@@ -1,0 +1,19 @@
+# Local-only override for Docker Desktop on macOS. Do not use on Linux.
+#
+# Docker Desktop's VirtioFS remaps bind-mount ownership to the uid of the
+# accessing process: a file appears owned by whoever stat()s it. The supervisor
+# image sets no USER, so it runs as root and sees /data as 0:0, while the
+# computer container (uid 1000) sees the same tree as 1000:1000 and writes fine.
+# assertComputerHomeWritable() therefore rejects a home that is actually
+# writable, and every sandbox provision fails with
+# "computer home entry ... is not writable by uid 1000".
+# data-init's `chown -R 1000:1000 /data` cannot help: chown is a no-op on this
+# filesystem.
+#
+# Running the supervisor as uid 1000 makes it observe the same ownership the
+# computer container does. gid 0 is required because /var/run/docker.sock is a
+# real socket (not a remapped bind mount) and stays root:root mode 660.
+# On Linux the socket is root:docker, so gid 0 would lose access there.
+services:
+  supervisor:
+    user: "1000:0"
