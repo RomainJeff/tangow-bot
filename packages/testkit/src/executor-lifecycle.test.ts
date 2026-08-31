@@ -127,6 +127,56 @@ describeIntegration("run executor lifecycle", () => {
     ).toBe(1);
   });
 
+  it("publishes one bubble per say and never repeats that text in the final message", async () => {
+    const seeded = await seedRun("chatty-bubbles", "give me two bubbles", {}, true);
+
+    await handles.executor.continueRun(seeded.run.id, "chatty-worker");
+
+    const [run, messages] = await Promise.all([
+      handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      handles.prisma.message.findMany({
+        where: { runId: seeded.run.id, role: "bot" },
+        orderBy: { seq: "asc" },
+      }),
+    ]);
+    expect(run.status).toBe("completed");
+    expect(messages).toHaveLength(3);
+
+    const [first, second, last] = messages.map((message) => messageText(message.blocks));
+    // Narration streamed before the say folds into its bubble, so the chat keeps the
+    // order the model produced instead of showing the prose twice.
+    expect(first).toContain("first, some narration.");
+    expect(first).toContain("bubble one");
+    expect(second).toContain("bubble two");
+    expect(second).not.toContain("bubble one");
+    // The regression this guards: forgetting to clear the segment buffer after a say
+    // makes finalizeRun republish everything the user already read.
+    expect(last).toContain("all done here.");
+    expect(last).not.toContain("narration");
+    expect(last).not.toContain("bubble one");
+    expect(last).not.toContain("bubble two");
+  });
+
+  it("adds no closing message when the run ends on a say", async () => {
+    const seeded = await seedRun("chatty-silent", "give me two bubbles and stop", {}, true);
+
+    await handles.executor.continueRun(seeded.run.id, "chatty-silent-worker");
+
+    const [run, messages] = await Promise.all([
+      handles.prisma.run.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      handles.prisma.message.findMany({
+        where: { runId: seeded.run.id, role: "bot" },
+        orderBy: { seq: "asc" },
+      }),
+    ]);
+    expect(run.status).toBe("completed");
+    expect(messages).toHaveLength(2);
+    const texts = messages.map((message) => messageText(message.blocks));
+    expect(texts[0]).toContain("bubble one");
+    expect(texts[1]).toContain("bubble two");
+    expect(texts.join("\n")).not.toContain("done.");
+  });
+
   it("recreates the approval pause when an intended effect was interrupted before the card", async () => {
     const prompt = "write this to the destination crm as a note";
     const seeded = await seedRun("interrupted-before-approval", prompt);
@@ -265,6 +315,13 @@ describeIntegration("run executor lifecycle", () => {
     expect(await handles.prisma.event.count({ where: { runId: seeded.run.id } })).toBe(0);
   });
 
+  function messageText(blocks: unknown): string {
+    return (blocks as Array<{ kind: string; text?: string }>)
+      .filter((block) => block.kind === "text")
+      .map((block) => block.text ?? "")
+      .join("\n");
+  }
+
   async function seedRun(
     label: string,
     prompt: string,
@@ -276,6 +333,7 @@ describeIntegration("run executor lifecycle", () => {
       startedAt?: Date;
       completedAt?: Date;
     } = {},
+    chattyReplies = false,
   ) {
     const cookie = await signup(`executor-${label}-${stamp}@rakazo.test`, `Executor ${label}`);
     const me = await rpc<{ userId: string; spaceId: string }>(cookie, "me");
@@ -286,6 +344,9 @@ describeIntegration("run executor lifecycle", () => {
       instructions: "",
       notifyOnFinish: false,
     });
+    if (chattyReplies) {
+      await handles.prisma.bot.update({ where: { id: bot.id }, data: { chattyReplies: true } });
+    }
     const thread = await handles.prisma.thread.findUniqueOrThrow({ where: { botId: bot.id } });
     const task = await handles.prisma.task.create({
       data: {

@@ -162,6 +162,34 @@ describe("thread event reduction", () => {
     });
   });
 
+  it("restarts the progress placeholder after a mid-run message instead of appending to it", () => {
+    // The `say` tool publishes a bubble mid-run. The server keeps streaming deltas
+    // afterwards, so the placeholder must rebuild from empty rather than resuming the
+    // text the published bubble already owns.
+    const streamed = reduceThreadSnapshot(
+      snapshot([]),
+      event({ seq: 4, payload: { text: "Hello", streaming: true } }),
+    );
+    expect(streamed?.messages.map((item) => item.id)).toEqual(["progress:run-1"]);
+
+    const published = reduceThreadSnapshot(
+      streamed!,
+      event({
+        type: "thread.message.created",
+        seq: 5,
+        payload: { messageId: "bubble-1", role: "bot", blocks: [{ kind: "text", text: "Hello" }] },
+      }),
+    );
+    expect(published?.messages.map((item) => item.id)).toEqual(["bubble-1"]);
+
+    const resumed = reduceThreadSnapshot(
+      published!,
+      event({ seq: 6, payload: { delta: "next", streaming: true } }),
+    );
+    expect(resumed?.messages.map((item) => item.id)).toEqual(["bubble-1", "progress:run-1"]);
+    expect(resumed?.messages[1]?.blocks).toEqual([{ kind: "progress", text: "next" }]);
+  });
+
   it("replaces transient progress and a matching live subagent with the durable message", () => {
     const initial = snapshot([
       message("durable", [{ kind: "text", text: "old value" }]),

@@ -9,12 +9,13 @@ import {
 } from "./executor.js";
 
 describe("run tool selection", () => {
-  const toolNames = (trigger: string, groupId: string | null = null) =>
+  const toolNames = (trigger: string, groupId: string | null = null, chattyReplies = false) =>
     selectBuiltinToolsForRun({
       graphicalToolsAllowed: true,
       groupId,
       trigger,
       semanticMemoryEnabled: false,
+      chattyReplies,
     }).map((tool) => tool.name);
 
   it("withholds schedule creation only from routine-triggered runs", () => {
@@ -33,6 +34,15 @@ describe("run tool selection", () => {
     expect(toolNames("routine", "group-1")).toEqual(
       expect.arrayContaining(["schedule_list", "schedule_cancel"]),
     );
+  });
+
+  it("exposes say only to bots that opted into chatty replies", () => {
+    expect(toolNames("user")).not.toContain("say");
+    expect(toolNames("user", null, true)).toContain("say");
+    // The trigger does not gate it: routines and group chats stay chatty too.
+    expect(toolNames("routine", null, true)).toContain("say");
+    expect(toolNames("user", "group-1", true)).toContain("say");
+    expect(toolNames("routine", "group-1")).not.toContain("say");
   });
 });
 
