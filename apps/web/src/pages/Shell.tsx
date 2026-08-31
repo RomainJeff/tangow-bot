@@ -3873,6 +3873,17 @@ const Transcript = memo(function Transcript({
     () => new Map(messages.map((message) => [message.id, message])),
     [messages],
   );
+  // A running turn keeps its reasoning and tool steps hidden, so a live message
+  // holding nothing else would render as a blank row under the speaker name.
+  const visibleMessages = useMemo(
+    () =>
+      messages.filter(
+        (message) =>
+          !message.id.startsWith("progress:") ||
+          message.blocks.some((block) => !isTrailBlock(block)),
+      ),
+    [messages],
+  );
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
   const workingLabel =
     workingBotName != null && workingBotName !== ""
@@ -3995,9 +4006,9 @@ const Transcript = memo(function Transcript({
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
-        {messages.map((message, index) => {
+        {visibleMessages.map((message, index) => {
           const peerReceipt = isPeerReceiptBlocks(message.blocks);
-          const previous = messages[index - 1];
+          const previous = visibleMessages[index - 1];
           // Consecutive messages from the same speaker read as one turn, so they
           // lose the between-turns gap and the repeated speaker name.
           const grouped =
@@ -4066,15 +4077,7 @@ const Transcript = memo(function Transcript({
             </div>
           );
         })}
-        {running &&
-        !messages.some(
-          (message) =>
-            message.id.startsWith("progress:") &&
-            message.blocks[0]?.kind === "progress" &&
-            message.blocks[0].text,
-        ) ? (
-          <ActiveBotGlyph bots={workingBots} label={workingLabel} />
-        ) : null}
+        {running ? <ActiveBotGlyph bots={workingBots} label={workingLabel} /> : null}
       </div>
       <button
         ref={jumpButtonRef}
@@ -4809,17 +4812,20 @@ function ComputerReleaseActions({
   );
 }
 
-/** Model scratchpad: dim, outside the answer bubble, open only while it streams. */
-function ReasoningTrail({ text, live }: { text: string; live: boolean }) {
+/** How the run got there — reasoning and tool steps — folded away behind one toggle. */
+function StepsTaken({ blocks }: { blocks: readonly MessageBlock[] }) {
   const { t } = useLingui();
-  // Live and persisted messages carry different ids, so the remount collapses it.
-  const [open, setOpen] = useState(live);
+  const [open, setOpen] = useState(false);
+  const count = blocks.reduce(
+    (total, block) => total + (block.kind === "steps" ? block.steps.length : 1),
+    0,
+  );
   return (
-    <div className="max-w-[74%]">
+    <div className="mb-2.5 max-w-[74%]">
       <button
         type="button"
         aria-expanded={open}
-        aria-label={t`Toggle reasoning`}
+        aria-label={t`Toggle steps taken`}
         onClick={() => setOpen((value) => !value)}
         className="flex items-center gap-1 text-[12.5px] text-[#6E6E73] hover:text-[#A0A0A6]"
       >
@@ -4828,71 +4834,75 @@ function ReasoningTrail({ text, live }: { text: string; live: boolean }) {
           strokeWidth={2}
           className={`transition-transform ${open ? "" : "-rotate-90"}`}
         />
-        <Trans>Thinking</Trans>
+        <Trans>Steps taken ({count})</Trans>
       </button>
       {open ? (
-        <div
-          className="mt-1 border-s border-[#26262A] ps-3 text-[13.5px] leading-[1.55] text-[#7C7C82]"
-          dir="auto"
-        >
-          <ChatMarkdown streaming={live}>{text}</ChatMarkdown>
+        <div className="mt-1.5 space-y-2 border-s border-[#26262A] ps-3">
+          {blocks.map((block, index) =>
+            block.kind === "steps" ? (
+              <div key={index} dir="ltr">
+                <ToolSteps steps={block.steps} />
+              </div>
+            ) : (
+              <div key={index} className="text-[13.5px] leading-[1.55] text-[#7C7C82]" dir="auto">
+                <ChatMarkdown>{"text" in block ? block.text : ""}</ChatMarkdown>
+              </div>
+            ),
+          )}
         </div>
       ) : null}
     </div>
   );
 }
 
+/** True for the blocks that belong in the steps-taken trail rather than the reply. */
+function isTrailBlock(block: MessageBlock): boolean {
+  return block.kind === "reasoning" || block.kind === "steps";
+}
+
 type NarrationRow =
   | { kind: "bubble"; blocks: MessageBlock[] }
-  | { kind: "aside"; block: MessageBlock; index: number };
+  | { kind: "trail"; blocks: MessageBlock[] };
 
-/** Answer text keeps the bubble; reasoning and tool trails render dim beside it. */
+/** Answer text keeps the bubble; everything else collects into a single trail. */
 function narrationRows(blocks: readonly MessageBlock[]): NarrationRow[] {
   const rows: NarrationRow[] = [];
-  blocks.forEach((block, index) => {
-    if (block.kind === "text" || block.kind === "progress") {
+  let trail: Extract<NarrationRow, { kind: "trail" }> | undefined;
+  for (const block of blocks) {
+    if (!isTrailBlock(block)) {
       const last = rows.at(-1);
       if (last?.kind === "bubble") last.blocks.push(block);
       else rows.push({ kind: "bubble", blocks: [block] });
-      return;
+      continue;
     }
-    rows.push({ kind: "aside", block, index });
-  });
+    // One trail per message: later steps join the first one instead of slicing the
+    // reply into alternating strips.
+    if (trail) trail.blocks.push(block);
+    else {
+      trail = { kind: "trail", blocks: [block] };
+      rows.push(trail);
+    }
+  }
   return rows;
 }
 
+/** Only ever rendered for a finished run, so every step reads as done. */
 function ToolSteps({
   steps,
-  currentIndex,
 }: {
   steps: Extract<ThreadMessage["blocks"][number], { kind: "steps" }>["steps"];
-  currentIndex?: number;
 }) {
   return (
     <div className="space-y-1.5">
-      {steps.map((step, index) => {
-        const isCurrent = index === currentIndex;
-        return (
-          <div key={index} className="flex items-center gap-2">
-            <span
-              className="text-[13px]"
-              style={{
-                color: isCurrent ? "#F5A03C" : "#4ECB71",
-                animation: isCurrent ? "rkPulse 1.2s ease-in-out infinite" : undefined,
-              }}
-            >
-              {isCurrent ? "◷" : "✓"}
-            </span>
-            <span
-              className="truncate text-[14px]"
-              style={{ color: isCurrent ? "#DFDFE2" : "#85858A" }}
-            >
-              {step.label}
-              {step.count > 1 ? ` ×${step.count}` : ""}
-            </span>
-          </div>
-        );
-      })}
+      {steps.map((step, index) => (
+        <div key={index} className="flex items-center gap-2">
+          <span className="text-[13px] text-[#4ECB71]">✓</span>
+          <span className="truncate text-[14px] text-[#85858A]">
+            {step.label}
+            {step.count > 1 ? ` ×${step.count}` : ""}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -4970,6 +4980,8 @@ const MessageView = memo(function MessageView({
       ) : null}
     </>
   );
+  const trailBlocks = message.blocks.filter(isTrailBlock);
+  const firstTrailIndex = message.blocks.findIndex(isTrailBlock);
   if (isNarration) {
     return (
       <>
@@ -4993,27 +5005,9 @@ const MessageView = memo(function MessageView({
                 </div>
               );
             }
-            if (row.block.kind === "reasoning") {
-              return (
-                <ReasoningTrail
-                  key={rowIndex}
-                  text={row.block.text}
-                  live={isLive && row.index === message.blocks.length - 1}
-                />
-              );
-            }
-            if (row.block.kind === "steps") {
-              const isCurrentBlock = isLive && row.index === message.blocks.length - 1;
-              return (
-                <div key={rowIndex} className="mb-2.5 max-w-[74%]" dir="ltr">
-                  <ToolSteps
-                    steps={row.block.steps}
-                    currentIndex={isCurrentBlock ? row.block.steps.length - 1 : undefined}
-                  />
-                </div>
-              );
-            }
-            return null;
+            // A running turn shows the animated bot glyph, not its raw activity.
+            if (isLive) return null;
+            return <StepsTaken key={rowIndex} blocks={row.blocks} />;
           })}
           {!isLive && voiceReady && message.blocks.some((block) => block.kind === "text") ? (
             <button
@@ -5113,24 +5107,9 @@ const MessageView = memo(function MessageView({
             </div>
           );
         }
-        if (block.kind === "steps") {
-          return (
-            <div key={i} className="mb-2.5 max-w-[74%]" dir="ltr">
-              <ToolSteps
-                steps={block.steps}
-                currentIndex={isLive ? block.steps.length - 1 : undefined}
-              />
-            </div>
-          );
-        }
-        if (block.kind === "reasoning") {
-          return (
-            <ReasoningTrail
-              key={i}
-              text={block.text}
-              live={isLive && i === message.blocks.length - 1}
-            />
-          );
+        if (isTrailBlock(block)) {
+          if (isLive || i !== firstTrailIndex) return null;
+          return <StepsTaken key={i} blocks={trailBlocks} />;
         }
         if (block.kind === "subagent") {
           const running = block.status === "running";
