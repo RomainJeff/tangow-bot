@@ -621,7 +621,9 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   });
 
   const childDefs = (host.request.tools.length ? host.request.tools : builtinAgentTools).filter(
-    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name),
+    // A subagent shares the host's event queue, so a `say` from here would publish a
+    // chat bubble as the parent bot. Subagents report back through their result only.
+    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name) && tool.name !== "say",
   );
   const nestedHost: ToolHost = { ...host, depth: 1 };
   const nested = new Agent({

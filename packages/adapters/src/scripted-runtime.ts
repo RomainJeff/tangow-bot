@@ -168,6 +168,18 @@ export function inferScript(
       },
     ];
   }
+  // Multi-message cadence: narration folded into the first bubble, then a second
+  // bubble, then either a closing message or nothing at all ("two bubbles and stop").
+  if (lower.includes("two bubbles")) {
+    const narrated = {
+      assistant: "first, some narration.",
+      toolCalls: [{ name: "say", args: { text: "bubble one" } }],
+    };
+    const second = { toolCalls: [{ name: "say", args: { text: "bubble two" } }] };
+    return lower.includes("and stop")
+      ? [narrated, { ...second, complete: true }]
+      : [narrated, second, { assistant: "all done here.", complete: true }];
+  }
   if (
     lower.includes("ask me") ||
     lower.includes("which city") ||

@@ -231,6 +231,9 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "recall_memory",
   "schedule_list",
   "scratchpad_list",
+  // `say` has no external effect worth recording: the executor's event loop publishes
+  // the bubble into the thread the run already owns.
+  "say",
   "skill_read",
   "web_search",
   "web_fetch",
@@ -1019,6 +1022,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             groupId: thread.groupId,
             trigger: run.trigger,
             semanticMemoryEnabled,
+            chattyReplies: bot.chattyReplies,
           }),
           // Cross-owner agent connections only exist for phone-linked bots.
           ...(hasPhoneIdentity ? agentConnectionTools : []),
@@ -1079,6 +1083,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let assembled = "";
         let currentTextSegment = "";
         let messageSegments: MessageBlock[] = [];
+        // Text already published mid-run by the `say` tool. It never enters `assembled`
+        // (it was never streamed), so it drives both end-of-run silence and the
+        // notification fallback for a run that only spoke through `say`.
+        const spokenTexts: string[] = [];
         // Tool calls that land mid-sentence wait here until the narration catches up to a
         // sentence boundary, so the step chips never render in the middle of a clause.
         let pendingToolNames: string[] = [];
@@ -2210,6 +2218,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return pauseForSecret();
           }
           if (name === "request_takeover") return { ok: true };
+          // The visible half of `say` lives in the event loop's "tool" branch. It cannot
+          // run here: the runtime queues the tool event before awaiting executeTool, so
+          // this callback can fire before the loop has consumed the narration that
+          // precedes the call, and the published bubble would lose its ordering.
+          if (name === "say") return { ok: true };
           if (name === "run_subagent") {
             return {
               ok: true,
@@ -2505,6 +2518,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 "create_space proposes a new privacy boundary inside the current organization. Use it when the user asks to create a space or separate data between teams or projects. It always pauses for explicit user approval; never claim the space exists before the tool succeeds.",
                 "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it.",
                 "run_subagent is a short helper inside this turn only. It is not a bot, has no thread, and does not show in the list. Use it for parallel work you will summarize here.",
+                bot.chattyReplies
+                  ? "Reply cadence: deliver your answer as several short messages using the say tool — one thought per call — instead of one long final reply. Call say as soon as you have something worth telling the user (a finding, a decision, a next step). Keep working between calls. After your last say, end the turn with an empty response and never restate what you already said."
+                  : undefined,
                 botDirectory,
                 "archive_bot safely archives a bot this bot created, and only that bot. Use it when the user asks to remove that bot or when it is finished and unused. The user can restore it or permanently delete it later. confirm_name must exactly match its name.",
                 pluginLine,
@@ -2624,10 +2640,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else if (event.type === "takeover") {
               if (!(await renewRunLease(deps, runId, workerId, fence))) return;
               const safeReason = redactSecrets(event.reason, runSecrets);
-              if (assembled.trim()) {
-                await publishMessage(deps, run, "bot", [
-                  { kind: "text", text: redactSecrets(assembled, runSecrets) },
-                ]);
+              // Publish the unpublished buffer rather than the whole `assembled` transcript,
+              // matching the loop-guard path below. `assembled` keeps every streamed
+              // character for the run, so after a `say` it would repeat text already sent.
+              flushPendingTools();
+              if (messageSegments.length > 0) {
+                await publishMessage(deps, run, "bot", redactBlocks(messageSegments, runSecrets));
+                messageSegments = [];
               }
               await publishMessage(deps, run, "bot", [
                 { kind: "computer", state: "Ready", text: safeReason },
@@ -2671,16 +2690,38 @@ export function createRunExecutor(deps: ExecutorDeps) {
               // Preserve event ordering when the throttle still holds recent narration: the
               // client must see that text before the tool call it describes.
               await flushProgress();
-              await deps.events.append({
-                spaceId: run.spaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "agent.tool.called",
-                runId,
-                payload: { name: event.name, executionId: event.executionId },
-              });
-              pendingToolNames.push(event.name);
-              tryFlushPendingTools();
+              if (event.name === "say") {
+                // Publish one bubble per `say`. Narration streamed before the call and any
+                // step chips still waiting fold into this bubble, so the chat keeps its
+                // chronology instead of showing the same prose twice.
+                if (!(await renewRunLease(deps, runId, workerId, fence))) return;
+                const sayText = redactSecrets(String(event.args.text ?? "").trim(), runSecrets);
+                flushPendingTools();
+                // appendTextSegment merges into a trailing text block, so folded-in
+                // narration would otherwise run straight into the say text.
+                const separator = messageSegments.at(-1)?.kind === "text" ? "\n\n" : "";
+                const blocks = sayText
+                  ? appendTextSegment(messageSegments, separator + sayText)
+                  : messageSegments;
+                if (blocks.length > 0) {
+                  await publishMessage(deps, run, "bot", redactBlocks(blocks, runSecrets));
+                }
+                // The published bubble owns this text now. Leaving it in the buffer would
+                // make finalizeRun republish everything the user has already read.
+                messageSegments = [];
+                if (sayText) spokenTexts.push(sayText);
+              } else {
+                await deps.events.append({
+                  spaceId: run.spaceId,
+                  threadId: thread.id,
+                  botId: bot.id,
+                  type: "agent.tool.called",
+                  runId,
+                  payload: { name: event.name, executionId: event.executionId },
+                });
+                pendingToolNames.push(event.name);
+                tryFlushPendingTools();
+              }
               const loopGuard = advanceToolCallLoopGuard(toolCallStreak, event.name, event.args);
               toolCallStreak = loopGuard.streak;
               if (loopGuard.stuck) {
@@ -2821,7 +2862,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           flushPendingTools();
           if (!assembled) {
             messageSegments = completionMessageSegments(messageSegments, {
-              allowSilentEmpty: allowSilentPeerMessage || phoneChannelRun,
+              // A run that said everything through `say` already answered the user, so it
+              // must not tack a "done." message onto the end of its own bubbles.
+              allowSilentEmpty: allowSilentPeerMessage || phoneChannelRun || spokenTexts.length > 0,
               emptyResponseText,
               suppressOutput: handedOff,
             });
@@ -2829,7 +2872,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const blocks = handedOff ? [] : redactBlocks(messageSegments, runSecrets);
           const text = handedOff
             ? ""
-            : redactSecrets(completionNotificationBody(assembled, blocks), runSecrets);
+            : redactSecrets(
+                // `say` text never passes through `assembled` or the final blocks, so fall
+                // back to it: a say-only run still deserves a push notification and a
+                // useful bot-to-bot return value.
+                completionNotificationBody(assembled, blocks) || spokenTexts.join("\n\n"),
+                runSecrets,
+              );
           if (containsSecret(text, runSecrets)) {
             throw new Error("refusing to persist a secret in the thread");
           }
@@ -3070,11 +3119,15 @@ export function selectBuiltinToolsForRun(options: {
   groupId: string | null;
   trigger: string;
   semanticMemoryEnabled: boolean;
+  chattyReplies: boolean;
 }) {
+  const chattyFiltered = options.chattyReplies
+    ? builtinAgentTools
+    : builtinAgentTools.filter((tool) => tool.name !== "say");
   return selectMemoryTools(
     filterBuiltinToolsForRun(
       filterBuiltinToolsForThread(
-        filterImageReturningComputerTools(builtinAgentTools, options.graphicalToolsAllowed),
+        filterImageReturningComputerTools(chattyFiltered, options.graphicalToolsAllowed),
         options.groupId,
       ),
       options.trigger,

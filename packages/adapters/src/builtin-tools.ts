@@ -572,6 +572,20 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    // Exposed only to bots with chattyReplies enabled; the executor publishes the
+    // bubble from its event loop, so this definition carries no side effect.
+    name: "say",
+    description:
+      "Send one short chat message to the user immediately, without ending your turn. Each call posts one bubble. Use several short say calls instead of one long final answer. Never repeat text you already sent with say; when say covered everything, end the turn with an empty response.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "The message. A sentence or two." },
+      },
+      required: ["text"],
+    },
+  },
+  {
     name: "message_bot",
     description:
       "Send a useful update, question, or result to another of the user's bots. Delivery is async and does not end your turn. Continue independent work; do not poll or send ack-only messages. Later updates only if they add something new.",
