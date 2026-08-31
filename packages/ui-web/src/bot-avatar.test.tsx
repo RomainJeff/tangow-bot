@@ -61,6 +61,16 @@ describe("BotAvatar", () => {
     expect(maya).not.toEqual(github);
   });
 
+  it("renders the picked shape seed instead of the identity-derived family", () => {
+    const picked = renderToString(
+      <BotAvatar color="#D9508A" identity="maya" shapeSeed={3} variant="organic" />,
+    );
+    const derived = renderToString(<BotAvatar color="#D9508A" identity="maya" variant="organic" />);
+
+    expect(picked).toContain('data-shape-family="3"');
+    expect(derived).toContain(`data-shape-family="${avatarIdentitySeed("maya") % 10}"`);
+  });
+
   it("assigns animation hooks across every organic shape family", () => {
     const identities = new Map<number, string>();
     for (let index = 0; index < 500 && identities.size < 10; index++) {

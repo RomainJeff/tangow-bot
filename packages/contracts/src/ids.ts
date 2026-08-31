@@ -11,6 +11,9 @@ export const ActorSchema = z.object({
 });
 export type Actor = z.infer<typeof ActorSchema>;
 
+/** Number of organic avatar shape families a seed can select. */
+export const AVATAR_SHAPE_COUNT = 10;
+
 export const BOT_COLORS = [
   "#3EC5A8",
   "#F5A03C",

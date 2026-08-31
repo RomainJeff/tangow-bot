@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { ThreadMessageSchema } from "./events.js";
-import { Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
+import { AVATAR_SHAPE_COUNT, Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
 
 export const ComputerModeSchema = z.enum(["team", "dedicated"]);
@@ -11,6 +11,13 @@ export type MemoryScopeValue = z.infer<typeof MemoryScopeSchema>;
 
 export const AvatarStyleSchema = z.enum(["robot", "organic"]);
 export type AvatarStyle = z.infer<typeof AvatarStyleSchema>;
+
+/** Chosen organic avatar shape; null keeps the shape derived from the bot id. */
+export const ShapeSeedSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(AVATAR_SHAPE_COUNT - 1);
 
 export const ThinkingLevelSchema = z.enum([
   "off",
@@ -31,6 +38,7 @@ export const BotSchema = z.object({
   description: z.string(),
   instructions: z.string(),
   color: z.string(),
+  shapeSeed: ShapeSeedSchema.nullable(),
   notifyOnFinish: z.boolean(),
   pinned: z.boolean(),
   sectionId: Id.nullable(),
@@ -65,6 +73,7 @@ export const GroupMemberSchema = z.object({
   botId: Id,
   name: z.string(),
   color: z.string(),
+  shapeSeed: ShapeSeedSchema.nullable(),
   status: z.string().optional(),
 });
 export type GroupMember = z.infer<typeof GroupMemberSchema>;
@@ -134,6 +143,7 @@ export const SpaceBotSchema = BotSchema.pick({
   name: true,
   title: true,
   color: true,
+  shapeSeed: true,
   notifyOnFinish: true,
   pinned: true,
   sectionId: true,
@@ -216,6 +226,7 @@ export const UpdateBotInput = z
     instructions: z.string().trim().max(BOT_INSTRUCTIONS_MAX_LENGTH).optional(),
     notifyOnFinish: z.boolean().optional(),
     color: z.string().optional(),
+    shapeSeed: ShapeSeedSchema.nullable().optional(),
     pinned: z.boolean().optional(),
     memoryScope: MemoryScopeSchema.nullable().optional(),
     sectionId: Id.nullable().optional(),

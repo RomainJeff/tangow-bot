@@ -1703,6 +1703,7 @@ export function ShellPage() {
     return {
       botId: run.botId,
       color: bot?.color ?? FALLBACK_BOT_COLOR,
+      shapeSeed: bot?.shapeSeed,
       name: bot?.name,
       status: run.status,
     };
@@ -2760,6 +2761,7 @@ export function ShellPage() {
                             <BotAvatar
                               color={item.chat.color}
                               identity={item.chat.id}
+                              shapeSeed={item.chat.shapeSeed}
                               size={38}
                               status={item.chat.status}
                             />
@@ -2865,6 +2867,7 @@ export function ShellPage() {
                       <BotAvatar
                         color={bot.color}
                         identity={bot.id}
+                        shapeSeed={bot.shapeSeed}
                         size={28}
                         status={bot.status}
                       />
@@ -3112,6 +3115,7 @@ export function ShellPage() {
                 <BotAvatar
                   color={active.color}
                   identity={active.id}
+                  shapeSeed={active.shapeSeed}
                   size={26}
                   status={active.status}
                 />
@@ -3879,11 +3883,13 @@ export function ShellPage() {
             botId={active.id}
             botName={active.name}
             botColor={active.color}
+            botShapeSeed={active.shapeSeed}
             peerBotId={peerConversation.peerBotId}
             peerBotName={peerConversation.peerBotName}
             peerBotColor={
               resolveTranscriptBot(peerConversation.peerBotId)?.color ?? FALLBACK_BOT_COLOR
             }
+            peerBotShapeSeed={resolveTranscriptBot(peerConversation.peerBotId)?.shapeSeed}
             onClose={() => setPeerConversation(null)}
           />
         ) : null}
@@ -3944,6 +3950,7 @@ export function ShellPage() {
               <BotAvatar
                 color={active.color}
                 identity={active.id}
+                shapeSeed={active.shapeSeed}
                 size={28}
                 status={active.status}
               />
@@ -4120,7 +4127,9 @@ const Transcript = memo(function Transcript({
   onJumpToMessage: (messageId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   memberName?: (botId: string | undefined) => string | undefined;
-  peerBot: (botId: string) => { color: string; status?: string } | undefined;
+  peerBot: (
+    botId: string,
+  ) => { color: string; shapeSeed?: number | null; status?: string } | undefined;
   onRefresh: () => Promise<void>;
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
@@ -5039,7 +5048,14 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
       </span>
     );
   }
-  return <BotAvatar color={mention.color ?? FALLBACK_BOT_COLOR} identity={mention.id} size={16} />;
+  return (
+    <BotAvatar
+      color={mention.color ?? FALLBACK_BOT_COLOR}
+      identity={mention.id}
+      shapeSeed={mention.shapeSeed}
+      size={16}
+    />
+  );
 }
 
 function MentionChipIcon({ mention }: { mention: ComposerMention }) {
@@ -5056,7 +5072,14 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
       </span>
     );
   }
-  return <BotAvatar color={mention.color ?? FALLBACK_BOT_COLOR} identity={mention.id} size={16} />;
+  return (
+    <BotAvatar
+      color={mention.color ?? FALLBACK_BOT_COLOR}
+      identity={mention.id}
+      shapeSeed={mention.shapeSeed}
+      size={16}
+    />
+  );
 }
 
 function previewMessageText(message: ThreadMessage): string {
@@ -5211,7 +5234,9 @@ const MessageView = memo(function MessageView({
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   speakerName?: string;
   memberName?: (botId: string | undefined) => string | undefined;
-  peerBot: (botId: string) => { color: string; status?: string } | undefined;
+  peerBot: (
+    botId: string,
+  ) => { color: string; shapeSeed?: number | null; status?: string } | undefined;
   replyPreview?: ThreadMessage;
   replyToMessageId?: string;
   onJumpToMessage?: (messageId: string) => void;
@@ -5319,6 +5344,7 @@ const MessageView = memo(function MessageView({
               ariaLabel={label}
               color={peerBot(peerBotId)?.color ?? FALLBACK_BOT_COLOR}
               identity={peerBotId}
+              shapeSeed={peerBot(peerBotId)?.shapeSeed}
               label={label}
               onClick={() => onOpenPeerMessages({ peerBotId, peerBotName: peer })}
             />

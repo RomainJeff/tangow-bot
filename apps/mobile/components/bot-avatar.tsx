@@ -25,6 +25,7 @@ export const BotAvatar = memo(function BotAvatar({
   size = 54,
   status,
   identity,
+  shapeSeed,
   variant,
   muted = false,
 }: {
@@ -32,6 +33,8 @@ export const BotAvatar = memo(function BotAvatar({
   size?: number;
   status?: string;
   identity?: string;
+  /** Picked organic shape; falls back to a shape derived from `identity`. */
+  shapeSeed?: number | null;
   variant?: AvatarStyle;
   muted?: boolean;
 }) {
@@ -46,7 +49,13 @@ export const BotAvatar = memo(function BotAvatar({
   return (
     <View style={{ width: size, height: size }}>
       {(variant ?? avatarStyle) === "organic" ? (
-        <OrganicAvatar color={color} identity={identity} size={size} isWorking={isWorking} />
+        <OrganicAvatar
+          color={color}
+          identity={identity}
+          shapeSeed={shapeSeed}
+          size={size}
+          isWorking={isWorking}
+        />
       ) : (
         <View
           style={{
@@ -132,15 +141,17 @@ export const BotAvatar = memo(function BotAvatar({
 function OrganicAvatar({
   color,
   identity,
+  shapeSeed,
   size,
   isWorking,
 }: {
   color: string;
   identity?: string;
+  shapeSeed?: number | null;
   size: number;
   isWorking: boolean;
 }) {
-  const seed = avatarIdentitySeed(identity || color || "#8B5CF6");
+  const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
   const progress = useSharedValue(0);
   const reducedMotion = useReducedMotion();
 

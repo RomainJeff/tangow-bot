@@ -14,17 +14,21 @@ export function PeerMessagesOverlay({
   botId,
   botName,
   botColor,
+  botShapeSeed,
   peerBotId,
   peerBotName: initialPeerBotName,
   peerBotColor,
+  peerBotShapeSeed,
   onClose,
 }: {
   botId: string;
   botName: string;
   botColor: string;
+  botShapeSeed?: number | null;
   peerBotId: string;
   peerBotName: string;
   peerBotColor: string;
+  peerBotShapeSeed?: number | null;
   onClose: () => void;
 }) {
   const { t } = useLingui();
@@ -82,8 +86,13 @@ export function PeerMessagesOverlay({
         <div className="flex items-center justify-between gap-4 border-b border-sidebar-border px-[18px] py-3.5">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="flex items-center -space-x-2">
-              <BotAvatar color={botColor} identity={botId} size={28} />
-              <BotAvatar color={peerBotColor} identity={peerBotId} size={28} />
+              <BotAvatar color={botColor} identity={botId} shapeSeed={botShapeSeed} size={28} />
+              <BotAvatar
+                color={peerBotColor}
+                identity={peerBotId}
+                shapeSeed={peerBotShapeSeed}
+                size={28}
+              />
             </div>
             <DialogTitle className="truncate text-[15.5px] font-medium text-foreground" dir="auto">
               {title}

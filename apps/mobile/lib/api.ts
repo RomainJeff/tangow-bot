@@ -453,6 +453,7 @@ export type MobileBot = Pick<
   | "preview"
   | "title"
   | "color"
+  | "shapeSeed"
   | "notifyOnFinish"
   | "threadId"
   | "pinned"

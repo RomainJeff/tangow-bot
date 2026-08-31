@@ -10,6 +10,7 @@ import type {
   VoiceInfo,
 } from "@rakazo/contracts";
 import {
+  AVATAR_SHAPE_COUNT,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
@@ -23,6 +24,7 @@ import {
   Switch,
   Textarea,
   Toggle,
+  useAvatarStyle,
 } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import { lazy, Suspense, useEffect, useId, useState } from "react";
@@ -190,6 +192,7 @@ export function BotSettings({
     modelProvider?: string | null;
     modelId?: string | null;
     thinkingLevel?: ThinkingLevel | null;
+    shapeSeed?: number | null;
   }) => Promise<void>;
   onExport: () => Promise<void>;
   onClear: () => void;
@@ -199,6 +202,7 @@ export function BotSettings({
   const [name, setName] = useState(bot.name);
   const [title, setTitle] = useState(bot.title);
   const [description, setDescription] = useState(bot.description);
+  const [shapeSeed, setShapeSeed] = useState(bot.shapeSeed);
   const [computerMode, setComputerMode] = useState(bot.computerMode);
   const [memoryScope, setMemoryScope] = useState(bot.memoryScope);
   const [autoSpeak, setAutoSpeak] = useState(bot.autoSpeak);
@@ -208,6 +212,7 @@ export function BotSettings({
     bot.modelProvider && bot.modelId ? modelOptionKey(bot.modelProvider, bot.modelId) : "",
   );
   const [thinkingLevel, setThinkingLevel] = useState(bot.thinkingLevel ?? "");
+  const avatarStyle = useAvatarStyle();
   const [credentials, setCredentials] = useState<ModelCredential[]>([]);
   const [catalog, setCatalog] = useState<ModelCatalogEntry[]>([]);
   const [me, setMe] = useState<Me | null>(null);
@@ -287,8 +292,53 @@ export function BotSettings({
   return (
     <div data-testid="bot-settings">
       <div className="flex justify-center">
-        <BotAvatar color={bot.color} identity={bot.id} size={64} status={bot.status} />
+        <BotAvatar
+          color={bot.color}
+          identity={bot.id}
+          shapeSeed={shapeSeed}
+          size={64}
+          status={bot.status}
+        />
       </div>
+      {avatarStyle === "organic" ? (
+        <div data-testid="bot-shape-picker" className="mt-4">
+          <span className="block text-[14px] text-muted-foreground">
+            <Trans>Shape</Trans>
+          </span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {[null, ...Array.from({ length: AVATAR_SHAPE_COUNT }, (_, index) => index)].map(
+              (seed) => (
+                <button
+                  key={seed ?? "auto"}
+                  type="button"
+                  aria-pressed={shapeSeed === seed}
+                  aria-label={seed === null ? t`Automatic shape` : t`Shape ${seed + 1}`}
+                  onClick={() => setShapeSeed(seed)}
+                  className={`flex h-11 w-11 items-center justify-center rounded-[12px] border transition-colors ${
+                    shapeSeed === seed
+                      ? "border-ring bg-muted"
+                      : "border-border hover:border-ring/60"
+                  }`}
+                >
+                  {seed === null ? (
+                    <span className="text-[12px] text-muted-foreground">
+                      <Trans>Auto</Trans>
+                    </span>
+                  ) : (
+                    <BotAvatar
+                      color={bot.color}
+                      identity={bot.id}
+                      shapeSeed={seed}
+                      size={28}
+                      variant="organic"
+                    />
+                  )}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+      ) : null}
       <label htmlFor={`${ids}-name`} className="mt-6 block text-[14px] text-muted-foreground">
         <Trans>Name</Trans>
         <Input
@@ -456,6 +506,7 @@ export function BotSettings({
               title: nextTitle,
               description: nextDescription,
               instructions: nextDescription,
+              shapeSeed,
               computerMode,
               memoryScope,
               autoSpeak,

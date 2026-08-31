@@ -6,6 +6,7 @@ export interface GroupAvatarMember {
   botId?: string;
   name?: string;
   color: string;
+  shapeSeed?: number | null;
   status?: string;
 }
 
@@ -55,6 +56,7 @@ export const GroupAvatar = memo(function GroupAvatar({
       <BotAvatar
         color={firstMember.color}
         identity={firstMember.botId ?? firstMember.name}
+        shapeSeed={firstMember.shapeSeed}
         size={size}
         status={firstMember.status}
         className={cn("rakazo-group-avatar", className)}
@@ -94,6 +96,7 @@ export const GroupAvatar = memo(function GroupAvatar({
           <BotAvatar
             color={member.color}
             identity={member.botId ?? member.name}
+            shapeSeed={member.shapeSeed}
             size={miniSize}
             status={member.status}
           />

@@ -556,7 +556,9 @@ describe("thread event reduction", () => {
       ...snapshot([]),
       botId: undefined,
       groupId: "group-1",
-      members: [{ botId: "bot-member", name: "Member", color: "#8B5CF6", status: "idle" }],
+      members: [
+        { botId: "bot-member", name: "Member", color: "#8B5CF6", shapeSeed: null, status: "idle" },
+      ],
     };
 
     const started = reduceThreadSnapshot(

@@ -10,6 +10,8 @@ export interface BotAvatarProps {
   status?: string;
   variant?: AvatarStyle;
   identity?: string;
+  /** Picked organic shape; falls back to a shape derived from `identity`. */
+  shapeSeed?: number | null;
   className?: string;
 }
 
@@ -19,6 +21,7 @@ export const BotAvatar = memo(function BotAvatar({
   status,
   variant,
   identity,
+  shapeSeed,
   className,
 }: BotAvatarProps) {
   const isWorking = ACTIVE_RUN_STATUSES.some((activeStatus) => activeStatus === status);
@@ -29,6 +32,7 @@ export const BotAvatar = memo(function BotAvatar({
       <OrganicAvatar
         color={color}
         identity={identity}
+        shapeSeed={shapeSeed}
         size={size}
         isWorking={isWorking}
         className={className}
@@ -158,12 +162,14 @@ export const BotAvatar = memo(function BotAvatar({
 function OrganicAvatar({
   color,
   identity,
+  shapeSeed,
   size,
   isWorking,
   className,
 }: {
   color: string;
   identity?: string;
+  shapeSeed?: number | null;
   size: number;
   isWorking: boolean;
   className?: string;
@@ -173,7 +179,7 @@ function OrganicAvatar({
     reducedMotionSnapshot,
     () => false,
   );
-  const seed = avatarIdentitySeed(identity || color || "#8B5CF6");
+  const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
   const duration = `${4.8 + (seed % 24) / 10}s`;
   const shapeA = organicAvatarPath(seed);
   const shapeB = organicAvatarPath(seed, 0.42);

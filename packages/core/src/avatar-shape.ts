@@ -1,3 +1,5 @@
+import { AVATAR_SHAPE_COUNT } from "@rakazo/contracts";
+
 type AvatarPoint = readonly [number, number];
 
 let organicAvatarTemplates: readonly (readonly AvatarPoint[])[] | undefined;
@@ -13,7 +15,7 @@ export function avatarIdentitySeed(identity: string): number {
 
 export function organicAvatarPath(seed: number, phaseOffset = 0): string {
   const phase = ((seed % 360) * Math.PI) / 180 + phaseOffset;
-  const family = seed % 10;
+  const family = seed % AVATAR_SHAPE_COUNT;
   if (!organicAvatarTemplates) {
     organicAvatarTemplates = [
       [

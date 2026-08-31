@@ -281,6 +281,7 @@ export async function resolveThreadTarget(
       botId: member.bot.id,
       name: member.bot.name,
       color: member.bot.color,
+      shapeSeed: member.bot.shapeSeed,
       status: member.bot.runs[0]?.status ?? "idle",
     }));
     return {

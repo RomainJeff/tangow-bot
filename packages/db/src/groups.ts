@@ -31,6 +31,7 @@ type GroupRecord = {
       id: string;
       name: string;
       color: string;
+      shapeSeed: number | null;
       runs: Array<{ status: string }>;
     };
   }>;
@@ -51,6 +52,7 @@ function mapGroupMembers(members: GroupRecord["members"]): GroupMember[] {
     botId: member.bot.id,
     name: member.bot.name,
     color: member.bot.color,
+    shapeSeed: member.bot.shapeSeed,
     status: member.bot.runs[0]?.status ?? "idle",
   }));
 }
@@ -111,14 +113,14 @@ async function assertOwnedBots(
       userId: actor.userId,
       archivedAt: null,
     },
-    select: { id: true, name: true, color: true },
+    select: { id: true, name: true, color: true, shapeSeed: true },
   });
   if (bots.length !== unique.length) throw new IsolationError();
   const botsById = new Map(bots.map((bot) => [bot.id, bot]));
   return unique.map((botId) => {
     const bot = botsById.get(botId);
     if (!bot) throw new IsolationError();
-    return { botId: bot.id, name: bot.name, color: bot.color };
+    return { botId: bot.id, name: bot.name, color: bot.color, shapeSeed: bot.shapeSeed };
   });
 }
 
@@ -136,6 +138,7 @@ const groupInclude = {
           id: true,
           name: true,
           color: true,
+          shapeSeed: true,
           runs: activeRunSelection,
         },
       },
@@ -154,6 +157,7 @@ const groupTargetInclude = {
           id: true,
           name: true,
           color: true,
+          shapeSeed: true,
           runs: activeRunSelection,
         },
       },

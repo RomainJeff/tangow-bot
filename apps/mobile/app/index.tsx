@@ -788,6 +788,7 @@ function BotRow({
         <BotAvatar
           color={bot.color || FALLBACK_COLOR}
           identity={bot.id}
+          shapeSeed={bot.shapeSeed}
           status={bot.status}
           muted={!bot.notifyOnFinish}
         />
