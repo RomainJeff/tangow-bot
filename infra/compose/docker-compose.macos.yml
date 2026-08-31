@@ -17,3 +17,17 @@
 services:
   supervisor:
     user: "1000:0"
+
+  # Cloudflare Tunnel: exposes the local stack on its public hostname without
+  # opening a port on the Mac. Ingress (hostname -> http://web:5173) is
+  # configured remotely in the Cloudflare dashboard; the token is all the
+  # connector needs. Token lives in .env (gitignored) as CLOUDFLARE_TUNNEL_TOKEN,
+  # never in this file.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    restart: unless-stopped
+    depends_on:
+      - web

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Rakazo",
     "slug": "rakazo",
-    "owner": "inbox-zero",
+    "owner": "romainjeff",
     "scheme": "rakazo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -42,7 +42,7 @@
       "./plugins/with-worklets-headers"
     ],
     "ios": {
-      "bundleIdentifier": "com.rakazo.app",
+      "bundleIdentifier": "com.romainjeff.rakazo",
       "buildNumber": "1",
       "supportsTablet": false,
       "icon": "./assets/icon.png",
@@ -76,7 +76,7 @@
       "router": {},
       "supportsRTL": true,
       "eas": {
-        "projectId": "07f7eb04-45e3-47fe-9374-99a2f991131e"
+        "projectId": "34a6a060-dc5f-4588-99ee-8ec220e40fda"
       }
     },
     "runtimeVersion": {
