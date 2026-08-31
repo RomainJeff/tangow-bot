@@ -20,5 +20,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     }
   }
 
+  // A half-configured service token silently produces a build that cannot reach
+  // an Access-protected server, so fail the build instead.
+  const accessId = process.env.EXPO_PUBLIC_CF_ACCESS_CLIENT_ID;
+  const accessSecret = process.env.EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET;
+  if (Boolean(accessId) !== Boolean(accessSecret)) {
+    throw new Error(
+      "EXPO_PUBLIC_CF_ACCESS_CLIENT_ID and EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET must be set together.",
+    );
+  }
+
   return config as ExpoConfig;
 };
