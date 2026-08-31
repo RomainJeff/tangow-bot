@@ -33,6 +33,15 @@ internal data class NotificationSettings(
   }
 }
 
+/** Everything one authenticated request to the Rakazo server needs. */
+internal data class ApiSession(
+  val endpoint: String,
+  val token: String,
+  val spaceId: String,
+  val accessClientId: String,
+  val accessClientSecret: String,
+)
+
 internal class NotificationStorage(context: Context) {
   private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
@@ -59,28 +68,44 @@ internal class NotificationStorage(context: Context) {
     set(value) = commit { putString(SPACE_ID, value) }
 
   var token: String
-    get() {
-      val encoded = preferences.getString(TOKEN, null) ?: return ""
-      return runCatching {
-        val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes, 0, IV_SIZE))
-        String(cipher.doFinal(bytes, IV_SIZE, bytes.size - IV_SIZE), Charsets.UTF_8)
-      }.getOrElse {
-        commit { remove(TOKEN) }
-        ""
-      }
-    }
-    set(value) {
-      if (value.isEmpty()) {
-        commit { remove(TOKEN) }
-        return
-      }
+    get() = readEncrypted(TOKEN)
+    set(value) = writeEncrypted(TOKEN, value)
+
+  /** The Cloudflare Access client ID is an identifier, not a secret. */
+  var accessClientId: String
+    get() = preferences.getString(ACCESS_ID, "").orEmpty()
+    set(value) = commit { putString(ACCESS_ID, value) }
+
+  var accessClientSecret: String
+    get() = readEncrypted(ACCESS_SECRET)
+    set(value) = writeEncrypted(ACCESS_SECRET, value)
+
+  private fun readEncrypted(name: String): String {
+    val encoded = preferences.getString(name, null) ?: return ""
+    return runCatching {
+      val bytes = Base64.decode(encoded, Base64.NO_WRAP)
       val cipher = Cipher.getInstance(TRANSFORMATION)
-      cipher.init(Cipher.ENCRYPT_MODE, key())
-      val encrypted = cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8))
-      commit { putString(TOKEN, Base64.encodeToString(encrypted, Base64.NO_WRAP)) }
+      cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes, 0, IV_SIZE))
+      String(cipher.doFinal(bytes, IV_SIZE, bytes.size - IV_SIZE), Charsets.UTF_8)
+    }.getOrElse {
+      commit { remove(name) }
+      ""
     }
+  }
+
+  private fun writeEncrypted(name: String, value: String) {
+    if (value.isEmpty()) {
+      commit { remove(name) }
+      return
+    }
+    val cipher = Cipher.getInstance(TRANSFORMATION)
+    cipher.init(Cipher.ENCRYPT_MODE, key())
+    val encrypted = cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+    commit { putString(name, Base64.encodeToString(encrypted, Base64.NO_WRAP)) }
+  }
+
+  val session: ApiSession
+    get() = ApiSession(endpoint, token, spaceId, accessClientId, accessClientSecret)
 
   private fun key(): SecretKey {
     val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -112,6 +137,8 @@ internal class NotificationStorage(context: Context) {
     const val ENDPOINT = "endpoint"
     const val SPACE_ID = "space_id"
     const val TOKEN = "token"
+    const val ACCESS_ID = "access_client_id"
+    const val ACCESS_SECRET = "access_client_secret"
     const val KEY_ALIAS = "rakazo.notifications.session"
     const val TRANSFORMATION = "AES/GCM/NoPadding"
     const val IV_SIZE = 12

@@ -15,7 +15,7 @@ class RakazoNotificationsModule : Module() {
       NotificationStorage(context()).settings.toMap()
     }
 
-    AsyncFunction("setSettings") { value: Map<String, Boolean>, endpoint: String, token: String, spaceId: String ->
+    AsyncFunction("setSettings") { value: Map<String, Boolean>, endpoint: String, token: String, spaceId: String, accessClientId: String, accessClientSecret: String ->
       val context = context()
       val storage = NotificationStorage(context)
       if (endpoint.isNotBlank() && !isAllowedNotificationEndpoint(endpoint)) {
@@ -24,6 +24,8 @@ class RakazoNotificationsModule : Module() {
       storage.endpoint = endpoint
       storage.token = token
       storage.spaceId = spaceId
+      storage.accessClientId = accessClientId
+      storage.accessClientSecret = accessClientSecret
       storage.settings = NotificationSettings.fromMap(value)
       if (storage.settings.liveConnection && endpoint.isNotBlank() && token.isNotBlank()) {
         RakazoNotificationService.start(context)
@@ -32,7 +34,7 @@ class RakazoNotificationsModule : Module() {
       }
     }
 
-    AsyncFunction("resume") { endpoint: String, token: String, spaceId: String ->
+    AsyncFunction("resume") { endpoint: String, token: String, spaceId: String, accessClientId: String, accessClientSecret: String ->
       val context = context()
       if (endpoint.isNotBlank() && !isAllowedNotificationEndpoint(endpoint)) {
         RakazoNotificationService.stop(context)
@@ -41,6 +43,8 @@ class RakazoNotificationsModule : Module() {
         storage.endpoint = endpoint
         storage.token = token
         storage.spaceId = spaceId
+        storage.accessClientId = accessClientId
+        storage.accessClientSecret = accessClientSecret
         if (storage.settings.liveConnection && endpoint.isNotBlank() && token.isNotBlank()) {
           RakazoNotificationService.start(context)
         }
@@ -54,6 +58,8 @@ class RakazoNotificationsModule : Module() {
         val storage = NotificationStorage(context)
         storage.token = ""
         storage.spaceId = ""
+        storage.accessClientId = ""
+        storage.accessClientSecret = ""
       } else {
         RakazoNotificationService.stop(context)
       }

@@ -108,13 +108,13 @@ class RakazoNotificationService : Service() {
         return
       }
       val seeded = prepareHistorySpace(generation, storage.spaceId) ?: return
+      val session = storage.session
       try {
         val avatarStyle = selectedAvatarStyle
-          ?: avatarStyle(storage.endpoint, storage.token, storage.spaceId)
-            .also { selectedAvatarStyle = it }
-        val active = runs(storage.endpoint, storage.token, storage.spaceId, "active")
+          ?: avatarStyle(session).also { selectedAvatarStyle = it }
+        val active = runs(session, "active")
         val working = active.filter(::isWorking).filter { it.notificationsEnabled }
-        val recent = runs(storage.endpoint, storage.token, storage.spaceId, "recent")
+        val recent = runs(session, "recent")
         val replyLookups = mutableListOf<Pair<RunRecord, Boolean>>()
         val immediate = mutableListOf<Pair<RunRecord, NotificationCopy>>()
         if (!runIfCurrent(generation) {
@@ -155,7 +155,7 @@ class RakazoNotificationService : Service() {
         }
         for ((run, scheduled) in replyLookups) {
           val reply = runCatching {
-            latestReply(storage.endpoint, storage.token, storage.spaceId, run)
+            latestReply(session, run)
           }.getOrDefault("")
           if (reply == null) continue
           if (!runIfCurrent(generation) {
@@ -429,14 +429,14 @@ private object Channels {
   const val ATTENTION = "rakazo_attention"
 }
 
-private fun runs(endpoint: String, token: String, spaceId: String, filter: String): List<RunRecord> {
-  val root = rpc(endpoint, token, spaceId, "runs/list", JSONObject().put("filter", filter))
+private fun runs(session: ApiSession, filter: String): List<RunRecord> {
+  val root = rpc(session, "runs/list", JSONObject().put("filter", filter))
   val rows = root.optJSONArray("runs") ?: throw IOException("Invalid activity response")
   return List(rows.length()) { index ->
     val row = rows.optJSONObject(index) ?: throw IOException("Invalid activity response")
     RunRecord(
       runId = row.requiredString("runId"),
-      spaceId = spaceId,
+      spaceId = session.spaceId,
       botId = row.requiredString("botId"),
       botName = row.requiredString("botName"),
       groupId = row.optionalString("groupId"),
@@ -453,14 +453,14 @@ private fun runs(endpoint: String, token: String, spaceId: String, filter: Strin
 private fun isWorking(run: RunRecord): Boolean =
   run.status == "queued" || run.status == "leased" || run.status == "running"
 
-private fun avatarStyle(endpoint: String, token: String, spaceId: String): String =
-  rpc(endpoint, token, spaceId, "me", JSONObject()).optString("avatarStyle", "robot")
+private fun avatarStyle(session: ApiSession): String =
+  rpc(session, "me", JSONObject()).optString("avatarStyle", "robot")
 
-private fun latestReply(endpoint: String, token: String, spaceId: String, run: RunRecord): String? {
+private fun latestReply(session: ApiSession, run: RunRecord): String? {
   val target = JSONObject().apply {
     if (run.groupId != null) put("groupId", run.groupId) else put("botId", run.botId)
   }
-  val root = rpc(endpoint, token, spaceId, "threads/get", target)
+  val root = rpc(session, "threads/get", target)
   val messages = root.optJSONArray("messages") ?: return ""
   for (messageIndex in messages.length() - 1 downTo 0) {
     val message = messages.optJSONObject(messageIndex) ?: continue
@@ -479,13 +479,8 @@ private fun latestReply(endpoint: String, token: String, spaceId: String, run: R
   return ""
 }
 
-private fun rpc(
-  endpoint: String,
-  token: String,
-  spaceId: String,
-  procedure: String,
-  input: JSONObject,
-): JSONObject {
+private fun rpc(session: ApiSession, procedure: String, input: JSONObject): JSONObject {
+  val endpoint = session.endpoint
   if (!isAllowedNotificationEndpoint(endpoint)) throw IOException("Disallowed notification endpoint")
   val connection = URL("$endpoint/rpc/$procedure").openConnection() as HttpURLConnection
   return try {
@@ -495,9 +490,13 @@ private fun rpc(
     connection.doOutput = true
     connection.setRequestProperty("Content-Type", "application/json")
     connection.setRequestProperty("Origin", "rakazo://")
-    connection.setRequestProperty("Authorization", "Bearer $token")
-    if (spaceId.isNotBlank()) {
-      connection.setRequestProperty("x-rakazo-space-id", spaceId)
+    connection.setRequestProperty("Authorization", "Bearer ${session.token}")
+    if (session.spaceId.isNotBlank()) {
+      connection.setRequestProperty("x-rakazo-space-id", session.spaceId)
+    }
+    if (session.accessClientId.isNotBlank() && session.accessClientSecret.isNotBlank()) {
+      connection.setRequestProperty("CF-Access-Client-Id", session.accessClientId)
+      connection.setRequestProperty("CF-Access-Client-Secret", session.accessClientSecret)
     }
     connection.outputStream.use {
       it.write(JSONObject().put("json", input).toString().toByteArray(Charsets.UTF_8))

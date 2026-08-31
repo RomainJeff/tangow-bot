@@ -45,7 +45,7 @@ describe("Android mobile platform contract", () => {
     const thread = readFileSync(resolve(mobileRoot, "app/thread.tsx"), "utf8");
     expect(service).toContain("android.requestPromotedOngoing");
     expect(service).toContain("liveStatusIcon(primary, avatarStyle)");
-    expect(service).toContain('rpc(endpoint, token, spaceId, "me"');
+    expect(service).toContain('rpc(session, "me"');
     expect(service).not.toContain("showStarting");
     expect(service).not.toContain("catch (_: IOException) {\n        stop()");
     expect(service).toContain("Expo push owns background completion and attention delivery");
@@ -61,9 +61,14 @@ describe("Android mobile platform contract", () => {
     expect(allowlist).toContain("isLanOrLocalHost");
     expect(live).toContain("normalizeApiBase(endpoint)");
     expect(live).toMatch(
-      /export async function resumeLiveNotifications[\s\S]*normalizeApiBase\(endpoint\)[\s\S]*nativeNotifications\.resume\(parsed\.url/,
+      /export async function resumeLiveNotifications[\s\S]*normalizeApiBase\(endpoint\)[\s\S]*nativeNotifications\.resume\(\s*parsed\.url/,
     );
-    expect(service).toContain('connection.setRequestProperty("x-rakazo-space-id", spaceId)');
+    expect(service).toContain(
+      'connection.setRequestProperty("x-rakazo-space-id", session.spaceId)',
+    );
+    // The Access service token must ride along with every polled request.
+    expect(service).toContain('connection.setRequestProperty("CF-Access-Client-Id"');
+    expect(service).toContain('connection.setRequestProperty("CF-Access-Client-Secret"');
     expect(service).toContain("storage.spaceId.isBlank()");
     expect(service).toContain("private fun prepareHistorySpace(");
     expect(service).toContain("knownCompleted.clear()");

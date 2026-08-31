@@ -1,7 +1,8 @@
 import { requireNativeModule } from "expo-modules-core";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import { apiBaseWarning, normalizeApiBase } from "./endpoint";
+import { accessFor } from "./access-store";
+import { apiBaseWarning, defaultApiBase, normalizeApiBase } from "./endpoint";
 import { t } from "./i18n";
 
 export interface LiveNotificationSettings {
@@ -25,8 +26,16 @@ type NativeNotifications = {
     endpoint: string,
     token: string,
     spaceId: string,
+    accessClientId: string,
+    accessClientSecret: string,
   ): Promise<void>;
-  resume(endpoint: string, token: string, spaceId: string): Promise<void>;
+  resume(
+    endpoint: string,
+    token: string,
+    spaceId: string,
+    accessClientId: string,
+    accessClientSecret: string,
+  ): Promise<void>;
   stop(clearSession: boolean): Promise<void>;
   setOpenThread(botId: string | null, threadId: string | null): Promise<void>;
   openSettings(): Promise<void>;
@@ -92,7 +101,15 @@ export async function setLiveNotificationSettings(
     const granted = existing.granted || (await Notifications.requestPermissionsAsync()).granted;
     if (!granted) throw new Error(t("Android blocked notifications."));
   }
-  await nativeNotifications.setSettings(settings, parsed.url, token, spaceId);
+  const access = accessFor(parsed.url, defaultApiBase());
+  await nativeNotifications.setSettings(
+    settings,
+    parsed.url,
+    token,
+    spaceId,
+    access?.clientId ?? "",
+    access?.clientSecret ?? "",
+  );
 }
 
 export async function resumeLiveNotifications(
@@ -103,7 +120,14 @@ export async function resumeLiveNotifications(
   if (!nativeNotifications || !token) return;
   const parsed = normalizeApiBase(endpoint);
   if (!parsed.ok || apiBaseWarning(parsed.url)) return;
-  await nativeNotifications.resume(parsed.url, token, spaceId);
+  const access = accessFor(parsed.url, defaultApiBase());
+  await nativeNotifications.resume(
+    parsed.url,
+    token,
+    spaceId,
+    access?.clientId ?? "",
+    access?.clientSecret ?? "",
+  );
 }
 
 export async function stopLiveNotifications(clearSession = false): Promise<void> {
