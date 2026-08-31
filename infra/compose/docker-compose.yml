@@ -132,5 +132,25 @@ services:
     depends_on:
       - api
 
+  # Cloudflare Tunnel: exposes the local stack on its public hostname without
+  # opening a port on the host. Ingress (hostname -> http://web:5173) is
+  # configured remotely in the Cloudflare dashboard; the token is all the
+  # connector needs. Token lives in .env (gitignored) as CLOUDFLARE_TUNNEL_TOKEN,
+  # never in this file.
+  #
+  # Opt-in through the `tunnel` profile: `docker compose --profile tunnel up`.
+  # Interpolation stays optional so the stack still starts, and backup/restore
+  # still run, on machines that never set the token; cloudflared refuses to run
+  # with an empty one.
+  cloudflared:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    restart: unless-stopped
+    depends_on:
+      - web
+
 volumes:
   pgdata:
