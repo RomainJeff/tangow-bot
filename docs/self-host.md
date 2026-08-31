@@ -375,15 +375,51 @@ instead.
 2. Add a policy on the Access application with the **Service Auth** action that matches that token.
    `Bypass` also lets the app through, but it disables Access enforcement *and* logging for everyone
    on the paths it covers.
-3. In the desktop app's setup screen, choose **Existing instance** and paste the client ID and secret
-   into the Cloudflare Access fields. The app stores the secret with the operating system keychain
-   (Keychain, DPAPI, or libsecret) and sends it on every request to that server, including the RPC
-   calls, the event stream, and embedded computer views.
+3. Give the token to the app, as described under **Desktop** or **Mobile** below.
 
 A service token is a single shared identity: per-user, per-group, and device-posture Access policies
 no longer distinguish who is connecting, and only the Rakazo sign-in tells your users apart. Scope
 the policy to that one token, set the shortest workable token duration, and rotate it deliberately.
-Machines without a keychain cannot store the secret, and the app refuses to save it in cleartext.
+
+### Desktop
+
+In the setup screen, choose **Existing instance** and paste the client ID and secret into the
+Cloudflare Access fields. The app stores the secret with the operating system keychain (Keychain,
+DPAPI, or libsecret) and sends it on every request to that server, including the RPC calls, the
+event stream, and embedded computer views. Machines without a keychain cannot store the secret, and
+the app refuses to save it in cleartext.
+
+### Mobile
+
+Open the server sheet on the sign-in screen, enter the server URL, and paste the client ID and
+secret below it. The app checks the token against the server before saving, stores the secret with
+`expo-secure-store` (Keychain on iOS, Keystore on Android), and sends it on every request to that
+server: the RPC calls, the event stream, and the Android background notification poller. The stored
+secret is never displayed again — re-open the sheet, leave the secret box empty, and saving keeps
+the token you already stored. Clearing both fields removes it.
+
+A token is bound to the server it was entered for, so pointing the app at a different server never
+sends it there.
+
+For a fleet build that always talks to one Access-protected server, bake the token in at build time
+next to `EXPO_PUBLIC_API_URL`:
+
+```bash
+EXPO_PUBLIC_CF_ACCESS_CLIENT_ID=<client-id>
+EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET=<client-secret>
+```
+
+Both must be set together or the build fails. The token then applies only to `EXPO_PUBLIC_API_URL`;
+a server the user types in still needs its own token.
+
+> **Warning:** `EXPO_PUBLIC_*` values are inlined into the JavaScript bundle at build time, so a
+> token passed this way is readable by anyone who unpacks the APK or IPA. Use it only for builds you
+> distribute internally, never for a public store release. Enter the token in the app instead when
+> it must stay confidential.
+
+The computer view renders the remote screen in a `WebView`, which cannot attach the service token to
+the page's subresources or its WebSocket. That view does not work against an Access-protected server
+on mobile.
 
 ## Restore
 

@@ -13,7 +13,12 @@ your own branded build, use your own Expo and store accounts.
 1. Link `apps/mobile` to an Expo project owned by your account.
 2. Choose unique iOS and Android application identifiers.
 3. Configure `EXPO_PUBLIC_API_URL` in the EAS build environment. Production
-   builds require a valid HTTPS URL.
+   builds require a valid HTTPS URL. To bake a Cloudflare Access service token
+   into an internally distributed build, also set
+   `EXPO_PUBLIC_CF_ACCESS_CLIENT_ID` and `EXPO_PUBLIC_CF_ACCESS_CLIENT_SECRET`
+   together. These are inlined into the bundle and readable by anyone who
+   unpacks the app, so never set them for a public store release. See
+   [Cloudflare Access](./self-host.md#cloudflare-access).
 4. Keep store application IDs, team IDs, signing credentials, API keys, and
    review-account credentials out of Git.
 5. Before a native iOS or Android build, run
