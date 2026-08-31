@@ -2,8 +2,18 @@ import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { DesktopReachability, DesktopSetup } from "@rakazo/contracts";
+import type {
+  DesktopAccessCredentials,
+  DesktopReachability,
+  DesktopSetup,
+} from "@rakazo/contracts";
 import { app, BrowserWindow, ipcMain, Menu, net, type Session, session, shell } from "electron";
+import {
+  accessStorageAvailable,
+  persistAccess,
+  readAccess,
+  type StoredAccess,
+} from "./access-store.js";
 import {
   DesktopUpdateController,
   type ElectronAutoUpdater,
@@ -25,6 +35,7 @@ import {
   isRendererAssetMiss,
 } from "./renderer-assets.js";
 import {
+  accessHeaders,
   DEFAULT_LOCAL_WEB_URL,
   desktopStackImageTag,
   isRakazoHealth,
@@ -34,6 +45,8 @@ import {
   parseSetupInput,
   probeFailureMessage,
   readProbeJson,
+  redirectsToCloudflareAccess,
+  resolveAccessInput,
   resolveStartupTarget,
   safeExternalUrl,
   servesBundledRenderer,
@@ -58,6 +71,8 @@ let mainWindow: BrowserWindow | null = null;
 let setupWindow: BrowserWindow | null = null;
 const bundledRendererInstallations = new Set<string>();
 let currentSetup: DesktopSetup | null = null;
+/** Cloudflare Access service token for the connected origin, when one is stored. */
+let currentAccess: StoredAccess | null = null;
 let currentTargetUrl: string | null = null;
 let setupError: string | null = null;
 let setupSaveInProgress = false;
@@ -310,12 +325,41 @@ function createWindow(url: string, partition: string | null) {
   return { loaded, win };
 }
 
-async function probeDocument(url: string): Promise<string | null> {
+/** Access headers for a target, or null when no token was stored for that origin. */
+function accessHeadersFor(targetUrl: string): Record<string, string> | null {
+  const origin = safeOrigin(targetUrl);
+  if (origin === null || currentAccess === null || currentAccess.origin !== origin) return null;
+  return accessHeaders(currentAccess);
+}
+
+/**
+ * One session hook covers every request the app makes to the server: the
+ * document, RPC calls, the SSE stream, WebSockets and embedded iframes.
+ */
+function applyAccessHeaders(targetSession: Session, targetUrl: string) {
+  const headers = accessHeadersFor(targetUrl);
+  // Only one onBeforeSendHeaders listener may exist per session, and this is
+  // the only one Rakazo installs, so clearing it here is safe.
+  if (headers === null) {
+    targetSession.webRequest.onBeforeSendHeaders(null);
+    return;
+  }
+  const origin = new URL(targetUrl).origin;
+  targetSession.webRequest.onBeforeSendHeaders({ urls: [`${origin}/*`] }, (details, callback) => {
+    callback({ requestHeaders: { ...details.requestHeaders, ...headers } });
+  });
+}
+
+async function probeDocument(
+  url: string,
+  access: Record<string, string> | null,
+): Promise<string | null> {
   // Test/dev harnesses may load data: or file: documents; only probe real servers.
   if (!url.startsWith("http://") && !url.startsWith("https://")) return null;
   try {
     const response = await net.fetch(url, {
       method: "GET",
+      ...(access === null ? {} : { headers: access }),
       redirect: "manual",
       cache: "no-store",
       credentials: "omit",
@@ -482,7 +526,10 @@ async function installBundledRenderer(
 
   await targetSession.protocol.handle(webUrl.protocol.slice(0, -1), async (request) => {
     const forward = () => {
-      return targetSession.fetch(request, forwardedRendererRequestInit(request, webUrl.origin));
+      return targetSession.fetch(
+        request,
+        forwardedRendererRequestInit(request, webUrl.origin, accessHeadersFor(targetUrl)),
+      );
     };
     if (request.method !== "GET" && request.method !== "HEAD") {
       return forward();
@@ -638,7 +685,11 @@ function fromSetupWindow(event: Electron.IpcMainInvokeEvent) {
   );
 }
 
-async function probeServer(rawUrl: string, signal?: AbortSignal): Promise<DesktopReachability> {
+async function probeServer(
+  rawUrl: string,
+  access: Record<string, string> | null = null,
+  signal?: AbortSignal,
+): Promise<DesktopReachability> {
   const url = normalizeServerUrl(rawUrl);
   if (url === null) return { ok: false, error: "Enter a valid http:// or https:// address." };
   const timeout = AbortSignal.timeout(PROBE_TIMEOUT_MS);
@@ -646,7 +697,7 @@ async function probeServer(rawUrl: string, signal?: AbortSignal): Promise<Deskto
   try {
     const response = await net.fetch(`${url}/rpc/health`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...(access ?? {}) },
       body: JSON.stringify({ json: {} }),
       cache: "no-store",
       credentials: "omit",
@@ -658,7 +709,9 @@ async function probeServer(rawUrl: string, signal?: AbortSignal): Promise<Deskto
         ok: false,
         status: response.status,
         url,
-        error: "That address redirects elsewhere. Enter the final Rakazo server address.",
+        error: redirectsToCloudflareAccess(response.headers.get("location"))
+          ? "That server is behind Cloudflare Access. Add a service token client ID and secret."
+          : "That address redirects elsewhere. Enter the final Rakazo server address.",
       };
     }
     if (!response.ok) {
@@ -743,7 +796,8 @@ async function openAppOnce(targetUrl: string) {
   const previous = mainWindow;
   let win: BrowserWindow | null = null;
   try {
-    const documentError = await probeDocument(targetUrl);
+    applyAccessHeaders(target.value, targetUrl);
+    const documentError = await probeDocument(targetUrl, accessHeadersFor(targetUrl));
     if (documentError !== null) {
       throw new Error(documentError);
     }
@@ -785,6 +839,7 @@ function commitPendingAppSwitch() {
 function abandonPendingAppSwitch(
   previousSetup: DesktopSetup | null,
   previousUrl: string | null,
+  previousAccess: StoredAccess | null,
 ): "restored" | "kept" {
   const previous = pendingPreviousWindow;
   pendingPreviousWindow = null;
@@ -793,6 +848,7 @@ function abandonPendingAppSwitch(
     if (failed !== null && !failed.isDestroyed() && failed !== previous) failed.destroy();
     mainWindow = previous;
     currentSetup = previousSetup;
+    currentAccess = previousAccess;
     currentTargetUrl = previousUrl;
     // If setup was already closed (e.g. during a slow write), make the restored
     // session visible — otherwise macOS can be left with no shown window.
@@ -828,10 +884,15 @@ function destroySetupWindow() {
 }
 
 /** Best-effort restore of setup.json after a failed save that already wrote disk. */
-async function rollbackSetupFile(userDataDir: string, previousSetup: DesktopSetup | null) {
+async function rollbackSetupFile(
+  userDataDir: string,
+  previousSetup: DesktopSetup | null,
+  previousAccess: StoredAccess | null,
+) {
   try {
     if (previousSetup !== null) await writeSetup(userDataDir, previousSetup);
     else await clearSetup(userDataDir);
+    await persistAccess(userDataDir, previousAccess);
   } catch {
     // Disk rollback is best-effort; callers already restored in-memory state when possible.
   }
@@ -845,13 +906,15 @@ async function recoverFromCrashedSave(
   userDataDir: string,
   previousSetup: DesktopSetup | null,
   previousUrl: string | null,
+  previousAccess: StoredAccess | null,
 ): Promise<string> {
-  const outcome = abandonPendingAppSwitch(previousSetup, previousUrl);
-  await rollbackSetupFile(userDataDir, previousSetup);
+  const outcome = abandonPendingAppSwitch(previousSetup, previousUrl, previousAccess);
+  await rollbackSetupFile(userDataDir, previousSetup, previousAccess);
   if (outcome === "kept") {
     if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.destroy();
     mainWindow = null;
     currentSetup = previousSetup;
+    currentAccess = previousAccess;
     currentTargetUrl = previousUrl;
   }
   const message =
@@ -893,6 +956,7 @@ app.whenReady().then(async () => {
     randomHex: (bytes) => randomBytes(bytes).toString("hex"),
   });
   currentSetup = await readSetup(userDataDir);
+  currentAccess = await readAccess(userDataDir);
   const target = resolveStartupTarget({
     envUrl: process.env.RAKAZO_WEB_URL,
     saved: currentSetup,
@@ -960,22 +1024,28 @@ app.whenReady().then(async () => {
     return {
       defaultLocalUrl: LOCAL_WEB_URL,
       saved: currentSetup,
+      // The client ID shows a token is configured; the secret never leaves main.
+      savedAccessClientId: currentAccess?.clientId ?? null,
       error: setupError ?? undefined,
     };
   });
 
-  ipcMain.handle("desktop.setup.test", async (event, url: unknown) => {
+  ipcMain.handle("desktop.setup.test", async (event, url: unknown, access: unknown) => {
     if (!fromSetupWindow(event)) return { ok: false, error: "Setup is not active." };
     if (typeof url !== "string") return { ok: false, error: "Enter a server address." };
-    return probeServer(url);
+    // normalizeServerUrl returns the canonical origin the token would be sent to.
+    const origin = normalizeServerUrl(url);
+    const credentials = origin === null ? null : resolveAccessInput(access, currentAccess, origin);
+    return probeServer(url, accessHeaders(credentials));
   });
 
-  ipcMain.handle("desktop.setup.save", async (event, payload: unknown) => {
+  ipcMain.handle("desktop.setup.save", async (event, payload: unknown, access: unknown) => {
     if (!fromSetupWindow(event)) return { ok: false, error: "Setup is not active." };
     if (setupSaveInProgress)
       return { ok: false, error: "A connection attempt is already running." };
     setupSaveInProgress = true;
     const previousSetup = currentSetup;
+    const previousAccess = currentAccess;
     const previousUrl = currentTargetUrl;
     try {
       const setup = parseSetupInput(payload);
@@ -1000,14 +1070,32 @@ app.whenReady().then(async () => {
         openSetup = { mode: "new", serverUrl: managedUrl };
       }
 
-      const reachability = await probeServer(openSetup.serverUrl);
+      const origin = new URL(openSetup.serverUrl).origin;
+      const credentials: DesktopAccessCredentials | null = resolveAccessInput(
+        access,
+        currentAccess,
+        origin,
+      );
+      if (credentials !== null && !accessStorageAvailable()) {
+        return {
+          ok: false,
+          error:
+            "This system has no secure credential storage, so the Cloudflare Access token cannot be saved.",
+        };
+      }
+
+      const nextAccess: StoredAccess | null =
+        credentials === null ? null : { ...credentials, origin };
+      const reachability = await probeServer(openSetup.serverUrl, accessHeaders(credentials));
       if (!reachability.ok) return { ok: false, error: reachability.error };
 
       // Open before persisting so a failed renderer load keeps the last working setup.
       currentSetup = openSetup;
+      currentAccess = nextAccess;
       const opened = await openApp(openSetup.serverUrl);
       if (!opened) {
         currentSetup = previousSetup;
+        currentAccess = previousAccess;
         return {
           ok: false,
           error: "Could not open that server. The previous instance was left unchanged.",
@@ -1020,26 +1108,45 @@ app.whenReady().then(async () => {
           ? watchRendererUntilCommitted(appWindow)
           : null;
       try {
+        // Token first: a failed setup write rolls both back together.
+        await persistAccess(userDataDir, nextAccess);
         await writeSetup(userDataDir, openSetup);
         if (rendererWatch?.crashed()) {
-          const message = await recoverFromCrashedSave(userDataDir, previousSetup, previousUrl);
+          const message = await recoverFromCrashedSave(
+            userDataDir,
+            previousSetup,
+            previousUrl,
+            previousAccess,
+          );
           return { ok: false, error: message };
         }
         // Commit while the crash listener is still armed.
         commitPendingAppSwitch();
         if (rendererWatch?.crashed()) {
-          const message = await recoverFromCrashedSave(userDataDir, previousSetup, previousUrl);
+          const message = await recoverFromCrashedSave(
+            userDataDir,
+            previousSetup,
+            previousUrl,
+            previousAccess,
+          );
           return { ok: false, error: message };
         }
         destroySetupWindow();
         // Final check after setup closes — a crash in this gap still rolls back.
         if (rendererWatch?.crashed()) {
-          const message = await recoverFromCrashedSave(userDataDir, previousSetup, previousUrl);
+          const message = await recoverFromCrashedSave(
+            userDataDir,
+            previousSetup,
+            previousUrl,
+            previousAccess,
+          );
           return { ok: false, error: message };
         }
         return { ok: true };
       } catch {
-        const outcome = abandonPendingAppSwitch(previousSetup, previousUrl);
+        // setup.json is written atomically, so only the token can be left ahead of it.
+        await persistAccess(userDataDir, previousAccess).catch(() => undefined);
+        const outcome = abandonPendingAppSwitch(previousSetup, previousUrl, previousAccess);
         return {
           ok: false,
           error:

@@ -57,6 +57,29 @@
             autocomplete="off"
             placeholder="https://rakazo.example.com"
           />
+
+          <label class="field-label" for="access-id">Cloudflare Access client ID</label>
+          <input
+            id="access-id"
+            class="field"
+            type="text"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="Optional"
+          />
+          <label class="field-label" for="access-secret">Cloudflare Access client secret</label>
+          <input
+            id="access-secret"
+            class="field"
+            type="password"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="Optional"
+          />
+          <p class="hint">
+            Only for servers behind Cloudflare Access. Leave the secret empty to keep the one
+            already saved.
+          </p>
         </section>
 
         <p id="status" class="status" role="status" aria-live="polite"></p>

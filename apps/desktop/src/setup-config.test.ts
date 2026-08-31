@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  accessHeaders,
   DEFAULT_LOCAL_WEB_URL,
   desktopStackImageTag,
   isRakazoHealth,
@@ -7,10 +8,13 @@ import {
   maySendDesktopStackToken,
   normalizeServerUrl,
   PROBE_RESPONSE_LIMIT_BYTES,
+  parseAccessInput,
   parseSetupInput,
   parseStoredSetup,
   probeFailureMessage,
   readProbeJson,
+  redirectsToCloudflareAccess,
+  resolveAccessInput,
   resolveStartupTarget,
   safeExternalUrl,
   serializeSetup,
@@ -264,5 +268,74 @@ describe("probe failures", () => {
     ["something else entirely", "Could not reach that address."],
   ])("explains %s", (message, expected) => {
     expect(probeFailureMessage(new Error(message))).toBe(expected);
+  });
+});
+
+describe("cloudflare access credentials", () => {
+  const stored = {
+    clientId: "abc.access",
+    clientSecret: "s3cret",
+    origin: "https://rakazo.example.com",
+  };
+
+  it("accepts a complete token and trims it", () => {
+    expect(parseAccessInput({ clientId: " abc.access ", clientSecret: " s3cret " })).toEqual({
+      clientId: "abc.access",
+      clientSecret: "s3cret",
+    });
+  });
+
+  it.each([
+    ["both blank", { clientId: "", clientSecret: "" }],
+    ["secret missing", { clientId: "abc.access", clientSecret: "  " }],
+    ["id missing", { clientId: "", clientSecret: "s3cret" }],
+    ["wrong shape", { clientId: 1, clientSecret: 2 }],
+    ["not an object", "abc.access"],
+  ])("rejects %s", (_name, value) => {
+    expect(parseAccessInput(value)).toBeNull();
+  });
+
+  it("keeps the stored secret when the id is unchanged and the secret is left empty", () => {
+    expect(
+      resolveAccessInput({ clientId: "abc.access", clientSecret: "" }, stored, stored.origin),
+    ).toEqual({ clientId: "abc.access", clientSecret: "s3cret" });
+  });
+
+  it("never reuses a stored secret for another origin or another id", () => {
+    expect(
+      resolveAccessInput(
+        { clientId: "abc.access", clientSecret: "" },
+        stored,
+        "https://other.example.com",
+      ),
+    ).toBeNull();
+    expect(
+      resolveAccessInput({ clientId: "other.access", clientSecret: "" }, stored, stored.origin),
+    ).toBeNull();
+  });
+
+  it("clears the token when both fields are emptied", () => {
+    expect(
+      resolveAccessInput({ clientId: "", clientSecret: "" }, stored, stored.origin),
+    ).toBeNull();
+  });
+
+  it("builds the service token headers", () => {
+    expect(accessHeaders({ clientId: "abc.access", clientSecret: "s3cret" })).toEqual({
+      "CF-Access-Client-Id": "abc.access",
+      "CF-Access-Client-Secret": "s3cret",
+    });
+    expect(accessHeaders(null)).toBeNull();
+  });
+
+  it.each([
+    ["https://team.cloudflareaccess.com/cdn-cgi/access/login/rakazo.example.com", true],
+    ["https://cloudflareaccess.com/login", true],
+    ["https://rakazo.example.com/login", false],
+    ["/login", false],
+    ["", false],
+    [null, false],
+  ])("detects an Access redirect to %s", (location, expected) => {
+    expect(redirectsToCloudflareAccess(location)).toBe(expected);
   });
 });

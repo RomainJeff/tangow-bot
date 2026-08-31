@@ -65,9 +65,20 @@ export interface DesktopSetup {
   serverUrl: string;
 }
 
+/**
+ * Cloudflare Access service token used to reach a server that sits behind Access.
+ * Never part of `DesktopSetup`: the secret is stored encrypted, apart from setup.json.
+ */
+export interface DesktopAccessCredentials {
+  clientId: string;
+  clientSecret: string;
+}
+
 export interface DesktopSetupState {
   defaultLocalUrl: string;
   saved: DesktopSetup | null;
+  /** Client ID of the stored Access token, so setup can show one is configured. */
+  savedAccessClientId: string | null;
   /** Present when a saved or newly selected server could not be reopened. */
   error?: string;
 }
@@ -123,8 +134,11 @@ export interface RakazoSetup {
   /** Used only to reserve space for native window controls in the local setup UI. */
   platform: string;
   state: () => Promise<DesktopSetupState>;
-  test: (url: string) => Promise<DesktopReachability>;
-  save: (setup: DesktopSetup) => Promise<{ ok: boolean; error?: string }>;
+  test: (url: string, access?: DesktopAccessCredentials | null) => Promise<DesktopReachability>;
+  save: (
+    setup: DesktopSetup,
+    access?: DesktopAccessCredentials | null,
+  ) => Promise<{ ok: boolean; error?: string }>;
   quit: () => Promise<void>;
   /** Opens one of the Docker install pages in the system browser. */
   openLink: (link: DesktopSetupLink) => Promise<void>;

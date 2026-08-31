@@ -72,4 +72,21 @@ describe("bundled desktop renderer", () => {
     });
     expect(oauthOptions.headers).toBeUndefined();
   });
+
+  it("adds Cloudflare Access headers to forwarded app requests only", () => {
+    const access = { "CF-Access-Client-Id": "abc.access", "CF-Access-Client-Secret": "s3cret" };
+    const appOptions = forwardedRendererRequestInit(
+      new Request(`${origin}/rpc/bots`),
+      origin,
+      access,
+    );
+    const oauthOptions = forwardedRendererRequestInit(
+      new Request("https://oauth.example.com/authorize"),
+      origin,
+      access,
+    );
+
+    expect(new Headers(appOptions.headers).get("cf-access-client-secret")).toBe("s3cret");
+    expect(oauthOptions.headers).toBeUndefined();
+  });
 });

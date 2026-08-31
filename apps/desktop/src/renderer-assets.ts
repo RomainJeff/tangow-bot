@@ -57,7 +57,11 @@ export function isRendererAssetMiss(error: unknown) {
   return code === "ENOENT" || code === "EISDIR" || code === "ENOTDIR";
 }
 
-export function forwardedRendererRequestInit(request: Request, webOrigin: string) {
+export function forwardedRendererRequestInit(
+  request: Request,
+  webOrigin: string,
+  extraHeaders?: Record<string, string> | null,
+) {
   const init: RequestInit & { bypassCustomProtocolHandlers: boolean } = {
     bypassCustomProtocolHandlers: true,
     credentials: "include",
@@ -65,6 +69,7 @@ export function forwardedRendererRequestInit(request: Request, webOrigin: string
   if (new URL(request.url).origin !== webOrigin) return init;
   const headers = new Headers(request.headers);
   headers.set("origin", webOrigin);
+  for (const [name, value] of Object.entries(extraHeaders ?? {})) headers.set(name, value);
   return { ...init, headers };
 }
 

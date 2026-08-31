@@ -364,6 +364,27 @@ Postgres custom-format dump plus an application-data archive under `/var/backups
 `0600` and seven-day rotation. These local snapshots help with operator mistakes but are not a
 substitute for an encrypted off-host backup or provider snapshot.
 
+## Cloudflare Access
+
+A server published behind [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/)
+answers browsers with a redirect to the team login domain, which the desktop app cannot follow:
+it authenticates with a bearer token, not an interactive session. Give the app a **service token**
+instead.
+
+1. In Zero Trust, create a service token and copy the client ID and secret. The secret is shown once.
+2. Add a policy on the Access application with the **Service Auth** action that matches that token.
+   `Bypass` also lets the app through, but it disables Access enforcement *and* logging for everyone
+   on the paths it covers.
+3. In the desktop app's setup screen, choose **Existing instance** and paste the client ID and secret
+   into the Cloudflare Access fields. The app stores the secret with the operating system keychain
+   (Keychain, DPAPI, or libsecret) and sends it on every request to that server, including the RPC
+   calls, the event stream, and embedded computer views.
+
+A service token is a single shared identity: per-user, per-group, and device-posture Access policies
+no longer distinguish who is connecting, and only the Rakazo sign-in tells your users apart. Scope
+the policy to that one token, set the shortest workable token duration, and rotate it deliberately.
+Machines without a keychain cannot store the secret, and the app refuses to save it in cleartext.
+
 ## Restore
 
 ```bash

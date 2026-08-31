@@ -1,12 +1,19 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
-import type { DesktopSetup, DesktopStackProbeResponse } from "@rakazo/contracts";
+import type {
+  DesktopAccessCredentials,
+  DesktopSetup,
+  DesktopStackProbeResponse,
+} from "@rakazo/contracts";
 
 /** Where `pnpm dev` serves the Rakazo web app on this machine. */
 export const DEFAULT_LOCAL_WEB_URL = "http://127.0.0.1:5173";
 export const PROBE_RESPONSE_LIMIT_BYTES = 64 * 1024;
 
 export const SETUP_FILE_NAME = "setup.json";
+
+/** Encrypted Cloudflare Access service token, kept out of plaintext setup.json. */
+export const ACCESS_FILE_NAME = "cloudflare-access.bin";
 
 export type StartupTarget =
   | { kind: "app"; url: string; source: "env" | "saved" }
@@ -299,4 +306,56 @@ function isLocalNetworkHost(hostname: string) {
 
 function unbracketedHost(hostname: string) {
   return hostname.replace(/^\[|\]$/g, "").toLowerCase();
+}
+
+/** A Cloudflare Access service token, or null when either field is blank. */
+export function parseAccessInput(value: unknown): DesktopAccessCredentials | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { clientId, clientSecret } = value as Record<string, unknown>;
+  if (typeof clientId !== "string" || typeof clientSecret !== "string") return null;
+  const id = clientId.trim();
+  const secret = clientSecret.trim();
+  if (id === "" || secret === "") return null;
+  return { clientId: id, clientSecret: secret };
+}
+
+/**
+ * Setup never renders a stored secret, so re-saving the same server with the
+ * client ID untouched and the secret box empty keeps the stored token instead of
+ * silently dropping it. Anything else is taken literally, including clearing it.
+ */
+export function resolveAccessInput(
+  value: unknown,
+  stored: (DesktopAccessCredentials & { origin: string }) | null,
+  origin: string,
+): DesktopAccessCredentials | null {
+  const entered = parseAccessInput(value);
+  if (entered !== null) return entered;
+  if (stored === null || stored.origin !== origin) return null;
+  const { clientId, clientSecret } = (value ?? {}) as Record<string, unknown>;
+  const id = typeof clientId === "string" ? clientId.trim() : "";
+  const secret = typeof clientSecret === "string" ? clientSecret.trim() : "";
+  if (id !== stored.clientId || secret !== "") return null;
+  return { clientId: stored.clientId, clientSecret: stored.clientSecret };
+}
+
+export function accessHeaders(
+  credentials: DesktopAccessCredentials | null,
+): Record<string, string> | null {
+  if (credentials === null) return null;
+  return {
+    "CF-Access-Client-Id": credentials.clientId,
+    "CF-Access-Client-Secret": credentials.clientSecret,
+  };
+}
+
+/** Access bounces unauthenticated requests to the team's login domain. */
+export function redirectsToCloudflareAccess(location: string | null): boolean {
+  if (location === null || location === "") return false;
+  try {
+    const host = new URL(location, "https://placeholder.invalid").hostname.toLowerCase();
+    return host === "cloudflareaccess.com" || host.endsWith(".cloudflareaccess.com");
+  } catch {
+    return false;
+  }
 }

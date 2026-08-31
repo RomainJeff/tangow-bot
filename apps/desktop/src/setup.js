@@ -4,6 +4,8 @@
 
   const form = document.getElementById("setup");
   const serverUrl = document.getElementById("server-url");
+  const accessId = document.getElementById("access-id");
+  const accessSecret = document.getElementById("access-secret");
   const panelNew = document.getElementById("panel-new");
   const panelExisting = document.getElementById("panel-existing");
   const stackSection = document.getElementById("stack");
@@ -38,6 +40,12 @@
   function selectedMode() {
     const checked = form.querySelector('input[name="mode"]:checked');
     return checked === null ? "new" : checked.value;
+  }
+
+  /** Only the "existing instance" panel can carry a Cloudflare Access token. */
+  function accessInput() {
+    if (selectedMode() !== "existing") return null;
+    return { clientId: accessId.value, clientSecret: accessSecret.value };
   }
 
   function setStatus(message, tone) {
@@ -103,7 +111,7 @@
     lockMode(true);
     setStatus("Connecting…");
     try {
-      const saved = await bridge.save({ mode, serverUrl: url });
+      const saved = await bridge.save({ mode, serverUrl: url }, accessInput());
       if (!saved.ok) setStatus(saved.error ?? "Could not save that address.", "error");
     } catch {
       setStatus("Could not save that address. Try again.", "error");
@@ -167,7 +175,7 @@
     setBusy(true);
     setStatus("Checking…");
     try {
-      const result = await bridge.test(value);
+      const result = await bridge.test(value, accessInput());
       if (result.ok) {
         serverUrl.value = result.url;
         setStatus(`Rakazo answered at ${result.url}.`, "ok");
@@ -235,6 +243,9 @@
       const stack = await bridge.stack.state();
       const attached = stack !== null && stack.phase !== "idle";
       if (attached) document.getElementById("mode-new").checked = true;
+      if (state.savedAccessClientId !== null) {
+        accessId.value = state.savedAccessClientId;
+      }
       syncPanels();
       if (state.error) setStatus(state.error, "error");
       if (attached) {
