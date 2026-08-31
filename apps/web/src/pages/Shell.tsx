@@ -5420,6 +5420,7 @@ function BotSettings({
     computerMode: ComputerMode;
     memoryScope?: "isolated" | "shared" | null;
     autoSpeak?: boolean;
+    chattyReplies?: boolean;
     voiceId?: string | null;
     modelProvider?: string | null;
     modelId?: string | null;
@@ -5436,6 +5437,7 @@ function BotSettings({
   const [computerMode, setComputerMode] = useState(bot.computerMode);
   const [memoryScope, setMemoryScope] = useState(bot.memoryScope);
   const [autoSpeak, setAutoSpeak] = useState(bot.autoSpeak);
+  const [chattyReplies, setChattyReplies] = useState(bot.chattyReplies);
   const [voiceId, setVoiceId] = useState(bot.voiceId ?? "");
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [modelKey, setModelKey] = useState(
@@ -5643,6 +5645,14 @@ function BotSettings({
           />
           <Trans>Read replies aloud</Trans>
         </label>
+        <label className="mt-4 flex cursor-pointer items-center gap-3 text-[14px] text-[#C9C9CE]">
+          <input
+            type="checkbox"
+            checked={chattyReplies}
+            onChange={(event) => setChattyReplies(event.target.checked)}
+          />
+          <Trans>Reply in several short messages</Trans>
+        </label>
         {voices.length ? (
           <label className="mt-4 block text-[14px] text-[#85858A]">
             <Trans>Voice</Trans>
@@ -5678,6 +5688,7 @@ function BotSettings({
               computerMode,
               memoryScope,
               autoSpeak,
+              chattyReplies,
               voiceId: voiceId || null,
               modelProvider: selected?.provider ?? null,
               modelId: selected?.modelId ?? null,
