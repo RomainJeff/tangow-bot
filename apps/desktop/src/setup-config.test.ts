@@ -266,6 +266,10 @@ describe("probe failures", () => {
     ["net::ERR_NAME_NOT_RESOLVED", "That host could not be found."],
     ["net::ERR_CERT_AUTHORITY_INVALID", "The server's HTTPS certificate was rejected."],
     ["something else entirely", "Could not reach that address."],
+    [
+      "net::ERR_HTTP2_PROTOCOL_ERROR",
+      "Could not reach that address (net::ERR_HTTP2_PROTOCOL_ERROR).",
+    ],
   ])("explains %s", (message, expected) => {
     expect(probeFailureMessage(new Error(message))).toBe(expected);
   });

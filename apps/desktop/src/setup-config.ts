@@ -146,7 +146,11 @@ export function probeFailureMessage(error: unknown): string {
   if (detail.includes("CERT_") || detail.includes("SSL")) {
     return "The server's HTTPS certificate was rejected.";
   }
-  return "Could not reach that address.";
+  // The Chromium code is the only clue left for anything unrecognised above.
+  const code = /net::[A-Z0-9_]+/.exec(detail);
+  return code === null
+    ? "Could not reach that address."
+    : `Could not reach that address (${code[0]}).`;
 }
 
 /** The bundled renderer only stands in for a real http(s) origin. */
