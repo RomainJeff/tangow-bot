@@ -14,6 +14,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { resolveAccessInput } from "../lib/access";
+import { accessFor, cachedAccess } from "../lib/access-store";
 import {
   apiBaseWarning,
   currentApiBase,
@@ -360,13 +362,26 @@ function ServerSheet({
 }) {
   const { t } = useI18n();
   const tokens = useMobileTokens();
+  const sheetInput = {
+    marginTop: 20,
+    backgroundColor: tokens.muted,
+    borderRadius: 13,
+    padding: 16,
+    color: tokens.foreground,
+    fontSize: 16,
+  } as const;
   const [draft, setDraft] = useState(current);
+  const [accessId, setAccessId] = useState("");
+  const [accessSecret, setAccessSecret] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     setDraft(current);
+    // The stored secret is never shown; leaving the box empty keeps it.
+    setAccessId(cachedAccess()?.origin === current ? (cachedAccess()?.clientId ?? "") : "");
+    setAccessSecret("");
     setError(null);
     setPending(false);
   }, [visible, current]);
@@ -378,12 +393,25 @@ function ServerSheet({
     setPending(true);
     setError(null);
     try {
-      const probed = await probeApiBase(draft);
+      const normalized = normalizeApiBase(draft);
+      const access = normalized.ok
+        ? resolveAccessInput(
+            { clientId: accessId, clientSecret: accessSecret },
+            cachedAccess(),
+            normalized.url,
+          )
+        : null;
+      // An empty form still probes with the build-time token when the URL is the
+      // build-time server, matching what the app will actually send.
+      const probed = await probeApiBase(
+        draft,
+        access ?? (normalized.ok ? accessFor(normalized.url, defaultApiBase()) : null),
+      );
       if (!probed.ok) {
         setError(probed.error);
         return;
       }
-      const saved = await saveApiBase(probed.url);
+      const saved = await saveApiBase(probed.url, access);
       if (!saved.ok) {
         setError(saved.error);
         return;
@@ -460,20 +488,50 @@ function ServerSheet({
               setDraft(value);
               setError(null);
             }}
-            style={{
-              marginTop: 20,
-              backgroundColor: tokens.muted,
-              borderRadius: 13,
-              padding: 16,
-              color: tokens.foreground,
-              fontSize: 16,
-            }}
+            style={sheetInput}
           />
           {warning ? (
             <Text style={{ color: tokens.mutedForeground, marginTop: 12, fontSize: 13 }}>
               {warning}
             </Text>
           ) : null}
+          <Text
+            style={{ color: tokens.mutedForeground, marginTop: 28, fontSize: 15, lineHeight: 22 }}
+          >
+            Cloudflare Access service token — only if your server sits behind Access. Leave both
+            fields empty otherwise.
+          </Text>
+          <TextInput
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="off"
+            placeholder="Client ID"
+            placeholderTextColor={tokens.mutedForeground}
+            value={accessId}
+            onChangeText={(value) => {
+              setAccessId(value);
+              setError(null);
+            }}
+            style={sheetInput}
+          />
+          <TextInput
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="off"
+            secureTextEntry
+            placeholder={
+              cachedAccess()?.origin === current && cachedAccess()?.clientId
+                ? "Client secret (saved)"
+                : "Client secret"
+            }
+            placeholderTextColor={tokens.mutedForeground}
+            value={accessSecret}
+            onChangeText={(value) => {
+              setAccessSecret(value);
+              setError(null);
+            }}
+            style={sheetInput}
+          />
           {error ? <Text style={{ color: tokens.destructive, marginTop: 12 }}>{error}</Text> : null}
           {usesCustomApiBase(current) || draft.trim() !== current ? (
             <Pressable
