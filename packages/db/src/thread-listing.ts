@@ -12,6 +12,9 @@ export const activeRunSelection = {
 export function previewFromBlocks(blocks: unknown): string {
   const rows = Array.isArray(blocks) ? blocks : [];
   for (const block of rows) {
+    if (block && typeof block === "object" && (block as { kind?: unknown }).kind === "reasoning") {
+      continue;
+    }
     if (
       block &&
       typeof block === "object" &&

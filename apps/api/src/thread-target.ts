@@ -476,7 +476,12 @@ function messagesWithLiveEvents(
   liveEvents: Parameters<typeof projectMessages>[0],
 ) {
   const live = projectMessages(liveEvents).filter((message) => {
-    if (message.blocks.some((block) => block.kind === "progress" || block.kind === "steps")) {
+    if (
+      message.blocks.some(
+        (block) =>
+          block.kind === "progress" || block.kind === "steps" || block.kind === "reasoning",
+      )
+    ) {
       return true;
     }
     if (!message.id.startsWith("subagent:")) return false;

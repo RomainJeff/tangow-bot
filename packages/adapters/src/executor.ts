@@ -28,6 +28,7 @@ import type { MessageBlock, RunStatus } from "@rakazo/contracts";
 import { ATTACHMENT_MAX_BYTES, isAttachmentImageMimeType } from "@rakazo/contracts";
 import {
   type ActionApprovalRule,
+  appendReasoningSegment,
   appendTextSegment,
   appendToolCallSegment,
   applyJudgeDecision,
@@ -1320,12 +1321,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let pendingProgress = "";
         let lastProgressAt = 0;
         let hasStreamedText = false;
+        let pendingReasoning = "";
+        let lastReasoningAt = 0;
         let toolCallStreak: ToolCallStreak = { key: undefined, count: 0 };
         let lastComputerFrameId: string | undefined;
         let terminalCheckpointComplete = false;
         let approvalPausePending = false;
         let handedOff = false;
         let progressRedactor = createStreamingRedactor(runSecrets);
+        let reasoningRedactor = createStreamingRedactor(runSecrets);
         const scripted = deps.runtime.describe().capabilities.scripted;
         const script = scripted ? inferScript(task.prompt, takeoverResume?.checkpoint) : undefined;
         const flushProgress = async () => {
@@ -1365,6 +1369,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
           midTurnUserTexts.push(narration);
           publishedMidTurnUserMessage = true;
+        };
+        const flushReasoning = async () => {
+          if (scripted || !pendingReasoning) return;
+          await deps.events.append({
+            spaceId: run.spaceId,
+            threadId: thread.id,
+            botId: bot.id,
+            type: "thread.progress",
+            runId,
+            // Always a delta: the reducer appends onto its own reasoning block, so it
+            // never needs the absolute text the narration stream depends on.
+            payload: { delta: pendingReasoning, reasoning: true, streaming: true },
+          });
+          pendingReasoning = "";
+          lastReasoningAt = Date.now();
         };
         const formatObservation = (
           observation: Awaited<ReturnType<SandboxProvider["observe"]>>,
@@ -2481,6 +2500,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               // Keep the tail the old redactor still holds; a fresh instance drops it.
               pendingProgress += progressRedactor.finish();
               progressRedactor = createStreamingRedactor(runSecrets);
+              pendingReasoning += reasoningRedactor.finish();
+              reasoningRedactor = createStreamingRedactor(runSecrets);
               const connectionId = args.connectionId ? String(args.connectionId) : undefined;
               const purpose = String(args.purpose ?? "otp");
               if (applied && !claimedEffect) {
@@ -3058,7 +3079,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
             }
 
-            if (event.type === "text") {
+            if (event.type === "reasoning") {
+              // Chips and narration buffered earlier happened first; emit them before the
+              // reasoning block so the transcript keeps its chronology.
+              if (pendingProgress) await flushProgress();
+              flushPendingTools();
+              messageSegments = appendReasoningSegment(messageSegments, event.text);
+              pendingReasoning += reasoningRedactor.push(event.text);
+              const now = Date.now();
+              if (!scripted && pendingReasoning && now - lastReasoningAt >= 250) {
+                await flushReasoning();
+              }
+            } else if (event.type === "text") {
+              if (pendingReasoning) await flushReasoning();
               assembled += event.text;
               currentTextSegment += event.text;
               toolCallStreak = { key: undefined, count: 0 };
@@ -3190,6 +3223,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else if (event.type === "tool") {
               // Preserve event ordering when the throttle still holds recent narration: the
               // client must see that text before the tool call it describes.
+              await flushReasoning();
               await flushProgress();
               // Promote streamed narration into a durable, replyable chat message before
               // tools continue, so long turns do not look stalled and stay replyable.
@@ -3321,6 +3355,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
 
           if (approvalPausePending) return;
           approvedEffectReplays.assertDrained();
+          pendingReasoning += reasoningRedactor.finish();
+          await flushReasoning();
           pendingProgress += progressRedactor.finish();
           await flushProgress();
 
@@ -3788,6 +3824,9 @@ function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[]
   return blocks.map((block) => {
     if (block.kind === "text") {
       return { kind: "text" as const, text: redactSecrets(block.text, secrets) };
+    }
+    if (block.kind === "reasoning") {
+      return { kind: "reasoning" as const, text: redactSecrets(block.text, secrets) };
     }
     if (block.kind === "bot_message_sent" || block.kind === "bot_message_received") {
       return { ...block, text: redactSecrets(block.text, secrets) };
