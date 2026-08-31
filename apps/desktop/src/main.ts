@@ -39,13 +39,13 @@ import {
   DEFAULT_LOCAL_WEB_URL,
   desktopStackImageTag,
   isRakazoHealth,
+  isRedirectCancelled,
   managedLocalOpenUrl,
   maySendDesktopStackToken,
   normalizeServerUrl,
   parseSetupInput,
   probeFailureMessage,
   readProbeJson,
-  redirectsToCloudflareAccess,
   resolveAccessInput,
   resolveStartupTarget,
   safeExternalUrl,
@@ -371,7 +371,8 @@ async function probeDocument(
     }
     return null;
   } catch (error) {
-    return probeFailureMessage(error);
+    // A redirect is the allowed case above; manual mode surfaces it as a throw.
+    return isRedirectCancelled(error) ? null : probeFailureMessage(error);
   }
 }
 
@@ -704,16 +705,6 @@ async function probeServer(
       redirect: "manual",
       signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
     });
-    if (response.status >= 300 && response.status < 400) {
-      return {
-        ok: false,
-        status: response.status,
-        url,
-        error: redirectsToCloudflareAccess(response.headers.get("location"))
-          ? "That server is behind Cloudflare Access. Add a service token client ID and secret."
-          : "That address redirects elsewhere. Enter the final Rakazo server address.",
-      };
-    }
     if (!response.ok) {
       return {
         ok: false,

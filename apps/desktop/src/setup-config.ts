@@ -136,6 +136,11 @@ export function probeFailureMessage(error: unknown): string {
     return "Timed out reaching that address.";
   }
 
+  if (isRedirectCancelled(error)) {
+    // The Location header is unavailable here, so name both plausible causes.
+    return "That address redirects elsewhere. Enter the final Rakazo server address, or add a Cloudflare Access service token if the server sits behind Access.";
+  }
+
   const detail = error instanceof Error ? error.message : String(error);
   if (detail.includes("CONNECTION_REFUSED") || detail.includes("ECONNREFUSED")) {
     return "Nothing is listening at that address yet.";
@@ -355,13 +360,10 @@ export function accessHeaders(
   };
 }
 
-/** Access bounces unauthenticated requests to the team's login domain. */
-export function redirectsToCloudflareAccess(location: string | null): boolean {
-  if (location === null || location === "") return false;
-  try {
-    const host = new URL(location, "https://placeholder.invalid").hostname.toLowerCase();
-    return host === "cloudflareaccess.com" || host.endsWith(".cloudflareaccess.com");
-  } catch {
-    return false;
-  }
+/**
+ * `redirect: "manual"` makes Chromium reject a redirect instead of returning it,
+ * so a 3xx never reaches the response branch and only this message identifies it.
+ */
+export function isRedirectCancelled(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("Redirect was cancelled");
 }

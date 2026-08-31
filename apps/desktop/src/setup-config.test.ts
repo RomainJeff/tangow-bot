@@ -13,7 +13,6 @@ import {
   parseStoredSetup,
   probeFailureMessage,
   readProbeJson,
-  redirectsToCloudflareAccess,
   resolveAccessInput,
   resolveStartupTarget,
   safeExternalUrl,
@@ -267,6 +266,10 @@ describe("probe failures", () => {
     ["net::ERR_CERT_AUTHORITY_INVALID", "The server's HTTPS certificate was rejected."],
     ["something else entirely", "Could not reach that address (something else entirely)."],
     ["", "Could not reach that address."],
+    [
+      "Redirect was cancelled",
+      "That address redirects elsewhere. Enter the final Rakazo server address, or add a Cloudflare Access service token if the server sits behind Access.",
+    ],
   ])("explains %s", (message, expected) => {
     expect(probeFailureMessage(new Error(message))).toBe(expected);
   });
@@ -327,16 +330,5 @@ describe("cloudflare access credentials", () => {
       "CF-Access-Client-Secret": "s3cret",
     });
     expect(accessHeaders(null)).toBeNull();
-  });
-
-  it.each([
-    ["https://team.cloudflareaccess.com/cdn-cgi/access/login/rakazo.example.com", true],
-    ["https://cloudflareaccess.com/login", true],
-    ["https://rakazo.example.com/login", false],
-    ["/login", false],
-    ["", false],
-    [null, false],
-  ])("detects an Access redirect to %s", (location, expected) => {
-    expect(redirectsToCloudflareAccess(location)).toBe(expected);
   });
 });
