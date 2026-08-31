@@ -352,6 +352,7 @@ export interface ScriptedTurn {
 
 export type AgentRuntimeEvent =
   | { type: "text"; text: string }
+  | { type: "reasoning"; text: string }
   | { type: "progress"; text: string }
   | { type: "tool"; name: string; args: Record<string, unknown>; executionId: string }
   | { type: "ask"; text: string; detail?: string }

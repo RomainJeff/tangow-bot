@@ -192,6 +192,15 @@ export class PiAgentRuntime implements AgentRuntime {
           }
           if (
             event.type === "message_update" &&
+            event.assistantMessageEvent.type === "thinking_delta"
+          ) {
+            const delta = event.assistantMessageEvent.delta;
+            // Reasoning never joins `streamed`: it is not the answer, and treating it
+            // as one would silence the empty-response fallback below.
+            if (delta) queue.push({ type: "reasoning", text: delta });
+          }
+          if (
+            event.type === "message_update" &&
             event.assistantMessageEvent.type === "text_delta"
           ) {
             const delta = event.assistantMessageEvent.delta;

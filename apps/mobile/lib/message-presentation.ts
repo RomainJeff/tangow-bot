@@ -48,6 +48,8 @@ export function messagePresentationSegments(
 
   for (const block of blocks) {
     if (block.kind === "app_connect") continue;
+    // Mobile has no reasoning UI; rendering it would be an empty bubble.
+    if (block.kind === "reasoning") continue;
     if (!isToolBlock(block)) {
       content.push(block);
       continue;
@@ -69,7 +71,11 @@ export function toolOwnerId(
 }
 
 export function hasVisibleMessagePresentation(blocks: readonly MessageBlock[]): boolean {
-  return blocks.some((block) => !isToolBlock(block) || toolBlocksForMessage([block]).length > 0);
+  return blocks.some(
+    (block) =>
+      block.kind !== "reasoning" &&
+      (!isToolBlock(block) || toolBlocksForMessage([block]).length > 0),
+  );
 }
 
 export function isToolBlock(block: MessageBlock): block is ToolBlock {

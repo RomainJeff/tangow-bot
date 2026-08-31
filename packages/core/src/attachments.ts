@@ -90,6 +90,9 @@ export function blocksToAgentHistoryText(blocks: MessageBlock[]): string {
   return blocks
     .map((block) => {
       if (block.kind === "text") return block.text;
+      // Reasoning is display-only: replaying it as history would have the model
+      // read its own scratchpad back as conversation.
+      if (block.kind === "reasoning") return "";
       if (block.kind === "chart") return `[chart: ${block.name}]`;
       if (block.kind === "image") return `[image: ${block.name}]`;
       if (block.kind === "file") {

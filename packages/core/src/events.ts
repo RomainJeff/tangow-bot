@@ -186,6 +186,14 @@ export function reduceLiveMessageBlocks(
 ): MessageBlock[] {
   const tail = blocks.at(-1);
   const segments = tail?.kind === "progress" ? blocks.slice(0, -1) : blocks;
+  if (update.type === "progress" && update.payload?.reasoning) {
+    const delta = String(update.payload.delta ?? update.payload.text ?? "");
+    if (!delta) return [...blocks];
+    // Freeze streaming narration before the reasoning block: the progress tail must
+    // stay last or the delta arithmetic below reads the wrong flushed length.
+    const flushed = tail?.kind === "progress" ? appendTextSegment(segments, tail.text) : segments;
+    return appendReasoningSegment(flushed, delta);
+  }
   const priorText = liveMessageText(blocks);
   const flushedLength =
     tail?.kind === "progress" ? priorText.length - tail.text.length : priorText.length;
@@ -265,6 +273,18 @@ export function appendTextSegment(segments: readonly MessageBlock[], text: strin
     return [...segments.slice(0, -1), { kind: "text", text: last.text + text }];
   }
   return [...segments, { kind: "text", text }];
+}
+
+export function appendReasoningSegment(
+  segments: readonly MessageBlock[],
+  text: string,
+): MessageBlock[] {
+  if (!text) return [...segments];
+  const last = segments.at(-1);
+  if (last?.kind === "reasoning") {
+    return [...segments.slice(0, -1), { kind: "reasoning", text: last.text + text }];
+  }
+  return [...segments, { kind: "reasoning", text }];
 }
 
 export function appendToolCallSegment(

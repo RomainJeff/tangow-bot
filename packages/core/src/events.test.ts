@@ -107,6 +107,32 @@ describe("projectMessages", () => {
     expect(messages[0]?.blocks[0]).toEqual({ kind: "text", text: "Lisbon" });
   });
 
+  it("routes reasoning deltas into their own block and freezes the narration tail", () => {
+    const events = [
+      { delta: "The user wants", reasoning: true },
+      { delta: " Lisbon", reasoning: true },
+      // First narration flush is absolute: reasoning must not count toward its offset.
+      { text: "Looking" },
+      { delta: " up flights" },
+      { delta: "now answer", reasoning: true },
+    ].map((payload, index) => ({
+      id: `e${index}`,
+      threadId: "t1",
+      seq: index,
+      type: "thread.progress" as const,
+      runId: "r1",
+      payload: { ...payload, streaming: true },
+      createdAt: `2026-01-01T00:00:0${index}.000Z`,
+    }));
+    const messages = projectMessages(events);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.blocks).toEqual([
+      { kind: "reasoning", text: "The user wants Lisbon" },
+      { kind: "text", text: "Looking up flights" },
+      { kind: "reasoning", text: "now answer" },
+    ]);
+  });
+
   it("keeps live subagent cards until a durable subagent message arrives", () => {
     const live = projectMessages([
       {

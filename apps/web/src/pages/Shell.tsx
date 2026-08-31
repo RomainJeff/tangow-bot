@@ -3995,16 +3995,33 @@ const Transcript = memo(function Transcript({
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
-        {messages.map((message) => {
+        {messages.map((message, index) => {
           const peerReceipt = isPeerReceiptBlocks(message.blocks);
+          const previous = messages[index - 1];
+          // Consecutive messages from the same speaker read as one turn, so they
+          // lose the between-turns gap and the repeated speaker name.
+          const grouped =
+            previous != null &&
+            previous.role === message.role &&
+            previous.botId === message.botId &&
+            message.replyToMessageId == null;
           return (
             <div
               key={message.id}
               data-message-id={message.id}
-              className={peerReceipt ? "relative py-0.5" : "group/message relative pt-9 hover:z-20"}
+              className={
+                peerReceipt
+                  ? "relative py-0.5"
+                  : `group/message relative hover:z-20 ${grouped ? "pt-1.5" : "pt-9"}`
+              }
             >
               {peerReceipt ? null : (
-                <MessageHoverActions message={message} onReply={onReply} onReact={onReact} />
+                <MessageHoverActions
+                  message={message}
+                  onReply={onReply}
+                  onReact={onReact}
+                  grouped={grouped}
+                />
               )}
               <MessageView
                 artifactTarget={artifactTarget}
@@ -4014,7 +4031,7 @@ const Transcript = memo(function Transcript({
                 onOpenPeerMessages={onOpenPeerMessages}
                 onAnswer={onAnswer}
                 speakerName={
-                  peerReceipt
+                  peerReceipt || grouped
                     ? undefined
                     : message.role === "bot"
                       ? memberName?.(message.botId)
@@ -4683,10 +4700,12 @@ function MessageHoverActions({
   message,
   onReply,
   onReact,
+  grouped,
 }: {
   message: ThreadMessage;
   onReply: (message: ThreadMessage) => void;
   onReact: (message: ThreadMessage) => Promise<void>;
+  grouped?: boolean;
 }) {
   const { t } = useLingui();
   // Streaming progress bubbles keep hover free for selection / stop clicks.
@@ -4699,7 +4718,7 @@ function MessageHoverActions({
   }
 
   return (
-    <MessageHoverMetadata createdAt={message.createdAt}>
+    <MessageHoverMetadata createdAt={message.createdAt} grouped={grouped}>
       <div
         data-testid="message-hover-actions"
         className="flex items-center gap-0.5 rounded-full bg-[#1C1C1F] p-0.5 shadow-[0_1px_4px_rgba(0,0,0,0.45)]"
@@ -4790,6 +4809,58 @@ function ComputerReleaseActions({
   );
 }
 
+/** Model scratchpad: dim, outside the answer bubble, open only while it streams. */
+function ReasoningTrail({ text, live }: { text: string; live: boolean }) {
+  const { t } = useLingui();
+  // Live and persisted messages carry different ids, so the remount collapses it.
+  const [open, setOpen] = useState(live);
+  return (
+    <div className="max-w-[74%]">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={t`Toggle reasoning`}
+        onClick={() => setOpen((value) => !value)}
+        className="flex items-center gap-1 text-[12.5px] text-[#6E6E73] hover:text-[#A0A0A6]"
+      >
+        <ChevronDown
+          size={12}
+          strokeWidth={2}
+          className={`transition-transform ${open ? "" : "-rotate-90"}`}
+        />
+        <Trans>Thinking</Trans>
+      </button>
+      {open ? (
+        <div
+          className="mt-1 border-s border-[#26262A] ps-3 text-[13.5px] leading-[1.55] text-[#7C7C82]"
+          dir="auto"
+        >
+          <ChatMarkdown streaming={live}>{text}</ChatMarkdown>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type NarrationRow =
+  | { kind: "bubble"; blocks: MessageBlock[] }
+  | { kind: "aside"; block: MessageBlock; index: number };
+
+/** Answer text keeps the bubble; reasoning and tool trails render dim beside it. */
+function narrationRows(blocks: readonly MessageBlock[]): NarrationRow[] {
+  const rows: NarrationRow[] = [];
+  blocks.forEach((block, index) => {
+    if (block.kind === "text" || block.kind === "progress") {
+      const last = rows.at(-1);
+      if (last?.kind === "bubble") last.blocks.push(block);
+      else rows.push({ kind: "bubble", blocks: [block] });
+      return;
+    }
+    rows.push({ kind: "aside", block, index });
+  });
+  return rows;
+}
+
 function ToolSteps({
   steps,
   currentIndex,
@@ -4870,7 +4941,11 @@ const MessageView = memo(function MessageView({
     message.role === "bot" &&
     message.blocks.length > 0 &&
     message.blocks.every(
-      (block) => block.kind === "text" || block.kind === "progress" || block.kind === "steps",
+      (block) =>
+        block.kind === "text" ||
+        block.kind === "progress" ||
+        block.kind === "steps" ||
+        block.kind === "reasoning",
     );
   const isLive = message.id.startsWith("progress:");
   const parentJumpId = replyPreview?.id ?? replyToMessageId;
@@ -4899,43 +4974,57 @@ const MessageView = memo(function MessageView({
     return (
       <>
         {messageContext}
-        <div className="flex justify-start">
-          <div
-            className="max-w-[74%] space-y-2.5 rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]"
-            dir="auto"
-          >
-            {message.blocks.map((block, i) => {
-              if (block.kind === "steps") {
-                const isCurrentBlock = isLive && i === message.blocks.length - 1;
-                return (
-                  <div key={i} dir="ltr">
-                    <ToolSteps
-                      steps={block.steps}
-                      currentIndex={isCurrentBlock ? block.steps.length - 1 : undefined}
-                    />
-                  </div>
-                );
-              }
-              if (block.kind === "text" || block.kind === "progress") {
-                return (
-                  <div key={i}>
-                    <ChatMarkdown streaming={block.kind === "progress"}>{block.text}</ChatMarkdown>
-                  </div>
-                );
-              }
-              return null;
-            })}
-            {!isLive && voiceReady && message.blocks.some((block) => block.kind === "text") ? (
-              <button
-                type="button"
-                aria-label={speaking ? t`Stop speaking` : t`Speak this reply`}
-                onClick={onSpeak}
-                className="text-[12px] text-[#85858A] hover:text-[#ECECEE]"
-              >
-                {speaking ? <Trans>Stop</Trans> : <Trans>Speak</Trans>}
-              </button>
-            ) : null}
-          </div>
+        <div className="flex flex-col items-start gap-1.5">
+          {narrationRows(message.blocks).map((row, rowIndex) => {
+            if (row.kind === "bubble") {
+              return (
+                <div
+                  key={rowIndex}
+                  className="max-w-[74%] space-y-2.5 rounded-[20px] bg-[#1A1A1D] px-[18px] py-3 text-[15.5px] leading-[1.5] text-[#DFDFE2]"
+                  dir="auto"
+                >
+                  {row.blocks.map((block, i) => (
+                    <div key={i}>
+                      <ChatMarkdown streaming={block.kind === "progress"}>
+                        {"text" in block ? block.text : ""}
+                      </ChatMarkdown>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            if (row.block.kind === "reasoning") {
+              return (
+                <ReasoningTrail
+                  key={rowIndex}
+                  text={row.block.text}
+                  live={isLive && row.index === message.blocks.length - 1}
+                />
+              );
+            }
+            if (row.block.kind === "steps") {
+              const isCurrentBlock = isLive && row.index === message.blocks.length - 1;
+              return (
+                <div key={rowIndex} className="max-w-[74%]" dir="ltr">
+                  <ToolSteps
+                    steps={row.block.steps}
+                    currentIndex={isCurrentBlock ? row.block.steps.length - 1 : undefined}
+                  />
+                </div>
+              );
+            }
+            return null;
+          })}
+          {!isLive && voiceReady && message.blocks.some((block) => block.kind === "text") ? (
+            <button
+              type="button"
+              aria-label={speaking ? t`Stop speaking` : t`Speak this reply`}
+              onClick={onSpeak}
+              className="text-[12px] text-[#85858A] hover:text-[#ECECEE]"
+            >
+              {speaking ? <Trans>Stop</Trans> : <Trans>Speak</Trans>}
+            </button>
+          ) : null}
         </div>
       </>
     );
@@ -5026,17 +5115,21 @@ const MessageView = memo(function MessageView({
         }
         if (block.kind === "steps") {
           return (
-            <div key={i} className="flex justify-start">
-              <div
-                className="max-w-[74%] space-y-1.5 rounded-[20px] bg-[#1A1A1D] px-[18px] py-3"
-                dir="ltr"
-              >
-                <ToolSteps
-                  steps={block.steps}
-                  currentIndex={isLive ? block.steps.length - 1 : undefined}
-                />
-              </div>
+            <div key={i} className="max-w-[74%]" dir="ltr">
+              <ToolSteps
+                steps={block.steps}
+                currentIndex={isLive ? block.steps.length - 1 : undefined}
+              />
             </div>
+          );
+        }
+        if (block.kind === "reasoning") {
+          return (
+            <ReasoningTrail
+              key={i}
+              text={block.text}
+              live={isLive && i === message.blocks.length - 1}
+            />
           );
         }
         if (block.kind === "subagent") {
