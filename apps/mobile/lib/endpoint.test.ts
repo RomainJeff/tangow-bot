@@ -99,7 +99,7 @@ describe("probeApiBase", () => {
       async () =>
         new Response(JSON.stringify({ json: { ok: true, version: "0.1.0" } }), { status: 200 }),
     ) as unknown as typeof fetch;
-    await expect(probeApiBase("https://app.example.com", fetchImpl)).resolves.toEqual({
+    await expect(probeApiBase("https://app.example.com", null, fetchImpl)).resolves.toEqual({
       ok: true,
       url: "https://app.example.com",
     });
@@ -109,11 +109,44 @@ describe("probeApiBase", () => {
     );
   });
 
+  it("sends the service token and reports a Cloudflare Access bounce", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response("<html>login</html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+    ) as unknown as typeof fetch;
+    // `Response.url` is read-only, so stand in for the followed redirect.
+    vi.spyOn(Response.prototype, "url", "get").mockReturnValue(
+      "https://acme.cloudflareaccess.com/cdn-cgi/access/login/app.example.com",
+    );
+    const probed = await probeApiBase(
+      "https://app.example.com",
+      {
+        clientId: "client-id",
+        clientSecret: "client-secret",
+      },
+      fetchImpl,
+    );
+    expect(probed).toMatchObject({ ok: false });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://app.example.com/rpc/health",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "CF-Access-Client-Id": "client-id",
+          "CF-Access-Client-Secret": "client-secret",
+        }),
+      }),
+    );
+    vi.restoreAllMocks();
+  });
+
   it("rejects a host that is up but is not Rakazo", async () => {
     const fetchImpl = vi.fn(
       async () => new Response("ok", { status: 200 }),
     ) as unknown as typeof fetch;
-    await expect(probeApiBase("https://example.com", fetchImpl)).resolves.toMatchObject({
+    await expect(probeApiBase("https://example.com", null, fetchImpl)).resolves.toMatchObject({
       ok: false,
     });
   });

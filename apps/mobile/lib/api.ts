@@ -21,6 +21,8 @@ import {
   upsertMessageById,
 } from "@rakazo/core";
 import * as SecureStore from "expo-secure-store";
+import type { AccessCredentials } from "./access";
+import { currentAccessHeaders, loadAccess, saveAccess } from "./access-store";
 import { defaultApiBase, type EndpointResult, normalizeApiBase } from "./endpoint";
 import { t } from "./i18n";
 import { resumeLiveNotifications } from "./live-notifications";
@@ -67,6 +69,7 @@ export async function loadApiBase() {
     // SecureStore is unavailable in some test / web hosts.
   }
   cachedApiBase = apiBase;
+  await loadAccess(apiBase);
   try {
     const storedSpace = (await SecureStore.getItemAsync(SPACE_KEY)) ?? "";
     cachedSpaceId = storedSpace;
@@ -224,7 +227,10 @@ async function recoverSpaceRollback(apiBase: string) {
   }
 }
 
-export async function saveApiBase(input: string): Promise<EndpointResult> {
+export async function saveApiBase(
+  input: string,
+  access: AccessCredentials | null = null,
+): Promise<EndpointResult> {
   const parsed = normalizeApiBase(input);
   if (!parsed.ok) return parsed;
   if (parsed.url === defaultApiBase()) return resetApiBase();
@@ -242,6 +248,10 @@ export async function saveApiBase(input: string): Promise<EndpointResult> {
     return { ok: false, error: t("Could not save the server URL") };
   }
   cachedApiBase = parsed.url;
+  // The endpoint is already stored, so a failure here only costs the token.
+  if (!(await saveAccess(parsed.url, access))) {
+    return { ok: false, error: "Could not save the Cloudflare Access service token" };
+  }
   await clearStoredValue(SPACE_ROLLBACK_KEY);
   return parsed;
 }
@@ -264,6 +274,7 @@ export async function resetApiBase(): Promise<EndpointResult> {
     }
   }
   cachedApiBase = url;
+  await saveAccess(url, null);
   await clearStoredValue(SPACE_ROLLBACK_KEY);
   return { ok: true, url };
 }
@@ -273,6 +284,7 @@ export async function authHeaders(
 ): Promise<Record<string, string>> {
   const token = await loadSessionToken();
   return {
+    ...currentAccessHeaders(currentApiBase(), defaultApiBase()),
     ...(token ? { authorization: `Bearer ${token}` } : {}),
     ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
   };
@@ -298,7 +310,11 @@ async function authenticateWithEmail(
 ) {
   const res = await fetch(`${currentApiBase()}/api/auth/${action}/email`, {
     method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://" },
+    headers: {
+      "content-type": "application/json",
+      origin: "rakazo://",
+      ...currentAccessHeaders(currentApiBase(), defaultApiBase()),
+    },
     body: JSON.stringify(input),
   });
   const body = await res.json().catch(() => ({}));

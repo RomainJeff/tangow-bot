@@ -1,3 +1,4 @@
+import { type AccessCredentials, accessHeaders, isAccessLoginUrl } from "./access";
 import { t } from "./i18n";
 
 const LOCAL_API = "http://127.0.0.1:3100";
@@ -58,6 +59,7 @@ export function apiBaseWarning(url: string): string | null {
 
 export async function probeApiBase(
   input: string,
+  access: AccessCredentials | null = null,
   fetchImpl: typeof fetch = fetch,
 ): Promise<EndpointResult> {
   const parsed = normalizeApiBase(input);
@@ -68,12 +70,28 @@ export async function probeApiBase(
     const res = await withAbort(
       fetchImpl(`${parsed.url}/rpc/health`, {
         method: "POST",
-        headers: { "content-type": "application/json", origin: "rakazo://" },
+        headers: {
+          "content-type": "application/json",
+          origin: "rakazo://",
+          ...accessHeaders(access),
+        },
         body: JSON.stringify({ json: {} }),
         signal: controller.signal,
       }),
       controller.signal,
     );
+    // Cloudflare answers an unauthorised request with a redirect to its login
+    // page, which fetch follows, so the response is a well-formed HTML page
+    // rather than a transport failure.
+    if (isAccessLoginUrl(res.url)) {
+      cancelResponseBody(res);
+      return {
+        ok: false,
+        error: access
+          ? "Cloudflare Access rejected that service token. Check the policy uses the Service Auth action and includes this token."
+          : "That server sits behind Cloudflare Access. Add a service token below.",
+      };
+    }
     if (!res.ok) {
       cancelResponseBody(res);
       return { ok: false, error: t("That URL did not look like a Rakazo server") };
