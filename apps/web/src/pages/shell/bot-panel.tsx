@@ -11,6 +11,7 @@ import type {
 } from "@rakazo/contracts";
 import {
   AVATAR_SHAPE_COUNT,
+  BOT_COLORS,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
@@ -21,6 +22,9 @@ import {
   Input,
   NativeSelect,
   NativeSelectOption,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Switch,
   Textarea,
   Toggle,
@@ -171,6 +175,98 @@ export function CreateBotForm({
   );
 }
 
+/** Avatar popover: pick the bot color, and its organic shape when that avatar
+ * style is on. Shapes stay hidden for the robot style, which ignores the seed. */
+function BotAppearancePicker({
+  botId,
+  status,
+  color,
+  shapeSeed,
+  onColorChange,
+  onShapeChange,
+}: {
+  botId: string;
+  status: Bot["status"];
+  color: string;
+  shapeSeed: number | null;
+  onColorChange: (color: string) => void;
+  onShapeChange: (shapeSeed: number | null) => void;
+}) {
+  const { t } = useLingui();
+  const avatarStyle = useAvatarStyle();
+
+  return (
+    <Popover>
+      <div className="flex justify-center">
+        <PopoverTrigger
+          data-testid="bot-appearance-trigger"
+          aria-label={t`Appearance`}
+          className="rounded-full outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <BotAvatar
+            color={color}
+            identity={botId}
+            shapeSeed={shapeSeed}
+            size={64}
+            status={status}
+          />
+        </PopoverTrigger>
+      </div>
+      <PopoverContent data-testid="bot-appearance-picker" aria-label={t`Appearance`}>
+        {avatarStyle === "organic" ? (
+          <div className="grid grid-cols-4 gap-1">
+            {[null, ...Array.from({ length: AVATAR_SHAPE_COUNT }, (_, index) => index)].map(
+              (seed) => (
+                <button
+                  key={seed ?? "auto"}
+                  type="button"
+                  aria-pressed={shapeSeed === seed}
+                  aria-label={seed === null ? t`Automatic shape` : t`Shape ${seed + 1}`}
+                  onClick={() => onShapeChange(seed)}
+                  className={`flex h-[58px] items-center justify-center rounded-[12px] border transition-colors ${
+                    shapeSeed === seed
+                      ? "border-ring bg-muted"
+                      : "border-transparent hover:border-ring/60"
+                  }`}
+                >
+                  {seed === null ? (
+                    <span className="text-[12px] text-muted-foreground">
+                      <Trans>Auto</Trans>
+                    </span>
+                  ) : (
+                    <BotAvatar
+                      color={color}
+                      identity={botId}
+                      shapeSeed={seed}
+                      size={36}
+                      variant="organic"
+                    />
+                  )}
+                </button>
+              ),
+            )}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap justify-center gap-3">
+          {BOT_COLORS.map((swatch, index) => (
+            <button
+              key={swatch}
+              type="button"
+              aria-pressed={color === swatch}
+              aria-label={t`Color ${index + 1}`}
+              onClick={() => onColorChange(swatch)}
+              style={{ background: swatch }}
+              className={`h-7 w-7 rounded-full transition-shadow ${
+                color === swatch ? "ring-1 ring-ring ring-offset-2 ring-offset-popover" : ""
+              }`}
+            />
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function BotSettings({
   bot,
   memoryProviderConfigured,
@@ -185,6 +281,7 @@ export function BotSettings({
     title?: string;
     description?: string;
     instructions?: string;
+    color?: string;
     computerMode: ComputerMode;
     memoryScope?: "isolated" | "shared" | null;
     autoSpeak?: boolean;
@@ -203,6 +300,7 @@ export function BotSettings({
   const [title, setTitle] = useState(bot.title);
   const [description, setDescription] = useState(bot.description);
   const [shapeSeed, setShapeSeed] = useState(bot.shapeSeed);
+  const [color, setColor] = useState(bot.color);
   const [computerMode, setComputerMode] = useState(bot.computerMode);
   const [memoryScope, setMemoryScope] = useState(bot.memoryScope);
   const [autoSpeak, setAutoSpeak] = useState(bot.autoSpeak);
@@ -212,7 +310,6 @@ export function BotSettings({
     bot.modelProvider && bot.modelId ? modelOptionKey(bot.modelProvider, bot.modelId) : "",
   );
   const [thinkingLevel, setThinkingLevel] = useState(bot.thinkingLevel ?? "");
-  const avatarStyle = useAvatarStyle();
   const [credentials, setCredentials] = useState<ModelCredential[]>([]);
   const [catalog, setCatalog] = useState<ModelCatalogEntry[]>([]);
   const [me, setMe] = useState<Me | null>(null);
@@ -291,54 +388,14 @@ export function BotSettings({
 
   return (
     <div data-testid="bot-settings">
-      <div className="flex justify-center">
-        <BotAvatar
-          color={bot.color}
-          identity={bot.id}
-          shapeSeed={shapeSeed}
-          size={64}
-          status={bot.status}
-        />
-      </div>
-      {avatarStyle === "organic" ? (
-        <div data-testid="bot-shape-picker" className="mt-4">
-          <span className="block text-[14px] text-muted-foreground">
-            <Trans>Shape</Trans>
-          </span>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {[null, ...Array.from({ length: AVATAR_SHAPE_COUNT }, (_, index) => index)].map(
-              (seed) => (
-                <button
-                  key={seed ?? "auto"}
-                  type="button"
-                  aria-pressed={shapeSeed === seed}
-                  aria-label={seed === null ? t`Automatic shape` : t`Shape ${seed + 1}`}
-                  onClick={() => setShapeSeed(seed)}
-                  className={`flex h-11 w-11 items-center justify-center rounded-[12px] border transition-colors ${
-                    shapeSeed === seed
-                      ? "border-ring bg-muted"
-                      : "border-border hover:border-ring/60"
-                  }`}
-                >
-                  {seed === null ? (
-                    <span className="text-[12px] text-muted-foreground">
-                      <Trans>Auto</Trans>
-                    </span>
-                  ) : (
-                    <BotAvatar
-                      color={bot.color}
-                      identity={bot.id}
-                      shapeSeed={seed}
-                      size={28}
-                      variant="organic"
-                    />
-                  )}
-                </button>
-              ),
-            )}
-          </div>
-        </div>
-      ) : null}
+      <BotAppearancePicker
+        botId={bot.id}
+        status={bot.status}
+        color={color}
+        shapeSeed={shapeSeed}
+        onColorChange={setColor}
+        onShapeChange={setShapeSeed}
+      />
       <label htmlFor={`${ids}-name`} className="mt-6 block text-[14px] text-muted-foreground">
         <Trans>Name</Trans>
         <Input
@@ -506,6 +563,7 @@ export function BotSettings({
               title: nextTitle,
               description: nextDescription,
               instructions: nextDescription,
+              color,
               shapeSeed,
               computerMode,
               memoryScope,
