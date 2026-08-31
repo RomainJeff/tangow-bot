@@ -2908,13 +2908,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const blocks = handedOff ? [] : redactBlocks(messageSegments, runSecrets);
           const text = handedOff
             ? ""
-            : redactSecrets(
-                // `say` text never passes through `assembled` or the final blocks, so fall
-                // back to it: a say-only run still deserves a push notification and a
-                // useful bot-to-bot return value.
-                completionNotificationBody(assembled, blocks) || spokenTexts.join("\n\n"),
-                runSecrets,
-              );
+            : redactSecrets(completionNotificationBody(assembled, blocks, spokenTexts), runSecrets);
           if (containsSecret(text, runSecrets)) {
             throw new Error("refusing to persist a secret in the thread");
           }
@@ -3211,12 +3205,20 @@ export function completionMessageSegments(
 }
 
 /** User-facing text for completion notifications; empty when only tool/step activity remains. */
-export function completionNotificationBody(assembled: string, blocks: MessageBlock[]): string {
-  if (assembled) return assembled;
-  return blocks
-    .filter((block): block is Extract<MessageBlock, { kind: "text" }> => block.kind === "text")
-    .map((block) => block.text)
-    .join("");
+export function completionNotificationBody(
+  assembled: string,
+  blocks: MessageBlock[],
+  spokenTexts: readonly string[] = [],
+): string {
+  const answer =
+    assembled ||
+    blocks
+      .filter((block): block is Extract<MessageBlock, { kind: "text" }> => block.kind === "text")
+      .map((block) => block.text)
+      .join("");
+  // A chatty run publishes its reply as several `say` messages that never reach
+  // `assembled`, so the notification carries the whole sequence the user saw.
+  return [...spokenTexts, answer].filter(Boolean).join("\n\n");
 }
 
 function computerRunRequeueData(

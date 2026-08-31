@@ -64,4 +64,14 @@ describe("completionNotificationBody", () => {
   it("uses the empty-run text when that is all the run produced", () => {
     expect(completionNotificationBody("", completionMessageSegments([]))).toBe("done.");
   });
+
+  it("carries the whole chatty sequence, spoken messages then the final answer", () => {
+    expect(completionNotificationBody("Booked it", [], ["Checking flights", "Found one"])).toBe(
+      "Checking flights\n\nFound one\n\nBooked it",
+    );
+  });
+
+  it("falls back to the spoken messages when the run streamed nothing else", () => {
+    expect(completionNotificationBody("", [], ["Checking flights"])).toBe("Checking flights");
+  });
 });
