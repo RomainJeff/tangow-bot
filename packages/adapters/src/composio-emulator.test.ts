@@ -29,21 +29,39 @@ describe("ComposioEmulator", () => {
     ]);
   });
 
-  it("isolates connection state by user and supports revoke", async () => {
+  it("isolates connection state by space and user and supports revoke", async () => {
     const emulator = new ComposioEmulator();
+    const otherSpace = { ...context, spaceId: "workspace-b" };
     await emulator.begin({ provider: "GMAIL", redirectUrl: "http://example.test" }, context);
 
     await expect(emulator.connectionReady(context, "GMAIL")).resolves.toBe(true);
-    await expect(emulator.listConnectedSlugs(context.userId)).resolves.toEqual(["GMAIL"]);
+    await expect(emulator.listConnectedSlugs(context)).resolves.toEqual(["GMAIL"]);
     await expect(emulator.connectionReady({ ...context, userId: "user-2" }, "GMAIL")).resolves.toBe(
       false,
     );
+    await expect(emulator.connectionReady(otherSpace, "GMAIL")).resolves.toBe(false);
+    await expect(emulator.listConnectedSlugs(otherSpace)).resolves.toEqual([]);
     await expect(emulator.catalog(context, "gmail")).resolves.toEqual([
       expect.objectContaining({ slug: "GMAIL", connected: true }),
+    ]);
+    await expect(emulator.catalog(otherSpace, "gmail")).resolves.toEqual([
+      expect.objectContaining({ slug: "GMAIL", connected: false }),
     ]);
 
     await emulator.revoke("GMAIL", context);
     await expect(emulator.connectionReady(context, "GMAIL")).resolves.toBe(false);
+  });
+
+  it("keeps a revoke in one space from touching another space", async () => {
+    const emulator = new ComposioEmulator();
+    const otherSpace = { ...context, spaceId: "workspace-b" };
+    await emulator.begin({ provider: "GMAIL", redirectUrl: "http://example.test" }, context);
+    await emulator.begin({ provider: "GMAIL", redirectUrl: "http://example.test" }, otherSpace);
+
+    await emulator.revoke("GMAIL", otherSpace);
+
+    await expect(emulator.connectionReady(context, "GMAIL")).resolves.toBe(true);
+    await expect(emulator.connectionReady(otherSpace, "GMAIL")).resolves.toBe(false);
   });
 
   it("discovers and executes deterministic tools for connected apps", async () => {

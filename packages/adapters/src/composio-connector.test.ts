@@ -8,6 +8,7 @@ import {
   CompositeConnector,
   collectLogIds,
   collectPages,
+  composioEntityId,
   executeSessionKey,
   filterCatalog,
   isComposioEnabled,
@@ -277,7 +278,7 @@ describe("composio tool mapping", () => {
       })),
     ).toEqual([
       { userId: "__rakazo_catalog__", toolkits: undefined, sessionPreset: undefined },
-      { userId: "user-1", toolkits: ["GITHUB"], sessionPreset: undefined },
+      { userId: "workspace__user-1", toolkits: ["GITHUB"], sessionPreset: undefined },
     ]);
 
     const events: ConnectorEvent[] = [];
@@ -296,7 +297,46 @@ describe("composio tool mapping", () => {
       { tool: "GITHUB_GET_REPOS", args: { owner: "composio" } },
     ]);
     await expect(connector.connectionReady(context, "github")).resolves.toBe(true);
-    await expect(connector.connectedAccountId("user-1", "github")).resolves.toBe("ca-github");
+    await expect(connector.connectedAccountId(context, "github")).resolves.toBe("ca-github");
+  });
+
+  it("scopes the Composio entity id to the space, not just the user", () => {
+    expect(composioEntityId({ spaceId: "workspace", userId: "user-1" })).toBe("workspace__user-1");
+    expect(composioEntityId({ spaceId: "workspace-b", userId: "user-1" })).not.toBe(
+      composioEntityId({ spaceId: "workspace-a", userId: "user-1" }),
+    );
+  });
+
+  it("opens a distinct Composio session per space for the same user", async () => {
+    composioSdkState.created.length = 0;
+    composioSdkState.sessions.clear();
+    composioToolkitDirectory.invalidate();
+
+    const connector = new ComposioConnector();
+    const contextFor = (spaceId: string): AdapterContext => ({
+      operationId: "composio-space-isolation",
+      traceId: "composio-space-isolation",
+      spaceId,
+      userId: "user-1",
+      signal: new AbortController().signal,
+      connectedConnections: [
+        {
+          id: "connection-github",
+          connectorId: "composio",
+          externalId: "github",
+          displayName: "GitHub",
+        },
+      ],
+    });
+
+    await connector.discoverTools(contextFor("workspace-a"));
+    await connector.discoverTools(contextFor("workspace-b"));
+
+    expect(
+      composioSdkState.created
+        .map(({ userId }) => userId)
+        .filter((userId) => userId !== "__rakazo_catalog__"),
+    ).toEqual(["workspace-a__user-1", "workspace-b__user-1"]);
   });
 
   it("uses Composio slug casing when the toolkit directory is unavailable", async () => {

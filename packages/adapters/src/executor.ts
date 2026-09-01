@@ -126,6 +126,7 @@ import { loadBotMessageContext, messageBot, returnBotMessageOutcome } from "./bo
 import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import {
+  type ConnectionScope,
   collectLogIds,
   mergeConnectedPlugins,
   needsLivePluginSync,
@@ -431,7 +432,7 @@ export interface ExecutorDeps {
   jobs: JobPublisher;
   /** Messaging surface; absent means zero identity queries and no chat prompts. */
   messaging?: { hasIdentity(botId: string): Promise<boolean> };
-  listConnectedPluginSlugs?: (userId: string) => Promise<string[]>;
+  listConnectedPluginSlugs?: (scope: ConnectionScope) => Promise<string[]>;
   /** Builtin web_search / web_fetch. Defaults to keyless HTTP when omitted. */
   web?: WebProvider;
 }
@@ -448,11 +449,11 @@ export async function deferFutureRoutine(
 
 async function loadLivePluginSlugs(
   listConnectedPluginSlugs: ExecutorDeps["listConnectedPluginSlugs"],
-  userId: string,
+  scope: ConnectionScope,
 ): Promise<{ ok: true; slugs: string[] } | { ok: false }> {
   if (!listConnectedPluginSlugs) return { ok: false };
   try {
-    return { ok: true, slugs: await listConnectedPluginSlugs(userId) };
+    return { ok: true, slugs: await listConnectedPluginSlugs(scope) };
   } catch {
     return { ok: false };
   }
@@ -931,7 +932,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         );
         let liveSlugs: string[] = [];
         if (needsLivePluginSync(composioRows)) {
-          const listing = await loadLivePluginSlugs(deps.listConnectedPluginSlugs, run.userId);
+          const listing = await loadLivePluginSlugs(deps.listConnectedPluginSlugs, run);
           if (listing.ok) {
             liveSlugs = listing.slugs;
             await persistLivePluginConnections(deps.prisma, run, composioRows, listing.slugs).catch(

@@ -8,6 +8,7 @@ import {
   PipedreamConnector,
   ThirdPartyConnectorEmulator,
 } from "@rakazo/adapters";
+import type { Space } from "@rakazo/contracts";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { sessionCookieHeader } from "./index.js";
 
@@ -115,6 +116,35 @@ describeWithDatabase("Composio catalog reconciliation", () => {
       { id: first.id, status: "connected" },
       { id: duplicate.id, status: "revoked" },
     ]);
+  });
+
+  it("keeps a Composio connection out of the same user's other space", async () => {
+    const cookie = await signup(app, `cross-space-connections-${stamp}@rakazo.test`, "Cross Space");
+    const actor = await rpc<Actor>(app, cookie, "me");
+    const other = await rpc<Space>(app, cookie, "spaces/create", { name: `Second ${stamp}` });
+    await connectRemote(composio, actor, "GMAIL");
+
+    const current = await rpc<Array<{ slug: string; connected: boolean }>>(
+      app,
+      cookie,
+      "connections/catalog",
+    );
+    const elsewhere = await rpc<Array<{ slug: string; connected: boolean }>>(
+      app,
+      cookie,
+      "connections/catalog",
+      {},
+      other.id,
+    );
+
+    expect(current).toContainEqual(expect.objectContaining({ slug: "GMAIL", connected: true }));
+    expect(elsewhere).toContainEqual(expect.objectContaining({ slug: "GMAIL", connected: false }));
+    await expect(
+      handles.prisma.connection.findMany({
+        where: { spaceId: other.id, userId: actor.userId, status: "connected" },
+        select: { provider: true },
+      }),
+    ).resolves.toEqual([]);
   });
 
   it("returns the remote catalog when local reconciliation fails", async () => {
@@ -475,12 +505,19 @@ async function signup(app: App, email: string, name: string) {
   return sessionCookieHeader(response);
 }
 
-async function rpc<T>(app: App, cookie: string, procedure: string, body: unknown = {}): Promise<T> {
+async function rpc<T>(
+  app: App,
+  cookie: string,
+  procedure: string,
+  body: unknown = {},
+  spaceId?: string,
+): Promise<T> {
   const response = await app.request(`/rpc/${procedure}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       cookie,
+      ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
       origin: "http://127.0.0.1:5173",
     },
     body: JSON.stringify({ json: body }),
