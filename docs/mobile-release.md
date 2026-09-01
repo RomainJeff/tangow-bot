@@ -58,6 +58,10 @@ configuration, modules, dependencies, assets, or the update workflow changed.
 The repository needs an `EXPO_TOKEN` Actions secret with access to the linked
 Expo project.
 
+For day-to-day preview rebuilds, `pnpm ship` from the repository root picks the
+update-or-native-build decision for you and packs the desktop app in parallel.
+See [docs/shipping-clients.md](./shipping-clients.md).
+
 To publish a compatible update manually from `apps/mobile`:
 
 ```sh

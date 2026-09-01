@@ -200,6 +200,7 @@ COMPUTER_E2E_MODEL=<vision-capable-openrouter-model-id> pnpm test:computer
 - [Computer runtime and isolation](./docs/computer-runtime.md)
 - [Desktop releases](./docs/desktop-release.md)
 - [Mobile releases](./docs/mobile-release.md)
+- [Rebuilding the mobile and desktop clients](./docs/shipping-clients.md)
 - [Performance testing](./docs/performance.md)
 
 ## Contributing
