@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     jq \
+    poppler-utils \
     procps \
     bash \
     chromium \
