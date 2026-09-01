@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     websockify \
     python3 \
     ca-certificates \
+    curl \
+    jq \
     procps \
     bash \
     chromium \
