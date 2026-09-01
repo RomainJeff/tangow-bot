@@ -2988,13 +2988,16 @@ export function ShellPage() {
               </Button>
               <Button
                 variant="ghost"
+                aria-label={t`Memory`}
                 className="w-full justify-start font-normal"
                 onClick={() => {
                   setMenuOpen(false);
                   setMemorySettingsOpen(true);
                 }}
               >
-                <span className="text-muted-foreground">◇</span>
+                <span aria-hidden="true" className="text-muted-foreground">
+                  ◇
+                </span>
                 <Trans>Memory</Trans>
               </Button>
               <Button
