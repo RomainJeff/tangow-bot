@@ -13,6 +13,7 @@ import {
   AVATAR_SHAPE_COUNT,
   BOT_COLORS,
   BOT_DESCRIPTION_MAX_LENGTH,
+  BOT_INSTRUCTIONS_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
 } from "@rakazo/contracts";
@@ -299,6 +300,7 @@ export function BotSettings({
   const [name, setName] = useState(bot.name);
   const [title, setTitle] = useState(bot.title);
   const [description, setDescription] = useState(bot.description);
+  const [instructions, setInstructions] = useState(bot.instructions);
   const [shapeSeed, setShapeSeed] = useState(bot.shapeSeed);
   const [color, setColor] = useState(bot.color);
   const [computerMode, setComputerMode] = useState(bot.computerMode);
@@ -424,6 +426,19 @@ export function BotSettings({
           maxLength={BOT_DESCRIPTION_MAX_LENGTH}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
+          className="mt-2"
+        />
+      </label>
+      <label htmlFor={`${ids}-instructions`} className={fieldLabelClass}>
+        <Trans>Instructions</Trans>
+        <Textarea
+          id={`${ids}-instructions`}
+          data-testid="bot-instructions"
+          value={instructions}
+          maxLength={BOT_INSTRUCTIONS_MAX_LENGTH}
+          onChange={(e) => setInstructions(e.target.value)}
+          rows={10}
+          placeholder={t`How this bot should behave`}
           className="mt-2"
         />
       </label>
@@ -555,14 +570,16 @@ export function BotSettings({
             const nextName = name.trim();
             const nextTitle = title.trim();
             const nextDescription = description.trim();
+            const nextInstructions = instructions.trim();
             setName(nextName);
             setTitle(nextTitle);
             setDescription(nextDescription);
+            setInstructions(nextInstructions);
             void onSave({
               name: nextName,
               title: nextTitle,
               description: nextDescription,
-              instructions: nextDescription,
+              instructions: nextInstructions,
               color,
               shapeSeed,
               computerMode,

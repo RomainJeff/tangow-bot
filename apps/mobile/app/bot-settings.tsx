@@ -1,6 +1,7 @@
 import {
   AVATAR_SHAPE_COUNT,
   BOT_DESCRIPTION_MAX_LENGTH,
+  BOT_INSTRUCTIONS_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
   type ComputerMode,
@@ -18,6 +19,7 @@ import { useMobileTokens } from "../lib/native";
 
 type BotSettingsRecord = MobileBot & {
   description?: string;
+  instructions?: string;
 };
 
 export default function BotSettingsScreen() {
@@ -29,6 +31,7 @@ export default function BotSettingsScreen() {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [shapeSeed, setShapeSeed] = useState<number | null>(null);
   const [computerMode, setComputerMode] = useState<ComputerMode>("team");
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +46,7 @@ export default function BotSettingsScreen() {
         setName(next.name);
         setTitle(next.title);
         setDescription(next.description ?? "");
+        setInstructions(next.instructions ?? "");
         setShapeSeed(next.shapeSeed ?? null);
         setComputerMode(next.computerMode);
       })
@@ -66,11 +70,11 @@ export default function BotSettingsScreen() {
       if (shapeSeed !== (bot.shapeSeed ?? null)) input.shapeSeed = shapeSeed;
       if (profile.name !== bot.name) input.name = profile.name;
       if (profile.title !== bot.title) input.title = profile.title;
+      // Instructions are their own field now, so a description edit must not overwrite them.
       if (profile.description !== (bot.description ?? "")) {
         input.description = profile.description;
-        // Keep instructions in sync with description (same as web BotSettings).
-        input.instructions = profile.instructions;
       }
+      if (instructions !== (bot.instructions ?? "")) input.instructions = instructions;
       if (computerMode !== bot.computerMode) {
         await rpc("bots/setComputer", { botId, mode: computerMode });
       }
@@ -144,6 +148,24 @@ export default function BotSettingsScreen() {
             padding: 16,
             color: tokens.foreground,
             minHeight: 120,
+            textAlignVertical: "top",
+          }}
+        />
+        <Text style={{ color: "#85858A", marginTop: 16, fontSize: 14 }}>Instructions</Text>
+        <TextInput
+          value={instructions}
+          maxLength={BOT_INSTRUCTIONS_MAX_LENGTH}
+          onChangeText={setInstructions}
+          placeholder="How this bot should behave"
+          placeholderTextColor="#6C6C70"
+          multiline
+          style={{
+            marginTop: 8,
+            backgroundColor: "#1A1A1D",
+            borderRadius: 11,
+            padding: 16,
+            color: "#ECECEE",
+            minHeight: 180,
             textAlignVertical: "top",
           }}
         />

@@ -78,6 +78,11 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
     "Finds reliable sources and turns them into concise briefs.",
   );
   const settings = page.getByTestId("bot-settings");
+  const instructionsInput = settings.getByTestId("bot-instructions");
+  // Creation seeds instructions from the description; editing them is independent after that.
+  await expect(instructionsInput).toHaveValue(
+    "Finds reliable sources and turns them into concise briefs.",
+  );
   const modelSelect = settings.locator("label:has-text('Model') select");
   const teamComputer = settings.getByRole("button", { name: "Team" });
   const openWork = settings.getByTestId("bot-scratchpad");
@@ -117,6 +122,7 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await nameInput.fill("Atlas");
   await titleInput.fill("Research lead");
   await descriptionInput.fill("Builds durable, source-backed research briefs.");
+  await instructionsInput.fill("Always cite two independent sources before answering.");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(botList.getByRole("button", { name: /^Atlas/ })).toBeVisible();
   await expect(page.getByPlaceholder("Message Atlas")).toBeVisible();
@@ -129,6 +135,9 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await expect(nameInput).toHaveValue("Atlas");
   await expect(titleInput).toHaveValue("Research lead");
   await expect(descriptionInput).toHaveValue("Builds durable, source-backed research briefs.");
+  await expect(instructionsInput).toHaveValue(
+    "Always cite two independent sources before answering.",
+  );
   await captureScreenshot(page, testInfo, "29-reloaded-bot-profile");
 
   const atlas = botList.getByRole("button", { name: /^Atlas/ });
