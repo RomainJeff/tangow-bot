@@ -606,3 +606,97 @@ describe("computer screen url", () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 });
+
+describe("thread rewind", () => {
+  function rewindDeps(role: string | null) {
+    const rewindThread = vi.fn().mockResolvedValue({
+      event: { seq: 20 },
+      cancelledRunIds: ["run-1"],
+      historyCompactionGeneration: 3,
+      fromSeq: 4,
+      compactionReset: false,
+    });
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const prisma = {
+      bot: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "bot-1",
+          thread: { id: "thread-1" },
+          computer: null,
+        }),
+      },
+      message: { findFirst: vi.fn().mockResolvedValue(role ? { role } : null) },
+    } as unknown as PrismaClient;
+    const deps = {
+      prisma,
+      events: { rewindThread },
+      jobs: { cancel },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      dataDir: "/tmp/rakazo-router-test",
+    } as unknown as RouterDeps;
+    const actor = {
+      spaceId: "workspace-1",
+      userId: "user-1",
+      email: "user@rakazo.test",
+      isDeploymentOwner: true,
+    } satisfies Actor;
+    return { rewindThread, cancel, actor, handler: new RPCHandler(createRouter(deps)) };
+  }
+
+  function rewindRequest(messageId: string) {
+    return new Request("http://127.0.0.1/rpc/threads/rewind", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ json: { botId: "bot-1", messageId } }),
+    });
+  }
+
+  it("truncates the thread and cancels the run jobs it stopped", async () => {
+    const { rewindThread, cancel, actor, handler } = rewindDeps("user");
+
+    const { response } = await handler.handle(rewindRequest("message-4"), {
+      prefix: "/rpc",
+      context: { actor },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ json: { ok: true } });
+    expect(rewindThread).toHaveBeenCalledWith({
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      botId: "bot-1",
+      messageId: "message-4",
+    });
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("refuses to rewind to a bot message", async () => {
+    const { rewindThread, actor, handler } = rewindDeps("bot");
+
+    const { response } = await handler.handle(rewindRequest("message-5"), {
+      prefix: "/rpc",
+      context: { actor },
+    });
+
+    expect(response.status).toBe(400);
+    expect(rewindThread).not.toHaveBeenCalled();
+  });
+
+  it("reports a missing target as not found", async () => {
+    const { rewindThread, actor, handler } = rewindDeps(null);
+
+    const { response } = await handler.handle(rewindRequest("message-gone"), {
+      prefix: "/rpc",
+      context: { actor },
+    });
+
+    expect(response.status).toBe(404);
+    expect(rewindThread).not.toHaveBeenCalled();
+  });
+});

@@ -153,6 +153,7 @@ import {
   sendThreadMessage,
   setThreadUnreadState,
   stopThreadRuns,
+  type ThreadTarget,
   threadHead,
   threadSnapshot,
 } from "./thread-target.js";
@@ -235,6 +236,42 @@ function computerContext(actor: Actor, botId: string, operationId: string): Adap
     botId,
     signal: new AbortController().signal,
   };
+}
+
+/**
+ * Durable memories remain in their Space-private containers. Truncating history only removes
+ * conversation-derived summaries from the previous generation; including the new generation also
+ * covers a compaction job that began just after the truncation committed.
+ */
+async function purgeCompactedHistoryMemory(
+  deps: RouterDeps,
+  actor: Actor,
+  target: ThreadTarget,
+  historyCompactionGeneration: number,
+  reason: string,
+): Promise<void> {
+  if (target.kind !== "bot") return;
+  const configuredMemory = await deps.memoryProviders.resolve(actor.spaceId).catch((error) => {
+    getLogger().error(`semantic memory resolution after ${reason} failed`, error);
+    return null;
+  });
+  if (!configuredMemory) return;
+  // Best effort: the conversation rows are already deleted, so failing the request here would
+  // help nothing — a failed purge only leaves stale summaries recallable.
+  try {
+    const purged = await configuredMemory.provider.purgeHistory(
+      {
+        botId: target.botId,
+        generations: [Math.max(0, historyCompactionGeneration - 1), historyCompactionGeneration],
+      },
+      computerContext(actor, target.botId, `${reason}:${target.threadId}`),
+    );
+    if (!purged.ok) {
+      getLogger().error(`semantic memory purge after ${reason} failed`, purged.error);
+    }
+  } catch (error) {
+    getLogger().error(`semantic memory purge after ${reason} failed`, error);
+  }
 }
 
 function mcpServerDto(
@@ -1130,42 +1167,52 @@ export function createRouter(deps: RouterDeps) {
           botId: contextBotId,
           ...(target.kind === "group" ? { groupId: target.groupId } : {}),
         });
-        const [configuredMemory] = await Promise.all([
-          target.kind === "bot"
-            ? deps.memoryProviders.resolve(context.actor.spaceId).catch((error) => {
-                getLogger().error("semantic memory resolution after thread clear failed", error);
-                return null;
-              })
-            : Promise.resolve(null),
-          Promise.all(
-            cancelledRunIds.map((runId) =>
-              deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
-            ),
+        await Promise.all(
+          cancelledRunIds.map((runId) => deps.jobs.cancel(runJobKey(runId)).catch(() => undefined)),
+        );
+        await purgeCompactedHistoryMemory(
+          deps,
+          context.actor,
+          target,
+          historyCompactionGeneration,
+          "thread-clear",
+        );
+        return { ok: true as const };
+      }),
+      rewind: authed.threads.rewind.handler(async ({ context, input }) => {
+        const target = await resolveThreadTarget(deps.prisma, context.actor, input);
+        const contextBotId = target.kind === "bot" ? target.botId : target.memberBotIds[0];
+        if (!contextBotId) throw new IsolationError();
+        const message = await deps.prisma.message.findFirst({
+          where: { id: input.messageId, threadId: target.threadId },
+          select: { role: true },
+        });
+        if (!message) throw new ORPCError("NOT_FOUND", { message: "Message not found" });
+        if (message.role !== "user") {
+          throw new ORPCError("BAD_REQUEST", { message: "Only your own messages can be edited" });
+        }
+        const rewound = await deps.events.rewindThread({
+          spaceId: context.actor.spaceId,
+          threadId: target.threadId,
+          botId: contextBotId,
+          messageId: input.messageId,
+          ...(target.kind === "group" ? { groupId: target.groupId } : {}),
+        });
+        if (!rewound) throw new ORPCError("NOT_FOUND", { message: "Message not found" });
+        await Promise.all(
+          rewound.cancelledRunIds.map((runId) =>
+            deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
           ),
-        ]);
-        // Durable memories remain in their Space-private containers. Clear only removes
-        // conversation-derived summaries from the previous generation; including the new
-        // generation also covers a compaction job that began just after the clear committed.
-        if (configuredMemory && target.kind === "bot") {
-          // Best effort: the conversation rows are already deleted, so failing the clear here
-          // would help nothing — a failed purge only leaves stale summaries recallable.
-          try {
-            const purged = await configuredMemory.provider.purgeHistory(
-              {
-                botId: target.botId,
-                generations: [
-                  Math.max(0, historyCompactionGeneration - 1),
-                  historyCompactionGeneration,
-                ],
-              },
-              computerContext(context.actor, target.botId, `thread-clear:${target.threadId}`),
-            );
-            if (!purged.ok) {
-              getLogger().error("semantic memory purge after thread clear failed", purged.error);
-            }
-          } catch (error) {
-            getLogger().error("semantic memory purge after thread clear failed", error);
-          }
+        );
+        // Compaction survived the rewind, so its summary still matches the remaining history.
+        if (rewound.compactionReset) {
+          await purgeCompactedHistoryMemory(
+            deps,
+            context.actor,
+            target,
+            rewound.historyCompactionGeneration,
+            "thread-rewind",
+          );
         }
         return { ok: true as const };
       }),
