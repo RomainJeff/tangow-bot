@@ -11,6 +11,7 @@ import type {
   SpaceNavigation,
 } from "@rakazo/contracts";
 import {
+  applyThreadRewind,
   isRunTerminalEvent,
   mergeThreadHistory,
   prependThreadHistoryPage,
@@ -694,6 +695,16 @@ export function applyMobileThreadEvent(
       cursor: event.seq,
       messages: [],
       olderCursor: null,
+      run: null,
+      activeRuns: [],
+    };
+  }
+  if (event.type === "thread.rewound") {
+    // olderCursor is kept: the history before the cut is still there and still pageable.
+    return {
+      ...prev,
+      cursor: event.seq ?? prev.cursor,
+      messages: applyThreadRewind(prev.messages, event),
       run: null,
       activeRuns: [],
     };

@@ -1060,6 +1060,26 @@ describe("mobile thread event reduction", () => {
     expect(next).toMatchObject({ cursor: 12, messages: [], olderCursor: null, run: null });
   });
 
+  it("drops the rewound message and everything after it when another client rewinds", () => {
+    const initial = snapshot(
+      [
+        mobileMessage("message-1", [{ kind: "text", text: "keep" }], 3),
+        mobileMessage("message-2", [{ kind: "text", text: "drop" }], 4),
+      ],
+      1,
+    );
+    initial.run = { id: "run-1", status: "running" };
+
+    const next = applyMobileThreadEvent(initial, {
+      type: "thread.rewound",
+      seq: 12,
+      payload: { fromSeq: 4 },
+    });
+
+    expect(next).toMatchObject({ cursor: 12, olderCursor: 1, run: null });
+    expect(next?.messages.map((message) => message.id)).toEqual(["message-1"]);
+  });
+
   it("applies the durable waiting-input run transition", () => {
     const initial: MobileSnapshot = { ...snapshot(), run: { id: "run-1", status: "running" } };
     const waiting = applyMobileThreadEvent(initial, {

@@ -1195,7 +1195,8 @@ export function ShellPage() {
               event.type === "bot.deleted" ||
               event.type === "run.started" ||
               isRunTerminalEvent(event) ||
-              event.type === "thread.cleared"
+              event.type === "thread.cleared" ||
+              event.type === "thread.rewound"
             ) {
               void refreshBots().catch(() => undefined);
             }

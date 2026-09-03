@@ -3,6 +3,7 @@ import {
   appendTextSegment,
   appendToolCallSegment,
   appendToolStep,
+  applyThreadRewind,
   containsSecret,
   createStreamingRedactor,
   endsSentence,
@@ -261,6 +262,29 @@ describe("projectMessages", () => {
         type: "thread.cleared",
         payload: {},
         createdAt: "2026-01-01T00:00:02.000Z",
+      },
+    ]);
+    expect(messages).toEqual([]);
+  });
+
+  it("drops live projections when a rewind event is replayed", () => {
+    const messages = projectMessages([
+      {
+        id: "e1",
+        threadId: "t1",
+        seq: 0,
+        type: "thread.progress",
+        runId: "r1",
+        payload: { text: "draft" },
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "e2",
+        threadId: "t1",
+        seq: 1,
+        type: "thread.rewound",
+        payload: { fromSeq: 0 },
+        createdAt: "2026-01-01T00:00:01.000Z",
       },
     ]);
     expect(messages).toEqual([]);
@@ -755,5 +779,25 @@ describe("sanitizeUtf16ForJson", () => {
         "meta\uFFFD#2": "also",
       },
     });
+  });
+});
+
+describe("applyThreadRewind", () => {
+  const messages = [
+    { id: "m1", seq: 3 },
+    { id: "m2", seq: 4 },
+    { id: "m3", seq: 5 },
+    { id: "progress:r1" },
+    { id: "subagent:r1:a" },
+  ];
+
+  it("drops the target message, everything after it, and live projections", () => {
+    expect(applyThreadRewind(messages, { payload: { fromSeq: 4 } })).toEqual([
+      { id: "m1", seq: 3 },
+    ]);
+  });
+
+  it("keeps the list untouched when the payload has no fromSeq", () => {
+    expect(applyThreadRewind(messages, { payload: {} })).toEqual(messages);
   });
 });

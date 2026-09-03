@@ -836,6 +836,7 @@ function Thread() {
                 event.type === "thread.message.reaction" ||
                 event.type === "thread.subagent" ||
                 event.type === "thread.cleared" ||
+                event.type === "thread.rewound" ||
                 event.type === "run.waiting_input" ||
                 isRunTerminalEvent(event)
               ) {

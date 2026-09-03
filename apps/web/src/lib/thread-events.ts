@@ -8,6 +8,7 @@ import type {
   ThreadSnapshot,
 } from "@rakazo/contracts";
 import {
+  applyThreadRewind,
   isActive,
   isRunTerminalEvent,
   mergeThreadHistory,
@@ -256,6 +257,7 @@ export function prependThreadMessagePage(
 export function isThreadSnapshotEvent(event: ProductEvent): boolean {
   return (
     event.type === "thread.cleared" ||
+    event.type === "thread.rewound" ||
     event.type === "thread.progress" ||
     event.type === "thread.subagent" ||
     event.type === "agent.tool.called" ||
@@ -280,6 +282,16 @@ export function reduceThreadSnapshot(
       cursor: event.seq,
       messages: [],
       olderCursor: null,
+      run: null,
+      activeRuns: [],
+    };
+  }
+  if (event.type === "thread.rewound") {
+    // olderCursor is kept: the history before the cut is still there and still pageable.
+    return {
+      ...prev,
+      cursor: event.seq,
+      messages: applyThreadRewind(prev.messages, event),
       run: null,
       activeRuns: [],
     };

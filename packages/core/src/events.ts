@@ -107,6 +107,15 @@ export function projectMessages(
       durableSubagents.clear();
       continue;
     }
+    if (event.type === "thread.rewound") {
+      // Rewind deletes the events it truncates, so nothing durable is left to filter here; only
+      // the live projections of the runs it cancelled have to go. Message rows are filtered by
+      // applyThreadRewind, which works on message seq rather than the event seq used above.
+      liveById.clear();
+      liveSubagents.clear();
+      durableSubagents.clear();
+      continue;
+    }
     if (event.type === "thread.subagent") {
       const block = subagentBlockFromPayload(payload);
       if (durableSubagents.has(block.agentId)) continue;
@@ -146,6 +155,24 @@ export function projectMessages(
     }
   }
   return messages;
+}
+
+/**
+ * Applies a thread.rewound event to a message list: the target user message and everything after
+ * it are gone, and so are the live projections of the runs the rewind cancelled.
+ */
+export function applyThreadRewind<T extends { id: string; seq?: number }>(
+  messages: T[],
+  event: { payload?: Record<string, unknown> },
+): T[] {
+  const fromSeq = event.payload?.fromSeq;
+  if (typeof fromSeq !== "number") return messages;
+  return messages.filter(
+    (message) =>
+      (message.seq ?? 0) < fromSeq &&
+      !message.id.startsWith("progress:") &&
+      !message.id.startsWith("subagent:"),
+  );
 }
 
 export function progressMessageId(event: { runId?: string | null; id?: string }): string {

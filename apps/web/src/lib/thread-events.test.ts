@@ -302,9 +302,32 @@ describe("thread event reduction", () => {
     expect(next).toMatchObject({ cursor: 12, messages: [], olderCursor: null, run: null });
   });
 
+  it("drops the rewound message and everything after it when another client rewinds", () => {
+    const initial = snapshot(
+      [
+        message("message-1", [{ kind: "text", text: "keep" }], 3),
+        message("message-2", [{ kind: "text", text: "drop" }], 4),
+        message("progress:run-1", [{ kind: "progress", text: "draft" }], 5),
+      ],
+      1,
+    );
+    initial.run = threadRun("run-1");
+
+    const next = reduceThreadSnapshot(
+      initial,
+      event({ type: "thread.rewound", seq: 12, runId: undefined, payload: { fromSeq: 4 } }),
+    );
+
+    expect(next).toMatchObject({ cursor: 12, olderCursor: 1, run: null, activeRuns: [] });
+    expect(next?.messages.map((item) => item.id)).toEqual(["message-1"]);
+  });
+
   it("routes clear and terminal events through the snapshot reducer", () => {
     expect(
       isThreadSnapshotEvent(event({ type: "thread.cleared", seq: 12, runId: undefined })),
+    ).toBe(true);
+    expect(
+      isThreadSnapshotEvent(event({ type: "thread.rewound", seq: 12, runId: undefined })),
     ).toBe(true);
     expect(isThreadSnapshotEvent(event({ type: "run.started" }))).toBe(true);
     expect(isThreadSnapshotEvent(event({ type: "run.completed" }))).toBe(true);
