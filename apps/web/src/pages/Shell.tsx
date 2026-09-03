@@ -1,3 +1,4 @@
+import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
@@ -87,6 +88,7 @@ import {
   Monitor,
   PanelLeftClose,
   Paperclip,
+  Pencil,
   Phone,
   Plus,
   Puzzle,
@@ -331,6 +333,11 @@ export function ShellPage() {
   const snapshotRef = useRef<ThreadSnapshot | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<ThreadMessage | null>(null);
+  const [rewindTarget, setRewindTarget] = useState<ThreadMessage | null>(null);
+  const [rewindArtifacts, setRewindArtifacts] = useState<{ id: string; name: string }[]>([]);
+  // `key` re-seeds the composer draft: once when rewind starts, again when a failed send
+  // has to hand the typed text back.
+  const [rewindDraft, setRewindDraft] = useState<{ key: string; text: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
@@ -1670,6 +1677,11 @@ export function ShellPage() {
     replyTarget && activeSnapshot?.messages.some((message) => message.id === replyTarget.id)
       ? replyTarget
       : null;
+  const activeRewindTarget =
+    rewindTarget && activeSnapshot?.messages.some((message) => message.id === rewindTarget.id)
+      ? rewindTarget
+      : null;
+  const rewindFromSeq = activeRewindTarget?.seq ?? null;
   const currentRuns = activeThreadRuns(activeSnapshot);
   const answerableAskMessageId = latestAnswerableAskMessageId(activeSnapshot);
   const workingRuns = currentRuns.filter((run) =>
@@ -1719,6 +1731,27 @@ export function ShellPage() {
       ? t`You`
       : (resolveTranscriptMemberName(activeReplyTarget.botId) ?? active?.name ?? t`Bot`)
     : undefined;
+  const rewindRemovedCount =
+    rewindFromSeq === null
+      ? 0
+      : transcriptMessages.filter((message) => (message.seq ?? 0) > rewindFromSeq).length;
+  const cancelRewind = useCallback(() => {
+    setRewindTarget(null);
+    setRewindArtifacts([]);
+    setRewindDraft(null);
+  }, []);
+  const startRewind = useCallback((message: ThreadMessage) => {
+    setReplyTarget(null);
+    setRewindTarget(message);
+    setRewindArtifacts(
+      message.blocks.flatMap((block) =>
+        block.kind === "image" || block.kind === "file"
+          ? [{ id: block.artifactId, name: block.name }]
+          : [],
+      ),
+    );
+    setRewindDraft({ key: message.id, text: copyableMessageText(message) });
+  }, []);
   const composerMentionTargets = useMemo(
     () =>
       buildComposerMentionOptions({
@@ -1958,10 +1991,12 @@ export function ShellPage() {
       if ((!initialBotTarget && !initialGroupTarget) || sending) return;
       const originThreadKey = initialGroupTarget ?? initialBotTarget;
       const attachments = attachmentsForThread(pendingAttachments, originThreadKey);
+      const rewindMessageId = activeRewindTarget?.id;
+      const restoredArtifactIds = rewindMessageId ? rewindArtifacts.map((item) => item.id) : [];
       const plan = resolveComposerSendPlan({
         text,
         mentions,
-        hasAttachments: attachments.length > 0,
+        hasAttachments: attachments.length > 0 || restoredArtifactIds.length > 0,
       });
       if (plan.isNoOp) return;
       const reroutedToGroup = Boolean(
@@ -2016,7 +2051,7 @@ export function ShellPage() {
           }
           return;
         }
-        const artifactIds: string[] = [];
+        const artifactIds: string[] = [...restoredArtifactIds];
         for (const pending of attachments) {
           const mimeType = inferAttachmentMimeType(pending.file.name, pending.file.type);
           if (!mimeType) {
@@ -2029,6 +2064,14 @@ export function ShellPage() {
               : { botId: botTarget!, name: pending.file.name, mimeType, contentBase64 },
           );
           artifactIds.push(artifact.id);
+        }
+        // Truncation happens here rather than on Edit, so backing out costs nothing.
+        if (rewindMessageId && !reroutedToGroup) {
+          await rpc.threads.rewind(
+            groupTarget
+              ? { groupId: groupTarget, messageId: rewindMessageId }
+              : { botId: botTarget!, messageId: rewindMessageId },
+          );
         }
         const clientNonce = newClientNonce();
         if (groupTarget) {
@@ -2065,6 +2108,7 @@ export function ShellPage() {
         }
         dropDelayedSetup();
         setReplyTarget(null);
+        cancelRewind();
         revokePendingAttachmentPreviews(attachments);
         setPendingAttachments((current) =>
           current.filter((attachment) => attachment.threadKey !== originThreadKey),
@@ -2080,6 +2124,10 @@ export function ShellPage() {
         if (groupTarget) await refreshGroupThreadRef.current(groupTarget);
         else if (botTarget) await refreshThreadRef.current(botTarget);
       } catch (error) {
+        // The composer already dropped the text on send, so hand it back for another try.
+        if (rewindMessageId) {
+          setRewindDraft({ key: `retry:${newClientNonce()}`, text: trimmed });
+        }
         if (reroutedToGroup && groupTarget) {
           setSendError(error instanceof Error ? error.message : t`Failed to send message`);
         } else if (groupTarget && activeGroupId.current === groupTarget) {
@@ -2093,9 +2141,12 @@ export function ShellPage() {
     },
     [
       activeReplyTarget?.id,
+      activeRewindTarget?.id,
+      cancelRewind,
       flushPendingBrowserNotifications,
       navigate,
       pendingAttachments,
+      rewindArtifacts,
       sending,
       t,
     ],
@@ -2413,9 +2464,10 @@ export function ShellPage() {
       return attachmentsForThread(current, threadKey);
     });
     setReplyTarget(null);
+    cancelRewind();
     setAttachmentNotice(null);
     setSendError(null);
-  }, [active?.id, groupId, inGroup]);
+  }, [active?.id, groupId, inGroup, cancelRewind]);
 
   useEffect(() => {
     if (!computerOpen) return;
@@ -3187,6 +3239,8 @@ export function ShellPage() {
           onOpenBot={openBot}
           onAnswer={answerMessage}
           onReply={setReplyTarget}
+          onEdit={startRewind}
+          rewindFromSeq={rewindFromSeq}
           onReact={reactToMessage}
           onJumpToMessage={jumpToReplyMessage}
           onOpenPeerMessages={(peer) => {
@@ -3228,6 +3282,14 @@ export function ShellPage() {
           replyTarget={activeReplyTarget}
           replyTargetName={replyTargetName}
           onClearReply={() => setReplyTarget(null)}
+          rewindTarget={activeRewindTarget}
+          rewindDraft={rewindDraft}
+          rewindRemovedCount={rewindRemovedCount}
+          rewindArtifacts={rewindArtifacts}
+          onCancelRewind={cancelRewind}
+          onRemoveRewindArtifact={(artifactId) =>
+            setRewindArtifacts((current) => current.filter((item) => item.id !== artifactId))
+          }
           mentionTargets={composerMentionTargets}
           agentSkills={agentSkills}
           onSlashOpen={refreshAgentSkills}
@@ -4104,6 +4166,8 @@ const Transcript = memo(function Transcript({
   onOpenBot,
   onAnswer,
   onReply,
+  onEdit,
+  rewindFromSeq,
   onReact,
   onJumpToMessage,
   onOpenPeerMessages,
@@ -4128,6 +4192,8 @@ const Transcript = memo(function Transcript({
   onOpenBot: (botId: string) => void;
   onAnswer: (message: ThreadMessage, text: string) => Promise<void>;
   onReply: (message: ThreadMessage) => void;
+  onEdit: (message: ThreadMessage) => void;
+  rewindFromSeq: number | null;
   onReact: (message: ThreadMessage) => Promise<void>;
   onJumpToMessage: (messageId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
@@ -4286,20 +4352,23 @@ const Transcript = memo(function Transcript({
             previous.role === message.role &&
             previous.botId === message.botId &&
             message.replyToMessageId == null;
+          const rewound = rewindFromSeq !== null && (message.seq ?? 0) >= rewindFromSeq;
           return (
             <div
               key={message.id}
               data-message-id={message.id}
-              className={
+              data-rewound={rewound ? "true" : undefined}
+              className={`${
                 peerReceipt
                   ? "relative py-0.5"
                   : `group/message relative hover:z-20 ${grouped ? "pt-1.5" : "pt-9"}`
-              }
+              }${rewound ? " opacity-40" : ""}`}
             >
               {peerReceipt ? null : (
                 <MessageHoverActions
                   message={message}
                   onReply={onReply}
+                  onEdit={onEdit}
                   onReact={onReact}
                   grouped={grouped}
                 />
@@ -4397,6 +4466,12 @@ const Composer = memo(function Composer({
   replyTarget,
   replyTargetName,
   onClearReply,
+  rewindTarget,
+  rewindDraft,
+  rewindRemovedCount,
+  rewindArtifacts,
+  onCancelRewind,
+  onRemoveRewindArtifact,
   mentionTargets,
   agentSkills,
   onSlashOpen,
@@ -4426,6 +4501,12 @@ const Composer = memo(function Composer({
   replyTarget?: ThreadMessage | null;
   replyTargetName?: string;
   onClearReply?: () => void;
+  rewindTarget?: ThreadMessage | null;
+  rewindDraft?: { key: string; text: string } | null;
+  rewindRemovedCount?: number;
+  rewindArtifacts?: { id: string; name: string }[];
+  onCancelRewind?: () => void;
+  onRemoveRewindArtifact?: (artifactId: string) => void;
   mentionTargets?: ComposerMention[];
   agentSkills?: AgentSkillCatalogEntry[];
   onSlashOpen?: () => void;
@@ -4452,7 +4533,22 @@ const Composer = memo(function Composer({
     draft.trim().length > 0 ||
     selectedSkill !== null ||
     selectedMentions.length > 0 ||
-    pendingAttachments.length > 0;
+    pendingAttachments.length > 0 ||
+    (rewindArtifacts?.length ?? 0) > 0;
+  const rewindTime = rewindTarget
+    ? new Date(rewindTarget.createdAt).toLocaleTimeString(i18n.locale || "en", {
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
+  const rewindDraftKey = rewindDraft?.key ?? null;
+  const rewindDraftText = rewindDraft?.text ?? "";
+
+  useEffect(() => {
+    if (!rewindDraftKey) return;
+    setDraft(rewindDraftText);
+    textareaRef.current?.focus();
+  }, [rewindDraftKey, rewindDraftText]);
 
   useEffect(() => {
     if (!runError || !runErrorId) return;
@@ -4720,6 +4816,49 @@ const Composer = memo(function Composer({
           </button>
         </div>
       ) : null}
+      {rewindTarget ? (
+        <div
+          data-testid="rewind-chip"
+          className="mb-2 flex items-center gap-2 rounded-full border border-border bg-sidebar-border px-3 py-1.5 text-[13px] text-foreground"
+        >
+          <Pencil size={13} strokeWidth={1.8} className="shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate text-muted-foreground">
+            {t`Editing message from ${rewindTime} · ${rewindRemovedCount ?? 0} messages after it will be removed`}
+          </span>
+          <button
+            type="button"
+            aria-label={t`Cancel edit`}
+            data-testid="rewind-chip-cancel"
+            onClick={onCancelRewind}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            <X size={13} strokeWidth={2} />
+          </button>
+        </div>
+      ) : null}
+      {rewindArtifacts?.length ? (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {rewindArtifacts.map((artifact) => (
+            <div
+              key={artifact.id}
+              className="flex items-center gap-2 rounded-full border border-border bg-sidebar-border px-3 py-1.5 text-[13px] text-foreground"
+            >
+              <Paperclip size={14} strokeWidth={1.8} />
+              <span className="max-w-[180px] truncate" dir="auto">
+                {artifact.name}
+              </span>
+              <button
+                type="button"
+                aria-label={t`Remove ${artifact.name}`}
+                onClick={() => onRemoveRewindArtifact?.(artifact.id)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X size={13} strokeWidth={2} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {attachmentNotice ? (
         <div className="mb-3 rounded-[14px] border border-warning/40 bg-warning/10 px-4 py-2 text-[13px] text-warning">
           {attachmentNotice}
@@ -4948,6 +5087,11 @@ const Composer = memo(function Composer({
                 removeLastChip();
                 return;
               }
+              if (event.key === "Escape" && !mentionPickerOpen && rewindTarget) {
+                event.preventDefault();
+                onCancelRewind?.();
+                return;
+              }
               const action = resolveMentionPickerKey({
                 key: event.key,
                 shiftKey: event.shiftKey,
@@ -5120,11 +5264,13 @@ function previewMessageText(message: ThreadMessage): string {
 function MessageHoverActions({
   message,
   onReply,
+  onEdit,
   onReact,
   grouped,
 }: {
   message: ThreadMessage;
   onReply: (message: ThreadMessage) => void;
+  onEdit: (message: ThreadMessage) => void;
   onReact: (message: ThreadMessage) => Promise<void>;
   grouped?: boolean;
 }) {
@@ -5152,6 +5298,17 @@ function MessageHoverActions({
         >
           <Reply size={14} strokeWidth={1.8} />
         </button>
+        {message.role === "user" ? (
+          <button
+            type="button"
+            aria-label={t`Edit and resend`}
+            data-testid="message-edit"
+            onClick={() => onEdit(message)}
+            className="grid h-7 w-7 place-items-center rounded-full text-foreground hover:bg-accent hover:text-foreground"
+          >
+            <Pencil size={14} strokeWidth={1.8} />
+          </button>
+        ) : null}
         {canReactToThreadMessage(message) ? (
           <button
             type="button"
