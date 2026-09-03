@@ -38,6 +38,7 @@ export interface ThreadEvents {
   append(input: AppendEventInput): Promise<ProductEvent>;
   claimSteering(input: ClaimSteeringInput): Promise<ClaimedSteeringMessage[]>;
   clearThread(input: ClearThreadInput): Promise<ClearThreadResult>;
+  rewindThread(input: RewindThreadInput): Promise<RewindThreadResult | null>;
   finalizeComputerControlRelease(
     input: FinalizeComputerControlReleaseInput,
   ): Promise<FinalizeComputerControlReleaseResult | false>;
@@ -61,6 +62,20 @@ export interface ClearThreadResult {
   event: ProductEvent;
   cancelledRunIds: string[];
   historyCompactionGeneration: number;
+}
+
+export interface RewindThreadInput extends ClearThreadInput {
+  /** The user message to rewind to; it and everything after it is removed. */
+  messageId: string;
+}
+
+export interface RewindThreadResult {
+  event: ProductEvent;
+  cancelledRunIds: string[];
+  historyCompactionGeneration: number;
+  fromSeq: number;
+  /** Compaction covered the rewound range and was rolled back; derived memory is now stale. */
+  compactionReset: boolean;
 }
 
 export interface FinalizeComputerControlReleaseInput {
@@ -223,6 +238,7 @@ export function createThreadEvents(
     append: (input) => appendEvent(prisma, input, realtime),
     claimSteering: (input) => claimSteering(prisma, input),
     clearThread: (input) => clearThread(prisma, input, realtime),
+    rewindThread: (input) => rewindThread(prisma, input, realtime),
     finalizeComputerControlRelease: (input) =>
       finalizeComputerControlRelease(prisma, input, realtime),
     finalizeRun: (input) => finalizeRun(prisma, input, realtime),
@@ -235,93 +251,124 @@ export function createThreadEvents(
   };
 }
 
+interface TruncateThreadInput extends ClearThreadInput {
+  /** Messages with seq >= fromSeq are deleted. */
+  fromSeq: number;
+  /** Events with seq >= fromEventSeq are deleted. */
+  fromEventSeq: number;
+}
+
+interface TruncateThreadResult {
+  nextMessageSeq: number;
+  historyCompactedUpToSeq: number | null;
+  historyCompactionGeneration: number;
+  cancelledRunIds: string[];
+}
+
+/**
+ * Shared by clearThread (cut at zero) and rewindThread (cut at a message): stop the thread's
+ * work, release its computer, and drop history at or after the cut. Compaction bookkeeping and
+ * the trailing event differ per caller and stay out of here.
+ */
+async function truncateThreadInTransaction(
+  tx: Prisma.TransactionClient,
+  input: TruncateThreadInput,
+): Promise<TruncateThreadResult> {
+  const thread = await tx.thread.update({
+    where: {
+      id: input.threadId,
+      spaceId: input.spaceId,
+      ...(input.groupId ? { groupId: input.groupId } : { botId: input.botId }),
+    },
+    data: { unread: false },
+    select: {
+      nextMessageSeq: true,
+      historyCompactedUpToSeq: true,
+      historyCompactionGeneration: true,
+    },
+  });
+  const activeRuns = await tx.run.findMany({
+    where: {
+      spaceId: input.spaceId,
+      threadId: input.threadId,
+      ...(input.groupId ? {} : { botId: input.botId }),
+      status: { in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"] },
+    },
+    select: { id: true, taskId: true },
+  });
+  const now = new Date();
+  const runIds = activeRuns.map((run) => run.id);
+  const taskIds = activeRuns.map((run) => run.taskId);
+  if (runIds.length > 0) {
+    await tx.run.updateMany({
+      where: { id: { in: runIds } },
+      data: {
+        status: "cancelled",
+        completedAt: now,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      },
+    });
+    await tx.attempt.updateMany({
+      where: { runId: { in: runIds }, status: "running" },
+      data: { status: "cancelled", finishedAt: now },
+    });
+    await tx.task.updateMany({
+      where: { id: { in: taskIds } },
+      data: { status: "cancelled" },
+    });
+  }
+  // Expire as tombstones so a still-open provider screen claim cannot reset fencing to 1.
+  await expireComputerExecutionLeases(tx, { runId: { in: runIds } });
+  await tx.computer.updateMany({
+    where: { executionRunId: { in: runIds } },
+    data: {
+      executionRunId: null,
+      executionBotId: null,
+      executionLeaseExpiresAt: null,
+    },
+  });
+  await tx.message.deleteMany({
+    where: { threadId: input.threadId, seq: { gte: input.fromSeq } },
+  });
+  await tx.event.deleteMany({
+    where: { threadId: input.threadId, seq: { gte: input.fromEventSeq } },
+  });
+  if (input.groupId) {
+    await tx.chatGroup.update({ where: { id: input.groupId }, data: { updatedAt: now } });
+  } else {
+    await tx.bot.update({
+      where: { id: input.botId, spaceId: input.spaceId },
+      data: { updatedAt: now },
+    });
+  }
+  return { ...thread, cancelledRunIds: runIds };
+}
+
 export async function clearThread(
   prisma: PrismaClient,
   input: ClearThreadInput,
   realtime?: RealtimeFanout,
 ): Promise<ClearThreadResult> {
   const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const thread = await tx.thread.update({
-      where: {
-        id: input.threadId,
-        spaceId: input.spaceId,
-        ...(input.groupId ? { groupId: input.groupId } : { botId: input.botId }),
-      },
-      data: { unread: false },
-      select: { nextMessageSeq: true, historyCompactionGeneration: true },
+    const truncated = await truncateThreadInTransaction(tx, {
+      ...input,
+      fromSeq: 0,
+      fromEventSeq: 0,
     });
-    const activeRuns = await tx.run.findMany({
-      where: {
-        spaceId: input.spaceId,
-        threadId: input.threadId,
-        ...(input.groupId ? {} : { botId: input.botId }),
-        status: { in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"] },
-      },
-      select: { id: true, taskId: true },
-    });
-    const now = new Date();
-    const runIds = activeRuns.map((run) => run.id);
-    const taskIds = activeRuns.map((run) => run.taskId);
-    if (runIds.length > 0) {
-      await tx.run.updateMany({
-        where: { id: { in: runIds } },
-        data: {
-          status: "cancelled",
-          completedAt: now,
-          leaseOwner: null,
-          leaseExpiresAt: null,
-        },
-      });
-      await tx.attempt.updateMany({
-        where: { runId: { in: runIds }, status: "running" },
-        data: { status: "cancelled", finishedAt: now },
-      });
-      await tx.task.updateMany({
-        where: { id: { in: taskIds } },
-        data: { status: "cancelled" },
-      });
-    }
-    // Expire as tombstones so a still-open provider screen claim cannot reset fencing to 1.
-    await expireComputerExecutionLeases(tx, { runId: { in: runIds } });
-    await tx.computer.updateMany({
-      where: { executionRunId: { in: runIds } },
+    await tx.thread.update({
+      where: { id: input.threadId },
       data: {
-        executionRunId: null,
-        executionBotId: null,
-        executionLeaseExpiresAt: null,
+        // nextMessageSeq is not reset, so mark every deleted message as already compacted.
+        // Leaving the cursor behind would let compaction re-summarize deleted history (or, reset
+        // to null, immediately re-fire on the fresh conversation).
+        ...(truncated.nextMessageSeq > 0
+          ? { historyCompactedUpToSeq: truncated.nextMessageSeq - 1 }
+          : {}),
+        historyCompactionSummary: null,
+        historyCompactionGeneration: { increment: 1 },
       },
     });
-    await tx.message.deleteMany({ where: { threadId: input.threadId } });
-    await tx.event.deleteMany({ where: { threadId: input.threadId } });
-    if (thread.nextMessageSeq > 0) {
-      // nextMessageSeq is not reset, so mark every deleted message as already compacted.
-      // Leaving the cursor behind would let compaction re-summarize deleted history (or, reset
-      // to null, immediately re-fire on the fresh conversation).
-      await tx.thread.update({
-        where: { id: input.threadId },
-        data: {
-          historyCompactedUpToSeq: thread.nextMessageSeq - 1,
-          historyCompactionSummary: null,
-          historyCompactionGeneration: { increment: 1 },
-        },
-      });
-    } else {
-      await tx.thread.update({
-        where: { id: input.threadId },
-        data: {
-          historyCompactionSummary: null,
-          historyCompactionGeneration: { increment: 1 },
-        },
-      });
-    }
-    if (input.groupId) {
-      await tx.chatGroup.update({ where: { id: input.groupId }, data: { updatedAt: now } });
-    } else {
-      await tx.bot.update({
-        where: { id: input.botId, spaceId: input.spaceId },
-        data: { updatedAt: now },
-      });
-    }
     const event = await appendEventInTransaction(tx, {
       ...input,
       type: "thread.cleared",
@@ -329,8 +376,8 @@ export async function clearThread(
     });
     return {
       event,
-      cancelledRunIds: runIds,
-      historyCompactionGeneration: thread.historyCompactionGeneration,
+      cancelledRunIds: truncated.cancelledRunIds,
+      historyCompactionGeneration: truncated.historyCompactionGeneration,
     };
   });
   await notifyRealtime(realtime, committed.event.threadId, committed.event.seq);
@@ -339,6 +386,68 @@ export async function clearThread(
     cancelledRunIds: committed.cancelledRunIds,
     historyCompactionGeneration: committed.historyCompactionGeneration,
   };
+}
+
+/**
+ * Drops the target user message and everything after it, so the caller can resend an edited
+ * version. Returns null when the target is gone or is not a user message.
+ */
+export async function rewindThread(
+  prisma: PrismaClient,
+  input: RewindThreadInput,
+  realtime?: RealtimeFanout,
+): Promise<RewindThreadResult | null> {
+  const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const target = await tx.message.findFirst({
+      where: { id: input.messageId, threadId: input.threadId, role: "user" },
+      select: { seq: true },
+    });
+    if (!target) return null;
+    const created = await tx.event.findFirst({
+      where: {
+        threadId: input.threadId,
+        type: "thread.message.created",
+        payload: { path: ["messageId"], equals: input.messageId },
+      },
+      orderBy: { seq: "asc" },
+      select: { seq: true },
+    });
+    const truncated = await truncateThreadInTransaction(tx, {
+      ...input,
+      fromSeq: target.seq,
+      // No creation event (only possible if history was already pruned): keep every event
+      // rather than guess a cut point and drop the wrong range.
+      fromEventSeq: created?.seq ?? Number.MAX_SAFE_INTEGER,
+    });
+    // Compaction covered the rewound messages, so its summary now describes deleted history.
+    const compactionReset =
+      truncated.historyCompactedUpToSeq !== null && target.seq <= truncated.historyCompactedUpToSeq;
+    if (compactionReset) {
+      await tx.thread.update({
+        where: { id: input.threadId },
+        data: {
+          historyCompactedUpToSeq: null,
+          historyCompactionSummary: null,
+          historyCompactionGeneration: { increment: 1 },
+        },
+      });
+    }
+    const event = await appendEventInTransaction(tx, {
+      ...input,
+      type: "thread.rewound",
+      payload: { fromSeq: target.seq },
+    });
+    return {
+      event,
+      cancelledRunIds: truncated.cancelledRunIds,
+      historyCompactionGeneration: truncated.historyCompactionGeneration,
+      fromSeq: target.seq,
+      compactionReset,
+    };
+  });
+  if (!committed) return null;
+  await notifyRealtime(realtime, committed.event.threadId, committed.event.seq);
+  return { ...committed, event: mapProductEvent(committed.event) };
 }
 
 export async function sendUserMessage(

@@ -12,6 +12,7 @@ import {
   followThreadEvents,
   pauseRunForInput,
   pauseRunForTakeover,
+  rewindThread,
   sendUserMessage,
 } from "./events.js";
 import { RunHistoryWriteError } from "./messages.js";
@@ -1678,6 +1679,136 @@ describe("clearThread", () => {
     expect(tx.computerExecutionLease.updateMany).not.toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ botId: expect.anything() }) }),
     );
+  });
+});
+
+describe("rewindThread", () => {
+  function rewindTx(overrides: {
+    message?: { seq: number } | null;
+    historyCompactedUpToSeq?: number | null;
+  }) {
+    return {
+      thread: {
+        update: vi
+          .fn()
+          .mockResolvedValueOnce({
+            nextMessageSeq: 9,
+            historyCompactedUpToSeq: overrides.historyCompactedUpToSeq ?? null,
+            historyCompactionGeneration: 2,
+          })
+          .mockResolvedValue({ nextEventSeq: 21 }),
+      },
+      message: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValue(overrides.message === undefined ? { seq: 4 } : overrides.message),
+        deleteMany: vi.fn(),
+      },
+      run: {
+        findMany: vi.fn().mockResolvedValue([{ id: "run-1", taskId: "task-1" }]),
+        updateMany: vi.fn(),
+      },
+      attempt: { updateMany: vi.fn() },
+      task: { updateMany: vi.fn() },
+      computerExecutionLease: { deleteMany: vi.fn() },
+      computer: { updateMany: vi.fn() },
+      event: {
+        findFirst: vi.fn().mockResolvedValue({ seq: 11 }),
+        deleteMany: vi.fn(),
+        create: vi.fn().mockResolvedValue({
+          ...event(20),
+          type: "thread.rewound",
+          payload: { fromSeq: 4 },
+        }),
+      },
+      bot: { update: vi.fn() },
+    };
+  }
+
+  function rewindPrisma(tx: ReturnType<typeof rewindTx>) {
+    return {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+  }
+
+  const input = {
+    spaceId: "workspace-1",
+    threadId: "thread-1",
+    botId: "bot-1",
+    messageId: "message-4",
+  };
+
+  it("deletes only the target message onwards and cancels active runs", async () => {
+    const fanout = new TestFanout();
+    const publish = vi.spyOn(fanout, "publish");
+    const tx = rewindTx({});
+
+    await expect(rewindThread(rewindPrisma(tx), input, fanout)).resolves.toMatchObject({
+      event: { type: "thread.rewound" },
+      cancelledRunIds: ["run-1"],
+      fromSeq: 4,
+      compactionReset: false,
+    });
+    expect(tx.message.deleteMany).toHaveBeenCalledWith({
+      where: { threadId: "thread-1", seq: { gte: 4 } },
+    });
+    // Events carry their own seq: cut at the target's creation event, not at the message seq.
+    expect(tx.event.deleteMany).toHaveBeenCalledWith({
+      where: { threadId: "thread-1", seq: { gte: 11 } },
+    });
+    expect(tx.run.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ["run-1"] } },
+        data: expect.objectContaining({ status: "cancelled" }),
+      }),
+    );
+    expect(tx.computerExecutionLease.deleteMany).toHaveBeenCalledWith({
+      where: { runId: { in: ["run-1"] } },
+    });
+    expect(tx.event.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ type: "thread.rewound", payload: { fromSeq: 4 } }),
+      }),
+    );
+    expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 20 }));
+  });
+
+  it("keeps compaction when the target is newer than the compaction cursor", async () => {
+    const tx = rewindTx({ historyCompactedUpToSeq: 2 });
+
+    await expect(rewindThread(rewindPrisma(tx), input)).resolves.toMatchObject({
+      compactionReset: false,
+    });
+    expect(tx.thread.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ historyCompactionGeneration: { increment: 1 } }),
+      }),
+    );
+  });
+
+  it("resets compaction when the target sits under the compaction cursor", async () => {
+    const tx = rewindTx({ historyCompactedUpToSeq: 4 });
+
+    await expect(rewindThread(rewindPrisma(tx), input)).resolves.toMatchObject({
+      compactionReset: true,
+      historyCompactionGeneration: 2,
+    });
+    expect(tx.thread.update).toHaveBeenCalledWith({
+      where: { id: "thread-1" },
+      data: {
+        historyCompactedUpToSeq: null,
+        historyCompactionSummary: null,
+        historyCompactionGeneration: { increment: 1 },
+      },
+    });
+  });
+
+  it("returns null and changes nothing when the target is not a user message", async () => {
+    const tx = rewindTx({ message: null });
+
+    await expect(rewindThread(rewindPrisma(tx), input)).resolves.toBeNull();
+    expect(tx.message.deleteMany).not.toHaveBeenCalled();
+    expect(tx.event.create).not.toHaveBeenCalled();
   });
 });
 
