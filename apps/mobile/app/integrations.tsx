@@ -336,6 +336,29 @@ export default function Integrations() {
           </Text>
         ) : null}
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: installedOpen }}
+          testID="installed-integrations"
+          onPress={() => setInstalledOpen((open) => !open)}
+          style={styles.advancedToggle}
+        >
+          <Text style={styles.advancedLabel}>
+            {t("Installed integrations")}
+          </Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+
+        {installedOpen ? (
+          installed.length === 0 ? (
+            <Text style={styles.secondary}>
+              {t("No integrations installed yet.")}
+            </Text>
+          ) : (
+            <View style={gridStyle}>{installed.map(renderCatalogRow)}</View>
+          )
+        ) : null}
+
         {catalogReady && catalog.length > 0 ? (
           <>
             {showFeatured ? (
@@ -429,29 +452,6 @@ export default function Integrations() {
           >
             <Text style={styles.buttonLabel}>{t("Show more")}</Text>
           </Pressable>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: installedOpen }}
-          testID="installed-integrations"
-          onPress={() => setInstalledOpen((open) => !open)}
-          style={styles.advancedToggle}
-        >
-          <Text style={styles.advancedLabel}>
-            {t("Installed integrations")}
-          </Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-
-        {installedOpen ? (
-          installed.length === 0 ? (
-            <Text style={styles.secondary}>
-              {t("No integrations installed yet.")}
-            </Text>
-          ) : (
-            <View style={gridStyle}>{installed.map(renderCatalogRow)}</View>
-          )
         ) : null}
 
         <Pressable

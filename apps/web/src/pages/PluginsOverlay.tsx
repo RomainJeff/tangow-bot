@@ -321,6 +321,31 @@ export function PluginsOverlay({
             </p>
           ) : null}
 
+          <details
+            data-testid="installed-integrations"
+            className="group mb-6"
+            onToggle={(event) => setInstalledOpen((event.currentTarget as HTMLDetailsElement).open)}
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[14px] text-muted-foreground">
+              <span className="text-muted-foreground">
+                <Trans>Installed integrations</Trans>
+              </span>
+              <span aria-hidden="true" className="transition-transform group-open:rotate-90">
+                ›
+              </span>
+            </summary>
+            {/* Rendered only when open so connected apps are not duplicated in the DOM. */}
+            {installedOpen ? (
+              installed.length === 0 ? (
+                <p className="mt-4 text-muted-foreground/80">
+                  <Trans>No integrations installed yet.</Trans>
+                </p>
+              ) : (
+                <div className="mt-4 grid grid-cols-2 gap-2">{installed.map(renderCatalogRow)}</div>
+              )
+            ) : null}
+          </details>
+
           {showFeatured ? (
             <div className="mb-6" data-testid="featured-connectors">
               {!loading && catalog.length === 0 ? (
@@ -432,31 +457,6 @@ export function PluginsOverlay({
               </Button>
             </div>
           ) : null}
-
-          <details
-            data-testid="installed-integrations"
-            className="group mt-8"
-            onToggle={(event) => setInstalledOpen((event.currentTarget as HTMLDetailsElement).open)}
-          >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[14px] text-muted-foreground">
-              <span className="text-muted-foreground">
-                <Trans>Installed integrations</Trans>
-              </span>
-              <span aria-hidden="true" className="transition-transform group-open:rotate-90">
-                ›
-              </span>
-            </summary>
-            {/* Rendered only when open so connected apps are not duplicated in the DOM. */}
-            {installedOpen ? (
-              installed.length === 0 ? (
-                <p className="mt-4 text-muted-foreground/80">
-                  <Trans>No integrations installed yet.</Trans>
-                </p>
-              ) : (
-                <div className="mt-4 grid grid-cols-2 gap-2">{installed.map(renderCatalogRow)}</div>
-              )
-            ) : null}
-          </details>
 
           <details
             data-testid="integrations-advanced"
