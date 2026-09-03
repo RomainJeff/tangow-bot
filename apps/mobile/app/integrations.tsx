@@ -1,4 +1,8 @@
-import type { CapabilityInstall, Connection, ConnectionCatalogItem } from "@rakazo/contracts";
+import type {
+  CapabilityInstall,
+  Connection,
+  ConnectionCatalogItem,
+} from "@rakazo/contracts";
 import {
   abortableDelay,
   buildFeaturedConnectorTiles,
@@ -36,10 +40,13 @@ export default function Integrations() {
   const catalogColumns = width >= 480 ? 2 : 1;
   const [catalog, setCatalog] = useState<ConnectionCatalogItem[]>([]);
   const [query, setQuery] = useState("");
-  const [visibleCount, setVisibleCount] = useState(CONNECTION_CATALOG_PAGE_SIZE);
+  const [visibleCount, setVisibleCount] = useState(
+    CONNECTION_CATALOG_PAGE_SIZE,
+  );
   const [sources, setSources] = useState<CapabilityInstall[]>([]);
   const [sourceKind, setSourceKind] = useState<SourceKind | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [installedOpen, setInstalledOpen] = useState(false);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [credential, setCredential] = useState("");
@@ -51,18 +58,32 @@ export default function Integrations() {
   const [catalogReady, setCatalogReady] = useState(false);
   const connectionAttempt = useRef<AbortController | null>(null);
 
-  const featuredTiles = useMemo(() => buildFeaturedConnectorTiles(catalog), [catalog]);
+  const featuredTiles = useMemo(
+    () => buildFeaturedConnectorTiles(catalog),
+    [catalog],
+  );
   const showFeatured = !query.trim();
-  const catalogApps = useMemo(() => filterConnectionCatalogItems(catalog, query), [catalog, query]);
+  const catalogApps = useMemo(
+    () => filterConnectionCatalogItems(catalog, query),
+    [catalog, query],
+  );
   const renderedApps = catalogApps.slice(0, visibleCount);
+  const installed = useMemo(
+    () => catalog.filter((item) => item.connected),
+    [catalog],
+  );
 
   async function refresh() {
-    const catalogResult = await rpc<ConnectionCatalogItem[]>("connections/catalog");
+    const catalogResult = await rpc<ConnectionCatalogItem[]>(
+      "connections/catalog",
+    );
     setCatalog(catalogResult);
     setCatalogReady(true);
     try {
       const installs = await rpc<CapabilityInstall[]>("capabilities/list");
-      setSources(installs.filter((item) => item.kind === "mcp" || item.kind === "api"));
+      setSources(
+        installs.filter((item) => item.kind === "mcp" || item.kind === "api"),
+      );
     } catch {
       // Tool sources are optional; keep featured/catalog usable if this fails.
     }
@@ -71,7 +92,11 @@ export default function Integrations() {
   useEffect(() => {
     void refresh().catch((reason) => {
       setCatalogReady(false);
-      setCatalogError(reason instanceof Error ? reason.message : t("Could not load integrations"));
+      setCatalogError(
+        reason instanceof Error
+          ? reason.message
+          : t("Could not load integrations"),
+      );
     });
     void loadLastBotId().then(setLastBotId);
     return () => connectionAttempt.current?.abort();
@@ -91,7 +116,9 @@ export default function Integrations() {
     const botId = lastBotId || (await loadLastBotId());
     if (!botId) return;
     if (botId !== lastBotId) setLastBotId(botId);
-    void rpc("onboarding/appConnected", { botId, provider: item.slug }).catch(() => undefined);
+    void rpc("onboarding/appConnected", { botId, provider: item.slug }).catch(
+      () => undefined,
+    );
   }
 
   async function connect(item: ConnectionCatalogItem) {
@@ -102,15 +129,16 @@ export default function Integrations() {
     setPending(key);
     setCatalogError(null);
     try {
-      const started = await rpc<{ connectionId: string; authorizationUrl: string | null }>(
-        "connections/begin",
-        {
-          connectorId: item.connectorId,
-          provider: item.slug,
-          displayName: item.name,
-        },
-      );
-      if (started.authorizationUrl) await Linking.openURL(started.authorizationUrl);
+      const started = await rpc<{
+        connectionId: string;
+        authorizationUrl: string | null;
+      }>("connections/begin", {
+        connectorId: item.connectorId,
+        provider: item.slug,
+        displayName: item.name,
+      });
+      if (started.authorizationUrl)
+        await Linking.openURL(started.authorizationUrl);
       for (let attempt = 0; attempt < 45; attempt += 1) {
         if (controller.signal.aborted) return;
         const row = await rpc<Connection>("connections/complete", {
@@ -131,7 +159,9 @@ export default function Integrations() {
       );
     } catch (reason) {
       if (controller.signal.aborted) return;
-      setCatalogError(reason instanceof Error ? reason.message : t("Could not connect"));
+      setCatalogError(
+        reason instanceof Error ? reason.message : t("Could not connect"),
+      );
     } finally {
       if (connectionAttempt.current === controller) {
         connectionAttempt.current = null;
@@ -144,21 +174,31 @@ export default function Integrations() {
     const key = `${item.connectorId}:${item.slug}`;
     setPending(key);
     setCatalogError(null);
-    const connections = await rpc<Connection[]>("connections/list").catch(() => []);
+    const connections = await rpc<Connection[]>("connections/list").catch(
+      () => [],
+    );
     const matches = connections.filter(
       (connection) =>
-        connection.connectorId === item.connectorId && connection.provider === item.slug,
+        connection.connectorId === item.connectorId &&
+        connection.provider === item.slug,
     );
     try {
       const row =
         matches.find((connection) => connection.status === "connected") ??
         matches.find((connection) => connection.status === "pending") ??
         matches.find((connection) => connection.status === "error");
-      if (!row) throw new Error(t("No connection record found for {name}.", { name: item.name }));
+      if (!row)
+        throw new Error(
+          t("No connection record found for {name}.", { name: item.name }),
+        );
       await rpc("connections/revoke", { connectionId: row.id });
       await refresh();
     } catch (reason) {
-      setCatalogError(reason instanceof Error ? reason.message : t("Could not revoke connection"));
+      setCatalogError(
+        reason instanceof Error
+          ? reason.message
+          : t("Could not revoke connection"),
+      );
     } finally {
       setPending(null);
     }
@@ -180,21 +220,31 @@ export default function Integrations() {
     try {
       await rpc("capabilities/install", {
         kind: sourceKind === "api" ? "api" : "mcp",
-        name: name.trim() || (sourceKind === "treg" ? "Treg" : t("Custom connector")),
+        name:
+          name.trim() ||
+          (sourceKind === "treg" ? "Treg" : t("Custom connector")),
         source: url.trim(),
         credential: credential.trim() || undefined,
         config:
           sourceKind === "treg"
             ? { preset: "treg", auth: { type: "bearer" } }
             : sourceKind === "api"
-              ? { openApi: true, auth: { type: requiresAuth ? "bearer" : "none" } }
-              : { preset: "custom", auth: { type: requiresAuth ? "bearer" : "none" } },
+              ? {
+                  openApi: true,
+                  auth: { type: requiresAuth ? "bearer" : "none" },
+                }
+              : {
+                  preset: "custom",
+                  auth: { type: requiresAuth ? "bearer" : "none" },
+                },
       });
       setCredential("");
       setSourceKind(null);
       await refresh();
     } catch (reason) {
-      setSourceError(reason instanceof Error ? reason.message : t("Could not add source"));
+      setSourceError(
+        reason instanceof Error ? reason.message : t("Could not add source"),
+      );
     } finally {
       setPending(null);
     }
@@ -207,15 +257,58 @@ export default function Integrations() {
       await rpc("capabilities/remove", { id: source.id });
       setSources((current) => current.filter((item) => item.id !== source.id));
     } catch (reason) {
-      setSourceError(reason instanceof Error ? reason.message : t("Could not remove source"));
+      setSourceError(
+        reason instanceof Error ? reason.message : t("Could not remove source"),
+      );
     } finally {
       setPending(null);
     }
   }
 
+  function renderCatalogRow(item: ConnectionCatalogItem) {
+    const key = `${item.connectorId}:${item.slug}`;
+    return (
+      <View
+        key={key}
+        style={[styles.row, catalogColumns === 2 ? styles.catalogCell : null]}
+      >
+        <ConnectorIcon name={item.name} logo={item.logo} />
+        <View style={styles.grow}>
+          <Text numberOfLines={1} style={styles.title}>
+            {item.name}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            item.connected
+              ? t("Remove {name}", { name: item.name })
+              : t("Add {name}", { name: item.name })
+          }
+          disabled={pending === key}
+          onPress={() => void (item.connected ? revoke(item) : connect(item))}
+        >
+          <Text style={styles.link}>
+            {pending === key
+              ? t("Working…")
+              : item.connected
+                ? t("Remove")
+                : t("Add")}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const gridStyle =
+    catalogColumns === 2 ? styles.catalogGrid : styles.catalogStack;
+
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.content}
+      >
         <TextInput
           value={query}
           onChangeText={(value) => {
@@ -233,103 +326,132 @@ export default function Integrations() {
 
         {catalogError ? <Text style={styles.error}>{catalogError}</Text> : null}
 
-        {!catalogReady ? <ActivityIndicator color={native.fillPressed} /> : null}
+        {!catalogReady ? (
+          <ActivityIndicator color={native.fillPressed} />
+        ) : null}
 
         {catalogReady && catalog.length === 0 ? (
-          <Text style={styles.secondary}>{t(EMPTY_PLUGIN_CATALOG_MESSAGE)}</Text>
+          <Text style={styles.secondary}>
+            {t(EMPTY_PLUGIN_CATALOG_MESSAGE)}
+          </Text>
         ) : null}
 
         {catalogReady && catalog.length > 0 ? (
-          <View style={catalogColumns === 2 ? styles.catalogGrid : styles.catalogStack}>
-            {showFeatured
-              ? featuredTiles.map((tile) => {
-                  const item = tile.item;
-                  const key = item ? `${item.connectorId}:${item.slug}` : tile.id;
-                  const disabled = tile.missing || !item;
-                  const connected = item?.connected ?? false;
-                  return (
-                    <View
-                      key={key}
-                      style={[
-                        styles.row,
-                        catalogColumns === 2 ? styles.catalogCell : null,
-                        disabled ? { opacity: 0.7 } : null,
-                      ]}
-                    >
-                      <ConnectorIcon name={tile.label} logo={item?.logo} />
-                      <View style={styles.grow}>
-                        <Text numberOfLines={1} style={styles.title}>
-                          {tile.label}
-                        </Text>
-                        {disabled ? (
-                          <Text style={styles.secondary}>{t("Not in the plugin catalog")}</Text>
-                        ) : null}
-                      </View>
-                      {disabled || !item ? null : (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={
-                            connected
-                              ? t("Remove {name}", { name: tile.label })
-                              : t("Add {name}", { name: tile.label })
-                          }
-                          disabled={pending === key}
-                          onPress={() => void (connected ? revoke(item) : connect(item))}
-                        >
-                          <Text style={styles.link}>
-                            {pending === key ? t("Working…") : connected ? t("Remove") : t("Add")}
+          <>
+            {showFeatured ? (
+              <>
+                <Text style={styles.section}>{t("Featured")}</Text>
+                <View style={gridStyle}>
+                  {featuredTiles.map((tile) => {
+                    const item = tile.item;
+                    const key = item
+                      ? `${item.connectorId}:${item.slug}`
+                      : tile.id;
+                    const disabled = tile.missing || !item;
+                    const connected = item?.connected ?? false;
+                    return (
+                      <View
+                        key={key}
+                        style={[
+                          styles.row,
+                          catalogColumns === 2 ? styles.catalogCell : null,
+                          disabled ? { opacity: 0.7 } : null,
+                        ]}
+                      >
+                        <ConnectorIcon name={tile.label} logo={item?.logo} />
+                        <View style={styles.grow}>
+                          <Text numberOfLines={1} style={styles.title}>
+                            {tile.label}
                           </Text>
-                        </Pressable>
-                      )}
-                    </View>
-                  );
-                })
-              : null}
-            {renderedApps.map((item) => {
-              const key = `${item.connectorId}:${item.slug}`;
-              return (
-                <View
-                  key={key}
-                  style={[styles.row, catalogColumns === 2 ? styles.catalogCell : null]}
-                >
-                  <ConnectorIcon name={item.name} logo={item.logo} />
-                  <View style={styles.grow}>
-                    <Text numberOfLines={1} style={styles.title}>
-                      {item.name}
-                    </Text>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      item.connected
-                        ? t("Remove {name}", { name: item.name })
-                        : t("Add {name}", { name: item.name })
-                    }
-                    disabled={pending === key}
-                    onPress={() => void (item.connected ? revoke(item) : connect(item))}
-                  >
-                    <Text style={styles.link}>
-                      {pending === key ? t("Working…") : item.connected ? t("Remove") : t("Add")}
-                    </Text>
-                  </Pressable>
+                          {disabled ? (
+                            <Text style={styles.secondary}>
+                              {t("Not in the plugin catalog")}
+                            </Text>
+                          ) : null}
+                        </View>
+                        {disabled || !item ? null : (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                              connected
+                                ? t("Remove {name}", { name: tile.label })
+                                : t("Add {name}", { name: tile.label })
+                            }
+                            disabled={pending === key}
+                            onPress={() =>
+                              void (connected ? revoke(item) : connect(item))
+                            }
+                          >
+                            <Text style={styles.link}>
+                              {pending === key
+                                ? t("Working…")
+                                : connected
+                                  ? t("Remove")
+                                  : t("Add")}
+                            </Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
-              );
-            })}
-          </View>
+              </>
+            ) : null}
+            {renderedApps.length > 0 ? (
+              <>
+                {showFeatured ? (
+                  <Text style={styles.section}>{t("All integrations")}</Text>
+                ) : null}
+                <View style={gridStyle}>
+                  {renderedApps.map(renderCatalogRow)}
+                </View>
+              </>
+            ) : null}
+          </>
         ) : null}
 
-        {catalogReady && catalog.length > 0 && catalogApps.length === 0 && !showFeatured ? (
-          <Text style={styles.secondary}>{t("No apps match your search.")}</Text>
+        {catalogReady &&
+        catalog.length > 0 &&
+        catalogApps.length === 0 &&
+        !showFeatured ? (
+          <Text style={styles.secondary}>
+            {t("No apps match your search.")}
+          </Text>
         ) : null}
 
         {renderedApps.length < catalogApps.length ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => setVisibleCount((count) => count + CONNECTION_CATALOG_PAGE_SIZE)}
+            onPress={() =>
+              setVisibleCount((count) => count + CONNECTION_CATALOG_PAGE_SIZE)
+            }
             style={styles.smallButton}
           >
             <Text style={styles.buttonLabel}>{t("Show more")}</Text>
           </Pressable>
+        ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: installedOpen }}
+          testID="installed-integrations"
+          onPress={() => setInstalledOpen((open) => !open)}
+          style={styles.advancedToggle}
+        >
+          <Text style={styles.advancedLabel}>
+            {t("Installed integrations")}
+          </Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+
+        {installedOpen ? (
+          installed.length === 0 ? (
+            <Text style={styles.secondary}>
+              {t("No integrations installed yet.")}
+            </Text>
+          ) : (
+            <View style={gridStyle}>{installed.map(renderCatalogRow)}</View>
+          )
         ) : null}
 
         <Pressable
@@ -367,7 +489,9 @@ export default function Integrations() {
               ))}
             </View>
 
-            {sourceError ? <Text style={styles.error}>{sourceError}</Text> : null}
+            {sourceError ? (
+              <Text style={styles.error}>{sourceError}</Text>
+            ) : null}
 
             {sourceKind ? (
               <View style={styles.card}>
@@ -407,7 +531,9 @@ export default function Integrations() {
                     style={styles.authToggle}
                   >
                     <Text style={styles.secondary}>
-                      {requiresAuth ? t("Bearer authentication") : t("No authentication")}
+                      {requiresAuth
+                        ? t("Bearer authentication")
+                        : t("No authentication")}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -418,7 +544,11 @@ export default function Integrations() {
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholder={sourceKind === "treg" ? t("Treg token") : t("Bearer token")}
+                    placeholder={
+                      sourceKind === "treg"
+                        ? t("Treg token")
+                        : t("Bearer token")
+                    }
                     placeholderTextColor={native.tertiaryLabel}
                     style={styles.input}
                   />
@@ -433,7 +563,9 @@ export default function Integrations() {
                     {pending === "source" ? (
                       <ActivityIndicator color={native.label} />
                     ) : (
-                      <Text style={styles.buttonLabel}>{t("Verify and add")}</Text>
+                      <Text style={styles.buttonLabel}>
+                        {t("Verify and add")}
+                      </Text>
                     )}
                   </Pressable>
                   <Pressable
@@ -449,7 +581,9 @@ export default function Integrations() {
 
             <Text style={styles.section}>{t("Tool sources")}</Text>
             {sources.length === 0 ? (
-              <Text style={styles.secondary}>{t("No custom sources installed.")}</Text>
+              <Text style={styles.secondary}>
+                {t("No custom sources installed.")}
+              </Text>
             ) : null}
             {sources.map((source) => (
               <View key={source.id} style={styles.row}>
@@ -459,7 +593,10 @@ export default function Integrations() {
                     {source.kind.toUpperCase()} · {source.source}
                   </Text>
                 </View>
-                <Pressable accessibilityRole="button" onPress={() => void removeSource(source)}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void removeSource(source)}
+                >
                   <Text style={styles.remove}>
                     {pending === source.id ? t("Removing…") : t("Remove")}
                   </Text>
@@ -478,7 +615,12 @@ function createIntegrationsStyles() {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: native.page },
     content: { padding: 20, gap: 14 },
-    section: { color: native.secondaryLabel, fontSize: 14, fontWeight: "600", marginTop: 10 },
+    section: {
+      color: native.secondaryLabel,
+      fontSize: 14,
+      fontWeight: "600",
+      marginTop: 10,
+    },
     actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     smallButton: {
       minHeight: 42,
@@ -489,7 +631,12 @@ function createIntegrationsStyles() {
       justifyContent: "center",
     },
     buttonLabel: { color: native.label, fontSize: 14, fontWeight: "600" },
-    card: { padding: 16, borderRadius: 16, backgroundColor: native.fill, gap: 12 },
+    card: {
+      padding: 16,
+      borderRadius: 16,
+      backgroundColor: native.fill,
+      gap: 12,
+    },
     input: {
       minHeight: 48,
       borderRadius: 12,

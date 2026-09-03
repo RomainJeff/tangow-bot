@@ -67,6 +67,7 @@ export function PluginsOverlay({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [installedOpen, setInstalledOpen] = useState(false);
   const connectionAttempt = useRef<AbortController | null>(null);
 
   async function refresh() {
@@ -93,6 +94,8 @@ export function PluginsOverlay({
 
   const visible = useMemo(() => filterConnectionCatalogItems(catalog, query), [catalog, query]);
   const rendered = visible.slice(0, visibleCount);
+
+  const installed = useMemo(() => catalog.filter((item) => item.connected), [catalog]);
 
   async function notifyAppConnected(item: ConnectionCatalogItem) {
     if (!activeBotId) return;
@@ -231,6 +234,50 @@ export function PluginsOverlay({
     }
   }
 
+  function renderCatalogRow(item: ConnectionCatalogItem) {
+    const key = itemKey(item);
+    return (
+      <div key={key} className="flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2">
+        {item.logo ? (
+          <img
+            src={item.logo}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="h-9 w-9 shrink-0 rounded-xl bg-accent object-contain"
+          />
+        ) : (
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent text-sm font-semibold text-foreground">
+            {item.name[0]}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[15px] font-medium text-foreground">{item.name}</div>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          className="rounded-full"
+          size="sm"
+          disabled={pending === key}
+          onClick={() => void (item.connected ? revoke(item) : connect(item))}
+        >
+          {pending === key ? (
+            item.connected ? (
+              <Trans>Removing…</Trans>
+            ) : (
+              <Trans>Adding…</Trans>
+            )
+          ) : item.connected ? (
+            <Trans>Remove</Trans>
+          ) : (
+            <Trans>Add</Trans>
+          )}
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <Dialog
       open
@@ -281,68 +328,73 @@ export function PluginsOverlay({
                   {EMPTY_PLUGIN_CATALOG_MESSAGE}
                 </p>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {featuredTiles.map((tile) => {
-                    const item = tile.item;
-                    const key = item ? itemKey(item) : tile.id;
-                    const disabled = tile.missing || !item;
-                    const connected = item?.connected ?? false;
-                    return (
-                      <div
-                        key={key}
-                        className={`flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2 ${
-                          disabled ? "opacity-70" : ""
-                        }`}
-                      >
-                        {item?.logo ? (
-                          <img
-                            src={item.logo}
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                            className="h-9 w-9 shrink-0 rounded-xl bg-accent object-contain"
-                          />
-                        ) : (
-                          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent text-sm font-semibold text-foreground">
-                            {tile.label[0]}
-                          </div>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[15px] font-medium text-foreground">
-                            {tile.label}
-                          </div>
-                          {disabled ? (
-                            <div className="truncate text-[12.5px] text-muted-foreground">
-                              <Trans>Not in the plugin catalog</Trans>
+                <>
+                  <h3 className="mb-2 text-[13px] font-medium text-muted-foreground">
+                    <Trans>Featured</Trans>
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {featuredTiles.map((tile) => {
+                      const item = tile.item;
+                      const key = item ? itemKey(item) : tile.id;
+                      const disabled = tile.missing || !item;
+                      const connected = item?.connected ?? false;
+                      return (
+                        <div
+                          key={key}
+                          className={`flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2 ${
+                            disabled ? "opacity-70" : ""
+                          }`}
+                        >
+                          {item?.logo ? (
+                            <img
+                              src={item.logo}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                              className="h-9 w-9 shrink-0 rounded-xl bg-accent object-contain"
+                            />
+                          ) : (
+                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent text-sm font-semibold text-foreground">
+                              {tile.label[0]}
                             </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[15px] font-medium text-foreground">
+                              {tile.label}
+                            </div>
+                            {disabled ? (
+                              <div className="truncate text-[12.5px] text-muted-foreground">
+                                <Trans>Not in the plugin catalog</Trans>
+                              </div>
+                            ) : null}
+                          </div>
+                          {item && !tile.missing ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="rounded-full"
+                              size="sm"
+                              disabled={pending === key}
+                              onClick={() => void (connected ? revoke(item) : connect(item))}
+                            >
+                              {pending === key ? (
+                                connected ? (
+                                  <Trans>Removing…</Trans>
+                                ) : (
+                                  <Trans>Adding…</Trans>
+                                )
+                              ) : connected ? (
+                                <Trans>Remove</Trans>
+                              ) : (
+                                <Trans>Add</Trans>
+                              )}
+                            </Button>
                           ) : null}
                         </div>
-                        {item && !tile.missing ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="rounded-full"
-                            size="sm"
-                            disabled={pending === key}
-                            onClick={() => void (connected ? revoke(item) : connect(item))}
-                          >
-                            {pending === key ? (
-                              connected ? (
-                                <Trans>Removing…</Trans>
-                              ) : (
-                                <Trans>Adding…</Trans>
-                              )
-                            ) : connected ? (
-                              <Trans>Remove</Trans>
-                            ) : (
-                              <Trans>Add</Trans>
-                            )}
-                          </Button>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           ) : null}
@@ -358,53 +410,14 @@ export function PluginsOverlay({
             </p>
           ) : null}
           {visible.length > 0 ? (
-            <div className="grid grid-cols-2 gap-2">
-              {rendered.map((item) => {
-                const key = itemKey(item);
-                return (
-                  <div key={key} className="flex min-w-0 items-center gap-3 rounded-xl px-2.5 py-2">
-                    {item.logo ? (
-                      <img
-                        src={item.logo}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        className="h-9 w-9 shrink-0 rounded-xl bg-accent object-contain"
-                      />
-                    ) : (
-                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent text-sm font-semibold text-foreground">
-                        {item.name[0]}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[15px] font-medium text-foreground">
-                        {item.name}
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="rounded-full"
-                      size="sm"
-                      disabled={pending === key}
-                      onClick={() => void (item.connected ? revoke(item) : connect(item))}
-                    >
-                      {pending === key ? (
-                        item.connected ? (
-                          <Trans>Removing…</Trans>
-                        ) : (
-                          <Trans>Adding…</Trans>
-                        )
-                      ) : item.connected ? (
-                        <Trans>Remove</Trans>
-                      ) : (
-                        <Trans>Add</Trans>
-                      )}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
+            <>
+              {showFeatured ? (
+                <h3 className="mb-2 text-[13px] font-medium text-muted-foreground">
+                  <Trans>All integrations</Trans>
+                </h3>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2">{rendered.map(renderCatalogRow)}</div>
+            </>
           ) : null}
           {rendered.length < visible.length ? (
             <div className="mt-4 flex justify-center">
@@ -419,6 +432,31 @@ export function PluginsOverlay({
               </Button>
             </div>
           ) : null}
+
+          <details
+            data-testid="installed-integrations"
+            className="group mt-8"
+            onToggle={(event) => setInstalledOpen((event.currentTarget as HTMLDetailsElement).open)}
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[14px] text-muted-foreground">
+              <span className="text-muted-foreground">
+                <Trans>Installed integrations</Trans>
+              </span>
+              <span aria-hidden="true" className="transition-transform group-open:rotate-90">
+                ›
+              </span>
+            </summary>
+            {/* Rendered only when open so connected apps are not duplicated in the DOM. */}
+            {installedOpen ? (
+              installed.length === 0 ? (
+                <p className="mt-4 text-muted-foreground/80">
+                  <Trans>No integrations installed yet.</Trans>
+                </p>
+              ) : (
+                <div className="mt-4 grid grid-cols-2 gap-2">{installed.map(renderCatalogRow)}</div>
+              )
+            ) : null}
+          </details>
 
           <details
             data-testid="integrations-advanced"

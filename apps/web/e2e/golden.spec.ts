@@ -141,6 +141,11 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
     /Gmail[\s\S]*Google Calendar[\s\S]*Google Drive[\s\S]*Slack[\s\S]*Notion/,
   );
   await expect(page.getByText("GitHub", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Featured", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All integrations", exact: true })).toBeVisible();
+  const installed = page.getByTestId("installed-integrations");
+  await expect(installed).toContainText("Installed integrations");
+  await expect(installed.getByRole("button", { name: "Remove", exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: "Add Treg", exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: "Add MCP server", exact: true })).toBeHidden();
   await expect(page.getByRole("button", { name: "Add OpenAPI", exact: true })).toBeHidden();
@@ -156,10 +161,20 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
     .locator("xpath=ancestor::*[.//button][1]");
   await gmailRow.getByRole("button", { name: "Add", exact: true }).click();
   await expect(gmailRow.getByRole("button", { name: "Remove", exact: true })).toBeVisible();
+  // Installed section is collapsed by default and lists only connected apps once opened.
+  await installed.evaluate((element) => {
+    (element as HTMLDetailsElement).open = true;
+  });
+  await expect(installed.getByText("Gmail", { exact: true })).toBeVisible();
+  await expect(installed.getByRole("button", { name: "Remove", exact: true })).toHaveCount(1);
   await captureScreenshot(page, testInfo, "11a-connected-plugins");
 
   await gmailRow.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(gmailRow.getByRole("button", { name: "Add", exact: true })).toBeVisible();
+  await expect(installed.getByText("No integrations installed yet.")).toBeVisible();
+  await installed.evaluate((element) => {
+    (element as HTMLDetailsElement).open = false;
+  });
   await captureScreenshot(page, testInfo, "11b-connected-plugins-empty");
 
   const linearRow = page
