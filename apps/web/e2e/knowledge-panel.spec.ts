@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import {
+  activeBotId,
+  captureScreenshot,
+  completeOnboarding,
+  realSandboxTimeout,
+  rpc,
+  signup,
+} from "./helpers";
 
 test("memory and skills are readable and editable in the app", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -8,6 +15,15 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
+
+  // Ask the agent for a working file up front so the Files tab has something
+  // real to show by the time memory and skills are done.
+  const chiefId = activeBotId(page);
+  const fileMarker = `file-${stamp}`;
+  await page
+    .getByPlaceholder(/Message/)
+    .fill(`write a file in your home called notes/result.csv that says ${fileMarker}`);
+  await page.keyboard.press("Enter");
 
   // Space-wide documents live in the Memory settings overlay. Open that before
   // bot settings so the Knowledge Memory tab cannot steal this click.
@@ -101,4 +117,34 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await knowledge.getByRole("button", { name: "Delete", exact: true }).click();
   await knowledge.getByRole("button", { name: "Confirm delete", exact: true }).click();
   await expect(skillRow).toBeHidden();
+
+  // Files: the agent's working folder, browsable down to a readable file.
+  await expect
+    .poll(
+      async () => {
+        const entries = await rpc<Array<{ path: string }>>(page, "computer/files", {
+          botId: chiefId,
+          path: "",
+        });
+        return entries.some((entry) => entry.path === "notes");
+      },
+      {
+        timeout: realSandboxTimeout(90_000, 20_000),
+        message: "the agent must finish writing notes/result.csv",
+      },
+    )
+    .toBe(true);
+
+  await knowledge.getByRole("button", { name: "Files", exact: true }).click();
+  const files = knowledge.getByTestId("bot-knowledge-files");
+  const notesRow = files.getByRole("button", { name: "notes/", exact: true });
+  await expect(notesRow).toBeVisible();
+  await notesRow.click();
+  const csvRow = files.getByRole("button", { name: /result\.csv/ });
+  await expect(csvRow).toBeVisible();
+  await captureScreenshot(page, testInfo, "85-knowledge-files-list");
+  await csvRow.click();
+  await expect(files.locator("textarea")).toHaveValue(new RegExp(fileMarker));
+  await expect(files.getByRole("button", { name: "Download", exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "86-knowledge-files-preview");
 });

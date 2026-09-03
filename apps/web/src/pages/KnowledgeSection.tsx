@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { AgentSkill, AgentSkillCatalogEntry, MemoryDocument } from "@rakazo/contracts";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { formatBytes } from "../components/ArtifactFileCard";
 import { rpc } from "../lib/rpc";
 
 const fieldClass =
@@ -10,13 +11,15 @@ function rowClass(open: boolean): string {
   return `w-full rounded-[11px] px-2.5 py-2.5 text-start ${open ? "bg-muted" : "hover:bg-muted"}`;
 }
 
+type KnowledgeTab = "memory" | "skills" | "files";
+
 /**
  * What the agent knows, editable: its own memory document and the space's
  * agent skills. Space-wide memory lives in the Memory settings overlay.
  * Rides entirely on the existing memory.* and agentSkills.* RPCs.
  */
 export function KnowledgeSection({ botId }: { botId: string }) {
-  const [tab, setTab] = useState<"memory" | "skills">("memory");
+  const [tab, setTab] = useState<KnowledgeTab>("memory");
   return (
     <div className="mt-6" data-testid="bot-knowledge">
       <div className="mb-3 text-[14px] text-muted-foreground">
@@ -25,9 +28,10 @@ export function KnowledgeSection({ botId }: { botId: string }) {
       <div className="mb-3 flex items-center gap-2 text-[14px]">
         {(
           [
-            { value: "memory" as const, label: <Trans>Memory</Trans> },
-            { value: "skills" as const, label: <Trans>Skills</Trans> },
-          ] satisfies Array<{ value: "memory" | "skills"; label: ReactNode }>
+            { value: "memory", label: <Trans>Memory</Trans> },
+            { value: "skills", label: <Trans>Skills</Trans> },
+            { value: "files", label: <Trans>Files</Trans> },
+          ] satisfies Array<{ value: KnowledgeTab; label: ReactNode }>
         ).map((option) => (
           <button
             key={option.value}
@@ -50,9 +54,9 @@ export function KnowledgeSection({ botId }: { botId: string }) {
           emptyLabel={<Trans>Nothing remembered yet</Trans>}
           testId="bot-knowledge-memory"
         />
-      ) : (
-        <AgentSkills />
-      )}
+      ) : null}
+      {tab === "skills" ? <AgentSkills /> : null}
+      {tab === "files" ? <AgentFiles key={botId} botId={botId} /> : null}
     </div>
   );
 }
@@ -444,6 +448,177 @@ function AgentSkills() {
           <Trans>New skill</Trans>
         </button>
       )}
+    </div>
+  );
+}
+
+type WorkspaceEntry = { path: string; kind: "file" | "dir"; size: number };
+
+function entryName(entryPath: string): string {
+  const segments = entryPath.split("/").filter(Boolean);
+  return segments[segments.length - 1] ?? entryPath;
+}
+
+/** Directories first, then files, each alphabetical, so the list is stable. */
+function sortEntries(entries: WorkspaceEntry[]): WorkspaceEntry[] {
+  return [...entries].sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
+    return entryName(a.path).localeCompare(entryName(b.path));
+  });
+}
+
+/**
+ * The agent's working files: its computer workspace while the computer runs,
+ * otherwise the last checkpoint. Rides on the existing computer.files and
+ * computer.readFile RPCs, which already scope paths to this bot's home.
+ */
+function AgentFiles({ botId }: { botId: string }) {
+  const { t } = useLingui();
+  const [dir, setDir] = useState("");
+  const [entries, setEntries] = useState<WorkspaceEntry[]>([]);
+  const [open, setOpen] = useState<{ path: string; content: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const generation = useRef(0);
+
+  useEffect(() => {
+    const current = ++generation.current;
+    setOpen(null);
+    setError(null);
+    void rpc.computer
+      .files({ botId, path: dir })
+      .then((list) => {
+        if (current !== generation.current) return;
+        setEntries(sortEntries(list));
+      })
+      .catch(() => {
+        if (current !== generation.current) return;
+        setEntries([]);
+        setError(t`Could not load`);
+      });
+    return () => {
+      generation.current += 1;
+    };
+  }, [botId, dir, t]);
+
+  async function openFile(entry: WorkspaceEntry) {
+    if (busy) return;
+    const current = ++generation.current;
+    setBusy(true);
+    setError(null);
+    try {
+      const file = await rpc.computer.readFile({ botId, path: entry.path });
+      if (current !== generation.current) return;
+      setOpen(file);
+    } catch (failure) {
+      if (current !== generation.current) return;
+      // A binary file fails the server's UTF-8 decode, and an oversized one
+      // comes back as a readable BAD_REQUEST message.
+      setError(failure instanceof Error ? failure.message : t`Could not read this file`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function download(file: { path: string; content: string }) {
+    const url = URL.createObjectURL(new Blob([file.content]));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = entryName(file.path);
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const segments = dir.split("/").filter(Boolean);
+  return (
+    <div data-testid="bot-knowledge-files">
+      <div className="flex flex-wrap items-baseline gap-1 px-2.5 pb-2 text-[12.5px] text-muted-foreground/80">
+        <button
+          type="button"
+          onClick={() => setDir("")}
+          aria-label={t`Workspace root`}
+          className={dir ? "hover:text-foreground/75" : "text-muted-foreground"}
+        >
+          /
+        </button>
+        {segments.map((segment, index) => (
+          <button
+            key={segments.slice(0, index + 1).join("/")}
+            type="button"
+            onClick={() => setDir(segments.slice(0, index + 1).join("/"))}
+            className={
+              index === segments.length - 1 ? "text-muted-foreground" : "hover:text-foreground/75"
+            }
+            dir="auto"
+          >
+            {segment} /
+          </button>
+        ))}
+      </div>
+      {error ? <div className="px-2.5 pb-2 text-[13px] text-destructive">{error}</div> : null}
+      {open ? (
+        <div className="px-2.5 pb-2">
+          <div className="pb-1 text-[14px] text-foreground" dir="auto">
+            {entryName(open.path)}
+          </div>
+          <textarea
+            value={open.content}
+            readOnly
+            rows={Math.min(20, Math.max(6, open.content.split("\n").length + 1))}
+            className={fieldClass}
+            dir="auto"
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => download(open)}
+              className="rounded-lg bg-muted px-3 py-1.5 text-[13px] text-foreground"
+            >
+              <Trans>Download</Trans>
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(null)}
+              className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground"
+            >
+              <Trans>Close</Trans>
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {!open && entries.length === 0 && !error ? (
+        <div className="px-2.5 py-1 text-[13.5px] text-muted-foreground/80">
+          <Trans>No files yet</Trans>
+        </div>
+      ) : null}
+      {!open
+        ? entries.map((entry) => (
+            <button
+              key={entry.path}
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                if (entry.kind === "dir") {
+                  setDir(entry.path);
+                  return;
+                }
+                void openFile(entry);
+              }}
+              className={rowClass(false)}
+            >
+              <span className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate text-[14px] text-foreground" dir="auto">
+                  {entry.kind === "dir" ? `${entryName(entry.path)}/` : entryName(entry.path)}
+                </span>
+                {entry.kind === "file" ? (
+                  <span className="shrink-0 text-[12px] text-muted-foreground/80">
+                    {formatBytes(entry.size)}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+          ))
+        : null}
     </div>
   );
 }

@@ -213,7 +213,7 @@ function DownloadError({ message }: { message: string }) {
   );
 }
 
-function formatBytes(size: number) {
+export function formatBytes(size: number) {
   const locale = i18n.locale || "en";
   if (size < 1024) return t`${size} B`;
   const format = (value: number) =>
