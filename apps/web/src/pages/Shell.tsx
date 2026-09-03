@@ -5241,7 +5241,7 @@ function ReasoningTrail({ text, live }: { text: string; live: boolean }) {
         aria-expanded={open}
         aria-label={t`Toggle reasoning`}
         onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-1 text-[12.5px] text-[#6E6E73] hover:text-[#A0A0A6]"
+        className="flex items-center gap-1 text-[12.5px] text-muted-foreground/80 hover:text-foreground/75"
       >
         <ChevronDown
           size={12}
@@ -5252,7 +5252,7 @@ function ReasoningTrail({ text, live }: { text: string; live: boolean }) {
       </button>
       {open ? (
         <div
-          className="mt-1 border-s border-[#26262A] ps-3 text-[13.5px] leading-[1.55] text-[#7C7C82]"
+          className="mt-1 border-s border-border ps-3 text-[13.5px] leading-[1.55] text-muted-foreground"
           dir="auto"
         >
           <ChatMarkdown streaming={live}>{text}</ChatMarkdown>

@@ -104,6 +104,7 @@
   border: 1px solid var(--border);
   border-radius: 0.75em;
   background: var(--card);
+  color: var(--foreground);
   padding: 0.8em 0.9em;
   direction: ltr;
   unicode-bidi: isolate;
