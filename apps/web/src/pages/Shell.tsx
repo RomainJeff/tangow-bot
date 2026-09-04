@@ -5550,22 +5550,6 @@ const MessageView = memo(function MessageView({
                 />
               );
             }
-            if (row.block.kind === "steps") {
-              const isCurrentBlock = isLive && row.index === message.blocks.length - 1;
-              return (
-                <div key={rowIndex} className="mb-2.5 max-w-[74%]" dir="ltr">
-                  <ToolActivityDisclosure
-                    live={isLive}
-                    label={isLive ? t`Working…` : t`Done`}
-                  >
-                    <ToolSteps
-                      steps={row.block.steps}
-                      currentIndex={isCurrentBlock ? row.block.steps.length - 1 : undefined}
-                    />
-                  </ToolActivityDisclosure>
-                </div>
-              );
-            }
             return null;
           })}
           {!isLive && voiceReady && message.blocks.some((block) => block.kind === "text") ? (
@@ -5651,18 +5635,6 @@ const MessageView = memo(function MessageView({
               >
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
               </div>
-            </div>
-          );
-        }
-        if (block.kind === "steps") {
-          return (
-            <div key={i} className="mb-2.5 max-w-[74%]" dir="ltr">
-              <ToolActivityDisclosure live={isLive} label={isLive ? t`Working…` : t`Done`}>
-                <ToolSteps
-                  steps={block.steps}
-                  currentIndex={isLive ? block.steps.length - 1 : undefined}
-                />
-              </ToolActivityDisclosure>
             </div>
           );
         }

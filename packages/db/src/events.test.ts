@@ -1710,7 +1710,7 @@ describe("rewindThread", () => {
       },
       attempt: { updateMany: vi.fn() },
       task: { updateMany: vi.fn() },
-      computerExecutionLease: { deleteMany: vi.fn() },
+      computerExecutionLease: { updateMany: vi.fn() },
       computer: { updateMany: vi.fn() },
       event: {
         findFirst: vi.fn().mockResolvedValue({ seq: 11 }),
@@ -1762,8 +1762,9 @@ describe("rewindThread", () => {
         data: expect.objectContaining({ status: "cancelled" }),
       }),
     );
-    expect(tx.computerExecutionLease.deleteMany).toHaveBeenCalledWith({
+    expect(tx.computerExecutionLease.updateMany).toHaveBeenCalledWith({
       where: { runId: { in: ["run-1"] } },
+      data: { expiresAt: new Date(0) },
     });
     expect(tx.event.create).toHaveBeenCalledWith(
       expect.objectContaining({
