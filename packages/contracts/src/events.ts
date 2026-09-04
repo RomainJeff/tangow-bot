@@ -138,9 +138,6 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     text: z.string(),
   }),
   z.object({ kind: z.literal("meta"), text: z.string() }),
-  // Model reasoning. Never part of the answer: kept out of agent history, previews
-  // and notifications, and rendered collapsed.
-  z.object({ kind: z.literal("reasoning"), text: z.string() }),
   z.object({
     kind: z.literal("progress"),
     text: z.string(),

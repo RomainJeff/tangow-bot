@@ -73,11 +73,7 @@ export function browserNotificationMessage(
     const blocks = Array.isArray(event.payload.blocks) ? event.payload.blocks : [];
     const body = blocks
       .map((block) =>
-        block &&
-        typeof block === "object" &&
-        "text" in block &&
-        typeof block.text === "string" &&
-        (block as { kind?: unknown }).kind !== "reasoning"
+        block && typeof block === "object" && "text" in block && typeof block.text === "string"
           ? block.text
           : "",
       )

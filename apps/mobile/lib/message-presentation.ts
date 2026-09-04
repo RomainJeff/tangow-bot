@@ -20,15 +20,11 @@ export function messagePresentationSegments(
   blocks: readonly MessageBlock[],
 ): MessagePresentationSegment[] {
   const content = blocks.filter(
-    (block) =>
-      block.kind !== "app_connect" &&
-      // Mobile has no reasoning UI; rendering it would be an empty bubble.
-      block.kind !== "reasoning" &&
-      !isToolActivityBlock(block),
+    (block) => block.kind !== "app_connect" && !isToolActivityBlock(block),
   );
   return content.length > 0 ? [{ kind: "content", blocks: content }] : [];
 }
 
 export function hasVisibleMessagePresentation(blocks: readonly MessageBlock[]): boolean {
-  return blocks.some((block) => block.kind !== "reasoning" && !isToolActivityBlock(block));
+  return blocks.some((block) => !isToolActivityBlock(block));
 }
