@@ -1,7 +1,7 @@
 # Skills system v2 — filesystem-first, scoping par bot, panneau + marketplaces
 
 > Statut : **design / exploration**, à valider avant plan d'implémentation détaillé (format writing-plans).
-> Date : 2026-09-03
+> Date : 2026-09-03 — révisé 2026-09-04 après relecture externe (skillKey stable dès phase 1, rename, intégrité DB↔FS, mount restreint, cap body à l'install, diff scripts, marketplaces au niveau Space).
 
 ## 0. TL;DR
 
@@ -82,6 +82,30 @@ Résolution pour un run : `visible(bot, skill) = BotSkill[bot,skill].enabled ?? 
 - `availability = selected` : invisible sauf opt-in explicite (`enabled=true`).
 - Un seul join table couvre les deux sens. Pas de flag « enabled global » séparé : désactiver globalement = `selected` + aucune ligne.
 
+### `skillKey` : stable **dès la phase 1**
+
+Le join référence une clé, pas un `AgentSkill.id` : en phase 2 les rows DB disparaissent et l'identité devient le dossier FS. Si la phase 1 pointait sur `id`, la phase 2 re-migrerait toutes les lignes `BotSkill`. Donc dès la phase 1 :
+
+- `skillKey = "user:" + slug(name)` — `slug` = `lower(name)` normalisé (même règle que l'index unique `lower(name)` existant), et futur nom de dossier FS.
+- Phase 3 ajoute `"mkt:<marketplace>/<plugin>/<slug>"`.
+- La phase 2 devient un pur déplacement de contenu, zéro touche au join.
+
+### Renommage
+
+Sur FS, identité = nom de dossier ; renommer = nouvelle clé. Règle :
+
+- **Clé immuable** (comme Claude Code : pas de rename, delete + create).
+- Exception pragmatique : `skills.update` / `skill_update` avec un nouveau `name` fait, **dans la même transaction**, `mv` du dossier + `updateMany` des `BotSkill`/`SkillSetting` vers la nouvelle clé. C'est trois lignes et ça évite qu'un rename dans l'UI perde silencieusement les assignations.
+- Un `mv` manuel sur le disque = orphelin, couvert par la règle d'intégrité ci-dessous.
+
+### Intégrité DB ↔ FS (rows pendantes)
+
+Un fichier peut disparaître sans passer par l'API : suppression à la main, update de marketplace qui retire une skill, marketplace supprimée. Sémantique :
+
+- Les lignes `BotSkill` / `SkillSetting` dont la clé n'existe plus dans le catalogue FS sont **tolérées et ignorées** à la lecture (le catalogue FS est la source ; on joint dessus, jamais l'inverse).
+- **GC explicite** : `skills.remove`, `marketplaces.removePlugin`, `marketplaces.update` (pour les clés disparues) et `marketplaces.remove` suppriment les lignes correspondantes dans la même transaction.
+- Le panneau n'affiche jamais une clé pendante ; un compteur « N assignations orphelines » + bouton « Nettoyer » dans la section avancée suffit pour les cas hors-API. `ponytail: pas de job périodique, GC au write + bouton`.
+
 ### Où ça se branche
 
 - `listAgentSkillRecords(prisma, {spaceId, userId, botId})` — ajouter `botId`, filtrer. Un seul seam, tous les appelants (`executor.ts:875`, routines `executor.ts:638`, `router.ts:2033`, `Shell.tsx:950` picker slash) passent le bot courant.
@@ -109,13 +133,13 @@ DATA_DIR/skills/
   user/<spaceId>/<userId>/<skill-name>/SKILL.md       # skills créées à la main ou par les bots
                                         scripts/…
                                         references/…
-  marketplaces/<marketplace-name>/                      # clone/tarball d'une marketplace
+  marketplaces/<spaceId>/<marketplace-name>/            # clone/tarball d'une marketplace — niveau Space (Q1)
     .claude-plugin/marketplace.json
     plugins/<plugin>/skills/<skill-name>/SKILL.md
-  skills.lock.json                                      # marketplaces installées : url, ref, commit, digest
+  marketplaces/<spaceId>/skills.lock.json               # marketplaces installées : url, ref, commit, digest
 ```
 
-Identité d'une skill = **`skillKey`** stable : `user:<name>` ou `mkt:<marketplace>/<plugin>/<name>`. C'est cette clé qu'utilise `BotSkill`. Le `name` affiché reste le frontmatter.
+Identité d'une skill = **`skillKey`** stable (défini en §2) : `user:<slug>` ou `mkt:<marketplace>/<plugin>/<slug>`. C'est cette clé qu'utilise `BotSkill`. Le `name` affiché reste le frontmatter.
 
 ### Ce qui reste en DB
 
@@ -123,7 +147,7 @@ Seulement l'état mutable et transactionnel :
 
 - `BotSkill` (join ci-dessus).
 - `SkillSetting` `{ spaceId, userId, skillKey, availability }` — ou colonne sur un enregistrement d'index (voir Q3).
-- `CapabilityInstall kind:"plugin"` : une ligne par marketplace/plugin installé (`source` = URL, `version` = ref, `digest` = commit sha). Réutilise la table existante, zéro nouveau schéma.
+- Marketplaces installées : une ligne par marketplace, **au niveau Space**. `CapabilityInstall` a un `userId` obligatoire → soit le rendre nullable (`userId IS NULL` = ressource Space), soit une petite table `SpaceMarketplace { spaceId, name, url, ref, commit, installedPlugins Json }`. Recommandation : **table dédiée** — première ressource partagée entre membres d'un Space dans le codebase, mieux vaut ne pas la cacher dans une table `(spaceId, userId)`. `version`/`digest` de `CapabilityInstall` restent le modèle.
 
 **Supprimé** : `AgentSkill.content` (et à terme la table `agent_skills`). Migration one-shot : export chaque row en `user/<space>/<user>/<name>/SKILL.md` via `buildSkillMd`, puis drop.
 
@@ -132,6 +156,7 @@ Seulement l'état mutable et transactionnel :
 - Scan `readdir` à chaque run + cache mémoire keyed `mtime` (pas de watcher, pas de chokidar — `ponytail: scan+mtime, watcher si latence mesurée`). Un run charge ~dizaines de fichiers, négligeable.
 - Parse via `parseSkillMd` existant. Fichier invalide → skill ignorée + warning visible dans le panneau (pas de crash de run).
 - Le catalogue système ne compte que les skills **visibles du bot** → le cap 50 redevient tenable. Si dépassé : tronquer + ajouter un tool `skill_list` (voir Q7).
+- **Cap du corps** : `expandSkillReferencesInPrompt` inline le `SKILL.md` complet dans le prompt sur `/Name`. Le cap 100k chars (`agent-skills.ts:57`) n'est enforcé qu'à la création → l'enforcer aussi **à l'install marketplace, en rejet** (pas troncation : une skill tronquée est une skill cassée). Les `references/` et `scripts/` ne sont pas inlinés — ils restent sur disque et le bot les lit à la demande — donc pas de cap sur eux, juste la borne taille du tarball.
 
 ### Fichiers annexes dans le sandbox
 
@@ -139,7 +164,7 @@ Une skill Claude Code peut référencer `scripts/foo.py`. Pour que le bot puisse
 
 | Option | Mécanisme | Coût | Limite |
 |---|---|---|---|
-| **A. Mount RO** (recommandé) | Supervisor bind-mount `DATA_DIR/skills` → `/skills` en lecture seule dans chaque sandbox, via la traduction de chemin existante (`supervisor/src/index.ts:698`) | ~20 lignes supervisor + prompt : « skills disponibles sous `/skills/<key>/` » | Le bot voit *tous* les fichiers de skills, y compris celles non assignées. Acceptable ? (Q5) |
+| **A. Mount RO** (recommandé) | Supervisor bind-mount **deux** dossiers en lecture seule : `skills/user/<spaceId>/<userId>` → `/skills/user` et `skills/marketplaces/<spaceId>` → `/skills/marketplaces`, via la traduction de chemin existante (`supervisor/src/index.ts:698`). **Jamais `DATA_DIR/skills` entier** : ça exposerait les skills des autres users du Space. | ~30 lignes supervisor + prompt : « skills disponibles sous `/skills/…` » | Le bot voit les fichiers des skills du user et des marketplaces du Space, y compris celles non assignées à ce bot. Acceptable ? (Q5) |
 | B. Copie dans le home | À `checkout`, copier les skills visibles sous `<home>/.skills/` | Filtrage exact par bot | Home keyé par `Computer.homeKey`, partagé entre bots d'un team computer → filtrage cassé de toute façon ; duplication disque ; sync des updates |
 
 Phase 1 peut vivre **sans** ni A ni B (skills texte-only, comme aujourd'hui). A arrive avec les marketplaces (phase 3), où les scripts deviennent réels.
@@ -149,9 +174,11 @@ Phase 1 peut vivre **sans** ni A ni B (skills texte-only, comme aujourd'hui). A 
 - Tout ce qui est sous `DATA_DIR/skills` est écrit par l'API uniquement ; chemins passés par `safeJoin`/containment comme `home.ts:215+`.
 - Une skill = instruction injectée dans le prompt avec les credentials du bot. Une marketplace = **code tiers**. Conséquences non négociables :
   - Install/update d'une marketplace = action explicite dans le panneau, jamais automatique.
-  - Pin sur commit sha (`digest`), « Update » montre le diff des SKILL.md avant application.
+  - Pin sur commit sha (`digest`). « Update » montre le **diff complet** avant application : SKILL.md **et** `scripts/`, `references/`, fichiers ajoutés/supprimés avec tailles. Le code malveillant vivra dans `scripts/`, pas dans le frontmatter — un diff limité aux SKILL.md ne protège de rien.
+  - Cap 100k chars sur chaque `SKILL.md` à l'install (rejet du plugin entier si dépassé), borne taille sur le tarball, extraction sans symlinks ni `..`.
   - Skills marketplace en lecture seule (`source:"plugin"` déjà enforcé).
   - Défaut `availability = selected` pour les skills marketplace (opt-in par bot), `all` pour les skills user. (Q4)
+  - Marketplaces au niveau Space (Q1) : tout membre peut en ajouter, donc tout membre peut mettre des instructions à portée des bots des autres. Le `selected` par défaut est ce qui rend ça acceptable : rien n'atteint un bot sans que son propriétaire l'ait coché. Ne jamais ajouter un défaut `all` pour les skills marketplace tant qu'il n'y a pas de rôles dans le Space.
 
 ### Alternatives écartées
 
@@ -226,9 +253,9 @@ marketplaces.installPlugin / removePlugin
 
 | Phase | Livrable | Dépend de | Taille |
 |---|---|---|---|
-| **1. Scoping** | `BotSkill` + `availability`, `listAgentSkillRecords(botId)`, chips agents dans `KnowledgeSection`, section Skills dans `BotSettings`, `bots.duplicate`, e2e | rien | S/M — table + 1 seam + UI toggles, DB inchangée sinon |
-| **2. Filesystem** | `DATA_DIR/skills/user/…`, loader FS + cache mtime, migration export DB→FS + drop `content`, tools `skill_*` réécrits sur FS, éditeur avec validation | 1 | M/L — touche executor, tools, API, migration |
-| **3. Panneau + marketplaces** | `SkillsOverlay`, marketplaces (add/update/remove/install plugin), tarball fetch, lock, mount RO `/skills` dans sandboxes, diff à l'update | 2 | L |
+| **1. Scoping** | `BotSkill(skillKey = "user:<slug>")` + `SkillSetting.availability`, `listAgentSkillRecords(botId)`, rename cascade, chips agents dans `KnowledgeSection`, section Skills dans `BotSettings`, `bots.duplicate`, e2e | rien | S/M — table + 1 seam + UI toggles, DB inchangée sinon |
+| **2. Filesystem** | `DATA_DIR/skills/user/…`, loader FS + cache mtime, migration export DB→FS + drop `content`, tools `skill_*` réécrits sur FS, GC rows pendantes, éditeur avec validation | 1 | M/L — touche executor, tools, API, migration |
+| **3. Panneau + marketplaces** | `SkillsOverlay`, `SpaceMarketplace` (add/update/remove/install plugin), tarball fetch + caps, lock, mount RO restreint dans sandboxes, diff complet à l'update | 2 | L |
 
 Phase 1 seule est déjà utile et sans risque. L'ordre 1→2→3 évite de migrer deux fois le modèle. Chaque phase → plan writing-plans séparé (tâches TDD).
 
@@ -238,11 +265,11 @@ Phase 1 seule est déjà utile et sans risque. L'ordre 1→2→3 évite de migre
 
 Réponds inline (CriticMarkup) ou en vrac. Défaut proposé entre crochets.
 
-**Q1. Niveau des skills filesystem — par user ou par instance ?**
-Tout est isolé `(spaceId, userId)` aujourd'hui. Layout proposé : `skills/user/<spaceId>/<userId>/…`. Les marketplaces : par user aussi, ou **globales à l'instance** (un admin installe, tous les users du Space voient) ? [défaut : marketplaces par `(spaceId, userId)` comme tout le reste — cohérent mais duplique les clones si 5 users installent la même ; alternative : marketplaces au niveau Space]
+**Q1. Niveau des marketplaces — par user ou par Space ?**
+Tout est isolé `(spaceId, userId)` aujourd'hui. Skills user : `skills/user/<spaceId>/<userId>/…`, pas de débat. Marketplaces : par user dupliquerait le clone × N users et amplifierait les updates × N ; une marketplace est de l'infra, pas un goût personnel. **Défaut révisé : niveau Space** (`skills/marketplaces/<spaceId>/`, table `SpaceMarketplace`). Conséquences assumées : première ressource partagée entre membres d'un Space (nouveau concept), tout membre peut add/update/remove (pas de rôles), et c'est le `selected` par défaut qui protège les bots des autres. **À confirmer par Romain** — c'est le seul point où le design change de nature.
 
 **Q2. Défaut d'`availability` pour les skills créées par un bot via `skill_create` ?**
-[défaut : `selected` + assignée au bot créateur. Aujourd'hui = visible par tous les bots du user, donc changement de comportement — voulu ?]
+[défaut : `selected` + assignée au bot créateur. Aujourd'hui = visible par tous les bots du user, donc changement de comportement — voulu ?] Conséquence à assumer : une routine du bot B qui référence `@Skill` créée par le bot A cesse de l'expander (la mention reste texte brut, le run ne casse pas). Documenter dans le changelog + afficher un warning dans l'éditeur de routine quand la skill mentionnée n'est pas visible du bot.
 
 **Q3. Où vit `availability` ?**
 (a) table DB `SkillSetting {skillKey, availability}` ; (b) frontmatter `SKILL.md` (`rakazo: { availability: all }`) — filesystem-first jusqu'au bout, mais on écrit dans un fichier marketplace read-only à chaque toggle → impossible pour les skills `plugin`. [défaut : (a) DB]
@@ -250,8 +277,8 @@ Tout est isolé `(spaceId, userId)` aujourd'hui. Layout proposé : `skills/user/
 **Q4. Skills marketplace : `selected` (opt-in par bot) par défaut ?**
 [défaut : oui, sécurité. Coût : N clics par install]
 
-**Q5. Mount RO `/skills` complet dans les sandboxes (option A §3) — acceptable que le bot voie les fichiers de skills non assignées ?**
-Alternative : mount par skill assignée (N binds, complexité supervisor). [défaut : mount complet, le filtrage reste au niveau prompt]
+**Q5. Mount RO dans les sandboxes (option A §3) — acceptable que le bot voie les fichiers des skills du user + marketplaces du Space non assignées à lui ?**
+Mount restreint à `user/<spaceId>/<userId>` + `marketplaces/<spaceId>` (jamais le dossier entier, fuite inter-users sinon). Alternative : mount par skill assignée (N binds, complexité supervisor). [défaut : mount restreint, le filtrage par bot reste au niveau prompt]
 
 **Q6. Sources marketplace v1 : GitHub public tarball seulement ?**
 Repos privés (token), GitLab, URL git arbitraire → v2 ? [défaut : GitHub public v1]
