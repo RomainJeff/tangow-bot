@@ -4340,17 +4340,27 @@ const Transcript = memo(function Transcript({
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
-        {messages.map((message) => {
+        {messages.map((message, index) => {
           if (!message.blocks.some((block) => !isToolActivityBlock(block))) return null;
           const peerReceipt = isPeerReceiptBlocks(message.blocks);
           const rewound = rewindFromSeq !== null && (message.seq ?? 0) >= rewindFromSeq;
+          const previous = messages[index - 1];
+          // Consecutive messages from the same speaker read as one turn, so they
+          // lose the between-turns gap and the repeated speaker name.
+          const grouped =
+            previous != null &&
+            previous.role === message.role &&
+            previous.botId === message.botId &&
+            message.replyToMessageId == null;
           return (
             <div
               key={message.id}
               data-message-id={message.id}
               data-rewound={rewound ? "true" : undefined}
               className={`${
-                peerReceipt ? "relative py-0.5" : "group/message relative pt-9 hover:z-20"
+                peerReceipt
+                  ? "relative py-0.5"
+                  : `group/message relative hover:z-20 ${grouped ? "pt-1.5" : "pt-9"}`
               }${rewound ? " opacity-40" : ""}`}
             >
               {peerReceipt ? null : (
@@ -4359,6 +4369,7 @@ const Transcript = memo(function Transcript({
                   onReply={onReply}
                   onEdit={onEdit}
                   onReact={onReact}
+                  grouped={grouped}
                 />
               )}
               <MessageView
@@ -4369,7 +4380,7 @@ const Transcript = memo(function Transcript({
                 onOpenPeerMessages={onOpenPeerMessages}
                 onAnswer={onAnswer}
                 speakerName={
-                  peerReceipt
+                  peerReceipt || grouped
                     ? undefined
                     : message.role === "bot"
                       ? memberName?.(message.botId)
@@ -5254,11 +5265,13 @@ function MessageHoverActions({
   onReply,
   onEdit,
   onReact,
+  grouped,
 }: {
   message: ThreadMessage;
   onReply: (message: ThreadMessage) => void;
   onEdit: (message: ThreadMessage) => void;
   onReact: (message: ThreadMessage) => Promise<void>;
+  grouped?: boolean;
 }) {
   const { t } = useLingui();
   // Streaming progress bubbles keep hover free for selection / stop clicks.
@@ -5271,7 +5284,7 @@ function MessageHoverActions({
   }
 
   return (
-    <MessageHoverMetadata createdAt={message.createdAt}>
+    <MessageHoverMetadata createdAt={message.createdAt} grouped={grouped}>
       <div
         data-testid="message-hover-actions"
         className="flex items-center gap-0.5 rounded-full bg-accent p-0.5 shadow-sm"
