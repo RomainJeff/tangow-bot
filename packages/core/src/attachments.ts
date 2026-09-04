@@ -90,6 +90,8 @@ export function blocksToAgentHistoryText(blocks: MessageBlock[]): string {
   return blocks
     .map((block) => {
       if (block.kind === "text") return block.text;
+      // Legacy reasoning blocks are not part of the answer and stay out of history.
+      if (block.kind === "reasoning") return "";
       if (block.kind === "chart") return `[chart: ${block.name}]`;
       if (block.kind === "image") return `[image: ${block.name}]`;
       if (block.kind === "file") {

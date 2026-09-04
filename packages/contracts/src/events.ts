@@ -138,6 +138,9 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     text: z.string(),
   }),
   z.object({ kind: z.literal("meta"), text: z.string() }),
+  // Legacy: reasoning is no longer produced or rendered, but threads persisted while it
+  // was still stream them, and output validation rejects the whole page without it.
+  z.object({ kind: z.literal("reasoning"), text: z.string() }),
   z.object({
     kind: z.literal("progress"),
     text: z.string(),

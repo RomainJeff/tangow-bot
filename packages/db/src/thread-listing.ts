@@ -12,6 +12,10 @@ export const activeRunSelection = {
 export function previewFromBlocks(blocks: unknown): string {
   const rows = Array.isArray(blocks) ? blocks : [];
   for (const block of rows) {
+    // Legacy reasoning blocks carry text but are not part of the answer.
+    if (block && typeof block === "object" && (block as { kind?: unknown }).kind === "reasoning") {
+      continue;
+    }
     if (
       block &&
       typeof block === "object" &&

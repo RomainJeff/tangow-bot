@@ -288,3 +288,9 @@ describe("contracts", () => {
     ).toBe(false);
   });
 });
+
+describe("legacy message blocks", () => {
+  it("still accepts reasoning blocks persisted before the feature was reverted", () => {
+    expect(MessageBlock.safeParse({ kind: "reasoning", text: "thinking" }).success).toBe(true);
+  });
+});
