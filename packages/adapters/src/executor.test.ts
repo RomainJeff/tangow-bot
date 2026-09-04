@@ -2,6 +2,7 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { ONCE_ROUTINE_CRON } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
+import { CHATTY_MESSAGE_USER_DESCRIPTION } from "./builtin-tools.js";
 import {
   createRunExecutor,
   createRunWorkspaceCheckpoint,
@@ -74,6 +75,21 @@ describe("run tool selection", () => {
     expect(toolNames("routine", "group-1")).toEqual(
       expect.arrayContaining(["schedule_list", "schedule_cancel"]),
     );
+  });
+
+  it("swaps the message_user description only when chattyReplies is on", () => {
+    const describeMessageUser = (chattyReplies: boolean) =>
+      selectBuiltinToolsForRun({
+        graphicalToolsAllowed: true,
+        groupId: null,
+        trigger: "user",
+        semanticMemoryEnabled: false,
+        chattyReplies,
+      }).find((tool) => tool.name === "message_user")?.description;
+
+    expect(describeMessageUser(true)).toBe(CHATTY_MESSAGE_USER_DESCRIPTION);
+    expect(describeMessageUser(false)).not.toBe(CHATTY_MESSAGE_USER_DESCRIPTION);
+    expect(describeMessageUser(false)).toBeTruthy();
   });
 });
 

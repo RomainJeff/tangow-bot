@@ -123,7 +123,7 @@ import {
   runAutoReviewJudge,
 } from "./auto-review.js";
 import { loadBotMessageContext, messageBot, returnBotMessageOutcome } from "./bot-messages.js";
-import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
+import { agentConnectionTools, builtinAgentTools, withChattyReplies } from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import {
   type ConnectionScope,
@@ -1208,6 +1208,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             groupId: thread.groupId,
             trigger: run.trigger,
             semanticMemoryEnabled,
+            chattyReplies: bot.chattyReplies,
           }),
           // Cross-owner agent connections only exist for chat-linked bots.
           ...(hasMessagingIdentity ? agentConnectionTools : []),
@@ -3679,8 +3680,9 @@ export function selectBuiltinToolsForRun(options: {
   groupId: string | null;
   trigger: string;
   semanticMemoryEnabled: boolean;
+  chattyReplies?: boolean;
 }) {
-  return selectMemoryTools(
+  const selected = selectMemoryTools(
     filterBuiltinToolsForRun(
       filterBuiltinToolsForThread(
         filterImageReturningComputerTools(builtinAgentTools, options.graphicalToolsAllowed),
@@ -3690,6 +3692,7 @@ export function selectBuiltinToolsForRun(options: {
     ),
     options.semanticMemoryEnabled,
   );
+  return options.chattyReplies ? withChattyReplies(selected) : selected;
 }
 
 export function threadContextForRun<T>(

@@ -9,6 +9,20 @@ export const DELEGATION_TOOL_NAMES = new Set([
   "message_bot",
 ]);
 
+// Bots with `chattyReplies` on trade one long final answer for a run of short
+// bubbles, so `message_user` stops being a sparse progress channel and becomes
+// the reply channel itself.
+export const CHATTY_MESSAGE_USER_DESCRIPTION =
+  "Send one short chat message to the user immediately, without ending your turn. Each call posts one bubble. Use several short message_user calls instead of one long final answer. Never repeat text you already sent with message_user; when message_user covered everything, end the turn with an empty response.";
+
+export function withChattyReplies(tools: ConnectorTool[]): ConnectorTool[] {
+  return tools.map((tool) =>
+    tool.name === "message_user"
+      ? { ...tool, description: CHATTY_MESSAGE_USER_DESCRIPTION }
+      : tool,
+  );
+}
+
 export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "computer_observe",

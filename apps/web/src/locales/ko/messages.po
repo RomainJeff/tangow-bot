@@ -64,7 +64,7 @@ msgstr "{0}회 실행 · 토큰 {1}개"
 msgid "{0}'s screen"
 msgstr "{0}의 화면"
 
-#: src/pages/Shell.tsx:5946
+#: src/pages/Shell.tsx:5918
 msgid "{botName}’s computer"
 msgstr "{botName}의 컴퓨터"
 
@@ -125,7 +125,7 @@ msgstr "액세스 토큰(선택 사항)"
 msgid "Account"
 msgstr "계정"
 
-#: src/pages/shell/bot-panel.tsx:558
+#: src/pages/shell/bot-panel.tsx:571
 msgid "Account default"
 msgstr "계정 기본값"
 
@@ -236,7 +236,7 @@ msgstr "추가 중…"
 #: src/pages/McpServersOverlay.tsx:342
 #: src/pages/PluginsOverlay.tsx:478
 #: src/pages/RoutineSchedule.tsx:43
-#: src/pages/shell/bot-panel.tsx:451
+#: src/pages/shell/bot-panel.tsx:453
 msgid "Advanced"
 msgstr "고급 설정"
 
@@ -365,7 +365,7 @@ msgstr "이 서버를 승인하면 Bot이 제공되는 도구를 사용할 수 �
 msgid "Archive"
 msgstr "보관"
 
-#: src/pages/Shell.tsx:5730
+#: src/pages/Shell.tsx:5702
 msgid "archived"
 msgstr "보관됨"
 
@@ -373,7 +373,7 @@ msgstr "보관됨"
 msgid "Archived"
 msgstr "보관됨"
 
-#: src/pages/Shell.tsx:5741
+#: src/pages/Shell.tsx:5713
 msgid "Archived. Chat, memory, and files kept."
 msgstr "보관되었습니다. 대화, 기억, 파일은 유지됩니다."
 
@@ -479,7 +479,7 @@ msgstr "서버 주소"
 msgid "Bearer token"
 msgstr "Bearer 토큰"
 
-#: src/pages/Shell.tsx:5938
+#: src/pages/Shell.tsx:5910
 msgid "Booting live desktop…"
 msgstr "라이브 데스크톱 시작 중…"
 
@@ -488,9 +488,9 @@ msgstr "라이브 데스크톱 시작 중…"
 msgid "Booting up {0}’s computer"
 msgstr "{0}의 컴퓨터를 켜는 중"
 
-#: src/pages/Shell.tsx:5585
-#: src/pages/Shell.tsx:5586
-#: src/pages/Shell.tsx:5734
+#: src/pages/Shell.tsx:5569
+#: src/pages/Shell.tsx:5570
+#: src/pages/Shell.tsx:5706
 msgid "bot"
 msgstr "Bot"
 
@@ -648,7 +648,7 @@ msgid "Clear {0}’s conversation?"
 msgstr "{0}와의 대화 내용을 비울까요?"
 
 #: src/pages/BotContextMenu.tsx:132
-#: src/pages/shell/bot-panel.tsx:622
+#: src/pages/shell/bot-panel.tsx:636
 msgid "Clear conversation"
 msgstr "대화 내용 비우기"
 
@@ -749,12 +749,12 @@ msgstr "실행 명령"
 msgid "Complete"
 msgstr "완료"
 
-#: src/pages/Shell.tsx:5888
+#: src/pages/Shell.tsx:5860
 #: src/pages/shell/bot-panel.tsx:57
 msgid "Computer"
 msgstr "컴퓨터"
 
-#: src/pages/Shell.tsx:5941
+#: src/pages/Shell.tsx:5913
 msgid "Computer failed to boot"
 msgstr "컴퓨터를 시작하지 못했습니다"
 
@@ -762,11 +762,11 @@ msgstr "컴퓨터를 시작하지 못했습니다"
 msgid "Computer is asleep"
 msgstr "컴퓨터가 절전 상태입니다"
 
-#: src/pages/Shell.tsx:5940
+#: src/pages/Shell.tsx:5912
 msgid "Computer is asleep. Open it to wake."
 msgstr "컴퓨터가 절전 상태입니다. 열어 깨우세요."
 
-#: src/pages/Shell.tsx:5942
+#: src/pages/Shell.tsx:5914
 msgid "Computer is stopped"
 msgstr "컴퓨터가 중지됨"
 
@@ -1109,7 +1109,7 @@ msgid "Could not run routine"
 msgstr "루틴을 실행할 수 없습니다"
 
 #: src/pages/KnowledgeSection.tsx:135
-#: src/pages/shell/bot-panel.tsx:607
+#: src/pages/shell/bot-panel.tsx:621
 msgid "Could not save"
 msgstr "저장하지 못했습니다."
 
@@ -1299,7 +1299,7 @@ msgstr "일"
 msgid "Decline"
 msgstr "거절"
 
-#: src/pages/shell/bot-panel.tsx:502
+#: src/pages/shell/bot-panel.tsx:504
 msgid "Default (medium)"
 msgstr "기본(보통)"
 
@@ -1340,7 +1340,7 @@ msgstr "그룹 삭제"
 msgid "Delete memories too"
 msgstr "기억도 함께 삭제"
 
-#: src/pages/Shell.tsx:5732
+#: src/pages/Shell.tsx:5704
 msgid "deleted"
 msgstr "삭제됨"
 
@@ -1369,7 +1369,7 @@ msgstr "이 Bot이 하는 일을 짧게 설명하세요"
 
 #: src/pages/Onboarding.tsx:613
 #: src/pages/shell/bot-panel.tsx:159
-#: src/pages/shell/bot-panel.tsx:425
+#: src/pages/shell/bot-panel.tsx:427
 msgid "Description"
 msgstr "설명"
 
@@ -1421,8 +1421,6 @@ msgid "Don’t have an account?"
 msgstr "계정이 없나요?"
 
 #: src/pages/ActivityList.tsx:157
-#: src/pages/Shell.tsx:5553
-#: src/pages/Shell.tsx:5654
 msgid "Done"
 msgstr "완료"
 
@@ -1527,7 +1525,7 @@ msgstr "펼치기"
 msgid "Expand {0}"
 msgstr "{0} 펼치기"
 
-#: src/pages/shell/bot-panel.tsx:614
+#: src/pages/shell/bot-panel.tsx:628
 msgid "Export"
 msgstr "내보내기"
 
@@ -1535,7 +1533,7 @@ msgstr "내보내기"
 msgid "Export this week's list from the CRM and drop it in the shared folder"
 msgstr "CRM에서 이번 주 목록을 내려받아 공유 폴더에 넣기"
 
-#: src/pages/shell/bot-panel.tsx:634
+#: src/pages/shell/bot-panel.tsx:648
 msgid "Extra high"
 msgstr "매우 높음"
 
@@ -1668,7 +1666,7 @@ msgstr ""
 msgid "Hide password"
 msgstr "비밀번호 숨기기"
 
-#: src/pages/shell/bot-panel.tsx:637
+#: src/pages/shell/bot-panel.tsx:651
 msgid "High"
 msgstr "높음"
 
@@ -1692,7 +1690,7 @@ msgstr "시간"
 msgid "How often"
 msgstr "실행 주기"
 
-#: src/pages/shell/bot-panel.tsx:444
+#: src/pages/shell/bot-panel.tsx:446
 msgid "How this bot should behave"
 msgstr ""
 
@@ -1712,7 +1710,7 @@ msgstr "샘플이 들렸다면 음성 설정이 완료되었습니다."
 msgid "Import OpenAPI JSON"
 msgstr "OpenAPI JSON 가져오기"
 
-#: src/pages/shell/bot-panel.tsx:517
+#: src/pages/shell/bot-panel.tsx:519
 msgid "Inherit default"
 msgstr "기본 설정 사용"
 
@@ -1732,7 +1730,7 @@ msgstr "인스턴스 API 키"
 msgid "Instruction"
 msgstr "실행할 내용"
 
-#: src/pages/shell/bot-panel.tsx:436
+#: src/pages/shell/bot-panel.tsx:438
 msgid "Instructions"
 msgstr ""
 
@@ -1759,7 +1757,7 @@ msgid "Interval unit"
 msgstr "간격 단위"
 
 #: src/pages/MemorySettingsOverlay.tsx:49
-#: src/pages/shell/bot-panel.tsx:518
+#: src/pages/shell/bot-panel.tsx:520
 msgid "Isolated"
 msgstr "이 Bot만 사용"
 
@@ -1869,7 +1867,7 @@ msgstr "로컬"
 msgid "Log out"
 msgstr "로그아웃"
 
-#: src/pages/shell/bot-panel.tsx:635
+#: src/pages/shell/bot-panel.tsx:649
 msgid "Low"
 msgstr "낮음"
 
@@ -1893,7 +1891,7 @@ msgstr "읽음으로 표시"
 msgid "Mark as Unread"
 msgstr "읽지 않음으로 표시"
 
-#: src/pages/shell/bot-panel.tsx:639
+#: src/pages/shell/bot-panel.tsx:653
 msgid "Max"
 msgstr "최대"
 
@@ -1902,7 +1900,7 @@ msgstr "최대"
 msgid "MCP servers"
 msgstr "MCP 서버"
 
-#: src/pages/shell/bot-panel.tsx:636
+#: src/pages/shell/bot-panel.tsx:650
 msgid "Medium"
 msgstr "보통"
 
@@ -1921,7 +1919,7 @@ msgstr "참여 Bot ({GROUP_MEMBER_MIN}~{GROUP_MEMBER_MAX}개 선택)"
 msgid "Memory"
 msgstr "기억"
 
-#: src/pages/shell/bot-panel.tsx:513
+#: src/pages/shell/bot-panel.tsx:515
 msgid "Memory scope"
 msgstr "기억 사용 범위"
 
@@ -1948,7 +1946,7 @@ msgstr "{activeName}에게 메시지 보내기"
 msgid "Message composer"
 msgstr "메시지 작성기"
 
-#: src/pages/Shell.tsx:5603
+#: src/pages/Shell.tsx:5587
 msgid "Message from {peer}"
 msgstr "{peer}의 메시지"
 
@@ -1956,7 +1954,7 @@ msgstr "{peer}의 메시지"
 msgid "Message…"
 msgstr "메시지를 입력하세요"
 
-#: src/pages/Shell.tsx:5603
+#: src/pages/Shell.tsx:5587
 msgid "Messaged {peer}"
 msgstr "{peer}에게 메시지 보냄"
 
@@ -1969,7 +1967,7 @@ msgstr "메시징"
 msgid "Microphone failed"
 msgstr "마이크를 사용할 수 없습니다."
 
-#: src/pages/shell/bot-panel.tsx:638
+#: src/pages/shell/bot-panel.tsx:652
 msgid "Minimal"
 msgstr "최소"
 
@@ -1996,7 +1994,7 @@ msgstr "분"
 #: src/pages/Onboarding.tsx:383
 #: src/pages/Onboarding.tsx:425
 #: src/pages/Onboarding.tsx:433
-#: src/pages/shell/bot-panel.tsx:465
+#: src/pages/shell/bot-panel.tsx:467
 msgid "Model"
 msgstr "모델"
 
@@ -2054,7 +2052,7 @@ msgstr "섹션으로 이동"
 #: src/pages/Onboarding.tsx:587
 #: src/pages/RoutineEditor.tsx:281
 #: src/pages/shell/bot-panel.tsx:137
-#: src/pages/shell/bot-panel.tsx:405
+#: src/pages/shell/bot-panel.tsx:407
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:140
 msgid "Name"
@@ -2302,7 +2300,7 @@ msgstr "진행 중인 작업"
 msgid "OpenAI-compatible server URL"
 msgstr "OpenAI 호환 서버 주소"
 
-#: src/pages/Shell.tsx:5743
+#: src/pages/Shell.tsx:5715
 msgid "Opened its thread."
 msgstr "대화가 만들어졌습니다."
 
@@ -2438,7 +2436,7 @@ msgstr "대기 중"
 msgid "Rakazo verifies the source before saving it. Credentials are encrypted and are never returned to clients or exposed to the model."
 msgstr "Rakazo는 저장하기 전에 연결 상태를 확인합니다. 인증 정보는 암호화되며 앱이나 AI 모델에 노출되지 않습니다."
 
-#: src/pages/shell/bot-panel.tsx:547
+#: src/pages/shell/bot-panel.tsx:549
 msgid "Read replies aloud"
 msgstr "답변을 자동으로 읽기"
 
@@ -2532,7 +2530,7 @@ msgstr "좋아요 제거"
 msgid "Remove webhook"
 msgstr "웹훅 제거"
 
-#: src/pages/Shell.tsx:5742
+#: src/pages/Shell.tsx:5714
 msgid "Removed with chat, computer, and memory."
 msgstr "대화, 컴퓨터, 기억과 함께 삭제되었습니다."
 
@@ -2563,6 +2561,10 @@ msgstr "키 교체"
 #: src/pages/Shell.tsx:5289
 msgid "Reply"
 msgstr "답장"
+
+#: src/pages/shell/bot-panel.tsx:560
+msgid "Reply in several short messages"
+msgstr "여러 개의 짧은 메시지로 답장"
 
 #: src/pages/Shell.tsx:4802
 msgid "Replying to {replyName}"
@@ -2672,7 +2674,7 @@ msgstr "실행 중…"
 #: src/pages/KnowledgeSection.tsx:405
 #: src/pages/ModelSettingsOverlay.tsx:689
 #: src/pages/RoutineEditor.tsx:413
-#: src/pages/shell/bot-panel.tsx:611
+#: src/pages/shell/bot-panel.tsx:625
 msgid "Save"
 msgstr "저장"
 
@@ -2827,7 +2829,7 @@ msgid "Shape {0}"
 msgstr ""
 
 #: src/pages/MemorySettingsOverlay.tsx:49
-#: src/pages/shell/bot-panel.tsx:519
+#: src/pages/shell/bot-panel.tsx:521
 msgid "Shared"
 msgstr "함께 사용"
 
@@ -2915,7 +2917,7 @@ msgstr "Slack 메시지"
 msgid "Software update"
 msgstr "소프트웨어 업데이트"
 
-#: src/pages/shell/bot-panel.tsx:476
+#: src/pages/shell/bot-panel.tsx:478
 msgid "Space default"
 msgstr "스페이스 기본값"
 
@@ -2923,8 +2925,8 @@ msgstr "스페이스 기본값"
 msgid "Space interrupts · Esc hangs up"
 msgstr "Space: 끼어들기 · Esc: 통화 종료"
 
-#: src/pages/Shell.tsx:5572
-#: src/pages/Shell.tsx:5840
+#: src/pages/Shell.tsx:5556
+#: src/pages/Shell.tsx:5812
 msgid "Speak"
 msgstr "읽기"
 
@@ -2936,8 +2938,8 @@ msgstr "음성 출력·받아쓰기"
 msgid "Speak only"
 msgstr "음성 출력만"
 
-#: src/pages/Shell.tsx:5568
-#: src/pages/Shell.tsx:5836
+#: src/pages/Shell.tsx:5552
+#: src/pages/Shell.tsx:5808
 msgid "Speak this reply"
 msgstr "이 답변 읽기"
 
@@ -2966,8 +2968,8 @@ msgstr "실행 단계"
 #: src/pages/Shell.tsx:4048
 #: src/pages/Shell.tsx:4053
 #: src/pages/Shell.tsx:5155
-#: src/pages/Shell.tsx:5572
-#: src/pages/Shell.tsx:5840
+#: src/pages/Shell.tsx:5556
+#: src/pages/Shell.tsx:5812
 msgid "Stop"
 msgstr "중지"
 
@@ -2975,8 +2977,8 @@ msgstr "중지"
 msgid "Stop dictation"
 msgstr "음성 입력 중지"
 
-#: src/pages/Shell.tsx:5568
-#: src/pages/Shell.tsx:5836
+#: src/pages/Shell.tsx:5552
+#: src/pages/Shell.tsx:5808
 msgid "Stop speaking"
 msgstr "읽기 중지"
 
@@ -2994,7 +2996,7 @@ msgstr "중지되었습니다."
 msgid "Stored encrypted"
 msgstr "암호화해 저장"
 
-#: src/pages/Shell.tsx:5696
+#: src/pages/Shell.tsx:5668
 msgid "subagent"
 msgstr "보조 에이전트"
 
@@ -3033,7 +3035,7 @@ msgstr "작업을 가르치는 중입니다. 새 메시지를 보내려면 먼�
 msgid "Team"
 msgstr "팀 공용"
 
-#: src/pages/Shell.tsx:5946
+#: src/pages/Shell.tsx:5918
 msgid "Team Computer"
 msgstr "팀 컴퓨터"
 
@@ -3058,7 +3060,7 @@ msgid "The selected memory provider is not available in this build."
 msgstr "선택한 기억 서비스는 현재 빌드에서 사용할 수 없습니다."
 
 #: src/pages/Shell.tsx:5403
-#: src/pages/shell/bot-panel.tsx:495
+#: src/pages/shell/bot-panel.tsx:497
 msgid "Thinking"
 msgstr "생각 깊이"
 
@@ -3137,7 +3139,7 @@ msgstr "실행 시각"
 
 #: src/pages/Onboarding.tsx:600
 #: src/pages/shell/bot-panel.tsx:148
-#: src/pages/shell/bot-panel.tsx:415
+#: src/pages/shell/bot-panel.tsx:417
 msgid "Title"
 msgstr "역할"
 
@@ -3244,7 +3246,7 @@ msgid "Verifying…"
 msgstr "확인 중…"
 
 #: src/pages/Shell.tsx:3065
-#: src/pages/shell/bot-panel.tsx:551
+#: src/pages/shell/bot-panel.tsx:564
 #: src/pages/VoiceSettingsOverlay.tsx:145
 #: src/pages/VoiceSettingsOverlay.tsx:288
 msgid "Voice"
@@ -3316,8 +3318,6 @@ msgstr "Bot을 어디에서 실행할까요?"
 #: src/pages/Auth.tsx:185
 #: src/pages/Auth.tsx:293
 #: src/pages/CallView.tsx:251
-#: src/pages/Shell.tsx:5553
-#: src/pages/Shell.tsx:5654
 msgid "Working…"
 msgstr "처리 중…"
 
