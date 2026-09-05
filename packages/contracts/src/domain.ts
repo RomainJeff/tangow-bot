@@ -381,6 +381,9 @@ export type TaughtSkill = z.infer<typeof TaughtSkillSchema>;
 export const AgentSkillSourceSchema = z.enum(["user", "builtin", "plugin"]);
 export type AgentSkillSource = z.infer<typeof AgentSkillSourceSchema>;
 
+export const SkillAvailabilitySchema = z.enum(["all", "selected"]);
+export type SkillAvailability = z.infer<typeof SkillAvailabilitySchema>;
+
 export const AgentSkillSchema = z.object({
   id: Id,
   name: z.string(),
@@ -399,6 +402,11 @@ export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
   description: true,
   source: true,
   readOnly: true,
+}).extend({
+  /** Global default: visible to every bot, or only to bots listed in visibleBotIds. */
+  availability: SkillAvailabilitySchema,
+  /** Resolved per active bot (availability + per-bot override). */
+  visibleBotIds: z.array(Id),
 });
 export type AgentSkillCatalogEntry = z.infer<typeof AgentSkillCatalogEntrySchema>;
 
