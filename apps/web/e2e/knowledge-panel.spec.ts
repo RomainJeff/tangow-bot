@@ -99,6 +99,30 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await expect(knowledge.getByText("Say hello before anything else.")).toBeVisible();
   await captureScreenshot(page, testInfo, "82-knowledge-skill-listed");
 
+  // Scoping: a hand-made skill is visible to every agent; excluding Chief hides it
+  // from Chief's catalog without touching the skill itself.
+  type CatalogEntry = { id: string; name: string; availability: string; visibleBotIds: string[] };
+  const listFor = (botId?: string) =>
+    rpc<CatalogEntry[]>(page, "agentSkills/list", botId ? { botId } : undefined);
+  const before = (await listFor()).find((entry) => entry.name === "greet-politely");
+  expect(before?.availability).toBe("all");
+  expect(before?.visibleBotIds).toContain(chiefId);
+
+  const skillCard = knowledge
+    .getByTestId("bot-knowledge-skill")
+    .filter({ hasText: "greet-politely" });
+  const chiefChip = skillCard.getByRole("button", { name: "Chief", exact: true });
+  await expect(chiefChip).toHaveAttribute("aria-pressed", "true");
+  await chiefChip.click();
+  await expect(chiefChip).toHaveAttribute("aria-pressed", "false");
+  await captureScreenshot(page, testInfo, "82b-knowledge-skill-scoped");
+  await expect
+    .poll(async () => (await listFor(chiefId)).some((entry) => entry.name === "greet-politely"))
+    .toBe(false);
+  expect((await listFor()).some((entry) => entry.name === "greet-politely")).toBe(true);
+  await chiefChip.click();
+  await expect(chiefChip).toHaveAttribute("aria-pressed", "true");
+
   await skillRow.click();
   await expect(editor).toHaveValue(/Always open with a greeting/);
   await editor.fill(
