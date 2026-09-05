@@ -34,7 +34,13 @@ test("create opens empty chat, picker lists bots, and sidebar collapses", async 
   await expect(page.getByTestId("bots-sidebar")).toHaveAttribute("data-collapsed", "true");
   const edge = page.getByTestId("bots-sidebar-edge");
   await expect(edge).toBeVisible();
+  await expect(page.getByTestId("restore-bots-sidebar")).toBeVisible();
   await captureScreenshot(page, testInfo, "bots-sidebar-collapsed");
+
+  await page.getByTestId("restore-bots-sidebar").click();
+  await expect(page.getByTestId("bots-sidebar")).toHaveAttribute("data-collapsed", "false");
+  await page.getByTestId("minimize-bots-sidebar").click();
+  await expect(page.getByTestId("bots-sidebar")).toHaveAttribute("data-collapsed", "true");
 
   const box = await edge.boundingBox();
   expect(box).toBeTruthy();

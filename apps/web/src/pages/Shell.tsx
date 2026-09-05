@@ -86,6 +86,7 @@ import {
   Mic,
   Monitor,
   PanelLeftClose,
+  PanelLeftOpen,
   Paperclip,
   Pencil,
   Phone,
@@ -144,6 +145,7 @@ import {
   shouldNotifyBrowser,
 } from "../lib/browser-notifications";
 import { loadComputerScreen } from "../lib/computer-screen";
+import { desktopBridge } from "../lib/desktop";
 import { dictation } from "../lib/dictation";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { localTimezone } from "../lib/local-timezone";
@@ -208,6 +210,9 @@ import {
   McpApprovalCard,
 } from "./shell/message-cards";
 import { WindowChrome } from "./WindowChrome";
+
+/** The desktop shell draws its own window chrome; a browser has none to make room for. */
+const isDesktopApp = desktopBridge() !== undefined;
 
 const BotContextMenu = lazy(() =>
   import("./BotContextMenu").then((module) => ({ default: module.BotContextMenu })),
@@ -3150,6 +3155,23 @@ export function ShellPage() {
       >
         <div className="app-drag flex items-center justify-between border-b border-sidebar-border px-3 py-[17px] md:px-[22px]">
           <div className="flex min-w-0 items-center gap-2">
+            {/* The sidebar owns the window chrome; when it is collapsed this header takes over so
+                the native traffic lights never land on top of the bot button. */}
+            {botsSidebarCollapsed ? (
+              <div className="hidden shrink-0 items-center gap-2 md:flex">
+                {isDesktopApp ? <WindowChrome /> : null}
+                <button
+                  type="button"
+                  aria-label={t`Show bots`}
+                  title={t`Show bots`}
+                  data-testid="restore-bots-sidebar"
+                  onClick={() => setBotsSidebarCollapsedPref(false)}
+                  className="app-no-drag grid h-8 w-8 shrink-0 place-items-center rounded-lg text-foreground/75 hover:bg-accent"
+                >
+                  <PanelLeftOpen size={17} strokeWidth={1.7} aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
             <button
               type="button"
               aria-label={t`Open navigation`}
