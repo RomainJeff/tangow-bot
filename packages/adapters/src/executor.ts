@@ -56,6 +56,7 @@ import {
   renderBotDirectory,
   resolveActionApprovalDetail,
   sandboxCommandTimeoutMs,
+  type ToolCallDetail,
   type ToolCallStreak,
   toolRequiresApproval,
   toolRequiresExplicitApproval,
@@ -1305,19 +1306,26 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
         // Tool calls that land mid-sentence wait here until the narration catches up to a
         // sentence boundary, so the step chips never render in the middle of a clause.
-        let pendingToolNames: string[] = [];
+        let pendingToolNames: Array<{ name: string; detail: ToolCallDetail }> = [];
+        // Details are mutated in place once the tool resolves: the step block they sit in is
+        // only serialized when the message is published, well after every call has returned.
+        const toolDetails = new Map<string, ToolCallDetail>();
         const flushPendingTools = () => {
           if (currentTextSegment) {
             messageSegments = appendTextSegment(messageSegments, currentTextSegment);
             currentTextSegment = "";
           }
-          for (const name of pendingToolNames) {
-            messageSegments = appendToolCallSegment(messageSegments, name);
+          for (const pending of pendingToolNames) {
+            messageSegments = appendToolCallSegment(messageSegments, pending.name, pending.detail);
           }
           pendingToolNames = [];
         };
         const tryFlushPendingTools = () => {
           if (pendingToolNames.length > 0 && endsSentence(currentTextSegment)) flushPendingTools();
+        };
+        const recordToolOutput = (executionId: string, result: unknown) => {
+          const detail = toolDetails.get(executionId);
+          if (detail) detail.output = describeToolPayload(result);
         };
         let pendingProgress = "";
         let lastProgressAt = 0;
@@ -2987,7 +2995,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
               script,
               allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun,
               emptyResponseText,
-              executeTool: scripted ? undefined : applyTool,
+              executeTool: scripted
+                ? undefined
+                : async (name, args, executionId) => {
+                    const result = await applyTool(name, args, executionId);
+                    recordToolOutput(executionId, result);
+                    return result;
+                  },
               claimSteering: scripted
                 ? undefined
                 : async (seenIds) => {
@@ -3206,7 +3220,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 runId,
                 payload: { name: event.name, executionId: event.executionId },
               });
-              pendingToolNames.push(event.name);
+              const toolDetail: ToolCallDetail = {
+                name: event.name,
+                input: describeToolPayload(event.args),
+                output: "",
+              };
+              toolDetails.set(event.executionId, toolDetail);
+              pendingToolNames.push({ name: event.name, detail: toolDetail });
               tryFlushPendingTools();
               const loopGuard = advanceToolCallLoopGuard(toolCallStreak, event.name, event.args);
               toolCallStreak = loopGuard.streak;
@@ -3251,6 +3271,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
               if (scripted) {
                 const result = await applyTool(event.name, event.args, event.executionId);
+                recordToolOutput(event.executionId, result);
                 if (isToolPauseResult(result)) return;
               }
             } else if (event.type === "subagent") {
@@ -3788,6 +3809,25 @@ async function requeueComputerRun(
   });
 }
 
+/** Step details are read by humans in the UI, so keep them small and always stringy. */
+const TOOL_DETAIL_MAX_CHARS = 4000;
+
+function describeToolPayload(value: unknown): string {
+  if (value === undefined) return "";
+  const text = typeof value === "string" ? value : safeStringifyToolPayload(value);
+  return text.length > TOOL_DETAIL_MAX_CHARS
+    ? `${text.slice(0, TOOL_DETAIL_MAX_CHARS)}\n… truncated`
+    : text;
+}
+
+function safeStringifyToolPayload(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[] {
   return blocks.map((block) => {
     if (block.kind === "text") {
@@ -3795,6 +3835,23 @@ function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[]
     }
     if (block.kind === "bot_message_sent" || block.kind === "bot_message_received") {
       return { ...block, text: redactSecrets(block.text, secrets) };
+    }
+    if (block.kind === "steps") {
+      return {
+        ...block,
+        steps: block.steps.map((step) =>
+          step.calls
+            ? {
+                ...step,
+                calls: step.calls.map((call) => ({
+                  ...call,
+                  input: redactSecrets(call.input, secrets),
+                  output: redactSecrets(call.output, secrets),
+                })),
+              }
+            : step,
+        ),
+      };
     }
     return block;
   });

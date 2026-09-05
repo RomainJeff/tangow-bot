@@ -255,15 +255,23 @@ function liveMessageText(blocks: readonly MessageBlock[]): string {
     .join("");
 }
 
-export type ToolStep = { label: string; count: number };
+export type ToolCallDetail = { name: string; input: string; output: string };
+export type ToolStep = { label: string; count: number; calls?: ToolCallDetail[] };
 
-export function appendToolStep(steps: readonly ToolStep[], toolName: string): ToolStep[] {
+export function appendToolStep(
+  steps: readonly ToolStep[],
+  toolName: string,
+  call?: ToolCallDetail,
+): ToolStep[] {
   const label = humanizeToolName(toolName);
   const last = steps.at(-1);
+  const calls = call ? [call] : undefined;
   if (last && last.label === label) {
-    return [...steps.slice(0, -1), { label, count: last.count + 1 }];
+    const merged =
+      last.calls || calls ? { calls: [...(last.calls ?? []), ...(calls ?? [])] } : undefined;
+    return [...steps.slice(0, -1), { label, count: last.count + 1, ...merged }];
   }
-  return [...steps, { label, count: 1 }];
+  return [...steps, { label, count: 1, ...(calls ? { calls } : {}) }];
 }
 
 export type ToolCallStreak = { key: string | undefined; count: number };
@@ -302,10 +310,11 @@ export function appendTextSegment(segments: readonly MessageBlock[], text: strin
 export function appendToolCallSegment(
   segments: readonly MessageBlock[],
   toolName: string,
+  call?: ToolCallDetail,
 ): MessageBlock[] {
   const last = segments.at(-1);
   const priorSteps = last?.kind === "steps" ? last.steps : [];
-  const steps = appendToolStep(priorSteps, toolName);
+  const steps = appendToolStep(priorSteps, toolName, call);
   if (last?.kind === "steps") {
     return [...segments.slice(0, -1), { kind: "steps", steps }];
   }

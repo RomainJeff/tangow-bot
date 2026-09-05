@@ -114,6 +114,7 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { AgentSteps, isHiddenActivityBlock } from "../components/AgentSteps";
 import { ArtifactFileCard } from "../components/ArtifactFileCard";
 import { AskCard } from "../components/AskCard";
 import { ActiveBotGlyph, CollaborationMarker } from "../components/ai/CollaborationMarker";
@@ -128,6 +129,7 @@ import { TeachCaptureOverlay } from "../components/teach/TeachCaptureOverlay";
 import { TeachComputerOverlayControl } from "../components/teach/TeachComputerOverlay";
 import { TeachRecordingChrome, TeachStopButton } from "../components/teach/TeachRecordingChrome";
 import { readActivityMode, writeActivityMode } from "../lib/activity-mode";
+import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../lib/artifact-open";
 import { authClient } from "../lib/auth";
 import { takeInitialBootstrap } from "../lib/bootstrap";
@@ -4208,6 +4210,7 @@ const Transcript = memo(function Transcript({
   onSpeak: (message: ThreadMessage) => void;
 }) {
   const { t } = useLingui();
+  const showSteps = useDisplayAgentSteps();
   const [atEnd, setAtEnd] = useState(true);
   const following = useRef(true);
   const autoScrolling = useRef(false);
@@ -4341,7 +4344,8 @@ const Transcript = memo(function Transcript({
           </button>
         ) : null}
         {messages.map((message) => {
-          if (!message.blocks.some((block) => !isToolActivityBlock(block))) return null;
+          if (!message.blocks.some((block) => !isHiddenActivityBlock(block, showSteps)))
+            return null;
           const peerReceipt = isPeerReceiptBlocks(message.blocks);
           const rewound = rewindFromSeq !== null && (message.seq ?? 0) >= rewindFromSeq;
           return (
@@ -5422,7 +5426,10 @@ const MessageView = memo(function MessageView({
       (block) => block.kind === "text" || block.kind === "progress" || block.kind === "steps",
     );
   const isLive = message.id.startsWith("progress:");
-  const visibleNarrationBlocks = message.blocks.filter((block) => !isToolActivityBlock(block));
+  const showSteps = useDisplayAgentSteps();
+  const visibleNarrationBlocks = message.blocks.filter(
+    (block) => !isHiddenActivityBlock(block, showSteps),
+  );
   const parentJumpId = replyPreview?.id ?? replyToMessageId;
   const messageContext = (
     <>
@@ -5463,6 +5470,7 @@ const MessageView = memo(function MessageView({
                   </div>
                 );
               }
+              if (block.kind === "steps") return <AgentSteps key={i} block={block} />;
               return null;
             })}
             {!isLive && voiceReady && message.blocks.some((block) => block.kind === "text") ? (
@@ -5484,7 +5492,8 @@ const MessageView = memo(function MessageView({
     <>
       {messageContext}
       {message.blocks.map((block, i) => {
-        if (isToolActivityBlock(block)) return null;
+        if (isHiddenActivityBlock(block, showSteps)) return null;
+        if (block.kind === "steps") return <AgentSteps key={i} block={block} />;
         if (block.kind === "handoff") {
           const from = memberName?.(block.fromBotId) ?? t`bot`;
           const to = memberName?.(block.toBotId) ?? t`bot`;

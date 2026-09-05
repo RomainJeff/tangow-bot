@@ -150,7 +150,16 @@ export const MessageBlock = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("steps"),
-    steps: z.array(z.object({ label: z.string(), count: z.number().int().positive() })),
+    steps: z.array(
+      z.object({
+        label: z.string(),
+        count: z.number().int().positive(),
+        /** One entry per collapsed call, for the "Display agent steps" detail view. */
+        calls: z
+          .array(z.object({ name: z.string(), input: z.string(), output: z.string() }))
+          .optional(),
+      }),
+    ),
     durationMs: z.number().int().nonnegative().optional(),
   }),
   z.object({

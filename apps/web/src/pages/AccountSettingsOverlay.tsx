@@ -10,6 +10,7 @@ import {
   Field,
   FieldLabel,
   Input,
+  Switch,
   Toggle,
 } from "@rakazo/ui-web";
 import { ChevronDown, XIcon } from "lucide-react";
@@ -27,6 +28,7 @@ import {
   computersAreUnavailable,
 } from "../components/ComputersUnavailableHint";
 import { SoftwareUpdateSection } from "../components/SoftwareUpdateSection";
+import { getDisplayAgentSteps, setDisplayAgentSteps } from "../lib/agent-steps-pref";
 import { authClient } from "../lib/auth";
 import { getActiveUiLocale, setUiLocale } from "../lib/i18n";
 import {
@@ -69,6 +71,7 @@ export function AccountSettingsOverlay({
   const [appearance, setAppearance] = useState<AppearancePreference>(() =>
     getUiAppearancePreference(),
   );
+  const [agentSteps, setAgentSteps] = useState<boolean>(() => getDisplayAgentSteps());
   const [avatarPending, setAvatarPending] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
@@ -156,6 +159,28 @@ export function AccountSettingsOverlay({
               setUiAppearance(next);
             }}
           />
+        </section>
+
+        <section className="mt-5 rounded-xl border border-border px-4 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-[15px] font-medium text-foreground">
+                <Trans>Display agent steps</Trans>
+              </h3>
+              <p className="mt-1 text-[12.5px] text-muted-foreground/80">
+                <Trans>Show the tools a bot used, with their input and output.</Trans>
+              </p>
+            </div>
+            <Switch
+              data-testid="display-agent-steps"
+              aria-label={t`Display agent steps`}
+              checked={agentSteps}
+              onCheckedChange={(next) => {
+                setAgentSteps(next);
+                setDisplayAgentSteps(next);
+              }}
+            />
+          </div>
         </section>
 
         <section className="mt-5 rounded-xl border border-border px-4 py-4">
