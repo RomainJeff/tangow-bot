@@ -52,6 +52,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Back to sign in": "返回登录",
   Bot: "Bot",
   "Bot actions": "Bot 操作",
+  "Bot chat": "Bot 对话",
   "Booting live desktop…": "正在启动实时桌面…",
   Camera: "相机",
   Cancel: "取消",
@@ -121,6 +122,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Could not load routine": "无法加载例行任务",
   "Could not load the desktop. This device cannot reach the screen URL.":
     "无法加载桌面。此设备无法访问屏幕地址。",
+  "Could not load this chat": "无法加载此对话",
   "Could not load this file.": "无法加载此文件。",
   "Could not load voice settings": "无法加载语音设置",
   "Could not open computer": "无法打开电脑",
@@ -252,6 +254,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "New space": "新建空间",
   "No apps match your search.": "没有符合搜索条件的应用。",
   "No matching bots": "没有匹配的 Bot",
+  "No messages with {peer} yet.": "还没有与 {peer} 的消息。",
   "No messages yet": "还没有消息",
   "No results": "没有结果",
   "Not connected": "未连接",
@@ -373,6 +376,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "The server changed while starting the request": "请求开始时服务器已更改",
   "This permanently deletes your account, bots, conversations, memories, files, and saved connections. This cannot be undone.":
     "这将永久删除你的账户、Bot、对话、记忆、文件和已保存的连接。此操作无法撤销。",
+  "This chat is view-only": "此对话仅供查看",
+  "This chat link is incomplete": "此对话链接不完整",
   "This routine no longer exists": "此例行任务已不存在",
   Thread: "对话",
   Title: "标题",

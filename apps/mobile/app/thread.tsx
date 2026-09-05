@@ -2618,6 +2618,7 @@ const MessageBubble = memo(function MessageBubble({
   const colorScheme = useResolvedAppearance();
   const tokens = mobileTokens();
   const { t } = useI18n();
+  const router = useRouter();
   const [peerExpanded, setPeerExpanded] = useState(false);
   const artifactTarget: MobileArtifactTarget = groupId
     ? { groupId }
@@ -2685,17 +2686,32 @@ const MessageBubble = memo(function MessageBubble({
     const label = sent
       ? t("Messaged {peer}", { peer: peer ?? t("Bot") })
       : t("Message from {peer}", { peer: peer ?? t("Bot") });
-    const peerColor =
-      bots.find((bot) => bot.id === peerBotId)?.color ??
-      members?.find((member) => member.botId === peerBotId)?.color ??
+    const botColorOf = (id: string) =>
+      bots.find((bot) => bot.id === id)?.color ??
+      members?.find((member) => member.botId === id)?.color ??
       tokens.mutedForeground;
-    // Compact receipt only: peer bodies stay out of the human thread.
-    // Full view-only peer chat is web-first; mobile keeps the chip without expand.
+    const peerColor = botColorOf(peerBotId);
+    // Compact receipt only: peer bodies stay out of the human thread; the full
+    // view-only exchange opens on its own screen.
     return (
       <Pressable
         {...actionProps}
-        accessible
+        accessibilityRole="button"
         accessibilityLabel={label}
+        onPress={() =>
+          router.push({
+            pathname: "/peer-messages",
+            params: {
+              botId: cardBotId,
+              botName: memberName(members, cardBotId) ?? botName ?? "",
+              botColor: botColorOf(cardBotId),
+              peerBotId,
+              peerBotName: peer ?? "",
+              peerColor,
+            },
+          })
+        }
+        hitSlop={8}
         style={{
           width: "100%",
           paddingVertical: 4,
