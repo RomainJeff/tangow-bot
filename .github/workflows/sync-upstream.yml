@@ -1,0 +1,119 @@
+name: sync-upstream
+
+# Fork-only workflow (not present upstream): merges RomainJeff/rakazo-bot main into this fork's
+# main once a day. A clean merge is pushed directly and triggers publish-fork-image through the
+# push event (the push uses a PAT, so it fires on: push like a human push would). A conflicting
+# merge is never resolved here: upstream/main is pushed to the `upstream-sync` branch and a PR
+# labeled `upstream-conflict` is opened so the conflict gets resolved locally.
+#
+# SYNC_TOKEN must be a classic PAT with `repo` + `workflow` scopes: GITHUB_TOKEN can neither read
+# the private upstream repository nor push changes under .github/workflows/.
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_URL: https://github.com/RomainJeff/rakazo-bot.git
+  SYNC_BRANCH: upstream-sync
+  CONFLICT_LABEL: upstream-conflict
+
+jobs:
+  sync:
+    name: Merge upstream main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: main
+          fetch-depth: 0
+          # Deviates from the repo convention (persist-credentials: false): this job must fetch the
+          # private upstream and push to origin, both through the PAT stored in the auth header.
+          token: ${{ secrets.SYNC_TOKEN }}
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream main
+        run: git fetch --no-tags "$UPSTREAM_URL" main
+
+      - name: Check whether upstream is already merged
+        id: state
+        run: |
+          set -euo pipefail
+          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+            echo "Already up to date with upstream ($(git rev-parse --short FETCH_HEAD))."
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+            echo "Upstream is ahead by $(git rev-list --count HEAD..FETCH_HEAD) commit(s)."
+          fi
+
+      - name: Merge upstream into main
+        if: steps.state.outputs.up_to_date == 'false'
+        id: merge
+        run: |
+          set -euo pipefail
+          if git merge --no-edit FETCH_HEAD; then
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Merge conflict with upstream; opening a PR instead."
+          fi
+
+      - name: Push merged main
+        if: steps.state.outputs.up_to_date == 'false' && steps.merge.outputs.conflict == 'false'
+        run: |
+          set -euo pipefail
+          if ! git push origin HEAD:main; then
+            # main moved while we were merging: replay once on top of the new tip.
+            git fetch origin main
+            git reset --hard origin/main
+            git merge --no-edit FETCH_HEAD
+            git push origin HEAD:main
+          fi
+
+      - name: Close a stale conflict PR
+        if: steps.state.outputs.up_to_date == 'false' && steps.merge.outputs.conflict == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for pr in $(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[].number'); do
+            gh pr close "$pr" --comment "Superseded: upstream merged cleanly on a later run." --delete-branch
+          done
+
+      - name: Push upstream to the sync branch
+        if: steps.merge.outputs.conflict == 'true'
+        run: git push --force origin FETCH_HEAD:refs/heads/$SYNC_BRANCH
+
+      - name: Open or refresh the conflict PR
+        if: steps.merge.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          existing="$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')"
+          if [[ -n "$existing" ]]; then
+            echo "Conflict PR #$existing already open; branch refreshed."
+            exit 0
+          fi
+          gh pr create \
+            --base main \
+            --head "$SYNC_BRANCH" \
+            --label "$CONFLICT_LABEL" \
+            --title "Sync upstream (conflits)" \
+            --body "Le merge automatique de upstream/main dans main a échoué à cause de conflits. À résoudre localement avec le skill sync-rakazo-fork : git merge upstream/main, résolution, push de main. La PR se fermera d'elle-même une fois main à jour."
