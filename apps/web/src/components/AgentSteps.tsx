@@ -22,7 +22,7 @@ export function AgentSteps({ block }: { block: StepsBlock }) {
   const calls = callsOf(block);
   if (calls.length === 0) return null;
   return (
-    <div className="flex justify-start">
+    <div className="mb-1.5 flex justify-start">
       <button
         type="button"
         data-testid="agent-steps-toggle"

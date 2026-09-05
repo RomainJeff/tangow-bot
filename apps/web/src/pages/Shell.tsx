@@ -5457,34 +5457,40 @@ const MessageView = memo(function MessageView({
     return (
       <>
         {messageContext}
-        <div className="flex justify-start">
-          <div
-            className="max-w-[74%] space-y-2.5 rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
-            dir="auto"
-          >
-            {visibleNarrationBlocks.map((block, i) => {
-              if (block.kind === "text" || block.kind === "progress") {
-                return (
-                  <div key={i}>
-                    <ChatMarkdown streaming={block.kind === "progress"}>{block.text}</ChatMarkdown>
-                  </div>
-                );
-              }
-              if (block.kind === "steps") return <AgentSteps key={i} block={block} />;
-              return null;
-            })}
-            {!isLive && voiceReady && message.blocks.some((block) => block.kind === "text") ? (
-              <button
-                type="button"
-                aria-label={speaking ? t`Stop speaking` : t`Speak this reply`}
-                onClick={onSpeak}
-                className="text-[12px] text-muted-foreground hover:text-foreground"
-              >
-                {speaking ? <Trans>Stop</Trans> : <Trans>Speak</Trans>}
-              </button>
-            ) : null}
+        {visibleNarrationBlocks.map((block, i) =>
+          block.kind === "steps" ? <AgentSteps key={i} block={block} /> : null,
+        )}
+        {visibleNarrationBlocks.some((block) => block.kind !== "steps") ? (
+          <div className="flex justify-start">
+            <div
+              className="max-w-[74%] space-y-2.5 rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
+              dir="auto"
+            >
+              {visibleNarrationBlocks.map((block, i) => {
+                if (block.kind === "text" || block.kind === "progress") {
+                  return (
+                    <div key={i}>
+                      <ChatMarkdown streaming={block.kind === "progress"}>
+                        {block.text}
+                      </ChatMarkdown>
+                    </div>
+                  );
+                }
+                return null;
+              })}
+              {!isLive && voiceReady && message.blocks.some((block) => block.kind === "text") ? (
+                <button
+                  type="button"
+                  aria-label={speaking ? t`Stop speaking` : t`Speak this reply`}
+                  onClick={onSpeak}
+                  className="text-[12px] text-muted-foreground hover:text-foreground"
+                >
+                  {speaking ? <Trans>Stop</Trans> : <Trans>Speak</Trans>}
+                </button>
+              ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
       </>
     );
   }
