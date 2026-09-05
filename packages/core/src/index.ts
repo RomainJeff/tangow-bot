@@ -1,6 +1,5 @@
 export * from "./action-approval.js";
 export * from "./agent-skill.js";
-export * from "./skill-access.js";
 export * from "./answerable-ask.js";
 export * from "./async.js";
 export * from "./attachments.js";
@@ -30,6 +29,7 @@ export * from "./search.js";
 export * from "./secrets-guard.js";
 export * from "./self-update.js";
 export * from "./signup-policy.js";
+export * from "./skill-access.js";
 export * from "./speech-text.js";
 export * from "./teach-playbook.js";
 export * from "./teach-recording.js";
