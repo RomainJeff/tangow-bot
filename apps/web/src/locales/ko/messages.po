@@ -17,6 +17,10 @@ msgstr ""
 msgid " (unread)"
 msgstr " (읽지 않음)"
 
+#: src/components/AgentSteps.tsx:90
+msgid "(empty)"
+msgstr ""
+
 #. placeholder {0}: group.entries.length
 #: src/pages/ModelSettingsOverlay.tsx:387
 msgid "{0, plural, one {# model} other {# models}}"
@@ -64,7 +68,7 @@ msgstr "{0}회 실행 · 토큰 {1}개"
 msgid "{0}'s screen"
 msgstr "{0}의 화면"
 
-#: src/pages/Shell.tsx:5832
+#: src/pages/Shell.tsx:5838
 msgid "{botName}’s computer"
 msgstr "{botName}의 컴퓨터"
 
@@ -252,10 +256,6 @@ msgstr "Agent 컴퓨터"
 msgid "Agent connections"
 msgstr "Agent 연결"
 
-#: src/components/AgentSteps.tsx:40
-msgid "Agent steps"
-msgstr ""
-
 #: src/pages/McpServersOverlay.tsx:385
 #: src/pages/McpServersOverlay.tsx:452
 msgid "Agents:"
@@ -369,7 +369,7 @@ msgstr "이 서버를 승인하면 Bot이 제공되는 도구를 사용할 수 �
 msgid "Archive"
 msgstr "보관"
 
-#: src/pages/Shell.tsx:5616
+#: src/pages/Shell.tsx:5622
 msgid "archived"
 msgstr "보관됨"
 
@@ -377,7 +377,7 @@ msgstr "보관됨"
 msgid "Archived"
 msgstr "보관됨"
 
-#: src/pages/Shell.tsx:5627
+#: src/pages/Shell.tsx:5633
 msgid "Archived. Chat, memory, and files kept."
 msgstr "보관되었습니다. 대화, 기억, 파일은 유지됩니다."
 
@@ -483,7 +483,7 @@ msgstr "서버 주소"
 msgid "Bearer token"
 msgstr "Bearer 토큰"
 
-#: src/pages/Shell.tsx:5824
+#: src/pages/Shell.tsx:5830
 msgid "Booting live desktop…"
 msgstr "라이브 데스크톱 시작 중…"
 
@@ -492,9 +492,9 @@ msgstr "라이브 데스크톱 시작 중…"
 msgid "Booting up {0}’s computer"
 msgstr "{0}의 컴퓨터를 켜는 중"
 
-#: src/pages/Shell.tsx:5492
-#: src/pages/Shell.tsx:5493
-#: src/pages/Shell.tsx:5620
+#: src/pages/Shell.tsx:5498
+#: src/pages/Shell.tsx:5499
+#: src/pages/Shell.tsx:5626
 msgid "bot"
 msgstr "Bot"
 
@@ -753,12 +753,12 @@ msgstr "실행 명령"
 msgid "Complete"
 msgstr "완료"
 
-#: src/pages/Shell.tsx:5774
+#: src/pages/Shell.tsx:5780
 #: src/pages/shell/bot-panel.tsx:57
 msgid "Computer"
 msgstr "컴퓨터"
 
-#: src/pages/Shell.tsx:5827
+#: src/pages/Shell.tsx:5833
 msgid "Computer failed to boot"
 msgstr "컴퓨터를 시작하지 못했습니다"
 
@@ -766,11 +766,11 @@ msgstr "컴퓨터를 시작하지 못했습니다"
 msgid "Computer is asleep"
 msgstr "컴퓨터가 절전 상태입니다"
 
-#: src/pages/Shell.tsx:5826
+#: src/pages/Shell.tsx:5832
 msgid "Computer is asleep. Open it to wake."
 msgstr "컴퓨터가 절전 상태입니다. 열어 깨우세요."
 
-#: src/pages/Shell.tsx:5828
+#: src/pages/Shell.tsx:5834
 msgid "Computer is stopped"
 msgstr "컴퓨터가 중지됨"
 
@@ -1344,7 +1344,7 @@ msgstr "그룹 삭제"
 msgid "Delete memories too"
 msgstr "기억도 함께 삭제"
 
-#: src/pages/Shell.tsx:5618
+#: src/pages/Shell.tsx:5624
 msgid "deleted"
 msgstr "삭제됨"
 
@@ -1723,7 +1723,7 @@ msgstr "OpenAPI JSON 가져오기"
 msgid "Inherit default"
 msgstr "기본 설정 사용"
 
-#: src/components/AgentSteps.tsx:48
+#: src/components/AgentSteps.tsx:69
 msgid "Input"
 msgstr ""
 
@@ -1959,7 +1959,7 @@ msgstr "{activeName}에게 메시지 보내기"
 msgid "Message composer"
 msgstr "메시지 작성기"
 
-#: src/pages/Shell.tsx:5510
+#: src/pages/Shell.tsx:5516
 msgid "Message from {peer}"
 msgstr "{peer}의 메시지"
 
@@ -1967,7 +1967,7 @@ msgstr "{peer}의 메시지"
 msgid "Message…"
 msgstr "메시지를 입력하세요"
 
-#: src/pages/Shell.tsx:5510
+#: src/pages/Shell.tsx:5516
 msgid "Messaged {peer}"
 msgstr "{peer}에게 메시지 보냄"
 
@@ -2313,7 +2313,7 @@ msgstr "진행 중인 작업"
 msgid "OpenAI-compatible server URL"
 msgstr "OpenAI 호환 서버 주소"
 
-#: src/pages/Shell.tsx:5629
+#: src/pages/Shell.tsx:5635
 msgid "Opened its thread."
 msgstr "대화가 만들어졌습니다."
 
@@ -2355,7 +2355,7 @@ msgstr "조직 API 키"
 msgid "Other model…"
 msgstr "다른 모델 직접 입력…"
 
-#: src/components/AgentSteps.tsx:49
+#: src/components/AgentSteps.tsx:70
 msgid "Output"
 msgstr ""
 
@@ -2547,7 +2547,7 @@ msgstr "좋아요 제거"
 msgid "Remove webhook"
 msgstr "웹훅 제거"
 
-#: src/pages/Shell.tsx:5628
+#: src/pages/Shell.tsx:5634
 msgid "Removed with chat, computer, and memory."
 msgstr "대화, 컴퓨터, 기억과 함께 삭제되었습니다."
 
@@ -2946,8 +2946,8 @@ msgstr "스페이스 기본값"
 msgid "Space interrupts · Esc hangs up"
 msgstr "Space: 끼어들기 · Esc: 통화 종료"
 
-#: src/pages/Shell.tsx:5477
-#: src/pages/Shell.tsx:5726
+#: src/pages/Shell.tsx:5482
+#: src/pages/Shell.tsx:5732
 msgid "Speak"
 msgstr "읽기"
 
@@ -2959,8 +2959,8 @@ msgstr "음성 출력·받아쓰기"
 msgid "Speak only"
 msgstr "음성 출력만"
 
-#: src/pages/Shell.tsx:5473
-#: src/pages/Shell.tsx:5722
+#: src/pages/Shell.tsx:5478
+#: src/pages/Shell.tsx:5728
 msgid "Speak this reply"
 msgstr "이 답변 읽기"
 
@@ -2987,15 +2987,15 @@ msgid "Steps"
 msgstr "실행 단계"
 
 #. placeholder {0}: calls.length
-#: src/components/AgentSteps.tsx:32
+#: src/components/AgentSteps.tsx:35
 msgid "Steps ({0})"
 msgstr ""
 
 #: src/pages/Shell.tsx:4049
 #: src/pages/Shell.tsx:4054
 #: src/pages/Shell.tsx:5147
-#: src/pages/Shell.tsx:5477
-#: src/pages/Shell.tsx:5726
+#: src/pages/Shell.tsx:5482
+#: src/pages/Shell.tsx:5732
 msgid "Stop"
 msgstr "중지"
 
@@ -3003,8 +3003,8 @@ msgstr "중지"
 msgid "Stop dictation"
 msgstr "음성 입력 중지"
 
-#: src/pages/Shell.tsx:5473
-#: src/pages/Shell.tsx:5722
+#: src/pages/Shell.tsx:5478
+#: src/pages/Shell.tsx:5728
 msgid "Stop speaking"
 msgstr "읽기 중지"
 
@@ -3022,7 +3022,7 @@ msgstr "중지되었습니다."
 msgid "Stored encrypted"
 msgstr "암호화해 저장"
 
-#: src/pages/Shell.tsx:5582
+#: src/pages/Shell.tsx:5588
 msgid "subagent"
 msgstr "보조 에이전트"
 
@@ -3061,7 +3061,7 @@ msgstr "작업을 가르치는 중입니다. 새 메시지를 보내려면 먼�
 msgid "Team"
 msgstr "팀 공용"
 
-#: src/pages/Shell.tsx:5832
+#: src/pages/Shell.tsx:5838
 msgid "Team Computer"
 msgstr "팀 컴퓨터"
 
@@ -3096,6 +3096,10 @@ msgstr "이 Bot은 별도 Linux 화면이 아니라 현재 컴퓨터에서 실�
 #: src/pages/Shell.tsx:4105
 msgid "This bot runs on this computer. There is no separate Linux desktop. Ask it to use the shell; working directories under your home folder are allowed."
 msgstr "이 Bot은 현재 컴퓨터에서 실행되며 별도 Linux 화면은 없습니다. 터미널을 사용하도록 요청할 수 있고 홈 폴더 아래에서 작업합니다."
+
+#: src/components/AgentSteps.tsx:74
+msgid "This call ran before step details were recorded."
+msgstr ""
 
 #: src/pages/shell/dialogs.tsx:276
 #: src/pages/shell/dialogs.tsx:329

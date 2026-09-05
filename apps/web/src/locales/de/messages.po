@@ -17,6 +17,10 @@ msgstr ""
 msgid " (unread)"
 msgstr " (ungelesen)"
 
+#: src/components/AgentSteps.tsx:90
+msgid "(empty)"
+msgstr ""
+
 #. placeholder {0}: group.entries.length
 #: src/pages/ModelSettingsOverlay.tsx:387
 msgid "{0, plural, one {# model} other {# models}}"
@@ -64,7 +68,7 @@ msgstr "{0} Läufe · {1} Tokens"
 msgid "{0}'s screen"
 msgstr "{0}s Bildschirm"
 
-#: src/pages/Shell.tsx:5832
+#: src/pages/Shell.tsx:5838
 msgid "{botName}’s computer"
 msgstr "Computer von {botName}"
 
@@ -252,10 +256,6 @@ msgstr "Agent-Computer"
 msgid "Agent connections"
 msgstr ""
 
-#: src/components/AgentSteps.tsx:40
-msgid "Agent steps"
-msgstr ""
-
 #: src/pages/McpServersOverlay.tsx:385
 #: src/pages/McpServersOverlay.tsx:452
 msgid "Agents:"
@@ -369,7 +369,7 @@ msgstr "Genehmige diesen Server, damit dein Agent seine Tools verwenden kann."
 msgid "Archive"
 msgstr "Archivieren"
 
-#: src/pages/Shell.tsx:5616
+#: src/pages/Shell.tsx:5622
 msgid "archived"
 msgstr "archiviert"
 
@@ -377,7 +377,7 @@ msgstr "archiviert"
 msgid "Archived"
 msgstr "Archiviert"
 
-#: src/pages/Shell.tsx:5627
+#: src/pages/Shell.tsx:5633
 msgid "Archived. Chat, memory, and files kept."
 msgstr "Archiviert. Chat, Erinnerungen und Dateien bleiben erhalten."
 
@@ -483,7 +483,7 @@ msgstr "Basis-URL"
 msgid "Bearer token"
 msgstr "Bearer-Token"
 
-#: src/pages/Shell.tsx:5824
+#: src/pages/Shell.tsx:5830
 msgid "Booting live desktop…"
 msgstr "Live-Desktop wird gestartet…"
 
@@ -492,9 +492,9 @@ msgstr "Live-Desktop wird gestartet…"
 msgid "Booting up {0}’s computer"
 msgstr "Computer von {0} wird gestartet"
 
-#: src/pages/Shell.tsx:5492
-#: src/pages/Shell.tsx:5493
-#: src/pages/Shell.tsx:5620
+#: src/pages/Shell.tsx:5498
+#: src/pages/Shell.tsx:5499
+#: src/pages/Shell.tsx:5626
 msgid "bot"
 msgstr "Bot"
 
@@ -753,12 +753,12 @@ msgstr "Befehl"
 msgid "Complete"
 msgstr "Abschließen"
 
-#: src/pages/Shell.tsx:5774
+#: src/pages/Shell.tsx:5780
 #: src/pages/shell/bot-panel.tsx:57
 msgid "Computer"
 msgstr "Computer"
 
-#: src/pages/Shell.tsx:5827
+#: src/pages/Shell.tsx:5833
 msgid "Computer failed to boot"
 msgstr "Computer konnte nicht gestartet werden"
 
@@ -766,11 +766,11 @@ msgstr "Computer konnte nicht gestartet werden"
 msgid "Computer is asleep"
 msgstr "Computer ist im Ruhezustand"
 
-#: src/pages/Shell.tsx:5826
+#: src/pages/Shell.tsx:5832
 msgid "Computer is asleep. Open it to wake."
 msgstr ""
 
-#: src/pages/Shell.tsx:5828
+#: src/pages/Shell.tsx:5834
 msgid "Computer is stopped"
 msgstr "Computer ist gestoppt"
 
@@ -1344,7 +1344,7 @@ msgstr "Gruppe löschen"
 msgid "Delete memories too"
 msgstr "Erinnerungen ebenfalls löschen"
 
-#: src/pages/Shell.tsx:5618
+#: src/pages/Shell.tsx:5624
 msgid "deleted"
 msgstr "gelöscht"
 
@@ -1723,7 +1723,7 @@ msgstr "OpenAPI-JSON importieren"
 msgid "Inherit default"
 msgstr "Standard übernehmen"
 
-#: src/components/AgentSteps.tsx:48
+#: src/components/AgentSteps.tsx:69
 msgid "Input"
 msgstr ""
 
@@ -1959,7 +1959,7 @@ msgstr "Nachricht an {activeName}"
 msgid "Message composer"
 msgstr ""
 
-#: src/pages/Shell.tsx:5510
+#: src/pages/Shell.tsx:5516
 msgid "Message from {peer}"
 msgstr "Nachricht von {peer}"
 
@@ -1967,7 +1967,7 @@ msgstr "Nachricht von {peer}"
 msgid "Message…"
 msgstr "Nachricht…"
 
-#: src/pages/Shell.tsx:5510
+#: src/pages/Shell.tsx:5516
 msgid "Messaged {peer}"
 msgstr "Nachricht an {peer} gesendet"
 
@@ -2313,7 +2313,7 @@ msgstr "Offene Arbeit"
 msgid "OpenAI-compatible server URL"
 msgstr "URL eines OpenAI-kompatiblen Servers"
 
-#: src/pages/Shell.tsx:5629
+#: src/pages/Shell.tsx:5635
 msgid "Opened its thread."
 msgstr "Thread geöffnet."
 
@@ -2355,7 +2355,7 @@ msgstr "Organisations-API-Schlüssel"
 msgid "Other model…"
 msgstr "Anderes Modell…"
 
-#: src/components/AgentSteps.tsx:49
+#: src/components/AgentSteps.tsx:70
 msgid "Output"
 msgstr ""
 
@@ -2547,7 +2547,7 @@ msgstr ""
 msgid "Remove webhook"
 msgstr ""
 
-#: src/pages/Shell.tsx:5628
+#: src/pages/Shell.tsx:5634
 msgid "Removed with chat, computer, and memory."
 msgstr "Zusammen mit Chat, Computer und Erinnerungen entfernt."
 
@@ -2946,8 +2946,8 @@ msgstr "Space-Standard"
 msgid "Space interrupts · Esc hangs up"
 msgstr "Leertaste unterbricht · Esc legt auf"
 
-#: src/pages/Shell.tsx:5477
-#: src/pages/Shell.tsx:5726
+#: src/pages/Shell.tsx:5482
+#: src/pages/Shell.tsx:5732
 msgid "Speak"
 msgstr "Vorlesen"
 
@@ -2959,8 +2959,8 @@ msgstr "Sprechen + transkribieren"
 msgid "Speak only"
 msgstr "Nur sprechen"
 
-#: src/pages/Shell.tsx:5473
-#: src/pages/Shell.tsx:5722
+#: src/pages/Shell.tsx:5478
+#: src/pages/Shell.tsx:5728
 msgid "Speak this reply"
 msgstr "Diese Antwort vorlesen"
 
@@ -2987,15 +2987,15 @@ msgid "Steps"
 msgstr "Schritte"
 
 #. placeholder {0}: calls.length
-#: src/components/AgentSteps.tsx:32
+#: src/components/AgentSteps.tsx:35
 msgid "Steps ({0})"
 msgstr ""
 
 #: src/pages/Shell.tsx:4049
 #: src/pages/Shell.tsx:4054
 #: src/pages/Shell.tsx:5147
-#: src/pages/Shell.tsx:5477
-#: src/pages/Shell.tsx:5726
+#: src/pages/Shell.tsx:5482
+#: src/pages/Shell.tsx:5732
 msgid "Stop"
 msgstr "Stoppen"
 
@@ -3003,8 +3003,8 @@ msgstr "Stoppen"
 msgid "Stop dictation"
 msgstr "Diktat stoppen"
 
-#: src/pages/Shell.tsx:5473
-#: src/pages/Shell.tsx:5722
+#: src/pages/Shell.tsx:5478
+#: src/pages/Shell.tsx:5728
 msgid "Stop speaking"
 msgstr "Vorlesen stoppen"
 
@@ -3022,7 +3022,7 @@ msgstr "Gestoppt."
 msgid "Stored encrypted"
 msgstr "Verschlüsselt gespeichert"
 
-#: src/pages/Shell.tsx:5582
+#: src/pages/Shell.tsx:5588
 msgid "subagent"
 msgstr "Subagent"
 
@@ -3061,7 +3061,7 @@ msgstr "Aufgabe wird angelernt. Beende das Anlernen, bevor du eine neue Nachrich
 msgid "Team"
 msgstr "Team"
 
-#: src/pages/Shell.tsx:5832
+#: src/pages/Shell.tsx:5838
 msgid "Team Computer"
 msgstr "Team-Computer"
 
@@ -3096,6 +3096,10 @@ msgstr "Dieser Bot wird auf diesem Computer und nicht auf einem Linux-Desktop au
 #: src/pages/Shell.tsx:4105
 msgid "This bot runs on this computer. There is no separate Linux desktop. Ask it to use the shell; working directories under your home folder are allowed."
 msgstr "Dieser Bot wird auf diesem Computer ausgeführt. Es gibt keinen separaten Linux-Desktop. Bitte ihn, die Shell zu verwenden; Arbeitsverzeichnisse in deinem persönlichen Ordner sind zulässig."
+
+#: src/components/AgentSteps.tsx:74
+msgid "This call ran before step details were recorded."
+msgstr ""
 
 #: src/pages/shell/dialogs.tsx:276
 #: src/pages/shell/dialogs.tsx:329

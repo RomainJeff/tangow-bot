@@ -17,6 +17,10 @@ msgstr ""
 msgid " (unread)"
 msgstr "（未读）"
 
+#: src/components/AgentSteps.tsx:90
+msgid "(empty)"
+msgstr ""
+
 #. placeholder {0}: group.entries.length
 #: src/pages/ModelSettingsOverlay.tsx:387
 msgid "{0, plural, one {# model} other {# models}}"
@@ -64,7 +68,7 @@ msgstr "{0} 次运行 · {1} tokens"
 msgid "{0}'s screen"
 msgstr ""
 
-#: src/pages/Shell.tsx:5832
+#: src/pages/Shell.tsx:5838
 msgid "{botName}’s computer"
 msgstr "{botName} 的电脑"
 
@@ -252,10 +256,6 @@ msgstr "Agent 电脑"
 msgid "Agent connections"
 msgstr "Agent 连接"
 
-#: src/components/AgentSteps.tsx:40
-msgid "Agent steps"
-msgstr ""
-
 #: src/pages/McpServersOverlay.tsx:385
 #: src/pages/McpServersOverlay.tsx:452
 msgid "Agents:"
@@ -369,7 +369,7 @@ msgstr "批准此服务器后，Agent 才能使用它的工具。"
 msgid "Archive"
 msgstr "归档"
 
-#: src/pages/Shell.tsx:5616
+#: src/pages/Shell.tsx:5622
 msgid "archived"
 msgstr "已归档"
 
@@ -377,7 +377,7 @@ msgstr "已归档"
 msgid "Archived"
 msgstr "已归档"
 
-#: src/pages/Shell.tsx:5627
+#: src/pages/Shell.tsx:5633
 msgid "Archived. Chat, memory, and files kept."
 msgstr "已归档。对话、记忆和文件保留。"
 
@@ -483,7 +483,7 @@ msgstr "Base URL"
 msgid "Bearer token"
 msgstr "Bearer token"
 
-#: src/pages/Shell.tsx:5824
+#: src/pages/Shell.tsx:5830
 msgid "Booting live desktop…"
 msgstr "正在启动实时桌面…"
 
@@ -492,9 +492,9 @@ msgstr "正在启动实时桌面…"
 msgid "Booting up {0}’s computer"
 msgstr "正在启动 {0} 的电脑"
 
-#: src/pages/Shell.tsx:5492
-#: src/pages/Shell.tsx:5493
-#: src/pages/Shell.tsx:5620
+#: src/pages/Shell.tsx:5498
+#: src/pages/Shell.tsx:5499
+#: src/pages/Shell.tsx:5626
 msgid "bot"
 msgstr "Bot"
 
@@ -753,12 +753,12 @@ msgstr "命令"
 msgid "Complete"
 msgstr "完成"
 
-#: src/pages/Shell.tsx:5774
+#: src/pages/Shell.tsx:5780
 #: src/pages/shell/bot-panel.tsx:57
 msgid "Computer"
 msgstr "电脑"
 
-#: src/pages/Shell.tsx:5827
+#: src/pages/Shell.tsx:5833
 msgid "Computer failed to boot"
 msgstr "电脑启动失败"
 
@@ -766,11 +766,11 @@ msgstr "电脑启动失败"
 msgid "Computer is asleep"
 msgstr "电脑已休眠"
 
-#: src/pages/Shell.tsx:5826
+#: src/pages/Shell.tsx:5832
 msgid "Computer is asleep. Open it to wake."
 msgstr ""
 
-#: src/pages/Shell.tsx:5828
+#: src/pages/Shell.tsx:5834
 msgid "Computer is stopped"
 msgstr "电脑已停止"
 
@@ -1344,7 +1344,7 @@ msgstr "删除群组"
 msgid "Delete memories too"
 msgstr "同时删除记忆"
 
-#: src/pages/Shell.tsx:5618
+#: src/pages/Shell.tsx:5624
 msgid "deleted"
 msgstr "已删除"
 
@@ -1723,7 +1723,7 @@ msgstr "导入 OpenAPI JSON"
 msgid "Inherit default"
 msgstr "沿用默认"
 
-#: src/components/AgentSteps.tsx:48
+#: src/components/AgentSteps.tsx:69
 msgid "Input"
 msgstr ""
 
@@ -1959,7 +1959,7 @@ msgstr "给 {activeName} 发消息"
 msgid "Message composer"
 msgstr "消息输入框"
 
-#: src/pages/Shell.tsx:5510
+#: src/pages/Shell.tsx:5516
 msgid "Message from {peer}"
 msgstr "来自 {peer} 的消息"
 
@@ -1967,7 +1967,7 @@ msgstr "来自 {peer} 的消息"
 msgid "Message…"
 msgstr "消息…"
 
-#: src/pages/Shell.tsx:5510
+#: src/pages/Shell.tsx:5516
 msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
@@ -2313,7 +2313,7 @@ msgstr "待办"
 msgid "OpenAI-compatible server URL"
 msgstr "OpenAI 兼容服务器 URL"
 
-#: src/pages/Shell.tsx:5629
+#: src/pages/Shell.tsx:5635
 msgid "Opened its thread."
 msgstr "已打开其对话。"
 
@@ -2355,7 +2355,7 @@ msgstr "组织 API 密钥"
 msgid "Other model…"
 msgstr "其他模型…"
 
-#: src/components/AgentSteps.tsx:49
+#: src/components/AgentSteps.tsx:70
 msgid "Output"
 msgstr ""
 
@@ -2547,7 +2547,7 @@ msgstr "取消点赞"
 msgid "Remove webhook"
 msgstr "移除 Webhook"
 
-#: src/pages/Shell.tsx:5628
+#: src/pages/Shell.tsx:5634
 msgid "Removed with chat, computer, and memory."
 msgstr "已连同对话、电脑和记忆一起移除。"
 
@@ -2946,8 +2946,8 @@ msgstr "工作区默认"
 msgid "Space interrupts · Esc hangs up"
 msgstr "空格键打断 · Esc 挂断"
 
-#: src/pages/Shell.tsx:5477
-#: src/pages/Shell.tsx:5726
+#: src/pages/Shell.tsx:5482
+#: src/pages/Shell.tsx:5732
 msgid "Speak"
 msgstr "朗读"
 
@@ -2959,8 +2959,8 @@ msgstr "朗读 + 转写"
 msgid "Speak only"
 msgstr "仅朗读"
 
-#: src/pages/Shell.tsx:5473
-#: src/pages/Shell.tsx:5722
+#: src/pages/Shell.tsx:5478
+#: src/pages/Shell.tsx:5728
 msgid "Speak this reply"
 msgstr "朗读这条回复"
 
@@ -2987,15 +2987,15 @@ msgid "Steps"
 msgstr "步骤"
 
 #. placeholder {0}: calls.length
-#: src/components/AgentSteps.tsx:32
+#: src/components/AgentSteps.tsx:35
 msgid "Steps ({0})"
 msgstr ""
 
 #: src/pages/Shell.tsx:4049
 #: src/pages/Shell.tsx:4054
 #: src/pages/Shell.tsx:5147
-#: src/pages/Shell.tsx:5477
-#: src/pages/Shell.tsx:5726
+#: src/pages/Shell.tsx:5482
+#: src/pages/Shell.tsx:5732
 msgid "Stop"
 msgstr "停止"
 
@@ -3003,8 +3003,8 @@ msgstr "停止"
 msgid "Stop dictation"
 msgstr "停止口述"
 
-#: src/pages/Shell.tsx:5473
-#: src/pages/Shell.tsx:5722
+#: src/pages/Shell.tsx:5478
+#: src/pages/Shell.tsx:5728
 msgid "Stop speaking"
 msgstr "停止朗读"
 
@@ -3022,7 +3022,7 @@ msgstr "已停止。"
 msgid "Stored encrypted"
 msgstr "已加密存储"
 
-#: src/pages/Shell.tsx:5582
+#: src/pages/Shell.tsx:5588
 msgid "subagent"
 msgstr "子 Agent"
 
@@ -3061,7 +3061,7 @@ msgstr "正在示范，发送新消息前请先停止示范。"
 msgid "Team"
 msgstr "团队"
 
-#: src/pages/Shell.tsx:5832
+#: src/pages/Shell.tsx:5838
 msgid "Team Computer"
 msgstr "团队电脑"
 
@@ -3096,6 +3096,10 @@ msgstr "此 Bot 运行在这台电脑上，而不是 Linux 桌面。Shell 和文
 #: src/pages/Shell.tsx:4105
 msgid "This bot runs on this computer. There is no separate Linux desktop. Ask it to use the shell; working directories under your home folder are allowed."
 msgstr "此 Bot 运行在这台电脑上，没有单独的 Linux 桌面。让它使用 shell；主目录下的工作目录可用。"
+
+#: src/components/AgentSteps.tsx:74
+msgid "This call ran before step details were recorded."
+msgstr ""
 
 #: src/pages/shell/dialogs.tsx:276
 #: src/pages/shell/dialogs.tsx:329

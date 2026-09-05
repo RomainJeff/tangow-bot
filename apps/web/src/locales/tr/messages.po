@@ -17,6 +17,10 @@ msgstr ""
 msgid " (unread)"
 msgstr " (okunmadı)"
 
+#: src/components/AgentSteps.tsx:90
+msgid "(empty)"
+msgstr ""
+
 #. placeholder {0}: group.entries.length
 #: src/pages/ModelSettingsOverlay.tsx:387
 msgid "{0, plural, one {# model} other {# models}}"
@@ -64,7 +68,7 @@ msgstr "{0} çalıştırma · {1} token"
 msgid "{0}'s screen"
 msgstr ""
 
-#: src/pages/Shell.tsx:5832
+#: src/pages/Shell.tsx:5838
 msgid "{botName}’s computer"
 msgstr "{botName} adlı botun bilgisayarı"
 
@@ -252,10 +256,6 @@ msgstr "Agent bilgisayarı"
 msgid "Agent connections"
 msgstr ""
 
-#: src/components/AgentSteps.tsx:40
-msgid "Agent steps"
-msgstr ""
-
 #: src/pages/McpServersOverlay.tsx:385
 #: src/pages/McpServersOverlay.tsx:452
 msgid "Agents:"
@@ -369,7 +369,7 @@ msgstr "Agent'ının bu sunucunun araçlarını kullanabilmesi için sunucuyu on
 msgid "Archive"
 msgstr "Arşivle"
 
-#: src/pages/Shell.tsx:5616
+#: src/pages/Shell.tsx:5622
 msgid "archived"
 msgstr "arşivlendi"
 
@@ -377,7 +377,7 @@ msgstr "arşivlendi"
 msgid "Archived"
 msgstr "Arşivlendi"
 
-#: src/pages/Shell.tsx:5627
+#: src/pages/Shell.tsx:5633
 msgid "Archived. Chat, memory, and files kept."
 msgstr "Arşivlendi. Sohbet, hafıza ve dosyalar korundu."
 
@@ -483,7 +483,7 @@ msgstr "Temel URL"
 msgid "Bearer token"
 msgstr "Bearer token"
 
-#: src/pages/Shell.tsx:5824
+#: src/pages/Shell.tsx:5830
 msgid "Booting live desktop…"
 msgstr "Canlı masaüstü başlatılıyor…"
 
@@ -492,9 +492,9 @@ msgstr "Canlı masaüstü başlatılıyor…"
 msgid "Booting up {0}’s computer"
 msgstr "{0} adlı botun bilgisayarı başlatılıyor"
 
-#: src/pages/Shell.tsx:5492
-#: src/pages/Shell.tsx:5493
-#: src/pages/Shell.tsx:5620
+#: src/pages/Shell.tsx:5498
+#: src/pages/Shell.tsx:5499
+#: src/pages/Shell.tsx:5626
 msgid "bot"
 msgstr "bot"
 
@@ -753,12 +753,12 @@ msgstr "Komut"
 msgid "Complete"
 msgstr "Tamamlandı"
 
-#: src/pages/Shell.tsx:5774
+#: src/pages/Shell.tsx:5780
 #: src/pages/shell/bot-panel.tsx:57
 msgid "Computer"
 msgstr "Bilgisayar"
 
-#: src/pages/Shell.tsx:5827
+#: src/pages/Shell.tsx:5833
 msgid "Computer failed to boot"
 msgstr "Bilgisayar başlatılamadı"
 
@@ -766,11 +766,11 @@ msgstr "Bilgisayar başlatılamadı"
 msgid "Computer is asleep"
 msgstr "Bilgisayar uykuda"
 
-#: src/pages/Shell.tsx:5826
+#: src/pages/Shell.tsx:5832
 msgid "Computer is asleep. Open it to wake."
 msgstr ""
 
-#: src/pages/Shell.tsx:5828
+#: src/pages/Shell.tsx:5834
 msgid "Computer is stopped"
 msgstr "Bilgisayar durduruldu"
 
@@ -1344,7 +1344,7 @@ msgstr "Grubu sil"
 msgid "Delete memories too"
 msgstr "Hafızayı da sil"
 
-#: src/pages/Shell.tsx:5618
+#: src/pages/Shell.tsx:5624
 msgid "deleted"
 msgstr "silindi"
 
@@ -1723,7 +1723,7 @@ msgstr "OpenAPI JSON içe aktar"
 msgid "Inherit default"
 msgstr "Varsayılanı devral"
 
-#: src/components/AgentSteps.tsx:48
+#: src/components/AgentSteps.tsx:69
 msgid "Input"
 msgstr ""
 
@@ -1959,7 +1959,7 @@ msgstr "{activeName} sohbetine yaz"
 msgid "Message composer"
 msgstr ""
 
-#: src/pages/Shell.tsx:5510
+#: src/pages/Shell.tsx:5516
 msgid "Message from {peer}"
 msgstr "{peer} botundan mesaj"
 
@@ -1967,7 +1967,7 @@ msgstr "{peer} botundan mesaj"
 msgid "Message…"
 msgstr "Mesaj…"
 
-#: src/pages/Shell.tsx:5510
+#: src/pages/Shell.tsx:5516
 msgid "Messaged {peer}"
 msgstr "{peer} botuna mesaj gönderildi"
 
@@ -2313,7 +2313,7 @@ msgstr "Açık işler"
 msgid "OpenAI-compatible server URL"
 msgstr "OpenAI uyumlu sunucu URL'si"
 
-#: src/pages/Shell.tsx:5629
+#: src/pages/Shell.tsx:5635
 msgid "Opened its thread."
 msgstr "Sohbeti açıldı."
 
@@ -2355,7 +2355,7 @@ msgstr "Kuruluş API anahtarı"
 msgid "Other model…"
 msgstr "Başka model…"
 
-#: src/components/AgentSteps.tsx:49
+#: src/components/AgentSteps.tsx:70
 msgid "Output"
 msgstr ""
 
@@ -2547,7 +2547,7 @@ msgstr ""
 msgid "Remove webhook"
 msgstr ""
 
-#: src/pages/Shell.tsx:5628
+#: src/pages/Shell.tsx:5634
 msgid "Removed with chat, computer, and memory."
 msgstr "Sohbeti, bilgisayarı ve hafızasıyla birlikte kaldırıldı."
 
@@ -2946,8 +2946,8 @@ msgstr "Alan varsayılanı"
 msgid "Space interrupts · Esc hangs up"
 msgstr "Boşluk keser · Esc aramayı sonlandırır"
 
-#: src/pages/Shell.tsx:5477
-#: src/pages/Shell.tsx:5726
+#: src/pages/Shell.tsx:5482
+#: src/pages/Shell.tsx:5732
 msgid "Speak"
 msgstr "Seslendir"
 
@@ -2959,8 +2959,8 @@ msgstr "Seslendir + yazıya dök"
 msgid "Speak only"
 msgstr "Yalnızca seslendir"
 
-#: src/pages/Shell.tsx:5473
-#: src/pages/Shell.tsx:5722
+#: src/pages/Shell.tsx:5478
+#: src/pages/Shell.tsx:5728
 msgid "Speak this reply"
 msgstr "Bu yanıtı seslendir"
 
@@ -2987,15 +2987,15 @@ msgid "Steps"
 msgstr "Adımlar"
 
 #. placeholder {0}: calls.length
-#: src/components/AgentSteps.tsx:32
+#: src/components/AgentSteps.tsx:35
 msgid "Steps ({0})"
 msgstr ""
 
 #: src/pages/Shell.tsx:4049
 #: src/pages/Shell.tsx:4054
 #: src/pages/Shell.tsx:5147
-#: src/pages/Shell.tsx:5477
-#: src/pages/Shell.tsx:5726
+#: src/pages/Shell.tsx:5482
+#: src/pages/Shell.tsx:5732
 msgid "Stop"
 msgstr "Durdur"
 
@@ -3003,8 +3003,8 @@ msgstr "Durdur"
 msgid "Stop dictation"
 msgstr "Dikteyi durdur"
 
-#: src/pages/Shell.tsx:5473
-#: src/pages/Shell.tsx:5722
+#: src/pages/Shell.tsx:5478
+#: src/pages/Shell.tsx:5728
 msgid "Stop speaking"
 msgstr "Seslendirmeyi durdur"
 
@@ -3022,7 +3022,7 @@ msgstr "Durduruldu."
 msgid "Stored encrypted"
 msgstr "Şifreli saklanıyor"
 
-#: src/pages/Shell.tsx:5582
+#: src/pages/Shell.tsx:5588
 msgid "subagent"
 msgstr "alt ajan"
 
@@ -3061,7 +3061,7 @@ msgstr "Öğretme sürüyor. Yeni mesaj göndermeden önce öğretmeyi durdur."
 msgid "Team"
 msgstr "Takım"
 
-#: src/pages/Shell.tsx:5832
+#: src/pages/Shell.tsx:5838
 msgid "Team Computer"
 msgstr "Takım Bilgisayarı"
 
@@ -3096,6 +3096,10 @@ msgstr "Bu bot bir Linux masaüstünde değil, bu bilgisayarda çalışır. Kabu
 #: src/pages/Shell.tsx:4105
 msgid "This bot runs on this computer. There is no separate Linux desktop. Ask it to use the shell; working directories under your home folder are allowed."
 msgstr "Bu bot bu bilgisayarda çalışır. Ayrı bir Linux masaüstü yoktur. Kabuğu kullanmasını isteyebilirsin; kullanıcı klasörünün altındaki çalışma dizinlerine izin verilir."
+
+#: src/components/AgentSteps.tsx:74
+msgid "This call ran before step details were recorded."
+msgstr ""
 
 #: src/pages/shell/dialogs.tsx:276
 #: src/pages/shell/dialogs.tsx:329
