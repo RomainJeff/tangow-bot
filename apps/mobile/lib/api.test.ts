@@ -385,6 +385,19 @@ describe("mobile API authentication", () => {
     await resetApiBase();
   });
 
+  it("unregisters push on the previous server before switching endpoints", async () => {
+    vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ json: null }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(saveApiBase("https://second-server.example")).resolves.toMatchObject({ ok: true });
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "http://127.0.0.1:3100/rpc/notifications/unregisterPush",
+    ]);
+    await resetApiBase();
+  });
+
   it("refuses to switch endpoints when SecureStore cannot clear credentials", async () => {
     await selectSpace("space-support");
     vi.mocked(SecureStore.deleteItemAsync).mockRejectedValue(new Error("device locked"));

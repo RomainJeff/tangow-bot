@@ -66,6 +66,10 @@ export const ZH_MESSAGES: Record<string, string> = {
   Clear: "清除",
   "Clear conversation": "清除对话",
   "Clear conversation?": "要清除对话吗？",
+  "Client ID": "客户端 ID",
+  "Client secret": "客户端密钥",
+  "Client secret (saved)": "客户端密钥（已保存）",
+  "Cloudflare Access protected": "受 Cloudflare Access 保护",
   "Close chat organization": "关闭聊天整理",
   "Close computer": "关闭电脑",
   "Close preview": "关闭预览",
@@ -177,6 +181,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   Done: "完成",
   Email: "邮箱",
   "Enter a server URL": "请输入服务器地址",
+  "Enter the service token this server’s Access policy allows.":
+    "请输入该服务器 Access 策略允许的服务令牌。",
   "Enter this code in your browser:": "请在浏览器中输入此代码：",
   "Enter your current password, then confirm permanent deletion of your account and all associated data.":
     "输入当前密码，然后确认永久删除账户及所有相关数据。",

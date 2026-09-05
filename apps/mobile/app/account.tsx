@@ -16,10 +16,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAvatarStyle } from "../components/avatar-style";
 import { BotAvatar } from "../components/bot-avatar";
+import { ServerSheet } from "../components/server-sheet";
 import type { MobileBot } from "../lib/api";
 import {
   currentApiBase,
   deleteAccount,
+  displayApiHost,
   loadSessionToken,
   type MobileMe,
   rpc,
@@ -65,6 +67,8 @@ export default function Account() {
   const [notificationPending, setNotificationPending] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [apiBase, setApiBase] = useState(() => currentApiBase());
+  const [serverOpen, setServerOpen] = useState(false);
   const [archivedBots, setArchivedBots] = useState<MobileBot[]>([]);
   const [usage, setUsage] = useState<{
     runs: number;
@@ -428,6 +432,19 @@ export default function Account() {
         <Pressable
           accessibilityRole="button"
           disabled={pending}
+          onPress={() => setServerOpen(true)}
+          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+        >
+          <View>
+            <Text style={styles.settingsTitle}>{t("Server")}</Text>
+            <Text style={styles.settingsExplanation}>{displayApiHost(apiBase)}</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={pending}
           onPress={() => void handleSignOut()}
           style={({ pressed }) => [styles.button, pressed && styles.pressed]}
         >
@@ -502,6 +519,19 @@ export default function Account() {
           </Pressable>
         </View>
       </ScrollView>
+      <ServerSheet
+        visible={serverOpen}
+        current={apiBase}
+        onClose={() => setServerOpen(false)}
+        onSaved={(url) => {
+          setServerOpen(false);
+          if (url === apiBase) return;
+          // A new origin drops the session with the old one.
+          setApiBase(url);
+          router.dismissAll();
+          router.replace(explicitSignInRoute);
+        }}
+      />
     </SafeAreaView>
   );
 }

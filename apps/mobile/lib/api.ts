@@ -139,6 +139,10 @@ async function snapshotSpace(): Promise<{ ok: true; value: string } | { ok: fals
 async function clearCredentialsForEndpointChange(): Promise<
   { ok: true; previousToken: string; previousSpace: string } | { ok: false; result: EndpointResult }
 > {
+  // Runs while the old endpoint, session and Access token are still stored, so the
+  // previous server stops pushing to this device. Best effort: a rollback leaves the
+  // device unregistered until the next launch re-registers it.
+  await rpc("notifications/unregisterPush").catch(() => undefined);
   const previousToken = await snapshotSessionToken();
   const previousSpace = await snapshotSpace();
   if (!previousToken.ok || !previousSpace.ok) {

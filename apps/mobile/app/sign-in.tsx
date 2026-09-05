@@ -4,7 +4,6 @@ import {
   AccessibilityInfo,
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -14,21 +13,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { resolveAccessInput } from "../lib/access";
-import { accessFor, cachedAccess } from "../lib/access-store";
+import { ServerSheet } from "../components/server-sheet";
 import {
-  apiBaseWarning,
   currentApiBase,
-  defaultApiBase,
   displayApiHost,
   loadSessionToken,
-  normalizeApiBase,
   type PasswordResetCapabilities,
   passwordResetCapabilities,
-  probeApiBase,
   requestPasswordReset,
-  resetApiBase,
-  saveApiBase,
   signIn,
   signUp,
   usesCustomApiBase,
@@ -346,206 +338,5 @@ export default function SignIn() {
         }}
       />
     </SafeAreaView>
-  );
-}
-
-function ServerSheet({
-  visible,
-  current,
-  onClose,
-  onSaved,
-}: {
-  visible: boolean;
-  current: string;
-  onClose: () => void;
-  onSaved: (url: string) => void;
-}) {
-  const { t } = useI18n();
-  const tokens = useMobileTokens();
-  const sheetInput = {
-    marginTop: 20,
-    backgroundColor: tokens.muted,
-    borderRadius: 13,
-    padding: 16,
-    color: tokens.foreground,
-    fontSize: 16,
-  } as const;
-  const [draft, setDraft] = useState(current);
-  const [accessId, setAccessId] = useState("");
-  const [accessSecret, setAccessSecret] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    if (!visible) return;
-    setDraft(current);
-    // The stored secret is never shown; leaving the box empty keeps it.
-    setAccessId(cachedAccess()?.origin === current ? (cachedAccess()?.clientId ?? "") : "");
-    setAccessSecret("");
-    setError(null);
-    setPending(false);
-  }, [visible, current]);
-
-  const parsedDraft = normalizeApiBase(draft);
-  const warning = parsedDraft.ok ? apiBaseWarning(parsedDraft.url) : null;
-
-  async function save() {
-    setPending(true);
-    setError(null);
-    try {
-      const normalized = normalizeApiBase(draft);
-      const access = normalized.ok
-        ? resolveAccessInput(
-            { clientId: accessId, clientSecret: accessSecret },
-            cachedAccess(),
-            normalized.url,
-          )
-        : null;
-      // An empty form still probes with the build-time token when the URL is the
-      // build-time server, matching what the app will actually send.
-      const probed = await probeApiBase(
-        draft,
-        access ?? (normalized.ok ? accessFor(normalized.url, defaultApiBase()) : null),
-      );
-      if (!probed.ok) {
-        setError(probed.error);
-        return;
-      }
-      const saved = await saveApiBase(probed.url, access);
-      if (!saved.ok) {
-        setError(saved.error);
-        return;
-      }
-      onSaved(saved.url);
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function restoreDefault() {
-    setPending(true);
-    setError(null);
-    try {
-      const saved = await resetApiBase();
-      if (!saved.ok) {
-        setError(saved.error);
-        return;
-      }
-      onSaved(saved.url);
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: tokens.background }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <SafeAreaView style={{ flex: 1, paddingHorizontal: 24, paddingTop: 12 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <Pressable onPress={onClose} hitSlop={8}>
-              <Text style={{ color: tokens.mutedForeground, fontSize: 17 }}>{t("Cancel")}</Text>
-            </Pressable>
-            <Text style={{ color: tokens.foreground, fontSize: 17, fontWeight: "600" }}>
-              {t("Server")}
-            </Text>
-            <Pressable onPress={() => void save()} disabled={pending} hitSlop={8}>
-              <Text style={{ color: tokens.foreground, fontSize: 17, fontWeight: "600" }}>
-                {pending ? t("Checking…") : t("Save")}
-              </Text>
-            </Pressable>
-          </View>
-          <Text
-            style={{ color: tokens.mutedForeground, marginTop: 28, fontSize: 15, lineHeight: 22 }}
-          >
-            {t("Enter your Rakazo server address.")}
-          </Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            keyboardType="url"
-            textContentType="URL"
-            returnKeyType="go"
-            onSubmitEditing={() => void save()}
-            placeholder={defaultApiBase()}
-            placeholderTextColor={tokens.mutedForeground}
-            value={draft}
-            onChangeText={(value) => {
-              setDraft(value);
-              setError(null);
-            }}
-            style={sheetInput}
-          />
-          {warning ? (
-            <Text style={{ color: tokens.mutedForeground, marginTop: 12, fontSize: 13 }}>
-              {warning}
-            </Text>
-          ) : null}
-          <Text
-            style={{ color: tokens.mutedForeground, marginTop: 28, fontSize: 15, lineHeight: 22 }}
-          >
-            Cloudflare Access service token — only if your server sits behind Access. Leave both
-            fields empty otherwise.
-          </Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            placeholder="Client ID"
-            placeholderTextColor={tokens.mutedForeground}
-            value={accessId}
-            onChangeText={(value) => {
-              setAccessId(value);
-              setError(null);
-            }}
-            style={sheetInput}
-          />
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            secureTextEntry
-            placeholder={
-              cachedAccess()?.origin === current && cachedAccess()?.clientId
-                ? "Client secret (saved)"
-                : "Client secret"
-            }
-            placeholderTextColor={tokens.mutedForeground}
-            value={accessSecret}
-            onChangeText={(value) => {
-              setAccessSecret(value);
-              setError(null);
-            }}
-            style={sheetInput}
-          />
-          {error ? <Text style={{ color: tokens.destructive, marginTop: 12 }}>{error}</Text> : null}
-          {usesCustomApiBase(current) || draft.trim() !== current ? (
-            <Pressable
-              onPress={() => void restoreDefault()}
-              disabled={pending}
-              style={{ marginTop: 28, alignItems: "center" }}
-            >
-              <Text style={{ color: tokens.mutedForeground, fontSize: 15 }}>
-                {t("Use default server")}
-              </Text>
-            </Pressable>
-          ) : null}
-        </SafeAreaView>
-      </KeyboardAvoidingView>
-    </Modal>
   );
 }

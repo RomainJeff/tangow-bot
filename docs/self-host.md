@@ -391,12 +391,13 @@ the app refuses to save it in cleartext.
 
 ### Mobile
 
-Open the server sheet on the sign-in screen, enter the server URL, and paste the client ID and
-secret below it. The app checks the token against the server before saving, stores the secret with
+Open the server sheet — **Use a custom server** on the sign-in screen, or **Server** in account
+settings — enter the server URL, turn on **Cloudflare Access protected**, and paste the client ID and
+secret. The app checks the token against the server before saving, stores the secret with
 `expo-secure-store` (Keychain on iOS, Keystore on Android), and sends it on every request to that
 server: the RPC calls, the event stream, and the Android background notification poller. The stored
 secret is never displayed again — re-open the sheet, leave the secret box empty, and saving keeps
-the token you already stored. Clearing both fields removes it.
+the token you already stored. Clearing both fields, or turning the toggle off, removes it.
 
 A token is bound to the server it was entered for, so pointing the app at a different server never
 sends it there.
@@ -659,4 +660,4 @@ To run a hosted product (same codebase):
 
 Expo / desktop installers are clients of that origin (`EXPO_PUBLIC_API_URL`, `RAKAZO_WEB_URL`). They are not a Cloud control plane.
 
-The iOS and Android app can also point at a self-hosted origin at runtime. On the sign-in screen, tap **Use a custom server** and enter the same HTTPS origin as `WEB_ORIGIN` (for example `https://app.example.com`). Store builds still default to `EXPO_PUBLIC_API_URL`; the in-app setting is an override for people running their own API. Changing the server signs the device out of any previous session.
+The iOS and Android app can also point at a self-hosted origin at runtime. On the sign-in screen, tap **Use a custom server**, or open **Server** in account settings, and enter the same HTTPS origin as `WEB_ORIGIN` (for example `https://app.example.com`). Store builds still default to `EXPO_PUBLIC_API_URL`; the in-app setting is an override for people running their own API. Changing the server signs the device out of any previous session.

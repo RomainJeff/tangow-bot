@@ -157,7 +157,7 @@ describe("probeApiBase", () => {
       (_input: RequestInfo | URL, _init?: RequestInit) => new Promise<Response>(() => undefined),
     );
 
-    const pending = probeApiBase("https://app.example.com", fetchImpl as typeof fetch);
+    const pending = probeApiBase("https://app.example.com", null, fetchImpl as typeof fetch);
     await vi.advanceTimersByTimeAsync(API_PROBE_TIMEOUT_MS);
 
     await expect(pending).resolves.toMatchObject({
@@ -174,7 +174,7 @@ describe("probeApiBase", () => {
       json: () => new Promise<unknown>(() => undefined),
     }));
 
-    const pending = probeApiBase("https://app.example.com", fetchImpl as unknown as typeof fetch);
+    const pending = probeApiBase("https://app.example.com", null, fetchImpl as unknown as typeof fetch);
     await vi.advanceTimersByTimeAsync(API_PROBE_TIMEOUT_MS);
 
     await expect(pending).resolves.toMatchObject({
@@ -185,14 +185,31 @@ describe("probeApiBase", () => {
 });
 
 describe("mobile custom server UI", () => {
-  it("exposes a sign-in control that writes the stored origin", () => {
-    const dir = path.dirname(fileURLToPath(import.meta.url));
-    const signIn = readFileSync(path.join(dir, "../app/sign-in.tsx"), "utf8");
-    const api = readFileSync(path.join(dir, "api.ts"), "utf8");
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const read = (file: string) => readFileSync(path.join(dir, file), "utf8");
+
+  it("exposes a control that writes the stored origin", () => {
+    const sheet = read("../components/server-sheet.tsx");
+    const signIn = read("../app/sign-in.tsx");
+    const api = read("api.ts");
     expect(signIn).toContain("Use a custom server");
-    expect(signIn).toContain("saveApiBase");
-    expect(signIn).toContain("probeApiBase");
+    expect(signIn).toContain("ServerSheet");
+    expect(sheet).toContain("saveApiBase");
+    expect(sheet).toContain("probeApiBase");
     expect(api).toContain("currentApiBase()");
     expect(api).not.toMatch(/export const API /);
+  });
+
+  it("reaches the same sheet from account settings", () => {
+    const account = read("../app/account.tsx");
+    expect(account).toContain("ServerSheet");
+    // A new origin drops the session, so settings has to route back to sign-in.
+    expect(account).toContain("explicitSignInRoute");
+  });
+
+  it("only sends a service token while the Access toggle is on", () => {
+    const sheet = read("../components/server-sheet.tsx");
+    expect(sheet).toContain("Cloudflare Access protected");
+    expect(sheet).toContain("const access = accessOn ? entered : null;");
   });
 });
