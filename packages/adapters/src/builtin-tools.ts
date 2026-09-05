@@ -17,9 +17,7 @@ export const CHATTY_MESSAGE_USER_DESCRIPTION =
 
 export function withChattyReplies(tools: ConnectorTool[]): ConnectorTool[] {
   return tools.map((tool) =>
-    tool.name === "message_user"
-      ? { ...tool, description: CHATTY_MESSAGE_USER_DESCRIPTION }
-      : tool,
+    tool.name === "message_user" ? { ...tool, description: CHATTY_MESSAGE_USER_DESCRIPTION } : tool,
   );
 }
 

@@ -174,7 +174,11 @@ describe("probeApiBase", () => {
       json: () => new Promise<unknown>(() => undefined),
     }));
 
-    const pending = probeApiBase("https://app.example.com", null, fetchImpl as unknown as typeof fetch);
+    const pending = probeApiBase(
+      "https://app.example.com",
+      null,
+      fetchImpl as unknown as typeof fetch,
+    );
     await vi.advanceTimersByTimeAsync(API_PROBE_TIMEOUT_MS);
 
     await expect(pending).resolves.toMatchObject({
