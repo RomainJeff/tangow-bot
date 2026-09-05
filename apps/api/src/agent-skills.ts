@@ -306,19 +306,32 @@ export function createAgentSkillsService(prisma: PrismaClient) {
       }
       // Mutate only owner-scoped user rows (never builtin/plugin), even if source was tampered.
       try {
-        const updated = await prisma.agentSkill.updateMany({
-          where: {
-            id: existing.id,
-            spaceId: actor.spaceId,
-            userId: actor.userId,
-            source: "user",
-          },
-          data: {
-            name: resolved.name,
-            description: resolved.description,
-            content: resolved.content,
-          },
-        });
+        const scope = { spaceId: actor.spaceId, userId: actor.userId };
+        const oldKey = userSkillKey(existing.name);
+        const newKey = userSkillKey(resolved.name);
+        const [updated] = await prisma.$transaction([
+          prisma.agentSkill.updateMany({
+            where: { id: existing.id, ...scope, source: "user" },
+            data: {
+              name: resolved.name,
+              description: resolved.description,
+              content: resolved.content,
+            },
+          }),
+          // Rename cascade: access rows follow the skill's key (case-only rename keeps the key).
+          ...(oldKey !== newKey
+            ? [
+                prisma.skillSetting.updateMany({
+                  where: { ...scope, skillKey: oldKey },
+                  data: { skillKey: newKey },
+                }),
+                prisma.botSkill.updateMany({
+                  where: { ...scope, skillKey: oldKey },
+                  data: { skillKey: newKey },
+                }),
+              ]
+            : []),
+        ]);
         if (updated.count !== 1) throw new IsolationError();
       } catch (error) {
         if (error instanceof IsolationError) throw error;
@@ -347,14 +360,14 @@ export function createAgentSkillsService(prisma: PrismaClient) {
       if (isSkillReadOnly(asSource(existing.source) as SkillSource)) {
         throw new ORPCError("BAD_REQUEST", { message: "Builtin and plugin skills are read-only." });
       }
-      const deleted = await prisma.agentSkill.deleteMany({
-        where: {
-          id: existing.id,
-          spaceId: actor.spaceId,
-          userId: actor.userId,
-          source: "user",
-        },
-      });
+      const scope = { spaceId: actor.spaceId, userId: actor.userId };
+      const skillKey = userSkillKey(existing.name);
+      // GC access rows with the skill so a future skill on the same key starts clean.
+      const [deleted] = await prisma.$transaction([
+        prisma.agentSkill.deleteMany({ where: { id: existing.id, ...scope, source: "user" } }),
+        prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
+        prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
+      ]);
       if (deleted.count !== 1) throw new IsolationError();
       return { ok: true };
     },
