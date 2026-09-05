@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import { type MessageBlock, USER_PROGRESS_CLIENT_NONCE_PREFIX } from "@rakazo/contracts";
 import { isToolActivityBlock } from "@rakazo/core";
 
 /** Keep mid-turn progress beats short; prefer a few high-signal updates. */
@@ -16,8 +16,9 @@ export function clampUserProgressMessage(text: string): string {
  * as a durable mid-turn message. Tool/step blocks stay for the final publish.
  */
 
-/** clientNonce prefix for mid-turn progress messages (reconciler uses this). */
-export const USER_PROGRESS_CLIENT_NONCE_PREFIX = "user-progress:";
+/** clientNonce prefix for mid-turn progress messages (reconciler uses this).
+ * Canonical definition lives in @rakazo/contracts; re-exported for existing importers. */
+export { USER_PROGRESS_CLIENT_NONCE_PREFIX };
 
 export function userProgressClientNonce(runId: string, index = 0): string {
   // Include entropy so a resumed executor turn cannot reuse an earlier nonce

@@ -2,7 +2,12 @@ import type { ThreadMessage } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { userVisibleMessages } from "./message-visibility.js";
 
-function message(id: string, runId: string, blocks: ThreadMessage["blocks"]): ThreadMessage {
+function message(
+  id: string,
+  runId: string,
+  blocks: ThreadMessage["blocks"],
+  clientNonce?: string,
+): ThreadMessage {
   return {
     id,
     threadId: "thread-1",
@@ -10,6 +15,7 @@ function message(id: string, runId: string, blocks: ThreadMessage["blocks"]): Th
     role: "bot",
     blocks,
     runId,
+    clientNonce,
     createdAt: "2026-08-30T22:00:00.000Z",
   };
 }
@@ -41,6 +47,24 @@ describe("user-visible messages", () => {
     expect(
       userVisibleMessages(peerExchange, { includePeerReceipts: true }).map((item) => item.id),
     ).toEqual(["user", "sent", "received", "answer"]);
+  });
+
+  it("keeps message_user and ask_user output from a delegated (peer) run", () => {
+    const messages = [
+      message("received", "run-peer", [
+        { kind: "bot_message_received", fromBotId: "c", fromBotName: "Coder", text: "Do it." },
+      ]),
+      message("narration", "run-peer", [{ kind: "text", text: "internal narration" }]),
+      message(
+        "hello",
+        "run-peer",
+        [{ kind: "text", text: "Bonjour Romain" }],
+        "user-progress:run-peer:0:z:z",
+      ),
+      message("question", "run-peer", [{ kind: "ask", text: "Ton horizon ?" }]),
+    ];
+    // message_user (nonce) and ask_user (ask block) reach the user; narration/receipts do not.
+    expect(userVisibleMessages(messages).map((item) => item.id)).toEqual(["hello", "question"]);
   });
 
   it("uses authoritative peer run ids when the receipt is outside the loaded page", () => {

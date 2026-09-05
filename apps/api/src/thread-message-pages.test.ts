@@ -3,6 +3,56 @@ import { describe, expect, it, vi } from "vitest";
 import { isPeerRun, loadAllMessages, loadMessagePage } from "./thread-message-pages.js";
 
 describe("thread message pages", () => {
+  it("surfaces message_user and ask_user rows from delegated (peer) runs", async () => {
+    const findMany = vi.fn(async () => [
+      {
+        id: "message-ask",
+        threadId: "thread-1",
+        seq: 4,
+        role: "bot",
+        blocks: [{ kind: "ask", text: "Ton horizon ?" }],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: null,
+        createdAt: new Date("2026-08-16T00:00:04.000Z"),
+      },
+      {
+        id: "message-hello",
+        threadId: "thread-1",
+        seq: 3,
+        role: "bot",
+        blocks: [{ kind: "text", text: "Bonjour Romain" }],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: "user-progress:run-peer:0:z:z",
+        createdAt: new Date("2026-08-16T00:00:03.000Z"),
+      },
+      {
+        id: "message-narration",
+        threadId: "thread-1",
+        seq: 2,
+        role: "bot",
+        blocks: [{ kind: "text", text: "internal narration" }],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: null,
+        createdAt: new Date("2026-08-16T00:00:02.000Z"),
+      },
+    ]);
+    const prisma = {
+      message: { findMany },
+      run: { findMany: vi.fn(async () => [{ id: "run-peer" }]) },
+    } as unknown as PrismaClient;
+
+    const page = await loadMessagePage(prisma, "thread-1", undefined, 3);
+
+    // message_user (nonce) + ask_user (ask block) surface; internal narration stays hidden.
+    expect(page.messages.map((message) => message.id)).toEqual(["message-hello", "message-ask"]);
+  });
+
   it("caches peer-run classification for live events", async () => {
     const findUnique = vi.fn(async () => ({ trigger: "bot_message" }));
     const prisma = { run: { findUnique } } as unknown as PrismaClient;
