@@ -1,8 +1,10 @@
 # Mobile builds and store releases
 
-Rakazo's public repository does not contain production App Store Connect,
-Google Play, Apple team, or private EAS submission identifiers. Those values
-belong in the release operator's private configuration.
+Rakazo's public repository contains no signing credentials, API keys, Apple
+team, or Google Play identifiers. The only store identifier tracked here is the
+iOS App Store Connect app ID in `apps/mobile/eas.json`, which submissions need
+and which Apple already exposes publicly. Every other value belongs in the
+release operator's private configuration.
 
 Self-hosters normally do not need to publish their own mobile app: the Rakazo
 client can select a compatible server from the sign-in screen. If you distribute
@@ -19,8 +21,10 @@ your own branded build, use your own Expo and store accounts.
    together. These are inlined into the bundle and readable by anyone who
    unpacks the app, so never set them for a public store release. See
    [Cloudflare Access](./self-host.md#cloudflare-access).
-4. Keep store application IDs, team IDs, signing credentials, API keys, and
-   review-account credentials out of Git.
+4. Keep team IDs, signing credentials, API keys, and review-account
+   credentials out of Git. Set the iOS App Store Connect app ID under
+   `submit.production.ios.ascAppId` in `eas.json` so `eas submit` runs
+   non-interactively.
 5. Before a native iOS or Android build, run
    `pnpm --filter @rakazo/mobile exec expo install --check`. Attachment pickers
    and other Expo native modules must match the SDK (SDK 57 needs
