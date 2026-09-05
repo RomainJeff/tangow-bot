@@ -396,6 +396,8 @@ describe("createRunExecutor", () => {
       thread: {
         findFirst: vi.fn(async () => ({ id: "group-thread-1" })),
       },
+      skillSetting: { findMany: vi.fn(async () => []) },
+      botSkill: { findMany: vi.fn(async () => []) },
       agentSkill: {
         findMany: vi.fn(async () => []),
       },
@@ -466,6 +468,8 @@ describe("createRunExecutor", () => {
         })),
       },
       thread: { findFirst },
+      skillSetting: { findMany: vi.fn(async () => []) },
+      botSkill: { findMany: vi.fn(async () => []) },
       agentSkill: { findMany: vi.fn(async () => []) },
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
@@ -531,6 +535,8 @@ describe("createRunExecutor", () => {
         })),
       },
       thread: { findFirst },
+      skillSetting: { findMany: vi.fn(async () => []) },
+      botSkill: { findMany: vi.fn(async () => []) },
       agentSkill: { findMany: vi.fn(async () => []) },
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
@@ -603,6 +609,8 @@ description: Prepare standup notes
           thread: { id: "thread-1" },
         })),
       },
+      skillSetting: { findMany: vi.fn(async () => []) },
+      botSkill: { findMany: vi.fn(async () => []) },
       agentSkill: {
         findMany: vi.fn(async () => [
           {
@@ -664,6 +672,8 @@ description: Prepare standup notes
           thread: { id: "thread-1" },
         })),
       },
+      skillSetting: { findMany: vi.fn(async () => []) },
+      botSkill: { findMany: vi.fn(async () => []) },
       agentSkill: {
         findMany: vi.fn(async () => []),
       },
@@ -720,6 +730,8 @@ description: Prepare standup notes
           thread: { id: "thread-1" },
         })),
       },
+      skillSetting: { findMany: vi.fn(async () => []) },
+      botSkill: { findMany: vi.fn(async () => []) },
       agentSkill: {
         findMany: vi.fn(async () => []),
       },
@@ -890,6 +902,8 @@ description: Prepare standup notes
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
       taughtSkill: { findMany: vi.fn(async () => []) },
+      skillSetting: { findMany: vi.fn(async () => []) },
+      botSkill: { findMany: vi.fn(async () => []) },
       agentSkill: { findMany: vi.fn(async () => []) },
       scratchpadItem: { findMany: vi.fn(async () => []) },
     } as unknown as PrismaClient;
