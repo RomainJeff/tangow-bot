@@ -18,7 +18,8 @@ test("per-bot skill access via agentSkills.setAccess", async ({ page }) => {
   });
   const listFor = (botId?: string) =>
     rpc<CatalogEntry[]>(page, "agentSkills/list", botId ? { botId } : undefined);
-  const has = (entries: CatalogEntry[]) => entries.some((entry) => entry.id === created.id);
+  const has = (entries: CatalogEntry[], id = created.id) =>
+    entries.some((entry) => entry.id === id);
 
   // Default: visible to every bot.
   const before = (await listFor()).find((entry) => entry.id === created.id);
@@ -36,12 +37,16 @@ test("per-bot skill access via agentSkills.setAccess", async ({ page }) => {
   expect(has(await listFor(chiefId))).toBe(false);
   expect(has(await listFor())).toBe(true);
 
-  // Rename keeps the exclusion: access rows follow the skill key.
-  await rpc(page, "agentSkills/update", { skillId: created.id, name: "Weekly standup" });
-  const renamedAll = await listFor();
-  expect(renamedAll.find((entry) => entry.id === created.id)?.name).toBe("Weekly standup");
-  expect(has(await listFor(chiefId))).toBe(false);
-  await rpc(page, "agentSkills/update", { skillId: created.id, name: "Daily standup" });
+  // Rename keeps the exclusion: access rows follow the skill key (the id *is* the key, so it changes).
+  const renamed = await rpc<{ id: string }>(page, "agentSkills/update", {
+    skillId: created.id,
+    name: "Weekly standup",
+  });
+  expect(renamed.id).not.toBe(created.id);
+  expect((await listFor()).find((entry) => entry.id === renamed.id)?.name).toBe("Weekly standup");
+  expect(has(await listFor(chiefId), renamed.id)).toBe(false);
+  expect(has(await listFor(), renamed.id)).toBe(true);
+  await rpc(page, "agentSkills/update", { skillId: renamed.id, name: "Daily standup" });
   expect(has(await listFor(chiefId))).toBe(false);
   expect(has(await listFor())).toBe(true);
 
