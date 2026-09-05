@@ -2,6 +2,7 @@
 
 > Statut : **design / exploration**, à valider avant plan d'implémentation détaillé (format writing-plans).
 > Date : 2026-09-03 — révisé 2026-09-04 après relecture externe (skillKey stable dès phase 1, rename, intégrité DB↔FS, mount restreint, cap body à l'install, diff scripts, marketplaces au niveau Space).
+> Recheck 2026-09-05 sur l'arbre rebasé (19 commits upstream depuis la révision) : aucun changement fonctionnel côté skills/capabilities/mounts ; `BotSettings` extrait dans `shell/bot-panel.tsx`, `PluginsOverlay` a gagné les sections Installed/Featured et une prop `activeBotId` ; refs `file:line` réalignées.
 
 ## 0. TL;DR
 
@@ -26,8 +27,8 @@ Trois phases livrables indépendamment. Questions ouvertes en §6 — merci de r
 | Nature | SKILL.md texte (recettes) | playbooks enregistrés (demo/record) |
 | Scope | `(spaceId, userId)` — **pas de botId** | `(spaceId, botId, userId)` |
 | Table | `agent_skills` (`schema.prisma:699`) | `taught_skills` (`schema.prisma:671`) |
-| RPC | `agentSkills.{list,get,create,update,remove}` (`rpc.ts:447`) | `skills.*` (`rpc.ts:419`) |
-| UI | `KnowledgeSection.tsx:243` (`AgentSkills`) | `SkillDraftCard.tsx` |
+| RPC | `agentSkills.{list,get,create,update,remove}` (`rpc.ts:452`) | `skills.*` (`rpc.ts:423`) |
+| UI | `KnowledgeSection.tsx:239` (`AgentSkills`) | `SkillDraftCard.tsx` |
 
 Ce document ne concerne que **`AgentSkill`**. `TaughtSkill` reste tel quel.
 
@@ -35,26 +36,26 @@ Ce document ne concerne que **`AgentSkill`**. `TaughtSkill` reste tel quel.
 
 - Chargement : `listAgentSkillRecords(prisma, {spaceId, userId})` (`packages/adapters/src/skill-tools.ts:84`) — unique point d'entrée, **aucun paramètre botId**. Concatène `BUILTIN_AGENT_SKILLS` (tableau **vide**, `builtin-skills.ts`) + rows DB.
 - Injection dans le run (`packages/adapters/src/executor.ts`) :
-  - `:2729` catalogue name+description dans les instructions système, **cappé à 50** (`agent-skill.ts:124`).
-  - `:2734` `expandSkillReferencesInPrompt` inline le **corps complet** dans le prompt user sur `/Name` ou `@Name`.
-  - Tools `skill_read/create/update/delete` toujours exposés (`builtin-tools.ts:458`, dispatch `executor.ts:2151`).
+  - `:2874` catalogue name+description dans les instructions système, **cappé à 50** (`agent-skill.ts:124`).
+  - `:2879` `expandSkillReferencesInPrompt` inline le **corps complet** dans le prompt user sur `/Name` ou `@Name`.
+  - Tools `skill_read/create/update/delete` toujours exposés (`builtin-tools.ts:487`, dispatch `executor.ts:2284`).
 - Le commentaire « The Pi runtime already understands this format » (schema, core, contracts) est **faux aujourd'hui** : rien ne passe de dossier skills à Pi, tout est assemblage de prompt.
 
 ### 1.3 Briques réutilisables
 
 - `parseSkillMd` / `buildSkillMd` (`packages/core/src/agent-skill.ts:64,92`) — parser YAML maison (~140 lignes, sous-ensemble : scalaires, block scalars, arrays inline, un niveau de nesting). Suffisant pour `name`/`description`/`allowed-tools`, fragile sur des SKILL.md tiers exotiques.
 - `isSkillReadOnly(source)` — `builtin|plugin` = lecture seule, déjà enforcé côté API (`agent-skills.ts:225,285`) et tools (`skill-tools.ts:199,272`).
-- **Pattern d'assignation par bot à copier** : `BotMcpServer` (`schema.prisma:996`, `@@unique([botId, serverId])`) + `mcp.assignments.{list,all,approve,replace}` (`rpc.ts:491`, `router.ts:2553-2669`) + re-check à l'exécution (`mcp-connector.ts:104-150`) + UI chips agents (`McpServersOverlay.tsx:177-190,432-452`) + copie dans `bots.duplicate` (`router.ts:2661`).
-- **Panneau à cloner** : `PluginsOverlay.tsx` (titre UI « Integrations ») — backdrop `:240`, carte 1080×760 `:241`, search `:257`, tuiles featured `:277`, grille 2 colonnes `:357`, pager `:407`, `<details>` advanced `:439`. Câblage dans `Shell.tsx:212-217` (lazy), `:390-391` (state), `:2756-2767` (bouton sidebar), `:3610-3620` (render).
-- `CapabilityInstall` (`schema.prisma:736`) : `kind ∈ {skill,plugin,mcp,api}`, `source`, `version`, `digest`, `config` — le schéma « install de marketplace » existe déjà, `kind:"skill"|"plugin"` n'est jamais écrit.
-- Fetch distant sécurisé : `assertSafeRemoteUrl` / `createSafeRemoteFetch` (`remote-mcp.ts:116,135`), lecture bornée 2 Mo (`installed-connectors.ts:368-394`).
+- **Pattern d'assignation par bot à copier** : `BotMcpServer` (`schema.prisma:996`, `@@unique([botId, serverId])`) + `mcp.assignments.{list,all,approve,replace}` (`rpc.ts:495`, `router.ts:2650-2768`) + re-check à l'exécution (`mcp-connector.ts:106-153`) + UI chips agents (`McpServersOverlay.tsx:199-212,452-470`) + copie dans `bots.duplicate` (`router.ts:717`).
+- **Panneau à cloner** : `PluginsOverlay.tsx` (titre UI « Integrations ») — carte 1080×760 `:290`, search `:304`, `<details>` « Installed integrations » `:324` (grille 2 colonnes `:344`), section « Featured » `:349-360`, bouton « load more » `:454`, `<details>` advanced `:461`. Reçoit déjà `activeBotId` en prop (`:49`) → précédent pour un panneau conscient du bot courant. Câblage dans `Shell.tsx:236-240` (lazy), `:421` (state), `:2998` (bouton sidebar), `:3929-3938` (render).
+- `CapabilityInstall` (`schema.prisma:736`) : `kind ∈ {skill,plugin,mcp,api,connection}` (`domain.ts:495`), `source`, `version`, `digest`, `config` — le schéma « install de marketplace » existe déjà, `kind:"skill"|"plugin"` n'est jamais écrit.
+- Fetch distant sécurisé : `assertSafeRemoteUrl` / `createSafeRemoteFetch` (`remote-mcp.ts:117,136`), lecture bornée 2 Mo (`installed-connectors.ts:376-381`, `readBoundedText` `:620`).
 - Chaîne RPC : zod dans `rpc.ts` → `authed.X.handler` dans `router.ts` → `rpc.X()` dans un `useEffect` (pas de React Query). Migrations SQL écrites à la main.
 
 ### 1.4 Réalités déploiement
 
-- Docker Compose uniquement. `DATA_DIR=/data`, bind `../../data:/data`, partagé api + worker + supervisor (`infra/compose/docker-compose.yml:23,62,87`), `chown 1000:1000` par `data-init`.
+- Docker Compose uniquement. `DATA_DIR=/data`, bind `../../data:/data`, partagé api + worker + supervisor (`infra/compose/docker-compose.yml:23,68,100`), `chown 1000:1000` par `data-init`.
 - `data/` contient `homes/`, `home-revisions/`, `artifacts/`, `desktop-computers/`, `push-tokens/`. **Pas de dossier skills.**
-- Supervisor traduit chemin conteneur → chemin hôte via le mount Docker (`infra/sandboxes/supervisor/src/index.ts:698-707`) pour monter les homes dans les sandboxes siblings. Tout nouveau dossier à monter dans un sandbox doit passer par la même traduction.
+- Supervisor traduit chemin conteneur → chemin hôte via le mount Docker (`infra/sandboxes/supervisor/src/index.ts:746-750`, garde `assertBotHomePath` `:739`) pour monter les homes dans les sandboxes siblings. Tout nouveau dossier à monter dans un sandbox doit passer par la même traduction.
 - Image api (`infra/compose/Dockerfile`) **sans `git`**. Sandboxes desktop en ont.
 
 ### 1.5 Orphelins à nettoyer
@@ -108,10 +109,10 @@ Un fichier peut disparaître sans passer par l'API : suppression à la main, upd
 
 ### Où ça se branche
 
-- `listAgentSkillRecords(prisma, {spaceId, userId, botId})` — ajouter `botId`, filtrer. Un seul seam, tous les appelants (`executor.ts:875`, routines `executor.ts:638`, `router.ts:2033`, `Shell.tsx:950` picker slash) passent le bot courant.
+- `listAgentSkillRecords(prisma, {spaceId, userId, botId})` — ajouter `botId`, filtrer. Un seul seam, tous les appelants (`executor.ts:914`, routines `executor.ts:677`, `router.ts:2286` via `agentSkills.*`, `Shell.tsx:1013` picker slash) passent le bot courant.
 - Tools `skill_*` : `skill_read` ne doit lire que les skills visibles du bot ; `skill_create` crée en `availability=selected` + `BotSkill[currentBot]=true` (le bot qui crée une skill l'a pour lui, pas pour ses voisins).
 - `bots.duplicate` copie les `BotSkill`.
-- UI : chips agents sur chaque carte skill (pattern `McpServersOverlay`) **et** section « Skills » dans `BotSettings` (`Shell.tsx:5927` Advanced) listant toutes les skills avec toggle — les deux vues écrivent la même table.
+- UI : chips agents sur chaque carte skill (pattern `McpServersOverlay`) **et** section « Skills » dans `BotSettings` (`shell/bot-panel.tsx:450` `<details>` Advanced) listant toutes les skills avec toggle — les deux vues écrivent la même table.
 
 ### Défaut à la migration
 
@@ -164,14 +165,14 @@ Une skill Claude Code peut référencer `scripts/foo.py`. Pour que le bot puisse
 
 | Option | Mécanisme | Coût | Limite |
 |---|---|---|---|
-| **A. Mount RO** (recommandé) | Supervisor bind-mount **deux** dossiers en lecture seule : `skills/user/<spaceId>/<userId>` → `/skills/user` et `skills/marketplaces/<spaceId>` → `/skills/marketplaces`, via la traduction de chemin existante (`supervisor/src/index.ts:698`). **Jamais `DATA_DIR/skills` entier** : ça exposerait les skills des autres users du Space. | ~30 lignes supervisor + prompt : « skills disponibles sous `/skills/…` » | Le bot voit les fichiers des skills du user et des marketplaces du Space, y compris celles non assignées à ce bot. Acceptable ? (Q5) |
+| **A. Mount RO** (recommandé) | Supervisor bind-mount **deux** dossiers en lecture seule : `skills/user/<spaceId>/<userId>` → `/skills/user` et `skills/marketplaces/<spaceId>` → `/skills/marketplaces`, via la traduction de chemin existante (`supervisor/src/index.ts:746`). **Jamais `DATA_DIR/skills` entier** : ça exposerait les skills des autres users du Space. | ~30 lignes supervisor + prompt : « skills disponibles sous `/skills/…` » | Le bot voit les fichiers des skills du user et des marketplaces du Space, y compris celles non assignées à ce bot. Acceptable ? (Q5) |
 | B. Copie dans le home | À `checkout`, copier les skills visibles sous `<home>/.skills/` | Filtrage exact par bot | Home keyé par `Computer.homeKey`, partagé entre bots d'un team computer → filtrage cassé de toute façon ; duplication disque ; sync des updates |
 
 Phase 1 peut vivre **sans** ni A ni B (skills texte-only, comme aujourd'hui). A arrive avec les marketplaces (phase 3), où les scripts deviennent réels.
 
 ### Sécurité
 
-- Tout ce qui est sous `DATA_DIR/skills` est écrit par l'API uniquement ; chemins passés par `safeJoin`/containment comme `home.ts:215+`.
+- Tout ce qui est sous `DATA_DIR/skills` est écrit par l'API uniquement ; chemins passés par `safeJoin`/containment comme `home.ts:213` (`safeJoin`).
 - Une skill = instruction injectée dans le prompt avec les credentials du bot. Une marketplace = **code tiers**. Conséquences non négociables :
   - Install/update d'une marketplace = action explicite dans le panneau, jamais automatique.
   - Pin sur commit sha (`digest`). « Update » montre le **diff complet** avant application : SKILL.md **et** `scripts/`, `references/`, fichiers ajoutés/supprimés avec tailles. Le code malveillant vivra dans `scripts/`, pas dans le frontmatter — un diff limité aux SKILL.md ne protège de rien.
@@ -192,14 +193,14 @@ Phase 1 peut vivre **sans** ni A ni B (skills texte-only, comme aujourd'hui). A 
 
 ### Panneau
 
-Nouvelle overlay `SkillsOverlay.tsx`, clone structurel de `PluginsOverlay.tsx`, bouton sidebar à côté de « Integrations » (`Shell.tsx:2756`). Nom UI : **« Skills »** (le mot « Plugins » désigne déjà les apps Composio dans les textes — collision de vocabulaire à éviter).
+Nouvelle overlay `SkillsOverlay.tsx`, clone structurel de `PluginsOverlay.tsx`, bouton sidebar à côté de « Integrations » (`Shell.tsx:2998`). Nom UI : **« Skills »** (le mot « Plugins » désigne déjà les apps Composio dans les textes — collision de vocabulaire à éviter).
 
 Contenu :
 
 1. **Installées** — cartes : nom, description, badge source (`user` / `<marketplace>/<plugin>`), disponibilité (`all`/`selected`), chips agents cliquables (pattern MCP), état (ok / fichier invalide + erreur), actions : éditer (user only), supprimer, ouvrir le dossier (liste fichiers).
 2. **Marketplaces** — liste des marketplaces ajoutées (nom, URL, ref, commit, date), bouton « Update » (diff puis apply), « Remove ». Formulaire « Add marketplace » : URL git (GitHub `owner/repo` ou URL complète) + ref optionnel.
 3. **Parcourir** — pour une marketplace ajoutée : plugins listés depuis `marketplace.json`, avec nombre de skills, bouton « Install » par plugin (installe ses skills, crée `CapabilityInstall kind:"plugin"`).
-4. **Nouvelle skill** — éditeur SKILL.md (reprendre `KnowledgeSection.tsx:243+`, ajouter validation live via `parseSkillMd` + champs name/description dérivés).
+4. **Nouvelle skill** — éditeur SKILL.md (reprendre `KnowledgeSection.tsx:239+`, ajouter validation live via `parseSkillMd` + champs name/description dérivés).
 
 `KnowledgeSection` onglet Skills : soit supprimé, soit réduit à la liste des skills **visibles de ce bot** avec toggles (même data que la section BotSettings). Recommandation : réduit, pas supprimé — c'est là que l'utilisateur regarde ce qu'un bot « sait ».
 
@@ -245,7 +246,7 @@ marketplaces.plugins       { marketplace } → plugins + skills déclarés
 marketplaces.installPlugin / removePlugin
 ```
 
-`agentSkills.*` gardé en alias déprécié le temps de migrer le composer slash (`Shell.tsx:950`) et les e2e (`slash-skills.spec.ts`, `knowledge-panel.spec.ts`).
+`agentSkills.*` gardé en alias déprécié le temps de migrer le composer slash (`Shell.tsx:1013`) et les e2e (`slash-skills.spec.ts`, `knowledge-panel.spec.ts`).
 
 ---
 
