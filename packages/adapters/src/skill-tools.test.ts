@@ -8,9 +8,46 @@ import {
   skillUpdateFromTool,
 } from "./skill-tools.js";
 
+type Row = Record<string, unknown>;
+
+const matches = (row: Row, where: Row) =>
+  Object.entries(where).every(([key, value]) => row[key] === value);
+
+// ponytail: only findMany + upsert, what listAgentSkillRecords and the tests use.
+function table(store: Row[]) {
+  return {
+    findMany: vi.fn(async ({ where = {} }: { where?: Row } = {}) =>
+      store.filter((row) => matches(row, where)).map((row) => ({ ...row })),
+    ),
+    upsert: vi.fn(
+      async ({
+        where,
+        create,
+        update,
+      }: {
+        where: Record<string, Row>;
+        create: Row;
+        update: Row;
+      }) => {
+        const key = Object.values(where)[0] ?? {};
+        const index = store.findIndex((row) => matches(row, key));
+        if (index >= 0) {
+          store[index] = { ...store[index], ...update };
+          return store[index];
+        }
+        const row = { id: `row-${store.length + 1}`, ...create };
+        store.push(row);
+        return row;
+      },
+    ),
+  };
+}
+
 function makePrisma(rows: Array<Record<string, unknown>> = []) {
   const store = [...rows];
   return {
+    skillSetting: table([]),
+    botSkill: table([]),
     agentSkill: {
       findMany: vi.fn(async ({ where }: { where?: Record<string, string> } = {}) =>
         store
@@ -248,5 +285,75 @@ describe("skill tools", () => {
         newName: longName,
       }),
     ).toEqual({ error: "Skill name must be at most 80 characters." });
+  });
+
+  it("filters the catalog by bot visibility when botId is given", async () => {
+    const row = (id: string, name: string) => ({
+      id,
+      spaceId: "w1",
+      userId: "u1",
+      name,
+      description: "d",
+      content: buildSkillMd({ name, description: "d", body: "" }),
+      source: "user",
+    });
+    prisma = makePrisma([row("s1", "Everyone"), row("s2", "Only bot A"), row("s3", "Not for A")]);
+    await prisma.skillSetting.upsert({
+      where: {
+        spaceId_userId_skillKey: { spaceId: "w1", userId: "u1", skillKey: "user:only bot a" },
+      },
+      create: {
+        spaceId: "w1",
+        userId: "u1",
+        skillKey: "user:only bot a",
+        availability: "selected",
+      },
+      update: {},
+    });
+    await prisma.botSkill.upsert({
+      where: { botId_skillKey: { botId: "botA", skillKey: "user:only bot a" } },
+      create: {
+        spaceId: "w1",
+        userId: "u1",
+        botId: "botA",
+        skillKey: "user:only bot a",
+        enabled: true,
+      },
+      update: {},
+    });
+    await prisma.botSkill.upsert({
+      where: { botId_skillKey: { botId: "botA", skillKey: "user:not for a" } },
+      create: {
+        spaceId: "w1",
+        userId: "u1",
+        botId: "botA",
+        skillKey: "user:not for a",
+        enabled: false,
+      },
+      update: {},
+    });
+
+    const forA = await listAgentSkillRecords(prisma as never, {
+      spaceId: "w1",
+      userId: "u1",
+      botId: "botA",
+    });
+    expect(forA.map((s) => s.name)).toEqual(["Everyone", "Only bot A"]);
+    const forB = await listAgentSkillRecords(prisma as never, {
+      spaceId: "w1",
+      userId: "u1",
+      botId: "botB",
+    });
+    expect(forB.map((s) => s.name)).toEqual(["Everyone", "Not for A"]);
+    const all = await listAgentSkillRecords(prisma as never, { spaceId: "w1", userId: "u1" });
+    expect(all).toHaveLength(3);
+    // skill_read follows the same visibility.
+    expect(
+      await skillReadFromTool(
+        prisma as never,
+        { spaceId: "w1", userId: "u1", botId: "botB" },
+        { name: "Only bot A" },
+      ),
+    ).toEqual({ error: "Skill not found." });
   });
 });

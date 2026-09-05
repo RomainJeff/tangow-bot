@@ -1,10 +1,13 @@
 import {
+  asSkillAvailability,
   buildSkillMd,
   findSkillByName,
   isSkillReadOnly,
+  isSkillVisible,
   parseSkillMd,
   type SkillRecord,
   type SkillSource,
+  userSkillKey,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { BUILTIN_AGENT_SKILLS } from "./builtin-skills.js";
@@ -24,6 +27,8 @@ const MAX_SKILL_DESCRIPTION_CHARS = 2000;
 type SkillOwner = {
   spaceId: string;
   userId: string;
+  /** When set, list/read/update/delete only see skills visible to this bot. */
+  botId?: string;
 };
 
 type AgentSkillRow = {
@@ -89,7 +94,29 @@ export async function listAgentSkillRecords(
     where: { spaceId: owner.spaceId, userId: owner.userId },
     orderBy: [{ name: "asc" }, { id: "asc" }],
   });
-  return [...builtinRecords(), ...rows.map(toRecord)];
+  const records = rows.map(toRecord);
+  const visible = owner.botId ? await onlyVisibleTo(prisma, owner, owner.botId, records) : records;
+  return [...builtinRecords(), ...visible];
+}
+
+async function onlyVisibleTo<T extends { name: string }>(
+  prisma: PrismaClient,
+  owner: SkillOwner,
+  botId: string,
+  records: T[],
+): Promise<T[]> {
+  const [settings, overrides] = await Promise.all([
+    prisma.skillSetting.findMany({ where: { spaceId: owner.spaceId, userId: owner.userId } }),
+    prisma.botSkill.findMany({ where: { botId, spaceId: owner.spaceId, userId: owner.userId } }),
+  ]);
+  const availability = new Map(
+    settings.map((s) => [s.skillKey, asSkillAvailability(s.availability)]),
+  );
+  const override = new Map(overrides.map((o) => [o.skillKey, o.enabled]));
+  return records.filter((record) => {
+    const key = userSkillKey(record.name);
+    return isSkillVisible({ availability: availability.get(key), override: override.get(key) });
+  });
 }
 
 async function findOwnedSkill(
