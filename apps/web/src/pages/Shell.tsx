@@ -998,7 +998,7 @@ export function ShellPage() {
   useEffect(() => {
     let cancelled = false;
     void rpc.agentSkills
-      .list()
+      .list({ botId: activeBotId.current })
       .then((skills) => {
         if (!cancelled) setAgentSkills(skills);
       })
@@ -1012,7 +1012,7 @@ export function ShellPage() {
 
   const refreshAgentSkills = useCallback(() => {
     void rpc.agentSkills
-      .list()
+      .list({ botId: activeBotId.current })
       .then(setAgentSkills)
       .catch(() => undefined);
   }, []);
