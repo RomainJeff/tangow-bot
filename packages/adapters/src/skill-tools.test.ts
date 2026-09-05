@@ -45,7 +45,12 @@ function table(store: Row[]) {
 
 function makePrisma(rows: Array<Record<string, unknown>> = []) {
   const store = [...rows];
-  return {
+  // ponytail: no rollback — array form awaits all, function form receives the mock itself.
+  const $transaction = vi.fn(async (arg: unknown) =>
+    Array.isArray(arg) ? Promise.all(arg) : (arg as (tx: unknown) => unknown)(prismaMock),
+  );
+  const prismaMock = {
+    $transaction,
     skillSetting: table([]),
     botSkill: table([]),
     agentSkill: {
@@ -119,6 +124,7 @@ function makePrisma(rows: Array<Record<string, unknown>> = []) {
     },
     _store: store,
   };
+  return prismaMock;
 }
 
 const owner = { spaceId: "ws-1", userId: "user-1" };
@@ -355,5 +361,46 @@ describe("skill tools", () => {
         { name: "Only bot A" },
       ),
     ).toEqual({ error: "Skill not found." });
+  });
+
+  it("scopes a bot-created skill to its creator", async () => {
+    const creator = { spaceId: "w1", userId: "u1", botId: "botA" };
+    const created = await skillCreateFromTool(prisma as never, creator, {
+      name: "Mine",
+      description: "d",
+      body: "x",
+    });
+    expect(created.ok).toBe(true);
+    expect(String(created.hint)).toContain("/Mine");
+    expect(String(created.hint)).toContain("share it with other agents");
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:mine" } })).toMatchObject([
+      { spaceId: "w1", userId: "u1", availability: "selected" },
+    ]);
+    expect(await prisma.botSkill.findMany({ where: { skillKey: "user:mine" } })).toMatchObject([
+      { spaceId: "w1", userId: "u1", botId: "botA", enabled: true },
+    ]);
+    const names = async (owner: typeof creator | { spaceId: string; userId: string }) =>
+      (await listAgentSkillRecords(prisma as never, owner))
+        .filter((s) => s.source === "user")
+        .map((s) => s.name);
+    expect(await names(creator)).toEqual(["Mine"]);
+    expect(await names({ ...creator, botId: "botB" })).toEqual([]);
+    expect(await names({ spaceId: "w1", userId: "u1" })).toEqual(["Mine"]);
+    expect(
+      await skillReadFromTool(prisma as never, { ...creator, botId: "botB" }, { name: "Mine" }),
+    ).toEqual({ error: "Skill not found." });
+
+    // Creation without a bot (API/panel) stays "all agents": no access rows.
+    const shared = await skillCreateFromTool(
+      prisma as never,
+      { spaceId: "w1", userId: "u1" },
+      { name: "Shared", description: "d", body: "x" },
+    );
+    expect(shared.ok).toBe(true);
+    expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:shared" } })).toEqual([]);
+    expect(await prisma.botSkill.findMany({ where: { skillKey: "user:shared" } })).toEqual([]);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(await names({ ...creator, botId: "botB" })).toEqual(["Shared"]);
   });
 });

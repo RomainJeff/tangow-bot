@@ -183,7 +183,7 @@ export async function skillCreateFromTool(
   if (existing) return { error: `A skill named "${existing.name}" already exists.` };
 
   try {
-    const row = await prisma.agentSkill.create({
+    const create = prisma.agentSkill.create({
       data: {
         spaceId: owner.spaceId,
         userId: owner.userId,
@@ -193,12 +193,33 @@ export async function skillCreateFromTool(
         source: "user",
       },
     });
+    // A bot-created skill starts scoped to its creator (design Q2); the user widens it in the UI.
+    // API/panel creation (no botId) stays "all agents": no access rows.
+    const skillKey = userSkillKey(name);
+    const scope = { spaceId: owner.spaceId, userId: owner.userId };
+    const [row] = owner.botId
+      ? await prisma.$transaction([
+          create,
+          prisma.skillSetting.upsert({
+            where: { spaceId_userId_skillKey: { ...scope, skillKey } },
+            create: { ...scope, skillKey, availability: "selected" },
+            update: { availability: "selected" },
+          }),
+          prisma.botSkill.upsert({
+            where: { botId_skillKey: { botId: owner.botId, skillKey } },
+            create: { ...scope, botId: owner.botId, skillKey, enabled: true },
+            update: { enabled: true },
+          }),
+        ])
+      : [await create];
     return {
       ok: true,
       id: row.id,
       name: row.name,
       description: row.description,
-      hint: `Created skill. Mention /${row.name} so the user can open it.`,
+      hint: owner.botId
+        ? `Created skill, available to this agent. Mention /${row.name} so the user can open it; they can share it with other agents from its settings.`
+        : `Created skill. Mention /${row.name} so the user can open it.`,
     };
   } catch {
     return { error: "Could not create skill (name may already exist)." };
