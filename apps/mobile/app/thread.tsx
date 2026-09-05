@@ -64,12 +64,14 @@ import { useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppConnectCard } from "../components/AppConnectCard";
 import { AskActions } from "../components/AskActions";
+import { AgentSteps } from "../components/agent-steps";
 import { BotAvatar } from "../components/bot-avatar";
 import {
   MarkdownArtifactPreview,
   type MarkdownArtifactPreviewTarget,
 } from "../components/markdown-artifact-preview";
 import { NativeSymbol } from "../components/native-symbol";
+import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import {
   applyMobileThreadEvent,
   blockText,
@@ -110,6 +112,7 @@ import {
   hasVisibleMessagePresentation,
   isCenteredAgentEvent,
   messagePresentationSegments,
+  stepsBlocks,
 } from "../lib/message-presentation";
 import { native, useMobileTokens, useResolvedAppearance } from "../lib/native";
 import {
@@ -344,12 +347,15 @@ function Thread() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [markdownPreview, setMarkdownPreview] =
     useState<MarkdownArtifactPreviewTarget | null>(null);
+  const showSteps = useDisplayAgentSteps();
   const visibleMessages = useMemo(
     () =>
       userVisibleMessages(snap?.messages ?? [], {
         includePeerReceipts: true,
-      }).filter((message) => hasVisibleMessagePresentation(message.blocks)),
-    [snap?.messages],
+      }).filter((message) =>
+        hasVisibleMessagePresentation(message.blocks, showSteps),
+      ),
+    [snap?.messages, showSteps],
   );
   const latestMessageId = visibleMessages.at(-1)?.id ?? null;
   const rewindRemovedCount = rewindTarget
@@ -2619,6 +2625,7 @@ const MessageBubble = memo(function MessageBubble({
   const tokens = mobileTokens();
   const { t } = useI18n();
   const router = useRouter();
+  const showSteps = useDisplayAgentSteps();
   const [peerExpanded, setPeerExpanded] = useState(false);
   const artifactTarget: MobileArtifactTarget = groupId
     ? { groupId }
@@ -3184,6 +3191,7 @@ const MessageBubble = memo(function MessageBubble({
     );
   }
   const segments = messagePresentationSegments(message.blocks);
+  const steps = showSteps ? stepsBlocks(message.blocks) : [];
   const speaker =
     message.role === "bot"
       ? (memberName(members, message.botId) ?? botName)
@@ -3193,6 +3201,9 @@ const MessageBubble = memo(function MessageBubble({
   );
   return (
     <View style={{ gap: 8, width: "100%" }}>
+      {steps.map((block, index) => (
+        <AgentSteps key={`${message.id}-steps-${index}`} block={block} />
+      ))}
       {segments.map((segment, index) => (
         <MessageTextCard
           key={`${message.id}-content-${index}`}

@@ -5,6 +5,7 @@ import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { AvatarStyleProvider } from "../components/avatar-style";
+import { loadDisplayAgentSteps } from "../lib/agent-steps-pref";
 import { currentApiBase, loadApiBase, loadSessionToken, selectedSpaceId } from "../lib/api";
 import { loadAppearancePreference, mobileTokens } from "../lib/appearance";
 import { bootstrapI18n, useI18n } from "../lib/i18n";
@@ -49,6 +50,7 @@ export default function Layout() {
         )
         .catch(() => undefined),
       bootstrapI18n(),
+      loadDisplayAgentSteps(),
     ]).finally(() => setReady(true));
   }, []);
 

@@ -17,6 +17,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAvatarStyle } from "../components/avatar-style";
 import { BotAvatar } from "../components/bot-avatar";
 import { ServerSheet } from "../components/server-sheet";
+import {
+  setDisplayAgentSteps,
+  useDisplayAgentSteps,
+} from "../lib/agent-steps-pref";
 import type { MobileBot } from "../lib/api";
 import {
   currentApiBase,
@@ -63,9 +67,13 @@ export default function Account() {
   const [notifications, setNotifications] = useState<LiveNotificationSettings>(
     DEFAULT_LIVE_NOTIFICATION_SETTINGS,
   );
-  const [notificationsReady, setNotificationsReady] = useState(Platform.OS !== "android");
+  const [notificationsReady, setNotificationsReady] = useState(
+    Platform.OS !== "android",
+  );
   const [notificationPending, setNotificationPending] = useState(false);
-  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [notificationError, setNotificationError] = useState<string | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [apiBase, setApiBase] = useState(() => currentApiBase());
   const [serverOpen, setServerOpen] = useState(false);
@@ -77,6 +85,7 @@ export default function Account() {
   } | null>(null);
   const { avatarStyle, updateAvatarStyle } = useAvatarStyle();
   const appearance = getCachedAppearancePreference();
+  const agentSteps = useDisplayAgentSteps();
   const styles = useThemedStyles(createAccountStyles);
 
   useEffect(() => {
@@ -86,7 +95,9 @@ export default function Account() {
     void rpc<MobileBot[]>("bots/listArchived")
       .then(setArchivedBots)
       .catch(() => undefined);
-    void rpc<{ runs: number; inputTokens: number; outputTokens: number }>("usage/summary")
+    void rpc<{ runs: number; inputTokens: number; outputTokens: number }>(
+      "usage/summary",
+    )
       .then(setUsage)
       .catch(() => undefined);
     if (Platform.OS === "android") {
@@ -108,7 +119,9 @@ export default function Account() {
           })}
         </Text>
       ) : null}
-      <Text style={styles.settingsExplanation}>{t("Model spend uses your provider keys.")}</Text>
+      <Text style={styles.settingsExplanation}>
+        {t("Model spend uses your provider keys.")}
+      </Text>
     </View>
   );
 
@@ -169,7 +182,9 @@ export default function Account() {
     } catch (cause) {
       setNotifications(previous);
       setNotificationError(
-        cause instanceof Error ? cause.message : t("Could not update notifications"),
+        cause instanceof Error
+          ? cause.message
+          : t("Could not update notifications"),
       );
     } finally {
       setNotificationPending(false);
@@ -202,7 +217,9 @@ export default function Account() {
       router.dismissAll();
       router.replace("/sign-in");
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not delete account"));
+      setError(
+        err instanceof Error ? err.message : t("Could not delete account"),
+      );
     } finally {
       setPending(false);
     }
@@ -221,7 +238,10 @@ export default function Account() {
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/change-password")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.settingsButton,
+            pressed && styles.pressed,
+          ]}
         >
           <Text style={styles.settingsTitle}>{t("Change password")}</Text>
           <Text style={styles.chevron}>›</Text>
@@ -259,7 +279,25 @@ export default function Account() {
           </View>
         </View>
 
-        <View accessibilityLabel={t("Avatar style")} style={styles.avatarSection}>
+        <View
+          accessibilityLabel={t("Display agent steps")}
+          style={styles.profile}
+        >
+          <SettingSwitch
+            label={t("Display agent steps")}
+            detail={t(
+              "Show the tools a bot used, with their input and output.",
+            )}
+            value={agentSteps}
+            disabled={false}
+            onChange={(next) => void setDisplayAgentSteps(next)}
+          />
+        </View>
+
+        <View
+          accessibilityLabel={t("Avatar style")}
+          style={styles.avatarSection}
+        >
           <Text style={styles.settingsTitle}>{t("Avatars")}</Text>
           <View style={styles.avatarOptions}>
             {(["robot", "organic"] as const).map((style) => {
@@ -268,7 +306,9 @@ export default function Account() {
               return (
                 <Pressable
                   key={style}
-                  accessibilityLabel={t("{style} avatars", { style: styleLabel })}
+                  accessibilityLabel={t("{style} avatars", {
+                    style: styleLabel,
+                  })}
                   accessibilityRole="button"
                   accessibilityState={{ selected, disabled: avatarPending }}
                   disabled={avatarPending}
@@ -321,7 +361,9 @@ export default function Account() {
                     localeSaving && { opacity: 0.6 },
                   ]}
                 >
-                  <Text style={styles.avatarLabel}>{UI_LOCALE_LABELS[code]}</Text>
+                  <Text style={styles.avatarLabel}>
+                    {UI_LOCALE_LABELS[code]}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -332,7 +374,7 @@ export default function Account() {
         {Platform.OS === "android" ? (
           <View accessibilityLabel={t("Notifications")} style={styles.profile}>
             <Text style={styles.settingsTitle}>{t("Notifications")}</Text>
-            <NotificationSwitch
+            <SettingSwitch
               label={t("Live working status")}
               detail={t("While agents are working")}
               value={notifications.liveConnection}
@@ -341,14 +383,16 @@ export default function Account() {
                 void updateNotifications({ ...notifications, liveConnection })
               }
             />
-            <NotificationSwitch
+            <SettingSwitch
               label={t("Agent messages")}
               detail={t("Replies and completed work")}
               value={notifications.messages}
               disabled={notificationPending || !notificationsReady}
-              onChange={(messages) => void updateNotifications({ ...notifications, messages })}
+              onChange={(messages) =>
+                void updateNotifications({ ...notifications, messages })
+              }
             />
-            <NotificationSwitch
+            <SettingSwitch
               label={t("Scheduled tasks")}
               detail={t("Alerts from routines")}
               value={notifications.scheduledTasks}
@@ -357,7 +401,7 @@ export default function Account() {
                 void updateNotifications({ ...notifications, scheduledTasks })
               }
             />
-            <NotificationSwitch
+            <SettingSwitch
               label={t("Needs attention")}
               detail={t("Questions, approvals, takeover")}
               value={notifications.needsAttention}
@@ -371,7 +415,9 @@ export default function Account() {
               onPress={() => void openPromotedNotificationSettings()}
               style={{ minHeight: 44, justifyContent: "center" }}
             >
-              <Text style={{ color: native.label, fontSize: 14 }}>{t("Live update settings")}</Text>
+              <Text style={{ color: native.label, fontSize: 14 }}>
+                {t("Live update settings")}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -382,7 +428,9 @@ export default function Account() {
                 {t("Notification settings")}
               </Text>
             </Pressable>
-            {notificationError ? <Text style={styles.error}>{notificationError}</Text> : null}
+            {notificationError ? (
+              <Text style={styles.error}>{notificationError}</Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -390,7 +438,10 @@ export default function Account() {
           accessibilityRole="button"
           disabled={pending}
           onPress={() => router.push("/models")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.settingsButton,
+            pressed && styles.pressed,
+          ]}
         >
           <View>
             <Text style={styles.settingsTitle}>{t("Models")}</Text>
@@ -405,7 +456,10 @@ export default function Account() {
           accessibilityRole="button"
           disabled={pending}
           onPress={() => router.push("/voice")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.settingsButton,
+            pressed && styles.pressed,
+          ]}
         >
           <View>
             <Text style={styles.settingsTitle}>{t("Voice")}</Text>
@@ -420,7 +474,10 @@ export default function Account() {
           accessibilityRole="button"
           disabled={pending}
           onPress={() => router.push("/integrations")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.settingsButton,
+            pressed && styles.pressed,
+          ]}
         >
           <View>
             <Text style={styles.settingsTitle}>{t("Integrations")}</Text>
@@ -433,11 +490,16 @@ export default function Account() {
           accessibilityRole="button"
           disabled={pending}
           onPress={() => setServerOpen(true)}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.settingsButton,
+            pressed && styles.pressed,
+          ]}
         >
           <View>
             <Text style={styles.settingsTitle}>{t("Server")}</Text>
-            <Text style={styles.settingsExplanation}>{displayApiHost(apiBase)}</Text>
+            <Text style={styles.settingsExplanation}>
+              {displayApiHost(apiBase)}
+            </Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </Pressable>
@@ -465,7 +527,9 @@ export default function Account() {
                 <Pressable
                   onPress={() =>
                     confirmDeleteBot(bot, () =>
-                      setArchivedBots((bots) => bots.filter((item) => item.id !== bot.id)),
+                      setArchivedBots((bots) =>
+                        bots.filter((item) => item.id !== bot.id),
+                      ),
                     )
                   }
                   hitSlop={8}
@@ -536,7 +600,7 @@ export default function Account() {
   );
 }
 
-function NotificationSwitch({
+function SettingSwitch({
   label,
   detail,
   value,
@@ -560,7 +624,11 @@ function NotificationSwitch({
     >
       <View style={{ flex: 1 }}>
         <Text style={{ color: native.label, fontSize: 15 }}>{label}</Text>
-        <Text style={{ color: native.secondaryLabel, fontSize: 12.5, marginTop: 2 }}>{detail}</Text>
+        <Text
+          style={{ color: native.secondaryLabel, fontSize: 12.5, marginTop: 2 }}
+        >
+          {detail}
+        </Text>
       </View>
       <Switch
         accessibilityLabel={label}

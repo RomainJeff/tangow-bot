@@ -4,6 +4,7 @@ import {
   hasVisibleMessagePresentation,
   isCenteredAgentEvent,
   messagePresentationSegments,
+  stepsBlocks,
 } from "./message-presentation";
 
 describe("mobile message presentation", () => {
@@ -53,6 +54,20 @@ describe("mobile message presentation", () => {
       hasVisibleMessagePresentation([
         { kind: "steps", steps: [{ label: "Message bot", count: 1 }] },
       ]),
+    ).toBe(false);
+  });
+
+  it("keeps steps-only messages visible when the setting is on", () => {
+    const steps = [{ kind: "steps", steps: [{ label: "Read file", count: 1 }] }] as MessageBlock[];
+
+    expect(hasVisibleMessagePresentation(steps)).toBe(false);
+    expect(hasVisibleMessagePresentation(steps, true)).toBe(true);
+    expect(stepsBlocks(steps)).toEqual(steps);
+    expect(
+      hasVisibleMessagePresentation(
+        [{ kind: "progress", text: "Using browser", activity: true }],
+        true,
+      ),
     ).toBe(false);
   });
 

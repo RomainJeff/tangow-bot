@@ -25,6 +25,19 @@ export function messagePresentationSegments(
   return content.length > 0 ? [{ kind: "content", blocks: content }] : [];
 }
 
-export function hasVisibleMessagePresentation(blocks: readonly MessageBlock[]): boolean {
-  return blocks.some((block) => !isToolActivityBlock(block));
+export function hasVisibleMessagePresentation(
+  blocks: readonly MessageBlock[],
+  showSteps = false,
+): boolean {
+  return blocks.some(
+    (block) => !isToolActivityBlock(block) || (showSteps && block.kind === "steps"),
+  );
+}
+
+export function stepsBlocks(
+  blocks: readonly MessageBlock[],
+): Extract<MessageBlock, { kind: "steps" }>[] {
+  return blocks.filter(
+    (block): block is Extract<MessageBlock, { kind: "steps" }> => block.kind === "steps",
+  );
 }

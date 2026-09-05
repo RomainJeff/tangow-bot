@@ -490,4 +490,12 @@ export const ZH_MESSAGES: Record<string, string> = {
   "{name} (permission denied)": "{name}（未授予权限）",
   "{name} (unsupported type)": "{name}（不支持的类型）",
   "Saved {name} locally": "已将 {name} 保存在本地",
+  "Display agent steps": "显示智能体步骤",
+  "Show the tools a bot used, with their input and output.": "显示机器人使用的工具及其输入和输出。",
+  "Steps ({count})": "步骤（{count}）",
+  Input: "输入",
+  Output: "输出",
+  "This call ran before step details were recorded.": "此次调用发生在开始记录步骤详情之前。",
+  "(empty)": "（空）",
+  Close: "关闭",
 };
