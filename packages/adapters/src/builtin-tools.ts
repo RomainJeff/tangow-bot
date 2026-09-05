@@ -9,11 +9,11 @@ export const DELEGATION_TOOL_NAMES = new Set([
   "message_bot",
 ]);
 
-// Bots with `chattyReplies` on trade one long final answer for a run of short
-// bubbles, so `message_user` stops being a sparse progress channel and becomes
-// the reply channel itself.
+// `message_user` is a conversation channel, never a progress channel. Bots with
+// `chattyReplies` on additionally trade one long final answer for a run of short
+// bubbles.
 export const CHATTY_MESSAGE_USER_DESCRIPTION =
-  "Send one short chat message to the user immediately, without ending your turn. Each call posts one bubble. Use several short message_user calls instead of one long final answer. Never repeat text you already sent with message_user; when message_user covered everything, end the turn with an empty response.";
+  "Send one short chat message to the user immediately, without ending your turn. Each call posts one bubble. Use several short message_user calls instead of one long final answer, and to ask questions. Never narrate your work \u2014 no progress updates, no tool logs, no play-by-play. Never repeat text you already sent with message_user; when message_user covered everything, end the turn with an empty response.";
 
 export function withChattyReplies(tools: ConnectorTool[]): ConnectorTool[] {
   return tools.map((tool) =>
@@ -176,7 +176,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "message_user",
     description:
-      "Post a short progress update to the user in this chat immediately. Does not end your turn. Use sparingly during long work for high-signal beats (what you are checking, then a result). Do not dump tool logs, thinking, or a play-by-play of every call. Put the final answer in your normal reply.",
+      "Talk to the user in this chat immediately, without ending your turn. Each call posts one bubble. Only two uses: saying something to the user as part of your reply, split into short natural messages like a human conversation, or asking a question you need answered. Never narrate your work \u2014 no announcing what you are about to do, no tool logs, no play-by-play, no status beats. Never repeat text you already sent.",
     inputSchema: {
       type: "object",
       properties: {
