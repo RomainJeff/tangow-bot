@@ -36,6 +36,8 @@ eas build --platform ios --profile production
 eas submit --platform ios --profile production --latest
 ```
 
+From the repository root, `pnpm submit:ios` runs that same submission.
+
 EAS can prompt for store identity interactively. For automated submission, add
 the required identifiers through a private CI configuration or a short-lived
 local change that is never committed.

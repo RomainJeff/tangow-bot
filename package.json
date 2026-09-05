@@ -29,6 +29,7 @@
     "perf:compare": "tsx packages/testkit/src/cli/compare-performance.ts",
     "ship": "bash scripts/ship.sh",
     "ship:test": "bash scripts/ship.test.sh",
+    "submit:ios": "pnpm --filter @rakazo/mobile submit:ios",
     "compose:up": "docker compose --env-file .env -f infra/compose/docker-compose.yml up --build",
     "compose:down": "docker compose --env-file .env -f infra/compose/docker-compose.yml down -v"
   },
