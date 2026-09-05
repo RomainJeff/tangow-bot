@@ -47,6 +47,7 @@ import {
   pipedreamConfigFromEnv,
   pushTokenPath,
   type RemoteConnectorDependencies,
+  removeUserSkillDirs,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceMemoryProviderResolver,
@@ -72,6 +73,7 @@ import { requestLogging } from "@rakazo/logging/hono";
 import { MarkdownMemoryStore } from "@rakazo/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { exportLegacyAgentSkills } from "./agent-skills-export.js";
 import { type AppEnv, loadEnv } from "./env.js";
 import { createMessagingInboundHandler } from "./messaging-inbound.js";
 import { mountMessagingWebhookRoutes } from "./messaging-webhook.js";
@@ -124,6 +126,10 @@ export async function createApp(
     : createDb(env.databaseUrl);
   const { prisma } = created;
   created.pool?.on("error", () => undefined);
+  const exportedSkills = await exportLegacyAgentSkills(prisma, env.dataDir);
+  if (exportedSkills > 0) {
+    logger.info("exported legacy agent skills to disk", { count: exportedSkills });
+  }
   const realtime =
     realtimeOverride ??
     (created.pool
@@ -274,6 +280,7 @@ export async function createApp(
         ),
       );
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
+      await removeUserSkillDirs(env.dataDir, userId);
     },
   });
   const executor = createRunExecutor({
