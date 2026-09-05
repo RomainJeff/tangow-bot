@@ -1,7 +1,20 @@
 import { ORPCError } from "@orpc/server";
 import { BUILTIN_AGENT_SKILLS } from "@rakazo/adapters";
-import type { Actor, AgentSkill, AgentSkillSource } from "@rakazo/contracts";
-import { buildSkillMd, isSkillReadOnly, parseSkillMd, type SkillSource } from "@rakazo/core";
+import type {
+  Actor,
+  AgentSkill,
+  AgentSkillCatalogEntry,
+  AgentSkillSource,
+} from "@rakazo/contracts";
+import {
+  asSkillAvailability,
+  buildSkillMd,
+  isSkillReadOnly,
+  isSkillVisible,
+  parseSkillMd,
+  type SkillSource,
+  userSkillKey,
+} from "@rakazo/core";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
 
 type AgentSkillRow = {
@@ -124,24 +137,73 @@ export function createAgentSkillsService(prisma: PrismaClient) {
     return row;
   }
 
-  return {
-    async list(actor: Actor): Promise<Omit<AgentSkill, "content">[]> {
-      const rows = await prisma.agentSkill.findMany({
-        where: { spaceId: actor.spaceId, userId: actor.userId },
-        orderBy: [{ name: "asc" }, { id: "asc" }],
-      });
-      const catalog = [...builtinCatalog(), ...rows.map(mapAgentSkill)].map(
-        ({ content: _content, ...entry }) => entry,
-      );
-      return catalog;
-    },
+  type Access = Pick<AgentSkillCatalogEntry, "availability" | "visibleBotIds">;
 
-    async listWithContent(actor: Actor): Promise<AgentSkill[]> {
-      const rows = await prisma.agentSkill.findMany({
+  /** Resolve availability + visible bots for every skill of the owner in 3 queries. */
+  async function accessIndex(actor: Actor): Promise<{
+    bots: string[];
+    of: (name: string) => Access;
+  }> {
+    const scope = { spaceId: actor.spaceId, userId: actor.userId };
+    const [bots, settings, overrides] = await Promise.all([
+      prisma.bot.findMany({
+        where: { ...scope, archivedAt: null },
+        select: { id: true },
+        orderBy: { position: "asc" },
+      }),
+      prisma.skillSetting.findMany({ where: scope }),
+      prisma.botSkill.findMany({ where: scope }),
+    ]);
+    const availability = new Map(
+      settings.map((s) => [s.skillKey, asSkillAvailability(s.availability)]),
+    );
+    const override = new Map(overrides.map((o) => [`${o.botId}\n${o.skillKey}`, o.enabled]));
+    const botIds = bots.map((bot) => bot.id);
+    return {
+      bots: botIds,
+      of(name) {
+        const key = userSkillKey(name);
+        const skillAvailability = availability.get(key) ?? "all";
+        return {
+          availability: skillAvailability,
+          visibleBotIds: botIds.filter((botId) =>
+            isSkillVisible({
+              availability: skillAvailability,
+              override: override.get(`${botId}\n${key}`),
+            }),
+          ),
+        };
+      },
+    };
+  }
+
+  async function catalog(actor: Actor, botId?: string): Promise<Array<AgentSkill & Access>> {
+    const [rows, access] = await Promise.all([
+      prisma.agentSkill.findMany({
         where: { spaceId: actor.spaceId, userId: actor.userId },
         orderBy: [{ name: "asc" }, { id: "asc" }],
-      });
-      return [...builtinCatalog(), ...rows.map(mapAgentSkill)];
+      }),
+      accessIndex(actor),
+    ]);
+    const builtins = builtinCatalog().map((skill) => ({
+      ...skill,
+      availability: "all" as const,
+      visibleBotIds: access.bots,
+    }));
+    const users = rows.map((row) => ({ ...mapAgentSkill(row), ...access.of(row.name) }));
+    const entries = [...builtins, ...users];
+    return botId ? entries.filter((entry) => entry.visibleBotIds.includes(botId)) : entries;
+  }
+
+  async function list(actor: Actor, input?: { botId?: string }): Promise<AgentSkillCatalogEntry[]> {
+    return (await catalog(actor, input?.botId)).map(({ content: _content, ...entry }) => entry);
+  }
+
+  return {
+    list,
+
+    async listWithContent(actor: Actor, botId?: string): Promise<AgentSkill[]> {
+      return catalog(actor, botId);
     },
 
     async get(actor: Actor, input: { skillId?: string; name?: string }): Promise<AgentSkill> {
@@ -295,6 +357,49 @@ export function createAgentSkillsService(prisma: PrismaClient) {
       });
       if (deleted.count !== 1) throw new IsolationError();
       return { ok: true };
+    },
+
+    async setAccess(
+      actor: Actor,
+      input: {
+        skillId: string;
+        availability?: "all" | "selected";
+        bot?: { botId: string; enabled: boolean };
+      },
+    ): Promise<AgentSkillCatalogEntry> {
+      const existing = await owned(actor, input.skillId);
+      const scope = { spaceId: actor.spaceId, userId: actor.userId };
+      const skillKey = userSkillKey(existing.name);
+      if (input.bot) {
+        const bot = await prisma.bot.findFirst({
+          where: { id: input.bot.botId, ...scope },
+          select: { id: true },
+        });
+        if (!bot) throw new IsolationError();
+      }
+      await prisma.$transaction([
+        ...(input.availability
+          ? [
+              prisma.skillSetting.upsert({
+                where: { spaceId_userId_skillKey: { ...scope, skillKey } },
+                create: { ...scope, skillKey, availability: input.availability },
+                update: { availability: input.availability },
+              }),
+            ]
+          : []),
+        ...(input.bot
+          ? [
+              prisma.botSkill.upsert({
+                where: { botId_skillKey: { botId: input.bot.botId, skillKey } },
+                create: { ...scope, botId: input.bot.botId, skillKey, enabled: input.bot.enabled },
+                update: { enabled: input.bot.enabled },
+              }),
+            ]
+          : []),
+      ]);
+      const entry = (await list(actor)).find((skill) => skill.id === existing.id);
+      if (!entry) throw new IsolationError();
+      return entry;
     },
   };
 }

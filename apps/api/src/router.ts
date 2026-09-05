@@ -2128,7 +2128,7 @@ export function createRouter(deps: RouterDeps) {
           });
           if (existing) return { runId: existing.id };
         }
-        const skillRecords = await agentSkills.listWithContent(context.actor);
+        const skillRecords = await agentSkills.listWithContent(context.actor, routine.botId);
         const prompt = expandSkillReferencesInPrompt(routine.prompt, skillRecords);
         let run: { id: string };
         try {
@@ -2284,7 +2284,9 @@ export function createRouter(deps: RouterDeps) {
       ),
     },
     agentSkills: {
-      list: authed.agentSkills.list.handler(async ({ context }) => agentSkills.list(context.actor)),
+      list: authed.agentSkills.list.handler(async ({ context, input }) =>
+        agentSkills.list(context.actor, input ?? undefined),
+      ),
       get: authed.agentSkills.get.handler(async ({ context, input }) =>
         agentSkills.get(context.actor, input),
       ),
@@ -2296,6 +2298,9 @@ export function createRouter(deps: RouterDeps) {
       ),
       remove: authed.agentSkills.remove.handler(async ({ context, input }) =>
         agentSkills.remove(context.actor, input.skillId),
+      ),
+      setAccess: authed.agentSkills.setAccess.handler(async ({ context, input }) =>
+        agentSkills.setAccess(context.actor, input),
       ),
     },
     capabilities: {
