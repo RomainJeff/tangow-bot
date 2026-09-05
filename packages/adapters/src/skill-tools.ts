@@ -2,15 +2,20 @@ import {
   asSkillAvailability,
   buildSkillMd,
   findSkillByName,
-  isSkillReadOnly,
   isSkillVisible,
   parseSkillMd,
   type SkillRecord,
-  type SkillSource,
   userSkillKey,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { BUILTIN_AGENT_SKILLS } from "./builtin-skills.js";
+import {
+  isExists,
+  listUserSkills,
+  removeUserSkill,
+  userSkillsRoot,
+  writeUserSkill,
+} from "./skill-store.js";
 
 export const SKILL_TOOL_NAMES = new Set([
   "skill_read",
@@ -31,30 +36,7 @@ type SkillOwner = {
   botId?: string;
 };
 
-type AgentSkillRow = {
-  id: string;
-  name: string;
-  description: string;
-  content: string;
-  source: string;
-};
-
-function asSource(value: string): SkillSource {
-  if (value === "builtin" || value === "plugin" || value === "user") return value;
-  return "user";
-}
-
-function toRecord(row: AgentSkillRow): SkillRecord & { id: string } {
-  const source = asSource(row.source);
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    content: row.content,
-    source,
-    readOnly: isSkillReadOnly(source),
-  };
-}
+export type SkillToolDeps = { prisma: PrismaClient; dataDir: string };
 
 function builtinRecords(): Array<SkillRecord & { id: string }> {
   return BUILTIN_AGENT_SKILLS.map((skill) => ({
@@ -87,15 +69,13 @@ function rejectInvalidSkillFields(name: string, description: string): string | u
 }
 
 export async function listAgentSkillRecords(
-  prisma: PrismaClient,
+  deps: SkillToolDeps,
   owner: SkillOwner,
 ): Promise<Array<SkillRecord & { id: string }>> {
-  const rows = await prisma.agentSkill.findMany({
-    where: { spaceId: owner.spaceId, userId: owner.userId },
-    orderBy: [{ name: "asc" }, { id: "asc" }],
-  });
-  const records = rows.map(toRecord);
-  const visible = owner.botId ? await onlyVisibleTo(prisma, owner, owner.botId, records) : records;
+  const records = await listUserSkills(userSkillsRoot(deps.dataDir, owner));
+  const visible = owner.botId
+    ? await onlyVisibleTo(deps.prisma, owner, owner.botId, records)
+    : records;
   return [...builtinRecords(), ...visible];
 }
 
@@ -120,11 +100,11 @@ async function onlyVisibleTo<T extends { name: string }>(
 }
 
 async function findOwnedSkill(
-  prisma: PrismaClient,
+  deps: SkillToolDeps,
   owner: SkillOwner,
   input: { skillId?: string; name?: string },
 ): Promise<(SkillRecord & { id: string }) | null> {
-  const skills = await listAgentSkillRecords(prisma, owner);
+  const skills = await listAgentSkillRecords(deps, owner);
   if (input.skillId) {
     return skills.find((skill) => skill.id === input.skillId) ?? null;
   }
@@ -133,11 +113,11 @@ async function findOwnedSkill(
 }
 
 export async function skillReadFromTool(
-  prisma: PrismaClient,
+  deps: SkillToolDeps,
   owner: SkillOwner,
   input: { name?: string; skillId?: string },
 ): Promise<Record<string, unknown>> {
-  const skill = await findOwnedSkill(prisma, owner, input);
+  const skill = await findOwnedSkill(deps, owner, input);
   if (!skill) return { error: "Skill not found." };
   return {
     name: skill.name,
@@ -149,7 +129,7 @@ export async function skillReadFromTool(
 }
 
 export async function skillCreateFromTool(
-  prisma: PrismaClient,
+  deps: SkillToolDeps,
   owner: SkillOwner,
   input: { name?: string; description?: string; body?: string; content?: string },
 ): Promise<Record<string, unknown>> {
@@ -179,55 +159,50 @@ export async function skillCreateFromTool(
   const oversized = rejectOversizedContent(content);
   if (oversized) return { error: oversized };
 
-  const existing = await findOwnedSkill(prisma, owner, { name });
+  const existing = await findOwnedSkill(deps, owner, { name });
   if (existing) return { error: `A skill named "${existing.name}" already exists.` };
 
+  const root = userSkillsRoot(deps.dataDir, owner);
   try {
-    const create = prisma.agentSkill.create({
-      data: {
-        spaceId: owner.spaceId,
-        userId: owner.userId,
-        name,
-        description,
-        content,
-        source: "user",
-      },
-    });
+    await writeUserSkill(root, { name, content }, "create");
+  } catch (error) {
+    return {
+      error: isExists(error)
+        ? `A skill named "${name}" already exists.`
+        : "Could not create skill.",
+    };
+  }
+  const skillKey = userSkillKey(name);
+  if (owner.botId) {
     // A bot-created skill starts scoped to its creator (design Q2); the user widens it in the UI.
     // API/panel creation (no botId) stays "all agents": no access rows.
-    const skillKey = userSkillKey(name);
     const scope = { spaceId: owner.spaceId, userId: owner.userId };
-    const [row] = owner.botId
-      ? await prisma.$transaction([
-          create,
-          prisma.skillSetting.upsert({
-            where: { spaceId_userId_skillKey: { ...scope, skillKey } },
-            create: { ...scope, skillKey, availability: "selected" },
-            update: { availability: "selected" },
-          }),
-          prisma.botSkill.upsert({
-            where: { botId_skillKey: { botId: owner.botId, skillKey } },
-            create: { ...scope, botId: owner.botId, skillKey, enabled: true },
-            update: { enabled: true },
-          }),
-        ])
-      : [await create];
-    return {
-      ok: true,
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      hint: owner.botId
-        ? `Created skill, available to this agent. Mention /${row.name} so the user can open it; they can share it with other agents from its settings.`
-        : `Created skill. Mention /${row.name} so the user can open it.`,
-    };
-  } catch {
-    return { error: "Could not create skill (name may already exist)." };
+    await deps.prisma.$transaction([
+      deps.prisma.skillSetting.upsert({
+        where: { spaceId_userId_skillKey: { ...scope, skillKey } },
+        create: { ...scope, skillKey, availability: "selected" },
+        update: { availability: "selected" },
+      }),
+      deps.prisma.botSkill.upsert({
+        where: { botId_skillKey: { botId: owner.botId, skillKey } },
+        create: { ...scope, botId: owner.botId, skillKey, enabled: true },
+        update: { enabled: true },
+      }),
+    ]);
   }
+  return {
+    ok: true,
+    id: skillKey,
+    name,
+    description,
+    hint: owner.botId
+      ? `Created skill, available to this agent. Mention /${name} so the user can open it; they can share it with other agents from its settings.`
+      : `Created skill. Mention /${name} so the user can open it.`,
+  };
 }
 
 export async function skillUpdateFromTool(
-  prisma: PrismaClient,
+  deps: SkillToolDeps,
   owner: SkillOwner,
   input: {
     name?: string;
@@ -238,7 +213,7 @@ export async function skillUpdateFromTool(
     content?: string;
   },
 ): Promise<Record<string, unknown>> {
-  const existing = await findOwnedSkill(prisma, owner, {
+  const existing = await findOwnedSkill(deps, owner, {
     skillId: input.skillId,
     name: input.name,
   });
@@ -281,61 +256,61 @@ export async function skillUpdateFromTool(
   if (oversized) return { error: oversized };
 
   if (nextName.toLowerCase() !== existing.name.toLowerCase()) {
-    const clash = await findOwnedSkill(prisma, owner, { name: nextName });
+    const clash = await findOwnedSkill(deps, owner, { name: nextName });
     if (clash && clash.id !== existing.id) {
       return { error: `A skill named "${clash.name}" already exists.` };
     }
   }
 
+  const root = userSkillsRoot(deps.dataDir, owner);
+  const scope = { spaceId: owner.spaceId, userId: owner.userId };
+  const oldKey = userSkillKey(existing.name);
+  const newKey = userSkillKey(nextName);
   try {
-    const scope = { spaceId: owner.spaceId, userId: owner.userId };
-    const oldKey = userSkillKey(existing.name);
-    const newKey = userSkillKey(nextName);
-    // Re-scope mutate to owner + user source so a stale id cannot cross tenants.
-    const [updated] = await prisma.$transaction([
-      prisma.agentSkill.updateMany({
-        where: { id: existing.id, ...scope, source: "user" },
-        data: { name: nextName, description: nextDescription, content: nextContent },
-      }),
-      // Rename cascade: access rows follow the skill's key (case-only rename keeps the key).
-      ...(oldKey !== newKey
-        ? [
-            prisma.skillSetting.updateMany({
-              where: { ...scope, skillKey: oldKey },
-              data: { skillKey: newKey },
-            }),
-            prisma.botSkill.updateMany({
-              where: { ...scope, skillKey: oldKey },
-              data: { skillKey: newKey },
-            }),
-          ]
-        : []),
-    ]);
-    if (updated.count !== 1) return { error: "Could not update skill." };
-    return { ok: true, id: existing.id, name: nextName, description: nextDescription };
-  } catch {
-    return { error: "Could not update skill." };
+    if (oldKey === newKey) {
+      await writeUserSkill(root, { name: nextName, content: nextContent }, "replace");
+    } else {
+      // Rename: new file first, then access rows follow the key, then the old file goes.
+      await writeUserSkill(root, { name: nextName, content: nextContent }, "create");
+      await deps.prisma.$transaction([
+        deps.prisma.skillSetting.updateMany({
+          where: { ...scope, skillKey: oldKey },
+          data: { skillKey: newKey },
+        }),
+        deps.prisma.botSkill.updateMany({
+          where: { ...scope, skillKey: oldKey },
+          data: { skillKey: newKey },
+        }),
+      ]);
+      await removeUserSkill(root, existing.name);
+    }
+  } catch (error) {
+    return {
+      error: isExists(error)
+        ? `A skill named "${nextName}" already exists.`
+        : "Could not update skill.",
+    };
   }
+  return { ok: true, id: newKey, name: nextName, description: nextDescription };
 }
 
 export async function skillDeleteFromTool(
-  prisma: PrismaClient,
+  deps: SkillToolDeps,
   owner: SkillOwner,
   input: { name?: string; skillId?: string },
 ): Promise<Record<string, unknown>> {
-  const existing = await findOwnedSkill(prisma, owner, input);
+  const existing = await findOwnedSkill(deps, owner, input);
   if (!existing) return { error: "Skill not found." };
   if (existing.readOnly || existing.source !== "user" || existing.id.startsWith("builtin:")) {
     return { error: "Builtin and plugin skills are read-only." };
   }
   const scope = { spaceId: owner.spaceId, userId: owner.userId };
   const skillKey = userSkillKey(existing.name);
-  // GC access rows with the skill so a future skill on the same key starts clean.
-  const [deleted] = await prisma.$transaction([
-    prisma.agentSkill.deleteMany({ where: { id: existing.id, ...scope, source: "user" } }),
-    prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
-    prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
+  // File first, rows second: orphan rows are harmless, a row-less file would widen to "all".
+  await removeUserSkill(userSkillsRoot(deps.dataDir, owner), existing.name);
+  await deps.prisma.$transaction([
+    deps.prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
+    deps.prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
   ]);
-  if (deleted.count !== 1) return { error: "Could not delete skill." };
   return { ok: true, name: existing.name };
 }
