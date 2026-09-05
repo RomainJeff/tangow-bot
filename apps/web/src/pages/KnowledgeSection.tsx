@@ -1,5 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { AgentSkill, AgentSkillCatalogEntry, MemoryDocument } from "@rakazo/contracts";
+import type { AgentSkill, AgentSkillCatalogEntry, Bot, MemoryDocument } from "@rakazo/contracts";
+import { Button } from "@rakazo/ui-web";
+import { Check } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatBytes } from "../components/ArtifactFileCard";
 import { rpc } from "../lib/rpc";
@@ -239,6 +241,7 @@ Steps the agent should follow.
 function AgentSkills() {
   const { t } = useLingui();
   const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
+  const [bots, setBots] = useState<Bot[]>([]);
   const [open, setOpen] = useState<AgentSkill | null>(null);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState("");
@@ -257,11 +260,11 @@ function AgentSkills() {
 
   useEffect(() => {
     const current = ++generation.current;
-    void rpc.agentSkills
-      .list()
-      .then((list) => {
+    void Promise.all([rpc.agentSkills.list(), rpc.bots.list()])
+      .then(([list, allBots]) => {
         if (current !== generation.current) return;
         setSkills(list);
+        setBots(allBots.filter((bot) => !bot.archivedAt));
       })
       .catch(() => {
         if (current !== generation.current) return;
@@ -288,6 +291,19 @@ function AgentSkills() {
     } catch {
       if (current !== selection.current) return;
       setError(t`Could not load skill`);
+    }
+  }
+
+  async function setAccess(
+    entry: AgentSkillCatalogEntry,
+    patch: { availability?: "all" | "selected"; bot?: { botId: string; enabled: boolean } },
+  ) {
+    setError(null);
+    try {
+      const updated = await rpc.agentSkills.setAccess({ skillId: entry.id, ...patch });
+      setSkills((list) => list.map((skill) => (skill.id === updated.id ? updated : skill)));
+    } catch {
+      setError(t`Could not update agent access`);
     }
   }
 
@@ -354,29 +370,72 @@ function AgentSkills() {
       ) : null}
       {!editorOpen
         ? skills.map((entry) => (
-            <button
+            <div
               key={entry.id}
-              type="button"
-              onClick={() => void openSkill(entry)}
-              className={rowClass(false)}
+              className="rounded-[11px] hover:bg-muted"
+              data-testid="bot-knowledge-skill"
             >
-              <span className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 truncate text-[14px] text-foreground" dir="auto">
-                  {entry.name}
-                </span>
-                {entry.readOnly ? (
-                  <span className="shrink-0 text-[12px] text-muted-foreground/80">
-                    <Trans>read-only</Trans>
-                  </span>
-                ) : null}
-              </span>
-              <span
-                className="mt-0.5 block truncate text-[12.5px] text-muted-foreground/80"
-                dir="auto"
+              <button
+                type="button"
+                onClick={() => void openSkill(entry)}
+                className={`w-full rounded-[11px] px-2.5 pt-2.5 text-start ${entry.readOnly ? "pb-2.5" : "pb-1"}`}
               >
-                {entry.description}
-              </span>
-            </button>
+                <span className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 truncate text-[14px] text-foreground" dir="auto">
+                    {entry.name}
+                  </span>
+                  {entry.readOnly ? (
+                    <span className="shrink-0 text-[12px] text-muted-foreground/80">
+                      <Trans>read-only</Trans>
+                    </span>
+                  ) : null}
+                </span>
+                <span
+                  className="mt-0.5 block truncate text-[12.5px] text-muted-foreground/80"
+                  dir="auto"
+                >
+                  {entry.description}
+                </span>
+              </button>
+              {entry.readOnly ? null : (
+                <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5">
+                  <Button
+                    type="button"
+                    variant={entry.availability === "all" ? "default" : "outline"}
+                    size="xs"
+                    className="rounded-full"
+                    aria-pressed={entry.availability === "all"}
+                    onClick={() =>
+                      void setAccess(entry, {
+                        availability: entry.availability === "all" ? "selected" : "all",
+                      })
+                    }
+                  >
+                    {entry.availability === "all" ? <Check aria-hidden="true" /> : null}
+                    <Trans>All agents</Trans>
+                  </Button>
+                  {bots.map((bot) => {
+                    const visible = entry.visibleBotIds.includes(bot.id);
+                    return (
+                      <Button
+                        key={bot.id}
+                        type="button"
+                        variant={visible ? "default" : "outline"}
+                        size="xs"
+                        className="rounded-full"
+                        aria-pressed={visible}
+                        onClick={() =>
+                          void setAccess(entry, { bot: { botId: bot.id, enabled: !visible } })
+                        }
+                      >
+                        {visible ? <Check aria-hidden="true" /> : null}
+                        {bot.name}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ))
         : null}
       {editorOpen ? (
