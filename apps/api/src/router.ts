@@ -408,7 +408,7 @@ export function createRouter(deps: RouterDeps) {
     home: deps.home,
     dataDir: deps.dataDir,
   });
-  const agentSkills = createAgentSkillsService(deps.prisma);
+  const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir);
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");

@@ -1,50 +1,37 @@
 import { ORPCError } from "@orpc/server";
-import { BUILTIN_AGENT_SKILLS } from "@rakazo/adapters";
-import type {
-  Actor,
-  AgentSkill,
-  AgentSkillCatalogEntry,
-  AgentSkillSource,
-} from "@rakazo/contracts";
+import {
+  BUILTIN_AGENT_SKILLS,
+  isExists,
+  listUserSkills,
+  removeUserSkill,
+  type UserSkillFile,
+  userSkillsRoot,
+  writeUserSkill,
+} from "@rakazo/adapters";
+import type { Actor, AgentSkill, AgentSkillCatalogEntry } from "@rakazo/contracts";
 import {
   asSkillAvailability,
   buildSkillMd,
-  isSkillReadOnly,
   isSkillVisible,
   parseSkillMd,
-  type SkillSource,
   userSkillKey,
 } from "@rakazo/core";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
 
-type AgentSkillRow = {
-  id: string;
-  name: string;
-  description: string;
-  content: string;
-  source: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-function asSource(value: string): AgentSkillSource {
-  if (value === "builtin" || value === "plugin" || value === "user") return value;
-  return "user";
-}
-
-export function mapAgentSkill(row: AgentSkillRow): AgentSkill {
-  const source = asSource(row.source);
+function toAgentSkill(file: UserSkillFile): AgentSkill {
   return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    content: row.content,
-    source,
-    readOnly: isSkillReadOnly(source as SkillSource),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    id: file.id,
+    name: file.name,
+    description: file.description,
+    content: file.content,
+    source: "user",
+    readOnly: false,
+    createdAt: file.createdAt.toISOString(),
+    updatedAt: file.updatedAt.toISOString(),
   };
 }
+
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 function builtinCatalog(): AgentSkill[] {
   return BUILTIN_AGENT_SKILLS.map((skill) => ({
@@ -124,17 +111,30 @@ export function resolveSkillContent(input: {
   };
 }
 
-export function createAgentSkillsService(prisma: PrismaClient) {
-  async function owned(actor: Actor, skillId: string) {
-    const row = await prisma.agentSkill.findFirst({
-      where: {
-        id: skillId,
-        spaceId: actor.spaceId,
-        userId: actor.userId,
-      },
-    });
-    if (!row) throw new IsolationError();
-    return row;
+export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) {
+  const root = (actor: Actor) => userSkillsRoot(dataDir, actor);
+  const files = (actor: Actor) => listUserSkills(root(actor));
+
+  async function owned(actor: Actor, skillId: string): Promise<UserSkillFile> {
+    const file = (await files(actor)).find((skill) => skill.id === skillId);
+    if (!file) throw new IsolationError();
+    return file;
+  }
+
+  function assertNameFree(existing: UserSkillFile[], name: string, exceptId?: string) {
+    const clash =
+      existing.some((s) => s.id !== exceptId && sameName(s.name, name)) ||
+      builtinCatalog().some((s) => sameName(s.name, name));
+    if (clash) {
+      throw new ORPCError("CONFLICT", { message: "A skill with that name already exists." });
+    }
+  }
+
+  function conflictOrRethrow(error: unknown): never {
+    if (isExists(error)) {
+      throw new ORPCError("CONFLICT", { message: "A skill with that name already exists." });
+    }
+    throw error;
   }
 
   type Access = Pick<AgentSkillCatalogEntry, "availability" | "visibleBotIds">;
@@ -178,19 +178,13 @@ export function createAgentSkillsService(prisma: PrismaClient) {
   }
 
   async function catalog(actor: Actor, botId?: string): Promise<Array<AgentSkill & Access>> {
-    const [rows, access] = await Promise.all([
-      prisma.agentSkill.findMany({
-        where: { spaceId: actor.spaceId, userId: actor.userId },
-        orderBy: [{ name: "asc" }, { id: "asc" }],
-      }),
-      accessIndex(actor),
-    ]);
+    const [rows, access] = await Promise.all([files(actor), accessIndex(actor)]);
     const builtins = builtinCatalog().map((skill) => ({
       ...skill,
       availability: "all" as const,
       visibleBotIds: access.bots,
     }));
-    const users = rows.map((row) => ({ ...mapAgentSkill(row), ...access.of(row.name) }));
+    const users = rows.map((file) => ({ ...toAgentSkill(file), ...access.of(file.name) }));
     const entries = [...builtins, ...users];
     return botId ? entries.filter((entry) => entry.visibleBotIds.includes(botId)) : entries;
   }
@@ -213,22 +207,14 @@ export function createAgentSkillsService(prisma: PrismaClient) {
         return builtin;
       }
       if (input.skillId) {
-        return mapAgentSkill(await owned(actor, input.skillId));
+        return toAgentSkill(await owned(actor, input.skillId));
       }
       const name = input.name?.trim() ?? "";
-      const builtin = builtinCatalog().find(
-        (skill) => skill.name.toLowerCase() === name.toLowerCase(),
-      );
+      const builtin = builtinCatalog().find((skill) => sameName(skill.name, name));
       if (builtin) return builtin;
-      const row = await prisma.agentSkill.findFirst({
-        where: {
-          spaceId: actor.spaceId,
-          userId: actor.userId,
-          name: { equals: name, mode: "insensitive" },
-        },
-      });
-      if (!row) throw new IsolationError();
-      return mapAgentSkill(row);
+      const file = (await files(actor)).find((skill) => sameName(skill.name, name));
+      if (!file) throw new IsolationError();
+      return toAgentSkill(file);
     },
 
     async create(
@@ -236,41 +222,13 @@ export function createAgentSkillsService(prisma: PrismaClient) {
       input: { content?: string; name?: string; description?: string; body?: string },
     ): Promise<AgentSkill> {
       const resolved = resolveSkillContent(input);
-      const clash = await prisma.agentSkill.findFirst({
-        where: {
-          spaceId: actor.spaceId,
-          userId: actor.userId,
-          name: { equals: resolved.name, mode: "insensitive" },
-        },
-      });
-      if (
-        clash ||
-        builtinCatalog().some((s) => s.name.toLowerCase() === resolved.name.toLowerCase())
-      ) {
-        throw new ORPCError("CONFLICT", { message: "A skill with that name already exists." });
-      }
-      try {
-        const row = await prisma.agentSkill.create({
-          data: {
-            spaceId: actor.spaceId,
-            userId: actor.userId,
-            name: resolved.name,
-            description: resolved.description,
-            content: resolved.content,
-            source: "user",
-          },
-        });
-        return mapAgentSkill(row);
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          (error as { code?: string }).code === "P2002"
-        ) {
-          throw new ORPCError("CONFLICT", { message: "A skill with that name already exists." });
-        }
-        throw error;
-      }
+      assertNameFree(await files(actor), resolved.name);
+      await writeUserSkill(
+        root(actor),
+        { name: resolved.name, content: resolved.content },
+        "create",
+      ).catch(conflictOrRethrow);
+      return toAgentSkill(await owned(actor, userSkillKey(resolved.name)));
     },
 
     async update(
@@ -284,91 +242,41 @@ export function createAgentSkillsService(prisma: PrismaClient) {
       },
     ): Promise<AgentSkill> {
       const existing = await owned(actor, input.skillId);
-      if (isSkillReadOnly(asSource(existing.source) as SkillSource)) {
-        throw new ORPCError("BAD_REQUEST", { message: "Builtin and plugin skills are read-only." });
-      }
       const resolved = resolveSkillContent({ ...input, prior: existing });
-      if (resolved.name.toLowerCase() !== existing.name.toLowerCase()) {
-        const clash = await prisma.agentSkill.findFirst({
-          where: {
-            spaceId: actor.spaceId,
-            userId: actor.userId,
-            name: { equals: resolved.name, mode: "insensitive" },
-            NOT: { id: existing.id },
-          },
-        });
-        if (
-          clash ||
-          builtinCatalog().some((s) => s.name.toLowerCase() === resolved.name.toLowerCase())
-        ) {
-          throw new ORPCError("CONFLICT", { message: "A skill with that name already exists." });
-        }
+      const oldKey = existing.id;
+      const newKey = userSkillKey(resolved.name);
+      const skill = { name: resolved.name, content: resolved.content };
+      if (oldKey === newKey) {
+        await writeUserSkill(root(actor), skill, "replace");
+        return toAgentSkill(await owned(actor, newKey));
       }
-      // Mutate only owner-scoped user rows (never builtin/plugin), even if source was tampered.
-      try {
-        const scope = { spaceId: actor.spaceId, userId: actor.userId };
-        const oldKey = userSkillKey(existing.name);
-        const newKey = userSkillKey(resolved.name);
-        const [updated] = await prisma.$transaction([
-          prisma.agentSkill.updateMany({
-            where: { id: existing.id, ...scope, source: "user" },
-            data: {
-              name: resolved.name,
-              description: resolved.description,
-              content: resolved.content,
-            },
-          }),
-          // Rename cascade: access rows follow the skill's key (case-only rename keeps the key).
-          ...(oldKey !== newKey
-            ? [
-                prisma.skillSetting.updateMany({
-                  where: { ...scope, skillKey: oldKey },
-                  data: { skillKey: newKey },
-                }),
-                prisma.botSkill.updateMany({
-                  where: { ...scope, skillKey: oldKey },
-                  data: { skillKey: newKey },
-                }),
-              ]
-            : []),
-        ]);
-        if (updated.count !== 1) throw new IsolationError();
-      } catch (error) {
-        if (error instanceof IsolationError) throw error;
-        if (
-          error instanceof Error &&
-          "code" in error &&
-          (error as { code?: string }).code === "P2002"
-        ) {
-          throw new ORPCError("CONFLICT", { message: "A skill with that name already exists." });
-        }
-        throw error;
-      }
-      const row = await prisma.agentSkill.findFirst({
-        where: {
-          id: existing.id,
-          spaceId: actor.spaceId,
-          userId: actor.userId,
-        },
-      });
-      if (!row) throw new IsolationError();
-      return mapAgentSkill(row);
+      // Rename: new file first, then access rows follow the key, then the old file goes.
+      assertNameFree(await files(actor), resolved.name, existing.id);
+      await writeUserSkill(root(actor), skill, "create").catch(conflictOrRethrow);
+      const scope = { spaceId: actor.spaceId, userId: actor.userId };
+      await prisma.$transaction([
+        prisma.skillSetting.updateMany({
+          where: { ...scope, skillKey: oldKey },
+          data: { skillKey: newKey },
+        }),
+        prisma.botSkill.updateMany({
+          where: { ...scope, skillKey: oldKey },
+          data: { skillKey: newKey },
+        }),
+      ]);
+      await removeUserSkill(root(actor), existing.name);
+      return toAgentSkill(await owned(actor, newKey));
     },
 
     async remove(actor: Actor, skillId: string): Promise<{ ok: true }> {
       const existing = await owned(actor, skillId);
-      if (isSkillReadOnly(asSource(existing.source) as SkillSource)) {
-        throw new ORPCError("BAD_REQUEST", { message: "Builtin and plugin skills are read-only." });
-      }
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
-      const skillKey = userSkillKey(existing.name);
-      // GC access rows with the skill so a future skill on the same key starts clean.
-      const [deleted] = await prisma.$transaction([
-        prisma.agentSkill.deleteMany({ where: { id: existing.id, ...scope, source: "user" } }),
-        prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
-        prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
+      // File first, rows second: orphan rows are harmless, a row-less file would widen to "all".
+      await removeUserSkill(root(actor), existing.name);
+      await prisma.$transaction([
+        prisma.skillSetting.deleteMany({ where: { ...scope, skillKey: existing.id } }),
+        prisma.botSkill.deleteMany({ where: { ...scope, skillKey: existing.id } }),
       ]);
-      if (deleted.count !== 1) throw new IsolationError();
       return { ok: true };
     },
 
@@ -382,7 +290,7 @@ export function createAgentSkillsService(prisma: PrismaClient) {
     ): Promise<AgentSkillCatalogEntry> {
       const existing = await owned(actor, input.skillId);
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
-      const skillKey = userSkillKey(existing.name);
+      const skillKey = existing.id;
       if (input.bot) {
         const bot = await prisma.bot.findFirst({
           where: { id: input.bot.botId, ...scope },
