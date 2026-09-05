@@ -177,6 +177,8 @@ model Space {
   mcpServers                  McpServer[]
   mcpOAuthSessions            McpOAuthSession[]
   botMcpServers               BotMcpServer[]
+  skillSettings               SkillSetting[]
+  botSkills                   BotSkill[]
   messagingIdentities         MessagingIdentity[]
   actionApprovalRules         ActionApprovalRule[]
   actionAutoReviewPreferences ActionAutoReviewPreference[]
@@ -356,6 +358,7 @@ model Bot {
   runs              Run[]
   steeringMessages  SteeringMessage[]
   mcpServers        BotMcpServer[]
+  skills            BotSkill[]
   groupMembers      ChatGroupMember[]
 
   @@unique([spaceId, spawnKey])
@@ -1010,6 +1013,40 @@ model BotMcpServer {
   @@unique([botId, serverId])
   @@index([spaceId, userId, botId])
   @@map("bot_mcp_servers")
+}
+
+/// Skills v2 phase 1 — global availability of a skill, keyed by skillKey ("user:<lower(name)>").
+/// No row = "all". Rows are renamed with the skill and deleted with it.
+model SkillSetting {
+  id           String   @id @default(cuid())
+  spaceId      String
+  space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId       String
+  skillKey     String
+  availability String   @default("all")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([spaceId, userId, skillKey])
+  @@map("skill_settings")
+}
+
+/// Skills v2 phase 1 — per-bot override. enabled=true includes, enabled=false excludes.
+model BotSkill {
+  id        String   @id @default(cuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  botId     String
+  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  userId    String
+  skillKey  String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([botId, skillKey])
+  @@index([spaceId, userId, skillKey])
+  @@map("bot_skills")
 }
 
 model MessagingIdentity {
