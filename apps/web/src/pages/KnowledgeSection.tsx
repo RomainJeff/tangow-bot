@@ -1,5 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { AgentSkill, AgentSkillCatalogEntry, Bot, MemoryDocument } from "@rakazo/contracts";
+import { parseSkillMd } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
 import { Check } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -360,6 +361,11 @@ function AgentSkills() {
   }
 
   const editorOpen = creating || open;
+  const draftError = (() => {
+    if (!editorOpen || open?.readOnly || !draft.trim()) return null;
+    const parsed = parseSkillMd(draft);
+    return "error" in parsed ? parsed.error : null;
+  })();
   return (
     <div data-testid="bot-knowledge-skills">
       {error ? <div className="px-2.5 pb-2 text-[13px] text-destructive">{error}</div> : null}
@@ -453,11 +459,21 @@ function AgentSkills() {
             className={fieldClass}
             dir="auto"
           />
+          {draftError ? (
+            <p className="mt-1 text-[12px] text-destructive" dir="auto" role="alert">
+              {draftError}
+            </p>
+          ) : null}
           <div className="mt-2 flex items-center gap-2">
             {!open?.readOnly ? (
               <button
                 type="button"
-                disabled={busy || !draft.trim() || (!creating && draft === open?.content)}
+                disabled={
+                  busy ||
+                  !draft.trim() ||
+                  Boolean(draftError) ||
+                  (!creating && draft === open?.content)
+                }
                 onClick={() => void save()}
                 className="rounded-lg bg-muted px-3 py-1.5 text-[13px] text-foreground disabled:opacity-50"
               >
