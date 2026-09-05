@@ -725,6 +725,25 @@ export function createRouter(deps: RouterDeps) {
             })),
           });
         }
+        // Per-bot skill overrides travel with the bot, like MCP assignments.
+        const skillAccess = await deps.prisma.botSkill.findMany({
+          where: {
+            botId: source.id,
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+          },
+        });
+        if (skillAccess.length) {
+          await deps.prisma.botSkill.createMany({
+            data: skillAccess.map((row) => ({
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+              botId: duplicate.id,
+              skillKey: row.skillKey,
+              enabled: row.enabled,
+            })),
+          });
+        }
         return duplicate;
       }),
       reorder: authed.bots.reorder.handler(async ({ context, input }) => {

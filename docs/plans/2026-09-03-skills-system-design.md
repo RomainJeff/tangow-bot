@@ -254,7 +254,7 @@ marketplaces.installPlugin / removePlugin
 
 | Phase | Livrable | Dépend de | Taille |
 |---|---|---|---|
-| **1. Scoping** | `BotSkill(skillKey = "user:<slug>")` + `SkillSetting.availability`, `listAgentSkillRecords(botId)`, rename cascade, chips agents dans `KnowledgeSection`, section Skills dans `BotSettings`, `bots.duplicate`, e2e | rien | S/M — table + 1 seam + UI toggles, DB inchangée sinon |
+| **1. Scoping** | `BotSkill(skillKey = "user:<slug>")` + `SkillSetting.availability`, `listAgentSkillRecords(botId)`, rename cascade, chips agents dans `KnowledgeSection`, `bots.duplicate`, e2e — plan : `docs/plans/2026-09-05-skills-scoping-phase1.md`, tickets : `.scratch/skills-scoping-phase1/issues/`. Simplification : pas de section Skills séparée dans `BotSettings`, `KnowledgeSection` (déjà dans BotSettings > Advanced) porte les chips. | rien | S/M — table + 1 seam + UI toggles, DB inchangée sinon |
 | **2. Filesystem** | `DATA_DIR/skills/user/…`, loader FS + cache mtime, migration export DB→FS + drop `content`, tools `skill_*` réécrits sur FS, GC rows pendantes, éditeur avec validation | 1 | M/L — touche executor, tools, API, migration |
 | **3. Panneau + marketplaces** | `SkillsOverlay`, `SpaceMarketplace` (add/update/remove/install plugin), tarball fetch + caps, lock, mount RO restreint dans sandboxes, diff complet à l'update | 2 | L |
 

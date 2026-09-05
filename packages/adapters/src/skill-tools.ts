@@ -288,20 +288,29 @@ export async function skillUpdateFromTool(
   }
 
   try {
+    const scope = { spaceId: owner.spaceId, userId: owner.userId };
+    const oldKey = userSkillKey(existing.name);
+    const newKey = userSkillKey(nextName);
     // Re-scope mutate to owner + user source so a stale id cannot cross tenants.
-    const updated = await prisma.agentSkill.updateMany({
-      where: {
-        id: existing.id,
-        spaceId: owner.spaceId,
-        userId: owner.userId,
-        source: "user",
-      },
-      data: {
-        name: nextName,
-        description: nextDescription,
-        content: nextContent,
-      },
-    });
+    const [updated] = await prisma.$transaction([
+      prisma.agentSkill.updateMany({
+        where: { id: existing.id, ...scope, source: "user" },
+        data: { name: nextName, description: nextDescription, content: nextContent },
+      }),
+      // Rename cascade: access rows follow the skill's key (case-only rename keeps the key).
+      ...(oldKey !== newKey
+        ? [
+            prisma.skillSetting.updateMany({
+              where: { ...scope, skillKey: oldKey },
+              data: { skillKey: newKey },
+            }),
+            prisma.botSkill.updateMany({
+              where: { ...scope, skillKey: oldKey },
+              data: { skillKey: newKey },
+            }),
+          ]
+        : []),
+    ]);
     if (updated.count !== 1) return { error: "Could not update skill." };
     return { ok: true, id: existing.id, name: nextName, description: nextDescription };
   } catch {
@@ -319,14 +328,14 @@ export async function skillDeleteFromTool(
   if (existing.readOnly || existing.source !== "user" || existing.id.startsWith("builtin:")) {
     return { error: "Builtin and plugin skills are read-only." };
   }
-  const deleted = await prisma.agentSkill.deleteMany({
-    where: {
-      id: existing.id,
-      spaceId: owner.spaceId,
-      userId: owner.userId,
-      source: "user",
-    },
-  });
+  const scope = { spaceId: owner.spaceId, userId: owner.userId };
+  const skillKey = userSkillKey(existing.name);
+  // GC access rows with the skill so a future skill on the same key starts clean.
+  const [deleted] = await prisma.$transaction([
+    prisma.agentSkill.deleteMany({ where: { id: existing.id, ...scope, source: "user" } }),
+    prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
+    prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
+  ]);
   if (deleted.count !== 1) return { error: "Could not delete skill." };
   return { ok: true, name: existing.name };
 }

@@ -36,6 +36,22 @@ test("per-bot skill access via agentSkills.setAccess", async ({ page }) => {
   expect(has(await listFor(chiefId))).toBe(false);
   expect(has(await listFor())).toBe(true);
 
+  // Rename keeps the exclusion: access rows follow the skill key.
+  await rpc(page, "agentSkills/update", { skillId: created.id, name: "Weekly standup" });
+  const renamedAll = await listFor();
+  expect(renamedAll.find((entry) => entry.id === created.id)?.name).toBe("Weekly standup");
+  expect(has(await listFor(chiefId))).toBe(false);
+  await rpc(page, "agentSkills/update", { skillId: created.id, name: "Daily standup" });
+  expect(has(await listFor(chiefId))).toBe(false);
+  expect(has(await listFor())).toBe(true);
+
+  // Duplicating a bot copies its skill overrides: the clone is excluded too.
+  const clone = await rpc<{ id: string }>(page, "bots/duplicate", { botId: chiefId });
+  expect(has(await listFor(clone.id))).toBe(false);
+  expect((await listFor()).find((entry) => entry.id === created.id)?.visibleBotIds).not.toContain(
+    clone.id,
+  );
+
   // Slash picker follows the active bot's catalog.
   const composer = page.getByRole("combobox", { name: /^Message/ });
   await expect(composer).toBeVisible();

@@ -13,12 +13,23 @@ type Row = Record<string, unknown>;
 const matches = (row: Row, where: Row) =>
   Object.entries(where).every(([key, value]) => row[key] === value);
 
-// ponytail: only findMany + upsert, what listAgentSkillRecords and the tests use.
+// ponytail: only findMany/upsert/updateMany/deleteMany, what the tools and tests use.
 function table(store: Row[]) {
   return {
     findMany: vi.fn(async ({ where = {} }: { where?: Row } = {}) =>
       store.filter((row) => matches(row, where)).map((row) => ({ ...row })),
     ),
+    updateMany: vi.fn(async ({ where, data }: { where: Row; data: Row }) => {
+      const hits = store.filter((row) => matches(row, where));
+      for (const row of hits) Object.assign(row, data);
+      return { count: hits.length };
+    }),
+    deleteMany: vi.fn(async ({ where }: { where: Row }) => {
+      const kept = store.filter((row) => !matches(row, where));
+      const count = store.length - kept.length;
+      store.splice(0, store.length, ...kept);
+      return { count };
+    }),
     upsert: vi.fn(
       async ({
         where,
@@ -45,12 +56,13 @@ function table(store: Row[]) {
 
 function makePrisma(rows: Array<Record<string, unknown>> = []) {
   const store = [...rows];
-  // ponytail: no rollback — array form awaits all, function form receives the mock itself.
-  const $transaction = vi.fn(async (arg: unknown) =>
-    Array.isArray(arg) ? Promise.all(arg) : (arg as (tx: unknown) => unknown)(prismaMock),
-  );
-  const prismaMock = {
-    $transaction,
+  const prisma = {
+    // Array form only (what the tools use); ops are already-running promises.
+    $transaction: vi.fn(async (ops: unknown) =>
+      typeof ops === "function"
+        ? (ops as (tx: unknown) => Promise<unknown>)(prisma)
+        : Promise.all(ops as Promise<unknown>[]),
+    ),
     skillSetting: table([]),
     botSkill: table([]),
     agentSkill: {
@@ -124,7 +136,7 @@ function makePrisma(rows: Array<Record<string, unknown>> = []) {
     },
     _store: store,
   };
-  return prismaMock;
+  return prisma;
 }
 
 const owner = { spaceId: "ws-1", userId: "user-1" };
@@ -402,5 +414,62 @@ describe("skill tools", () => {
     expect(await prisma.botSkill.findMany({ where: { skillKey: "user:shared" } })).toEqual([]);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(await names({ ...creator, botId: "botB" })).toEqual(["Shared"]);
+  });
+
+  it("renames access rows with the skill and removes them on delete", async () => {
+    const scope = { spaceId: owner.spaceId, userId: owner.userId };
+    await skillCreateFromTool(prisma as never, owner, { name: "Old", description: "d", body: "x" });
+    // Fixture rows set directly: creator scoping (skill_create + botId) is a separate ticket.
+    await prisma.skillSetting.upsert({
+      where: { spaceId_userId_skillKey: { ...scope, skillKey: "user:old" } },
+      create: { ...scope, skillKey: "user:old", availability: "selected" },
+      update: {},
+    });
+    await prisma.botSkill.upsert({
+      where: { botId_skillKey: { botId: "botA", skillKey: "user:old" } },
+      create: { ...scope, botId: "botA", skillKey: "user:old", enabled: true },
+      update: {},
+    });
+
+    // Case-only rename keeps the key: access rows untouched.
+    expect(
+      await skillUpdateFromTool(prisma as never, owner, { name: "Old", newName: "OLD" }),
+    ).toMatchObject({ ok: true, name: "OLD" });
+    expect(prisma.skillSetting.updateMany).not.toHaveBeenCalled();
+    expect(prisma.botSkill.updateMany).not.toHaveBeenCalled();
+    expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:old" } })).toHaveLength(1);
+
+    const renamed = await skillUpdateFromTool(prisma as never, owner, {
+      name: "OLD",
+      newName: "New",
+    });
+    expect(renamed).toMatchObject({ ok: true, name: "New" });
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:old" } })).toEqual([]);
+    expect(await prisma.botSkill.findMany({ where: { skillKey: "user:old" } })).toEqual([]);
+    expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:new" } })).toMatchObject([
+      { availability: "selected" },
+    ]);
+    expect(await prisma.botSkill.findMany({ where: { skillKey: "user:new" } })).toMatchObject([
+      { botId: "botA", enabled: true },
+    ]);
+    // The exclusion semantics survive the rename: only botA sees it.
+    expect(
+      (await listAgentSkillRecords(prisma as never, { ...owner, botId: "botA" })).map(
+        (s) => s.name,
+      ),
+    ).toEqual(["New"]);
+    expect(
+      (await listAgentSkillRecords(prisma as never, { ...owner, botId: "botB" })).map(
+        (s) => s.name,
+      ),
+    ).toEqual([]);
+
+    expect(await skillDeleteFromTool(prisma as never, owner, { name: "New" })).toEqual({
+      ok: true,
+      name: "New",
+    });
+    expect(await prisma.skillSetting.findMany()).toEqual([]);
+    expect(await prisma.botSkill.findMany()).toEqual([]);
   });
 });
