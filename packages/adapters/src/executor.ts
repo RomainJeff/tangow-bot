@@ -562,6 +562,8 @@ export function buildApprovalContinuation(
 
 export function createRunExecutor(deps: ExecutorDeps) {
   const web = deps.web ?? createWebProvider();
+  // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
+  const skillDeps = { prisma: deps.prisma, dataDir: deps.dataDir ?? "./data" };
   return {
     async resolveModel(scope: {
       userId: string;
@@ -674,7 +676,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             routine.timezone,
           );
       const previousLastRunAt = routine.lastRunAt;
-      const skillRecords = await listAgentSkillRecords(deps.prisma, {
+      const skillRecords = await listAgentSkillRecords(skillDeps, {
         spaceId: routine.spaceId,
         userId: routine.userId,
         botId: routine.botId,
@@ -912,7 +914,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           deps.prisma.taughtSkill.findMany({
             where: { botId: run.botId, spaceId: run.spaceId, status: "saved" },
           }),
-          listAgentSkillRecords(deps.prisma, {
+          listAgentSkillRecords(skillDeps, {
             spaceId: run.spaceId,
             userId: run.userId,
             botId: run.botId,
@@ -2285,7 +2287,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "skill_read") {
             return skillReadFromTool(
-              deps.prisma,
+              skillDeps,
               {
                 spaceId: run.spaceId,
                 userId: run.userId,
@@ -2300,7 +2302,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "skill_create") {
             return finish(
               await skillCreateFromTool(
-                deps.prisma,
+                skillDeps,
                 {
                   spaceId: run.spaceId,
                   userId: run.userId,
@@ -2318,7 +2320,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "skill_update") {
             return finish(
               await skillUpdateFromTool(
-                deps.prisma,
+                skillDeps,
                 {
                   spaceId: run.spaceId,
                   userId: run.userId,
@@ -2339,7 +2341,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "skill_delete") {
             return finish(
               await skillDeleteFromTool(
-                deps.prisma,
+                skillDeps,
                 {
                   spaceId: run.spaceId,
                   userId: run.userId,

@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type { MessageBlock } from "@rakazo/contracts";
 import { ONCE_ROUTINE_CRON } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
@@ -13,6 +16,7 @@ import {
   settleSteeringAttachmentLoads,
   threadContextForRun,
 } from "./executor.js";
+import { userSkillsRoot, writeUserSkill } from "./skill-store.js";
 
 describe("run workspace checkpoint", () => {
   it("skips clean turns and flushes once after a mutation", async () => {
@@ -398,9 +402,6 @@ describe("createRunExecutor", () => {
       },
       skillSetting: { findMany: vi.fn(async () => []) },
       botSkill: { findMany: vi.fn(async () => []) },
-      agentSkill: {
-        findMany: vi.fn(async () => []),
-      },
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           routine: { updateMany },
@@ -470,7 +471,6 @@ describe("createRunExecutor", () => {
       thread: { findFirst },
       skillSetting: { findMany: vi.fn(async () => []) },
       botSkill: { findMany: vi.fn(async () => []) },
-      agentSkill: { findMany: vi.fn(async () => []) },
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           routine: { updateMany: vi.fn(async () => ({ count: 1 })) },
@@ -537,7 +537,6 @@ describe("createRunExecutor", () => {
       thread: { findFirst },
       skillSetting: { findMany: vi.fn(async () => []) },
       botSkill: { findMany: vi.fn(async () => []) },
-      agentSkill: { findMany: vi.fn(async () => []) },
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           routine: { updateMany: vi.fn(async () => ({ count: 1 })) },
@@ -589,6 +588,12 @@ description: Prepare standup notes
 
 1. Summarize wins.
 `;
+    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-executor-skills-"));
+    await writeUserSkill(
+      userSkillsRoot(dataDir, { spaceId: "ws-1", userId: "user-1" }),
+      { name: "Daily standup", content: skillContent },
+      "create",
+    );
     const prisma = {
       routine: {
         findUnique: vi.fn(async () => ({
@@ -611,17 +616,6 @@ description: Prepare standup notes
       },
       skillSetting: { findMany: vi.fn(async () => []) },
       botSkill: { findMany: vi.fn(async () => []) },
-      agentSkill: {
-        findMany: vi.fn(async () => [
-          {
-            id: "skill-1",
-            name: "Daily standup",
-            description: "Prepare standup notes",
-            content: skillContent,
-            source: "user",
-          },
-        ]),
-      },
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           routine: { updateMany: vi.fn(async () => ({ count: 1 })) },
@@ -632,11 +626,16 @@ description: Prepare standup notes
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
       prisma,
+      dataDir,
       jobs: { enqueue, cancel: vi.fn(async () => undefined), close: vi.fn(async () => undefined) },
       events: { append: vi.fn(async () => undefined) },
     } as unknown as Parameters<typeof createRunExecutor>[0]);
 
-    await executor.wakeRoutine("routine-1", scheduledAt.toISOString());
+    try {
+      await executor.wakeRoutine("routine-1", scheduledAt.toISOString());
+    } finally {
+      await rm(dataDir, { recursive: true, force: true });
+    }
 
     expect(createdPrompt).toContain("Use skill: Daily standup");
     expect(createdPrompt).toContain("Summarize wins");
@@ -674,9 +673,6 @@ description: Prepare standup notes
       },
       skillSetting: { findMany: vi.fn(async () => []) },
       botSkill: { findMany: vi.fn(async () => []) },
-      agentSkill: {
-        findMany: vi.fn(async () => []),
-      },
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           routine: { updateMany },
@@ -732,9 +728,6 @@ description: Prepare standup notes
       },
       skillSetting: { findMany: vi.fn(async () => []) },
       botSkill: { findMany: vi.fn(async () => []) },
-      agentSkill: {
-        findMany: vi.fn(async () => []),
-      },
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => {
         transactionCalls += 1;
         if (transactionCalls === 1) {
@@ -904,7 +897,6 @@ description: Prepare standup notes
       taughtSkill: { findMany: vi.fn(async () => []) },
       skillSetting: { findMany: vi.fn(async () => []) },
       botSkill: { findMany: vi.fn(async () => []) },
-      agentSkill: { findMany: vi.fn(async () => []) },
       scratchpadItem: { findMany: vi.fn(async () => []) },
     } as unknown as PrismaClient;
     const executor = createRunExecutor({
