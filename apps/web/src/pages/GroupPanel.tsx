@@ -1,6 +1,12 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { type Bot, GROUP_MEMBER_MAX, GROUP_MEMBER_MIN, type Group } from "@rakazo/contracts";
-import { BotAvatar, Button, Input } from "@rakazo/ui-web";
+import {
+  type Bot,
+  GROUP_DESCRIPTION_MAX_LENGTH,
+  GROUP_MEMBER_MAX,
+  GROUP_MEMBER_MIN,
+  type Group,
+} from "@rakazo/contracts";
+import { BotAvatar, Button, Input, Textarea } from "@rakazo/ui-web";
 import { Check, X } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
@@ -78,11 +84,13 @@ export function CreateGroupForm({
 }: {
   bots: Bot[];
   onCancel: () => void;
-  onCreate: (input: { name: string; botIds: string[] }) => Promise<void>;
+  onCreate: (input: { name: string; description: string; botIds: string[] }) => Promise<void>;
 }) {
   const { t } = useLingui();
   const nameId = useId();
+  const descriptionId = useId();
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +100,7 @@ export function CreateGroupForm({
     setSubmitting(true);
     setError(null);
     try {
-      await onCreate({ name: name.trim(), botIds: selected });
+      await onCreate({ name: name.trim(), description: description.trim(), botIds: selected });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t`Could not create group`);
     } finally {
@@ -131,6 +139,18 @@ export function CreateGroupForm({
           className="mt-2"
         />
       </label>
+      <label htmlFor={descriptionId} className="mt-5 block text-sm text-muted-foreground">
+        <Trans>Description</Trans>
+        <Textarea
+          id={descriptionId}
+          value={description}
+          maxLength={GROUP_DESCRIPTION_MAX_LENGTH}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder={t`What this group is for`}
+          rows={3}
+          className="mt-2"
+        />
+      </label>
       <div className="mt-5 text-sm text-muted-foreground">
         <Trans>
           Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})
@@ -161,12 +181,14 @@ export function GroupSettings({
 }: {
   group: Group;
   bots: Bot[];
-  onSave: (input: { name?: string; botIds?: string[] }) => Promise<void>;
+  onSave: (input: { name?: string; description?: string; botIds?: string[] }) => Promise<void>;
   onRemove: () => Promise<void>;
 }) {
   const { t } = useLingui();
   const nameId = useId();
+  const descriptionId = useId();
   const [name, setName] = useState(group.name);
+  const [description, setDescription] = useState(group.description);
   const [selected, setSelected] = useState(group.members.map((member) => member.botId));
   const [pending, setPending] = useState<"save" | "remove" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -193,6 +215,7 @@ export function GroupSettings({
   function save() {
     return onSave({
       name: name.trim() !== group.name ? name.trim() : undefined,
+      description: description.trim() !== group.description ? description.trim() : undefined,
       botIds: sameMembers(
         selected,
         group.members.map((member) => member.botId),
@@ -220,6 +243,18 @@ export function GroupSettings({
           id={nameId}
           value={name}
           onChange={(e) => setName(e.target.value)}
+          className="mt-2"
+        />
+      </label>
+      <label htmlFor={descriptionId} className="mt-5 block text-sm text-muted-foreground">
+        <Trans>Description</Trans>
+        <Textarea
+          id={descriptionId}
+          value={description}
+          maxLength={GROUP_DESCRIPTION_MAX_LENGTH}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder={t`What this group is for`}
+          rows={3}
           className="mt-2"
         />
       </label>

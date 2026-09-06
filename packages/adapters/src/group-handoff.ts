@@ -209,5 +209,6 @@ export async function loadGroupContext(
     group.name,
     group.members.map((member) => member.bot),
     self,
+    group.description,
   );
 }

@@ -411,6 +411,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Waiting for this bot’s response.": "正在等待这个 Bot 的回复。",
   "Waiting…": "等待中…",
   "What this bot is for": "这个 Bot 的用途",
+  "What this group is for": "这个群组的用途",
   "While agents are working": "智能体工作时",
   Working: "工作中",
   "Working…": "处理中…",

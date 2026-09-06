@@ -81,11 +81,13 @@ export type GroupMember = z.infer<typeof GroupMemberSchema>;
 
 export const GROUP_MEMBER_MIN = 1;
 export const GROUP_MEMBER_MAX = 6;
+export const GROUP_DESCRIPTION_MAX_LENGTH = 4000;
 
 export const GroupSchema = z.object({
   id: Id,
   spaceId: Id,
   name: z.string(),
+  description: z.string(),
   pinned: z.boolean(),
   sectionId: Id.nullable(),
   archivedAt: z.string().nullable(),
@@ -106,6 +108,7 @@ const GroupBotIds = z
 
 export const CreateGroupInput = z.object({
   name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(GROUP_DESCRIPTION_MAX_LENGTH).default(""),
   botIds: GroupBotIds,
 });
 export type CreateGroupInput = z.infer<typeof CreateGroupInput>;
@@ -113,6 +116,7 @@ export type CreateGroupInput = z.infer<typeof CreateGroupInput>;
 export const UpdateGroupInput = z.object({
   groupId: Id,
   name: z.string().trim().min(1).max(80).optional(),
+  description: z.string().trim().max(GROUP_DESCRIPTION_MAX_LENGTH).optional(),
   botIds: GroupBotIds.optional(),
   pinned: z.boolean().optional(),
   sectionId: Id.nullable().optional(),

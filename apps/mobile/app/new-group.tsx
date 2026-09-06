@@ -1,4 +1,8 @@
-import { GROUP_MEMBER_MAX, GROUP_MEMBER_MIN } from "@rakazo/contracts";
+import {
+  GROUP_DESCRIPTION_MAX_LENGTH,
+  GROUP_MEMBER_MAX,
+  GROUP_MEMBER_MIN,
+} from "@rakazo/contracts";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
@@ -13,6 +17,7 @@ export default function NewGroup() {
   const router = useRouter();
   const [bots, setBots] = useState<MobileBot[]>([]);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -36,6 +41,7 @@ export default function NewGroup() {
     try {
       const group = await rpc<{ id: string; name: string }>("groups/create", {
         name: name.trim(),
+        description: description.trim(),
         botIds: selected,
       });
       router.replace({
@@ -69,6 +75,27 @@ export default function NewGroup() {
             padding: 14,
             color: tokens.foreground,
             fontSize: 16,
+          }}
+        />
+        <Text style={{ color: tokens.mutedForeground, fontSize: 14, marginTop: 20 }}>
+          {t("Description")}
+        </Text>
+        <TextInput
+          value={description}
+          maxLength={GROUP_DESCRIPTION_MAX_LENGTH}
+          onChangeText={setDescription}
+          placeholder={t("What this group is for")}
+          placeholderTextColor={tokens.mutedForeground}
+          multiline
+          style={{
+            marginTop: 8,
+            backgroundColor: tokens.muted,
+            borderRadius: 11,
+            padding: 14,
+            color: tokens.foreground,
+            fontSize: 16,
+            minHeight: 96,
+            textAlignVertical: "top",
           }}
         />
         <Text style={{ color: tokens.mutedForeground, fontSize: 14, marginTop: 20 }}>

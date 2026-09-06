@@ -1013,10 +1013,21 @@ describeJourneys("required product journeys", () => {
       notifyOnFinish: false,
     });
     const dmThread = await prisma.thread.findUniqueOrThrow({ where: { botId: bot.id } });
-    const group = await rpc<{ id: string; threadId: string }>(app, cookie, "groups/create", {
-      name: "Schedule room",
-      botIds: [bot.id, peer.id],
-    });
+    const group = await rpc<{ id: string; threadId: string; description: string }>(
+      app,
+      cookie,
+      "groups/create",
+      {
+        name: "Schedule room",
+        description: "  Plans the weekly digest  ",
+        botIds: [bot.id, peer.id],
+      },
+    );
+    expect(group.description).toBe("Plans the weekly digest");
+    await rpc(app, cookie, "groups/update", { groupId: group.id, description: "Digest only" });
+    expect(
+      (await prisma.chatGroup.findUniqueOrThrow({ where: { id: group.id } })).description,
+    ).toBe("Digest only");
     const events = createThreadEvents(prisma);
     const scheduleDeps = { prisma, events, jobs };
 

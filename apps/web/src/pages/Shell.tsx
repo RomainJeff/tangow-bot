@@ -2146,7 +2146,7 @@ export function ShellPage() {
     if (text && id) void speaker.speak(text, { botId: id, messageId: message.id });
   }, []);
 
-  async function createGroup(input: { name: string; botIds: string[] }) {
+  async function createGroup(input: { name: string; description: string; botIds: string[] }) {
     const group = await rpc.groups.create(input);
     setGroups((current) =>
       current.some((item) => item.id === group.id) ? current : [group, ...current],

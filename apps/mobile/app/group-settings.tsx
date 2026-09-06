@@ -1,4 +1,8 @@
-import { GROUP_MEMBER_MAX, GROUP_MEMBER_MIN } from "@rakazo/contracts";
+import {
+  GROUP_DESCRIPTION_MAX_LENGTH,
+  GROUP_MEMBER_MAX,
+  GROUP_MEMBER_MIN,
+} from "@rakazo/contracts";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
@@ -15,6 +19,7 @@ export default function GroupSettingsScreen() {
   const [group, setGroup] = useState<MobileGroup | null>(null);
   const [bots, setBots] = useState<MobileBot[]>([]);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -31,6 +36,7 @@ export default function GroupSettingsScreen() {
         if (!nextGroup) throw new Error(t("Group not found"));
         setGroup(nextGroup);
         setName(nextGroup.name);
+        setDescription(nextGroup.description ?? "");
         setSelected(nextGroup.members.map((member) => member.botId));
         setBots(nextBots.filter((bot) => !bot.archivedAt));
       })
@@ -42,11 +48,15 @@ export default function GroupSettingsScreen() {
     setPending(true);
     setError(null);
     try {
-      const input: { groupId: string; name?: string; botIds?: string[] } = { groupId };
+      const input: { groupId: string; name?: string; description?: string; botIds?: string[] } = {
+        groupId,
+      };
       if (name.trim() !== group.name) input.name = name.trim();
+      if (description.trim() !== (group.description ?? "")) input.description = description.trim();
       const memberIds = group.members.map((member) => member.botId).join(",");
       if (selected.join(",") !== memberIds) input.botIds = selected;
-      if (input.name || input.botIds) await rpc("groups/update", input);
+      if (input.name || input.description !== undefined || input.botIds)
+        await rpc("groups/update", input);
       router.back();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("Could not save group"));
@@ -95,6 +105,27 @@ export default function GroupSettingsScreen() {
             padding: 14,
             color: tokens.foreground,
             fontSize: 16,
+          }}
+        />
+        <Text style={{ color: tokens.mutedForeground, fontSize: 14, marginTop: 20 }}>
+          {t("Description")}
+        </Text>
+        <TextInput
+          value={description}
+          maxLength={GROUP_DESCRIPTION_MAX_LENGTH}
+          onChangeText={setDescription}
+          placeholder={t("What this group is for")}
+          placeholderTextColor={tokens.mutedForeground}
+          multiline
+          style={{
+            marginTop: 8,
+            backgroundColor: tokens.muted,
+            borderRadius: 11,
+            padding: 14,
+            color: tokens.foreground,
+            fontSize: 16,
+            minHeight: 96,
+            textAlignVertical: "top",
           }}
         />
         <Text style={{ color: tokens.mutedForeground, fontSize: 14, marginTop: 20 }}>

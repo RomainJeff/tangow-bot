@@ -57,7 +57,7 @@ msgid "{0} MB"
 msgstr "{0} MB"
 
 #. placeholder {0}: mkt.installedPlugins.length
-#: src/pages/SkillsOverlay.tsx:261
+#: src/pages/SkillsOverlay.tsx:264
 msgid "{0} plugins installed"
 msgstr "{0} eklenti kurulu"
 
@@ -69,12 +69,12 @@ msgid "{0} runs · {1} tokens"
 msgstr "{0} çalıştırma · {1} token"
 
 #. placeholder {0}: picked.size
-#: src/pages/SkillsOverlay.tsx:477
+#: src/pages/SkillsOverlay.tsx:491
 msgid "{0} selected"
 msgstr "{0} seçildi"
 
 #. placeholder {0}: mkt.installedPlugins.length
-#: src/pages/SkillsOverlay.tsx:259
+#: src/pages/SkillsOverlay.tsx:262
 msgid "{0} skills installed"
 msgstr "{0} beceri kurulu"
 
@@ -136,7 +136,7 @@ msgstr "{workingBotName} çalışıyor"
 msgid "@{0}"
 msgstr "@{0}"
 
-#: src/pages/SkillsOverlay.tsx:232
+#: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "Bir eklenti pazar yeri (.claude-plugin/marketplace.json) veya beceri deposu (SKILL.md dosyaları). Biçim otomatik olarak algılanır."
 
@@ -161,7 +161,7 @@ msgstr "İşlem onayları"
 msgid "Actions for {0}"
 msgstr "{0} için işlemler"
 
-#: src/pages/KnowledgeSection.tsx:516
+#: src/pages/KnowledgeSection.tsx:506
 #: src/pages/RoutineEditor.tsx:268
 msgid "Active"
 msgstr "Etkin"
@@ -185,7 +185,7 @@ msgstr "Etkinlik"
 msgid "Add"
 msgstr "Ekle"
 
-#: src/pages/SkillsOverlay.tsx:454
+#: src/pages/SkillsOverlay.tsx:465
 msgid "Add a marketplace first."
 msgstr "Önce bir pazar yeri ekleyin."
 
@@ -229,7 +229,7 @@ msgstr "GraphQL uç noktası ekle"
 msgid "Add item"
 msgstr "Öğe ekle"
 
-#: src/pages/SkillsOverlay.tsx:227
+#: src/pages/SkillsOverlay.tsx:230
 msgid "Add marketplace"
 msgstr "Pazar yeri ekle"
 
@@ -269,7 +269,7 @@ msgstr "Tetikleyici ekle"
 #: src/pages/McpServersOverlay.tsx:415
 #: src/pages/PluginsOverlay.tsx:283
 #: src/pages/PluginsOverlay.tsx:429
-#: src/pages/SkillsOverlay.tsx:227
+#: src/pages/SkillsOverlay.tsx:230
 msgid "Adding…"
 msgstr "Ekleniyor…"
 
@@ -295,7 +295,7 @@ msgstr "Agent bilgisayarı"
 msgid "Agent connections"
 msgstr "Ajan bağlantıları"
 
-#: src/pages/KnowledgeSection.tsx:519
+#: src/pages/KnowledgeSection.tsx:509
 msgid "Agents"
 msgstr "Ajanlar"
 
@@ -304,7 +304,7 @@ msgstr "Ajanlar"
 msgid "Agents:"
 msgstr "Agent'lar:"
 
-#: src/pages/KnowledgeSection.tsx:515
+#: src/pages/KnowledgeSection.tsx:505
 msgid "All"
 msgstr "Tümü"
 
@@ -400,11 +400,11 @@ msgid "Appearance"
 msgstr "Görünüm"
 
 #. placeholder {0}: check.commit.slice(0, 7)
-#: src/pages/SkillsOverlay.tsx:335
+#: src/pages/SkillsOverlay.tsx:338
 msgid "Apply update to {0}"
 msgstr "Güncellemeyi {0} üzerine uygula"
 
-#: src/pages/SkillsOverlay.tsx:333
+#: src/pages/SkillsOverlay.tsx:336
 msgid "Applying…"
 msgstr "Uygulanıyor…"
 
@@ -588,7 +588,7 @@ msgstr "Botlar çalışıyor"
 msgid "Bring your own key. The provider is swappable; your bots keep the same speak and call buttons."
 msgstr "Kendi anahtarını getir. Sağlayıcı değiştirilebilir; botlarındaki seslendirme ve arama düğmeleri aynı kalır."
 
-#: src/pages/SkillsOverlay.tsx:122
+#: src/pages/SkillsOverlay.tsx:125
 msgid "Browse"
 msgstr "Göz at"
 
@@ -607,7 +607,7 @@ msgstr "Sunucuya ulaşılamıyor."
 #: src/components/ComputerMaintenanceActions.tsx:96
 #: src/components/teach/TeachComputerOverlay.tsx:254
 #: src/pages/KnowledgeSection.tsx:235
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:669
 #: src/pages/PluginsOverlay.tsx:654
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:152
@@ -625,7 +625,7 @@ msgstr "Düzenlemeyi iptal et"
 msgid "Cancel new bot"
 msgstr "Yeni botu iptal et"
 
-#: src/pages/GroupPanel.tsx:112
+#: src/pages/GroupPanel.tsx:120
 msgid "Cancel new group"
 msgstr "Yeni grubu iptal et"
 
@@ -683,7 +683,7 @@ msgstr "Güncellemeleri denetle"
 msgid "Check in."
 msgstr "Durum bildir."
 
-#: src/pages/SkillsOverlay.tsx:281
+#: src/pages/SkillsOverlay.tsx:284
 msgid "Check update"
 msgstr "Güncellemeyi denetle"
 
@@ -692,7 +692,7 @@ msgid "Check your email"
 msgstr "E-postanızı kontrol edin"
 
 #: src/components/SoftwareUpdateSection.tsx:77
-#: src/pages/SkillsOverlay.tsx:279
+#: src/pages/SkillsOverlay.tsx:282
 msgid "Checking…"
 msgstr "Denetleniyor…"
 
@@ -730,8 +730,8 @@ msgstr "Sohbeti temizle"
 msgid "Clearing…"
 msgstr "Temizleniyor…"
 
-#: src/pages/KnowledgeSection.tsx:679
-#: src/pages/KnowledgeSection.tsx:829
+#: src/pages/KnowledgeSection.tsx:669
+#: src/pages/KnowledgeSection.tsx:819
 #: src/pages/PeerMessagesOverlay.tsx:101
 #: src/pages/PeerMessagesOverlay.tsx:102
 #: src/pages/PeerMessagesOverlay.tsx:153
@@ -784,7 +784,7 @@ msgstr "Paneli kapat"
 msgid "Close preview"
 msgstr "Önizlemeyi kapat"
 
-#: src/pages/SkillsOverlay.tsx:106
+#: src/pages/SkillsOverlay.tsx:109
 msgid "Close skills"
 msgstr "Yetenekleri kapat"
 
@@ -863,7 +863,7 @@ msgstr "Dağıtım tarafından yapılandırıldı"
 msgid "Configured servers"
 msgstr "Yapılandırılmış sunucular"
 
-#: src/pages/KnowledgeSection.tsx:690
+#: src/pages/KnowledgeSection.tsx:680
 #: src/pages/McpServersOverlay.tsx:506
 msgid "Confirm delete"
 msgstr "Silmeyi onayla"
@@ -966,7 +966,7 @@ msgstr "Kopyala"
 msgid "Could not add"
 msgstr "Eklenemedi"
 
-#: src/pages/SkillsOverlay.tsx:198
+#: src/pages/SkillsOverlay.tsx:201
 msgid "Could not add marketplace"
 msgstr "Pazar yeri eklenemedi"
 
@@ -974,7 +974,7 @@ msgstr "Pazar yeri eklenemedi"
 msgid "Could not add MCP server"
 msgstr "MCP sunucusu eklenemedi"
 
-#: src/pages/SkillsOverlay.tsx:322
+#: src/pages/SkillsOverlay.tsx:325
 msgid "Could not apply update"
 msgstr "Güncelleme uygulanamadı"
 
@@ -994,7 +994,7 @@ msgstr "Parola değiştirilemedi"
 msgid "Could not change the default model"
 msgstr "Varsayılan model değiştirilemedi"
 
-#: src/pages/SkillsOverlay.tsx:272
+#: src/pages/SkillsOverlay.tsx:275
 msgid "Could not check for updates"
 msgstr "Güncellemeler denetlenemedi"
 
@@ -1040,7 +1040,7 @@ msgstr "Devam edilemedi"
 msgid "Could not create bot"
 msgstr "Bot oluşturulamadı"
 
-#: src/pages/GroupPanel.tsx:97
+#: src/pages/GroupPanel.tsx:105
 msgid "Could not create group"
 msgstr "Grup oluşturulamadı"
 
@@ -1105,7 +1105,7 @@ msgstr "Yetenek içe aktarılamadı"
 msgid "Could not install connector"
 msgstr "Bağlayıcı kurulamadı"
 
-#: src/pages/SkillsOverlay.tsx:443
+#: src/pages/SkillsOverlay.tsx:454
 msgid "Could not install skills"
 msgstr "Beceriler kurulamadı"
 
@@ -1115,7 +1115,7 @@ msgstr "Beceriler kurulamadı"
 #: src/pages/KnowledgeSection.tsx:361
 #: src/pages/KnowledgeSection.tsx:384
 #: src/pages/KnowledgeSection.tsx:411
-#: src/pages/KnowledgeSection.tsx:742
+#: src/pages/KnowledgeSection.tsx:732
 msgid "Could not load"
 msgstr "Yüklenemedi"
 
@@ -1135,7 +1135,7 @@ msgstr "MCP sunucuları yüklenemedi"
 msgid "Could not load model settings"
 msgstr "Model ayarları yüklenemedi"
 
-#: src/pages/SkillsOverlay.tsx:413
+#: src/pages/SkillsOverlay.tsx:424
 msgid "Could not load plugins"
 msgstr "Eklentiler yüklenemedi"
 
@@ -1143,7 +1143,7 @@ msgstr "Eklentiler yüklenemedi"
 msgid "Could not load skill"
 msgstr "Beceri yüklenemedi"
 
-#: src/pages/SkillsOverlay.tsx:79
+#: src/pages/SkillsOverlay.tsx:82
 msgid "Could not load skills"
 msgstr "Yetenekler yüklenemedi"
 
@@ -1178,7 +1178,7 @@ msgstr "Sunucuya ulaşılamadı"
 msgid "Could not reach this model server"
 msgstr "Bu model sunucusuna ulaşılamadı"
 
-#: src/pages/KnowledgeSection.tsx:762
+#: src/pages/KnowledgeSection.tsx:752
 msgid "Could not read this file"
 msgstr "Bu dosya okunamadı"
 
@@ -1190,11 +1190,11 @@ msgstr "Kaldırılamadı"
 msgid "Could not remove connector"
 msgstr "Bağlayıcı kaldırılamadı"
 
-#: src/pages/GroupPanel.tsx:186
+#: src/pages/GroupPanel.tsx:208
 msgid "Could not remove group"
 msgstr "Grup kaldırılamadı"
 
-#: src/pages/SkillsOverlay.tsx:292
+#: src/pages/SkillsOverlay.tsx:295
 msgid "Could not remove marketplace"
 msgstr "Pazar yeri kaldırılamadı"
 
@@ -1227,7 +1227,7 @@ msgstr "Kaydedilemedi"
 msgid "Could not save Auto Review"
 msgstr "Otomatik inceleme kaydedilemedi"
 
-#: src/pages/GroupPanel.tsx:185
+#: src/pages/GroupPanel.tsx:207
 msgid "Could not save group"
 msgstr "Grup kaydedilemedi"
 
@@ -1296,7 +1296,7 @@ msgstr "Agent erişimi güncellenemedi"
 msgid "Could not update computer"
 msgstr "Bilgisayar güncellenemedi"
 
-#: src/pages/SkillsOverlay.tsx:433
+#: src/pages/SkillsOverlay.tsx:444
 msgid "Could not update plugin"
 msgstr "Eklenti güncellenemedi"
 
@@ -1335,7 +1335,7 @@ msgstr "Bir bölüm oluştur ve {0} botunu içine taşı."
 msgid "Create account"
 msgstr "Hesap oluştur"
 
-#: src/pages/GroupPanel.tsx:150
+#: src/pages/GroupPanel.tsx:170
 msgid "Create group"
 msgstr "Grup oluştur"
 
@@ -1365,7 +1365,7 @@ msgstr "Rakazo hesabını oluştur"
 msgid "Created"
 msgstr "Oluşturuldu"
 
-#: src/pages/GroupPanel.tsx:150
+#: src/pages/GroupPanel.tsx:170
 #: src/pages/shell/bot-panel.tsx:179
 #: src/pages/shell/dialogs.tsx:91
 #: src/pages/shell/dialogs.tsx:155
@@ -1428,7 +1428,7 @@ msgid "Default scope"
 msgstr "Varsayılan kapsam"
 
 #: src/pages/BotContextMenu.tsx:140
-#: src/pages/KnowledgeSection.tsx:690
+#: src/pages/KnowledgeSection.tsx:680
 #: src/pages/McpServersOverlay.tsx:508
 #: src/pages/RoutineEditor.tsx:272
 #: src/pages/Shell.tsx:2829
@@ -1452,7 +1452,7 @@ msgstr "{0} sil"
 msgid "Delete {0}?"
 msgstr "{0} silinsin mi?"
 
-#: src/pages/GroupPanel.tsx:250
+#: src/pages/GroupPanel.tsx:285
 msgid "Delete group"
 msgstr "Grubu sil"
 
@@ -1464,7 +1464,7 @@ msgstr "Hafızayı da sil"
 msgid "deleted"
 msgstr "silindi"
 
-#: src/pages/GroupPanel.tsx:250
+#: src/pages/GroupPanel.tsx:285
 #: src/pages/shell/dialogs.tsx:298
 #: src/pages/shell/dialogs.tsx:355
 msgid "Deleting…"
@@ -1487,6 +1487,8 @@ msgstr "Dağıtım varsayılanı"
 msgid "Describe what this bot does"
 msgstr "Bu botun ne yaptığını açıkla"
 
+#: src/pages/GroupPanel.tsx:143
+#: src/pages/GroupPanel.tsx:250
 #: src/pages/Onboarding.tsx:615
 #: src/pages/shell/bot-panel.tsx:162
 #: src/pages/shell/bot-panel.tsx:438
@@ -1498,7 +1500,7 @@ msgid "Dictate"
 msgstr "Dikte et"
 
 #: src/pages/KnowledgeSection.tsx:435
-#: src/pages/KnowledgeSection.tsx:517
+#: src/pages/KnowledgeSection.tsx:507
 msgid "Disabled"
 msgstr "Devre dışı"
 
@@ -1554,7 +1556,7 @@ msgstr "Hesabın yok mu?"
 msgid "Done"
 msgstr "Bitti"
 
-#: src/pages/KnowledgeSection.tsx:822
+#: src/pages/KnowledgeSection.tsx:812
 msgid "Download"
 msgstr "İndir"
 
@@ -1703,7 +1705,7 @@ msgstr "Öne çıkanlar"
 msgid "Files"
 msgstr "Dosyalar"
 
-#: src/pages/KnowledgeSection.tsx:512
+#: src/pages/KnowledgeSection.tsx:502
 msgid "Filter skills"
 msgstr "Yetenekleri filtrele"
 
@@ -1756,7 +1758,7 @@ msgstr "Tam ekran"
 msgid "Git event"
 msgstr "Git olayı"
 
-#: src/pages/SkillsOverlay.tsx:217
+#: src/pages/SkillsOverlay.tsx:220
 msgid "Git ref"
 msgstr "Git ref"
 
@@ -1770,7 +1772,7 @@ msgstr "Genel"
 msgid "Group"
 msgstr "Grup"
 
-#: src/pages/GroupPanel.tsx:209
+#: src/pages/GroupPanel.tsx:232
 msgid "Group settings"
 msgstr "Grup ayarları"
 
@@ -1856,7 +1858,7 @@ msgstr "Bitirdim"
 msgid "If you heard that, voice is ready."
 msgstr "Bunu duyduysan ses hazır."
 
-#: src/pages/KnowledgeSection.tsx:496
+#: src/pages/KnowledgeSection.tsx:486
 msgid "Import"
 msgstr "İçe aktar"
 
@@ -1876,16 +1878,16 @@ msgstr "Girdi"
 msgid "Inputs"
 msgstr "Girdiler"
 
-#: src/pages/SkillsOverlay.tsx:552
+#: src/pages/SkillsOverlay.tsx:566
 msgid "Install"
 msgstr "Kur"
 
 #. placeholder {0}: picked.size
-#: src/pages/SkillsOverlay.tsx:490
+#: src/pages/SkillsOverlay.tsx:504
 msgid "Install selected ({0})"
 msgstr "Seçilenleri kur ({0})"
 
-#: src/pages/SkillsOverlay.tsx:116
+#: src/pages/SkillsOverlay.tsx:119
 msgid "Installed"
 msgstr "Kurulu"
 
@@ -1893,7 +1895,7 @@ msgstr "Kurulu"
 msgid "Installed integrations"
 msgstr "Kurulu entegrasyonlar"
 
-#: src/pages/SkillsOverlay.tsx:488
+#: src/pages/SkillsOverlay.tsx:502
 msgid "Installing…"
 msgstr "Kuruluyor…"
 
@@ -2066,15 +2068,15 @@ msgstr "Okundu olarak işaretle"
 msgid "Mark as Unread"
 msgstr "Okunmadı olarak işaretle"
 
-#: src/pages/SkillsOverlay.tsx:465
+#: src/pages/SkillsOverlay.tsx:476
 msgid "Marketplace"
 msgstr "Pazar yeri"
 
-#: src/pages/SkillsOverlay.tsx:210
+#: src/pages/SkillsOverlay.tsx:213
 msgid "Marketplace URL"
 msgstr "Pazar yeri URL'si"
 
-#: src/pages/SkillsOverlay.tsx:119
+#: src/pages/SkillsOverlay.tsx:122
 msgid "Marketplaces"
 msgstr "Pazar yerleri"
 
@@ -2091,11 +2093,11 @@ msgstr "MCP sunucuları"
 msgid "Medium"
 msgstr "Orta"
 
-#: src/pages/GroupPanel.tsx:227
+#: src/pages/GroupPanel.tsx:262
 msgid "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Üyeler ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
-#: src/pages/GroupPanel.tsx:135
+#: src/pages/GroupPanel.tsx:155
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Üyeler ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} seç)"
 
@@ -2234,8 +2236,8 @@ msgstr "Taşı"
 
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:117
-#: src/pages/GroupPanel.tsx:125
-#: src/pages/GroupPanel.tsx:218
+#: src/pages/GroupPanel.tsx:133
+#: src/pages/GroupPanel.tsx:241
 #: src/pages/Onboarding.tsx:589
 #: src/pages/RoutineEditor.tsx:281
 #: src/pages/shell/bot-panel.tsx:140
@@ -2250,7 +2252,7 @@ msgstr "Ad"
 msgid "Name this bot"
 msgstr "Bota bir ad ver"
 
-#: src/pages/GroupPanel.tsx:130
+#: src/pages/GroupPanel.tsx:138
 msgid "Name this group"
 msgstr "Gruba bir ad ver"
 
@@ -2274,7 +2276,7 @@ msgstr "Sizi bekliyor"
 msgid "New bot"
 msgstr "Yeni bot"
 
-#: src/pages/GroupPanel.tsx:107
+#: src/pages/GroupPanel.tsx:115
 #: src/pages/shell/bot-picker.tsx:93
 msgid "New group"
 msgstr "Yeni grup"
@@ -2293,7 +2295,7 @@ msgstr "Yeni parola"
 msgid "New section"
 msgstr "Yeni bölüm"
 
-#: src/pages/KnowledgeSection.tsx:476
+#: src/pages/KnowledgeSection.tsx:466
 msgid "New skill"
 msgstr "Yeni beceri"
 
@@ -2339,7 +2341,7 @@ msgstr "{0} için bağlantı kaydı bulunamadı."
 msgid "No exceptions. Actions run automatically."
 msgstr "İstisna yok. İşlemler otomatik çalışır."
 
-#: src/pages/KnowledgeSection.tsx:836
+#: src/pages/KnowledgeSection.tsx:826
 msgid "No files yet"
 msgstr "Henüz dosya yok"
 
@@ -2359,7 +2361,7 @@ msgstr "Artık etkin değil"
 msgid "No managed app catalog is configured on this deployment."
 msgstr "Bu kurulumda yönetilen bir uygulama kataloğu yapılandırılmamış."
 
-#: src/pages/SkillsOverlay.tsx:240
+#: src/pages/SkillsOverlay.tsx:243
 msgid "No marketplaces added yet."
 msgstr "Henüz pazar yeri eklenmedi."
 
@@ -2383,7 +2385,7 @@ msgstr "{peerBotName} ile henüz mesaj yok."
 msgid "No model catalog is available."
 msgstr "Kullanılabilir model kataloğu yok."
 
-#: src/pages/SkillsOverlay.tsx:501
+#: src/pages/SkillsOverlay.tsx:515
 msgid "No plugins in this marketplace."
 msgstr "Bu pazar yerinde eklenti yok."
 
@@ -2403,19 +2405,19 @@ msgstr "Sonuç yok"
 msgid "No runs yet"
 msgstr "Henüz çalışma yok"
 
-#: src/pages/SkillsOverlay.tsx:499
+#: src/pages/SkillsOverlay.tsx:513
 msgid "No skills in this marketplace."
 msgstr "Bu pazar yerinde beceri yok."
 
-#: src/pages/SkillsOverlay.tsx:561
+#: src/pages/SkillsOverlay.tsx:575
 msgid "No skills in this plugin."
 msgstr "Bu eklentide yetenek yok."
 
-#: src/pages/KnowledgeSection.tsx:533
+#: src/pages/KnowledgeSection.tsx:523
 msgid "No skills match"
 msgstr "Eşleşen yetenek yok"
 
-#: src/pages/KnowledgeSection.tsx:533
+#: src/pages/KnowledgeSection.tsx:523
 msgid "No skills yet"
 msgstr "Henüz beceri yok"
 
@@ -2474,7 +2476,7 @@ msgstr "OAuth bağlantısı başarısız"
 msgid "OAuth expired"
 msgstr "OAuth süresi doldu"
 
-#: src/pages/SkillsOverlay.tsx:576
+#: src/pages/SkillsOverlay.tsx:591
 msgid "Off for every agent until you pick some in Installed."
 msgstr "Kurulu bölümünden birkaçını seçene kadar tüm ajanlar için kapalı."
 
@@ -2487,7 +2489,7 @@ msgstr "Zamanlamaya göre"
 msgid "on the 1st at {0}"
 msgstr "her ayın 1'inde saat {0}"
 
-#: src/pages/SkillsOverlay.tsx:135
+#: src/pages/SkillsOverlay.tsx:138
 msgid "Only the first 50 skills are shown to the agent."
 msgstr "Ajana yalnızca ilk 50 yetenek gösterilir."
 
@@ -2629,7 +2631,7 @@ msgstr "Sabitle"
 msgid "Playing…"
 msgstr "Çalınıyor…"
 
-#: src/pages/SkillsOverlay.tsx:253
+#: src/pages/SkillsOverlay.tsx:256
 msgid "Plugins"
 msgstr "Eklentiler"
 
@@ -2672,7 +2674,7 @@ msgstr "Rakazo kaynağı kaydetmeden önce doğrular. Kimlik bilgileri şifrelen
 msgid "Read replies aloud"
 msgstr "Yanıtları sesli oku"
 
-#: src/pages/KnowledgeSection.tsx:560
+#: src/pages/KnowledgeSection.tsx:550
 msgid "read-only"
 msgstr "salt okunur"
 
@@ -2729,8 +2731,8 @@ msgstr "Bırak"
 #: src/pages/PluginsOverlay.tsx:432
 #: src/pages/PluginsOverlay.tsx:696
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SkillsOverlay.tsx:298
-#: src/pages/SkillsOverlay.tsx:550
+#: src/pages/SkillsOverlay.tsx:301
+#: src/pages/SkillsOverlay.tsx:564
 msgid "Remove"
 msgstr "Kaldır"
 
@@ -2742,7 +2744,7 @@ msgid "Remove {0}"
 msgstr "{0} kaldır"
 
 #. placeholder {0}: mkt.name
-#: src/pages/SkillsOverlay.tsx:291
+#: src/pages/SkillsOverlay.tsx:294
 msgid "Remove marketplace {0} and its skills?"
 msgstr "{0} pazar yeri ve yetenekleri kaldırılsın mı?"
 
@@ -2780,7 +2782,7 @@ msgstr "Kaldırıldı ama liste yenilenemedi"
 #: src/pages/PluginsOverlay.tsx:281
 #: src/pages/PluginsOverlay.tsx:427
 #: src/pages/PluginsOverlay.tsx:696
-#: src/pages/SkillsOverlay.tsx:298
+#: src/pages/SkillsOverlay.tsx:301
 msgid "Removing…"
 msgstr "Kaldırılıyor…"
 
@@ -2914,9 +2916,9 @@ msgstr "Çalışıyor…"
 
 #: src/components/AskCard.tsx:157
 #: src/components/teach/SkillDraftCard.tsx:142
-#: src/pages/GroupPanel.tsx:242
+#: src/pages/GroupPanel.tsx:277
 #: src/pages/KnowledgeSection.tsx:227
-#: src/pages/KnowledgeSection.tsx:666
+#: src/pages/KnowledgeSection.tsx:656
 #: src/pages/ModelSettingsOverlay.tsx:689
 #: src/pages/RoutineEditor.tsx:413
 #: src/pages/shell/bot-panel.tsx:645
@@ -2943,7 +2945,7 @@ msgstr "Kaydedildi. Görmek için döndürün."
 
 #: src/components/AskCard.tsx:157
 #: src/components/teach/SkillDraftCard.tsx:142
-#: src/pages/GroupPanel.tsx:242
+#: src/pages/GroupPanel.tsx:277
 #: src/pages/ModelSettingsOverlay.tsx:687
 #: src/pages/RoutineEditor.tsx:413
 msgid "Saving…"
@@ -2992,8 +2994,8 @@ msgstr "Sağlayıcı ara"
 msgid "Search providers and models"
 msgstr "Sağlayıcı ve model ara"
 
-#: src/pages/KnowledgeSection.tsx:502
-#: src/pages/KnowledgeSection.tsx:503
+#: src/pages/KnowledgeSection.tsx:492
+#: src/pages/KnowledgeSection.tsx:493
 msgid "Search skills"
 msgstr "Yeteneklerde ara"
 
@@ -3002,7 +3004,7 @@ msgid "Searching…"
 msgstr "Aranıyor…"
 
 #. placeholder {0}: plugin.name
-#: src/pages/SkillsOverlay.tsx:514
+#: src/pages/SkillsOverlay.tsx:528
 msgid "Select {0}"
 msgstr "{0} öğesini seç"
 
@@ -3097,7 +3099,7 @@ msgstr "Paylaşılan belgeler"
 msgid "Show all providers"
 msgstr "Tüm sağlayıcıları göster"
 
-#: src/pages/SkillsOverlay.tsx:368
+#: src/pages/SkillsOverlay.tsx:371
 msgid "Show before / after"
 msgstr "Öncesini / sonrasını göster"
 
@@ -3155,8 +3157,8 @@ msgstr "Beceri: {0}"
 
 #: src/pages/CustomizeOverlay.tsx:19
 #: src/pages/KnowledgeSection.tsx:84
-#: src/pages/SkillsOverlay.tsx:103
-#: src/pages/SkillsOverlay.tsx:253
+#: src/pages/SkillsOverlay.tsx:106
+#: src/pages/SkillsOverlay.tsx:256
 msgid "Skills"
 msgstr "Beceriler"
 
@@ -3461,7 +3463,7 @@ msgstr "Sabitlemeyi kaldır"
 msgid "Unsupported file type: {0}"
 msgstr "Desteklenmeyen dosya türü: {0}"
 
-#: src/pages/SkillsOverlay.tsx:531
+#: src/pages/SkillsOverlay.tsx:545
 msgid "Unsupported source"
 msgstr "Desteklenmeyen kaynak"
 
@@ -3469,7 +3471,7 @@ msgstr "Desteklenmeyen kaynak"
 msgid "Up to date"
 msgstr "Güncel"
 
-#: src/pages/SkillsOverlay.tsx:306
+#: src/pages/SkillsOverlay.tsx:309
 msgid "Up to date."
 msgstr "Güncel."
 
@@ -3579,6 +3581,11 @@ msgstr "Bu rutin her çalıştığında ne yapmalı?"
 msgid "What this bot is for"
 msgstr "Bu botun amacı"
 
+#: src/pages/GroupPanel.tsx:149
+#: src/pages/GroupPanel.tsx:256
+msgid "What this group is for"
+msgstr "Bu grubun amacı"
+
 #: src/components/teach/SkillDraftCard.tsx:119
 msgid "What to return"
 msgstr "Ne döndürülecek"
@@ -3603,11 +3610,11 @@ msgstr "Botlar nerede çalışsın?"
 #: src/pages/Auth.tsx:192
 #: src/pages/Auth.tsx:300
 #: src/pages/CallView.tsx:251
-#: src/pages/SkillsOverlay.tsx:548
+#: src/pages/SkillsOverlay.tsx:562
 msgid "Working…"
 msgstr "Çalışıyor…"
 
-#: src/pages/KnowledgeSection.tsx:784
+#: src/pages/KnowledgeSection.tsx:774
 msgid "Workspace root"
 msgstr "Çalışma alanı kökü"
 

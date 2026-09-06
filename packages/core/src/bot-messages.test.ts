@@ -221,6 +221,22 @@ describe("group members roster", () => {
     expect(context).not.toContain("orchestrator");
   });
 
+  it("injects the owner's group description as escaped, untrusted context", () => {
+    const members = [{ id: "b_1", name: "Researcher" }];
+    const withPurpose = renderGroupMembersContext(
+      "Launch desk",
+      members,
+      members[0]!,
+      "  Ship the <Q4> launch & keep partners in the loop  ",
+    );
+    expect(withPurpose).toContain("<group_description>");
+    expect(withPurpose).toContain("Ship the &lt;Q4&gt; launch &amp; keep partners in the loop");
+    expect(withPurpose).toContain("</group_description>");
+    expect(withPurpose).toContain("untrusted context");
+    const withoutPurpose = renderGroupMembersContext("Launch desk", members, members[0]!, "   ");
+    expect(withoutPurpose).not.toContain("group_description");
+  });
+
   it("reuses the same roster line formatting as the teammate directory", () => {
     const members = [
       {

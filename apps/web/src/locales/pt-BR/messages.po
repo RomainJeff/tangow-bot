@@ -57,7 +57,7 @@ msgid "{0} MB"
 msgstr "{0} MB"
 
 #. placeholder {0}: mkt.installedPlugins.length
-#: src/pages/SkillsOverlay.tsx:261
+#: src/pages/SkillsOverlay.tsx:264
 msgid "{0} plugins installed"
 msgstr "{0} plugins instalados"
 
@@ -69,12 +69,12 @@ msgid "{0} runs · {1} tokens"
 msgstr "{0} execuções · {1} tokens"
 
 #. placeholder {0}: picked.size
-#: src/pages/SkillsOverlay.tsx:477
+#: src/pages/SkillsOverlay.tsx:491
 msgid "{0} selected"
 msgstr "{0} selecionados"
 
 #. placeholder {0}: mkt.installedPlugins.length
-#: src/pages/SkillsOverlay.tsx:259
+#: src/pages/SkillsOverlay.tsx:262
 msgid "{0} skills installed"
 msgstr "{0} skills instaladas"
 
@@ -136,7 +136,7 @@ msgstr "{workingBotName} está trabalhando"
 msgid "@{0}"
 msgstr "@{0}"
 
-#: src/pages/SkillsOverlay.tsx:232
+#: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "Um marketplace de plugins (.claude-plugin/marketplace.json) ou um repositório de skills (arquivos SKILL.md). O formato é detectado automaticamente."
 
@@ -161,7 +161,7 @@ msgstr "Confirmações de ação"
 msgid "Actions for {0}"
 msgstr "Ações para {0}"
 
-#: src/pages/KnowledgeSection.tsx:516
+#: src/pages/KnowledgeSection.tsx:506
 #: src/pages/RoutineEditor.tsx:268
 msgid "Active"
 msgstr "Ativo"
@@ -185,7 +185,7 @@ msgstr "Atividade"
 msgid "Add"
 msgstr "Adicionar"
 
-#: src/pages/SkillsOverlay.tsx:454
+#: src/pages/SkillsOverlay.tsx:465
 msgid "Add a marketplace first."
 msgstr "Adicione um marketplace primeiro."
 
@@ -229,7 +229,7 @@ msgstr "Adicionar endpoint GraphQL"
 msgid "Add item"
 msgstr "Adicionar item"
 
-#: src/pages/SkillsOverlay.tsx:227
+#: src/pages/SkillsOverlay.tsx:230
 msgid "Add marketplace"
 msgstr "Adicionar marketplace"
 
@@ -269,7 +269,7 @@ msgstr "Adicionar gatilho"
 #: src/pages/McpServersOverlay.tsx:415
 #: src/pages/PluginsOverlay.tsx:283
 #: src/pages/PluginsOverlay.tsx:429
-#: src/pages/SkillsOverlay.tsx:227
+#: src/pages/SkillsOverlay.tsx:230
 msgid "Adding…"
 msgstr "Adicionando"
 
@@ -295,7 +295,7 @@ msgstr "Computador do agente"
 msgid "Agent connections"
 msgstr "Conexões de agentes"
 
-#: src/pages/KnowledgeSection.tsx:519
+#: src/pages/KnowledgeSection.tsx:509
 msgid "Agents"
 msgstr "Agentes"
 
@@ -304,7 +304,7 @@ msgstr "Agentes"
 msgid "Agents:"
 msgstr "Agentes:"
 
-#: src/pages/KnowledgeSection.tsx:515
+#: src/pages/KnowledgeSection.tsx:505
 msgid "All"
 msgstr "Todos"
 
@@ -400,11 +400,11 @@ msgid "Appearance"
 msgstr "Aparência"
 
 #. placeholder {0}: check.commit.slice(0, 7)
-#: src/pages/SkillsOverlay.tsx:335
+#: src/pages/SkillsOverlay.tsx:338
 msgid "Apply update to {0}"
 msgstr "Aplicar a atualização em {0}"
 
-#: src/pages/SkillsOverlay.tsx:333
+#: src/pages/SkillsOverlay.tsx:336
 msgid "Applying…"
 msgstr "Aplicando…"
 
@@ -588,7 +588,7 @@ msgstr "Bots estão trabalhando"
 msgid "Bring your own key. The provider is swappable; your bots keep the same speak and call buttons."
 msgstr "Traga sua própria chave. O provedor pode ser trocado; seus bots mantêm os mesmos botões de fala e chamada."
 
-#: src/pages/SkillsOverlay.tsx:122
+#: src/pages/SkillsOverlay.tsx:125
 msgid "Browse"
 msgstr "Explorar"
 
@@ -607,7 +607,7 @@ msgstr "Não é possível acessar o servidor."
 #: src/components/ComputerMaintenanceActions.tsx:96
 #: src/components/teach/TeachComputerOverlay.tsx:254
 #: src/pages/KnowledgeSection.tsx:235
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:669
 #: src/pages/PluginsOverlay.tsx:654
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:152
@@ -625,7 +625,7 @@ msgstr "Cancelar edição"
 msgid "Cancel new bot"
 msgstr "Cancelar novo bot"
 
-#: src/pages/GroupPanel.tsx:112
+#: src/pages/GroupPanel.tsx:120
 msgid "Cancel new group"
 msgstr "Cancelar novo grupo"
 
@@ -683,7 +683,7 @@ msgstr "Procurar atualizações"
 msgid "Check in."
 msgstr "Acompanhamento"
 
-#: src/pages/SkillsOverlay.tsx:281
+#: src/pages/SkillsOverlay.tsx:284
 msgid "Check update"
 msgstr "Verificar atualização"
 
@@ -692,7 +692,7 @@ msgid "Check your email"
 msgstr "Confira seu e-mail"
 
 #: src/components/SoftwareUpdateSection.tsx:77
-#: src/pages/SkillsOverlay.tsx:279
+#: src/pages/SkillsOverlay.tsx:282
 msgid "Checking…"
 msgstr "Verificando…"
 
@@ -730,8 +730,8 @@ msgstr "Limpar conversa"
 msgid "Clearing…"
 msgstr "Limpeza"
 
-#: src/pages/KnowledgeSection.tsx:679
-#: src/pages/KnowledgeSection.tsx:829
+#: src/pages/KnowledgeSection.tsx:669
+#: src/pages/KnowledgeSection.tsx:819
 #: src/pages/PeerMessagesOverlay.tsx:101
 #: src/pages/PeerMessagesOverlay.tsx:102
 #: src/pages/PeerMessagesOverlay.tsx:153
@@ -784,7 +784,7 @@ msgstr "Fechar painel"
 msgid "Close preview"
 msgstr "Fechar pré-visualização"
 
-#: src/pages/SkillsOverlay.tsx:106
+#: src/pages/SkillsOverlay.tsx:109
 msgid "Close skills"
 msgstr "Fechar skills"
 
@@ -863,7 +863,7 @@ msgstr "Configurado por implantação"
 msgid "Configured servers"
 msgstr "Servidores configurados"
 
-#: src/pages/KnowledgeSection.tsx:690
+#: src/pages/KnowledgeSection.tsx:680
 #: src/pages/McpServersOverlay.tsx:506
 msgid "Confirm delete"
 msgstr "Confirmar exclusão"
@@ -966,7 +966,7 @@ msgstr "Copiar"
 msgid "Could not add"
 msgstr "Não foi possível adicionar."
 
-#: src/pages/SkillsOverlay.tsx:198
+#: src/pages/SkillsOverlay.tsx:201
 msgid "Could not add marketplace"
 msgstr "Não foi possível adicionar o marketplace"
 
@@ -974,7 +974,7 @@ msgstr "Não foi possível adicionar o marketplace"
 msgid "Could not add MCP server"
 msgstr "Não foi possível adicionar o servidor MCP"
 
-#: src/pages/SkillsOverlay.tsx:322
+#: src/pages/SkillsOverlay.tsx:325
 msgid "Could not apply update"
 msgstr "Não foi possível aplicar a atualização"
 
@@ -994,7 +994,7 @@ msgstr "Não foi possível alterar a senha"
 msgid "Could not change the default model"
 msgstr "Não foi possível alterar o modelo padrão"
 
-#: src/pages/SkillsOverlay.tsx:272
+#: src/pages/SkillsOverlay.tsx:275
 msgid "Could not check for updates"
 msgstr "Não foi possível procurar atualizações"
 
@@ -1040,7 +1040,7 @@ msgstr "Não foi possível continuar"
 msgid "Could not create bot"
 msgstr "Não foi possível criar o bot"
 
-#: src/pages/GroupPanel.tsx:97
+#: src/pages/GroupPanel.tsx:105
 msgid "Could not create group"
 msgstr "Não foi possível criar o grupo"
 
@@ -1105,7 +1105,7 @@ msgstr "Não foi possível importar a skill"
 msgid "Could not install connector"
 msgstr "Não foi possível instalar o conector"
 
-#: src/pages/SkillsOverlay.tsx:443
+#: src/pages/SkillsOverlay.tsx:454
 msgid "Could not install skills"
 msgstr "Não foi possível instalar as skills"
 
@@ -1115,7 +1115,7 @@ msgstr "Não foi possível instalar as skills"
 #: src/pages/KnowledgeSection.tsx:361
 #: src/pages/KnowledgeSection.tsx:384
 #: src/pages/KnowledgeSection.tsx:411
-#: src/pages/KnowledgeSection.tsx:742
+#: src/pages/KnowledgeSection.tsx:732
 msgid "Could not load"
 msgstr "Não foi possível carregar"
 
@@ -1135,7 +1135,7 @@ msgstr "Não foi possível carregar os servidores MCP"
 msgid "Could not load model settings"
 msgstr "Não foi possível carregar as configurações do modelo"
 
-#: src/pages/SkillsOverlay.tsx:413
+#: src/pages/SkillsOverlay.tsx:424
 msgid "Could not load plugins"
 msgstr "Não foi possível carregar os plugins"
 
@@ -1143,7 +1143,7 @@ msgstr "Não foi possível carregar os plugins"
 msgid "Could not load skill"
 msgstr "Não foi possível carregar a habilidade"
 
-#: src/pages/SkillsOverlay.tsx:79
+#: src/pages/SkillsOverlay.tsx:82
 msgid "Could not load skills"
 msgstr "Não foi possível carregar as skills"
 
@@ -1178,7 +1178,7 @@ msgstr "Não foi possível acessar o servidor"
 msgid "Could not reach this model server"
 msgstr "Não foi possível acessar este servidor modelo"
 
-#: src/pages/KnowledgeSection.tsx:762
+#: src/pages/KnowledgeSection.tsx:752
 msgid "Could not read this file"
 msgstr "Não foi possível ler este arquivo"
 
@@ -1190,11 +1190,11 @@ msgstr "Não foi possível remover."
 msgid "Could not remove connector"
 msgstr "Não foi possível remover o conector"
 
-#: src/pages/GroupPanel.tsx:186
+#: src/pages/GroupPanel.tsx:208
 msgid "Could not remove group"
 msgstr "Não foi possível remover o grupo"
 
-#: src/pages/SkillsOverlay.tsx:292
+#: src/pages/SkillsOverlay.tsx:295
 msgid "Could not remove marketplace"
 msgstr "Não foi possível remover o marketplace"
 
@@ -1227,7 +1227,7 @@ msgstr "Não foi possível salvar"
 msgid "Could not save Auto Review"
 msgstr "Não foi possível salvar a revisão automática"
 
-#: src/pages/GroupPanel.tsx:185
+#: src/pages/GroupPanel.tsx:207
 msgid "Could not save group"
 msgstr "Não foi possível salvar o grupo"
 
@@ -1296,7 +1296,7 @@ msgstr "Não foi possível atualizar o acesso do agente"
 msgid "Could not update computer"
 msgstr "Não foi possível atualizar o computador"
 
-#: src/pages/SkillsOverlay.tsx:433
+#: src/pages/SkillsOverlay.tsx:444
 msgid "Could not update plugin"
 msgstr "Não foi possível atualizar o plugin"
 
@@ -1335,7 +1335,7 @@ msgstr "Crie uma seção e mova {0} para ela."
 msgid "Create account"
 msgstr "Criar Conta"
 
-#: src/pages/GroupPanel.tsx:150
+#: src/pages/GroupPanel.tsx:170
 msgid "Create group"
 msgstr "Criar grupo"
 
@@ -1365,7 +1365,7 @@ msgstr "Crie o seu Rakazo"
 msgid "Created"
 msgstr "Criado"
 
-#: src/pages/GroupPanel.tsx:150
+#: src/pages/GroupPanel.tsx:170
 #: src/pages/shell/bot-panel.tsx:179
 #: src/pages/shell/dialogs.tsx:91
 #: src/pages/shell/dialogs.tsx:155
@@ -1428,7 +1428,7 @@ msgid "Default scope"
 msgstr "Escopo padrão"
 
 #: src/pages/BotContextMenu.tsx:140
-#: src/pages/KnowledgeSection.tsx:690
+#: src/pages/KnowledgeSection.tsx:680
 #: src/pages/McpServersOverlay.tsx:508
 #: src/pages/RoutineEditor.tsx:272
 #: src/pages/Shell.tsx:2829
@@ -1452,7 +1452,7 @@ msgstr "Excluir {0}"
 msgid "Delete {0}?"
 msgstr "Excluir {0}?"
 
-#: src/pages/GroupPanel.tsx:250
+#: src/pages/GroupPanel.tsx:285
 msgid "Delete group"
 msgstr "Excluir o grupo"
 
@@ -1464,7 +1464,7 @@ msgstr "Excluir memórias também"
 msgid "deleted"
 msgstr "excluído"
 
-#: src/pages/GroupPanel.tsx:250
+#: src/pages/GroupPanel.tsx:285
 #: src/pages/shell/dialogs.tsx:298
 #: src/pages/shell/dialogs.tsx:355
 msgid "Deleting…"
@@ -1487,6 +1487,8 @@ msgstr "Padrão de implantação"
 msgid "Describe what this bot does"
 msgstr "Descreva o que este bot faz"
 
+#: src/pages/GroupPanel.tsx:143
+#: src/pages/GroupPanel.tsx:250
 #: src/pages/Onboarding.tsx:615
 #: src/pages/shell/bot-panel.tsx:162
 #: src/pages/shell/bot-panel.tsx:438
@@ -1498,7 +1500,7 @@ msgid "Dictate"
 msgstr "Ditar"
 
 #: src/pages/KnowledgeSection.tsx:435
-#: src/pages/KnowledgeSection.tsx:517
+#: src/pages/KnowledgeSection.tsx:507
 msgid "Disabled"
 msgstr "Desativado"
 
@@ -1554,7 +1556,7 @@ msgstr "Não tem uma conta?"
 msgid "Done"
 msgstr "Concluído"
 
-#: src/pages/KnowledgeSection.tsx:822
+#: src/pages/KnowledgeSection.tsx:812
 msgid "Download"
 msgstr "Baixar"
 
@@ -1703,7 +1705,7 @@ msgstr "Em destaque"
 msgid "Files"
 msgstr "Arquivos"
 
-#: src/pages/KnowledgeSection.tsx:512
+#: src/pages/KnowledgeSection.tsx:502
 msgid "Filter skills"
 msgstr "Filtrar skills"
 
@@ -1756,7 +1758,7 @@ msgstr "Tela Cheia"
 msgid "Git event"
 msgstr "Evento do Git"
 
-#: src/pages/SkillsOverlay.tsx:217
+#: src/pages/SkillsOverlay.tsx:220
 msgid "Git ref"
 msgstr "Ref do Git"
 
@@ -1770,7 +1772,7 @@ msgstr "Global"
 msgid "Group"
 msgstr "Grupo"
 
-#: src/pages/GroupPanel.tsx:209
+#: src/pages/GroupPanel.tsx:232
 msgid "Group settings"
 msgstr "Configuração do grupo"
 
@@ -1856,7 +1858,7 @@ msgstr "Eu terminei."
 msgid "If you heard that, voice is ready."
 msgstr "Se você ouviu isso, a voz está pronta."
 
-#: src/pages/KnowledgeSection.tsx:496
+#: src/pages/KnowledgeSection.tsx:486
 msgid "Import"
 msgstr "Importar"
 
@@ -1876,16 +1878,16 @@ msgstr "Entrada"
 msgid "Inputs"
 msgstr "Entradas"
 
-#: src/pages/SkillsOverlay.tsx:552
+#: src/pages/SkillsOverlay.tsx:566
 msgid "Install"
 msgstr "Instalar"
 
 #. placeholder {0}: picked.size
-#: src/pages/SkillsOverlay.tsx:490
+#: src/pages/SkillsOverlay.tsx:504
 msgid "Install selected ({0})"
 msgstr "Instalar selecionados ({0})"
 
-#: src/pages/SkillsOverlay.tsx:116
+#: src/pages/SkillsOverlay.tsx:119
 msgid "Installed"
 msgstr "Instalados"
 
@@ -1893,7 +1895,7 @@ msgstr "Instalados"
 msgid "Installed integrations"
 msgstr "Integrações instaladas"
 
-#: src/pages/SkillsOverlay.tsx:488
+#: src/pages/SkillsOverlay.tsx:502
 msgid "Installing…"
 msgstr "Instalando…"
 
@@ -2066,15 +2068,15 @@ msgstr "Marcar como Lido"
 msgid "Mark as Unread"
 msgstr "Marcar como Não Lida"
 
-#: src/pages/SkillsOverlay.tsx:465
+#: src/pages/SkillsOverlay.tsx:476
 msgid "Marketplace"
 msgstr "Marketplace"
 
-#: src/pages/SkillsOverlay.tsx:210
+#: src/pages/SkillsOverlay.tsx:213
 msgid "Marketplace URL"
 msgstr "URL do marketplace"
 
-#: src/pages/SkillsOverlay.tsx:119
+#: src/pages/SkillsOverlay.tsx:122
 msgid "Marketplaces"
 msgstr "Marketplaces"
 
@@ -2091,11 +2093,11 @@ msgstr "Servidores MCP"
 msgid "Medium"
 msgstr "Médio"
 
-#: src/pages/GroupPanel.tsx:227
+#: src/pages/GroupPanel.tsx:262
 msgid "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Membros ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
-#: src/pages/GroupPanel.tsx:135
+#: src/pages/GroupPanel.tsx:155
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Membros (escolha {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
@@ -2234,8 +2236,8 @@ msgstr "Mover para"
 
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:117
-#: src/pages/GroupPanel.tsx:125
-#: src/pages/GroupPanel.tsx:218
+#: src/pages/GroupPanel.tsx:133
+#: src/pages/GroupPanel.tsx:241
 #: src/pages/Onboarding.tsx:589
 #: src/pages/RoutineEditor.tsx:281
 #: src/pages/shell/bot-panel.tsx:140
@@ -2250,7 +2252,7 @@ msgstr "Nome"
 msgid "Name this bot"
 msgstr "Nomeie este bot"
 
-#: src/pages/GroupPanel.tsx:130
+#: src/pages/GroupPanel.tsx:138
 msgid "Name this group"
 msgstr "Dar nome ao grupo"
 
@@ -2274,7 +2276,7 @@ msgstr "Precisa de você"
 msgid "New bot"
 msgstr "Novo bot"
 
-#: src/pages/GroupPanel.tsx:107
+#: src/pages/GroupPanel.tsx:115
 #: src/pages/shell/bot-picker.tsx:93
 msgid "New group"
 msgstr "Novo grupo"
@@ -2293,7 +2295,7 @@ msgstr "Nova senha"
 msgid "New section"
 msgstr "Nova seção"
 
-#: src/pages/KnowledgeSection.tsx:476
+#: src/pages/KnowledgeSection.tsx:466
 msgid "New skill"
 msgstr "Nova habilidade"
 
@@ -2339,7 +2341,7 @@ msgstr "Nenhum registro de conexão encontrado para {0}."
 msgid "No exceptions. Actions run automatically."
 msgstr "Sem exceções. As ações são executadas automaticamente."
 
-#: src/pages/KnowledgeSection.tsx:836
+#: src/pages/KnowledgeSection.tsx:826
 msgid "No files yet"
 msgstr "Ainda não há arquivos"
 
@@ -2359,7 +2361,7 @@ msgstr "Não está mais ativo"
 msgid "No managed app catalog is configured on this deployment."
 msgstr "Nenhum catálogo de aplicativos gerenciados está configurado nesta implantação."
 
-#: src/pages/SkillsOverlay.tsx:240
+#: src/pages/SkillsOverlay.tsx:243
 msgid "No marketplaces added yet."
 msgstr "Ainda não há marketplaces adicionados."
 
@@ -2383,7 +2385,7 @@ msgstr "Ainda sem mensagens com {peerBotName}."
 msgid "No model catalog is available."
 msgstr "Nenhum catálogo de modelos está disponível."
 
-#: src/pages/SkillsOverlay.tsx:501
+#: src/pages/SkillsOverlay.tsx:515
 msgid "No plugins in this marketplace."
 msgstr "Não há plugins neste marketplace."
 
@@ -2403,19 +2405,19 @@ msgstr "Nenhum resultado"
 msgid "No runs yet"
 msgstr "Ainda não há execuções"
 
-#: src/pages/SkillsOverlay.tsx:499
+#: src/pages/SkillsOverlay.tsx:513
 msgid "No skills in this marketplace."
 msgstr "Não há skills neste marketplace."
 
-#: src/pages/SkillsOverlay.tsx:561
+#: src/pages/SkillsOverlay.tsx:575
 msgid "No skills in this plugin."
 msgstr "Não há skills neste plugin."
 
-#: src/pages/KnowledgeSection.tsx:533
+#: src/pages/KnowledgeSection.tsx:523
 msgid "No skills match"
 msgstr "Nenhuma skill corresponde"
 
-#: src/pages/KnowledgeSection.tsx:533
+#: src/pages/KnowledgeSection.tsx:523
 msgid "No skills yet"
 msgstr "Ainda não há habilidades"
 
@@ -2474,7 +2476,7 @@ msgstr "Falha na conexão OAuth"
 msgid "OAuth expired"
 msgstr "OAuth expirado"
 
-#: src/pages/SkillsOverlay.tsx:576
+#: src/pages/SkillsOverlay.tsx:591
 msgid "Off for every agent until you pick some in Installed."
 msgstr "Desativado para todos os agentes até você escolher algumas em Instalados."
 
@@ -2487,7 +2489,7 @@ msgstr "Em um agendamento"
 msgid "on the 1st at {0}"
 msgstr "no dia 1º às {0}"
 
-#: src/pages/SkillsOverlay.tsx:135
+#: src/pages/SkillsOverlay.tsx:138
 msgid "Only the first 50 skills are shown to the agent."
 msgstr "Somente as primeiras 50 skills são mostradas ao agente."
 
@@ -2629,7 +2631,7 @@ msgstr "Fixar"
 msgid "Playing…"
 msgstr "Reproduzindo"
 
-#: src/pages/SkillsOverlay.tsx:253
+#: src/pages/SkillsOverlay.tsx:256
 msgid "Plugins"
 msgstr "Plugins"
 
@@ -2672,7 +2674,7 @@ msgstr "Rakazo verifica a fonte antes de salvá-la. As credenciais são criptogr
 msgid "Read replies aloud"
 msgstr "Leia as respostas em voz alta"
 
-#: src/pages/KnowledgeSection.tsx:560
+#: src/pages/KnowledgeSection.tsx:550
 msgid "read-only"
 msgstr "somente leitura"
 
@@ -2729,8 +2731,8 @@ msgstr "Libere"
 #: src/pages/PluginsOverlay.tsx:432
 #: src/pages/PluginsOverlay.tsx:696
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SkillsOverlay.tsx:298
-#: src/pages/SkillsOverlay.tsx:550
+#: src/pages/SkillsOverlay.tsx:301
+#: src/pages/SkillsOverlay.tsx:564
 msgid "Remove"
 msgstr "Remover"
 
@@ -2742,7 +2744,7 @@ msgid "Remove {0}"
 msgstr "Remover {0}"
 
 #. placeholder {0}: mkt.name
-#: src/pages/SkillsOverlay.tsx:291
+#: src/pages/SkillsOverlay.tsx:294
 msgid "Remove marketplace {0} and its skills?"
 msgstr "Remover o marketplace {0} e suas skills?"
 
@@ -2780,7 +2782,7 @@ msgstr "Removido, mas a atualização da lista falhou"
 #: src/pages/PluginsOverlay.tsx:281
 #: src/pages/PluginsOverlay.tsx:427
 #: src/pages/PluginsOverlay.tsx:696
-#: src/pages/SkillsOverlay.tsx:298
+#: src/pages/SkillsOverlay.tsx:301
 msgid "Removing…"
 msgstr "Removendo…"
 
@@ -2914,9 +2916,9 @@ msgstr "Executando..."
 
 #: src/components/AskCard.tsx:157
 #: src/components/teach/SkillDraftCard.tsx:142
-#: src/pages/GroupPanel.tsx:242
+#: src/pages/GroupPanel.tsx:277
 #: src/pages/KnowledgeSection.tsx:227
-#: src/pages/KnowledgeSection.tsx:666
+#: src/pages/KnowledgeSection.tsx:656
 #: src/pages/ModelSettingsOverlay.tsx:689
 #: src/pages/RoutineEditor.tsx:413
 #: src/pages/shell/bot-panel.tsx:645
@@ -2943,7 +2945,7 @@ msgstr "Salva. Rotacione para exibir."
 
 #: src/components/AskCard.tsx:157
 #: src/components/teach/SkillDraftCard.tsx:142
-#: src/pages/GroupPanel.tsx:242
+#: src/pages/GroupPanel.tsx:277
 #: src/pages/ModelSettingsOverlay.tsx:687
 #: src/pages/RoutineEditor.tsx:413
 msgid "Saving…"
@@ -2992,8 +2994,8 @@ msgstr "Pesquisar provedores"
 msgid "Search providers and models"
 msgstr "Pesquisar fornecedores e modelos"
 
-#: src/pages/KnowledgeSection.tsx:502
-#: src/pages/KnowledgeSection.tsx:503
+#: src/pages/KnowledgeSection.tsx:492
+#: src/pages/KnowledgeSection.tsx:493
 msgid "Search skills"
 msgstr "Buscar skills"
 
@@ -3002,7 +3004,7 @@ msgid "Searching…"
 msgstr "Pesquisando…"
 
 #. placeholder {0}: plugin.name
-#: src/pages/SkillsOverlay.tsx:514
+#: src/pages/SkillsOverlay.tsx:528
 msgid "Select {0}"
 msgstr "Selecionar {0}"
 
@@ -3097,7 +3099,7 @@ msgstr "Documentos compartilhados"
 msgid "Show all providers"
 msgstr "Mostrar todos os provedores"
 
-#: src/pages/SkillsOverlay.tsx:368
+#: src/pages/SkillsOverlay.tsx:371
 msgid "Show before / after"
 msgstr "Mostrar antes / depois"
 
@@ -3155,8 +3157,8 @@ msgstr "Habilidade {0}"
 
 #: src/pages/CustomizeOverlay.tsx:19
 #: src/pages/KnowledgeSection.tsx:84
-#: src/pages/SkillsOverlay.tsx:103
-#: src/pages/SkillsOverlay.tsx:253
+#: src/pages/SkillsOverlay.tsx:106
+#: src/pages/SkillsOverlay.tsx:256
 msgid "Skills"
 msgstr "Habilidades"
 
@@ -3461,7 +3463,7 @@ msgstr "Desafixar"
 msgid "Unsupported file type: {0}"
 msgstr "Tipo de arquivo não suportado: {0}"
 
-#: src/pages/SkillsOverlay.tsx:531
+#: src/pages/SkillsOverlay.tsx:545
 msgid "Unsupported source"
 msgstr "Fonte não suportada"
 
@@ -3469,7 +3471,7 @@ msgstr "Fonte não suportada"
 msgid "Up to date"
 msgstr "Atualizado"
 
-#: src/pages/SkillsOverlay.tsx:306
+#: src/pages/SkillsOverlay.tsx:309
 msgid "Up to date."
 msgstr "Atualizado."
 
@@ -3579,6 +3581,11 @@ msgstr "O que esta rotina deve fazer a cada execução?"
 msgid "What this bot is for"
 msgstr "Para que serve este bot"
 
+#: src/pages/GroupPanel.tsx:149
+#: src/pages/GroupPanel.tsx:256
+msgid "What this group is for"
+msgstr "Para que serve este grupo"
+
 #: src/components/teach/SkillDraftCard.tsx:119
 msgid "What to return"
 msgstr "O que devolver"
@@ -3603,11 +3610,11 @@ msgstr "Onde os bots devem ser executados?"
 #: src/pages/Auth.tsx:192
 #: src/pages/Auth.tsx:300
 #: src/pages/CallView.tsx:251
-#: src/pages/SkillsOverlay.tsx:548
+#: src/pages/SkillsOverlay.tsx:562
 msgid "Working…"
 msgstr "Funcionando"
 
-#: src/pages/KnowledgeSection.tsx:784
+#: src/pages/KnowledgeSection.tsx:774
 msgid "Workspace root"
 msgstr "Raiz do espaço de trabalho"
 
