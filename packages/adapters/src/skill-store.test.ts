@@ -347,6 +347,24 @@ describe("skill store", () => {
       expect(await readFile(path.join(root, "deploy", "x.txt"), "utf8")).toBe("x");
     });
 
+    it("accepts a Finder-compressed archive, ignoring its __MACOSX sibling", async () => {
+      const root = await tmpRoot();
+      // What `ditto -c -k --sequesterRsrc --keepParent` writes for a directory with xattrs.
+      const archive = await zip([
+        { name: "deploy/" },
+        { name: "deploy/SKILL.md", content: md("Deploy") },
+        { name: "deploy/run.sh", content: "echo hi" },
+        { name: "__MACOSX/" },
+        { name: "__MACOSX/deploy/" },
+        { name: "__MACOSX/deploy/._run.sh", content: "\u0000\u0005\u0016\u0007" },
+      ]);
+      await writeUserSkillBundle(root, archive, resolve);
+      expect(await readdir(root)).toEqual(["deploy"]);
+      const dir = path.join(root, "deploy");
+      expect((await readdir(dir)).sort()).toEqual(["SKILL.md", "run.sh"]);
+      expect(await readFile(path.join(dir, "run.sh"), "utf8")).toBe("echo hi");
+    });
+
     it("rejects bundles without SKILL.md at the root and cleans up", async () => {
       const root = await tmpRoot();
       const archive = await zip([

@@ -333,9 +333,18 @@ const isFile = (file: string) =>
     () => false,
   );
 
+/**
+ * macOS Finder "Compress" (ditto -c -k --sequesterRsrc --keepParent) adds a `__MACOSX` sibling
+ * whenever any file carries an xattr, which quarantine flags and Finder tags routinely do, so the
+ * skill directory is no longer the only top-level entry.
+ */
+// ponytail: only the two names Finder adds, and only for finding the skill directory — a
+// `__MACOSX` beside SKILL.md at the archive root still lands inside the skill, harmlessly.
+const isFinderJunk = (name: string) => name === "__MACOSX" || name === ".DS_Store";
+
 async function locateSkillDir(out: string): Promise<string> {
   if (await isFile(path.join(out, "SKILL.md"))) return out;
-  const entries = await readdir(out);
+  const entries = (await readdir(out)).filter((name) => !isFinderJunk(name));
   const top = entries.length === 1 ? path.join(out, entries[0] ?? "") : null;
   if (top && (await isFile(path.join(top, "SKILL.md")))) return top;
   throw new Error("Skill bundle must contain SKILL.md at its root.");
