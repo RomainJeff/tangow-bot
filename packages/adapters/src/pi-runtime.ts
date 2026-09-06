@@ -1258,10 +1258,23 @@ function createQueue(): EventQueue {
   };
 }
 
+// OpenCode requires x-opencode-session on every request and warns that requests
+// without it will start failing. pi-ai gates its session-affinity headers on
+// per-provider compat flags that OpenCode does not set, so we send it ourselves.
+const OPENCODE_SESSION_PROVIDERS = new Set(["opencode", "opencode-go"]);
+
 export function reliableStreamOptions(
   model: Pick<Model<Api>, "api" | "provider">,
   options?: SimpleStreamOptions,
 ): SimpleStreamOptions | undefined {
+  if (OPENCODE_SESSION_PROVIDERS.has(model.provider) && options?.sessionId) {
+    // Options headers win over provider defaults in every pi-ai API adapter, but
+    // an explicit caller header still wins over ours.
+    options = {
+      ...options,
+      headers: { "x-opencode-session": options.sessionId, ...options.headers },
+    };
+  }
   if (model.provider !== "openai-codex" && model.api !== "openai-codex-responses") {
     return options;
   }
