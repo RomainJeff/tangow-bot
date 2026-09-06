@@ -418,6 +418,8 @@ function BrowseTab({
   }
 
   useEffect(() => {
+    // Another marketplace can list the same plugin name: prune alone would keep the tick.
+    setPicked(new Set());
     void loadPlugins().catch((err: unknown) =>
       onError(errorMessage(err, t`Could not load plugins`)),
     );

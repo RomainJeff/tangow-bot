@@ -190,6 +190,7 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
   }
 
   /** Installs `plugins` from one checkout. Whatever installed before a failure is persisted. */
+  // ponytail: sequential fan-out, up to 100 tarball downloads per call for external plugins; batch or cap if it hurts.
   async function installPlugins(
     actor: Actor,
     marketplaceId: string,

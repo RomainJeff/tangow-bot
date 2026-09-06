@@ -376,6 +376,8 @@ describe("marketplaces service", () => {
           "utf8",
         ),
       ).toBe(skill("tdd", "red green"));
+      // The synthesized manifest must be byte-stable, or every check would report a diff.
+      expect(await m.checkUpdate(actor, id)).toEqual({ commit: SK1, upToDate: true, changes: [] });
     });
 
     it("installPlugins persists the plugins that succeeded before a failing one", async () => {
@@ -406,6 +408,7 @@ describe("marketplaces service", () => {
       ]);
       const row = await m.applyUpdate(actor, id, SK2);
       expect(row.installedPlugins).toEqual(["tdd"]);
+      expect(row.kind).toBe("skills");
       expect(await exists(path.join(root(), "vercel-labs-agent-skills/plugins/review"))).toBe(
         false,
       );
