@@ -19,7 +19,8 @@ test("skills overlay: tabs, marketplace URL validation, installed skills", async
     body: "1. Summarize wins.\n2. List blockers.",
   });
 
-  await page.getByTestId("open-skills").click();
+  await page.getByTestId("open-customize").click();
+  await page.getByTestId("customize-nav-skills").click();
   const overlay = page.getByRole("dialog");
   await expect(overlay.getByRole("heading", { name: "Skills" })).toBeVisible();
   await expect(page.getByTestId("skills-tab-installed")).toBeVisible();

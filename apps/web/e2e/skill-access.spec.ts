@@ -116,7 +116,8 @@ test("per-bot skill access via agentSkills.setAccess", async ({ page }) => {
 
   // Global -> Specific in the Skills panel keeps exactly that audience: Scout has no
   // override row, so without seeding the switch would silently drop it.
-  await page.getByTestId("open-skills").click();
+  await page.getByTestId("open-customize").click();
+  await page.getByTestId("customize-nav-skills").click();
   const overlay = page.getByRole("dialog");
   const card = overlay.getByTestId("bot-knowledge-skill").filter({ hasText: "Daily standup" });
   await expect(card.getByRole("button", { name: "Global", exact: true })).toHaveAttribute(

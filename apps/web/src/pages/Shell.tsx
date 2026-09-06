@@ -94,7 +94,7 @@ import {
   Puzzle,
   Reply,
   Settings,
-  Sparkles,
+  SlidersHorizontal,
   Square,
   ThumbsUp,
   Volume2,
@@ -234,11 +234,8 @@ const ModelSettingsOverlay = lazy(() =>
 const PeerMessagesOverlay = lazy(() =>
   import("./PeerMessagesOverlay").then((module) => ({ default: module.PeerMessagesOverlay })),
 );
-const PluginsOverlay = lazy(() =>
-  import("./PluginsOverlay").then((module) => ({ default: module.PluginsOverlay })),
-);
-const SkillsOverlay = lazy(() =>
-  import("./SkillsOverlay").then((module) => ({ default: module.SkillsOverlay })),
+const CustomizeOverlay = lazy(() =>
+  import("./CustomizeOverlay").then((module) => ({ default: module.CustomizeOverlay })),
 );
 const McpServersOverlay = lazy(() =>
   import("./McpServersOverlay").then((module) => ({ default: module.McpServersOverlay })),
@@ -422,8 +419,7 @@ export function ShellPage() {
   function updateSnapshot(update: (prev: ThreadSnapshot | null) => ThreadSnapshot | null) {
     commitSnapshot(update(snapshotRef.current));
   }
-  const [pluginsOpen, setPluginsOpen] = useState(false);
-  const [skillsOpen, setSkillsOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [messagingSettingsOpen, setMessagingSettingsOpen] = useState(false);
@@ -3001,27 +2997,15 @@ export function ShellPage() {
         <div className="mx-3 mb-1 flex items-center gap-1 pt-2">
           <button
             type="button"
-            onClick={() => setPluginsOpen(true)}
+            data-testid="open-customize"
+            onClick={() => setCustomizeOpen(true)}
             className="flex min-w-0 flex-1 items-center gap-2 rounded-[11px] px-2.5 py-2 hover:bg-background"
           >
             <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-muted text-foreground/75">
-              <Puzzle size={15} strokeWidth={1.7} />
+              <SlidersHorizontal size={15} strokeWidth={1.7} />
             </span>
             <span className="truncate text-[14.5px] text-foreground/90">
-              <Trans>Integrations</Trans>
-            </span>
-          </button>
-          <button
-            type="button"
-            data-testid="open-skills"
-            onClick={() => setSkillsOpen(true)}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-[11px] px-2.5 py-2 hover:bg-background"
-          >
-            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-muted text-foreground/75">
-              <Sparkles size={15} strokeWidth={1.7} />
-            </span>
-            <span className="truncate text-[14.5px] text-foreground/90">
-              <Trans>Skills</Trans>
+              <Trans>Customize</Trans>
             </span>
           </button>
         </div>
@@ -3946,20 +3930,14 @@ export function ShellPage() {
           />
         ) : null}
 
-        {pluginsOpen ? (
-          <PluginsOverlay
+        {customizeOpen ? (
+          <CustomizeOverlay
             activeBotId={activeBotId.current}
-            onClose={() => setPluginsOpen(false)}
+            onClose={() => setCustomizeOpen(false)}
             onOpenMcp={() => {
-              setPluginsOpen(false);
+              setCustomizeOpen(false);
               setMcpOpen(true);
             }}
-          />
-        ) : null}
-        {skillsOpen ? (
-          <SkillsOverlay
-            botId={activeBotId.current}
-            onClose={() => setSkillsOpen(false)}
             onSkillsChanged={refreshAgentSkills}
           />
         ) : null}
