@@ -32,6 +32,9 @@ import { AgentSkills } from "./KnowledgeSection";
 /** Runtime ceiling: the agent only sees the first 50 visible skills. */
 const SKILL_LIMIT = 50;
 
+/** Pending key for the batch install; not a valid plugin name, so it cannot collide with one. */
+const BATCH = "\0batch";
+
 type SkillsTab = "installed" | "marketplaces" | "browse";
 
 function errorMessage(err: unknown, fallback: string) {
@@ -249,7 +252,7 @@ function MarketplacesTab({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-[15px] font-medium text-foreground">
                   {mkt.name}
-                  <Badge variant="outline">
+                  <Badge variant="outline" className="shrink-0">
                     {mkt.kind === "skills" ? <Trans>Skills</Trans> : <Trans>Plugins</Trans>}
                   </Badge>
                 </div>
@@ -403,9 +406,15 @@ function BrowseTab({
   const marketplace = marketplaces.find((mkt) => mkt.id === marketplaceId);
 
   async function loadPlugins() {
-    setPicked(new Set());
-    if (!marketplaceId) return setPlugins([]);
-    setPlugins(await rpc.marketplaces.plugins({ marketplaceId }));
+    if (!marketplaceId) {
+      setPicked(new Set());
+      return setPlugins([]);
+    }
+    const next = await rpc.marketplaces.plugins({ marketplaceId });
+    setPlugins(next);
+    // ponytail: prune instead of clear, so a single-row install/remove keeps the other ticks.
+    const selectable = new Set(next.filter((p) => !p.installed && p.supported).map((p) => p.name));
+    setPicked((prev) => new Set([...prev].filter((name) => selectable.has(name))));
   }
 
   useEffect(() => {
@@ -440,7 +449,7 @@ function BrowseTab({
 
   function installPicked() {
     if (!marketplace || picked.size === 0) return;
-    void run("batch", t`Could not install skills`, async () => {
+    void run(BATCH, t`Could not install skills`, async () => {
       await rpc.marketplaces.installPlugins({
         marketplaceId: marketplace.id,
         plugins: [...picked],
@@ -472,7 +481,10 @@ function BrowseTab({
       </NativeSelect>
 
       {picked.size > 0 ? (
-        <div className="sticky top-0 z-10 flex items-center justify-between rounded-xl border border-border bg-card px-4 py-2">
+        <div
+          role="status"
+          className="sticky top-0 z-10 flex items-center justify-between rounded-xl border border-border bg-card px-4 py-2"
+        >
           <span className="text-[13px] text-muted-foreground">
             <Trans>{picked.size} selected</Trans>
           </span>
@@ -484,7 +496,7 @@ function BrowseTab({
             disabled={pending !== null}
             onClick={installPicked}
           >
-            {pending === "batch" ? (
+            {pending === BATCH ? (
               <Trans>Installing…</Trans>
             ) : (
               <Trans>Install selected ({picked.size})</Trans>
@@ -556,11 +568,12 @@ function BrowseTab({
             {plugin.installed ? (
               <div className="mt-2 text-[13px]">
                 {/* One plugin is one skill in a skills repository, so the sublist adds nothing. */}
-                {marketplace?.kind === "skills" ? null : skills.length === 0 ? (
+                {marketplace?.kind !== "skills" && skills.length === 0 ? (
                   <p className="text-muted-foreground/80">
                     <Trans>No skills in this plugin.</Trans>
                   </p>
-                ) : (
+                ) : null}
+                {marketplace?.kind !== "skills" && skills.length > 0 ? (
                   <ul className="list-disc ps-5 text-foreground">
                     {skills.map((skill) => (
                       <li key={skill.id}>
@@ -571,7 +584,7 @@ function BrowseTab({
                       </li>
                     ))}
                   </ul>
-                )}
+                ) : null}
                 <p className="mt-1 text-muted-foreground/80">
                   <Trans>Off for every agent until you pick some in Installed.</Trans>
                 </p>
