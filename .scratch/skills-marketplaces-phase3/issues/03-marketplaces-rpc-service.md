@@ -6,8 +6,8 @@
 
 **Blocked by:** 01 (table SpaceMarketplace), 02 (tarball + store)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Contrat zod : `SpaceMarketplace`, `MarketplacePlugin`, `MarketplaceFileChange`, `MarketplaceUpdateCheck` ; procédures list / add / remove / plugins / installPlugin / removePlugin / checkUpdate / applyUpdate
-- [ ] Service testé avec prisma en mémoire + fetch factice : add (ok, doublon, URL non GitHub), plugins, installPlugin (ok, non supporté), removePlugin purge les settings, checkUpdate upToDate vs changements, applyUpdate, remove
-- [ ] Handlers câblés dans le router, accès limité au space de l'acteur ; check + tests API verts
+- [x] Contrat zod : `SpaceMarketplace`, `MarketplacePlugin`, `MarketplaceFileChange`, `MarketplaceUpdateCheck` ; procédures list / add / remove / plugins / installPlugin / removePlugin / checkUpdate / applyUpdate
+- [x] Service testé avec prisma en mémoire + fetch factice : add (ok, doublon, URL non GitHub), plugins, installPlugin (ok, non supporté), removePlugin purge les settings, checkUpdate upToDate vs changements, applyUpdate, remove
+- [x] Handlers câblés dans le router, accès limité au space de l'acteur ; check + tests API verts

@@ -6,8 +6,8 @@
 
 **Blocked by:** 02 (store + helpers core)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Tests adapters : skill `mkt:` absent des records sans setting, présent avec `BotSkill.enabled`, `source: plugin` + `readOnly`, tools update/delete refusés
-- [ ] Tests API : catalogue expose `mkt:` avec `selected` / `visibleBotIds: []`, setAccess active un bot, get renvoie le contenu, update/remove refusés, autre space → not found
-- [ ] Indice de chemins montés ajouté au prompt ; check + tests verts
+- [x] Tests adapters : skill `mkt:` absent des records sans setting, présent avec `BotSkill.enabled`, `source: plugin` + `readOnly`, tools update/delete refusés
+- [x] Tests API : catalogue expose `mkt:` avec `selected` / `visibleBotIds: []`, setAccess active un bot, get renvoie le contenu, update/remove refusés, autre space → not found
+- [x] Indice de chemins montés ajouté au prompt ; check + tests verts

@@ -6,8 +6,8 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Tests unitaires avec fetch factice : URL non GitHub refusée, sha résolu via `Accept: application/vnd.github.sha`, tarball extrait sans le top dir ni les symlinks, cap d'octets déclenche une erreur
-- [ ] Tests store : manifest parsé (lowercase, sources non supportées flaggées), install copie seulement `skills/`, SKILL.md > 100k rejette le plugin, remove, diff ordonné par chemin
-- [ ] Helpers core testés ; store + tarball ré-exportés depuis l'index adapters ; check + biome verts
+- [x] Tests unitaires avec fetch factice : URL non GitHub refusée, sha résolu via `Accept: application/vnd.github.sha`, tarball extrait sans le top dir ni les symlinks, cap d'octets déclenche une erreur
+- [x] Tests store : manifest parsé (lowercase, sources non supportées flaggées), install copie seulement `skills/`, SKILL.md > 100k rejette le plugin, remove, diff ordonné par chemin
+- [x] Helpers core testés ; store + tarball ré-exportés depuis l'index adapters ; check + biome verts

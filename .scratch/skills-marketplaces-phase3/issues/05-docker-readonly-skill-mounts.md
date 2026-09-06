@@ -6,9 +6,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Test spec conteneur : binds = home + deux binds skills `:ro`
-- [ ] Test helper de calcul des binds ; `spaceId`/`userId` validés comme segments de chemin sûrs
-- [ ] Reprise d'un conteneur existant uniquement si image/network/user **et** binds skills correspondent
-- [ ] Adapter docker envoie `userId` ; worker `mkdir -p` des dossiers skills user + marketplaces avant provision ; tests supervisor (`vitest`, `tsc --noEmit`) et adapters verts
+- [x] Test spec conteneur : binds = home + deux binds skills `:ro`
+- [x] Test helper de calcul des binds ; `spaceId`/`userId` validés comme segments de chemin sûrs
+- [x] Reprise d'un conteneur existant uniquement si image/network/user **et** binds skills correspondent
+- [x] Adapter docker envoie `userId` ; worker `mkdir -p` des dossiers skills user + marketplaces avant provision ; tests supervisor (`vitest`, `tsc --noEmit`) et adapters verts

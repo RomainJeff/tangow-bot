@@ -6,9 +6,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `agent_skills` droppée par migration ; modèle Prisma `AgentSkill` et toute relation supprimés ; `prisma validate` passe
-- [ ] Export legacy au boot API supprimé (module + test + appel), `@rakazo/api` check + tests verts
-- [ ] `skills-lock.json` et `.agents/skills/composio/` supprimés
-- [ ] Modèle + migration `SpaceMarketplace` créés, relation `marketplaces` sur `Space`
+- [x] `agent_skills` droppée par migration ; modèle Prisma `AgentSkill` et toute relation supprimés ; `prisma validate` passe
+- [x] Export legacy au boot API supprimé (module + test + appel), `@rakazo/api` check + tests verts
+- [x] `skills-lock.json` et `.agents/skills/composio/` supprimés
+- [x] Modèle + migration `SpaceMarketplace` créés, relation `marketplaces` sur `Space`
