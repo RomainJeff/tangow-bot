@@ -9,6 +9,7 @@ import {
   installPluginFromCheckout,
   installPluginTree,
   listMarketplaceSkills,
+  loadOrSynthesizeManifest,
   marketplacesRoot,
   pluginDirIn,
   pluginSource,
@@ -385,5 +386,56 @@ describe("discoverSkills", () => {
     expect((await discoverSkills(dir, "repo")).map((s) => [s.slug, s.description])).toEqual([
       ["tdd", "About TDD"],
     ]);
+  });
+});
+
+describe("loadOrSynthesizeManifest", () => {
+  const repo = { owner: "Vercel-Labs", repo: "Agent-Skills" };
+
+  it("returns the real manifest when present, even if loose SKILL.md files exist", async () => {
+    const dir = await checkout();
+    await mkdir(path.join(dir, "skills/loose"), { recursive: true });
+    await writeFile(path.join(dir, "skills/loose/SKILL.md"), md("Loose"));
+    const loaded = await loadOrSynthesizeManifest(dir, repo);
+    expect(loaded.kind).toBe("marketplace");
+    expect(loaded.manifest.name).toBe("acme");
+    expect(loaded.raw).toBe(
+      await readFile(path.join(dir, ".claude-plugin/marketplace.json"), "utf8"),
+    );
+  });
+
+  it("synthesizes one plugin per discovered skill, named <owner>-<repo>", async () => {
+    const dir = await skillsRepo({
+      "skills/tdd/SKILL.md": md("TDD"),
+      "skills/b/SKILL.md": md("B"),
+    });
+    const loaded = await loadOrSynthesizeManifest(dir, repo);
+    expect(loaded.kind).toBe("skills");
+    expect(loaded.manifest.name).toBe("vercel-labs-agent-skills");
+    expect(loaded.manifest.plugins).toEqual([
+      {
+        name: "b",
+        source: { kind: "local", path: "./skills/b" },
+        description: "About B",
+        supported: true,
+      },
+      {
+        name: "tdd",
+        source: { kind: "local", path: "./skills/tdd" },
+        description: "About TDD",
+        supported: true,
+      },
+    ]);
+    // The raw JSON round-trips through the real reader: what add() writes is what plugins() reads.
+    await mkdir(path.join(dir, ".claude-plugin"));
+    await writeFile(path.join(dir, ".claude-plugin/marketplace.json"), loaded.raw);
+    expect(await readMarketplaceManifest(dir)).toEqual(loaded.manifest);
+  });
+
+  it("rejects a repository with neither manifest nor skills", async () => {
+    const dir = await skillsRepo({ "README.md": "nothing" });
+    await expect(loadOrSynthesizeManifest(dir, repo)).rejects.toThrow(
+      "Repository has neither .claude-plugin/marketplace.json nor any SKILL.md.",
+    );
   });
 });

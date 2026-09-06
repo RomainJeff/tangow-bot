@@ -19,11 +19,12 @@ import path from "node:path";
 import { marketplaceSkillKey, parseSkillMd } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { z } from "zod";
-import { parseGithubRepoUrl } from "./github-tarball.js";
+import { type GithubRepo, parseGithubRepoUrl } from "./github-tarball.js";
 
 export const SAFE_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 export const MAX_SKILL_MD_BYTES = 100_000;
 const IGNORED_PLUGIN_CONTENT = ["commands", "agents", "hooks", ".mcp.json"];
+const MANIFEST_PATH = path.join(".claude-plugin", "marketplace.json");
 
 export function marketplacesRoot(dataDir: string, spaceId: string): string {
   return path.join(dataDir, "skills", "marketplaces", spaceId);
@@ -91,15 +92,8 @@ function parsePluginSource(source: unknown): PluginSource | null {
   return { kind: "github", url, ref: parsed.data.ref };
 }
 
-/**
- * Reads `.claude-plugin/marketplace.json` from an extracted checkout. Plugins whose source is
- * neither a `./` path nor a public GitHub repository are listed but flagged unsupported.
- */
-export async function readMarketplaceManifest(checkoutDir: string): Promise<MarketplaceManifest> {
-  const file = path.join(checkoutDir, ".claude-plugin", "marketplace.json");
-  const raw = await readFile(file, "utf8").catch(() => {
-    throw new Error("Repository has no .claude-plugin/marketplace.json.");
-  });
+/** Plugins whose source is neither a `./` path nor a public GitHub repository stay unsupported. */
+function parseManifest(raw: string): MarketplaceManifest {
   let json: unknown;
   try {
     json = JSON.parse(raw);
@@ -122,6 +116,14 @@ export async function readMarketplaceManifest(checkoutDir: string): Promise<Mark
       };
     }),
   };
+}
+
+/** Reads `.claude-plugin/marketplace.json` from an extracted checkout. */
+export async function readMarketplaceManifest(checkoutDir: string): Promise<MarketplaceManifest> {
+  const raw = await readFile(path.join(checkoutDir, MANIFEST_PATH), "utf8").catch(() => {
+    throw new Error("Repository has no .claude-plugin/marketplace.json.");
+  });
+  return parseManifest(raw);
 }
 
 const PluginJsonSchema = z.object({ skills: z.array(z.string()).optional() });
@@ -210,6 +212,41 @@ export async function discoverSkills(
     }
   }
   return [...found.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
+export type MarketplaceKind = "marketplace" | "skills";
+export type LoadedManifest = {
+  manifest: MarketplaceManifest;
+  kind: MarketplaceKind;
+  /** File content to persist as the marketplace's manifest (real or synthesized). */
+  raw: string;
+};
+
+/**
+ * Phase 4: the real manifest when the repository ships one (it always wins), otherwise a
+ * manifest synthesized from its SKILL.md files — one single-skill plugin per skill, named
+ * `<owner>-<repo>`. The synthetic JSON goes through the same parser, so what gets written to
+ * disk is exactly what `readMarketplaceManifest` reads back later.
+ */
+export async function loadOrSynthesizeManifest(
+  checkoutDir: string,
+  repo: GithubRepo,
+): Promise<LoadedManifest> {
+  const real = await readFile(path.join(checkoutDir, MANIFEST_PATH), "utf8").catch(() => null);
+  if (real !== null) return { manifest: parseManifest(real), kind: "marketplace", raw: real };
+  const skills = await discoverSkills(checkoutDir, repo.repo.toLowerCase());
+  if (skills.length === 0) {
+    throw new Error("Repository has neither .claude-plugin/marketplace.json nor any SKILL.md.");
+  }
+  const raw = JSON.stringify(
+    {
+      name: `${repo.owner}-${repo.repo}`,
+      plugins: skills.map((s) => ({ name: s.slug, source: s.relPath, description: s.description })),
+    },
+    null,
+    2,
+  );
+  return { manifest: parseManifest(raw), kind: "skills", raw };
 }
 
 /** Skill directories of a plugin, keyed by the flat slug they install as. */
