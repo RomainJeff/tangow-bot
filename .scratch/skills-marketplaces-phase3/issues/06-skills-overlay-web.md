@@ -6,10 +6,10 @@
 
 **Blocked by:** 03 (RPC marketplaces), 04 (catalogue avec skills mkt)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Bouton sidebar + overlay lazy avec `data-testid` sur le bouton et les onglets
-- [ ] Installed embarque le composant existant + compteur/avertissement 50
-- [ ] Marketplaces : add, check update avec diff lisible, apply, remove
-- [ ] Browse : plugins avec install/remove et skills du plugin installé
-- [ ] `intl:extract` + `intl:compile` ; check web + biome verts ; vérification navigateur (URL non GitHub → erreur visible)
+- [x] Bouton sidebar + overlay lazy avec `data-testid` sur le bouton et les onglets
+- [x] Installed embarque le composant existant + compteur/avertissement 50
+- [x] Marketplaces : add, check update avec diff lisible, apply, remove
+- [x] Browse : plugins avec install/remove et skills du plugin installé
+- [x] `intl:extract` + `intl:compile` ; check web + biome verts ; vérification navigateur (URL non GitHub → erreur visible)

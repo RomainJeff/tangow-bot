@@ -4,8 +4,8 @@
 
 **Blocked by:** 01, 02, 03, 04, 05, 06
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] e2e `skills-overlay` vert
-- [ ] Toutes les suites listées vertes sur `main` après merge
-- [ ] Design doc §5 mis à jour
+- [x] e2e `skills-overlay` vert
+- [x] Toutes les suites listées vertes sur `main` après merge
+- [x] Design doc §5 mis à jour
