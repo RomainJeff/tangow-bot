@@ -272,9 +272,14 @@ export const ProductEventSchema = z.object({
 });
 export type ProductEvent = z.infer<typeof ProductEventSchema>;
 
-/** clientNonce prefix for message_user / mid-turn progress messages. Single source of truth
- * (adapters user-progress + core message-visibility import this). */
+/** clientNonce prefix for mid-turn narration messages the executor publishes on its own
+ * initiative. Single source of truth (adapters user-progress imports this). */
 export const USER_PROGRESS_CLIENT_NONCE_PREFIX = "user-progress:";
+
+/** clientNonce prefix for `message_user` output: text the bot deliberately addressed to the
+ * user. Distinct from narration because a delegated (peer) run only surfaces this one.
+ * Single source of truth (adapters user-progress + core message-visibility import this). */
+export const USER_MESSAGE_CLIENT_NONCE_PREFIX = "user-message:";
 
 export const ThreadMessageSchema = z.object({
   id: Id,

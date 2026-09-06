@@ -1,4 +1,4 @@
-import { type MessageBlock, USER_PROGRESS_CLIENT_NONCE_PREFIX } from "@rakazo/contracts";
+import { type MessageBlock, USER_MESSAGE_CLIENT_NONCE_PREFIX } from "@rakazo/contracts";
 
 type PresentableMessage = {
   runId?: string;
@@ -24,15 +24,16 @@ export function isPeerReceiptBlocks(blocks: readonly MessageBlock[]): boolean {
 
 /**
  * A message a bot addressed to the user on purpose: `message_user` output (carries the
- * user-progress clientNonce) or an `ask_user` question (an `ask` block). These must reach the
+ * user-message clientNonce) or an `ask_user` question (an `ask` block). These must reach the
  * user even inside a delegated (peer, `trigger === "bot_message"`) run — a delegated bot has no
- * other way to talk to the user. Internal narration / tool steps / peer receipts are NOT this.
+ * other way to talk to the user. Internal narration (user-progress clientNonce, published
+ * before every tool call) / tool steps / peer receipts are NOT this.
  */
 export function isUserDirectedMessage(message: {
   clientNonce?: string | null;
   blocks: readonly MessageBlock[];
 }): boolean {
-  if (message.clientNonce?.startsWith(USER_PROGRESS_CLIENT_NONCE_PREFIX)) return true;
+  if (message.clientNonce?.startsWith(USER_MESSAGE_CLIENT_NONCE_PREFIX)) return true;
   return message.blocks.some((block) => block.kind === "ask");
 }
 

@@ -54,12 +54,19 @@ describe("user-visible messages", () => {
       message("received", "run-peer", [
         { kind: "bot_message_received", fromBotId: "c", fromBotName: "Coder", text: "Do it." },
       ]),
-      message("narration", "run-peer", [{ kind: "text", text: "internal narration" }]),
+      // Production narration carries a user-progress nonce (the executor publishes it before
+      // every tool call), so it must not be mistaken for user-directed output.
+      message(
+        "narration",
+        "run-peer",
+        [{ kind: "text", text: "internal narration" }],
+        "user-progress:run-peer:0:z:z",
+      ),
       message(
         "hello",
         "run-peer",
         [{ kind: "text", text: "Bonjour Romain" }],
-        "user-progress:run-peer:0:z:z",
+        "user-message:run-peer:1:z:z",
       ),
       message("question", "run-peer", [{ kind: "ask", text: "Ton horizon ?" }]),
     ];

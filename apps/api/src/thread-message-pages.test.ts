@@ -26,7 +26,7 @@ describe("thread message pages", () => {
         botId: "bot-1",
         replyToMessageId: null,
         runId: "run-peer",
-        clientNonce: "user-progress:run-peer:0:z:z",
+        clientNonce: "user-message:run-peer:1:z:z",
         createdAt: new Date("2026-08-16T00:00:03.000Z"),
       },
       {
@@ -38,7 +38,8 @@ describe("thread message pages", () => {
         botId: "bot-1",
         replyToMessageId: null,
         runId: "run-peer",
-        clientNonce: null,
+        // Production narration carries a user-progress nonce; it must still stay hidden.
+        clientNonce: "user-progress:run-peer:0:z:z",
         createdAt: new Date("2026-08-16T00:00:02.000Z"),
       },
     ]);
