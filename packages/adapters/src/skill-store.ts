@@ -283,7 +283,7 @@ async function extractZipEntry(
     throw new Error(`Skill bundle entry escapes the bundle root: ${entry.fileName}.`);
   }
   if (entry.fileName.endsWith("/")) {
-    await mkdir(target, { recursive: true });
+    await mkdir(target, { recursive: true }).catch(entryFailure(entry));
     return;
   }
   // Symlinks (S_IFLNK), fifos and devices are dropped silently, like the tar filter drops them.
@@ -293,7 +293,7 @@ async function extractZipEntry(
   if (entry.isEncrypted()) {
     throw new Error("Skill bundle uses zip encryption, which is not supported.");
   }
-  await mkdir(path.dirname(target), { recursive: true });
+  await mkdir(path.dirname(target), { recursive: true }).catch(entryFailure(entry));
   const stream = await new Promise<ReadableStream>((resolve, reject) => {
     zipfile.openReadStream(entry, (error, readable) => {
       if (readable) resolve(readable);
@@ -303,7 +303,28 @@ async function extractZipEntry(
   // The cap counts the bytes actually observed, across every entry: the central directory's
   // uncompressedSize is attacker-controlled, so a bomb declaring 1 KB and delivering 4 GB of
   // inflated data still stops here rather than filling the disk.
-  await pipeline(stream, cap(), createWriteStream(target));
+  await pipeline(stream, cap(), createWriteStream(target)).catch(entryFailure(entry));
+}
+
+/**
+ * A filesystem error in here is about the archive's own layout — a file and a directory claiming
+ * the same name, an entry named "." — not about the user's skill list, and its message carries the
+ * temp path we extracted into. Reword it so the import answers BAD_REQUEST naming the entry
+ * instead of the CONFLICT that the name-clash mkdir in writeUserSkillBundle raises, and so no host
+ * path reaches the user. The byte cap and yauzl's own stream errors carry no `code` and pass
+ * through untouched.
+ */
+// ponytail: two buckets, no error taxonomy; split further only if a message is ever unactionable.
+function entryFailure(entry: Entry): (error: unknown) => never {
+  return (error: unknown) => {
+    if (hasCode(error, "EEXIST") || hasCode(error, "ENOTDIR") || hasCode(error, "EISDIR")) {
+      throw new Error(`Skill bundle has conflicting entries: ${entry.fileName}.`);
+    }
+    if (error instanceof Error && "code" in error) {
+      throw new Error(`Skill bundle entry could not be written: ${entry.fileName}.`);
+    }
+    throw error;
+  };
 }
 
 const isFile = (file: string) =>

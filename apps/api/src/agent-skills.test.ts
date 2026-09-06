@@ -238,6 +238,33 @@ describe("agent skills service (filesystem)", () => {
     expect((await skills.get(actor, { skillId: "user:deploy" })).description).toBe("D");
   });
 
+  it("reports a zip whose own entries collide as a bad request, not a name clash", async () => {
+    const skills = service();
+    const file = new ZipFile();
+    file.addBuffer(
+      Buffer.from(buildSkillMd({ name: "Clash", description: "C", body: "Steps" })),
+      "SKILL.md",
+    );
+    // "scripts" arrives as a file, then as the parent of another entry.
+    file.addBuffer(Buffer.from("not a directory"), "scripts");
+    file.addBuffer(Buffer.from("echo hi"), "scripts/run.sh");
+    file.end();
+    const chunks: Buffer[] = [];
+    await new Promise<void>((done, fail) => {
+      file.outputStream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      file.outputStream.on("end", () => done());
+      file.outputStream.on("error", fail);
+    });
+    const error = await skills
+      .import(actor, { data: Buffer.concat(chunks).toString("base64") })
+      .catch((e: unknown) => e);
+    expect(error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringMatching(/conflicting entries/),
+    });
+    expect((error as Error).message).not.toContain(dataDir);
+  });
+
   it("writes a batch of bot overrides with the availability in one transaction", async () => {
     const skills = service();
     const created = await skills.create(actor, { name: "Batch", description: "B" });

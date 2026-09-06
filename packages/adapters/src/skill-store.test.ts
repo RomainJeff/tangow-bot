@@ -458,6 +458,31 @@ describe("skill store", () => {
       await expect(stat(path.join(root, "..", "escape.txt"))).rejects.toThrow();
     });
 
+    it("reports entries that collide with each other, without leaking the temp path", async () => {
+      const root = await tmpRoot();
+      const archive = await zip([
+        { name: "SKILL.md", content: md("Clash") },
+        { name: "scripts", content: "not a directory" },
+        { name: "scripts/run.sh", content: "echo hi" },
+      ]);
+      const error = await writeUserSkillBundle(root, archive, resolve).catch((e: unknown) => e);
+      // Not EEXIST: that signal is reserved for a name clash with an existing skill.
+      expect(isExists(error)).toBe(false);
+      expect((error as Error).message).toMatch(/conflicting entries: scripts\/run\.sh/);
+      expect((error as Error).message).not.toContain(root);
+      expect(await readdir(root)).toEqual([]);
+
+      // An entry named "." resolves onto the bundle directory itself: same treatment.
+      const dot = await zip([
+        { name: "SKILL.md", content: md("Dot") },
+        { name: ".", content: "x" },
+      ]);
+      const dotError = await writeUserSkillBundle(root, dot, resolve).catch((e: unknown) => e);
+      expect((dotError as Error).message).toMatch(/^Skill bundle /);
+      expect((dotError as Error).message).not.toContain(root);
+      expect(await readdir(root)).toEqual([]);
+    });
+
     it("rejects encrypted entries by name", async () => {
       const root = await tmpRoot();
       const archive = await zip([
