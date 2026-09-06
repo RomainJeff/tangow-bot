@@ -41,6 +41,7 @@ test("skills overlay: tabs, marketplace URL validation, installed skills", async
   expect(await rpc<Marketplace[]>(page, "marketplaces/list", {})).toEqual([]);
   await page.getByTestId("skills-tab-marketplaces").click();
   await expect(overlay.getByText("No marketplaces added yet.")).toBeVisible();
+  await expect(overlay.getByText(/repository of skills/)).toBeVisible();
   await overlay.getByLabel("Marketplace URL").fill("https://gitlab.com/x/y");
   await overlay.getByRole("button", { name: "Add marketplace" }).click();
   await expect(overlay.getByText(/Only public GitHub repositories are supported/)).toBeVisible();

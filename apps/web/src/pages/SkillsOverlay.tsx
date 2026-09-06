@@ -10,6 +10,7 @@ import { marketplaceSkillKey } from "@rakazo/core";
 import {
   Badge,
   Button,
+  Checkbox,
   Dialog,
   DialogClose,
   DialogContent,
@@ -227,6 +228,13 @@ function MarketplacesTab({
         </Button>
       </form>
 
+      <p className="-mt-3 text-[13px] text-muted-foreground/80">
+        <Trans>
+          A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md
+          files). The format is detected automatically.
+        </Trans>
+      </p>
+
       {marketplaces.length === 0 ? (
         <p className="text-muted-foreground/80">
           <Trans>No marketplaces added yet.</Trans>
@@ -239,10 +247,19 @@ function MarketplacesTab({
           <div key={mkt.id} className="rounded-xl border border-border px-4 py-3">
             <div className="flex items-center gap-4">
               <div className="min-w-0 flex-1">
-                <div className="text-[15px] font-medium text-foreground">{mkt.name}</div>
+                <div className="flex items-center gap-2 text-[15px] font-medium text-foreground">
+                  {mkt.name}
+                  <Badge variant="outline">
+                    {mkt.kind === "skills" ? <Trans>Skills</Trans> : <Trans>Plugins</Trans>}
+                  </Badge>
+                </div>
                 <div className="truncate text-[13px] text-muted-foreground/80">
                   {mkt.url} · {mkt.ref} @ {mkt.commit.slice(0, 7)} ·{" "}
-                  <Trans>{mkt.installedPlugins.length} plugins installed</Trans>
+                  {mkt.kind === "skills" ? (
+                    <Trans>{mkt.installedPlugins.length} skills installed</Trans>
+                  ) : (
+                    <Trans>{mkt.installedPlugins.length} plugins installed</Trans>
+                  )}
                 </div>
               </div>
               <Button
@@ -379,12 +396,14 @@ function BrowseTab({
   const [selectedId, setSelectedId] = useState("");
   const [plugins, setPlugins] = useState<MarketplacePlugin[]>([]);
   const [pending, setPending] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const marketplaceId = marketplaces.some((mkt) => mkt.id === selectedId)
     ? selectedId
     : (marketplaces[0]?.id ?? "");
   const marketplace = marketplaces.find((mkt) => mkt.id === marketplaceId);
 
   async function loadPlugins() {
+    setPicked(new Set());
     if (!marketplaceId) return setPlugins([]);
     setPlugins(await rpc.marketplaces.plugins({ marketplaceId }));
   }
@@ -395,21 +414,38 @@ function BrowseTab({
     );
   }, [marketplaceId]);
 
-  async function toggle(plugin: MarketplacePlugin) {
-    if (!marketplace) return;
-    setPending(plugin.name);
+  async function run(key: string, fallback: string, action: () => Promise<void>) {
+    setPending(key);
     onError(null);
     try {
+      await action();
+      await Promise.all([onChanged(), loadPlugins()]);
+    } catch (err) {
+      onError(errorMessage(err, fallback));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  // ponytail: two install paths in the UI, one on the server (installPlugin = installPlugins([p])).
+  function toggle(plugin: MarketplacePlugin) {
+    if (!marketplace) return;
+    void run(plugin.name, t`Could not update plugin`, async () => {
       const input = { marketplaceId: marketplace.id, plugin: plugin.name };
       await (plugin.installed
         ? rpc.marketplaces.removePlugin(input)
         : rpc.marketplaces.installPlugin(input));
-      await Promise.all([onChanged(), loadPlugins()]);
-    } catch (err) {
-      onError(errorMessage(err, t`Could not update plugin`));
-    } finally {
-      setPending(null);
-    }
+    });
+  }
+
+  function installPicked() {
+    if (!marketplace || picked.size === 0) return;
+    void run("batch", t`Could not install skills`, async () => {
+      await rpc.marketplaces.installPlugins({
+        marketplaceId: marketplace.id,
+        plugins: [...picked],
+      });
+    });
   }
 
   if (marketplaces.length === 0) {
@@ -435,9 +471,35 @@ function BrowseTab({
         ))}
       </NativeSelect>
 
+      {picked.size > 0 ? (
+        <div className="sticky top-0 z-10 flex items-center justify-between rounded-xl border border-border bg-card px-4 py-2">
+          <span className="text-[13px] text-muted-foreground">
+            <Trans>{picked.size} selected</Trans>
+          </span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="rounded-full"
+            disabled={pending !== null}
+            onClick={installPicked}
+          >
+            {pending === "batch" ? (
+              <Trans>Installing…</Trans>
+            ) : (
+              <Trans>Install selected ({picked.size})</Trans>
+            )}
+          </Button>
+        </div>
+      ) : null}
+
       {plugins.length === 0 ? (
         <p className="text-muted-foreground/80">
-          <Trans>No plugins in this marketplace.</Trans>
+          {marketplace?.kind === "skills" ? (
+            <Trans>No skills in this marketplace.</Trans>
+          ) : (
+            <Trans>No plugins in this marketplace.</Trans>
+          )}
         </p>
       ) : null}
 
@@ -447,6 +509,20 @@ function BrowseTab({
         return (
           <div key={plugin.name} className="rounded-xl border border-border px-4 py-3">
             <div className="flex items-center gap-4">
+              {!plugin.installed && plugin.supported ? (
+                <Checkbox
+                  aria-label={t`Select ${plugin.name}`}
+                  checked={picked.has(plugin.name)}
+                  onCheckedChange={(checked) =>
+                    setPicked((prev) => {
+                      const next = new Set(prev);
+                      if (checked) next.add(plugin.name);
+                      else next.delete(plugin.name);
+                      return next;
+                    })
+                  }
+                />
+              ) : null}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-[15px] font-medium text-foreground">
                   {plugin.name}
@@ -465,8 +541,8 @@ function BrowseTab({
                 variant="secondary"
                 className="rounded-full"
                 size="sm"
-                disabled={pending === plugin.name || (!plugin.supported && !plugin.installed)}
-                onClick={() => void toggle(plugin)}
+                disabled={pending !== null || (!plugin.supported && !plugin.installed)}
+                onClick={() => toggle(plugin)}
               >
                 {pending === plugin.name ? (
                   <Trans>Working…</Trans>
@@ -479,7 +555,8 @@ function BrowseTab({
             </div>
             {plugin.installed ? (
               <div className="mt-2 text-[13px]">
-                {skills.length === 0 ? (
+                {/* One plugin is one skill in a skills repository, so the sublist adds nothing. */}
+                {marketplace?.kind === "skills" ? null : skills.length === 0 ? (
                   <p className="text-muted-foreground/80">
                     <Trans>No skills in this plugin.</Trans>
                   </p>
