@@ -8,6 +8,7 @@ import {
   finalBlocksAfterMidTurnProgress,
   isUserProgressClientNonce,
   USER_PROGRESS_MESSAGE_MAX_LENGTH,
+  userMessageClientNonce,
   userProgressClientNonce,
 } from "./user-progress.js";
 
@@ -86,5 +87,17 @@ describe("userProgressClientNonce", () => {
     expect(userProgressClientNonce("run-1", 0)).not.toBe(nonce);
     expect(isUserProgressClientNonce(null)).toBe(false);
     expect(isUserProgressClientNonce("other")).toBe(false);
+  });
+
+  it("gives message_user its own prefix while both count as mid-turn", () => {
+    const progress = userProgressClientNonce("run-1", 0);
+    const userMessage = userMessageClientNonce("run-1", 1);
+
+    expect(userMessage.startsWith("user-message:")).toBe(true);
+    expect(userMessage.startsWith("user-progress:")).toBe(false);
+    expect(progress.startsWith("user-message:")).toBe(false);
+    // Transcript rebuilders (executor resume, job reconciler) want both kinds.
+    expect(isUserProgressClientNonce(userMessage)).toBe(true);
+    expect(isUserProgressClientNonce(progress)).toBe(true);
   });
 });

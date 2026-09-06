@@ -1,5 +1,5 @@
 import type { MessageBlock, ThreadMessage, ThreadMessagePage } from "@rakazo/contracts";
-import { isPeerReceiptBlocks } from "@rakazo/core";
+import { isPeerReceiptBlocks, isUserDirectedMessage } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 
 type MessageDb = PrismaClient | Prisma.TransactionClient;
@@ -93,10 +93,9 @@ export async function loadAllMessages(
   return pages.reverse().flat();
 }
 
-async function withoutPeerRunMessages<T extends { runId: string | null; blocks: Prisma.JsonValue }>(
-  prisma: MessageDb,
-  rows: T[],
-): Promise<T[]> {
+async function withoutPeerRunMessages<
+  T extends { runId: string | null; clientNonce: string | null; blocks: Prisma.JsonValue },
+>(prisma: MessageDb, rows: T[]): Promise<T[]> {
   const runIds = [...new Set(rows.flatMap((row) => (row.runId ? [row.runId] : [])))];
   if (runIds.length === 0) return rows;
   const peerRuns = await prisma.run.findMany({
@@ -106,11 +105,17 @@ async function withoutPeerRunMessages<T extends { runId: string | null; blocks: 
   const peerRunIds = new Set(peerRuns.map((run) => run.id));
   return rows.filter((row) => {
     if (!row.runId || !peerRunIds.has(row.runId)) return true;
-    // Keep compact sent/received receipts; clients render them as chips.
     const blocks = row.blocks as MessageBlock[];
-    return blocks.some(
-      (block) => block.kind === "bot_message_sent" || block.kind === "bot_message_received",
-    );
+    // Keep compact sent/received receipts; clients render them as chips.
+    if (
+      blocks.some(
+        (block) => block.kind === "bot_message_sent" || block.kind === "bot_message_received",
+      )
+    ) {
+      return true;
+    }
+    // Keep what a delegated bot addressed to the user (message_user / ask_user); drop the rest.
+    return isUserDirectedMessage({ clientNonce: row.clientNonce, blocks });
   });
 }
 
@@ -139,6 +144,7 @@ function toThreadMessage(row: {
   botId: string | null;
   replyToMessageId: string | null;
   runId: string | null;
+  clientNonce: string | null;
   thumbsUp: boolean;
   createdAt: Date;
 }): ThreadMessage {
@@ -151,6 +157,7 @@ function toThreadMessage(row: {
     botId: row.botId ?? undefined,
     replyToMessageId: row.replyToMessageId ?? undefined,
     runId: row.runId ?? undefined,
+    clientNonce: row.clientNonce ?? undefined,
     thumbsUp: row.thumbsUp,
     createdAt: row.createdAt.toISOString(),
   };

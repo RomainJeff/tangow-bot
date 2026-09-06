@@ -1,7 +1,8 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import { type MessageBlock, USER_MESSAGE_CLIENT_NONCE_PREFIX } from "@rakazo/contracts";
 
 type PresentableMessage = {
   runId?: string;
+  clientNonce?: string | null;
   blocks: readonly MessageBlock[];
 };
 
@@ -21,7 +22,22 @@ export function isPeerReceiptBlocks(blocks: readonly MessageBlock[]): boolean {
   );
 }
 
-/** Drop peer-run activity/replies; optionally keep sent/received receipt rows. */
+/**
+ * A message a bot addressed to the user on purpose: `message_user` output (carries the
+ * user-message clientNonce) or an `ask_user` question (an `ask` block). These must reach the
+ * user even inside a delegated (peer, `trigger === "bot_message"`) run — a delegated bot has no
+ * other way to talk to the user. Internal narration (user-progress clientNonce, published
+ * before every tool call) / tool steps / peer receipts are NOT this.
+ */
+export function isUserDirectedMessage(message: {
+  clientNonce?: string | null;
+  blocks: readonly MessageBlock[];
+}): boolean {
+  if (message.clientNonce?.startsWith(USER_MESSAGE_CLIENT_NONCE_PREFIX)) return true;
+  return message.blocks.some((block) => block.kind === "ask");
+}
+
+/** Drop peer-run activity/replies; keep messages the bot addressed to the user; optionally keep receipts. */
 export function userVisibleMessages<T extends PresentableMessage>(
   messages: readonly T[],
   options: UserVisibleMessagesOptions = {},
@@ -36,6 +52,9 @@ export function userVisibleMessages<T extends PresentableMessage>(
 
   return messages.filter((message) => {
     if (isPeerReceiptBlocks(message.blocks)) return includePeerReceipts;
-    return !message.runId || !peerRunIds.has(message.runId);
+    const isPeerRunMessage = !!message.runId && peerRunIds.has(message.runId);
+    if (!isPeerRunMessage) return true;
+    // Delegated run: keep only what the bot explicitly sent to the user.
+    return isUserDirectedMessage(message);
   });
 }

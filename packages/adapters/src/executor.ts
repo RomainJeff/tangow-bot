@@ -280,6 +280,7 @@ import {
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
   isUserProgressClientNonce,
+  userMessageClientNonce,
   userProgressClientNonce,
 } from "./user-progress.js";
 import { createWebProvider } from "./web-provider-factory.js";
@@ -2873,7 +2874,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               "bot",
               [{ kind: "text", text }],
               undefined,
-              userProgressClientNonce(run.id, midTurnProgressCount++),
+              // user-message: (not user-progress:) so a delegated run surfaces this to the
+              // user while its narration stays hidden.
+              userMessageClientNonce(run.id, midTurnProgressCount++),
             );
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
