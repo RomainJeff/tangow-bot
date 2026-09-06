@@ -99,7 +99,7 @@ describe("Pi multi-question asks", () => {
     const ask = events.find((event) => event.type === "ask");
     expect(ask).toEqual({
       type: "ask",
-      text: "",
+      text: "Ta cible ?\nTon horizon ?",
       questions: [
         {
           id: "q1",

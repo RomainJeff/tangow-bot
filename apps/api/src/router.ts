@@ -102,6 +102,7 @@ import {
   findModelCredential,
   findSpaceMemoryConfig,
   formatMessagingLinkCode,
+  InvalidAnswerError,
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
@@ -1391,14 +1392,23 @@ export function createRouter(deps: RouterDeps) {
       }),
       answer: authed.threads.answer.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        const answered = await deps.events.answerRunInput({
-          spaceId: context.actor.spaceId,
-          threadId: target.threadId,
-          runId: input.runId,
-          messageId: input.messageId,
-          answeredByUserId: context.actor.userId,
-          answer: input.answer,
-        });
+        const answered = await deps.events
+          .answerRunInput({
+            spaceId: context.actor.spaceId,
+            threadId: target.threadId,
+            runId: input.runId,
+            messageId: input.messageId,
+            answeredByUserId: context.actor.userId,
+            answer: input.answer,
+          })
+          .catch((error: unknown) => {
+            // The prompt is still pending — the payload is the problem, so don't report it as
+            // a stale prompt.
+            if (error instanceof InvalidAnswerError) {
+              throw new ORPCError("BAD_REQUEST", { message: error.message });
+            }
+            throw error;
+          });
         if (!answered) {
           throw new ORPCError("CONFLICT", {
             message: "This prompt is no longer awaiting an answer",

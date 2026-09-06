@@ -39,7 +39,7 @@ function normalizeAskQuestions(raw: Record<string, unknown>): AskQuestion[] | nu
     const question = String(q.question ?? "").trim();
     if (!question) throw new Error("each ask_user question needs non-empty question text");
     const options = Array.isArray(q.options)
-      ? q.options.map((option) => String(option).trim())
+      ? q.options.map((option) => (typeof option === "string" ? option.trim() : ""))
       : [];
     if (
       options.length > 0 &&
@@ -653,8 +653,10 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         const options = Array.isArray(raw.options) ? raw.options.map(String) : raw.options;
         return {
           question: String(raw.question ?? "What should I use?"),
-          // Keep a missing/invalid options value as-is so schema minItems can reject it;
-          // do not coerce to [] (that used to look like a valid empty list upstream).
+          // Keep a missing/invalid options value as-is so the execute-time check below can
+          // reject it; do not coerce to [] (that used to look like a valid empty list
+          // upstream). The wire schema no longer enforces this: `options` is optional there
+          // because the v2 `questions` shape supplies neither `question` nor `options`.
           options,
         };
       }
@@ -743,7 +745,9 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
           host.pausePending = true;
           host.queue.push({
             type: "ask",
-            text: questions.length === 1 ? questions[0]!.question : "",
+            // Push notifications and TTS read this text, so a multi-question card still
+            // needs a non-empty body: list every question rather than sending nothing.
+            text: questions.map((entry) => entry.question).join("\n"),
             questions,
           });
           return {

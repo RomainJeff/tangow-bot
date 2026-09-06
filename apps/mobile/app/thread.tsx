@@ -3369,7 +3369,13 @@ function MultiQuestionAskBlock({
     answers[id] ?? { selected: [], other: "", otherOpen: false, skipped: false };
 
   function update(id: string, patch: Partial<MobileLocalAnswer>) {
-    setAnswers((prev) => ({ ...prev, [id]: { ...get(id), ...patch } }));
+    setAnswers((prev) => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] ?? { selected: [], other: "", otherOpen: false, skipped: false }),
+        ...patch,
+      },
+    }));
   }
 
   function toggleOption(optionId: string) {

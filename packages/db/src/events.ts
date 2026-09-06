@@ -6,6 +6,7 @@ import {
   type ProductEvent,
 } from "@rakazo/contracts";
 import {
+  ACTIVE_RUN_STATUSES,
   blocksToAgentHistoryText,
   isApprovalAskBlock,
   isSecretAskBlock,
@@ -608,6 +609,14 @@ export async function claimSteering(
   });
 }
 
+/** The run is still awaiting an answer, but the submitted payload is malformed or incomplete. */
+export class InvalidAnswerError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidAnswerError";
+  }
+}
+
 export async function answerRunInput(
   prisma: PrismaClient,
   input: AnswerRunInput,
@@ -623,9 +632,10 @@ export async function answerRunInput(
 }
 
 /**
- * Answer the pending ask of a waiting_input run inside an existing transaction. Used by the
- * answer RPC and by sendThreadMessage when the user types a free-text reply in the composer
- * instead of tapping a choice. Returns null when nothing was awaiting an answer.
+ * Answer the pending ask of a waiting_input run inside an existing transaction. Called by
+ * answerRunInput, and exported so a caller that already holds a transaction can reuse it.
+ * Returns null when nothing was awaiting an answer; throws InvalidAnswerError when the run is
+ * still waiting but the submitted answer is malformed or incomplete.
  */
 export async function answerRunInputInTransaction(
   tx: Prisma.TransactionClient,
@@ -668,13 +678,15 @@ export async function answerRunInputInTransaction(
       try {
         raw = JSON.parse(input.answer);
       } catch {
-        return null;
+        throw new InvalidAnswerError("A multi-question answer must be a JSON payload");
       }
       const container =
         raw && typeof raw === "object" && "answers" in raw
           ? (raw as { answers: unknown }).answers
           : raw;
-      if (!container || typeof container !== "object") return null;
+      if (!container || typeof container !== "object") {
+        throw new InvalidAnswerError("A multi-question answer must be an object of answers");
+      }
       const submitted = container as Record<
         string,
         { selected?: unknown; other?: unknown; skipped?: unknown } | undefined
@@ -687,7 +699,7 @@ export async function answerRunInputInTransaction(
       for (let index = 0; index < questions.length; index += 1) {
         const question = questions[index]!;
         const entry = submitted[question.id] ?? {};
-        const selected = Array.isArray(entry.selected)
+        const selectedIds = Array.isArray(entry.selected)
           ? Array.from(
               new Set(
                 entry.selected
@@ -696,13 +708,18 @@ export async function answerRunInputInTransaction(
               ),
             )
           : [];
+        // Same defense in depth as `required` below: a single-choice question keeps at most one
+        // id, whatever a direct API call submits.
+        const selected = question.multiSelect ? selectedIds : selectedIds.slice(0, 1);
         const other = typeof entry.other === "string" ? entry.other.trim() : "";
         const answered = selected.length > 0 || other.length > 0;
         // Only the question's own `required` flag decides whether it may be skipped — a
         // client-asserted `skipped` cannot waive a required question (defense in depth: the
         // UI already gates Send, but a direct API call must not resume with a hole).
         const skipped = !answered && question.required === false;
-        if (!answered && !skipped) return null;
+        if (!answered && !skipped) {
+          throw new InvalidAnswerError(`Question ${index + 1} needs an answer`);
+        }
         const labels = selected.map(
           (id) => question.options?.find((option) => option.id === id)?.label ?? id,
         );
@@ -757,7 +774,9 @@ export async function answerRunInputInTransaction(
     // A choice ask also accepts a free-text answer ("none of the above" typed in the composer):
     // the offered options are a convenience, never a constraint on what the user may say.
     const freeTextAnswer = choiceAsk && !selectedChoice ? input.answer.trim() : "";
-    if (choiceAsk && !selectedChoice && !freeTextAnswer) return null;
+    if (choiceAsk && !selectedChoice && !freeTextAnswer) {
+      throw new InvalidAnswerError("Pick one of the offered choices or type an answer");
+    }
     if (secretAsk && !runSecretWriter) return null;
     if (secretAsk && pendingAsk.credential && run.userId !== input.answeredByUserId) return null;
     let approvalEffect: { id: string; kind: string } | null = null;
@@ -1298,7 +1317,7 @@ async function createSteeringContinuation(
     where: {
       threadId: input.threadId,
       botId: input.botId,
-      status: { in: ["leased", "running", "waiting_input", "waiting_takeover"] },
+      status: { in: [...ACTIVE_RUN_STATUSES] },
     },
     select: { id: true },
   });

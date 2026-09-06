@@ -302,7 +302,13 @@ function MultiQuestionAsk({
     answers[id] ?? { selected: [], other: "", otherOpen: false, skipped: false };
 
   function update(id: string, patch: Partial<LocalAnswer>) {
-    setAnswers((prev) => ({ ...prev, [id]: { ...get(id), ...patch } }));
+    setAnswers((prev) => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] ?? { selected: [], other: "", otherOpen: false, skipped: false }),
+        ...patch,
+      },
+    }));
   }
 
   function toggleOption(question: AskQuestionBlock, optionId: string) {
@@ -314,7 +320,9 @@ function MultiQuestionAsk({
       update(question.id, { selected, skipped: false });
     } else {
       const selected = state.selected[0] === optionId ? [] : [optionId];
-      update(question.id, { selected, skipped: false });
+      // Single choice: tapping an option replaces any typed free-text answer, so only one
+      // of the two ever reaches the server.
+      update(question.id, { selected, other: "", skipped: false });
     }
   }
 
