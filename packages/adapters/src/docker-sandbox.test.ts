@@ -150,6 +150,23 @@ describe("Docker sandbox", () => {
     );
   });
 
+  it("sends the user id so the supervisor can mount that user's skills", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      Response.json({ id: "computer", resumed: false }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+
+    await provider.provision({ botId: "bot", homePath: "/data/homes/bot" }, context);
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      botId: "bot",
+      homePath: "/data/homes/bot",
+      spaceId: "workspace",
+      userId: "user",
+    });
+  });
+
   it("does not buffer an oversized supervisor error body", async () => {
     const cancel = vi.fn();
     const fetchMock = vi.fn(

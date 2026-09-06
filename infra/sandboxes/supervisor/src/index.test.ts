@@ -3,7 +3,12 @@ import http from "node:http";
 import net from "node:net";
 import { resolveSupervisorToken } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import { resolveDockerSocketPath, supervisorApp, waitForScreenReady } from "./index.js";
+import {
+  resolveDockerSocketPath,
+  skillsBindsFor,
+  supervisorApp,
+  waitForScreenReady,
+} from "./index.js";
 import {
   assertRequestIdentity,
   attemptComputerControl,
@@ -169,12 +174,42 @@ describe("sandbox supervisor HTTP boundary", () => {
       body: JSON.stringify({
         botId: "bot",
         spaceId: "workspace",
+        userId: "user",
         homePath: "/tmp/never-used",
       }),
     });
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "computer identity mismatch" });
+  });
+
+  it("rejects provision ids that are not safe path segments", async () => {
+    for (const ids of [
+      { spaceId: "../etc", userId: "user" },
+      { spaceId: "workspace", userId: "a/b" },
+      { spaceId: "workspace" },
+    ]) {
+      const response = await supervisorApp.request("/computers", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          "x-rakazo-bot-id": "bot",
+          "x-rakazo-space-id": "workspace",
+        },
+        body: JSON.stringify({ botId: "bot", homePath: "/tmp/never-used", ...ids }),
+      });
+      expect(response.status).toBe(500);
+    }
+  });
+});
+
+describe("skills binds", () => {
+  it("derives read-only skills binds from ids and the translated data dir", () => {
+    expect(skillsBindsFor("/data", "s1", "u1", (p) => p.replace("/data", "/var/rakazo"))).toEqual([
+      "/var/rakazo/skills/user/s1/u1:/skills/user:ro",
+      "/var/rakazo/skills/marketplaces/s1:/skills/marketplaces:ro",
+    ]);
   });
 });
 

@@ -108,12 +108,28 @@ app.use("/computers/*", async (c, next) => {
   await next();
 });
 
+const PathSegment = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+
+/** Skills mounts are derived from ids + dataDir, never from client paths (design Q10). */
+export function skillsBindsFor(
+  dataDir: string,
+  spaceId: string,
+  userId: string,
+  translate: (p: string) => string,
+): string[] {
+  return [
+    `${translate(path.join(dataDir, "skills", "user", spaceId, userId))}:/skills/user:ro`,
+    `${translate(path.join(dataDir, "skills", "marketplaces", spaceId))}:/skills/marketplaces:ro`,
+  ];
+}
+
 app.post("/computers", async (c) => {
   const body = z
     .object({
       botId: z.string().min(1),
       homePath: z.string().min(1),
-      spaceId: z.string().min(1),
+      spaceId: PathSegment,
+      userId: PathSegment,
     })
     .parse(await c.req.json());
   try {
@@ -135,6 +151,10 @@ app.post("/computers", async (c) => {
       if (hostUid !== 0) await mkdir(serviceHomePath, { recursive: true });
       const homePath = hostHomePath(serviceHomePath, runtimeInfo);
       const computerUser = runtimeInfo ? COMPUTER_USER : hostComputerUser(hostUid, hostGid);
+      // Bind sources are created by the worker before provision; a root supervisor never mkdirs them.
+      const skillsBinds = skillsBindsFor(dataDir, body.spaceId, body.userId, (p) =>
+        hostHomePath(p, runtimeInfo),
+      );
       const existing = await findBotContainer(body.botId, body.spaceId);
       if (existing) {
         const info = await existing.inspect();
@@ -142,7 +162,8 @@ app.post("/computers", async (c) => {
         if (
           info.Image === desired.Id &&
           (!networkMode || info.HostConfig.NetworkMode === networkMode) &&
-          info.Config.User === computerUser
+          info.Config.User === computerUser &&
+          skillsBinds.every((bind) => info.HostConfig.Binds?.includes(bind))
         ) {
           if (!info.State.Running) await existing.start();
           const screenUrl = await publishedScreenUrl(
@@ -184,6 +205,7 @@ app.post("/computers", async (c) => {
           user: computerUser,
           networkMode,
           controlToken: randomUUID(),
+          skillsBinds,
         }),
       );
       await container.start();

@@ -116,6 +116,7 @@ export class DockerSandboxProvider implements SandboxProvider {
         botId: request.botId,
         homePath: request.homePath,
         spaceId: context.spaceId,
+        userId: context.userId,
       }),
       signal: context.signal,
     });

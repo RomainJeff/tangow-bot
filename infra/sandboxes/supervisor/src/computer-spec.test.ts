@@ -81,6 +81,25 @@ describe("graphical computer spec", () => {
     expect(options.HostConfig.NetworkMode).toBe("rakazo_default");
   });
 
+  it("appends read-only skills binds after the home bind", () => {
+    const options = containerCreateOptions({
+      name: "rakazo-bot-abc",
+      image: COMPUTER_IMAGE,
+      botId: "abc",
+      spaceId: "ws",
+      homePath: "/var/rakazo/homes/abc",
+      skillsBinds: [
+        "/var/rakazo/skills/user/s/u:/skills/user:ro",
+        "/var/rakazo/skills/marketplaces/s:/skills/marketplaces:ro",
+      ],
+    });
+    expect(options.HostConfig.Binds).toEqual([
+      "/var/rakazo/homes/abc:/home/rakazo",
+      "/var/rakazo/skills/user/s/u:/skills/user:ro",
+      "/var/rakazo/skills/marketplaces/s:/skills/marketplaces:ro",
+    ]);
+  });
+
   it("still publishes host ports when NetworkMode is a per-bot isolated network", () => {
     const networkMode = computerNetworkNameFor("bot_isolation");
     const options = containerCreateOptions({

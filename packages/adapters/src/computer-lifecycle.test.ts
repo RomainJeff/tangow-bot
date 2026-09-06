@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type {
@@ -83,6 +83,10 @@ describe("computer provisioning", () => {
           context,
         ),
       ).rejects.toThrow("Computer is busy");
+      // Skills bind sources are created before provision so Docker never creates them as root.
+      for (const dir of ["skills/user/workspace-1/user-1", "skills/marketplaces/workspace-1"]) {
+        expect((await stat(path.join(dataDir, dir))).isDirectory()).toBe(true);
+      }
       expect(releaseScreen).toHaveBeenCalledOnce();
       expect(stop).toHaveBeenCalledOnce();
       expect(updateMany).toHaveBeenNthCalledWith(

@@ -60,6 +60,8 @@ export interface ComputerCreateInput {
   user?: string;
   controlToken?: string;
   networkMode?: string;
+  /** Extra `host:container:ro` binds, appended after the home bind. */
+  skillsBinds?: string[];
 }
 
 interface PointerInput {
@@ -97,7 +99,7 @@ export function containerCreateOptions(input: ComputerCreateInput) {
     },
     ExposedPorts: ports.ExposedPorts,
     HostConfig: {
-      Binds: [`${input.homePath}:/home/rakazo`],
+      Binds: [`${input.homePath}:/home/rakazo`, ...(input.skillsBinds ?? [])],
       PortBindings: ports.PortBindings,
       ShmSize: 256 * 1024 * 1024,
       CapDrop: ["ALL"],

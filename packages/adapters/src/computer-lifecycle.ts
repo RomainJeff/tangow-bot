@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import type {
   AdapterContext,
   AgentHomeStore,
@@ -26,6 +27,7 @@ import {
 } from "./computer-workspace.js";
 import { isUnrecoverableSandboxError } from "./e2b-sandbox.js";
 import { resolveAgentHomePath } from "./home.js";
+import { userSkillsRoot } from "./skill-store.js";
 
 const EXECUTION_LEASE_MS = 5 * 60_000;
 const RELEASED_EXECUTION_LEASE_AT = new Date(0);
@@ -64,6 +66,14 @@ export async function provisionComputer(
   }
   const homePath = resolveAgentHomePath(deps.home, existing.homeKey, deps.dataDir ?? "./data");
   await mkdir(homePath, { recursive: true });
+  // Docker would create missing bind sources as root; create them as the worker user first.
+  if (deps.dataDir) {
+    await mkdir(userSkillsRoot(deps.dataDir, context), { recursive: true });
+    // ponytail: mirrors marketplacesRoot() from the marketplace store; inlined to avoid a cross-ticket import.
+    await mkdir(path.join(deps.dataDir, "skills", "marketplaces", context.spaceId), {
+      recursive: true,
+    });
+  }
 
   if (existing.state === "running" && existing.providerRef) {
     return reconnectComputer(deps, existing, homePath, context);
