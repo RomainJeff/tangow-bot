@@ -28,6 +28,8 @@ import {
   ExportManifestSchema,
   GroupDetailSchema,
   GroupSchema,
+  MarketplacePluginSchema,
+  MarketplaceUpdateCheckSchema,
   McpServerConfigInput,
   McpServerSchema,
   MemoryDocumentSchema,
@@ -51,6 +53,7 @@ import {
   ServerUpdateStatusSchema,
   SkillAvailabilitySchema,
   SkillPlaybookSchema,
+  SpaceMarketplaceSchema,
   SpaceMemoryConfigSchema,
   SpaceNavigationSchema,
   SpaceSchema,
@@ -483,6 +486,27 @@ export const appContract = {
         }),
       )
       .output(AgentSkillCatalogEntrySchema),
+  },
+  /** Skills v2 phase 3: GitHub marketplaces (.claude-plugin/marketplace.json), space-level. */
+  marketplaces: {
+    list: oc.input(z.object({})).output(z.array(SpaceMarketplaceSchema)),
+    add: oc
+      .input(
+        z.object({ url: z.string().url().max(500), ref: z.string().min(1).max(200).optional() }),
+      )
+      .output(SpaceMarketplaceSchema),
+    remove: oc.input(z.object({ marketplaceId: Id })).output(z.object({ ok: z.literal(true) })),
+    plugins: oc.input(z.object({ marketplaceId: Id })).output(z.array(MarketplacePluginSchema)),
+    installPlugin: oc
+      .input(z.object({ marketplaceId: Id, plugin: z.string().min(1).max(64) }))
+      .output(SpaceMarketplaceSchema),
+    removePlugin: oc
+      .input(z.object({ marketplaceId: Id, plugin: z.string().min(1).max(64) }))
+      .output(SpaceMarketplaceSchema),
+    checkUpdate: oc.input(z.object({ marketplaceId: Id })).output(MarketplaceUpdateCheckSchema),
+    applyUpdate: oc
+      .input(z.object({ marketplaceId: Id, commit: z.string().regex(/^[0-9a-f]{40}$/) }))
+      .output(SpaceMarketplaceSchema),
   },
   capabilities: {
     list: oc.output(z.array(CapabilityInstallSchema)),
