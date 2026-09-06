@@ -126,6 +126,7 @@ import {
   resolveBusyBotName,
   toComputerStatus,
 } from "./computer-status.js";
+import { createMarketplacesService } from "./marketplaces.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
 import {
   chooseFocus,
@@ -409,6 +410,7 @@ export function createRouter(deps: RouterDeps) {
     dataDir: deps.dataDir,
   });
   const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir);
+  const marketplaces = createMarketplacesService({ prisma: deps.prisma, dataDir: deps.dataDir });
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
@@ -2320,6 +2322,32 @@ export function createRouter(deps: RouterDeps) {
       ),
       setAccess: authed.agentSkills.setAccess.handler(async ({ context, input }) =>
         agentSkills.setAccess(context.actor, input),
+      ),
+    },
+    marketplaces: {
+      list: authed.marketplaces.list.handler(async ({ context }) =>
+        marketplaces.list(context.actor),
+      ),
+      add: authed.marketplaces.add.handler(async ({ context, input }) =>
+        marketplaces.add(context.actor, input),
+      ),
+      remove: authed.marketplaces.remove.handler(async ({ context, input }) =>
+        marketplaces.remove(context.actor, input.marketplaceId),
+      ),
+      plugins: authed.marketplaces.plugins.handler(async ({ context, input }) =>
+        marketplaces.plugins(context.actor, input.marketplaceId),
+      ),
+      installPlugin: authed.marketplaces.installPlugin.handler(async ({ context, input }) =>
+        marketplaces.installPlugin(context.actor, input.marketplaceId, input.plugin),
+      ),
+      removePlugin: authed.marketplaces.removePlugin.handler(async ({ context, input }) =>
+        marketplaces.removePlugin(context.actor, input.marketplaceId, input.plugin),
+      ),
+      checkUpdate: authed.marketplaces.checkUpdate.handler(async ({ context, input }) =>
+        marketplaces.checkUpdate(context.actor, input.marketplaceId),
+      ),
+      applyUpdate: authed.marketplaces.applyUpdate.handler(async ({ context, input }) =>
+        marketplaces.applyUpdate(context.actor, input.marketplaceId, input.commit),
       ),
     },
     capabilities: {
