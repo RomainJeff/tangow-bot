@@ -57,6 +57,21 @@ export type ThreadTarget =
 const THREAD_MESSAGE_PAGE_SIZE = 100;
 const RUNS_NEEDING_CONTINUE = new Set(["queued"]);
 
+/**
+ * Peer (`bot_message`) runs stay out of the snapshot — their activity is noise in the
+ * recipient's own chat. The one exception is a run parked on `ask_user`: the client only lets
+ * the user answer an ask whose run is in the snapshot, so hiding it leaves a question that
+ * renders but can never be answered. `threads.answer` already accepts peer runs.
+ */
+const SNAPSHOT_RUN_VISIBILITY: Prisma.RunWhereInput["OR"] = [
+  { trigger: { not: "bot_message" } },
+  { status: "waiting_input" },
+];
+
+function isPeerRunRow(run: { trigger: string }): boolean {
+  return run.trigger === "bot_message";
+}
+
 type MentionTargetInput = string | { kind: "bot" | "group" | "routine" | "connector"; id: string };
 
 function splitMentionTargets(mentions: MentionTargetInput[] | undefined) {
@@ -333,8 +348,8 @@ export async function threadSnapshot(
             where: {
               botId: target.botId,
               threadId: target.threadId,
-              trigger: { not: "bot_message" },
               status: { in: [...ACTIVE_RUN_STATUSES, "failed"] },
+              OR: SNAPSHOT_RUN_VISIBILITY,
             },
             // The id tiebreak keeps ordering deterministic under equal
             // timestamps, matching the supersession probe below.
@@ -363,7 +378,7 @@ export async function threadSnapshot(
             : null;
         const currentRun = run?.status === "failed" && newestTerminal?.id !== run.id ? null : run;
         const liveEvents =
-          currentRun && isActive(currentRun.status as RunStatus)
+          currentRun && isActive(currentRun.status as RunStatus) && !isPeerRunRow(currentRun)
             ? await tx.event.findMany({
                 where: {
                   threadId: target.threadId,
@@ -399,8 +414,8 @@ export async function threadSnapshot(
       tx.run.findMany({
         where: {
           threadId: target.threadId,
-          trigger: { not: "bot_message" },
           status: { in: [...ACTIVE_RUN_STATUSES] },
+          OR: SNAPSHOT_RUN_VISIBILITY,
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -416,12 +431,13 @@ export async function threadSnapshot(
         take: 50,
       }),
     ]);
+    const liveRunIds = activeRuns.filter((run) => !isPeerRunRow(run)).map((run) => run.id);
     const liveEvents =
-      activeRuns.length > 0
+      liveRunIds.length > 0
         ? await tx.event.findMany({
             where: {
               threadId: target.threadId,
-              runId: { in: activeRuns.map((run) => run.id) },
+              runId: { in: liveRunIds },
               type: { in: ["thread.progress", "thread.subagent", "agent.tool.called"] },
             },
             orderBy: { seq: "asc" },

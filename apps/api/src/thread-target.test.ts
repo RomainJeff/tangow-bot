@@ -261,10 +261,10 @@ describe("threadSnapshot", () => {
         where: expect.objectContaining({
           botId: "bot-1",
           threadId: "thread-1",
-          trigger: { not: "bot_message" },
           status: {
             in: ["queued", "leased", "running", "waiting_input", "waiting_takeover", "failed"],
           },
+          OR: [{ trigger: { not: "bot_message" } }, { status: "waiting_input" }],
         }),
       }),
     );
@@ -401,8 +401,8 @@ describe("threadSnapshot", () => {
       expect.objectContaining({
         where: {
           threadId: "thread-1",
-          trigger: { not: "bot_message" },
           status: { in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"] },
+          OR: [{ trigger: { not: "bot_message" } }, { status: "waiting_input" }],
         },
       }),
     );
@@ -452,8 +452,8 @@ describe("threadSnapshot", () => {
     expect(findManyRuns).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          trigger: { not: "bot_message" },
           status: { in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"] },
+          OR: [{ trigger: { not: "bot_message" } }, { status: "waiting_input" }],
         }),
       }),
     );
@@ -465,6 +465,39 @@ describe("threadSnapshot", () => {
         }),
       }),
     );
+  });
+
+  it("keeps a peer run parked on ask_user answerable without leaking its live events", async () => {
+    const peerAsking = {
+      id: "run-peer-asking",
+      botId: "bot-a",
+      threadId: "thread-1",
+      taskId: "task-peer",
+      status: "waiting_input",
+      trigger: "bot_message",
+      modelProvider: null,
+      modelId: null,
+      error: null,
+      startedAt: new Date("2026-08-23T00:00:05.000Z"),
+      completedAt: null,
+      createdAt: new Date("2026-08-23T00:00:05.000Z"),
+    };
+    const peerRunning = { ...peerAsking, id: "run-peer-running", status: "running" };
+    const findManyEvents = vi.fn().mockResolvedValue([]);
+    const snapshot = await threadSnapshot(
+      {
+        prisma: groupPrisma(
+          groupRunFindMany({ active: [peerAsking, peerRunning] }),
+          findManyEvents,
+        ),
+      },
+      groupTarget(),
+    );
+
+    // The ask must be answerable (the client gates AskCard on activeRuns)...
+    expect(snapshot.activeRuns?.map((run) => run.id)).toEqual(["run-peer-asking"]);
+    // ...but no peer narration may be streamed into the transcript.
+    expect(findManyEvents).not.toHaveBeenCalled();
   });
 
   it("does not revive an older group failure after a newer run completed", async () => {
@@ -701,31 +734,45 @@ function isTerminalRunQuery(where: { status?: { in?: string[] } } | undefined) {
   return Array.isArray(statuses) && statuses.includes("failed") && statuses.includes("completed");
 }
 
-function excludesPeerRuns(where: { trigger?: { not?: string } } | undefined) {
-  return where?.trigger?.not === "bot_message";
+type RunWhere = {
+  status?: { in?: string[] };
+  trigger?: { not?: string };
+  OR?: Array<{ trigger?: { not?: string }; status?: string }>;
+};
+
+/** Mirror the snapshot's run-visibility rule so the fake behaves like the DB. */
+function matchesRunVisibility(
+  where: RunWhere | undefined,
+  row: { trigger?: string; status?: string },
+) {
+  if (where?.trigger?.not === "bot_message") return row.trigger !== "bot_message";
+  if (!where?.OR) return true;
+  return where.OR.some((clause) => {
+    if (clause.trigger?.not !== undefined) return row.trigger !== clause.trigger.not;
+    if (clause.status !== undefined) return row.status === clause.status;
+    return false;
+  });
 }
 
 function groupRunFindMany(input: { active?: unknown[]; terminals?: unknown[] }) {
-  return vi
-    .fn()
-    .mockImplementation(
-      async (args: { where?: { status?: { in?: string[] }; trigger?: { not?: string } } }) => {
-        const rows = isTerminalRunQuery(args.where)
-          ? (input.terminals ?? [])
-          : (input.active ?? []);
-        if (!excludesPeerRuns(args.where)) return rows;
-        return rows.filter((row) => (row as { trigger?: string }).trigger !== "bot_message");
-      },
+  return vi.fn().mockImplementation(async (args: { where?: RunWhere }) => {
+    const rows = isTerminalRunQuery(args.where) ? (input.terminals ?? []) : (input.active ?? []);
+    return rows.filter((row) =>
+      matchesRunVisibility(args.where, row as { trigger?: string; status?: string }),
     );
+  });
 }
 
-function groupPrisma(findManyRuns: ReturnType<typeof groupRunFindMany>) {
+function groupPrisma(
+  findManyRuns: ReturnType<typeof groupRunFindMany>,
+  findManyEvents = vi.fn().mockResolvedValue([]),
+) {
   const tx = {
     $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
     message: { findMany: vi.fn().mockResolvedValue([]) },
     event: {
       findFirst: vi.fn().mockResolvedValue(null),
-      findMany: vi.fn().mockResolvedValue([]),
+      findMany: findManyEvents,
     },
     run: { findMany: findManyRuns },
   };
