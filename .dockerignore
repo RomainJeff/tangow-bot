@@ -23,3 +23,19 @@ playwright-report
 test-results
 verify-report
 *.log
+
+# Native build output. Gitignored, but nothing here excluded it, so every build sent
+# ~2.3 GB of iOS/Android/Electron artifacts to the daemon. The server image builds
+# neither app; the explicit paths also survive a host whose copy of this file predates
+# the `**/` globs above.
+apps/mobile/ios
+apps/mobile/android
+apps/mobile/.expo
+apps/mobile/.maestro
+apps/desktop/out
+**/Pods
+**/.turbo
+**/*.ipa
+**/*.apk
+**/*.aab
+**/*.tsbuildinfo
