@@ -108,6 +108,124 @@ describe("marketplace store", () => {
     await expect(readFile(path.join(root, "acme/plugins/writer/commands/x.md"))).rejects.toThrow();
   });
 
+  it("installs a plugin whose source is the repository root", async () => {
+    const dir = await tmp();
+    await mkdir(path.join(dir, ".claude-plugin"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".claude-plugin/marketplace.json"),
+      JSON.stringify({ name: "solo", plugins: [{ name: "solo-skills", source: "./" }] }),
+    );
+    const skill = path.join(dir, "skills/tdd");
+    await mkdir(skill, { recursive: true });
+    await writeFile(
+      path.join(skill, "SKILL.md"),
+      buildSkillMd({ name: "TDD", description: "Red green refactor", body: "Steps" }),
+    );
+    const root = marketplacesRoot(await tmp(), "space1");
+    await installPluginFromCheckout(
+      root,
+      "solo",
+      dir,
+      await readMarketplaceManifest(dir),
+      "solo-skills",
+    );
+    expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual([
+      "mkt:solo/solo-skills/tdd",
+    ]);
+  });
+
+  it("flattens skills declared in plugin.json under category directories", async () => {
+    const dir = await tmp();
+    await mkdir(path.join(dir, ".claude-plugin"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".claude-plugin/marketplace.json"),
+      JSON.stringify({ name: "nested", plugins: [{ name: "pack", source: "./" }] }),
+    );
+    await writeFile(
+      path.join(dir, ".claude-plugin/plugin.json"),
+      JSON.stringify({ skills: ["./skills/engineering/tdd", "./skills/productivity/Grilling"] }),
+    );
+    for (const rel of ["engineering/tdd", "productivity/Grilling", "deprecated/old"]) {
+      await mkdir(path.join(dir, "skills", rel), { recursive: true });
+      await writeFile(
+        path.join(dir, "skills", rel, "SKILL.md"),
+        buildSkillMd({ name: rel, description: `desc ${rel}`, body: "Steps" }),
+      );
+    }
+    const root = marketplacesRoot(await tmp(), "space1");
+    await installPluginFromCheckout(
+      root,
+      "nested",
+      dir,
+      await readMarketplaceManifest(dir),
+      "pack",
+    );
+    // Declared skills only, flattened and lowercased: deprecated/ is not in plugin.json.
+    expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual([
+      "mkt:nested/pack/grilling",
+      "mkt:nested/pack/tdd",
+    ]);
+  });
+
+  it("descends one level into category directories when plugin.json declares nothing", async () => {
+    const dir = await tmp();
+    await mkdir(path.join(dir, ".claude-plugin"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".claude-plugin/marketplace.json"),
+      JSON.stringify({ name: "scan", plugins: [{ name: "pack", source: "./" }] }),
+    );
+    for (const rel of ["flat", "engineering/tdd"]) {
+      await mkdir(path.join(dir, "skills", rel), { recursive: true });
+      await writeFile(
+        path.join(dir, "skills", rel, "SKILL.md"),
+        buildSkillMd({ name: rel, description: `desc ${rel}`, body: "Steps" }),
+      );
+    }
+    const root = marketplacesRoot(await tmp(), "space1");
+    await installPluginFromCheckout(root, "scan", dir, await readMarketplaceManifest(dir), "pack");
+    expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual([
+      "mkt:scan/pack/flat",
+      "mkt:scan/pack/tdd",
+    ]);
+  });
+
+  it("refuses a plugin.json skill path that escapes the plugin", async () => {
+    const dir = await tmp();
+    await mkdir(path.join(dir, ".claude-plugin"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".claude-plugin/marketplace.json"),
+      JSON.stringify({ name: "evil", plugins: [{ name: "pack", source: "./" }] }),
+    );
+    await writeFile(
+      path.join(dir, ".claude-plugin/plugin.json"),
+      JSON.stringify({ skills: ["../outside/secrets"] }),
+    );
+    const root = marketplacesRoot(await tmp(), "space1");
+    await expect(
+      installPluginFromCheckout(root, "evil", dir, await readMarketplaceManifest(dir), "pack"),
+    ).rejects.toThrow(/escapes the plugin/);
+  });
+
+  it("refuses two skills that would install under the same slug", async () => {
+    const dir = await tmp();
+    await mkdir(path.join(dir, ".claude-plugin"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".claude-plugin/marketplace.json"),
+      JSON.stringify({ name: "clash", plugins: [{ name: "pack", source: "./" }] }),
+    );
+    for (const rel of ["engineering/tdd", "productivity/TDD"]) {
+      await mkdir(path.join(dir, "skills", rel), { recursive: true });
+      await writeFile(
+        path.join(dir, "skills", rel, "SKILL.md"),
+        buildSkillMd({ name: rel, description: `desc ${rel}`, body: "Steps" }),
+      );
+    }
+    const root = marketplacesRoot(await tmp(), "space1");
+    await expect(
+      installPluginFromCheckout(root, "clash", dir, await readMarketplaceManifest(dir), "pack"),
+    ).rejects.toThrow(/both install as "tdd"/);
+  });
+
   it("returns an empty list when the root does not exist", async () => {
     expect(await listMarketplaceSkills(path.join(await tmp(), "missing"))).toEqual([]);
   });

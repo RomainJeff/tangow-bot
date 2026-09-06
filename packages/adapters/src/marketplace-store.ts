@@ -3,6 +3,10 @@
  * DATA_DIR/skills/marketplaces/<spaceId>/<marketplace>/plugins/<plugin>/skills/<slug>/ and
  * read back as read-only `mkt:` skills. Only `<plugin>/skills/**` is consumed (design Q5);
  * the DB row (SpaceMarketplace) is the lock, this module never touches it.
+ *
+ * Upstream plugins are not all flat: some declare their skills in `.claude-plugin/plugin.json`
+ * and file them under `skills/<category>/<slug>/`. Both shapes are read; the installed tree
+ * stays flat.
  */
 import { lstatSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
@@ -82,6 +86,69 @@ export async function readMarketplaceManifest(checkoutDir: string): Promise<Mark
   };
 }
 
+const PluginJsonSchema = z.object({ skills: z.array(z.string()).optional() });
+
+function isInside(parent: string, child: string): boolean {
+  const root = path.resolve(parent);
+  return child === root || child.startsWith(root + path.sep);
+}
+
+/** `skills` from `.claude-plugin/plugin.json`, or null when the plugin ships no such list. */
+async function declaredSkillDirs(pluginDir: string): Promise<string[] | null> {
+  const file = path.join(pluginDir, ".claude-plugin", "plugin.json");
+  const raw = await readFile(file, "utf8").catch(() => null);
+  if (raw === null) return null;
+  let declared: string[] | undefined;
+  try {
+    declared = PluginJsonSchema.parse(JSON.parse(raw)).skills;
+  } catch {
+    throw new Error("plugin.json is invalid: expected { skills?: string[] }.");
+  }
+  if (!declared) return null;
+  return declared.map((entry) => {
+    const dir = path.resolve(pluginDir, entry);
+    if (!isInside(pluginDir, dir)) throw new Error(`Skill path "${entry}" escapes the plugin.`);
+    return dir;
+  });
+}
+
+/**
+ * `skills/<slug>/`, descending one level into `skills/<category>/<slug>/` for entries that hold
+ * no SKILL.md of their own. Two levels is where every layout seen in the wild stops.
+ */
+async function scanSkillDirs(skillsDir: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const name of await listDirs(skillsDir)) {
+    const dir = path.join(skillsDir, name);
+    if (await stat(path.join(dir, "SKILL.md")).catch(() => null)) {
+      out.push(dir);
+      continue;
+    }
+    for (const nested of await listDirs(dir)) out.push(path.join(dir, nested));
+  }
+  return out;
+}
+
+/** Skill directories of a plugin, keyed by the flat slug they install as. */
+async function resolveSkillDirs(pluginDir: string): Promise<{ slug: string; dir: string }[]> {
+  const dirs =
+    (await declaredSkillDirs(pluginDir)) ?? (await scanSkillDirs(path.join(pluginDir, "skills")));
+  const bySlug = new Map<string, string>();
+  for (const dir of dirs) {
+    const raw = path.basename(dir);
+    const slug = raw.toLowerCase();
+    if (!SAFE_NAME.test(slug)) throw new Error(`Invalid skill name "${raw}".`);
+    const clash = bySlug.get(slug);
+    if (clash !== undefined && clash !== dir) {
+      throw new Error(`Skills "${clash}" and "${dir}" both install as "${slug}".`);
+    }
+    bySlug.set(slug, dir);
+  }
+  return [...bySlug]
+    .map(([slug, dir]) => ({ slug, dir }))
+    .sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
 export type MarketplaceSkillFile = {
   id: string;
   marketplace: string;
@@ -136,9 +203,9 @@ export async function listMarketplaceSkills(root: string): Promise<MarketplaceSk
 }
 
 /**
- * Copies `<source>/skills/<slug>/**` into `<root>/<marketplace>/plugins/<plugin>/skills/<slug>/`
- * (slug lowercased). Validates everything before touching the root, so a rejected plugin
- * leaves the previous install intact.
+ * Copies each skill directory into `<root>/<marketplace>/plugins/<plugin>/skills/<slug>/`
+ * (slug lowercased, tree flattened). Validates everything before touching the root, so a
+ * rejected plugin leaves the previous install intact.
  */
 export async function installPluginFromCheckout(
   root: string,
@@ -154,15 +221,15 @@ export async function installPluginFromCheckout(
       `Plugin "${pluginName}" has an unsupported source (only paths inside the repository are supported).`,
     );
   }
+  // `source: "./"` means the repository itself is the plugin, so equality is legal here.
   const pluginDir = path.resolve(checkoutDir, plugin.source);
-  if (!pluginDir.startsWith(path.resolve(checkoutDir) + path.sep)) {
+  if (!isInside(checkoutDir, pluginDir)) {
     throw new Error("Plugin source escapes the repository.");
   }
-  const skillsDir = path.join(pluginDir, "skills");
-  const slugs = await listDirs(skillsDir);
-  if (slugs.length === 0) throw new Error(`Plugin "${pluginName}" has no skills/ directory.`);
-  for (const slug of slugs) {
-    const size = (await stat(path.join(skillsDir, slug, "SKILL.md")).catch(() => null))?.size;
+  const skills = await resolveSkillDirs(pluginDir);
+  if (skills.length === 0) throw new Error(`Plugin "${pluginName}" has no skills/ directory.`);
+  for (const { slug, dir } of skills) {
+    const size = (await stat(path.join(dir, "SKILL.md")).catch(() => null))?.size;
     if (size === undefined) throw new Error(`Skill "${slug}" has no SKILL.md.`);
     if (size > MAX_SKILL_MD_BYTES) {
       throw new Error(
@@ -178,8 +245,8 @@ export async function installPluginFromCheckout(
   const target = path.join(root, marketplace, "plugins", pluginName, "skills");
   await rm(target, { recursive: true, force: true });
   await mkdir(target, { recursive: true });
-  for (const slug of slugs) {
-    await cp(path.join(skillsDir, slug), path.join(target, slug.toLowerCase()), {
+  for (const { slug, dir } of skills) {
+    await cp(dir, path.join(target, slug), {
       recursive: true,
       dereference: false,
       // ponytail: the tarball extractor already drops symlinks; belt and braces for other checkouts.
