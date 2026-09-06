@@ -168,7 +168,14 @@ async function scanSkillDirs(skillsDir: string): Promise<string[]> {
 }
 
 /** Skill directories of a plugin, keyed by the flat slug they install as. */
-async function resolveSkillDirs(pluginDir: string): Promise<{ slug: string; dir: string }[]> {
+async function resolveSkillDirs(
+  pluginDir: string,
+  pluginName: string,
+): Promise<{ slug: string; dir: string }[]> {
+  // A plugin that is itself a skill — skills.sh repositories, bare-skill plugins — installs as one.
+  if (await stat(path.join(pluginDir, "SKILL.md")).catch(() => null)) {
+    return [{ slug: pluginName, dir: pluginDir }];
+  }
   const dirs =
     (await declaredSkillDirs(pluginDir)) ?? (await scanSkillDirs(path.join(pluginDir, "skills")));
   const bySlug = new Map<string, string>();
@@ -287,7 +294,7 @@ export async function installPluginTree(
   pluginName: string,
   pluginDir: string,
 ): Promise<void> {
-  const skills = await resolveSkillDirs(pluginDir);
+  const skills = await resolveSkillDirs(pluginDir, pluginName);
   if (skills.length === 0) throw new Error(`Plugin "${pluginName}" has no skills/ directory.`);
   for (const { slug, dir } of skills) {
     const size = (await stat(path.join(dir, "SKILL.md")).catch(() => null))?.size;

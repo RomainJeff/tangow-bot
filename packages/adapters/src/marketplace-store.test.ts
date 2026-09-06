@@ -152,6 +152,17 @@ describe("marketplace store", () => {
     ]);
   });
 
+  it("installs a plugin whose directory is itself a skill under the plugin name", async () => {
+    const dir = await tmp();
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      buildSkillMd({ name: "TDD", description: "Red green refactor", body: "Steps" }),
+    );
+    const root = marketplacesRoot(await tmp(), "space1");
+    await installPluginTree(root, "solo", "tdd", dir);
+    expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual(["mkt:solo/tdd/tdd"]);
+  });
+
   it("flattens skills declared in plugin.json under category directories", async () => {
     const dir = await tmp();
     await mkdir(path.join(dir, ".claude-plugin"), { recursive: true });
