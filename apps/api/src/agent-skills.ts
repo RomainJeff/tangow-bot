@@ -2,7 +2,10 @@ import { ORPCError } from "@orpc/server";
 import {
   BUILTIN_AGENT_SKILLS,
   isExists,
+  listMarketplaceSkills,
   listUserSkills,
+  type MarketplaceSkillFile,
+  marketplacesRoot,
   removeUserSkill,
   type UserSkillFile,
   userSkillsRoot,
@@ -12,23 +15,35 @@ import type { Actor, AgentSkill, AgentSkillCatalogEntry } from "@rakazo/contract
 import {
   asSkillAvailability,
   buildSkillMd,
+  defaultSkillAvailability,
   isSkillVisible,
   parseSkillMd,
   userSkillKey,
 } from "@rakazo/core";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
 
-function toAgentSkill(file: UserSkillFile): AgentSkill {
+type SkillFile = UserSkillFile | MarketplaceSkillFile;
+
+function toAgentSkill(file: SkillFile): AgentSkill {
   return {
     id: file.id,
     name: file.name,
     description: file.description,
     content: file.content,
-    source: "user",
-    readOnly: false,
-    createdAt: file.createdAt.toISOString(),
+    source: file.source,
+    readOnly: file.readOnly,
+    // ponytail: marketplace files only carry mtime; install time is not tracked.
+    createdAt: ("createdAt" in file ? file.createdAt : file.updatedAt).toISOString(),
     updatedAt: file.updatedAt.toISOString(),
   };
+}
+
+function assertWritable(file: SkillFile): asserts file is UserSkillFile {
+  if (file.readOnly) {
+    throw new ORPCError("FORBIDDEN", {
+      message: "Marketplace skills are read-only; edit them upstream and update the marketplace.",
+    });
+  }
 }
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -114,9 +129,13 @@ export function resolveSkillContent(input: {
 export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) {
   const root = (actor: Actor) => userSkillsRoot(dataDir, actor);
   const files = (actor: Actor) => listUserSkills(root(actor));
+  const marketplaceFiles = (actor: Actor) =>
+    listMarketplaceSkills(marketplacesRoot(dataDir, actor.spaceId));
+  const allFiles = async (actor: Actor): Promise<SkillFile[]> =>
+    (await Promise.all([files(actor), marketplaceFiles(actor)])).flat();
 
-  async function owned(actor: Actor, skillId: string): Promise<UserSkillFile> {
-    const file = (await files(actor)).find((skill) => skill.id === skillId);
+  async function owned(actor: Actor, skillId: string): Promise<SkillFile> {
+    const file = (await allFiles(actor)).find((skill) => skill.id === skillId);
     if (!file) throw new IsolationError();
     return file;
   }
@@ -142,7 +161,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
   /** Resolve availability + visible bots for every skill of the owner in 3 queries. */
   async function accessIndex(actor: Actor): Promise<{
     bots: string[];
-    of: (name: string) => Access;
+    of: (key: string) => Access;
   }> {
     const scope = { spaceId: actor.spaceId, userId: actor.userId };
     const [bots, settings, overrides] = await Promise.all([
@@ -161,9 +180,8 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
     const botIds = bots.map((bot) => bot.id);
     return {
       bots: botIds,
-      of(name) {
-        const key = userSkillKey(name);
-        const skillAvailability = availability.get(key) ?? "all";
+      of(key) {
+        const skillAvailability = availability.get(key) ?? defaultSkillAvailability(key);
         return {
           availability: skillAvailability,
           visibleBotIds: botIds.filter((botId) =>
@@ -178,13 +196,13 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
   }
 
   async function catalog(actor: Actor, botId?: string): Promise<Array<AgentSkill & Access>> {
-    const [rows, access] = await Promise.all([files(actor), accessIndex(actor)]);
+    const [rows, access] = await Promise.all([allFiles(actor), accessIndex(actor)]);
     const builtins = builtinCatalog().map((skill) => ({
       ...skill,
       availability: "all" as const,
       visibleBotIds: access.bots,
     }));
-    const users = rows.map((file) => ({ ...toAgentSkill(file), ...access.of(file.name) }));
+    const users = rows.map((file) => ({ ...toAgentSkill(file), ...access.of(file.id) }));
     const entries = [...builtins, ...users];
     return botId ? entries.filter((entry) => entry.visibleBotIds.includes(botId)) : entries;
   }
@@ -212,7 +230,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       const name = input.name?.trim() ?? "";
       const builtin = builtinCatalog().find((skill) => sameName(skill.name, name));
       if (builtin) return builtin;
-      const file = (await files(actor)).find((skill) => sameName(skill.name, name));
+      const file = (await allFiles(actor)).find((skill) => sameName(skill.name, name));
       if (!file) throw new IsolationError();
       return toAgentSkill(file);
     },
@@ -242,6 +260,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       },
     ): Promise<AgentSkill> {
       const existing = await owned(actor, input.skillId);
+      assertWritable(existing);
       const resolved = resolveSkillContent({ ...input, prior: existing });
       const oldKey = existing.id;
       const newKey = userSkillKey(resolved.name);
@@ -270,6 +289,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
 
     async remove(actor: Actor, skillId: string): Promise<{ ok: true }> {
       const existing = await owned(actor, skillId);
+      assertWritable(existing);
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
       // File first, rows second: orphan rows are harmless, a row-less file would widen to "all".
       await removeUserSkill(root(actor), existing.name);
