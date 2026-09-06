@@ -165,10 +165,28 @@ export async function writeUserSkillBundle(
   }
 }
 
-async function extractBundle(archive: Buffer, out: string): Promise<void> {
+/**
+ * Magic bytes of the archive formats a `.skill` bundle may use, or null for anything else
+ * (which the import path then reads as plain SKILL.md text). Two bytes are enough for zip:
+ * `50 4b` covers the local-file, central-directory and spanning headers without enumerating
+ * them, so an odd variant fails downstream with a real message instead of "not a .skill file".
+ * A valid SKILL.md always starts with a `---` frontmatter fence (see parseSkillMd), so it can
+ * never collide with either signature.
+ */
+export function bundleFormat(bytes: Buffer): "tar" | "zip" | null {
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return "tar";
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return "zip";
+  return null;
+}
+
+/**
+ * One byte counter for the whole bundle, whatever the format: every extracted stream is piped
+ * through the same instance, so the cap is on the observed decompressed bytes rather than any
+ * size an archive declares about itself.
+ */
+function capStream(): Transform {
   let bytes = 0;
-  let entries = 0;
-  const limit = new Transform({
+  return new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       bytes += chunk.length;
       if (bytes > SKILL_BUNDLE_MAX_BYTES) {
@@ -178,6 +196,16 @@ async function extractBundle(archive: Buffer, out: string): Promise<void> {
       callback(null, chunk);
     },
   });
+}
+
+async function extractBundle(archive: Buffer, out: string): Promise<void> {
+  const format = bundleFormat(archive);
+  if (format === "tar") return extractTar(archive, out, capStream());
+  throw new Error("Skill bundle must be a gzip tar or zip archive.");
+}
+
+async function extractTar(archive: Buffer, out: string, cap: Transform): Promise<void> {
+  let entries = 0;
   const unpack = tarExtract({
     cwd: out,
     preservePaths: false,
@@ -192,7 +220,7 @@ async function extractBundle(archive: Buffer, out: string): Promise<void> {
     },
   });
   // Explicit gunzip so the byte cap applies to the decompressed tar, not the compressed file.
-  await pipeline(Readable.from([archive]), createGunzip(), limit, unpack);
+  await pipeline(Readable.from([archive]), createGunzip(), cap, unpack);
 }
 
 const isFile = (file: string) =>
