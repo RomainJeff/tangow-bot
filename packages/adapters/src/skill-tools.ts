@@ -1,7 +1,9 @@
 import {
   asSkillAvailability,
   buildSkillMd,
+  defaultSkillAvailability,
   findSkillByName,
+  isMarketplaceSkillKey,
   isSkillVisible,
   parseSkillMd,
   type SkillRecord,
@@ -9,6 +11,7 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { BUILTIN_AGENT_SKILLS } from "./builtin-skills.js";
+import { listMarketplaceSkills, marketplacesRoot } from "./marketplace-store.js";
 import {
   isExists,
   listUserSkills,
@@ -49,6 +52,18 @@ function builtinRecords(): Array<SkillRecord & { id: string }> {
   }));
 }
 
+function readOnlyError(skill: {
+  id: string;
+  source: string;
+  readOnly: boolean;
+}): string | undefined {
+  if (isMarketplaceSkillKey(skill.id)) {
+    return "Marketplace skills are read-only; edit them upstream and update the marketplace.";
+  }
+  if (skill.readOnly || skill.source !== "user") return "Builtin and plugin skills are read-only.";
+  return undefined;
+}
+
 function rejectOversizedContent(content: string): string | undefined {
   if (content.length > MAX_SKILL_CONTENT_CHARS) {
     return `Skill content must be at most ${MAX_SKILL_CONTENT_CHARS} characters.`;
@@ -72,14 +87,18 @@ export async function listAgentSkillRecords(
   deps: SkillToolDeps,
   owner: SkillOwner,
 ): Promise<Array<SkillRecord & { id: string }>> {
-  const records = await listUserSkills(userSkillsRoot(deps.dataDir, owner));
+  const [userSkills, marketplaceSkills] = await Promise.all([
+    listUserSkills(userSkillsRoot(deps.dataDir, owner)),
+    listMarketplaceSkills(marketplacesRoot(deps.dataDir, owner.spaceId)),
+  ]);
+  const records = [...userSkills, ...marketplaceSkills];
   const visible = owner.botId
     ? await onlyVisibleTo(deps.prisma, owner, owner.botId, records)
     : records;
   return [...builtinRecords(), ...visible];
 }
 
-async function onlyVisibleTo<T extends { name: string }>(
+async function onlyVisibleTo<T extends { id: string }>(
   prisma: PrismaClient,
   owner: SkillOwner,
   botId: string,
@@ -93,10 +112,12 @@ async function onlyVisibleTo<T extends { name: string }>(
     settings.map((s) => [s.skillKey, asSkillAvailability(s.availability)]),
   );
   const override = new Map(overrides.map((o) => [o.skillKey, o.enabled]));
-  return records.filter((record) => {
-    const key = userSkillKey(record.name);
-    return isSkillVisible({ availability: availability.get(key), override: override.get(key) });
-  });
+  return records.filter((record) =>
+    isSkillVisible({
+      availability: availability.get(record.id) ?? defaultSkillAvailability(record.id),
+      override: override.get(record.id),
+    }),
+  );
 }
 
 async function findOwnedSkill(
@@ -218,9 +239,8 @@ export async function skillUpdateFromTool(
     name: input.name,
   });
   if (!existing) return { error: "Skill not found." };
-  if (existing.readOnly || existing.source !== "user" || existing.id.startsWith("builtin:")) {
-    return { error: "Builtin and plugin skills are read-only." };
-  }
+  const readOnly = readOnlyError(existing);
+  if (readOnly) return { error: readOnly };
 
   let nextContent = existing.content;
   let nextName = existing.name;
@@ -301,9 +321,8 @@ export async function skillDeleteFromTool(
 ): Promise<Record<string, unknown>> {
   const existing = await findOwnedSkill(deps, owner, input);
   if (!existing) return { error: "Skill not found." };
-  if (existing.readOnly || existing.source !== "user" || existing.id.startsWith("builtin:")) {
-    return { error: "Builtin and plugin skills are read-only." };
-  }
+  const readOnly = readOnlyError(existing);
+  if (readOnly) return { error: readOnly };
   const scope = { spaceId: owner.spaceId, userId: owner.userId };
   const skillKey = userSkillKey(existing.name);
   // File first, rows second: orphan rows are harmless, a row-less file would widen to "all".

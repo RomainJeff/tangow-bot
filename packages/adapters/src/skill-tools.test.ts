@@ -1,8 +1,9 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildSkillMd, formatSkillsCatalogInstruction } from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { marketplacesRoot } from "./marketplace-store.js";
 import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 import {
   listAgentSkillRecords,
@@ -365,5 +366,53 @@ describe("skill tools", () => {
     expect(await prisma.skillSetting.findMany()).toEqual([]);
     expect(await prisma.botSkill.findMany()).toEqual([]);
     expect(await listUserSkills(userSkillsRoot(dataDir, owner))).toEqual([]);
+  });
+
+  it("exposes marketplace skills as read-only plugin skills hidden until a bot enables them", async () => {
+    const dir = path.join(
+      marketplacesRoot(dataDir, owner.spaceId),
+      "acme",
+      "plugins",
+      "writer",
+      "skills",
+      "blog",
+    );
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      buildSkillMd({ name: "Blog", description: "Write posts", body: "Outline first." }),
+    );
+    await seed("Mine", "d");
+    const mktId = "mkt:acme/writer/blog";
+    const ids = async (scope: typeof owner & { botId?: string }) =>
+      (await listAgentSkillRecords(deps, scope))
+        .map((r) => r.id)
+        .filter((id) => !id.startsWith("builtin:"));
+
+    // No SkillSetting: user skill defaults to "all", marketplace skill to "selected".
+    expect(await ids({ ...owner, botId: "botA" })).toEqual(["user:mine"]);
+    expect(await ids(owner)).toEqual(["user:mine", mktId]);
+
+    await prisma.botSkill.upsert({
+      where: { botId_skillKey: { botId: "botA", skillKey: mktId } },
+      create: { ...owner, botId: "botA", skillKey: mktId, enabled: true },
+      update: {},
+    });
+    const forA = await listAgentSkillRecords(deps, { ...owner, botId: "botA" });
+    expect(forA.find((r) => r.id === mktId)).toMatchObject({
+      name: "Blog",
+      source: "plugin",
+      readOnly: true,
+    });
+    expect(await ids({ ...owner, botId: "botB" })).toEqual(["user:mine"]);
+
+    const read = await skillReadFromTool(deps, { ...owner, botId: "botA" }, { skillId: mktId });
+    expect(read).toMatchObject({ name: "Blog", source: "plugin", readOnly: true });
+    expect(String(read.content)).toContain("Outline first.");
+
+    const readOnly = { error: expect.stringContaining("read-only") };
+    expect(await skillUpdateFromTool(deps, owner, { skillId: mktId, body: "x" })).toEqual(readOnly);
+    expect(await skillDeleteFromTool(deps, owner, { skillId: mktId })).toEqual(readOnly);
+    expect(await ids(owner)).toEqual(["user:mine", mktId]);
   });
 });

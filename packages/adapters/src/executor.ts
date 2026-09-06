@@ -2879,7 +2879,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   "\n",
                 )}\nWhen the user asks to run a taught skill by name, follow that skill's playbook exactly. The full playbook is included in the user task when they invoke it.`
             : undefined;
-        const agentSkillsLine = formatSkillsCatalogInstruction(agentSkills);
+        const agentSkillsCatalog = formatSkillsCatalogInstruction(agentSkills);
+        // ponytail: only docker mounts these; harmless hint elsewhere.
+        const agentSkillsLine = agentSkillsCatalog
+          ? `${agentSkillsCatalog}\nSkill files are mounted read-only in the sandbox: your skills under /skills/user/<skill-dir>/SKILL.md, marketplace skills under /skills/marketplaces/<marketplace>/plugins/<plugin>/skills/<slug>/ (SKILL.md, scripts/, references/).`
+          : undefined;
         const missingImagesInstruction = missingTurnImagesInstruction(
           turnBlocks,
           currentTurnImages,
