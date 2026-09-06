@@ -479,13 +479,19 @@ export const appContract = {
     import: oc.input(ImportAgentSkillInput).output(AgentSkillSchema),
     update: oc.input(UpdateAgentSkillInput).output(AgentSkillSchema),
     remove: oc.input(z.object({ skillId: Id })).output(z.object({ ok: z.literal(true) })),
-    /** One write path for both the global toggle and the per-bot chips. */
+    /**
+     * One write path for the global state and the per-bot overrides, applied together so
+     * `all → selected` can seed the include list in the same transaction.
+     */
     setAccess: oc
       .input(
         z.object({
           skillId: Id,
           availability: SkillAvailabilitySchema.optional(),
-          bot: z.object({ botId: Id, enabled: z.boolean() }).optional(),
+          bots: z
+            .array(z.object({ botId: Id, enabled: z.boolean() }))
+            .max(200)
+            .optional(),
         }),
       )
       .output(AgentSkillCatalogEntrySchema),

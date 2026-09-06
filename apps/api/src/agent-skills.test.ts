@@ -60,7 +60,7 @@ describe("agent skills service (filesystem)", () => {
   let dataDir: string;
   let prisma: {
     $transaction: ReturnType<typeof vi.fn>;
-    bot: { findMany: ReturnType<typeof vi.fn>; findFirst: ReturnType<typeof vi.fn> };
+    bot: { findMany: ReturnType<typeof vi.fn> };
     skillSetting: ReturnType<typeof table>;
     botSkill: ReturnType<typeof table>;
   };
@@ -70,8 +70,11 @@ describe("agent skills service (filesystem)", () => {
     prisma = {
       $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
       bot: {
-        findMany: vi.fn(async () => [{ id: "bot-1" }, { id: "bot-2" }]),
-        findFirst: vi.fn(async ({ where }: { where: { id: string } }) => ({ id: where.id })),
+        findMany: vi.fn(async ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
+          [{ id: "bot-1" }, { id: "bot-2" }].filter(
+            (bot) => !where?.id || where.id.in.includes(bot.id),
+          ),
+        ),
       },
       skillSetting: table([]),
       botSkill: table([]),
@@ -96,7 +99,7 @@ describe("agent skills service (filesystem)", () => {
     await skills.setAccess(actor, {
       skillId: created.id,
       availability: "selected",
-      bot: { botId: "bot-1", enabled: true },
+      bots: [{ botId: "bot-1", enabled: true }],
     });
     const listed = await skills.list(actor);
     expect(listed.find((s) => s.id === created.id)).toMatchObject({
@@ -197,6 +200,56 @@ describe("agent skills service (filesystem)", () => {
     expect((await skills.get(actor, { skillId: "user:deploy" })).description).toBe("D");
   });
 
+  it("writes a batch of bot overrides with the availability in one transaction", async () => {
+    const skills = service();
+    const created = await skills.create(actor, { name: "Batch", description: "B" });
+    // bot-2 was excluded while the skill was global; switching to "selected" seeds the
+    // include list from the bots that could see it, so bot-2 stays hidden.
+    await skills.setAccess(actor, {
+      skillId: created.id,
+      bots: [{ botId: "bot-2", enabled: false }],
+    });
+    const entry = await skills.setAccess(actor, {
+      skillId: created.id,
+      availability: "selected",
+      bots: [{ botId: "bot-1", enabled: true }],
+    });
+    expect(entry).toMatchObject({ availability: "selected", visibleBotIds: ["bot-1"] });
+    expect(prisma.$transaction).toHaveBeenLastCalledWith([expect.anything(), expect.anything()]);
+    expect(prisma.bot.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { in: ["bot-1"] } }) }),
+    );
+
+    await expect(
+      skills.setAccess(actor, {
+        skillId: created.id,
+        bots: [
+          { botId: "bot-1", enabled: true },
+          { botId: "bot-9", enabled: true },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(IsolationError);
+  });
+
+  it("disabled hides the skill from every bot, explicit includes notwithstanding", async () => {
+    const skills = service();
+    const created = await skills.create(actor, { name: "Off", description: "O" });
+    const disabled = await skills.setAccess(actor, {
+      skillId: created.id,
+      availability: "disabled",
+      bots: [{ botId: "bot-1", enabled: true }],
+    });
+    expect(disabled).toMatchObject({ availability: "disabled", visibleBotIds: [] });
+    for (const botId of ["bot-1", "bot-2"]) {
+      expect((await skills.list(actor, { botId })).map((s) => s.id)).not.toContain(created.id);
+    }
+    expect((await skills.list(actor)).map((s) => s.id)).toContain(created.id);
+
+    // Re-enabling to "all" restores everyone; the stale include row is harmless.
+    const restored = await skills.setAccess(actor, { skillId: created.id, availability: "all" });
+    expect(restored.visibleBotIds).toEqual(["bot-1", "bot-2"]);
+  });
+
   it("lists, reads and scopes marketplace skills but refuses to edit them", async () => {
     const dir = path.join(
       marketplacesRoot(dataDir, "ws-1"),
@@ -224,7 +277,7 @@ describe("agent skills service (filesystem)", () => {
 
     const access = await skills.setAccess(actor, {
       skillId: mktId,
-      bot: { botId: "bot-1", enabled: true },
+      bots: [{ botId: "bot-1", enabled: true }],
     });
     expect(access.visibleBotIds).toEqual(["bot-1"]);
     expect((await skills.list(actor, { botId: "bot-1" })).map((s) => s.id)).toContain(mktId);

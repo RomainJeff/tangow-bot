@@ -26,6 +26,12 @@ describe("skill access", () => {
     expect(isSkillVisible({ availability: "selected", override: null })).toBe(false);
   });
 
+  it("disabled hides the skill even from a bot with an explicit include", () => {
+    expect(isSkillVisible({ availability: "disabled" })).toBe(false);
+    expect(isSkillVisible({ availability: "disabled", override: true })).toBe(false);
+    expect(isSkillVisible({ availability: "disabled", override: false })).toBe(false);
+  });
+
   it("builds and recognises marketplace keys", () => {
     expect(marketplaceSkillKey("acme", "writer", "blog-post")).toBe("mkt:acme/writer/blog-post");
     expect(isMarketplaceSkillKey("mkt:a/b/c")).toBe(true);
@@ -39,6 +45,7 @@ describe("skill access", () => {
 
   it("coerces unknown availability strings to all", () => {
     expect(asSkillAvailability("selected")).toBe("selected");
+    expect(asSkillAvailability("disabled")).toBe("disabled");
     expect(asSkillAvailability("garbage")).toBe("all");
     expect(asSkillAvailability(undefined)).toBe("all");
   });
