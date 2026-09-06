@@ -30,7 +30,7 @@ test("per-bot skill access via agentSkills.setAccess", async ({ page }) => {
   // Exclude Chief: hidden from Chief's catalog, still in the full list.
   const excluded = await rpc<CatalogEntry>(page, "agentSkills/setAccess", {
     skillId: created.id,
-    bot: { botId: chiefId, enabled: false },
+    bots: [{ botId: chiefId, enabled: false }],
   });
   expect(excluded.availability).toBe("all");
   expect(excluded.visibleBotIds).not.toContain(chiefId);
@@ -76,7 +76,7 @@ test("per-bot skill access via agentSkills.setAccess", async ({ page }) => {
   expect(selected.visibleBotIds).not.toContain(chiefId);
   const included = await rpc<CatalogEntry>(page, "agentSkills/setAccess", {
     skillId: created.id,
-    bot: { botId: chiefId, enabled: true },
+    bots: [{ botId: chiefId, enabled: true }],
   });
   expect(included.availability).toBe("selected");
   expect(included.visibleBotIds).toContain(chiefId);
@@ -84,4 +84,65 @@ test("per-bot skill access via agentSkills.setAccess", async ({ page }) => {
 
   await composer.fill("/");
   await expect(picker.getByRole("button", { name: "Skill Daily standup" })).toBeVisible();
+  await composer.fill("");
+
+  // Disabled beats the explicit include: gone from every catalog and from the picker.
+  const disabled = await rpc<CatalogEntry>(page, "agentSkills/setAccess", {
+    skillId: created.id,
+    availability: "disabled",
+    bots: [{ botId: chiefId, enabled: true }],
+  });
+  expect(disabled.availability).toBe("disabled");
+  expect(disabled.visibleBotIds).toEqual([]);
+  expect(has(await listFor(chiefId))).toBe(false);
+  expect(has(await listFor(clone.id))).toBe(false);
+  expect(has(await listFor())).toBe(true);
+  await composer.fill("/");
+  await expect(picker.getByRole("button", { name: "Chat Settings" })).toBeVisible();
+  await expect(picker.getByRole("button", { name: "Skill Daily standup" })).toHaveCount(0);
+  await composer.fill("");
+
+  // Back to Global: the include row for Chief and the exclusion copied onto the clone
+  // are in force again, and a third bot with no row of its own sees the skill.
+  const scout = await rpc<{ id: string }>(page, "bots/create", { name: "Scout" });
+  const restored = await rpc<CatalogEntry>(page, "agentSkills/setAccess", {
+    skillId: created.id,
+    availability: "all",
+  });
+  expect(restored.availability).toBe("all");
+  expect(restored.visibleBotIds).toEqual(expect.arrayContaining([chiefId, scout.id]));
+  expect(restored.visibleBotIds).not.toContain(clone.id);
+  expect(has(await listFor(chiefId))).toBe(true);
+
+  // Global -> Specific in the Skills panel keeps exactly that audience: Scout has no
+  // override row, so without seeding the switch would silently drop it.
+  await page.getByTestId("open-skills").click();
+  const overlay = page.getByRole("dialog");
+  const card = overlay.getByTestId("bot-knowledge-skill").filter({ hasText: "Daily standup" });
+  await expect(card.getByRole("button", { name: "Global", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await card.getByRole("button", { name: "Specific agents", exact: true }).click();
+  await expect(card.getByRole("button", { name: "Scout", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(card.getByRole("button", { name: "Chief copy", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  const specific = (await listFor()).find((entry) => entry.id === created.id);
+  expect(specific?.availability).toBe("selected");
+  expect([...(specific?.visibleBotIds ?? [])].sort()).toEqual([chiefId, scout.id].sort());
+  expect(has(await listFor(scout.id))).toBe(true);
+  expect(has(await listFor(clone.id))).toBe(false);
+
+  // Disabled from the panel hides the picker and the whole audience.
+  await card.getByRole("button", { name: "Disabled", exact: true }).click();
+  await expect(card.getByRole("button", { name: "Scout", exact: true })).toHaveCount(0);
+  await expect
+    .poll(async () => (await listFor()).find((entry) => entry.id === created.id)?.visibleBotIds)
+    .toEqual([]);
+  await overlay.getByLabel("Close skills").click();
 });

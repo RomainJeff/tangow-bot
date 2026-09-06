@@ -27,7 +27,7 @@ test("skills overlay: tabs, marketplace URL validation, installed skills", async
   await expect(page.getByTestId("skills-tab-browse")).toBeVisible();
 
   // Installed: the user skill and the visibility counter.
-  await expect(overlay.getByText(/skills visible to this agent/)).toBeVisible();
+  await expect(overlay.getByText(/visible to Chief/)).toBeVisible();
   await expect(overlay.getByRole("button", { name: /Daily standup/ })).toBeVisible();
   await captureScreenshot(page, testInfo, "90-skills-installed");
 

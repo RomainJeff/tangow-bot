@@ -111,8 +111,8 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   });
   await expect(knowledge.getByRole("button", { name: /imported-skill/ })).toBeVisible();
 
-  // Scoping: a hand-made skill is visible to every agent; excluding Chief hides it
-  // from Chief's catalog without touching the skill itself.
+  // Scoping: a hand-made skill is visible to every agent; the agent's own switch
+  // writes a per-bot override that hides it from Chief's catalog only.
   type CatalogEntry = { id: string; name: string; availability: string; visibleBotIds: string[] };
   const listFor = (botId?: string) =>
     rpc<CatalogEntry[]>(page, "agentSkills/list", botId ? { botId } : undefined);
@@ -123,17 +123,32 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   const skillCard = knowledge
     .getByTestId("bot-knowledge-skill")
     .filter({ hasText: "greet-politely" });
-  const chiefChip = skillCard.getByRole("button", { name: "Chief", exact: true });
-  await expect(chiefChip).toHaveAttribute("aria-pressed", "true");
-  await chiefChip.click();
-  await expect(chiefChip).toHaveAttribute("aria-pressed", "false");
+  const chiefSwitch = skillCard.getByRole("switch", { name: "greet-politely" });
+  await expect(chiefSwitch).toHaveAttribute("aria-checked", "true");
+  await chiefSwitch.click();
+  await expect(chiefSwitch).toHaveAttribute("aria-checked", "false");
   await captureScreenshot(page, testInfo, "82b-knowledge-skill-scoped");
   await expect
     .poll(async () => (await listFor(chiefId)).some((entry) => entry.name === "greet-politely"))
     .toBe(false);
   expect((await listFor()).some((entry) => entry.name === "greet-politely")).toBe(true);
-  await chiefChip.click();
-  await expect(chiefChip).toHaveAttribute("aria-pressed", "true");
+  await chiefSwitch.click();
+  await expect(chiefSwitch).toHaveAttribute("aria-checked", "true");
+  await expect
+    .poll(async () => (await listFor(chiefId)).some((entry) => entry.name === "greet-politely"))
+    .toBe(true);
+
+  // A skill disabled for every agent cannot be switched on from here.
+  await rpc(page, "agentSkills/setAccess", {
+    skillId: before?.id,
+    availability: "disabled",
+  });
+  await knowledge.getByRole("button", { name: "Memory", exact: true }).click();
+  await knowledge.getByRole("button", { name: "Skills", exact: true }).click();
+  await expect(chiefSwitch).toHaveAttribute("aria-checked", "false");
+  await expect(chiefSwitch).toBeDisabled();
+  await expect(skillCard.getByText("Disabled for all agents in Skills")).toBeVisible();
+  await rpc(page, "agentSkills/setAccess", { skillId: before?.id, availability: "all" });
 
   await skillRow.click();
   await expect(editor).toHaveValue(/Always open with a greeting/);
