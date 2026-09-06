@@ -83,7 +83,7 @@ msgstr "{0} skills instaladas"
 msgid "{0}'s screen"
 msgstr "Tela de {0}"
 
-#: src/pages/Shell.tsx:5808
+#: src/pages/Shell.tsx:5809
 msgid "{botName}’s computer"
 msgstr "Computador do {botName}"
 
@@ -359,11 +359,12 @@ msgstr "Permitir sempre esta ferramenta"
 msgid "Always allowed"
 msgstr "Sempre permitido"
 
-#: src/components/AskCard.tsx:169
+#: src/components/AskCard.tsx:227
 msgid "Answer"
 msgstr "Respostas"
 
 #: src/components/AskCard.tsx:19
+#: src/components/AskCard.tsx:403
 msgid "Answered"
 msgstr "Respondido"
 
@@ -526,6 +527,7 @@ msgstr "Disponível depois que a rotina for salva"
 msgid "Avatars"
 msgstr "Avatares"
 
+#: src/components/AskCard.tsx:496
 #: src/pages/RoutineEditor.tsx:231
 msgid "Back"
 msgstr "Voltar"
@@ -544,7 +546,7 @@ msgstr "URL Base"
 msgid "Bearer token"
 msgstr "Token portador"
 
-#: src/pages/Shell.tsx:5800
+#: src/pages/Shell.tsx:5801
 msgid "Booting live desktop…"
 msgstr "Iniciando a área de trabalho ao vivo..."
 
@@ -607,7 +609,8 @@ msgid "Can't reach the server."
 msgstr "Não é possível acessar o servidor."
 
 #: src/components/AskCard.tsx:35
-#: src/components/AskCard.tsx:186
+#: src/components/AskCard.tsx:176
+#: src/components/AskCard.tsx:244
 #: src/components/ComputerMaintenanceActions.tsx:96
 #: src/components/teach/TeachComputerOverlay.tsx:254
 #: src/pages/KnowledgeSection.tsx:235
@@ -834,12 +837,12 @@ msgstr "Comando"
 msgid "Complete"
 msgstr "Concluir"
 
-#: src/pages/Shell.tsx:5744
+#: src/pages/Shell.tsx:5745
 #: src/pages/shell/bot-panel.tsx:60
 msgid "Computer"
 msgstr "Computador"
 
-#: src/pages/Shell.tsx:5803
+#: src/pages/Shell.tsx:5804
 msgid "Computer failed to boot"
 msgstr "Falha ao inicializar o computador"
 
@@ -847,11 +850,11 @@ msgstr "Falha ao inicializar o computador"
 msgid "Computer is asleep"
 msgstr "O computador está dormindo"
 
-#: src/pages/Shell.tsx:5802
+#: src/pages/Shell.tsx:5803
 msgid "Computer is asleep. Open it to wake."
 msgstr "O computador está em suspensão. Abra-o para acordá-lo."
 
-#: src/pages/Shell.tsx:5804
+#: src/pages/Shell.tsx:5805
 msgid "Computer is stopped"
 msgstr "O computador está parado"
 
@@ -1284,7 +1287,11 @@ msgstr "Não foi possível iniciar o OAuth"
 msgid "Could not start teaching"
 msgstr "Não foi possível iniciar o aprendizado"
 
-#: src/components/AskCard.tsx:79
+#: src/components/AskCard.tsx:348
+msgid "Could not submit these answers"
+msgstr ""
+
+#: src/components/AskCard.tsx:81
 msgid "Could not submit this answer"
 msgstr "Não foi possível enviar esta resposta"
 
@@ -1604,7 +1611,7 @@ msgstr "Mensagem anterior"
 msgid "Edit and resend"
 msgstr "Editar e reenviar"
 
-#: src/components/AskCard.tsx:196
+#: src/components/AskCard.tsx:254
 msgid "Edit first"
 msgstr "Editar primeiro"
 
@@ -2317,6 +2324,10 @@ msgstr "Nova habilidade"
 msgid "New space"
 msgstr "Novo espaço"
 
+#: src/components/AskCard.tsx:523
+msgid "Next"
+msgstr ""
+
 #: src/pages/MessagingSettingsOverlay.tsx:259
 msgid "No agent connections yet."
 msgstr "Ainda não há conexões de agentes."
@@ -2366,7 +2377,8 @@ msgstr "Ainda não há chats em grupo."
 msgid "No integrations installed yet."
 msgstr "Ainda não há integrações instaladas."
 
-#: src/components/AskCard.tsx:116
+#: src/components/AskCard.tsx:129
+#: src/components/AskCard.tsx:410
 msgid "No longer active"
 msgstr "Não está mais ativo"
 
@@ -2563,6 +2575,10 @@ msgstr "Ou conecte uma chave de API"
 msgid "Or paste an API key"
 msgstr "Ou cole uma chave de API"
 
+#: src/components/AskCard.tsx:464
+msgid "Or type your own answer"
+msgstr ""
+
 #: src/pages/AccountSettingsOverlay.tsx:216
 msgid "Organic"
 msgstr "Orgânica"
@@ -2571,10 +2587,27 @@ msgstr "Orgânica"
 msgid "Organization API key"
 msgstr "Chave da API da organização"
 
+#: src/components/AskCard.tsx:396
+msgid "Other"
+msgstr ""
+
+#: src/components/AskCard.tsx:160
+#: src/components/AskCard.tsx:468
+msgid "Other answer"
+msgstr ""
+
+#: src/components/AskCard.tsx:191
+msgid "Other answer…"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:459
 #: src/pages/Onboarding.tsx:394
 msgid "Other model…"
 msgstr "Outro modelo..."
+
+#: src/components/AskCard.tsx:454
+msgid "Other…"
+msgstr ""
 
 #: src/components/AgentSteps.tsx:70
 msgid "Output"
@@ -2932,7 +2965,7 @@ msgstr "Em execução · Parar"
 msgid "Running…"
 msgstr "Executando..."
 
-#: src/components/AskCard.tsx:157
+#: src/components/AskCard.tsx:215
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/KnowledgeSection.tsx:227
@@ -2961,7 +2994,7 @@ msgstr "Salvo."
 msgid "Saved. Rotate to reveal."
 msgstr "Salva. Rotacione para exibir."
 
-#: src/components/AskCard.tsx:157
+#: src/components/AskCard.tsx:215
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/ModelSettingsOverlay.tsx:687
@@ -3043,11 +3076,16 @@ msgstr "Enviar"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "Envie <0>{linkCode}</0> para a linha pelo seu app de chat em até 10 minutos. Você receberá uma resposta de confirmação assim que estiver vinculado."
 
-#: src/components/AskCard.tsx:176
+#: src/components/AskCard.tsx:179
+#: src/components/AskCard.tsx:234
 msgid "Send answer"
 msgstr "Enviar resposta"
 
-#: src/components/AskCard.tsx:193
+#: src/components/AskCard.tsx:519
+msgid "Send answers"
+msgstr ""
+
+#: src/components/AskCard.tsx:251
 msgid "Send it"
 msgstr "Enviar"
 
@@ -3055,9 +3093,11 @@ msgstr "Enviar"
 msgid "Send reset link"
 msgstr "Enviar link de redefinição"
 
-#: src/components/AskCard.tsx:129
-#: src/components/AskCard.tsx:176
-#: src/components/AskCard.tsx:193
+#: src/components/AskCard.tsx:142
+#: src/components/AskCard.tsx:179
+#: src/components/AskCard.tsx:234
+#: src/components/AskCard.tsx:251
+#: src/components/AskCard.tsx:519
 msgid "Sending…"
 msgstr "Enviando…"
 
@@ -3180,6 +3220,7 @@ msgstr "Habilidade {0}"
 msgid "Skills"
 msgstr "Habilidades"
 
+#: src/components/AskCard.tsx:509
 #: src/pages/Shell.tsx:5327
 msgid "Skip"
 msgstr "Pular"
@@ -3191,6 +3232,10 @@ msgstr "Ignorar por enquanto"
 #: src/lib/localized-provider-hint.ts:8
 msgid "Skip or deploy key"
 msgstr "Ignorar ou implantar chave"
+
+#: src/components/AskCard.tsx:397
+msgid "Skipped"
+msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
 #: src/pages/Shell.tsx:1863
@@ -3333,7 +3378,7 @@ msgstr "Ensino em andamento. Pare de ensinar antes de enviar uma nova mensagem."
 msgid "Team"
 msgstr "Equipe"
 
-#: src/pages/Shell.tsx:5808
+#: src/pages/Shell.tsx:5809
 msgid "Team Computer"
 msgstr "Computador da equipe"
 
@@ -3468,7 +3513,13 @@ msgstr "Fontes de ferramentas"
 msgid "Treg token"
 msgstr "Token Treg"
 
-#: src/components/AskCard.tsx:172
+#: src/components/AskCard.tsx:163
+#: src/components/AskCard.tsx:480
+msgid "Type a different answer"
+msgstr ""
+
+#: src/components/AskCard.tsx:230
+#: src/components/AskCard.tsx:480
 msgid "Type your answer"
 msgstr "Digite sua resposta"
 

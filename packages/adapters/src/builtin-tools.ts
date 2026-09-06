@@ -205,10 +205,33 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "ask_user",
     description:
-      "Ask the user one short multiple-choice question with tappable options, then wait for their selection. Use this instead of asking them to type when two to four concise choices are enough.",
+      'Ask the user one to four questions in a single card, then wait for all answers at once. The card shows one question at a time with a counter (e.g. 2/3) and previous/next navigation. Each question may offer up to four tappable options; the user can always type a custom "Other" answer, and questions marked required:false can be skipped. Provide `questions`: for each, a short `question`, an optional `header` (a <=24-char tab label), optional `options` (2-4 concise choices; omit for a free-text question), optional `multiSelect`, and optional `required` (default true). Prefer batching related questions into one call over several sequential ask_user turns.',
     inputSchema: {
       type: "object",
       properties: {
+        questions: {
+          type: "array",
+          minItems: 1,
+          maxItems: 4,
+          items: {
+            type: "object",
+            properties: {
+              question: { type: "string", minLength: 1, maxLength: 240 },
+              header: { type: "string", maxLength: 24 },
+              options: {
+                type: "array",
+                items: { type: "string", minLength: 1, maxLength: 80 },
+                minItems: 2,
+                maxItems: 4,
+                uniqueItems: true,
+              },
+              multiSelect: { type: "boolean" },
+              required: { type: "boolean" },
+            },
+            required: ["question"],
+          },
+        },
+        // Legacy single-question shape, still accepted and normalized into one question.
         question: { type: "string", maxLength: 240 },
         options: {
           type: "array",
@@ -218,7 +241,7 @@ export const builtinAgentTools: ConnectorTool[] = [
           uniqueItems: true,
         },
       },
-      required: ["question", "options"],
+      required: [],
     },
   },
   {

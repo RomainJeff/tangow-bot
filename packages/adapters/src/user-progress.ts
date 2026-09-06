@@ -52,6 +52,24 @@ export function isUserProgressClientNonce(clientNonce: string | null | undefined
   );
 }
 
+/**
+ * Steering = a user message that arrived while the bot was already working. The reply must
+ * take it into account visibly; a silent "read" is exactly what users perceive as being ignored.
+ */
+export const STEERING_USER_MESSAGE_PREAMBLE =
+  "The user sent this message while you were still working. Address it explicitly in your reply before you finish this turn; do not merely acknowledge it.";
+
+/** Compose the text shown to the model for a steering (mid-run) user message. */
+export function buildSteeringMessageText(
+  text: string,
+  filesInstruction?: string,
+  unavailableInstruction?: string,
+): string {
+  return [STEERING_USER_MESSAGE_PREAMBLE, text, filesInstruction, unavailableInstruction]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function extractNarrationText(
   segments: readonly MessageBlock[],
   currentText: string,

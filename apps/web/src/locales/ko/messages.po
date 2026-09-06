@@ -83,7 +83,7 @@ msgstr "스킬 {0}개 설치됨"
 msgid "{0}'s screen"
 msgstr "{0}의 화면"
 
-#: src/pages/Shell.tsx:5808
+#: src/pages/Shell.tsx:5809
 msgid "{botName}’s computer"
 msgstr "{botName}의 컴퓨터"
 
@@ -359,11 +359,12 @@ msgstr "이 도구 항상 허용"
 msgid "Always allowed"
 msgstr "항상 허용됨"
 
-#: src/components/AskCard.tsx:169
+#: src/components/AskCard.tsx:227
 msgid "Answer"
 msgstr "답변"
 
 #: src/components/AskCard.tsx:19
+#: src/components/AskCard.tsx:403
 msgid "Answered"
 msgstr "응답함"
 
@@ -526,6 +527,7 @@ msgstr "루틴을 저장한 후 사용할 수 있습니다"
 msgid "Avatars"
 msgstr "아바타"
 
+#: src/components/AskCard.tsx:496
 #: src/pages/RoutineEditor.tsx:231
 msgid "Back"
 msgstr "뒤로"
@@ -544,7 +546,7 @@ msgstr "서버 주소"
 msgid "Bearer token"
 msgstr "Bearer 토큰"
 
-#: src/pages/Shell.tsx:5800
+#: src/pages/Shell.tsx:5801
 msgid "Booting live desktop…"
 msgstr "라이브 데스크톱 시작 중…"
 
@@ -607,7 +609,8 @@ msgid "Can't reach the server."
 msgstr "서버에 연결할 수 없습니다."
 
 #: src/components/AskCard.tsx:35
-#: src/components/AskCard.tsx:186
+#: src/components/AskCard.tsx:176
+#: src/components/AskCard.tsx:244
 #: src/components/ComputerMaintenanceActions.tsx:96
 #: src/components/teach/TeachComputerOverlay.tsx:254
 #: src/pages/KnowledgeSection.tsx:235
@@ -834,12 +837,12 @@ msgstr "실행 명령"
 msgid "Complete"
 msgstr "완료"
 
-#: src/pages/Shell.tsx:5744
+#: src/pages/Shell.tsx:5745
 #: src/pages/shell/bot-panel.tsx:60
 msgid "Computer"
 msgstr "컴퓨터"
 
-#: src/pages/Shell.tsx:5803
+#: src/pages/Shell.tsx:5804
 msgid "Computer failed to boot"
 msgstr "컴퓨터를 시작하지 못했습니다"
 
@@ -847,11 +850,11 @@ msgstr "컴퓨터를 시작하지 못했습니다"
 msgid "Computer is asleep"
 msgstr "컴퓨터가 절전 상태입니다"
 
-#: src/pages/Shell.tsx:5802
+#: src/pages/Shell.tsx:5803
 msgid "Computer is asleep. Open it to wake."
 msgstr "컴퓨터가 절전 상태입니다. 열어 깨우세요."
 
-#: src/pages/Shell.tsx:5804
+#: src/pages/Shell.tsx:5805
 msgid "Computer is stopped"
 msgstr "컴퓨터가 중지됨"
 
@@ -1284,7 +1287,11 @@ msgstr "OAuth 인증을 시작하지 못했습니다."
 msgid "Could not start teaching"
 msgstr "가르치기를 시작하지 못했습니다."
 
-#: src/components/AskCard.tsx:79
+#: src/components/AskCard.tsx:348
+msgid "Could not submit these answers"
+msgstr ""
+
+#: src/components/AskCard.tsx:81
 msgid "Could not submit this answer"
 msgstr "답변을 보내지 못했습니다."
 
@@ -1604,7 +1611,7 @@ msgstr "이전 메시지"
 msgid "Edit and resend"
 msgstr "편집 후 다시 보내기"
 
-#: src/components/AskCard.tsx:196
+#: src/components/AskCard.tsx:254
 msgid "Edit first"
 msgstr "수정 후 보내기"
 
@@ -2317,6 +2324,10 @@ msgstr "새 스킬"
 msgid "New space"
 msgstr "새 스페이스"
 
+#: src/components/AskCard.tsx:523
+msgid "Next"
+msgstr ""
+
 #: src/pages/MessagingSettingsOverlay.tsx:259
 msgid "No agent connections yet."
 msgstr "아직 Agent 연결이 없습니다."
@@ -2366,7 +2377,8 @@ msgstr "아직 그룹 채팅이 없습니다."
 msgid "No integrations installed yet."
 msgstr "아직 설치된 통합이 없습니다."
 
-#: src/components/AskCard.tsx:116
+#: src/components/AskCard.tsx:129
+#: src/components/AskCard.tsx:410
 msgid "No longer active"
 msgstr "이미 종료된 요청입니다"
 
@@ -2563,6 +2575,10 @@ msgstr "또는 API 키 연결"
 msgid "Or paste an API key"
 msgstr "또는 API 키 붙여넣기"
 
+#: src/components/AskCard.tsx:464
+msgid "Or type your own answer"
+msgstr ""
+
 #: src/pages/AccountSettingsOverlay.tsx:216
 msgid "Organic"
 msgstr "자연스럽게"
@@ -2571,10 +2587,27 @@ msgstr "자연스럽게"
 msgid "Organization API key"
 msgstr "조직 API 키"
 
+#: src/components/AskCard.tsx:396
+msgid "Other"
+msgstr ""
+
+#: src/components/AskCard.tsx:160
+#: src/components/AskCard.tsx:468
+msgid "Other answer"
+msgstr ""
+
+#: src/components/AskCard.tsx:191
+msgid "Other answer…"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:459
 #: src/pages/Onboarding.tsx:394
 msgid "Other model…"
 msgstr "다른 모델 직접 입력…"
+
+#: src/components/AskCard.tsx:454
+msgid "Other…"
+msgstr ""
 
 #: src/components/AgentSteps.tsx:70
 msgid "Output"
@@ -2932,7 +2965,7 @@ msgstr "실행 중 · 중지"
 msgid "Running…"
 msgstr "실행 중…"
 
-#: src/components/AskCard.tsx:157
+#: src/components/AskCard.tsx:215
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/KnowledgeSection.tsx:227
@@ -2961,7 +2994,7 @@ msgstr "저장되었습니다."
 msgid "Saved. Rotate to reveal."
 msgstr "저장되었습니다. key를 교체하면 표시됩니다."
 
-#: src/components/AskCard.tsx:157
+#: src/components/AskCard.tsx:215
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/ModelSettingsOverlay.tsx:687
@@ -3043,11 +3076,16 @@ msgstr "보내기"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "10분 안에 채팅 앱에서 연결할 회선으로 <0>{linkCode}</0>를 보내세요. 연결되면 확인 답장을 받습니다."
 
-#: src/components/AskCard.tsx:176
+#: src/components/AskCard.tsx:179
+#: src/components/AskCard.tsx:234
 msgid "Send answer"
 msgstr "답변 보내기"
 
-#: src/components/AskCard.tsx:193
+#: src/components/AskCard.tsx:519
+msgid "Send answers"
+msgstr ""
+
+#: src/components/AskCard.tsx:251
 msgid "Send it"
 msgstr "보내기"
 
@@ -3055,9 +3093,11 @@ msgstr "보내기"
 msgid "Send reset link"
 msgstr "재설정 링크 보내기"
 
-#: src/components/AskCard.tsx:129
-#: src/components/AskCard.tsx:176
-#: src/components/AskCard.tsx:193
+#: src/components/AskCard.tsx:142
+#: src/components/AskCard.tsx:179
+#: src/components/AskCard.tsx:234
+#: src/components/AskCard.tsx:251
+#: src/components/AskCard.tsx:519
 msgid "Sending…"
 msgstr "보내는 중…"
 
@@ -3180,6 +3220,7 @@ msgstr "작업 기술 {0}"
 msgid "Skills"
 msgstr "스킬"
 
+#: src/components/AskCard.tsx:509
 #: src/pages/Shell.tsx:5327
 msgid "Skip"
 msgstr "건너뛰기"
@@ -3191,6 +3232,10 @@ msgstr "지금은 건너뛰기"
 #: src/lib/localized-provider-hint.ts:8
 msgid "Skip or deploy key"
 msgstr "건너뛰거나 배포 키"
+
+#: src/components/AskCard.tsx:397
+msgid "Skipped"
+msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
 #: src/pages/Shell.tsx:1863
@@ -3333,7 +3378,7 @@ msgstr "작업을 가르치는 중입니다. 새 메시지를 보내려면 먼�
 msgid "Team"
 msgstr "팀 공용"
 
-#: src/pages/Shell.tsx:5808
+#: src/pages/Shell.tsx:5809
 msgid "Team Computer"
 msgstr "팀 컴퓨터"
 
@@ -3468,7 +3513,13 @@ msgstr "도구 소스"
 msgid "Treg token"
 msgstr "Treg 토큰"
 
-#: src/components/AskCard.tsx:172
+#: src/components/AskCard.tsx:163
+#: src/components/AskCard.tsx:480
+msgid "Type a different answer"
+msgstr ""
+
+#: src/components/AskCard.tsx:230
+#: src/components/AskCard.tsx:480
 msgid "Type your answer"
 msgstr "답변을 입력하세요"
 

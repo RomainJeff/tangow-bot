@@ -1,4 +1,4 @@
-import type { ConnectionCatalogItem, SandboxKind } from "@rakazo/contracts";
+import type { AskQuestion, ConnectionCatalogItem, SandboxKind } from "@rakazo/contracts";
 
 export interface AdapterContext {
   operationId: string;
@@ -364,7 +364,12 @@ export interface AgentRunRequest {
 export interface ScriptedTurn {
   assistant?: string;
   toolCalls?: Array<{ name: string; args: Record<string, unknown> }>;
-  ask?: { text: string; detail?: string; actions?: Array<{ id: string; label: string }> };
+  ask?: {
+    text: string;
+    detail?: string;
+    actions?: Array<{ id: string; label: string }>;
+    questions?: AskQuestion[];
+  };
   takeover?: { reason: string };
   files?: Array<{ path: string; content: string }>;
   memory?: Array<{ scope: "bot" | "user"; path: string; content: string }>;
@@ -385,6 +390,7 @@ export type AgentRuntimeEvent =
       text: string;
       detail?: string;
       actions?: Array<{ id: string; label: string }>;
+      questions?: AskQuestion[];
     }
   | { type: "takeover"; reason: string }
   | { type: "usage"; inputTokens: number; outputTokens: number; provider: string; model: string }

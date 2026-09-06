@@ -83,7 +83,7 @@ msgstr "{0} beceri kurulu"
 msgid "{0}'s screen"
 msgstr "{0} adlı botun ekranı"
 
-#: src/pages/Shell.tsx:5808
+#: src/pages/Shell.tsx:5809
 msgid "{botName}’s computer"
 msgstr "{botName} adlı botun bilgisayarı"
 
@@ -359,11 +359,12 @@ msgstr "Bu araca her zaman izin ver"
 msgid "Always allowed"
 msgstr "Her zaman izinli"
 
-#: src/components/AskCard.tsx:169
+#: src/components/AskCard.tsx:227
 msgid "Answer"
 msgstr "Yanıtla"
 
 #: src/components/AskCard.tsx:19
+#: src/components/AskCard.tsx:403
 msgid "Answered"
 msgstr "Yanıtlandı"
 
@@ -526,6 +527,7 @@ msgstr "Rutin kaydedildikten sonra kullanılabilir"
 msgid "Avatars"
 msgstr "Avatarlar"
 
+#: src/components/AskCard.tsx:496
 #: src/pages/RoutineEditor.tsx:231
 msgid "Back"
 msgstr "Geri"
@@ -544,7 +546,7 @@ msgstr "Temel URL"
 msgid "Bearer token"
 msgstr "Bearer token"
 
-#: src/pages/Shell.tsx:5800
+#: src/pages/Shell.tsx:5801
 msgid "Booting live desktop…"
 msgstr "Canlı masaüstü başlatılıyor…"
 
@@ -607,7 +609,8 @@ msgid "Can't reach the server."
 msgstr "Sunucuya ulaşılamıyor."
 
 #: src/components/AskCard.tsx:35
-#: src/components/AskCard.tsx:186
+#: src/components/AskCard.tsx:176
+#: src/components/AskCard.tsx:244
 #: src/components/ComputerMaintenanceActions.tsx:96
 #: src/components/teach/TeachComputerOverlay.tsx:254
 #: src/pages/KnowledgeSection.tsx:235
@@ -834,12 +837,12 @@ msgstr "Komut"
 msgid "Complete"
 msgstr "Tamamlandı"
 
-#: src/pages/Shell.tsx:5744
+#: src/pages/Shell.tsx:5745
 #: src/pages/shell/bot-panel.tsx:60
 msgid "Computer"
 msgstr "Bilgisayar"
 
-#: src/pages/Shell.tsx:5803
+#: src/pages/Shell.tsx:5804
 msgid "Computer failed to boot"
 msgstr "Bilgisayar başlatılamadı"
 
@@ -847,11 +850,11 @@ msgstr "Bilgisayar başlatılamadı"
 msgid "Computer is asleep"
 msgstr "Bilgisayar uykuda"
 
-#: src/pages/Shell.tsx:5802
+#: src/pages/Shell.tsx:5803
 msgid "Computer is asleep. Open it to wake."
 msgstr "Bilgisayar uykuda. Uyandırmak için açın."
 
-#: src/pages/Shell.tsx:5804
+#: src/pages/Shell.tsx:5805
 msgid "Computer is stopped"
 msgstr "Bilgisayar durduruldu"
 
@@ -1284,7 +1287,11 @@ msgstr "OAuth başlatılamadı"
 msgid "Could not start teaching"
 msgstr "Öğretme başlatılamadı"
 
-#: src/components/AskCard.tsx:79
+#: src/components/AskCard.tsx:348
+msgid "Could not submit these answers"
+msgstr ""
+
+#: src/components/AskCard.tsx:81
 msgid "Could not submit this answer"
 msgstr "Bu yanıt gönderilemedi"
 
@@ -1604,7 +1611,7 @@ msgstr "Önceki mesaj"
 msgid "Edit and resend"
 msgstr "Düzenle ve yeniden gönder"
 
-#: src/components/AskCard.tsx:196
+#: src/components/AskCard.tsx:254
 msgid "Edit first"
 msgstr "Önce düzenle"
 
@@ -2317,6 +2324,10 @@ msgstr "Yeni beceri"
 msgid "New space"
 msgstr "Yeni alan"
 
+#: src/components/AskCard.tsx:523
+msgid "Next"
+msgstr ""
+
 #: src/pages/MessagingSettingsOverlay.tsx:259
 msgid "No agent connections yet."
 msgstr "Henüz ajan bağlantısı yok."
@@ -2366,7 +2377,8 @@ msgstr "Henüz grup sohbeti yok."
 msgid "No integrations installed yet."
 msgstr "Henüz kurulu entegrasyon yok."
 
-#: src/components/AskCard.tsx:116
+#: src/components/AskCard.tsx:129
+#: src/components/AskCard.tsx:410
 msgid "No longer active"
 msgstr "Artık etkin değil"
 
@@ -2563,6 +2575,10 @@ msgstr "Veya bir API anahtarı bağla"
 msgid "Or paste an API key"
 msgstr "Veya bir API anahtarı yapıştır"
 
+#: src/components/AskCard.tsx:464
+msgid "Or type your own answer"
+msgstr ""
+
 #: src/pages/AccountSettingsOverlay.tsx:216
 msgid "Organic"
 msgstr "Organik"
@@ -2571,10 +2587,27 @@ msgstr "Organik"
 msgid "Organization API key"
 msgstr "Kuruluş API anahtarı"
 
+#: src/components/AskCard.tsx:396
+msgid "Other"
+msgstr ""
+
+#: src/components/AskCard.tsx:160
+#: src/components/AskCard.tsx:468
+msgid "Other answer"
+msgstr ""
+
+#: src/components/AskCard.tsx:191
+msgid "Other answer…"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:459
 #: src/pages/Onboarding.tsx:394
 msgid "Other model…"
 msgstr "Başka model…"
+
+#: src/components/AskCard.tsx:454
+msgid "Other…"
+msgstr ""
 
 #: src/components/AgentSteps.tsx:70
 msgid "Output"
@@ -2932,7 +2965,7 @@ msgstr "Çalışıyor · Durdur"
 msgid "Running…"
 msgstr "Çalışıyor…"
 
-#: src/components/AskCard.tsx:157
+#: src/components/AskCard.tsx:215
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/KnowledgeSection.tsx:227
@@ -2961,7 +2994,7 @@ msgstr "Kaydedildi."
 msgid "Saved. Rotate to reveal."
 msgstr "Kaydedildi. Görmek için döndürün."
 
-#: src/components/AskCard.tsx:157
+#: src/components/AskCard.tsx:215
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/ModelSettingsOverlay.tsx:687
@@ -3043,11 +3076,16 @@ msgstr "Gönder"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "10 dakika içinde sohbet uygulamanızdan hatta <0>{linkCode}</0> gönderin. Bağlantı kurulunca bir onay yanıtı alırsınız."
 
-#: src/components/AskCard.tsx:176
+#: src/components/AskCard.tsx:179
+#: src/components/AskCard.tsx:234
 msgid "Send answer"
 msgstr "Yanıtı gönder"
 
-#: src/components/AskCard.tsx:193
+#: src/components/AskCard.tsx:519
+msgid "Send answers"
+msgstr ""
+
+#: src/components/AskCard.tsx:251
 msgid "Send it"
 msgstr "Gönder"
 
@@ -3055,9 +3093,11 @@ msgstr "Gönder"
 msgid "Send reset link"
 msgstr "Sıfırlama bağlantısı gönder"
 
-#: src/components/AskCard.tsx:129
-#: src/components/AskCard.tsx:176
-#: src/components/AskCard.tsx:193
+#: src/components/AskCard.tsx:142
+#: src/components/AskCard.tsx:179
+#: src/components/AskCard.tsx:234
+#: src/components/AskCard.tsx:251
+#: src/components/AskCard.tsx:519
 msgid "Sending…"
 msgstr "Gönderiliyor…"
 
@@ -3180,6 +3220,7 @@ msgstr "Beceri: {0}"
 msgid "Skills"
 msgstr "Beceriler"
 
+#: src/components/AskCard.tsx:509
 #: src/pages/Shell.tsx:5327
 msgid "Skip"
 msgstr "Atla"
@@ -3191,6 +3232,10 @@ msgstr "Şimdilik atla"
 #: src/lib/localized-provider-hint.ts:8
 msgid "Skip or deploy key"
 msgstr "Atla veya dağıtım anahtarı kullan"
+
+#: src/components/AskCard.tsx:397
+msgid "Skipped"
+msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
 #: src/pages/Shell.tsx:1863
@@ -3333,7 +3378,7 @@ msgstr "Öğretme sürüyor. Yeni mesaj göndermeden önce öğretmeyi durdur."
 msgid "Team"
 msgstr "Takım"
 
-#: src/pages/Shell.tsx:5808
+#: src/pages/Shell.tsx:5809
 msgid "Team Computer"
 msgstr "Takım Bilgisayarı"
 
@@ -3468,7 +3513,13 @@ msgstr "Araç kaynakları"
 msgid "Treg token"
 msgstr "Treg token'ı"
 
-#: src/components/AskCard.tsx:172
+#: src/components/AskCard.tsx:163
+#: src/components/AskCard.tsx:480
+msgid "Type a different answer"
+msgstr ""
+
+#: src/components/AskCard.tsx:230
+#: src/components/AskCard.tsx:480
 msgid "Type your answer"
 msgstr "Yanıtını yaz"
 

@@ -276,6 +276,7 @@ import { advanceToolCallLoopGuard } from "./tool-loop.js";
 import { textContentArg } from "./tool-text.js";
 import {
   botMessageOutcomeFromMidTurn,
+  buildSteeringMessageText,
   clampUserProgressMessage,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
@@ -3206,9 +3207,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                           id: item.id,
                           messageId: item.messageId,
                           historyText: item.text,
-                          text: [item.text, filesInstruction, unavailableInstruction]
-                            .filter(Boolean)
-                            .join("\n\n"),
+                          text: buildSteeringMessageText(
+                            item.text,
+                            filesInstruction,
+                            unavailableInstruction,
+                          ),
                           images,
                         };
                       }),
@@ -3285,6 +3288,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 id: action.id,
                 label: redactSecrets(action.label, runSecrets),
               }));
+              const safeQuestions = event.questions?.map((question) => ({
+                ...question,
+                question: redactSecrets(question.question, runSecrets),
+                ...(question.header ? { header: redactSecrets(question.header, runSecrets) } : {}),
+                ...(question.options
+                  ? {
+                      options: question.options.map((option) => ({
+                        id: option.id,
+                        label: redactSecrets(option.label, runSecrets),
+                      })),
+                    }
+                  : {}),
+              }));
               await workspaceCheckpoint.flush();
               const paused = await deps.events.pauseRunForInput({
                 spaceId: run.spaceId,
@@ -3300,7 +3316,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     text: safeText,
                     detail: safeDetail,
                     status: "pending",
-                    actions: safeActions,
+                    ...(safeActions ? { actions: safeActions } : {}),
+                    ...(safeQuestions ? { questions: safeQuestions } : {}),
                   },
                 ],
                 // Keep unredacted labels on the run for resume; message blocks stay redacted.

@@ -83,7 +83,7 @@ msgstr "已安装 {0} 个技能"
 msgid "{0}'s screen"
 msgstr "{0} 的屏幕"
 
-#: src/pages/Shell.tsx:5808
+#: src/pages/Shell.tsx:5809
 msgid "{botName}’s computer"
 msgstr "{botName} 的电脑"
 
@@ -359,11 +359,12 @@ msgstr "始终允许此工具"
 msgid "Always allowed"
 msgstr "始终允许"
 
-#: src/components/AskCard.tsx:169
+#: src/components/AskCard.tsx:227
 msgid "Answer"
 msgstr "回答"
 
 #: src/components/AskCard.tsx:19
+#: src/components/AskCard.tsx:403
 msgid "Answered"
 msgstr "已回答"
 
@@ -526,6 +527,7 @@ msgstr "保存例行任务后可用"
 msgid "Avatars"
 msgstr "头像"
 
+#: src/components/AskCard.tsx:496
 #: src/pages/RoutineEditor.tsx:231
 msgid "Back"
 msgstr "返回"
@@ -544,7 +546,7 @@ msgstr "Base URL"
 msgid "Bearer token"
 msgstr "Bearer token"
 
-#: src/pages/Shell.tsx:5800
+#: src/pages/Shell.tsx:5801
 msgid "Booting live desktop…"
 msgstr "正在启动实时桌面…"
 
@@ -607,7 +609,8 @@ msgid "Can't reach the server."
 msgstr "无法连接服务器。"
 
 #: src/components/AskCard.tsx:35
-#: src/components/AskCard.tsx:186
+#: src/components/AskCard.tsx:176
+#: src/components/AskCard.tsx:244
 #: src/components/ComputerMaintenanceActions.tsx:96
 #: src/components/teach/TeachComputerOverlay.tsx:254
 #: src/pages/KnowledgeSection.tsx:235
@@ -834,12 +837,12 @@ msgstr "命令"
 msgid "Complete"
 msgstr "完成"
 
-#: src/pages/Shell.tsx:5744
+#: src/pages/Shell.tsx:5745
 #: src/pages/shell/bot-panel.tsx:60
 msgid "Computer"
 msgstr "电脑"
 
-#: src/pages/Shell.tsx:5803
+#: src/pages/Shell.tsx:5804
 msgid "Computer failed to boot"
 msgstr "电脑启动失败"
 
@@ -847,11 +850,11 @@ msgstr "电脑启动失败"
 msgid "Computer is asleep"
 msgstr "电脑已休眠"
 
-#: src/pages/Shell.tsx:5802
+#: src/pages/Shell.tsx:5803
 msgid "Computer is asleep. Open it to wake."
 msgstr "电脑处于睡眠状态。打开以唤醒。"
 
-#: src/pages/Shell.tsx:5804
+#: src/pages/Shell.tsx:5805
 msgid "Computer is stopped"
 msgstr "电脑已停止"
 
@@ -1284,7 +1287,11 @@ msgstr "无法开始 OAuth"
 msgid "Could not start teaching"
 msgstr "无法开始教学"
 
-#: src/components/AskCard.tsx:79
+#: src/components/AskCard.tsx:348
+msgid "Could not submit these answers"
+msgstr ""
+
+#: src/components/AskCard.tsx:81
 msgid "Could not submit this answer"
 msgstr "无法提交此回答"
 
@@ -1604,7 +1611,7 @@ msgstr "更早的消息"
 msgid "Edit and resend"
 msgstr "编辑并重新发送"
 
-#: src/components/AskCard.tsx:196
+#: src/components/AskCard.tsx:254
 msgid "Edit first"
 msgstr "先编辑"
 
@@ -2317,6 +2324,10 @@ msgstr "新建技能"
 msgid "New space"
 msgstr "新建工作区"
 
+#: src/components/AskCard.tsx:523
+msgid "Next"
+msgstr ""
+
 #: src/pages/MessagingSettingsOverlay.tsx:259
 msgid "No agent connections yet."
 msgstr "还没有 Agent 连接。"
@@ -2366,7 +2377,8 @@ msgstr "还没有群聊。"
 msgid "No integrations installed yet."
 msgstr "尚未安装任何集成。"
 
-#: src/components/AskCard.tsx:116
+#: src/components/AskCard.tsx:129
+#: src/components/AskCard.tsx:410
 msgid "No longer active"
 msgstr "已停用"
 
@@ -2563,6 +2575,10 @@ msgstr "或连接 API 密钥"
 msgid "Or paste an API key"
 msgstr "或粘贴 API 密钥"
 
+#: src/components/AskCard.tsx:464
+msgid "Or type your own answer"
+msgstr ""
+
 #: src/pages/AccountSettingsOverlay.tsx:216
 msgid "Organic"
 msgstr "自然"
@@ -2571,10 +2587,27 @@ msgstr "自然"
 msgid "Organization API key"
 msgstr "组织 API 密钥"
 
+#: src/components/AskCard.tsx:396
+msgid "Other"
+msgstr ""
+
+#: src/components/AskCard.tsx:160
+#: src/components/AskCard.tsx:468
+msgid "Other answer"
+msgstr ""
+
+#: src/components/AskCard.tsx:191
+msgid "Other answer…"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:459
 #: src/pages/Onboarding.tsx:394
 msgid "Other model…"
 msgstr "其他模型…"
+
+#: src/components/AskCard.tsx:454
+msgid "Other…"
+msgstr ""
 
 #: src/components/AgentSteps.tsx:70
 msgid "Output"
@@ -2932,7 +2965,7 @@ msgstr "运行中 · 停止"
 msgid "Running…"
 msgstr "正在运行…"
 
-#: src/components/AskCard.tsx:157
+#: src/components/AskCard.tsx:215
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/KnowledgeSection.tsx:227
@@ -2961,7 +2994,7 @@ msgstr "已保存。"
 msgid "Saved. Rotate to reveal."
 msgstr "已保存。轮换后可查看。"
 
-#: src/components/AskCard.tsx:157
+#: src/components/AskCard.tsx:215
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/ModelSettingsOverlay.tsx:687
@@ -3043,11 +3076,16 @@ msgstr "发送"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "请在 10 分钟内从聊天应用向该线路发送 <0>{linkCode}</0>。关联成功后你会收到确认回复。"
 
-#: src/components/AskCard.tsx:176
+#: src/components/AskCard.tsx:179
+#: src/components/AskCard.tsx:234
 msgid "Send answer"
 msgstr "发送回答"
 
-#: src/components/AskCard.tsx:193
+#: src/components/AskCard.tsx:519
+msgid "Send answers"
+msgstr ""
+
+#: src/components/AskCard.tsx:251
 msgid "Send it"
 msgstr "发送"
 
@@ -3055,9 +3093,11 @@ msgstr "发送"
 msgid "Send reset link"
 msgstr "发送重置链接"
 
-#: src/components/AskCard.tsx:129
-#: src/components/AskCard.tsx:176
-#: src/components/AskCard.tsx:193
+#: src/components/AskCard.tsx:142
+#: src/components/AskCard.tsx:179
+#: src/components/AskCard.tsx:234
+#: src/components/AskCard.tsx:251
+#: src/components/AskCard.tsx:519
 msgid "Sending…"
 msgstr "正在发送…"
 
@@ -3180,6 +3220,7 @@ msgstr "技能 {0}"
 msgid "Skills"
 msgstr "技能"
 
+#: src/components/AskCard.tsx:509
 #: src/pages/Shell.tsx:5327
 msgid "Skip"
 msgstr "跳过"
@@ -3191,6 +3232,10 @@ msgstr "暂时跳过"
 #: src/lib/localized-provider-hint.ts:8
 msgid "Skip or deploy key"
 msgstr "跳过或使用部署密钥"
+
+#: src/components/AskCard.tsx:397
+msgid "Skipped"
+msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
 #: src/pages/Shell.tsx:1863
@@ -3333,7 +3378,7 @@ msgstr "正在示范，发送新消息前请先停止示范。"
 msgid "Team"
 msgstr "团队"
 
-#: src/pages/Shell.tsx:5808
+#: src/pages/Shell.tsx:5809
 msgid "Team Computer"
 msgstr "团队电脑"
 
@@ -3468,7 +3513,13 @@ msgstr "工具源"
 msgid "Treg token"
 msgstr "Treg token"
 
-#: src/components/AskCard.tsx:172
+#: src/components/AskCard.tsx:163
+#: src/components/AskCard.tsx:480
+msgid "Type a different answer"
+msgstr ""
+
+#: src/components/AskCard.tsx:230
+#: src/components/AskCard.tsx:480
 msgid "Type your answer"
 msgstr "输入你的回答"
 

@@ -18,9 +18,59 @@ import type {
   AgentToolExecutionResult,
   ConnectorTool,
 } from "@rakazo/adapter-kit";
+import type { AskQuestion } from "@rakazo/contracts";
 import { getLogger } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
+
+/**
+ * Normalize the ask_user v2 `questions` argument into validated AskQuestion[] with stable ids.
+ * Returns null when no `questions` array is present (caller falls back to the legacy single
+ * question + options shape). Throws on a malformed questions array so the model sees the error.
+ */
+function normalizeAskQuestions(raw: Record<string, unknown>): AskQuestion[] | null {
+  if (!Array.isArray(raw.questions)) return null;
+  const rawQuestions = raw.questions;
+  if (rawQuestions.length < 1 || rawQuestions.length > 4) {
+    throw new Error("ask_user accepts one to four questions");
+  }
+  return rawQuestions.map((entry, qIndex) => {
+    const q = (entry ?? {}) as Record<string, unknown>;
+    const question = String(q.question ?? "").trim();
+    if (!question) throw new Error("each ask_user question needs non-empty question text");
+    const options = Array.isArray(q.options)
+      ? q.options.map((option) => String(option).trim())
+      : [];
+    if (
+      options.length > 0 &&
+      (options.length < 2 ||
+        options.length > 4 ||
+        options.some((option) => option.length === 0 || option.length > 80) ||
+        new Set(options).size !== options.length)
+    ) {
+      throw new Error(
+        "each ask_user question offers two to four unique, non-empty options (or none for a free-text answer)",
+      );
+    }
+    const header = q.header ? String(q.header).trim().slice(0, 24) : undefined;
+    return {
+      id: `q${qIndex + 1}`,
+      ...(header ? { header } : {}),
+      question: question.slice(0, 240),
+      ...(options.length
+        ? {
+            options: options.map((label, oIndex) => ({
+              id: `q${qIndex + 1}o${oIndex + 1}`,
+              label,
+            })),
+          }
+        : {}),
+      ...(q.multiSelect === true ? { multiSelect: true } : {}),
+      ...(q.required === false ? { required: false } : {}),
+    };
+  });
+}
+
 import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
 import { registerLocalProvider } from "./pi-local-provider.js";
 import {
@@ -599,6 +649,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         return { reason: String(raw.reason ?? "I need you on the screen.") };
       }
       if (tool.name === "ask_user") {
+        if (Array.isArray(raw.questions)) return { questions: raw.questions };
         const options = Array.isArray(raw.options) ? raw.options.map(String) : raw.options;
         return {
           question: String(raw.question ?? "What should I use?"),
@@ -687,6 +738,20 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         };
       }
       if (tool.name === "ask_user") {
+        const questions = normalizeAskQuestions(args);
+        if (questions) {
+          host.pausePending = true;
+          host.queue.push({
+            type: "ask",
+            text: questions.length === 1 ? questions[0]!.question : "",
+            questions,
+          });
+          return {
+            content: [{ type: "text", text: "Waiting for the user's answers." }],
+            details: args,
+            terminate: true,
+          };
+        }
         const options = Array.isArray(args.options)
           ? args.options.map((option) => String(option).trim())
           : [];
@@ -946,13 +1011,28 @@ function builtinParameters(tool: ConnectorTool) {
     });
   }
   if (tool.name === "ask_user") {
+    const questionOptions = Type.Array(Type.String({ minLength: 1, maxLength: 80 }), {
+      minItems: 2,
+      maxItems: 4,
+      uniqueItems: true,
+    });
+    // All fields optional at the wire level; normalizeAskQuestions enforces the real rules and
+    // both the v2 `questions` shape and the legacy question+options shape validate here.
     return Type.Object({
-      question: Type.String({ maxLength: 240 }),
-      options: Type.Array(Type.String({ minLength: 1, maxLength: 80 }), {
-        minItems: 2,
-        maxItems: 4,
-        uniqueItems: true,
-      }),
+      questions: Type.Optional(
+        Type.Array(
+          Type.Object({
+            question: Type.String({ minLength: 1, maxLength: 240 }),
+            header: Type.Optional(Type.String({ maxLength: 24 })),
+            options: Type.Optional(questionOptions),
+            multiSelect: Type.Optional(Type.Boolean()),
+            required: Type.Optional(Type.Boolean()),
+          }),
+          { minItems: 1, maxItems: 4 },
+        ),
+      ),
+      question: Type.Optional(Type.String({ maxLength: 240 })),
+      options: Type.Optional(questionOptions),
     });
   }
   if (tool.name === "remember") {

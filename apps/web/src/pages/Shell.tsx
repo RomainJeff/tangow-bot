@@ -5722,6 +5722,7 @@ const MessageView = memo(function MessageView({
               block={block}
               canAnswer={canAnswer}
               onAnswer={(text) => onAnswer(message, text)}
+              messageId={message.id}
             />
           );
         }

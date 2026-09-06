@@ -614,7 +614,25 @@ export async function answerRunInput(
   realtime?: RealtimeFanout,
   runSecretWriter?: RunSecretWriter,
 ): Promise<boolean> {
-  const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  const committed = await prisma.$transaction((tx: Prisma.TransactionClient) =>
+    answerRunInputInTransaction(tx, input, runSecretWriter),
+  );
+  if (!committed) return false;
+  await notifyRealtime(realtime, committed.threadId, committed.seq);
+  return true;
+}
+
+/**
+ * Answer the pending ask of a waiting_input run inside an existing transaction. Used by the
+ * answer RPC and by sendThreadMessage when the user types a free-text reply in the composer
+ * instead of tapping a choice. Returns null when nothing was awaiting an answer.
+ */
+export async function answerRunInputInTransaction(
+  tx: Prisma.TransactionClient,
+  input: AnswerRunInput,
+  runSecretWriter?: RunSecretWriter,
+): Promise<{ threadId: string; seq: number } | null> {
+  {
     // Thread row first, then run rows — the same order as clearThread and finalizeRun, so a
     // concurrent clear cannot deadlock against this transaction.
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
@@ -642,13 +660,104 @@ export async function answerRunInput(
       (block) => block.kind === "ask" && block.status !== "answered",
     );
     if (pendingAsk?.kind !== "ask") return null;
+
+    // ask_user v2: a multi-question card submits one JSON payload of per-question answers.
+    if (pendingAsk.questions?.length) {
+      const questions = pendingAsk.questions;
+      let raw: unknown;
+      try {
+        raw = JSON.parse(input.answer);
+      } catch {
+        return null;
+      }
+      const container =
+        raw && typeof raw === "object" && "answers" in raw
+          ? (raw as { answers: unknown }).answers
+          : raw;
+      if (!container || typeof container !== "object") return null;
+      const submitted = container as Record<
+        string,
+        { selected?: unknown; other?: unknown; skipped?: unknown } | undefined
+      >;
+      const lines: string[] = [];
+      const storedAnswers: Record<
+        string,
+        { selected?: string[]; other?: string; skipped?: boolean }
+      > = {};
+      for (let index = 0; index < questions.length; index += 1) {
+        const question = questions[index]!;
+        const entry = submitted[question.id] ?? {};
+        const selected = Array.isArray(entry.selected)
+          ? Array.from(
+              new Set(
+                entry.selected
+                  .map((id) => String(id))
+                  .filter((id) => question.options?.some((option) => option.id === id)),
+              ),
+            )
+          : [];
+        const other = typeof entry.other === "string" ? entry.other.trim() : "";
+        const answered = selected.length > 0 || other.length > 0;
+        // Only the question's own `required` flag decides whether it may be skipped — a
+        // client-asserted `skipped` cannot waive a required question (defense in depth: the
+        // UI already gates Send, but a direct API call must not resume with a hole).
+        const skipped = !answered && question.required === false;
+        if (!answered && !skipped) return null;
+        const labels = selected.map(
+          (id) => question.options?.find((option) => option.id === id)?.label ?? id,
+        );
+        if (other) labels.push(`Other: ${other}`);
+        lines.push(
+          `${index + 1}. ${question.question} — ${skipped ? "(skipped)" : labels.join(", ")}`,
+        );
+        storedAnswers[question.id] = {
+          ...(selected.length ? { selected } : {}),
+          ...(other ? { other } : {}),
+          ...(skipped ? { skipped: true } : {}),
+        };
+      }
+      const queued = await tx.run.updateMany({
+        where: {
+          id: input.runId,
+          spaceId: input.spaceId,
+          threadId: input.threadId,
+          status: "waiting_input",
+        },
+        data: { status: "queued", checkpoint: null },
+      });
+      if (queued.count !== 1) return null;
+      const task = await tx.task.updateMany({
+        where: { runs: { some: { id: input.runId } } },
+        data: { prompt: `The user answered your questions:\n${lines.join("\n")}` },
+      });
+      if (task.count !== 1) throw new Error("Run task was not available to answer");
+      const answeredBlocks = parsed.data.map((block) =>
+        block === pendingAsk
+          ? { ...block, status: "answered" as const, answers: storedAnswers }
+          : block,
+      );
+      await tx.message.update({ where: { id: message.id }, data: { blocks: answeredBlocks } });
+      const updated = await appendEventInTransaction(tx, {
+        spaceId: input.spaceId,
+        threadId: input.threadId,
+        botId: run.botId,
+        type: "thread.message.updated",
+        runId: input.runId,
+        payload: { messageId: message.id, role: "bot", blocks: answeredBlocks },
+      });
+      return { threadId: updated.threadId, seq: updated.seq };
+    }
+
     const approvalAsk = isApprovalAskBlock(pendingAsk);
     const secretAsk = isSecretAskBlock(pendingAsk);
     const choiceAsk = !approvalAsk && !secretAsk && Boolean(pendingAsk.actions?.length);
     const selectedChoice = choiceAsk
       ? pendingAsk.actions?.find((action) => action.id === input.answer)
       : undefined;
-    if (choiceAsk && !selectedChoice) return null;
+    // A choice ask also accepts a free-text answer ("none of the above" typed in the composer):
+    // the offered options are a convenience, never a constraint on what the user may say.
+    const freeTextAnswer = choiceAsk && !selectedChoice ? input.answer.trim() : "";
+    if (choiceAsk && !selectedChoice && !freeTextAnswer) return null;
     if (secretAsk && !runSecretWriter) return null;
     if (secretAsk && pendingAsk.credential && run.userId !== input.answeredByUserId) return null;
     let approvalEffect: { id: string; kind: string } | null = null;
@@ -743,7 +852,9 @@ export async function answerRunInput(
         data: {
           prompt: selectedChoice
             ? `Selected choice ${selectedChoice.id}: ${resumeLabel}`
-            : input.answer,
+            : freeTextAnswer
+              ? `Free-text answer (none of the offered choices): ${freeTextAnswer}`
+              : input.answer,
         },
       });
       if (task.count !== 1) throw new Error("Run task was not available to answer");
@@ -754,7 +865,7 @@ export async function answerRunInput(
         ? {
             ...block,
             status: "answered" as const,
-            answer: secretAsk ? "" : input.answer,
+            answer: secretAsk ? "" : freeTextAnswer || input.answer,
           }
         : block,
     );
@@ -768,11 +879,7 @@ export async function answerRunInput(
       payload: { messageId: message.id, role: "bot", blocks },
     });
     return { threadId: updated.threadId, seq: updated.seq };
-  });
-
-  if (!committed) return false;
-  await notifyRealtime(realtime, committed.threadId, committed.seq);
-  return true;
+  }
 }
 
 export async function pauseRunForInput(
@@ -1191,7 +1298,7 @@ async function createSteeringContinuation(
     where: {
       threadId: input.threadId,
       botId: input.botId,
-      status: { in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"] },
+      status: { in: ["leased", "running", "waiting_input", "waiting_takeover"] },
     },
     select: { id: true },
   });
