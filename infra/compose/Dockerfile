@@ -34,8 +34,14 @@ COPY infra/updater/package.json infra/updater/
 # workspace root: `start` is `tsx src/index.ts`, and tsx, turbo and cross-env are root
 # devDependencies resolved through /app/node_modules/.bin.
 # The skip-download vars cover any postinstall that survives a future filter change.
-RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    pnpm install --frozen-lockfile \
+# The store lives on a BuildKit cache mount rather than in the layer, so a lockfile
+# change re-links from local disk instead of refetching the registry. It is written
+# and read only by root during this step and is gone before USER node applies, so
+# nothing at runtime depends on it. sharing=locked keeps two concurrent builds from
+# writing the same store.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store,sharing=locked \
+    ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    pnpm install --frozen-lockfile --store-dir=/pnpm-store \
       --filter "@rakazo/api..." \
       --filter "@rakazo/worker..." \
       --filter "@rakazo/web..." \
