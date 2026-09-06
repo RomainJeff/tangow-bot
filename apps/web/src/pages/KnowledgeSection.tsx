@@ -468,7 +468,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
           <input
             ref={fileInput}
             type="file"
-            accept=".skill"
+            accept=".skill,.zip"
             className="hidden"
             data-testid="bot-knowledge-skill-import"
             onChange={(event) => {
