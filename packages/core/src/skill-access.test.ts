@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   asSkillAvailability,
   defaultSkillAvailability,
+  filterSkillList,
   isMarketplaceSkillKey,
   isSkillVisible,
   marketplaceSkillKey,
@@ -48,5 +49,51 @@ describe("skill access", () => {
     expect(asSkillAvailability("disabled")).toBe("disabled");
     expect(asSkillAvailability("garbage")).toBe("all");
     expect(asSkillAvailability(undefined)).toBe("all");
+  });
+});
+
+describe("filterSkillList", () => {
+  const entries = [
+    {
+      name: "Deploy",
+      description: "ships the app",
+      availability: "all" as const,
+      visibleBotIds: ["a"],
+    },
+    {
+      name: "Notes",
+      description: "writes notes",
+      availability: "disabled" as const,
+      visibleBotIds: [],
+    },
+    {
+      name: "Report",
+      description: "weekly deploy report",
+      availability: "selected" as const,
+      visibleBotIds: ["b"],
+    },
+  ];
+
+  it("matches name and description, case-insensitively", () => {
+    expect(filterSkillList(entries, { query: " DEPLOY " }).map((e) => e.name)).toEqual([
+      "Deploy",
+      "Report",
+    ]);
+  });
+
+  it("filters by availability and by bot", () => {
+    expect(filterSkillList(entries, { filter: "active" }).map((e) => e.name)).toEqual([
+      "Deploy",
+      "Report",
+    ]);
+    expect(filterSkillList(entries, { filter: "disabled" }).map((e) => e.name)).toEqual(["Notes"]);
+    expect(filterSkillList(entries, { filter: "bot:b" }).map((e) => e.name)).toEqual(["Report"]);
+  });
+
+  it("hides disabled skills in bot mode", () => {
+    expect(filterSkillList(entries, { botId: "a" }).map((e) => e.name)).toEqual([
+      "Deploy",
+      "Report",
+    ]);
   });
 });

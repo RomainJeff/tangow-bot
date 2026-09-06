@@ -1,12 +1,14 @@
 import { ORPCError } from "@orpc/server";
 import {
   BUILTIN_AGENT_SKILLS,
+  bundleFormat,
   isExists,
   listMarketplaceSkills,
   listUserSkills,
   type MarketplaceSkillFile,
   marketplacesRoot,
   removeUserSkill,
+  renameUserSkill,
   type UserSkillFile,
   userSkillsRoot,
   writeUserSkill,
@@ -259,16 +261,16 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
 
     create,
 
-    /** `.skill` file: gzip tar bundle (magic 1f 8b) or plain SKILL.md text. */
+    /** `.skill` file: gzip tar or zip bundle (sniffed by magic bytes) or plain SKILL.md text. */
     async import(actor: Actor, input: { data: string }): Promise<AgentSkill> {
       const bytes = Buffer.from(input.data, "base64");
-      if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) {
+      if (!bundleFormat(bytes)) {
         let content: string;
         try {
           content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
         } catch {
           throw new ORPCError("BAD_REQUEST", {
-            message: "Not a .skill file (expected SKILL.md text or a gzip tar bundle).",
+            message: "Not a .skill file (expected SKILL.md text, or a gzip tar or zip bundle).",
           });
         }
         return create(actor, { content });
@@ -282,7 +284,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       }).catch((error: unknown) => {
         if (error instanceof ORPCError) throw error;
         if (isExists(error)) conflictOrRethrow(error);
-        // ponytail: gunzip/tar/layout failures all read fine as-is; no error taxonomy.
+        // ponytail: archive/layout failures all read fine as-is; no error taxonomy.
         throw new ORPCError("BAD_REQUEST", {
           message: error instanceof Error ? error.message : "Invalid skill bundle.",
         });
@@ -310,9 +312,9 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
         await writeUserSkill(root(actor), skill, "replace");
         return toAgentSkill(await owned(actor, newKey));
       }
-      // Rename: new file first, then access rows follow the key, then the old file goes.
+      // Rename: the directory moves first (bundle extras follow), then access rows follow the key.
       assertNameFree(await files(actor), resolved.name, existing.id);
-      await writeUserSkill(root(actor), skill, "create").catch(conflictOrRethrow);
+      await renameUserSkill(root(actor), existing.name, skill).catch(conflictOrRethrow);
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
       await prisma.$transaction([
         prisma.skillSetting.updateMany({
@@ -324,7 +326,6 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
           data: { skillKey: newKey },
         }),
       ]);
-      await removeUserSkill(root(actor), existing.name);
       return toAgentSkill(await owned(actor, newKey));
     },
 

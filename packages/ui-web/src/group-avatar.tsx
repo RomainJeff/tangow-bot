@@ -1,4 +1,4 @@
-import { type CSSProperties, memo } from "react";
+import { type CSSProperties, memo, useState } from "react";
 import { BotAvatar } from "./bot-avatar.js";
 import { cn } from "./lib/utils.js";
 
@@ -14,13 +14,22 @@ export interface GroupAvatarProps {
   members: GroupAvatarMember[];
   size?: number;
   className?: string;
+  /** When set, a one-bot group pairs the bot with the user's initials. */
+  userInitials?: string;
+  /** Profile photo shown instead of the initials tile, initials on failure. */
+  userImage?: string | null;
 }
 
 export const GroupAvatar = memo(function GroupAvatar({
   members,
   size = 38,
   className,
+  userInitials,
+  userImage,
 }: GroupAvatarProps) {
+  // Tracking the failed source (not a boolean) retries on the next photo.
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const userPhoto = userImage && userImage !== failedImage ? userImage : null;
   const firstMember = members[0];
   if (!firstMember) {
     return (
@@ -51,7 +60,7 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  if (members.length === 1) {
+  if (members.length === 1 && !userInitials && !userPhoto) {
     return (
       <BotAvatar
         color={firstMember.color}
@@ -64,7 +73,8 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  const pair = members.length === 2;
+  const withUser = members.length === 1;
+  const pair = withUser || members.length === 2;
   const miniSize = Math.round(size * (pair ? 0.65 : 0.54));
   const positions: CSSProperties[] = pair
     ? [
@@ -102,6 +112,28 @@ export const GroupAvatar = memo(function GroupAvatar({
           />
         </div>
       ))}
+      {withUser ? (
+        <div
+          className="absolute right-0 bottom-0 z-[2] flex items-center justify-center overflow-hidden rounded-full bg-accent font-semibold text-foreground/75"
+          style={{
+            width: miniSize,
+            height: miniSize,
+            fontSize: Math.max(8, Math.round(miniSize * 0.4)),
+            boxShadow: "0 0 0 1.5px var(--accent)",
+          }}
+        >
+          {userPhoto ? (
+            <img
+              src={userPhoto}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={() => setFailedImage(userPhoto)}
+            />
+          ) : (
+            userInitials
+          )}
+        </div>
+      ) : null}
       {members.length > 3 ? (
         <div
           className="absolute right-0 bottom-0 z-[3] flex items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-foreground"

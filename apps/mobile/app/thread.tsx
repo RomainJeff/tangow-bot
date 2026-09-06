@@ -16,6 +16,7 @@ import {
   isApprovalAskBlock,
   isRunTerminalEvent,
   isSecretAskBlock,
+  latestActivityLabel,
   latestAnswerableAskMessageId,
   mentionChipKey,
   resolveComposerSendPlan,
@@ -23,6 +24,8 @@ import {
   type SlashActionId,
   selectedAskActionLabel,
   serializeComposerPrompt,
+  showsTimeMarker,
+  threadTimeMarkerLabel,
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
@@ -48,7 +51,7 @@ import {
   type TextProps,
   View,
 } from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
 import { useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppConnectCard } from "../components/AppConnectCard";
@@ -60,6 +63,7 @@ import {
   type MarkdownArtifactPreviewTarget,
 } from "../components/markdown-artifact-preview";
 import { NativeSymbol } from "../components/native-symbol";
+import { ShimmerText } from "../components/shimmer-text";
 import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import {
   applyMobileThreadEvent,
@@ -84,7 +88,7 @@ import { mobileTokens } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
-import { t, useI18n } from "../lib/i18n";
+import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { saveLastBotId } from "../lib/last-bot";
 import {
   dismissThreadNotifications,
@@ -235,6 +239,7 @@ function Thread() {
   const router = useRouter();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardState();
   const { botId, groupId, name, messageId } = useLocalSearchParams<{
     botId?: string;
     groupId?: string;
@@ -388,6 +393,8 @@ function Thread() {
   activeThreadId.current = notificationThreadId;
   const currentBotStatus = snap ? snap.run?.status : currentBot?.status;
   const hasLiveProgress = visibleMessages.some((message) => message.id.startsWith("progress:"));
+  // One bot only: an activity line names one bot's tool, so it would mislabel a group.
+  const activityLabel = latestActivityLabel(snap?.messages ?? []);
   const workingGroupBots = useMemo(() => {
     if (!inGroup) return [];
     const seen = new Set<string>();
@@ -1385,8 +1392,18 @@ function Thread() {
     };
   }
 
-  function renderMessageRow(message: MobileMessage, options?: { enableJump?: boolean }) {
+  function renderMessageRow(
+    message: MobileMessage,
+    options?: { enableJump?: boolean; previousCreatedAt?: string },
+  ) {
     const actionProps = messageActionProps(message);
+    const timeMarker = showsTimeMarker(options?.previousCreatedAt, message.createdAt)
+      ? threadTimeMarkerLabel(message.createdAt, {
+          locale: dateLocaleForUi(),
+          today: t("Today"),
+          yesterday: t("Yesterday"),
+        })
+      : "";
     const activityBotId =
       !inGroup && message.role === "bot" && message.id.startsWith("progress:")
         ? (message.botId ?? botId)
@@ -1415,72 +1432,87 @@ function Thread() {
               }
             : undefined
         }
-        style={{
-          marginTop: 12,
-          width: "100%",
-          opacity: rewindTarget && (message.seq ?? 0) >= (rewindTarget.seq ?? 0) ? 0.4 : 1,
-          flexDirection: "row",
-          alignItems: "flex-start",
-          gap: 8,
-          justifyContent: message.role === "user" ? "flex-end" : "flex-start",
-        }}
       >
-        {activityBotId ? (
-          <View style={{ paddingTop: 22 }}>
-            <BotAvatar
-              color={activityBot?.color ?? tokens.mutedForeground}
-              identity={activityBotId}
-              shapeSeed={activityBot?.shapeSeed}
-              size={inGroup ? 20 : 28}
-              status={activityStatus}
-            />
-          </View>
+        {timeMarker ? (
+          <Text
+            style={{
+              alignSelf: "center",
+              color: tokens.mutedForeground,
+              fontSize: 11,
+              marginTop: 16,
+            }}
+          >
+            {timeMarker}
+          </Text>
         ) : null}
         <View
           style={{
-            width: isCenteredAgentEvent(message.blocks) ? "100%" : undefined,
-            maxWidth: isCenteredAgentEvent(message.blocks)
-              ? "100%"
-              : activityBotId
-                ? undefined
-                : "90%",
-            flex: activityBotId ? 1 : undefined,
-            flexShrink: 1,
+            marginTop: 12,
+            width: "100%",
+            opacity: rewindTarget && (message.seq ?? 0) >= (rewindTarget.seq ?? 0) ? 0.4 : 1,
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: 8,
+            justifyContent: message.role === "user" ? "flex-end" : "flex-start",
           }}
         >
-          <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
-            <MessageBubble
-              botId={botId ?? snap?.members?.[0]?.botId ?? ""}
-              groupId={groupId}
-              message={message}
-              botName={name}
-              bots={mentionBots}
-              members={snap?.members}
-              replyPreview={
-                message.replyToMessageId ? messagesById.get(message.replyToMessageId) : undefined
-              }
-              canAnswer={message.id === answerableAskMessageId}
-              onAnswer={answerMessage}
-              onOpenBot={openBot}
-              onPreviewMarkdown={setMarkdownPreview}
-              actionProps={actionProps}
-            />
-          </Pressable>
-          {canReactToThreadMessage(message) && message.thumbsUp ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("Remove thumbs-up")}
-              accessibilityState={{ selected: true }}
-              onPress={() => void reactToMessage(message)}
-              hitSlop={8}
-              style={{
-                alignSelf: message.role === "user" ? "flex-end" : "flex-start",
-                marginTop: 4,
-              }}
-            >
-              <Text style={{ color: tokens.warning, fontSize: 13 }}>👍</Text>
-            </Pressable>
+          {activityBotId ? (
+            <View style={{ paddingTop: 22 }}>
+              <BotAvatar
+                color={activityBot?.color ?? tokens.mutedForeground}
+                identity={activityBotId}
+                shapeSeed={activityBot?.shapeSeed}
+                size={inGroup ? 20 : 28}
+                status={activityStatus}
+              />
+            </View>
           ) : null}
+          <View
+            style={{
+              width: isCenteredAgentEvent(message.blocks) ? "100%" : undefined,
+              maxWidth: isCenteredAgentEvent(message.blocks)
+                ? "100%"
+                : activityBotId
+                  ? undefined
+                  : "90%",
+              flex: activityBotId ? 1 : undefined,
+              flexShrink: 1,
+            }}
+          >
+            <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+              <MessageBubble
+                botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+                groupId={groupId}
+                message={message}
+                botName={name}
+                bots={mentionBots}
+                members={snap?.members}
+                replyPreview={
+                  message.replyToMessageId ? messagesById.get(message.replyToMessageId) : undefined
+                }
+                canAnswer={message.id === answerableAskMessageId}
+                onAnswer={answerMessage}
+                onOpenBot={openBot}
+                onPreviewMarkdown={setMarkdownPreview}
+                actionProps={actionProps}
+              />
+            </Pressable>
+            {canReactToThreadMessage(message) && message.thumbsUp ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("Remove thumbs-up")}
+                accessibilityState={{ selected: true }}
+                onPress={() => void reactToMessage(message)}
+                hitSlop={8}
+                style={{
+                  alignSelf: message.role === "user" ? "flex-end" : "flex-start",
+                  marginTop: 4,
+                }}
+              >
+                <Text style={{ color: tokens.warning, fontSize: 13 }}>👍</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </View>
     );
@@ -1504,9 +1536,9 @@ function Thread() {
           size={28}
           status={currentBotStatus}
         />
-        <Text style={{ color: tokens.mutedForeground, fontSize: 13.5 }}>
-          {t("{name} is working", { name: currentBot.name })}
-        </Text>
+        <ShimmerText style={{ color: tokens.mutedForeground, fontSize: 13.5, flexShrink: 1 }}>
+          {activityLabel ?? `${t("{name} is working", { name: currentBot.name })}…`}
+        </ShimmerText>
       </View>
     ) : inGroup && workingGroupBots.length > 0 ? (
       <View
@@ -1537,19 +1569,22 @@ function Thread() {
             </View>
           ))}
         </View>
-        <Text
+        <ShimmerText
           style={{
             color: tokens.mutedForeground,
             fontSize: 13.5,
             flexShrink: 1,
           }}
         >
-          {workingGroupBots.length === 1
-            ? t("{name} is working", {
-                name: workingGroupBots[0]?.name ?? t("Agent"),
-              })
-            : t("{count} agents working", { count: workingGroupBots.length })}
-        </Text>
+          {(workingGroupBots.length === 1 ? activityLabel : undefined) ??
+            `${
+              workingGroupBots.length === 1
+                ? t("{name} is working", {
+                    name: workingGroupBots[0]?.name ?? t("Agent"),
+                  })
+                : t("{count} agents working", { count: workingGroupBots.length })
+            }…`}
+        </ShimmerText>
       </View>
     ) : null;
 
@@ -1593,7 +1628,12 @@ function Thread() {
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
           >
             {loadEarlierControl}
-            {visibleMessages.map((message) => renderMessageRow(message, { enableJump: true }))}
+            {visibleMessages.map((message, index) =>
+              renderMessageRow(message, {
+                enableJump: true,
+                previousCreatedAt: visibleMessages[index - 1]?.createdAt,
+              }),
+            )}
             {workingFooter}
           </ScrollView>
         ) : (
@@ -1637,7 +1677,9 @@ function Thread() {
             }}
             ListFooterComponent={loadEarlierControl}
             ListHeaderComponent={workingFooter}
-            renderItem={({ item }) => renderMessageRow(item)}
+            renderItem={({ item, index }) =>
+              renderMessageRow(item, { previousCreatedAt: liveMessages[index + 1]?.createdAt })
+            }
           />
         )}
         {!showPinnedPage && threadScrollState.detached ? (
@@ -1687,7 +1729,13 @@ function Thread() {
           </Pressable>
         ) : null}
       </View>
-      <View style={{ paddingBottom: Math.max(insets.bottom + 12, 24) }}>
+      <View
+        style={{
+          // Keyboard covers the nav bar / home indicator, so the safe-area
+          // inset would render as dead space between composer and keyboard.
+          paddingBottom: keyboard.isVisible ? 12 : Math.max(insets.bottom + 12, 24),
+        }}
+      >
         {replyTarget ? (
           <View
             style={{

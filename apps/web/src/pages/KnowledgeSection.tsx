@@ -6,7 +6,7 @@ import type {
   MemoryDocument,
   SkillAvailability,
 } from "@rakazo/contracts";
-import { parseSkillMd } from "@rakazo/core";
+import { filterSkillList, parseSkillMd } from "@rakazo/core";
 import {
   Button,
   Input,
@@ -437,17 +437,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
     { value: "selected", label: <Trans>Specific agents</Trans> },
   ] satisfies Array<{ value: SkillAvailability; label: ReactNode }>;
 
-  const needle = query.trim().toLowerCase();
-  const shown = skills.filter((entry) => {
-    // Bot mode only offers what the agent can actually switch on.
-    if (botId && entry.availability === "disabled") return false;
-    if (needle && !`${entry.name} ${entry.description}`.toLowerCase().includes(needle))
-      return false;
-    if (filter === "active") return entry.availability !== "disabled";
-    if (filter === "disabled") return entry.availability === "disabled";
-    if (filter.startsWith("bot:")) return entry.visibleBotIds.includes(filter.slice(4));
-    return true;
-  });
+  const shown = filterSkillList(skills, { query, filter, botId });
 
   const editorOpen = creating || open;
   const draftError = (() => {
@@ -478,7 +468,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
           <input
             ref={fileInput}
             type="file"
-            accept=".skill"
+            accept=".skill,.zip"
             className="hidden"
             data-testid="bot-knowledge-skill-import"
             onChange={(event) => {

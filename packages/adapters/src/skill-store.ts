@@ -5,8 +5,10 @@
  * (trusted); the skill directory name is derived from the skill key, never from user input
  * directly, so no path can escape the owner's root.
  */
+import { createWriteStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Readable as ReadableStream } from "node:stream";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
@@ -14,6 +16,7 @@ import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contra
 import { parseSkillMd, type SkillRecord, userSkillKey } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { extract as tarExtract } from "tar";
+import { type Entry, fromBuffer, type ZipFile } from "yauzl";
 
 export type UserSkillFile = SkillRecord & {
   id: string;
@@ -111,7 +114,28 @@ export async function writeUserSkill(
 }
 
 /**
- * Imports a `.skill` bundle: a gzip tar with SKILL.md at its root (or inside a single top-level
+ * Renames a skill: the whole directory moves, so bundle extras (scripts/, references/) follow the
+ * new name instead of being dropped, then the new SKILL.md lands. "create" semantics: EEXIST on a
+ * name clash, same signal as writeUserSkill "create".
+ */
+export async function renameUserSkill(
+  root: string,
+  oldName: string,
+  skill: { name: string; content: string },
+): Promise<void> {
+  const from = path.join(root, skillDirName(oldName));
+  const dest = path.join(root, skillDirName(skill.name));
+  await mkdir(dest); // EEXIST = name clash
+  // rename(2) replaces the empty directory we just claimed.
+  await rename(from, dest).catch(async (error) => {
+    await rm(dest, { recursive: true, force: true });
+    throw error;
+  });
+  await writeUserSkill(root, skill, "replace");
+}
+
+/**
+ * Imports a `.skill` bundle: a gzip tar or zip with SKILL.md at its root (or inside a single top-level
  * directory) plus any extra files (scripts/, references/, ...). Extracts into a temp dir under
  * root, lets `resolve` validate the SKILL.md (and return the normalized content), then renames
  * the tree into place with "create" semantics: EEXIST on a name clash, never a half-written
@@ -144,19 +168,50 @@ export async function writeUserSkillBundle(
   }
 }
 
-async function extractBundle(archive: Buffer, out: string): Promise<void> {
+/**
+ * Magic bytes of the archive formats a `.skill` bundle may use, or null for anything else
+ * (which the import path then reads as plain SKILL.md text). Two bytes are enough for zip:
+ * `50 4b` covers the local-file, central-directory and spanning headers without enumerating
+ * them, so an odd variant fails downstream with a real message instead of "not a .skill file".
+ * A valid SKILL.md always starts with a `---` frontmatter fence (see parseSkillMd), so it can
+ * never collide with either signature.
+ */
+export function bundleFormat(bytes: Buffer): "tar" | "zip" | null {
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return "tar";
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return "zip";
+  return null;
+}
+
+/**
+ * One byte budget for the whole bundle, whatever the format. The factory hands out a fresh
+ * Transform per stream — zip extracts one entry at a time, each its own pipeline — while every
+ * one of them spends the same counter, so the cap is on observed decompressed bytes rather than
+ * any size an archive declares about itself.
+ */
+function capStream(): () => Transform {
   let bytes = 0;
+  return () =>
+    new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        bytes += chunk.length;
+        if (bytes > SKILL_BUNDLE_MAX_BYTES) {
+          callback(new Error(`Skill bundle too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`));
+          return;
+        }
+        callback(null, chunk);
+      },
+    });
+}
+
+async function extractBundle(archive: Buffer, out: string): Promise<void> {
+  const format = bundleFormat(archive);
+  if (format === "tar") return extractTar(archive, out, capStream());
+  if (format === "zip") return extractZip(archive, out, capStream());
+  throw new Error("Skill bundle must be a gzip tar or zip archive.");
+}
+
+async function extractTar(archive: Buffer, out: string, cap: () => Transform): Promise<void> {
   let entries = 0;
-  const limit = new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      bytes += chunk.length;
-      if (bytes > SKILL_BUNDLE_MAX_BYTES) {
-        callback(new Error(`Skill bundle too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`));
-        return;
-      }
-      callback(null, chunk);
-    },
-  });
   const unpack = tarExtract({
     cwd: out,
     preservePaths: false,
@@ -171,7 +226,105 @@ async function extractBundle(archive: Buffer, out: string): Promise<void> {
     },
   });
   // Explicit gunzip so the byte cap applies to the decompressed tar, not the compressed file.
-  await pipeline(Readable.from([archive]), createGunzip(), limit, unpack);
+  await pipeline(Readable.from([archive]), createGunzip(), cap(), unpack);
+}
+
+const S_IFMT = 0o170000;
+const S_IFREG = 0o100000;
+
+/**
+ * Zip counterpart of extractTar, with the same guarantees: regular files and directories only,
+ * nothing outside `out`, one shared byte cap, one entry cap. yauzl reads the whole buffer we
+ * already hold (bounded by the base64 length cap on import) and streams entries lazily, one at
+ * a time, so nothing is inflated into memory ahead of the cap.
+ */
+async function extractZip(archive: Buffer, out: string, cap: () => Transform): Promise<void> {
+  const zipfile = await new Promise<ZipFile>((resolve, reject) => {
+    fromBuffer(archive, { lazyEntries: true }, (error, opened) => {
+      if (opened) resolve(opened);
+      else reject(error ?? new Error("Skill bundle is not a readable zip archive."));
+    });
+  });
+  let entries = 0;
+  await new Promise<void>((resolve, reject) => {
+    const fail = (error: unknown) => {
+      zipfile.close();
+      reject(error);
+    };
+    zipfile.on("error", fail);
+    zipfile.on("end", resolve);
+    zipfile.on("entry", (entry: Entry) => {
+      // Counted before any per-entry work, so a 10k-entry archive dies on entry 201.
+      if (++entries > SKILL_BUNDLE_MAX_ENTRIES) {
+        fail(new Error(`Skill bundle has too many entries (> ${SKILL_BUNDLE_MAX_ENTRIES}).`));
+        return;
+      }
+      extractZipEntry(zipfile, entry, out, cap).then(() => {
+        zipfile.readEntry();
+      }, fail);
+    });
+    zipfile.readEntry();
+  });
+}
+
+async function extractZipEntry(
+  zipfile: ZipFile,
+  entry: Entry,
+  out: string,
+  cap: () => Transform,
+): Promise<void> {
+  // yauzl's own validateFileName already rejects "..", absolute paths and backslashes; resolving
+  // the target again is the belt-and-braces check the marketplace extractor keeps.
+  // ponytail: path depth and name length are unguarded here as on the tar side — the entry and
+  // byte caps bound the damage; add a depth check if a real bundle ever needs one.
+  const root = path.resolve(out);
+  const target = path.resolve(root, entry.fileName);
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error(`Skill bundle entry escapes the bundle root: ${entry.fileName}.`);
+  }
+  if (entry.fileName.endsWith("/")) {
+    await mkdir(target, { recursive: true }).catch(entryFailure(entry));
+    return;
+  }
+  // Symlinks (S_IFLNK), fifos and devices are dropped silently, like the tar filter drops them.
+  // A zero mode is an MS-DOS-authored zip, which carries no unix mode at all: treat it as a file.
+  const mode = (entry.externalFileAttributes >>> 16) & S_IFMT;
+  if (mode !== S_IFREG && mode !== 0) return;
+  if (entry.isEncrypted()) {
+    throw new Error("Skill bundle uses zip encryption, which is not supported.");
+  }
+  await mkdir(path.dirname(target), { recursive: true }).catch(entryFailure(entry));
+  const stream = await new Promise<ReadableStream>((resolve, reject) => {
+    zipfile.openReadStream(entry, (error, readable) => {
+      if (readable) resolve(readable);
+      else reject(error ?? new Error(`Cannot read skill bundle entry ${entry.fileName}.`));
+    });
+  });
+  // The cap counts the bytes actually observed, across every entry: the central directory's
+  // uncompressedSize is attacker-controlled, so a bomb declaring 1 KB and delivering 4 GB of
+  // inflated data still stops here rather than filling the disk.
+  await pipeline(stream, cap(), createWriteStream(target)).catch(entryFailure(entry));
+}
+
+/**
+ * A filesystem error in here is about the archive's own layout — a file and a directory claiming
+ * the same name, an entry named "." — not about the user's skill list, and its message carries the
+ * temp path we extracted into. Reword it so the import answers BAD_REQUEST naming the entry
+ * instead of the CONFLICT that the name-clash mkdir in writeUserSkillBundle raises, and so no host
+ * path reaches the user. The byte cap and yauzl's own stream errors carry no `code` and pass
+ * through untouched.
+ */
+// ponytail: two buckets, no error taxonomy; split further only if a message is ever unactionable.
+function entryFailure(entry: Entry): (error: unknown) => never {
+  return (error: unknown) => {
+    if (hasCode(error, "EEXIST") || hasCode(error, "ENOTDIR") || hasCode(error, "EISDIR")) {
+      throw new Error(`Skill bundle has conflicting entries: ${entry.fileName}.`);
+    }
+    if (error instanceof Error && "code" in error) {
+      throw new Error(`Skill bundle entry could not be written: ${entry.fileName}.`);
+    }
+    throw error;
+  };
 }
 
 const isFile = (file: string) =>
@@ -180,9 +333,18 @@ const isFile = (file: string) =>
     () => false,
   );
 
+/**
+ * macOS Finder "Compress" (ditto -c -k --sequesterRsrc --keepParent) adds a `__MACOSX` sibling
+ * whenever any file carries an xattr, which quarantine flags and Finder tags routinely do, so the
+ * skill directory is no longer the only top-level entry.
+ */
+// ponytail: only the two names Finder adds, and only for finding the skill directory — a
+// `__MACOSX` beside SKILL.md at the archive root still lands inside the skill, harmlessly.
+const isFinderJunk = (name: string) => name === "__MACOSX" || name === ".DS_Store";
+
 async function locateSkillDir(out: string): Promise<string> {
   if (await isFile(path.join(out, "SKILL.md"))) return out;
-  const entries = await readdir(out);
+  const entries = (await readdir(out)).filter((name) => !isFinderJunk(name));
   const top = entries.length === 1 ? path.join(out, entries[0] ?? "") : null;
   if (top && (await isFile(path.join(top, "SKILL.md")))) return top;
   throw new Error("Skill bundle must contain SKILL.md at its root.");

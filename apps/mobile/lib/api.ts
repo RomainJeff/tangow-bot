@@ -384,6 +384,26 @@ export async function changePassword(currentPassword: string, newPassword: strin
   if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not change password")));
 }
 
+/** The photo lives on the session user, not on `me`, so it needs its own read. */
+export async function fetchProfileImage(): Promise<string | null> {
+  const response = await fetch(`${currentApiBase()}/api/auth/get-session`, {
+    headers: { origin: "rakazo://", ...(await authHeaders()) },
+  });
+  if (!response.ok) throw new Error(t("Could not load your profile photo"));
+  const body = (await response.json()) as { user?: { image?: string | null } } | null;
+  return body?.user?.image ?? null;
+}
+
+export async function updateProfileImage(image: string | null): Promise<void> {
+  const response = await fetch(`${currentApiBase()}/api/auth/update-user`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "rakazo://", ...(await authHeaders()) },
+    body: JSON.stringify({ image }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not update your photo")));
+}
+
 export async function signOut() {
   await rpc("notifications/unregisterPush").catch(() => undefined);
   const headers = await authHeaders();
@@ -514,6 +534,7 @@ export type MobileMessage = {
   botId?: string;
   replyToMessageId?: string;
   thumbsUp?: boolean;
+  createdAt: string;
   blocks: MessageBlock[];
 };
 
@@ -521,6 +542,7 @@ export type MobileGroup = Pick<
   Group,
   | "id"
   | "name"
+  | "description"
   | "preview"
   | "pinned"
   | "sectionId"
@@ -638,6 +660,7 @@ type ThreadEvent = {
   type: string;
   seq?: number;
   runId?: string;
+  createdAt?: string;
   payload?: Record<string, unknown>;
 };
 
@@ -759,6 +782,7 @@ export function applyMobileThreadEvent(
     const streaming: MobileMessage = {
       id: progressId,
       role: "bot",
+      createdAt: event.createdAt ?? new Date().toISOString(),
       blocks: reduceLiveMessageBlocks((previous?.blocks ?? []) as MessageBlock[], {
         type: "progress",
         payload: event.payload,
@@ -778,6 +802,7 @@ export function applyMobileThreadEvent(
     const streaming: MobileMessage = {
       id: progressId,
       role: "bot",
+      createdAt: event.createdAt ?? new Date().toISOString(),
       blocks: reduceLiveMessageBlocks((previous?.blocks ?? []) as MessageBlock[], {
         type: "tool",
         name: String(event.payload?.name ?? ""),
@@ -797,6 +822,7 @@ export function applyMobileThreadEvent(
     const streaming: MobileMessage = {
       id: `subagent:${agentId}`,
       role: "bot",
+      createdAt: event.createdAt ?? new Date().toISOString(),
       ...(event.botId ? { botId: event.botId } : {}),
       ...(event.runId ? { runId: event.runId } : {}),
       blocks: [
@@ -837,6 +863,7 @@ export function applyMobileThreadEvent(
       id: String(event.payload?.messageId ?? event.id ?? `msg:${event.seq ?? 0}`),
       runId: event.runId ? String(event.runId) : undefined,
       role: (event.payload?.role as MobileMessage["role"]) ?? "bot",
+      createdAt: event.createdAt ?? new Date().toISOString(),
       blocks: (event.payload?.blocks as MobileMessage["blocks"]) ?? [],
       botId: event.botId ?? (event.payload?.botId ? String(event.payload.botId) : undefined),
       replyToMessageId: event.payload?.replyToMessageId

@@ -13,6 +13,38 @@ describe("GroupAvatar", () => {
     expect(html).toContain("rakazo-bot-avatar");
   });
 
+  it("pairs a lone bot with the user's initials when provided", () => {
+    const html = renderToString(
+      <GroupAvatar members={[{ name: "Harry", color: "#8B5CF6" }]} userInitials="RJ" />,
+    );
+    expect((html.match(/data-working=/g) || []).length).toBe(1);
+    expect(html).toContain(">RJ<");
+  });
+
+  it("renders the user's photo instead of the initials tile", () => {
+    const html = renderToString(
+      <GroupAvatar
+        members={[{ name: "Harry", color: "#8B5CF6" }]}
+        userInitials="RJ"
+        userImage="data:image/webp;base64,dGlueQ=="
+      />,
+    );
+    expect(html).toContain('src="data:image/webp;base64,dGlueQ=="');
+    expect(html).not.toContain(">RJ<");
+  });
+
+  it("keeps the initials tile when no photo is set", () => {
+    const html = renderToString(
+      <GroupAvatar
+        members={[{ name: "Harry", color: "#8B5CF6" }]}
+        userInitials="RJ"
+        userImage={null}
+      />,
+    );
+    expect(html).not.toContain("<img");
+    expect(html).toContain(">RJ<");
+  });
+
   it("renders 2 overlapping bot avatars for 2 members", () => {
     const html = renderToString(
       <GroupAvatar

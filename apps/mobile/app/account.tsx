@@ -1,9 +1,12 @@
 import type { AvatarStyle } from "@rakazo/contracts";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -23,11 +26,13 @@ import {
   currentApiBase,
   deleteAccount,
   displayApiHost,
+  fetchProfileImage,
   loadSessionToken,
   type MobileMe,
   rpc,
   selectedSpaceId,
   signOut,
+  updateProfileImage,
 } from "../lib/api";
 import {
   getCachedAppearancePreference,
@@ -37,6 +42,7 @@ import {
 import { explicitSignInRoute } from "../lib/auth-routing";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
 import { setUiLocale, useI18n } from "../lib/i18n";
+import { userInitials } from "../lib/inbox";
 import {
   canPostPromotedNotifications,
   DEFAULT_LIVE_NOTIFICATION_SETTINGS,
@@ -47,6 +53,12 @@ import {
   setLiveNotificationSettings,
 } from "../lib/live-notifications";
 import { native, useThemedStyles } from "../lib/native";
+import {
+  PROFILE_PHOTO_SIZE,
+  profilePhotoDataUrl,
+  setProfilePhoto,
+  useProfilePhoto,
+} from "../lib/profile-photo";
 import { registerPushToken } from "../lib/push";
 import { UI_LOCALE_LABELS, UI_LOCALES, type UiLocale } from "../lib/ui-locale";
 
@@ -217,6 +229,7 @@ export default function Account() {
         <View style={styles.profile}>
           <Text style={styles.name}>{me?.name || t("Your account")}</Text>
           {me?.email ? <Text style={styles.email}>{me.email}</Text> : null}
+          <ProfilePhoto initials={userInitials(me?.name ?? "")} />
         </View>
         {focus !== "usage" ? usageBlock : null}
 
@@ -446,6 +459,19 @@ export default function Account() {
         <Pressable
           accessibilityRole="button"
           disabled={pending}
+          onPress={() => router.push("/skills")}
+          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+        >
+          <View>
+            <Text style={styles.settingsTitle}>{t("Skills")}</Text>
+            <Text style={styles.settingsExplanation}>{t("Teach agents recipes.")}</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={pending}
           onPress={() => setServerOpen(true)}
           style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
         >
@@ -547,6 +573,131 @@ export default function Account() {
         }}
       />
     </SafeAreaView>
+  );
+}
+
+/** Square WebP data URL small enough to live on the session user, or null when cancelled. */
+async function encodeProfilePhoto(): Promise<string | null> {
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ["images"],
+    // The square editor is the crop: React Native has no canvas to centre-crop on.
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 1,
+  });
+  const asset = result.canceled ? undefined : result.assets[0];
+  if (!asset) return null;
+  const context = ImageManipulator.manipulate(asset.uri);
+  context.resize({ width: PROFILE_PHOTO_SIZE, height: PROFILE_PHOTO_SIZE });
+  const image = await context.renderAsync();
+  const saved = await image.saveAsync({
+    format: SaveFormat.WEBP,
+    compress: 0.8,
+    base64: true,
+  });
+  context.release();
+  image.release();
+  return saved.base64 ?? null;
+}
+
+function ProfilePhoto({ initials }: { initials: string }) {
+  const { t } = useI18n();
+  const styles = useThemedStyles(createAccountStyles);
+  const photo = useProfilePhoto();
+  const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Tracking the failed source (not a boolean) retries on the next photo.
+  const preview = photo && photo !== failedPhoto ? photo : null;
+
+  useEffect(() => {
+    void fetchProfileImage()
+      .then(setProfilePhoto)
+      .catch(() => undefined);
+  }, []);
+
+  async function save(image: string | null) {
+    setPending(true);
+    setError(null);
+    try {
+      await updateProfileImage(image);
+      setFailedPhoto(null);
+      setProfilePhoto(image);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("Could not update your photo"));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function pick() {
+    setError(null);
+    let base64: string | null;
+    try {
+      base64 = await encodeProfilePhoto();
+    } catch {
+      setError(t("That image could not be read"));
+      return;
+    }
+    if (base64 === null) return;
+    const encoded = profilePhotoDataUrl(base64);
+    if (!encoded.ok) {
+      setError(
+        encoded.reason === "too-large"
+          ? t("That image is too detailed to store, try a simpler one")
+          : t("That image could not be read"),
+      );
+      return;
+    }
+    await save(encoded.dataUrl);
+  }
+
+  return (
+    <View accessibilityLabel={t("Profile photo")} style={styles.photoSection}>
+      <Text style={styles.sectionTitle}>{t("Profile photo")}</Text>
+      <View style={styles.photoRow}>
+        {preview ? (
+          <Image
+            source={{ uri: preview }}
+            style={styles.photoPreview}
+            resizeMode="cover"
+            onError={() => setFailedPhoto(preview)}
+          />
+        ) : (
+          <View style={[styles.photoPreview, styles.photoFallback]}>
+            <Text style={styles.photoInitials}>{initials}</Text>
+          </View>
+        )}
+        {pending ? <ActivityIndicator color={native.secondaryLabel} /> : null}
+        <Pressable
+          accessibilityRole="button"
+          disabled={pending}
+          onPress={() => void pick()}
+          style={({ pressed }) => [
+            styles.photoAction,
+            pending && styles.disabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.restoreLabel}>{photo ? t("Change photo") : t("Add photo")}</Text>
+        </Pressable>
+        {photo ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={pending}
+            onPress={() => void save(null)}
+            style={({ pressed }) => [
+              styles.photoAction,
+              pending && styles.disabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.archivedDeleteLabel}>{t("Remove")}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
   );
 }
 
@@ -655,6 +806,38 @@ function createAccountStyles() {
     archivedDeleteLabel: {
       color: tokens.destructive,
       fontSize: 14,
+    },
+    photoSection: {
+      marginTop: 14,
+      gap: 12,
+    },
+    photoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    photoPreview: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+    },
+    photoFallback: {
+      backgroundColor: native.fillPressed,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    photoInitials: {
+      color: native.label,
+      fontSize: 18,
+      fontWeight: "600",
+    },
+    photoAction: {
+      minHeight: 40,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: native.tertiaryLabel,
+      paddingHorizontal: 14,
+      justifyContent: "center",
     },
     settingsButton: {
       minHeight: 62,

@@ -41,6 +41,7 @@ import { UI_LOCALE_LABELS, UI_LOCALES, type UiLocale } from "../lib/ui-locale";
 export function AccountSettingsOverlay({
   email,
   name,
+  initials,
   usage,
   focusUsage,
   avatarStyle,
@@ -53,6 +54,7 @@ export function AccountSettingsOverlay({
 }: {
   email?: string | null;
   name: string;
+  initials: string;
   usage?: { runs: number; inputTokens: number; outputTokens: number } | null;
   focusUsage?: boolean;
   avatarStyle: AvatarStyle;
@@ -130,6 +132,7 @@ export function AccountSettingsOverlay({
           </h3>
           <p className="mt-3 text-[14px] text-foreground/75">{name}</p>
           {email ? <p className="mt-1 text-[13px] text-muted-foreground/70">{email}</p> : null}
+          <ProfilePhoto initials={initials} />
         </section>
 
         <ChangePasswordSection />
@@ -279,6 +282,143 @@ export function AccountSettingsOverlay({
         </details>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const PROFILE_PHOTO_SIZE = 128;
+// Mirrors the server guard in @rakazo/auth: the photo rides in every session payload.
+const PROFILE_PHOTO_MAX_LENGTH = 32 * 1024;
+
+/** Centre-cropped square WebP data URL, small enough to live on the session user. */
+async function encodeProfilePhoto(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = PROFILE_PHOTO_SIZE;
+  canvas.height = PROFILE_PHOTO_SIZE;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas is unavailable");
+  context.drawImage(
+    bitmap,
+    (bitmap.width - side) / 2,
+    (bitmap.height - side) / 2,
+    side,
+    side,
+    0,
+    0,
+    PROFILE_PHOTO_SIZE,
+    PROFILE_PHOTO_SIZE,
+  );
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/webp", 0.8);
+  });
+  if (!blob) throw new Error("Could not encode the photo");
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the photo"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function ProfilePhoto({ initials }: { initials: string }) {
+  const { t } = useLingui();
+  const session = authClient.useSession();
+  const photo = session.data?.user.image ?? null;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(image: string | null) {
+    setPending(true);
+    setError(null);
+    try {
+      // better-auth signals its session store on /update-user, so every
+      // useSession() subscriber picks the new photo up without a reload.
+      const result = await authClient.updateUser({ image });
+      if (result.error) setError(result.error.message ?? t`Could not update your photo`);
+    } catch {
+      setError(t`Could not reach the server`);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function upload(file: File) {
+    setError(null);
+    let dataUrl: string;
+    try {
+      dataUrl = await encodeProfilePhoto(file);
+    } catch {
+      setError(t`That image could not be read`);
+      return;
+    }
+    if (dataUrl.length > PROFILE_PHOTO_MAX_LENGTH) {
+      setError(t`That image is too detailed to store, try a simpler one`);
+      return;
+    }
+    await save(dataUrl);
+  }
+
+  return (
+    <div className="mt-4 border-t border-border pt-4">
+      <h4 className="text-[14px] font-medium text-foreground">
+        <Trans>Profile photo</Trans>
+      </h4>
+      <div className="mt-3 flex items-center gap-4">
+        {photo ? (
+          <img
+            src={photo}
+            alt=""
+            className="h-14 w-14 shrink-0 rounded-full object-cover"
+            data-testid="profile-photo-preview"
+          />
+        ) : (
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-accent text-[16px] text-foreground/75">
+            {initials}
+          </span>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            data-testid="profile-photo-input"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              // Clear the input so re-picking the same file fires change again.
+              event.target.value = "";
+              if (file) void upload(file);
+            }}
+          />
+          <Button
+            variant="secondary"
+            className="rounded-full"
+            disabled={pending}
+            onClick={() => fileRef.current?.click()}
+          >
+            {photo ? <Trans>Change photo</Trans> : <Trans>Add photo</Trans>}
+          </Button>
+          {photo ? (
+            <Button
+              variant="ghost"
+              className="rounded-full"
+              disabled={pending}
+              onClick={() => void save(null)}
+            >
+              <Trans>Remove</Trans>
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      {error ? (
+        <p role="alert" className="mt-3 text-[12.5px] text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

@@ -79,13 +79,15 @@ export const GroupMemberSchema = z.object({
 });
 export type GroupMember = z.infer<typeof GroupMemberSchema>;
 
-export const GROUP_MEMBER_MIN = 2;
+export const GROUP_MEMBER_MIN = 1;
 export const GROUP_MEMBER_MAX = 6;
+export const GROUP_DESCRIPTION_MAX_LENGTH = 4000;
 
 export const GroupSchema = z.object({
   id: Id,
   spaceId: Id,
   name: z.string(),
+  description: z.string(),
   pinned: z.boolean(),
   sectionId: Id.nullable(),
   archivedAt: z.string().nullable(),
@@ -106,6 +108,7 @@ const GroupBotIds = z
 
 export const CreateGroupInput = z.object({
   name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(GROUP_DESCRIPTION_MAX_LENGTH).default(""),
   botIds: GroupBotIds,
 });
 export type CreateGroupInput = z.infer<typeof CreateGroupInput>;
@@ -113,6 +116,7 @@ export type CreateGroupInput = z.infer<typeof CreateGroupInput>;
 export const UpdateGroupInput = z.object({
   groupId: Id,
   name: z.string().trim().min(1).max(80).optional(),
+  description: z.string().trim().max(GROUP_DESCRIPTION_MAX_LENGTH).optional(),
   botIds: GroupBotIds.optional(),
   pinned: z.boolean().optional(),
   sectionId: Id.nullable().optional(),
@@ -451,7 +455,7 @@ export const UpdateAgentSkillInput = z
     }
   });
 
-/** `.skill` import: plain SKILL.md text, or a gzip tar bundle (SKILL.md + scripts/, references/, ...). */
+/** `.skill` import: plain SKILL.md text, or a gzip tar or zip bundle (SKILL.md + scripts/, references/, ...). */
 export const SKILL_BUNDLE_MAX_BYTES = 10 * 1024 * 1024;
 export const SKILL_BUNDLE_MAX_ENTRIES = 200;
 export const ImportAgentSkillInput = z.object({

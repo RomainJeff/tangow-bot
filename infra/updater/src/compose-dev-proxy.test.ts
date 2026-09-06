@@ -10,7 +10,9 @@ interface ComposeService {
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
 
 function loadCompose(rel: string) {
-  return parse(readFileSync(path.resolve(repoRoot, rel), "utf8")) as {
+  // merge: true resolves `<<: *anchor`, so this asserts the environment a service
+  // effectively gets rather than the keys spelled out under its own block.
+  return parse(readFileSync(path.resolve(repoRoot, rel), "utf8"), { merge: true }) as {
     services: Record<string, ComposeService>;
   };
 }

@@ -1,5 +1,11 @@
 import type { TransactionalEmail, TransactionalEmailProvider } from "@rakazo/adapter-kit";
-import { emailAllowed, isMessagingEmail, parseAllowlist, signupPolicyFromEnv } from "@rakazo/core";
+import {
+  decodeAttachmentBase64,
+  emailAllowed,
+  isMessagingEmail,
+  parseAllowlist,
+  signupPolicyFromEnv,
+} from "@rakazo/core";
 import { bootstrapUserSpace, type PrismaClient } from "@rakazo/db";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
@@ -33,6 +39,36 @@ export async function resolveSignupPolicy(
     };
   }
   return signupPolicyFromEnv(env);
+}
+
+// `user.image` is a self-service field on a public endpoint and it rides in every
+// get-session response, so only small self-contained raster data URLs are allowed.
+// The allowlist rejects `data:image/svg+xml` (scriptable) and http(s) URLs, which
+// would make a self-hosted deployment fetch third-party images and leak the
+// viewer's IP on every render.
+const PROFILE_IMAGE_PREFIXES = [
+  "data:image/png;base64,",
+  "data:image/jpeg;base64,",
+  "data:image/webp;base64,",
+];
+const PROFILE_IMAGE_MAX_LENGTH = 32 * 1024;
+
+export function assertProfileImage(image: unknown): void {
+  if (image === null || image === undefined || image === "") return;
+  if (typeof image !== "string" || image.length > PROFILE_IMAGE_MAX_LENGTH) {
+    throw new APIError("BAD_REQUEST", { message: "Profile photo must be under 32 KB" });
+  }
+  const prefix = PROFILE_IMAGE_PREFIXES.find((candidate) => image.startsWith(candidate));
+  if (!prefix) {
+    throw new APIError("BAD_REQUEST", {
+      message: "Profile photo must be a PNG, JPEG, or WebP data URL",
+    });
+  }
+  try {
+    decodeAttachmentBase64(image.slice(prefix.length));
+  } catch {
+    throw new APIError("BAD_REQUEST", { message: "Profile photo is not valid base64" });
+  }
 }
 
 export function createAuth(prisma: PrismaClient, env: AuthEnv) {
@@ -198,6 +234,7 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
             if (isMessagingEmail(user.email)) {
               throw new APIError("BAD_REQUEST", { message: "Email is not available" });
             }
+            assertProfileImage(user.image);
           },
         },
         update: {
@@ -205,6 +242,7 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
             if (user.email && isMessagingEmail(user.email)) {
               throw new APIError("BAD_REQUEST", { message: "Email is not available" });
             }
+            assertProfileImage(user.image);
           },
         },
       },

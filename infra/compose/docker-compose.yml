@@ -1,3 +1,23 @@
+# Shared by the api and worker services, which run the same image against the same
+# database and sandbox supervisor. Each merges it and adds only what it alone needs.
+x-app-env: &app-env
+  DATABASE_URL: postgres://rakazo:rakazo@postgres:5432/rakazo
+  DATA_DIR: /data
+  SANDBOX_SUPERVISOR_URL: http://supervisor:7091
+  WAKEUP_DRIVER: graphile
+  SANDBOX_PROVIDER: docker
+  CLOUD_AGENT_PROVIDER: ${CLOUD_AGENT_PROVIDER:-none}
+  CLOUD_AGENT_SPACE_ID: ${CLOUD_AGENT_SPACE_ID:-}
+  CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+  AGENT_RUNTIME: pi
+  # Optional egress proxy (Mainland / corporate). Empty = unset; either case works.
+  HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+  HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+  NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
+  http_proxy: ${http_proxy:-${HTTP_PROXY:-}}
+  https_proxy: ${https_proxy:-${HTTPS_PROXY:-}}
+  no_proxy: ${no_proxy:-${NO_PROXY:-}}
+
 services:
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:16}
@@ -56,6 +76,12 @@ services:
       - ../../data:/data
 
   api:
+    # One image for api, worker and web: same context, same Dockerfile, only the
+    # command differs. Naming it here builds it once instead of leaving Compose to
+    # derive a per-service tag and keep three copies of the same 6 GB image.
+    # worker and web reuse this tag with `pull_policy: never`: no registry serves
+    # `:local`, and this build is what puts it on the host.
+    image: rakazo/app:local
     build:
       context: ../..
       dockerfile: infra/compose/Dockerfile
@@ -63,23 +89,8 @@ services:
     env_file:
       - ../../.env
     environment:
-      DATABASE_URL: postgres://rakazo:rakazo@postgres:5432/rakazo
+      <<: *app-env
       API_HOST: "0.0.0.0"
-      DATA_DIR: /data
-      SANDBOX_SUPERVISOR_URL: http://supervisor:7091
-      WAKEUP_DRIVER: graphile
-      SANDBOX_PROVIDER: docker
-      CLOUD_AGENT_PROVIDER: ${CLOUD_AGENT_PROVIDER:-none}
-      CLOUD_AGENT_SPACE_ID: ${CLOUD_AGENT_SPACE_ID:-}
-      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
-      AGENT_RUNTIME: pi
-      # Optional egress proxy (Mainland / corporate). Empty = unset; either case works.
-      HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
-      HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
-      NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
-      http_proxy: ${http_proxy:-${HTTP_PROXY:-}}
-      https_proxy: ${https_proxy:-${HTTPS_PROXY:-}}
-      no_proxy: ${no_proxy:-${NO_PROXY:-}}
     ports:
       - "127.0.0.1:3100:3100"
     volumes:
@@ -91,31 +102,15 @@ services:
         condition: service_completed_successfully
 
   worker:
-    build:
-      context: ../..
-      dockerfile: infra/compose/Dockerfile
+    image: rakazo/app:local
+    pull_policy: never
     command: ["pnpm", "--filter", "@rakazo/worker", "start"]
     env_file:
       - ../../.env
     environment:
+      <<: *app-env
       BETTER_AUTH_SECRET: ""
-      DATABASE_URL: postgres://rakazo:rakazo@postgres:5432/rakazo
-      DATA_DIR: /data
-      SANDBOX_SUPERVISOR_URL: http://supervisor:7091
-      WAKEUP_DRIVER: graphile
-      SANDBOX_PROVIDER: docker
-      CLOUD_AGENT_PROVIDER: ${CLOUD_AGENT_PROVIDER:-none}
-      CLOUD_AGENT_SPACE_ID: ${CLOUD_AGENT_SPACE_ID:-}
-      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       SCREEN_PROXY_SECRET: ""
-      AGENT_RUNTIME: pi
-      # Optional egress proxy (Mainland / corporate). Empty = unset; either case works.
-      HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
-      HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
-      NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
-      http_proxy: ${http_proxy:-${HTTP_PROXY:-}}
-      https_proxy: ${https_proxy:-${HTTPS_PROXY:-}}
-      no_proxy: ${no_proxy:-${NO_PROXY:-}}
     volumes:
       - ../../data:/data
     depends_on:
@@ -125,9 +120,8 @@ services:
         condition: service_completed_successfully
 
   web:
-    build:
-      context: ../..
-      dockerfile: infra/compose/Dockerfile
+    image: rakazo/app:local
+    pull_policy: never
     command: ["pnpm", "--filter", "@rakazo/web", "preview", "--host", "0.0.0.0", "--port", "5173"]
     environment:
       API_PROXY_TARGET: http://api:3100

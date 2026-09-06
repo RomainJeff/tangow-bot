@@ -120,8 +120,13 @@ describe("contracts", () => {
   it("normalizes group names and rejects duplicate members", () => {
     expect(CreateGroupInput.parse({ name: "  Draft team  ", botIds: ["bot-1", "bot-2"] })).toEqual({
       name: "Draft team",
+      description: "",
       botIds: ["bot-1", "bot-2"],
     });
+    expect(
+      CreateGroupInput.parse({ name: "Draft team", description: "  Ship it  ", botIds: ["bot-1"] })
+        .description,
+    ).toBe("Ship it");
     expect(CreateGroupInput.safeParse({ name: "   ", botIds: ["bot-1", "bot-2"] }).success).toBe(
       false,
     );

@@ -870,11 +870,13 @@ describe("mobile thread event reduction", () => {
     const first = applyMobileThreadEvent(snapshot(), {
       type: "thread.progress",
       runId: "run-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
       payload: { delta: "Hel" },
     });
     const second = applyMobileThreadEvent(first, {
       type: "thread.progress",
       runId: "run-1",
+      createdAt: "2026-01-01T00:00:01.000Z",
       payload: { delta: "lo" },
     });
 
@@ -883,6 +885,7 @@ describe("mobile thread event reduction", () => {
         id: "progress:run-1",
         role: "bot",
         runId: "run-1",
+        createdAt: "2026-01-01T00:00:01.000Z",
         blocks: [{ kind: "progress", text: "Hello" }],
       },
     ]);
@@ -1303,5 +1306,12 @@ function snapshot(
 }
 
 function mobileMessage(id: string, blocks: MobileMessage["blocks"], seq?: number): MobileMessage {
-  return { id, threadId: "thread-1", seq, role: "bot", blocks };
+  return {
+    id,
+    threadId: "thread-1",
+    seq,
+    role: "bot",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    blocks,
+  };
 }

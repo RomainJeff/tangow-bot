@@ -14,6 +14,7 @@ import {
   Alert,
   AppState,
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -34,6 +35,7 @@ import {
 import { loadActivityMode, saveActivityMode } from "../lib/activity-mode";
 import {
   currentApiBase,
+  fetchProfileImage,
   loadSessionToken,
   type MobileBot,
   type MobileBotSection,
@@ -53,6 +55,7 @@ import { botTag, filterBots, formatThreadTime, userInitials } from "../lib/inbox
 import { dismissThreadNotifications, resumeLiveNotifications } from "../lib/live-notifications";
 import { native, useThemedStyles } from "../lib/native";
 import { previewSnippet } from "../lib/preview";
+import { setProfilePhoto, useProfilePhoto } from "../lib/profile-photo";
 import { registerPushToken } from "../lib/push";
 import { querySpaceSearch } from "../lib/search";
 import { mobileSearchDestination } from "../lib/search-destination";
@@ -83,6 +86,7 @@ export default function Home() {
   const [botSections, setBotSections] = useState<MobileBotSection[]>([]);
   const [spaces, setSpaces] = useState<MobileSpace[]>([]);
   const [me, setMe] = useState<MobileMe | null>(null);
+  const [failedUserImage, setFailedUserImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
@@ -134,6 +138,10 @@ export default function Home() {
       setGroups(navigation.current.groups);
       setSpaces(navigation.spaces);
       setMe(nextMe);
+      // The photo lives on the session user, not on `me`.
+      void fetchProfileImage()
+        .then(setProfilePhoto)
+        .catch(() => undefined);
     } catch (err) {
       if (requestId !== inboxRequestId.current) return;
       setError(err instanceof Error ? err.message : t("Could not load bots"));
@@ -306,6 +314,9 @@ export default function Home() {
     });
   }, [botSections, locale, me, spaces, query, searching, searchHits, visible, visibleGroups]);
   const initials = userInitials(me?.name ?? "");
+  const photo = useProfilePhoto();
+  // Tracking the failed source (not a boolean) retries on the next photo.
+  const userImage = photo !== failedUserImage ? photo : null;
   const organizeChat = organizeTarget
     ? organizeTarget.kind === "bot"
       ? bots.find((bot) => bot.id === organizeTarget.id)
@@ -357,7 +368,16 @@ export default function Home() {
     <View style={[styles.screen, { paddingTop: Math.max(insets.top, 20) }]}>
       <View style={styles.header}>
         <CircleButton accessibilityLabel={t("Account")} onPress={() => router.push("/account")}>
-          <Text style={styles.profileInitials}>{initials}</Text>
+          {userImage ? (
+            <Image
+              source={{ uri: userImage }}
+              style={styles.profilePhoto}
+              resizeMode="cover"
+              onError={() => setFailedUserImage(userImage)}
+            />
+          ) : (
+            <Text style={styles.profileInitials}>{initials}</Text>
+          )}
         </CircleButton>
         <View style={styles.headerActions}>
           <CircleButton
@@ -480,6 +500,8 @@ export default function Home() {
           ) : item.type === "group" ? (
             <GroupRow
               group={item.group}
+              userInitials={initials}
+              userImage={userImage}
               onPress={() => {
                 void openMobileSpace(item.group.spaceId, () =>
                   router.push({
@@ -799,10 +821,14 @@ function BotRow({
 
 function GroupRow({
   group,
+  userInitials,
+  userImage,
   onPress,
   onLongPress,
 }: {
   group: MobileGroup | SpaceGroup;
+  userInitials: string;
+  userImage: string | null;
   onPress: () => void;
   onLongPress?: () => void;
 }) {
@@ -822,7 +848,14 @@ function GroupRow({
       accessibilityHint={onLongPress ? t("Long press to pin or move to a section") : undefined}
       onPress={onPress}
       onLongPress={onLongPress}
-      avatar={<GroupAvatar members={group.members} size={54} />}
+      avatar={
+        <GroupAvatar
+          members={group.members}
+          size={54}
+          userInitials={userInitials}
+          userImage={userImage}
+        />
+      }
     />
   );
 }
@@ -865,6 +898,10 @@ function createHomeStyles() {
     },
     circleAccent: {
       backgroundColor: tokens.primary,
+    },
+    profilePhoto: {
+      width: 40,
+      height: 40,
     },
     profileInitials: {
       color: native.label,

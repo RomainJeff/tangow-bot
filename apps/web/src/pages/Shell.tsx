@@ -42,6 +42,7 @@ import {
   isPeerReceiptBlocks,
   isRunTerminalEvent,
   isToolActivityBlock,
+  latestActivityLabel,
   latestAnswerableAskMessageId,
   mentionChipKey,
   reorderBotTo,
@@ -52,7 +53,9 @@ import {
   type SlashActionId,
   searchHitThreadTarget,
   serializeComposerPrompt,
+  showsTimeMarker,
   speechFromBlocks,
+  threadTimeMarkerLabel,
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
@@ -102,6 +105,7 @@ import {
 } from "lucide-react";
 import {
   type DragEvent,
+  Fragment,
   lazy,
   type MutableRefObject,
   memo,
@@ -314,6 +318,8 @@ export function ShellPage() {
   searchParamsRef.current = searchParams;
   const session = authClient.useSession();
   const userId = session.data?.user.id;
+  // Tracking the failed source (not a boolean) retries on the next photo.
+  const [failedUserImage, setFailedUserImage] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [bots, setBots] = useState<Bot[]>([]);
   const botsRef = useRef(bots);
@@ -2146,7 +2152,7 @@ export function ShellPage() {
     if (text && id) void speaker.speak(text, { botId: id, messageId: message.id });
   }, []);
 
-  async function createGroup(input: { name: string; botIds: string[] }) {
+  async function createGroup(input: { name: string; description: string; botIds: string[] }) {
     const group = await rpc.groups.create(input);
     setGroups((current) =>
       current.some((item) => item.id === group.id) ? current : [group, ...current],
@@ -2434,6 +2440,8 @@ export function ShellPage() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const sessionUserImage = session.data?.user.image ?? null;
+  const userImage = sessionUserImage !== failedUserImage ? sessionUserImage : null;
 
   const shell = (
     <div
@@ -2706,6 +2714,8 @@ export function ShellPage() {
                                   : item.chat.members
                               }
                               size={38}
+                              userInitials={initials}
+                              userImage={userImage}
                             />
                           )}
                           <div className="min-w-0 flex-1">
@@ -2832,7 +2842,12 @@ export function ShellPage() {
                   ))}
                   {archivedGroups.map((group) => (
                     <div key={group.id} className="flex items-center gap-2 rounded-lg px-2.5 py-2">
-                      <GroupAvatar members={group.members} size={28} />
+                      <GroupAvatar
+                        members={group.members}
+                        size={28}
+                        userInitials={initials}
+                        userImage={userImage}
+                      />
                       <span
                         className="min-w-0 flex-1 truncate text-[14px] text-foreground/75"
                         dir="auto"
@@ -2886,9 +2901,18 @@ export function ShellPage() {
             data-testid="user-menu-trigger"
             className="flex items-center gap-[11px] px-[18px] py-3.5"
           >
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-accent text-[12px] text-foreground/75">
-              {initials}
-            </span>
+            {userImage ? (
+              <img
+                src={userImage}
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-full object-cover"
+                onError={() => setFailedUserImage(userImage)}
+              />
+            ) : (
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-accent text-[12px] text-foreground/75">
+                {initials}
+              </span>
+            )}
             <span className="text-[14.5px] text-foreground/90">{userName}</span>
           </PopoverTrigger>
           {menuOpen ? (
@@ -3066,6 +3090,8 @@ export function ShellPage() {
                 <GroupAvatar
                   members={activeSnapshot?.members ?? activeGroup?.members ?? []}
                   size={26}
+                  userInitials={initials}
+                  userImage={userImage}
                 />
               ) : active ? (
                 <BotAvatar
@@ -3823,6 +3849,7 @@ export function ShellPage() {
         {accountSettingsOpen ? (
           <AccountSettingsOverlay
             name={userName}
+            initials={initials}
             email={session.data?.user.email}
             usage={usage}
             focusUsage={accountSettingsFocusUsage}
@@ -4120,11 +4147,24 @@ const Transcript = memo(function Transcript({
     () => new Map(messages.map((message) => [message.id, message])),
     [messages],
   );
+  // Markers read the rendered rows: a hidden activity row must not swallow a
+  // marker or invent a gap.
+  const visibleMessages = useMemo(
+    () =>
+      messages.filter((message) =>
+        message.blocks.some((block) => !isHiddenActivityBlock(block, showSteps)),
+      ),
+    [messages, showSteps],
+  );
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
-  const workingLabel =
+  const workingFallback = `${
     workingBotName != null && workingBotName !== ""
       ? t`${workingBotName} is working`
-      : t`Bots are working`;
+      : t`Bots are working`
+  }…`;
+  // One bot only: an activity line names one bot's tool, so it would mislabel a group.
+  const workingLabel =
+    (workingBots.length === 1 ? latestActivityLabel(messages) : undefined) ?? workingFallback;
   const snapToEnd = useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
@@ -4242,69 +4282,86 @@ const Transcript = memo(function Transcript({
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
-        {messages.map((message) => {
-          if (!message.blocks.some((block) => !isHiddenActivityBlock(block, showSteps)))
-            return null;
+        {visibleMessages.map((message, index) => {
           const peerReceipt = isPeerReceiptBlocks(message.blocks);
           const rewound = rewindFromSeq !== null && (message.seq ?? 0) >= rewindFromSeq;
+          const timeMarker = showsTimeMarker(
+            visibleMessages[index - 1]?.createdAt,
+            message.createdAt,
+          )
+            ? threadTimeMarkerLabel(message.createdAt, {
+                locale: i18n.locale || "en",
+                today: t`Today`,
+                yesterday: t`Yesterday`,
+              })
+            : "";
           return (
-            <div
-              key={message.id}
-              data-message-id={message.id}
-              data-rewound={rewound ? "true" : undefined}
-              className={`${
-                peerReceipt ? "relative py-0.5" : "group/message relative pt-9 hover:z-20"
-              }${rewound ? " opacity-40" : ""}`}
-            >
-              {peerReceipt ? null : (
-                <MessageHoverActions
-                  message={message}
-                  onReply={onReply}
-                  onEdit={onEdit}
-                  onReact={onReact}
-                />
-              )}
-              <MessageView
-                artifactTarget={artifactTarget}
-                message={message}
-                canAnswer={message.id === answerableAskMessageId}
-                onOpenBot={onOpenBot}
-                onOpenPeerMessages={onOpenPeerMessages}
-                onAnswer={onAnswer}
-                speakerName={
-                  peerReceipt
-                    ? undefined
-                    : message.role === "bot"
-                      ? memberName?.(message.botId)
-                      : undefined
-                }
-                memberName={memberName}
-                peerBot={peerBot}
-                replyPreview={
-                  message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined
-                }
-                replyToMessageId={message.replyToMessageId}
-                onJumpToMessage={onJumpToMessage}
-                onRefresh={onRefresh}
-                onBotChanged={onBotChanged}
-                onAddRoutine={onAddRoutine}
-                voiceReady={voiceReady}
-                speaking={speakingMessageId === message.id}
-                onSpeak={() => onSpeak(message)}
-              />
-              {!peerReceipt && message.thumbsUp ? (
-                <button
-                  type="button"
-                  aria-label={t`Remove thumbs-up`}
-                  onClick={() => void onReact(message)}
-                  className={`mt-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs ${
-                    message.role === "user" ? "ml-auto block" : ""
-                  }`}
+            <Fragment key={message.id}>
+              {timeMarker ? (
+                <time
+                  dateTime={message.createdAt}
+                  className="self-center pt-4 pb-1 text-[11px] tabular-nums text-muted-foreground"
                 >
-                  👍
-                </button>
+                  {timeMarker}
+                </time>
               ) : null}
-            </div>
+              <div
+                data-message-id={message.id}
+                data-rewound={rewound ? "true" : undefined}
+                className={`${
+                  peerReceipt ? "relative py-0.5" : "group/message relative pt-9 hover:z-20"
+                }${rewound ? " opacity-40" : ""}`}
+              >
+                {peerReceipt ? null : (
+                  <MessageHoverActions
+                    message={message}
+                    onReply={onReply}
+                    onEdit={onEdit}
+                    onReact={onReact}
+                  />
+                )}
+                <MessageView
+                  artifactTarget={artifactTarget}
+                  message={message}
+                  canAnswer={message.id === answerableAskMessageId}
+                  onOpenBot={onOpenBot}
+                  onOpenPeerMessages={onOpenPeerMessages}
+                  onAnswer={onAnswer}
+                  speakerName={
+                    peerReceipt
+                      ? undefined
+                      : message.role === "bot"
+                        ? memberName?.(message.botId)
+                        : undefined
+                  }
+                  memberName={memberName}
+                  peerBot={peerBot}
+                  replyPreview={
+                    message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined
+                  }
+                  replyToMessageId={message.replyToMessageId}
+                  onJumpToMessage={onJumpToMessage}
+                  onRefresh={onRefresh}
+                  onBotChanged={onBotChanged}
+                  onAddRoutine={onAddRoutine}
+                  voiceReady={voiceReady}
+                  speaking={speakingMessageId === message.id}
+                  onSpeak={() => onSpeak(message)}
+                />
+                {!peerReceipt && message.thumbsUp ? (
+                  <button
+                    type="button"
+                    aria-label={t`Remove thumbs-up`}
+                    onClick={() => void onReact(message)}
+                    className={`mt-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs ${
+                      message.role === "user" ? "ml-auto block" : ""
+                    }`}
+                  >
+                    👍
+                  </button>
+                ) : null}
+              </div>
+            </Fragment>
           );
         })}
         {running &&
