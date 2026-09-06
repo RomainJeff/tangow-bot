@@ -6,8 +6,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   diffPluginTrees,
   installPluginFromCheckout,
+  installPluginTree,
   listMarketplaceSkills,
   marketplacesRoot,
+  pluginDirIn,
+  pluginSource,
   readMarketplaceManifest,
   removeInstalledPlugin,
 } from "./marketplace-store.js";
@@ -33,6 +36,8 @@ async function checkout(skillBody = "Steps") {
       plugins: [
         { name: "Writer", source: "./plugins/writer", description: "Writing helpers" },
         { name: "remote", source: { source: "github", repo: "x/y" } },
+        { name: "remote-url", source: { source: "url", url: "https://github.com/x/y.git" } },
+        { name: "gitlab", source: { source: "url", url: "https://gitlab.com/x/y.git" } },
         { name: "escape", source: "./../outside" },
       ],
     }),
@@ -66,11 +71,24 @@ describe("marketplace store", () => {
     expect(manifest.plugins).toEqual([
       {
         name: "writer",
-        source: "./plugins/writer",
+        source: { kind: "local", path: "./plugins/writer" },
         description: "Writing helpers",
         supported: true,
       },
-      { name: "remote", source: null, description: undefined, supported: false },
+      {
+        name: "remote",
+        source: { kind: "github", url: "https://github.com/x/y", ref: undefined },
+        description: undefined,
+        supported: true,
+      },
+      {
+        name: "remote-url",
+        source: { kind: "github", url: "https://github.com/x/y.git", ref: undefined },
+        description: undefined,
+        supported: true,
+      },
+      // Only github.com is allowlisted, so a GitLab remote stays unsupported.
+      { name: "gitlab", source: null, description: undefined, supported: false },
       { name: "escape", source: null, description: undefined, supported: false },
     ]);
   });
@@ -226,6 +244,24 @@ describe("marketplace store", () => {
     ).rejects.toThrow(/both install as "tdd"/);
   });
 
+  it("installs a github-sourced plugin from its own checkout", async () => {
+    // The external repo is the plugin: no marketplace.json, skills sit at its root.
+    const external = await tmp();
+    await mkdir(path.join(external, "skills/brainstorming"), { recursive: true });
+    await writeFile(
+      path.join(external, "skills/brainstorming/SKILL.md"),
+      buildSkillMd({ name: "Brainstorming", description: "Ideas first", body: "Steps" }),
+    );
+    const manifest = await readMarketplaceManifest(await checkout());
+    const source = pluginSource(manifest, "remote");
+    expect(source).toEqual({ kind: "github", url: "https://github.com/x/y", ref: undefined });
+    const root = marketplacesRoot(await tmp(), "space1");
+    await installPluginTree(root, "acme", "remote", pluginDirIn(external, source));
+    expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual([
+      "mkt:acme/remote/brainstorming",
+    ]);
+  });
+
   it("returns an empty list when the root does not exist", async () => {
     expect(await listMarketplaceSkills(path.join(await tmp(), "missing"))).toEqual([]);
   });
@@ -234,7 +270,7 @@ describe("marketplace store", () => {
     const root = marketplacesRoot(await tmp(), "space1");
     const src = await checkout();
     await expect(install(root, src, "nope")).rejects.toThrow(/not in the marketplace/);
-    await expect(install(root, src, "remote")).rejects.toThrow(/unsupported source/);
+    await expect(install(root, src, "gitlab")).rejects.toThrow(/unsupported source/);
     await expect(install(root, src, "escape")).rejects.toThrow(/unsupported source/);
   });
 

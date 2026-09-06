@@ -7,6 +7,11 @@
  * Upstream plugins are not all flat: some declare their skills in `.claude-plugin/plugin.json`
  * and file them under `skills/<category>/<slug>/`. Both shapes are read; the installed tree
  * stays flat.
+ *
+ * A plugin either lives inside the marketplace repository (`source: "./x"`) or in a GitHub
+ * repository of its own (`source: { source: "github" | "url", … }`), which index marketplaces
+ * such as superpowers-marketplace use throughout. This module resolves the source; fetching an
+ * external repository is the caller's job (see marketplaces.ts).
  */
 import { lstatSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
@@ -14,6 +19,7 @@ import path from "node:path";
 import { marketplaceSkillKey, parseSkillMd } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { z } from "zod";
+import { parseGithubRepoUrl } from "./github-tarball.js";
 
 export const SAFE_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 export const MAX_SKILL_MD_BYTES = 100_000;
@@ -36,10 +42,15 @@ const ManifestSchema = z.object({
     .default([]),
 });
 
+/** Where a plugin's files come from. `local` is a path inside the marketplace repository. */
+export type PluginSource =
+  | { kind: "local"; path: string }
+  | { kind: "github"; url: string; ref?: string };
+
 export type MarketplacePlugin = {
   name: string;
-  /** Relative `./…` path inside the repository, null when the source is unsupported. */
-  source: string | null;
+  /** null when the source is neither a `./` path nor a public GitHub repository. */
+  source: PluginSource | null;
   description?: string;
   supported: boolean;
 };
@@ -51,9 +62,38 @@ function safeName(raw: string, what: string): string {
   return name;
 }
 
+const GithubSourceSchema = z.union([
+  z.object({ source: z.literal("github"), repo: z.string(), ref: z.string().optional() }),
+  z.object({ source: z.literal("url"), url: z.string(), ref: z.string().optional() }),
+]);
+
 /**
- * Reads `.claude-plugin/marketplace.json` from an extracted checkout. Only relative `./`
- * sources are installable (design Q6); others are listed but flagged unsupported.
+ * Relative `./` path, or a public GitHub repository (design Q6). Anything else — a git://
+ * remote, a tarball URL, a local absolute path — is unsupported and returns null.
+ */
+function parsePluginSource(source: unknown): PluginSource | null {
+  if (typeof source === "string") {
+    const local = source.startsWith("./") && !source.split("/").includes("..");
+    return local ? { kind: "local", path: source } : null;
+  }
+  const parsed = GithubSourceSchema.safeParse(source);
+  if (!parsed.success) return null;
+  const url =
+    parsed.data.source === "github"
+      ? `https://github.com/${parsed.data.repo}`
+      : parsed.data.url.replace(/^git\+/, "");
+  // parseGithubRepoUrl is the allowlist: it rejects every host but github.com.
+  try {
+    parseGithubRepoUrl(url);
+  } catch {
+    return null;
+  }
+  return { kind: "github", url, ref: parsed.data.ref };
+}
+
+/**
+ * Reads `.claude-plugin/marketplace.json` from an extracted checkout. Plugins whose source is
+ * neither a `./` path nor a public GitHub repository are listed but flagged unsupported.
  */
 export async function readMarketplaceManifest(checkoutDir: string): Promise<MarketplaceManifest> {
   const file = path.join(checkoutDir, ".claude-plugin", "marketplace.json");
@@ -73,14 +113,12 @@ export async function readMarketplaceManifest(checkoutDir: string): Promise<Mark
   return {
     name: safeName(parsed.data.name, "marketplace"),
     plugins: parsed.data.plugins.map((plugin) => {
-      const source = plugin.source;
-      const relative =
-        typeof source === "string" && source.startsWith("./") && !source.split("/").includes("..");
+      const source = parsePluginSource(plugin.source);
       return {
         name: safeName(plugin.name, "plugin"),
-        source: relative ? source : null,
+        source,
         description: plugin.description,
-        supported: relative,
+        supported: source !== null,
       };
     }),
   };
@@ -203,10 +241,30 @@ export async function listMarketplaceSkills(root: string): Promise<MarketplaceSk
 }
 
 /**
- * Copies each skill directory into `<root>/<marketplace>/plugins/<plugin>/skills/<slug>/`
- * (slug lowercased, tree flattened). Validates everything before touching the root, so a
- * rejected plugin leaves the previous install intact.
+ * Resolves a plugin's directory inside an extracted checkout. For a `github` source the
+ * checkout is that repository and the plugin is its root; for a `local` source it is the
+ * marketplace repository and the plugin is the declared subdirectory.
  */
+export function pluginDirIn(checkoutDir: string, source: PluginSource): string {
+  if (source.kind === "github") return path.resolve(checkoutDir);
+  // `source: "./"` means the repository itself is the plugin, so equality is legal here.
+  const dir = path.resolve(checkoutDir, source.path);
+  if (!isInside(checkoutDir, dir)) throw new Error("Plugin source escapes the repository.");
+  return dir;
+}
+
+/** The source of a plugin listed in the manifest, or a user-facing error. */
+export function pluginSource(manifest: MarketplaceManifest, pluginName: string): PluginSource {
+  const plugin = manifest.plugins.find((p) => p.name === pluginName);
+  if (!plugin) throw new Error(`Plugin "${pluginName}" is not in the marketplace.`);
+  if (!plugin.source) {
+    throw new Error(
+      `Plugin "${pluginName}" has an unsupported source (only repository paths and public GitHub repositories are supported).`,
+    );
+  }
+  return plugin.source;
+}
+
 export async function installPluginFromCheckout(
   root: string,
   marketplace: string,
@@ -214,18 +272,21 @@ export async function installPluginFromCheckout(
   manifest: MarketplaceManifest,
   pluginName: string,
 ): Promise<void> {
-  const plugin = manifest.plugins.find((p) => p.name === pluginName);
-  if (!plugin) throw new Error(`Plugin "${pluginName}" is not in the marketplace.`);
-  if (!plugin.source) {
-    throw new Error(
-      `Plugin "${pluginName}" has an unsupported source (only paths inside the repository are supported).`,
-    );
-  }
-  // `source: "./"` means the repository itself is the plugin, so equality is legal here.
-  const pluginDir = path.resolve(checkoutDir, plugin.source);
-  if (!isInside(checkoutDir, pluginDir)) {
-    throw new Error("Plugin source escapes the repository.");
-  }
+  const source = pluginSource(manifest, pluginName);
+  await installPluginTree(root, marketplace, pluginName, pluginDirIn(checkoutDir, source));
+}
+
+/**
+ * Copies each skill directory into `<root>/<marketplace>/plugins/<plugin>/skills/<slug>/`
+ * (slug lowercased, tree flattened). Validates everything before touching the root, so a
+ * rejected plugin leaves the previous install intact.
+ */
+export async function installPluginTree(
+  root: string,
+  marketplace: string,
+  pluginName: string,
+  pluginDir: string,
+): Promise<void> {
   const skills = await resolveSkillDirs(pluginDir);
   if (skills.length === 0) throw new Error(`Plugin "${pluginName}" has no skills/ directory.`);
   for (const { slug, dir } of skills) {

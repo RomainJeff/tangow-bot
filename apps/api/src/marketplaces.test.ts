@@ -9,34 +9,47 @@ import { createMarketplacesService } from "./marketplaces.js";
 // ponytail: `tar` is not resolvable from apps/api; fake the two network calls and materialise
 // an in-memory repo tree instead of a tarball. The store/diff/manifest code runs for real.
 type Tree = Record<string, string>;
+/** Keyed by commit sha, or by `owner/repo@sha` for a plugin with its own repository. */
 const repos = new Map<string, Tree>();
+/** Per-repo HEAD, falling back to `headSha` (the marketplace index). */
+const heads = new Map<string, string>();
 let headSha = "";
+const repoKey = (input: { owner: string; repo: string }) => `${input.owner}/${input.repo}`;
 vi.mock("@rakazo/adapters", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@rakazo/adapters")>();
   return {
     ...actual,
-    resolveGithubCommit: vi.fn(async () => headSha),
-    downloadGithubTarball: vi.fn(async (input: { commit: string }, destDir: string) => {
-      const tree = repos.get(input.commit);
-      if (!tree) throw new Error("GitHub tarball download failed (404).");
-      for (const [rel, content] of Object.entries(tree)) {
-        await mkdir(path.dirname(path.join(destDir, rel)), { recursive: true });
-        await writeFile(path.join(destDir, rel), content);
-      }
-    }),
+    resolveGithubCommit: vi.fn(
+      async (input: { owner: string; repo: string }) => heads.get(repoKey(input)) ?? headSha,
+    ),
+    downloadGithubTarball: vi.fn(
+      async (input: { owner: string; repo: string; commit: string }, destDir: string) => {
+        const tree = repos.get(`${repoKey(input)}@${input.commit}`) ?? repos.get(input.commit);
+        if (!tree) throw new Error("GitHub tarball download failed (404).");
+        for (const [rel, content] of Object.entries(tree)) {
+          await mkdir(path.dirname(path.join(destDir, rel)), { recursive: true });
+          await writeFile(path.join(destDir, rel), content);
+        }
+      },
+    ),
   };
 });
 
 const SHA1 = "1".repeat(40);
 const SHA2 = "2".repeat(40);
+const EXT1 = "a".repeat(40);
+const EXT2 = "b".repeat(40);
 const skill = (name: string, body: string) => `---\nname: ${name}\ndescription: d\n---\n${body}`;
 const manifest = JSON.stringify({
   name: "Acme",
   plugins: [
     { name: "alpha", source: "./plugins/alpha", description: "A" },
     { name: "remote", source: { source: "github", repo: "x/y" } },
+    { name: "gitlab", source: { source: "url", url: "https://gitlab.com/x/y.git" } },
   ],
 });
+/** The external repo is the plugin: no manifest, skills at its root. */
+const ext = (body: string): Tree => ({ "skills/solo/SKILL.md": skill("solo", body) });
 const v1: Tree = {
   ".claude-plugin/marketplace.json": manifest,
   "plugins/alpha/skills/one/SKILL.md": skill("one", "v1"),
@@ -122,8 +135,12 @@ describe("marketplaces service", () => {
   beforeEach(async () => {
     dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-api-mkt-"));
     repos.clear();
+    heads.clear();
     repos.set(SHA1, v1);
     repos.set(SHA2, v2);
+    repos.set(`x/y@${EXT1}`, ext("ext-v1"));
+    repos.set(`x/y@${EXT2}`, ext("ext-v2"));
+    heads.set("x/y", EXT1);
     headSha = SHA1;
     prisma = { spaceMarketplace: table([]), skillSetting: table([]), botSkill: table([]) };
   });
@@ -166,10 +183,11 @@ describe("marketplaces service", () => {
     const { id } = await m.add(actor, { url: URL_ });
     expect(await m.plugins(actor, id)).toEqual([
       { name: "alpha", description: "A", supported: true, installed: false },
-      { name: "remote", description: undefined, supported: false, installed: false },
+      { name: "remote", description: undefined, supported: true, installed: false },
+      { name: "gitlab", description: undefined, supported: false, installed: false },
     ]);
 
-    await expect(m.installPlugin(actor, id, "remote")).rejects.toMatchObject({
+    await expect(m.installPlugin(actor, id, "gitlab")).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
     const installed = await m.installPlugin(actor, id, "alpha");
@@ -178,6 +196,41 @@ describe("marketplaces service", () => {
     expect((await listMarketplaceSkills(root())).map((s) => s.id)).toEqual(["mkt:acme/alpha/one"]);
 
     await expect(m.plugins(other, id)).rejects.toBeInstanceOf(IsolationError);
+  });
+
+  it("installs a plugin from its own repository and pins that repository's commit", async () => {
+    const m = service();
+    const { id } = await m.add(actor, { url: URL_ });
+    const row = await m.installPlugin(actor, id, "remote");
+    // The DTO stays a list of names; the pin lives in the JSON column.
+    expect(row.installedPlugins).toEqual(["remote"]);
+    expect(prisma.spaceMarketplace._store[0]?.installedPlugins).toEqual([
+      { name: "remote", commit: EXT1 },
+    ]);
+    expect((await listMarketplaceSkills(root())).map((s) => s.id)).toEqual([
+      "mkt:acme/remote/solo",
+    ]);
+
+    // The index is unchanged, but the plugin's own repo moved: that is still an update.
+    heads.set("x/y", EXT2);
+    const check = await m.checkUpdate(actor, id);
+    expect(check).toMatchObject({ commit: SHA1, upToDate: false });
+    expect(check.changes).toEqual([
+      expect.objectContaining({
+        path: "remote/solo/SKILL.md",
+        status: "modified",
+        before: skill("solo", "ext-v1"),
+        after: skill("solo", "ext-v2"),
+      }),
+    ]);
+
+    await m.applyUpdate(actor, id, SHA1);
+    expect(prisma.spaceMarketplace._store[0]?.installedPlugins).toEqual([
+      { name: "remote", commit: EXT2 },
+    ]);
+    expect(
+      await readFile(path.join(root(), "acme/plugins/remote/skills/solo/SKILL.md"), "utf8"),
+    ).toBe(skill("solo", "ext-v2"));
   });
 
   it("removePlugin deletes the folder and purges mkt:<m>/<p>/ access rows", async () => {

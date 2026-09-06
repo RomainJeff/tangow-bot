@@ -11,10 +11,13 @@ import {
   createSafeRemoteFetch,
   diffPluginTrees,
   downloadGithubTarball,
-  installPluginFromCheckout,
+  installPluginTree,
   type MarketplaceManifest,
   marketplacesRoot,
+  type PluginSource,
   parseGithubRepoUrl,
+  pluginDirIn,
+  pluginSource,
   readMarketplaceManifest,
   removeInstalledPlugin,
   resolveGithubCommit,
@@ -46,8 +49,32 @@ function badRequest(error: unknown): never {
   });
 }
 
-const installedPlugins = (row: Row): string[] =>
-  Array.isArray(row.installedPlugins) ? (row.installedPlugins as string[]) : [];
+/**
+ * A plugin fetched from its own GitHub repository carries its own pinned commit: the
+ * marketplace row's `commit` only pins the index. Older rows stored bare names, so both
+ * shapes are read.
+ */
+type Installed = { name: string; commit?: string };
+
+const installedPlugins = (row: Row): Installed[] =>
+  Array.isArray(row.installedPlugins)
+    ? row.installedPlugins.flatMap((entry): Installed[] => {
+        if (typeof entry === "string") return [{ name: entry }];
+        if (entry && typeof entry === "object" && "name" in entry) {
+          const { name, commit } = entry as { name: unknown; commit?: unknown };
+          if (typeof name === "string") {
+            return [{ name, commit: typeof commit === "string" ? commit : undefined }];
+          }
+        }
+        return [];
+      })
+    : [];
+
+const installedNames = (row: Row): string[] => installedPlugins(row).map((p) => p.name);
+
+/** Prisma rejects `undefined` inside a Json value, so an unpinned plugin stays a bare name. */
+const entry = (name: string, commit?: string): Installed => (commit ? { name, commit } : { name });
+const byName = (a: Installed, b: Installed) => a.name.localeCompare(b.name);
 
 const toDto = (row: Row): SpaceMarketplace => ({
   id: row.id,
@@ -55,7 +82,7 @@ const toDto = (row: Row): SpaceMarketplace => ({
   url: row.url,
   ref: row.ref,
   commit: row.commit,
-  installedPlugins: installedPlugins(row),
+  installedPlugins: installedNames(row),
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });
@@ -66,11 +93,11 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
   const dirOf = (actor: Actor, row: Row) => path.join(root(actor), row.name);
 
   /** Pins `ref` (unless `commit` is given) and extracts the repo into a temp dir the caller must rm. */
-  async function checkout(
+  async function download(
     url: string,
     ref: string,
     commit?: string,
-  ): Promise<{ dir: string; commit: string; manifest: MarketplaceManifest }> {
+  ): Promise<{ dir: string; commit: string }> {
     const safe = deps.fetch
       ? Object.assign(deps.fetch.bind(globalThis), { close: async () => {} })
       : createSafeRemoteFetch();
@@ -79,12 +106,53 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       const repo = parseGithubRepoUrl(url);
       const sha = commit ?? (await resolveGithubCommit({ ...repo, ref }, safe));
       await downloadGithubTarball({ ...repo, commit: sha }, dir, { fetch: safe });
-      return { dir, commit: sha, manifest: await readMarketplaceManifest(dir) };
+      return { dir, commit: sha };
     } catch (error) {
       await rm(dir, { recursive: true, force: true });
       badRequest(error);
     } finally {
       await safe.close().catch(() => undefined);
+    }
+  }
+
+  async function checkout(
+    url: string,
+    ref: string,
+    commit?: string,
+  ): Promise<{ dir: string; commit: string; manifest: MarketplaceManifest }> {
+    const { dir, commit: sha } = await download(url, ref, commit);
+    try {
+      return { dir, commit: sha, manifest: await readMarketplaceManifest(dir) };
+    } catch (error) {
+      await rm(dir, { recursive: true, force: true });
+      badRequest(error);
+    }
+  }
+
+  /**
+   * Installs one plugin into `targetRoot` from wherever it lives, returning the commit it was
+   * pinned to when the plugin has a repository of its own. `pin` replays an earlier install
+   * instead of following the ref.
+   */
+  async function installOne(
+    targetRoot: string,
+    row: Row,
+    checkoutDir: string,
+    manifest: MarketplaceManifest,
+    plugin: string,
+    pin?: string,
+  ): Promise<string | undefined> {
+    const source: PluginSource = pluginSource(manifest, plugin);
+    if (source.kind === "local") {
+      await installPluginTree(targetRoot, row.name, plugin, pluginDirIn(checkoutDir, source));
+      return undefined;
+    }
+    const external = await download(source.url, source.ref ?? "HEAD", pin);
+    try {
+      await installPluginTree(targetRoot, row.name, plugin, pluginDirIn(external.dir, source));
+      return external.commit;
+    } finally {
+      await rm(external.dir, { recursive: true, force: true });
     }
   }
 
@@ -100,7 +168,7 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
     await prisma.botSkill.deleteMany({ where });
   }
 
-  async function setInstalled(row: Row, plugins: string[]): Promise<SpaceMarketplace> {
+  async function setInstalled(row: Row, plugins: Installed[]): Promise<SpaceMarketplace> {
     return toDto(
       await prisma.spaceMarketplace.update({
         where: { id: row.id },
@@ -146,7 +214,7 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
     async plugins(actor: Actor, marketplaceId: string): Promise<MarketplacePlugin[]> {
       const row = await owned(actor, marketplaceId);
       const manifest = await readMarketplaceManifest(dirOf(actor, row)).catch(badRequest);
-      const installed = new Set(installedPlugins(row));
+      const installed = new Set(installedNames(row));
       return manifest.plugins.map((p) => ({
         name: p.name,
         description: p.description,
@@ -162,14 +230,14 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
     ): Promise<SpaceMarketplace> {
       const row = await owned(actor, marketplaceId);
       const { dir, manifest } = await checkout(row.url, row.ref, row.commit);
+      let commit: string | undefined;
       try {
-        await installPluginFromCheckout(root(actor), row.name, dir, manifest, plugin).catch(
-          badRequest,
-        );
+        commit = await installOne(root(actor), row, dir, manifest, plugin).catch(badRequest);
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
-      return setInstalled(row, [...new Set([...installedPlugins(row), plugin])].sort());
+      const kept = installedPlugins(row).filter((p) => p.name !== plugin);
+      return setInstalled(row, [...kept, entry(plugin, commit)].sort(byName));
     },
 
     async removePlugin(
@@ -182,7 +250,7 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       await forgetSkillRows(actor, `mkt:${row.name}/${plugin}/`);
       return setInstalled(
         row,
-        installedPlugins(row).filter((p) => p !== plugin),
+        installedPlugins(row).filter((p) => p.name !== plugin),
       );
     },
 
@@ -192,21 +260,23 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       const { dir, commit, manifest } = await checkout(row.url, row.ref);
       const staging = await mkdtemp(path.join(tmpdir(), "rakazo-mkt-stage-"));
       try {
-        if (commit === row.commit) return { commit, upToDate: true, changes: [] };
+        const installed = installedPlugins(row);
+        // A plugin with its own repository can drift while the index stays put, so its files
+        // have to be fetched to answer; a purely local marketplace is settled by the sha alone.
+        const external = installed.some((p) => p.commit !== undefined);
+        if (commit === row.commit && !external) return { commit, upToDate: true, changes: [] };
         const changes: MarketplaceFileChange[] = [];
-        for (const plugin of installedPlugins(row)) {
+        for (const { name } of installed) {
           // Plugin gone or broken upstream: staging stays empty and every file shows as removed.
-          await installPluginFromCheckout(staging, row.name, dir, manifest, plugin).catch(
-            () => undefined,
-          );
-          const skills = ["plugins", plugin, "skills"];
+          await installOne(staging, row, dir, manifest, name).catch(() => undefined);
+          const skills = ["plugins", name, "skills"];
           const diff = await diffPluginTrees(
             path.join(dirOf(actor, row), ...skills),
             path.join(staging, row.name, ...skills),
           );
-          changes.push(...diff.map((c) => ({ ...c, path: `${plugin}/${c.path}` })));
+          changes.push(...diff.map((c) => ({ ...c, path: `${name}/${c.path}` })));
         }
-        return { commit, upToDate: false, changes };
+        return { commit, upToDate: commit === row.commit && changes.length === 0, changes };
       } finally {
         await Promise.all([
           rm(dir, { recursive: true, force: true }),
@@ -222,21 +292,25 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
     ): Promise<SpaceMarketplace> {
       const row = await owned(actor, marketplaceId);
       const { dir, manifest } = await checkout(row.url, row.ref, commit);
+      const pinned: Installed[] = [];
       try {
         await writeFile(
           path.join(dirOf(actor, row), MANIFEST),
           await readFile(path.join(dir, MANIFEST)),
         );
-        for (const plugin of installedPlugins(row)) {
-          await installPluginFromCheckout(root(actor), row.name, dir, manifest, plugin).catch(
-            badRequest,
-          );
+        for (const { name } of installedPlugins(row)) {
+          pinned.push(entry(name, await installOne(root(actor), row, dir, manifest, name)));
         }
+      } catch (error) {
+        badRequest(error);
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
       return toDto(
-        await prisma.spaceMarketplace.update({ where: { id: row.id }, data: { commit } }),
+        await prisma.spaceMarketplace.update({
+          where: { id: row.id },
+          data: { commit, installedPlugins: pinned.sort(byName) },
+        }),
       );
     },
 
