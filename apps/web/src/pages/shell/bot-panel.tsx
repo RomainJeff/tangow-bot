@@ -41,6 +41,9 @@ const ScratchpadSection = lazy(() =>
 const KnowledgeSection = lazy(() =>
   import("../KnowledgeSection").then((module) => ({ default: module.KnowledgeSection })),
 );
+const BotSkillsSection = lazy(() =>
+  import("../KnowledgeSection").then((module) => ({ default: module.BotSkillsSection })),
+);
 
 const fieldLabelClass = "mt-4 block text-[14px] text-muted-foreground";
 
@@ -462,6 +465,9 @@ export function BotSettings({
         </Suspense>
         <Suspense fallback={null}>
           <KnowledgeSection botId={bot.id} />
+        </Suspense>
+        <Suspense fallback={null}>
+          <BotSkillsSection botId={bot.id} />
         </Suspense>
         <label htmlFor={`${ids}-model`} className={fieldLabelClass}>
           <Trans>Model</Trans>

@@ -27,12 +27,12 @@ function rowClass(open: boolean): string {
   return `w-full rounded-[11px] px-2.5 py-2.5 text-start ${open ? "bg-muted" : "hover:bg-muted"}`;
 }
 
-type KnowledgeTab = "memory" | "skills" | "files";
+type KnowledgeTab = "memory" | "files";
 
 /**
- * What the agent knows, editable: its own memory document and the space's
- * agent skills. Space-wide memory lives in the Memory settings overlay.
- * Rides entirely on the existing memory.* and agentSkills.* RPCs.
+ * What the agent knows, editable: its own memory document and its working
+ * files. Space-wide memory lives in the Memory settings overlay; skills sit
+ * in their own section. Rides entirely on the existing memory.* RPCs.
  */
 export function KnowledgeSection({ botId }: { botId: string }) {
   const [tab, setTab] = useState<KnowledgeTab>("memory");
@@ -45,7 +45,6 @@ export function KnowledgeSection({ botId }: { botId: string }) {
         {(
           [
             { value: "memory", label: <Trans>Memory</Trans> },
-            { value: "skills", label: <Trans>Skills</Trans> },
             { value: "files", label: <Trans>Files</Trans> },
           ] satisfies Array<{ value: KnowledgeTab; label: ReactNode }>
         ).map((option) => (
@@ -71,8 +70,19 @@ export function KnowledgeSection({ botId }: { botId: string }) {
           testId="bot-knowledge-memory"
         />
       ) : null}
-      {tab === "skills" ? <AgentSkills botId={botId} /> : null}
       {tab === "files" ? <AgentFiles key={botId} botId={botId} /> : null}
+    </div>
+  );
+}
+
+/** The agent's own skills section, sibling to Knowledge in the settings panel. */
+export function BotSkillsSection({ botId }: { botId: string }) {
+  return (
+    <div className="mt-6" data-testid="bot-skills">
+      <div className="mb-3 text-[14px] text-muted-foreground">
+        <Trans>Skills</Trans>
+      </div>
+      <AgentSkills botId={botId} />
     </div>
   );
 }
@@ -254,8 +264,8 @@ Steps the agent should follow.
 
 /**
  * The space's skill catalog. Space mode (no botId) manages each skill's reach:
- * disabled, every agent, or a picked set. Bot mode shows the same catalog with
- * one toggle per skill for that agent, so skills currently off can be turned on.
+ * disabled, every agent, or a picked set. Bot mode lists only the skills that
+ * agent can install — globally disabled ones are out — with one toggle each.
  */
 export function AgentSkills({ botId }: { botId?: string } = {}) {
   const { t } = useLingui();
@@ -430,6 +440,8 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
 
   const needle = query.trim().toLowerCase();
   const shown = skills.filter((entry) => {
+    // Bot mode only offers what the agent can actually switch on.
+    if (botId && entry.availability === "disabled") return false;
     if (needle && !`${entry.name} ${entry.description}`.toLowerCase().includes(needle))
       return false;
     if (filter === "active") return entry.availability !== "disabled";
@@ -493,26 +505,28 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
             data-testid="bot-knowledge-skill-search"
             className="ms-auto h-8 w-40 flex-1 sm:max-w-56"
           />
-          <NativeSelect
-            size="sm"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            aria-label={t`Filter skills`}
-            data-testid="bot-knowledge-skill-filter"
-          >
-            <NativeSelectOption value="all">{t`All`}</NativeSelectOption>
-            <NativeSelectOption value="active">{t`Active`}</NativeSelectOption>
-            <NativeSelectOption value="disabled">{t`Disabled`}</NativeSelectOption>
-            {bots.length > 0 ? (
-              <NativeSelectOptGroup label={t`Agents`}>
-                {bots.map((bot) => (
-                  <NativeSelectOption key={bot.id} value={`bot:${bot.id}`}>
-                    {bot.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelectOptGroup>
-            ) : null}
-          </NativeSelect>
+          {botId ? null : (
+            <NativeSelect
+              size="sm"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              aria-label={t`Filter skills`}
+              data-testid="bot-knowledge-skill-filter"
+            >
+              <NativeSelectOption value="all">{t`All`}</NativeSelectOption>
+              <NativeSelectOption value="active">{t`Active`}</NativeSelectOption>
+              <NativeSelectOption value="disabled">{t`Disabled`}</NativeSelectOption>
+              {bots.length > 0 ? (
+                <NativeSelectOptGroup label={t`Agents`}>
+                  {bots.map((bot) => (
+                    <NativeSelectOption key={bot.id} value={`bot:${bot.id}`}>
+                      {bot.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelectOptGroup>
+              ) : null}
+            </NativeSelect>
+          )}
         </div>
       ) : null}
       {shown.length === 0 && !editorOpen && !error ? (
@@ -524,7 +538,6 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
         ? shown.map((entry) => {
             // Builtins are always on for every agent; only the rest carry access controls.
             const controlled = entry.source !== "builtin";
-            const disabled = entry.availability === "disabled";
             return (
               <div
                 key={entry.id}
@@ -557,18 +570,15 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
                     </span>
                   </button>
                   {botId && controlled ? (
-                    <span className="flex shrink-0 items-center gap-2 text-[12px] text-muted-foreground/80">
-                      {disabled ? <Trans>Disabled for all agents in Skills</Trans> : null}
-                      <Switch
-                        size="sm"
-                        aria-label={entry.name}
-                        checked={entry.visibleBotIds.includes(botId)}
-                        disabled={disabled}
-                        onCheckedChange={(enabled) =>
-                          void setAccess(entry, { bots: [{ botId, enabled }] })
-                        }
-                      />
-                    </span>
+                    <Switch
+                      size="sm"
+                      className="shrink-0"
+                      aria-label={entry.name}
+                      checked={entry.visibleBotIds.includes(botId)}
+                      onCheckedChange={(enabled) =>
+                        void setAccess(entry, { bots: [{ botId, enabled }] })
+                      }
+                    />
                   ) : null}
                 </div>
                 {!botId && controlled ? (

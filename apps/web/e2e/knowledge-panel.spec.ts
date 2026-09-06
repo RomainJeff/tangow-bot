@@ -57,6 +57,16 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   const settings = page.getByTestId("bot-settings");
   await expect(settings.getByRole("button", { name: "Save", exact: true })).toBeVisible();
   await settings.getByText("Advanced", { exact: true }).click();
+  /** Remount the settings panel so its sections refetch after an out-of-band RPC. */
+  const reopenAdvanced = async () => {
+    await page.reload();
+    await page
+      .locator("main")
+      .getByRole("button", { name: /^Chief/ })
+      .click();
+    await expect(settings.getByRole("button", { name: "Save", exact: true })).toBeVisible();
+    await settings.getByText("Advanced", { exact: true }).click();
+  };
   const knowledge = settings.getByTestId("bot-knowledge");
   await expect(knowledge).toBeVisible();
   await expect(knowledge.getByText("Knowledge", { exact: true })).toBeVisible();
@@ -77,11 +87,13 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await expect(botDocEditor).toHaveValue(new RegExp(botMarker));
   await botMemory.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  // Skills: create one through the editor, reopen it, edit, then delete it.
-  // Builtin catalog is currently empty; user skills still cover create/edit/delete.
-  await knowledge.getByRole("button", { name: "Skills", exact: true }).click();
-  await knowledge.getByRole("button", { name: "New skill", exact: true }).click();
-  const editor = knowledge.locator("textarea");
+  // Skills: its own section next to Knowledge. Create one through the editor,
+  // reopen it, edit, then delete it. Builtin catalog is currently empty; user
+  // skills still cover create/edit/delete.
+  const skillsSection = settings.getByTestId("bot-skills");
+  await expect(skillsSection.getByText("Skills", { exact: true })).toBeVisible();
+  await skillsSection.getByRole("button", { name: "New skill", exact: true }).click();
+  const editor = skillsSection.locator("textarea");
   await editor.fill(
     [
       "---",
@@ -93,14 +105,14 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     ].join("\n"),
   );
   await captureScreenshot(page, testInfo, "81-knowledge-skill-editor");
-  await knowledge.getByRole("button", { name: "Save", exact: true }).click();
-  const skillRow = knowledge.getByRole("button", { name: /greet-politely/ });
+  await skillsSection.getByRole("button", { name: "Save", exact: true }).click();
+  const skillRow = skillsSection.getByRole("button", { name: /greet-politely/ });
   await expect(skillRow).toBeVisible();
-  await expect(knowledge.getByText("Say hello before anything else.")).toBeVisible();
+  await expect(skillsSection.getByText("Say hello before anything else.")).toBeVisible();
   await captureScreenshot(page, testInfo, "82-knowledge-skill-listed");
 
   // Import: a plain-text .skill lands in the list like a hand-made skill.
-  await knowledge.getByTestId("bot-knowledge-skill-import").setInputFiles({
+  await skillsSection.getByTestId("bot-knowledge-skill-import").setInputFiles({
     name: "imported.skill",
     mimeType: "application/octet-stream",
     buffer: Buffer.from(
@@ -109,7 +121,7 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
       ),
     ),
   });
-  await expect(knowledge.getByRole("button", { name: /imported-skill/ })).toBeVisible();
+  await expect(skillsSection.getByRole("button", { name: /imported-skill/ })).toBeVisible();
 
   // Scoping: a hand-made skill is visible to every agent; the agent's own switch
   // writes a per-bot override that hides it from Chief's catalog only.
@@ -120,7 +132,7 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   expect(before?.availability).toBe("all");
   expect(before?.visibleBotIds).toContain(chiefId);
 
-  const skillCard = knowledge
+  const skillCard = skillsSection
     .getByTestId("bot-knowledge-skill")
     .filter({ hasText: "greet-politely" });
   const chiefSwitch = skillCard.getByRole("switch", { name: "greet-politely" });
@@ -138,17 +150,17 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     .poll(async () => (await listFor(chiefId)).some((entry) => entry.name === "greet-politely"))
     .toBe(true);
 
-  // A skill disabled for every agent cannot be switched on from here.
+  // A skill disabled for every agent is not installable, so it leaves this list.
+  // The section reads the catalog on mount, hence the reopen.
   await rpc(page, "agentSkills/setAccess", {
     skillId: before?.id,
     availability: "disabled",
   });
-  await knowledge.getByRole("button", { name: "Memory", exact: true }).click();
-  await knowledge.getByRole("button", { name: "Skills", exact: true }).click();
-  await expect(chiefSwitch).toHaveAttribute("aria-checked", "false");
-  await expect(chiefSwitch).toBeDisabled();
-  await expect(skillCard.getByText("Disabled for all agents in Skills")).toBeVisible();
+  await reopenAdvanced();
+  await expect(skillCard).toHaveCount(0);
   await rpc(page, "agentSkills/setAccess", { skillId: before?.id, availability: "all" });
+  await reopenAdvanced();
+  await expect(skillCard).toHaveCount(1);
 
   await skillRow.click();
   await expect(editor).toHaveValue(/Always open with a greeting/);
@@ -162,11 +174,11 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
       "Open with a warm greeting.",
     ].join("\n"),
   );
-  await knowledge.getByRole("button", { name: "Save", exact: true }).click();
+  await skillsSection.getByRole("button", { name: "Save", exact: true }).click();
   await skillRow.click();
   await expect(editor).toHaveValue(/warm greeting/);
-  await knowledge.getByRole("button", { name: "Delete", exact: true }).click();
-  await knowledge.getByRole("button", { name: "Confirm delete", exact: true }).click();
+  await skillsSection.getByRole("button", { name: "Delete", exact: true }).click();
+  await skillsSection.getByRole("button", { name: "Confirm delete", exact: true }).click();
   await expect(skillRow).toBeHidden();
 
   // Files: the agent's working folder, browsable down to a readable file.
