@@ -2998,31 +2998,33 @@ export function ShellPage() {
             </div>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={() => setPluginsOpen(true)}
-          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-background"
-        >
-          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-muted text-foreground/75">
-            <Puzzle size={15} strokeWidth={1.7} />
-          </span>
-          <span className="text-[14.5px] text-foreground/90">
-            <Trans>Integrations</Trans>
-          </span>
-        </button>
-        <button
-          type="button"
-          data-testid="open-skills"
-          onClick={() => setSkillsOpen(true)}
-          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-background"
-        >
-          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-muted text-foreground/75">
-            <Sparkles size={15} strokeWidth={1.7} />
-          </span>
-          <span className="text-[14.5px] text-foreground/90">
-            <Trans>Skills</Trans>
-          </span>
-        </button>
+        <div className="mx-3 mb-1 flex items-center gap-1 pt-2">
+          <button
+            type="button"
+            onClick={() => setPluginsOpen(true)}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-[11px] px-2.5 py-2 hover:bg-background"
+          >
+            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-muted text-foreground/75">
+              <Puzzle size={15} strokeWidth={1.7} />
+            </span>
+            <span className="truncate text-[14.5px] text-foreground/90">
+              <Trans>Integrations</Trans>
+            </span>
+          </button>
+          <button
+            type="button"
+            data-testid="open-skills"
+            onClick={() => setSkillsOpen(true)}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-[11px] px-2.5 py-2 hover:bg-background"
+          >
+            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-muted text-foreground/75">
+              <Sparkles size={15} strokeWidth={1.7} />
+            </span>
+            <span className="truncate text-[14.5px] text-foreground/90">
+              <Trans>Skills</Trans>
+            </span>
+          </button>
+        </div>
         <Popover open={menuOpen} onOpenChange={setMenuOpen}>
           <PopoverTrigger
             data-testid="user-menu-trigger"
