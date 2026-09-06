@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { asSkillAvailability, isSkillVisible, userSkillKey } from "./skill-access.js";
+import {
+  asSkillAvailability,
+  defaultSkillAvailability,
+  isMarketplaceSkillKey,
+  isSkillVisible,
+  marketplaceSkillKey,
+  userSkillKey,
+} from "./skill-access.js";
 
 describe("skill access", () => {
   it("derives a stable key from the case-insensitive unique name", () => {
@@ -17,6 +24,17 @@ describe("skill access", () => {
     expect(isSkillVisible({ availability: "all", override: false })).toBe(false);
     expect(isSkillVisible({ availability: "selected", override: true })).toBe(true);
     expect(isSkillVisible({ availability: "selected", override: null })).toBe(false);
+  });
+
+  it("builds and recognises marketplace keys", () => {
+    expect(marketplaceSkillKey("acme", "writer", "blog-post")).toBe("mkt:acme/writer/blog-post");
+    expect(isMarketplaceSkillKey("mkt:a/b/c")).toBe(true);
+    expect(isMarketplaceSkillKey("user:a")).toBe(false);
+  });
+
+  it("hides marketplace skills by default, keeps user skills visible", () => {
+    expect(defaultSkillAvailability("mkt:a/b/c")).toBe("selected");
+    expect(defaultSkillAvailability("user:x")).toBe("all");
   });
 
   it("coerces unknown availability strings to all", () => {

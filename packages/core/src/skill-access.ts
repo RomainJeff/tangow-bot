@@ -22,3 +22,17 @@ export function isSkillVisible(input: {
   if (typeof input.override === "boolean") return input.override;
   return (input.availability ?? "all") === "all";
 }
+
+/** Marketplace skills (phase 3): `mkt:<marketplace>/<plugin>/<slug>`, all three already lowercase. */
+export function marketplaceSkillKey(marketplace: string, plugin: string, slug: string): string {
+  return `mkt:${marketplace}/${plugin}/${slug}`;
+}
+
+export function isMarketplaceSkillKey(key: string): boolean {
+  return key.startsWith("mkt:");
+}
+
+/** Marketplace skills start hidden (design Q8); user skills stay visible to every bot. */
+export function defaultSkillAvailability(key: string): SkillAvailability {
+  return isMarketplaceSkillKey(key) ? "selected" : "all";
+}
