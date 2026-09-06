@@ -61,6 +61,19 @@ const v2: Tree = {
   "plugins/alpha/skills/two/SKILL.md": skill("two", "new"),
 };
 
+const SKILLS_URL = "https://github.com/vercel-labs/agent-skills";
+const SK1 = "3".repeat(40);
+const SK2 = "4".repeat(40);
+/** skills.sh layout: no manifest. `.claude/skills/tdd` is shadowed by `skills/tdd`. */
+const skillsV1: Tree = {
+  "skills/tdd/SKILL.md": skill("tdd", "red green"),
+  "skills/review/SKILL.md": skill("review", "look twice"),
+  ".claude/skills/tdd/SKILL.md": skill("tdd", "shadowed"),
+  "README.md": "docs",
+};
+/** `review` vanished upstream. */
+const skillsV2: Tree = { "skills/tdd/SKILL.md": skill("tdd", "red green refactor") };
+
 type Row = Record<string, unknown>;
 const matches = (row: Row, where: Row) =>
   Object.entries(where).every(([key, value]) =>
@@ -139,6 +152,8 @@ describe("marketplaces service", () => {
     heads.clear();
     repos.set(SHA1, v1);
     repos.set(SHA2, v2);
+    repos.set(SK1, skillsV1);
+    repos.set(SK2, skillsV2);
     repos.set(`x/y@${EXT1}`, ext("ext-v1"));
     repos.set(`x/y@${EXT2}`, ext("ext-v2"));
     heads.set("x/y", EXT1);
@@ -314,5 +329,42 @@ describe("marketplaces service", () => {
     expect(prisma.spaceMarketplace._store).toEqual([]);
     expect(prisma.skillSetting._store).toEqual([]);
     expect(prisma.botSkill._store.map((r) => r.skillKey)).toEqual(["user:keep"]);
+  });
+
+  describe("skills repositories (phase 4)", () => {
+    it("adds a repository without a manifest as a `skills` marketplace named <owner>-<repo>", async () => {
+      headSha = SK1;
+      const m = service();
+      const added = await m.add(actor, { url: SKILLS_URL });
+      expect(added).toMatchObject({
+        name: "vercel-labs-agent-skills",
+        kind: "skills",
+        commit: SK1,
+      });
+      expect(prisma.spaceMarketplace._store[0]?.kind).toBe("skills");
+      const written = JSON.parse(
+        await readFile(
+          path.join(root(), "vercel-labs-agent-skills/.claude-plugin/marketplace.json"),
+          "utf8",
+        ),
+      );
+      expect(written.plugins).toEqual([
+        { name: "review", source: "./skills/review", description: "d" },
+        { name: "tdd", source: "./skills/tdd", description: "d" },
+      ]);
+      expect(await m.plugins(actor, added.id)).toEqual([
+        { name: "review", description: "d", supported: true, installed: false },
+        { name: "tdd", description: "d", supported: true, installed: false },
+      ]);
+    });
+
+    it("refuses a repository with neither manifest nor SKILL.md", async () => {
+      headSha = SK1;
+      repos.set(SK1, { "README.md": "nothing" });
+      await expect(service().add(actor, { url: SKILLS_URL })).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Repository has neither .claude-plugin/marketplace.json nor any SKILL.md.",
+      });
+    });
   });
 });

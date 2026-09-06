@@ -3,7 +3,7 @@
  * SpaceMarketplace row is the lock (url, ref, pinned commit, installed plugins); the files live
  * under DATA_DIR/skills/marketplaces/<spaceId>/<marketplace>/ (see marketplace-store.ts).
  */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ORPCError } from "@orpc/server";
@@ -11,7 +11,10 @@ import {
   createSafeRemoteFetch,
   diffPluginTrees,
   downloadGithubTarball,
+  type GithubRepo,
   installPluginTree,
+  loadOrSynthesizeManifest,
+  type MarketplaceKind,
   type MarketplaceManifest,
   marketplacesRoot,
   type PluginSource,
@@ -98,7 +101,7 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
     url: string,
     ref: string,
     commit?: string,
-  ): Promise<{ dir: string; commit: string }> {
+  ): Promise<{ dir: string; commit: string; repo: GithubRepo }> {
     const safe = deps.fetch
       ? Object.assign(deps.fetch.bind(globalThis), { close: async () => {} })
       : createSafeRemoteFetch();
@@ -107,7 +110,7 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       const repo = parseGithubRepoUrl(url);
       const sha = commit ?? (await resolveGithubCommit({ ...repo, ref }, safe));
       await downloadGithubTarball({ ...repo, commit: sha }, dir, { fetch: safe });
-      return { dir, commit: sha };
+      return { dir, commit: sha, repo };
     } catch (error) {
       await rm(dir, { recursive: true, force: true });
       badRequest(error);
@@ -116,14 +119,21 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
     }
   }
 
+  /** Phase 4: a repository without a manifest is read as a `skills` one (synthetic manifest). */
   async function checkout(
     url: string,
     ref: string,
     commit?: string,
-  ): Promise<{ dir: string; commit: string; manifest: MarketplaceManifest }> {
-    const { dir, commit: sha } = await download(url, ref, commit);
+  ): Promise<{
+    dir: string;
+    commit: string;
+    manifest: MarketplaceManifest;
+    kind: MarketplaceKind;
+    raw: string;
+  }> {
+    const { dir, commit: sha, repo } = await download(url, ref, commit);
     try {
-      return { dir, commit: sha, manifest: await readMarketplaceManifest(dir) };
+      return { dir, commit: sha, ...(await loadOrSynthesizeManifest(dir, repo)) };
     } catch (error) {
       await rm(dir, { recursive: true, force: true });
       badRequest(error);
@@ -189,7 +199,7 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
 
     async add(actor: Actor, input: { url: string; ref?: string }): Promise<SpaceMarketplace> {
       const ref = input.ref ?? "HEAD";
-      const { dir, commit, manifest } = await checkout(input.url, ref);
+      const { dir, commit, manifest, kind, raw } = await checkout(input.url, ref);
       try {
         const clash = await prisma.spaceMarketplace.findUnique({
           where: { spaceId_name: { spaceId: actor.spaceId, name: manifest.name } },
@@ -201,10 +211,17 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
         }
         const target = path.join(root(actor), manifest.name);
         await mkdir(path.dirname(path.join(target, MANIFEST)), { recursive: true });
-        await writeFile(path.join(target, MANIFEST), await readFile(path.join(dir, MANIFEST)));
+        await writeFile(path.join(target, MANIFEST), raw);
         return toDto(
           await prisma.spaceMarketplace.create({
-            data: { spaceId: actor.spaceId, name: manifest.name, url: input.url, ref, commit },
+            data: {
+              spaceId: actor.spaceId,
+              name: manifest.name,
+              url: input.url,
+              ref,
+              commit,
+              kind,
+            },
           }),
         );
       } finally {
@@ -292,13 +309,10 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       commit: string,
     ): Promise<SpaceMarketplace> {
       const row = await owned(actor, marketplaceId);
-      const { dir, manifest } = await checkout(row.url, row.ref, commit);
+      const { dir, manifest, raw } = await checkout(row.url, row.ref, commit);
       const pinned: Installed[] = [];
       try {
-        await writeFile(
-          path.join(dirOf(actor, row), MANIFEST),
-          await readFile(path.join(dir, MANIFEST)),
-        );
+        await writeFile(path.join(dirOf(actor, row), MANIFEST), raw);
         for (const { name } of installedPlugins(row)) {
           pinned.push(entry(name, await installOne(root(actor), row, dir, manifest, name)));
         }
