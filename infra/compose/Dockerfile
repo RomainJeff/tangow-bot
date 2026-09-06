@@ -26,7 +26,22 @@ COPY packages/ui-tokens/package.json packages/ui-tokens/
 COPY packages/ui-web/package.json packages/ui-web/
 COPY infra/sandboxes/supervisor/package.json infra/sandboxes/supervisor/
 COPY infra/updater/package.json infra/updater/
-RUN pnpm install --frozen-lockfile
+# Only what this image ever runs. Across docker-compose.yml, .prod.yml and
+# .images.yml the app image is started as @rakazo/api, @rakazo/worker, @rakazo/web
+# and @rakazo/sandbox-supervisor, plus @rakazo/db's prisma CLI for migrate deploy;
+# the desktop, mobile, www and testkit projects only add electron, expo, react-native
+# and the astro toolchain to an image that never builds them. `rakazo` is the
+# workspace root: `start` is `tsx src/index.ts`, and tsx, turbo and cross-env are root
+# devDependencies resolved through /app/node_modules/.bin.
+# The skip-download vars cover any postinstall that survives a future filter change.
+RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    pnpm install --frozen-lockfile \
+      --filter "@rakazo/api..." \
+      --filter "@rakazo/worker..." \
+      --filter "@rakazo/web..." \
+      --filter "@rakazo/sandbox-supervisor..." \
+      --filter "@rakazo/db..." \
+      --filter "rakazo"
 # Normalize modes: a restrictive host umask (e.g. 077 on hardened hosts) would otherwise
 # leave the copied tree unreadable to USER node at runtime.
 COPY --chmod=755 . .
