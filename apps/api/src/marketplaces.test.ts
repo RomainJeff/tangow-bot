@@ -387,6 +387,31 @@ describe("marketplaces service", () => {
       expect(prisma.spaceMarketplace._store[0]?.installedPlugins).toEqual([{ name: "tdd" }]);
     });
 
+    it("applyUpdate drops a plugin that vanished upstream instead of failing", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      await m.installPlugins(actor, id, ["tdd", "review"]);
+      prisma.skillSetting._store.push({
+        spaceId: "ws-1",
+        skillKey: "mkt:vercel-labs-agent-skills/review/review",
+      });
+      headSha = SK2;
+      const check = await m.checkUpdate(actor, id);
+      expect(check.upToDate).toBe(false);
+      expect(check.changes.map((c) => [c.path, c.status])).toEqual([
+        ["review/review/SKILL.md", "removed"],
+        ["tdd/tdd/SKILL.md", "modified"],
+      ]);
+      const row = await m.applyUpdate(actor, id, SK2);
+      expect(row.installedPlugins).toEqual(["tdd"]);
+      expect(await exists(path.join(root(), "vercel-labs-agent-skills/plugins/review"))).toBe(
+        false,
+      );
+      expect(prisma.skillSetting._store).toEqual([]);
+      expect((await m.plugins(actor, id)).map((p) => p.name)).toEqual(["tdd"]);
+    });
+
     it("refuses a repository with neither manifest nor SKILL.md", async () => {
       headSha = SK1;
       repos.set(SK1, { "README.md": "nothing" });

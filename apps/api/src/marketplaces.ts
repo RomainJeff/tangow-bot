@@ -33,6 +33,7 @@ import type {
   SpaceMarketplace,
 } from "@rakazo/contracts";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
+import { getLogger } from "@rakazo/logging";
 
 export type MarketplacesDeps = {
   prisma: PrismaClient;
@@ -328,6 +329,13 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       try {
         await writeFile(path.join(dirOf(actor, row), MANIFEST), raw);
         for (const { name } of installedPlugins(row)) {
+          if (!manifest.plugins.some((p) => p.name === name)) {
+            // Gone upstream: drop it rather than fail the whole update.
+            getLogger().info(`[skills] ${row.name}/${name}: no longer upstream, removed`);
+            await removeInstalledPlugin(root(actor), row.name, name);
+            await forgetSkillRows(actor, `mkt:${row.name}/${name}/`);
+            continue;
+          }
           pinned.push(entry(name, await installOne(root(actor), row, dir, manifest, name)));
         }
       } catch (error) {
