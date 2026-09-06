@@ -188,7 +188,9 @@ export function GroupSettings({
   const nameId = useId();
   const descriptionId = useId();
   const [name, setName] = useState(group.name);
-  const [description, setDescription] = useState(group.description);
+  // Older API builds omit description; treat missing as empty so save() never trims undefined.
+  const currentDescription = group.description ?? "";
+  const [description, setDescription] = useState(currentDescription);
   const [selected, setSelected] = useState(group.members.map((member) => member.botId));
   const [pending, setPending] = useState<"save" | "remove" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -215,7 +217,7 @@ export function GroupSettings({
   function save() {
     return onSave({
       name: name.trim() !== group.name ? name.trim() : undefined,
-      description: description.trim() !== group.description ? description.trim() : undefined,
+      description: description.trim() !== currentDescription ? description.trim() : undefined,
       botIds: sameMembers(
         selected,
         group.members.map((member) => member.botId),
