@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { memo, useState } from "react";
+import { Image, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { native, useThemedStyles } from "../lib/native";
 import { BotAvatar } from "./bot-avatar";
 
@@ -15,13 +15,19 @@ export const GroupAvatar = memo(function GroupAvatar({
   members,
   size = 54,
   userInitials,
+  userImage,
 }: {
   members: GroupAvatarMember[];
   size?: number;
   /** When set, a one-bot group pairs the bot with the user's initials. */
   userInitials?: string;
+  /** Profile photo shown instead of the initials tile, initials on failure. */
+  userImage?: string | null;
 }) {
   const styles = useThemedStyles(createGroupAvatarStyles);
+  // Tracking the failed source (not a boolean) retries on the next photo.
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const userPhoto = userImage && userImage !== failedImage ? userImage : null;
   const firstMember = members[0];
   if (!firstMember) {
     return (
@@ -40,7 +46,7 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  if (members.length === 1 && !userInitials) {
+  if (members.length === 1 && !userInitials && !userPhoto) {
     return (
       <BotAvatar
         color={firstMember.color}
@@ -100,17 +106,27 @@ export const GroupAvatar = memo(function GroupAvatar({
             backgroundColor: native.fillPressed,
             alignItems: "center",
             justifyContent: "center",
+            overflow: "hidden",
           }}
         >
-          <Text
-            style={{
-              color: native.label,
-              fontSize: Math.max(8, Math.round(miniSize * 0.4)),
-              fontWeight: "600",
-            }}
-          >
-            {userInitials}
-          </Text>
+          {userPhoto ? (
+            <Image
+              source={{ uri: userPhoto }}
+              style={{ width: miniSize, height: miniSize }}
+              resizeMode="cover"
+              onError={() => setFailedImage(userPhoto)}
+            />
+          ) : (
+            <Text
+              style={{
+                color: native.label,
+                fontSize: Math.max(8, Math.round(miniSize * 0.4)),
+                fontWeight: "600",
+              }}
+            >
+              {userInitials}
+            </Text>
+          )}
         </View>
       ) : null}
       {members.length > 3 ? (

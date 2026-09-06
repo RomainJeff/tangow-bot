@@ -384,6 +384,26 @@ export async function changePassword(currentPassword: string, newPassword: strin
   if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not change password")));
 }
 
+/** The photo lives on the session user, not on `me`, so it needs its own read. */
+export async function fetchProfileImage(): Promise<string | null> {
+  const response = await fetch(`${currentApiBase()}/api/auth/get-session`, {
+    headers: { origin: "rakazo://", ...(await authHeaders()) },
+  });
+  if (!response.ok) throw new Error(t("Could not load your profile photo"));
+  const body = (await response.json()) as { user?: { image?: string | null } } | null;
+  return body?.user?.image ?? null;
+}
+
+export async function updateProfileImage(image: string | null): Promise<void> {
+  const response = await fetch(`${currentApiBase()}/api/auth/update-user`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "rakazo://", ...(await authHeaders()) },
+    body: JSON.stringify({ image }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not update your photo")));
+}
+
 export async function signOut() {
   await rpc("notifications/unregisterPush").catch(() => undefined);
   const headers = await authHeaders();

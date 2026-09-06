@@ -28,6 +28,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Active model": "当前模型",
   "Add {name}": "添加 {name}",
   "Add MCP server": "添加 MCP 服务器",
+  "Add photo": "添加照片",
   "Add GraphQL": "添加 GraphQL",
   "GraphQL endpoint": "GraphQL 端点",
   "https://example.com/graphql": "https://example.com/graphql",
@@ -70,6 +71,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Cancel reply": "取消回复",
   Cancelled: "已取消",
   "Change password": "更改密码",
+  "Change photo": "更换照片",
   "Chat settings": "聊天设置",
   Checking: "检查中",
   "Checking…": "正在检查…",
@@ -130,6 +132,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Could not load group": "无法加载群组",
   "Could not load integrations": "无法加载集成",
   "Could not load model settings": "无法加载模型设置",
+  "Could not load your profile photo": "无法加载你的头像",
   "Could not load routine": "无法加载例行任务",
   "Could not load the desktop. This device cannot reach the screen URL.":
     "无法加载桌面。此设备无法访问屏幕地址。",
@@ -165,6 +168,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Could not update computer": "无法更新电脑",
   "Could not update notifications": "无法更新通知",
   "Could not update reaction": "无法更新反应",
+  "Could not update your photo": "无法更新你的头像",
   "Couldn't update avatars": "无法更新头像",
   Create: "创建",
   "Create group": "创建群组",
@@ -297,6 +301,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Point this app at your self-hosted Rakazo origin, the same HTTPS URL you open in a browser.":
     "将此应用指向你自托管的 Rakazo 源站，地址与你在浏览器中打开的 HTTPS URL 相同。",
   Private: "私有",
+  "Profile photo": "个人头像",
   Providers: "提供商",
   "Public servers need https://. HTTP only works on your local network.":
     "公共服务器需要 https://。HTTP 仅适用于本地网络。",
@@ -381,6 +386,9 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Tap + to create a bot": "点按 + 创建 Bot",
   Team: "团队",
   "Team Computer": "团队电脑",
+  "That image could not be read": "无法读取该图片",
+  "That image is too detailed to store, try a simpler one":
+    "该图片过于精细，无法保存，请换一张更简单的",
   "That doesn’t look like a URL": "这看起来不像 URL",
   "That URL did not look like a Rakazo server": "该地址看起来不是 Rakazo 服务器",
   "That URL is missing a host": "该地址缺少主机名",
