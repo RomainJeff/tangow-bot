@@ -60,6 +60,7 @@ import {
   type MarkdownArtifactPreviewTarget,
 } from "../components/markdown-artifact-preview";
 import { NativeSymbol } from "../components/native-symbol";
+import { ShimmerText } from "../components/shimmer-text";
 import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import {
   applyMobileThreadEvent,
@@ -1504,9 +1505,9 @@ function Thread() {
           size={28}
           status={currentBotStatus}
         />
-        <Text style={{ color: tokens.mutedForeground, fontSize: 13.5 }}>
-          {t("{name} is working", { name: currentBot.name })}
-        </Text>
+        <ShimmerText style={{ color: tokens.mutedForeground, fontSize: 13.5, flexShrink: 1 }}>
+          {`${t("{name} is working", { name: currentBot.name })}…`}
+        </ShimmerText>
       </View>
     ) : inGroup && workingGroupBots.length > 0 ? (
       <View
@@ -1537,19 +1538,21 @@ function Thread() {
             </View>
           ))}
         </View>
-        <Text
+        <ShimmerText
           style={{
             color: tokens.mutedForeground,
             fontSize: 13.5,
             flexShrink: 1,
           }}
         >
-          {workingGroupBots.length === 1
-            ? t("{name} is working", {
-                name: workingGroupBots[0]?.name ?? t("Agent"),
-              })
-            : t("{count} agents working", { count: workingGroupBots.length })}
-        </Text>
+          {`${
+            workingGroupBots.length === 1
+              ? t("{name} is working", {
+                  name: workingGroupBots[0]?.name ?? t("Agent"),
+                })
+              : t("{count} agents working", { count: workingGroupBots.length })
+          }…`}
+        </ShimmerText>
       </View>
     ) : null;
 

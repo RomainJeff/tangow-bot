@@ -77,9 +77,11 @@ export function LoadingState({
 }) {
   if (indicator) {
     return (
-      <span role="status" className="flex w-fit items-center gap-2.5">
-        <span className="sr-only">{label}</span>
-        {indicator}
+      <span role="status" className="flex w-fit max-w-full items-center gap-2.5">
+        <span className="shrink-0">{indicator}</span>
+        <span className="min-w-0 truncate text-[13.5px] font-medium">
+          <Shimmer>{label}</Shimmer>
+        </span>
       </span>
     );
   }

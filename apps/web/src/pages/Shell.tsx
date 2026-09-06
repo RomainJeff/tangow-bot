@@ -4144,10 +4144,11 @@ const Transcript = memo(function Transcript({
     [messages],
   );
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
-  const workingLabel =
+  const workingLabel = `${
     workingBotName != null && workingBotName !== ""
       ? t`${workingBotName} is working`
-      : t`Bots are working`;
+      : t`Bots are working`
+  }…`;
   const snapToEnd = useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
