@@ -23,6 +23,8 @@ import { type GithubRepo, parseGithubRepoUrl } from "./github-tarball.js";
 
 export const SAFE_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 export const MAX_SKILL_MD_BYTES = 100_000;
+/** A plugin can be a whole repository (`source: "./"`), so its tree needs its own ceiling. */
+export const MAX_PLUGIN_TREE_BYTES = 50 * 1024 * 1024;
 const IGNORED_PLUGIN_CONTENT = ["commands", "agents", "hooks", ".mcp.json"];
 const MANIFEST_PATH = path.join(".claude-plugin", "marketplace.json");
 
@@ -371,6 +373,17 @@ export async function installPluginFromCheckout(
   await installPluginTree(root, marketplace, pluginName, pluginDirIn(checkoutDir, source));
 }
 
+/** Sum of regular-file sizes under `dir`. Symlinks are not files here, so they are skipped. */
+async function treeBytes(dir: string): Promise<number> {
+  let total = 0;
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const child = path.join(dir, entry.name);
+    if (entry.isDirectory()) total += await treeBytes(child);
+    else if (entry.isFile()) total += (await stat(child)).size;
+  }
+  return total;
+}
+
 /**
  * Copies each skill directory into `<root>/<marketplace>/plugins/<plugin>/skills/<slug>/`
  * (slug lowercased, tree flattened). Validates everything before touching the root, so a
@@ -381,6 +394,7 @@ export async function installPluginTree(
   marketplace: string,
   pluginName: string,
   pluginDir: string,
+  options: { maxBytes?: number } = {},
 ): Promise<void> {
   const skills = await resolveSkillDirs(pluginDir, pluginName);
   if (skills.length === 0) throw new Error(`Plugin "${pluginName}" has no skills/ directory.`);
@@ -392,6 +406,13 @@ export async function installPluginTree(
         `Skill "${slug}" SKILL.md exceeds ${MAX_SKILL_MD_BYTES} bytes; plugin rejected.`,
       );
     }
+  }
+  // The tarball cap counts compressed bytes; a whole-repository plugin expands past it.
+  const maxBytes = options.maxBytes ?? MAX_PLUGIN_TREE_BYTES;
+  let bytes = 0;
+  for (const { dir } of skills) bytes += await treeBytes(dir);
+  if (bytes > maxBytes) {
+    throw new Error(`Plugin "${pluginName}" exceeds ${maxBytes} bytes; plugin rejected.`);
   }
   for (const ignored of IGNORED_PLUGIN_CONTENT) {
     if (await stat(path.join(pluginDir, ignored)).catch(() => null)) {
@@ -452,7 +473,7 @@ export async function diffPluginTrees(beforeDir: string, afterDir: string): Prom
   return changes;
 }
 
-// ponytail: whole tree in memory; skills are capped at 100k per SKILL.md so this stays small.
+// ponytail: whole tree in memory; installPluginTree caps a plugin at MAX_PLUGIN_TREE_BYTES.
 async function walk(dir: string, prefix = ""): Promise<Map<string, Buffer>> {
   const out = new Map<string, Buffer>();
   for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {

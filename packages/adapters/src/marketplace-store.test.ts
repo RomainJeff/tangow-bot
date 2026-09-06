@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildSkillMd } from "@rakazo/core";
@@ -175,6 +175,25 @@ describe("marketplace store", () => {
     const root = marketplacesRoot(await tmp(), "space1");
     await installPluginTree(root, "solo", "tdd", dir);
     expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual(["mkt:solo/tdd/tdd"]);
+  });
+
+  it("rejects a plugin tree over the byte budget without leaving files behind", async () => {
+    const dir = await tmp();
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      buildSkillMd({ name: "TDD", description: "Red green refactor", body: "Steps" }),
+    );
+    await writeFile(path.join(dir, "fixtures.bin"), "x".repeat(2_000));
+    const root = marketplacesRoot(await tmp(), "space1");
+    await expect(installPluginTree(root, "solo", "tdd", dir, { maxBytes: 1_000 })).rejects.toThrow(
+      /exceeds 1000 bytes; plugin rejected/,
+    );
+    expect(
+      await stat(path.join(root, "solo", "plugins", "tdd")).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
   });
 
   it("prefers plugin.json skills over a root SKILL.md", async () => {
