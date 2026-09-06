@@ -13,6 +13,14 @@ describe("GroupAvatar", () => {
     expect(html).toContain("rakazo-bot-avatar");
   });
 
+  it("pairs a lone bot with the user's initials when provided", () => {
+    const html = renderToString(
+      <GroupAvatar members={[{ name: "Harry", color: "#8B5CF6" }]} userInitials="RJ" />,
+    );
+    expect((html.match(/data-working=/g) || []).length).toBe(1);
+    expect(html).toContain(">RJ<");
+  });
+
   it("renders 2 overlapping bot avatars for 2 members", () => {
     const html = renderToString(
       <GroupAvatar

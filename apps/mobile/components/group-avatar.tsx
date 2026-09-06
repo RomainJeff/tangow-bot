@@ -14,9 +14,12 @@ export interface GroupAvatarMember {
 export const GroupAvatar = memo(function GroupAvatar({
   members,
   size = 54,
+  userInitials,
 }: {
   members: GroupAvatarMember[];
   size?: number;
+  /** When set, a one-bot group pairs the bot with the user's initials. */
+  userInitials?: string;
 }) {
   const styles = useThemedStyles(createGroupAvatarStyles);
   const firstMember = members[0];
@@ -37,7 +40,7 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  if (members.length === 1) {
+  if (members.length === 1 && !userInitials) {
     return (
       <BotAvatar
         color={firstMember.color}
@@ -49,7 +52,8 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  const pair = members.length === 2;
+  const withUser = members.length === 1;
+  const pair = withUser || members.length === 2;
   const miniSize = Math.round(size * (pair ? 0.65 : 0.54));
   const positions: ViewStyle[] = pair
     ? [
@@ -83,6 +87,32 @@ export const GroupAvatar = memo(function GroupAvatar({
           />
         </View>
       ))}
+      {withUser ? (
+        <View
+          style={{
+            position: "absolute",
+            right: 0,
+            bottom: 0,
+            zIndex: 2,
+            width: miniSize,
+            height: miniSize,
+            borderRadius: miniSize / 2,
+            backgroundColor: native.fillPressed,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text
+            style={{
+              color: native.label,
+              fontSize: Math.max(8, Math.round(miniSize * 0.4)),
+              fontWeight: "600",
+            }}
+          >
+            {userInitials}
+          </Text>
+        </View>
+      ) : null}
       {members.length > 3 ? (
         <View
           style={{

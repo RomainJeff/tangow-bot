@@ -2706,6 +2706,7 @@ export function ShellPage() {
                                   : item.chat.members
                               }
                               size={38}
+                              userInitials={initials}
                             />
                           )}
                           <div className="min-w-0 flex-1">
@@ -2832,7 +2833,7 @@ export function ShellPage() {
                   ))}
                   {archivedGroups.map((group) => (
                     <div key={group.id} className="flex items-center gap-2 rounded-lg px-2.5 py-2">
-                      <GroupAvatar members={group.members} size={28} />
+                      <GroupAvatar members={group.members} size={28} userInitials={initials} />
                       <span
                         className="min-w-0 flex-1 truncate text-[14px] text-foreground/75"
                         dir="auto"
@@ -3066,6 +3067,7 @@ export function ShellPage() {
                 <GroupAvatar
                   members={activeSnapshot?.members ?? activeGroup?.members ?? []}
                   size={26}
+                  userInitials={initials}
                 />
               ) : active ? (
                 <BotAvatar

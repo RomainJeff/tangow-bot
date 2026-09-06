@@ -480,6 +480,7 @@ export default function Home() {
           ) : item.type === "group" ? (
             <GroupRow
               group={item.group}
+              userInitials={initials}
               onPress={() => {
                 void openMobileSpace(item.group.spaceId, () =>
                   router.push({
@@ -799,10 +800,12 @@ function BotRow({
 
 function GroupRow({
   group,
+  userInitials,
   onPress,
   onLongPress,
 }: {
   group: MobileGroup | SpaceGroup;
+  userInitials: string;
   onPress: () => void;
   onLongPress?: () => void;
 }) {
@@ -822,7 +825,7 @@ function GroupRow({
       accessibilityHint={onLongPress ? t("Long press to pin or move to a section") : undefined}
       onPress={onPress}
       onLongPress={onLongPress}
-      avatar={<GroupAvatar members={group.members} size={54} />}
+      avatar={<GroupAvatar members={group.members} size={54} userInitials={userInitials} />}
     />
   );
 }
