@@ -177,6 +177,27 @@ describe("marketplace store", () => {
     expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual(["mkt:solo/tdd/tdd"]);
   });
 
+  it("prefers plugin.json skills over a root SKILL.md", async () => {
+    const dir = await tmp();
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      buildSkillMd({ name: "Root", description: "The whole plugin", body: "Steps" }),
+    );
+    await mkdir(path.join(dir, ".claude-plugin"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".claude-plugin/plugin.json"),
+      JSON.stringify({ skills: ["./bundled/alpha"] }),
+    );
+    await mkdir(path.join(dir, "bundled/alpha"), { recursive: true });
+    await writeFile(
+      path.join(dir, "bundled/alpha/SKILL.md"),
+      buildSkillMd({ name: "Alpha", description: "A declared skill", body: "Steps" }),
+    );
+    const root = marketplacesRoot(await tmp(), "space1");
+    await installPluginTree(root, "solo", "pack", dir);
+    expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual(["mkt:solo/pack/alpha"]);
+  });
+
   it("flattens skills declared in plugin.json under category directories", async () => {
     const dir = await tmp();
     await mkdir(path.join(dir, ".claude-plugin"), { recursive: true });
@@ -375,12 +396,22 @@ describe("discoverSkills", () => {
     ]);
   });
 
-  it("skips internal, invalid and unsafe skills; the first root wins on a slug clash", async () => {
+  it("skips a directory named SKILL.md instead of failing", async () => {
+    const dir = await skillsRepo({
+      "skills/tdd/SKILL.md": md("TDD"),
+      "skills/deploy/SKILL.md": md("Deploy"),
+    });
+    await mkdir(path.join(dir, "skills/weird/SKILL.md"), { recursive: true });
+    expect((await discoverSkills(dir, "repo")).map((s) => s.slug)).toEqual(["deploy", "tdd"]);
+  });
+
+  it("skips internal and invalid skills; the first root wins on a slug clash", async () => {
     const dir = await skillsRepo({
       "skills/tdd/SKILL.md": md("TDD"),
       ".claude/skills/tdd/SKILL.md": md("Shadowed"),
       "skills/hidden/SKILL.md": md("Hidden", "metadata:\n  internal: true\n"),
       "skills/broken/SKILL.md": "no frontmatter",
+      // Never reaches discoverSkills: listDirs drops directory names that fail SAFE_NAME.
       "skills/Bad Name/SKILL.md": md("Bad"),
     });
     expect((await discoverSkills(dir, "repo")).map((s) => [s.slug, s.description])).toEqual([

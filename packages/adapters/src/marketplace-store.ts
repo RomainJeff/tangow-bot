@@ -180,7 +180,9 @@ async function describeSkill(dir: string): Promise<string | null> {
   const file = path.join(dir, "SKILL.md");
   const size = (await stat(file).catch(() => null))?.size;
   if (size === undefined || size > MAX_SKILL_MD_BYTES) return null;
-  const parsed = parseSkillMd(await readFile(file, "utf8"));
+  const content = await readFile(file, "utf8").catch(() => null);
+  if (content === null) return null;
+  const parsed = parseSkillMd(content);
   if ("error" in parsed) return null;
   const meta = parsed.frontmatter.metadata;
   if (meta && typeof meta === "object" && (meta as Record<string, unknown>).internal === true) {
@@ -192,8 +194,11 @@ async function describeSkill(dir: string): Promise<string | null> {
 /**
  * Skills of a repository without a marketplace manifest (skills.sh layout). A root SKILL.md
  * makes the whole repository one skill named `rootSlug`; otherwise every `<root>/<slug>/`
- * (one category level deep) that holds a valid SKILL.md. Invalid frontmatter, unsafe names
- * and `metadata.internal: true` are skipped; a slug seen under an earlier root shadows later ones.
+ * (one category level deep) that holds a valid SKILL.md. Unsafe names never reach here
+ * (`listDirs` drops them); invalid frontmatter and `metadata.internal: true` are skipped without
+ * entering `found`, so an invalid skill under an earlier root cannot shadow a valid one under a
+ * later root. A slug seen under an earlier root shadows later ones, and an intra-root clash (two
+ * categories holding the same skill name) keeps the first, silently.
  */
 export async function discoverSkills(
   checkoutDir: string,
@@ -205,7 +210,7 @@ export async function discoverSkills(
   for (const skillsRoot of SKILL_ROOTS) {
     for (const dir of await scanSkillDirs(path.join(checkoutDir, skillsRoot))) {
       const slug = path.basename(dir).toLowerCase();
-      if (!SAFE_NAME.test(slug) || found.has(slug)) continue;
+      if (found.has(slug)) continue;
       const description = await describeSkill(dir);
       if (description === null) continue;
       found.set(slug, { slug, relPath: `./${path.relative(checkoutDir, dir)}`, description });
@@ -254,12 +259,13 @@ async function resolveSkillDirs(
   pluginDir: string,
   pluginName: string,
 ): Promise<{ slug: string; dir: string }[]> {
-  // A plugin that is itself a skill — skills.sh repositories, bare-skill plugins — installs as one.
-  if (await stat(path.join(pluginDir, "SKILL.md")).catch(() => null)) {
+  // A plugin that is itself a skill — skills.sh repositories, bare-skill plugins — installs as
+  // one, unless plugin.json declares skills: an explicit list always wins over the root SKILL.md.
+  const declared = await declaredSkillDirs(pluginDir);
+  if (declared === null && (await stat(path.join(pluginDir, "SKILL.md")).catch(() => null))) {
     return [{ slug: pluginName, dir: pluginDir }];
   }
-  const dirs =
-    (await declaredSkillDirs(pluginDir)) ?? (await scanSkillDirs(path.join(pluginDir, "skills")));
+  const dirs = declared ?? (await scanSkillDirs(path.join(pluginDir, "skills")));
   const bySlug = new Map<string, string>();
   for (const dir of dirs) {
     const raw = path.basename(dir);
