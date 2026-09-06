@@ -6,6 +6,7 @@ import { buildSkillMd } from "@rakazo/core";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
 import { create as tarCreate } from "tar";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ZipFile } from "yazl";
 import { createAgentSkillsService } from "./agent-skills.js";
 
 type Row = Record<string, unknown>;
@@ -157,11 +158,15 @@ describe("agent skills service (filesystem)", () => {
     await expect(
       skills.import(actor, { data: Buffer.from("no frontmatter").toString("base64") }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // Zip magic goes to the bundle path now, so the text path never gets to refuse it.
     await expect(
       skills.import(actor, {
         data: Buffer.from([0x50, 0x4b, 0x03, 0x04, 0xff]).toString("base64"),
       }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/\.skill/) });
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.not.stringMatching(/Not a \.skill file/),
+    });
   });
 
   it("imports a tar.gz bundle with its extra files, rejecting bad frontmatter and duplicates", async () => {
@@ -195,6 +200,36 @@ describe("agent skills service (filesystem)", () => {
     await expect(
       skills.import(actor, { data: await bundle("no frontmatter") }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/frontmatter/) });
+    await expect(
+      skills.import(actor, {
+        data: await bundle(buildSkillMd({ name: "deploy", description: "Again", body: "" })),
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect((await skills.get(actor, { skillId: "user:deploy" })).description).toBe("D");
+  });
+
+  it("imports a zip bundle with its extra files, rejecting duplicates", async () => {
+    const skills = service();
+    async function bundle(skillMd: string): Promise<string> {
+      const file = new ZipFile();
+      file.addBuffer(Buffer.from(skillMd), "SKILL.md");
+      file.addBuffer(Buffer.from("echo hi"), "scripts/run.sh");
+      file.end();
+      const chunks: Buffer[] = [];
+      await new Promise<void>((done, fail) => {
+        file.outputStream.on("data", (chunk: Buffer) => chunks.push(chunk));
+        file.outputStream.on("end", () => done());
+        file.outputStream.on("error", fail);
+      });
+      return Buffer.concat(chunks).toString("base64");
+    }
+    const imported = await skills.import(actor, {
+      data: await bundle(buildSkillMd({ name: "Deploy", description: "D", body: "Steps" })),
+    });
+    expect(imported).toMatchObject({ id: "user:deploy", name: "Deploy", source: "user" });
+    const dir = path.join(userSkillsRoot(dataDir, actor), "deploy");
+    expect(await readFile(path.join(dir, "scripts", "run.sh"), "utf8")).toBe("echo hi");
+
     await expect(
       skills.import(actor, {
         data: await bundle(buildSkillMd({ name: "deploy", description: "Again", body: "" })),

@@ -243,7 +243,7 @@ describe("skill store", () => {
       expect(await readdir(root)).toEqual([]);
     });
 
-    it("rejects data that is not a gzip tar", async () => {
+    it("rejects data that is neither a gzip tar nor a zip", async () => {
       const root = await tmpRoot();
       await expect(
         writeUserSkillBundle(root, Buffer.from("plain text"), resolve),

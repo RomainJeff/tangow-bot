@@ -135,7 +135,7 @@ export async function renameUserSkill(
 }
 
 /**
- * Imports a `.skill` bundle: a gzip tar with SKILL.md at its root (or inside a single top-level
+ * Imports a `.skill` bundle: a gzip tar or zip with SKILL.md at its root (or inside a single top-level
  * directory) plus any extra files (scripts/, references/, ...). Extracts into a temp dir under
  * root, lets `resolve` validate the SKILL.md (and return the normalized content), then renames
  * the tree into place with "create" semantics: EEXIST on a name clash, never a half-written

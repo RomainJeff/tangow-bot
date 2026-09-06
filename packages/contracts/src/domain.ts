@@ -455,7 +455,7 @@ export const UpdateAgentSkillInput = z
     }
   });
 
-/** `.skill` import: plain SKILL.md text, or a gzip tar bundle (SKILL.md + scripts/, references/, ...). */
+/** `.skill` import: plain SKILL.md text, or a gzip tar or zip bundle (SKILL.md + scripts/, references/, ...). */
 export const SKILL_BUNDLE_MAX_BYTES = 10 * 1024 * 1024;
 export const SKILL_BUNDLE_MAX_ENTRIES = 200;
 export const ImportAgentSkillInput = z.object({

@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import {
   BUILTIN_AGENT_SKILLS,
+  bundleFormat,
   isExists,
   listMarketplaceSkills,
   listUserSkills,
@@ -260,16 +261,16 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
 
     create,
 
-    /** `.skill` file: gzip tar bundle (magic 1f 8b) or plain SKILL.md text. */
+    /** `.skill` file: gzip tar or zip bundle (sniffed by magic bytes) or plain SKILL.md text. */
     async import(actor: Actor, input: { data: string }): Promise<AgentSkill> {
       const bytes = Buffer.from(input.data, "base64");
-      if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) {
+      if (!bundleFormat(bytes)) {
         let content: string;
         try {
           content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
         } catch {
           throw new ORPCError("BAD_REQUEST", {
-            message: "Not a .skill file (expected SKILL.md text or a gzip tar bundle).",
+            message: "Not a .skill file (expected SKILL.md text, or a gzip tar or zip bundle).",
           });
         }
         return create(actor, { content });
@@ -283,7 +284,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       }).catch((error: unknown) => {
         if (error instanceof ORPCError) throw error;
         if (isExists(error)) conflictOrRethrow(error);
-        // ponytail: gunzip/tar/layout failures all read fine as-is; no error taxonomy.
+        // ponytail: archive/layout failures all read fine as-is; no error taxonomy.
         throw new ORPCError("BAD_REQUEST", {
           message: error instanceof Error ? error.message : "Invalid skill bundle.",
         });
