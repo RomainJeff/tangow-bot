@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Statut : livré c7d7adfd.**
+**Statut : livré c7d7adfd, follow-ups review finale 22e9fbfb.**
 
 **Goal :** ajouter une URL GitHub qui n'a **pas** de `.claude-plugin/marketplace.json` mais expose des `SKILL.md` (layout `npx skills` / skills.sh), la voir apparaître comme un **marketplace** dans la UI, parcourir ses skills, et **cocher lesquels installer** en un seul téléchargement.
 
