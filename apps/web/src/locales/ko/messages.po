@@ -19,7 +19,7 @@ msgstr " (읽지 않음)"
 
 #: src/components/AgentSteps.tsx:90
 msgid "(empty)"
-msgstr ""
+msgstr "(비어 있음)"
 
 #. placeholder {0}: group.entries.length
 #: src/pages/ModelSettingsOverlay.tsx:387
@@ -59,7 +59,7 @@ msgstr "{0} MB"
 #. placeholder {0}: mkt.installedPlugins.length
 #: src/pages/SkillsOverlay.tsx:245
 msgid "{0} plugins installed"
-msgstr ""
+msgstr "플러그인 {0}개 설치됨"
 
 #. placeholder {0}: usage.runs
 #. placeholder {1}: usage.inputTokens + usage.outputTokens
@@ -173,7 +173,7 @@ msgstr "추가"
 
 #: src/pages/SkillsOverlay.tsx:418
 msgid "Add a marketplace first."
-msgstr ""
+msgstr "먼저 마켓플레이스를 추가하세요."
 
 #: src/components/ApprovalRulesSettings.tsx:151
 msgid "Add a model in Settings to use this."
@@ -209,7 +209,7 @@ msgstr "항목 추가"
 
 #: src/pages/SkillsOverlay.tsx:226
 msgid "Add marketplace"
-msgstr ""
+msgstr "마켓플레이스 추가"
 
 #: src/pages/PluginsOverlay.tsx:514
 msgid "Add MCP server"
@@ -273,7 +273,7 @@ msgstr "Agent 연결"
 
 #: src/pages/KnowledgeSection.tsx:520
 msgid "Agents"
-msgstr ""
+msgstr "에이전트"
 
 #: src/pages/McpServersOverlay.tsx:385
 #: src/pages/McpServersOverlay.tsx:452
@@ -282,11 +282,11 @@ msgstr "사용 Bot:"
 
 #: src/pages/KnowledgeSection.tsx:516
 msgid "All"
-msgstr ""
+msgstr "전체"
 
 #: src/pages/PluginsOverlay.tsx:449
 msgid "All integrations"
-msgstr ""
+msgstr "모든 통합"
 
 #. placeholder {0}: rule.matchValue
 #: src/components/ApprovalRulesSettings.tsx:21
@@ -377,11 +377,11 @@ msgstr "모양"
 #. placeholder {0}: check.commit.slice(0, 7)
 #: src/pages/SkillsOverlay.tsx:318
 msgid "Apply update to {0}"
-msgstr ""
+msgstr "{0}에 업데이트 적용"
 
 #: src/pages/SkillsOverlay.tsx:316
 msgid "Applying…"
-msgstr ""
+msgstr "적용 중…"
 
 #: src/components/teach/SkillDraftCard.tsx:126
 msgid "Approval boundaries"
@@ -483,11 +483,11 @@ msgstr "인증하기"
 
 #: src/pages/shell/bot-panel.tsx:241
 msgid "Auto"
-msgstr ""
+msgstr "자동"
 
 #: src/pages/shell/bot-panel.tsx:231
 msgid "Automatic shape"
-msgstr ""
+msgstr "자동 모양"
 
 #: src/pages/RoutineEditor.tsx:449
 msgid "Available after the routine is saved"
@@ -565,7 +565,7 @@ msgstr "사용 중인 서비스의 API 키를 연결하세요. 서비스를 바�
 
 #: src/pages/SkillsOverlay.tsx:121
 msgid "Browse"
-msgstr ""
+msgstr "둘러보기"
 
 #: src/pages/CallView.tsx:241
 #: src/pages/Shell.tsx:3220
@@ -594,7 +594,7 @@ msgstr "취소"
 
 #: src/pages/Shell.tsx:4849
 msgid "Cancel edit"
-msgstr ""
+msgstr "편집 취소"
 
 #: src/pages/shell/bot-panel.tsx:126
 msgid "Cancel new bot"
@@ -656,7 +656,7 @@ msgstr "확인해 주세요."
 
 #: src/pages/SkillsOverlay.tsx:264
 msgid "Check update"
-msgstr ""
+msgstr "업데이트 확인"
 
 #: src/pages/Auth.tsx:33
 msgid "Check your email"
@@ -757,7 +757,7 @@ msgstr "미리보기 닫기"
 
 #: src/pages/SkillsOverlay.tsx:105
 msgid "Close skills"
-msgstr ""
+msgstr "스킬 닫기"
 
 #: src/pages/AccountSettingsOverlay.tsx:120
 msgid "Close user settings"
@@ -784,7 +784,7 @@ msgstr "{0} 접기"
 #. placeholder {0}: index + 1
 #: src/pages/shell/bot-panel.tsx:263
 msgid "Color {0}"
-msgstr ""
+msgstr "색상 {0}"
 
 #: src/pages/RoutineEditor.tsx:387
 msgid "Coming soon"
@@ -940,7 +940,7 @@ msgstr "추가하지 못했습니다."
 
 #: src/pages/SkillsOverlay.tsx:197
 msgid "Could not add marketplace"
-msgstr ""
+msgstr "마켓플레이스를 추가하지 못했습니다"
 
 #: src/pages/McpServersOverlay.tsx:170
 msgid "Could not add MCP server"
@@ -948,7 +948,7 @@ msgstr "MCP 서버를 추가하지 못했습니다."
 
 #: src/pages/SkillsOverlay.tsx:305
 msgid "Could not apply update"
-msgstr ""
+msgstr "업데이트를 적용하지 못했습니다"
 
 #: src/pages/shell/message-cards.tsx:328
 msgid "Could not approve this server"
@@ -968,7 +968,7 @@ msgstr "기본 모델을 변경하지 못했습니다."
 
 #: src/pages/SkillsOverlay.tsx:255
 msgid "Could not check for updates"
-msgstr ""
+msgstr "업데이트를 확인하지 못했습니다"
 
 #: src/components/teach/TeachComputerOverlay.tsx:85
 msgid "Could not check teaching status. Refresh the view to continue."
@@ -1001,7 +1001,7 @@ msgstr "음성 서비스에 연결하지 못했습니다."
 
 #: src/pages/Shell.tsx:863
 msgid "Could not connect to the computer screen"
-msgstr ""
+msgstr "컴퓨터 화면에 연결하지 못했습니다"
 
 #: src/pages/Auth.tsx:85
 msgid "Could not continue"
@@ -1058,7 +1058,7 @@ msgstr "OAuth 연결을 해제하지 못했습니다."
 
 #: src/pages/shell/message-cards.tsx:48
 msgid "Could not dismiss"
-msgstr ""
+msgstr "닫지 못했습니다"
 
 #. placeholder {0}: props.name
 #: src/components/ArtifactFileCard.tsx:36
@@ -1071,7 +1071,7 @@ msgstr "{name}을 다운로드하지 못했습니다. 다시 시도해 주세요
 
 #: src/pages/KnowledgeSection.tsx:388
 msgid "Could not import skill"
-msgstr ""
+msgstr "스킬을 가져오지 못했습니다"
 
 #: src/pages/PluginsOverlay.tsx:220
 msgid "Could not install connector"
@@ -1105,7 +1105,7 @@ msgstr "AI 모델 설정을 불러오지 못했습니다."
 
 #: src/pages/SkillsOverlay.tsx:394
 msgid "Could not load plugins"
-msgstr ""
+msgstr "플러그인을 불러오지 못했습니다"
 
 #: src/pages/KnowledgeSection.tsx:326
 msgid "Could not load skill"
@@ -1113,7 +1113,7 @@ msgstr "스킬을 불러오지 못했습니다"
 
 #: src/pages/SkillsOverlay.tsx:78
 msgid "Could not load skills"
-msgstr ""
+msgstr "스킬을 불러오지 못했습니다"
 
 #: src/pages/PeerMessagesOverlay.tsx:112
 msgid "Could not load this chat."
@@ -1148,7 +1148,7 @@ msgstr "모델 서버에 연결하지 못했습니다."
 
 #: src/pages/KnowledgeSection.tsx:763
 msgid "Could not read this file"
-msgstr ""
+msgstr "이 파일을 읽지 못했습니다"
 
 #: src/pages/ScratchpadSection.tsx:97
 msgid "Could not remove"
@@ -1164,7 +1164,7 @@ msgstr "그룹을 삭제하지 못했습니다."
 
 #: src/pages/SkillsOverlay.tsx:275
 msgid "Could not remove marketplace"
-msgstr ""
+msgstr "마켓플레이스를 제거하지 못했습니다"
 
 #: src/components/ApprovalRulesSettings.tsx:92
 msgid "Could not remove rule"
@@ -1266,7 +1266,7 @@ msgstr "컴퓨터를 업데이트할 수 없습니다"
 
 #: src/pages/SkillsOverlay.tsx:409
 msgid "Could not update plugin"
-msgstr ""
+msgstr "플러그인을 업데이트하지 못했습니다"
 
 #: src/pages/Shell.tsx:1951
 msgid "Could not update reaction"
@@ -1309,7 +1309,7 @@ msgstr "그룹 만들기"
 
 #: src/pages/shell/bot-picker.tsx:70
 msgid "Create new Bot"
-msgstr ""
+msgstr "새 봇 만들기"
 
 #: src/pages/RoutineEditor.tsx:114
 #: src/pages/RoutineEditor.tsx:115
@@ -1368,7 +1368,7 @@ msgstr "고객 지원"
 #: src/pages/CustomizeOverlay.tsx:24
 #: src/pages/Shell.tsx:3008
 msgid "Customize"
-msgstr ""
+msgstr "사용자 지정"
 
 #: src/pages/AccountSettingsOverlay.tsx:406
 msgid "Dark"
@@ -1468,7 +1468,7 @@ msgstr "음성 입력"
 #: src/pages/KnowledgeSection.tsx:436
 #: src/pages/KnowledgeSection.tsx:518
 msgid "Disabled"
-msgstr ""
+msgstr "비활성"
 
 #: src/pages/McpServersOverlay.tsx:493
 #: src/pages/MemorySettingsOverlay.tsx:208
@@ -1495,7 +1495,7 @@ msgstr "지금은 연결하지 않았습니다. MCP 설정에서 언제든 다�
 #: src/pages/AccountSettingsOverlay.tsx:168
 #: src/pages/AccountSettingsOverlay.tsx:176
 msgid "Display agent steps"
-msgstr ""
+msgstr "에이전트 단계 표시"
 
 #: src/pages/PluginsOverlay.tsx:555
 msgid "Display name"
@@ -1524,7 +1524,7 @@ msgstr "완료"
 
 #: src/pages/KnowledgeSection.tsx:823
 msgid "Download"
-msgstr ""
+msgstr "다운로드"
 
 #. placeholder {0}: props.name
 #: src/components/ArtifactFileCard.tsx:81
@@ -1555,7 +1555,7 @@ msgstr "이전 메시지"
 
 #: src/pages/Shell.tsx:5321
 msgid "Edit and resend"
-msgstr ""
+msgstr "편집 후 다시 보내기"
 
 #: src/components/AskCard.tsx:180
 msgid "Edit first"
@@ -1568,7 +1568,7 @@ msgstr "Bot 정보 수정"
 #. placeholder {0}: rewindRemovedCount ?? 0
 #: src/pages/Shell.tsx:4845
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
-msgstr ""
+msgstr "{rewindTime}의 메시지를 편집 중 · 이후 메시지 {0}개가 삭제됩니다"
 
 #: src/pages/Auth.tsx:125
 msgid "Email"
@@ -1661,15 +1661,15 @@ msgstr "실패했을 때 처리"
 
 #: src/pages/PluginsOverlay.tsx:366
 msgid "Featured"
-msgstr ""
+msgstr "추천"
 
 #: src/pages/KnowledgeSection.tsx:48
 msgid "Files"
-msgstr ""
+msgstr "파일"
 
 #: src/pages/KnowledgeSection.tsx:513
 msgid "Filter skills"
-msgstr ""
+msgstr "스킬 필터"
 
 #: src/pages/ModelSettingsOverlay.tsx:444
 #: src/pages/Onboarding.tsx:375
@@ -1718,11 +1718,11 @@ msgstr "Git 이벤트"
 
 #: src/pages/SkillsOverlay.tsx:216
 msgid "Git ref"
-msgstr ""
+msgstr "Git ref"
 
 #: src/pages/KnowledgeSection.tsx:437
 msgid "Global"
-msgstr ""
+msgstr "전역"
 
 #: src/pages/MessagingSettingsOverlay.tsx:198
 #: src/pages/Shell.tsx:3210
@@ -1770,7 +1770,7 @@ msgstr "안녕하세요. 답변을 소리 내어 읽을 때 이런 목소리로 
 
 #: src/pages/Shell.tsx:3115
 msgid "Hide bots"
-msgstr ""
+msgstr "봇 숨기기"
 
 #: src/pages/Auth.tsx:162
 msgid "Hide password"
@@ -1802,7 +1802,7 @@ msgstr "실행 주기"
 
 #: src/pages/shell/bot-panel.tsx:449
 msgid "How this bot should behave"
-msgstr ""
+msgstr "이 봇이 어떻게 동작해야 하는지"
 
 #: src/components/teach/SkillDraftCard.tsx:112
 msgid "How to check"
@@ -1818,7 +1818,7 @@ msgstr "샘플이 들렸다면 음성 설정이 완료되었습니다."
 
 #: src/pages/KnowledgeSection.tsx:497
 msgid "Import"
-msgstr ""
+msgstr "가져오기"
 
 #: src/pages/PluginsOverlay.tsx:547
 msgid "Import OpenAPI JSON"
@@ -1830,7 +1830,7 @@ msgstr "기본 설정 사용"
 
 #: src/components/AgentSteps.tsx:69
 msgid "Input"
-msgstr ""
+msgstr "입력"
 
 #: src/components/teach/SkillDraftCard.tsx:88
 msgid "Inputs"
@@ -1838,15 +1838,15 @@ msgstr "입력값"
 
 #: src/pages/SkillsOverlay.tsx:476
 msgid "Install"
-msgstr ""
+msgstr "설치"
 
 #: src/pages/SkillsOverlay.tsx:115
 msgid "Installed"
-msgstr ""
+msgstr "설치됨"
 
 #: src/pages/PluginsOverlay.tsx:337
 msgid "Installed integrations"
-msgstr ""
+msgstr "설치된 통합"
 
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:61
 msgid "Instance API key"
@@ -1858,7 +1858,7 @@ msgstr "실행할 내용"
 
 #: src/pages/shell/bot-panel.tsx:441
 msgid "Instructions"
-msgstr ""
+msgstr "지침"
 
 #: src/pages/CustomizeOverlay.tsx:18
 #: src/pages/PluginsOverlay.tsx:298
@@ -2019,15 +2019,15 @@ msgstr "읽지 않음으로 표시"
 
 #: src/pages/SkillsOverlay.tsx:429
 msgid "Marketplace"
-msgstr ""
+msgstr "마켓플레이스"
 
 #: src/pages/SkillsOverlay.tsx:209
 msgid "Marketplace URL"
-msgstr ""
+msgstr "마켓플레이스 URL"
 
 #: src/pages/SkillsOverlay.tsx:118
 msgid "Marketplaces"
-msgstr ""
+msgstr "마켓플레이스"
 
 #: src/pages/shell/bot-panel.tsx:659
 msgid "Max"
@@ -2116,7 +2116,7 @@ msgstr "최소화"
 #: src/pages/Shell.tsx:2621
 #: src/pages/Shell.tsx:2622
 msgid "Minimize bots"
-msgstr ""
+msgstr "봇 최소화"
 
 #: src/pages/RoutineSchedule.tsx:65
 msgid "minute"
@@ -2147,7 +2147,7 @@ msgstr "모델 선택지"
 
 #: src/pages/Onboarding.tsx:281
 msgid "Model providers"
-msgstr ""
+msgstr "모델 제공자"
 
 #: src/pages/AccountSettingsOverlay.tsx:241
 msgid "Model spend uses your provider keys."
@@ -2219,7 +2219,7 @@ msgstr "인수 필요"
 
 #: src/pages/Shell.tsx:4067
 msgid "Needs you"
-msgstr ""
+msgstr "확인 필요"
 
 #: src/pages/shell/bot-panel.tsx:124
 msgid "New bot"
@@ -2271,11 +2271,11 @@ msgstr "인증 없음"
 
 #: src/pages/shell/command-palette.tsx:107
 msgid "No bots"
-msgstr ""
+msgstr "봇 없음"
 
 #: src/pages/shell/bot-picker.tsx:59
 msgid "No bots match"
-msgstr ""
+msgstr "일치하는 봇 없음"
 
 #: src/pages/MessagingSettingsOverlay.tsx:140
 msgid "No chat apps linked yet."
@@ -2292,7 +2292,7 @@ msgstr "별도 확인 규칙이 없습니다. 작업이 자동으로 실행됩�
 
 #: src/pages/KnowledgeSection.tsx:837
 msgid "No files yet"
-msgstr ""
+msgstr "아직 파일이 없습니다"
 
 #: src/pages/MessagingSettingsOverlay.tsx:188
 msgid "No group chats yet."
@@ -2300,7 +2300,7 @@ msgstr "아직 그룹 채팅이 없습니다."
 
 #: src/pages/PluginsOverlay.tsx:347
 msgid "No integrations installed yet."
-msgstr ""
+msgstr "아직 설치된 통합이 없습니다."
 
 #: src/components/AskCard.tsx:98
 msgid "No longer active"
@@ -2312,7 +2312,7 @@ msgstr "이 서버에는 관리형 앱 목록이 설정되지 않았습니다."
 
 #: src/pages/SkillsOverlay.tsx:232
 msgid "No marketplaces added yet."
-msgstr ""
+msgstr "아직 추가된 마켓플레이스가 없습니다."
 
 #: src/pages/ModelSettingsOverlay.tsx:996
 msgid "No matching models"
@@ -2336,11 +2336,11 @@ msgstr "사용 가능한 모델 목록이 없습니다."
 
 #: src/pages/SkillsOverlay.tsx:440
 msgid "No plugins in this marketplace."
-msgstr ""
+msgstr "이 마켓플레이스에 플러그인이 없습니다."
 
 #: src/pages/Onboarding.tsx:342
 msgid "No providers found"
-msgstr ""
+msgstr "제공자를 찾을 수 없음"
 
 #: src/pages/ModelSettingsOverlay.tsx:402
 msgid "No providers found."
@@ -2356,11 +2356,11 @@ msgstr "아직 실행 기록이 없습니다"
 
 #: src/pages/SkillsOverlay.tsx:484
 msgid "No skills in this plugin."
-msgstr ""
+msgstr "이 플러그인에 스킬이 없습니다."
 
 #: src/pages/KnowledgeSection.tsx:534
 msgid "No skills match"
-msgstr ""
+msgstr "일치하는 스킬 없음"
 
 #: src/pages/KnowledgeSection.tsx:534
 msgid "No skills yet"
@@ -2419,11 +2419,11 @@ msgstr "OAuth 연결 실패"
 
 #: src/pages/McpServersOverlay.tsx:33
 msgid "OAuth expired"
-msgstr ""
+msgstr "OAuth 만료됨"
 
 #: src/pages/SkillsOverlay.tsx:499
 msgid "Off for every agent until you pick some in Installed."
-msgstr ""
+msgstr "설치됨에서 선택하기 전까지 모든 에이전트에서 꺼져 있습니다."
 
 #: src/pages/RoutineEditor.tsx:375
 msgid "On a schedule"
@@ -2436,7 +2436,7 @@ msgstr "매월 1일 {0}에"
 
 #: src/pages/SkillsOverlay.tsx:134
 msgid "Only the first 50 skills are shown to the agent."
-msgstr ""
+msgstr "에이전트에는 처음 50개 스킬만 표시됩니다."
 
 #: src/pages/ScratchpadSection.tsx:159
 #: src/pages/Shell.tsx:3460
@@ -2510,7 +2510,7 @@ msgstr "다른 모델 직접 입력…"
 
 #: src/components/AgentSteps.tsx:70
 msgid "Output"
-msgstr ""
+msgstr "출력"
 
 #: src/pages/RoutineEditor.tsx:61
 msgid "PagerDuty incident"
@@ -2682,7 +2682,7 @@ msgstr "{0} 삭제"
 #. placeholder {0}: mkt.name
 #: src/pages/SkillsOverlay.tsx:274
 msgid "Remove marketplace {0} and its skills?"
-msgstr ""
+msgstr "마켓플레이스 {0}과(와) 해당 스킬을 제거할까요?"
 
 #. placeholder {0}: mention.name
 #: src/pages/Shell.tsx:5081
@@ -2788,7 +2788,7 @@ msgstr "지금 다시 시도"
 
 #: src/pages/Shell.tsx:2553
 msgid "Retry screen"
-msgstr ""
+msgstr "화면 다시 시도"
 
 #: src/pages/McpOAuthCallback.tsx:62
 msgid "Return to Rakazo"
@@ -2902,7 +2902,7 @@ msgstr "앱 검색"
 
 #: src/pages/shell/command-palette.tsx:91
 msgid "Search bots and switch conversations"
-msgstr ""
+msgstr "봇 검색 및 대화 전환"
 
 #: src/pages/ModelSettingsOverlay.tsx:952
 msgid "Search models"
@@ -2911,7 +2911,7 @@ msgstr "모델 검색"
 #: src/pages/shell/bot-picker.tsx:51
 #: src/pages/shell/bot-picker.tsx:52
 msgid "Search or create Bots"
-msgstr ""
+msgstr "봇 검색 또는 만들기"
 
 #: src/pages/ModelSettingsOverlay.tsx:360
 #: src/pages/ModelSettingsOverlay.tsx:366
@@ -2926,7 +2926,7 @@ msgstr "AI 서비스 또는 모델 검색"
 #: src/pages/KnowledgeSection.tsx:503
 #: src/pages/KnowledgeSection.tsx:504
 msgid "Search skills"
-msgstr ""
+msgstr "스킬 검색"
 
 #: src/pages/SpaceSearch.tsx:16
 msgid "Searching…"
@@ -2938,7 +2938,7 @@ msgstr "대화할 Bot을 선택하세요"
 
 #: src/pages/Onboarding.tsx:323
 msgid "Selected"
-msgstr ""
+msgstr "선택됨"
 
 #: src/pages/Shell.tsx:5170
 #: src/pages/Shell.tsx:5191
@@ -3009,7 +3009,7 @@ msgstr "설정 도움말"
 #. placeholder {0}: seed + 1
 #: src/pages/shell/bot-panel.tsx:231
 msgid "Shape {0}"
-msgstr ""
+msgstr "모양 {0}"
 
 #: src/pages/MemorySettingsOverlay.tsx:49
 #: src/pages/shell/bot-panel.tsx:527
@@ -3022,17 +3022,17 @@ msgstr "공유 문서"
 
 #: src/pages/Onboarding.tsx:267
 msgid "Show all providers"
-msgstr ""
+msgstr "모든 제공자 표시"
 
 #: src/pages/SkillsOverlay.tsx:351
 msgid "Show before / after"
-msgstr ""
+msgstr "이전 / 이후 표시"
 
 #: src/pages/Shell.tsx:3115
 #: src/pages/Shell.tsx:3169
 #: src/pages/Shell.tsx:3170
 msgid "Show bots"
-msgstr ""
+msgstr "봇 표시"
 
 #: src/pages/Shell.tsx:3397
 msgid "Show computer"
@@ -3048,7 +3048,7 @@ msgstr "비밀번호 표시"
 
 #: src/pages/Onboarding.tsx:265
 msgid "Show popular providers"
-msgstr ""
+msgstr "인기 제공자 표시"
 
 #: src/pages/Shell.tsx:3397
 msgid "Show settings"
@@ -3056,7 +3056,7 @@ msgstr "설정 보기"
 
 #: src/pages/AccountSettingsOverlay.tsx:171
 msgid "Show the tools a bot used, with their input and output."
-msgstr ""
+msgstr "봇이 사용한 도구를 입력 및 출력과 함께 표시합니다."
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:206
@@ -3144,7 +3144,7 @@ msgstr "말하는 중…"
 
 #: src/pages/KnowledgeSection.tsx:438
 msgid "Specific agents"
-msgstr ""
+msgstr "특정 에이전트"
 
 #: src/components/teach/TeachComputerOverlay.tsx:250
 msgid "Start recording"
@@ -3167,7 +3167,7 @@ msgstr "실행 단계"
 #. placeholder {0}: calls.length
 #: src/components/AgentSteps.tsx:35
 msgid "Steps ({0})"
-msgstr ""
+msgstr "단계 ({0})"
 
 #: src/pages/Shell.tsx:4082
 #: src/pages/Shell.tsx:4087
@@ -3216,7 +3216,7 @@ msgstr "제출됨"
 
 #: src/pages/shell/command-palette.tsx:90
 msgid "Switch bot"
-msgstr ""
+msgstr "봇 전환"
 
 #: src/pages/ModelSettingsOverlay.tsx:719
 msgid "Switching…"
@@ -3277,7 +3277,7 @@ msgstr "이 Bot은 현재 컴퓨터에서 실행되며 별도 Linux 화면은 �
 
 #: src/components/AgentSteps.tsx:74
 msgid "This call ran before step details were recorded."
-msgstr ""
+msgstr "이 호출은 단계 세부 정보가 기록되기 전에 실행되었습니다."
 
 #: src/pages/shell/dialogs.tsx:276
 #: src/pages/shell/dialogs.tsx:329
@@ -3352,7 +3352,7 @@ msgstr "역할"
 
 #: src/pages/shell/bot-picker.tsx:46
 msgid "To:"
-msgstr ""
+msgstr "받는 사람:"
 
 #: src/pages/PluginsOverlay.tsx:638
 msgid "Tool sources"
@@ -3389,7 +3389,7 @@ msgstr "지원하지 않는 파일 형식: {0}"
 
 #: src/pages/SkillsOverlay.tsx:455
 msgid "Unsupported source"
-msgstr ""
+msgstr "지원되지 않는 소스"
 
 #: src/components/SoftwareUpdateSection.tsx:253
 msgid "Up to date"
@@ -3397,7 +3397,7 @@ msgstr "최신 상태"
 
 #: src/pages/SkillsOverlay.tsx:289
 msgid "Up to date."
-msgstr ""
+msgstr "최신 상태입니다."
 
 #: src/components/SoftwareUpdateSection.tsx:81
 msgid "Update"
@@ -3535,7 +3535,7 @@ msgstr "처리 중…"
 
 #: src/pages/KnowledgeSection.tsx:785
 msgid "Workspace root"
-msgstr ""
+msgstr "작업 공간 루트"
 
 #: src/pages/Shell.tsx:1738
 #: src/pages/Shell.tsx:2558
