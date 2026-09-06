@@ -314,6 +314,8 @@ export function ShellPage() {
   searchParamsRef.current = searchParams;
   const session = authClient.useSession();
   const userId = session.data?.user.id;
+  // Tracking the failed source (not a boolean) retries on the next photo.
+  const [failedUserImage, setFailedUserImage] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [bots, setBots] = useState<Bot[]>([]);
   const botsRef = useRef(bots);
@@ -2434,6 +2436,8 @@ export function ShellPage() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+  const sessionUserImage = session.data?.user.image ?? null;
+  const userImage = sessionUserImage !== failedUserImage ? sessionUserImage : null;
 
   const shell = (
     <div
@@ -2707,6 +2711,7 @@ export function ShellPage() {
                               }
                               size={38}
                               userInitials={initials}
+                              userImage={userImage}
                             />
                           )}
                           <div className="min-w-0 flex-1">
@@ -2833,7 +2838,12 @@ export function ShellPage() {
                   ))}
                   {archivedGroups.map((group) => (
                     <div key={group.id} className="flex items-center gap-2 rounded-lg px-2.5 py-2">
-                      <GroupAvatar members={group.members} size={28} userInitials={initials} />
+                      <GroupAvatar
+                        members={group.members}
+                        size={28}
+                        userInitials={initials}
+                        userImage={userImage}
+                      />
                       <span
                         className="min-w-0 flex-1 truncate text-[14px] text-foreground/75"
                         dir="auto"
@@ -2887,9 +2897,18 @@ export function ShellPage() {
             data-testid="user-menu-trigger"
             className="flex items-center gap-[11px] px-[18px] py-3.5"
           >
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-accent text-[12px] text-foreground/75">
-              {initials}
-            </span>
+            {userImage ? (
+              <img
+                src={userImage}
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-full object-cover"
+                onError={() => setFailedUserImage(userImage)}
+              />
+            ) : (
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-accent text-[12px] text-foreground/75">
+                {initials}
+              </span>
+            )}
             <span className="text-[14.5px] text-foreground/90">{userName}</span>
           </PopoverTrigger>
           {menuOpen ? (
@@ -3068,6 +3087,7 @@ export function ShellPage() {
                   members={activeSnapshot?.members ?? activeGroup?.members ?? []}
                   size={26}
                   userInitials={initials}
+                  userImage={userImage}
                 />
               ) : active ? (
                 <BotAvatar
@@ -3825,6 +3845,7 @@ export function ShellPage() {
         {accountSettingsOpen ? (
           <AccountSettingsOverlay
             name={userName}
+            initials={initials}
             email={session.data?.user.email}
             usage={usage}
             focusUsage={accountSettingsFocusUsage}

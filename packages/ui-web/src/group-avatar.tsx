@@ -1,4 +1,4 @@
-import { type CSSProperties, memo } from "react";
+import { type CSSProperties, memo, useState } from "react";
 import { BotAvatar } from "./bot-avatar.js";
 import { cn } from "./lib/utils.js";
 
@@ -16,6 +16,8 @@ export interface GroupAvatarProps {
   className?: string;
   /** When set, a one-bot group pairs the bot with the user's initials. */
   userInitials?: string;
+  /** Profile photo shown instead of the initials tile, initials on failure. */
+  userImage?: string | null;
 }
 
 export const GroupAvatar = memo(function GroupAvatar({
@@ -23,7 +25,11 @@ export const GroupAvatar = memo(function GroupAvatar({
   size = 38,
   className,
   userInitials,
+  userImage,
 }: GroupAvatarProps) {
+  // Tracking the failed source (not a boolean) retries on the next photo.
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const userPhoto = userImage && userImage !== failedImage ? userImage : null;
   const firstMember = members[0];
   if (!firstMember) {
     return (
@@ -54,7 +60,7 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  if (members.length === 1 && !userInitials) {
+  if (members.length === 1 && !userInitials && !userPhoto) {
     return (
       <BotAvatar
         color={firstMember.color}
@@ -108,7 +114,7 @@ export const GroupAvatar = memo(function GroupAvatar({
       ))}
       {withUser ? (
         <div
-          className="absolute right-0 bottom-0 z-[2] flex items-center justify-center rounded-full bg-accent font-semibold text-foreground/75"
+          className="absolute right-0 bottom-0 z-[2] flex items-center justify-center overflow-hidden rounded-full bg-accent font-semibold text-foreground/75"
           style={{
             width: miniSize,
             height: miniSize,
@@ -116,7 +122,16 @@ export const GroupAvatar = memo(function GroupAvatar({
             boxShadow: "0 0 0 1.5px var(--accent)",
           }}
         >
-          {userInitials}
+          {userPhoto ? (
+            <img
+              src={userPhoto}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={() => setFailedImage(userPhoto)}
+            />
+          ) : (
+            userInitials
+          )}
         </div>
       ) : null}
       {members.length > 3 ? (

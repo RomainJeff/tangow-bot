@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { blockedAuthPaths, passwordResetEmail, resolveSignupPolicy } from "./index.js";
+import {
+  assertProfileImage,
+  blockedAuthPaths,
+  passwordResetEmail,
+  resolveSignupPolicy,
+} from "./index.js";
 
 describe("auth policy", () => {
   it("blocks invitation and org-creation paths in version 1", () => {
@@ -76,5 +81,40 @@ describe("resolveSignupPolicy", () => {
         signupAllowlist: "environment-only@example.com",
       }),
     ).resolves.toEqual({ enabled: false, allowlist: ["approved@example.com"] });
+  });
+});
+
+describe("assertProfileImage", () => {
+  const payload = Buffer.from("tiny").toString("base64");
+
+  it("accepts the supported raster data URLs", () => {
+    for (const mimeType of ["png", "jpeg", "webp"]) {
+      expect(() => assertProfileImage(`data:image/${mimeType};base64,${payload}`)).not.toThrow();
+    }
+  });
+
+  it("accepts clearing the photo", () => {
+    expect(() => assertProfileImage(null)).not.toThrow();
+    expect(() => assertProfileImage(undefined)).not.toThrow();
+    expect(() => assertProfileImage("")).not.toThrow();
+  });
+
+  it("rejects svg, which can carry script", () => {
+    expect(() => assertProfileImage(`data:image/svg+xml;base64,${payload}`)).toThrow();
+    expect(() => assertProfileImage('data:image/svg+xml,<svg onload="alert(1)"/>')).toThrow();
+  });
+
+  it("rejects remote urls that would leak the viewer's IP", () => {
+    expect(() => assertProfileImage("https://tracker.example.test/pixel.png")).toThrow();
+    expect(() => assertProfileImage("http://tracker.example.test/pixel.png")).toThrow();
+  });
+
+  it("rejects malformed base64", () => {
+    expect(() => assertProfileImage("data:image/png;base64,not base64!!")).toThrow();
+    expect(() => assertProfileImage("data:image/png;base64,")).toThrow();
+  });
+
+  it("rejects a payload above the 32 KB session budget", () => {
+    expect(() => assertProfileImage(`data:image/webp;base64,${"A".repeat(32 * 1024)}`)).toThrow();
   });
 });
