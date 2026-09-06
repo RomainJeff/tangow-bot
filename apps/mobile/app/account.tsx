@@ -446,6 +446,19 @@ export default function Account() {
         <Pressable
           accessibilityRole="button"
           disabled={pending}
+          onPress={() => router.push("/skills")}
+          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+        >
+          <View>
+            <Text style={styles.settingsTitle}>{t("Skills")}</Text>
+            <Text style={styles.settingsExplanation}>{t("Teach agents recipes.")}</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={pending}
           onPress={() => setServerOpen(true)}
           style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
         >
