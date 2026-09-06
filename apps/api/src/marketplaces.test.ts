@@ -64,6 +64,7 @@ const v2: Tree = {
 const SKILLS_URL = "https://github.com/vercel-labs/agent-skills";
 const SK1 = "3".repeat(40);
 const SK2 = "4".repeat(40);
+const SK3 = "5".repeat(40);
 /** skills.sh layout: no manifest. `.claude/skills/tdd` is shadowed by `skills/tdd`. */
 const skillsV1: Tree = {
   "skills/tdd/SKILL.md": skill("tdd", "red green"),
@@ -410,6 +411,28 @@ describe("marketplaces service", () => {
       );
       expect(prisma.skillSetting._store).toEqual([]);
       expect((await m.plugins(actor, id)).map((p) => p.name)).toEqual(["tdd"]);
+    });
+
+    it("applyUpdate leaves the on-disk manifest alone when an install fails", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      await m.installPlugin(actor, id, "tdd");
+      const manifestPath = path.join(
+        root(),
+        "vercel-labs-agent-skills/.claude-plugin/marketplace.json",
+      );
+      const before = await readFile(manifestPath, "utf8");
+      // A manifest whose plugin has no files at all: installOne throws mid-update.
+      repos.set(SK3, {
+        ".claude-plugin/marketplace.json": JSON.stringify({
+          name: "vercel-labs-agent-skills",
+          plugins: [{ name: "tdd", source: "./plugins/tdd" }],
+        }),
+      });
+      await expect(m.applyUpdate(actor, id, SK3)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      expect(await readFile(manifestPath, "utf8")).toBe(before);
+      expect(prisma.spaceMarketplace._store[0]?.commit).toBe(SK1);
     });
 
     it("removePlugin cannot delete anything outside the marketplace's plugins dir", async () => {

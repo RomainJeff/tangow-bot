@@ -328,7 +328,6 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       const { dir, manifest, kind, raw } = await checkout(row.url, row.ref, commit);
       const pinned: Installed[] = [];
       try {
-        await writeFile(path.join(dirOf(actor, row), MANIFEST), raw);
         for (const { name } of installedPlugins(row)) {
           if (!manifest.plugins.some((p) => p.name === name)) {
             // Gone upstream: drop it rather than fail the whole update.
@@ -339,6 +338,8 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
           }
           pinned.push(entry(name, await installOne(root(actor), row, dir, manifest, name)));
         }
+        // Last: a failed install must not leave a manifest that plugins() would read as current.
+        await writeFile(path.join(dirOf(actor, row), MANIFEST), raw);
       } catch (error) {
         badRequest(error);
       } finally {
