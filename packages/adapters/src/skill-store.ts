@@ -5,8 +5,10 @@
  * (trusted); the skill directory name is derived from the skill key, never from user input
  * directly, so no path can escape the owner's root.
  */
+import { createWriteStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Readable as ReadableStream } from "node:stream";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
@@ -14,6 +16,7 @@ import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contra
 import { parseSkillMd, type SkillRecord, userSkillKey } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { extract as tarExtract } from "tar";
+import { type Entry, fromBuffer, type ZipFile } from "yauzl";
 
 export type UserSkillFile = SkillRecord & {
   id: string;
@@ -180,31 +183,34 @@ export function bundleFormat(bytes: Buffer): "tar" | "zip" | null {
 }
 
 /**
- * One byte counter for the whole bundle, whatever the format: every extracted stream is piped
- * through the same instance, so the cap is on the observed decompressed bytes rather than any
- * size an archive declares about itself.
+ * One byte budget for the whole bundle, whatever the format. The factory hands out a fresh
+ * Transform per stream — zip extracts one entry at a time, each its own pipeline — while every
+ * one of them spends the same counter, so the cap is on observed decompressed bytes rather than
+ * any size an archive declares about itself.
  */
-function capStream(): Transform {
+function capStream(): () => Transform {
   let bytes = 0;
-  return new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      bytes += chunk.length;
-      if (bytes > SKILL_BUNDLE_MAX_BYTES) {
-        callback(new Error(`Skill bundle too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`));
-        return;
-      }
-      callback(null, chunk);
-    },
-  });
+  return () =>
+    new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        bytes += chunk.length;
+        if (bytes > SKILL_BUNDLE_MAX_BYTES) {
+          callback(new Error(`Skill bundle too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`));
+          return;
+        }
+        callback(null, chunk);
+      },
+    });
 }
 
 async function extractBundle(archive: Buffer, out: string): Promise<void> {
   const format = bundleFormat(archive);
   if (format === "tar") return extractTar(archive, out, capStream());
+  if (format === "zip") return extractZip(archive, out, capStream());
   throw new Error("Skill bundle must be a gzip tar or zip archive.");
 }
 
-async function extractTar(archive: Buffer, out: string, cap: Transform): Promise<void> {
+async function extractTar(archive: Buffer, out: string, cap: () => Transform): Promise<void> {
   let entries = 0;
   const unpack = tarExtract({
     cwd: out,
@@ -220,7 +226,84 @@ async function extractTar(archive: Buffer, out: string, cap: Transform): Promise
     },
   });
   // Explicit gunzip so the byte cap applies to the decompressed tar, not the compressed file.
-  await pipeline(Readable.from([archive]), createGunzip(), cap, unpack);
+  await pipeline(Readable.from([archive]), createGunzip(), cap(), unpack);
+}
+
+const S_IFMT = 0o170000;
+const S_IFREG = 0o100000;
+
+/**
+ * Zip counterpart of extractTar, with the same guarantees: regular files and directories only,
+ * nothing outside `out`, one shared byte cap, one entry cap. yauzl reads the whole buffer we
+ * already hold (bounded by the base64 length cap on import) and streams entries lazily, one at
+ * a time, so nothing is inflated into memory ahead of the cap.
+ */
+async function extractZip(archive: Buffer, out: string, cap: () => Transform): Promise<void> {
+  const zipfile = await new Promise<ZipFile>((resolve, reject) => {
+    fromBuffer(archive, { lazyEntries: true }, (error, opened) => {
+      if (opened) resolve(opened);
+      else reject(error ?? new Error("Skill bundle is not a readable zip archive."));
+    });
+  });
+  let entries = 0;
+  await new Promise<void>((resolve, reject) => {
+    const fail = (error: unknown) => {
+      zipfile.close();
+      reject(error);
+    };
+    zipfile.on("error", fail);
+    zipfile.on("end", resolve);
+    zipfile.on("entry", (entry: Entry) => {
+      // Counted before any per-entry work, so a 10k-entry archive dies on entry 201.
+      if (++entries > SKILL_BUNDLE_MAX_ENTRIES) {
+        fail(new Error(`Skill bundle has too many entries (> ${SKILL_BUNDLE_MAX_ENTRIES}).`));
+        return;
+      }
+      extractZipEntry(zipfile, entry, out, cap).then(() => {
+        zipfile.readEntry();
+      }, fail);
+    });
+    zipfile.readEntry();
+  });
+}
+
+async function extractZipEntry(
+  zipfile: ZipFile,
+  entry: Entry,
+  out: string,
+  cap: () => Transform,
+): Promise<void> {
+  // yauzl's own validateFileName already rejects "..", absolute paths and backslashes; resolving
+  // the target again is the belt-and-braces check the marketplace extractor keeps.
+  // ponytail: path depth and name length are unguarded here as on the tar side — the entry and
+  // byte caps bound the damage; add a depth check if a real bundle ever needs one.
+  const root = path.resolve(out);
+  const target = path.resolve(root, entry.fileName);
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error(`Skill bundle entry escapes the bundle root: ${entry.fileName}.`);
+  }
+  if (entry.fileName.endsWith("/")) {
+    await mkdir(target, { recursive: true });
+    return;
+  }
+  // Symlinks (S_IFLNK), fifos and devices are dropped silently, like the tar filter drops them.
+  // A zero mode is an MS-DOS-authored zip, which carries no unix mode at all: treat it as a file.
+  const mode = (entry.externalFileAttributes >>> 16) & S_IFMT;
+  if (mode !== S_IFREG && mode !== 0) return;
+  if (entry.isEncrypted()) {
+    throw new Error("Skill bundle uses zip encryption, which is not supported.");
+  }
+  await mkdir(path.dirname(target), { recursive: true });
+  const stream = await new Promise<ReadableStream>((resolve, reject) => {
+    zipfile.openReadStream(entry, (error, readable) => {
+      if (readable) resolve(readable);
+      else reject(error ?? new Error(`Cannot read skill bundle entry ${entry.fileName}.`));
+    });
+  });
+  // The cap counts the bytes actually observed, across every entry: the central directory's
+  // uncompressedSize is attacker-controlled, so a bomb declaring 1 KB and delivering 4 GB of
+  // inflated data still stops here rather than filling the disk.
+  await pipeline(stream, cap(), createWriteStream(target));
 }
 
 const isFile = (file: string) =>

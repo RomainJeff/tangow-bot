@@ -5,6 +5,7 @@ import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contra
 import { buildSkillMd } from "@rakazo/core";
 import { create as tarCreate } from "tar";
 import { afterEach, describe, expect, it } from "vitest";
+import { ZipFile } from "yazl";
 import {
   isExists,
   listUserSkills,
@@ -247,6 +248,184 @@ describe("skill store", () => {
       await expect(
         writeUserSkillBundle(root, Buffer.from("plain text"), resolve),
       ).rejects.toThrow();
+      expect(await readdir(root)).toEqual([]);
+    });
+  });
+
+  describe("zip bundles", () => {
+    const resolve = async (skillMd: string) => {
+      const name = /^name: (.*)$/m.exec(skillMd)?.[1] ?? "";
+      return { name, content: `${skillMd}\n<!-- normalized -->\n` };
+    };
+
+    type ZipEntry = { name: string; content?: string; mode?: number };
+
+    async function zip(entries: ZipEntry[]): Promise<Buffer> {
+      const file = new ZipFile();
+      for (const entry of entries) {
+        const options = entry.mode === undefined ? undefined : { mode: entry.mode };
+        file.addBuffer(Buffer.from(entry.content ?? ""), entry.name, options);
+      }
+      file.end();
+      const chunks: Buffer[] = [];
+      await new Promise<void>((done, fail) => {
+        file.outputStream.on("data", (chunk: Buffer) => chunks.push(chunk));
+        file.outputStream.on("end", () => done());
+        file.outputStream.on("error", fail);
+      });
+      return Buffer.concat(chunks);
+    }
+
+    /** Rewrites every zip header in place; yazl refuses to author these on its own. */
+    function patchHeaders(
+      archive: Buffer,
+      edit: (out: Buffer, local: number, central: number) => void,
+    ): Buffer {
+      const out = Buffer.from(archive);
+      for (let i = 0; i + 30 <= out.length; i++) {
+        const signature = out.readUInt32LE(i);
+        if (signature === 0x04034b50) edit(out, i, -1);
+        else if (signature === 0x02014b50) edit(out, -1, i);
+      }
+      return out;
+    }
+
+    const declareSize = (archive: Buffer, size: number) =>
+      patchHeaders(archive, (out, local, central) => {
+        if (local >= 0) out.writeUInt32LE(size, local + 22);
+        else out.writeUInt32LE(size, central + 24);
+      });
+
+    const markEncrypted = (archive: Buffer) =>
+      patchHeaders(archive, (out, local, central) => {
+        const at = local >= 0 ? local + 6 : central + 8;
+        out.writeUInt16LE(out.readUInt16LE(at) | 0x1, at);
+      });
+
+    it("extracts SKILL.md with its extra files next to it, dropping symlinks", async () => {
+      const root = await tmpRoot();
+      const archive = await zip([
+        { name: "SKILL.md", content: md("Deploy") },
+        { name: "scripts/run.sh", content: "echo hi" },
+        { name: "references/notes.md", content: "n" },
+        { name: "link", content: "/etc/passwd", mode: 0o120777 },
+      ]);
+      await writeUserSkillBundle(root, archive, resolve);
+      const dir = path.join(root, "deploy");
+      expect((await readdir(dir)).sort()).toEqual(["SKILL.md", "references", "scripts"]);
+      expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toContain("normalized");
+      expect(await readFile(path.join(dir, "scripts/run.sh"), "utf8")).toBe("echo hi");
+      expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Deploy"]);
+      expect(await readdir(root)).toEqual(["deploy"]);
+    });
+
+    it("accepts a single top-level directory wrapping the skill", async () => {
+      const root = await tmpRoot();
+      const archive = await zip([
+        { name: "deploy/SKILL.md", content: md("Deploy") },
+        { name: "deploy/x.txt", content: "x" },
+      ]);
+      await writeUserSkillBundle(root, archive, resolve);
+      expect(await readFile(path.join(root, "deploy", "x.txt"), "utf8")).toBe("x");
+    });
+
+    it("rejects bundles without SKILL.md at the root and cleans up", async () => {
+      const root = await tmpRoot();
+      const archive = await zip([
+        { name: "a/SKILL.md", content: md("A") },
+        { name: "b/SKILL.md", content: md("B") },
+      ]);
+      await expect(writeUserSkillBundle(root, archive, resolve)).rejects.toThrow(/SKILL\.md/);
+      expect(await readdir(root)).toEqual([]);
+    });
+
+    it("fails with EEXIST on a name clash without touching the existing skill", async () => {
+      const root = await tmpRoot();
+      await writeUserSkill(root, { name: "Deploy", content: md("Deploy", "Old") }, "create");
+      const archive = await zip([
+        { name: "SKILL.md", content: md("Deploy") },
+        { name: "x.txt", content: "x" },
+      ]);
+      const error = await writeUserSkillBundle(root, archive, resolve).catch((e: unknown) => e);
+      expect(isExists(error)).toBe(true);
+      expect(await readFile(path.join(root, "deploy", "SKILL.md"), "utf8")).toBe(
+        md("Deploy", "Old"),
+      );
+      expect(await readdir(root)).toEqual(["deploy"]);
+    });
+
+    it("caps the bytes it observes, not the size the archive declares", async () => {
+      const root = await tmpRoot();
+      // Deflates to a few KB, so only the running counter over the inflated stream catches it.
+      const bomb = await zip([
+        { name: "SKILL.md", content: md("Bomb") },
+        { name: "blob.bin", content: "a".repeat(SKILL_BUNDLE_MAX_BYTES + 1) },
+      ]);
+      await expect(writeUserSkillBundle(root, bomb, resolve)).rejects.toThrow(/too large/);
+      expect(await readdir(root)).toEqual([]);
+
+      // Same bytes, now claiming to be 1 KB in every header: still rejected, never written.
+      await expect(writeUserSkillBundle(root, declareSize(bomb, 1024), resolve)).rejects.toThrow();
+      expect(await readdir(root)).toEqual([]);
+
+      // One counter for the whole bundle: two entries under the cap that together exceed it.
+      const half = "b".repeat(Math.ceil(SKILL_BUNDLE_MAX_BYTES * 0.6));
+      const split = await zip([
+        { name: "SKILL.md", content: md("Split") },
+        { name: "one.bin", content: half },
+        { name: "two.bin", content: half },
+      ]);
+      await expect(writeUserSkillBundle(root, split, resolve)).rejects.toThrow(/too large/);
+      expect(await readdir(root)).toEqual([]);
+    });
+
+    it("rejects bundles with too many entries", async () => {
+      const root = await tmpRoot();
+      const archive = await zip([
+        { name: "SKILL.md", content: md("Many") },
+        ...Array.from({ length: SKILL_BUNDLE_MAX_ENTRIES }, (_, i) => ({
+          name: `f/${i}.txt`,
+          content: "x",
+        })),
+      ]);
+      await expect(writeUserSkillBundle(root, archive, resolve)).rejects.toThrow(/too many/);
+      expect(await readdir(root)).toEqual([]);
+    });
+
+    it("rejects truncated zip bytes", async () => {
+      const root = await tmpRoot();
+      const archive = await zip([{ name: "SKILL.md", content: md("Cut") }]);
+      await expect(
+        writeUserSkillBundle(root, archive.subarray(0, archive.length - 20), resolve),
+      ).rejects.toThrow();
+      expect(await readdir(root)).toEqual([]);
+    });
+
+    it("rejects entries that escape the bundle root", async () => {
+      const root = await tmpRoot();
+      // yazl refuses to author "..", so swap in a same-length placeholder after the fact.
+      const archive = await zip([
+        { name: "SKILL.md", content: md("Escape") },
+        { name: "zz/escape.txt", content: "pwned" },
+      ]);
+      const traversal = Buffer.from(
+        archive.toString("latin1").replaceAll("zz/escape.txt", "../escape.txt"),
+        "latin1",
+      );
+      await expect(writeUserSkillBundle(root, traversal, resolve)).rejects.toThrow();
+      expect(await readdir(root)).toEqual([]);
+      await expect(stat(path.join(root, "..", "escape.txt"))).rejects.toThrow();
+    });
+
+    it("rejects encrypted entries by name", async () => {
+      const root = await tmpRoot();
+      const archive = await zip([
+        { name: "SKILL.md", content: md("Secret") },
+        { name: "payload.txt", content: "z".repeat(2048) },
+      ]);
+      await expect(writeUserSkillBundle(root, markEncrypted(archive), resolve)).rejects.toThrow(
+        /encryption/,
+      );
       expect(await readdir(root)).toEqual([]);
     });
   });
