@@ -111,6 +111,27 @@ export async function writeUserSkill(
 }
 
 /**
+ * Renames a skill: the whole directory moves, so bundle extras (scripts/, references/) follow the
+ * new name instead of being dropped, then the new SKILL.md lands. "create" semantics: EEXIST on a
+ * name clash, same signal as writeUserSkill "create".
+ */
+export async function renameUserSkill(
+  root: string,
+  oldName: string,
+  skill: { name: string; content: string },
+): Promise<void> {
+  const from = path.join(root, skillDirName(oldName));
+  const dest = path.join(root, skillDirName(skill.name));
+  await mkdir(dest); // EEXIST = name clash
+  // rename(2) replaces the empty directory we just claimed.
+  await rename(from, dest).catch(async (error) => {
+    await rm(dest, { recursive: true, force: true });
+    throw error;
+  });
+  await writeUserSkill(root, skill, "replace");
+}
+
+/**
  * Imports a `.skill` bundle: a gzip tar with SKILL.md at its root (or inside a single top-level
  * directory) plus any extra files (scripts/, references/, ...). Extracts into a temp dir under
  * root, lets `resolve` validate the SKILL.md (and return the normalized content), then renames

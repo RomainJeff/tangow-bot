@@ -17,6 +17,7 @@ import {
   isExists,
   listUserSkills,
   removeUserSkill,
+  renameUserSkill,
   userSkillsRoot,
   writeUserSkill,
 } from "./skill-store.js";
@@ -290,8 +291,8 @@ export async function skillUpdateFromTool(
     if (oldKey === newKey) {
       await writeUserSkill(root, { name: nextName, content: nextContent }, "replace");
     } else {
-      // Rename: new file first, then access rows follow the key, then the old file goes.
-      await writeUserSkill(root, { name: nextName, content: nextContent }, "create");
+      // Rename: the directory moves first (bundle extras follow), then access rows follow the key.
+      await renameUserSkill(root, existing.name, { name: nextName, content: nextContent });
       await deps.prisma.$transaction([
         deps.prisma.skillSetting.updateMany({
           where: { ...scope, skillKey: oldKey },
@@ -302,7 +303,6 @@ export async function skillUpdateFromTool(
           data: { skillKey: newKey },
         }),
       ]);
-      await removeUserSkill(root, existing.name);
     }
   } catch (error) {
     return {

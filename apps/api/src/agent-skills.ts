@@ -7,6 +7,7 @@ import {
   type MarketplaceSkillFile,
   marketplacesRoot,
   removeUserSkill,
+  renameUserSkill,
   type UserSkillFile,
   userSkillsRoot,
   writeUserSkill,
@@ -310,9 +311,9 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
         await writeUserSkill(root(actor), skill, "replace");
         return toAgentSkill(await owned(actor, newKey));
       }
-      // Rename: new file first, then access rows follow the key, then the old file goes.
+      // Rename: the directory moves first (bundle extras follow), then access rows follow the key.
       assertNameFree(await files(actor), resolved.name, existing.id);
-      await writeUserSkill(root(actor), skill, "create").catch(conflictOrRethrow);
+      await renameUserSkill(root(actor), existing.name, skill).catch(conflictOrRethrow);
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
       await prisma.$transaction([
         prisma.skillSetting.updateMany({
@@ -324,7 +325,6 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
           data: { skillKey: newKey },
         }),
       ]);
-      await removeUserSkill(root(actor), existing.name);
       return toAgentSkill(await owned(actor, newKey));
     },
 

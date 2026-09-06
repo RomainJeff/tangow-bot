@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
@@ -10,6 +10,7 @@ import {
   listUserSkills,
   removeUserSkill,
   removeUserSkillDirs,
+  renameUserSkill,
   skillDirName,
   userSkillsRoot,
   writeUserSkill,
@@ -74,6 +75,32 @@ describe("skill store", () => {
 
     await removeUserSkill(root, "alpha");
     expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Daily Standup"]);
+  });
+
+  it("renaming moves the whole directory, keeping bundle extras", async () => {
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Alpha", content: md("Alpha") }, "create");
+    await mkdir(path.join(root, "alpha", "scripts"), { recursive: true });
+    await writeFile(path.join(root, "alpha", "scripts", "run.sh"), "echo hi");
+
+    await renameUserSkill(root, "Alpha", { name: "Beta", content: md("Beta") });
+
+    expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Beta"]);
+    expect(await readFile(path.join(root, "beta", "scripts", "run.sh"), "utf8")).toBe("echo hi");
+    expect(await readFile(path.join(root, "beta", "SKILL.md"), "utf8")).toBe(md("Beta"));
+    await expect(stat(path.join(root, "alpha"))).rejects.toThrow();
+  });
+
+  it("refuses to rename onto an existing skill name", async () => {
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Alpha", content: md("Alpha") }, "create");
+    await writeUserSkill(root, { name: "Beta", content: md("Beta") }, "create");
+    const error = await renameUserSkill(root, "Alpha", {
+      name: "Beta",
+      content: md("Beta"),
+    }).catch((e: unknown) => e);
+    expect(isExists(error)).toBe(true);
+    expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Alpha", "Beta"]);
   });
 
   it("refuses to create over an existing skill, case-insensitively", async () => {
