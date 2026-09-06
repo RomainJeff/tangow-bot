@@ -1,9 +1,10 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { listUserSkills, marketplacesRoot, userSkillsRoot } from "@rakazo/adapters";
 import { buildSkillMd } from "@rakazo/core";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
+import { create as tarCreate } from "tar";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAgentSkillsService } from "./agent-skills.js";
 
@@ -140,6 +141,60 @@ describe("agent skills service (filesystem)", () => {
       IsolationError,
     );
     await expect(skills.remove(actor, "builtin:x")).rejects.toBeInstanceOf(IsolationError);
+  });
+
+  it("imports a plain-text .skill through the create path", async () => {
+    const skills = service();
+    const content = buildSkillMd({ name: "Plain", description: "P", body: "Body" });
+    const imported = await skills.import(actor, { data: Buffer.from(content).toString("base64") });
+    expect(imported).toMatchObject({ id: "user:plain", name: "Plain", description: "P" });
+    await expect(
+      skills.import(actor, { data: Buffer.from(content).toString("base64") }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      skills.import(actor, { data: Buffer.from("no frontmatter").toString("base64") }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      skills.import(actor, {
+        data: Buffer.from([0x50, 0x4b, 0x03, 0x04, 0xff]).toString("base64"),
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/\.skill/) });
+  });
+
+  it("imports a tar.gz bundle with its extra files, rejecting bad frontmatter and duplicates", async () => {
+    const skills = service();
+    async function bundle(skillMd: string): Promise<string> {
+      const src = await mkdtemp(path.join(tmpdir(), "rakazo-bundle-"));
+      try {
+        await mkdir(path.join(src, "scripts"));
+        await writeFile(path.join(src, "SKILL.md"), skillMd, "utf8");
+        await writeFile(path.join(src, "scripts", "run.sh"), "echo hi", "utf8");
+        await tarCreate({ gzip: true, cwd: src, file: path.join(src, "out.skill") }, [
+          "SKILL.md",
+          "scripts",
+        ]);
+        return (await readFile(path.join(src, "out.skill"))).toString("base64");
+      } finally {
+        await rm(src, { recursive: true, force: true });
+      }
+    }
+    const imported = await skills.import(actor, {
+      data: await bundle(buildSkillMd({ name: "Deploy", description: "D", body: "Steps" })),
+    });
+    expect(imported).toMatchObject({ id: "user:deploy", name: "Deploy", source: "user" });
+    const dir = path.join(userSkillsRoot(dataDir, actor), "deploy");
+    expect(await readFile(path.join(dir, "scripts", "run.sh"), "utf8")).toBe("echo hi");
+    expect((await skills.list(actor)).map((s) => s.id)).toEqual(["user:deploy"]);
+
+    await expect(
+      skills.import(actor, { data: await bundle("no frontmatter") }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/frontmatter/) });
+    await expect(
+      skills.import(actor, {
+        data: await bundle(buildSkillMd({ name: "deploy", description: "Again", body: "" })),
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect((await skills.get(actor, { skillId: "user:deploy" })).description).toBe("D");
   });
 
   it("lists, reads and scopes marketplace skills but refuses to edit them", async () => {

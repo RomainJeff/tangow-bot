@@ -2314,6 +2314,9 @@ export function createRouter(deps: RouterDeps) {
       create: authed.agentSkills.create.handler(async ({ context, input }) =>
         agentSkills.create(context.actor, input),
       ),
+      import: authed.agentSkills.import.handler(async ({ context, input }) =>
+        agentSkills.import(context.actor, input),
+      ),
       update: authed.agentSkills.update.handler(async ({ context, input }) =>
         agentSkills.update(context.actor, input),
       ),

@@ -251,6 +251,7 @@ export function AgentSkills() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const generation = useRef(0);
   const selection = useRef(0);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   async function refresh() {
     const current = ++generation.current;
@@ -328,6 +329,29 @@ export function AgentSkills() {
       }
     } catch {
       setError(t`Could not save skill`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importFile(file: File) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      }
+      await rpc.agentSkills.import({ data: btoa(binary) });
+      try {
+        await refresh();
+      } catch {
+        setError(t`Could not load`);
+      }
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : t`Could not import skill`);
     } finally {
       setBusy(false);
     }
@@ -507,21 +531,43 @@ export function AgentSkills() {
           </div>
         </div>
       ) : (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            selection.current += 1;
-            setOpen(null);
-            setCreating(true);
-            setConfirmingDelete(false);
-            setDraft(NEW_SKILL_TEMPLATE);
-            setError(null);
-          }}
-          className="mt-2 px-2.5 text-[13px] text-muted-foreground hover:text-foreground"
-        >
-          <Trans>New skill</Trans>
-        </button>
+        <div className="mt-2 flex items-center">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              selection.current += 1;
+              setOpen(null);
+              setCreating(true);
+              setConfirmingDelete(false);
+              setDraft(NEW_SKILL_TEMPLATE);
+              setError(null);
+            }}
+            className="px-2.5 text-[13px] text-muted-foreground hover:text-foreground"
+          >
+            <Trans>New skill</Trans>
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".skill"
+            className="hidden"
+            data-testid="bot-knowledge-skill-import"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void importFile(file);
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => fileInput.current?.click()}
+            className="px-2.5 text-[13px] text-muted-foreground hover:text-foreground"
+          >
+            <Trans>Import</Trans>
+          </button>
+        </div>
       )}
     </div>
   );

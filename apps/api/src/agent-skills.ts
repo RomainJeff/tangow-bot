@@ -10,6 +10,7 @@ import {
   type UserSkillFile,
   userSkillsRoot,
   writeUserSkill,
+  writeUserSkillBundle,
 } from "@rakazo/adapters";
 import type { Actor, AgentSkill, AgentSkillCatalogEntry } from "@rakazo/contracts";
 import {
@@ -211,6 +212,20 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
     return (await catalog(actor, input?.botId)).map(({ content: _content, ...entry }) => entry);
   }
 
+  async function create(
+    actor: Actor,
+    input: { content?: string; name?: string; description?: string; body?: string },
+  ): Promise<AgentSkill> {
+    const resolved = resolveSkillContent(input);
+    assertNameFree(await files(actor), resolved.name);
+    await writeUserSkill(
+      root(actor),
+      { name: resolved.name, content: resolved.content },
+      "create",
+    ).catch(conflictOrRethrow);
+    return toAgentSkill(await owned(actor, userSkillKey(resolved.name)));
+  }
+
   return {
     list,
 
@@ -235,18 +250,37 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       return toAgentSkill(file);
     },
 
-    async create(
-      actor: Actor,
-      input: { content?: string; name?: string; description?: string; body?: string },
-    ): Promise<AgentSkill> {
-      const resolved = resolveSkillContent(input);
-      assertNameFree(await files(actor), resolved.name);
-      await writeUserSkill(
-        root(actor),
-        { name: resolved.name, content: resolved.content },
-        "create",
-      ).catch(conflictOrRethrow);
-      return toAgentSkill(await owned(actor, userSkillKey(resolved.name)));
+    create,
+
+    /** `.skill` file: gzip tar bundle (magic 1f 8b) or plain SKILL.md text. */
+    async import(actor: Actor, input: { data: string }): Promise<AgentSkill> {
+      const bytes = Buffer.from(input.data, "base64");
+      if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) {
+        let content: string;
+        try {
+          content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        } catch {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Not a .skill file (expected SKILL.md text or a gzip tar bundle).",
+          });
+        }
+        return create(actor, { content });
+      }
+      let name = "";
+      await writeUserSkillBundle(root(actor), bytes, async (skillMd) => {
+        const resolved = resolveSkillContent({ content: skillMd });
+        assertNameFree(await files(actor), resolved.name);
+        name = resolved.name;
+        return resolved;
+      }).catch((error: unknown) => {
+        if (error instanceof ORPCError) throw error;
+        if (isExists(error)) conflictOrRethrow(error);
+        // ponytail: gunzip/tar/layout failures all read fine as-is; no error taxonomy.
+        throw new ORPCError("BAD_REQUEST", {
+          message: error instanceof Error ? error.message : "Invalid skill bundle.",
+        });
+      });
+      return toAgentSkill(await owned(actor, userSkillKey(name)));
     },
 
     async update(

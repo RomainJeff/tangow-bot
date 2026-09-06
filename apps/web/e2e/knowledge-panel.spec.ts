@@ -99,6 +99,18 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await expect(knowledge.getByText("Say hello before anything else.")).toBeVisible();
   await captureScreenshot(page, testInfo, "82-knowledge-skill-listed");
 
+  // Import: a plain-text .skill lands in the list like a hand-made skill.
+  await knowledge.getByTestId("bot-knowledge-skill-import").setInputFiles({
+    name: "imported.skill",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from(
+      ["---", "name: imported-skill", "description: Came from a file.", "---", "", "Body."].join(
+        "\n",
+      ),
+    ),
+  });
+  await expect(knowledge.getByRole("button", { name: /imported-skill/ })).toBeVisible();
+
   // Scoping: a hand-made skill is visible to every agent; excluding Chief hides it
   // from Chief's catalog without touching the skill itself.
   type CatalogEntry = { id: string; name: string; availability: string; visibleBotIds: string[] };

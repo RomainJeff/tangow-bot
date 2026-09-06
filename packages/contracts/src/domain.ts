@@ -451,6 +451,16 @@ export const UpdateAgentSkillInput = z
     }
   });
 
+/** `.skill` import: plain SKILL.md text, or a gzip tar bundle (SKILL.md + scripts/, references/, ...). */
+export const SKILL_BUNDLE_MAX_BYTES = 10 * 1024 * 1024;
+export const SKILL_BUNDLE_MAX_ENTRIES = 200;
+export const ImportAgentSkillInput = z.object({
+  data: z
+    .string()
+    .min(1)
+    .max(Math.ceil(SKILL_BUNDLE_MAX_BYTES / 3) * 4),
+});
+
 /** Skills v2 phase 3: a GitHub marketplace added to a space; the row is the lock (design Q3). */
 export const SpaceMarketplaceSchema = z.object({
   id: Id,

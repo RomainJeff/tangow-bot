@@ -28,6 +28,7 @@ import {
   ExportManifestSchema,
   GroupDetailSchema,
   GroupSchema,
+  ImportAgentSkillInput,
   MarketplacePluginSchema,
   MarketplaceUpdateCheckSchema,
   McpServerConfigInput,
@@ -474,6 +475,8 @@ export const appContract = {
       )
       .output(AgentSkillSchema),
     create: oc.input(CreateAgentSkillInput).output(AgentSkillSchema),
+    /** Base64 `.skill` file: SKILL.md text or a gzip tar bundle with SKILL.md at its root. */
+    import: oc.input(ImportAgentSkillInput).output(AgentSkillSchema),
     update: oc.input(UpdateAgentSkillInput).output(AgentSkillSchema),
     remove: oc.input(z.object({ skillId: Id })).output(z.object({ ok: z.literal(true) })),
     /** One write path for both the global toggle and the per-bot chips. */
