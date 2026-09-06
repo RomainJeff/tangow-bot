@@ -747,6 +747,8 @@ model SpaceMarketplace {
   ref              String   @default("HEAD")
   commit           String
   installedPlugins Json     @default("[]")
+  /// "marketplace" (.claude-plugin/marketplace.json) or "skills" (skills.sh layout, synthetic manifest). UI-only.
+  kind             String   @default("marketplace")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

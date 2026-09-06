@@ -83,6 +83,7 @@ const toDto = (row: Row): SpaceMarketplace => ({
   ref: row.ref,
   commit: row.commit,
   installedPlugins: installedNames(row),
+  kind: row.kind === "skills" ? "skills" : "marketplace",
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });

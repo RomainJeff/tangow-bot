@@ -469,6 +469,8 @@ export const SpaceMarketplaceSchema = z.object({
   ref: z.string(),
   commit: z.string(),
   installedPlugins: z.array(z.string()),
+  /** Phase 4: how the repository is read. Drives UI wording only. */
+  kind: z.enum(["marketplace", "skills"]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

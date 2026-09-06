@@ -83,6 +83,7 @@ function table(store: Row[]) {
         id: `mkt-${store.length + 1}`,
         createdAt: new Date(),
         updatedAt: new Date(),
+        kind: "marketplace",
         ...data,
       };
       store.push(row);
@@ -157,6 +158,7 @@ describe("marketplaces service", () => {
       ref: "HEAD",
       commit: SHA1,
       installedPlugins: [],
+      kind: "marketplace",
     });
     expect(added.createdAt).toMatch(/^\d{4}-/);
     expect(
