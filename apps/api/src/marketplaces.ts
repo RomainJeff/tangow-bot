@@ -188,6 +188,32 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
     );
   }
 
+  /** Installs `plugins` from one checkout. Whatever installed before a failure is persisted. */
+  async function installPlugins(
+    actor: Actor,
+    marketplaceId: string,
+    plugins: string[],
+  ): Promise<SpaceMarketplace> {
+    const row = await owned(actor, marketplaceId);
+    const { dir, manifest } = await checkout(row.url, row.ref, row.commit);
+    const added: Installed[] = [];
+    const merged = () => {
+      const names = new Set(added.map((p) => p.name));
+      return [...installedPlugins(row).filter((p) => !names.has(p.name)), ...added].sort(byName);
+    };
+    try {
+      for (const plugin of plugins) {
+        added.push(entry(plugin, await installOne(root(actor), row, dir, manifest, plugin)));
+      }
+    } catch (error) {
+      await setInstalled(row, merged());
+      badRequest(error);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+    return setInstalled(row, merged());
+  }
+
   return {
     async list(actor: Actor): Promise<SpaceMarketplace[]> {
       const rows = await prisma.spaceMarketplace.findMany({
@@ -241,22 +267,10 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       }));
     },
 
-    async installPlugin(
-      actor: Actor,
-      marketplaceId: string,
-      plugin: string,
-    ): Promise<SpaceMarketplace> {
-      const row = await owned(actor, marketplaceId);
-      const { dir, manifest } = await checkout(row.url, row.ref, row.commit);
-      let commit: string | undefined;
-      try {
-        commit = await installOne(root(actor), row, dir, manifest, plugin).catch(badRequest);
-      } finally {
-        await rm(dir, { recursive: true, force: true });
-      }
-      const kept = installedPlugins(row).filter((p) => p.name !== plugin);
-      return setInstalled(row, [...kept, entry(plugin, commit)].sort(byName));
-    },
+    installPlugins,
+
+    installPlugin: (actor: Actor, marketplaceId: string, plugin: string) =>
+      installPlugins(actor, marketplaceId, [plugin]),
 
     async removePlugin(
       actor: Actor,

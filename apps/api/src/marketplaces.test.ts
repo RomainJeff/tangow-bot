@@ -358,6 +358,35 @@ describe("marketplaces service", () => {
       ]);
     });
 
+    it("installPlugins installs several skills from one checkout and keeps earlier installs", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      await m.installPlugin(actor, id, "tdd");
+      const row = await m.installPlugins(actor, id, ["review", "tdd"]);
+      expect(row.installedPlugins).toEqual(["review", "tdd"]);
+      expect((await listMarketplaceSkills(root())).map((s) => s.id)).toEqual([
+        "mkt:vercel-labs-agent-skills/review/review",
+        "mkt:vercel-labs-agent-skills/tdd/tdd",
+      ]);
+      expect(
+        await readFile(
+          path.join(root(), "vercel-labs-agent-skills/plugins/tdd/skills/tdd/SKILL.md"),
+          "utf8",
+        ),
+      ).toBe(skill("tdd", "red green"));
+    });
+
+    it("installPlugins persists the plugins that succeeded before a failing one", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      await expect(m.installPlugins(actor, id, ["tdd", "nope"])).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });
+      expect(prisma.spaceMarketplace._store[0]?.installedPlugins).toEqual([{ name: "tdd" }]);
+    });
+
     it("refuses a repository with neither manifest nor SKILL.md", async () => {
       headSha = SK1;
       repos.set(SK1, { "README.md": "nothing" });
