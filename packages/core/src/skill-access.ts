@@ -1,7 +1,7 @@
 /**
  * Per-bot skill visibility (Skills v2, phase 1).
  * `skillKey` is the identity shared by SkillSetting / BotSkill rows. For user skills it is
- * derived from the name with the same rule as the case-insensitive unique index on
+ * derived from the name with the same rule as the former case-insensitive unique index on
  * agent_skills (lower(name)), so a rename is the only thing that changes it.
  */
 export type SkillAvailability = "all" | "selected";
