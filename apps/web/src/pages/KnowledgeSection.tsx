@@ -239,7 +239,7 @@ description: What this skill does and when the agent should use it.
 Steps the agent should follow.
 `;
 
-function AgentSkills() {
+export function AgentSkills() {
   const { t } = useLingui();
   const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
   const [bots, setBots] = useState<Bot[]>([]);

@@ -94,6 +94,7 @@ import {
   Puzzle,
   Reply,
   Settings,
+  Sparkles,
   Square,
   ThumbsUp,
   Volume2,
@@ -235,6 +236,9 @@ const PeerMessagesOverlay = lazy(() =>
 );
 const PluginsOverlay = lazy(() =>
   import("./PluginsOverlay").then((module) => ({ default: module.PluginsOverlay })),
+);
+const SkillsOverlay = lazy(() =>
+  import("./SkillsOverlay").then((module) => ({ default: module.SkillsOverlay })),
 );
 const McpServersOverlay = lazy(() =>
   import("./McpServersOverlay").then((module) => ({ default: module.McpServersOverlay })),
@@ -419,6 +423,7 @@ export function ShellPage() {
     commitSnapshot(update(snapshotRef.current));
   }
   const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [messagingSettingsOpen, setMessagingSettingsOpen] = useState(false);
@@ -3005,6 +3010,19 @@ export function ShellPage() {
             <Trans>Integrations</Trans>
           </span>
         </button>
+        <button
+          type="button"
+          data-testid="open-skills"
+          onClick={() => setSkillsOpen(true)}
+          className="mx-3 mb-1 flex items-center gap-3 rounded-[11px] px-2.5 py-2 hover:bg-background"
+        >
+          <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-muted text-foreground/75">
+            <Sparkles size={15} strokeWidth={1.7} />
+          </span>
+          <span className="text-[14.5px] text-foreground/90">
+            <Trans>Skills</Trans>
+          </span>
+        </button>
         <Popover open={menuOpen} onOpenChange={setMenuOpen}>
           <PopoverTrigger
             data-testid="user-menu-trigger"
@@ -3934,6 +3952,13 @@ export function ShellPage() {
               setPluginsOpen(false);
               setMcpOpen(true);
             }}
+          />
+        ) : null}
+        {skillsOpen ? (
+          <SkillsOverlay
+            botId={activeBotId.current}
+            onClose={() => setSkillsOpen(false)}
+            onSkillsChanged={refreshAgentSkills}
           />
         ) : null}
         {mcpOpen ? <McpServersOverlay onClose={() => setMcpOpen(false)} /> : null}
