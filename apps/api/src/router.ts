@@ -2377,6 +2377,9 @@ export function createRouter(deps: RouterDeps) {
       installPlugin: authed.marketplaces.installPlugin.handler(async ({ context, input }) =>
         marketplaces.installPlugin(context.actor, input.marketplaceId, input.plugin),
       ),
+      installPlugins: authed.marketplaces.installPlugins.handler(async ({ context, input }) =>
+        marketplaces.installPlugins(context.actor, input.marketplaceId, input.plugins),
+      ),
       removePlugin: authed.marketplaces.removePlugin.handler(async ({ context, input }) =>
         marketplaces.removePlugin(context.actor, input.marketplaceId, input.plugin),
       ),

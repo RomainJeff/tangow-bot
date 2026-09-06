@@ -509,6 +509,15 @@ export const appContract = {
     installPlugin: oc
       .input(z.object({ marketplaceId: Id, plugin: z.string().min(1).max(64) }))
       .output(SpaceMarketplaceSchema),
+    /** Phase 4: several plugins from one checkout (Browse "Install selected"). */
+    installPlugins: oc
+      .input(
+        z.object({
+          marketplaceId: Id,
+          plugins: z.array(z.string().min(1).max(64)).min(1).max(100),
+        }),
+      )
+      .output(SpaceMarketplaceSchema),
     removePlugin: oc
       .input(z.object({ marketplaceId: Id, plugin: z.string().min(1).max(64) }))
       .output(SpaceMarketplaceSchema),

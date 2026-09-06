@@ -61,6 +61,20 @@ const v2: Tree = {
   "plugins/alpha/skills/two/SKILL.md": skill("two", "new"),
 };
 
+const SKILLS_URL = "https://github.com/vercel-labs/agent-skills";
+const SK1 = "3".repeat(40);
+const SK2 = "4".repeat(40);
+const SK3 = "5".repeat(40);
+/** skills.sh layout: no manifest. `.claude/skills/tdd` is shadowed by `skills/tdd`. */
+const skillsV1: Tree = {
+  "skills/tdd/SKILL.md": skill("tdd", "red green"),
+  "skills/review/SKILL.md": skill("review", "look twice"),
+  ".claude/skills/tdd/SKILL.md": skill("tdd", "shadowed"),
+  "README.md": "docs",
+};
+/** `review` vanished upstream. */
+const skillsV2: Tree = { "skills/tdd/SKILL.md": skill("tdd", "red green refactor") };
+
 type Row = Record<string, unknown>;
 const matches = (row: Row, where: Row) =>
   Object.entries(where).every(([key, value]) =>
@@ -83,6 +97,7 @@ function table(store: Row[]) {
         id: `mkt-${store.length + 1}`,
         createdAt: new Date(),
         updatedAt: new Date(),
+        kind: "marketplace",
         ...data,
       };
       store.push(row);
@@ -138,6 +153,8 @@ describe("marketplaces service", () => {
     heads.clear();
     repos.set(SHA1, v1);
     repos.set(SHA2, v2);
+    repos.set(SK1, skillsV1);
+    repos.set(SK2, skillsV2);
     repos.set(`x/y@${EXT1}`, ext("ext-v1"));
     repos.set(`x/y@${EXT2}`, ext("ext-v2"));
     heads.set("x/y", EXT1);
@@ -157,6 +174,7 @@ describe("marketplaces service", () => {
       ref: "HEAD",
       commit: SHA1,
       installedPlugins: [],
+      kind: "marketplace",
     });
     expect(added.createdAt).toMatch(/^\d{4}-/);
     expect(
@@ -312,5 +330,132 @@ describe("marketplaces service", () => {
     expect(prisma.spaceMarketplace._store).toEqual([]);
     expect(prisma.skillSetting._store).toEqual([]);
     expect(prisma.botSkill._store.map((r) => r.skillKey)).toEqual(["user:keep"]);
+  });
+
+  describe("skills repositories (phase 4)", () => {
+    it("adds a repository without a manifest as a `skills` marketplace named <owner>-<repo>", async () => {
+      headSha = SK1;
+      const m = service();
+      const added = await m.add(actor, { url: SKILLS_URL });
+      expect(added).toMatchObject({
+        name: "vercel-labs-agent-skills",
+        kind: "skills",
+        commit: SK1,
+      });
+      expect(prisma.spaceMarketplace._store[0]?.kind).toBe("skills");
+      const written = JSON.parse(
+        await readFile(
+          path.join(root(), "vercel-labs-agent-skills/.claude-plugin/marketplace.json"),
+          "utf8",
+        ),
+      );
+      expect(written.plugins).toEqual([
+        { name: "review", source: "./skills/review", description: "d" },
+        { name: "tdd", source: "./skills/tdd", description: "d" },
+      ]);
+      expect(await m.plugins(actor, added.id)).toEqual([
+        { name: "review", description: "d", supported: true, installed: false },
+        { name: "tdd", description: "d", supported: true, installed: false },
+      ]);
+    });
+
+    it("installPlugins installs several skills from one checkout and keeps earlier installs", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      await m.installPlugin(actor, id, "tdd");
+      const row = await m.installPlugins(actor, id, ["review", "tdd", "tdd"]);
+      expect(row.installedPlugins).toEqual(["review", "tdd"]);
+      expect((await listMarketplaceSkills(root())).map((s) => s.id)).toEqual([
+        "mkt:vercel-labs-agent-skills/review/review",
+        "mkt:vercel-labs-agent-skills/tdd/tdd",
+      ]);
+      expect(
+        await readFile(
+          path.join(root(), "vercel-labs-agent-skills/plugins/tdd/skills/tdd/SKILL.md"),
+          "utf8",
+        ),
+      ).toBe(skill("tdd", "red green"));
+      // The synthesized manifest must be byte-stable, or every check would report a diff.
+      expect(await m.checkUpdate(actor, id)).toEqual({ commit: SK1, upToDate: true, changes: [] });
+    });
+
+    it("installPlugins persists the plugins that succeeded before a failing one", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      await expect(m.installPlugins(actor, id, ["tdd", "nope"])).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });
+      expect(prisma.spaceMarketplace._store[0]?.installedPlugins).toEqual([{ name: "tdd" }]);
+    });
+
+    it("applyUpdate drops a plugin that vanished upstream instead of failing", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      await m.installPlugins(actor, id, ["tdd", "review"]);
+      prisma.skillSetting._store.push({
+        spaceId: "ws-1",
+        skillKey: "mkt:vercel-labs-agent-skills/review/review",
+      });
+      headSha = SK2;
+      const check = await m.checkUpdate(actor, id);
+      expect(check.upToDate).toBe(false);
+      expect(check.changes.map((c) => [c.path, c.status])).toEqual([
+        ["review/review/SKILL.md", "removed"],
+        ["tdd/tdd/SKILL.md", "modified"],
+      ]);
+      const row = await m.applyUpdate(actor, id, SK2);
+      expect(row.installedPlugins).toEqual(["tdd"]);
+      expect(row.kind).toBe("skills");
+      expect(await exists(path.join(root(), "vercel-labs-agent-skills/plugins/review"))).toBe(
+        false,
+      );
+      expect(prisma.skillSetting._store).toEqual([]);
+      expect((await m.plugins(actor, id)).map((p) => p.name)).toEqual(["tdd"]);
+    });
+
+    it("applyUpdate leaves the on-disk manifest alone when an install fails", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      await m.installPlugin(actor, id, "tdd");
+      const manifestPath = path.join(
+        root(),
+        "vercel-labs-agent-skills/.claude-plugin/marketplace.json",
+      );
+      const before = await readFile(manifestPath, "utf8");
+      // A manifest whose plugin has no files at all: installOne throws mid-update.
+      repos.set(SK3, {
+        ".claude-plugin/marketplace.json": JSON.stringify({
+          name: "vercel-labs-agent-skills",
+          plugins: [{ name: "tdd", source: "./plugins/tdd" }],
+        }),
+      });
+      await expect(m.applyUpdate(actor, id, SK3)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      expect(await readFile(manifestPath, "utf8")).toBe(before);
+      expect(prisma.spaceMarketplace._store[0]?.commit).toBe(SK1);
+    });
+
+    it("removePlugin cannot delete anything outside the marketplace's plugins dir", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      const victim = path.join(root(), "victim");
+      await mkdir(victim, { recursive: true });
+      await writeFile(path.join(victim, "keep.txt"), "keep");
+      await m.removePlugin(actor, id, "../../victim").catch(() => undefined);
+      expect(await exists(path.join(victim, "keep.txt"))).toBe(true);
+    });
+
+    it("refuses a repository with neither manifest nor SKILL.md", async () => {
+      headSha = SK1;
+      repos.set(SK1, { "README.md": "nothing" });
+      await expect(service().add(actor, { url: SKILLS_URL })).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Repository has neither .claude-plugin/marketplace.json nor any SKILL.md.",
+      });
+    });
   });
 });

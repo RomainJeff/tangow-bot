@@ -57,7 +57,7 @@ msgid "{0} MB"
 msgstr "{0} MB"
 
 #. placeholder {0}: mkt.installedPlugins.length
-#: src/pages/SkillsOverlay.tsx:245
+#: src/pages/SkillsOverlay.tsx:261
 msgid "{0} plugins installed"
 msgstr "已安装 {0} 个插件"
 
@@ -67,6 +67,16 @@ msgstr "已安装 {0} 个插件"
 #: src/pages/Shell.tsx:2961
 msgid "{0} runs · {1} tokens"
 msgstr "{0} 次运行 · {1} tokens"
+
+#. placeholder {0}: picked.size
+#: src/pages/SkillsOverlay.tsx:477
+msgid "{0} selected"
+msgstr "已选择 {0} 个"
+
+#. placeholder {0}: mkt.installedPlugins.length
+#: src/pages/SkillsOverlay.tsx:259
+msgid "{0} skills installed"
+msgstr "已安装 {0} 个技能"
 
 #. placeholder {0}: active.name
 #: src/pages/Shell.tsx:3343
@@ -126,6 +136,10 @@ msgstr "{workingBotName} 正在工作"
 msgid "@{0}"
 msgstr "@{0}"
 
+#: src/pages/SkillsOverlay.tsx:232
+msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
+msgstr "插件市场（.claude-plugin/marketplace.json）或技能仓库（SKILL.md 文件）。格式会自动识别。"
+
 #: src/pages/McpServersOverlay.tsx:354
 msgid "Access token (optional)"
 msgstr "访问令牌（可选）"
@@ -171,7 +185,7 @@ msgstr "动态"
 msgid "Add"
 msgstr "添加"
 
-#: src/pages/SkillsOverlay.tsx:418
+#: src/pages/SkillsOverlay.tsx:454
 msgid "Add a marketplace first."
 msgstr "请先添加一个市场。"
 
@@ -215,7 +229,7 @@ msgstr "添加 GraphQL 端点"
 msgid "Add item"
 msgstr "添加项目"
 
-#: src/pages/SkillsOverlay.tsx:226
+#: src/pages/SkillsOverlay.tsx:227
 msgid "Add marketplace"
 msgstr "添加市场"
 
@@ -255,7 +269,7 @@ msgstr "添加触发器"
 #: src/pages/McpServersOverlay.tsx:415
 #: src/pages/PluginsOverlay.tsx:283
 #: src/pages/PluginsOverlay.tsx:429
-#: src/pages/SkillsOverlay.tsx:226
+#: src/pages/SkillsOverlay.tsx:227
 msgid "Adding…"
 msgstr "正在添加…"
 
@@ -386,11 +400,11 @@ msgid "Appearance"
 msgstr "外观"
 
 #. placeholder {0}: check.commit.slice(0, 7)
-#: src/pages/SkillsOverlay.tsx:318
+#: src/pages/SkillsOverlay.tsx:335
 msgid "Apply update to {0}"
 msgstr "将更新应用到 {0}"
 
-#: src/pages/SkillsOverlay.tsx:316
+#: src/pages/SkillsOverlay.tsx:333
 msgid "Applying…"
 msgstr "正在应用…"
 
@@ -574,7 +588,7 @@ msgstr "Bot 正在工作"
 msgid "Bring your own key. The provider is swappable; your bots keep the same speak and call buttons."
 msgstr "使用你自己的密钥。提供方可更换，Bot 的朗读和通话按钮不变。"
 
-#: src/pages/SkillsOverlay.tsx:121
+#: src/pages/SkillsOverlay.tsx:122
 msgid "Browse"
 msgstr "浏览"
 
@@ -669,7 +683,7 @@ msgstr "检查更新"
 msgid "Check in."
 msgstr "报到。"
 
-#: src/pages/SkillsOverlay.tsx:264
+#: src/pages/SkillsOverlay.tsx:281
 msgid "Check update"
 msgstr "检查更新"
 
@@ -678,7 +692,7 @@ msgid "Check your email"
 msgstr "请查看邮箱"
 
 #: src/components/SoftwareUpdateSection.tsx:77
-#: src/pages/SkillsOverlay.tsx:262
+#: src/pages/SkillsOverlay.tsx:279
 msgid "Checking…"
 msgstr "正在检查…"
 
@@ -770,7 +784,7 @@ msgstr "关闭面板"
 msgid "Close preview"
 msgstr "关闭预览"
 
-#: src/pages/SkillsOverlay.tsx:105
+#: src/pages/SkillsOverlay.tsx:106
 msgid "Close skills"
 msgstr "关闭技能"
 
@@ -952,7 +966,7 @@ msgstr "复制"
 msgid "Could not add"
 msgstr "无法添加"
 
-#: src/pages/SkillsOverlay.tsx:197
+#: src/pages/SkillsOverlay.tsx:198
 msgid "Could not add marketplace"
 msgstr "无法添加市场"
 
@@ -960,7 +974,7 @@ msgstr "无法添加市场"
 msgid "Could not add MCP server"
 msgstr "无法添加 MCP 服务器"
 
-#: src/pages/SkillsOverlay.tsx:305
+#: src/pages/SkillsOverlay.tsx:322
 msgid "Could not apply update"
 msgstr "无法应用更新"
 
@@ -980,7 +994,7 @@ msgstr "无法修改密码"
 msgid "Could not change the default model"
 msgstr "无法更改默认模型"
 
-#: src/pages/SkillsOverlay.tsx:255
+#: src/pages/SkillsOverlay.tsx:272
 msgid "Could not check for updates"
 msgstr "无法检查更新"
 
@@ -1091,6 +1105,10 @@ msgstr "无法导入技能"
 msgid "Could not install connector"
 msgstr "无法安装连接器"
 
+#: src/pages/SkillsOverlay.tsx:443
+msgid "Could not install skills"
+msgstr "无法安装技能"
+
 #: src/pages/KnowledgeSection.tsx:140
 #: src/pages/KnowledgeSection.tsx:181
 #: src/pages/KnowledgeSection.tsx:304
@@ -1117,7 +1135,7 @@ msgstr "无法加载 MCP 服务器"
 msgid "Could not load model settings"
 msgstr "无法加载模型设置"
 
-#: src/pages/SkillsOverlay.tsx:394
+#: src/pages/SkillsOverlay.tsx:413
 msgid "Could not load plugins"
 msgstr "无法加载插件"
 
@@ -1125,7 +1143,7 @@ msgstr "无法加载插件"
 msgid "Could not load skill"
 msgstr "无法加载技能"
 
-#: src/pages/SkillsOverlay.tsx:78
+#: src/pages/SkillsOverlay.tsx:79
 msgid "Could not load skills"
 msgstr "无法加载技能"
 
@@ -1176,7 +1194,7 @@ msgstr "无法移除连接器"
 msgid "Could not remove group"
 msgstr "无法移除群组"
 
-#: src/pages/SkillsOverlay.tsx:275
+#: src/pages/SkillsOverlay.tsx:292
 msgid "Could not remove marketplace"
 msgstr "无法移除市场"
 
@@ -1278,7 +1296,7 @@ msgstr "无法更新 Agent 权限"
 msgid "Could not update computer"
 msgstr "无法更新电脑"
 
-#: src/pages/SkillsOverlay.tsx:409
+#: src/pages/SkillsOverlay.tsx:433
 msgid "Could not update plugin"
 msgstr "无法更新插件"
 
@@ -1738,7 +1756,7 @@ msgstr "全屏"
 msgid "Git event"
 msgstr "Git 事件"
 
-#: src/pages/SkillsOverlay.tsx:216
+#: src/pages/SkillsOverlay.tsx:217
 msgid "Git ref"
 msgstr "Git ref"
 
@@ -1858,17 +1876,26 @@ msgstr "输入"
 msgid "Inputs"
 msgstr "输入"
 
-#: src/pages/SkillsOverlay.tsx:476
+#: src/pages/SkillsOverlay.tsx:552
 msgid "Install"
 msgstr "安装"
 
-#: src/pages/SkillsOverlay.tsx:115
+#. placeholder {0}: picked.size
+#: src/pages/SkillsOverlay.tsx:490
+msgid "Install selected ({0})"
+msgstr "安装所选（{0}）"
+
+#: src/pages/SkillsOverlay.tsx:116
 msgid "Installed"
 msgstr "已安装"
 
 #: src/pages/PluginsOverlay.tsx:349
 msgid "Installed integrations"
 msgstr "已安装的集成"
+
+#: src/pages/SkillsOverlay.tsx:488
+msgid "Installing…"
+msgstr "正在安装…"
 
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:61
 msgid "Instance API key"
@@ -2039,15 +2066,15 @@ msgstr "标为已读"
 msgid "Mark as Unread"
 msgstr "标为未读"
 
-#: src/pages/SkillsOverlay.tsx:429
+#: src/pages/SkillsOverlay.tsx:465
 msgid "Marketplace"
 msgstr "市场"
 
-#: src/pages/SkillsOverlay.tsx:209
+#: src/pages/SkillsOverlay.tsx:210
 msgid "Marketplace URL"
 msgstr "市场 URL"
 
-#: src/pages/SkillsOverlay.tsx:118
+#: src/pages/SkillsOverlay.tsx:119
 msgid "Marketplaces"
 msgstr "市场"
 
@@ -2332,7 +2359,7 @@ msgstr "已停用"
 msgid "No managed app catalog is configured on this deployment."
 msgstr "此部署未配置托管应用目录。"
 
-#: src/pages/SkillsOverlay.tsx:232
+#: src/pages/SkillsOverlay.tsx:240
 msgid "No marketplaces added yet."
 msgstr "尚未添加市场。"
 
@@ -2356,7 +2383,7 @@ msgstr "还没有与 {peerBotName} 的消息。"
 msgid "No model catalog is available."
 msgstr "没有可用的模型目录。"
 
-#: src/pages/SkillsOverlay.tsx:440
+#: src/pages/SkillsOverlay.tsx:501
 msgid "No plugins in this marketplace."
 msgstr "此市场中没有插件。"
 
@@ -2376,7 +2403,11 @@ msgstr "无结果"
 msgid "No runs yet"
 msgstr "还没有运行记录"
 
-#: src/pages/SkillsOverlay.tsx:484
+#: src/pages/SkillsOverlay.tsx:499
+msgid "No skills in this marketplace."
+msgstr "此市场中没有技能。"
+
+#: src/pages/SkillsOverlay.tsx:561
 msgid "No skills in this plugin."
 msgstr "此插件中没有技能。"
 
@@ -2443,7 +2474,7 @@ msgstr "OAuth 连接失败"
 msgid "OAuth expired"
 msgstr "OAuth 已过期"
 
-#: src/pages/SkillsOverlay.tsx:499
+#: src/pages/SkillsOverlay.tsx:576
 msgid "Off for every agent until you pick some in Installed."
 msgstr "在“已安装”中选择之前，对所有智能体均为关闭状态。"
 
@@ -2456,7 +2487,7 @@ msgstr "按计划"
 msgid "on the 1st at {0}"
 msgstr "每月 1 日 {0}"
 
-#: src/pages/SkillsOverlay.tsx:134
+#: src/pages/SkillsOverlay.tsx:135
 msgid "Only the first 50 skills are shown to the agent."
 msgstr "仅向智能体展示前 50 个技能。"
 
@@ -2598,6 +2629,10 @@ msgstr "置顶"
 msgid "Playing…"
 msgstr "播放中…"
 
+#: src/pages/SkillsOverlay.tsx:253
+msgid "Plugins"
+msgstr "插件"
+
 #: src/pages/RoutineEditor.tsx:483
 msgid "POST to"
 msgstr "POST 到"
@@ -2694,8 +2729,8 @@ msgstr "释放"
 #: src/pages/PluginsOverlay.tsx:432
 #: src/pages/PluginsOverlay.tsx:696
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SkillsOverlay.tsx:281
-#: src/pages/SkillsOverlay.tsx:474
+#: src/pages/SkillsOverlay.tsx:298
+#: src/pages/SkillsOverlay.tsx:550
 msgid "Remove"
 msgstr "移除"
 
@@ -2707,7 +2742,7 @@ msgid "Remove {0}"
 msgstr "移除 {0}"
 
 #. placeholder {0}: mkt.name
-#: src/pages/SkillsOverlay.tsx:274
+#: src/pages/SkillsOverlay.tsx:291
 msgid "Remove marketplace {0} and its skills?"
 msgstr "移除市场 {0} 及其技能？"
 
@@ -2745,7 +2780,7 @@ msgstr "已移除，但列表刷新失败"
 #: src/pages/PluginsOverlay.tsx:281
 #: src/pages/PluginsOverlay.tsx:427
 #: src/pages/PluginsOverlay.tsx:696
-#: src/pages/SkillsOverlay.tsx:281
+#: src/pages/SkillsOverlay.tsx:298
 msgid "Removing…"
 msgstr "正在移除…"
 
@@ -2966,6 +3001,11 @@ msgstr "搜索技能"
 msgid "Searching…"
 msgstr "正在搜索…"
 
+#. placeholder {0}: plugin.name
+#: src/pages/SkillsOverlay.tsx:514
+msgid "Select {0}"
+msgstr "选择 {0}"
+
 #: src/pages/Shell.tsx:3083
 msgid "Select a bot"
 msgstr "选择 Bot"
@@ -3057,7 +3097,7 @@ msgstr "共享文档"
 msgid "Show all providers"
 msgstr "显示所有提供方"
 
-#: src/pages/SkillsOverlay.tsx:351
+#: src/pages/SkillsOverlay.tsx:368
 msgid "Show before / after"
 msgstr "显示前后对比"
 
@@ -3115,7 +3155,8 @@ msgstr "技能 {0}"
 
 #: src/pages/CustomizeOverlay.tsx:19
 #: src/pages/KnowledgeSection.tsx:84
-#: src/pages/SkillsOverlay.tsx:102
+#: src/pages/SkillsOverlay.tsx:103
+#: src/pages/SkillsOverlay.tsx:253
 msgid "Skills"
 msgstr "技能"
 
@@ -3420,7 +3461,7 @@ msgstr "取消置顶"
 msgid "Unsupported file type: {0}"
 msgstr "不支持的文件类型：{0}"
 
-#: src/pages/SkillsOverlay.tsx:455
+#: src/pages/SkillsOverlay.tsx:531
 msgid "Unsupported source"
 msgstr "不支持的来源"
 
@@ -3428,7 +3469,7 @@ msgstr "不支持的来源"
 msgid "Up to date"
 msgstr "已是最新"
 
-#: src/pages/SkillsOverlay.tsx:289
+#: src/pages/SkillsOverlay.tsx:306
 msgid "Up to date."
 msgstr "已是最新。"
 
@@ -3562,7 +3603,7 @@ msgstr "Bot 应在哪里运行？"
 #: src/pages/Auth.tsx:192
 #: src/pages/Auth.tsx:300
 #: src/pages/CallView.tsx:251
-#: src/pages/SkillsOverlay.tsx:472
+#: src/pages/SkillsOverlay.tsx:548
 msgid "Working…"
 msgstr "处理中…"
 

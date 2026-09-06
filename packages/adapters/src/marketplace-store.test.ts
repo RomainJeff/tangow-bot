@@ -1,13 +1,15 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildSkillMd } from "@rakazo/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   diffPluginTrees,
+  discoverSkills,
   installPluginFromCheckout,
   installPluginTree,
   listMarketplaceSkills,
+  loadOrSynthesizeManifest,
   marketplacesRoot,
   pluginDirIn,
   pluginSource,
@@ -53,6 +55,18 @@ async function checkout(skillBody = "Steps") {
   await writeFile(path.join(dir, "plugins/writer/commands/x.md"), "ignored");
   return dir;
 }
+
+/** A skills.sh-style repository: no manifest, SKILL.md files under conventional roots. */
+async function skillsRepo(files: Record<string, string>) {
+  const dir = await tmp();
+  for (const [rel, content] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+    await writeFile(path.join(dir, rel), content);
+  }
+  return dir;
+}
+const md = (name: string, extra = "") =>
+  `---\nname: ${name}\ndescription: About ${name}\n${extra}---\nBody`;
 
 async function install(root: string, src: string, plugin = "writer") {
   await installPluginFromCheckout(root, "acme", src, await readMarketplaceManifest(src), plugin);
@@ -150,6 +164,57 @@ describe("marketplace store", () => {
     expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual([
       "mkt:solo/solo-skills/tdd",
     ]);
+  });
+
+  it("installs a plugin whose directory is itself a skill under the plugin name", async () => {
+    const dir = await tmp();
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      buildSkillMd({ name: "TDD", description: "Red green refactor", body: "Steps" }),
+    );
+    const root = marketplacesRoot(await tmp(), "space1");
+    await installPluginTree(root, "solo", "tdd", dir);
+    expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual(["mkt:solo/tdd/tdd"]);
+  });
+
+  it("rejects a plugin tree over the byte budget without leaving files behind", async () => {
+    const dir = await tmp();
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      buildSkillMd({ name: "TDD", description: "Red green refactor", body: "Steps" }),
+    );
+    await writeFile(path.join(dir, "fixtures.bin"), "x".repeat(2_000));
+    const root = marketplacesRoot(await tmp(), "space1");
+    await expect(installPluginTree(root, "solo", "tdd", dir, { maxBytes: 1_000 })).rejects.toThrow(
+      /exceeds 1000 bytes; plugin rejected/,
+    );
+    expect(
+      await stat(path.join(root, "solo", "plugins", "tdd")).then(
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
+  });
+
+  it("prefers plugin.json skills over a root SKILL.md", async () => {
+    const dir = await tmp();
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      buildSkillMd({ name: "Root", description: "The whole plugin", body: "Steps" }),
+    );
+    await mkdir(path.join(dir, ".claude-plugin"), { recursive: true });
+    await writeFile(
+      path.join(dir, ".claude-plugin/plugin.json"),
+      JSON.stringify({ skills: ["./bundled/alpha"] }),
+    );
+    await mkdir(path.join(dir, "bundled/alpha"), { recursive: true });
+    await writeFile(
+      path.join(dir, "bundled/alpha/SKILL.md"),
+      buildSkillMd({ name: "Alpha", description: "A declared skill", body: "Steps" }),
+    );
+    const root = marketplacesRoot(await tmp(), "space1");
+    await installPluginTree(root, "solo", "pack", dir);
+    expect((await listMarketplaceSkills(root)).map((s) => s.id)).toEqual(["mkt:solo/pack/alpha"]);
   });
 
   it("flattens skills declared in plugin.json under category directories", async () => {
@@ -323,5 +388,104 @@ describe("marketplace store", () => {
     await install(root, await checkout());
     const skills = path.join(root, "acme/plugins/writer/skills");
     expect(await diffPluginTrees(skills, skills)).toEqual([]);
+  });
+});
+
+describe("discoverSkills", () => {
+  it("finds skills under skills/, .claude/skills/, .agents/skills/ and one category level", async () => {
+    const dir = await skillsRepo({
+      "skills/tdd/SKILL.md": md("TDD"),
+      "skills/writing/Blog-Post/SKILL.md": md("Blog"),
+      ".claude/skills/review/SKILL.md": md("Review"),
+      ".agents/skills/deploy/SKILL.md": md("Deploy"),
+      "README.md": "not a skill",
+    });
+    expect(await discoverSkills(dir, "repo")).toEqual([
+      { slug: "blog-post", relPath: "./skills/writing/Blog-Post", description: "About Blog" },
+      { slug: "deploy", relPath: "./.agents/skills/deploy", description: "About Deploy" },
+      { slug: "review", relPath: "./.claude/skills/review", description: "About Review" },
+      { slug: "tdd", relPath: "./skills/tdd", description: "About TDD" },
+    ]);
+  });
+
+  it("a root SKILL.md makes the repository a single skill named after it", async () => {
+    const dir = await skillsRepo({ "SKILL.md": md("Solo"), "skills/x/SKILL.md": md("X") });
+    expect(await discoverSkills(dir, "my-repo")).toEqual([
+      { slug: "my-repo", relPath: "./", description: "About Solo" },
+    ]);
+  });
+
+  it("skips a directory named SKILL.md instead of failing", async () => {
+    const dir = await skillsRepo({
+      "skills/tdd/SKILL.md": md("TDD"),
+      "skills/deploy/SKILL.md": md("Deploy"),
+    });
+    await mkdir(path.join(dir, "skills/weird/SKILL.md"), { recursive: true });
+    expect((await discoverSkills(dir, "repo")).map((s) => s.slug)).toEqual(["deploy", "tdd"]);
+  });
+
+  it("skips internal and invalid skills; the first root wins on a slug clash", async () => {
+    const dir = await skillsRepo({
+      "skills/tdd/SKILL.md": md("TDD"),
+      ".claude/skills/tdd/SKILL.md": md("Shadowed"),
+      "skills/hidden/SKILL.md": md("Hidden", "metadata:\n  internal: true\n"),
+      "skills/broken/SKILL.md": "no frontmatter",
+      // Never reaches discoverSkills: listDirs drops directory names that fail SAFE_NAME.
+      "skills/Bad Name/SKILL.md": md("Bad"),
+    });
+    expect((await discoverSkills(dir, "repo")).map((s) => [s.slug, s.description])).toEqual([
+      ["tdd", "About TDD"],
+    ]);
+  });
+});
+
+describe("loadOrSynthesizeManifest", () => {
+  const repo = { owner: "Vercel-Labs", repo: "Agent-Skills" };
+
+  it("returns the real manifest when present, even if loose SKILL.md files exist", async () => {
+    const dir = await checkout();
+    await mkdir(path.join(dir, "skills/loose"), { recursive: true });
+    await writeFile(path.join(dir, "skills/loose/SKILL.md"), md("Loose"));
+    const loaded = await loadOrSynthesizeManifest(dir, repo);
+    expect(loaded.kind).toBe("marketplace");
+    expect(loaded.manifest.name).toBe("acme");
+    expect(loaded.raw).toBe(
+      await readFile(path.join(dir, ".claude-plugin/marketplace.json"), "utf8"),
+    );
+  });
+
+  it("synthesizes one plugin per discovered skill, named <owner>-<repo>", async () => {
+    const dir = await skillsRepo({
+      "skills/tdd/SKILL.md": md("TDD"),
+      "skills/b/SKILL.md": md("B"),
+    });
+    const loaded = await loadOrSynthesizeManifest(dir, repo);
+    expect(loaded.kind).toBe("skills");
+    expect(loaded.manifest.name).toBe("vercel-labs-agent-skills");
+    expect(loaded.manifest.plugins).toEqual([
+      {
+        name: "b",
+        source: { kind: "local", path: "./skills/b" },
+        description: "About B",
+        supported: true,
+      },
+      {
+        name: "tdd",
+        source: { kind: "local", path: "./skills/tdd" },
+        description: "About TDD",
+        supported: true,
+      },
+    ]);
+    // The raw JSON round-trips through the real reader: what add() writes is what plugins() reads.
+    await mkdir(path.join(dir, ".claude-plugin"));
+    await writeFile(path.join(dir, ".claude-plugin/marketplace.json"), loaded.raw);
+    expect(await readMarketplaceManifest(dir)).toEqual(loaded.manifest);
+  });
+
+  it("rejects a repository with neither manifest nor skills", async () => {
+    const dir = await skillsRepo({ "README.md": "nothing" });
+    await expect(loadOrSynthesizeManifest(dir, repo)).rejects.toThrow(
+      "Repository has neither .claude-plugin/marketplace.json nor any SKILL.md.",
+    );
   });
 });

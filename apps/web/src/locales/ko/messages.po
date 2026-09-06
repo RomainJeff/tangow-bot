@@ -57,7 +57,7 @@ msgid "{0} MB"
 msgstr "{0} MB"
 
 #. placeholder {0}: mkt.installedPlugins.length
-#: src/pages/SkillsOverlay.tsx:245
+#: src/pages/SkillsOverlay.tsx:261
 msgid "{0} plugins installed"
 msgstr "플러그인 {0}개 설치됨"
 
@@ -67,6 +67,16 @@ msgstr "플러그인 {0}개 설치됨"
 #: src/pages/Shell.tsx:2961
 msgid "{0} runs · {1} tokens"
 msgstr "{0}회 실행 · 토큰 {1}개"
+
+#. placeholder {0}: picked.size
+#: src/pages/SkillsOverlay.tsx:477
+msgid "{0} selected"
+msgstr "{0}개 선택됨"
+
+#. placeholder {0}: mkt.installedPlugins.length
+#: src/pages/SkillsOverlay.tsx:259
+msgid "{0} skills installed"
+msgstr "스킬 {0}개 설치됨"
 
 #. placeholder {0}: active.name
 #: src/pages/Shell.tsx:3343
@@ -126,6 +136,10 @@ msgstr "{workingBotName} 작업 중"
 msgid "@{0}"
 msgstr "@{0}"
 
+#: src/pages/SkillsOverlay.tsx:232
+msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
+msgstr "플러그인 마켓플레이스(.claude-plugin/marketplace.json) 또는 스킬 저장소(SKILL.md 파일). 형식은 자동으로 감지됩니다."
+
 #: src/pages/McpServersOverlay.tsx:354
 msgid "Access token (optional)"
 msgstr "액세스 토큰(선택 사항)"
@@ -171,7 +185,7 @@ msgstr "활동"
 msgid "Add"
 msgstr "추가"
 
-#: src/pages/SkillsOverlay.tsx:418
+#: src/pages/SkillsOverlay.tsx:454
 msgid "Add a marketplace first."
 msgstr "먼저 마켓플레이스를 추가하세요."
 
@@ -215,7 +229,7 @@ msgstr "GraphQL 엔드포인트 추가"
 msgid "Add item"
 msgstr "항목 추가"
 
-#: src/pages/SkillsOverlay.tsx:226
+#: src/pages/SkillsOverlay.tsx:227
 msgid "Add marketplace"
 msgstr "마켓플레이스 추가"
 
@@ -255,7 +269,7 @@ msgstr "트리거 추가"
 #: src/pages/McpServersOverlay.tsx:415
 #: src/pages/PluginsOverlay.tsx:283
 #: src/pages/PluginsOverlay.tsx:429
-#: src/pages/SkillsOverlay.tsx:226
+#: src/pages/SkillsOverlay.tsx:227
 msgid "Adding…"
 msgstr "추가 중…"
 
@@ -386,11 +400,11 @@ msgid "Appearance"
 msgstr "모양"
 
 #. placeholder {0}: check.commit.slice(0, 7)
-#: src/pages/SkillsOverlay.tsx:318
+#: src/pages/SkillsOverlay.tsx:335
 msgid "Apply update to {0}"
 msgstr "{0}에 업데이트 적용"
 
-#: src/pages/SkillsOverlay.tsx:316
+#: src/pages/SkillsOverlay.tsx:333
 msgid "Applying…"
 msgstr "적용 중…"
 
@@ -574,7 +588,7 @@ msgstr "봇 작업 중"
 msgid "Bring your own key. The provider is swappable; your bots keep the same speak and call buttons."
 msgstr "사용 중인 서비스의 API 키를 연결하세요. 서비스를 바꿔도 Bot의 읽기·통화 기능은 그대로 유지됩니다."
 
-#: src/pages/SkillsOverlay.tsx:121
+#: src/pages/SkillsOverlay.tsx:122
 msgid "Browse"
 msgstr "둘러보기"
 
@@ -669,7 +683,7 @@ msgstr "업데이트 확인"
 msgid "Check in."
 msgstr "확인해 주세요."
 
-#: src/pages/SkillsOverlay.tsx:264
+#: src/pages/SkillsOverlay.tsx:281
 msgid "Check update"
 msgstr "업데이트 확인"
 
@@ -678,7 +692,7 @@ msgid "Check your email"
 msgstr "이메일을 확인하세요"
 
 #: src/components/SoftwareUpdateSection.tsx:77
-#: src/pages/SkillsOverlay.tsx:262
+#: src/pages/SkillsOverlay.tsx:279
 msgid "Checking…"
 msgstr "확인 중…"
 
@@ -770,7 +784,7 @@ msgstr "패널 닫기"
 msgid "Close preview"
 msgstr "미리보기 닫기"
 
-#: src/pages/SkillsOverlay.tsx:105
+#: src/pages/SkillsOverlay.tsx:106
 msgid "Close skills"
 msgstr "스킬 닫기"
 
@@ -952,7 +966,7 @@ msgstr "복사"
 msgid "Could not add"
 msgstr "추가하지 못했습니다."
 
-#: src/pages/SkillsOverlay.tsx:197
+#: src/pages/SkillsOverlay.tsx:198
 msgid "Could not add marketplace"
 msgstr "마켓플레이스를 추가하지 못했습니다"
 
@@ -960,7 +974,7 @@ msgstr "마켓플레이스를 추가하지 못했습니다"
 msgid "Could not add MCP server"
 msgstr "MCP 서버를 추가하지 못했습니다."
 
-#: src/pages/SkillsOverlay.tsx:305
+#: src/pages/SkillsOverlay.tsx:322
 msgid "Could not apply update"
 msgstr "업데이트를 적용하지 못했습니다"
 
@@ -980,7 +994,7 @@ msgstr "비밀번호를 변경할 수 없습니다"
 msgid "Could not change the default model"
 msgstr "기본 모델을 변경하지 못했습니다."
 
-#: src/pages/SkillsOverlay.tsx:255
+#: src/pages/SkillsOverlay.tsx:272
 msgid "Could not check for updates"
 msgstr "업데이트를 확인하지 못했습니다"
 
@@ -1091,6 +1105,10 @@ msgstr "스킬을 가져오지 못했습니다"
 msgid "Could not install connector"
 msgstr "도구 연결을 추가하지 못했습니다."
 
+#: src/pages/SkillsOverlay.tsx:443
+msgid "Could not install skills"
+msgstr "스킬을 설치하지 못했습니다"
+
 #: src/pages/KnowledgeSection.tsx:140
 #: src/pages/KnowledgeSection.tsx:181
 #: src/pages/KnowledgeSection.tsx:304
@@ -1117,7 +1135,7 @@ msgstr "MCP 서버 목록을 불러오지 못했습니다."
 msgid "Could not load model settings"
 msgstr "AI 모델 설정을 불러오지 못했습니다."
 
-#: src/pages/SkillsOverlay.tsx:394
+#: src/pages/SkillsOverlay.tsx:413
 msgid "Could not load plugins"
 msgstr "플러그인을 불러오지 못했습니다"
 
@@ -1125,7 +1143,7 @@ msgstr "플러그인을 불러오지 못했습니다"
 msgid "Could not load skill"
 msgstr "스킬을 불러오지 못했습니다"
 
-#: src/pages/SkillsOverlay.tsx:78
+#: src/pages/SkillsOverlay.tsx:79
 msgid "Could not load skills"
 msgstr "스킬을 불러오지 못했습니다"
 
@@ -1176,7 +1194,7 @@ msgstr "도구 연결을 삭제하지 못했습니다."
 msgid "Could not remove group"
 msgstr "그룹을 삭제하지 못했습니다."
 
-#: src/pages/SkillsOverlay.tsx:275
+#: src/pages/SkillsOverlay.tsx:292
 msgid "Could not remove marketplace"
 msgstr "마켓플레이스를 제거하지 못했습니다"
 
@@ -1278,7 +1296,7 @@ msgstr "Bot의 서버 사용 권한을 변경하지 못했습니다."
 msgid "Could not update computer"
 msgstr "컴퓨터를 업데이트할 수 없습니다"
 
-#: src/pages/SkillsOverlay.tsx:409
+#: src/pages/SkillsOverlay.tsx:433
 msgid "Could not update plugin"
 msgstr "플러그인을 업데이트하지 못했습니다"
 
@@ -1738,7 +1756,7 @@ msgstr "전체 화면"
 msgid "Git event"
 msgstr "Git 이벤트"
 
-#: src/pages/SkillsOverlay.tsx:216
+#: src/pages/SkillsOverlay.tsx:217
 msgid "Git ref"
 msgstr "Git ref"
 
@@ -1858,17 +1876,26 @@ msgstr "입력"
 msgid "Inputs"
 msgstr "입력값"
 
-#: src/pages/SkillsOverlay.tsx:476
+#: src/pages/SkillsOverlay.tsx:552
 msgid "Install"
 msgstr "설치"
 
-#: src/pages/SkillsOverlay.tsx:115
+#. placeholder {0}: picked.size
+#: src/pages/SkillsOverlay.tsx:490
+msgid "Install selected ({0})"
+msgstr "선택 항목 설치 ({0})"
+
+#: src/pages/SkillsOverlay.tsx:116
 msgid "Installed"
 msgstr "설치됨"
 
 #: src/pages/PluginsOverlay.tsx:349
 msgid "Installed integrations"
 msgstr "설치된 통합"
+
+#: src/pages/SkillsOverlay.tsx:488
+msgid "Installing…"
+msgstr "설치 중…"
 
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:61
 msgid "Instance API key"
@@ -2039,15 +2066,15 @@ msgstr "읽음으로 표시"
 msgid "Mark as Unread"
 msgstr "읽지 않음으로 표시"
 
-#: src/pages/SkillsOverlay.tsx:429
+#: src/pages/SkillsOverlay.tsx:465
 msgid "Marketplace"
 msgstr "마켓플레이스"
 
-#: src/pages/SkillsOverlay.tsx:209
+#: src/pages/SkillsOverlay.tsx:210
 msgid "Marketplace URL"
 msgstr "마켓플레이스 URL"
 
-#: src/pages/SkillsOverlay.tsx:118
+#: src/pages/SkillsOverlay.tsx:119
 msgid "Marketplaces"
 msgstr "마켓플레이스"
 
@@ -2332,7 +2359,7 @@ msgstr "이미 종료된 요청입니다"
 msgid "No managed app catalog is configured on this deployment."
 msgstr "이 서버에는 관리형 앱 목록이 설정되지 않았습니다."
 
-#: src/pages/SkillsOverlay.tsx:232
+#: src/pages/SkillsOverlay.tsx:240
 msgid "No marketplaces added yet."
 msgstr "아직 추가된 마켓플레이스가 없습니다."
 
@@ -2356,7 +2383,7 @@ msgstr "{peerBotName}와의 메시지가 아직 없습니다."
 msgid "No model catalog is available."
 msgstr "사용 가능한 모델 목록이 없습니다."
 
-#: src/pages/SkillsOverlay.tsx:440
+#: src/pages/SkillsOverlay.tsx:501
 msgid "No plugins in this marketplace."
 msgstr "이 마켓플레이스에 플러그인이 없습니다."
 
@@ -2376,7 +2403,11 @@ msgstr "검색 결과가 없습니다"
 msgid "No runs yet"
 msgstr "아직 실행 기록이 없습니다"
 
-#: src/pages/SkillsOverlay.tsx:484
+#: src/pages/SkillsOverlay.tsx:499
+msgid "No skills in this marketplace."
+msgstr "이 마켓플레이스에 스킬이 없습니다."
+
+#: src/pages/SkillsOverlay.tsx:561
 msgid "No skills in this plugin."
 msgstr "이 플러그인에 스킬이 없습니다."
 
@@ -2443,7 +2474,7 @@ msgstr "OAuth 연결 실패"
 msgid "OAuth expired"
 msgstr "OAuth 만료됨"
 
-#: src/pages/SkillsOverlay.tsx:499
+#: src/pages/SkillsOverlay.tsx:576
 msgid "Off for every agent until you pick some in Installed."
 msgstr "설치됨에서 선택하기 전까지 모든 에이전트에서 꺼져 있습니다."
 
@@ -2456,7 +2487,7 @@ msgstr "일정에 따라"
 msgid "on the 1st at {0}"
 msgstr "매월 1일 {0}에"
 
-#: src/pages/SkillsOverlay.tsx:134
+#: src/pages/SkillsOverlay.tsx:135
 msgid "Only the first 50 skills are shown to the agent."
 msgstr "에이전트에는 처음 50개 스킬만 표시됩니다."
 
@@ -2598,6 +2629,10 @@ msgstr "고정"
 msgid "Playing…"
 msgstr "재생 중…"
 
+#: src/pages/SkillsOverlay.tsx:253
+msgid "Plugins"
+msgstr "플러그인"
+
 #: src/pages/RoutineEditor.tsx:483
 msgid "POST to"
 msgstr "POST 대상"
@@ -2694,8 +2729,8 @@ msgstr "제어권 돌려주기"
 #: src/pages/PluginsOverlay.tsx:432
 #: src/pages/PluginsOverlay.tsx:696
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SkillsOverlay.tsx:281
-#: src/pages/SkillsOverlay.tsx:474
+#: src/pages/SkillsOverlay.tsx:298
+#: src/pages/SkillsOverlay.tsx:550
 msgid "Remove"
 msgstr "삭제"
 
@@ -2707,7 +2742,7 @@ msgid "Remove {0}"
 msgstr "{0} 삭제"
 
 #. placeholder {0}: mkt.name
-#: src/pages/SkillsOverlay.tsx:274
+#: src/pages/SkillsOverlay.tsx:291
 msgid "Remove marketplace {0} and its skills?"
 msgstr "마켓플레이스 {0}과(와) 해당 스킬을 제거할까요?"
 
@@ -2745,7 +2780,7 @@ msgstr "삭제했지만 목록을 새로고침하지 못했습니다."
 #: src/pages/PluginsOverlay.tsx:281
 #: src/pages/PluginsOverlay.tsx:427
 #: src/pages/PluginsOverlay.tsx:696
-#: src/pages/SkillsOverlay.tsx:281
+#: src/pages/SkillsOverlay.tsx:298
 msgid "Removing…"
 msgstr "삭제 중…"
 
@@ -2966,6 +3001,11 @@ msgstr "스킬 검색"
 msgid "Searching…"
 msgstr "검색 중…"
 
+#. placeholder {0}: plugin.name
+#: src/pages/SkillsOverlay.tsx:514
+msgid "Select {0}"
+msgstr "{0} 선택"
+
 #: src/pages/Shell.tsx:3083
 msgid "Select a bot"
 msgstr "대화할 Bot을 선택하세요"
@@ -3057,7 +3097,7 @@ msgstr "공유 문서"
 msgid "Show all providers"
 msgstr "모든 제공자 표시"
 
-#: src/pages/SkillsOverlay.tsx:351
+#: src/pages/SkillsOverlay.tsx:368
 msgid "Show before / after"
 msgstr "이전 / 이후 표시"
 
@@ -3115,7 +3155,8 @@ msgstr "작업 기술 {0}"
 
 #: src/pages/CustomizeOverlay.tsx:19
 #: src/pages/KnowledgeSection.tsx:84
-#: src/pages/SkillsOverlay.tsx:102
+#: src/pages/SkillsOverlay.tsx:103
+#: src/pages/SkillsOverlay.tsx:253
 msgid "Skills"
 msgstr "스킬"
 
@@ -3420,7 +3461,7 @@ msgstr "고정 해제"
 msgid "Unsupported file type: {0}"
 msgstr "지원하지 않는 파일 형식: {0}"
 
-#: src/pages/SkillsOverlay.tsx:455
+#: src/pages/SkillsOverlay.tsx:531
 msgid "Unsupported source"
 msgstr "지원되지 않는 소스"
 
@@ -3428,7 +3469,7 @@ msgstr "지원되지 않는 소스"
 msgid "Up to date"
 msgstr "최신 상태"
 
-#: src/pages/SkillsOverlay.tsx:289
+#: src/pages/SkillsOverlay.tsx:306
 msgid "Up to date."
 msgstr "최신 상태입니다."
 
@@ -3562,7 +3603,7 @@ msgstr "Bot을 어디에서 실행할까요?"
 #: src/pages/Auth.tsx:192
 #: src/pages/Auth.tsx:300
 #: src/pages/CallView.tsx:251
-#: src/pages/SkillsOverlay.tsx:472
+#: src/pages/SkillsOverlay.tsx:548
 msgid "Working…"
 msgstr "처리 중…"
 

@@ -19,11 +19,14 @@ import path from "node:path";
 import { marketplaceSkillKey, parseSkillMd } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { z } from "zod";
-import { parseGithubRepoUrl } from "./github-tarball.js";
+import { type GithubRepo, parseGithubRepoUrl } from "./github-tarball.js";
 
 export const SAFE_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 export const MAX_SKILL_MD_BYTES = 100_000;
+/** A plugin can be a whole repository (`source: "./"`), so its tree needs its own ceiling. */
+export const MAX_PLUGIN_TREE_BYTES = 50 * 1024 * 1024;
 const IGNORED_PLUGIN_CONTENT = ["commands", "agents", "hooks", ".mcp.json"];
+const MANIFEST_PATH = path.join(".claude-plugin", "marketplace.json");
 
 export function marketplacesRoot(dataDir: string, spaceId: string): string {
   return path.join(dataDir, "skills", "marketplaces", spaceId);
@@ -91,15 +94,8 @@ function parsePluginSource(source: unknown): PluginSource | null {
   return { kind: "github", url, ref: parsed.data.ref };
 }
 
-/**
- * Reads `.claude-plugin/marketplace.json` from an extracted checkout. Plugins whose source is
- * neither a `./` path nor a public GitHub repository are listed but flagged unsupported.
- */
-export async function readMarketplaceManifest(checkoutDir: string): Promise<MarketplaceManifest> {
-  const file = path.join(checkoutDir, ".claude-plugin", "marketplace.json");
-  const raw = await readFile(file, "utf8").catch(() => {
-    throw new Error("Repository has no .claude-plugin/marketplace.json.");
-  });
+/** Plugins whose source is neither a `./` path nor a public GitHub repository stay unsupported. */
+function parseManifest(raw: string): MarketplaceManifest {
   let json: unknown;
   try {
     json = JSON.parse(raw);
@@ -122,6 +118,14 @@ export async function readMarketplaceManifest(checkoutDir: string): Promise<Mark
       };
     }),
   };
+}
+
+/** Reads `.claude-plugin/marketplace.json` from an extracted checkout. */
+export async function readMarketplaceManifest(checkoutDir: string): Promise<MarketplaceManifest> {
+  const raw = await readFile(path.join(checkoutDir, MANIFEST_PATH), "utf8").catch(() => {
+    throw new Error("Repository has no .claude-plugin/marketplace.json.");
+  });
+  return parseManifest(raw);
 }
 
 const PluginJsonSchema = z.object({ skills: z.array(z.string()).optional() });
@@ -167,10 +171,103 @@ async function scanSkillDirs(skillsDir: string): Promise<string[]> {
   return out;
 }
 
+/** Roots `npx skills add` reads, in precedence order. */
+// ponytail: .cursor/.codex/.opencode not seen in real repos yet; one line each when asked.
+const SKILL_ROOTS = ["skills", ".claude/skills", ".agents/skills"];
+
+export type DiscoveredSkill = { slug: string; relPath: string; description: string };
+
+/** Description of the SKILL.md in `dir`; null when absent, invalid, oversized or `metadata.internal`. */
+async function describeSkill(dir: string): Promise<string | null> {
+  const file = path.join(dir, "SKILL.md");
+  const size = (await stat(file).catch(() => null))?.size;
+  if (size === undefined || size > MAX_SKILL_MD_BYTES) return null;
+  const content = await readFile(file, "utf8").catch(() => null);
+  if (content === null) return null;
+  const parsed = parseSkillMd(content);
+  if ("error" in parsed) return null;
+  const meta = parsed.frontmatter.metadata;
+  if (meta && typeof meta === "object" && (meta as Record<string, unknown>).internal === true) {
+    return null;
+  }
+  return parsed.description;
+}
+
+/**
+ * Skills of a repository without a marketplace manifest (skills.sh layout). A root SKILL.md
+ * makes the whole repository one skill named `rootSlug`; otherwise every `<root>/<slug>/`
+ * (one category level deep) that holds a valid SKILL.md. Unsafe names never reach here
+ * (`listDirs` drops them); invalid frontmatter and `metadata.internal: true` are skipped without
+ * entering `found`, so an invalid skill under an earlier root cannot shadow a valid one under a
+ * later root. A slug seen under an earlier root shadows later ones, and an intra-root clash (two
+ * categories holding the same skill name) keeps the first, silently.
+ */
+export async function discoverSkills(
+  checkoutDir: string,
+  rootSlug: string,
+): Promise<DiscoveredSkill[]> {
+  const root = await describeSkill(checkoutDir);
+  if (root !== null) return [{ slug: rootSlug, relPath: "./", description: root }];
+  const found = new Map<string, DiscoveredSkill>();
+  for (const skillsRoot of SKILL_ROOTS) {
+    for (const dir of await scanSkillDirs(path.join(checkoutDir, skillsRoot))) {
+      const slug = path.basename(dir).toLowerCase();
+      if (found.has(slug)) continue;
+      const description = await describeSkill(dir);
+      if (description === null) continue;
+      found.set(slug, { slug, relPath: `./${path.relative(checkoutDir, dir)}`, description });
+    }
+  }
+  return [...found.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
+export type MarketplaceKind = "marketplace" | "skills";
+export type LoadedManifest = {
+  manifest: MarketplaceManifest;
+  kind: MarketplaceKind;
+  /** File content to persist as the marketplace's manifest (real or synthesized). */
+  raw: string;
+};
+
+/**
+ * Phase 4: the real manifest when the repository ships one (it always wins), otherwise a
+ * manifest synthesized from its SKILL.md files — one single-skill plugin per skill, named
+ * `<owner>-<repo>`. The synthetic JSON goes through the same parser, so what gets written to
+ * disk is exactly what `readMarketplaceManifest` reads back later.
+ */
+export async function loadOrSynthesizeManifest(
+  checkoutDir: string,
+  repo: GithubRepo,
+): Promise<LoadedManifest> {
+  const real = await readFile(path.join(checkoutDir, MANIFEST_PATH), "utf8").catch(() => null);
+  if (real !== null) return { manifest: parseManifest(real), kind: "marketplace", raw: real };
+  const skills = await discoverSkills(checkoutDir, repo.repo.toLowerCase());
+  if (skills.length === 0) {
+    throw new Error("Repository has neither .claude-plugin/marketplace.json nor any SKILL.md.");
+  }
+  const raw = JSON.stringify(
+    {
+      name: `${repo.owner}-${repo.repo}`,
+      plugins: skills.map((s) => ({ name: s.slug, source: s.relPath, description: s.description })),
+    },
+    null,
+    2,
+  );
+  return { manifest: parseManifest(raw), kind: "skills", raw };
+}
+
 /** Skill directories of a plugin, keyed by the flat slug they install as. */
-async function resolveSkillDirs(pluginDir: string): Promise<{ slug: string; dir: string }[]> {
-  const dirs =
-    (await declaredSkillDirs(pluginDir)) ?? (await scanSkillDirs(path.join(pluginDir, "skills")));
+async function resolveSkillDirs(
+  pluginDir: string,
+  pluginName: string,
+): Promise<{ slug: string; dir: string }[]> {
+  // A plugin that is itself a skill — skills.sh repositories, bare-skill plugins — installs as
+  // one, unless plugin.json declares skills: an explicit list always wins over the root SKILL.md.
+  const declared = await declaredSkillDirs(pluginDir);
+  if (declared === null && (await stat(path.join(pluginDir, "SKILL.md")).catch(() => null))) {
+    return [{ slug: pluginName, dir: pluginDir }];
+  }
+  const dirs = declared ?? (await scanSkillDirs(path.join(pluginDir, "skills")));
   const bySlug = new Map<string, string>();
   for (const dir of dirs) {
     const raw = path.basename(dir);
@@ -276,6 +373,17 @@ export async function installPluginFromCheckout(
   await installPluginTree(root, marketplace, pluginName, pluginDirIn(checkoutDir, source));
 }
 
+/** Sum of regular-file sizes under `dir`. Symlinks are not files here, so they are skipped. */
+async function treeBytes(dir: string): Promise<number> {
+  let total = 0;
+  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const child = path.join(dir, entry.name);
+    if (entry.isDirectory()) total += await treeBytes(child);
+    else if (entry.isFile()) total += (await stat(child)).size;
+  }
+  return total;
+}
+
 /**
  * Copies each skill directory into `<root>/<marketplace>/plugins/<plugin>/skills/<slug>/`
  * (slug lowercased, tree flattened). Validates everything before touching the root, so a
@@ -286,8 +394,9 @@ export async function installPluginTree(
   marketplace: string,
   pluginName: string,
   pluginDir: string,
+  options: { maxBytes?: number } = {},
 ): Promise<void> {
-  const skills = await resolveSkillDirs(pluginDir);
+  const skills = await resolveSkillDirs(pluginDir, pluginName);
   if (skills.length === 0) throw new Error(`Plugin "${pluginName}" has no skills/ directory.`);
   for (const { slug, dir } of skills) {
     const size = (await stat(path.join(dir, "SKILL.md")).catch(() => null))?.size;
@@ -297,6 +406,13 @@ export async function installPluginTree(
         `Skill "${slug}" SKILL.md exceeds ${MAX_SKILL_MD_BYTES} bytes; plugin rejected.`,
       );
     }
+  }
+  // The tarball cap counts compressed bytes; a whole-repository plugin expands past it.
+  const maxBytes = options.maxBytes ?? MAX_PLUGIN_TREE_BYTES;
+  let bytes = 0;
+  for (const { dir } of skills) bytes += await treeBytes(dir);
+  if (bytes > maxBytes) {
+    throw new Error(`Plugin "${pluginName}" exceeds ${maxBytes} bytes; plugin rejected.`);
   }
   for (const ignored of IGNORED_PLUGIN_CONTENT) {
     if (await stat(path.join(pluginDir, ignored)).catch(() => null)) {
@@ -321,6 +437,8 @@ export async function removeInstalledPlugin(
   marketplace: string,
   plugin: string,
 ): Promise<void> {
+  // Never installed under such a name (see parseManifest), so nothing to remove — and no path escape.
+  if (!SAFE_NAME.test(plugin)) return;
   await rm(path.join(root, marketplace, "plugins", plugin), { recursive: true, force: true });
 }
 
@@ -355,7 +473,7 @@ export async function diffPluginTrees(beforeDir: string, afterDir: string): Prom
   return changes;
 }
 
-// ponytail: whole tree in memory; skills are capped at 100k per SKILL.md so this stays small.
+// ponytail: whole tree in memory; installPluginTree caps a plugin at MAX_PLUGIN_TREE_BYTES.
 async function walk(dir: string, prefix = ""): Promise<Map<string, Buffer>> {
   const out = new Map<string, Buffer>();
   for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
