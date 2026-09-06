@@ -1,0 +1,56 @@
+/** Same-day silence after which a transcript shows the date and time again. */
+export const THREAD_TIME_MARKER_GAP_MS = 4 * 60 * 60 * 1000;
+
+function localDayIndex(date: Date): number {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/**
+ * Whether a transcript row opens a new stretch of conversation: the first
+ * loaded message, a new local calendar day, or a return after `gapMs` of
+ * silence. Callers pass the previous *visible* message, so hidden activity
+ * rows neither swallow a marker nor invent a gap.
+ */
+export function showsTimeMarker(
+  previousCreatedAt: string | undefined,
+  createdAt: string,
+  gapMs: number = THREAD_TIME_MARKER_GAP_MS,
+): boolean {
+  const current = new Date(createdAt);
+  if (Number.isNaN(current.getTime())) return false;
+  if (previousCreatedAt == null) return true;
+  const previous = new Date(previousCreatedAt);
+  if (Number.isNaN(previous.getTime())) return true;
+  if (localDayIndex(previous) !== localDayIndex(current)) return true;
+  return current.getTime() - previous.getTime() >= gapMs;
+}
+
+/**
+ * Absolute label for a time marker: "Today 7:19 PM", "Yesterday 7:19 PM", or
+ * "Wed, Sep 2 7:19 PM" further back. `today` and `yesterday` arrive already
+ * translated, so each surface keeps its own i18n runtime.
+ *
+ * ponytail: `now` is read at render, so a thread left open across midnight
+ * keeps saying "Today" until the next message repaints it. Add a midnight
+ * tick only if that ever bites.
+ */
+export function threadTimeMarkerLabel(
+  createdAt: string,
+  options: { locale: string; today: string; yesterday: string; now?: Date },
+): string {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return "";
+  const locale = options.locale || "en";
+  const time = date.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  const dayDiff = Math.round(
+    (localDayIndex(options.now ?? new Date()) - localDayIndex(date)) / 86_400_000,
+  );
+  if (dayDiff === 0) return `${options.today} ${time}`;
+  if (dayDiff === 1) return `${options.yesterday} ${time}`;
+  const day = date.toLocaleDateString(locale, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  return `${day} ${time}`;
+}

@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/pages/Shell.tsx:2729
+#: src/pages/Shell.tsx:2733
 msgid " (unread)"
 msgstr "（未读）"
 
@@ -27,12 +27,12 @@ msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# 个模型} other {# 个模型}}"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1839
+#: src/pages/Shell.tsx:1843
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0}（最多 {ATTACHMENT_MAX_COUNT} 个附件）"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1843
+#: src/pages/Shell.tsx:1847
 msgid "{0} (over 10 MiB)"
 msgstr "{0}（超过 10 MiB）"
 
@@ -64,7 +64,7 @@ msgstr "已安装 {0} 个插件"
 #. placeholder {0}: usage.runs
 #. placeholder {1}: usage.inputTokens + usage.outputTokens
 #: src/pages/AccountSettingsOverlay.tsx:238
-#: src/pages/Shell.tsx:2981
+#: src/pages/Shell.tsx:2985
 msgid "{0} runs · {1} tokens"
 msgstr "{0} 次运行 · {1} tokens"
 
@@ -79,11 +79,11 @@ msgid "{0} skills installed"
 msgstr "已安装 {0} 个技能"
 
 #. placeholder {0}: active.name
-#: src/pages/Shell.tsx:3365
+#: src/pages/Shell.tsx:3369
 msgid "{0}'s screen"
 msgstr "{0} 的屏幕"
 
-#: src/pages/Shell.tsx:5775
+#: src/pages/Shell.tsx:5808
 msgid "{botName}’s computer"
 msgstr "{botName} 的电脑"
 
@@ -127,12 +127,12 @@ msgstr "{size} B"
 msgid "{title}, {label}"
 msgstr "{title}，{label}"
 
-#: src/pages/Shell.tsx:4149
+#: src/pages/Shell.tsx:4162
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} 正在工作"
 
 #. placeholder {0}: mention.name
-#: src/pages/Shell.tsx:4831
+#: src/pages/Shell.tsx:4864
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -174,8 +174,8 @@ msgstr "当前模型"
 msgid "Active voice"
 msgstr "当前语音"
 
-#: src/pages/Shell.tsx:2476
-#: src/pages/Shell.tsx:2478
+#: src/pages/Shell.tsx:2480
+#: src/pages/Shell.tsx:2482
 msgid "Activity"
 msgstr "动态"
 
@@ -193,7 +193,7 @@ msgstr "请先添加一个市场。"
 msgid "Add a model in Settings to use this."
 msgstr "请在设置中添加模型后再使用。"
 
-#: src/pages/Shell.tsx:3527
+#: src/pages/Shell.tsx:3531
 msgid "Add a run time for this one-shot."
 msgstr "为此一次性任务添加运行时间。"
 
@@ -201,7 +201,7 @@ msgstr "为此一次性任务添加运行时间。"
 msgid "Add a schedule or webhook to run this routine."
 msgstr "添加计划或 Webhook 以运行此例行任务。"
 
-#: src/pages/Shell.tsx:3499
+#: src/pages/Shell.tsx:3503
 msgid "Add a schedule or webhook trigger"
 msgstr "添加计划或 Webhook 触发器"
 
@@ -254,7 +254,7 @@ msgstr "添加远程 MCP 服务器"
 msgid "Add server"
 msgstr "添加服务器"
 
-#: src/pages/Shell.tsx:5228
+#: src/pages/Shell.tsx:5261
 msgid "Add thumbs-up"
 msgstr "点赞"
 
@@ -291,7 +291,7 @@ msgstr "高级"
 msgid "Advanced..."
 msgstr "高级..."
 
-#: src/pages/Shell.tsx:3132
+#: src/pages/Shell.tsx:3136
 msgid "Agent computer"
 msgstr "Agent 电脑"
 
@@ -430,15 +430,15 @@ msgstr "批准此服务器后，Agent 才能使用它的工具。"
 msgid "Archive"
 msgstr "归档"
 
-#: src/pages/Shell.tsx:5552
+#: src/pages/Shell.tsx:5585
 msgid "archived"
 msgstr "已归档"
 
-#: src/pages/Shell.tsx:2798
+#: src/pages/Shell.tsx:2802
 msgid "Archived"
 msgstr "已归档"
 
-#: src/pages/Shell.tsx:5563
+#: src/pages/Shell.tsx:5596
 msgid "Archived. Chat, memory, and files kept."
 msgstr "已归档。对话、记忆和文件保留。"
 
@@ -488,11 +488,11 @@ msgstr "{0}"
 msgid "at {timeSelect}"
 msgstr "{timeSelect}"
 
-#: src/pages/Shell.tsx:4911
+#: src/pages/Shell.tsx:4944
 msgid "Attach file"
 msgstr "附加文件"
 
-#: src/pages/Shell.tsx:5174
+#: src/pages/Shell.tsx:5207
 msgid "Attachment"
 msgstr "附件"
 
@@ -544,18 +544,18 @@ msgstr "Base URL"
 msgid "Bearer token"
 msgstr "Bearer token"
 
-#: src/pages/Shell.tsx:5767
+#: src/pages/Shell.tsx:5800
 msgid "Booting live desktop…"
 msgstr "正在启动实时桌面…"
 
 #. placeholder {0}: active?.name
-#: src/pages/Shell.tsx:3927
+#: src/pages/Shell.tsx:3931
 msgid "Booting up {0}’s computer"
 msgstr "正在启动 {0} 的电脑"
 
-#: src/pages/Shell.tsx:5427
-#: src/pages/Shell.tsx:5428
-#: src/pages/Shell.tsx:5556
+#: src/pages/Shell.tsx:5460
+#: src/pages/Shell.tsx:5461
+#: src/pages/Shell.tsx:5589
 msgid "bot"
 msgstr "Bot"
 
@@ -564,15 +564,15 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/Shell.tsx:1613
+#: src/pages/Shell.tsx:1617
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/Shell.tsx:4041
+#: src/pages/Shell.tsx:4045
 msgid "Bot screen"
 msgstr "Bot 屏幕"
 
-#: src/pages/Shell.tsx:3328
+#: src/pages/Shell.tsx:3332
 msgid "Bot screen preview"
 msgstr "Bot 屏幕预览"
 
@@ -584,7 +584,7 @@ msgstr "要关联的 Bot"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "默认情况下 Bot 会直接执行。只有当你想先审核某类操作时，才添加例外。"
 
-#: src/pages/Shell.tsx:4150
+#: src/pages/Shell.tsx:4163
 msgid "Bots are working"
 msgstr "Bot 正在工作"
 
@@ -597,8 +597,8 @@ msgid "Browse"
 msgstr "浏览"
 
 #: src/pages/CallView.tsx:241
-#: src/pages/Shell.tsx:3114
-#: src/pages/Shell.tsx:3115
+#: src/pages/Shell.tsx:3118
+#: src/pages/Shell.tsx:3119
 msgid "Call"
 msgstr "通话"
 
@@ -621,7 +621,7 @@ msgstr "无法连接服务器。"
 msgid "Cancel"
 msgstr "取消"
 
-#: src/pages/Shell.tsx:4745
+#: src/pages/Shell.tsx:4778
 msgid "Cancel edit"
 msgstr "取消编辑"
 
@@ -633,7 +633,7 @@ msgstr "取消新建 Bot"
 msgid "Cancel new group"
 msgstr "取消新建群组"
 
-#: src/pages/Shell.tsx:4726
+#: src/pages/Shell.tsx:4759
 msgid "Cancel reply"
 msgstr "取消回复"
 
@@ -674,7 +674,7 @@ msgstr "聊天应用"
 msgid "Chat apps, group channels, and agent connections."
 msgstr "聊天应用、群组频道和 Agent 连接。"
 
-#: src/pages/Shell.tsx:5103
+#: src/pages/Shell.tsx:5136
 msgid "Chat Settings"
 msgstr "聊天设置"
 
@@ -686,8 +686,8 @@ msgstr "检查失败"
 msgid "Check for updates"
 msgstr "检查更新"
 
-#: src/pages/Shell.tsx:3540
-#: src/pages/Shell.tsx:3550
+#: src/pages/Shell.tsx:3544
+#: src/pages/Shell.tsx:3554
 msgid "Check in."
 msgstr "报到。"
 
@@ -752,7 +752,7 @@ msgstr "关闭"
 msgid "Close chart"
 msgstr "关闭图表"
 
-#: src/pages/Shell.tsx:4015
+#: src/pages/Shell.tsx:4019
 msgid "Close computer"
 msgstr "关闭电脑"
 
@@ -780,11 +780,11 @@ msgstr "关闭消息设置"
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
-#: src/pages/Shell.tsx:2454
+#: src/pages/Shell.tsx:2458
 msgid "Close navigation"
 msgstr "关闭导航"
 
-#: src/pages/Shell.tsx:3301
+#: src/pages/Shell.tsx:3305
 msgid "Close panel"
 msgstr "关闭面板"
 
@@ -813,7 +813,7 @@ msgid "Code"
 msgstr "代码"
 
 #. placeholder {0}: group.title
-#: src/pages/Shell.tsx:2596
+#: src/pages/Shell.tsx:2600
 msgid "Collapse {0}"
 msgstr "折叠 {0}"
 
@@ -834,24 +834,24 @@ msgstr "命令"
 msgid "Complete"
 msgstr "完成"
 
-#: src/pages/Shell.tsx:5711
+#: src/pages/Shell.tsx:5744
 #: src/pages/shell/bot-panel.tsx:60
 msgid "Computer"
 msgstr "电脑"
 
-#: src/pages/Shell.tsx:5770
+#: src/pages/Shell.tsx:5803
 msgid "Computer failed to boot"
 msgstr "电脑启动失败"
 
-#: src/pages/Shell.tsx:4064
+#: src/pages/Shell.tsx:4068
 msgid "Computer is asleep"
 msgstr "电脑已休眠"
 
-#: src/pages/Shell.tsx:5769
+#: src/pages/Shell.tsx:5802
 msgid "Computer is asleep. Open it to wake."
 msgstr "电脑处于睡眠状态。打开以唤醒。"
 
-#: src/pages/Shell.tsx:5771
+#: src/pages/Shell.tsx:5804
 msgid "Computer is stopped"
 msgstr "电脑已停止"
 
@@ -966,7 +966,7 @@ msgstr "继续"
 msgid "Continue with email"
 msgstr "使用邮箱继续"
 
-#: src/pages/Shell.tsx:5240
+#: src/pages/Shell.tsx:5273
 msgid "Copy"
 msgstr "复制"
 
@@ -1035,7 +1035,7 @@ msgstr "无法连接此提供方"
 msgid "Could not connect this voice provider"
 msgstr "无法连接此语音提供方"
 
-#: src/pages/Shell.tsx:866
+#: src/pages/Shell.tsx:870
 msgid "Could not connect to the computer screen"
 msgstr "无法连接到电脑屏幕"
 
@@ -1043,7 +1043,7 @@ msgstr "无法连接到电脑屏幕"
 msgid "Could not continue"
 msgstr "无法继续"
 
-#: src/pages/Shell.tsx:2235
+#: src/pages/Shell.tsx:2239
 #: src/pages/shell/bot-panel.tsx:114
 msgid "Could not create bot"
 msgstr "无法创建 Bot"
@@ -1223,7 +1223,7 @@ msgstr "无法重置密码"
 msgid "Could not revoke connection"
 msgstr "无法撤销连接"
 
-#: src/pages/Shell.tsx:3602
+#: src/pages/Shell.tsx:3606
 msgid "Could not run routine"
 msgstr "无法运行例行任务"
 
@@ -1244,7 +1244,7 @@ msgstr "无法保存群组"
 msgid "Could not save model"
 msgstr "无法保存模型"
 
-#: src/pages/Shell.tsx:3573
+#: src/pages/Shell.tsx:3577
 msgid "Could not save routine"
 msgstr "无法保存例行任务"
 
@@ -1288,7 +1288,7 @@ msgstr "无法开始教学"
 msgid "Could not submit this answer"
 msgstr "无法提交此回答"
 
-#: src/pages/Shell.tsx:2260
+#: src/pages/Shell.tsx:2264
 msgid "Could not take control"
 msgstr "无法接管"
 
@@ -1309,7 +1309,7 @@ msgstr "无法更新电脑"
 msgid "Could not update plugin"
 msgstr "无法更新插件"
 
-#: src/pages/Shell.tsx:1825
+#: src/pages/Shell.tsx:1829
 msgid "Could not update reaction"
 msgstr "无法更新反应"
 
@@ -1333,7 +1333,7 @@ msgstr "无法更新头像"
 msgid "Couldn't update messaging settings"
 msgstr "无法更新消息设置"
 
-#: src/pages/Shell.tsx:2507
+#: src/pages/Shell.tsx:2511
 #: src/pages/shell/bot-panel.tsx:179
 #: src/pages/shell/dialogs.tsx:155
 msgid "Create"
@@ -1411,7 +1411,7 @@ msgid "Customer support"
 msgstr "客户支持"
 
 #: src/pages/CustomizeOverlay.tsx:24
-#: src/pages/Shell.tsx:2891
+#: src/pages/Shell.tsx:2895
 msgid "Customize"
 msgstr "自定义"
 
@@ -1444,8 +1444,8 @@ msgstr "默认范围"
 #: src/pages/KnowledgeSection.tsx:680
 #: src/pages/McpServersOverlay.tsx:508
 #: src/pages/RoutineEditor.tsx:272
-#: src/pages/Shell.tsx:2835
-#: src/pages/Shell.tsx:2871
+#: src/pages/Shell.tsx:2839
+#: src/pages/Shell.tsx:2875
 #: src/pages/shell/dialogs.tsx:298
 #: src/pages/shell/dialogs.tsx:355
 msgid "Delete"
@@ -1453,8 +1453,8 @@ msgstr "删除"
 
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.name
-#: src/pages/Shell.tsx:2832
-#: src/pages/Shell.tsx:2868
+#: src/pages/Shell.tsx:2836
+#: src/pages/Shell.tsx:2872
 msgid "Delete {0}"
 msgstr "删除 {0}"
 
@@ -1473,7 +1473,7 @@ msgstr "删除群组"
 msgid "Delete memories too"
 msgstr "同时删除记忆"
 
-#: src/pages/Shell.tsx:5554
+#: src/pages/Shell.tsx:5587
 msgid "deleted"
 msgstr "已删除"
 
@@ -1508,7 +1508,7 @@ msgstr "描述这个 Bot 做什么"
 msgid "Description"
 msgstr "描述"
 
-#: src/pages/Shell.tsx:4921
+#: src/pages/Shell.tsx:4954
 msgid "Dictate"
 msgstr "口述"
 
@@ -1531,7 +1531,7 @@ msgstr "正在断开…"
 msgid "Dismiss"
 msgstr "关闭"
 
-#: src/pages/Shell.tsx:4706
+#: src/pages/Shell.tsx:4739
 msgid "Dismiss error"
 msgstr "关闭错误"
 
@@ -1596,11 +1596,11 @@ msgstr "技能草稿"
 msgid "Duplicate"
 msgstr "复制"
 
-#: src/pages/Shell.tsx:5373
+#: src/pages/Shell.tsx:5406
 msgid "Earlier message"
 msgstr "更早的消息"
 
-#: src/pages/Shell.tsx:5217
+#: src/pages/Shell.tsx:5250
 msgid "Edit and resend"
 msgstr "编辑并重新发送"
 
@@ -1613,7 +1613,7 @@ msgid "Edit Profile"
 msgstr "编辑资料"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/Shell.tsx:4741
+#: src/pages/Shell.tsx:4774
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "正在编辑 {rewindTime} 的消息 · 其后的 {0} 条消息将被移除"
 
@@ -1666,7 +1666,7 @@ msgid "Expand"
 msgstr "展开"
 
 #. placeholder {0}: group.title
-#: src/pages/Shell.tsx:2595
+#: src/pages/Shell.tsx:2599
 msgid "Expand {0}"
 msgstr "展开 {0}"
 
@@ -1690,14 +1690,14 @@ msgstr "失败"
 msgid "Failed"
 msgstr "失败"
 
-#: src/pages/Shell.tsx:2013
-#: src/pages/Shell.tsx:2015
 #: src/pages/Shell.tsx:2017
+#: src/pages/Shell.tsx:2019
+#: src/pages/Shell.tsx:2021
 msgid "Failed to send message"
 msgstr "发送消息失败"
 
-#: src/pages/Shell.tsx:2053
-#: src/pages/Shell.tsx:2072
+#: src/pages/Shell.tsx:2057
+#: src/pages/Shell.tsx:2076
 msgid "Failed to stop"
 msgstr "停止失败"
 
@@ -1780,8 +1780,8 @@ msgid "Global"
 msgstr "全局"
 
 #: src/pages/MessagingSettingsOverlay.tsx:198
-#: src/pages/Shell.tsx:3104
-#: src/pages/Shell.tsx:3271
+#: src/pages/Shell.tsx:3108
+#: src/pages/Shell.tsx:3275
 msgid "Group"
 msgstr "群组"
 
@@ -1823,7 +1823,7 @@ msgstr "试听"
 msgid "Hi, this is how I'll sound when I read replies out loud."
 msgstr "你好，这是我朗读回复时的声音。"
 
-#: src/pages/Shell.tsx:3007
+#: src/pages/Shell.tsx:3011
 msgid "Hide bots"
 msgstr "隐藏机器人"
 
@@ -1835,11 +1835,11 @@ msgstr "隐藏密码"
 msgid "High"
 msgstr "高"
 
-#: src/pages/Shell.tsx:4940
+#: src/pages/Shell.tsx:4973
 msgid "Hold to talk"
 msgstr "按住说话"
 
-#: src/pages/Shell.tsx:4940
+#: src/pages/Shell.tsx:4973
 msgid "Hold to talk (on-device dictation)"
 msgstr "按住说话（设备端口述）"
 
@@ -1863,7 +1863,7 @@ msgstr "此机器人应如何表现"
 msgid "How to check"
 msgstr "如何检查"
 
-#: src/pages/Shell.tsx:5297
+#: src/pages/Shell.tsx:5330
 msgid "I’m done"
 msgstr "我做完了"
 
@@ -1955,11 +1955,11 @@ msgstr "隔离"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "它的对话、文件和例行任务将被永久删除。它创建的 Bot 仍留在列表中。"
 
-#: src/pages/Shell.tsx:4349
+#: src/pages/Shell.tsx:4382
 msgid "Jump to latest"
 msgstr "跳到最新"
 
-#: src/pages/Shell.tsx:5368
+#: src/pages/Shell.tsx:5401
 msgid "Jump to replied message"
 msgstr "跳到被回复的消息"
 
@@ -2009,7 +2009,7 @@ msgstr "关联聊天应用"
 msgid "Listening…"
 msgstr "正在听…"
 
-#: src/pages/Shell.tsx:4266
+#: src/pages/Shell.tsx:4282
 msgid "Load earlier messages"
 msgstr "加载更早的消息"
 
@@ -2045,7 +2045,7 @@ msgstr "正在加载语音提供方…"
 #: src/App.tsx:54
 #: src/pages/Onboarding.tsx:241
 #: src/pages/PeerMessagesOverlay.tsx:108
-#: src/pages/Shell.tsx:4266
+#: src/pages/Shell.tsx:4282
 msgid "Loading…"
 msgstr "加载中…"
 
@@ -2053,7 +2053,7 @@ msgstr "加载中…"
 msgid "Local"
 msgstr "本地"
 
-#: src/pages/Shell.tsx:2997
+#: src/pages/Shell.tsx:3001
 msgid "Log out"
 msgstr "退出登录"
 
@@ -2116,8 +2116,8 @@ msgstr "成员（选择 {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} 个）"
 
 #: src/pages/KnowledgeSection.tsx:48
 #: src/pages/MemorySettingsOverlay.tsx:158
-#: src/pages/Shell.tsx:2946
-#: src/pages/Shell.tsx:2956
+#: src/pages/Shell.tsx:2950
+#: src/pages/Shell.tsx:2960
 msgid "Memory"
 msgstr "记忆"
 
@@ -2125,7 +2125,7 @@ msgstr "记忆"
 msgid "Memory scope"
 msgstr "记忆范围"
 
-#: src/pages/Shell.tsx:4817
+#: src/pages/Shell.tsx:4850
 msgid "Mentions"
 msgstr "提及"
 
@@ -2134,29 +2134,29 @@ msgstr "提及"
 msgid "Message"
 msgstr "消息"
 
-#: src/pages/Shell.tsx:5048
-#: src/pages/Shell.tsx:5176
+#: src/pages/Shell.tsx:5081
+#: src/pages/Shell.tsx:5209
 msgid "Message"
 msgstr "消息"
 
-#: src/pages/Shell.tsx:5044
-#: src/pages/Shell.tsx:5048
+#: src/pages/Shell.tsx:5077
+#: src/pages/Shell.tsx:5081
 msgid "Message {activeName}"
 msgstr "给 {activeName} 发消息"
 
-#: src/pages/Shell.tsx:4686
+#: src/pages/Shell.tsx:4719
 msgid "Message composer"
 msgstr "消息输入框"
 
-#: src/pages/Shell.tsx:5445
+#: src/pages/Shell.tsx:5478
 msgid "Message from {peer}"
 msgstr "来自 {peer} 的消息"
 
-#: src/pages/Shell.tsx:5045
+#: src/pages/Shell.tsx:5078
 msgid "Message…"
 msgstr "消息…"
 
-#: src/pages/Shell.tsx:5445
+#: src/pages/Shell.tsx:5478
 msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
@@ -2177,8 +2177,8 @@ msgstr "最低"
 msgid "Minimize"
 msgstr "最小化"
 
-#: src/pages/Shell.tsx:2497
-#: src/pages/Shell.tsx:2498
+#: src/pages/Shell.tsx:2501
+#: src/pages/Shell.tsx:2502
 msgid "Minimize bots"
 msgstr "最小化机器人"
 
@@ -2222,7 +2222,7 @@ msgid "Model updated."
 msgstr "模型已更新。"
 
 #: src/pages/ModelSettingsOverlay.tsx:312
-#: src/pages/Shell.tsx:2942
+#: src/pages/Shell.tsx:2946
 msgid "Models"
 msgstr "模型"
 
@@ -2281,7 +2281,7 @@ msgstr "需要输入"
 msgid "Needs takeover"
 msgstr "需要接管"
 
-#: src/pages/Shell.tsx:3962
+#: src/pages/Shell.tsx:3966
 msgid "Needs you"
 msgstr "需要你处理"
 
@@ -2507,21 +2507,21 @@ msgid "Only the first 50 skills are shown to the agent."
 msgstr "仅向智能体展示前 50 个技能。"
 
 #: src/pages/ScratchpadSection.tsx:159
-#: src/pages/Shell.tsx:3354
-#: src/pages/Shell.tsx:3359
+#: src/pages/Shell.tsx:3358
+#: src/pages/Shell.tsx:3363
 msgid "Open"
 msgstr "打开"
 
 #. placeholder {0}: group.title
-#: src/pages/Shell.tsx:2593
+#: src/pages/Shell.tsx:2597
 msgid "Open {0}"
 msgstr "打开 {0}"
 
-#: src/pages/Shell.tsx:3317
+#: src/pages/Shell.tsx:3321
 msgid "Open in full window"
 msgstr "在完整窗口中打开"
 
-#: src/pages/Shell.tsx:3073
+#: src/pages/Shell.tsx:3077
 msgid "Open navigation"
 msgstr "打开导航"
 
@@ -2534,7 +2534,7 @@ msgstr "待办"
 msgid "OpenAI-compatible server URL"
 msgstr "OpenAI 兼容服务器 URL"
 
-#: src/pages/Shell.tsx:5565
+#: src/pages/Shell.tsx:5598
 msgid "Opened its thread."
 msgstr "已打开其对话。"
 
@@ -2739,7 +2739,7 @@ msgstr "刷新视图"
 msgid "Refreshing…"
 msgstr "正在刷新…"
 
-#: src/pages/Shell.tsx:5287
+#: src/pages/Shell.tsx:5320
 msgid "Release"
 msgstr "释放"
 
@@ -2756,8 +2756,8 @@ msgstr "移除"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/Shell.tsx:4767
-#: src/pages/Shell.tsx:4803
+#: src/pages/Shell.tsx:4800
+#: src/pages/Shell.tsx:4836
 msgid "Remove {0}"
 msgstr "移除 {0}"
 
@@ -2767,7 +2767,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "移除市场 {0} 及其技能？"
 
 #. placeholder {0}: mention.name
-#: src/pages/Shell.tsx:4977
+#: src/pages/Shell.tsx:5010
 msgid "Remove mention {0}"
 msgstr "移除提及 {0}"
 
@@ -2776,12 +2776,12 @@ msgid "Remove schedule"
 msgstr "移除计划"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/Shell.tsx:4956
+#: src/pages/Shell.tsx:4989
 msgid "Remove skill {0}"
 msgstr "移除技能 {0}"
 
-#: src/pages/Shell.tsx:4322
-#: src/pages/Shell.tsx:5228
+#: src/pages/Shell.tsx:4354
+#: src/pages/Shell.tsx:5261
 msgid "Remove thumbs-up"
 msgstr "取消点赞"
 
@@ -2789,7 +2789,7 @@ msgstr "取消点赞"
 msgid "Remove webhook"
 msgstr "移除 Webhook"
 
-#: src/pages/Shell.tsx:5564
+#: src/pages/Shell.tsx:5597
 msgid "Removed with chat, computer, and memory."
 msgstr "已连同对话、电脑和记忆一起移除。"
 
@@ -2818,7 +2818,7 @@ msgstr "替换 API 密钥"
 msgid "Replace key"
 msgstr "替换密钥"
 
-#: src/pages/Shell.tsx:5208
+#: src/pages/Shell.tsx:5241
 msgid "Reply"
 msgstr "回复"
 
@@ -2826,7 +2826,7 @@ msgstr "回复"
 msgid "Reply in several short messages"
 msgstr "分成多条简短消息回复"
 
-#: src/pages/Shell.tsx:4723
+#: src/pages/Shell.tsx:4756
 msgid "Replying to {replyName}"
 msgstr "正在回复 {replyName}"
 
@@ -2855,8 +2855,8 @@ msgstr "重置你的密码"
 msgid "Resetting…"
 msgstr "正在重置…"
 
-#: src/pages/Shell.tsx:2826
-#: src/pages/Shell.tsx:2862
+#: src/pages/Shell.tsx:2830
+#: src/pages/Shell.tsx:2866
 msgid "Restore"
 msgstr "恢复"
 
@@ -2868,7 +2868,7 @@ msgstr "还原上次保存的工作区。电脑上未保存的工作会丢失。
 msgid "Retry now"
 msgstr "立即重试"
 
-#: src/pages/Shell.tsx:2427
+#: src/pages/Shell.tsx:2431
 msgid "Retry screen"
 msgstr "重试屏幕"
 
@@ -2894,8 +2894,8 @@ msgid "Rotate key"
 msgstr "轮换密钥"
 
 #: src/pages/RoutineEditor.tsx:236
-#: src/pages/Shell.tsx:3539
-#: src/pages/Shell.tsx:3549
+#: src/pages/Shell.tsx:3543
+#: src/pages/Shell.tsx:3553
 msgid "Routine"
 msgstr "例行任务"
 
@@ -2912,7 +2912,7 @@ msgstr "运行时间"
 msgid "Run history"
 msgstr "运行记录"
 
-#: src/pages/Shell.tsx:3532
+#: src/pages/Shell.tsx:3536
 msgid "Run time must be in the future."
 msgstr "运行时间必须是将来的时间。"
 
@@ -2979,7 +2979,7 @@ msgid "Say yes or no, or answer in a sentence."
 msgstr "回答是或否，或一句话说明。"
 
 #: src/pages/ModelSettingsOverlay.tsx:957
-#: src/pages/Shell.tsx:2550
+#: src/pages/Shell.tsx:2554
 #: src/pages/shell/command-palette.tsx:102
 msgid "Search"
 msgstr "搜索"
@@ -3026,7 +3026,7 @@ msgstr "正在搜索…"
 msgid "Select {0}"
 msgstr "选择 {0}"
 
-#: src/pages/Shell.tsx:3105
+#: src/pages/Shell.tsx:3109
 msgid "Select a bot"
 msgstr "选择 Bot"
 
@@ -3034,8 +3034,8 @@ msgstr "选择 Bot"
 msgid "Selected"
 msgstr "已选择"
 
-#: src/pages/Shell.tsx:5066
-#: src/pages/Shell.tsx:5087
+#: src/pages/Shell.tsx:5099
+#: src/pages/Shell.tsx:5120
 msgid "Send"
 msgstr "发送"
 
@@ -3075,22 +3075,22 @@ msgstr "服务器名称"
 msgid "Server URL"
 msgstr "服务器 URL"
 
-#: src/pages/Shell.tsx:3114
+#: src/pages/Shell.tsx:3118
 msgid "Set up voice to call"
 msgstr "设置通话语音"
 
 #: src/pages/AccountSettingsOverlay.tsx:119
-#: src/pages/Shell.tsx:2923
-#: src/pages/Shell.tsx:2931
-#: src/pages/Shell.tsx:3267
+#: src/pages/Shell.tsx:2927
+#: src/pages/Shell.tsx:2935
+#: src/pages/Shell.tsx:3271
 msgid "Settings"
 msgstr "设置"
 
-#: src/pages/Shell.tsx:5105
+#: src/pages/Shell.tsx:5138
 msgid "Settings: General"
 msgstr "设置：通用"
 
-#: src/pages/Shell.tsx:5107
+#: src/pages/Shell.tsx:5140
 msgid "Settings: Usage"
 msgstr "设置：用量"
 
@@ -3121,13 +3121,13 @@ msgstr "显示所有提供方"
 msgid "Show before / after"
 msgstr "显示前后对比"
 
-#: src/pages/Shell.tsx:3007
-#: src/pages/Shell.tsx:3061
-#: src/pages/Shell.tsx:3062
+#: src/pages/Shell.tsx:3011
+#: src/pages/Shell.tsx:3065
+#: src/pages/Shell.tsx:3066
 msgid "Show bots"
 msgstr "显示机器人"
 
-#: src/pages/Shell.tsx:3291
+#: src/pages/Shell.tsx:3295
 msgid "Show computer"
 msgstr "显示电脑"
 
@@ -3143,7 +3143,7 @@ msgstr "显示密码"
 msgid "Show popular providers"
 msgstr "显示热门提供方"
 
-#: src/pages/Shell.tsx:3291
+#: src/pages/Shell.tsx:3295
 msgid "Show settings"
 msgstr "显示设置"
 
@@ -3169,7 +3169,7 @@ msgid "Sign up"
 msgstr "注册"
 
 #. placeholder {0}: skill.name
-#: src/pages/Shell.tsx:4864
+#: src/pages/Shell.tsx:4897
 msgid "Skill {0}"
 msgstr "技能 {0}"
 
@@ -3180,7 +3180,7 @@ msgstr "技能 {0}"
 msgid "Skills"
 msgstr "技能"
 
-#: src/pages/Shell.tsx:5294
+#: src/pages/Shell.tsx:5327
 msgid "Skip"
 msgstr "跳过"
 
@@ -3193,7 +3193,7 @@ msgid "Skip or deploy key"
 msgstr "跳过或使用部署密钥"
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1859
+#: src/pages/Shell.tsx:1863
 msgid "Skipped {0}"
 msgstr "已跳过 {0}"
 
@@ -3214,8 +3214,8 @@ msgstr "工作区默认"
 msgid "Space interrupts · Esc hangs up"
 msgstr "空格键打断 · Esc 挂断"
 
-#: src/pages/Shell.tsx:5411
-#: src/pages/Shell.tsx:5662
+#: src/pages/Shell.tsx:5444
+#: src/pages/Shell.tsx:5695
 msgid "Speak"
 msgstr "朗读"
 
@@ -3227,8 +3227,8 @@ msgstr "朗读 + 转写"
 msgid "Speak only"
 msgstr "仅朗读"
 
-#: src/pages/Shell.tsx:5407
-#: src/pages/Shell.tsx:5658
+#: src/pages/Shell.tsx:5440
+#: src/pages/Shell.tsx:5691
 msgid "Speak this reply"
 msgstr "朗读这条回复"
 
@@ -3263,20 +3263,20 @@ msgstr "步骤"
 msgid "Steps ({0})"
 msgstr "步骤（{0}）"
 
-#: src/pages/Shell.tsx:3977
-#: src/pages/Shell.tsx:3982
-#: src/pages/Shell.tsx:5076
-#: src/pages/Shell.tsx:5411
-#: src/pages/Shell.tsx:5662
+#: src/pages/Shell.tsx:3981
+#: src/pages/Shell.tsx:3986
+#: src/pages/Shell.tsx:5109
+#: src/pages/Shell.tsx:5444
+#: src/pages/Shell.tsx:5695
 msgid "Stop"
 msgstr "停止"
 
-#: src/pages/Shell.tsx:4921
+#: src/pages/Shell.tsx:4954
 msgid "Stop dictation"
 msgstr "停止口述"
 
-#: src/pages/Shell.tsx:5407
-#: src/pages/Shell.tsx:5658
+#: src/pages/Shell.tsx:5440
+#: src/pages/Shell.tsx:5691
 msgid "Stop speaking"
 msgstr "停止朗读"
 
@@ -3294,7 +3294,7 @@ msgstr "已停止。"
 msgid "Stored encrypted"
 msgstr "已加密存储"
 
-#: src/pages/Shell.tsx:5518
+#: src/pages/Shell.tsx:5551
 msgid "subagent"
 msgstr "子 Agent"
 
@@ -3325,7 +3325,7 @@ msgstr "系统"
 msgid "Teach a task"
 msgstr "示范任务"
 
-#: src/pages/Shell.tsx:3181
+#: src/pages/Shell.tsx:3185
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "正在示范，发送新消息前请先停止示范。"
 
@@ -3333,7 +3333,7 @@ msgstr "正在示范，发送新消息前请先停止示范。"
 msgid "Team"
 msgstr "团队"
 
-#: src/pages/Shell.tsx:5775
+#: src/pages/Shell.tsx:5808
 msgid "Team Computer"
 msgstr "团队电脑"
 
@@ -3369,11 +3369,11 @@ msgstr "所选记忆提供方在此构建中不可用。"
 msgid "Thinking"
 msgstr "思考"
 
-#: src/pages/Shell.tsx:3321
+#: src/pages/Shell.tsx:3325
 msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
 msgstr "此 Bot 运行在这台电脑上，而不是 Linux 桌面。Shell 和文件使用你的主目录。"
 
-#: src/pages/Shell.tsx:4033
+#: src/pages/Shell.tsx:4037
 msgid "This bot runs on this computer. There is no separate Linux desktop. Ask it to use the shell; working directories under your home folder are allowed."
 msgstr "此 Bot 运行在这台电脑上，没有单独的 Linux 桌面。让它使用 shell；主目录下的工作目录可用。"
 
@@ -3456,6 +3456,10 @@ msgstr "标题"
 msgid "To:"
 msgstr "发送至："
 
+#: src/pages/Shell.tsx:4294
+msgid "Today"
+msgstr "今天"
+
 #: src/pages/PluginsOverlay.tsx:663
 msgid "Tool sources"
 msgstr "工具源"
@@ -3485,7 +3489,7 @@ msgid "Unpin"
 msgstr "取消置顶"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:1939
+#: src/pages/Shell.tsx:1943
 msgid "Unsupported file type: {0}"
 msgstr "不支持的文件类型：{0}"
 
@@ -3533,7 +3537,7 @@ msgid "Updating…"
 msgstr "正在更新…"
 
 #: src/pages/AccountSettingsOverlay.tsx:234
-#: src/pages/Shell.tsx:2977
+#: src/pages/Shell.tsx:2981
 msgid "Usage"
 msgstr "用量"
 
@@ -3558,7 +3562,7 @@ msgstr "校验并添加"
 msgid "Verifying…"
 msgstr "正在校验…"
 
-#: src/pages/Shell.tsx:2967
+#: src/pages/Shell.tsx:2971
 #: src/pages/shell/bot-panel.tsx:584
 #: src/pages/VoiceSettingsOverlay.tsx:145
 #: src/pages/VoiceSettingsOverlay.tsx:288
@@ -3644,8 +3648,12 @@ msgstr "处理中…"
 msgid "Workspace root"
 msgstr "工作区根目录"
 
-#: src/pages/Shell.tsx:1612
-#: src/pages/Shell.tsx:2432
+#: src/pages/Shell.tsx:4295
+msgid "Yesterday"
+msgstr "昨天"
+
+#: src/pages/Shell.tsx:1616
+#: src/pages/Shell.tsx:2436
 msgid "You"
 msgstr "你"
 
@@ -3657,7 +3665,7 @@ msgstr "如果没有自动跳转，可以关闭此标签页。"
 msgid "You can close this window."
 msgstr "可以关闭此窗口。"
 
-#: src/pages/Shell.tsx:3966
+#: src/pages/Shell.tsx:3970
 msgid "You have control"
 msgstr "你已接管"
 

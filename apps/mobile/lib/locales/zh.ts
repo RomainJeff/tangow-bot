@@ -16,6 +16,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "{count}m ago": "{count} 分钟前",
   "{count}h ago": "{count} 小时前",
   "{count}d ago": "{count} 天前",
+  Today: "今天",
+  Yesterday: "昨天",
   "{name} is using it": "{name} 正在使用",
   "{name} is working": "{name} 正在工作",
   "{name}’s computer": "{name} 的电脑",

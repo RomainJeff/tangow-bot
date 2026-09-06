@@ -534,6 +534,7 @@ export type MobileMessage = {
   botId?: string;
   replyToMessageId?: string;
   thumbsUp?: boolean;
+  createdAt: string;
   blocks: MessageBlock[];
 };
 
@@ -659,6 +660,7 @@ type ThreadEvent = {
   type: string;
   seq?: number;
   runId?: string;
+  createdAt?: string;
   payload?: Record<string, unknown>;
 };
 
@@ -780,6 +782,7 @@ export function applyMobileThreadEvent(
     const streaming: MobileMessage = {
       id: progressId,
       role: "bot",
+      createdAt: event.createdAt ?? new Date().toISOString(),
       blocks: reduceLiveMessageBlocks((previous?.blocks ?? []) as MessageBlock[], {
         type: "progress",
         payload: event.payload,
@@ -799,6 +802,7 @@ export function applyMobileThreadEvent(
     const streaming: MobileMessage = {
       id: progressId,
       role: "bot",
+      createdAt: event.createdAt ?? new Date().toISOString(),
       blocks: reduceLiveMessageBlocks((previous?.blocks ?? []) as MessageBlock[], {
         type: "tool",
         name: String(event.payload?.name ?? ""),
@@ -818,6 +822,7 @@ export function applyMobileThreadEvent(
     const streaming: MobileMessage = {
       id: `subagent:${agentId}`,
       role: "bot",
+      createdAt: event.createdAt ?? new Date().toISOString(),
       ...(event.botId ? { botId: event.botId } : {}),
       ...(event.runId ? { runId: event.runId } : {}),
       blocks: [
@@ -858,6 +863,7 @@ export function applyMobileThreadEvent(
       id: String(event.payload?.messageId ?? event.id ?? `msg:${event.seq ?? 0}`),
       runId: event.runId ? String(event.runId) : undefined,
       role: (event.payload?.role as MobileMessage["role"]) ?? "bot",
+      createdAt: event.createdAt ?? new Date().toISOString(),
       blocks: (event.payload?.blocks as MobileMessage["blocks"]) ?? [],
       botId: event.botId ?? (event.payload?.botId ? String(event.payload.botId) : undefined),
       replyToMessageId: event.payload?.replyToMessageId

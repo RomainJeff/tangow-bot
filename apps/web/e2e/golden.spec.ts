@@ -305,6 +305,10 @@ test("sign-in, spawn, and stop work in the shell", async ({ page }, testInfo) =>
   await expect(
     page.getByTestId("transcript").getByText("Use the newer report and keep the answer short."),
   ).toBeVisible();
+  // The transcript opens a stretch of conversation with a day/time marker.
+  await expect(page.getByTestId("transcript").locator("time").first()).toHaveText(
+    /^Today \d{1,2}:\d{2}/,
+  );
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "14-active-bot-work");
   await page.setViewportSize({ width: 390, height: 844 });

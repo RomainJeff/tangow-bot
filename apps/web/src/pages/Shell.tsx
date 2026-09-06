@@ -53,7 +53,9 @@ import {
   type SlashActionId,
   searchHitThreadTarget,
   serializeComposerPrompt,
+  showsTimeMarker,
   speechFromBlocks,
+  threadTimeMarkerLabel,
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
@@ -103,6 +105,7 @@ import {
 } from "lucide-react";
 import {
   type DragEvent,
+  Fragment,
   lazy,
   type MutableRefObject,
   memo,
@@ -4144,6 +4147,15 @@ const Transcript = memo(function Transcript({
     () => new Map(messages.map((message) => [message.id, message])),
     [messages],
   );
+  // Markers read the rendered rows: a hidden activity row must not swallow a
+  // marker or invent a gap.
+  const visibleMessages = useMemo(
+    () =>
+      messages.filter((message) =>
+        message.blocks.some((block) => !isHiddenActivityBlock(block, showSteps)),
+      ),
+    [messages, showSteps],
+  );
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
   const workingFallback = `${
     workingBotName != null && workingBotName !== ""
@@ -4270,69 +4282,86 @@ const Transcript = memo(function Transcript({
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
-        {messages.map((message) => {
-          if (!message.blocks.some((block) => !isHiddenActivityBlock(block, showSteps)))
-            return null;
+        {visibleMessages.map((message, index) => {
           const peerReceipt = isPeerReceiptBlocks(message.blocks);
           const rewound = rewindFromSeq !== null && (message.seq ?? 0) >= rewindFromSeq;
+          const timeMarker = showsTimeMarker(
+            visibleMessages[index - 1]?.createdAt,
+            message.createdAt,
+          )
+            ? threadTimeMarkerLabel(message.createdAt, {
+                locale: i18n.locale || "en",
+                today: t`Today`,
+                yesterday: t`Yesterday`,
+              })
+            : "";
           return (
-            <div
-              key={message.id}
-              data-message-id={message.id}
-              data-rewound={rewound ? "true" : undefined}
-              className={`${
-                peerReceipt ? "relative py-0.5" : "group/message relative pt-9 hover:z-20"
-              }${rewound ? " opacity-40" : ""}`}
-            >
-              {peerReceipt ? null : (
-                <MessageHoverActions
-                  message={message}
-                  onReply={onReply}
-                  onEdit={onEdit}
-                  onReact={onReact}
-                />
-              )}
-              <MessageView
-                artifactTarget={artifactTarget}
-                message={message}
-                canAnswer={message.id === answerableAskMessageId}
-                onOpenBot={onOpenBot}
-                onOpenPeerMessages={onOpenPeerMessages}
-                onAnswer={onAnswer}
-                speakerName={
-                  peerReceipt
-                    ? undefined
-                    : message.role === "bot"
-                      ? memberName?.(message.botId)
-                      : undefined
-                }
-                memberName={memberName}
-                peerBot={peerBot}
-                replyPreview={
-                  message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined
-                }
-                replyToMessageId={message.replyToMessageId}
-                onJumpToMessage={onJumpToMessage}
-                onRefresh={onRefresh}
-                onBotChanged={onBotChanged}
-                onAddRoutine={onAddRoutine}
-                voiceReady={voiceReady}
-                speaking={speakingMessageId === message.id}
-                onSpeak={() => onSpeak(message)}
-              />
-              {!peerReceipt && message.thumbsUp ? (
-                <button
-                  type="button"
-                  aria-label={t`Remove thumbs-up`}
-                  onClick={() => void onReact(message)}
-                  className={`mt-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs ${
-                    message.role === "user" ? "ml-auto block" : ""
-                  }`}
+            <Fragment key={message.id}>
+              {timeMarker ? (
+                <time
+                  dateTime={message.createdAt}
+                  className="self-center pt-4 pb-1 text-[11px] tabular-nums text-muted-foreground"
                 >
-                  👍
-                </button>
+                  {timeMarker}
+                </time>
               ) : null}
-            </div>
+              <div
+                data-message-id={message.id}
+                data-rewound={rewound ? "true" : undefined}
+                className={`${
+                  peerReceipt ? "relative py-0.5" : "group/message relative pt-9 hover:z-20"
+                }${rewound ? " opacity-40" : ""}`}
+              >
+                {peerReceipt ? null : (
+                  <MessageHoverActions
+                    message={message}
+                    onReply={onReply}
+                    onEdit={onEdit}
+                    onReact={onReact}
+                  />
+                )}
+                <MessageView
+                  artifactTarget={artifactTarget}
+                  message={message}
+                  canAnswer={message.id === answerableAskMessageId}
+                  onOpenBot={onOpenBot}
+                  onOpenPeerMessages={onOpenPeerMessages}
+                  onAnswer={onAnswer}
+                  speakerName={
+                    peerReceipt
+                      ? undefined
+                      : message.role === "bot"
+                        ? memberName?.(message.botId)
+                        : undefined
+                  }
+                  memberName={memberName}
+                  peerBot={peerBot}
+                  replyPreview={
+                    message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined
+                  }
+                  replyToMessageId={message.replyToMessageId}
+                  onJumpToMessage={onJumpToMessage}
+                  onRefresh={onRefresh}
+                  onBotChanged={onBotChanged}
+                  onAddRoutine={onAddRoutine}
+                  voiceReady={voiceReady}
+                  speaking={speakingMessageId === message.id}
+                  onSpeak={() => onSpeak(message)}
+                />
+                {!peerReceipt && message.thumbsUp ? (
+                  <button
+                    type="button"
+                    aria-label={t`Remove thumbs-up`}
+                    onClick={() => void onReact(message)}
+                    className={`mt-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs ${
+                      message.role === "user" ? "ml-auto block" : ""
+                    }`}
+                  >
+                    👍
+                  </button>
+                ) : null}
+              </div>
+            </Fragment>
           );
         })}
         {running &&
