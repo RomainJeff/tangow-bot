@@ -51,7 +51,7 @@ import {
   type TextProps,
   View,
 } from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
 import { useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppConnectCard } from "../components/AppConnectCard";
@@ -239,6 +239,7 @@ function Thread() {
   const router = useRouter();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardState();
   const { botId, groupId, name, messageId } = useLocalSearchParams<{
     botId?: string;
     groupId?: string;
@@ -1728,7 +1729,13 @@ function Thread() {
           </Pressable>
         ) : null}
       </View>
-      <View style={{ paddingBottom: Math.max(insets.bottom + 12, 24) }}>
+      <View
+        style={{
+          // Keyboard covers the nav bar / home indicator, so the safe-area
+          // inset would render as dead space between composer and keyboard.
+          paddingBottom: keyboard.isVisible ? 12 : Math.max(insets.bottom + 12, 24),
+        }}
+      >
         {replyTarget ? (
           <View
             style={{
