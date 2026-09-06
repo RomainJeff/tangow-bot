@@ -412,6 +412,17 @@ describe("marketplaces service", () => {
       expect((await m.plugins(actor, id)).map((p) => p.name)).toEqual(["tdd"]);
     });
 
+    it("removePlugin cannot delete anything outside the marketplace's plugins dir", async () => {
+      headSha = SK1;
+      const m = service();
+      const { id } = await m.add(actor, { url: SKILLS_URL });
+      const victim = path.join(root(), "victim");
+      await mkdir(victim, { recursive: true });
+      await writeFile(path.join(victim, "keep.txt"), "keep");
+      await m.removePlugin(actor, id, "../../victim").catch(() => undefined);
+      expect(await exists(path.join(victim, "keep.txt"))).toBe(true);
+    });
+
     it("refuses a repository with neither manifest nor SKILL.md", async () => {
       headSha = SK1;
       repos.set(SK1, { "README.md": "nothing" });

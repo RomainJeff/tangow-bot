@@ -416,6 +416,8 @@ export async function removeInstalledPlugin(
   marketplace: string,
   plugin: string,
 ): Promise<void> {
+  // Never installed under such a name (see parseManifest), so nothing to remove — and no path escape.
+  if (!SAFE_NAME.test(plugin)) return;
   await rm(path.join(root, marketplace, "plugins", plugin), { recursive: true, force: true });
 }
 
