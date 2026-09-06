@@ -802,32 +802,25 @@ export function createRouter(deps: RouterDeps) {
             }
           }
         }
-        await deps.prisma.bot.update({
-          where: { id: input.botId },
-          data: {
-            name: input.name,
-            title: input.title,
-            description: input.description,
-            instructions: input.instructions,
-            notifyOnFinish: input.notifyOnFinish,
-            color: input.color,
-            shapeSeed: input.shapeSeed,
-            pinned: input.pinned,
-            memoryScope: input.memoryScope,
-            sectionId: input.sectionId,
-            voiceId: input.voiceId,
-            autoSpeak: input.autoSpeak,
-            chattyReplies: input.chattyReplies,
-            ...(input.modelProvider !== undefined
-              ? { modelProvider: input.modelProvider, modelId: input.modelId ?? null }
-              : {}),
-            ...(input.thinkingLevel !== undefined ? { thinkingLevel } : {}),
-          },
+        return repos.updateBot(context.actor, input.botId, {
+          name: input.name,
+          title: input.title,
+          description: input.description,
+          instructions: input.instructions,
+          notifyOnFinish: input.notifyOnFinish,
+          color: input.color,
+          shapeSeed: input.shapeSeed,
+          pinned: input.pinned,
+          memoryScope: input.memoryScope,
+          sectionId: input.sectionId,
+          voiceId: input.voiceId,
+          autoSpeak: input.autoSpeak,
+          chattyReplies: input.chattyReplies,
+          ...(input.modelProvider !== undefined
+            ? { modelProvider: input.modelProvider, modelId: input.modelId ?? null }
+            : {}),
+          ...(input.thinkingLevel !== undefined ? { thinkingLevel } : {}),
         });
-        const bots = await repos.listBots(context.actor);
-        const bot = bots.find((b) => b.id === input.botId);
-        if (!bot) throw new IsolationError();
-        return bot;
       }),
       setComputer: authed.bots.setComputer.handler(async ({ context, input }) => {
         const bot = await repos.getBot(context.actor, input.botId);

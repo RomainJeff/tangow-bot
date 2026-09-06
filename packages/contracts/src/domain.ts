@@ -263,6 +263,30 @@ export const UpdateBotInput = z
     }
   });
 
+/**
+ * Fields the `update_bot` tool lets an orchestrator change on an existing bot.
+ * Deliberately narrower than {@link UpdateBotInput}: no model, credentials, or
+ * archival — only the profile a bot may reshape on itself or a bot it created.
+ * Reuses the same length limits as create/update so validation stays in sync.
+ */
+export const UpdateBotToolInput = z
+  .object({
+    botId: Id,
+    title: z.string().trim().max(BOT_TITLE_MAX_LENGTH).optional(),
+    description: z.string().trim().max(BOT_DESCRIPTION_MAX_LENGTH).optional(),
+    instructions: z.string().trim().max(BOT_INSTRUCTIONS_MAX_LENGTH).optional(),
+    color: z.string().trim().min(1).optional(),
+  })
+  .refine(
+    (value) =>
+      value.title !== undefined ||
+      value.description !== undefined ||
+      value.instructions !== undefined ||
+      value.color !== undefined,
+    { message: "Provide at least one of title, description, instructions, or color to change." },
+  );
+export type UpdateBotToolInput = z.infer<typeof UpdateBotToolInput>;
+
 export const RoutineSchema = z.object({
   id: Id,
   botId: Id,

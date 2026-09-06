@@ -5,6 +5,7 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
+import { BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -13,6 +14,7 @@ import {
   confirmSpawnedBotName,
   destroyBot,
   spawnBot,
+  updateSpawnedBot,
 } from "./child-bots.js";
 
 const context = {
@@ -154,6 +156,126 @@ describe("spawned bot archival", () => {
         context,
       ),
     ).resolves.toMatchObject({ ok: true, botId: "child-1", name: "Scout" });
+  });
+});
+
+describe("spawned bot updates", () => {
+  function sidebarBotRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "child-1",
+      spaceId: "workspace-1",
+      name: "Scout",
+      title: "Lead researcher",
+      description: "",
+      instructions: "Stay sharp.",
+      color: "ink",
+      shapeSeed: null,
+      notifyOnFinish: true,
+      pinned: false,
+      sectionId: null,
+      archivedAt: null,
+      parentBotId: "parent-1",
+      memoryScope: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+      thread: { id: "thread-1", unread: false, messages: [] },
+      computer: null,
+      runs: [],
+      voiceId: null,
+      autoSpeak: false,
+      chattyReplies: false,
+      modelProvider: null,
+      modelId: null,
+      thinkingLevel: null,
+      webhookSecretId: null,
+      ...overrides,
+    };
+  }
+
+  it("updates a bot the caller created and reports the changed fields", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      bot: {
+        findFirst: vi.fn().mockResolvedValue({ id: "child-1", parentBotId: "parent-1" }),
+        updateMany,
+        findMany: vi.fn().mockResolvedValue([sidebarBotRow()]),
+      },
+      run: { findMany: vi.fn().mockResolvedValue([]) },
+    } as unknown as PrismaClient;
+
+    const result = await updateSpawnedBot(
+      { prisma },
+      {
+        updatedByBotId: "parent-1",
+        userId: "user-1",
+        spaceId: "workspace-1",
+        botId: "child-1",
+        title: "Lead researcher",
+        instructions: "Stay sharp.",
+      },
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      botId: "child-1",
+      name: "Scout",
+      updated: ["title", "instructions"],
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "child-1",
+        spaceId: "workspace-1",
+        userId: "user-1",
+        archivedAt: null,
+      },
+      data: { title: "Lead researcher", instructions: "Stay sharp." },
+    });
+  });
+
+  it("refuses to update a bot the caller did not create", async () => {
+    const updateMany = vi.fn();
+    const prisma = {
+      bot: {
+        findFirst: vi.fn().mockResolvedValue({ id: "stranger-1", parentBotId: "someone-else" }),
+        updateMany,
+        findMany: vi.fn(),
+      },
+    } as unknown as PrismaClient;
+
+    const result = await updateSpawnedBot(
+      { prisma },
+      {
+        updatedByBotId: "parent-1",
+        userId: "user-1",
+        spaceId: "workspace-1",
+        botId: "stranger-1",
+        title: "Hijacked",
+      },
+    );
+
+    expect(result).toMatchObject({ error: expect.stringContaining("only update itself") });
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects instructions past the shared length limit before touching the database", async () => {
+    const findFirst = vi.fn();
+    const prisma = {
+      bot: { findFirst, updateMany: vi.fn(), findMany: vi.fn() },
+    } as unknown as PrismaClient;
+
+    const result = await updateSpawnedBot(
+      { prisma },
+      {
+        updatedByBotId: "parent-1",
+        userId: "user-1",
+        spaceId: "workspace-1",
+        botId: "child-1",
+        instructions: "x".repeat(BOT_INSTRUCTIONS_MAX_LENGTH + 1),
+      },
+    );
+
+    expect(result).toHaveProperty("error");
+    expect(findFirst).not.toHaveBeenCalled();
   });
 });
 

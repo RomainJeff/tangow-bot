@@ -1210,6 +1210,7 @@ export function ShellPage() {
               void refreshBots(true).catch(() => undefined);
             } else if (
               event.type === "bot.spawned" ||
+              event.type === "bot.updated" ||
               event.type === "bot.deleted" ||
               event.type === "run.started" ||
               isRunTerminalEvent(event) ||

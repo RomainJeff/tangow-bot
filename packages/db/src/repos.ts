@@ -7,7 +7,7 @@ import {
   type SpaceBot,
 } from "@rakazo/contracts";
 import { userVisibleMessages } from "@rakazo/core";
-import type { PrismaClient } from "./client.js";
+import type { Prisma, PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
 import { createThreadMessageInTransaction } from "./messages.js";
 import { IsolationError } from "./scope.js";
@@ -155,6 +155,104 @@ export function createRepos(prisma: PrismaClient) {
     });
   }
 
+  async function listBots(actor: Actor, options: { archived?: boolean } = {}): Promise<Bot[]> {
+    const bots = await prisma.bot.findMany({
+      where: {
+        spaceId: actor.spaceId,
+        userId: actor.userId,
+        archivedAt: options.archived ? { not: null } : null,
+      },
+      include: {
+        thread: {
+          include: {
+            messages: { orderBy: { seq: "desc" }, take: SIDEBAR_PREVIEW_MESSAGE_WINDOW },
+          },
+        },
+        runs: activeRunSelection,
+        computer: { select: { scope: true } },
+      },
+      orderBy: [{ pinned: "desc" }, { position: "asc" }, { createdAt: "asc" }],
+    });
+    const candidateRunIds = [
+      ...new Set(
+        bots.flatMap((bot) =>
+          (bot.thread?.messages ?? []).flatMap((message) => (message.runId ? [message.runId] : [])),
+        ),
+      ),
+    ];
+    const peerRuns = candidateRunIds.length
+      ? await prisma.run.findMany({
+          where: { id: { in: candidateRunIds }, trigger: "bot_message" },
+          select: { id: true },
+        })
+      : [];
+    const peerRunIds = new Set(peerRuns.map((run) => run.id));
+    return Promise.all(
+      bots.map(async (bot) => {
+        let messages = bot.thread?.messages ?? [];
+        let preview = "";
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const windowRunIds = [
+            ...new Set(messages.flatMap((message) => (message.runId ? [message.runId] : []))),
+          ].filter((runId) => !peerRunIds.has(runId));
+          if (windowRunIds.length > 0) {
+            const morePeers = await prisma.run.findMany({
+              where: { id: { in: windowRunIds }, trigger: "bot_message" },
+              select: { id: true },
+            });
+            for (const run of morePeers) peerRunIds.add(run.id);
+          }
+          const visible = userVisibleMessages(
+            messages.map((message) => ({
+              ...message,
+              blocks: message.blocks as MessageBlock[],
+              runId: message.runId ?? undefined,
+            })),
+            { knownPeerRunIds: peerRunIds },
+          );
+          preview = previewFromBlocks(visible[0]?.blocks);
+          if (preview || messages.length === 0 || !bot.thread || attempt === 4) break;
+          const oldest = messages[messages.length - 1];
+          if (!oldest) break;
+          messages = await prisma.message.findMany({
+            where: { threadId: bot.thread.id, seq: { lt: oldest.seq } },
+            orderBy: { seq: "desc" },
+            take: SIDEBAR_PREVIEW_MESSAGE_WINDOW,
+          });
+          if (messages.length === 0) break;
+        }
+        return mapBot(bot, preview, bot.runs[0]?.status ?? "idle");
+      }),
+    );
+  }
+
+  /**
+   * Apply profile changes to one bot and return the refreshed sidebar DTO.
+   * Isolation is enforced atomically: the update only lands when the bot is a
+   * live (non-archived) bot in the actor's own space, otherwise it throws.
+   * Shared by the `bots.update` RPC and the `update_bot` tool so both go
+   * through one validated write and produce the same {@link Bot} shape.
+   */
+  async function updateBot(
+    actor: Actor,
+    botId: string,
+    data: Prisma.BotUncheckedUpdateManyInput,
+  ): Promise<Bot> {
+    const applied = await prisma.bot.updateMany({
+      where: {
+        id: botId,
+        spaceId: actor.spaceId,
+        userId: actor.userId,
+        archivedAt: null,
+      },
+      data,
+    });
+    if (applied.count !== 1) throw new IsolationError();
+    const bot = (await listBots(actor)).find((candidate) => candidate.id === botId);
+    if (!bot) throw new IsolationError();
+    return bot;
+  }
+
   return {
     async listBotSections(actor: Actor): Promise<BotSection[]> {
       return listBotSectionsForSpaces(actor, [actor.spaceId]);
@@ -229,78 +327,9 @@ export function createRepos(prisma: PrismaClient) {
       });
     },
 
-    async listBots(actor: Actor, options: { archived?: boolean } = {}): Promise<Bot[]> {
-      const bots = await prisma.bot.findMany({
-        where: {
-          spaceId: actor.spaceId,
-          userId: actor.userId,
-          archivedAt: options.archived ? { not: null } : null,
-        },
-        include: {
-          thread: {
-            include: {
-              messages: { orderBy: { seq: "desc" }, take: SIDEBAR_PREVIEW_MESSAGE_WINDOW },
-            },
-          },
-          runs: activeRunSelection,
-          computer: { select: { scope: true } },
-        },
-        orderBy: [{ pinned: "desc" }, { position: "asc" }, { createdAt: "asc" }],
-      });
-      const candidateRunIds = [
-        ...new Set(
-          bots.flatMap((bot) =>
-            (bot.thread?.messages ?? []).flatMap((message) =>
-              message.runId ? [message.runId] : [],
-            ),
-          ),
-        ),
-      ];
-      const peerRuns = candidateRunIds.length
-        ? await prisma.run.findMany({
-            where: { id: { in: candidateRunIds }, trigger: "bot_message" },
-            select: { id: true },
-          })
-        : [];
-      const peerRunIds = new Set(peerRuns.map((run) => run.id));
-      return Promise.all(
-        bots.map(async (bot) => {
-          let messages = bot.thread?.messages ?? [];
-          let preview = "";
-          for (let attempt = 0; attempt < 5; attempt++) {
-            const windowRunIds = [
-              ...new Set(messages.flatMap((message) => (message.runId ? [message.runId] : []))),
-            ].filter((runId) => !peerRunIds.has(runId));
-            if (windowRunIds.length > 0) {
-              const morePeers = await prisma.run.findMany({
-                where: { id: { in: windowRunIds }, trigger: "bot_message" },
-                select: { id: true },
-              });
-              for (const run of morePeers) peerRunIds.add(run.id);
-            }
-            const visible = userVisibleMessages(
-              messages.map((message) => ({
-                ...message,
-                blocks: message.blocks as MessageBlock[],
-                runId: message.runId ?? undefined,
-              })),
-              { knownPeerRunIds: peerRunIds },
-            );
-            preview = previewFromBlocks(visible[0]?.blocks);
-            if (preview || messages.length === 0 || !bot.thread || attempt === 4) break;
-            const oldest = messages[messages.length - 1];
-            if (!oldest) break;
-            messages = await prisma.message.findMany({
-              where: { threadId: bot.thread.id, seq: { lt: oldest.seq } },
-              orderBy: { seq: "desc" },
-              take: SIDEBAR_PREVIEW_MESSAGE_WINDOW,
-            });
-            if (messages.length === 0) break;
-          }
-          return mapBot(bot, preview, bot.runs[0]?.status ?? "idle");
-        }),
-      );
-    },
+    listBots,
+
+    updateBot,
 
     listSpaceBotsForSpaces,
 

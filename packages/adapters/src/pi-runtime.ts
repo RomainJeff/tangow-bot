@@ -620,6 +620,15 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
           prompt: raw.prompt ? String(raw.prompt) : "",
         };
       }
+      if (tool.name === "update_bot") {
+        return {
+          bot_id: raw.bot_id ? String(raw.bot_id) : raw.botId ? String(raw.botId) : "",
+          ...(raw.title !== undefined ? { title: String(raw.title) } : {}),
+          ...(raw.description !== undefined ? { description: String(raw.description) } : {}),
+          ...(raw.instructions !== undefined ? { instructions: String(raw.instructions) } : {}),
+          ...(raw.color !== undefined ? { color: String(raw.color) } : {}),
+        };
+      }
       if (tool.name === "create_space") {
         return { name: String(raw.name ?? "") };
       }
@@ -932,6 +941,15 @@ function builtinParameters(tool: ConnectorTool) {
       title: Type.Optional(Type.String()),
       instructions: Type.Optional(Type.String()),
       prompt: Type.Optional(Type.String()),
+    });
+  }
+  if (tool.name === "update_bot") {
+    return Type.Object({
+      bot_id: Type.String(),
+      title: Type.Optional(Type.String()),
+      description: Type.Optional(Type.String()),
+      instructions: Type.Optional(Type.String()),
+      color: Type.Optional(Type.String()),
     });
   }
   if (tool.name === "create_space") {

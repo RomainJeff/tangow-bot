@@ -16,6 +16,7 @@ import {
   RunActivityRowSchema,
   RunSchema,
   UpdateBotInput,
+  UpdateBotToolInput,
   UpdateGroupInput,
 } from "./index.js";
 
@@ -100,6 +101,30 @@ describe("contracts", () => {
     ).toBe("Concise briefs.");
     expect(CreateBotInput.safeParse({ name: "   " }).success).toBe(false);
     expect(UpdateBotInput.safeParse({ botId: "bot-1", name: "   " }).success).toBe(false);
+  });
+
+  it("accepts an update_bot change and trims its copy", () => {
+    const parsed = UpdateBotToolInput.parse({
+      botId: "bot-1",
+      title: "  Lead researcher  ",
+      instructions: "  Stay concise.  ",
+    });
+    expect(parsed.title).toBe("Lead researcher");
+    expect(parsed.instructions).toBe("Stay concise.");
+    expect(parsed.description).toBeUndefined();
+  });
+
+  it("requires update_bot to change at least one field", () => {
+    expect(UpdateBotToolInput.safeParse({ botId: "bot-1" }).success).toBe(false);
+    expect(UpdateBotToolInput.safeParse({ botId: "bot-1", color: "ink" }).success).toBe(true);
+  });
+
+  it("holds update_bot instructions to the shared length limit", () => {
+    const instructions = "I".repeat(BOT_INSTRUCTIONS_MAX_LENGTH);
+    expect(UpdateBotToolInput.safeParse({ botId: "bot-1", instructions }).success).toBe(true);
+    expect(
+      UpdateBotToolInput.safeParse({ botId: "bot-1", instructions: `${instructions}I` }).success,
+    ).toBe(false);
   });
 
   it("rejects partial model override clears on bot update", () => {

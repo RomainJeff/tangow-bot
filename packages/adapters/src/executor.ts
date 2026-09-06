@@ -124,7 +124,7 @@ import {
 } from "./auto-review.js";
 import { loadBotMessageContext, messageBot, returnBotMessageOutcome } from "./bot-messages.js";
 import { agentConnectionTools, builtinAgentTools, withChattyReplies } from "./builtin-tools.js";
-import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
+import { archiveSpawnedBot, spawnBot, updateSpawnedBot } from "./child-bots.js";
 import {
   type ConnectionScope,
   collectLogIds,
@@ -2709,6 +2709,41 @@ export function createRunExecutor(deps: ExecutorDeps) {
               getLogger().error("spawned bot notification", error);
             }
             return spawned;
+          }
+          if (name === "update_bot") {
+            const updated = await updateSpawnedBot(deps, {
+              updatedByBotId: bot.id,
+              userId: run.userId,
+              spaceId: run.spaceId,
+              botId: args.bot_id
+                ? String(args.bot_id)
+                : args.botId
+                  ? String(args.botId)
+                  : undefined,
+              title: args.title !== undefined ? String(args.title) : undefined,
+              description: args.description !== undefined ? String(args.description) : undefined,
+              instructions: args.instructions !== undefined ? String(args.instructions) : undefined,
+              color: args.color !== undefined ? String(args.color) : undefined,
+            });
+            if ("error" in updated) return finish(updated);
+            if (!(await persistEffectResult(updated))) return uncertainEffectResult(name);
+            try {
+              await deps.events.append({
+                spaceId: run.spaceId,
+                threadId: thread.id,
+                botId: bot.id,
+                runId: run.id,
+                type: "bot.updated",
+                payload: {
+                  targetBotId: updated.botId,
+                  name: updated.name,
+                  fields: updated.updated,
+                },
+              });
+            } catch (error) {
+              getLogger().error("updated bot notification", error);
+            }
+            return updated;
           }
           if (name === "message_user") {
             const text = clampUserProgressMessage(

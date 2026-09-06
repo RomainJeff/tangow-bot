@@ -7,7 +7,7 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { routineJobKey, runContinueJob, runJobKey } from "@rakazo/adapter-kit";
-import { type Actor, type Bot, GROUP_MEMBER_MIN } from "@rakazo/contracts";
+import { type Actor, type Bot, GROUP_MEMBER_MIN, UpdateBotToolInput } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import {
   computerScopeKey,
@@ -123,6 +123,78 @@ export async function spawnBot(
     name: created.name,
     title: created.title,
     threadId: created.threadId,
+  };
+}
+
+/**
+ * Apply an orchestrator's changes to an existing bot's profile.
+ *
+ * A bot may reshape only itself or a bot it created (`parentBotId` points back
+ * to the caller), and only within its own space. Model, credentials, and
+ * archival stay out of reach. Validation and the write are shared with the
+ * `bots.update` RPC through {@link createRepos}.`updateBot`, so the new
+ * instructions take effect on the target bot's next run.
+ */
+export async function updateSpawnedBot(
+  deps: { prisma: PrismaClient },
+  input: {
+    updatedByBotId: string;
+    userId: string;
+    spaceId: string;
+    botId?: string;
+    title?: string;
+    description?: string;
+    instructions?: string;
+    color?: string;
+  },
+) {
+  const parsed = UpdateBotToolInput.safeParse({
+    botId: (input.botId ?? "").trim(),
+    title: input.title,
+    description: input.description,
+    instructions: input.instructions,
+    color: input.color,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid update." };
+  }
+  const { botId } = parsed.data;
+
+  const target = await deps.prisma.bot.findFirst({
+    where: { id: botId, userId: input.userId, spaceId: input.spaceId, archivedAt: null },
+    select: { id: true, parentBotId: true },
+  });
+  if (!target) {
+    return { error: "No active bot with that id exists in this space. Refusing to update." };
+  }
+  if (target.id !== input.updatedByBotId && target.parentBotId !== input.updatedByBotId) {
+    return {
+      error: "A bot can only update itself or a bot it created. Refusing to update.",
+    };
+  }
+
+  const changes: Prisma.BotUncheckedUpdateManyInput = {};
+  const changed: string[] = [];
+  for (const key of ["title", "description", "instructions", "color"] as const) {
+    const value = parsed.data[key];
+    if (value !== undefined) {
+      changes[key] = value;
+      changed.push(key);
+    }
+  }
+
+  const actor: Actor = {
+    userId: input.userId,
+    spaceId: input.spaceId,
+    email: "",
+    isDeploymentOwner: false,
+  };
+  const updated = await createRepos(deps.prisma).updateBot(actor, botId, changes);
+  return {
+    ok: true as const,
+    botId: updated.id,
+    name: updated.name,
+    updated: changed,
   };
 }
 

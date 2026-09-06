@@ -603,6 +603,25 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "update_bot",
+    description:
+      "Change an existing bot's title, description, instructions, or color — either yourself or a bot you created. Pass bot_id and at least one field; only the fields you pass change. This cannot change a bot's model, credentials, or archive it, and cannot touch bots the user or another bot created. New instructions take effect on that bot's next run.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bot_id: {
+          type: "string",
+          description: "Id of the bot to update: yourself, or a bot you created.",
+        },
+        title: { type: "string" },
+        description: { type: "string" },
+        instructions: { type: "string" },
+        color: { type: "string" },
+      },
+      required: ["bot_id"],
+    },
+  },
+  {
     name: "archive_bot",
     description:
       "Archive a bot this bot created. Archiving stops its work and routines, hides it from the active list, and preserves its conversation, memory, and files for the user to restore or delete later. confirm_name must exactly match its name. This cannot archive you, bots the user created, or bots another bot created.",

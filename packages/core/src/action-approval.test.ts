@@ -33,6 +33,7 @@ describe("toolRequiresApproval", () => {
       "shell",
       "remember",
       "spawn_bot",
+      "update_bot",
       "run_subagent",
     ]) {
       expect(toolRequiresApproval(name, false)).toBe(false);
