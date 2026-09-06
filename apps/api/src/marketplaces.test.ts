@@ -363,7 +363,7 @@ describe("marketplaces service", () => {
       const m = service();
       const { id } = await m.add(actor, { url: SKILLS_URL });
       await m.installPlugin(actor, id, "tdd");
-      const row = await m.installPlugins(actor, id, ["review", "tdd"]);
+      const row = await m.installPlugins(actor, id, ["review", "tdd", "tdd"]);
       expect(row.installedPlugins).toEqual(["review", "tdd"]);
       expect((await listMarketplaceSkills(root())).map((s) => s.id)).toEqual([
         "mkt:vercel-labs-agent-skills/review/review",

@@ -203,11 +203,12 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       return [...installedPlugins(row).filter((p) => !names.has(p.name)), ...added].sort(byName);
     };
     try {
-      for (const plugin of plugins) {
+      for (const plugin of new Set(plugins)) {
         added.push(entry(plugin, await installOne(root(actor), row, dir, manifest, plugin)));
       }
     } catch (error) {
-      await setInstalled(row, merged());
+      // Best-effort persist of what landed: its own failure must not mask the cause.
+      await setInstalled(row, merged()).catch(() => undefined);
       badRequest(error);
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -324,7 +325,7 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       commit: string,
     ): Promise<SpaceMarketplace> {
       const row = await owned(actor, marketplaceId);
-      const { dir, manifest, raw } = await checkout(row.url, row.ref, commit);
+      const { dir, manifest, kind, raw } = await checkout(row.url, row.ref, commit);
       const pinned: Installed[] = [];
       try {
         await writeFile(path.join(dirOf(actor, row), MANIFEST), raw);
@@ -346,7 +347,7 @@ export function createMarketplacesService(deps: MarketplacesDeps) {
       return toDto(
         await prisma.spaceMarketplace.update({
           where: { id: row.id },
-          data: { commit, installedPlugins: pinned.sort(byName) },
+          data: { commit, kind, installedPlugins: pinned.sort(byName) },
         }),
       );
     },
