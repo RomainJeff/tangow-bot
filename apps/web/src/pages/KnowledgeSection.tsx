@@ -1,7 +1,13 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { AgentSkill, AgentSkillCatalogEntry, Bot, MemoryDocument } from "@rakazo/contracts";
+import type {
+  AgentSkill,
+  AgentSkillCatalogEntry,
+  Bot,
+  MemoryDocument,
+  SkillAvailability,
+} from "@rakazo/contracts";
 import { parseSkillMd } from "@rakazo/core";
-import { Button } from "@rakazo/ui-web";
+import { Button, Switch } from "@rakazo/ui-web";
 import { Check } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatBytes } from "../components/ArtifactFileCard";
@@ -58,7 +64,7 @@ export function KnowledgeSection({ botId }: { botId: string }) {
           testId="bot-knowledge-memory"
         />
       ) : null}
-      {tab === "skills" ? <AgentSkills /> : null}
+      {tab === "skills" ? <AgentSkills botId={botId} /> : null}
       {tab === "files" ? <AgentFiles key={botId} botId={botId} /> : null}
     </div>
   );
@@ -239,7 +245,12 @@ description: What this skill does and when the agent should use it.
 Steps the agent should follow.
 `;
 
-export function AgentSkills() {
+/**
+ * The space's skill catalog. Space mode (no botId) manages each skill's reach:
+ * disabled, every agent, or a picked set. Bot mode shows the same catalog with
+ * one toggle per skill for that agent, so skills currently off can be turned on.
+ */
+export function AgentSkills({ botId }: { botId?: string } = {}) {
   const { t } = useLingui();
   const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
   const [bots, setBots] = useState<Bot[]>([]);
@@ -262,7 +273,7 @@ export function AgentSkills() {
 
   useEffect(() => {
     const current = ++generation.current;
-    void Promise.all([rpc.agentSkills.list(), rpc.bots.list()])
+    void Promise.all([rpc.agentSkills.list(), botId ? [] : rpc.bots.list()])
       .then(([list, allBots]) => {
         if (current !== generation.current) return;
         setSkills(list);
@@ -276,7 +287,7 @@ export function AgentSkills() {
     return () => {
       generation.current += 1;
     };
-  }, [t]);
+  }, [t, botId]);
 
   async function openSkill(entry: AgentSkillCatalogEntry) {
     if (busy) return;
@@ -298,7 +309,10 @@ export function AgentSkills() {
 
   async function setAccess(
     entry: AgentSkillCatalogEntry,
-    patch: { availability?: "all" | "selected"; bot?: { botId: string; enabled: boolean } },
+    patch: {
+      availability?: SkillAvailability;
+      bots?: Array<{ botId: string; enabled: boolean }>;
+    },
   ) {
     setError(null);
     try {
@@ -384,6 +398,26 @@ export function AgentSkills() {
     }
   }
 
+  /**
+   * Global -> Specific must seed the include list from the bots that can see the skill
+   * now; otherwise a lone "excluded" row would flip into being the only include.
+   */
+  function setAvailability(entry: AgentSkillCatalogEntry, availability: SkillAvailability) {
+    if (availability === entry.availability) return;
+    void setAccess(entry, {
+      availability,
+      ...(availability === "selected"
+        ? { bots: entry.visibleBotIds.map((id) => ({ botId: id, enabled: true })) }
+        : {}),
+    });
+  }
+
+  const availabilityOptions = [
+    { value: "disabled", label: <Trans>Disabled</Trans> },
+    { value: "all", label: <Trans>Global</Trans> },
+    { value: "selected", label: <Trans>Specific agents</Trans> },
+  ] satisfies Array<{ value: SkillAvailability; label: ReactNode }>;
+
   const editorOpen = creating || open;
   const draftError = (() => {
     if (!editorOpen || open?.readOnly || !draft.trim()) return null;
@@ -399,74 +433,105 @@ export function AgentSkills() {
         </div>
       ) : null}
       {!editorOpen
-        ? skills.map((entry) => (
-            <div
-              key={entry.id}
-              className="rounded-[11px] hover:bg-muted"
-              data-testid="bot-knowledge-skill"
-            >
-              <button
-                type="button"
-                onClick={() => void openSkill(entry)}
-                className={`w-full rounded-[11px] px-2.5 pt-2.5 text-start ${entry.readOnly ? "pb-2.5" : "pb-1"}`}
+        ? skills.map((entry) => {
+            // Builtins are always on for every agent; only the rest carry access controls.
+            const controlled = entry.source !== "builtin";
+            const disabled = entry.availability === "disabled";
+            return (
+              <div
+                key={entry.id}
+                className="rounded-[11px] hover:bg-muted"
+                data-testid="bot-knowledge-skill"
               >
-                <span className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate text-[14px] text-foreground" dir="auto">
-                    {entry.name}
-                  </span>
-                  {entry.readOnly ? (
-                    <span className="shrink-0 text-[12px] text-muted-foreground/80">
-                      <Trans>read-only</Trans>
+                <div className="flex items-center gap-3 pe-2.5">
+                  <button
+                    type="button"
+                    onClick={() => void openSkill(entry)}
+                    className={`min-w-0 flex-1 rounded-[11px] px-2.5 pt-2.5 text-start ${
+                      controlled && !botId ? "pb-1" : "pb-2.5"
+                    }`}
+                  >
+                    <span className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 truncate text-[14px] text-foreground" dir="auto">
+                        {entry.name}
+                      </span>
+                      {entry.readOnly ? (
+                        <span className="shrink-0 text-[12px] text-muted-foreground/80">
+                          <Trans>read-only</Trans>
+                        </span>
+                      ) : null}
+                    </span>
+                    <span
+                      className="mt-0.5 block truncate text-[12.5px] text-muted-foreground/80"
+                      dir="auto"
+                    >
+                      {entry.description}
+                    </span>
+                  </button>
+                  {botId && controlled ? (
+                    <span className="flex shrink-0 items-center gap-2 text-[12px] text-muted-foreground/80">
+                      {disabled ? <Trans>Disabled for all agents in Skills</Trans> : null}
+                      <Switch
+                        size="sm"
+                        aria-label={entry.name}
+                        checked={entry.visibleBotIds.includes(botId)}
+                        disabled={disabled}
+                        onCheckedChange={(enabled) =>
+                          void setAccess(entry, { bots: [{ botId, enabled }] })
+                        }
+                      />
                     </span>
                   ) : null}
-                </span>
-                <span
-                  className="mt-0.5 block truncate text-[12.5px] text-muted-foreground/80"
-                  dir="auto"
-                >
-                  {entry.description}
-                </span>
-              </button>
-              {entry.readOnly ? null : (
-                <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5">
-                  <Button
-                    type="button"
-                    variant={entry.availability === "all" ? "default" : "outline"}
-                    size="xs"
-                    className="rounded-full"
-                    aria-pressed={entry.availability === "all"}
-                    onClick={() =>
-                      void setAccess(entry, {
-                        availability: entry.availability === "all" ? "selected" : "all",
-                      })
-                    }
-                  >
-                    {entry.availability === "all" ? <Check aria-hidden="true" /> : null}
-                    <Trans>All agents</Trans>
-                  </Button>
-                  {bots.map((bot) => {
-                    const visible = entry.visibleBotIds.includes(bot.id);
-                    return (
-                      <Button
-                        key={bot.id}
-                        type="button"
-                        variant={visible ? "default" : "outline"}
-                        size="xs"
-                        className="rounded-full"
-                        aria-pressed={visible}
-                        onClick={() =>
-                          void setAccess(entry, { bot: { botId: bot.id, enabled: !visible } })
-                        }
-                      >
-                        {visible ? <Check aria-hidden="true" /> : null}
-                        {bot.name}
-                      </Button>
-                    );
-                  })}
                 </div>
-              )}
-            </div>
-          ))
+                {!botId && controlled ? (
+                  <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5">
+                    <div className="flex items-center rounded-full border border-border p-0.5 text-[12.5px]">
+                      {availabilityOptions.map((option) => {
+                        const on = entry.availability === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => setAvailability(entry, option.value)}
+                            className={`rounded-full px-2.5 py-0.5 ${
+                              on ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* ponytail: inline chips; a searchable picker only pays off past ~10 agents. */}
+                    {entry.availability === "selected"
+                      ? bots.map((bot) => {
+                          const visible = entry.visibleBotIds.includes(bot.id);
+                          return (
+                            <Button
+                              key={bot.id}
+                              type="button"
+                              variant={visible ? "default" : "outline"}
+                              size="xs"
+                              className="rounded-full"
+                              aria-pressed={visible}
+                              onClick={() =>
+                                void setAccess(entry, {
+                                  bots: [{ botId: bot.id, enabled: !visible }],
+                                })
+                              }
+                            >
+                              {visible ? <Check aria-hidden="true" /> : null}
+                              {bot.name}
+                            </Button>
+                          );
+                        })
+                      : null}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
         : null}
       {editorOpen ? (
         <div className="px-2.5 pb-2">

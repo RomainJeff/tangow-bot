@@ -44,10 +44,12 @@ function errorMessage(err: unknown, fallback: string) {
 export function SkillsOverlay({
   onClose,
   botId,
+  botName,
   onSkillsChanged,
 }: {
   onClose: () => void;
   botId?: string;
+  botName?: string;
   onSkillsChanged?: () => void;
 }) {
   const { t } = useLingui();
@@ -128,7 +130,7 @@ export function SkillsOverlay({
               <div className="mb-3 flex items-baseline justify-between gap-3 text-[13px] text-muted-foreground">
                 <span>
                   {visibleCount === null ? "…" : `${visibleCount} / ${SKILL_LIMIT}`}{" "}
-                  <Trans>skills visible to this agent</Trans>
+                  {botName ? <Trans>visible to {botName}</Trans> : <Trans>skills</Trans>}
                 </span>
                 {visibleCount !== null && visibleCount > SKILL_LIMIT ? (
                   <span className="text-destructive">
@@ -497,7 +499,7 @@ function BrowseTab({
                   </ul>
                 )}
                 <p className="mt-1 text-muted-foreground/80">
-                  <Trans>Enable it per bot in Installed.</Trans>
+                  <Trans>Off for every agent until you pick some in Installed.</Trans>
                 </p>
               </div>
             ) : null}
