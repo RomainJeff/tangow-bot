@@ -5,6 +5,7 @@ import { buildSkillMd } from "@rakazo/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   diffPluginTrees,
+  discoverSkills,
   installPluginFromCheckout,
   installPluginTree,
   listMarketplaceSkills,
@@ -53,6 +54,18 @@ async function checkout(skillBody = "Steps") {
   await writeFile(path.join(dir, "plugins/writer/commands/x.md"), "ignored");
   return dir;
 }
+
+/** A skills.sh-style repository: no manifest, SKILL.md files under conventional roots. */
+async function skillsRepo(files: Record<string, string>) {
+  const dir = await tmp();
+  for (const [rel, content] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+    await writeFile(path.join(dir, rel), content);
+  }
+  return dir;
+}
+const md = (name: string, extra = "") =>
+  `---\nname: ${name}\ndescription: About ${name}\n${extra}---\nBody`;
 
 async function install(root: string, src: string, plugin = "writer") {
   await installPluginFromCheckout(root, "acme", src, await readMarketplaceManifest(src), plugin);
@@ -334,5 +347,43 @@ describe("marketplace store", () => {
     await install(root, await checkout());
     const skills = path.join(root, "acme/plugins/writer/skills");
     expect(await diffPluginTrees(skills, skills)).toEqual([]);
+  });
+});
+
+describe("discoverSkills", () => {
+  it("finds skills under skills/, .claude/skills/, .agents/skills/ and one category level", async () => {
+    const dir = await skillsRepo({
+      "skills/tdd/SKILL.md": md("TDD"),
+      "skills/writing/Blog-Post/SKILL.md": md("Blog"),
+      ".claude/skills/review/SKILL.md": md("Review"),
+      ".agents/skills/deploy/SKILL.md": md("Deploy"),
+      "README.md": "not a skill",
+    });
+    expect(await discoverSkills(dir, "repo")).toEqual([
+      { slug: "blog-post", relPath: "./skills/writing/Blog-Post", description: "About Blog" },
+      { slug: "deploy", relPath: "./.agents/skills/deploy", description: "About Deploy" },
+      { slug: "review", relPath: "./.claude/skills/review", description: "About Review" },
+      { slug: "tdd", relPath: "./skills/tdd", description: "About TDD" },
+    ]);
+  });
+
+  it("a root SKILL.md makes the repository a single skill named after it", async () => {
+    const dir = await skillsRepo({ "SKILL.md": md("Solo"), "skills/x/SKILL.md": md("X") });
+    expect(await discoverSkills(dir, "my-repo")).toEqual([
+      { slug: "my-repo", relPath: "./", description: "About Solo" },
+    ]);
+  });
+
+  it("skips internal, invalid and unsafe skills; the first root wins on a slug clash", async () => {
+    const dir = await skillsRepo({
+      "skills/tdd/SKILL.md": md("TDD"),
+      ".claude/skills/tdd/SKILL.md": md("Shadowed"),
+      "skills/hidden/SKILL.md": md("Hidden", "metadata:\n  internal: true\n"),
+      "skills/broken/SKILL.md": "no frontmatter",
+      "skills/Bad Name/SKILL.md": md("Bad"),
+    });
+    expect((await discoverSkills(dir, "repo")).map((s) => [s.slug, s.description])).toEqual([
+      ["tdd", "About TDD"],
+    ]);
   });
 });

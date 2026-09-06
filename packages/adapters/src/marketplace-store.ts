@@ -167,6 +167,51 @@ async function scanSkillDirs(skillsDir: string): Promise<string[]> {
   return out;
 }
 
+/** Roots `npx skills add` reads, in precedence order. */
+// ponytail: .cursor/.codex/.opencode not seen in real repos yet; one line each when asked.
+const SKILL_ROOTS = ["skills", ".claude/skills", ".agents/skills"];
+
+export type DiscoveredSkill = { slug: string; relPath: string; description: string };
+
+/** Description of the SKILL.md in `dir`; null when absent, invalid, oversized or `metadata.internal`. */
+async function describeSkill(dir: string): Promise<string | null> {
+  const file = path.join(dir, "SKILL.md");
+  const size = (await stat(file).catch(() => null))?.size;
+  if (size === undefined || size > MAX_SKILL_MD_BYTES) return null;
+  const parsed = parseSkillMd(await readFile(file, "utf8"));
+  if ("error" in parsed) return null;
+  const meta = parsed.frontmatter.metadata;
+  if (meta && typeof meta === "object" && (meta as Record<string, unknown>).internal === true) {
+    return null;
+  }
+  return parsed.description;
+}
+
+/**
+ * Skills of a repository without a marketplace manifest (skills.sh layout). A root SKILL.md
+ * makes the whole repository one skill named `rootSlug`; otherwise every `<root>/<slug>/`
+ * (one category level deep) that holds a valid SKILL.md. Invalid frontmatter, unsafe names
+ * and `metadata.internal: true` are skipped; a slug seen under an earlier root shadows later ones.
+ */
+export async function discoverSkills(
+  checkoutDir: string,
+  rootSlug: string,
+): Promise<DiscoveredSkill[]> {
+  const root = await describeSkill(checkoutDir);
+  if (root !== null) return [{ slug: rootSlug, relPath: "./", description: root }];
+  const found = new Map<string, DiscoveredSkill>();
+  for (const skillsRoot of SKILL_ROOTS) {
+    for (const dir of await scanSkillDirs(path.join(checkoutDir, skillsRoot))) {
+      const slug = path.basename(dir).toLowerCase();
+      if (!SAFE_NAME.test(slug) || found.has(slug)) continue;
+      const description = await describeSkill(dir);
+      if (description === null) continue;
+      found.set(slug, { slug, relPath: `./${path.relative(checkoutDir, dir)}`, description });
+    }
+  }
+  return [...found.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
 /** Skill directories of a plugin, keyed by the flat slug they install as. */
 async function resolveSkillDirs(
   pluginDir: string,
