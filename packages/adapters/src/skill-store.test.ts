@@ -258,12 +258,18 @@ describe("skill store", () => {
       return { name, content: `${skillMd}\n<!-- normalized -->\n` };
     };
 
-    type ZipEntry = { name: string; content?: string; mode?: number };
+    type ZipEntry = { name: string; content?: string; mode?: number; compress?: boolean };
 
     async function zip(entries: ZipEntry[]): Promise<Buffer> {
       const file = new ZipFile();
       for (const entry of entries) {
-        const options = entry.mode === undefined ? undefined : { mode: entry.mode };
+        if (entry.name.endsWith("/")) {
+          file.addEmptyDirectory(entry.name);
+          continue;
+        }
+        const options: { mode?: number; compress?: boolean } = {};
+        if (entry.mode !== undefined) options.mode = entry.mode;
+        if (entry.compress !== undefined) options.compress = entry.compress;
         file.addBuffer(Buffer.from(entry.content ?? ""), entry.name, options);
       }
       file.end();
@@ -276,25 +282,37 @@ describe("skill store", () => {
       return Buffer.concat(chunks);
     }
 
-    /** Rewrites every zip header in place; yazl refuses to author these on its own. */
+    /**
+     * Rewrites zip headers in place; yazl refuses to author these on its own. `only` restricts the
+     * edit to one entry's headers, read from the name that follows each header (local +30, central
+     * +46, each preceded by its own name length), so patching a bomb never also corrupts SKILL.md.
+     */
     function patchHeaders(
       archive: Buffer,
       edit: (out: Buffer, local: number, central: number) => void,
+      only?: string,
     ): Buffer {
       const out = Buffer.from(archive);
+      const named = (at: number, lengthAt: number, nameAt: number) =>
+        only === undefined ||
+        out.toString("utf8", at + nameAt, at + nameAt + out.readUInt16LE(at + lengthAt)) === only;
       for (let i = 0; i + 30 <= out.length; i++) {
         const signature = out.readUInt32LE(i);
-        if (signature === 0x04034b50) edit(out, i, -1);
-        else if (signature === 0x02014b50) edit(out, -1, i);
+        if (signature === 0x04034b50 && named(i, 26, 30)) edit(out, i, -1);
+        else if (signature === 0x02014b50 && named(i, 28, 46)) edit(out, -1, i);
       }
       return out;
     }
 
-    const declareSize = (archive: Buffer, size: number) =>
-      patchHeaders(archive, (out, local, central) => {
-        if (local >= 0) out.writeUInt32LE(size, local + 22);
-        else out.writeUInt32LE(size, central + 24);
-      });
+    const declareSize = (archive: Buffer, name: string, size: number) =>
+      patchHeaders(
+        archive,
+        (out, local, central) => {
+          if (local >= 0) out.writeUInt32LE(size, local + 22);
+          else out.writeUInt32LE(size, central + 24);
+        },
+        name,
+      );
 
     const markEncrypted = (archive: Buffer) =>
       patchHeaders(archive, (out, local, central) => {
@@ -357,15 +375,38 @@ describe("skill store", () => {
     it("caps the bytes it observes, not the size the archive declares", async () => {
       const root = await tmpRoot();
       // Deflates to a few KB, so only the running counter over the inflated stream catches it.
+      // Twice the cap, so the counter trips with megabytes still in flight: at cap + 1 byte the
+      // stream ends in the same tick and yauzl's own end-of-entry error can win the race.
       const bomb = await zip([
         { name: "SKILL.md", content: md("Bomb") },
-        { name: "blob.bin", content: "a".repeat(SKILL_BUNDLE_MAX_BYTES + 1) },
+        { name: "blob.bin", content: "a".repeat(SKILL_BUNDLE_MAX_BYTES * 2) },
       ]);
       await expect(writeUserSkillBundle(root, bomb, resolve)).rejects.toThrow(/too large/);
       expect(await readdir(root)).toEqual([]);
 
-      // Same bytes, now claiming to be 1 KB in every header: still rejected, never written.
-      await expect(writeUserSkillBundle(root, declareSize(bomb, 1024), resolve)).rejects.toThrow();
+      // Same bytes, blob.bin alone now claiming to be 1 KB: the inflated stream is cut short,
+      // by yauzl's size assertion or by our counter, whichever trips first. Never written.
+      await expect(
+        writeUserSkillBundle(root, declareSize(bomb, "blob.bin", 1024), resolve),
+      ).rejects.toThrow(/too many bytes|too large/);
+      expect(await readdir(root)).toEqual([]);
+
+      // 0xffffffff declares more than yauzl will ever assert, so only our own counter stops it.
+      await expect(
+        writeUserSkillBundle(root, declareSize(bomb, "blob.bin", 0xffffffff), resolve),
+      ).rejects.toThrow(/too large/);
+      expect(await readdir(root)).toEqual([]);
+
+      // Stored entries get no size assertion from yauzl at all: the counter is the only bound.
+      const stored = await zip([
+        { name: "SKILL.md", content: md("Stored") },
+        {
+          name: "blob.bin",
+          content: "a".repeat(SKILL_BUNDLE_MAX_BYTES + 1),
+          compress: false,
+        },
+      ]);
+      await expect(writeUserSkillBundle(root, stored, resolve)).rejects.toThrow(/too large/);
       expect(await readdir(root)).toEqual([]);
 
       // One counter for the whole bundle: two entries under the cap that together exceed it.
