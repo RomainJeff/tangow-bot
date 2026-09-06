@@ -44,12 +44,10 @@ function errorMessage(err: unknown, fallback: string) {
 export function SkillsOverlay({
   onClose,
   botId,
-  botName,
   onSkillsChanged,
 }: {
   onClose: () => void;
   botId?: string;
-  botName?: string;
   onSkillsChanged?: () => void;
 }) {
   const { t } = useLingui();
@@ -127,17 +125,11 @@ export function SkillsOverlay({
 
           {tab === "installed" ? (
             <>
-              <div className="mb-3 flex items-baseline justify-between gap-3 text-[13px] text-muted-foreground">
-                <span>
-                  {visibleCount === null ? "…" : `${visibleCount} / ${SKILL_LIMIT}`}{" "}
-                  {botName ? <Trans>visible to {botName}</Trans> : <Trans>skills</Trans>}
-                </span>
-                {visibleCount !== null && visibleCount > SKILL_LIMIT ? (
-                  <span className="text-destructive">
-                    <Trans>Only the first 50 skills are shown to the agent.</Trans>
-                  </span>
-                ) : null}
-              </div>
+              {visibleCount !== null && visibleCount > SKILL_LIMIT ? (
+                <p className="mb-3 text-[13px] text-destructive">
+                  <Trans>Only the first 50 skills are shown to the agent.</Trans>
+                </p>
+              ) : null}
               <AgentSkills />
             </>
           ) : null}

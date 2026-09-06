@@ -3959,7 +3959,6 @@ export function ShellPage() {
         {skillsOpen ? (
           <SkillsOverlay
             botId={activeBotId.current}
-            botName={active?.name}
             onClose={() => setSkillsOpen(false)}
             onSkillsChanged={refreshAgentSkills}
           />

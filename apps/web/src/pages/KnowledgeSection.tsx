@@ -7,7 +7,14 @@ import type {
   SkillAvailability,
 } from "@rakazo/contracts";
 import { parseSkillMd } from "@rakazo/core";
-import { Button, Switch } from "@rakazo/ui-web";
+import {
+  Button,
+  Input,
+  NativeSelect,
+  NativeSelectOptGroup,
+  NativeSelectOption,
+  Switch,
+} from "@rakazo/ui-web";
 import { Check } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatBytes } from "../components/ArtifactFileCard";
@@ -260,6 +267,9 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [query, setQuery] = useState("");
+  /** "all" | "active" | "disabled" | `bot:<id>`. */
+  const [filter, setFilter] = useState("all");
   const generation = useRef(0);
   const selection = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -418,6 +428,16 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
     { value: "selected", label: <Trans>Specific agents</Trans> },
   ] satisfies Array<{ value: SkillAvailability; label: ReactNode }>;
 
+  const needle = query.trim().toLowerCase();
+  const shown = skills.filter((entry) => {
+    if (needle && !`${entry.name} ${entry.description}`.toLowerCase().includes(needle))
+      return false;
+    if (filter === "active") return entry.availability !== "disabled";
+    if (filter === "disabled") return entry.availability === "disabled";
+    if (filter.startsWith("bot:")) return entry.visibleBotIds.includes(filter.slice(4));
+    return true;
+  });
+
   const editorOpen = creating || open;
   const draftError = (() => {
     if (!editorOpen || open?.readOnly || !draft.trim()) return null;
@@ -427,13 +447,81 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
   return (
     <div data-testid="bot-knowledge-skills">
       {error ? <div className="px-2.5 pb-2 text-[13px] text-destructive">{error}</div> : null}
-      {skills.length === 0 && !editorOpen && !error ? (
+      {!editorOpen ? (
+        <div className="mb-2 flex flex-wrap items-center gap-2 px-2.5">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              selection.current += 1;
+              setOpen(null);
+              setCreating(true);
+              setConfirmingDelete(false);
+              setDraft(NEW_SKILL_TEMPLATE);
+              setError(null);
+            }}
+            className="text-[13px] text-muted-foreground hover:text-foreground"
+          >
+            <Trans>New skill</Trans>
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".skill"
+            className="hidden"
+            data-testid="bot-knowledge-skill-import"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void importFile(file);
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => fileInput.current?.click()}
+            className="me-1 text-[13px] text-muted-foreground hover:text-foreground"
+          >
+            <Trans>Import</Trans>
+          </button>
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t`Search skills`}
+            aria-label={t`Search skills`}
+            data-testid="bot-knowledge-skill-search"
+            className="ms-auto h-8 w-40 flex-1 sm:max-w-56"
+          />
+          <NativeSelect
+            size="sm"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            aria-label={t`Filter skills`}
+            data-testid="bot-knowledge-skill-filter"
+          >
+            <NativeSelectOption value="all">{t`All`}</NativeSelectOption>
+            <NativeSelectOption value="active">{t`Active`}</NativeSelectOption>
+            <NativeSelectOption value="disabled">{t`Disabled`}</NativeSelectOption>
+            {bots.length > 0 ? (
+              <NativeSelectOptGroup label={t`Agents`}>
+                {bots.map((bot) => (
+                  <NativeSelectOption key={bot.id} value={`bot:${bot.id}`}>
+                    {bot.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelectOptGroup>
+            ) : null}
+          </NativeSelect>
+        </div>
+      ) : null}
+      {shown.length === 0 && !editorOpen && !error ? (
         <div className="px-2.5 py-1 text-[13.5px] text-muted-foreground/80">
-          <Trans>No skills yet</Trans>
+          {skills.length === 0 ? <Trans>No skills yet</Trans> : <Trans>No skills match</Trans>}
         </div>
       ) : null}
       {!editorOpen
-        ? skills.map((entry) => {
+        ? shown.map((entry) => {
             // Builtins are always on for every agent; only the rest carry access controls.
             const controlled = entry.source !== "builtin";
             const disabled = entry.availability === "disabled";
@@ -595,45 +683,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
             ) : null}
           </div>
         </div>
-      ) : (
-        <div className="mt-2 flex items-center">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              selection.current += 1;
-              setOpen(null);
-              setCreating(true);
-              setConfirmingDelete(false);
-              setDraft(NEW_SKILL_TEMPLATE);
-              setError(null);
-            }}
-            className="px-2.5 text-[13px] text-muted-foreground hover:text-foreground"
-          >
-            <Trans>New skill</Trans>
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".skill"
-            className="hidden"
-            data-testid="bot-knowledge-skill-import"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) void importFile(file);
-            }}
-          />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => fileInput.current?.click()}
-            className="px-2.5 text-[13px] text-muted-foreground hover:text-foreground"
-          >
-            <Trans>Import</Trans>
-          </button>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }

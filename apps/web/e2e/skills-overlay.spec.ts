@@ -26,8 +26,12 @@ test("skills overlay: tabs, marketplace URL validation, installed skills", async
   await expect(page.getByTestId("skills-tab-marketplaces")).toBeVisible();
   await expect(page.getByTestId("skills-tab-browse")).toBeVisible();
 
-  // Installed: the user skill and the visibility counter.
-  await expect(overlay.getByText(/visible to Chief/)).toBeVisible();
+  // Installed: the user skill, plus search narrowing the list.
+  await expect(overlay.getByRole("button", { name: /Daily standup/ })).toBeVisible();
+  await overlay.getByTestId("bot-knowledge-skill-search").fill("zzz-no-match");
+  await expect(overlay.getByRole("button", { name: /Daily standup/ })).toHaveCount(0);
+  await expect(overlay.getByText("No skills match")).toBeVisible();
+  await overlay.getByTestId("bot-knowledge-skill-search").fill("standup");
   await expect(overlay.getByRole("button", { name: /Daily standup/ })).toBeVisible();
   await captureScreenshot(page, testInfo, "90-skills-installed");
 
