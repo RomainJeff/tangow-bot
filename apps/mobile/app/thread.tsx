@@ -16,6 +16,7 @@ import {
   isApprovalAskBlock,
   isRunTerminalEvent,
   isSecretAskBlock,
+  latestActivityLabel,
   latestAnswerableAskMessageId,
   mentionChipKey,
   resolveComposerSendPlan,
@@ -389,6 +390,8 @@ function Thread() {
   activeThreadId.current = notificationThreadId;
   const currentBotStatus = snap ? snap.run?.status : currentBot?.status;
   const hasLiveProgress = visibleMessages.some((message) => message.id.startsWith("progress:"));
+  // One bot only: an activity line names one bot's tool, so it would mislabel a group.
+  const activityLabel = latestActivityLabel(snap?.messages ?? []);
   const workingGroupBots = useMemo(() => {
     if (!inGroup) return [];
     const seen = new Set<string>();
@@ -1506,7 +1509,7 @@ function Thread() {
           status={currentBotStatus}
         />
         <ShimmerText style={{ color: tokens.mutedForeground, fontSize: 13.5, flexShrink: 1 }}>
-          {`${t("{name} is working", { name: currentBot.name })}…`}
+          {activityLabel ?? `${t("{name} is working", { name: currentBot.name })}…`}
         </ShimmerText>
       </View>
     ) : inGroup && workingGroupBots.length > 0 ? (
@@ -1545,13 +1548,14 @@ function Thread() {
             flexShrink: 1,
           }}
         >
-          {`${
-            workingGroupBots.length === 1
-              ? t("{name} is working", {
-                  name: workingGroupBots[0]?.name ?? t("Agent"),
-                })
-              : t("{count} agents working", { count: workingGroupBots.length })
-          }…`}
+          {(workingGroupBots.length === 1 ? activityLabel : undefined) ??
+            `${
+              workingGroupBots.length === 1
+                ? t("{name} is working", {
+                    name: workingGroupBots[0]?.name ?? t("Agent"),
+                  })
+                : t("{count} agents working", { count: workingGroupBots.length })
+            }…`}
         </ShimmerText>
       </View>
     ) : null;

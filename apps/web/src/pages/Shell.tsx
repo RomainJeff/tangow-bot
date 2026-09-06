@@ -42,6 +42,7 @@ import {
   isPeerReceiptBlocks,
   isRunTerminalEvent,
   isToolActivityBlock,
+  latestActivityLabel,
   latestAnswerableAskMessageId,
   mentionChipKey,
   reorderBotTo,
@@ -4144,11 +4145,14 @@ const Transcript = memo(function Transcript({
     [messages],
   );
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
-  const workingLabel = `${
+  const workingFallback = `${
     workingBotName != null && workingBotName !== ""
       ? t`${workingBotName} is working`
       : t`Bots are working`
   }…`;
+  // One bot only: an activity line names one bot's tool, so it would mislabel a group.
+  const workingLabel =
+    (workingBots.length === 1 ? latestActivityLabel(messages) : undefined) ?? workingFallback;
   const snapToEnd = useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
