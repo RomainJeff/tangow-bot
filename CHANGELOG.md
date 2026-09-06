@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Skills marketplaces accept repositories of skills in the `npx skills` / skills.sh layout (`skills/`, `.claude/skills/`, `.agents/skills/`, or a root `SKILL.md`) alongside `.claude-plugin/marketplace.json` marketplaces; pick several skills and install them at once from Browse. Applying a marketplace update now drops plugins that vanished upstream instead of failing.
 - Voice mode: spoken replies, hold-to-talk dictation, and half-duplex calls with ElevenLabs, OpenAI, or Cartesia.
 - Desktop owners using Docker can opt into running bot shell commands directly on their computer. This grants access under the owner's OS account; see [computer providers](docs/self-host.md#choosing-a-computer-provider).
 - GitHub Copilot and SuperGrok / X Premium sign-in for model access.
