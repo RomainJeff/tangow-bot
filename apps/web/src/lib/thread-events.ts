@@ -17,6 +17,9 @@ import {
   reduceLiveMessageBlocks,
   runFailureError,
   subagentBlockFromPayload,
+  takeLiveMessage,
+  updateCloudAgentMessages,
+  updateMessageReaction,
   upsertMessageById,
 } from "@rakazo/core";
 
@@ -30,6 +33,7 @@ const runTriggers = new Set<Run["trigger"]>([
   "bot_message",
   "webhook",
   "messaging",
+  "cloud_agent",
 ]);
 
 function runFromStartedEvent(event: ProductEvent, previous: Run | undefined): Run {
@@ -55,22 +59,6 @@ function runFromStartedEvent(event: ProductEvent, previous: Run | undefined): Ru
     completedAt: null,
     createdAt: previous?.createdAt ?? event.createdAt,
   };
-}
-
-function takeLiveMessage(
-  messages: readonly ThreadMessage[],
-  liveId: string,
-): { previous: ThreadMessage | undefined; remaining: ThreadMessage[] } {
-  let previous: ThreadMessage | undefined;
-  const remaining: ThreadMessage[] = [];
-  for (const message of messages) {
-    if (message.id === liveId) {
-      previous = message;
-    } else if (!message.id.startsWith("progress:") || message.runId) {
-      remaining.push(message);
-    }
-  }
-  return { previous, remaining };
 }
 
 const computerStates: ReadonlySet<unknown> = new Set<ComputerStatus["state"]>([
@@ -260,6 +248,7 @@ export function isThreadSnapshotEvent(event: ProductEvent): boolean {
     event.type === "thread.rewound" ||
     event.type === "thread.progress" ||
     event.type === "thread.subagent" ||
+    event.type === "thread.cloud_agent" ||
     event.type === "agent.tool.called" ||
     event.type === "thread.message.created" ||
     event.type === "thread.message.updated" ||
@@ -447,16 +436,19 @@ export function reduceThreadSnapshot(
     }
     return { ...prev, cursor: event.seq, messages: [...without, next, ...kept] };
   }
-  if (event.type === "thread.message.reaction") {
-    const messageId = String(event.payload.messageId ?? "");
+
+  if (event.type === "thread.cloud_agent") {
     return {
       ...prev,
       cursor: event.seq,
-      messages: prev.messages.map((message) =>
-        message.id === messageId
-          ? { ...message, thumbsUp: event.payload.thumbsUp === true }
-          : message,
-      ),
+      messages: updateCloudAgentMessages(prev.messages, event.payload ?? {}),
+    };
+  }
+  if (event.type === "thread.message.reaction") {
+    return {
+      ...prev,
+      cursor: event.seq,
+      messages: updateMessageReaction(prev.messages, event.payload ?? {}),
     };
   }
   if (event.type === "thread.message.created" || event.type === "thread.message.updated") {

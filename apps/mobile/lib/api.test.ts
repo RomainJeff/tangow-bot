@@ -978,6 +978,7 @@ describe("mobile thread event reduction", () => {
           {
             kind: "channel_message",
             provider: "sendblue",
+            transport: "SMS",
             channelId: "ch-1",
             fromAddress: "+15551234567",
             fromLabel: "Alex",
@@ -985,7 +986,7 @@ describe("mobile thread event reduction", () => {
           },
         ]),
       ),
-    ).toBe("iMessage · Alex: Hello from the group");
+    ).toBe("SMS · Alex: Hello from the group");
     expect(
       blockText(
         mobileMessage("channel-2", [
@@ -1225,6 +1226,45 @@ describe("mobile thread event reduction", () => {
     expect(next?.activeRuns).toEqual([runA]);
     expect(next?.run).toEqual({ id: runB.id, status: "failed", error: "member exploded" });
     expect(next?.messages).toEqual([]);
+  });
+
+  it("updates a cloud agent card from thread.cloud_agent", () => {
+    const initial = snapshot([
+      mobileMessage("msg-ca", [
+        {
+          kind: "cloud_agent",
+          agentId: "ca-1",
+          title: "Add README",
+          status: "running",
+          url: "https://example.test/agents/ca-1",
+        },
+      ]),
+    ]);
+
+    const next = applyMobileThreadEvent(initial, {
+      type: "thread.cloud_agent",
+      seq: 9,
+      payload: {
+        messageId: "msg-ca",
+        agentId: "ca-1",
+        title: "Add README",
+        status: "finished",
+        url: "https://example.test/agents/ca-1",
+        branch: "cursor/add-readme",
+        prUrl: "https://github.com/example/repo/pull/1",
+      },
+    });
+
+    expect(next?.cursor).toBe(9);
+    expect(next?.messages[0]?.blocks[0]).toEqual({
+      kind: "cloud_agent",
+      agentId: "ca-1",
+      title: "Add README",
+      status: "finished",
+      url: "https://example.test/agents/ca-1",
+      branch: "cursor/add-readme",
+      prUrl: "https://github.com/example/repo/pull/1",
+    });
   });
 
   it("leaves the snapshot unchanged for unrelated events", () => {

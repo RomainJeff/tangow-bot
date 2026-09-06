@@ -18,6 +18,7 @@ import {
 import { Check } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatBytes } from "../components/ArtifactFileCard";
+import { downloadArtifactBytes } from "../lib/artifact-open";
 import { rpc } from "../lib/rpc";
 
 const fieldClass =
@@ -175,12 +176,7 @@ function MemoryDocumentList({
       generation.current += 1;
       setDocs(fresh);
       const markdown = fresh.map((doc) => `# ${doc.path}\n\n${doc.content}`).join("\n\n");
-      const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" }));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = exportFilename;
-      link.click();
-      URL.revokeObjectURL(url);
+      downloadArtifactBytes(exportFilename, "text/markdown", new TextEncoder().encode(markdown));
     } catch {
       setError(t`Could not load`);
     } finally {
@@ -198,6 +194,7 @@ function MemoryDocumentList({
         <div key={doc.id}>
           <button
             type="button"
+            disabled={busy}
             onClick={() => (openId === doc.id ? setOpenId(null) : openDoc(doc))}
             className={rowClass(openId === doc.id)}
           >
@@ -214,6 +211,7 @@ function MemoryDocumentList({
             <div className="px-2.5 pb-2">
               <textarea
                 value={draft}
+                disabled={busy}
                 onChange={(event) => setDraft(event.target.value)}
                 rows={Math.min(16, Math.max(4, draft.split("\n").length + 1))}
                 className={fieldClass}
@@ -230,8 +228,9 @@ function MemoryDocumentList({
                 </button>
                 <button
                   type="button"
+                  disabled={busy}
                   onClick={() => setOpenId(null)}
-                  className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground"
+                  className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground disabled:opacity-50"
                 >
                   <Trans>Cancel</Trans>
                 </button>

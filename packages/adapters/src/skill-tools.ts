@@ -5,6 +5,7 @@ import {
   findSkillByName,
   isMarketplaceSkillKey,
   isSkillVisible,
+  mergeBuiltinSkills,
   parseSkillMd,
   type SkillRecord,
   userSkillKey,
@@ -91,11 +92,10 @@ export async function listAgentSkillRecords(
     listUserSkills(userSkillsRoot(deps.dataDir, owner)),
     listMarketplaceSkills(marketplacesRoot(deps.dataDir, owner.spaceId)),
   ]);
-  const records = [...userSkills, ...marketplaceSkills];
-  const visible = owner.botId
-    ? await onlyVisibleTo(deps.prisma, owner, owner.botId, records)
-    : records;
-  return [...builtinRecords(), ...visible];
+  // Builtins join the catalog before filtering: a user skill shadows a same-named builtin,
+  // and per-bot availability applies to builtins too.
+  const records = mergeBuiltinSkills(builtinRecords(), [...userSkills, ...marketplaceSkills]);
+  return owner.botId ? await onlyVisibleTo(deps.prisma, owner, owner.botId, records) : records;
 }
 
 async function onlyVisibleTo<T extends { id: string }>(

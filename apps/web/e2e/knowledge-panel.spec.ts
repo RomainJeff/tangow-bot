@@ -1,4 +1,6 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import type { MemoryDocument } from "@rakazo/contracts";
 import {
   activeBotId,
   captureScreenshot,
@@ -39,13 +41,48 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   const marker = `Edited in e2e ${stamp}`;
   await docEditor.fill(`# Memory\n\n${marker}\n`);
   await captureScreenshot(page, testInfo, "83-space-memory-editor");
+  let releaseSave!: () => void;
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  await page.route(
+    "**/rpc/memory/update",
+    async (route) => {
+      await saveGate;
+      await route.continue();
+    },
+    { times: 1 },
+  );
   await spaceDocs.getByRole("button", { name: "Save", exact: true }).click();
+  try {
+    await expect(docEditor).toBeDisabled();
+    await expect(memoryRow).toBeDisabled();
+    await expect(spaceDocs.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+  } finally {
+    releaseSave();
+  }
   await expect(spaceDocs.getByText("rev 2")).toBeVisible();
 
   // The save persisted: reopen the document and find the marker.
   await memoryRow.click();
   await expect(docEditor).toHaveValue(new RegExp(marker));
   await captureScreenshot(page, testInfo, "84-space-memory-saved");
+  const sharedDocuments = await rpc<MemoryDocument[]>(page, "memory/list", { scope: "user" });
+  expect(sharedDocuments).toContainEqual(
+    expect.objectContaining({ content: `# Memory\n\n${marker}\n`, revision: 2 }),
+  );
+  // Export must fetch fresh content and exclude the bot's private document.
+  const sharedDocument = sharedDocuments.find((doc) => doc.path === "MEMORY.md")!;
+  const latestMarker = `Latest shared memory ${stamp}`;
+  await rpc(page, "memory/update", { documentId: sharedDocument.id, content: latestMarker });
+  const downloadPromise = page.waitForEvent("download");
+  await spaceDocs.getByRole("button", { name: "Download as markdown" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("space-memory.md");
+  const exported = await readFile((await download.path())!, "utf8");
+  expect(exported).toContain(latestMarker);
+  expect(exported).not.toContain(marker);
+  expect(exported).not.toContain("# Chief");
   await page.getByLabel("Close memory settings").click();
   await expect(page.getByLabel("Close memory settings")).toHaveCount(0);
 
@@ -83,6 +120,9 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await captureScreenshot(page, testInfo, "80-knowledge-bot-memory");
   await botMemory.getByRole("button", { name: "Save", exact: true }).click();
   await expect(botMemory.getByText("rev 2")).toBeVisible();
+  expect(
+    await rpc<MemoryDocument[]>(page, "memory/list", { botId: chiefId, scope: "bot" }),
+  ).toContainEqual(expect.objectContaining({ content: `# Chief\n\n${botMarker}\n`, revision: 2 }));
   await botMemoryRow.click();
   await expect(botDocEditor).toHaveValue(new RegExp(botMarker));
   await botMemory.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -110,6 +150,12 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await expect(skillRow).toBeVisible();
   await expect(skillsSection.getByText("Say hello before anything else.")).toBeVisible();
   await captureScreenshot(page, testInfo, "82-knowledge-skill-listed");
+  const composer = page.getByRole("combobox", { name: /^Message/ });
+  await composer.fill("/");
+  await expect(
+    page.getByRole("button", { name: "Skill greet-politely", exact: true }),
+  ).toBeVisible();
+  await composer.fill("");
 
   // Import: a plain-text .skill lands in the list like a hand-made skill.
   await skillsSection.getByTestId("bot-knowledge-skill-import").setInputFiles({
@@ -162,6 +208,24 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await reopenAdvanced();
   await expect(skillCard).toHaveCount(1);
 
+  // A provider-owned skill uses the same viewer without mutation controls.
+  await page.route(
+    "**/rpc/agentSkills/get",
+    async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({
+        response,
+        json: { ...body, json: { ...body.json, readOnly: true, source: "plugin" } },
+      });
+    },
+    { times: 1 },
+  );
+  await skillRow.click();
+  await expect(editor).toHaveAttribute("readonly", "");
+  await expect(skillsSection.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  await expect(skillsSection.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+  await skillsSection.getByRole("button", { name: "Close", exact: true }).click();
   await skillRow.click();
   await expect(editor).toHaveValue(/Always open with a greeting/);
   await editor.fill(
@@ -180,6 +244,14 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await skillsSection.getByRole("button", { name: "Delete", exact: true }).click();
   await skillsSection.getByRole("button", { name: "Confirm delete", exact: true }).click();
   await expect(skillRow).toBeHidden();
+  await composer.fill("/");
+  await expect(page.getByRole("button", { name: "Skill greet-politely", exact: true })).toHaveCount(
+    0,
+  );
+  await composer.fill("");
+  expect(await rpc<Array<{ name: string }>>(page, "agentSkills/list", {})).not.toContainEqual(
+    expect.objectContaining({ name: "greet-politely" }),
+  );
 
   // Files: the agent's working folder, browsable down to a readable file.
   await expect

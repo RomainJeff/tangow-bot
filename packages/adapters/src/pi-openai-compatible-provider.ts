@@ -40,22 +40,28 @@ const OPENAI_COMPAT_BASE = "http://127.0.0.1:1/v1";
 const resolveHostname: ResolveHostname = (hostname) =>
   lookup(hostname, { all: true, verbatim: true });
 
-function openAiCompatibleModel(id: string, baseUrl: string): Model<"openai-completions"> {
+export function openAiCompatibleModel(
+  id: string,
+  baseUrl: string,
+  reasoning = false,
+): Model<"openai-completions"> {
   return {
     id,
     name: id,
     api: "openai-completions",
     provider: OPENAI_COMPATIBLE_PROVIDER_ID,
     baseUrl,
-    reasoning: false,
+    reasoning,
+    compat: {
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: reasoning,
+      thinkingFormat: "openai",
+    },
+    thinkingLevelMap: { off: "none" },
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: DEFAULT_CONTEXT_WINDOW,
     maxTokens: DEFAULT_MAX_TOKENS,
-    compat: {
-      supportsDeveloperRole: false,
-      supportsReasoningEffort: false,
-    },
   };
 }
 
@@ -226,11 +232,11 @@ export function registerOpenAiCompatibleCatalog(models: MutableModels): MutableM
 /** Register a concrete model + base URL for an agent run. */
 export function registerOpenAiCompatibleRuntime(
   models: MutableModels,
-  opts: { modelId: string; baseUrl: string },
+  opts: { modelId: string; baseUrl: string; reasoning?: boolean },
 ): MutableModels {
   const baseUrl = normalizeOpenAiCompatibleBaseUrl(opts.baseUrl);
   models.setProvider(
-    openAiCompatibleProvider([openAiCompatibleModel(opts.modelId.trim(), baseUrl)]),
+    openAiCompatibleProvider([openAiCompatibleModel(opts.modelId.trim(), baseUrl, opts.reasoning)]),
   );
   return models;
 }

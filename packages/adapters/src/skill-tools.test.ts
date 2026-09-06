@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildSkillMd, formatSkillsCatalogInstruction } from "@rakazo/core";
+import { buildSkillMd, formatSkillsCatalogInstruction, parseSkillMd } from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BUILTIN_AGENT_SKILLS } from "./builtin-skills.js";
 import { marketplacesRoot } from "./marketplace-store.js";
 import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 import {
@@ -202,7 +203,87 @@ describe("skill tools", () => {
       update: {},
     });
     const records = await listAgentSkillRecords(deps, { ...owner, botId: "bot-1" });
-    expect(records.map((r) => r.name)).toEqual([]);
+    expect(records.map((r) => r.name)).toEqual(["Interrogate"]);
+  });
+
+  it("ships builtin skills as valid, readable, read-only SKILL.md records", async () => {
+    expect(BUILTIN_AGENT_SKILLS.map((skill) => skill.name)).toContain("Interrogate");
+    for (const skill of BUILTIN_AGENT_SKILLS) {
+      const parsed = parseSkillMd(skill.content);
+      expect(parsed).toMatchObject({ name: skill.name, description: skill.description });
+      // / picker truncates at 72; keep descriptions short so "review only" stays visible.
+      expect(skill.description.length).toBeLessThanOrEqual(72);
+    }
+
+    const records = await listAgentSkillRecords(deps, owner);
+    const interrogate = records.find((row) => row.name === "Interrogate");
+    expect(interrogate).toMatchObject({
+      id: "builtin:Interrogate",
+      source: "builtin",
+      readOnly: true,
+    });
+    expect(formatSkillsCatalogInstruction(records)).toContain("- Interrogate:");
+    expect(formatSkillsCatalogInstruction(records)).toContain("Review only");
+
+    const read = await skillReadFromTool(deps, owner, { name: "interrogate" });
+    expect(read).toMatchObject({ name: "Interrogate", source: "builtin", readOnly: true });
+    expect(String(read.content)).toContain("Do not modify files");
+
+    expect(
+      await skillCreateFromTool(deps, owner, {
+        name: "interrogate",
+        description: "shadow the builtin",
+        body: "steps",
+      }),
+    ).toEqual({ error: 'A skill named "Interrogate" already exists.' });
+    expect(
+      await skillUpdateFromTool(deps, owner, {
+        name: "Interrogate",
+        description: "hijack",
+      }),
+    ).toEqual({ error: "Builtin and plugin skills are read-only." });
+    expect(await skillDeleteFromTool(deps, owner, { name: "Interrogate" })).toEqual({
+      error: "Builtin and plugin skills are read-only.",
+    });
+  });
+
+  it.each(["interrogate", " Interrogate "])("preserves a saved skill named %j", async (name) => {
+    // A skill file whose name collides with a builtin still belongs to its owner.
+    await writeUserSkill(
+      userSkillsRoot(dataDir, owner),
+      {
+        name,
+        content: buildSkillMd({
+          name: name.trim(),
+          description: "my review recipe",
+          body: "my steps",
+        }),
+      },
+      "create",
+    );
+
+    const records = await listAgentSkillRecords(deps, owner);
+    const saved = records.filter((skill) => skill.name.trim().toLowerCase() === "interrogate");
+    expect(saved).toEqual([expect.objectContaining({ source: "user", readOnly: false })]);
+    expect(await skillReadFromTool(deps, owner, { name: "Interrogate" })).toMatchObject({
+      name: name.trim(),
+      source: "user",
+      readOnly: false,
+    });
+    expect(await skillReadFromTool(deps, owner, { skillId: saved[0]!.id })).toMatchObject({
+      name: name.trim(),
+      source: "user",
+    });
+    expect(
+      await skillUpdateFromTool(deps, owner, {
+        name: "Interrogate",
+        description: "still mine",
+      }),
+    ).toMatchObject({ ok: true });
+    expect(await skillDeleteFromTool(deps, owner, { name: "Interrogate" })).toEqual({
+      ok: true,
+      name: name.trim(),
+    });
   });
 
   it("rejects oversized skill content", async () => {
@@ -259,12 +340,13 @@ describe("skill tools", () => {
       update: {},
     });
 
+    // Builtins default to "all", so every bot sees them alongside its own visible skills.
     const forA = await listAgentSkillRecords(deps, { ...scope, botId: "botA" });
-    expect(forA.map((s) => s.name)).toEqual(["Everyone", "Only bot A"]);
+    expect(forA.map((s) => s.name)).toEqual(["Interrogate", "Everyone", "Only bot A"]);
     const forB = await listAgentSkillRecords(deps, { ...scope, botId: "botB" });
-    expect(forB.map((s) => s.name)).toEqual(["Everyone", "Not for A"]);
+    expect(forB.map((s) => s.name)).toEqual(["Interrogate", "Everyone", "Not for A"]);
     const all = await listAgentSkillRecords(deps, scope);
-    expect(all).toHaveLength(3);
+    expect(all).toHaveLength(4);
     // skill_read follows the same visibility.
     expect(
       await skillReadFromTool(deps, { ...scope, botId: "botB" }, { name: "Only bot A" }),
@@ -354,10 +436,10 @@ describe("skill tools", () => {
     // The exclusion semantics survive the rename: only botA sees it.
     expect(
       (await listAgentSkillRecords(deps, { ...owner, botId: "botA" })).map((s) => s.name),
-    ).toEqual(["New"]);
+    ).toEqual(["Interrogate", "New"]);
     expect(
       (await listAgentSkillRecords(deps, { ...owner, botId: "botB" })).map((s) => s.name),
-    ).toEqual([]);
+    ).toEqual(["Interrogate"]);
 
     expect(await skillDeleteFromTool(deps, owner, { name: "New" })).toEqual({
       ok: true,

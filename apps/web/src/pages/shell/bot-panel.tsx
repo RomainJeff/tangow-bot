@@ -303,6 +303,7 @@ export function BotSettings({
   onClear: () => void;
 }) {
   const { t } = useLingui();
+  const [advancedOpened, setAdvancedOpened] = useState(false);
   const ids = useId();
   const [name, setName] = useState(bot.name);
   const [title, setTitle] = useState(bot.title);
@@ -394,7 +395,14 @@ export function BotSettings({
           (entry) => entry.provider === effectiveProvider && entry.id === effectiveModelId,
         )
       : undefined;
-  const thinkingOptions = (effectiveEntry?.thinkingLevels ?? []).filter((level) => level !== "off");
+  const effectiveCredential = credentials.find(
+    (entry) => entry.provider === effectiveProvider && entry.modelId === effectiveModelId,
+  );
+  const thinkingOptions = (
+    effectiveCredential?.thinkingLevels ??
+    effectiveEntry?.thinkingLevels ??
+    []
+  ).filter((level) => level !== "off");
 
   return (
     <div data-testid="bot-settings">
@@ -450,7 +458,13 @@ export function BotSettings({
           className="mt-2"
         />
       </label>
-      <details data-testid="bot-settings-advanced" className="group mt-5">
+      <details
+        data-testid="bot-settings-advanced"
+        className="group mt-5"
+        onToggle={(event) => {
+          if (event.currentTarget.open) setAdvancedOpened(true);
+        }}
+      >
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[14px] text-muted-foreground">
           <span className="text-muted-foreground">
             <Trans>Advanced</Trans>
@@ -462,12 +476,12 @@ export function BotSettings({
         <ComputerModePicker value={computerMode} onChange={setComputerMode} />
         <Suspense fallback={null}>
           <ScratchpadSection botId={bot.id} />
-        </Suspense>
-        <Suspense fallback={null}>
-          <KnowledgeSection botId={bot.id} />
-        </Suspense>
-        <Suspense fallback={null}>
-          <BotSkillsSection botId={bot.id} />
+          {advancedOpened ? (
+            <>
+              <KnowledgeSection botId={bot.id} />
+              <BotSkillsSection botId={bot.id} />
+            </>
+          ) : null}
         </Suspense>
         <label htmlFor={`${ids}-model`} className={fieldLabelClass}>
           <Trans>Model</Trans>

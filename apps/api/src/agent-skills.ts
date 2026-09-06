@@ -22,7 +22,9 @@ import {
   asSkillAvailability,
   buildSkillMd,
   defaultSkillAvailability,
+  findSkillByName,
   isSkillVisible,
+  mergeBuiltinSkills,
   parseSkillMd,
   userSkillKey,
 } from "@rakazo/core";
@@ -209,7 +211,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       visibleBotIds: access.bots,
     }));
     const users = rows.map((file) => ({ ...toAgentSkill(file), ...access.of(file.id) }));
-    const entries = [...builtins, ...users];
+    const entries = mergeBuiltinSkills(builtins, users);
     return botId ? entries.filter((entry) => entry.visibleBotIds.includes(botId)) : entries;
   }
 
@@ -248,11 +250,11 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
         return toAgentSkill(await owned(actor, input.skillId));
       }
       const name = input.name?.trim() ?? "";
-      const builtin = builtinCatalog().find((skill) => sameName(skill.name, name));
-      if (builtin) return builtin;
-      const file = (await allFiles(actor)).find((skill) => sameName(skill.name, name));
-      if (!file) throw new IsolationError();
-      return toAgentSkill(file);
+      const file = findSkillByName(await allFiles(actor), name);
+      if (file) return toAgentSkill(file);
+      const builtin = findSkillByName(builtinCatalog(), name);
+      if (!builtin) throw new IsolationError();
+      return builtin;
     },
 
     create,
