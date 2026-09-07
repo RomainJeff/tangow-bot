@@ -974,6 +974,7 @@ description: Prepare standup notes
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
       taughtSkill: { findMany: vi.fn(async () => []) },
+      agentSecret: { findMany: vi.fn(async () => []) },
       skillSetting: { findMany: vi.fn(async () => []) },
       botSkill: { findMany: vi.fn(async () => []) },
       scratchpadItem: { findMany: vi.fn(async () => []) },

@@ -7,6 +7,7 @@ import {
   apiBaseWarning,
   defaultApiBase,
   displayApiHost,
+  MAX_API_PROBE_RESPONSE_BYTES,
   normalizeApiBase,
   probeApiBase,
   usesCustomApiBase,
@@ -151,6 +152,20 @@ describe("probeApiBase", () => {
     });
   });
 
+  it("rejects an oversized health response", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ json: { ok: true } }), {
+          headers: { "content-length": String(MAX_API_PROBE_RESPONSE_BYTES + 1) },
+        }),
+    ) as unknown as typeof fetch;
+
+    await expect(probeApiBase("https://app.example.com", null, fetchImpl)).resolves.toMatchObject({
+      ok: false,
+      error: "Could not reach that server",
+    });
+  });
+
   it("returns a failure when an injected fetch ignores the probe signal", async () => {
     vi.useFakeTimers();
     const fetchImpl = vi.fn(
@@ -169,10 +184,8 @@ describe("probeApiBase", () => {
 
   it("returns a failure when a health response body never settles", async () => {
     vi.useFakeTimers();
-    const fetchImpl = vi.fn(async () => ({
-      ok: true,
-      json: () => new Promise<unknown>(() => undefined),
-    }));
+    const cancel = vi.fn();
+    const fetchImpl = vi.fn(async () => new Response(new ReadableStream({ cancel })));
 
     const pending = probeApiBase(
       "https://app.example.com",
@@ -185,6 +198,7 @@ describe("probeApiBase", () => {
       ok: false,
       error: "Could not reach that server",
     });
+    expect(cancel).toHaveBeenCalledOnce();
   });
 });
 

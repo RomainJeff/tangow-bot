@@ -1,6 +1,11 @@
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import { isPeerRun, loadAllMessages, loadMessagePage } from "./thread-message-pages.js";
+import {
+  isPeerRun,
+  loadAllMessages,
+  loadMessagePage,
+  shouldForwardPeerThreadEvent,
+} from "./thread-message-pages.js";
 
 describe("thread message pages", () => {
   it("surfaces message_user and ask_user rows from delegated (peer) runs", async () => {
@@ -64,10 +69,36 @@ describe("thread message pages", () => {
     expect(findUnique).toHaveBeenCalledTimes(1);
   });
 
+  it("forwards peer waiting, ask, and text events on an open thread", () => {
+    expect(shouldForwardPeerThreadEvent({ type: "run.waiting_input", payload: {} })).toBe(true);
+    expect(shouldForwardPeerThreadEvent({ type: "computer.takeover.requested", payload: {} })).toBe(
+      true,
+    );
+    expect(
+      shouldForwardPeerThreadEvent({
+        type: "thread.message.created",
+        payload: { blocks: [{ kind: "ask", text: "Pick one" }] },
+      }),
+    ).toBe(true);
+    expect(
+      shouldForwardPeerThreadEvent({
+        type: "thread.message.created",
+        payload: { blocks: [{ kind: "text", text: "peer body" }] },
+      }),
+    ).toBe(true);
+    expect(
+      shouldForwardPeerThreadEvent({
+        type: "thread.progress",
+        payload: {},
+      }),
+    ).toBe(false);
+  });
+
   it("keeps peer receipt rows when filtering peer-run output from pages", async () => {
     const findMany = vi.fn(async () => [
       {
         id: "message-reply",
+        clientNonce: "user-message:run-peer:1:z:z",
         threadId: "thread-1",
         seq: 3,
         role: "bot",
@@ -117,17 +148,18 @@ describe("thread message pages", () => {
     expect(page.messages.map((message) => message.id)).toEqual([
       "message-user",
       "message-received",
+      "message-reply",
     ]);
   });
 
-  it("filters peer-run output when its receipt is outside the loaded page", async () => {
+  it("filters peer-run activity when its receipt is outside the loaded page", async () => {
     const findMany = vi.fn(async () => [
       {
         id: "message-peer",
         threadId: "thread-1",
         seq: 2,
         role: "bot",
-        blocks: [{ kind: "text", text: "Echoed peer reply" }],
+        blocks: [{ kind: "steps", steps: [{ label: "Echoed peer reply", count: 1 }] }],
         botId: "bot-1",
         replyToMessageId: null,
         runId: "run-peer",
@@ -155,7 +187,7 @@ describe("thread message pages", () => {
     expect(page.messages.map((message) => message.id)).toEqual(["message-user"]);
   });
 
-  it("omits peer around-page targets from the normal transcript", async () => {
+  it("keeps peer text around-page targets and omits peer activity", async () => {
     const findMany = vi.fn(async () => [
       {
         id: "message-user",
@@ -181,6 +213,7 @@ describe("thread message pages", () => {
       },
       {
         id: "message-peer-target",
+        clientNonce: "user-message:run-peer:1:z:z",
         threadId: "thread-1",
         seq: 6,
         role: "bot",
@@ -203,11 +236,14 @@ describe("thread message pages", () => {
       seq: 6,
     });
 
-    expect(page.messages.map((message) => message.id)).toEqual(["message-user"]);
+    expect(page.messages.map((message) => message.id)).toEqual([
+      "message-user",
+      "message-peer-target",
+    ]);
     expect(runFindMany).toHaveBeenCalled();
   });
 
-  it("keeps peer receipt around-page targets in the normal transcript page", async () => {
+  it("keeps peer receipt and text around-page targets in the normal transcript page", async () => {
     const findMany = vi.fn(async () => [
       {
         id: "message-user",
@@ -240,6 +276,7 @@ describe("thread message pages", () => {
       },
       {
         id: "message-peer-text",
+        clientNonce: "user-message:run-peer:1:z:z",
         threadId: "thread-1",
         seq: 6,
         role: "bot",
@@ -264,6 +301,7 @@ describe("thread message pages", () => {
     expect(page.messages.map((message) => message.id)).toEqual([
       "message-user",
       "message-peer-receipt",
+      "message-peer-text",
     ]);
   });
 
@@ -297,13 +335,16 @@ describe("thread message pages", () => {
     expect(page.messages.map((message) => message.id)).toEqual(["message-peer"]);
   });
 
-  it("scans past a page containing only peer-run output", async () => {
-    const row = (seq: number, runId: string) => ({
+  it("scans past a page containing only hidden peer-run activity", async () => {
+    const row = (seq: number, runId: string, kind: "text" | "steps" = "text") => ({
       id: `message-${seq}`,
       threadId: "thread-1",
       seq,
       role: "bot",
-      blocks: [{ kind: "text", text: String(seq) }],
+      blocks:
+        kind === "steps"
+          ? [{ kind: "steps", steps: [{ label: String(seq), count: 1 }] }]
+          : [{ kind: "text", text: String(seq) }],
       botId: "bot-1",
       replyToMessageId: null,
       runId,
@@ -311,7 +352,11 @@ describe("thread message pages", () => {
     });
     const findMany = vi
       .fn()
-      .mockResolvedValueOnce([row(4, "run-peer"), row(3, "run-peer"), row(2, "run-peer")])
+      .mockResolvedValueOnce([
+        row(4, "run-peer", "steps"),
+        row(3, "run-peer", "steps"),
+        row(2, "run-peer", "steps"),
+      ])
       .mockResolvedValueOnce([row(1, "run-user")]);
     const prisma = {
       message: { findMany },

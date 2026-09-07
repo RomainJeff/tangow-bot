@@ -8,6 +8,8 @@ import {
   currentApiBase,
   deleteAccount,
   loadApiBase,
+  MAX_MOBILE_AUTH_RESPONSE_BYTES,
+  MAX_MOBILE_RPC_RESPONSE_BYTES,
   type MobileMessage,
   type MobileSnapshot,
   mergeMobileSnapshot,
@@ -126,6 +128,18 @@ describe("mobile API authentication", () => {
     );
   });
 
+  it("treats a malformed capabilities response as password recovery being unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("not-json", { status: 200 })),
+    );
+
+    await expect(passwordResetCapabilities()).resolves.toEqual({
+      passwordReset: false,
+      resetUrl: null,
+    });
+  });
+
   it("changes a password with the bearer session and revokes other sessions", async () => {
     vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
     const fetchMock = vi.fn(async () => jsonResponse({ status: true }));
@@ -192,6 +206,40 @@ describe("mobile API authentication", () => {
     );
 
     await expect(signIn("ada@example.com", "wrong")).rejects.toThrow("Invalid credentials");
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it("does not retain an oversized sign-in response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          { token: "must-not-be-read" },
+          { headers: { "content-length": String(MAX_MOBILE_AUTH_RESPONSE_BYTES + 1) } },
+        ),
+      ),
+    );
+
+    await expect(signIn("ada@example.com", "correct horse")).rejects.toThrow(
+      `exceeds ${MAX_MOBILE_AUTH_RESPONSE_BYTES} bytes`,
+    );
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it("times out and cancels a stalled sign-in response body", async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(new ReadableStream({ cancel }))),
+    );
+
+    const pending = signIn("ada@example.com", "correct horse");
+    const rejection = expect(pending).rejects.toThrow("Request timed out");
+    await vi.advanceTimersByTimeAsync(8_000);
+
+    await rejection;
+    expect(cancel).toHaveBeenCalledOnce();
     expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
   });
 
@@ -304,6 +352,20 @@ describe("mobile API authentication", () => {
       }),
     );
     await expect(rpc("bots/get", { botId: "missing" })).rejects.toThrow("Bot does not exist");
+  });
+
+  it("rejects an oversized RPC response before parsing it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          { json: { ok: true } },
+          { headers: { "content-length": String(MAX_MOBILE_RPC_RESPONSE_BYTES + 1) } },
+        ),
+      ),
+    );
+
+    await expect(rpc("bots/get")).rejects.toThrow(`exceeds ${MAX_MOBILE_RPC_RESPONSE_BYTES} bytes`);
   });
 
   it("shares the selected space with direct API requests", async () => {
@@ -1116,6 +1178,60 @@ describe("mobile thread event reduction", () => {
     expect(repeated?.run).toBe(waiting?.run);
   });
 
+  it("applies computer takeover requests as waiting_takeover", () => {
+    const progress = mobileMessage("progress:run-1", [{ kind: "progress", text: "working…" }], 1);
+    const initial: MobileSnapshot = {
+      ...snapshot([progress]),
+      run: { id: "run-1", status: "running" },
+      activeRuns: [{ id: "run-1", status: "running" }],
+    };
+    const waiting = applyMobileThreadEvent(initial, {
+      type: "computer.takeover.requested",
+      runId: "run-1",
+      seq: 10,
+    });
+
+    expect(waiting?.run?.status).toBe("waiting_takeover");
+    expect(waiting?.activeRuns?.[0]?.status).toBe("waiting_takeover");
+    expect(waiting?.messages.some((message) => message.id.startsWith("progress:"))).toBe(false);
+    expect(waiting?.cursor).toBe(10);
+  });
+
+  it("inserts a peer takeover run that was absent from the open snapshot", () => {
+    const progress = mobileMessage(
+      "progress:run-peer",
+      [{ kind: "progress", text: "working…" }],
+      1,
+    );
+    const initial: MobileSnapshot = {
+      ...snapshot([progress]),
+      run: { id: "run-user", status: "running" },
+      activeRuns: [{ id: "run-user", status: "running" }],
+      computer: {
+        state: "running",
+        controlHolder: "bot",
+        screenAvailable: true,
+        mode: "team",
+        busyBotName: "Peer",
+      },
+    };
+
+    const waiting = applyMobileThreadEvent(initial, {
+      type: "computer.takeover.requested",
+      runId: "run-peer",
+      botId: "bot-peer",
+      seq: 12,
+    });
+
+    expect(waiting?.run).toEqual({ id: "run-peer", botId: "bot-peer", status: "waiting_takeover" });
+    expect(waiting?.activeRuns).toEqual([
+      { id: "run-user", status: "running" },
+      { id: "run-peer", botId: "bot-peer", status: "waiting_takeover" },
+    ]);
+    expect(waiting?.messages.some((message) => message.id.startsWith("progress:"))).toBe(false);
+    expect(waiting?.computer?.busyBotName).toBeNull();
+  });
+
   it("advances the cursor for durable message events", () => {
     const next = applyMobileThreadEvent(snapshot(), {
       type: "thread.message.created",
@@ -1315,3 +1431,28 @@ function mobileMessage(id: string, blocks: MobileMessage["blocks"], seq?: number
     blocks,
   };
 }
+
+describe("mobile clipboard text", () => {
+  it("copies message content with transport labels and omits card chrome", async () => {
+    const { copyableMobileMessageText } = await import("./api");
+    expect(
+      copyableMobileMessageText({
+        id: "message",
+        role: "bot",
+        blocks: [
+          { kind: "text", text: "Hello" },
+          {
+            kind: "channel_message",
+            provider: "sendblue",
+            transport: "SMS",
+            channelId: "ch-1",
+            fromAddress: "+15551234567",
+            fromLabel: "Sender",
+            text: "Reply",
+          },
+          { kind: "card", lines: [] },
+        ],
+      }),
+    ).toBe("Hello\nSMS · Sender: Reply");
+  });
+});

@@ -63,6 +63,11 @@ import {
   AvatarStyleProvider,
   BotAvatar,
   Button,
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   GroupAvatar,
   type GroupAvatarMember,
   InputGroup,
@@ -88,6 +93,7 @@ import {
   Menu,
   Mic,
   Monitor,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
   Paperclip,
@@ -96,14 +102,16 @@ import {
   Plus,
   Puzzle,
   Reply,
+  Search,
   Settings,
   SlidersHorizontal,
+  Smile,
   Square,
-  ThumbsUp,
   Volume2,
   X,
 } from "lucide-react";
 import {
+  type ClipboardEvent,
   type DragEvent,
   Fragment,
   lazy,
@@ -157,10 +165,15 @@ import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { localTimezone } from "../lib/local-timezone";
 import { copyableMessageText } from "../lib/message-text";
 import { messageProviderLabel } from "../lib/messaging";
-import { isFileDrag, revokePendingAttachmentPreviews } from "../lib/pending-attachments";
+import {
+  isFileDrag,
+  isFilePaste,
+  revokePendingAttachmentPreviews,
+} from "../lib/pending-attachments";
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { clearSpaceSelection, rpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
+import { sharedInflight } from "../lib/shared-inflight";
 import {
   activeThreadRuns,
   applyThreadSendReceipt,
@@ -431,6 +444,7 @@ export function ShellPage() {
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [messagingSettingsOpen, setMessagingSettingsOpen] = useState(false);
   const [messagingSurfaceEnabled, setMessagingSurfaceEnabled] = useState(false);
+  const [messagingProviders, setMessagingProviders] = useState<string[]>([]);
   const [accountSettingsFocusUsage, setAccountSettingsFocusUsage] = useState(false);
   const [modelsOpen, setModelsOpen] = useState(false);
   const [memorySettingsOpen, setMemorySettingsOpen] = useState(false);
@@ -453,7 +467,6 @@ export function ShellPage() {
   const [botsSidebarCollapsed, setBotsSidebarCollapsed] = useState(false);
   const focusPromptAbortRef = useRef<AbortController | null>(null);
   const focusPromptBotIdRef = useRef<string | null>(null);
-  const creatingBotRef = useRef(false);
   const botsSidebarEdgeDragRef = useRef<{ startX: number; mode: "expand" | "collapse" } | null>(
     null,
   );
@@ -520,7 +533,10 @@ export function ShellPage() {
     void rpc.messaging
       .status()
       .then((status) => {
-        if (!cancelled) setMessagingSurfaceEnabled(status.enabled);
+        if (!cancelled) {
+          setMessagingSurfaceEnabled(status.enabled);
+          setMessagingProviders(status.providers);
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -534,6 +550,16 @@ export function ShellPage() {
   } | null>(null);
   const autoBooted = useRef<string | null>(null);
   const routineSavePending = useRef(false);
+  const webhookSecretProvisionRef = useRef(new Map<string, Promise<string>>());
+  const ensureWebhookSecret = (botId: string) =>
+    sharedInflight(webhookSecretProvisionRef.current, botId, async () => {
+      const result = await rpc.bots.rotateWebhookSecret({ botId });
+      setRoutineWebhookSecret(result.secret);
+      setBots((current) =>
+        current.map((bot) => (bot.id === botId ? { ...bot, webhookConfigured: true } : bot)),
+      );
+      return result.secret;
+    });
   const routineSaveRequest = useRef(0);
   const routineRunPending = useRef(false);
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
@@ -2224,24 +2250,6 @@ export function ShellPage() {
     await refreshBots().catch(() => undefined);
   }
 
-  async function createBotQuick() {
-    if (creatingBotRef.current) return;
-    creatingBotRef.current = true;
-    try {
-      await createBot({
-        name: "New Bot",
-        title: "",
-        description: "",
-        computerMode: "team",
-      });
-    } catch (error) {
-      // Keep the current chat open when create fails, but surface the error.
-      setSendError(error instanceof Error ? error.message : t`Could not create bot`);
-    } finally {
-      creatingBotRef.current = false;
-    }
-  }
-
   async function bootComputer({
     takeControl,
     overlay,
@@ -2397,12 +2405,23 @@ export function ShellPage() {
     }
   }
 
-  async function releaseComputer(reason?: ComputerReleaseReason) {
-    if (!active) return;
-    setComputerOpen(false);
-    await rpc.computer.release({ botId: active.id, reason }).catch(() => undefined);
-    await refreshThread(active.id);
-  }
+  const releaseComputer = useCallback(
+    async (reason?: ComputerReleaseReason) => {
+      const botId = activeBotId.current;
+      if (!botId) return;
+      try {
+        await rpc.computer.release({ botId, reason });
+        if (activeBotId.current !== botId) return;
+        setComputerOpen(false);
+        await refreshThreadRef.current(botId).catch(() => undefined);
+      } catch {
+        if (activeBotId.current !== botId) return;
+        setComputerError(t`Could not continue`);
+        setComputerErrorFromScreen(false);
+      }
+    },
+    [t],
+  );
 
   function dismissComposerError() {
     // The strip shows one message at a time, so only dismiss the run failure when it is the
@@ -2523,7 +2542,8 @@ export function ShellPage() {
                     bots={bots}
                     onCreateBot={() => {
                       setCreateMenuOpen(false);
-                      void createBotQuick();
+                      setMobileSidebarOpen(false);
+                      setPanel("create");
                     }}
                     onOpenBot={(id) => {
                       setCreateMenuOpen(false);
@@ -2532,10 +2552,12 @@ export function ShellPage() {
                     }}
                     onCreateGroup={() => {
                       setCreateMenuOpen(false);
+                      setMobileSidebarOpen(false);
                       setPanel("create-group");
                     }}
                     onCreateSpace={() => {
                       setCreateMenuOpen(false);
+                      setMobileSidebarOpen(false);
                       setNewSpaceOpen(true);
                     }}
                   />
@@ -2546,12 +2568,14 @@ export function ShellPage() {
         </div>
         <InputGroup data-testid="sidebar-search" className="mx-2.5 mb-3 w-auto rounded-xl bg-card">
           <InputGroupAddon>
-            <span aria-hidden="true">⌕</span>
+            <Search size={16} strokeWidth={1.8} aria-hidden="true" />
           </InputGroupAddon>
           <InputGroupInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t`Search`}
+            autoComplete="off"
+            name="sidebar-search"
           />
         </InputGroup>
         <div className="rk-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
@@ -3321,12 +3345,7 @@ export function ShellPage() {
                       <Trans>Open in full window</Trans>
                     </div>
                   ) : computer?.kind === "desktop" ? (
-                    <div className="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground/80">
-                      <Trans>
-                        This bot runs on this computer, not a Linux desktop. Shell and files use
-                        your home folder.
-                      </Trans>
-                    </div>
+                    <DesktopKindEmptyState className="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground/80" />
                   ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
                     <iframe
                       title={t`Bot screen preview`}
@@ -3480,27 +3499,32 @@ export function ShellPage() {
                   secret: routineWebhookSecret,
                   configured: active.webhookConfigured || Boolean(routineWebhookSecret),
                 }}
+                githubPath={
+                  typeof window !== "undefined"
+                    ? `${window.location.origin}/api/v1/bots/${active.id}/github`
+                    : `/api/v1/bots/${active.id}/github`
+                }
+                messageProviders={messagingProviders}
                 saving={savingRoutine}
                 running={runningRoutine}
                 error={routineError}
                 onBack={() => setPanel("computer")}
                 onClose={() => setPanel(null)}
                 onEnsureWebhook={async () => {
-                  const result = await rpc.bots.rotateWebhookSecret({ botId: active.id });
-                  setRoutineWebhookSecret(result.secret);
-                  setBots((current) =>
-                    current.map((bot) =>
-                      bot.id === active.id ? { ...bot, webhookConfigured: true } : bot,
-                    ),
-                  );
+                  await ensureWebhookSecret(active.id);
                 }}
                 onSave={async () => {
                   if (routineSavePending.current) return;
                   const targetBotId = active.id;
                   const targetRoutine = editingRoutine;
                   if (targetRoutine && targetRoutine.botId !== targetBotId) return;
-                  if (!routineDraft.schedules.length && !routineDraft.webhookEnabled) {
-                    setRoutineError(t`Add a schedule or webhook trigger`);
+                  if (
+                    !routineDraft.schedules.length &&
+                    !routineDraft.webhookEnabled &&
+                    !routineDraft.githubEnabled &&
+                    !routineDraft.messageProvider
+                  ) {
+                    setRoutineError(t`Add a schedule, webhook, GitHub, or message trigger`);
                     return;
                   }
                   const saveRequest = ++routineSaveRequest.current;
@@ -3509,17 +3533,11 @@ export function ShellPage() {
                   setRoutineError(null);
                   try {
                     if (
-                      routineDraft.webhookEnabled &&
+                      (routineDraft.webhookEnabled || routineDraft.githubEnabled) &&
                       !active.webhookConfigured &&
                       !routineWebhookSecret
                     ) {
-                      const rotated = await rpc.bots.rotateWebhookSecret({ botId: targetBotId });
-                      setRoutineWebhookSecret(rotated.secret);
-                      setBots((current) =>
-                        current.map((bot) =>
-                          bot.id === targetBotId ? { ...bot, webhookConfigured: true } : bot,
-                        ),
-                      );
+                      await ensureWebhookSecret(targetBotId);
                     }
                     const crons = routineDraft.schedules.map(cronFromPreset);
                     let saved: Routine;
@@ -3545,6 +3563,8 @@ export function ShellPage() {
                         crons,
                         active: armOneShot ? true : routineDraft.active,
                         webhookEnabled: routineDraft.webhookEnabled,
+                        githubEnabled: routineDraft.githubEnabled,
+                        messageProvider: routineDraft.messageProvider,
                         ...(runAt ? { runAt } : {}),
                       });
                     } else {
@@ -3557,6 +3577,8 @@ export function ShellPage() {
                         active: routineDraft.active,
                         notify: true,
                         webhookEnabled: routineDraft.webhookEnabled,
+                        githubEnabled: routineDraft.githubEnabled,
+                        messageProvider: routineDraft.messageProvider,
                       });
                     }
                     if (
@@ -4033,12 +4055,7 @@ export function ShellPage() {
           ) : null}
           <div className="relative min-h-0 flex-1 bg-background">
             {computer?.kind === "desktop" ? (
-              <div className="grid h-full place-items-center px-8 text-center text-sm text-muted-foreground/80">
-                <Trans>
-                  This bot runs on this computer. There is no separate Linux desktop. Ask it to use
-                  the shell; working directories under your home folder are allowed.
-                </Trans>
-              </div>
+              <DesktopKindEmptyState className="grid h-full place-items-center px-8 text-center text-sm text-muted-foreground/80" />
             ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
               <>
                 <iframe
@@ -4309,45 +4326,69 @@ const Transcript = memo(function Transcript({
                 data-message-id={message.id}
                 data-rewound={rewound ? "true" : undefined}
                 className={`${
-                  peerReceipt ? "relative py-0.5" : "group/message relative pt-9 hover:z-20"
+                  peerReceipt ? "relative py-0.5" : "group/message relative hover:z-20"
                 }${rewound ? " opacity-40" : ""}`}
               >
-                {peerReceipt ? null : (
-                  <MessageHoverActions
-                    message={message}
-                    onReply={onReply}
-                    onEdit={onEdit}
-                    onReact={onReact}
-                  />
-                )}
-                <MessageView
-                  artifactTarget={artifactTarget}
-                  message={message}
-                  canAnswer={message.id === answerableAskMessageId}
-                  onOpenBot={onOpenBot}
-                  onOpenPeerMessages={onOpenPeerMessages}
-                  onAnswer={onAnswer}
-                  speakerName={
+                <div
+                  className={
                     peerReceipt
                       ? undefined
-                      : message.role === "bot"
-                        ? memberName?.(message.botId)
-                        : undefined
+                      : `relative flex ${message.role === "user" ? "justify-end" : "justify-start"}`
                   }
-                  memberName={memberName}
-                  peerBot={peerBot}
-                  replyPreview={
-                    message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined
-                  }
-                  replyToMessageId={message.replyToMessageId}
-                  onJumpToMessage={onJumpToMessage}
-                  onRefresh={onRefresh}
-                  onBotChanged={onBotChanged}
-                  onAddRoutine={onAddRoutine}
-                  voiceReady={voiceReady}
-                  speaking={speakingMessageId === message.id}
-                  onSpeak={() => onSpeak(message)}
-                />
+                >
+                  <div
+                    data-testid={peerReceipt ? undefined : "message-bubble-frame"}
+                    className={
+                      peerReceipt
+                        ? undefined
+                        : `relative w-fit min-w-0 ${
+                            message.role === "user"
+                              ? "max-w-[min(70%,calc(100%_-_6rem))]"
+                              : "max-w-[min(74%,calc(100%_-_6rem))]"
+                          }`
+                    }
+                  >
+                    {peerReceipt ? null : (
+                      <MessageHoverActions
+                        message={message}
+                        side={message.role === "user" ? "start" : "end"}
+                        onReply={onReply}
+                        onEdit={onEdit}
+                        onReact={onReact}
+                      />
+                    )}
+                    <MessageView
+                      artifactTarget={artifactTarget}
+                      message={message}
+                      canAnswer={message.id === answerableAskMessageId}
+                      onOpenBot={onOpenBot}
+                      onOpenPeerMessages={onOpenPeerMessages}
+                      onAnswer={onAnswer}
+                      speakerName={
+                        peerReceipt
+                          ? undefined
+                          : message.role === "bot"
+                            ? memberName?.(message.botId)
+                            : undefined
+                      }
+                      memberName={memberName}
+                      peerBot={peerBot}
+                      replyPreview={
+                        message.replyToMessageId
+                          ? messageById.get(message.replyToMessageId)
+                          : undefined
+                      }
+                      replyToMessageId={message.replyToMessageId}
+                      onJumpToMessage={onJumpToMessage}
+                      onRefresh={onRefresh}
+                      onBotChanged={onBotChanged}
+                      onAddRoutine={onAddRoutine}
+                      voiceReady={voiceReady}
+                      speaking={speakingMessageId === message.id}
+                      onSpeak={() => onSpeak(message)}
+                    />
+                  </div>
+                </div>
                 {!peerReceipt && message.thumbsUp ? (
                   <button
                     type="button"
@@ -4710,6 +4751,24 @@ const Composer = memo(function Composer({
     if (!disabled) void onAttachmentPick(dataTransfer.files);
   }
 
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const clipboardData = event.clipboardData;
+    // Only intercept real FileList pastes; leave text-only / empty-files native.
+    if (disabled || !clipboardData || !isFilePaste(clipboardData)) return;
+    event.preventDefault();
+    void onAttachmentPick(clipboardData.files);
+    const text = clipboardData.getData("text/plain");
+    if (!text) return;
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    updateDraft(`${draft.slice(0, start)}${text}${draft.slice(end)}`);
+    const caret = start + text.length;
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.setSelectionRange(caret, caret);
+    });
+  }
+
   const showComposerPlaceholder =
     draft.length === 0 && selectedSkill === null && selectedMentions.length === 0;
   const replyName = replyTarget ? (replyTargetName ?? previewMessageText(replyTarget)) : "";
@@ -5025,6 +5084,7 @@ const Composer = memo(function Composer({
             ref={textareaRef}
             value={draft}
             onChange={(event) => updateDraft(event.target.value)}
+            onPaste={handlePaste}
             onKeyDown={(event) => {
               if (
                 event.key === "Backspace" &&
@@ -5211,16 +5271,20 @@ function previewMessageText(message: ThreadMessage): string {
 
 function MessageHoverActions({
   message,
+  side,
   onReply,
   onEdit,
   onReact,
 }: {
   message: ThreadMessage;
+  side: "start" | "end";
   onReply: (message: ThreadMessage) => void;
   onEdit: (message: ThreadMessage) => void;
   onReact: (message: ThreadMessage) => Promise<void>;
 }) {
   const { t } = useLingui();
+  const [moreOpen, setMoreOpen] = useState(false);
+
   // Streaming progress bubbles keep hover free for selection / stop clicks.
   if (message.id.startsWith("progress:")) return null;
 
@@ -5230,19 +5294,34 @@ function MessageHoverActions({
     void navigator.clipboard.writeText(text).catch(() => undefined);
   }
 
+  const iconButtonClass =
+    "grid h-7 w-7 place-items-center text-muted-foreground transition-colors hover:text-foreground";
+
   return (
-    <MessageHoverMetadata createdAt={message.createdAt}>
-      <div
-        data-testid="message-hover-actions"
-        className="flex items-center gap-0.5 rounded-full bg-accent p-0.5 shadow-sm"
-      >
+    <MessageHoverMetadata pinned={moreOpen} side={side}>
+      <div data-testid="message-hover-actions" className="flex items-center gap-0.5">
+        {canReactToThreadMessage(message) ? (
+          <button
+            type="button"
+            aria-label={message.thumbsUp ? t`Remove thumbs-up` : t`Add thumbs-up`}
+            aria-pressed={Boolean(message.thumbsUp)}
+            onClick={() => void onReact(message)}
+            className={cn(
+              iconButtonClass,
+              "hidden [@media(hover:hover)_and_(pointer:fine)]:grid",
+              message.thumbsUp && "text-foreground",
+            )}
+          >
+            <Smile size={15} strokeWidth={1.7} />
+          </button>
+        ) : null}
         <button
           type="button"
           aria-label={t`Reply`}
           onClick={() => onReply(message)}
-          className="grid h-7 w-7 place-items-center rounded-full text-foreground/75 hover:bg-accent hover:text-foreground"
+          className={`${iconButtonClass} hidden [@media(hover:hover)_and_(pointer:fine)]:grid`}
         >
-          <Reply size={14} strokeWidth={1.8} />
+          <Reply size={15} strokeWidth={1.7} />
         </button>
         {message.role === "user" ? (
           <button
@@ -5250,32 +5329,63 @@ function MessageHoverActions({
             aria-label={t`Edit and resend`}
             data-testid="message-edit"
             onClick={() => onEdit(message)}
-            className="grid h-7 w-7 place-items-center rounded-full text-foreground hover:bg-accent hover:text-foreground"
+            className={`${iconButtonClass} hidden [@media(hover:hover)_and_(pointer:fine)]:grid`}
           >
-            <Pencil size={14} strokeWidth={1.8} />
+            <Pencil size={15} strokeWidth={1.7} />
           </button>
         ) : null}
-        {canReactToThreadMessage(message) ? (
-          <button
-            type="button"
-            aria-label={message.thumbsUp ? t`Remove thumbs-up` : t`Add thumbs-up`}
-            aria-pressed={Boolean(message.thumbsUp)}
-            onClick={() => void onReact(message)}
-            className={`grid h-7 w-7 place-items-center rounded-full hover:bg-accent hover:text-foreground ${
-              message.thumbsUp ? "text-warning" : "text-foreground/75"
-            }`}
+        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+          <DropdownMenuTrigger
+            aria-label={t`More`}
+            className={cn(
+              iconButtonClass,
+              "h-11 w-11 [@media(hover:hover)_and_(pointer:fine)]:h-7 [@media(hover:hover)_and_(pointer:fine)]:w-7",
+            )}
           >
-            <ThumbsUp size={14} strokeWidth={1.8} />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          aria-label={t`Copy`}
-          onClick={copyMessage}
-          className="grid h-7 w-7 place-items-center rounded-full text-foreground/75 hover:bg-accent hover:text-foreground"
-        >
-          <Copy size={14} strokeWidth={1.8} />
-        </button>
+            <MoreHorizontal size={15} strokeWidth={1.7} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align={side === "end" ? "start" : "end"}>
+            {canReactToThreadMessage(message) ? (
+              <DropdownMenuItem
+                className="[@media(hover:hover)_and_(pointer:fine)]:hidden"
+                onClick={() => void onReact(message)}
+              >
+                <Smile size={15} />
+                {message.thumbsUp ? t`Remove thumbs-up` : t`Add thumbs-up`}
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem
+              className="[@media(hover:hover)_and_(pointer:fine)]:hidden"
+              onClick={() => onReply(message)}
+            >
+              <Reply size={15} />
+              <Trans>Reply</Trans>
+            </DropdownMenuItem>
+            {message.role === "user" ? (
+              <DropdownMenuItem
+                className="[@media(hover:hover)_and_(pointer:fine)]:hidden"
+                onClick={() => onEdit(message)}
+              >
+                <Pencil size={15} />
+                <Trans>Edit and resend</Trans>
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem onClick={copyMessage}>
+              <Copy size={14} strokeWidth={1.7} />
+              <Trans>Copy</Trans>
+            </DropdownMenuItem>
+            <time
+              dateTime={message.createdAt}
+              data-testid="message-hover-time"
+              className="block px-1.5 py-1 text-xs tabular-nums text-muted-foreground"
+            >
+              {new Date(message.createdAt).toLocaleTimeString(i18n.locale || "en", {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </time>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </MessageHoverMetadata>
   );
@@ -5417,9 +5527,10 @@ const MessageView = memo(function MessageView({
           block.kind === "steps" ? <AgentSteps key={i} block={block} /> : null,
         )}
         {visibleNarrationBlocks.some((block) => block.kind !== "steps") ? (
-          <div className="flex justify-start">
+          <div className="flex w-fit max-w-full justify-start">
             <div
-              className="max-w-[74%] space-y-2.5 rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
+              data-testid="message-bot-bubble"
+              className="max-w-full space-y-2.5 rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
               dir="auto"
             >
               {visibleNarrationBlocks.map((block, i) => {
@@ -5514,9 +5625,10 @@ const MessageView = memo(function MessageView({
         }
         if (block.kind === "progress") {
           return (
-            <div key={i} className="flex justify-start">
+            <div key={i} className="flex w-fit max-w-full justify-start">
               <div
-                className="max-w-[74%] rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
+                data-testid="message-bot-bubble"
+                className="max-w-full rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
                 dir="auto"
               >
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
@@ -5667,9 +5779,10 @@ const MessageView = memo(function MessageView({
         }
         if (block.kind === "text" && message.role === "user") {
           return (
-            <div key={i} className="flex justify-end">
+            <div key={i} className="flex w-fit max-w-full justify-end">
               <div
-                className="max-w-[70%] whitespace-pre-wrap rounded-[20px] bg-primary px-[18px] py-3 text-[15.5px] leading-[1.45] text-primary-foreground"
+                data-testid="message-user-bubble"
+                className="max-w-full whitespace-pre-wrap wrap-anywhere rounded-[20px] bg-secondary px-[18px] py-3 text-[15.5px] leading-[1.45] text-secondary-foreground"
                 dir="auto"
               >
                 {block.text}
@@ -5679,9 +5792,10 @@ const MessageView = memo(function MessageView({
         }
         if (block.kind === "text") {
           return (
-            <div key={i} className="flex justify-start">
+            <div key={i} className="flex w-fit max-w-full justify-start">
               <div
-                className="max-w-[74%] rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
+                data-testid="message-bot-bubble"
+                className="max-w-full rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
                 dir="auto"
               >
                 <ChatMarkdown>{block.text}</ChatMarkdown>
@@ -5791,6 +5905,16 @@ function screenIframeSandbox(url: string | null) {
   } catch {
     return undefined;
   }
+}
+
+function DesktopKindEmptyState({ className }: { className?: string }) {
+  return (
+    <div className={className}>
+      <Trans>
+        This bot runs on this computer, not a Linux desktop. Shell and files use your home folder.
+      </Trans>
+    </div>
+  );
 }
 
 function computerPlaceholder(

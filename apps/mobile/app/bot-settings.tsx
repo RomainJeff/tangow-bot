@@ -1,5 +1,6 @@
 import {
   AVATAR_SHAPE_COUNT,
+  BOT_COLORS,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_INSTRUCTIONS_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
@@ -33,6 +34,7 @@ export default function BotSettingsScreen() {
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
   const [shapeSeed, setShapeSeed] = useState<number | null>(null);
+  const [color, setColor] = useState<string>(BOT_COLORS[0]);
   const [computerMode, setComputerMode] = useState<ComputerMode>("team");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -48,6 +50,7 @@ export default function BotSettingsScreen() {
         setDescription(next.description ?? "");
         setInstructions(next.instructions ?? "");
         setShapeSeed(next.shapeSeed ?? null);
+        setColor(next.color);
         setComputerMode(next.computerMode);
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("Could not load bot")));
@@ -66,6 +69,7 @@ export default function BotSettingsScreen() {
         description?: string;
         instructions?: string;
         shapeSeed?: number | null;
+        color?: string;
       } = { botId };
       if (shapeSeed !== (bot.shapeSeed ?? null)) input.shapeSeed = shapeSeed;
       if (profile.name !== bot.name) input.name = profile.name;
@@ -75,6 +79,7 @@ export default function BotSettingsScreen() {
         input.description = profile.description;
       }
       if (instructions !== (bot.instructions ?? "")) input.instructions = instructions;
+      if (color !== bot.color) input.color = color;
       if (computerMode !== bot.computerMode) {
         await rpc("bots/setComputer", { botId, mode: computerMode });
       }
@@ -99,6 +104,17 @@ export default function BotSettingsScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
+        {bot ? (
+          <View style={{ alignItems: "center", marginBottom: 24 }}>
+            <BotAvatar
+              color={color}
+              identity={bot.id}
+              shapeSeed={shapeSeed}
+              size={64}
+              status={bot.status}
+            />
+          </View>
+        ) : null}
         <Text style={{ color: tokens.mutedForeground, fontSize: 14 }}>{t("Name")}</Text>
         <TextInput
           value={name}
@@ -196,7 +212,7 @@ export default function BotSettingsScreen() {
                       <Text style={{ color: "#85858A", fontSize: 12 }}>Auto</Text>
                     ) : (
                       <BotAvatar
-                        color={bot.color}
+                        color={color}
                         identity={bot.id}
                         shapeSeed={seed}
                         size={28}
@@ -209,6 +225,33 @@ export default function BotSettingsScreen() {
             </View>
           </>
         ) : null}
+        <Text style={{ color: tokens.mutedForeground, marginTop: 16, fontSize: 14 }}>
+          {t("Color")}
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 10, marginTop: 8 }}
+          accessibilityRole="radiogroup"
+        >
+          {BOT_COLORS.map((option, index) => (
+            <Pressable
+              key={option}
+              accessibilityRole="radio"
+              accessibilityLabel={t("Color {number}", { number: index + 1 })}
+              accessibilityState={{ checked: color === option }}
+              onPress={() => setColor(option)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: option,
+                borderWidth: 3,
+                borderColor: color === option ? tokens.foreground : "transparent",
+              }}
+            />
+          ))}
+        </ScrollView>
         <ComputerModePicker value={computerMode} onChange={setComputerMode} />
         {error ? <Text style={{ color: tokens.destructive, marginTop: 16 }}>{error}</Text> : null}
         <Pressable

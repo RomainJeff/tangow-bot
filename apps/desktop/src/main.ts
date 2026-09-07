@@ -22,6 +22,7 @@ import {
 import { DOCKER_INSTALL_LINKS, isDesktopSetupLink, runDocker } from "./docker-cli.js";
 import {
   LocalStackController,
+  readStackWebUrl,
   resolveImageTag,
   stackDir,
   stackResourceDir,
@@ -949,7 +950,9 @@ app.whenReady().then(async () => {
       resourcesPath: process.resourcesPath,
       appPath: app.getAppPath(),
     }),
-    localWebUrl: LOCAL_WEB_URL,
+    localWebUrl:
+      process.env.RAKAZO_LOCAL_WEB_URL?.trim() ||
+      (await readStackWebUrl(stackDir(userDataDir), LOCAL_WEB_URL)),
     imageTag: resolveImageTag({
       version: app.getVersion(),
       packaged: app.isPackaged,
@@ -1025,7 +1028,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("desktop.setup.state", (event) => {
     if (!fromSetupWindow(event)) return null;
     return {
-      defaultLocalUrl: LOCAL_WEB_URL,
+      defaultLocalUrl: localStack.webUrl(),
       saved: currentSetup,
       // The client ID shows a token is configured; the secret never leaves main.
       savedAccessClientId: currentAccess?.clientId ?? null,
@@ -1060,10 +1063,10 @@ app.whenReady().then(async () => {
         };
       }
 
-      // Managed stacks authenticate LOCAL_WEB_URL only; never open a different loopback.
+      // Only open the exact origin selected and authenticated by the managed stack.
       let openSetup = setup;
       if (setup.mode === "new") {
-        const managedUrl = managedLocalOpenUrl(setup.serverUrl, LOCAL_WEB_URL);
+        const managedUrl = managedLocalOpenUrl(setup.serverUrl, localStack.webUrl());
         if (managedUrl === null || !(await localStack.matchesDesiredStack())) {
           return {
             ok: false,
@@ -1207,7 +1210,7 @@ app.whenReady().then(async () => {
     showSetupWindow();
   } else if (target.source === "saved") {
     if (currentSetup?.mode === "new") {
-      const managedUrl = managedLocalOpenUrl(target.url, LOCAL_WEB_URL);
+      const managedUrl = managedLocalOpenUrl(target.url, localStack.webUrl());
       const managedStackReady =
         managedUrl !== null ? await localStack.matchesDesiredStack() : false;
       if (managedStackReady && managedUrl !== null) {
