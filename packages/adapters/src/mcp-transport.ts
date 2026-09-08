@@ -15,6 +15,7 @@ import {
   type RemoteTransportDependencies,
   type SafeRemoteFetch,
 } from "./remote-mcp.js";
+import { dispatchableFetch } from "./undici-fetch.js";
 
 export type McpRemoteTransport = "streamable-http" | "sse";
 
@@ -126,7 +127,7 @@ export function secureFetch(
     "proxy-authorization",
   ]);
   const safeRemoteFetch = createSafeRemoteFetch(
-    network.fetch ?? globalThis.fetch,
+    network.fetch ?? dispatchableFetch,
     network.resolveHostname,
   );
   const request = async (input: Request | URL | string, init?: RequestInit): Promise<Response> => {

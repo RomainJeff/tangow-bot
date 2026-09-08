@@ -12,6 +12,7 @@ import {
   type ResolvedAddress,
   type ResolveHostname,
 } from "./network-address.js";
+import { dispatchableFetch } from "./undici-fetch.js";
 
 const MAX_MCP_TOOLS = 250;
 const MAX_MCP_PAGES = 20;
@@ -93,7 +94,7 @@ async function withRemoteMcpClient<T>(
   );
   const signal = combineSignals(options.signal, AbortSignal.timeout(MCP_TIMEOUT_MS));
   const safeFetch = createSafeRemoteFetch(
-    options.fetch ?? globalThis.fetch,
+    options.fetch ?? dispatchableFetch,
     options.resolveHostname ?? resolveHostname,
   );
   const transport = new StreamableHTTPClientTransport(endpoint, {
@@ -134,7 +135,7 @@ export async function assertSafeRemoteUrl(
 }
 
 export function createSafeRemoteFetch(
-  baseFetch: typeof globalThis.fetch = globalThis.fetch,
+  baseFetch: typeof globalThis.fetch = dispatchableFetch,
   resolve: ResolveHostname = resolveHostname,
 ): SafeRemoteFetch {
   const dispatcher = new Agent({ connect: { lookup: createSafeLookup(resolve) } });
