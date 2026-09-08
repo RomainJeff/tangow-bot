@@ -175,5 +175,8 @@ describe("mobile computer screen", () => {
     expect(src).toContain("SafeAreaProvider");
     expect(src).toContain("readScreenUrl");
     expect(src).toContain("SCREEN_URL_OPEN_ATTEMPTS");
+    // Cloudflare Access: the screen proxy lives on the API origin, so the WebView load
+    // must carry the service-token headers or it bounces to the Access login page.
+    expect(src).toContain("headers: currentAccessHeaders(currentApiBase(), defaultApiBase())");
   });
 });

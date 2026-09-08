@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - Connector artwork is back on the mobile Integrations screen — tiles show each app's logo again instead of a bare name.
+- The bot's computer screen loads behind Cloudflare Access on mobile: the embedded view now sends the service-token headers instead of bouncing to the Access login page.
 
 ### 2026-09-06
 
