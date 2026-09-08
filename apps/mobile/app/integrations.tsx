@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ConnectorIcon } from "../components/connector-icon";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
@@ -400,6 +401,7 @@ export default function Integrations() {
     const connected = itemConnected(item);
     const body = (
       <>
+        <ConnectorIcon name={label} logo={item.logo} />
         <View style={styles.grow}>
           <Text numberOfLines={1} style={styles.title}>
             {label}
@@ -606,6 +608,7 @@ export default function Integrations() {
                               disabled ? { opacity: 0.7 } : null,
                             ]}
                           >
+                            <ConnectorIcon name={tile.label} logo={item?.logo} />
                             <View style={styles.grow}>
                               <Text numberOfLines={1} style={styles.title}>
                                 {tile.label}
