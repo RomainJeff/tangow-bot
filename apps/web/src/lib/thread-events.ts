@@ -250,6 +250,7 @@ export function isThreadSnapshotEvent(event: ProductEvent): boolean {
     event.type === "thread.subagent" ||
     event.type === "thread.cloud_agent" ||
     event.type === "agent.tool.called" ||
+    event.type === "agent.tool.completed" ||
     event.type === "thread.message.created" ||
     event.type === "thread.message.updated" ||
     event.type === "thread.message.reaction" ||
@@ -449,6 +450,9 @@ export function reduceThreadSnapshot(
       createdAt: event.createdAt,
     };
     return { ...prev, cursor: event.seq, messages: [...remaining, next] };
+  }
+  if (event.type === "agent.tool.completed") {
+    return { ...prev, cursor: event.seq };
   }
   if (event.type === "thread.subagent") {
     const block = subagentBlockFromPayload(event.payload);

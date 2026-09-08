@@ -14,6 +14,7 @@ import type {
 import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
+  ComposioConnector,
   type ComposioProvider,
   type ConnectorRegistry,
   createBackgroundJobHandlers,
@@ -35,6 +36,7 @@ import {
   InMemoryJobQueue,
   InMemoryRealtimeFanout,
   InstalledConnectorProvider,
+  IntegrationProviderSettings,
   isComposioEnabled,
   isMessagingSurfaceEnabled,
   isPipedreamEnabled,
@@ -48,9 +50,12 @@ import {
   PipedreamConnector,
   PostgresRealtimeFanout,
   pipedreamConfigFromEnv,
+  piSessionsRoot,
   pushTokenPath,
   type RemoteConnectorDependencies,
   reconcileCloudAgents,
+  reconcileComputerUpdates,
+  removePiUserSessions,
   removeUserSkillDirs,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
@@ -79,6 +84,7 @@ import { MarkdownMemoryStore } from "@rakazo/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { type AppEnv, loadEnv } from "./env.js";
+import { mountLocalSettings } from "./local-settings.js";
 import {
   createMessagingInboundHandler,
   teamChatSenderCanWakeMessageRoutines,
@@ -250,17 +256,30 @@ export async function createApp(
       ? new SmtpEmailProvider({ url: env.smtpUrl, from: env.emailFrom ?? "" })
       : localEmailEmulator);
   const installed = new InstalledConnectorProvider(prisma, secrets, remoteConnectors);
-  const stack = createConnectorStack(isComposioEnabled(env.composioApiKey), composioOverride, [
+  const integrationSettings = new IntegrationProviderSettings(prisma, secrets, env.encryptionKey, {
+    composio:
+      composioOverride ??
+      (isComposioEnabled(env.composioApiKey)
+        ? new ComposioConnector(env.composioApiKey)
+        : undefined),
+    pipedream,
+  });
+  const stack = createConnectorStack(false, composioOverride, [
     installed,
-    ...(pipedream ? [pipedream] : []),
+    ...integrationSettings
+      .providers()
+      .filter((provider) => !composioOverride || provider.describe().id !== "composio"),
     mcp,
   ]);
   const connector = stack.destination;
   await connector.start();
-  void stack.composio?.warmDirectory().catch(() => undefined);
-  void pipedream?.warmDirectory?.().catch(() => undefined);
+  integrationSettings.warmDirectories();
   const runtime =
-    env.agentRuntime === "scripted" ? new ScriptedAgentRuntime() : new PiAgentRuntime();
+    env.agentRuntime === "scripted"
+      ? new ScriptedAgentRuntime()
+      : new PiAgentRuntime({
+          sessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
+        });
   const notifications = new ExpoPushProvider(env.dataDir);
   const auth = createAuth(prisma, {
     secret: env.authSecret,
@@ -282,7 +301,7 @@ export async function createApp(
     beforeDeleteUser: async (userId) => {
       const bots = await prisma.bot.findMany({
         where: { userId },
-        select: { id: true, spaceId: true, name: true, archivedAt: true },
+        select: { id: true, userId: true, spaceId: true, name: true, archivedAt: true },
       });
       await Promise.all(
         bots.map((bot) =>
@@ -301,6 +320,7 @@ export async function createApp(
           ),
         ),
       );
+      await removePiUserSessions(env.dataDir, userId);
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
       await removeUserSkillDirs(env.dataDir, userId);
     },
@@ -322,7 +342,17 @@ export async function createApp(
     artifacts,
     connector: stack.connector,
     connectors: stack.connector,
-    listConnectedPluginSlugs: stack.composio?.listConnectedSlugs.bind(stack.composio),
+    listConnectedPluginSlugs: async (scope) => {
+      const provider = await integrationSettings.resolve("composio");
+      if (!provider) return [];
+      return provider.listConnectedExternalIds({
+        userId: scope.userId,
+        spaceId: scope.spaceId,
+        operationId: "connections.sync",
+        traceId: "connections.sync",
+        signal: AbortSignal.timeout(15_000),
+      });
+    },
     secrets: [
       env.deploymentModelKey ?? "",
       env.composioApiKey ?? "",
@@ -364,6 +394,7 @@ export async function createApp(
         prisma,
         jobs,
         reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
+        reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
       })
     : undefined;
   reconciler?.start();
@@ -379,6 +410,7 @@ export async function createApp(
     home,
     secrets,
     oauthLogins,
+    integrationSettings,
     mcpOAuth,
     composio: stack.composio,
     connectors: stack.connector,
@@ -443,6 +475,7 @@ export async function createApp(
     }
     return auth.handler(c.req.raw);
   });
+  mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
     const requestedSpaceId = c.req.header("x-rakazo-space-id");

@@ -106,6 +106,7 @@ describe("computer provisioning", () => {
         2,
         expect.objectContaining({
           where: {
+            maintenanceId: null,
             id: "computer-1",
             state: "booting",
             updatedAt: expect.any(Date),
@@ -690,6 +691,7 @@ describe("computer provisioning", () => {
         expect(sandbox.stop).not.toHaveBeenCalled();
         expect(prisma.computer.updateMany).toHaveBeenLastCalledWith({
           where: {
+            maintenanceId: null,
             id: "computer-1",
             state: "booting",
             providerRef: "provider-1",
@@ -831,6 +833,7 @@ describe("computer provisioning", () => {
         expect(await sandbox.readFile(ref, "notes/keep.txt", context)).toEqual(saved);
         expect(prisma.computer.updateMany).toHaveBeenLastCalledWith({
           where: {
+            maintenanceId: null,
             id: "computer-1",
             state: "booting",
             providerRef: "provider-1",
@@ -1026,6 +1029,7 @@ describe("computer provisioning", () => {
       });
       expect(updateMany).toHaveBeenLastCalledWith({
         where: {
+          maintenanceId: null,
           id: "computer-1",
           state: "booting",
           providerRef: null,
@@ -2370,7 +2374,7 @@ describe("computer replacement", () => {
       ).rejects.toThrow("ECONNRESET");
       expect(destroy).not.toHaveBeenCalled();
       expect(updateMany).toHaveBeenLastCalledWith({
-        where: { id: "computer-1" },
+        where: { id: "computer-1", maintenanceId: null },
         data: { state: "error" },
       });
     } finally {

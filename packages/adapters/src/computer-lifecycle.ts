@@ -6,6 +6,7 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
+import type { ComputerUpdate } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, parseScreenLeaseId, screenLeaseId } from "@rakazo/core";
 import {
   expireComputerExecutionLeases,
@@ -27,6 +28,10 @@ import {
 import { resolveAgentHomePath } from "./home.js";
 import { marketplacesRoot } from "./marketplace-store.js";
 import { userSkillsRoot } from "./skill-store.js";
+
+type ComputerUpdateProgress = (
+  stage: Exclude<ComputerUpdate["stage"], "preparing">,
+) => Promise<void>;
 
 const EXECUTION_LEASE_MS = 5 * 60_000;
 const BOOT_WAIT_ATTEMPTS = 40;
@@ -135,8 +140,11 @@ export async function provisionComputer(
   computerId: string,
   context: AdapterContext,
   controlHolder: "bot" | "none" = "none",
+  onProgress?: ComputerUpdateProgress,
 ): Promise<ComputerRef> {
   let existing = await deps.prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
+  if (existing.maintenanceId && existing.maintenanceId !== context.operationId)
+    throw new ComputerBusyError();
   if (existing.controlLeaseId && !hasActiveComputerControl(existing)) {
     await expireComputerControl(deps, existing.id, existing.controlLeaseId);
     existing = await deps.prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
@@ -236,6 +244,7 @@ export async function provisionComputer(
     where: {
       id: computerId,
       ...claimWhere,
+      maintenanceId: existing.maintenanceId ?? null,
       ...(context.botId ? { bots: { some: { id: context.botId, archivedAt: null } } } : {}),
     },
     data: { state: "booting", updatedAt: claimStamp },
@@ -243,6 +252,7 @@ export async function provisionComputer(
   if (claimed.count !== 1) throw new ComputerBusyError();
   let provisioned: ComputerRef | undefined;
   try {
+    await onProgress?.("recreating");
     const ref = await deps.sandbox.provision(
       {
         botId: existing.homeKey,
@@ -260,8 +270,10 @@ export async function provisionComputer(
       existing.providerRef !== ref.providerRef ||
       existing.kind !== ref.kind;
     if (replacement) {
+      await onProgress?.("restoring");
       await restoreComputerWorkspace(deps.home, deps.sandbox, existing.homeKey, ref, context);
     }
+    await onProgress?.("reconnecting");
     await ensureComputerWorkspaceLayout(
       deps.sandbox,
       ref,
@@ -276,6 +288,7 @@ export async function provisionComputer(
         state: "booting",
         updatedAt: claimStamp,
         ...previousRef,
+        maintenanceId: existing.maintenanceId ?? null,
         ...(context.botId ? { bots: { some: { id: context.botId, archivedAt: null } } } : {}),
       },
       data: {
@@ -314,6 +327,7 @@ export async function provisionComputer(
           state: "booting",
           updatedAt: claimStamp,
           ...previousRef,
+          maintenanceId: existing.maintenanceId ?? null,
         },
         data: {
           state: reconnecting ? "running" : "error",
@@ -405,6 +419,8 @@ export async function acquireComputerExecutionLease(
   },
 ): Promise<ComputerExecutionLease | null> {
   const computer = await prisma.computer.findUniqueOrThrow({ where: { id: input.computerId } });
+  if (computer.maintenanceId && computer.maintenanceId !== input.runId)
+    throw new ComputerBusyError();
   if (computer.scope !== "team") return null;
   if (computer.state === "suspending") throw new ComputerBusyError();
   const now = new Date();
@@ -459,9 +475,13 @@ async function validateAcquiredComputerLease(
 ): Promise<ComputerExecutionLease> {
   const computer = await prisma.computer.findUniqueOrThrow({
     where: { id: lease.computerId },
-    select: { state: true },
+    select: { state: true, maintenanceId: true },
   });
-  if (computer.state !== "suspending") return lease;
+  if (
+    computer.state !== "suspending" &&
+    (!computer.maintenanceId || computer.maintenanceId === lease.runId)
+  )
+    return lease;
   await releaseComputerExecutionLease(prisma, lease);
   throw new ComputerBusyError();
 }
@@ -543,8 +563,11 @@ export async function replaceComputer(
   mode: ComputerReplaceMode,
   context: AdapterContext,
   controlHolder: "bot" | "none" = "none",
+  onProgress?: ComputerUpdateProgress,
 ): Promise<ComputerRef> {
   let existing = await deps.prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
+  if (existing.maintenanceId && existing.maintenanceId !== context.operationId)
+    throw new ComputerBusyError();
   if (existing.controlLeaseId && !hasActiveComputerControl(existing)) {
     const expired = await expireComputerControl(deps, existing.id, existing.controlLeaseId);
     existing = await deps.prisma.computer.findUniqueOrThrow({ where: { id: computerId } });
@@ -602,6 +625,7 @@ export async function replaceComputer(
     where: {
       id: computerId,
       state: previousState,
+      maintenanceId: existing.maintenanceId ?? null,
       // CAS the booting stamp so a concurrent live claim cannot be overwritten by Reset.
       ...(previousState === "booting" ? { updatedAt: existing.updatedAt } : {}),
       executionLeases: { none: { botId: { not: botId }, expiresAt: { gt: now } } },
@@ -636,11 +660,13 @@ export async function replaceComputer(
     // Retry the checkpoint even after an earlier update left the row in error.
     if (oldRef && (mode === "update" || (existing.state === "running" && mode === "recover"))) {
       try {
+        await onProgress?.("saving");
         await checkpointAndRecordComputerWorkspace(deps, existing, oldRef, context);
       } catch (error) {
         if (mode !== "recover") throw error;
       }
     }
+    await onProgress?.("recreating");
     if (oldRef) {
       await deps.sandbox.releaseScreen?.(oldRef, context).catch(() => undefined);
       try {
@@ -649,8 +675,8 @@ export async function replaceComputer(
         if (mode !== "recover") throw error;
       }
     }
-    await deps.prisma.computer.update({
-      where: { id: computerId },
+    const stopped = await deps.prisma.computer.updateMany({
+      where: { id: computerId, state: "suspending", maintenanceId: existing.maintenanceId ?? null },
       data: {
         state: "stopped",
         providerRef: null,
@@ -661,11 +687,12 @@ export async function replaceComputer(
         controlRunId: null,
       },
     });
-    return provisionComputer(deps, computerId, context, controlHolder);
+    if (stopped.count !== 1) throw new ComputerBusyError();
+    return provisionComputer(deps, computerId, context, controlHolder, onProgress);
   } catch (error) {
     await deps.prisma.computer
       .updateMany({
-        where: { id: computerId },
+        where: { id: computerId, maintenanceId: existing.maintenanceId ?? null },
         data: { state: "error" },
       })
       .catch(() => undefined);

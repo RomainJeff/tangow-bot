@@ -1,3 +1,4 @@
+import type { IntegrationSetupState } from "@rakazo/contracts";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -21,6 +22,7 @@ import {
   type PasswordResetCapabilities,
   passwordResetCapabilities,
   requestPasswordReset,
+  rpc,
   signIn,
   signUp,
   usesCustomApiBase,
@@ -114,7 +116,11 @@ export default function SignIn() {
       } else {
         await signIn(email.trim(), password);
       }
-      router.replace("/");
+      const setup =
+        mode === "up"
+          ? await rpc<IntegrationSetupState>("integrationSetup/get").catch(() => null)
+          : null;
+      router.replace(setup?.needsSetup ? "/integration-setup" : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("Could not continue"));
     } finally {

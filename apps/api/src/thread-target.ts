@@ -397,7 +397,14 @@ export async function threadSnapshot(
                 where: {
                   threadId: target.threadId,
                   runId: currentRun.id,
-                  type: { in: ["thread.progress", "thread.subagent", "agent.tool.called"] },
+                  type: {
+                    in: [
+                      "thread.progress",
+                      "thread.subagent",
+                      "agent.tool.called",
+                      "agent.tool.completed",
+                    ],
+                  },
                 },
                 orderBy: { seq: "asc" },
               })
@@ -452,7 +459,14 @@ export async function threadSnapshot(
             where: {
               threadId: target.threadId,
               runId: { in: liveRunIds },
-              type: { in: ["thread.progress", "thread.subagent", "agent.tool.called"] },
+              type: {
+                in: [
+                  "thread.progress",
+                  "thread.subagent",
+                  "agent.tool.called",
+                  "agent.tool.completed",
+                ],
+              },
             },
             orderBy: { seq: "asc" },
           })

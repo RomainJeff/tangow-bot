@@ -19,6 +19,7 @@ import {
   ComputerModeSchema,
   ComputerReleaseReasonSchema,
   ComputerStatusSchema,
+  ComputerUpdateSchema,
   ConnectionCatalogItemSchema,
   ConnectionSchema,
   CreateAgentSkillInput,
@@ -32,9 +33,9 @@ import {
   GroupDetailSchema,
   GroupSchema,
   ImportAgentSkillInput,
+  IntegrationCatalogResultSchema,
   MarketplacePluginSchema,
   MarketplaceUpdateCheckSchema,
-  IntegrationCatalogResultSchema,
   McpServerConfigInput,
   McpServerSchema,
   MemoryDocumentSchema,
@@ -78,6 +79,10 @@ import {
 } from "./domain.js";
 import { ProductEventSchema } from "./events.js";
 import { Id, IsoDate } from "./ids.js";
+import {
+  IntegrationProviderConfigSchema,
+  IntegrationSetupStateSchema,
+} from "./integration-settings.js";
 import { RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
 
@@ -141,6 +146,9 @@ export const appContract = {
   spaces: {
     list: oc.output(SpaceNavigationSchema),
     create: oc.input(z.object({ name: z.string().trim().min(1).max(60) })).output(SpaceSchema),
+    remove: oc
+      .input(z.object({ spaceId: Id }))
+      .output(z.object({ ok: z.literal(true), activeSpaceId: Id })),
   },
   bootstrap: oc.input(z.object({ botId: Id.optional() })).output(AppBootstrapSchema),
   deployment: {
@@ -312,9 +320,14 @@ export const appContract = {
     status: oc.input(botId).output(ComputerStatusSchema),
     boot: oc.input(botId).output(ComputerStatusSchema),
     stop: oc.input(botId).output(ComputerStatusSchema),
-    recover: oc.input(botId).output(ComputerStatusSchema),
+    recover: oc.input(botId).output(ComputerUpdateSchema),
     reset: oc.input(botId).output(ComputerStatusSchema),
-    update: oc.input(botId).output(ComputerStatusSchema),
+    update: oc.input(botId).output(ComputerUpdateSchema),
+    updates: oc.output(z.array(ComputerUpdateSchema)),
+    releaseInterrupted: oc
+      .input(z.object({ id: Id, workersStopped: z.literal(true) }))
+      .output(z.object({ ok: z.literal(true) })),
+    dismissUpdate: oc.input(z.object({ id: Id })).output(z.object({ ok: z.literal(true) })),
     takeover: oc.input(botId).output(z.object({ leaseId: Id, expiresAt: z.string() })),
     release: oc
       .input(
@@ -547,12 +560,19 @@ export const appContract = {
   },
   capabilities: {
     list: oc.output(z.array(CapabilityInstallSchema)),
-    catalogSearch: oc.input(z.object({ query: z.string().trim().max(253).default("") })).output(
-      z.object({
-        enabled: z.boolean(),
-        results: z.array(IntegrationCatalogResultSchema),
-      }),
-    ),
+    catalogSearch: oc
+      .input(
+        z.object({
+          query: z.string().trim().max(253).default(""),
+          usePublicCatalog: z.boolean().default(false),
+        }),
+      )
+      .output(
+        z.object({
+          enabled: z.boolean(),
+          results: z.array(IntegrationCatalogResultSchema),
+        }),
+      ),
     install: oc
       .input(
         z.object({
@@ -570,7 +590,14 @@ export const appContract = {
     servers: {
       list: oc.output(z.array(McpServerSchema)),
       create: oc.input(McpServerConfigInput).output(McpServerSchema),
-      update: oc.input(z.object({ id: Id, config: McpServerConfigInput })).output(McpServerSchema),
+      update: oc
+        .input(
+          z.union([
+            z.object({ id: Id, config: McpServerConfigInput }),
+            z.object({ id: Id, secret: z.string().min(1).max(16384) }),
+          ]),
+        )
+        .output(McpServerSchema),
       remove: oc.input(z.object({ id: Id })).output(z.object({ ok: z.literal(true) })),
     },
     assignments: {
@@ -624,8 +651,14 @@ export const appContract = {
     dismissFocus: oc.input(z.object({ botId: Id })).output(z.object({ ok: z.literal(true) })),
     /** Flip an app_connect card to connected after authorization completes. */
     appConnected: oc
-      .input(z.object({ botId: Id, provider: z.string() }))
+      .input(
+        z.object({ botId: Id, provider: z.string(), connectorId: z.string().default("composio") }),
+      )
       .output(z.object({ ok: z.literal(true) })),
+  },
+  integrationSetup: {
+    get: oc.output(IntegrationSetupStateSchema),
+    save: oc.input(IntegrationProviderConfigSchema).output(z.object({ ok: z.literal(true) })),
   },
   connections: {
     catalog: oc

@@ -5,6 +5,7 @@ import {
   activeBotId,
   captureScreenshot,
   completeOnboarding,
+  openUserSettings,
   realSandboxTimeout,
   rpc,
   signup,
@@ -27,10 +28,9 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     .fill(`write a file in your home called notes/result.csv that says ${fileMarker}`);
   await page.keyboard.press("Enter");
 
-  // Space-wide documents live in the Memory settings overlay. Open that before
-  // bot settings so the Knowledge Memory tab cannot steal this click.
-  await page.getByRole("button", { name: new RegExp(userName) }).click();
-  await page.getByRole("button", { name: "Memory", exact: true }).click();
+  // Space-wide documents live in Settings → Memory. Open that before bot
+  // settings so the Knowledge Memory tab cannot steal this click.
+  await openUserSettings(page, "memory");
   await expect(page.getByLabel("Close memory settings")).toBeVisible();
   const spaceDocs = page.getByTestId("space-memory-documents");
   await expect(spaceDocs.getByText("Shared documents")).toBeVisible();
