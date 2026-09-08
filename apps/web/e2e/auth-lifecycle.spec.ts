@@ -51,12 +51,30 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   await expect(page.getByPlaceholder("Message Chief")).toBeVisible();
 
   await page.getByRole("button", { name: new RegExp(userName, "i") }).click();
+  await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Usage", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
+  await expect(
+    page
+      .locator('[data-slot="popover-content"]')
+      .getByRole("button", { name: "Models", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .locator('[data-slot="popover-content"]')
+      .getByRole("button", { name: "Memory", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .locator('[data-slot="popover-content"]')
+      .getByRole("button", { name: "Voice", exact: true }),
+  ).toHaveCount(0);
   await captureScreenshot(page, testInfo, "36-account-menu");
 
   await page.getByRole("button", { name: "Log out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to Rakazo" })).toBeVisible();
   await page.goto("/");
+  await expect(page.locator('[data-rakazo-surface="welcome"]')).toBeVisible();
   await expect(page.getByText(/Your team of always-on agents/)).toBeVisible();
   await page.getByRole("button", { name: /Sign up/ }).click();
   await expect(page).toHaveURL(/\/sign-up$/);
@@ -138,6 +156,28 @@ test("changes and recovers an email password", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = page.getByTestId("user-settings");
   await expect(settings).toBeVisible();
+  await expect(page.getByTestId("sidebar-search").locator("input")).toHaveAttribute(
+    "autocomplete",
+    "off",
+  );
+  await expect(page.getByTestId("sidebar-search").locator("input")).toHaveAttribute(
+    "name",
+    "sidebar-search",
+  );
+  await expect(settings.locator('input[name="username"]')).toHaveAttribute(
+    "autocomplete",
+    "username",
+  );
+  await expect(settings.locator('input[name="username"]')).toHaveValue(email);
+  await expect(settings.getByLabel("Current password")).toHaveAttribute(
+    "autocomplete",
+    "current-password",
+  );
+  await expect(settings.getByLabel("New password")).toHaveAttribute("autocomplete", "new-password");
+  await expect(settings.getByLabel("Confirm password")).toHaveAttribute(
+    "autocomplete",
+    "new-password",
+  );
   await settings.getByLabel("Current password").fill(originalPassword);
   await settings.getByLabel("New password").fill(changedPassword);
   await settings.getByLabel("Confirm password").fill(changedPassword);

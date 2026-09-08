@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Pressable, Text, View, type ViewProps } from "react-native";
+import { Alert, Pressable, Text, TextInput, View, type ViewProps } from "react-native";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
 
@@ -15,18 +15,22 @@ export function AskActions({
   actions,
   disabled,
   onAnswer,
+  allowFreeText,
   accessibilityActions,
   onAccessibilityAction,
 }: {
   actions: AskAction[];
   disabled?: boolean;
   onAnswer: (answer: string) => Promise<void>;
+  allowFreeText?: boolean;
   accessibilityActions?: ViewProps["accessibilityActions"];
   onAccessibilityAction?: ViewProps["onAccessibilityAction"];
 }) {
   const { t } = useI18n();
   const tokens = mobileTokens();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [freeText, setFreeText] = useState("");
   const submitting = pendingAction !== null;
 
   async function submit(answer: string) {
@@ -82,6 +86,82 @@ export function AskActions({
           </Pressable>
         );
       })}
+      {allowFreeText ? (
+        editing ? (
+          <View style={{ gap: 6 }}>
+            <TextInput
+              value={freeText}
+              onChangeText={setFreeText}
+              editable={!submitting}
+              placeholder={t("Type a different answer")}
+              placeholderTextColor={tokens.mutedForeground}
+              autoFocus
+              multiline
+              style={{
+                alignSelf: "stretch",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                color: tokens.foreground,
+                fontSize: 15,
+                minHeight: 44,
+              }}
+            />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable
+                disabled={submitting || freeText.trim().length === 0}
+                onPress={() => void submit(freeText.trim())}
+                style={{
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  backgroundColor: tokens.muted,
+                  opacity: submitting || freeText.trim().length === 0 ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: tokens.foreground, fontSize: 15, fontWeight: "600" }}>
+                  {submitting ? t("Sending…") : t("Send answer")}
+                </Text>
+              </Pressable>
+              <Pressable
+                disabled={submitting}
+                onPress={() => {
+                  setFreeText("");
+                  setEditing(false);
+                }}
+                style={{
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderWidth: 1,
+                  borderColor: tokens.border,
+                  opacity: submitting ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: tokens.foreground, fontSize: 15 }}>{t("Cancel")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <Pressable
+            disabled={disabled || submitting}
+            onPress={() => setEditing(true)}
+            style={{
+              alignSelf: "stretch",
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              opacity: disabled || submitting ? 0.5 : 1,
+            }}
+          >
+            <Text style={{ color: tokens.mutedForeground, fontSize: 15 }}>
+              {t("Other answer…")}
+            </Text>
+          </Pressable>
+        )
+      ) : null}
     </View>
   );
 }

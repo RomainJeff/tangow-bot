@@ -38,6 +38,7 @@ export const ProductEventType = z.enum([
   "skill.saved",
   "effect.recorded",
   "agent.tool.called",
+  "agent.tool.completed",
   "effect.reconciled",
   "usage.recorded",
   "bot.spawned",
@@ -88,6 +89,30 @@ const ChartBlock = z
 export const SecretAskPurpose = z.enum(["otp", "password", "api_key"]);
 export type SecretAskPurpose = z.infer<typeof SecretAskPurpose>;
 
+/** ask_user v2: one or more questions answered in a single card (Claude Code style). */
+export const AskQuestionOption = z.object({ id: z.string(), label: z.string() });
+export const AskQuestion = z.object({
+  id: z.string(),
+  /** Short chip/tab label (<= 12 chars recommended). */
+  header: z.string().optional(),
+  question: z.string(),
+  /** 0 options => a free-text question; 1-4 => tappable choices, "Other" always added by the UI. */
+  options: z.array(AskQuestionOption).optional(),
+  multiSelect: z.boolean().optional(),
+  /** required:false renders a "Skip" affordance. Default true. */
+  required: z.boolean().optional(),
+});
+export type AskQuestion = z.infer<typeof AskQuestion>;
+/** One question's answer: chosen option ids, an optional free-text "Other", or skipped. */
+export const AskAnswer = z.object({
+  selected: z.array(z.string()).optional(),
+  other: z.string().optional(),
+  skipped: z.boolean().optional(),
+});
+/** The full multi-question answer, keyed by question id. Submitted JSON-encoded in the answer field. */
+export const AskAnswers = z.record(z.string(), AskAnswer);
+export type AskAnswers = z.infer<typeof AskAnswers>;
+
 export const MessageBlock = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string() }),
   z.object({
@@ -114,6 +139,10 @@ export const MessageBlock = z.discriminatedUnion("kind", [
         }),
       )
       .optional(),
+    /** ask_user v2: when present, the card renders a multi-question stepper. */
+    questions: z.array(AskQuestion).optional(),
+    /** Structured answers once submitted; drives the frozen summary. */
+    answers: AskAnswers.optional(),
   }),
   z.object({
     kind: z.literal("choice"),
@@ -127,6 +156,7 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     /** Inline app authorization card (Composio-backed): logo, name, one-line
         description, and an Authorize button that flips to connected. */
     kind: z.literal("app_connect"),
+    connectorId: z.string().optional(),
     provider: z.string(),
     name: z.string(),
     description: z.string(),

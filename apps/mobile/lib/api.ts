@@ -16,6 +16,7 @@ import {
   mergeThreadHistory,
   prependThreadHistoryPage,
   progressMessageId,
+  readBoundedJsonResponse,
   reduceLiveMessageBlocks,
   runFailureError,
   signupRequiresEmailVerification,
@@ -44,6 +45,8 @@ const ENDPOINT_KEY = "rakazo.api_base";
 const SPACE_KEY = "rakazo.space_id";
 const SPACE_ROLLBACK_KEY = "rakazo.space_rollback";
 const RPC_TIMEOUT_MS = 8_000;
+export const MAX_MOBILE_AUTH_RESPONSE_BYTES = 256 * 1024;
+export const MAX_MOBILE_RPC_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 let cachedApiBase: string | undefined;
 let cachedSpaceId = "";
@@ -317,20 +320,23 @@ async function authenticateWithEmail(
   action: "sign-in" | "sign-up",
   input: { email: string; password: string; name?: string },
 ) {
-  const res = await fetch(`${currentApiBase()}/api/auth/${action}/email`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      origin: "rakazo://",
-      ...currentAccessHeaders(currentApiBase(), defaultApiBase()),
+  const { response, body } = await fetchMobileJson<unknown>(
+    `${currentApiBase()}/api/auth/${action}/email`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "rakazo://",
+        ...currentAccessHeaders(currentApiBase(), defaultApiBase()),
+      },
+      body: JSON.stringify(input),
     },
-    body: JSON.stringify(input),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
+    {},
+  );
+  if (!response.ok) {
     throw new Error(responseErrorMessage(body, `Could not ${action.replace("-", " ")}`));
   }
-  const token = tokenFromAuthResponse(res, body);
+  const token = tokenFromAuthResponse(response, body);
   if (action === "sign-up" && signupRequiresEmailVerification(body))
     return { verificationRequired: true };
   if (!token)
@@ -357,30 +363,42 @@ export function signUp(email: string, password: string, name: string) {
 export type PasswordResetCapabilities = { passwordReset: boolean; resetUrl: string | null };
 
 export async function passwordResetCapabilities(): Promise<PasswordResetCapabilities> {
-  const response = await fetch(`${currentApiBase()}/api/auth/capabilities`, {
-    headers: { origin: "rakazo://" },
-  });
+  const { response, body } = await fetchMobileJson<PasswordResetCapabilities>(
+    `${currentApiBase()}/api/auth/capabilities`,
+    { headers: { origin: "rakazo://" } },
+    { passwordReset: false, resetUrl: null },
+  );
   if (!response.ok) throw new Error("Could not load password recovery settings");
-  return (await response.json()) as PasswordResetCapabilities;
+  return body;
 }
 
 export async function requestPasswordReset(email: string, redirectTo: string): Promise<void> {
-  const response = await fetch(`${currentApiBase()}/api/auth/request-password-reset`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://" },
-    body: JSON.stringify({ email, redirectTo }),
-  });
-  const body = await response.json().catch(() => ({}));
+  const { response, body } = await fetchMobileJson<unknown>(
+    `${currentApiBase()}/api/auth/request-password-reset`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "rakazo://" },
+      body: JSON.stringify({ email, redirectTo }),
+    },
+    {},
+  );
   if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not send reset email")));
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  const response = await fetch(`${currentApiBase()}/api/auth/change-password`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://", ...(await authHeaders()) },
-    body: JSON.stringify({ currentPassword, newPassword, revokeOtherSessions: true }),
-  });
-  const body = await response.json().catch(() => ({}));
+  const { response, body } = await fetchMobileJson<unknown>(
+    `${currentApiBase()}/api/auth/change-password`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "rakazo://",
+        ...(await authHeaders()),
+      },
+      body: JSON.stringify({ currentPassword, newPassword, revokeOtherSessions: true }),
+    },
+    {},
+  );
   if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not change password")));
 }
 
@@ -402,6 +420,36 @@ export async function updateProfileImage(image: string | null): Promise<void> {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(responseErrorMessage(body, t("Could not update your photo")));
+}
+
+async function fetchMobileJson<T>(
+  input: Parameters<typeof fetch>[0],
+  init: RequestInit,
+  invalidJsonFallback?: T,
+): Promise<{ response: Response; body: T }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error("Request timed out")), RPC_TIMEOUT_MS);
+  try {
+    const response = await withAbort(
+      fetch(input, { ...init, signal: controller.signal }),
+      controller.signal,
+    );
+    try {
+      const body = await readBoundedJsonResponse<T>(
+        response,
+        MAX_MOBILE_AUTH_RESPONSE_BYTES,
+        controller.signal,
+      );
+      return { response, body };
+    } catch (error) {
+      if (invalidJsonFallback !== undefined && error instanceof SyntaxError) {
+        return { response, body: invalidJsonFallback };
+      }
+      throw error;
+    }
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function signOut() {
@@ -446,13 +494,20 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 
 export async function deleteAccount(password: string) {
   await rpc("notifications/unregisterPush").catch(() => undefined);
-  const res = await fetch(`${currentApiBase()}/api/auth/delete-user`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://", ...(await authHeaders()) },
-    body: JSON.stringify({ password }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  const { response, body } = await fetchMobileJson<unknown>(
+    `${currentApiBase()}/api/auth/delete-user`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "rakazo://",
+        ...(await authHeaders()),
+      },
+      body: JSON.stringify({ password }),
+    },
+    {},
+  );
+  if (!response.ok) {
     throw new Error(responseErrorMessage(body, t("Could not delete account")));
   }
   await clearSessionToken();
@@ -485,7 +540,11 @@ export async function rpc<T>(
       body: JSON.stringify({ json: body }),
       signal: controller.signal,
     });
-    const parsed = (await res.json()) as { json?: T; error?: { message?: string } };
+    const parsed = await readBoundedJsonResponse<{ json?: T; error?: { message?: string } }>(
+      res,
+      MAX_MOBILE_RPC_RESPONSE_BYTES,
+      controller.signal,
+    );
     if (!res.ok || parsed.error) throw new Error(parsed.error?.message ?? `rpc ${proc} failed`);
     return parsed.json as T;
   } finally {
@@ -511,6 +570,9 @@ export type MobileBot = Pick<
   | "unread"
   | "updatedAt"
   | "computerMode"
+  | "modelProvider"
+  | "modelId"
+  | "thinkingLevel"
 > &
   Partial<Pick<Bot, "parentBotId" | "spaceId">>;
 
@@ -518,7 +580,14 @@ export type MobileBotSection = BotSection;
 
 export type MobileMe = Pick<
   Me,
-  "name" | "email" | "spaceId" | "defaultProvider" | "defaultModel" | "needsModel" | "avatarStyle"
+  | "name"
+  | "email"
+  | "spaceId"
+  | "defaultProvider"
+  | "defaultModel"
+  | "needsModel"
+  | "avatarStyle"
+  | "isDeploymentOwner"
 >;
 
 export type MobileModel = ModelCatalogEntry;
@@ -534,7 +603,7 @@ export type MobileMessage = {
   botId?: string;
   replyToMessageId?: string;
   thumbsUp?: boolean;
-  createdAt: string;
+  createdAt?: string;
   blocks: MessageBlock[];
 };
 
@@ -621,6 +690,21 @@ export function messagingProviderLabel(provider: string, transport?: string): st
     return transport!;
   }
   return MESSAGING_PROVIDER_LABELS[provider] ?? provider;
+}
+
+export function copyableMobileMessageText(message: MobileMessage): string {
+  return message.blocks
+    .map((block) => {
+      if (block.kind === "channel_message") {
+        return `${messagingProviderLabel(block.provider, block.transport)} · ${block.fromLabel}: ${block.text}`;
+      }
+      if (block.kind === "text" || block.kind === "progress" || block.kind === "ask")
+        return block.text;
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n")
+    .trim();
 }
 
 export function blockText(message: MobileMessage) {
@@ -733,27 +817,62 @@ export function applyMobileThreadEvent(
       activeRuns: [],
     };
   }
-  if (event.type === "run.waiting_input") {
+  if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
+    const status = event.type === "run.waiting_input" ? "waiting_input" : "waiting_takeover";
     const progressId = progressMessageId(event);
+    // Waiting pauses drop live progress server-side; clear a leftover bubble so
+    // the waiting footer is not hidden behind a stale "Working…" row.
     const messages = prev.messages.filter((message) => message.id !== progressId);
     const progressCleared = messages.length !== prev.messages.length;
-    const runChanged = Boolean(
-      prev.run && prev.run.id === event.runId && prev.run.status !== "waiting_input",
+    const runId = event.runId;
+    const knownInRun = Boolean(runId && prev.run?.id === runId);
+    const knownInActive = Boolean(
+      runId && prev.activeRuns?.some((candidate) => candidate.id === runId),
     );
-    const activeRunChanged = prev.activeRuns?.some(
-      (candidate) => candidate.id === event.runId && candidate.status !== "waiting_input",
+    // Peer bot_message runs are omitted from snapshots while busy; the first wait
+    // event is how an open thread learns they need ask/takeover UI.
+    const needsInsert = Boolean(runId) && !knownInRun && !knownInActive;
+    const runChanged = Boolean(knownInRun && prev.run && prev.run.status !== status);
+    const activeRunChanged = Boolean(
+      knownInActive &&
+        prev.activeRuns?.some((candidate) => candidate.id === runId && candidate.status !== status),
     );
+    const computer =
+      event.type === "computer.takeover.requested" && prev.computer?.busyBotName
+        ? { ...prev.computer, busyBotName: null }
+        : prev.computer;
+    const computerChanged = computer !== prev.computer;
     const cursor = event.seq ?? prev.cursor;
-    if (!runChanged && !activeRunChanged && !progressCleared) {
+    if (!runChanged && !activeRunChanged && !progressCleared && !needsInsert && !computerChanged) {
       return cursor === prev.cursor ? prev : { ...prev, cursor };
     }
-    const run = runChanged && prev.run ? { ...prev.run, status: "waiting_input" } : prev.run;
+    if (needsInsert && runId) {
+      const waitingRun = {
+        id: runId,
+        status,
+        ...(event.botId ? { botId: event.botId } : {}),
+      };
+      const baseActive = prev.activeRuns ?? (prev.run ? [prev.run] : []);
+      const activeRuns = [...baseActive.filter((candidate) => candidate.id !== runId), waitingRun];
+      const promoteWaiting =
+        !prev.run ||
+        (prev.run.status !== "waiting_input" && prev.run.status !== "waiting_takeover");
+      return {
+        ...prev,
+        cursor,
+        messages,
+        computer,
+        run: promoteWaiting ? waitingRun : prev.run,
+        activeRuns,
+      };
+    }
+    const run = runChanged && prev.run ? { ...prev.run, status } : prev.run;
     const activeRuns = activeRunChanged
       ? prev.activeRuns?.map((candidate) =>
-          candidate.id === event.runId ? { ...candidate, status: "waiting_input" } : candidate,
+          candidate.id === runId ? { ...candidate, status } : candidate,
         )
       : prev.activeRuns;
-    return { ...prev, cursor, run, activeRuns, messages };
+    return { ...prev, cursor, run, activeRuns, messages, computer };
   }
   if (isRunTerminalEvent(event)) {
     const activeRuns = prev.activeRuns?.filter((candidate) => candidate.id !== event.runId);
@@ -815,6 +934,9 @@ export function applyMobileThreadEvent(
       cursor: event.seq ?? prev.cursor,
       messages: [...remaining, streaming],
     };
+  }
+  if (event.type === "agent.tool.completed") {
+    return { ...prev, cursor: event.seq ?? prev.cursor };
   }
   if (event.type === "thread.subagent") {
     const agentId = String(event.payload?.agentId ?? event.id ?? "live");

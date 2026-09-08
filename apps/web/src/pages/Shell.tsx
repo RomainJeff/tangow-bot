@@ -63,6 +63,11 @@ import {
   AvatarStyleProvider,
   BotAvatar,
   Button,
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   GroupAvatar,
   type GroupAvatarMember,
   InputGroup,
@@ -80,7 +85,6 @@ import {
   ChevronDown,
   Clock,
   Copy,
-  Cpu,
   Gauge,
   Lock,
   LogOut,
@@ -88,22 +92,24 @@ import {
   Menu,
   Mic,
   Monitor,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
   Paperclip,
   Pencil,
-  Phone,
   Plus,
   Puzzle,
   Reply,
+  Search,
   Settings,
   SlidersHorizontal,
+  Smile,
   Square,
-  ThumbsUp,
-  Volume2,
+  Trash2,
   X,
 } from "lucide-react";
 import {
+  type ClipboardEvent,
   type DragEvent,
   Fragment,
   lazy,
@@ -130,6 +136,7 @@ import {
   ComputersUnavailableHint,
   computersAreUnavailable,
 } from "../components/ComputersUnavailableHint";
+import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
 import { MessageHoverMetadata } from "../components/MessageHoverMetadata";
 import { SkillDraftCard } from "../components/teach/SkillDraftCard";
 import { TeachCaptureOverlay } from "../components/teach/TeachCaptureOverlay";
@@ -152,15 +159,19 @@ import {
 } from "../lib/browser-notifications";
 import { loadComputerScreen } from "../lib/computer-screen";
 import { desktopBridge } from "../lib/desktop";
-import { dictation } from "../lib/dictation";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { localTimezone } from "../lib/local-timezone";
 import { copyableMessageText } from "../lib/message-text";
 import { messageProviderLabel } from "../lib/messaging";
-import { isFileDrag, revokePendingAttachmentPreviews } from "../lib/pending-attachments";
+import {
+  isFileDrag,
+  isFilePaste,
+  revokePendingAttachmentPreviews,
+} from "../lib/pending-attachments";
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { clearSpaceSelection, rpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
+import { sharedInflight } from "../lib/shared-inflight";
 import {
   activeThreadRuns,
   applyThreadSendReceipt,
@@ -197,6 +208,7 @@ import {
   RoutineListRow,
   routineNeedsOneShotArm,
 } from "./RoutineEditor";
+import type { SettingsSection } from "./SettingsOverlay";
 import { SpaceSearchResults } from "./SpaceSearch";
 import { BotSettings, CreateBotForm } from "./shell/bot-panel";
 import { BotCreatePicker } from "./shell/bot-picker";
@@ -207,6 +219,7 @@ import {
   DeleteItemDialog,
   NewBotSectionDialog,
   NewSpaceDialog,
+  PickerInfoDialog,
 } from "./shell/dialogs";
 import {
   AppConnectCard,
@@ -223,18 +236,13 @@ const isDesktopApp = desktopBridge() !== undefined;
 const BotContextMenu = lazy(() =>
   import("./BotContextMenu").then((module) => ({ default: module.BotContextMenu })),
 );
-const AccountSettingsOverlay = lazy(() =>
-  import("./AccountSettingsOverlay").then((module) => ({
-    default: module.AccountSettingsOverlay,
-  })),
-);
 const MessagingSettingsOverlay = lazy(() =>
   import("./MessagingSettingsOverlay").then((module) => ({
     default: module.MessagingSettingsOverlay,
   })),
 );
-const ModelSettingsOverlay = lazy(() =>
-  import("./ModelSettingsOverlay").then((module) => ({ default: module.ModelSettingsOverlay })),
+const SettingsOverlay = lazy(() =>
+  import("./SettingsOverlay").then((module) => ({ default: module.SettingsOverlay })),
 );
 const PeerMessagesOverlay = lazy(() =>
   import("./PeerMessagesOverlay").then((module) => ({ default: module.PeerMessagesOverlay })),
@@ -244,14 +252,6 @@ const CustomizeOverlay = lazy(() =>
 );
 const McpServersOverlay = lazy(() =>
   import("./McpServersOverlay").then((module) => ({ default: module.McpServersOverlay })),
-);
-const MemorySettingsOverlay = lazy(() =>
-  import("./MemorySettingsOverlay").then((module) => ({
-    default: module.MemorySettingsOverlay,
-  })),
-);
-const VoiceSettingsOverlay = lazy(() =>
-  import("./VoiceSettingsOverlay").then((module) => ({ default: module.VoiceSettingsOverlay })),
 );
 const CallView = lazy(() => import("./CallView").then((module) => ({ default: module.CallView })));
 
@@ -282,9 +282,19 @@ const ATTACHMENT_ACCEPT = ATTACHMENT_ALLOWED_MIME_TYPES.join(",");
 /** Identity colour for bots the roster no longer knows about. */
 const FALLBACK_BOT_COLOR = "#85858A";
 const THREAD_SNAPSHOT_TIMEOUT_MS = 2_000;
+/** Bound Settings leave so a hung voice status refresh cannot block dismissal. */
+const VOICE_STATUS_REFRESH_TIMEOUT_MS = 10_000;
 
 function threadSnapshotSignal(parent: AbortSignal): AbortSignal {
   return AbortSignal.any([parent, AbortSignal.timeout(THREAD_SNAPSHOT_TIMEOUT_MS)]);
+}
+
+function voiceStatusRefreshTimeout(): Promise<never> {
+  return new Promise((_, reject) => {
+    AbortSignal.timeout(VOICE_STATUS_REFRESH_TIMEOUT_MS).addEventListener("abort", () => {
+      reject(new DOMException("Voice status refresh timed out", "TimeoutError"));
+    });
+  });
 }
 
 function collapsedSidebarSectionsStorageKey(userId: string | null | undefined): string | null {
@@ -428,22 +438,18 @@ export function ShellPage() {
   }
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
-  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const [messagingSettingsOpen, setMessagingSettingsOpen] = useState(false);
   const [messagingSurfaceEnabled, setMessagingSurfaceEnabled] = useState(false);
-  const [accountSettingsFocusUsage, setAccountSettingsFocusUsage] = useState(false);
-  const [modelsOpen, setModelsOpen] = useState(false);
-  const [memorySettingsOpen, setMemorySettingsOpen] = useState(false);
+  const [messagingProviders, setMessagingProviders] = useState<string[]>([]);
   const [memoryProviderConfig, setMemoryProviderConfig] = useState<
     SpaceMemoryConfig | null | undefined
   >(undefined);
   const memoryProviderConfigRevision = useRef(0);
-  const [voiceOpen, setVoiceOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
-  const [dictating, setDictating] = useState(false);
-  const [dictationError, setDictationError] = useState<string | null>(null);
   const [dismissedRunErrorIds, setDismissedRunErrorIds] =
     useState<ReadonlySet<string>>(readSeenRunErrorIds);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -453,11 +459,11 @@ export function ShellPage() {
   const [botsSidebarCollapsed, setBotsSidebarCollapsed] = useState(false);
   const focusPromptAbortRef = useRef<AbortController | null>(null);
   const focusPromptBotIdRef = useRef<string | null>(null);
-  const creatingBotRef = useRef(false);
   const botsSidebarEdgeDragRef = useRef<{ startX: number; mode: "expand" | "collapse" } | null>(
     null,
   );
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
+  const [pickerInfoTopic, setPickerInfoTopic] = useState<"group" | "space" | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -491,6 +497,18 @@ export function ShellPage() {
   }, [botMenu]);
   const [deleteTarget, setDeleteTarget] = useState<Bot | null>(null);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
+  const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<Space | null>(null);
+  const [spaceMenu, setSpaceMenu] = useState<{
+    id: string;
+    position: ContextMenuPosition;
+  } | null>(null);
+  const spaceMenuAnchor = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (spaceMenu || !spaceMenuAnchor.current) return;
+    spaceMenuAnchor.current.focus();
+    spaceMenuAnchor.current = null;
+  }, [spaceMenu]);
+  const closeSpaceMenu = useCallback(() => setSpaceMenu(null), []);
   const [clearTarget, setClearTarget] = useState<
     { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group } | null
   >(null);
@@ -520,7 +538,10 @@ export function ShellPage() {
     void rpc.messaging
       .status()
       .then((status) => {
-        if (!cancelled) setMessagingSurfaceEnabled(status.enabled);
+        if (!cancelled) {
+          setMessagingSurfaceEnabled(status.enabled);
+          setMessagingProviders(status.providers);
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -534,6 +555,16 @@ export function ShellPage() {
   } | null>(null);
   const autoBooted = useRef<string | null>(null);
   const routineSavePending = useRef(false);
+  const webhookSecretProvisionRef = useRef(new Map<string, Promise<string>>());
+  const ensureWebhookSecret = (botId: string) =>
+    sharedInflight(webhookSecretProvisionRef.current, botId, async () => {
+      const result = await rpc.bots.rotateWebhookSecret({ botId });
+      setRoutineWebhookSecret(result.secret);
+      setBots((current) =>
+        current.map((bot) => (bot.id === botId ? { ...bot, webhookConfigured: true } : bot)),
+      );
+      return result.secret;
+    });
   const routineSaveRequest = useRef(0);
   const routineRunPending = useRef(false);
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
@@ -733,8 +764,12 @@ export function ShellPage() {
           list.length === 0 &&
           archived?.length === 0 &&
           groupList.length === 0 &&
-          archivedGroupList?.length === 0
+          archivedGroupList?.length === 0 &&
+          !navigation.spaces.some((space) => space.hasContent)
         ) {
+          // Only the very first bot everywhere needs onboarding. An empty
+          // current space with content elsewhere stays in the app so the
+          // space can be switched to or deleted instead of trapping the user.
           navigate("/onboarding", { replace: true });
           return;
         }
@@ -959,7 +994,8 @@ export function ShellPage() {
           bootstrap.bots.length === 0 &&
           bootstrap.archivedBots.length === 0 &&
           groupList.length === 0 &&
-          bootstrap.archivedGroups.length === 0
+          bootstrap.archivedGroups.length === 0 &&
+          !bootstrap.spaces.some((space) => space.hasContent)
         ) {
           navigate("/onboarding", { replace: true });
           return;
@@ -1033,14 +1069,8 @@ export function ShellPage() {
     const unsubSpeech = speaker.subscribe((state) => {
       setSpeakingMessageId(state.status === "idle" ? null : (state.messageId ?? null));
     });
-    const unsubDictation = dictation.subscribe((state) => {
-      setDictating(state.status === "listening" || state.status === "transcribing");
-      if (state.error) setDictationError(state.error);
-      else if (state.status === "listening") setDictationError(null);
-    });
     return () => {
       unsubSpeech();
-      unsubDictation();
     };
   }, []);
 
@@ -1282,6 +1312,7 @@ export function ShellPage() {
                 id: bootstrapMe.spaceId,
                 name: "Personal",
                 isDefault: true,
+                hasContent: true,
                 bots,
                 groups,
                 botSections,
@@ -1312,6 +1343,9 @@ export function ShellPage() {
           : group.title,
         showLock: showSpaceNames,
         emptySpaceId: undefined as string | undefined,
+        spaceId: space.id,
+        spaceName: space.name,
+        spaceIsDefault: space.isDefault,
       }));
       if (sections.length > 0) return sections;
       // Keep empty spaces selectable; chat clicks are the only switch control.
@@ -1324,6 +1358,9 @@ export function ShellPage() {
           bots: [],
           showLock: true,
           emptySpaceId: space.id,
+          spaceId: space.id,
+          spaceName: space.name,
+          spaceIsDefault: space.isDefault,
         },
       ];
     });
@@ -1575,7 +1612,7 @@ export function ShellPage() {
   const transcriptRunning = workingRuns.length > 0;
   const composerRunning = currentRuns.some((run) => isActive(run.status));
   const runError = threadRunError(activeSnapshot, dismissedRunErrorIds);
-  const displayedRunError = !sendError && !dictationError ? runError : null;
+  const displayedRunError = !sendError ? runError : null;
   const displayedRunErrorId = displayedRunError ? (activeSnapshot?.run?.id ?? null) : null;
   const handleRunErrorPresented = useCallback((runId: string) => {
     rememberSeenRunErrorId(runId);
@@ -2173,6 +2210,11 @@ export function ShellPage() {
     writeBotsSidebarCollapsed(userId, collapsed);
   }
 
+  function openSettings(section: SettingsSection = "general") {
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  }
+
   async function createBot(input: {
     name: string;
     title: string;
@@ -2222,24 +2264,6 @@ export function ShellPage() {
       }
     });
     await refreshBots().catch(() => undefined);
-  }
-
-  async function createBotQuick() {
-    if (creatingBotRef.current) return;
-    creatingBotRef.current = true;
-    try {
-      await createBot({
-        name: "New Bot",
-        title: "",
-        description: "",
-        computerMode: "team",
-      });
-    } catch (error) {
-      // Keep the current chat open when create fails, but surface the error.
-      setSendError(error instanceof Error ? error.message : t`Could not create bot`);
-    } finally {
-      creatingBotRef.current = false;
-    }
   }
 
   async function bootComputer({
@@ -2397,19 +2421,29 @@ export function ShellPage() {
     }
   }
 
-  async function releaseComputer(reason?: ComputerReleaseReason) {
-    if (!active) return;
-    setComputerOpen(false);
-    await rpc.computer.release({ botId: active.id, reason }).catch(() => undefined);
-    await refreshThread(active.id);
-  }
+  const releaseComputer = useCallback(
+    async (reason?: ComputerReleaseReason) => {
+      const botId = activeBotId.current;
+      if (!botId) return;
+      try {
+        await rpc.computer.release({ botId, reason });
+        if (activeBotId.current !== botId) return;
+        setComputerOpen(false);
+        await refreshThreadRef.current(botId).catch(() => undefined);
+      } catch {
+        if (activeBotId.current !== botId) return;
+        setComputerError(t`Could not continue`);
+        setComputerErrorFromScreen(false);
+      }
+    },
+    [t],
+  );
 
   function dismissComposerError() {
     // The strip shows one message at a time, so only dismiss the run failure when it is the
     // one on screen; otherwise a live run would be silenced before it has even failed.
     const failedRunId = displayedRunErrorId;
     setSendError(null);
-    setDictationError(null);
     if (failedRunId) {
       rememberSeenRunErrorId(failedRunId);
       setDismissedRunErrorIds((current) => new Set(current).add(failedRunId));
@@ -2449,6 +2483,11 @@ export function ShellPage() {
       data-ready={shellReady}
       className="relative flex h-full min-w-0 overflow-hidden bg-background text-foreground/90"
     >
+      <ComputerUpdateProgress
+        onCompleted={() => {
+          if (active) void refreshThread(active.id);
+        }}
+      />
       {bootstrapMe !== undefined ? (
         <HostComputerPrompt initialMe={bootstrapMe ?? undefined} />
       ) : null}
@@ -2523,7 +2562,8 @@ export function ShellPage() {
                     bots={bots}
                     onCreateBot={() => {
                       setCreateMenuOpen(false);
-                      void createBotQuick();
+                      setMobileSidebarOpen(false);
+                      setPanel("create");
                     }}
                     onOpenBot={(id) => {
                       setCreateMenuOpen(false);
@@ -2532,11 +2572,23 @@ export function ShellPage() {
                     }}
                     onCreateGroup={() => {
                       setCreateMenuOpen(false);
+                      setMobileSidebarOpen(false);
                       setPanel("create-group");
                     }}
                     onCreateSpace={() => {
                       setCreateMenuOpen(false);
+                      setMobileSidebarOpen(false);
                       setNewSpaceOpen(true);
+                    }}
+                    onShowGroupInfo={() => {
+                      setCreateMenuOpen(false);
+                      setMobileSidebarOpen(false);
+                      setPickerInfoTopic("group");
+                    }}
+                    onShowSpaceInfo={() => {
+                      setCreateMenuOpen(false);
+                      setMobileSidebarOpen(false);
+                      setPickerInfoTopic("space");
                     }}
                   />
                 </PopoverContent>
@@ -2544,14 +2596,19 @@ export function ShellPage() {
             </Popover>
           </div>
         </div>
-        <InputGroup data-testid="sidebar-search" className="mx-2.5 mb-3 w-auto rounded-xl bg-card">
+        <InputGroup
+          data-testid="sidebar-search"
+          className="mx-2.5 mb-3 w-auto rounded-xl bg-card dark:bg-input"
+        >
           <InputGroupAddon>
-            <span aria-hidden="true">⌕</span>
+            <Search size={16} strokeWidth={1.8} aria-hidden="true" />
           </InputGroupAddon>
           <InputGroupInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t`Search`}
+            autoComplete="off"
+            name="sidebar-search"
           />
         </InputGroup>
         <div className="rk-scroll flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5">
@@ -2583,7 +2640,7 @@ export function ShellPage() {
                       <div className="pt-2">
                         <button
                           type="button"
-                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                           onClick={() => {
                             if (group.emptySpaceId) {
                               openSpaceChat(group.emptySpaceId, "/onboarding");
@@ -2591,6 +2648,18 @@ export function ShellPage() {
                             }
                             toggleSidebarSection(group.key);
                           }}
+                          onContextMenu={
+                            group.spaceId && !group.spaceIsDefault
+                              ? (event) => {
+                                  event.preventDefault();
+                                  spaceMenuAnchor.current = event.currentTarget;
+                                  setSpaceMenu({
+                                    id: group.spaceId as string,
+                                    position: { x: event.clientX, y: event.clientY },
+                                  });
+                                }
+                              : undefined
+                          }
                           aria-expanded={group.emptySpaceId ? undefined : !collapsed}
                           aria-label={
                             group.emptySpaceId
@@ -2690,8 +2759,8 @@ export function ShellPage() {
                           } ${
                             (item.kind === "bot" && !inGroup && active?.id === item.chat.id) ||
                             (item.kind === "group" && inGroup && activeGroup?.id === item.chat.id)
-                              ? "bg-card"
-                              : "hover:bg-background"
+                              ? "bg-sidebar-accent"
+                              : "hover:bg-sidebar-accent"
                           }`}
                           style={{
                             opacity:
@@ -2796,7 +2865,7 @@ export function ShellPage() {
                 type="button"
                 aria-expanded={archivedOpen}
                 onClick={() => setArchivedOpen((open) => !open)}
-                className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-[13.5px] text-muted-foreground hover:bg-background"
+                className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-[13.5px] text-muted-foreground hover:bg-sidebar-accent"
               >
                 <span>
                   <Trans>Archived</Trans>
@@ -2886,7 +2955,7 @@ export function ShellPage() {
             type="button"
             data-testid="open-customize"
             onClick={() => setCustomizeOpen(true)}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-[11px] px-2.5 py-2 hover:bg-background"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-[11px] px-2.5 py-2 hover:bg-sidebar-accent"
           >
             <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-muted text-foreground/75">
               <SlidersHorizontal size={15} strokeWidth={1.7} />
@@ -2927,66 +2996,28 @@ export function ShellPage() {
                 aria-label={t`Settings`}
                 onClick={() => {
                   setMenuOpen(false);
-                  setAccountSettingsFocusUsage(false);
-                  setAccountSettingsOpen(true);
+                  openSettings("general");
                 }}
               >
-                <span className="text-muted-foreground">⚙</span>
+                <Settings className="text-muted-foreground" strokeWidth={1.75} />
                 <Trans>Settings</Trans>
               </Button>
               <Button
                 variant="ghost"
                 className="w-full justify-start font-normal"
+                aria-label={t`Usage`}
                 onClick={() => {
                   setMenuOpen(false);
-                  setModelsOpen(true);
+                  void rpc.usage
+                    .summary()
+                    .then(setUsage)
+                    .catch(() => undefined);
+                  openSettings("usage");
                 }}
               >
-                <Cpu size={16} strokeWidth={1.7} className="text-muted-foreground" />
-                <Trans>Models</Trans>
-              </Button>
-              <Button
-                variant="ghost"
-                aria-label={t`Memory`}
-                className="w-full justify-start font-normal"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setMemorySettingsOpen(true);
-                }}
-              >
-                <span aria-hidden="true" className="text-muted-foreground">
-                  ◇
-                </span>
-                <Trans>Memory</Trans>
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full justify-start font-normal"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setVoiceOpen(true);
-                }}
-              >
-                <Volume2 size={16} strokeWidth={1.7} className="text-muted-foreground" />
-                <Trans>Voice</Trans>
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full justify-start font-normal"
-                onClick={async () => {
-                  setUsage(await rpc.usage.summary());
-                }}
-              >
-                <Gauge size={16} strokeWidth={1.7} className="text-muted-foreground" />
+                <Gauge className="text-muted-foreground" strokeWidth={1.75} />
                 <Trans>Usage</Trans>
               </Button>
-              {usage ? (
-                <p className="px-2.5 pb-2 text-[12.5px] text-muted-foreground">
-                  <Trans>
-                    {usage.runs} runs · {usage.inputTokens + usage.outputTokens} tokens
-                  </Trans>
-                </p>
-              ) : null}
               <Button
                 variant="ghost"
                 className="w-full justify-start font-normal"
@@ -2997,7 +3028,7 @@ export function ShellPage() {
                   })
                 }
               >
-                <LogOut size={16} strokeWidth={1.7} className="text-muted-foreground" />
+                <LogOut className="text-muted-foreground" strokeWidth={1.75} />
                 <Trans>Log out</Trans>
               </Button>
             </PopoverContent>
@@ -3112,24 +3143,6 @@ export function ShellPage() {
             </button>
           </div>
           <div className="flex items-center gap-1">
-            {!inGroup && active ? (
-              <button
-                type="button"
-                title={voiceStatus?.ready ? t`Call` : t`Set up voice to call`}
-                aria-label={t`Call`}
-                onClick={() => {
-                  if (!voiceStatus?.ready) {
-                    setVoiceOpen(true);
-                    return;
-                  }
-                  setCallOpen(true);
-                }}
-                data-active={callOpen ? "" : undefined}
-                className="app-no-drag grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
-              >
-                <Phone size={16} strokeWidth={1.6} className="text-foreground/75" />
-              </button>
-            ) : null}
             {!inGroup ? (
               <button
                 type="button"
@@ -3193,7 +3206,6 @@ export function ShellPage() {
           pendingAttachments={activePendingAttachments}
           attachmentNotice={attachmentNotice}
           sendError={sendError}
-          dictationError={dictationError}
           runError={displayedRunError}
           runErrorId={displayedRunErrorId}
           onRunErrorPresented={handleRunErrorPresented}
@@ -3204,6 +3216,17 @@ export function ShellPage() {
           onRemoveAttachment={removeAttachment}
           onSend={sendMessage}
           onStop={stopRun}
+          onVoice={
+            !inGroup && active
+              ? () => {
+                  if (!voiceStatus?.ready) {
+                    openSettings("voice");
+                    return;
+                  }
+                  setCallOpen(true);
+                }
+              : undefined
+          }
           replyTarget={activeReplyTarget}
           replyTargetName={replyTargetName}
           onClearReply={() => setReplyTarget(null)}
@@ -3224,29 +3247,17 @@ export function ShellPage() {
               return;
             }
             if (action === "settings-general") {
-              setAccountSettingsFocusUsage(false);
-              setAccountSettingsOpen(true);
+              openSettings("general");
               return;
             }
             if (action === "settings-usage") {
-              setAccountSettingsFocusUsage(true);
-              setAccountSettingsOpen(true);
               void rpc.usage
                 .summary()
                 .then(setUsage)
                 .catch(() => undefined);
+              openSettings("usage");
             }
           }}
-          dictating={dictating}
-          transcribe={Boolean(voiceStatus?.transcribe)}
-          onDictateStart={(onFinal) => {
-            void dictation.listen({
-              mode: "hold",
-              transcribe: Boolean(voiceStatus?.transcribe),
-              onFinal,
-            });
-          }}
-          onDictateStop={() => dictation.submitHold()}
         />
       </main>
 
@@ -3321,12 +3332,7 @@ export function ShellPage() {
                       <Trans>Open in full window</Trans>
                     </div>
                   ) : computer?.kind === "desktop" ? (
-                    <div className="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground/80">
-                      <Trans>
-                        This bot runs on this computer, not a Linux desktop. Shell and files use
-                        your home folder.
-                      </Trans>
-                    </div>
+                    <DesktopKindEmptyState className="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground/80" />
                   ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
                     <iframe
                       title={t`Bot screen preview`}
@@ -3480,27 +3486,32 @@ export function ShellPage() {
                   secret: routineWebhookSecret,
                   configured: active.webhookConfigured || Boolean(routineWebhookSecret),
                 }}
+                githubPath={
+                  typeof window !== "undefined"
+                    ? `${window.location.origin}/api/v1/bots/${active.id}/github`
+                    : `/api/v1/bots/${active.id}/github`
+                }
+                messageProviders={messagingProviders}
                 saving={savingRoutine}
                 running={runningRoutine}
                 error={routineError}
                 onBack={() => setPanel("computer")}
                 onClose={() => setPanel(null)}
                 onEnsureWebhook={async () => {
-                  const result = await rpc.bots.rotateWebhookSecret({ botId: active.id });
-                  setRoutineWebhookSecret(result.secret);
-                  setBots((current) =>
-                    current.map((bot) =>
-                      bot.id === active.id ? { ...bot, webhookConfigured: true } : bot,
-                    ),
-                  );
+                  await ensureWebhookSecret(active.id);
                 }}
                 onSave={async () => {
                   if (routineSavePending.current) return;
                   const targetBotId = active.id;
                   const targetRoutine = editingRoutine;
                   if (targetRoutine && targetRoutine.botId !== targetBotId) return;
-                  if (!routineDraft.schedules.length && !routineDraft.webhookEnabled) {
-                    setRoutineError(t`Add a schedule or webhook trigger`);
+                  if (
+                    !routineDraft.schedules.length &&
+                    !routineDraft.webhookEnabled &&
+                    !routineDraft.githubEnabled &&
+                    !routineDraft.messageProvider
+                  ) {
+                    setRoutineError(t`Add a schedule, webhook, GitHub, or message trigger`);
                     return;
                   }
                   const saveRequest = ++routineSaveRequest.current;
@@ -3509,17 +3520,11 @@ export function ShellPage() {
                   setRoutineError(null);
                   try {
                     if (
-                      routineDraft.webhookEnabled &&
+                      (routineDraft.webhookEnabled || routineDraft.githubEnabled) &&
                       !active.webhookConfigured &&
                       !routineWebhookSecret
                     ) {
-                      const rotated = await rpc.bots.rotateWebhookSecret({ botId: targetBotId });
-                      setRoutineWebhookSecret(rotated.secret);
-                      setBots((current) =>
-                        current.map((bot) =>
-                          bot.id === targetBotId ? { ...bot, webhookConfigured: true } : bot,
-                        ),
-                      );
+                      await ensureWebhookSecret(targetBotId);
                     }
                     const crons = routineDraft.schedules.map(cronFromPreset);
                     let saved: Routine;
@@ -3545,6 +3550,8 @@ export function ShellPage() {
                         crons,
                         active: armOneShot ? true : routineDraft.active,
                         webhookEnabled: routineDraft.webhookEnabled,
+                        githubEnabled: routineDraft.githubEnabled,
+                        messageProvider: routineDraft.messageProvider,
                         ...(runAt ? { runAt } : {}),
                       });
                     } else {
@@ -3557,6 +3564,8 @@ export function ShellPage() {
                         active: routineDraft.active,
                         notify: true,
                         webhookEnabled: routineDraft.webhookEnabled,
+                        githubEnabled: routineDraft.githubEnabled,
+                        messageProvider: routineDraft.messageProvider,
                       });
                     }
                     if (
@@ -3716,6 +3725,46 @@ export function ShellPage() {
           />
         ) : null}
 
+        {spaceMenu ? (
+          <DropdownMenu
+            open
+            onOpenChange={(open) => {
+              if (!open) closeSpaceMenu();
+            }}
+          >
+            {/* Invisible anchor at the pointer position, mirroring the bot menu. */}
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-hidden
+                  className="fixed size-0 p-0 opacity-0"
+                  style={{ left: spaceMenu.position.x, top: spaceMenu.position.y }}
+                />
+              }
+            />
+            <DropdownMenuContent
+              aria-label={t`Actions for space`}
+              align="start"
+              sideOffset={0}
+              className="w-[220px]"
+            >
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  const target = spaces.find((space) => space.id === spaceMenu.id);
+                  if (target) setDeleteSpaceTarget(target);
+                  setSpaceMenu(null);
+                }}
+              >
+                <Trash2 />
+                {t`Delete space`}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+
         {deleteTarget ? (
           <DeleteBotDialog
             bot={deleteTarget}
@@ -3738,6 +3787,32 @@ export function ShellPage() {
               await rpc.groups.remove({ groupId: deleteGroupTarget.id });
               setDeleteGroupTarget(null);
               setPanel(null);
+              await refreshBots(true);
+            }}
+          />
+        ) : null}
+
+        {deleteSpaceTarget ? (
+          <DeleteItemDialog
+            item={deleteSpaceTarget}
+            noun="space"
+            description={
+              <Trans>Only empty spaces can be deleted. Delete its bots and groups first.</Trans>
+            }
+            onCancel={() => setDeleteSpaceTarget(null)}
+            onConfirm={async () => {
+              const targetId = deleteSpaceTarget.id;
+              const result = await rpc.spaces.remove({ spaceId: targetId });
+              setDeleteSpaceTarget(null);
+              setPanel(null);
+              const effectiveSpaceId = selectedSpaceId() ?? bootstrapMe?.spaceId;
+              if (effectiveSpaceId === targetId) {
+                // The auth boundary changed, so reload like a space switch.
+                if (selectSpace(result.activeSpaceId)) {
+                  window.location.assign("/app");
+                  return;
+                }
+              }
               await refreshBots(true);
             }}
           />
@@ -3782,6 +3857,10 @@ export function ShellPage() {
               window.location.assign("/onboarding");
             }}
           />
+        ) : null}
+
+        {pickerInfoTopic ? (
+          <PickerInfoDialog topic={pickerInfoTopic} onClose={() => setPickerInfoTopic(null)} />
         ) : null}
 
         {clearTarget ? (
@@ -3846,32 +3925,46 @@ export function ShellPage() {
       </Suspense>
 
       <Suspense fallback={null}>
-        {accountSettingsOpen ? (
-          <AccountSettingsOverlay
+        {settingsOpen ? (
+          <SettingsOverlay
             name={userName}
             initials={initials}
             email={session.data?.user.email}
             usage={usage}
-            focusUsage={accountSettingsFocusUsage}
+            initialSection={settingsSection}
             avatarStyle={bootstrapMe?.avatarStyle ?? "robot"}
             isDeploymentOwner={bootstrapMe?.isDeploymentOwner === true}
             sandboxProvider={bootstrapMe?.sandboxProvider}
             messagingEnabled={messagingSurfaceEnabled}
             onOpenMessaging={() => {
-              setAccountSettingsOpen(false);
+              setSettingsOpen(false);
               setMessagingSettingsOpen(true);
             }}
             onAvatarStyleChange={async (avatarStyle) => {
               const nextMe = await rpc.preferences.update({ avatarStyle });
               setBootstrapMe(nextMe);
             }}
+            memoryConfig={memoryProviderConfig}
+            onMemoryConfigChange={(config) => {
+              memoryProviderConfigRevision.current += 1;
+              setMemoryProviderConfig(config);
+            }}
+            onVoiceStatusMaybeChanged={async () => {
+              try {
+                setVoiceStatus(
+                  await Promise.race([rpc.voice.status(), voiceStatusRefreshTimeout()]),
+                );
+              } catch {
+                // Prefer reopening Voice settings over CallView with stale readiness.
+                setVoiceStatus(null);
+              }
+            }}
             onClose={() => {
-              setAccountSettingsOpen(false);
-              setAccountSettingsFocusUsage(false);
+              setSettingsOpen(false);
+              setSettingsSection("general");
             }}
           />
         ) : null}
-        {modelsOpen ? <ModelSettingsOverlay onClose={() => setModelsOpen(false)} /> : null}
         {peerConversation && active ? (
           <PeerMessagesOverlay
             botId={active.id}
@@ -3887,17 +3980,6 @@ export function ShellPage() {
             onClose={() => setPeerConversation(null)}
           />
         ) : null}
-        {voiceOpen ? (
-          <VoiceSettingsOverlay
-            onClose={() => {
-              setVoiceOpen(false);
-              void rpc.voice
-                .status()
-                .then(setVoiceStatus)
-                .catch(() => undefined);
-            }}
-          />
-        ) : null}
         {callOpen && active ? (
           <CallView
             botId={active.id}
@@ -3908,19 +3990,6 @@ export function ShellPage() {
             onFollowUp={followUpMessage}
             onAnswer={answerMessage}
             onClose={() => setCallOpen(false)}
-          />
-        ) : null}
-      </Suspense>
-
-      <Suspense fallback={null}>
-        {memorySettingsOpen ? (
-          <MemorySettingsOverlay
-            onClose={() => setMemorySettingsOpen(false)}
-            config={memoryProviderConfig}
-            onConfigChange={(config) => {
-              memoryProviderConfigRevision.current += 1;
-              setMemoryProviderConfig(config);
-            }}
           />
         ) : null}
       </Suspense>
@@ -4033,12 +4102,7 @@ export function ShellPage() {
           ) : null}
           <div className="relative min-h-0 flex-1 bg-background">
             {computer?.kind === "desktop" ? (
-              <div className="grid h-full place-items-center px-8 text-center text-sm text-muted-foreground/80">
-                <Trans>
-                  This bot runs on this computer. There is no separate Linux desktop. Ask it to use
-                  the shell; working directories under your home folder are allowed.
-                </Trans>
-              </div>
+              <DesktopKindEmptyState className="grid h-full place-items-center px-8 text-center text-sm text-muted-foreground/80" />
             ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
               <>
                 <iframe
@@ -4309,45 +4373,69 @@ const Transcript = memo(function Transcript({
                 data-message-id={message.id}
                 data-rewound={rewound ? "true" : undefined}
                 className={`${
-                  peerReceipt ? "relative py-0.5" : "group/message relative pt-9 hover:z-20"
+                  peerReceipt ? "relative py-0.5" : "group/message relative hover:z-20"
                 }${rewound ? " opacity-40" : ""}`}
               >
-                {peerReceipt ? null : (
-                  <MessageHoverActions
-                    message={message}
-                    onReply={onReply}
-                    onEdit={onEdit}
-                    onReact={onReact}
-                  />
-                )}
-                <MessageView
-                  artifactTarget={artifactTarget}
-                  message={message}
-                  canAnswer={message.id === answerableAskMessageId}
-                  onOpenBot={onOpenBot}
-                  onOpenPeerMessages={onOpenPeerMessages}
-                  onAnswer={onAnswer}
-                  speakerName={
+                <div
+                  className={
                     peerReceipt
                       ? undefined
-                      : message.role === "bot"
-                        ? memberName?.(message.botId)
-                        : undefined
+                      : `relative flex ${message.role === "user" ? "justify-end" : "justify-start"}`
                   }
-                  memberName={memberName}
-                  peerBot={peerBot}
-                  replyPreview={
-                    message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined
-                  }
-                  replyToMessageId={message.replyToMessageId}
-                  onJumpToMessage={onJumpToMessage}
-                  onRefresh={onRefresh}
-                  onBotChanged={onBotChanged}
-                  onAddRoutine={onAddRoutine}
-                  voiceReady={voiceReady}
-                  speaking={speakingMessageId === message.id}
-                  onSpeak={() => onSpeak(message)}
-                />
+                >
+                  <div
+                    data-testid={peerReceipt ? undefined : "message-bubble-frame"}
+                    className={
+                      peerReceipt
+                        ? undefined
+                        : `relative w-fit min-w-0 ${
+                            message.role === "user"
+                              ? "max-w-[min(70%,calc(100%_-_6rem))]"
+                              : "max-w-[min(74%,calc(100%_-_6rem))]"
+                          }`
+                    }
+                  >
+                    {peerReceipt ? null : (
+                      <MessageHoverActions
+                        message={message}
+                        side={message.role === "user" ? "start" : "end"}
+                        onReply={onReply}
+                        onEdit={onEdit}
+                        onReact={onReact}
+                      />
+                    )}
+                    <MessageView
+                      artifactTarget={artifactTarget}
+                      message={message}
+                      canAnswer={message.id === answerableAskMessageId}
+                      onOpenBot={onOpenBot}
+                      onOpenPeerMessages={onOpenPeerMessages}
+                      onAnswer={onAnswer}
+                      speakerName={
+                        peerReceipt
+                          ? undefined
+                          : message.role === "bot"
+                            ? memberName?.(message.botId)
+                            : undefined
+                      }
+                      memberName={memberName}
+                      peerBot={peerBot}
+                      replyPreview={
+                        message.replyToMessageId
+                          ? messageById.get(message.replyToMessageId)
+                          : undefined
+                      }
+                      replyToMessageId={message.replyToMessageId}
+                      onJumpToMessage={onJumpToMessage}
+                      onRefresh={onRefresh}
+                      onBotChanged={onBotChanged}
+                      onAddRoutine={onAddRoutine}
+                      voiceReady={voiceReady}
+                      speaking={speakingMessageId === message.id}
+                      onSpeak={() => onSpeak(message)}
+                    />
+                  </div>
+                </div>
                 {!peerReceipt && message.thumbsUp ? (
                   <button
                     type="button"
@@ -4400,7 +4488,6 @@ const Composer = memo(function Composer({
   pendingAttachments,
   attachmentNotice,
   sendError,
-  dictationError,
   runError,
   runErrorId,
   onRunErrorPresented,
@@ -4411,6 +4498,7 @@ const Composer = memo(function Composer({
   onRemoveAttachment,
   onSend,
   onStop,
+  onVoice,
   replyTarget,
   replyTargetName,
   onClearReply,
@@ -4424,10 +4512,6 @@ const Composer = memo(function Composer({
   agentSkills,
   onSlashOpen,
   onSlashAction,
-  dictating,
-  transcribe,
-  onDictateStart,
-  onDictateStop,
 }: {
   activeName?: string;
   running: boolean;
@@ -4435,7 +4519,6 @@ const Composer = memo(function Composer({
   pendingAttachments: PendingAttachment[];
   attachmentNotice: string | null;
   sendError: string | null;
-  dictationError: string | null;
   runError: string | null;
   runErrorId: string | null;
   onRunErrorPresented: (runId: string) => void;
@@ -4446,6 +4529,7 @@ const Composer = memo(function Composer({
   onRemoveAttachment: (attachment: PendingAttachment) => void;
   onSend: (text: string, mentions?: ComposerMention[]) => Promise<void>;
   onStop: () => Promise<void>;
+  onVoice?: () => void;
   replyTarget?: ThreadMessage | null;
   replyTargetName?: string;
   onClearReply?: () => void;
@@ -4459,10 +4543,6 @@ const Composer = memo(function Composer({
   agentSkills?: AgentSkillCatalogEntry[];
   onSlashOpen?: () => void;
   onSlashAction?: (action: SlashActionId) => void;
-  dictating: boolean;
-  transcribe: boolean;
-  onDictateStart: (onFinal: (text: string) => void) => void;
-  onDictateStop: () => void;
 }) {
   const { t } = useLingui();
   const [draft, setDraft] = useState("");
@@ -4710,6 +4790,24 @@ const Composer = memo(function Composer({
     if (!disabled) void onAttachmentPick(dataTransfer.files);
   }
 
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const clipboardData = event.clipboardData;
+    // Only intercept real FileList pastes; leave text-only / empty-files native.
+    if (disabled || !clipboardData || !isFilePaste(clipboardData)) return;
+    event.preventDefault();
+    void onAttachmentPick(clipboardData.files);
+    const text = clipboardData.getData("text/plain");
+    if (!text) return;
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    updateDraft(`${draft.slice(0, start)}${text}${draft.slice(end)}`);
+    const caret = start + text.length;
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.setSelectionRange(caret, caret);
+    });
+  }
+
   const showComposerPlaceholder =
     draft.length === 0 && selectedSkill === null && selectedMentions.length === 0;
   const replyName = replyTarget ? (replyTargetName ?? previewMessageText(replyTarget)) : "";
@@ -4726,14 +4824,14 @@ const Composer = memo(function Composer({
         draggingFiles ? "rounded-[14px] ring-2 ring-inset ring-ring" : ""
       }`}
     >
-      {sendError || dictationError || runError ? (
+      {sendError || runError ? (
         <div
           ref={runErrorRef}
           role="alert"
           data-testid="composer-error"
           className="mb-3 flex items-center gap-2 rounded-[14px] border border-destructive/40 bg-destructive/10 px-4 py-2 text-[13px] text-destructive"
         >
-          <span className="min-w-0 flex-1">{sendError ?? dictationError ?? runError}</span>
+          <span className="min-w-0 flex-1">{sendError ?? runError}</span>
           <button
             type="button"
             aria-label={t`Dismiss error`}
@@ -4948,32 +5046,6 @@ const Composer = memo(function Composer({
         >
           <Plus size={17} strokeWidth={1.8} />
         </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          aria-label={dictating ? t`Stop dictation` : t`Dictate`}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            onDictateStart((text) => setDraft((current) => `${current} ${text}`.trim()));
-          }}
-          onMouseUp={onDictateStop}
-          onMouseLeave={() => {
-            if (dictating) onDictateStop();
-          }}
-          onTouchStart={(event) => {
-            event.preventDefault();
-            onDictateStart((text) => setDraft((current) => `${current} ${text}`.trim()));
-          }}
-          onTouchEnd={onDictateStop}
-          className={`rounded-full ${
-            dictating
-              ? "border-success bg-success/15 text-success hover:bg-success/15 hover:text-success"
-              : "text-foreground/75"
-          }`}
-          title={transcribe ? t`Hold to talk` : t`Hold to talk (on-device dictation)`}
-        >
-          <Mic size={16} strokeWidth={1.8} />
-        </Button>
         <div className="flex min-w-0 flex-1 flex-wrap items-end gap-1.5">
           {selectedSkill ? (
             <span
@@ -5025,6 +5097,7 @@ const Composer = memo(function Composer({
             ref={textareaRef}
             value={draft}
             onChange={(event) => updateDraft(event.target.value)}
+            onPaste={handlePaste}
             onKeyDown={(event) => {
               if (
                 event.key === "Backspace" &&
@@ -5092,6 +5165,19 @@ const Composer = memo(function Composer({
             className="max-h-32 min-h-[24px] min-w-[8rem] flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-[15.5px] leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-40"
           />
         </div>
+        {onVoice ? (
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t`Voice`}
+            title={t`Voice`}
+            disabled={disabled}
+            onClick={onVoice}
+            className="rounded-full text-foreground/75"
+          >
+            <Mic size={16} strokeWidth={1.8} />
+          </Button>
+        ) : null}
         {running ? (
           <>
             <Button
@@ -5211,16 +5297,20 @@ function previewMessageText(message: ThreadMessage): string {
 
 function MessageHoverActions({
   message,
+  side,
   onReply,
   onEdit,
   onReact,
 }: {
   message: ThreadMessage;
+  side: "start" | "end";
   onReply: (message: ThreadMessage) => void;
   onEdit: (message: ThreadMessage) => void;
   onReact: (message: ThreadMessage) => Promise<void>;
 }) {
   const { t } = useLingui();
+  const [moreOpen, setMoreOpen] = useState(false);
+
   // Streaming progress bubbles keep hover free for selection / stop clicks.
   if (message.id.startsWith("progress:")) return null;
 
@@ -5230,19 +5320,34 @@ function MessageHoverActions({
     void navigator.clipboard.writeText(text).catch(() => undefined);
   }
 
+  const iconButtonClass =
+    "grid h-7 w-7 place-items-center text-muted-foreground transition-colors hover:text-foreground";
+
   return (
-    <MessageHoverMetadata createdAt={message.createdAt}>
-      <div
-        data-testid="message-hover-actions"
-        className="flex items-center gap-0.5 rounded-full bg-accent p-0.5 shadow-sm"
-      >
+    <MessageHoverMetadata pinned={moreOpen} side={side}>
+      <div data-testid="message-hover-actions" className="flex items-center gap-0.5">
+        {canReactToThreadMessage(message) ? (
+          <button
+            type="button"
+            aria-label={message.thumbsUp ? t`Remove thumbs-up` : t`Add thumbs-up`}
+            aria-pressed={Boolean(message.thumbsUp)}
+            onClick={() => void onReact(message)}
+            className={cn(
+              iconButtonClass,
+              "hidden [@media(hover:hover)_and_(pointer:fine)]:grid",
+              message.thumbsUp && "text-foreground",
+            )}
+          >
+            <Smile size={15} strokeWidth={1.7} />
+          </button>
+        ) : null}
         <button
           type="button"
           aria-label={t`Reply`}
           onClick={() => onReply(message)}
-          className="grid h-7 w-7 place-items-center rounded-full text-foreground/75 hover:bg-accent hover:text-foreground"
+          className={`${iconButtonClass} hidden [@media(hover:hover)_and_(pointer:fine)]:grid`}
         >
-          <Reply size={14} strokeWidth={1.8} />
+          <Reply size={15} strokeWidth={1.7} />
         </button>
         {message.role === "user" ? (
           <button
@@ -5250,32 +5355,63 @@ function MessageHoverActions({
             aria-label={t`Edit and resend`}
             data-testid="message-edit"
             onClick={() => onEdit(message)}
-            className="grid h-7 w-7 place-items-center rounded-full text-foreground hover:bg-accent hover:text-foreground"
+            className={`${iconButtonClass} hidden [@media(hover:hover)_and_(pointer:fine)]:grid`}
           >
-            <Pencil size={14} strokeWidth={1.8} />
+            <Pencil size={15} strokeWidth={1.7} />
           </button>
         ) : null}
-        {canReactToThreadMessage(message) ? (
-          <button
-            type="button"
-            aria-label={message.thumbsUp ? t`Remove thumbs-up` : t`Add thumbs-up`}
-            aria-pressed={Boolean(message.thumbsUp)}
-            onClick={() => void onReact(message)}
-            className={`grid h-7 w-7 place-items-center rounded-full hover:bg-accent hover:text-foreground ${
-              message.thumbsUp ? "text-warning" : "text-foreground/75"
-            }`}
+        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+          <DropdownMenuTrigger
+            aria-label={t`More`}
+            className={cn(
+              iconButtonClass,
+              "h-11 w-11 [@media(hover:hover)_and_(pointer:fine)]:h-7 [@media(hover:hover)_and_(pointer:fine)]:w-7",
+            )}
           >
-            <ThumbsUp size={14} strokeWidth={1.8} />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          aria-label={t`Copy`}
-          onClick={copyMessage}
-          className="grid h-7 w-7 place-items-center rounded-full text-foreground/75 hover:bg-accent hover:text-foreground"
-        >
-          <Copy size={14} strokeWidth={1.8} />
-        </button>
+            <MoreHorizontal size={15} strokeWidth={1.7} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align={side === "end" ? "start" : "end"}>
+            {canReactToThreadMessage(message) ? (
+              <DropdownMenuItem
+                className="[@media(hover:hover)_and_(pointer:fine)]:hidden"
+                onClick={() => void onReact(message)}
+              >
+                <Smile size={15} />
+                {message.thumbsUp ? t`Remove thumbs-up` : t`Add thumbs-up`}
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem
+              className="[@media(hover:hover)_and_(pointer:fine)]:hidden"
+              onClick={() => onReply(message)}
+            >
+              <Reply size={15} />
+              <Trans>Reply</Trans>
+            </DropdownMenuItem>
+            {message.role === "user" ? (
+              <DropdownMenuItem
+                className="[@media(hover:hover)_and_(pointer:fine)]:hidden"
+                onClick={() => onEdit(message)}
+              >
+                <Pencil size={15} />
+                <Trans>Edit and resend</Trans>
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem onClick={copyMessage}>
+              <Copy size={14} strokeWidth={1.7} />
+              <Trans>Copy</Trans>
+            </DropdownMenuItem>
+            <time
+              dateTime={message.createdAt}
+              data-testid="message-hover-time"
+              className="block px-1.5 py-1 text-xs tabular-nums text-muted-foreground"
+            >
+              {new Date(message.createdAt).toLocaleTimeString(i18n.locale || "en", {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </time>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </MessageHoverMetadata>
   );
@@ -5417,9 +5553,10 @@ const MessageView = memo(function MessageView({
           block.kind === "steps" ? <AgentSteps key={i} block={block} /> : null,
         )}
         {visibleNarrationBlocks.some((block) => block.kind !== "steps") ? (
-          <div className="flex justify-start">
+          <div className="flex w-fit max-w-full justify-start">
             <div
-              className="max-w-[74%] space-y-2.5 rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
+              data-testid="message-bot-bubble"
+              className="max-w-full space-y-2.5 rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
               dir="auto"
             >
               {visibleNarrationBlocks.map((block, i) => {
@@ -5514,9 +5651,10 @@ const MessageView = memo(function MessageView({
         }
         if (block.kind === "progress") {
           return (
-            <div key={i} className="flex justify-start">
+            <div key={i} className="flex w-fit max-w-full justify-start">
               <div
-                className="max-w-[74%] rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
+                data-testid="message-bot-bubble"
+                className="max-w-full rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
                 dir="auto"
               >
                 <ChatMarkdown streaming>{block.text}</ChatMarkdown>
@@ -5667,9 +5805,10 @@ const MessageView = memo(function MessageView({
         }
         if (block.kind === "text" && message.role === "user") {
           return (
-            <div key={i} className="flex justify-end">
+            <div key={i} className="flex w-fit max-w-full justify-end">
               <div
-                className="max-w-[70%] whitespace-pre-wrap rounded-[20px] bg-primary px-[18px] py-3 text-[15.5px] leading-[1.45] text-primary-foreground"
+                data-testid="message-user-bubble"
+                className="max-w-full whitespace-pre-wrap wrap-anywhere rounded-[20px] bg-chat-user px-[18px] py-3 text-[15.5px] leading-[1.45] text-chat-user-foreground"
                 dir="auto"
               >
                 {block.text}
@@ -5679,9 +5818,10 @@ const MessageView = memo(function MessageView({
         }
         if (block.kind === "text") {
           return (
-            <div key={i} className="flex justify-start">
+            <div key={i} className="flex w-fit max-w-full justify-start">
               <div
-                className="max-w-[74%] rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
+                data-testid="message-bot-bubble"
+                className="max-w-full rounded-[20px] bg-muted px-[18px] py-3 text-[15.5px] leading-[1.5] text-foreground/90"
                 dir="auto"
               >
                 <ChatMarkdown>{block.text}</ChatMarkdown>
@@ -5722,6 +5862,7 @@ const MessageView = memo(function MessageView({
               block={block}
               canAnswer={canAnswer}
               onAnswer={(text) => onAnswer(message, text)}
+              messageId={message.id}
             />
           );
         }
@@ -5790,6 +5931,16 @@ function screenIframeSandbox(url: string | null) {
   } catch {
     return undefined;
   }
+}
+
+function DesktopKindEmptyState({ className }: { className?: string }) {
+  return (
+    <div className={className}>
+      <Trans>
+        This bot runs on this computer, not a Linux desktop. Shell and files use your home folder.
+      </Trans>
+    </div>
+  );
 }
 
 function computerPlaceholder(

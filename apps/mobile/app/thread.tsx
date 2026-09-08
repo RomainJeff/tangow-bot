@@ -29,6 +29,7 @@ import {
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
+import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -68,6 +69,7 @@ import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import {
   applyMobileThreadEvent,
   blockText,
+  copyableMobileMessageText,
   currentApiBase,
   loadSessionToken,
   type MobileBot,
@@ -95,6 +97,7 @@ import {
   resumeLiveNotifications,
   setOpenNotificationThread,
 } from "../lib/live-notifications";
+import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import {
   hasVisibleMessagePresentation,
   isCenteredAgentEvent,
@@ -866,6 +869,7 @@ function Thread() {
               if (
                 event.type === "thread.progress" ||
                 event.type === "agent.tool.called" ||
+                event.type === "agent.tool.completed" ||
                 event.type === "thread.message.created" ||
                 event.type === "thread.message.updated" ||
                 event.type === "thread.message.reaction" ||
@@ -874,6 +878,7 @@ function Thread() {
                 event.type === "thread.cleared" ||
                 event.type === "thread.rewound" ||
                 event.type === "run.waiting_input" ||
+                event.type === "computer.takeover.requested" ||
                 isRunTerminalEvent(event)
               ) {
                 if (event.type === "thread.cleared") {
@@ -1357,35 +1362,30 @@ function Thread() {
             },
           ]
         : []),
+      {
+        name: "copy",
+        text: t("Copy"),
+        onPress: () => {
+          const text = copyableMobileMessageText(message);
+          if (text) void Clipboard.setStringAsync(text).catch(() => undefined);
+        },
+      },
     ];
     return {
-      onLongPress: () => {
-        if (Platform.OS === "ios") {
-          ActionSheetIOS.showActionSheetWithOptions(
-            {
-              options: [...actions.map((action) => action.text), t("Cancel")],
-              cancelButtonIndex: actions.length,
-              userInterfaceStyle: colorScheme,
-            },
-            (index) => actions[index]?.onPress(),
-          );
-        } else {
-          // Android alerts allow at most three buttons; Back/outside tap always dismisses.
-          Alert.alert(
-            "",
-            undefined,
-            [
-              ...actions,
-              ...(actions.length < 3 ? [{ text: t("Cancel"), style: "cancel" as const }] : []),
-            ],
-            { cancelable: true },
-          );
-        }
-      },
-      accessibilityActions: actions.map((action) => ({
-        name: action.name,
-        label: action.text,
-      })),
+      onLongPress: () =>
+        presentMessageActionSheet({
+          actions,
+          title: message.createdAt
+            ? new Date(message.createdAt).toLocaleTimeString(dateLocaleForUi(), {
+                hour: "numeric",
+                minute: "2-digit",
+              })
+            : undefined,
+          cancel: t("Cancel"),
+          more: t("More"),
+          colorScheme,
+        }),
+      accessibilityActions: actions.map((action) => ({ name: action.name, label: action.text })),
       onAccessibilityAction: (event) => {
         actions.find((action) => action.name === event.nativeEvent.actionName)?.onPress();
       },
@@ -1397,13 +1397,15 @@ function Thread() {
     options?: { enableJump?: boolean; previousCreatedAt?: string },
   ) {
     const actionProps = messageActionProps(message);
-    const timeMarker = showsTimeMarker(options?.previousCreatedAt, message.createdAt)
-      ? threadTimeMarkerLabel(message.createdAt, {
-          locale: dateLocaleForUi(),
-          today: t("Today"),
-          yesterday: t("Yesterday"),
-        })
-      : "";
+    const createdAt = message.createdAt;
+    const timeMarker =
+      createdAt && showsTimeMarker(options?.previousCreatedAt, createdAt)
+        ? threadTimeMarkerLabel(createdAt, {
+            locale: dateLocaleForUi(),
+            today: t("Today"),
+            yesterday: t("Yesterday"),
+          })
+        : "";
     const activityBotId =
       !inGroup && message.role === "bot" && message.id.startsWith("progress:")
         ? (message.botId ?? botId)
@@ -2430,9 +2432,38 @@ const MessageBubble = memo(function MessageBubble({
     (block): block is Extract<MessageBlock, { kind: "app_connect" }> =>
       block.kind === "app_connect",
   );
+  const questionsAsk = message.blocks.find(
+    (block): block is Extract<MessageBlock, { kind: "ask" }> =>
+      block.kind === "ask" && Boolean(block.questions?.length),
+  );
+  if (questionsAsk) {
+    return (
+      <View style={{ gap: 8, width: "100%" }}>
+        <MultiQuestionAskBlock
+          ask={questionsAsk}
+          actionProps={actionProps}
+          canAnswer={canAnswer}
+          onAnswer={(answer) => onAnswer(message, answer)}
+          messageId={message.id}
+        />
+        {appConnectBlocks.map((block, index) => (
+          <AppConnectCard
+            key={`${block.provider}-${index}`}
+            botId={cardBotId}
+            block={block}
+            accessibilityActions={actionProps.accessibilityActions}
+            onAccessibilityAction={actionProps.onAccessibilityAction}
+          />
+        ))}
+      </View>
+    );
+  }
   const ask = message.blocks.find(
     (block): block is Extract<MessageBlock, { kind: "ask" }> =>
-      block.kind === "ask" && !isApprovalAskBlock(block) && !block.actions?.length,
+      block.kind === "ask" &&
+      !isApprovalAskBlock(block) &&
+      !block.actions?.length &&
+      !block.questions?.length,
   );
   if (ask) {
     return (
@@ -2820,6 +2851,7 @@ const MessageBubble = memo(function MessageBubble({
           ) : canAnswer && onAnswer ? (
             <AskActions
               actions={askBlock.actions}
+              allowFreeText={!isApprovalAskBlock(askBlock)}
               accessibilityActions={actionProps.accessibilityActions}
               onAccessibilityAction={actionProps.onAccessibilityAction}
               onAnswer={(answer) => onAnswer(message, answer)}
@@ -2872,7 +2904,7 @@ const MessageBubble = memo(function MessageBubble({
           borderRadius: 20,
           borderWidth: 1,
           borderColor: tokens.border,
-          backgroundColor: message.role === "user" ? tokens.primary : tokens.muted,
+          backgroundColor: message.role === "user" ? tokens.secondary : tokens.muted,
           paddingHorizontal: 14,
           paddingVertical: 12,
           gap: 8,
@@ -2892,7 +2924,7 @@ const MessageBubble = memo(function MessageBubble({
         {replyPreview ? (
           <Text
             style={{
-              color: message.role === "user" ? tokens.primaryForeground : tokens.mutedForeground,
+              color: message.role === "user" ? tokens.secondaryForeground : tokens.mutedForeground,
               fontSize: 12.5,
             }}
             numberOfLines={2}
@@ -2903,7 +2935,7 @@ const MessageBubble = memo(function MessageBubble({
         {caption ? (
           <Text
             style={{
-              color: message.role === "user" ? tokens.primaryForeground : tokens.foreground,
+              color: message.role === "user" ? tokens.secondaryForeground : tokens.foreground,
               fontSize: 15,
             }}
           >
@@ -2933,7 +2965,7 @@ const MessageBubble = memo(function MessageBubble({
             >
               <Text
                 style={{
-                  color: message.role === "user" ? tokens.primaryForeground : tokens.foreground,
+                  color: message.role === "user" ? tokens.secondaryForeground : tokens.foreground,
                   fontSize: 15,
                 }}
               >
@@ -2968,7 +3000,7 @@ const MessageBubble = memo(function MessageBubble({
             >
               <Text
                 style={{
-                  color: message.role === "user" ? tokens.primaryForeground : tokens.foreground,
+                  color: message.role === "user" ? tokens.secondaryForeground : tokens.foreground,
                   fontSize: 15,
                 }}
               >
@@ -2978,7 +3010,7 @@ const MessageBubble = memo(function MessageBubble({
                 <Text
                   style={{
                     color:
-                      message.role === "user" ? tokens.primaryForeground : tokens.mutedForeground,
+                      message.role === "user" ? tokens.secondaryForeground : tokens.mutedForeground,
                     marginTop: 4,
                     fontSize: 13,
                   }}
@@ -3055,7 +3087,7 @@ function MessageTextCard({
         flexShrink: 1,
         minWidth: 0,
         maxWidth: "100%",
-        backgroundColor: message.role === "user" ? tokens.primary : tokens.muted,
+        backgroundColor: message.role === "user" ? tokens.secondary : tokens.muted,
         padding: 12,
         borderRadius: 20,
       }}
@@ -3075,7 +3107,7 @@ function MessageTextCard({
       {replyPreview ? (
         <Text
           style={{
-            color: message.role === "user" ? tokens.primaryForeground : tokens.mutedForeground,
+            color: message.role === "user" ? tokens.secondaryForeground : tokens.mutedForeground,
             fontSize: 12.5,
             marginBottom: 6,
           }}
@@ -3085,13 +3117,7 @@ function MessageTextCard({
         </Text>
       ) : null}
       {message.role === "user" ? (
-        <Text
-          style={{
-            color: tokens.primaryForeground,
-            fontSize: 15.5,
-            lineHeight: 23,
-          }}
-        >
+        <Text style={{ color: tokens.secondaryForeground, fontSize: 15.5, lineHeight: 23 }}>
           {contentText}
         </Text>
       ) : (
@@ -3285,6 +3311,364 @@ function AskBlock({
         </Text>
       )}
       {error ? <Text style={{ color: tokens.destructive, fontSize: 13 }}>{error}</Text> : null}
+    </View>
+  );
+}
+
+type MobileLocalAnswer = {
+  selected: string[];
+  other: string;
+  otherOpen: boolean;
+  skipped: boolean;
+};
+
+function mobileAnswered(a: MobileLocalAnswer): boolean {
+  return a.selected.length > 0 || a.other.trim().length > 0;
+}
+
+type MobileAskDraft = { answers: Record<string, MobileLocalAnswer>; index: number };
+// Keep an in-progress multi-question draft while the card unmounts (leaving and returning to the
+// thread), keyed by the ask message id, until it is submitted.
+const mobileAskDrafts = new Map<string, MobileAskDraft>();
+
+function MultiQuestionAskBlock({
+  ask,
+  canAnswer,
+  onAnswer,
+  actionProps,
+  messageId,
+}: {
+  ask: Extract<MobileMessage["blocks"][number], { kind: "ask" }>;
+  canAnswer: boolean;
+  onAnswer: (answer: string) => Promise<void>;
+  actionProps: MessageActionProps;
+  messageId: string;
+}) {
+  const tokens = useMobileTokens();
+  const { t } = useI18n();
+  const questions = ask.questions ?? [];
+  const [index, setIndex] = useState(() => mobileAskDrafts.get(messageId)?.index ?? 0);
+  const [answers, setAnswers] = useState<Record<string, MobileLocalAnswer>>(
+    () => mobileAskDrafts.get(messageId)?.answers ?? {},
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    mobileAskDrafts.set(messageId, { answers, index });
+  }, [messageId, answers, index]);
+
+  const total = questions.length;
+  const current = questions[index]!;
+  const isLast = index === total - 1;
+  const answered = ask.status === "answered";
+  const get = (id: string): MobileLocalAnswer =>
+    answers[id] ?? { selected: [], other: "", otherOpen: false, skipped: false };
+
+  function update(id: string, patch: Partial<MobileLocalAnswer>) {
+    setAnswers((prev) => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] ?? { selected: [], other: "", otherOpen: false, skipped: false }),
+        ...patch,
+      },
+    }));
+  }
+
+  function toggleOption(optionId: string) {
+    const state = get(current.id);
+    if (current.multiSelect) {
+      const selected = state.selected.includes(optionId)
+        ? state.selected.filter((id) => id !== optionId)
+        : [...state.selected, optionId];
+      update(current.id, { selected, skipped: false });
+    } else {
+      const selected = state.selected[0] === optionId ? [] : [optionId];
+      update(current.id, { selected, other: "", skipped: false });
+    }
+  }
+
+  const requiredSatisfied = questions.every(
+    (question) => question.required === false || mobileAnswered(get(question.id)),
+  );
+
+  async function submit() {
+    if (submitting || !requiredSatisfied) return;
+    const payload: Record<string, { selected?: string[]; other?: string; skipped?: boolean }> = {};
+    for (const question of questions) {
+      const state = get(question.id);
+      const other = state.other.trim();
+      if (mobileAnswered(state)) {
+        payload[question.id] = {
+          ...(state.selected.length ? { selected: state.selected } : {}),
+          ...(other ? { other } : {}),
+        };
+      } else {
+        payload[question.id] = { skipped: true };
+      }
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onAnswer(JSON.stringify({ answers: payload }));
+      mobileAskDrafts.delete(messageId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("Could not submit these answers"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <View
+      style={{
+        width: "90%",
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: tokens.border,
+        backgroundColor: tokens.card,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 10,
+        }}
+      >
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          {questions.map((question, dotIndex) => {
+            const done = answered || mobileAnswered(get(question.id));
+            const active = !answered && dotIndex === index;
+            return (
+              <View
+                key={question.id}
+                style={{
+                  height: 6,
+                  width: active ? 22 : 6,
+                  borderRadius: 3,
+                  backgroundColor: active
+                    ? tokens.foreground
+                    : done
+                      ? tokens.success
+                      : tokens.mutedForeground,
+                  opacity: active ? 1 : done ? 1 : 0.4,
+                }}
+              />
+            );
+          })}
+        </View>
+        {!answered ? (
+          <Text style={{ color: tokens.mutedForeground, fontSize: 12, fontWeight: "600" }}>
+            {index + 1}/{total}
+          </Text>
+        ) : null}
+      </View>
+
+      {answered ? (
+        <View style={{ gap: 10 }}>
+          {questions.map((question, qIndex) => {
+            const stored = ask.answers?.[question.id];
+            const labels = (stored?.selected ?? []).map(
+              (id) => question.options?.find((option) => option.id === id)?.label ?? id,
+            );
+            if (stored?.other) labels.push(`${t("Other")}: ${stored.other}`);
+            const value = stored?.skipped && labels.length === 0 ? t("Skipped") : labels.join(", ");
+            return (
+              <View key={question.id}>
+                <Text style={{ color: tokens.mutedForeground, fontSize: 13, fontWeight: "600" }}>
+                  {qIndex + 1}. {question.question}
+                </Text>
+                <Text style={{ color: tokens.foreground, fontSize: 14.5 }}>
+                  {value || t("Answered")}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      ) : !canAnswer ? (
+        <Text style={{ color: tokens.mutedForeground, fontSize: 13.5 }}>
+          {t("No longer active")}
+        </Text>
+      ) : (
+        <View>
+          {current.header ? (
+            <Text style={{ color: tokens.mutedForeground, fontSize: 11.5, marginBottom: 4 }}>
+              {current.header}
+            </Text>
+          ) : null}
+          <Text
+            {...actionProps}
+            style={{ color: tokens.foreground, fontSize: 15.5, lineHeight: 23 }}
+          >
+            {current.question}
+          </Text>
+          <View style={{ marginTop: 10, gap: 6 }}>
+            {current.options?.map((option) => {
+              const selected = get(current.id).selected.includes(option.id);
+              return (
+                <Pressable
+                  key={option.id}
+                  disabled={submitting}
+                  onPress={() => toggleOption(option.id)}
+                  style={{
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    borderWidth: 1,
+                    borderColor: selected ? tokens.foreground : tokens.border,
+                    backgroundColor: selected ? tokens.muted : "transparent",
+                    opacity: submitting ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ color: tokens.foreground, fontSize: 15 }}>
+                    {current.multiSelect ? (selected ? "☑ " : "☐ ") : ""}
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            {current.options?.length && current.multiSelect ? (
+              <Pressable
+                disabled={submitting}
+                onPress={() => {
+                  const open = !get(current.id).otherOpen;
+                  update(current.id, {
+                    otherOpen: open,
+                    ...(open ? {} : { other: "" }),
+                    skipped: false,
+                  });
+                }}
+                style={{
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  borderWidth: 1,
+                  borderColor: get(current.id).otherOpen ? tokens.foreground : tokens.border,
+                  backgroundColor: get(current.id).otherOpen ? tokens.muted : "transparent",
+                  opacity: submitting ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: tokens.foreground, fontSize: 15 }}>
+                  {get(current.id).otherOpen ? "☑ " : "☐ "}
+                  {t("Other…")}
+                </Text>
+              </Pressable>
+            ) : current.options?.length ? (
+              <Text style={{ color: tokens.mutedForeground, fontSize: 12, marginTop: 4 }}>
+                {t("Or type your own answer")}
+              </Text>
+            ) : null}
+            {!current.options?.length || !current.multiSelect || get(current.id).otherOpen ? (
+              <TextInput
+                value={get(current.id).other}
+                onChangeText={(value) =>
+                  update(current.id, {
+                    other: value,
+                    ...(current.multiSelect || !value.trim() ? {} : { selected: [] }),
+                    skipped: false,
+                  })
+                }
+                editable={!submitting}
+                autoFocus={current.multiSelect && get(current.id).otherOpen}
+                placeholder={
+                  current.options?.length ? t("Type a different answer") : t("Type your answer")
+                }
+                placeholderTextColor={tokens.mutedForeground}
+                multiline
+                style={{
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: tokens.border,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  color: tokens.foreground,
+                  fontSize: 15,
+                  minHeight: 44,
+                }}
+              />
+            ) : null}
+          </View>
+          <View
+            style={{
+              marginTop: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {index > 0 ? (
+                <Pressable
+                  disabled={submitting}
+                  onPress={() => setIndex(index - 1)}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    opacity: submitting ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ color: tokens.foreground, fontSize: 15 }}>{t("Back")}</Text>
+                </Pressable>
+              ) : null}
+              {current.required === false ? (
+                <Pressable
+                  disabled={submitting}
+                  onPress={() => {
+                    update(current.id, { selected: [], other: "", skipped: true });
+                    if (!isLast) setIndex(index + 1);
+                  }}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    opacity: submitting ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ color: tokens.mutedForeground, fontSize: 15 }}>{t("Skip")}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {isLast ? (
+              <Pressable
+                disabled={submitting || !requiredSatisfied}
+                onPress={() => void submit()}
+                style={{
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  backgroundColor: tokens.foreground,
+                  opacity: submitting || !requiredSatisfied ? 0.4 : 1,
+                }}
+              >
+                <Text style={{ color: tokens.background, fontSize: 15, fontWeight: "600" }}>
+                  {submitting ? t("Sending…") : t("Send answers")}
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                disabled={submitting}
+                onPress={() => setIndex(index + 1)}
+                style={{
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  backgroundColor: tokens.foreground,
+                  opacity: submitting ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: tokens.background, fontSize: 15, fontWeight: "600" }}>
+                  {t("Next")}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+          {error ? (
+            <Text style={{ color: tokens.destructive, fontSize: 13, marginTop: 8 }}>{error}</Text>
+          ) : null}
+        </View>
+      )}
     </View>
   );
 }
