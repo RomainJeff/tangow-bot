@@ -33,6 +33,7 @@ export * from "./computer-support.js";
 export * from "./computer-tools.js";
 export * from "./computer-update.js";
 export * from "./computer-workspace.js";
+export * from "./connector-safety.js";
 export * from "./cursor-cloud-agent.js";
 export * from "./daytona-emulator.js";
 export * from "./daytona-sandbox.js";

@@ -4,8 +4,25 @@ export function combineSignals(...signals: Array<AbortSignal | undefined>): Abor
   return AbortSignal.any(signals.filter((signal): signal is AbortSignal => Boolean(signal)));
 }
 
+/**
+ * undici collapses every network failure to "fetch failed"; the cause names the host and
+ * errno, which is the only part worth acting on. Walk the chain so it reaches the caller.
+ */
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const parts = [error.message];
+  let cause: unknown = error.cause;
+  for (let depth = 0; depth < 3 && cause instanceof Error; depth += 1) {
+    const code = "code" in cause && typeof cause.code === "string" ? ` (${cause.code})` : "";
+    const detail = `${cause.message}${code}`;
+    if (!parts.includes(detail)) parts.push(detail);
+    cause = cause.cause;
+  }
+  return parts.join(": ");
+}
+
 export function sanitizeConnectorError(error: unknown, secrets: string[] = []): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = describeError(error);
   return redactSecrets(
     message
       .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
