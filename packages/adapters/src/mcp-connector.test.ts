@@ -4,15 +4,6 @@ import { type McpOAuthBroker, StoredMcpOAuthProvider } from "./mcp-oauth.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
-// Production dispatches through undici's own fetch, so vi.stubGlobal("fetch") no longer
-// reaches it. A getter hands the current stub over the injection seam instead.
-const TEST_NETWORK = {
-  resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }],
-  get fetch() {
-    return globalThis.fetch;
-  },
-};
-
 const SERVER = {
   id: "server-1",
   slug: "demo",
@@ -31,6 +22,12 @@ const ASSIGNMENT = {
   allowAllTools: true,
   allowedTools: [],
   server: SERVER,
+};
+
+const TEST_NETWORK = {
+  // Read the global per call so a fetch stubbed after construction still wins.
+  fetch: (input: string | URL | Request, init?: RequestInit) => globalThis.fetch(input, init),
+  resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }],
 };
 
 function mcpFetch(

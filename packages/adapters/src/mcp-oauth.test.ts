@@ -8,12 +8,9 @@ import {
 afterEach(() => vi.unstubAllGlobals());
 
 const TEST_NETWORK = {
+  // Read the global per call so a fetch stubbed after construction still wins.
+  fetch: (input: string | URL | Request, init?: RequestInit) => globalThis.fetch(input, init),
   resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }],
-  // Production dispatches through undici's own fetch, so vi.stubGlobal("fetch") no longer
-  // reaches it. A getter hands the current stub over the injection seam instead.
-  get fetch() {
-    return globalThis.fetch;
-  },
 };
 
 function oauthSessionStore() {
@@ -676,7 +673,7 @@ describe("MCP OAuth", () => {
         userId: "user-1",
         redirectUri: "http://127.0.0.1:5173/mcp/oauth/callback",
       }),
-    ).rejects.toThrow(/fetch failed|Unexpected request/);
+    ).rejects.toThrow(/Could not reach private-auth\.example\.test|Unexpected request/);
 
     expect(requests).toContain(
       "GET https://mcp.example.test/.well-known/oauth-protected-resource/mcp",

@@ -7,7 +7,7 @@ import { registerOpenAiCompatibleRuntime } from "./pi-openai-compatible-provider
 // Production dispatches through undici's own fetch, so vi.stubGlobal("fetch") no longer
 // reaches it. Route the module back to whatever the test stubbed.
 vi.mock("./undici-fetch.js", () => ({
-  dispatchableFetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args),
+  dispatcherFetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args),
 }));
 
 const modelId = "arbitrary-model";

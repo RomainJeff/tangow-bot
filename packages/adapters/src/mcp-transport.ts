@@ -15,7 +15,7 @@ import {
   type RemoteTransportDependencies,
   type SafeRemoteFetch,
 } from "./remote-mcp.js";
-import { dispatchableFetch } from "./undici-fetch.js";
+import { dispatcherFetch } from "./undici-fetch.js";
 
 export type McpRemoteTransport = "streamable-http" | "sse";
 
@@ -126,10 +126,7 @@ export function secureFetch(
     "cookie",
     "proxy-authorization",
   ]);
-  const safeRemoteFetch = createSafeRemoteFetch(
-    network.fetch ?? dispatchableFetch,
-    network.resolveHostname,
-  );
+  const safeRemoteFetch = createSafeRemoteFetch(network.fetch, network.resolveHostname);
   const request = async (input: Request | URL | string, init?: RequestInit): Promise<Response> => {
     const source = new Request(input, init);
     // OAuth challenges and rediscovery can supply new URLs. Only the explicitly
