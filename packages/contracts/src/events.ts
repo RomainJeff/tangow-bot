@@ -9,7 +9,6 @@ export const ProductEventType = z.enum([
   /** History truncated at payload.fromSeq so the user can resend an edited message. */
   "thread.rewound",
   "thread.message.updated",
-  "thread.message.reaction",
   "thread.progress",
   "thread.artifact",
   "thread.ask",

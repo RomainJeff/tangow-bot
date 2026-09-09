@@ -15,7 +15,6 @@ import {
   type RemoteTransportDependencies,
   type SafeRemoteFetch,
 } from "./remote-mcp.js";
-import { dispatcherFetch } from "./undici-fetch.js";
 
 export type McpRemoteTransport = "streamable-http" | "sse";
 
