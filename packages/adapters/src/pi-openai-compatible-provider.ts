@@ -25,6 +25,7 @@ import {
   normalizeOpenAiCompatibleBaseUrl,
   OPENAI_COMPATIBLE_PROVIDER_ID,
 } from "./openai-compatible-url.js";
+import { dispatchableFetch } from "./undici-fetch.js";
 
 export { OPENAI_COMPATIBLE_PROVIDER_ID };
 
@@ -150,7 +151,7 @@ function requestCarriesAuthorization(input: RequestInfo | URL, init?: RequestIni
 }
 
 export function createOpenAiCompatibleFetch(
-  baseFetch: typeof globalThis.fetch = globalThis.fetch,
+  baseFetch: typeof globalThis.fetch = dispatchableFetch,
   resolve: ResolveHostname = resolveHostname,
 ): typeof globalThis.fetch {
   return async (input, init) => {

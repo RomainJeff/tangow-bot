@@ -11,6 +11,7 @@ import { WebView } from "react-native-webview";
 import { ComputerMaintenanceActions } from "../components/computer-maintenance-actions";
 import { ComputerModePicker } from "../components/computer-mode-picker";
 import { NativeSymbol } from "../components/native-symbol";
+import { currentAccessHeaders } from "../lib/access-store";
 import { currentApiBase, rpc } from "../lib/api";
 import {
   COMPUTER_HEARTBEAT_MS,
@@ -23,6 +24,7 @@ import {
   SCREEN_URL_OPEN_ATTEMPTS,
 } from "../lib/computer";
 import { createComputerRefresh } from "../lib/computer-refresh";
+import { defaultApiBase } from "../lib/endpoint";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 
@@ -510,7 +512,11 @@ function ScreenWebView({
   return (
     <WebView
       key={url}
-      source={{ uri: url }}
+      // ponytail: headers only reach the top-level load, so noVNC subresources and its
+      // websocket still go out bare. Enough for a service-token origin (Access lets the
+      // whole session through after the first request); needs a signed cookie bounce if
+      // Cloudflare ever starts challenging them individually.
+      source={{ uri: url, headers: currentAccessHeaders(currentApiBase(), defaultApiBase()) }}
       style={{ flex: 1, backgroundColor: tokens.background }}
       pointerEvents={interactive ? "auto" : "none"}
       javaScriptEnabled

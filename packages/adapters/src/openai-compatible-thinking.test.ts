@@ -4,6 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildModelConnectPlaintext } from "./model-connect.js";
 import { registerOpenAiCompatibleRuntime } from "./pi-openai-compatible-provider.js";
 
+// Production dispatches through undici's own fetch, so vi.stubGlobal("fetch") no longer
+// reaches it. Route the module back to whatever the test stubbed.
+vi.mock("./undici-fetch.js", () => ({
+  dispatchableFetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args),
+}));
+
 const modelId = "arbitrary-model";
 const baseUrl = "http://127.0.0.1:8090/v1";
 

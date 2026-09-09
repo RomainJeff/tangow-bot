@@ -63,6 +63,7 @@ import {
   resolveAutoReviewChecker,
   resolveBotWorkspacePath,
   sanitizeComposioError,
+  sanitizeConnectorError,
   savePushToken,
   scheduleComputerControlExpiry,
   scheduleComputerSleep,
@@ -3154,7 +3155,10 @@ export function createRouter(deps: RouterDeps) {
             });
           } catch (error) {
             throw new ORPCError("BAD_REQUEST", {
-              message: error instanceof Error ? error.message : "Could not start MCP OAuth",
+              message:
+                error instanceof Error
+                  ? sanitizeConnectorError(error)
+                  : "Could not start MCP OAuth",
             });
           }
         }),
@@ -3168,7 +3172,10 @@ export function createRouter(deps: RouterDeps) {
             return { ok: true as const };
           } catch (error) {
             throw new ORPCError("BAD_REQUEST", {
-              message: error instanceof Error ? error.message : "Could not complete MCP OAuth",
+              message:
+                error instanceof Error
+                  ? sanitizeConnectorError(error)
+                  : "Could not complete MCP OAuth",
             });
           }
         }),

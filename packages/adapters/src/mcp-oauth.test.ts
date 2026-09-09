@@ -9,6 +9,11 @@ afterEach(() => vi.unstubAllGlobals());
 
 const TEST_NETWORK = {
   resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }],
+  // Production dispatches through undici's own fetch, so vi.stubGlobal("fetch") no longer
+  // reaches it. A getter hands the current stub over the injection seam instead.
+  get fetch() {
+    return globalThis.fetch;
+  },
 };
 
 function oauthSessionStore() {
