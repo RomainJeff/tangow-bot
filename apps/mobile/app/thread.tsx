@@ -1611,6 +1611,7 @@ function Thread() {
         style={{
           flexDirection: "row",
           alignItems: "center",
+          gap: 10,
           minHeight: 40,
           marginTop: 12,
         }}
