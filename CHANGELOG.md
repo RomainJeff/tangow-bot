@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-09
+
+#### Fixed
+
+- A bot finishing or failing work another bot delegated to it no longer pushes you a "finished"/"failed" notification: those results are reported back to the bot that asked, so only runs you started, routines, and requests for your input (approvals, answers, takeovers) still page you.
+
 ### 2026-09-08
 
 #### Fixed

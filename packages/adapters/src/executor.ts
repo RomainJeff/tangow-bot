@@ -1331,7 +1331,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               "status",
             ).catch((error) => getLogger().error("bot message failure return", error));
           }
-          if (!failed.continuationRunId) {
+          // A delegated run's failure is reported back to the ordering bot via
+          // returnBotMessageOutcome above; the human is not paged for internal delegation.
+          if (!failed.continuationRunId && notifiesUserOnRunEnd(run.trigger)) {
             await notifyRun(deps, run, {
               kind: "failure",
               title: `${bot.name} failed`,
@@ -3886,7 +3888,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               botMessageOutcome.intent,
             ).catch((error) => getLogger().error("bot message result return", error));
           }
-          if (text && !completed.continuationRunId) {
+          // A delegated run's result auto-returns to the ordering bot and is hidden from the
+          // user's thread, so a "finished" push here is pure back-office noise for the human.
+          if (text && !completed.continuationRunId && notifiesUserOnRunEnd(run.trigger)) {
             await notifyRun(deps, run, {
               kind: "completion",
               title: `${bot.name} finished`,
@@ -3954,7 +3958,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               "status",
             ).catch((returnError) => getLogger().error("bot message failure return", returnError));
           }
-          if (!failed.continuationRunId) {
+          // A delegated run's failure is reported back to the ordering bot via
+          // returnBotMessageOutcome above; the human is not paged for internal delegation.
+          if (!failed.continuationRunId && notifiesUserOnRunEnd(run.trigger)) {
             await notifyRun(deps, run, {
               kind: "failure",
               title: `${bot.name} failed`,
@@ -4205,6 +4211,16 @@ export function completionNotificationBody(assembled: string, blocks: MessageBlo
 
 export function completionMarksUnread(trigger: string, text: string): boolean {
   return trigger !== "routine" || Boolean(text);
+}
+
+/**
+ * Whether a run ending (completion or failure) should page the human. A delegated
+ * (`bot_message`) run's result and failure are returned to the ordering bot and hidden from
+ * the user's thread, so a "finished"/"failed" push would be pure back-office noise. Runs the
+ * user or a routine own still notify; asks/takeovers page through their own `help` path.
+ */
+export function notifiesUserOnRunEnd(trigger: string): boolean {
+  return trigger !== "bot_message";
 }
 
 export function missingTurnImagesInstruction(

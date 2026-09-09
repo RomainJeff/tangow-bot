@@ -3,6 +3,7 @@ import {
   completionMarksUnread,
   completionMessageSegments,
   completionNotificationBody,
+  notifiesUserOnRunEnd,
   subagentMarksUnread,
 } from "./executor.js";
 
@@ -68,6 +69,17 @@ describe("completionNotificationBody", () => {
 
   it("uses the empty-run text when that is all the run produced", () => {
     expect(completionNotificationBody("", completionMessageSegments([]))).toBe("done.");
+  });
+});
+
+describe("notifiesUserOnRunEnd", () => {
+  it("suppresses finish/failure pushes for delegated runs but keeps user and routine runs", () => {
+    // A delegated (bot_message) run reports back to the ordering bot and is hidden from the
+    // user's thread, so a "finished"/"failed" push would be pure back-office noise.
+    expect(notifiesUserOnRunEnd("bot_message")).toBe(false);
+    expect(notifiesUserOnRunEnd("user")).toBe(true);
+    expect(notifiesUserOnRunEnd("routine")).toBe(true);
+    expect(notifiesUserOnRunEnd("messaging")).toBe(true);
   });
 });
 
