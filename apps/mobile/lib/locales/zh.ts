@@ -1,9 +1,8 @@
 export const ZH_MESSAGES: Record<string, string> = {
   "Release computer": "释放电脑",
   "Release interrupted computer?": "释放中断的电脑？",
-  "Stop all workers and confirm that provider operations have stopped before releasing this computer.":
-    "释放此电脑前，请停止所有工作进程，并确认服务提供方的操作已经停止。",
-  "Workers and operations are stopped": "工作进程和操作均已停止",
+  "Make sure nothing is still running on this computer.": "请确认这台电脑上没有仍在运行的任务。",
+  "Nothing is still running": "没有仍在运行的任务",
 
   "Recovery is unavailable until the previous operation has stopped.":
     "上一次操作停止之前，无法恢复。",
@@ -83,8 +82,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "GraphQL endpoint": "GraphQL 端点",
   "https://example.com/graphql": "https://example.com/graphql",
   "Add OpenAPI": "添加 OpenAPI",
-  "Add thumbs-up": "点赞",
   "Add your own answer": "补充你的答案",
+  React: "回应",
   "Add Treg": "添加 Treg",
   "Agent messages": "智能体消息",
   "Alerts from routines": "来自例行任务的提醒",
@@ -182,6 +181,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Could not delete account": "无法删除账户",
   "Could not delete bot": "无法删除 Bot",
   "Could not delete group": "无法删除群组",
+  "Could not delete space": "无法删除空间",
   "Could not finish sign-in": "无法完成登录",
   "Could not load bot": "无法加载 Bot",
   "Could not load bots": "无法加载 Bot 列表",
@@ -241,6 +241,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Delete account": "删除账户",
   "Delete group": "删除群组",
   "Delete memories too": "同时删除记忆",
+  "Delete space": "删除空间",
   "Delete {name}?": "要删除 {name} 吗？",
   "Delete this group? Bots and their solo threads are kept.":
     "要删除此群组吗？Bot 及其单独对话会保留。",
@@ -389,7 +390,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Remove {name}": "移除 {name}",
   "Remove mention {name}": "移除提及 {name}",
   "Remove skill {name}": "移除技能 {name}",
-  "Remove thumbs-up": "取消点赞",
   "Removed with chat, computer, and memory.": "已连同对话、电脑和记忆一起移除。",
   "Replies and completed work": "回复和已完成的工作",
   Reply: "回复",
@@ -446,6 +446,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   Skip: "跳过",
   Skipped: "已跳过",
   Space: "空间",
+  "Space actions for {name}": "{name} 的空间操作",
+  "This removes the empty space for everyone.": "这将为所有人删除此空空间。",
   "Space created": "空间已创建",
   "Space default": "空间默认",
   "Speak + transcribe": "朗读并转写",

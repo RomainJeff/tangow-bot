@@ -28,6 +28,8 @@ import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_MAX_COUNT,
   canReactToThreadMessage,
+  MESSAGE_REACTIONS,
+  type MessageReaction,
   normalizeCreateBotProfile,
 } from "@rakazo/contracts";
 import {
@@ -45,6 +47,7 @@ import {
   latestActivityLabel,
   latestAnswerableAskMessageId,
   mentionChipKey,
+  projectMessageReactions,
   reorderBotTo,
   resolveComposerSendPlan,
   resolveMentionPickerKey,
@@ -1313,6 +1316,7 @@ export function ShellPage() {
                 name: "Personal",
                 isDefault: true,
                 hasContent: true,
+                canDelete: false,
                 bots,
                 groups,
                 botSections,
@@ -1333,7 +1337,7 @@ export function ShellPage() {
           ...visibleGroups.map((chat) => ({ kind: "group" as const, chat })),
         ].map((item) => ({ ...item, pinned: item.chat.pinned, sectionId: item.chat.sectionId })),
         space.botSections,
-      ).map((group) => ({
+      ).map((group, index) => ({
         ...group,
         key: showSpaceNames ? `space:${space.id}:${group.key}` : group.key,
         title: showSpaceNames
@@ -1345,7 +1349,7 @@ export function ShellPage() {
         emptySpaceId: undefined as string | undefined,
         spaceId: space.id,
         spaceName: space.name,
-        spaceIsDefault: space.isDefault,
+        canDeleteSpace: index === 0 && space.canDelete === true,
       }));
       if (sections.length > 0) return sections;
       // Keep empty spaces selectable; chat clicks are the only switch control.
@@ -1360,7 +1364,7 @@ export function ShellPage() {
           emptySpaceId: space.id,
           spaceId: space.id,
           spaceName: space.name,
-          spaceIsDefault: space.isDefault,
+          canDeleteSpace: space.canDelete === true,
         },
       ];
     });
@@ -1848,7 +1852,7 @@ export function ShellPage() {
     }
   }, []);
   const reactToMessage = useCallback(
-    async (message: ThreadMessage) => {
+    async (message: ThreadMessage, reaction: MessageReaction) => {
       const botId = activeBotId.current;
       const groupId = activeGroupId.current;
       if (!botId && !groupId) return;
@@ -1856,7 +1860,8 @@ export function ShellPage() {
         await rpc.threads.react({
           ...(groupId ? { groupId } : { botId: botId! }),
           messageId: message.id,
-          thumbsUp: !message.thumbsUp,
+          reaction,
+          clientNonce: newClientNonce(),
         });
       } catch (error) {
         const stillHere = groupId
@@ -2637,10 +2642,10 @@ export function ShellPage() {
                 return (
                   <div key={group.key} data-sidebar-group={group.key}>
                     {group.title ? (
-                      <div className="pt-2">
+                      <div className="flex items-center pt-2">
                         <button
                           type="button"
-                          className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                          className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                           onClick={() => {
                             if (group.emptySpaceId) {
                               openSpaceChat(group.emptySpaceId, "/onboarding");
@@ -2649,12 +2654,12 @@ export function ShellPage() {
                             toggleSidebarSection(group.key);
                           }}
                           onContextMenu={
-                            group.spaceId && !group.spaceIsDefault
+                            group.canDeleteSpace
                               ? (event) => {
                                   event.preventDefault();
                                   spaceMenuAnchor.current = event.currentTarget;
                                   setSpaceMenu({
-                                    id: group.spaceId as string,
+                                    id: group.spaceId,
                                     position: { x: event.clientX, y: event.clientY },
                                   });
                                 }
@@ -2688,6 +2693,23 @@ export function ShellPage() {
                             />
                           )}
                         </button>
+                        {group.canDeleteSpace ? (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t`Actions for ${group.spaceName}`}
+                            onClick={(event) => {
+                              const rect = event.currentTarget.getBoundingClientRect();
+                              spaceMenuAnchor.current = event.currentTarget;
+                              setSpaceMenu({
+                                id: group.spaceId,
+                                position: { x: rect.left, y: rect.bottom },
+                              });
+                            }}
+                          >
+                            <MoreHorizontal size={14} aria-hidden="true" />
+                          </Button>
+                        ) : null}
                       </div>
                     ) : null}
                     {!collapsed &&
@@ -3143,7 +3165,7 @@ export function ShellPage() {
             </button>
           </div>
           <div className="flex items-center gap-1">
-            {!inGroup ? (
+            {!inGroup && active ? (
               <button
                 type="button"
                 title={t`Agent computer`}
@@ -3163,114 +3185,125 @@ export function ShellPage() {
             ) : null}
           </div>
         </div>
-        <Transcript
-          key={activeSnapshot?.threadId}
-          scrollRef={messageScroll}
-          artifactTarget={transcriptArtifactTarget}
-          messages={transcriptMessages}
-          olderCursor={activeSnapshot?.olderCursor ?? null}
-          loadingOlder={loadingOlder}
-          answerableAskMessageId={answerableAskMessageId}
-          running={transcriptRunning}
-          workingBots={workingBots}
-          onLoadOlder={loadOlder}
-          onOpenBot={openBot}
-          onAnswer={answerMessage}
-          onReply={setReplyTarget}
-          onEdit={startRewind}
-          rewindFromSeq={rewindFromSeq}
-          onReact={reactToMessage}
-          onJumpToMessage={jumpToReplyMessage}
-          onOpenPeerMessages={(peer) => {
-            setPeerConversation(peer);
-          }}
-          memberName={resolveTranscriptMemberName}
-          peerBot={resolveTranscriptBot}
-          onRefresh={refreshActiveThread}
-          onBotChanged={refreshBots}
-          onAddRoutine={addSkillRoutine}
-          voiceReady={Boolean(voiceStatus?.ready)}
-          speakingMessageId={speakingMessageId}
-          onSpeak={speakMessage}
-        />
+        {!active && !activeGroup && initialBotsLoaded ? (
+          <div className="grid flex-1 place-items-center">
+            <Button onClick={() => setPanel("create")}>
+              <Plus size={16} aria-hidden="true" />
+              <Trans>Create new Bot</Trans>
+            </Button>
+          </div>
+        ) : (
+          <Transcript
+            key={activeSnapshot?.threadId}
+            scrollRef={messageScroll}
+            artifactTarget={transcriptArtifactTarget}
+            messages={transcriptMessages}
+            olderCursor={activeSnapshot?.olderCursor ?? null}
+            loadingOlder={loadingOlder}
+            answerableAskMessageId={answerableAskMessageId}
+            running={transcriptRunning}
+            workingBots={workingBots}
+            onLoadOlder={loadOlder}
+            onOpenBot={openBot}
+            onAnswer={answerMessage}
+            onReply={setReplyTarget}
+            onEdit={startRewind}
+            rewindFromSeq={rewindFromSeq}
+            onReact={reactToMessage}
+            onJumpToMessage={jumpToReplyMessage}
+            onOpenPeerMessages={(peer) => {
+              setPeerConversation(peer);
+            }}
+            memberName={resolveTranscriptMemberName}
+            peerBot={resolveTranscriptBot}
+            onRefresh={refreshActiveThread}
+            onBotChanged={refreshBots}
+            onAddRoutine={addSkillRoutine}
+            voiceReady={Boolean(voiceStatus?.ready)}
+            speakingMessageId={speakingMessageId}
+            onSpeak={speakMessage}
+          />
+        )}
         {recordingSkill ? (
           <div className="px-6 pb-2 text-center text-[13px] text-destructive">
             <Trans>Teaching in progress. Stop teaching before sending a new message.</Trans>
           </div>
         ) : null}
-        <Composer
-          key={inGroup ? `group:${groupId}` : `bot:${active?.id}`}
-          activeName={inGroup ? (activeGroup?.name ?? activeSnapshot?.groupName) : active?.name}
-          running={composerRunning}
-          disabled={Boolean(recordingSkill)}
-          pendingAttachments={activePendingAttachments}
-          attachmentNotice={attachmentNotice}
-          sendError={sendError}
-          runError={displayedRunError}
-          runErrorId={displayedRunErrorId}
-          onRunErrorPresented={handleRunErrorPresented}
-          onDismissError={dismissComposerError}
-          sending={sending}
-          fileInputRef={fileInputRef}
-          onAttachmentPick={onAttachmentPick}
-          onRemoveAttachment={removeAttachment}
-          onSend={sendMessage}
-          onStop={stopRun}
-          onVoice={
-            !inGroup && active
-              ? () => {
-                  if (!voiceStatus?.ready) {
-                    openSettings("voice");
-                    return;
+        {active || activeGroup ? (
+          <Composer
+            key={inGroup ? `group:${groupId}` : `bot:${active?.id}`}
+            activeName={inGroup ? (activeGroup?.name ?? activeSnapshot?.groupName) : active?.name}
+            running={composerRunning}
+            disabled={Boolean(recordingSkill)}
+            pendingAttachments={activePendingAttachments}
+            attachmentNotice={attachmentNotice}
+            sendError={sendError}
+            runError={displayedRunError}
+            runErrorId={displayedRunErrorId}
+            onRunErrorPresented={handleRunErrorPresented}
+            onDismissError={dismissComposerError}
+            sending={sending}
+            fileInputRef={fileInputRef}
+            onAttachmentPick={onAttachmentPick}
+            onRemoveAttachment={removeAttachment}
+            onSend={sendMessage}
+            onStop={stopRun}
+            onVoice={
+              !inGroup && active
+                ? () => {
+                    if (!voiceStatus?.ready) {
+                      openSettings("voice");
+                      return;
+                    }
+                    setCallOpen(true);
                   }
-                  setCallOpen(true);
-                }
-              : undefined
-          }
-          replyTarget={activeReplyTarget}
-          replyTargetName={replyTargetName}
-          onClearReply={() => setReplyTarget(null)}
-          rewindTarget={activeRewindTarget}
-          rewindDraft={rewindDraft}
-          rewindRemovedCount={rewindRemovedCount}
-          rewindArtifacts={rewindArtifacts}
-          onCancelRewind={cancelRewind}
-          onRemoveRewindArtifact={(artifactId) =>
-            setRewindArtifacts((current) => current.filter((item) => item.id !== artifactId))
-          }
-          mentionTargets={composerMentionTargets}
-          agentSkills={agentSkills}
-          onSlashOpen={refreshAgentSkills}
-          onSlashAction={(action) => {
-            if (action === "chat-settings") {
-              setPanel(inGroup ? "group-settings" : "settings");
-              return;
+                : undefined
             }
-            if (action === "settings-general") {
-              openSettings("general");
-              return;
+            replyTarget={activeReplyTarget}
+            replyTargetName={replyTargetName}
+            onClearReply={() => setReplyTarget(null)}
+            rewindTarget={activeRewindTarget}
+            rewindDraft={rewindDraft}
+            rewindRemovedCount={rewindRemovedCount}
+            rewindArtifacts={rewindArtifacts}
+            onCancelRewind={cancelRewind}
+            onRemoveRewindArtifact={(artifactId) =>
+              setRewindArtifacts((current) => current.filter((item) => item.id !== artifactId))
             }
-            if (action === "settings-usage") {
-              void rpc.usage
-                .summary()
-                .then(setUsage)
-                .catch(() => undefined);
-              openSettings("usage");
-            }
-          }}
-        />
+            mentionTargets={composerMentionTargets}
+            agentSkills={agentSkills}
+            onSlashOpen={refreshAgentSkills}
+            onSlashAction={(action) => {
+              if (action === "chat-settings") {
+                setPanel(inGroup ? "group-settings" : "settings");
+                return;
+              }
+              if (action === "settings-general") {
+                openSettings("general");
+                return;
+              }
+              if (action === "settings-usage") {
+                void rpc.usage
+                  .summary()
+                  .then(setUsage)
+                  .catch(() => undefined);
+                openSettings("usage");
+              }
+            }}
+          />
+        ) : null}
       </main>
 
       <aside
         data-testid="side-panel"
         data-panel={panel ?? "closed"}
         className={`absolute inset-y-0 end-0 z-20 flex min-h-0 shrink-0 flex-col overflow-hidden bg-background transition-[width] duration-150 ease-out md:relative ${
-          panel && (active || activeGroup)
+          panel && (active || activeGroup || panel === "create")
             ? "w-full max-w-[384px] border-s border-sidebar-border md:w-[384px] md:max-w-none"
             : "pointer-events-none w-0"
         }`}
       >
-        {panel && (active || activeGroup) ? (
+        {panel && (active || activeGroup || panel === "create") ? (
           <div className="rk-scroll h-full w-full overflow-y-auto px-5 py-[17px] md:w-[384px]">
             {panel !== "routine" &&
             panel !== "create" &&
@@ -4185,7 +4218,7 @@ const Transcript = memo(function Transcript({
   onReply: (message: ThreadMessage) => void;
   onEdit: (message: ThreadMessage) => void;
   rewindFromSeq: number | null;
-  onReact: (message: ThreadMessage) => Promise<void>;
+  onReact: (message: ThreadMessage, reaction: MessageReaction) => Promise<void>;
   onJumpToMessage: (messageId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   memberName?: (botId: string | undefined) => string | undefined;
@@ -4213,10 +4246,12 @@ const Transcript = memo(function Transcript({
   );
   // Markers read the rendered rows: a hidden activity row must not swallow a
   // marker or invent a gap.
-  const visibleMessages = useMemo(
+  const reactionView = useMemo(
     () =>
-      messages.filter((message) =>
-        message.blocks.some((block) => !isHiddenActivityBlock(block, showSteps)),
+      projectMessageReactions(
+        messages.filter((message) =>
+          message.blocks.some((block) => !isHiddenActivityBlock(block, showSteps)),
+        ),
       ),
     [messages, showSteps],
   );
@@ -4346,11 +4381,12 @@ const Transcript = memo(function Transcript({
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
-        {visibleMessages.map((message, index) => {
+        {reactionView.visibleMessages.map((message, index) => {
           const peerReceipt = isPeerReceiptBlocks(message.blocks);
           const rewound = rewindFromSeq !== null && (message.seq ?? 0) >= rewindFromSeq;
+          const messageReactions = reactionView.reactions.get(message.id);
           const timeMarker = showsTimeMarker(
-            visibleMessages[index - 1]?.createdAt,
+            reactionView.visibleMessages[index - 1]?.createdAt,
             message.createdAt,
           )
             ? threadTimeMarkerLabel(message.createdAt, {
@@ -4376,6 +4412,21 @@ const Transcript = memo(function Transcript({
                   peerReceipt ? "relative py-0.5" : "group/message relative hover:z-20"
                 }${rewound ? " opacity-40" : ""}`}
               >
+                {!peerReceipt && !message.id.startsWith("progress:") ? (
+                  <time
+                    dateTime={message.createdAt}
+                    data-testid="message-hover-time"
+                    className={cn(
+                      "pointer-events-none absolute top-1 z-10 text-xs tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-has-[[aria-expanded=true]]/message:opacity-100",
+                      message.role === "user" ? "start-0" : "end-0",
+                    )}
+                  >
+                    {new Date(message.createdAt).toLocaleTimeString(i18n.locale || "en", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                ) : null}
                 <div
                   className={
                     peerReceipt
@@ -4436,17 +4487,24 @@ const Transcript = memo(function Transcript({
                     />
                   </div>
                 </div>
-                {!peerReceipt && message.thumbsUp ? (
-                  <button
-                    type="button"
-                    aria-label={t`Remove thumbs-up`}
-                    onClick={() => void onReact(message)}
-                    className={`mt-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs ${
-                      message.role === "user" ? "ml-auto block" : ""
-                    }`}
+                {!peerReceipt && messageReactions ? (
+                  <div
+                    data-testid="message-reactions"
+                    className={cn(
+                      "mt-1 flex flex-wrap gap-1",
+                      message.role === "user" && "justify-end",
+                    )}
                   >
-                    👍
-                  </button>
+                    {[...messageReactions].map(([emoji, count]) => (
+                      <span
+                        key={emoji}
+                        className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs"
+                      >
+                        {emoji}
+                        {count > 1 ? ` ${count}` : ""}
+                      </span>
+                    ))}
+                  </div>
                 ) : null}
               </div>
             </Fragment>
@@ -5306,10 +5364,11 @@ function MessageHoverActions({
   side: "start" | "end";
   onReply: (message: ThreadMessage) => void;
   onEdit: (message: ThreadMessage) => void;
-  onReact: (message: ThreadMessage) => Promise<void>;
+  onReact: (message: ThreadMessage, reaction: MessageReaction) => Promise<void>;
 }) {
   const { t } = useLingui();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [reactionsOpen, setReactionsOpen] = useState(false);
 
   // Streaming progress bubbles keep hover free for selection / stop clicks.
   if (message.id.startsWith("progress:")) return null;
@@ -5324,22 +5383,40 @@ function MessageHoverActions({
     "grid h-7 w-7 place-items-center text-muted-foreground transition-colors hover:text-foreground";
 
   return (
-    <MessageHoverMetadata pinned={moreOpen} side={side}>
+    <MessageHoverMetadata pinned={moreOpen || reactionsOpen} side={side}>
       <div data-testid="message-hover-actions" className="flex items-center gap-0.5">
         {canReactToThreadMessage(message) ? (
-          <button
-            type="button"
-            aria-label={message.thumbsUp ? t`Remove thumbs-up` : t`Add thumbs-up`}
-            aria-pressed={Boolean(message.thumbsUp)}
-            onClick={() => void onReact(message)}
-            className={cn(
-              iconButtonClass,
-              "hidden [@media(hover:hover)_and_(pointer:fine)]:grid",
-              message.thumbsUp && "text-foreground",
-            )}
-          >
-            <Smile size={15} strokeWidth={1.7} />
-          </button>
+          <Popover open={reactionsOpen} onOpenChange={setReactionsOpen}>
+            <PopoverTrigger
+              aria-label={t`React`}
+              className={cn(
+                iconButtonClass,
+                "h-11 w-11 [@media(hover:hover)_and_(pointer:fine)]:h-7 [@media(hover:hover)_and_(pointer:fine)]:w-7",
+              )}
+            >
+              <Smile size={15} strokeWidth={1.7} />
+            </PopoverTrigger>
+            <PopoverContent
+              align={side === "end" ? "start" : "end"}
+              className="w-auto flex-row gap-0 rounded-2xl p-1.5"
+              aria-label={t`Reactions`}
+            >
+              {MESSAGE_REACTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  aria-label={emoji}
+                  className="grid h-11 w-11 place-items-center rounded-xl text-2xl hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+                  onClick={() => {
+                    setReactionsOpen(false);
+                    void onReact(message, emoji);
+                  }}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
         ) : null}
         <button
           type="button"
@@ -5371,15 +5448,6 @@ function MessageHoverActions({
             <MoreHorizontal size={15} strokeWidth={1.7} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align={side === "end" ? "start" : "end"}>
-            {canReactToThreadMessage(message) ? (
-              <DropdownMenuItem
-                className="[@media(hover:hover)_and_(pointer:fine)]:hidden"
-                onClick={() => void onReact(message)}
-              >
-                <Smile size={15} />
-                {message.thumbsUp ? t`Remove thumbs-up` : t`Add thumbs-up`}
-              </DropdownMenuItem>
-            ) : null}
             <DropdownMenuItem
               className="[@media(hover:hover)_and_(pointer:fine)]:hidden"
               onClick={() => onReply(message)}
@@ -5400,16 +5468,6 @@ function MessageHoverActions({
               <Copy size={14} strokeWidth={1.7} />
               <Trans>Copy</Trans>
             </DropdownMenuItem>
-            <time
-              dateTime={message.createdAt}
-              data-testid="message-hover-time"
-              className="block px-1.5 py-1 text-xs tabular-nums text-muted-foreground"
-            >
-              {new Date(message.createdAt).toLocaleTimeString(i18n.locale || "en", {
-                hour: "numeric",
-                minute: "2-digit",
-              })}
-            </time>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

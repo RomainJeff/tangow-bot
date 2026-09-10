@@ -19,7 +19,6 @@ import {
   subagentBlockFromPayload,
   takeLiveMessage,
   updateCloudAgentMessages,
-  updateMessageReaction,
   upsertMessageById,
 } from "@rakazo/core";
 
@@ -253,7 +252,6 @@ export function isThreadSnapshotEvent(event: ProductEvent): boolean {
     event.type === "agent.tool.completed" ||
     event.type === "thread.message.created" ||
     event.type === "thread.message.updated" ||
-    event.type === "thread.message.reaction" ||
     event.type === "run.started" ||
     event.type === "run.waiting_input" ||
     event.type === "computer.takeover.requested" ||
@@ -486,13 +484,6 @@ export function reduceThreadSnapshot(
       messages: updateCloudAgentMessages(prev.messages, event.payload ?? {}),
     };
   }
-  if (event.type === "thread.message.reaction") {
-    return {
-      ...prev,
-      cursor: event.seq,
-      messages: updateMessageReaction(prev.messages, event.payload ?? {}),
-    };
-  }
   if (event.type === "thread.message.created" || event.type === "thread.message.updated") {
     const role = (event.payload.role as ThreadMessage["role"]) ?? "bot";
     const blocks = (event.payload.blocks as ThreadMessage["blocks"]) ?? [];
@@ -504,7 +495,10 @@ export function reduceThreadSnapshot(
       blocks,
       botId: event.botId,
       runId: event.runId,
-      thumbsUp: event.payload.thumbsUp === true,
+      replyToMessageId:
+        typeof event.payload.replyToMessageId === "string"
+          ? event.payload.replyToMessageId
+          : undefined,
       createdAt: event.createdAt,
     };
     const replacedSubagentIds = new Set(

@@ -6,7 +6,11 @@ import type {
   MessageBlock,
   Routine,
 } from "@rakazo/contracts";
-import { canReactToThreadMessage } from "@rakazo/contracts";
+import {
+  canReactToThreadMessage,
+  MESSAGE_REACTIONS,
+  type MessageReaction,
+} from "@rakazo/contracts";
 import {
   abortableDelay,
   attachmentsForThread,
@@ -19,6 +23,7 @@ import {
   latestActivityLabel,
   latestAnswerableAskMessageId,
   mentionChipKey,
+  projectMessageReactions,
   resolveComposerSendPlan,
   SLASH_ACTIONS,
   type SlashActionId,
@@ -242,7 +247,7 @@ function Thread() {
   const router = useRouter();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
-  const keyboard = useKeyboardState();
+  const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const { botId, groupId, name, messageId } = useLocalSearchParams<{
     botId?: string;
     groupId?: string;
@@ -271,6 +276,10 @@ function Thread() {
   activeBotId.current = botId;
   const activeGroupId = useRef(groupId);
   activeGroupId.current = groupId;
+  const routeName = useRef(name);
+  routeName.current = name;
+  const mentionBotsRefreshGeneration = useRef(0);
+  const mentionBotsAppliedGeneration = useRef(0);
   const readVisibleTarget = useRef<string | null>(null);
   const threadKey = groupId ?? botId;
   const [threadScrollState, setThreadScrollState] = useState<ThreadScrollState>(() =>
@@ -322,13 +331,16 @@ function Thread() {
     null,
   );
   const showSteps = useDisplayAgentSteps();
-  const visibleMessages = useMemo(
+  const reactionView = useMemo(
     () =>
-      userVisibleMessages(snap?.messages ?? [], {
-        includePeerReceipts: true,
-      }).filter((message) => hasVisibleMessagePresentation(message.blocks, showSteps)),
+      projectMessageReactions(
+        userVisibleMessages(snap?.messages ?? [], { includePeerReceipts: true }).filter((message) =>
+          hasVisibleMessagePresentation(message.blocks, showSteps),
+        ),
+      ),
     [snap?.messages, showSteps],
   );
+  const visibleMessages = reactionView.visibleMessages;
   const latestMessageId = visibleMessages.at(-1)?.id ?? null;
   const rewindRemovedCount = rewindTarget
     ? visibleMessages.filter((message) => (message.seq ?? 0) > (rewindTarget.seq ?? 0)).length
@@ -392,6 +404,7 @@ function Thread() {
         })
       : [];
   const currentBot = botId ? mentionBots.find((bot) => bot.id === botId) : undefined;
+  const displayName = currentBot?.name ?? name;
   const notificationThreadId = snap?.threadId ?? currentBot?.threadId;
   activeThreadId.current = notificationThreadId;
   const currentBotStatus = snap ? snap.run?.status : currentBot?.status;
@@ -422,14 +435,37 @@ function Thread() {
     setThreadScrollState(scrollBehavior.current.state());
   }, [threadKey]);
 
+  const refreshMentionBots = useCallback(async () => {
+    if (!botId && !groupId) return;
+    const generation = ++mentionBotsRefreshGeneration.current;
+    const targetBotId = botId;
+    try {
+      const bots = await rpc<MobileBot[]>("bots/list");
+      // Apply any successful response that is still the newest applied so far.
+      // A later failed refresh must not discard an earlier success.
+      if (generation < mentionBotsAppliedGeneration.current) return;
+      if (targetBotId !== activeBotId.current) return;
+      mentionBotsAppliedGeneration.current = generation;
+      setMentionBots(bots);
+      if (targetBotId) {
+        const next = bots.find((bot) => bot.id === targetBotId);
+        // Read the route name from a ref so renaming does not recreate this
+        // callback (and restart the SSE subscription that depends on it).
+        if (next?.name && next.name !== routeName.current) {
+          router.setParams({ name: next.name });
+        }
+      }
+    } catch {
+      // Keep the last known roster if refresh fails.
+    }
+  }, [botId, groupId, router]);
+
   useEffect(() => {
-    void rpc<MobileBot[]>("bots/list")
-      .then(setMentionBots)
-      .catch(() => setMentionBots([]));
+    void refreshMentionBots();
     void rpc<MobileGroup[]>("groups/list")
       .then(setMentionGroups)
       .catch(() => setMentionGroups([]));
-  }, []);
+  }, [refreshMentionBots]);
 
   useEffect(() => {
     if (mentionBots.length === 0) {
@@ -502,9 +538,16 @@ function Thread() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: name || t("Thread"),
+      title: displayName || t("Thread"),
       headerTitle: () => (
-        <View
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={!inGroup && botId ? t("Chat settings") : displayName || t("Thread")}
+          disabled={inGroup || !botId}
+          onPress={() => {
+            if (!botId || inGroup) return;
+            router.push({ pathname: "/bot-settings", params: { botId } });
+          }}
           style={{
             flexDirection: "row",
             alignItems: "center",
@@ -530,9 +573,9 @@ function Thread() {
               fontWeight: "600",
             }}
           >
-            {name || t("Thread")}
+            {displayName || t("Thread")}
           </Text>
-        </View>
+        </Pressable>
       ),
       headerRight: () =>
         inGroup ? (
@@ -568,9 +611,9 @@ function Thread() {
     botId,
     currentBot,
     currentBotStatus,
+    displayName,
     groupId,
     inGroup,
-    name,
     navigation,
     router,
     t,
@@ -602,11 +645,19 @@ function Thread() {
 
   const botActions = [
     {
+      text: t("Chat settings"),
+      onPress: () =>
+        router.push({
+          pathname: "/bot-settings",
+          params: { botId: botId ?? "" },
+        }),
+    },
+    {
       text: t("Open computer"),
       onPress: () =>
         router.push({
           pathname: "/computer",
-          params: { botId: botId ?? "", name: name ?? t("Bot") },
+          params: { botId: botId ?? "", name: displayName ?? t("Bot") },
         }),
     },
     {
@@ -643,7 +694,7 @@ function Thread() {
     {
       text: t("Delete…"),
       destructive: true,
-      onPress: () => confirmDeleteBot({ id: botId ?? "", name: name || t("Bot") }, leaveBot),
+      onPress: () => confirmDeleteBot({ id: botId ?? "", name: displayName || t("Bot") }, leaveBot),
     },
   ];
 
@@ -810,11 +861,12 @@ function Thread() {
           threadId: notificationThreadId,
         }).catch(() => undefined);
       }
+      void refreshMentionBots();
       markReadIfVisible();
       return () => {
         void setOpenNotificationThread(null).catch(() => undefined);
       };
-    }, [botId, markReadIfVisible, notificationThreadId]),
+    }, [botId, markReadIfVisible, notificationThreadId, refreshMentionBots]),
   );
 
   useEffect(() => {
@@ -872,7 +924,6 @@ function Thread() {
                 event.type === "agent.tool.completed" ||
                 event.type === "thread.message.created" ||
                 event.type === "thread.message.updated" ||
-                event.type === "thread.message.reaction" ||
                 event.type === "thread.subagent" ||
                 event.type === "thread.cloud_agent" ||
                 event.type === "thread.cleared" ||
@@ -888,11 +939,15 @@ function Thread() {
                 }
                 setSnap((prev) => applyMobileThreadEvent(prev, event));
               }
+              if (event.type === "bot.updated") {
+                void refreshMentionBots();
+              }
               if (event.type === "thread.message.created" && event.payload?.role === "bot") {
                 readVisibleTarget.current = null;
                 markReadIfVisible();
               }
               if (isRunTerminalEvent(event)) {
+                void refreshMentionBots();
                 if (!jumpScrollTarget.current && !expandedHistoryThread.current) {
                   void refresh().catch(() => undefined);
                 }
@@ -914,7 +969,7 @@ function Thread() {
     return () => {
       abort.abort();
     };
-  }, [botId, groupId, markReadIfVisible]);
+  }, [botId, groupId, markReadIfVisible, refreshMentionBots]);
 
   useEffect(() => {
     if (!botId && !groupId) return;
@@ -1312,7 +1367,7 @@ function Thread() {
     );
   }
 
-  async function reactToMessage(message: MobileMessage) {
+  async function reactToMessage(message: MobileMessage, reaction: MessageReaction) {
     const targetBotId = botId;
     const targetGroupId = groupId;
     if (!targetBotId && !targetGroupId) return;
@@ -1320,7 +1375,8 @@ function Thread() {
       await rpc("threads/react", {
         ...(targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! }),
         messageId: message.id,
-        thumbsUp: !message.thumbsUp,
+        reaction,
+        clientNonce: newClientNonce(),
       });
     } catch (err) {
       if (!isCurrentTarget(targetBotId, targetGroupId)) return;
@@ -1339,8 +1395,18 @@ function Thread() {
         ? [
             {
               name: "react",
-              text: message.thumbsUp ? t("Remove thumbs-up") : t("Add thumbs-up"),
-              onPress: () => void reactToMessage(message),
+              text: t("React"),
+              onPress: () =>
+                presentMessageActionSheet({
+                  cancel: t("Cancel"),
+                  more: t("More"),
+                  colorScheme,
+                  actions: MESSAGE_REACTIONS.map((emoji) => ({
+                    name: emoji,
+                    text: emoji,
+                    onPress: () => void reactToMessage(message, emoji),
+                  })),
+                }),
             },
           ]
         : []),
@@ -1406,6 +1472,7 @@ function Thread() {
             yesterday: t("Yesterday"),
           })
         : "";
+    const messageReactions = reactionView.reactions.get(message.id);
     const activityBotId =
       !inGroup && message.role === "bot" && message.id.startsWith("progress:")
         ? (message.botId ?? botId)
@@ -1486,7 +1553,7 @@ function Thread() {
                 botId={botId ?? snap?.members?.[0]?.botId ?? ""}
                 groupId={groupId}
                 message={message}
-                botName={name}
+                botName={displayName}
                 bots={mentionBots}
                 members={snap?.members}
                 replyPreview={
@@ -1499,20 +1566,35 @@ function Thread() {
                 actionProps={actionProps}
               />
             </Pressable>
-            {canReactToThreadMessage(message) && message.thumbsUp ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("Remove thumbs-up")}
-                accessibilityState={{ selected: true }}
-                onPress={() => void reactToMessage(message)}
-                hitSlop={8}
+            {messageReactions ? (
+              <View
                 style={{
-                  alignSelf: message.role === "user" ? "flex-end" : "flex-start",
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 4,
                   marginTop: 4,
+                  justifyContent: message.role === "user" ? "flex-end" : "flex-start",
                 }}
               >
-                <Text style={{ color: tokens.warning, fontSize: 13 }}>👍</Text>
-              </Pressable>
+                {[...messageReactions].map(([emoji, count]) => (
+                  <Text
+                    key={emoji}
+                    style={{
+                      color: tokens.foreground,
+                      backgroundColor: tokens.muted,
+                      borderColor: tokens.border,
+                      borderWidth: 1,
+                      borderRadius: 16,
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      fontSize: 13,
+                    }}
+                  >
+                    {emoji}
+                    {count > 1 ? ` ${count}` : ""}
+                  </Text>
+                ))}
+              </View>
             ) : null}
           </View>
         </View>
@@ -1523,6 +1605,8 @@ function Thread() {
   const workingFooter =
     !inGroup && currentBot && isWorkingStatus(currentBotStatus) && !hasLiveProgress ? (
       <View
+        accessibilityLabel={t("{name} is working", { name: currentBot.name })}
+        accessibilityRole="text"
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -1544,10 +1628,15 @@ function Thread() {
       </View>
     ) : inGroup && workingGroupBots.length > 0 ? (
       <View
+        accessibilityLabel={
+          workingGroupBots.length === 1
+            ? t("{name} is working", { name: workingGroupBots[0]?.name ?? t("Agent") })
+            : t("{count} agents working", { count: workingGroupBots.length })
+        }
+        accessibilityRole="text"
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 10,
           minHeight: 40,
           marginTop: 12,
         }}
@@ -1735,7 +1824,7 @@ function Thread() {
         style={{
           // Keyboard covers the nav bar / home indicator, so the safe-area
           // inset would render as dead space between composer and keyboard.
-          paddingBottom: keyboard.isVisible ? 12 : Math.max(insets.bottom + 12, 24),
+          paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom + 12, 24),
         }}
       >
         {replyTarget ? (
@@ -2099,7 +2188,9 @@ function Thread() {
             <TextInput
               value={draft}
               onChangeText={updateDraft}
-              accessibilityLabel={name ? t("Message {name}", { name }) : t("Message")}
+              accessibilityLabel={
+                displayName ? t("Message {name}", { name: displayName }) : t("Message")
+              }
               onKeyPress={(event) => {
                 if (
                   event.nativeEvent.key === "Backspace" &&
@@ -2112,8 +2203,8 @@ function Thread() {
               placeholder={
                 selectedSkill || selectedMentions.length
                   ? undefined
-                  : name
-                    ? t("Message {name}", { name })
+                  : displayName
+                    ? t("Message {name}", { name: displayName })
                     : t("Message…")
               }
               placeholderTextColor={tokens.mutedForeground}

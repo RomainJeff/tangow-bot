@@ -9,7 +9,6 @@ export const ProductEventType = z.enum([
   /** History truncated at payload.fromSeq so the user can resend an edited message. */
   "thread.rewound",
   "thread.message.updated",
-  "thread.message.reaction",
   "thread.progress",
   "thread.artifact",
   "thread.ask",
@@ -42,6 +41,7 @@ export const ProductEventType = z.enum([
   "effect.reconciled",
   "usage.recorded",
   "bot.spawned",
+  "bot.updated",
   "bot.archived",
   "bot.deleted",
   "group.created",
@@ -341,7 +341,6 @@ export const ThreadMessageSchema = z.object({
   botId: Id.optional(),
   replyToMessageId: Id.optional(),
   runId: Id.optional(),
-  thumbsUp: z.boolean().optional(),
   // Set for message_user output (user-progress prefix); lets delegated (peer) runs still
   // surface messages the bot addressed to the user. See core/message-visibility.
   clientNonce: z.string().optional(),

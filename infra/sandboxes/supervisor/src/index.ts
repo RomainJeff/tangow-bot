@@ -19,16 +19,19 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import {
+  assertVolumeSubpathSupport,
   COMPUTER_GID,
   COMPUTER_IMAGE,
   COMPUTER_UID,
   COMPUTER_USER,
+  computerHomeStorage,
   computerNetworkNameFor,
   computerNetworkNamesForCleanup,
   computerResourceLimits,
   containerCreateOptions,
   containerNameFor,
   controlPortPublicationMatches,
+  homeVolumeMatches,
   hostComputerUser,
   legacyNetworkOwnedSolelyBy,
   publishedLoopbackControlHostPort,
@@ -187,7 +190,10 @@ app.post("/computers", async (c) => {
       // do so as the same user, but a root supervisor must never create or chown
       // user-controlled paths at runtime; Compose data-init handles legacy data.
       if (hostUid !== 0) await mkdir(serviceHomePath, { recursive: true });
-      const homePath = hostHomePath(serviceHomePath, runtimeInfo);
+      const storage = computerHomeStorage(serviceHomePath, dataDir, runtimeInfo);
+      if (storage.homeVolume) {
+        assertVolumeSubpathSupport((await docker.version()).ApiVersion);
+      }
       const computerUser = runtimeInfo ? COMPUTER_USER : hostComputerUser(hostUid, hostGid);
       // Bind sources are created by the worker before provision; a root supervisor never mkdirs them.
       const skillsBinds = skillsBindsFor(dataDir, body.spaceId, body.userId, (p) =>
@@ -206,7 +212,8 @@ app.post("/computers", async (c) => {
           (!networkMode || info.HostConfig.NetworkMode === networkMode) &&
           info.Config.User === computerUser &&
           skillsBinds.every((bind) => info.HostConfig.Binds?.includes(bind)) &&
-          controlPublishOk
+          controlPublishOk &&
+          (!storage.homeVolume || homeVolumeMatches(info.HostConfig.Mounts, storage.homeVolume))
         ) {
           if (!info.State.Running) await existing.start();
           return c.json({
@@ -243,7 +250,7 @@ app.post("/computers", async (c) => {
             image: COMPUTER_IMAGE,
             botId: body.botId,
             spaceId: body.spaceId,
-            homePath,
+            ...storage,
             user: computerUser,
             networkMode,
             controlToken: randomUUID(),
@@ -967,6 +974,8 @@ function assertBotHomePath(homePath: string, botId: string) {
   }
 }
 
+// computerHomeStorage covers the bot home; skills binds still need the same
+// service-path -> host-path translation for the data dir bind mount.
 function hostHomePath(serviceHomePath: string, info: Docker.ContainerInspectInfo | undefined) {
   const dataMount = info?.Mounts.find((mount) => mount.Destination === dataDir);
   if (!dataMount?.Source) return serviceHomePath;
