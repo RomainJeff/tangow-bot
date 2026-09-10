@@ -1332,8 +1332,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ).catch((error) => getLogger().error("bot message failure return", error));
           }
           // A delegated run's failure is reported back to the ordering bot via
-          // returnBotMessageOutcome above; the human is not paged for internal delegation.
-          if (!failed.continuationRunId && notifiesUserOnRunEnd(run.trigger)) {
+          // returnBotMessageOutcome above, and a sub-bot's routine reports to its orchestrator;
+          // neither pages the human.
+          if (
+            !failed.continuationRunId &&
+            notifiesUserOnRunEnd(run.trigger, { isSubBot: bot.parentBotId != null })
+          ) {
             await notifyRun(deps, run, {
               kind: "failure",
               title: `${bot.name} failed`,
@@ -3889,8 +3893,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ).catch((error) => getLogger().error("bot message result return", error));
           }
           // A delegated run's result auto-returns to the ordering bot and is hidden from the
-          // user's thread, so a "finished" push here is pure back-office noise for the human.
-          if (text && !completed.continuationRunId && notifiesUserOnRunEnd(run.trigger)) {
+          // user's thread, and a sub-bot's routine reports to its orchestrator, so neither should
+          // push a "finished" notification to the human.
+          if (
+            text &&
+            !completed.continuationRunId &&
+            notifiesUserOnRunEnd(run.trigger, { isSubBot: bot.parentBotId != null })
+          ) {
             await notifyRun(deps, run, {
               kind: "completion",
               title: `${bot.name} finished`,
@@ -3959,8 +3968,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ).catch((returnError) => getLogger().error("bot message failure return", returnError));
           }
           // A delegated run's failure is reported back to the ordering bot via
-          // returnBotMessageOutcome above; the human is not paged for internal delegation.
-          if (!failed.continuationRunId && notifiesUserOnRunEnd(run.trigger)) {
+          // returnBotMessageOutcome above, and a sub-bot's routine reports to its orchestrator;
+          // neither pages the human.
+          if (
+            !failed.continuationRunId &&
+            notifiesUserOnRunEnd(run.trigger, { isSubBot: bot.parentBotId != null })
+          ) {
             await notifyRun(deps, run, {
               kind: "failure",
               title: `${bot.name} failed`,
@@ -4214,13 +4227,20 @@ export function completionMarksUnread(trigger: string, text: string): boolean {
 }
 
 /**
- * Whether a run ending (completion or failure) should page the human. A delegated
- * (`bot_message`) run's result and failure are returned to the ordering bot and hidden from
- * the user's thread, so a "finished"/"failed" push would be pure back-office noise. Runs the
- * user or a routine own still notify; asks/takeovers page through their own `help` path.
+ * Whether a run ending (completion or failure) should page the human.
+ *
+ * A delegated (`bot_message`) run's result and failure are returned to the ordering bot and
+ * hidden from the user's thread, so a push here is pure back-office noise. A sub-bot's scheduled
+ * `routine` reports to its orchestrator too (via `message_bot`), yet any closing text it still
+ * emits lands in its own thread and would page the user; a sub-bot only speaks to the user in a
+ * direct conversation (`user`/`messaging`), so its routine end must stay silent. A top-level bot
+ * (no parent, e.g. the orchestrator) keeps routine notifications — that is its user-facing brief.
+ * Asks/takeovers page through their own `help` path and are unaffected.
  */
-export function notifiesUserOnRunEnd(trigger: string): boolean {
-  return trigger !== "bot_message";
+export function notifiesUserOnRunEnd(trigger: string, opts?: { isSubBot?: boolean }): boolean {
+  if (trigger === "bot_message") return false;
+  if (trigger === "routine" && opts?.isSubBot === true) return false;
+  return true;
 }
 
 export function missingTurnImagesInstruction(

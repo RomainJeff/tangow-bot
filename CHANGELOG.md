@@ -6,11 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-09-09
+### 2026-09-10
 
 #### Fixed
 
-- A bot finishing or failing work another bot delegated to it no longer pushes you a "finished"/"failed" notification: those results are reported back to the bot that asked, so only runs you started, routines, and requests for your input (approvals, answers, takeovers) still page you.
+- A sub-bot no longer pings you when it finishes background work: neither a run another bot delegated to it (reported back to that bot) nor its own scheduled routine (which reports to its orchestrator) pushes you a "finished"/"failed" notification. Runs you started, your direct conversations with any bot, a top-level bot's own routine brief, and requests for your input (approvals, answers, takeovers) still page you.
 
 ### 2026-09-08
 
