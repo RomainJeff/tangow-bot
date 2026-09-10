@@ -164,8 +164,8 @@ msgstr "@{0}"
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "एक प्लगइन मार्केटप्लेस (.claude-plugin/marketplace.json) या स्किल्स की रिपॉजिटरी (SKILL.md फ़ाइलें)। फ़ॉर्मेट अपने आप पहचाना जाता है।"
 
-#: src/pages/shell/dialogs.tsx:140
-msgid "A separate, private workspace with its own bots and groups. Use spaces to keep contexts apart, such as work and personal."
+#: src/pages/shell/dialogs.tsx:137
+msgid "Private workspace with its own bots and groups."
 msgstr ""
 
 #: src/pages/shell/bot-picker.tsx:105
@@ -2773,7 +2773,7 @@ msgid "on the 1st at {0}"
 msgstr "1 तारीख को {0} बजे"
 
 #: src/pages/shell/dialogs.tsx:135
-msgid "One conversation with 2–6 of your bots in a shared thread. Name the group, pick its members, and they all reply in the same chat."
+msgid "Shared chat with 2-6 bots. They all reply in the same thread."
 msgstr ""
 
 #: src/pages/Shell.tsx:3833
@@ -2986,9 +2986,9 @@ msgstr "पुल अनुरोध"
 msgid "Queued"
 msgstr "कतार में"
 
-#: src/pages/PluginsOverlay.tsx:1141
-msgid "Rakazo verifies the source before saving it. Credentials are encrypted and are never returned to clients or exposed to the model."
-msgstr "Rakazo सहेजने से पहले स्रोत की पुष्टि करता है। क्रेडेंशियल एन्क्रिप्टेड होते हैं और कभी क्लाइंट को नहीं लौटाए जाते, न ही मॉडल को दिखाए जाते हैं।"
+#: src/pages/PluginsOverlay.tsx:1075
+msgid "Credentials are encrypted and never sent to the model."
+msgstr "क्रेडेंशियल एन्क्रिप्टेड होते हैं और मॉडल को कभी नहीं भेजे जाते।"
 
 #: src/pages/Shell.tsx:5391
 msgid "React"
