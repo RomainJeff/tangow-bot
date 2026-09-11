@@ -3,6 +3,7 @@ import {
   completionMarksUnread,
   completionMessageSegments,
   completionNotificationBody,
+  notifiesUserOnRunEnd,
   subagentMarksUnread,
 } from "./executor.js";
 
@@ -68,6 +69,31 @@ describe("completionNotificationBody", () => {
 
   it("uses the empty-run text when that is all the run produced", () => {
     expect(completionNotificationBody("", completionMessageSegments([]))).toBe("done.");
+  });
+});
+
+describe("notifiesUserOnRunEnd", () => {
+  it("never pages the human for a delegated run", () => {
+    // A delegated (bot_message) run reports back to the ordering bot and is hidden from the
+    // user's thread, so a "finished"/"failed" push would be pure back-office noise.
+    expect(notifiesUserOnRunEnd("bot_message")).toBe(false);
+    expect(notifiesUserOnRunEnd("bot_message", { isSubBot: true })).toBe(false);
+  });
+
+  it("keeps user-initiated and top-level runs, including a top-level bot's routine", () => {
+    expect(notifiesUserOnRunEnd("user")).toBe(true);
+    expect(notifiesUserOnRunEnd("messaging")).toBe(true);
+    // Orchestrator (no parent): its routine is a user-facing brief and still notifies.
+    expect(notifiesUserOnRunEnd("routine")).toBe(true);
+    expect(notifiesUserOnRunEnd("routine", { isSubBot: false })).toBe(true);
+  });
+
+  it("silences a sub-bot's routine but keeps its direct conversation with the user", () => {
+    // A sub-bot's routine reports to its orchestrator; any closing text it emits must not page
+    // the user. Its direct conversation (user/messaging) still notifies.
+    expect(notifiesUserOnRunEnd("routine", { isSubBot: true })).toBe(false);
+    expect(notifiesUserOnRunEnd("user", { isSubBot: true })).toBe(true);
+    expect(notifiesUserOnRunEnd("messaging", { isSubBot: true })).toBe(true);
   });
 });
 
