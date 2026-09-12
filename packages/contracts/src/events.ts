@@ -307,6 +307,25 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     /** Links in a bot-started chain; absent when a person started it. */
     hop: z.number().int().nonnegative().optional(),
   }),
+  z.object({
+    /** A sub-bot's routine run, traced in its own thread instead of a free closing text.
+        Driven by the run lifecycle (queued/running/completed/failed/cancelled), not by
+        model-authored narration; `headline`/`digest` are untrusted content, rendered as
+        escaped text with no remote resource loads. */
+    kind: z.literal("routine_run"),
+    routineId: Id.optional(),
+    routineName: z.string(),
+    state: z.enum(["queued", "running", "completed", "failed", "cancelled"]),
+    /** One-line summary shown at rest; the first non-empty line of `digest`, truncated. */
+    headline: z.string().optional(),
+    /** Full result text, shown in a collapsed-by-default toggle. */
+    digest: z.string().optional(),
+    startedAt: z.string().optional(),
+    endedAt: z.string().optional(),
+    /** Mirrors the routine's `notify` setting at the time this card was rendered, so the
+        client can default the toggle open/closed without a second lookup. */
+    notify: z.boolean().optional(),
+  }),
 ]);
 export type MessageBlock = z.infer<typeof MessageBlock>;
 
