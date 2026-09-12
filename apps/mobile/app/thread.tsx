@@ -2670,6 +2670,17 @@ const MessageBubble = memo(function MessageBubble({
       </Pressable>
     );
   }
+  const routineRun = message.blocks.find(
+    (block): block is Extract<MessageBlock, { kind: "routine_run" }> =>
+      block.kind === "routine_run",
+  );
+  if (routineRun) {
+    const accent =
+      bots.find((bot) => bot.id === cardBotId)?.color ??
+      members?.find((member) => member.botId === cardBotId)?.color ??
+      tokens.mutedForeground;
+    return <RoutineRunCard block={routineRun} accent={accent} actionProps={actionProps} />;
+  }
   const special = message.blocks.find(
     (block) =>
       block.kind === "subagent" || block.kind === "child_bot" || block.kind === "cloud_agent",
@@ -3155,6 +3166,157 @@ const MessageBubble = memo(function MessageBubble({
     </View>
   );
 });
+
+/** "3m ago"-style label from an ISO timestamp, in the active UI locale. Falls
+    back to a clock time when `Intl.RelativeTimeFormat` isn't available. */
+function routineRunTimeLabel(iso: string | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const locale = dateLocaleForUi();
+  const diffMin = Math.round((Date.now() - date.getTime()) / 60_000);
+  try {
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    if (Math.abs(diffMin) < 1) return rtf.format(0, "minute");
+    if (Math.abs(diffMin) < 60) return rtf.format(-diffMin, "minute");
+    const diffHour = Math.round(diffMin / 60);
+    if (Math.abs(diffHour) < 24) return rtf.format(-diffHour, "hour");
+    return rtf.format(-Math.round(diffHour / 24), "day");
+  } catch {
+    return date.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  }
+}
+
+/** Native routine-run card: a sub-bot's routine traced by its run lifecycle
+    (queued/running/completed/failed/cancelled) instead of a free closing
+    text. Mirrors the web `RoutineRunCard`'s semantics; visual template is the
+    `subagent` card above. Collapsed by default, expanded when the routine's
+    `notify` toggle is on (spec CA2/CA13). The digest is untrusted content
+    (a sub-bot's routine can summarize scanned mail or web pages): it is
+    rendered as plain RN `Text`, never markdown/HTML, and no remote resource
+    is ever loaded from it (threat model S1, CA15). */
+function RoutineRunCard({
+  block,
+  accent,
+  actionProps,
+}: {
+  block: Extract<MessageBlock, { kind: "routine_run" }>;
+  accent: string;
+  actionProps: MessageActionProps;
+}) {
+  const tokens = mobileTokens();
+  const { t } = useI18n();
+  const digest = block.digest?.trim() || undefined;
+  const subscribed = Boolean(block.notify);
+  const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
+  const expanded = manualExpanded ?? subscribed;
+  const statusColor =
+    block.state === "completed"
+      ? tokens.success
+      : block.state === "failed"
+        ? tokens.destructive
+        : block.state === "running"
+          ? tokens.warning
+          : tokens.mutedForeground;
+  const statusLabel =
+    block.state === "queued"
+      ? t("Queued")
+      : block.state === "running"
+        ? t("Running")
+        : block.state === "completed"
+          ? t("Completed")
+          : block.state === "failed"
+            ? t("Failed")
+            : t("Cancelled");
+  const timeLabel = routineRunTimeLabel(
+    block.state === "queued" || block.state === "running"
+      ? block.startedAt
+      : (block.endedAt ?? block.startedAt),
+  );
+  return (
+    <Pressable
+      {...actionProps}
+      style={{
+        width: "90%",
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: subscribed ? accent : tokens.border,
+        backgroundColor: tokens.card,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        gap: 6,
+      }}
+    >
+      {/* The routine name owns the full width and is never truncated by the
+          state pill or timestamp (explicit requirement): they always sit on
+          their own row below it, not squeezed onto the same line. */}
+      <Text style={{ color: tokens.foreground, fontSize: 15, fontWeight: "600" }}>
+        {block.routineName}
+      </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        {block.state === "running" ? (
+          <ShimmerText style={{ color: statusColor, fontSize: 13, fontWeight: "600" }}>
+            {`● ${statusLabel}`}
+          </ShimmerText>
+        ) : (
+          // The dot never carries the status alone: the word is always shown too.
+          <Text style={{ color: statusColor, fontSize: 13, fontWeight: "600" }}>
+            {`● ${statusLabel}`}
+          </Text>
+        )}
+        {timeLabel ? (
+          <Text style={{ color: tokens.mutedForeground, fontSize: 12.5 }}>{timeLabel}</Text>
+        ) : null}
+        {subscribed ? (
+          <View
+            style={{
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: accent,
+              paddingHorizontal: 6,
+              paddingVertical: 1,
+            }}
+          >
+            <Text style={{ color: accent, fontSize: 11, fontWeight: "600" }}>
+              {t("Subscribed")}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      {block.headline ? (
+        <Text
+          numberOfLines={1}
+          style={{ color: tokens.mutedForeground, fontSize: 13.5, lineHeight: 19 }}
+        >
+          {block.headline}
+        </Text>
+      ) : null}
+      {digest ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? t("Hide details") : t("Show details")}
+          onPress={() => setManualExpanded(!expanded)}
+          hitSlop={8}
+          style={{ flexDirection: "row", alignItems: "center", marginTop: 2 }}
+        >
+          <NativeSymbol
+            ios={expanded ? "chevron.up" : "chevron.down"}
+            android={expanded ? "chevron-up-outline" : "chevron-down-outline"}
+            size={14}
+            color={tokens.mutedForeground}
+          />
+        </Pressable>
+      ) : null}
+      {expanded && digest ? (
+        <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled>
+          <Text selectable style={{ color: tokens.foreground, fontSize: 13.5, lineHeight: 20 }}>
+            {digest}
+          </Text>
+        </ScrollView>
+      ) : null}
+    </Pressable>
+  );
+}
 
 function MessageTextCard({
   message,
