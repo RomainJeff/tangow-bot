@@ -2,13 +2,14 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { MessageBlock } from "@rakazo/contracts";
 import { abortableDelay } from "@rakazo/core";
 import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
-import { X } from "lucide-react";
+import { Check, ChevronDown, Clock, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { BuiCard, SuccessPop } from "../../components/ai/primitives";
 import { type ArtifactTarget, decodeArtifactBase64 } from "../../lib/artifact-open";
 import { chartViewport } from "../../lib/chart-viewport";
 import { connectMcpOauth } from "../../lib/mcp-connect";
 import { rpc } from "../../lib/rpc";
+import { formatRelativeTime } from "../ActivityList";
 
 export function ChoiceCard({
   botId,
@@ -545,6 +546,130 @@ export function ArtifactImage({
           </DialogContent>
         </Dialog>
       ) : null}
+    </div>
+  );
+}
+
+type RoutineRunBlock = Extract<MessageBlock, { kind: "routine_run" }>;
+
+const ROUTINE_STATE_ICON_SIZE = 14;
+
+function RoutineRunStatePill({ state }: { state: RoutineRunBlock["state"] }) {
+  if (state === "queued") {
+    return (
+      <span className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+        <Clock size={ROUTINE_STATE_ICON_SIZE} strokeWidth={1.8} aria-hidden />
+        <Trans>Queued</Trans>
+      </span>
+    );
+  }
+  if (state === "running") {
+    return (
+      <span className="flex items-center gap-1.5 text-[12.5px] text-foreground/80">
+        <span
+          aria-hidden
+          className="size-2 rounded-full bg-foreground/70 animate-pulse motion-reduce:animate-none"
+        />
+        <Trans>Running</Trans>
+      </span>
+    );
+  }
+  if (state === "failed") {
+    return (
+      <span className="flex items-center gap-1.5 text-[12.5px] text-destructive">
+        <X size={ROUTINE_STATE_ICON_SIZE} strokeWidth={2} aria-hidden />
+        <Trans>Failed</Trans>
+      </span>
+    );
+  }
+  if (state === "cancelled") {
+    return (
+      <span className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+        <Trans>Cancelled</Trans>
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1.5 text-[12.5px] text-success">
+      <Check size={ROUTINE_STATE_ICON_SIZE} strokeWidth={2.2} aria-hidden />
+      <Trans>Completed</Trans>
+    </span>
+  );
+}
+
+/** Background-routine run card: a bot's own thread trace for a routine run, driven by
+ * lifecycle state (never by free-form model text). Collapsed by default; expanded when the
+ * routine's notify toggle is on (CA2/CA13). The digest renders as escaped plain text only —
+ * no markdown, no HTML, no remote resource loads (CA15). */
+export function RoutineRunCard({ block, botColor }: { block: RoutineRunBlock; botColor: string }) {
+  const { t } = useLingui();
+  const subscribed = block.notify === true;
+  const hasDigest = Boolean(block.digest?.trim());
+  const [expanded, setExpanded] = useState(subscribed);
+  const timestamp = block.endedAt ?? block.startedAt;
+
+  return (
+    <div className="flex justify-start">
+      <BuiCard
+        data-testid="routine-run-card"
+        className="w-[min(440px,100%)] px-4 py-3.5"
+        style={
+          subscribed
+            ? {
+                boxShadow: `inset 3px 0 0 0 color-mix(in oklab, var(--border) 40%, ${botColor})`,
+              }
+            : undefined
+        }
+      >
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+          <span
+            className="min-w-0 flex-1 basis-48 text-[15px] font-medium text-foreground"
+            dir="auto"
+          >
+            {block.routineName}
+          </span>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5">
+            {subscribed ? (
+              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                <Trans>Subscribed</Trans>
+              </span>
+            ) : null}
+            <RoutineRunStatePill state={block.state} />
+            {timestamp ? (
+              <span className="text-[12px] text-muted-foreground/75">
+                {formatRelativeTime(timestamp)}
+              </span>
+            ) : null}
+            {hasDigest ? (
+              <button
+                type="button"
+                aria-expanded={expanded}
+                aria-label={expanded ? t`Hide details` : t`Show details`}
+                onClick={() => setExpanded((open) => !open)}
+                className="rounded-full p-1 text-muted-foreground hover:bg-accent hover:text-foreground/75"
+              >
+                <ChevronDown
+                  size={16}
+                  strokeWidth={1.8}
+                  className={expanded ? "rotate-180 transition-transform" : "transition-transform"}
+                />
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {block.headline ? (
+          <p className="mt-1.5 truncate text-[13.5px] text-muted-foreground" dir="auto">
+            {block.headline}
+          </p>
+        ) : null}
+        {expanded && hasDigest ? (
+          <div className="rk-scroll mt-2.5 max-h-64 overflow-y-auto overflow-x-hidden rounded-lg bg-muted px-3 py-2.5 text-[13px] leading-[1.55] text-foreground/85">
+            <pre className="whitespace-pre-wrap break-words font-sans" dir="auto">
+              {block.digest}
+            </pre>
+          </div>
+        ) : null}
+      </BuiCard>
     </div>
   );
 }

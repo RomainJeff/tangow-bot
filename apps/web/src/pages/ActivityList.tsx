@@ -127,7 +127,7 @@ function ActivityRow({ run, onOpen }: { run: RunActivityRow; onOpen: () => void 
   );
 }
 
-function formatRelativeTime(iso: string, now = new Date()): string {
+export function formatRelativeTime(iso: string, now = new Date()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
