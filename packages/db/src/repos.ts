@@ -275,9 +275,15 @@ export function createRepos(prisma: PrismaClient) {
           ),
         ),
       ];
+      // Only a sub-bot's delegated `bot_message` run is a hidden peer run; a top-level bot's
+      // `bot_message` run is its visible relay to the user (background-work-visibility CA5/CA7).
       const peerRuns = candidateRunIds.length
         ? await prisma.run.findMany({
-            where: { id: { in: candidateRunIds }, trigger: "bot_message" },
+            where: {
+              id: { in: candidateRunIds },
+              trigger: "bot_message",
+              bot: { parentBotId: { not: null } },
+            },
             select: { id: true },
           })
         : [];
@@ -294,7 +300,11 @@ export function createRepos(prisma: PrismaClient) {
             ].filter((runId) => !checkedRunIds.has(runId));
             if (windowRunIds.length > 0) {
               const morePeers = await prisma.run.findMany({
-                where: { id: { in: windowRunIds }, trigger: "bot_message" },
+                where: {
+                  id: { in: windowRunIds },
+                  trigger: "bot_message",
+                  bot: { parentBotId: { not: null } },
+                },
                 select: { id: true },
               });
               for (const run of morePeers) peerRunIds.add(run.id);

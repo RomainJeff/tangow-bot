@@ -60,13 +60,30 @@ describe("thread message pages", () => {
   });
 
   it("caches peer-run classification for live events", async () => {
-    const findUnique = vi.fn(async () => ({ trigger: "bot_message" }));
+    const findUnique = vi.fn(async () => ({
+      trigger: "bot_message",
+      bot: { parentBotId: "claudius-1" },
+    }));
     const prisma = { run: { findUnique } } as unknown as PrismaClient;
     const cache = new Map<string, Promise<boolean>>();
 
     await expect(isPeerRun(prisma, "run-peer", cache)).resolves.toBe(true);
     await expect(isPeerRun(prisma, "run-peer", cache)).resolves.toBe(true);
     expect(findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat a top-level bot's bot_message run as a peer run (CA5/CA6)", async () => {
+    // background-work-visibility: a top-level bot (no parent) has no orchestrator above it, so
+    // its own `bot_message` run IS its user-facing relay, not a hidden delegated run.
+    const findUnique = vi.fn(async () => ({ trigger: "bot_message", bot: { parentBotId: null } }));
+    const prisma = { run: { findUnique } } as unknown as PrismaClient;
+    const cache = new Map<string, Promise<boolean>>();
+
+    await expect(isPeerRun(prisma, "run-relay", cache)).resolves.toBe(false);
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: "run-relay" },
+      select: { trigger: true, bot: { select: { parentBotId: true } } },
+    });
   });
 
   it("forwards peer waiting, ask, and text events on an open thread", () => {
@@ -150,6 +167,43 @@ describe("thread message pages", () => {
       "message-received",
       "message-reply",
     ]);
+  });
+
+  it("queries only sub-bot bot_message runs as peer runs (CA5/CA7 de-masking gate)", async () => {
+    const findMany = vi.fn(async () => [
+      {
+        id: "message-relay",
+        threadId: "thread-1",
+        seq: 1,
+        role: "bot",
+        blocks: [{ kind: "text", text: "Point marché de Warren : rien à signaler." }],
+        botId: "claudius-1",
+        replyToMessageId: null,
+        runId: "run-relay",
+        clientNonce: null,
+        createdAt: new Date("2026-09-12T00:00:01.000Z"),
+      },
+    ]);
+    // The DB-side filter (`bot.parentBotId not null`) excludes a top-level bot's bot_message
+    // run, so it never enters peerRunIds even though its trigger is "bot_message" — this is
+    // Claudius's relay to the user (CA5/CA6), not a hidden delegated run.
+    const runFindMany = vi.fn(async () => []);
+    const prisma = {
+      message: { findMany },
+      run: { findMany: runFindMany },
+    } as unknown as PrismaClient;
+
+    const page = await loadMessagePage(prisma, "thread-1", undefined, 1);
+
+    expect(page.messages.map((message) => message.id)).toEqual(["message-relay"]);
+    expect(runFindMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["run-relay"] },
+        trigger: "bot_message",
+        bot: { parentBotId: { not: null } },
+      },
+      select: { id: true },
+    });
   });
 
   it("filters peer-run activity when its receipt is outside the loaded page", async () => {

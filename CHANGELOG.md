@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-12
+
+#### Added
+
+- **Routine runs leave a visible trace.** A sub-bot's scheduled routine (Alfred's inbox check, Warren's market point, ...) now shows a run card in its own thread — started, running, completed, or failed, timestamped, with a one-line summary and the full result tucked in an expandable detail — instead of a free "done"/"nothing to report" reply. A "notify me every time" toggle in the routine's setup controls whether that run also pages you; off by default, so a routine stays a quiet, browsable trace until you ask to hear from it.
+
+#### Fixed
+
+- **Claudius's replies about a sub-bot's report now reach you.** When a sub-bot hands a result to Claudius, Claudius's own reply was being silently dropped from your view; it's now a normal, visible, notifying message like any other reply. Sub-bots' own delegated work stays out of your thread, unchanged.
+
 ### 2026-09-10
 
 #### Fixed
