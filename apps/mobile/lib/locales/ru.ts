@@ -693,4 +693,12 @@ export const RU_MESSAGES: Record<string, string> = {
   "{count} plugins installed": "Установлено плагинов: {count}",
   "{count} selected": "Выбрано: {count}",
   "{count} skills installed": "Установлено навыков: {count}",
+
+  Subscribed: "Подписан",
+  "Show details": "Показать детали",
+  "Hide details": "Скрыть детали",
+  "Notify me on every run": "Уведомлять меня при каждом запуске",
+  "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
+    "Включено — уведомление и развёрнутая карточка при каждом запуске. Выключено — только тихий след в этом чате.",
+  "Could not update routine": "Не удалось обновить программу",
 };

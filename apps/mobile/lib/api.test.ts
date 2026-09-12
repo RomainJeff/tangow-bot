@@ -1686,6 +1686,26 @@ describe("mobile thread event reduction", () => {
     ).toBe("Slack · Alex: Hello from the group");
   });
 
+  it("formats a routine run card", () => {
+    expect(
+      blockText(
+        mobileMessage("routine-run-1", [
+          {
+            kind: "routine_run",
+            routineId: "routine-1",
+            routineName: "Morning check-in",
+            state: "completed",
+            headline: "Nothing needs your attention",
+            digest: "Checked the inbox: nothing needs your attention.",
+            startedAt: "2026-01-01T00:00:00.000Z",
+            endedAt: "2026-01-01T00:00:05.000Z",
+            notify: false,
+          },
+        ]),
+      ),
+    ).toBe("Morning check-in: completed — Nothing needs your attention");
+  });
+
   it("deduplicates durable messages and replaces matching transient subagent state", () => {
     const initial = snapshot([
       mobileMessage("message-1", [{ kind: "text", text: "old" }]),
