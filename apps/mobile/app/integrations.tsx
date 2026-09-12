@@ -449,6 +449,7 @@ export default function Integrations() {
             >
               <Text style={styles.link}>{t("Back")}</Text>
             </Pressable>
+            <ConnectorIcon name={item.name} logo={item.logo} />
             <Text numberOfLines={1} style={styles.detailTitle}>
               {item.name}
             </Text>
