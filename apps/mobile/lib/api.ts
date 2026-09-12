@@ -871,6 +871,9 @@ export function blockText(message: MobileMessage) {
       if (block.kind === "subagent") {
         return `${block.name ?? "subagent"}: ${block.result || block.progress || block.task || ""}`;
       }
+      if (block.kind === "routine_run") {
+        return `${block.routineName}: ${block.state}${block.headline ? ` — ${block.headline}` : ""}`;
+      }
       if (block.kind === "child_bot") {
         return `${block.status === "archived" ? "Archived" : block.status === "deleted" ? "Deleted" : "Bot"} ${block.name ?? ""}`;
       }

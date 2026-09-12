@@ -667,4 +667,12 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Extra high": "超高",
   Low: "低",
   High: "高",
+
+  Subscribed: "已订阅",
+  "Show details": "显示详情",
+  "Hide details": "隐藏详情",
+  "Notify me on every run": "每次运行都通知我",
+  "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
+    "开启后每次运行都会通知并展开卡片；关闭则仅在此对话中保留静默记录。",
+  "Could not update routine": "无法更新例行任务",
 };
