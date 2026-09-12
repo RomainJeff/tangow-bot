@@ -4,6 +4,7 @@ import {
   completionMessageSegments,
   completionNotificationBody,
   notifiesUserOnRunEnd,
+  routineRunHeadline,
   subagentMarksUnread,
 } from "./executor.js";
 
@@ -73,11 +74,17 @@ describe("completionNotificationBody", () => {
 });
 
 describe("notifiesUserOnRunEnd", () => {
-  it("never pages the human for a delegated run", () => {
-    // A delegated (bot_message) run reports back to the ordering bot and is hidden from the
-    // user's thread, so a "finished"/"failed" push would be pure back-office noise.
-    expect(notifiesUserOnRunEnd("bot_message")).toBe(false);
+  it("never pages the human for a sub-bot's delegated run", () => {
+    // A sub-bot's delegated (bot_message) run reports back to the ordering bot and is hidden
+    // from the user's thread, so a "finished"/"failed" push would be pure back-office noise.
     expect(notifiesUserOnRunEnd("bot_message", { isSubBot: true })).toBe(false);
+  });
+
+  it("pages the human for a top-level bot's bot_message run (the orchestrator's relay)", () => {
+    // A top-level bot's `bot_message` run IS the user-facing relay of what a sub-bot reported
+    // (background-work-visibility CA5/CA6); it must notify like any other reply.
+    expect(notifiesUserOnRunEnd("bot_message")).toBe(true);
+    expect(notifiesUserOnRunEnd("bot_message", { isSubBot: false })).toBe(true);
   });
 
   it("keeps user-initiated and top-level runs, including a top-level bot's routine", () => {
@@ -88,12 +95,51 @@ describe("notifiesUserOnRunEnd", () => {
     expect(notifiesUserOnRunEnd("routine", { isSubBot: false })).toBe(true);
   });
 
-  it("silences a sub-bot's routine but keeps its direct conversation with the user", () => {
-    // A sub-bot's routine reports to its orchestrator; any closing text it emits must not page
-    // the user. Its direct conversation (user/messaging) still notifies.
+  it("silences a sub-bot's routine by default but keeps its direct conversation with the user", () => {
+    // A sub-bot's routine reports to its orchestrator via its run card; any closing text it
+    // emits must not page the user unless the routine's own notify toggle is on. Its direct
+    // conversation (user/messaging) still notifies regardless.
     expect(notifiesUserOnRunEnd("routine", { isSubBot: true })).toBe(false);
+    expect(notifiesUserOnRunEnd("routine", { isSubBot: true, notify: false })).toBe(false);
     expect(notifiesUserOnRunEnd("user", { isSubBot: true })).toBe(true);
     expect(notifiesUserOnRunEnd("messaging", { isSubBot: true })).toBe(true);
+  });
+
+  it("pages the human for a sub-bot routine the user explicitly subscribed to (notify: true)", () => {
+    // The per-routine notify toggle is the explicit exception: the user chose to hear from
+    // this specific routine every time, independent of Claudius's own triage.
+    expect(notifiesUserOnRunEnd("routine", { isSubBot: true, notify: true })).toBe(true);
+  });
+});
+
+describe("routineRunHeadline", () => {
+  it("takes the first non-empty line of the digest", () => {
+    expect(routineRunHeadline("Inbox is clear.\n\nChecked 12 threads.")).toBe("Inbox is clear.");
+  });
+
+  it("skips leading blank lines", () => {
+    expect(routineRunHeadline("\n\n  Two invoices need approval.\nDetails below.")).toBe(
+      "Two invoices need approval.",
+    );
+  });
+
+  it("returns undefined for a fully empty digest", () => {
+    expect(routineRunHeadline("")).toBeUndefined();
+    expect(routineRunHeadline("\n\n   \n")).toBeUndefined();
+  });
+
+  it("truncates a long line to ~120 chars with an ellipsis", () => {
+    const line = "x".repeat(200);
+    const headline = routineRunHeadline(line);
+    expect(headline?.endsWith("…")).toBe(true);
+    expect(headline?.length).toBe(121);
+  });
+
+  it("is a pure, deterministic slice — never a model call", () => {
+    // Same input always yields the same headline; no randomness, no async, no LLM round trip.
+    expect(routineRunHeadline("Same digest every time.")).toBe(
+      routineRunHeadline("Same digest every time."),
+    );
   });
 });
 

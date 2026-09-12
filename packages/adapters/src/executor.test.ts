@@ -481,6 +481,26 @@ describe("run notification preference", () => {
       }),
     ).resolves.toBe(true);
   });
+
+  it("lets a subscribed routine (notify: true) page regardless of the bot's own preference", async () => {
+    // The user explicitly turned this routine's notify toggle on; that must not be gated by
+    // the bot's own notifyOnFinish setting (background-work-visibility CA13).
+    const findFirst = vi.fn(async () => ({
+      bot: { notifyOnFinish: false },
+      thread: { groupId: null },
+    }));
+    const prisma = { run: { findFirst } } as unknown as PrismaClient;
+
+    await expect(
+      runNotificationsEnabled(
+        prisma,
+        { botId: "bot-1", threadId: "thread-1", spaceId: "workspace-1", userId: "user-1" },
+        { forceEnabled: true },
+      ),
+    ).resolves.toBe(true);
+    // forceEnabled short-circuits before any lookup.
+    expect(findFirst).not.toHaveBeenCalled();
+  });
 });
 
 describe("createRunExecutor", () => {

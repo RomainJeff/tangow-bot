@@ -641,6 +641,11 @@ export const builtinAgentTools: ConnectorTool[] = [
           description: "Seconds from now for a one-shot schedule (may be under one minute).",
         },
         timezone: { type: "string", description: "IANA timezone (default UTC)." },
+        notify: {
+          type: "boolean",
+          description:
+            "Page the user on every run (e.g. they asked to be told each time). Default false: the run stays a silent, browsable card in this thread.",
+        },
       },
       required: ["name", "prompt"],
     },
