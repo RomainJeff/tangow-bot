@@ -1204,6 +1204,29 @@ export function createRunExecutor(deps: ExecutorDeps) {
           payload: { trigger: run.trigger, routineId: run.routineId },
         });
 
+        // A sub-bot's scheduled routine gets a run card in its own thread instead of a free
+        // closing text (background-work-visibility CA1/CA2); a top-level bot's routine (the
+        // orchestrator's own brief) is unaffected and keeps behaving as a normal reply.
+        const isSubBotRoutineRun = run.trigger === "routine" && bot.parentBotId != null;
+        const routineCardStartedAt = current.startedAt ?? new Date();
+        let routineForCard: { id: string; name: string; notify: boolean } | null = null;
+        let routineRunCardMessageId: string | null = null;
+        if (isSubBotRoutineRun && run.routineId) {
+          routineForCard = await deps.prisma.routine.findUnique({
+            where: { id: run.routineId },
+            select: { id: true, name: true, notify: true },
+          });
+          if (routineForCard) {
+            const card = await publishRoutineRunCard(
+              deps,
+              { id: runId, spaceId: run.spaceId, threadId: thread.id, botId: bot.id },
+              routineForCard,
+              routineCardStartedAt,
+            );
+            routineRunCardMessageId = card?.id ?? null;
+          }
+        }
+
         const discoveredPromise = deps.connector
           ? deps.connector.discoverTools(context)
           : Promise.resolve([]);
@@ -1334,6 +1357,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: MISSING_MODEL_MESSAGE,
           });
           if (!failed) return;
+          if (isSubBotRoutineRun && routineForCard && routineRunCardMessageId) {
+            await finalizeRoutineRunCard(
+              deps,
+              { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, id: runId },
+              routineRunCardMessageId,
+              routineForCard,
+              "failed",
+              MISSING_MODEL_MESSAGE,
+              { startedAt: routineCardStartedAt.toISOString(), endedAt: new Date().toISOString() },
+            );
+          }
           if (failed.continuationRunId) {
             await deps.jobs
               .enqueue(runContinueJob(failed.continuationRunId))
@@ -1348,14 +1382,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
               "status",
             ).catch((error) => getLogger().error("bot message failure return", error));
           }
-          if (!failed.continuationRunId) {
-            await notifyRun(deps, run, {
-              kind: "failure",
-              title: `${bot.name} failed`,
-              body: MISSING_MODEL_MESSAGE,
-              botId: bot.id,
-              threadId: thread.id,
-            });
+          // A delegated run's failure is reported back to the ordering bot unless that bot is
+          // top-level (then it is the visible relay, CA5/CA6); a sub-bot's routine reports via
+          // its card and only pages when the user subscribed to that routine (`notify === true`).
+          if (
+            !failed.continuationRunId &&
+            notifiesUserOnRunEnd(run.trigger, {
+              isSubBot: bot.parentBotId != null,
+              notify: routineForCard?.notify,
+            })
+          ) {
+            await notifyRun(
+              deps,
+              run,
+              {
+                kind: "failure",
+                title: `${bot.name} failed`,
+                body: MISSING_MODEL_MESSAGE,
+                botId: bot.id,
+                threadId: thread.id,
+              },
+              { forceEnabled: isSubBotRoutineRun && routineForCard?.notify === true },
+            );
           }
           return;
         }
@@ -2524,6 +2572,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               name: String(args.name ?? ""),
               prompt: String(args.prompt ?? ""),
               timezone: args.timezone ? String(args.timezone) : undefined,
+              notify: typeof args.notify === "boolean" ? args.notify : undefined,
               schedule: {
                 cron: args.cron,
                 every: args.every,
@@ -3963,7 +4012,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
               skipEmptyFallback: publishedTerminalSubagent || publishedMidTurnUserMessage,
             });
           }
-          const blocks = handedOff
+          // A sub-bot routine's free closing text is replaced by the run card below (CA1/CA2):
+          // suppress it from the thread the same way a handed-off turn suppresses its narration,
+          // while still computing `text` (the digest) from the unsuppressed blocks so the card
+          // and the notify decision see exactly what would have been said.
+          const rawBlocks = handedOff
             ? []
             : finalBlocksAfterMidTurnProgress(
                 redactBlocks(messageSegments, runSecrets),
@@ -3971,10 +4024,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
               );
           const text = handedOff
             ? ""
-            : redactSecrets(completionNotificationBody(assembled, blocks), runSecrets);
+            : redactSecrets(completionNotificationBody(assembled, rawBlocks), runSecrets);
           if (containsSecret(text, runSecrets)) {
             throw new Error("refusing to persist a secret in the thread");
           }
+          const blocks = isSubBotRoutineRun ? [] : rawBlocks;
           if (!(await renewRunLease(deps, runId, workerId, fence))) return;
           const botMessageOutcome =
             run.trigger === "bot_message"
@@ -3994,6 +4048,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
             markUnread: completionMarksUnread(run.trigger, text),
           });
           if (!completed) return;
+          if (isSubBotRoutineRun && routineForCard && routineRunCardMessageId) {
+            await finalizeRoutineRunCard(
+              deps,
+              { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, id: runId },
+              routineRunCardMessageId,
+              routineForCard,
+              "completed",
+              text,
+              { startedAt: routineCardStartedAt.toISOString(), endedAt: new Date().toISOString() },
+            );
+          }
           if (completed.continuationRunId) {
             await deps.jobs
               .enqueue(runContinueJob(completed.continuationRunId))
@@ -4012,14 +4077,30 @@ export function createRunExecutor(deps: ExecutorDeps) {
               botMessageOutcome.intent,
             ).catch((error) => getLogger().error("bot message result return", error));
           }
-          if (text && !completed.continuationRunId) {
-            await notifyRun(deps, run, {
-              kind: "completion",
-              title: `${bot.name} finished`,
-              body: text.slice(0, 180),
-              botId: bot.id,
-              threadId: thread.id,
-            });
+          // A delegated run's result auto-returns to the ordering bot and is hidden from the
+          // user's thread unless that bot is top-level (the orchestrator's relay, which does
+          // page — CA5/CA6); a sub-bot's routine reports to its orchestrator via its card and
+          // only pages when the user subscribed to that routine (`notify === true`).
+          if (
+            text &&
+            !completed.continuationRunId &&
+            notifiesUserOnRunEnd(run.trigger, {
+              isSubBot: bot.parentBotId != null,
+              notify: routineForCard?.notify,
+            })
+          ) {
+            await notifyRun(
+              deps,
+              run,
+              {
+                kind: "completion",
+                title: `${bot.name} finished`,
+                body: text.slice(0, 180),
+                botId: bot.id,
+                threadId: thread.id,
+              },
+              { forceEnabled: isSubBotRoutineRun && routineForCard?.notify === true },
+            );
           }
           // Last, and never fatal: the run is already finalized, so a failure here must not reach
           // the catch block below, where a second finalizeRun would match no rows and silently
@@ -4066,6 +4147,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: message,
           });
           if (!failed) return;
+          if (isSubBotRoutineRun && routineForCard && routineRunCardMessageId) {
+            await finalizeRoutineRunCard(
+              deps,
+              { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, id: runId },
+              routineRunCardMessageId,
+              routineForCard,
+              "failed",
+              message,
+              { startedAt: routineCardStartedAt.toISOString(), endedAt: new Date().toISOString() },
+            );
+          }
           if (failed.continuationRunId) {
             await deps.jobs
               .enqueue(runContinueJob(failed.continuationRunId))
@@ -4080,14 +4172,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
               "status",
             ).catch((returnError) => getLogger().error("bot message failure return", returnError));
           }
-          if (!failed.continuationRunId) {
-            await notifyRun(deps, run, {
-              kind: "failure",
-              title: `${bot.name} failed`,
-              body: message.slice(0, 180),
-              botId: bot.id,
-              threadId: thread.id,
-            });
+          // A delegated run's failure is reported back to the ordering bot unless that bot is
+          // top-level (then it is the visible relay, CA5/CA6); a sub-bot's routine reports via
+          // its card and only pages when the user subscribed to that routine (`notify === true`).
+          if (
+            !failed.continuationRunId &&
+            notifiesUserOnRunEnd(run.trigger, {
+              isSubBot: bot.parentBotId != null,
+              notify: routineForCard?.notify,
+            })
+          ) {
+            await notifyRun(
+              deps,
+              run,
+              {
+                kind: "failure",
+                title: `${bot.name} failed`,
+                body: message.slice(0, 180),
+                botId: bot.id,
+                threadId: thread.id,
+              },
+              { forceEnabled: isSubBotRoutineRun && routineForCard?.notify === true },
+            );
           }
         }
       } catch (setupError) {
@@ -4167,7 +4273,13 @@ async function computerScreenToolResult(
 export async function runNotificationsEnabled(
   prisma: PrismaClient,
   run: { spaceId: string; userId: string; botId: string; threadId: string },
+  opts?: {
+    /** A subscribed routine (`notify === true`) pages regardless of the bot's own
+        notifyOnFinish preference — the user opted into this routine specifically. */
+    forceEnabled?: boolean;
+  },
 ): Promise<boolean> {
+  if (opts?.forceEnabled) return true;
   const source = await prisma.run.findFirst({
     where: {
       botId: run.botId,
@@ -4187,9 +4299,10 @@ async function notifyRun(
   deps: ExecutorDeps,
   run: { spaceId: string; userId: string; botId: string; threadId: string },
   message: NotificationMessage,
+  opts?: { forceEnabled?: boolean },
 ) {
   if (!deps.notifications) return;
-  const enabled = await runNotificationsEnabled(deps.prisma, run).catch((error) => {
+  const enabled = await runNotificationsEnabled(deps.prisma, run, opts).catch((error) => {
     getLogger().error("notification preference lookup", error);
     return false;
   });
@@ -4333,6 +4446,29 @@ export function completionMarksUnread(trigger: string, text: string): boolean {
   return trigger !== "routine" || Boolean(text);
 }
 
+/**
+ * Whether a run ending (completion or failure) should page the human.
+ *
+ * A delegated (`bot_message`) run's result is returned to the ordering bot; when that ordering
+ * bot is itself a sub-bot, the relay stays internal and a push would be pure back-office noise.
+ * But when the ordering bot is top-level (the orchestrator, no parent), its `bot_message` run
+ * *is* the user-facing relay of what a sub-bot reported — that must page like any other reply
+ * (background-work-visibility CA5/CA6). A sub-bot's scheduled `routine` reports to its
+ * orchestrator too (via `message_bot`); its own thread instead gets a routine-run card, silent
+ * by default. The routine's own per-run `notify` toggle is the explicit, user-chosen exception:
+ * with it on, the sub-bot pages from its own thread regardless of Claudius's triage. A top-level
+ * bot's own routine (no parent) keeps notifying unconditionally — that is its user-facing brief.
+ * Asks/takeovers page through their own `help` path and are unaffected.
+ */
+export function notifiesUserOnRunEnd(
+  trigger: string,
+  opts?: { isSubBot?: boolean; notify?: boolean },
+): boolean {
+  if (trigger === "bot_message") return !opts?.isSubBot;
+  if (trigger === "routine" && opts?.isSubBot === true) return opts?.notify === true;
+  return true;
+}
+
 export function missingTurnImagesInstruction(
   blocks: MessageBlock[] | undefined,
   images: { length: number } | undefined,
@@ -4433,6 +4569,15 @@ function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[]
     if (block.kind === "bot_message_sent" || block.kind === "bot_message_received") {
       return { ...block, text: redactSecrets(block.text, secrets) };
     }
+    if (block.kind === "routine_run") {
+      return {
+        ...block,
+        ...(block.headline !== undefined
+          ? { headline: redactSecrets(block.headline, secrets) }
+          : {}),
+        ...(block.digest !== undefined ? { digest: redactSecrets(block.digest, secrets) } : {}),
+      };
+    }
     if (block.kind === "steps") {
       return {
         ...block,
@@ -4497,6 +4642,127 @@ async function persistMessageInTransaction(
     payload: { messageId: message.id, role, blocks },
   });
   return { message, eventSeq: event.seq };
+}
+
+const ROUTINE_RUN_CARD_NONCE_PREFIX = "routine-run-card:";
+const ROUTINE_RUN_HEADLINE_MAX_CHARS = 120;
+
+/**
+ * A deterministic one-line summary: the first non-empty line of the digest, trimmed and
+ * capped. Never a model call — the card is driven by run lifecycle events, not narration, so
+ * this cannot become a second place for model-authored (or injected) text to steer the UI.
+ */
+export function routineRunHeadline(digest: string): string | undefined {
+  for (const rawLine of digest.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    return line.length > ROUTINE_RUN_HEADLINE_MAX_CHARS
+      ? `${line.slice(0, ROUTINE_RUN_HEADLINE_MAX_CHARS).trimEnd()}…`
+      : line;
+  }
+  return undefined;
+}
+
+type RoutineRunBlock = Extract<MessageBlock, { kind: "routine_run" }>;
+
+function routineRunCardBlock(
+  routine: { id: string; name: string; notify: boolean },
+  state: RoutineRunBlock["state"],
+  timing: { startedAt?: string; endedAt?: string },
+  digest?: string,
+): RoutineRunBlock {
+  return {
+    kind: "routine_run",
+    routineId: routine.id,
+    routineName: routine.name,
+    state,
+    notify: routine.notify,
+    ...(timing.startedAt ? { startedAt: timing.startedAt } : {}),
+    ...(timing.endedAt ? { endedAt: timing.endedAt } : {}),
+    ...(digest !== undefined ? { digest, headline: routineRunHeadline(digest) } : {}),
+  };
+}
+
+/**
+ * Publishes the "running" routine-run card into a sub-bot's own thread when its scheduled run
+ * starts, replacing the free-text closing narration with a lifecycle-driven trace (spec
+ * background-work-visibility CA1/CA2). Idempotent on the run id via a stable clientNonce, so a
+ * worker crash + retry cannot duplicate the card (spec edge case: reprise après crash).
+ */
+async function publishRoutineRunCard(
+  deps: ExecutorDeps,
+  run: { id: string; spaceId: string; threadId: string; botId: string },
+  routine: { id: string; name: string; notify: boolean },
+  startedAt: Date,
+): Promise<{ id: string } | null> {
+  const clientNonce = `${ROUTINE_RUN_CARD_NONCE_PREFIX}${run.id}`;
+  const existing = await deps.prisma.message.findUnique({
+    where: { threadId_clientNonce: { threadId: run.threadId, clientNonce } },
+    select: { id: true },
+  });
+  if (existing) return existing;
+  const block = routineRunCardBlock(routine, "running", { startedAt: startedAt.toISOString() });
+  try {
+    const message = await publishMessage(deps, run, "bot", [block], false, clientNonce);
+    return { id: message.id };
+  } catch (error) {
+    // A concurrent publish (crash/retry race) may already have won the unique nonce.
+    const raced = await deps.prisma.message
+      .findUnique({
+        where: { threadId_clientNonce: { threadId: run.threadId, clientNonce } },
+        select: { id: true },
+      })
+      .catch(() => null);
+    if (raced) return raced;
+    getLogger().error("routine run card publish", error);
+    return null;
+  }
+}
+
+/**
+ * Mutates the routine-run card in place to its terminal state (background-work-visibility
+ * CA2/CA12), the same "load the message, replace the block, append thread.message.updated"
+ * mechanism used for `ask` answers and `cloud_agent` status flips. `digest` is untrusted content
+ * already redacted by the caller; it is stored as plain text and escaped at render time, never
+ * interpreted as HTML/markdown (M1) and never used to fetch a remote resource (M2).
+ */
+async function finalizeRoutineRunCard(
+  deps: ExecutorDeps,
+  run: { spaceId: string; threadId: string; botId: string; id: string },
+  cardMessageId: string,
+  routine: { id: string; name: string; notify: boolean },
+  state: "completed" | "failed",
+  digest: string,
+  timing: { startedAt?: string; endedAt: string },
+): Promise<void> {
+  const committed = await deps.prisma
+    .$transaction(async (tx) => {
+      const message = await tx.message.findUnique({ where: { id: cardMessageId } });
+      if (!message) return null;
+      const blocks = (message.blocks as MessageBlock[]).map((existingBlock) =>
+        existingBlock.kind === "routine_run"
+          ? routineRunCardBlock(routine, state, timing, digest)
+          : existingBlock,
+      );
+      await tx.message.update({ where: { id: cardMessageId }, data: { blocks } });
+      const event = await appendEventInTransaction(tx, {
+        spaceId: run.spaceId,
+        threadId: run.threadId,
+        botId: run.botId,
+        type: "thread.message.updated",
+        runId: run.id,
+        payload: { messageId: cardMessageId, role: "bot", blocks },
+      });
+      return event.seq;
+    })
+    .catch((error) => {
+      getLogger().error("routine run card finalize", error);
+      return null;
+    });
+  if (committed === null) return;
+  await deps.events.notify(run.threadId, committed).catch((error) => {
+    getLogger().error("routine run card realtime notification", error);
+  });
 }
 
 async function recordEffect(
