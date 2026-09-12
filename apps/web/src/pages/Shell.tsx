@@ -230,6 +230,7 @@ import {
   ChartBlockView,
   ChoiceCard,
   McpApprovalCard,
+  RoutineRunCard,
 } from "./shell/message-cards";
 import { WindowChrome } from "./WindowChrome";
 
@@ -3649,6 +3650,7 @@ export function ShellPage() {
                         prompt: routineDraft.prompt || t`Check in.`,
                         crons,
                         active: armOneShot ? true : routineDraft.active,
+                        notify: routineDraft.notify,
                         webhookEnabled: routineDraft.webhookEnabled,
                         githubEnabled: routineDraft.githubEnabled,
                         messageProvider: routineDraft.messageProvider,
@@ -3662,7 +3664,7 @@ export function ShellPage() {
                         crons,
                         timezone: localTimezone(),
                         active: routineDraft.active,
-                        notify: true,
+                        notify: routineDraft.notify,
                         webhookEnabled: routineDraft.webhookEnabled,
                         githubEnabled: routineDraft.githubEnabled,
                         messageProvider: routineDraft.messageProvider,
@@ -5870,6 +5872,15 @@ const MessageView = memo(function MessageView({
                   : block.title || t`Opened its thread.`}
               </div>
             </button>
+          );
+        }
+        if (block.kind === "routine_run") {
+          return (
+            <RoutineRunCard
+              key={i}
+              block={block}
+              botColor={peerBot(message.botId ?? "")?.color ?? FALLBACK_BOT_COLOR}
+            />
           );
         }
         if (block.kind === "choice") {
