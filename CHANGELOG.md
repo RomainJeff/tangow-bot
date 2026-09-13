@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-14
+
+#### Fixed
+
+- A sub-bot's routine no longer streams its live text or activity lines into the thread while it runs — the run card is the only surface, so a routine appears as just its card (running → done) with nothing streaming beside it.
+
 ### 2026-09-13
 
 #### Fixed
