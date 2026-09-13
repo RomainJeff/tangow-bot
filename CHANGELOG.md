@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-13
+
+#### Fixed
+
+- A sub-bot's scheduled routine no longer drops a mid-run "nothing to report" narration bubble into its thread alongside the run card — the card is its only trace, so the routine stays a single, clean entry.
+
 ### 2026-09-12
 
 #### Added

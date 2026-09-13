@@ -1618,6 +1618,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           assembled = "";
           hasStreamedText = false;
           pendingProgress = "";
+          // A sub-bot routine run's only user-facing artifact is its run card. Drop the
+          // mid-turn narration instead of posting it as a separate bubble in the thread —
+          // the text has already been lifted out of the segments above, so the card digest
+          // stays the clean final report.
+          if (isSubBotRoutineRun) return;
           await publishMessage(
             deps,
             run,
