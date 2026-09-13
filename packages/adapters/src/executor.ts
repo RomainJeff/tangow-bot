@@ -1608,6 +1608,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const script = scripted ? inferScript(task.prompt, takeoverResume?.checkpoint) : undefined;
         const flushProgress = async () => {
           if (scripted || !pendingProgress) return;
+          // A sub-bot routine run shows only its run card; never stream live text into the
+          // thread. Drop the buffered progress instead of emitting a thread.progress delta.
+          if (isSubBotRoutineRun) {
+            pendingProgress = "";
+            return;
+          }
           await deps.events.append({
             spaceId: run.spaceId,
             threadId: thread.id,
@@ -3651,31 +3657,37 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
             } else if (event.type === "progress") {
               toolCallStreak = { key: undefined, count: 0 };
-              // Flush batched text deltas first so an activity line cannot land
-              // ahead of text the model streamed before the tool call.
-              if (pendingProgress) {
+              if (isSubBotRoutineRun) {
+                // A sub-bot routine run streams nothing into the thread — its run card is the
+                // only surface. Drop batched text and skip the activity line.
+                pendingProgress = "";
+              } else {
+                // Flush batched text deltas first so an activity line cannot land
+                // ahead of text the model streamed before the tool call.
+                if (pendingProgress) {
+                  await deps.events.append({
+                    spaceId: run.spaceId,
+                    threadId: thread.id,
+                    botId: bot.id,
+                    type: "thread.progress",
+                    runId,
+                    payload: { delta: pendingProgress, streaming: true },
+                  });
+                  pendingProgress = "";
+                  lastProgressAt = Date.now();
+                }
                 await deps.events.append({
                   spaceId: run.spaceId,
                   threadId: thread.id,
                   botId: bot.id,
                   type: "thread.progress",
                   runId,
-                  payload: { delta: pendingProgress, streaming: true },
+                  payload: {
+                    text: redactSecrets(event.text, runSecrets),
+                    ...(event.activity ? { activity: true } : {}),
+                  },
                 });
-                pendingProgress = "";
-                lastProgressAt = Date.now();
               }
-              await deps.events.append({
-                spaceId: run.spaceId,
-                threadId: thread.id,
-                botId: bot.id,
-                type: "thread.progress",
-                runId,
-                payload: {
-                  text: redactSecrets(event.text, runSecrets),
-                  ...(event.activity ? { activity: true } : {}),
-                },
-              });
             } else if (event.type === "ask") {
               if (!(await renewRunLease(deps, runId, workerId, fence))) return;
               const safeText = redactSecrets(event.text, runSecrets);
