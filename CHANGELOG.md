@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-14
+
+#### Added
+
+- **A bot's background work is now a visible, quiet trace.** A sub-bot's scheduled routine shows a single run card in its own thread — queued / running / completed / failed, timestamped, a one-line summary with the full result in an expandable detail — instead of a free "done"/"nothing to report" reply, and it streams nothing else beside the card while it runs. A per-routine "notify me every time" toggle (off by default) controls whether a run also pages you; on, the card opens expanded and the run notifies from the sub-bot's own thread.
+
+#### Fixed
+
+- **An orchestrating bot's relay of a sub-bot's result now reaches you.** When a sub-bot hands a result to a top-level bot, that bot's reply was silently dropped from your view because it ran as a `bot_message` turn; it is now a normal, visible, notifying message. Sub-bots' own delegated and routine runs stay out of your thread, unchanged.
+
 ### 2026-09-08
 
 #### Fixed
