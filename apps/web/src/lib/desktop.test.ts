@@ -60,6 +60,14 @@ describe("window chrome", () => {
     expect(welcome).not.toContain("FF5F57");
   });
 
+  it("reserves room for window controls in the peer chat view", () => {
+    const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
+    const overlay = readFileSync(path.join(root, "PeerMessagesOverlay.tsx"), "utf8");
+    expect(overlay).toContain("{desktopBridge() ? <WindowChrome /> : null}");
+    expect(overlay).toContain('className="app-drag flex items-center justify-between');
+    expect(overlay).not.toContain("FF5F57");
+  });
+
   it("keeps conversation header controls clickable", () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
     const shell = readFileSync(path.join(root, "Shell.tsx"), "utf8");

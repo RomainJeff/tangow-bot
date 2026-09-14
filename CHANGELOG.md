@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-14
+
+#### Fixed
+
+- A bot-to-bot chat now opens on its latest messages instead of the oldest, so the newest exchange is visible without scrolling; the oldest-first order is unchanged.
+- On desktop, a bot-to-bot chat's title no longer sits under the macOS window buttons.
+
 ### 2026-09-08
 
 #### Fixed

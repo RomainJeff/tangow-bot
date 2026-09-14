@@ -95,9 +95,7 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await expect(view.getByRole("textbox")).toHaveCount(0);
   await expect(view.getByText("Loading")).toHaveCount(0);
   const peerTranscript = view.getByTestId("peer-conversation-transcript");
-  await peerTranscript.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
+  // Oldest-first, but the view must open on the latest exchange without scrolling.
   await expect
     .poll(() =>
       peerTranscript.evaluate(
