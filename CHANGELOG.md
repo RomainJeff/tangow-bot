@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-15
+
+#### Fixed
+
+- A conversation no longer goes blank when it holds a message this version cannot display: the part it does not recognise is skipped and the rest of the thread opens normally, on web, desktop and mobile.
+
 ### 2026-09-08
 
 #### Fixed

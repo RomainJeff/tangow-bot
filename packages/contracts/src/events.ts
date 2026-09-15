@@ -332,12 +332,26 @@ export const USER_PROGRESS_CLIENT_NONCE_PREFIX = "user-progress:";
  * Single source of truth (adapters user-progress + core message-visibility import this). */
 export const USER_MESSAGE_CLIENT_NONCE_PREFIX = "user-message:";
 
+/**
+ * A block whose `kind` this build does not know must not take the whole conversation down
+ * with it. The union is exhaustive, so one unrecognised entry fails output validation and
+ * the response carrying it is lost: every message in the thread disappears at once, and the
+ * ORPCError it raises is not logged, which leaves no trace of why. That happens whenever the
+ * data outlives the code that reads it, after a rollback or between two deployed versions.
+ * Unrecognised entries are dropped instead, so the rest of the conversation still renders.
+ */
+export const MessageBlocks = z
+  .array(z.unknown())
+  .transform((blocks) =>
+    blocks.filter((block): block is MessageBlock => MessageBlock.safeParse(block).success),
+  );
+
 export const ThreadMessageSchema = z.object({
   id: Id,
   threadId: Id,
   seq: z.number().int().nonnegative(),
   role: MessageRole,
-  blocks: z.array(MessageBlock),
+  blocks: MessageBlocks,
   botId: Id.optional(),
   replyToMessageId: Id.optional(),
   runId: Id.optional(),

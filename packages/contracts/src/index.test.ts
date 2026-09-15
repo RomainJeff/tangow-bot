@@ -20,6 +20,7 @@ import {
   ReorderBotsInput,
   RunActivityRowSchema,
   RunSchema,
+  ThreadMessageSchema,
   UpdateBotInput,
   UpdateGroupInput,
 } from "./index.js";
@@ -394,5 +395,61 @@ describe("contracts", () => {
 describe("legacy message blocks", () => {
   it("still accepts reasoning blocks persisted before the feature was reverted", () => {
     expect(MessageBlock.safeParse({ kind: "reasoning", text: "thinking" }).success).toBe(true);
+  });
+});
+
+describe("unknown message blocks", () => {
+  const message = (blocks: unknown[]) => ({
+    id: "message-1",
+    threadId: "thread-1",
+    seq: 0,
+    role: "bot",
+    blocks,
+    createdAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  it("keeps the known blocks of a message that also carries an unknown one", () => {
+    const parsed = ThreadMessageSchema.parse(
+      message([
+        { kind: "text", text: "before" },
+        { kind: "from_a_later_version", summary: "written by a newer build" },
+        { kind: "text", text: "after" },
+      ]),
+    );
+    expect(parsed.blocks).toEqual([
+      { kind: "text", text: "before" },
+      { kind: "text", text: "after" },
+    ]);
+  });
+
+  it("parses a message made only of unknown blocks instead of rejecting it", () => {
+    // Surfaces already skip a message with nothing to render, so dropping the blocks is
+    // enough; rejecting would fail output validation and take the whole thread with it.
+    const parsed = ThreadMessageSchema.parse(message([{ kind: "from_a_later_version" }]));
+    expect(parsed.blocks).toEqual([]);
+  });
+
+  it("drops a malformed known block rather than losing the message", () => {
+    const parsed = ThreadMessageSchema.parse(
+      message([{ kind: "text" }, { kind: "text", text: "kept" }]),
+    );
+    expect(parsed.blocks).toEqual([{ kind: "text", text: "kept" }]);
+  });
+
+  it("leaves every other message in the page intact", () => {
+    const page = [
+      message([{ kind: "text", text: "first" }]),
+      message([{ kind: "from_a_later_version" }]),
+      message([{ kind: "text", text: "last" }]),
+    ].map((row) => ThreadMessageSchema.parse(row));
+    expect(page.map((row) => row.blocks)).toEqual([
+      [{ kind: "text", text: "first" }],
+      [],
+      [{ kind: "text", text: "last" }],
+    ]);
+  });
+
+  it("rejects blocks that are not a list", () => {
+    expect(ThreadMessageSchema.safeParse({ ...message([]), blocks: "text" }).success).toBe(false);
   });
 });
