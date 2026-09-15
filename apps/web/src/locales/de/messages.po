@@ -17,6 +17,16 @@ msgstr ""
 msgid " (unread)"
 msgstr " (ungelesen)"
 
+#: src/pages/shell/dialogs.tsx
+msgid "Could not rename section"
+msgstr "Abschnitt konnte nicht umbenannt werden"
+
+#: src/pages/BotContextMenu.tsx
+#: src/pages/Shell.tsx
+#: src/pages/shell/dialogs.tsx
+msgid "Rename section"
+msgstr "Abschnitt umbenennen"
+
 #: src/components/AgentSteps.tsx:90
 msgid "(empty)"
 msgstr "(leer)"

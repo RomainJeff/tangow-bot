@@ -17,6 +17,16 @@ msgstr ""
 msgid " (unread)"
 msgstr " (अपठित)"
 
+#: src/pages/shell/dialogs.tsx
+msgid "Could not rename section"
+msgstr "अनुभाग का नाम नहीं बदला जा सका"
+
+#: src/pages/BotContextMenu.tsx
+#: src/pages/Shell.tsx
+#: src/pages/shell/dialogs.tsx
+msgid "Rename section"
+msgstr "अनुभाग का नाम बदलें"
+
 #: src/components/AgentSteps.tsx:90
 msgid "(empty)"
 msgstr "(खाली)"

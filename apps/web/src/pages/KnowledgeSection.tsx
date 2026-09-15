@@ -536,6 +536,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
                 <div className="flex items-center gap-3 pe-2.5">
                   <button
                     type="button"
+                    disabled={busy}
                     onClick={() => void openSkill(entry)}
                     className={`min-w-0 flex-1 rounded-[11px] px-2.5 pt-2.5 text-start ${
                       controlled && !botId ? "pb-1" : "pb-2.5"

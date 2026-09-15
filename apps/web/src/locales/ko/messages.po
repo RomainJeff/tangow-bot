@@ -17,6 +17,16 @@ msgstr ""
 msgid " (unread)"
 msgstr " (읽지 않음)"
 
+#: src/pages/shell/dialogs.tsx
+msgid "Could not rename section"
+msgstr "섹션 이름을 바꿀 수 없습니다"
+
+#: src/pages/BotContextMenu.tsx
+#: src/pages/Shell.tsx
+#: src/pages/shell/dialogs.tsx
+msgid "Rename section"
+msgstr "섹션 이름 바꾸기"
+
 #: src/components/AgentSteps.tsx:90
 msgid "(empty)"
 msgstr "(비어 있음)"

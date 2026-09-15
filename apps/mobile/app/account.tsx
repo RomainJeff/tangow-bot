@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Button,
   Image,
   Platform,
   Pressable,
@@ -21,14 +22,13 @@ import { useAvatarStyle } from "../components/avatar-style";
 import { BotAvatar } from "../components/bot-avatar";
 import { ServerSheet } from "../components/server-sheet";
 import { setDisplayAgentSteps, useDisplayAgentSteps } from "../lib/agent-steps-pref";
-import type { MobileBot } from "../lib/api";
+import type { MobileBot, MobileMe } from "../lib/api";
 import {
   currentApiBase,
   deleteAccount,
   displayApiHost,
   fetchProfileImage,
   loadSessionToken,
-  type MobileMe,
   rpc,
   selectedSpaceId,
   signOut,
@@ -44,11 +44,11 @@ import { explicitSignInRoute } from "../lib/auth-routing";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
 import { setUiLocale, useI18n } from "../lib/i18n";
 import { userInitials } from "../lib/inbox";
+import type { LiveNotificationSettings } from "../lib/live-notifications";
 import {
   canPostPromotedNotifications,
   DEFAULT_LIVE_NOTIFICATION_SETTINGS,
   getLiveNotificationSettings,
-  type LiveNotificationSettings,
   openLiveNotificationSettings,
   openPromotedNotificationSettings,
   setLiveNotificationSettings,
@@ -257,6 +257,11 @@ export default function Account() {
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
+        <Button
+          color={mobileTokens().primary}
+          title="AI data sharing"
+          onPress={() => router.push("/ai-data-sharing")}
+        />
         {focus === "usage" ? usageBlock : null}
         <View style={styles.profile}>
           <Text style={styles.name}>{me?.name || t("Your account")}</Text>

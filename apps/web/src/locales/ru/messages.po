@@ -17,6 +17,16 @@ msgstr ""
 msgid " (unread)"
 msgstr " (непрочитано)"
 
+#: src/pages/shell/dialogs.tsx
+msgid "Could not rename section"
+msgstr "Не удалось переименовать раздел"
+
+#: src/pages/BotContextMenu.tsx
+#: src/pages/Shell.tsx
+#: src/pages/shell/dialogs.tsx
+msgid "Rename section"
+msgstr "Переименовать раздел"
+
 #: src/components/AgentSteps.tsx:90
 msgid "(empty)"
 msgstr ""

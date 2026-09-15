@@ -1,4 +1,6 @@
 export const RU_MESSAGES: Record<string, string> = {
+  "Update your server to use AI data sharing in this mobile version.":
+    "Обновите сервер, чтобы использовать обмен данными с ИИ в этой версии мобильного приложения.",
   "Ask the server owner to configure this provider.":
     "Попросите владельца сервера настроить этого провайдера.",
   "Client ID": "ID клиента",
@@ -336,6 +338,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "New bot": "Новый бот",
   "New group": "Новая группа",
   "New section": "Новый раздел",
+  "Rename section": "Переименовать раздел",
+  "Save section name": "Сохранить название раздела",
   "New space": "Новое пространство",
   "No apps match your search.": "Нет приложений, соответствующих вашему запросу.",
   "No tools available.": "Нет доступных инструментов.",
