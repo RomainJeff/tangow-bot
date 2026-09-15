@@ -3968,6 +3968,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             : finalBlocksAfterMidTurnProgress(
                 redactBlocks(messageSegments, runSecrets),
                 publishedMidTurnUserMessage,
+                midTurnUserTexts,
               );
           const text = handedOff
             ? ""

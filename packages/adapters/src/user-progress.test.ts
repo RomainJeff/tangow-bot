@@ -69,6 +69,35 @@ describe("finalBlocksAfterMidTurnProgress", () => {
     expect(finalBlocksAfterMidTurnProgress(blocks, true)).toEqual(blocks);
     expect(isToolActivityBlock(blocks[0]!)).toBe(true);
   });
+
+  it("drops a final reply that repeats what message_user already said", () => {
+    const blocks: MessageBlock[] = [
+      { kind: "steps", steps: [{ label: "Message user", count: 1 }] },
+      { kind: "text", text: "Oui, je suis là." },
+    ];
+    expect(finalBlocksAfterMidTurnProgress(blocks, true, ["Oui, je suis là."])).toEqual([]);
+  });
+
+  it("ignores surrounding whitespace when comparing the repeat", () => {
+    const blocks: MessageBlock[] = [{ kind: "text", text: "  Done.  " }];
+    expect(finalBlocksAfterMidTurnProgress(blocks, true, ["Done."])).toEqual([]);
+  });
+
+  it("keeps the part of a final reply that adds something new", () => {
+    const repeated: MessageBlock = { kind: "text", text: "On it." };
+    const added: MessageBlock = { kind: "text", text: "Here is the summary." };
+    expect(finalBlocksAfterMidTurnProgress([repeated, added], true, ["On it."])).toEqual([added]);
+  });
+
+  it("keeps a final reply that only resembles the mid-turn text", () => {
+    const blocks: MessageBlock[] = [{ kind: "text", text: "Done, and here is why." }];
+    expect(finalBlocksAfterMidTurnProgress(blocks, true, ["Done."])).toEqual(blocks);
+  });
+
+  it("leaves the final reply alone when nothing was posted mid-turn", () => {
+    const blocks: MessageBlock[] = [{ kind: "text", text: "Oui, je suis là." }];
+    expect(finalBlocksAfterMidTurnProgress(blocks, false, ["Oui, je suis là."])).toEqual(blocks);
+  });
 });
 
 describe("botMessageOutcomeFromMidTurn", () => {

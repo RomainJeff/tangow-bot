@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-16
+
+#### Fixed
+
+- A bot no longer posts the same answer twice in a row when it sends an interim update and then repeats it as its final reply; you see it once.
+
 ### 2026-09-08
 
 #### Fixed

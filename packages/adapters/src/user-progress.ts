@@ -100,14 +100,26 @@ export function extractNarrationText(
 /**
  * After mid-turn progress messages were already posted, skip a hollow final
  * message that would only carry hidden tool-activity blocks (or nothing).
+ *
+ * `alreadySent` carries the mid-turn text the user has already been shown. A model that
+ * answers with `message_user` and then repeats the same words as its final reply would post
+ * that answer to the thread twice in a row; the mid-turn message already delivered it, so
+ * the repeat is dropped and a final message left with nothing of its own is not posted.
  */
 export function finalBlocksAfterMidTurnProgress(
   blocks: MessageBlock[],
   publishedMidTurn: boolean,
+  alreadySent: readonly string[] = [],
 ): MessageBlock[] {
   if (!publishedMidTurn || blocks.length === 0) return blocks;
-  if (blocks.every((block) => isToolActivityBlock(block))) return [];
-  return blocks;
+  const sent = new Set(alreadySent.map((text) => text.trim()).filter(Boolean));
+  const remaining =
+    sent.size === 0
+      ? blocks
+      : blocks.filter((block) => !(block.kind === "text" && sent.has(block.text.trim())));
+  if (remaining.length === 0) return [];
+  if (remaining.every((block) => isToolActivityBlock(block))) return [];
+  return remaining;
 }
 
 /** Outcome to return for a bot_message run after mid-turn progress posts. */
