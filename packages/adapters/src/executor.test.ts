@@ -231,6 +231,23 @@ describe("run tool selection", () => {
     expect(describeMessageUser(false)).not.toBe(CHATTY_MESSAGE_USER_DESCRIPTION);
     expect(describeMessageUser(false)).toBeTruthy();
   });
+
+  it("tells every bot to end the turn empty once message_user said everything", () => {
+    // Without this rule a bot splits its answer into bubbles and then repeats the whole
+    // answer as its final reply, so the user reads it twice.
+    for (const chattyReplies of [false, true]) {
+      const description = selectBuiltinToolsForRun({
+        graphicalToolsAllowed: true,
+        groupId: null,
+        trigger: "user",
+        semanticMemoryEnabled: false,
+        messagingChannelRun: false,
+        chattyReplies,
+      }).find((tool) => tool.name === "message_user")?.description;
+      expect(description).toContain("end the turn with an empty response");
+      expect(description).toContain("Never repeat text you already sent");
+    }
+  });
 });
 
 describe("steering attachment hydration", () => {

@@ -298,6 +298,7 @@ import {
   finalBlocksAfterMidTurnProgress,
   isProgressMessageTruncated,
   isUserProgressClientNonce,
+  repeatsSentUserText,
   userMessageClientNonce,
   userProgressClientNonce,
 } from "./user-progress.js";
@@ -3172,6 +3173,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const rawMessage = redactSecrets(String(args.message ?? ""), runSecrets);
             const text = clampUserProgressMessage(rawMessage);
             if (!text) return finish({ error: "message is required" });
+            if (repeatsSentUserText(text, midTurnUserTexts)) {
+              // The user already read this exact message; posting it again is the
+              // "answered twice" bubble. Tell the model, publish nothing.
+              return finish({
+                error:
+                  "You already sent this exact message with message_user; it was not posted again. Do not repeat yourself. If message_user covered everything, end the turn with an empty response.",
+              });
+            }
             const truncated = isProgressMessageTruncated(rawMessage);
             await flushProgress();
             await publishMidTurnNarration();

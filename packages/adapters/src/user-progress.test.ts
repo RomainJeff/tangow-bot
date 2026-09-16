@@ -8,6 +8,7 @@ import {
   finalBlocksAfterMidTurnProgress,
   isProgressMessageTruncated,
   isUserProgressClientNonce,
+  repeatsSentUserText,
   USER_PROGRESS_MESSAGE_MAX_LENGTH,
   userMessageClientNonce,
   userProgressClientNonce,
@@ -142,5 +143,21 @@ describe("userProgressClientNonce", () => {
     // Transcript rebuilders (executor resume, job reconciler) want both kinds.
     expect(isUserProgressClientNonce(userMessage)).toBe(true);
     expect(isUserProgressClientNonce(progress)).toBe(true);
+  });
+});
+
+describe("repeatsSentUserText", () => {
+  it("recognises a message the user already read, ignoring surrounding whitespace", () => {
+    expect(repeatsSentUserText("Charge moyen", ["Checking…", " Charge moyen \n"])).toBe(true);
+  });
+
+  it("does not flag a message that merely resembles or extends an earlier one", () => {
+    expect(repeatsSentUserText("Charge moyen, top risques jeudi.", ["Charge moyen"])).toBe(false);
+    expect(repeatsSentUserText("Charge moyen", ["Charge moyen, top risques jeudi."])).toBe(false);
+  });
+
+  it("never flags an empty message or an empty history", () => {
+    expect(repeatsSentUserText("   ", ["   "])).toBe(false);
+    expect(repeatsSentUserText("Done.", [])).toBe(false);
   });
 });

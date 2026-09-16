@@ -98,6 +98,17 @@ export function extractNarrationText(
 }
 
 /**
+ * True when `text` is, after trimming, a message the user was already shown in this run.
+ * Shared by the `message_user` tool (which then refuses to post the bubble again) and the
+ * final-reply guard below, so both paths agree on what counts as a repeat.
+ */
+export function repeatsSentUserText(text: string, alreadySent: readonly string[]): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return alreadySent.some((sent) => sent.trim() === trimmed);
+}
+
+/**
  * After mid-turn progress messages were already posted, skip a hollow final
  * message that would only carry hidden tool-activity blocks (or nothing).
  *
@@ -112,11 +123,9 @@ export function finalBlocksAfterMidTurnProgress(
   alreadySent: readonly string[] = [],
 ): MessageBlock[] {
   if (!publishedMidTurn || blocks.length === 0) return blocks;
-  const sent = new Set(alreadySent.map((text) => text.trim()).filter(Boolean));
-  const remaining =
-    sent.size === 0
-      ? blocks
-      : blocks.filter((block) => !(block.kind === "text" && sent.has(block.text.trim())));
+  const remaining = blocks.filter(
+    (block) => !(block.kind === "text" && repeatsSentUserText(block.text, alreadySent)),
+  );
   if (remaining.length === 0) return [];
   if (remaining.every((block) => isToolActivityBlock(block))) return [];
   return remaining;

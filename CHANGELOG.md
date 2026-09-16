@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- A bot no longer posts the same answer twice in a row when it sends an interim update and then repeats it as its final reply; you see it once.
+- A bot no longer posts the same answer twice in a row: a message it already sent is not posted again, whether it repeats it as another message or as its final reply, and it is told to end its turn once its messages have said everything.
 
 ### 2026-09-08
 
