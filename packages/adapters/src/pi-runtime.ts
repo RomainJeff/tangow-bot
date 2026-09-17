@@ -370,7 +370,7 @@ export class PiAgentRuntime implements AgentRuntime {
             event.type === "message_update" &&
             event.assistantMessageEvent.type === "text_delta"
           ) {
-            const delta = event.assistantMessageEvent.delta;
+            const delta = stripModelControlTokens(event.assistantMessageEvent.delta ?? "");
             if (delta) {
               if (toolActivityShowing) {
                 // Real text replaces the activity line instead of appending to it.
@@ -1524,18 +1524,33 @@ function boundAgentToolResult<T>(result: AgentToolResult<T>): AgentToolResult<T>
   };
 }
 
+/**
+ * Remove model control / special tokens that leak into assistant text. Some models and
+ * OpenAI-compatible proxies surface their end-of-turn or role markers as literal text —
+ * `<|eos|>`, `<|eot_id|>`, `<|im_end|>`, `<|end_of_turn|>`, `<|assistant|>`, ... — instead of
+ * treating them as stop tokens. They must never reach the thread. Matches the `<|token|>` shape
+ * generically (no spaces inside) so it is robust across whatever model the user picks, without
+ * touching ordinary prose. Exported for tests.
+ */
+export function stripModelControlTokens(text: string): string {
+  if (!text.includes("<|")) return text;
+  return text.replace(/<\|[^\s|>]{1,64}\|>/g, "");
+}
+
 function assistantText(message: unknown): string {
   if (!message || typeof message !== "object" || !("content" in message)) return "";
   const content = (message as { content?: unknown }).content;
-  if (typeof content === "string") return content;
+  if (typeof content === "string") return stripModelControlTokens(content);
   if (!Array.isArray(content)) return "";
-  return content
-    .map((part) =>
-      part && typeof part === "object" && "type" in part && part.type === "text" && "text" in part
-        ? String(part.text)
-        : "",
-    )
-    .join("");
+  return stripModelControlTokens(
+    content
+      .map((part) =>
+        part && typeof part === "object" && "type" in part && part.type === "text" && "text" in part
+          ? String(part.text)
+          : "",
+      )
+      .join(""),
+  );
 }
 
 function sanitizeSensitiveText(message: string) {
