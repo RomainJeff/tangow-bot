@@ -1,9 +1,14 @@
 import type { AvatarStyle } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
+  AVATAR_BODY_RADIUS,
   avatarIdentitySeed,
+  lerpPose,
   organicAvatarFace,
   organicAvatarPath,
+  REST_POSE,
+  WORKING_STILL_SECONDS,
+  workingPose,
 } from "@rakazo/core";
 import { memo, useEffect } from "react";
 import { View } from "react-native";
@@ -11,19 +16,33 @@ import Animated, {
   cancelAnimation,
   Easing,
   useAnimatedProps,
-  useAnimatedStyle,
+  useDerivedValue,
   useReducedMotion,
   useSharedValue,
-  withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { Defs, G, Mask, Path, Rect } from "react-native-svg";
-import { workingAvatarDuration, workingAvatarFrame } from "../lib/avatar-motion";
+import Svg, {
+  Circle,
+  Defs,
+  G,
+  type GProps,
+  Mask,
+  Path,
+  type PathProps,
+  Rect,
+} from "react-native-svg";
 import { useI18n } from "../lib/i18n";
 import { useAvatarStyle } from "./avatar-style";
 import { NativeSymbol } from "./native-symbol";
 
 const AnimatedG = Animated.createAnimatedComponent(G);
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+// react-native-svg leaves `matrix` out of its element props, but the native spec has it.
+type Matrix = [number, number, number, number, number, number];
+const svgProps = <P extends GProps | PathProps>(props: { matrix: Matrix; opacity?: number }) =>
+  props as unknown as Partial<P>;
 
 export const BotAvatar = memo(function BotAvatar({
   color,
@@ -157,60 +176,96 @@ function OrganicAvatar({
   isWorking: boolean;
 }) {
   const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
-  const progress = useSharedValue(0);
+  const face = organicAvatarFace(seed);
   const reducedMotion = useReducedMotion();
+  const clock = useSharedValue(0);
+  const working = useSharedValue(0);
 
   useEffect(() => {
-    cancelAnimation(progress);
-    progress.value = 0;
-    if (isWorking && !reducedMotion) {
-      progress.value = withRepeat(
-        withTiming(1, {
-          duration: workingAvatarDuration(seed),
-          easing: Easing.linear,
-        }),
-        -1,
-      );
+    cancelAnimation(clock);
+    working.value = withTiming(isWorking ? 1 : 0, {
+      duration: 450,
+      easing: Easing.out(Easing.quad),
+    });
+    if (!isWorking) return;
+    if (reducedMotion) {
+      clock.value = WORKING_STILL_SECONDS;
+      return;
     }
-    return () => cancelAnimation(progress);
-  }, [isWorking, progress, reducedMotion, seed]);
+    // ponytail: a linear one-hour clock; a bot working longer restarts its cycle once.
+    clock.value = 0;
+    clock.value = withTiming(3600, { duration: 3_600_000, easing: Easing.linear });
+    return () => cancelAnimation(clock);
+  }, [clock, isWorking, reducedMotion, working]);
 
-  const bodyStyle = useAnimatedStyle(() => {
-    const frame = workingAvatarFrame(seed, progress.value);
-    return {
-      transform: [
-        { translateX: (frame.translationX * size) / 120 },
-        { translateY: (frame.translationY * size) / 120 },
-        { rotate: `${frame.rotation}deg` },
-        { scaleX: frame.scaleX },
-        { scaleY: frame.scaleY },
+  const pose = useDerivedValue(() => lerpPose(REST_POSE, workingPose(clock.value), working.value));
+  const R = AVATAR_BODY_RADIUS;
+  const bodyProps = useAnimatedProps(() =>
+    svgProps<PathProps>({
+      matrix: [
+        pose.value.body.sx,
+        0,
+        0,
+        pose.value.body.sy,
+        pose.value.body.x * R,
+        pose.value.body.y * R,
       ],
+    }),
+  );
+  const eyesProps = useAnimatedProps(() => {
+    const { x, y, roll, opacity } = pose.value.eyes;
+    const a = (roll * Math.PI) / 180;
+    return {
+      opacity,
+      matrix: [
+        Math.cos(a),
+        Math.sin(a),
+        -Math.sin(a),
+        Math.cos(a),
+        face.x + x * R,
+        face.y + y * R,
+      ] as Matrix,
     };
   });
-  const face = organicAvatarFace(seed);
-  const eyesProps = useAnimatedProps(() => {
-    const frame = workingAvatarFrame(seed, progress.value);
-    return { x: face.x + frame.eyeOffsetX, y: face.y + frame.eyeOffsetY };
-  });
+  const eyeProps = face.eyes.map((eye, i) =>
+    // biome-ignore lint/correctness/useHookAtTopLevel: fixed-length list (two eyes)
+    useAnimatedProps(() => {
+      const [sx, sy] = pose.value.eyes.scale[i]!;
+      return svgProps<GProps>({ matrix: [sx, 0, 0, sy, eye.x * (1 - sx), eye.y * (1 - sy)] });
+    }),
+  );
+  const dotProps = [0, 1, 2].map((i) =>
+    // biome-ignore lint/correctness/useHookAtTopLevel: fixed-length list (three dots)
+    useAnimatedProps(() => {
+      const dot = pose.value.dots[i]!;
+      return { cx: dot.x * R, cy: dot.y * R, r: dot.r * R, opacity: dot.opacity };
+    }),
+  );
 
   return (
-    <View style={{ width: size, height: size }}>
-      <Animated.View style={[{ width: size, height: size }, bodyStyle]}>
-        <Svg width={size} height={size} viewBox="-60 -60 120 120">
-          <Defs>
-            {/* Eyes are holes cut out of the body (bloub): luminance mask, black = hole. */}
-            <Mask id="eyes" maskUnits="userSpaceOnUse" x={-60} y={-60} width={120} height={120}>
-              <Rect x={-60} y={-60} width={120} height={120} fill="#fff" />
-              <AnimatedG animatedProps={eyesProps} fill="#000">
-                {face.eyes.map((eye) => (
-                  <Path key={eye.transform} d={eye.d} transform={eye.transform} />
-                ))}
+    <Svg width={size} height={size} viewBox="-60 -60 120 120">
+      <Defs>
+        {/* Eyes are holes cut out of the body (bloub): luminance mask, black = hole. */}
+        <Mask id="eyes" maskUnits="userSpaceOnUse" x={-60} y={-60} width={120} height={120}>
+          <Rect x={-60} y={-60} width={120} height={120} fill="#fff" />
+          <AnimatedG animatedProps={eyesProps} fill="#000">
+            {face.eyes.map((eye, i) => (
+              <AnimatedG key={eye.transform} animatedProps={eyeProps[i]!}>
+                <Path d={eye.d} transform={eye.transform} />
               </AnimatedG>
-            </Mask>
-          </Defs>
-          <Path d={organicAvatarPath(seed)} fill={color} mask="url(#eyes)" />
-        </Svg>
-      </Animated.View>
-    </View>
+            ))}
+          </AnimatedG>
+        </Mask>
+      </Defs>
+      <AnimatedPath
+        animatedProps={bodyProps}
+        d={organicAvatarPath(seed)}
+        fill={color}
+        mask="url(#eyes)"
+      />
+      {dotProps.map((props, i) => (
+        <AnimatedCircle key={i} animatedProps={props} fill={color} />
+      ))}
+    </Svg>
   );
 }

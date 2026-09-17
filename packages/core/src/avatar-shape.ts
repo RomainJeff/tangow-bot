@@ -189,7 +189,8 @@ export interface OrganicAvatarFace {
   x: number;
   y: number;
   /** Eye paths with `matrix(...)` transforms relative to (x, y). Eyes are meant to be cut out of the body (mask), not painted on it. */
-  eyes: readonly { d: string; transform: string }[];
+  /** `x`/`y` = eye centre relative to (x, y), for transform origins. */
+  eyes: readonly { d: string; transform: string; x: number; y: number }[];
 }
 
 export function organicAvatarFace(seed: number): OrganicAvatarFace {
@@ -211,6 +212,8 @@ export function organicAvatarFace(seed: number): OrganicAvatarFace {
     eyes: placed.map((e) => ({
       d,
       transform: `matrix(${e.a} ${e.b} ${e.c} ${e.d} ${r2(e.px - x)} ${r2(e.py - y)})`,
+      x: r2(e.px - x),
+      y: r2(e.py - y),
     })),
   };
 }
