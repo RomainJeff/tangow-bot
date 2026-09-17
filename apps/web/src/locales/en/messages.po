@@ -186,7 +186,7 @@ msgstr "Access token (optional)"
 msgid "Account"
 msgstr "Account"
 
-#: src/pages/shell/bot-panel.tsx:633
+#: src/pages/shell/bot-panel.tsx:736
 msgid "Account default"
 msgstr "Account default"
 
@@ -347,7 +347,7 @@ msgstr "Adding…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/PluginsOverlay.tsx:896
 #: src/pages/RoutineSchedule.tsx:44
-#: src/pages/shell/bot-panel.tsx:510
+#: src/pages/shell/bot-panel.tsx:613
 msgid "Advanced"
 msgstr "Advanced"
 
@@ -472,6 +472,8 @@ msgstr "API key header"
 
 #: src/pages/AccountSettingsOverlay.tsx:112
 #: src/pages/AccountSettingsOverlay.tsx:542
+#: src/pages/shell/bot-panel.tsx:222
+#: src/pages/shell/bot-panel.tsx:234
 msgid "Appearance"
 msgstr "Appearance"
 
@@ -590,6 +592,10 @@ msgstr "Authorize"
 msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "Authorize this server so agents can use its tools. A popup opens."
 
+#: src/pages/shell/bot-panel.tsx:253
+msgid "Auto"
+msgstr "Auto"
+
 #: src/pages/ExternalConversationSettings.tsx:160
 msgid "Automated senders"
 msgstr "Automated senders"
@@ -598,13 +604,13 @@ msgstr "Automated senders"
 msgid "Automated senders will appear after they post here."
 msgstr "Automated senders will appear after they post here."
 
+#: src/pages/shell/bot-panel.tsx:243
+msgid "Automatic shape"
+msgstr "Automatic shape"
+
 #: src/pages/RoutineEditor.tsx:557
 msgid "Available after the routine is saved"
 msgstr "Available after the routine is saved"
-
-#: src/pages/shell/avatar-studio-popover.tsx:134
-msgid "Avatar Studio"
-msgstr "Avatar Studio"
 
 #: src/pages/AccountSettingsOverlay.tsx:154
 msgid "Avatars"
@@ -648,7 +654,6 @@ msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1709
-#: src/pages/shell/avatar-studio-popover.tsx:165
 msgid "Bot"
 msgstr "Bot"
 
@@ -719,7 +724,7 @@ msgstr "Cancel"
 msgid "Cancel edit"
 msgstr "Cancel edit"
 
-#: src/pages/shell/bot-panel.tsx:125
+#: src/pages/shell/bot-panel.tsx:131
 msgid "Cancel new bot"
 msgstr "Cancel new bot"
 
@@ -805,10 +810,6 @@ msgstr "Checking…"
 msgid "Checkout has local changes. Clean it before updating."
 msgstr "Checkout has local changes. Clean it before updating."
 
-#: src/pages/shell/avatar-studio-popover.tsx:137
-msgid "Choose a bot shape, color, or upload an image"
-msgstr "Choose a bot shape, color, or upload an image"
-
 #: src/pages/MessagingSettingsOverlay.tsx:158
 msgid "Choose a bot…"
 msgstr "Choose a bot…"
@@ -816,10 +817,6 @@ msgstr "Choose a bot…"
 #: src/pages/Auth.tsx:281
 msgid "Choose a new password"
 msgstr "Choose a new password"
-
-#: src/pages/shell/avatar-studio-popover.tsx:271
-msgid "Choose file"
-msgstr "Choose file"
 
 #: src/pages/ModelSettingsOverlay.tsx:361
 msgid "Choose which connected model Rakazo uses."
@@ -835,7 +832,7 @@ msgid "Clear {0}’s conversation?"
 msgstr "Clear {0}’s conversation?"
 
 #: src/pages/BotContextMenu.tsx:140
-#: src/pages/shell/bot-panel.tsx:662
+#: src/pages/shell/bot-panel.tsx:773
 msgid "Clear conversation"
 msgstr "Clear conversation"
 
@@ -857,7 +854,6 @@ msgstr "Client secret"
 #: src/pages/PeerMessagesOverlay.tsx:100
 #: src/pages/PeerMessagesOverlay.tsx:101
 #: src/pages/RoutineEditor.tsx:272
-#: src/pages/shell/avatar-studio-popover.tsx:143
 #: src/pages/WindowChrome.tsx:19
 msgid "Close"
 msgstr "Close"
@@ -934,13 +930,10 @@ msgstr "Code"
 msgid "Collapse {0}"
 msgstr "Collapse {0}"
 
-#: src/pages/shell/avatar-studio-popover.tsx:211
-msgid "Color"
-msgstr "Color"
-
-#: src/pages/shell/avatar-studio-popover.tsx:222
-msgid "Color {color}"
-msgstr "Color {color}"
+#. placeholder {0}: index + 1
+#: src/pages/shell/bot-panel.tsx:275
+msgid "Color {0}"
+msgstr "Color {0}"
 
 #: src/pages/RoutineEditor.tsx:455
 msgid "Coming soon"
@@ -956,7 +949,7 @@ msgstr "Complete"
 
 #: src/pages/SettingsOverlay.tsx:90
 #: src/pages/Shell.tsx:6331
-#: src/pages/shell/bot-panel.tsx:58
+#: src/pages/shell/bot-panel.tsx:64
 msgid "Computer"
 msgstr "Computer"
 
@@ -1191,7 +1184,7 @@ msgstr "Could not connect to the computer screen"
 msgid "Could not continue"
 msgstr "Could not continue"
 
-#: src/pages/shell/bot-panel.tsx:113
+#: src/pages/shell/bot-panel.tsx:119
 msgid "Could not create bot"
 msgstr "Could not create bot"
 
@@ -1404,7 +1397,7 @@ msgstr "Could not run routine"
 
 #: src/pages/ExternalConversationSettings.tsx:250
 #: src/pages/KnowledgeSection.tsx:162
-#: src/pages/shell/bot-panel.tsx:391
+#: src/pages/shell/bot-panel.tsx:491
 msgid "Could not save"
 msgstr "Could not save"
 
@@ -1518,7 +1511,7 @@ msgid "Couldn't update messaging settings"
 msgstr "Couldn't update messaging settings"
 
 #: src/pages/Shell.tsx:2658
-#: src/pages/shell/bot-panel.tsx:185
+#: src/pages/shell/bot-panel.tsx:191
 #: src/pages/shell/dialogs.tsx:202
 msgid "Create"
 msgstr "Create"
@@ -1568,7 +1561,7 @@ msgid "Created"
 msgstr "Created"
 
 #: src/pages/GroupPanel.tsx:170
-#: src/pages/shell/bot-panel.tsx:185
+#: src/pages/shell/bot-panel.tsx:191
 #: src/pages/shell/dialogs.tsx:91
 #: src/pages/shell/dialogs.tsx:202
 msgid "Creating…"
@@ -1608,10 +1601,6 @@ msgstr "Customer support"
 msgid "Customize"
 msgstr "Customize"
 
-#: src/pages/shell/avatar-studio-popover.tsx:117
-msgid "Customize bot avatar"
-msgstr "Customize bot avatar"
-
 #: src/pages/AccountSettingsOverlay.tsx:537
 msgid "Dark"
 msgstr "Dark"
@@ -1635,7 +1624,7 @@ msgid "Default"
 msgstr "Default"
 
 #. placeholder {0}: thinkingLevelLabel(defaultThinkingLevel)
-#: src/pages/shell/bot-panel.tsx:565
+#: src/pages/shell/bot-panel.tsx:668
 msgid "Default ({0})"
 msgstr "Default ({0})"
 
@@ -1702,14 +1691,14 @@ msgstr "Deny"
 msgid "Deployment default"
 msgstr "Deployment default"
 
-#: src/pages/shell/bot-panel.tsx:156
+#: src/pages/shell/bot-panel.tsx:162
 msgid "Describe what this bot does"
 msgstr "Describe what this bot does"
 
 #: src/pages/GroupPanel.tsx:143
 #: src/pages/GroupPanel.tsx:252
-#: src/pages/shell/bot-panel.tsx:161
-#: src/pages/shell/bot-panel.tsx:453
+#: src/pages/shell/bot-panel.tsx:167
+#: src/pages/shell/bot-panel.tsx:556
 msgid "Description"
 msgstr "Description"
 
@@ -1782,7 +1771,6 @@ msgid "Don’t have an account?"
 msgstr "Don’t have an account?"
 
 #: src/pages/ActivityList.tsx:157
-#: src/pages/shell/avatar-studio-popover.tsx:283
 msgid "Done"
 msgstr "Done"
 
@@ -1817,15 +1805,11 @@ msgstr "Downloading…"
 msgid "Draft skill"
 msgstr "Draft skill"
 
-#: src/pages/shell/avatar-studio-popover.tsx:268
-msgid "Drag, drop, or paste an image"
-msgstr "Drag, drop, or paste an image"
-
 #: src/pages/BotContextMenu.tsx:135
 msgid "Duplicate"
 msgstr "Duplicate"
 
-#: src/pages/shell/bot-panel.tsx:448
+#: src/pages/shell/bot-panel.tsx:551
 msgid "e.g. Hivenet Agent, Presales, Timesheets bot"
 msgstr "e.g. Hivenet Agent, Presales, Timesheets bot"
 
@@ -1928,7 +1912,7 @@ msgstr "Expand"
 msgid "Expand {0}"
 msgstr "Expand {0}"
 
-#: src/pages/shell/bot-panel.tsx:654
+#: src/pages/shell/bot-panel.tsx:765
 msgid "Export"
 msgstr "Export"
 
@@ -1943,7 +1927,7 @@ msgstr "External conversation"
 
 #: src/pages/ModelSettingsOverlay.tsx:569
 #: src/pages/Onboarding.tsx:507
-#: src/pages/shell/bot-panel.tsx:674
+#: src/pages/shell/bot-panel.tsx:785
 msgid "Extra high"
 msgstr "Extra high"
 
@@ -2041,7 +2025,7 @@ msgstr "General"
 msgid "Get credentials"
 msgstr "Get credentials"
 
-#: src/pages/shell/bot-panel.tsx:487
+#: src/pages/shell/bot-panel.tsx:590
 msgid "Get notified when this Bot finishes or needs input"
 msgstr "Get notified when this Bot finishes or needs input"
 
@@ -2125,7 +2109,7 @@ msgstr "Hide password"
 
 #: src/pages/ModelSettingsOverlay.tsx:568
 #: src/pages/Onboarding.tsx:506
-#: src/pages/shell/bot-panel.tsx:677
+#: src/pages/shell/bot-panel.tsx:788
 msgid "High"
 msgstr "High"
 
@@ -2142,7 +2126,7 @@ msgstr "hours"
 msgid "How often"
 msgstr "How often"
 
-#: src/pages/shell/bot-panel.tsx:474
+#: src/pages/shell/bot-panel.tsx:577
 msgid "How this bot should behave"
 msgstr "How this bot should behave"
 
@@ -2162,10 +2146,6 @@ msgstr "If you heard that, voice is ready."
 msgid "Ignore"
 msgstr "Ignore"
 
-#: src/pages/shell/avatar-studio-popover.tsx:239
-msgid "Image upload area"
-msgstr "Image upload area"
-
 #: src/pages/KnowledgeSection.tsx:486
 msgid "Import"
 msgstr "Import"
@@ -2174,7 +2154,7 @@ msgstr "Import"
 msgid "Import OpenAPI JSON"
 msgstr "Import OpenAPI JSON"
 
-#: src/pages/shell/bot-panel.tsx:581
+#: src/pages/shell/bot-panel.tsx:684
 msgid "Inherit default"
 msgstr "Inherit default"
 
@@ -2215,7 +2195,7 @@ msgstr "Instance API key"
 msgid "Instruction"
 msgstr "Instruction"
 
-#: src/pages/shell/bot-panel.tsx:465
+#: src/pages/shell/bot-panel.tsx:568
 msgid "Instructions"
 msgstr "Instructions"
 
@@ -2250,7 +2230,7 @@ msgid "Interval unit"
 msgstr "Interval unit"
 
 #: src/pages/MemorySettingsOverlay.tsx:49
-#: src/pages/shell/bot-panel.tsx:582
+#: src/pages/shell/bot-panel.tsx:685
 msgid "Isolated"
 msgstr "Isolated"
 
@@ -2383,7 +2363,7 @@ msgstr "Log out"
 
 #: src/pages/ModelSettingsOverlay.tsx:566
 #: src/pages/Onboarding.tsx:504
-#: src/pages/shell/bot-panel.tsx:675
+#: src/pages/shell/bot-panel.tsx:786
 msgid "Low"
 msgstr "Low"
 
@@ -2434,7 +2414,7 @@ msgstr "Marketplaces"
 
 #: src/pages/ModelSettingsOverlay.tsx:570
 #: src/pages/Onboarding.tsx:508
-#: src/pages/shell/bot-panel.tsx:679
+#: src/pages/shell/bot-panel.tsx:790
 msgid "Max"
 msgstr "Max"
 
@@ -2458,7 +2438,7 @@ msgstr "MCP servers"
 
 #: src/pages/ModelSettingsOverlay.tsx:567
 #: src/pages/Onboarding.tsx:505
-#: src/pages/shell/bot-panel.tsx:676
+#: src/pages/shell/bot-panel.tsx:787
 msgid "Medium"
 msgstr "Medium"
 
@@ -2476,7 +2456,7 @@ msgstr "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgid "Memory"
 msgstr "Memory"
 
-#: src/pages/shell/bot-panel.tsx:577
+#: src/pages/shell/bot-panel.tsx:680
 msgid "Memory scope"
 msgstr "Memory scope"
 
@@ -2535,7 +2515,7 @@ msgstr "Microphone failed"
 
 #: src/pages/ModelSettingsOverlay.tsx:565
 #: src/pages/Onboarding.tsx:503
-#: src/pages/shell/bot-panel.tsx:678
+#: src/pages/shell/bot-panel.tsx:789
 msgid "Minimal"
 msgstr "Minimal"
 
@@ -2562,7 +2542,7 @@ msgstr "minutes"
 #: src/pages/Onboarding.tsx:433
 #: src/pages/Onboarding.tsx:529
 #: src/pages/Onboarding.tsx:541
-#: src/pages/shell/bot-panel.tsx:527
+#: src/pages/shell/bot-panel.tsx:630
 msgid "Model"
 msgstr "Model"
 
@@ -2623,15 +2603,15 @@ msgstr "Move to"
 #: src/pages/GroupPanel.tsx:133
 #: src/pages/GroupPanel.tsx:243
 #: src/pages/RoutineEditor.tsx:310
-#: src/pages/shell/bot-panel.tsx:139
-#: src/pages/shell/bot-panel.tsx:430
+#: src/pages/shell/bot-panel.tsx:145
+#: src/pages/shell/bot-panel.tsx:533
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
 msgid "Name"
 msgstr "Name"
 
-#: src/pages/shell/bot-panel.tsx:145
+#: src/pages/shell/bot-panel.tsx:151
 msgid "Name this bot"
 msgstr "Name this bot"
 
@@ -2655,7 +2635,7 @@ msgstr "Needs takeover"
 msgid "Needs you"
 msgstr "Needs you"
 
-#: src/pages/shell/bot-panel.tsx:123
+#: src/pages/shell/bot-panel.tsx:129
 msgid "New bot"
 msgstr "New bot"
 
@@ -2840,7 +2820,7 @@ msgstr "Nothing is still running"
 msgid "Nothing remembered yet"
 msgstr "Nothing remembered yet"
 
-#: src/pages/shell/bot-panel.tsx:484
+#: src/pages/shell/bot-panel.tsx:587
 msgid "Notifications"
 msgstr "Notifications"
 
@@ -3061,7 +3041,7 @@ msgstr "POST to"
 msgid "Preview {0}"
 msgstr "Preview {0}"
 
-#: src/pages/shell/bot-panel.tsx:72
+#: src/pages/shell/bot-panel.tsx:78
 msgid "Private"
 msgstr "Private"
 
@@ -3108,7 +3088,7 @@ msgstr "React"
 msgid "Reactions"
 msgstr "Reactions"
 
-#: src/pages/shell/bot-panel.tsx:611
+#: src/pages/shell/bot-panel.tsx:714
 msgid "Read replies aloud"
 msgstr "Read replies aloud"
 
@@ -3300,7 +3280,7 @@ msgstr "Replace key"
 msgid "Reply"
 msgstr "Reply"
 
-#: src/pages/shell/bot-panel.tsx:622
+#: src/pages/shell/bot-panel.tsx:725
 msgid "Reply in several short messages"
 msgstr "Reply in several short messages"
 
@@ -3313,7 +3293,6 @@ msgid "Replying to {replyName}: “{replyQuote}”"
 msgstr "Replying to {replyName}: “{replyQuote}”"
 
 #: src/components/ComputerMaintenanceActions.tsx:100
-#: src/pages/shell/avatar-studio-popover.tsx:186
 msgid "Reset"
 msgstr "Reset"
 
@@ -3441,7 +3420,7 @@ msgstr "Runs when this bot receives a verified message from this provider."
 #: src/pages/KnowledgeSection.tsx:657
 #: src/pages/ModelSettingsOverlay.tsx:791
 #: src/pages/RoutineEditor.tsx:489
-#: src/pages/shell/bot-panel.tsx:651
+#: src/pages/shell/bot-panel.tsx:762
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
 msgstr "Save"
@@ -3625,12 +3604,13 @@ msgstr "Settings: Usage"
 msgid "Setup help"
 msgstr "Setup help"
 
-#: src/pages/shell/avatar-studio-popover.tsx:194
-msgid "Shape"
-msgstr "Shape"
+#. placeholder {0}: seed + 1
+#: src/pages/shell/bot-panel.tsx:243
+msgid "Shape {0}"
+msgstr "Shape {0}"
 
 #: src/pages/MemorySettingsOverlay.tsx:49
-#: src/pages/shell/bot-panel.tsx:583
+#: src/pages/shell/bot-panel.tsx:686
 msgid "Shared"
 msgstr "Shared"
 
@@ -3736,7 +3716,7 @@ msgstr "Slack not enabled"
 msgid "Software update"
 msgstr "Software update"
 
-#: src/pages/shell/bot-panel.tsx:538
+#: src/pages/shell/bot-panel.tsx:641
 msgid "Space default"
 msgstr "Space default"
 
@@ -3868,7 +3848,7 @@ msgstr "Teach a task"
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Teaching in progress. Stop teaching before sending a new message."
 
-#: src/pages/shell/bot-panel.tsx:72
+#: src/pages/shell/bot-panel.tsx:78
 msgid "Team"
 msgstr "Team"
 
@@ -3914,7 +3894,7 @@ msgstr "The API did not come back. Refresh this page."
 msgid "The selected memory provider is not available in this build."
 msgstr "The selected memory provider is not available in this build."
 
-#: src/pages/shell/bot-panel.tsx:557
+#: src/pages/shell/bot-panel.tsx:660
 msgid "Thinking"
 msgstr "Thinking"
 
@@ -3975,8 +3955,8 @@ msgstr "This subscription sign-in is not available in Rakazo yet. Use a deployme
 msgid "Time of day"
 msgstr "Time of day"
 
-#: src/pages/shell/bot-panel.tsx:150
-#: src/pages/shell/bot-panel.tsx:441
+#: src/pages/shell/bot-panel.tsx:156
+#: src/pages/shell/bot-panel.tsx:544
 msgid "Title"
 msgstr "Title"
 
@@ -4105,10 +4085,6 @@ msgstr "Updating Team Computer"
 msgid "Updating…"
 msgstr "Updating…"
 
-#: src/pages/shell/avatar-studio-popover.tsx:177
-msgid "Upload"
-msgstr "Upload"
-
 #: src/pages/AccountSettingsOverlay.tsx:226
 #: src/pages/SettingsOverlay.tsx:89
 #: src/pages/Shell.tsx:3139
@@ -4145,7 +4121,7 @@ msgstr "Verifying…"
 #: src/pages/SettingsOverlay.tsx:88
 #: src/pages/Shell.tsx:5569
 #: src/pages/Shell.tsx:5570
-#: src/pages/shell/bot-panel.tsx:626
+#: src/pages/shell/bot-panel.tsx:729
 #: src/pages/VoiceSettingsOverlay.tsx:170
 #: src/pages/VoiceSettingsOverlay.tsx:293
 msgid "Voice"
@@ -4188,7 +4164,7 @@ msgstr "What result will you demonstrate?"
 msgid "What should this routine do each time it runs?"
 msgstr "What should this routine do each time it runs?"
 
-#: src/pages/shell/bot-panel.tsx:167
+#: src/pages/shell/bot-panel.tsx:173
 msgid "What this bot is for"
 msgstr "What this bot is for"
 

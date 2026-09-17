@@ -10,24 +10,30 @@ import type {
   VoiceInfo,
 } from "@rakazo/contracts";
 import {
+  AVATAR_SHAPE_COUNT,
+  BOT_COLORS,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_INSTRUCTIONS_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
 } from "@rakazo/contracts";
 import {
+  BotAvatar,
   Button,
   Input,
   NativeSelect,
   NativeSelectOption,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Switch,
   Textarea,
   Toggle,
+  useAvatarStyle,
 } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
-import { AvatarStudioPopover } from "./avatar-studio-popover";
 
 const ScratchpadSection = lazy(() =>
   import("../ScratchpadSection").then((module) => ({ default: module.ScratchpadSection })),
@@ -188,6 +194,97 @@ export function CreateBotForm({
   );
 }
 
+/** Avatar popover: pick the bot color, and its organic shape when that avatar
+ * style is on. Shapes stay hidden for the robot style, which ignores the seed. */
+function BotAppearancePicker({
+  botId,
+  status,
+  color,
+  shapeSeed,
+  onColorChange,
+  onShapeChange,
+}: {
+  botId: string;
+  status: Bot["status"];
+  color: string;
+  shapeSeed: number | null;
+  onColorChange: (color: string) => void;
+  onShapeChange: (shapeSeed: number | null) => void;
+}) {
+  const { t } = useLingui();
+  const avatarStyle = useAvatarStyle();
+
+  return (
+    <Popover>
+      <div className="flex justify-center">
+        <PopoverTrigger
+          data-testid="bot-appearance-trigger"
+          aria-label={t`Appearance`}
+          className="rounded-full outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <BotAvatar
+            color={color}
+            identity={botId}
+            shapeSeed={shapeSeed}
+            size={64}
+            status={status}
+          />
+        </PopoverTrigger>
+      </div>
+      <PopoverContent data-testid="bot-appearance-picker" aria-label={t`Appearance`}>
+        {avatarStyle === "organic" ? (
+          <div className="grid grid-cols-4 gap-1">
+            {[null, ...Array.from({ length: AVATAR_SHAPE_COUNT }, (_, index) => index)].map(
+              (seed) => (
+                <button
+                  key={seed ?? "auto"}
+                  type="button"
+                  aria-pressed={shapeSeed === seed}
+                  aria-label={seed === null ? t`Automatic shape` : t`Shape ${seed + 1}`}
+                  onClick={() => onShapeChange(seed)}
+                  className={`flex h-[58px] items-center justify-center rounded-[12px] border transition-colors ${
+                    shapeSeed === seed
+                      ? "border-ring bg-muted"
+                      : "border-transparent hover:border-ring/60"
+                  }`}
+                >
+                  {seed === null ? (
+                    <span className="text-[12px] text-muted-foreground">
+                      <Trans>Auto</Trans>
+                    </span>
+                  ) : (
+                    <BotAvatar
+                      color={color}
+                      identity={botId}
+                      shapeSeed={seed}
+                      size={36}
+                      variant="organic"
+                    />
+                  )}
+                </button>
+              ),
+            )}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap justify-center gap-3">
+          {BOT_COLORS.map((swatch, index) => (
+            <button
+              key={swatch}
+              type="button"
+              aria-pressed={color === swatch}
+              aria-label={t`Color ${index + 1}`}
+              onClick={() => onColorChange(swatch)}
+              style={{ background: swatch }}
+              className={`h-7 w-7 rounded-full transition-shadow ${
+                color === swatch ? "ring-1 ring-ring ring-offset-2 ring-offset-popover" : ""
+              }`}
+            />
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 export function BotSettings({
   bot,
   memoryProviderConfigured,
@@ -224,8 +321,7 @@ export function BotSettings({
   const [title, setTitle] = useState(bot.title);
   const [description, setDescription] = useState(bot.description);
   const [instructions, setInstructions] = useState(bot.instructions);
-  // Organic shape seed still round-trips through save; the web picker is now Avatar Studio.
-  const shapeSeed = bot.shapeSeed;
+  const [shapeSeed, setShapeSeed] = useState<number | null>(bot.shapeSeed ?? null);
   const [color, setColor] = useState(bot.color);
   const [notifyOnFinish, setNotifyOnFinish] = useState(bot.notifyOnFinish ?? true);
   const [computerMode, setComputerMode] = useState(bot.computerMode);
@@ -252,6 +348,7 @@ export function BotSettings({
       description?: string;
       instructions?: string;
       color?: string;
+      shapeSeed?: number | null;
       notifyOnFinish?: boolean;
     }) => Promise<void>
   >(async () => undefined);
@@ -339,6 +436,7 @@ export function BotSettings({
     description?: string;
     instructions?: string;
     color?: string;
+    shapeSeed?: number | null;
     notifyOnFinish?: boolean;
   }) {
     const selected = modelKey ? parseModelOptionKey(modelKey) : null;
@@ -351,6 +449,8 @@ export function BotSettings({
       patchOverrides?.instructions !== undefined ? patchOverrides.instructions : instructions
     ).trim();
     const nextColor = patchOverrides?.color !== undefined ? patchOverrides.color : color;
+    const nextShapeSeed =
+      patchOverrides?.shapeSeed !== undefined ? patchOverrides.shapeSeed : shapeSeed;
     const nextNotify =
       patchOverrides?.notifyOnFinish !== undefined ? patchOverrides.notifyOnFinish : notifyOnFinish;
 
@@ -369,7 +469,7 @@ export function BotSettings({
         instructions: nextInstructions,
         color: nextColor,
         notifyOnFinish: nextNotify,
-        shapeSeed,
+        shapeSeed: nextShapeSeed,
         computerMode,
         memoryScope,
         autoSpeak,
@@ -401,6 +501,7 @@ export function BotSettings({
     description?: string;
     instructions?: string;
     color?: string;
+    shapeSeed?: number | null;
     notifyOnFinish?: boolean;
   }) {
     // Serialize full-object auto-saves so an older in-flight request cannot
@@ -414,18 +515,20 @@ export function BotSettings({
 
   return (
     <div data-testid="bot-settings">
-      <div className="flex justify-center py-4">
-        <AvatarStudioPopover
-          value={color}
-          identity={bot.id}
-          status={bot.status}
-          size={76}
-          onChange={(newColor) => {
-            setColor(newColor);
-            void enqueueSave({ color: newColor });
-          }}
-        />
-      </div>
+      <BotAppearancePicker
+        botId={bot.id}
+        status={bot.status}
+        color={color}
+        shapeSeed={shapeSeed}
+        onColorChange={(newColor) => {
+          setColor(newColor);
+          void enqueueSave({ color: newColor });
+        }}
+        onShapeChange={(newShapeSeed) => {
+          setShapeSeed(newShapeSeed);
+          void enqueueSave({ shapeSeed: newShapeSeed });
+        }}
+      />
       <label htmlFor={`${ids}-name`} className="mt-4 block text-[13.5px] text-muted-foreground/80">
         <Trans>Name</Trans>
         <Input
@@ -645,7 +748,15 @@ export function BotSettings({
         <Button
           disabled={saving}
           onClick={() => {
-            void enqueueSave({ name, title, description, instructions, color, notifyOnFinish });
+            void enqueueSave({
+              name,
+              title,
+              description,
+              instructions,
+              color,
+              shapeSeed,
+              notifyOnFinish,
+            });
           }}
         >
           <Trans>Save</Trans>

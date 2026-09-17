@@ -79,7 +79,6 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  resolvePersonaColorDef,
 } from "@rakazo/ui-web";
 import {
   ArrowDown,
@@ -5952,21 +5951,19 @@ const MessageView = memo(function MessageView({
   );
   const parentJumpId = replyPreview?.id ?? replyToMessageId;
   const speakerBot = message.botId ? peerBot?.(message.botId) : undefined;
-  const speakerColorDef = useMemo(
-    () => resolvePersonaColorDef(message.botId ?? "bot", speakerBot?.color),
-    [message.botId, speakerBot?.color],
-  );
+  const speakerColor = speakerBot?.color ?? FALLBACK_BOT_COLOR;
   const messageContext = (
     <>
       {speakerName ? (
         <div
           className="mb-1.5 flex items-center gap-2 text-[13px] font-semibold tracking-tight"
           dir="auto"
-          style={{ color: speakerColorDef.light }}
+          style={{ color: speakerColor }}
         >
           <BotAvatar
-            color={speakerBot?.color ?? FALLBACK_BOT_COLOR}
+            color={speakerColor}
             identity={message.botId}
+            shapeSeed={speakerBot?.shapeSeed}
             size={22}
           />
           {speakerName}

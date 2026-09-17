@@ -11,7 +11,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - Quote selected text when replying: select part of a message and the reply carries that excerpt.
-- Avatar Studio replaces the color radio row on the web bot panel: pick a color and a geometric shape from the avatar popover. The organic shape picker stays on mobile.
 - Per-bot "Notifications" switch: get notified when a bot finishes or needs input. Name, title, description, instructions and avatar now autosave on blur.
 - Every run's system instructions now state the current date and time (UTC), so bots judge deadlines, recency and scheduling from the real present instead of guessing it from training data or quoted timestamps.
 

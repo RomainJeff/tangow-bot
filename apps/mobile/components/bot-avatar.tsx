@@ -21,7 +21,7 @@ import { NativeSymbol } from "./native-symbol";
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 export const BotAvatar = memo(function BotAvatar({
-  color: rawColor,
+  color,
   size = 54,
   status,
   identity,
@@ -39,8 +39,6 @@ export const BotAvatar = memo(function BotAvatar({
   muted?: boolean;
 }) {
   const { t } = useI18n();
-  // Web Avatar Studio stores `#hex::shape_N`; mobile only renders the colour part.
-  const color = rawColor.split("::")[0] ?? rawColor;
   const isWorking = ACTIVE_RUN_STATUSES.some((activeStatus) => activeStatus === status);
   const { avatarStyle } = useAvatarStyle();
   const visorW = Math.round(size * 0.68);

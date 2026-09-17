@@ -96,11 +96,11 @@ export const GroupAvatar = memo(function GroupAvatar({
       {visibleMembers.map((member, index) => (
         <div
           key={member.botId ?? index}
-          className="absolute"
+          className="absolute rounded-full"
           style={{
             ...positions[index],
             zIndex: index + 1,
-            filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))",
+            boxShadow: "0 0 0 1.5px var(--accent)",
           }}
         >
           <BotAvatar
@@ -136,10 +136,11 @@ export const GroupAvatar = memo(function GroupAvatar({
       ) : null}
       {members.length > 3 ? (
         <div
-          className="absolute right-0 bottom-0 z-[3] flex items-center justify-center rounded-full bg-secondary border border-border text-[10px] font-semibold text-secondary-foreground shadow-md"
+          className="absolute right-0 bottom-0 z-[3] flex items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-foreground"
           style={{
             width: miniSize,
             height: miniSize,
+            boxShadow: "0 0 0 1.5px var(--accent)",
           }}
         >
           {`+${members.length - 2}`}
