@@ -1,36 +1,40 @@
 /**
  * Working choreography, ported from bloub <https://github.com/jeremy-prt/bloub>
- * (MIT, Copyright (c) 2026 Jérémy Perret): the bot cycles through a handful of
- * bloub states (thinking dots, wink, wide eyes, "!", sleeping dot), each entered
- * with an easeOutQuint morph from the previous one. At rest nothing moves.
+ * (MIT, Copyright (c) 2026 Jérémy Perret). While working the bot slowly cycles
+ * through bloub expressions (attentive, curious, happy, surprised, confused, a
+ * wink), blinking on every change, with a small gaze drift so the hold never
+ * looks frozen. Once per cycle it "plays": a bouquet of thin arcs sweeps across
+ * the body. The body itself never moves; at rest nothing moves at all.
  *
  * `workingPose(t)` is the single source of truth: web drives it from
  * requestAnimationFrame, mobile from a Reanimated worklet. Units are ball radii
- * (× `AVATAR_BODY_RADIUS` for SVG user units) and seconds. The numbers are bloub's
- * measurements off the reference video — keep them verbatim.
+ * (× `AVATAR_BODY_RADIUS` for SVG user units), degrees and seconds. Expression
+ * numbers are bloub's — keep them verbatim.
  */
 
-export interface AvatarDot {
-  x: number;
-  y: number;
-  r: number;
-  opacity: number;
-}
-
 export interface AvatarPose {
-  body: { x: number; y: number; sx: number; sy: number };
   eyes: {
+    /** eye-pair offset from its resting spot, ball radii */
     x: number;
     y: number;
-    /** degrees */
+    /** whole-pair roll, degrees */
     roll: number;
-    opacity: number;
+    /** per-eye tilt, degrees, positive = top leans right */
+    tilt: [number, number];
     /** [inner, outer] scale relative to the resting capsule */
     scale: [[number, number], [number, number]];
   };
-  /** Ellipsis decor: left, middle (also the "!" dot), right. */
-  dots: [AvatarDot, AvatarDot, AvatarDot];
+  /** Play swoosh: `t` drives `swooshPath`, opacity 0 hides it. */
+  swoosh: { t: number; opacity: number };
 }
+
+interface Gaze {
+  yaw: number;
+  pitch: number;
+  roll: number;
+}
+type EyeSizes = [[number, number], [number, number]];
+type Tilts = [number, number];
 
 interface WorkingState {
   /** hold time, seconds */
@@ -40,28 +44,26 @@ interface WorkingState {
   pose(local: number): AvatarPose;
 }
 
-const DOT_X = [-0.557, -0.013, 0.532] as const;
-const DOT_R = 0.165;
-const DOT_PEAK = 1.25;
 const EYE_W = 0.186;
 const EYE_H = 0.412;
-const REST_GAZE = { yaw: 28.49, pitch: 28.62 };
-
-const NO_DOT: AvatarDot = { x: 0, y: 0, r: 0, opacity: 0 };
+const REST_GAZE: Gaze = { yaw: 28.49, pitch: 28.62, roll: -13 };
+/** bloub expressions turn the whole head; halve the travel so eyes stay on the body. */
+const HEAD_TURN = 0.5;
+const BLINK_SECONDS = 0.24;
+const PLAY_SECONDS = 2.2;
 
 export const REST_POSE: AvatarPose = {
-  body: { x: 0, y: 0, sx: 1, sy: 1 },
   eyes: {
     x: 0,
     y: 0,
     roll: 0,
-    opacity: 1,
+    tilt: [0, 0],
     scale: [
       [1, 1],
       [1, 1],
     ],
   },
-  dots: [NO_DOT, NO_DOT, NO_DOT],
+  swoosh: { t: 0, opacity: 0 },
 };
 
 function clamp(v: number): number {
@@ -74,146 +76,148 @@ function lerp(a: number, b: number, k: number): number {
   return a + (b - a) * k;
 }
 
-/** bloub `dotPulse`: cosine rise over a quarter wave, hold, snap back. */
-function dotPulse(t: number, index: number): number {
-  "worklet";
-  const p = ((((t - index * 0.5) / 1.5) % 1) + 1) % 1;
-  const k = p < 0.5 ? 0.5 - 0.5 * Math.cos(p * Math.PI * 2) : 0;
-  return clamp(k * 2);
-}
-
-// ponytail: bloub projects eyes on a sphere; a sine offset of the gaze delta is
-// close enough at avatar sizes.
-function faced(
-  gaze: { yaw: number; pitch: number; roll: number },
-  eyes: [[number, number], [number, number]],
-  over: Partial<Omit<AvatarPose, "eyes">> = {},
-): AvatarPose {
+/** bloub `eyePoses`: the eye pair sits where the head's forward vector meets the sphere. */
+function project(gaze: Gaze): [number, number] {
   "worklet";
   const rad = Math.PI / 180;
+  return [Math.sin(gaze.yaw * rad) * Math.cos(gaze.pitch * rad), -Math.sin(gaze.pitch * rad)];
+}
+
+const REST_POINT = project(REST_GAZE);
+
+function faced(gaze: Gaze, eyes: EyeSizes, tilt: Tilts): AvatarPose {
+  "worklet";
+  const [px, py] = project(gaze);
   return {
-    ...REST_POSE,
-    ...over,
     eyes: {
-      x: Math.sin((gaze.yaw - REST_GAZE.yaw) * rad) * 0.55,
-      y: Math.sin((gaze.pitch - REST_GAZE.pitch) * rad) * 0.55,
-      roll: gaze.roll + 13,
-      opacity: 1,
+      x: (px - REST_POINT[0]) * HEAD_TURN,
+      y: (py - REST_POINT[1]) * HEAD_TURN,
+      roll: gaze.roll - REST_GAZE.roll,
+      tilt,
       scale: [
         [eyes[0][0] / EYE_W, eyes[0][1] / EYE_H],
         [eyes[1][0] / EYE_W, eyes[1][1] / EYE_H],
       ],
     },
+    swoosh: REST_POSE.swoosh,
   };
 }
 
-function faceless(body: AvatarPose["body"], dots: AvatarPose["dots"] = REST_POSE.dots): AvatarPose {
-  "worklet";
-  return { body, eyes: { ...REST_POSE.eyes, opacity: 0 }, dots };
+/** Same capsule on both eyes, tilts mirrored (bloub `pair`). */
+function pair(w: number, h: number, tilt = 0): [EyeSizes, Tilts] {
+  return [
+    [
+      [w, h],
+      [w, h],
+    ],
+    [tilt, -tilt],
+  ];
+}
+
+function hold(duration: number, gaze: Gaze, [eyes, tilt]: [EyeSizes, Tilts]): WorkingState {
+  return {
+    duration,
+    morph: 0.45,
+    pose: () => {
+      "worklet";
+      return faced(gaze, eyes, tilt);
+    },
+  };
 }
 
 const STATES: WorkingState[] = [
+  hold(2.8, { yaw: 4, pitch: 5, roll: -4 }, pair(0.21, 0.44)),
+  // curious: the head tilt carries it, both eyes lean the same way
+  hold(2.6, { yaw: 16, pitch: -9, roll: -15 }, [
+    [
+      [0.24, 0.46],
+      [0.2, 0.38],
+    ],
+    [-8, -8],
+  ]),
+  hold(2.4, { yaw: 5, pitch: 9, roll: 0 }, pair(0.27, 0.17, 14)),
+  hold(1.6, { yaw: 3, pitch: -3, roll: 0 }, pair(0.45, 0.47)),
+  // confused: mismatched sizes AND tilts
+  hold(2.6, { yaw: -14, pitch: 3, roll: 8 }, [
+    [
+      [0.2, 0.44],
+      [0.28, 0.17],
+    ],
+    [-18, 14],
+  ]),
+  // wink: the closed eye is a dash WIDER than the open one
+  hold(1.6, { yaw: -5.37, pitch: 4.55, roll: 6.7 }, [
+    [
+      [0.236, 0.464],
+      [0.447, 0.089],
+    ],
+    [0, 0],
+  ]),
   {
-    duration: 1,
-    morph: 0.45,
-    pose: () => {
-      "worklet";
-      return REST_POSE;
-    },
-  },
-  {
-    duration: 2.6,
-    morph: 0.4,
-    pose: (t) => {
-      "worklet";
-      const dot = (i: number): AvatarDot => {
-        const k = dotPulse(t, i);
-        return {
-          x: DOT_X[i]!,
-          y: 0,
-          r: DOT_R * (1 + (DOT_PEAK - 1) * k),
-          opacity: 0.55 + 0.45 * k,
-        };
-      };
-      // The ball BECOMES the middle dot, so the morph stays continuous.
-      const mid = DOT_R * (1 + (DOT_PEAK - 1) * dotPulse(t, 1));
-      return faceless({ x: DOT_X[1], y: 0, sx: mid, sy: mid }, [dot(0), NO_DOT, dot(2)]);
-    },
-  },
-  {
-    duration: 1.6,
-    morph: 0.3,
-    // The closed eye is a dash WIDER than the open one, not a squashed capsule.
-    pose: () => {
-      "worklet";
-      return faced({ yaw: -5.37, pitch: 4.55, roll: 6.7 }, [
-        [0.236, 0.464],
-        [0.447, 0.089],
-      ]);
-    },
-  },
-  {
-    duration: 1.8,
-    morph: 0.55,
-    pose: () => {
-      "worklet";
-      return faced({ yaw: 6.92, pitch: -21.96, roll: 11.6 }, [
-        [0.356, 0.875],
-        [0.356, 0.875],
-      ]);
-    },
-  },
-  {
-    duration: 2,
-    morph: 0.45,
-    // ponytail: bloub's "!" bar is a truncated cone; a squashed body reads the same.
-    pose: () => {
-      "worklet";
-      return faceless({ x: 0, y: -0.216, sx: 0.24, sy: 0.42 }, [
-        NO_DOT,
-        { x: -0.012, y: 0.526, r: 0.113, opacity: 1 },
-        NO_DOT,
-      ]);
-    },
-  },
-  {
-    duration: 2.4,
+    duration: PLAY_SECONDS,
     morph: 0.5,
     pose: (t) => {
       "worklet";
-      // Vertical bounce: ±0.19 around +0.11, period 0.6 s.
-      const y = 0.11 + Math.sin(t * ((Math.PI * 2) / 0.6)) * 0.19;
-      return faceless({ x: 0, y, sx: 0.1585, sy: 0.1585 });
+      const pose = faced(
+        { yaw: 12, pitch: -8, roll: -6 },
+        [
+          [0.18, 0.34],
+          [0.18, 0.34],
+        ],
+        [0, 0],
+      );
+      pose.swoosh = { t, opacity: clamp(t / 0.35) * clamp((PLAY_SECONDS - t) / 0.5) };
+      return pose;
     },
   },
+  hold(1.8, REST_GAZE, pair(EYE_W, EYE_H)),
 ];
 
 /** Length of one full working cycle, seconds. */
 export const WORKING_CYCLE_SECONDS = STATES.reduce((sum, s) => sum + s.duration, 0);
 
-/** Frozen frame used under reduced motion: thinking dots, mid-pulse. */
-export const WORKING_STILL_SECONDS = STATES[0]!.duration + 1.1;
+/** Frozen frame used under reduced motion: attentive, mid-hold. */
+export const WORKING_STILL_SECONDS = 1.4;
+
+export const SWOOSH_COUNT = 4;
+
+/**
+ * bloub `SWOOSH` through `arcRender`: four nested, nearly edge-on ellipses
+ * sweeping right to left over the body. Returns an SVG path in viewBox units.
+ * Drawn in the body colour behind the body, so no front/back split is needed.
+ */
+export function swooshPath(index: number, t: number, radius: number): string {
+  "worklet";
+  const TAU = Math.PI * 2;
+  const a = 0.78 + index * 0.2;
+  const k = 0.05 + index * 0.02;
+  const tilt = -0.62 + index * 0.05;
+  const cx = 0.45 - t * 0.42;
+  const cy = -0.12;
+  const spin = 0.06 * index + t * 0.3 * TAU;
+  const cu = Math.cos(tilt);
+  const su = Math.sin(tilt);
+  const N = 24;
+  let d = "";
+  for (let i = 0; i <= N; i += 1) {
+    const th = spin + (i / N) * 0.4 * TAU;
+    const ct = Math.cos(th);
+    const st = Math.sin(th);
+    const x = (a * (ct * cu - st * su * k) + cx) * radius;
+    const y = (a * (ct * su + st * cu * k) + cy) * radius;
+    d += `${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+  }
+  return d;
+}
 
 export function lerpPose(a: AvatarPose, b: AvatarPose, k: number): AvatarPose {
   "worklet";
-  const dot = (i: number): AvatarDot => ({
-    x: lerp(a.dots[i]!.x, b.dots[i]!.x, k),
-    y: lerp(a.dots[i]!.y, b.dots[i]!.y, k),
-    r: lerp(a.dots[i]!.r, b.dots[i]!.r, k),
-    opacity: lerp(a.dots[i]!.opacity, b.dots[i]!.opacity, k),
-  });
   return {
-    body: {
-      x: lerp(a.body.x, b.body.x, k),
-      y: lerp(a.body.y, b.body.y, k),
-      sx: lerp(a.body.sx, b.body.sx, k),
-      sy: lerp(a.body.sy, b.body.sy, k),
-    },
     eyes: {
       x: lerp(a.eyes.x, b.eyes.x, k),
       y: lerp(a.eyes.y, b.eyes.y, k),
       roll: lerp(a.eyes.roll, b.eyes.roll, k),
-      opacity: lerp(a.eyes.opacity, b.eyes.opacity, k),
+      tilt: [lerp(a.eyes.tilt[0], b.eyes.tilt[0], k), lerp(a.eyes.tilt[1], b.eyes.tilt[1], k)],
       scale: [
         [
           lerp(a.eyes.scale[0][0], b.eyes.scale[0][0], k),
@@ -225,13 +229,17 @@ export function lerpPose(a: AvatarPose, b: AvatarPose, k: number): AvatarPose {
         ],
       ],
     },
-    dots: [dot(0), dot(1), dot(2)],
+    swoosh: {
+      t: lerp(a.swoosh.t, b.swoosh.t, k),
+      opacity: lerp(a.swoosh.opacity, b.swoosh.opacity, k),
+    },
   };
 }
 
 /** `t` = seconds since the bot started working; loops every `WORKING_CYCLE_SECONDS`. */
 export function workingPose(t: number): AvatarPose {
   "worklet";
+  const TAU = Math.PI * 2;
   const local = ((t % WORKING_CYCLE_SECONDS) + WORKING_CYCLE_SECONDS) % WORKING_CYCLE_SECONDS;
   const last = STATES[STATES.length - 1]!;
   // First pass morphs in from rest; later cycles morph from the last state.
@@ -240,8 +248,22 @@ export function workingPose(t: number): AvatarPose {
   for (let i = 0; i < STATES.length; i += 1) {
     const state = STATES[i]!;
     if (local < start + state.duration) {
-      const k = 1 - (1 - clamp((local - start) / state.morph)) ** 5;
-      return lerpPose(previous, state.pose(local - start), k);
+      const elapsed = local - start;
+      const k = 1 - (1 - clamp(elapsed / state.morph)) ** 5;
+      const pose = lerpPose(previous, state.pose(elapsed), k);
+      // bloub `liveliness`: slow gaze drift on incommensurate periods, damped,
+      // faded in so the first frame is exactly the resting face.
+      const drift = clamp(t / 0.6);
+      pose.eyes.x +=
+        (Math.sin((t / 11.3) * TAU + 0.4) * 0.03 + Math.sin((t / 3.7) * TAU + 2.1) * 0.008) * drift;
+      pose.eyes.y +=
+        (Math.sin((t / 9.1) * TAU + 1.3) * 0.024 + Math.sin((t / 4.3) * TAU + 0.7) * 0.007) * drift;
+      // bloub `blinkIn`: a vertical screen-space squash on every state entry.
+      const lid = 1 - Math.sin(Math.PI * clamp(elapsed / BLINK_SECONDS));
+      const squash = 0.06 + 0.94 * lid;
+      pose.eyes.scale[0][1] *= squash;
+      pose.eyes.scale[1][1] *= squash;
+      return pose;
     }
     start += state.duration;
     previous = state.pose(state.duration);

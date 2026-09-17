@@ -7,6 +7,8 @@ import {
   organicAvatarFace,
   organicAvatarPath,
   REST_POSE,
+  SWOOSH_COUNT,
+  swooshPath,
   WORKING_STILL_SECONDS,
   workingPose,
 } from "@rakazo/core";
@@ -21,28 +23,17 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import Svg, {
-  Circle,
-  Defs,
-  G,
-  type GProps,
-  Mask,
-  Path,
-  type PathProps,
-  Rect,
-} from "react-native-svg";
+import Svg, { Defs, G, type GProps, Mask, Path, Rect } from "react-native-svg";
 import { useI18n } from "../lib/i18n";
 import { useAvatarStyle } from "./avatar-style";
 import { NativeSymbol } from "./native-symbol";
 
 const AnimatedG = Animated.createAnimatedComponent(G);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // react-native-svg leaves `matrix` out of its element props, but the native spec has it.
 type Matrix = [number, number, number, number, number, number];
-const svgProps = <P extends GProps | PathProps>(props: { matrix: Matrix; opacity?: number }) =>
-  props as unknown as Partial<P>;
+const svgProps = <P extends GProps>(props: { matrix: Matrix }) => props as unknown as Partial<P>;
 
 export const BotAvatar = memo(function BotAvatar({
   color,
@@ -200,45 +191,38 @@ function OrganicAvatar({
 
   const pose = useDerivedValue(() => lerpPose(REST_POSE, workingPose(clock.value), working.value));
   const R = AVATAR_BODY_RADIUS;
-  const bodyProps = useAnimatedProps(() =>
-    svgProps<PathProps>({
-      matrix: [
-        pose.value.body.sx,
-        0,
-        0,
-        pose.value.body.sy,
-        pose.value.body.x * R,
-        pose.value.body.y * R,
-      ],
-    }),
-  );
   const eyesProps = useAnimatedProps(() => {
-    const { x, y, roll, opacity } = pose.value.eyes;
+    const { x, y, roll } = pose.value.eyes;
     const a = (roll * Math.PI) / 180;
-    return {
-      opacity,
-      matrix: [
-        Math.cos(a),
-        Math.sin(a),
-        -Math.sin(a),
-        Math.cos(a),
-        face.x + x * R,
-        face.y + y * R,
-      ] as Matrix,
-    };
+    return svgProps<GProps>({
+      matrix: [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), face.x + x * R, face.y + y * R],
+    });
   });
   const eyeProps = face.eyes.map((eye, i) =>
     // biome-ignore lint/correctness/useHookAtTopLevel: fixed-length list (two eyes)
     useAnimatedProps(() => {
+      // rotate(tilt) · scale(sx, sy) about the eye centre
       const [sx, sy] = pose.value.eyes.scale[i]!;
-      return svgProps<GProps>({ matrix: [sx, 0, 0, sy, eye.x * (1 - sx), eye.y * (1 - sy)] });
+      const a = (pose.value.eyes.tilt[i]! * Math.PI) / 180;
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      return svgProps<GProps>({
+        matrix: [
+          c * sx,
+          s * sx,
+          -s * sy,
+          c * sy,
+          eye.x - (c * sx * eye.x - s * sy * eye.y),
+          eye.y - (s * sx * eye.x + c * sy * eye.y),
+        ],
+      });
     }),
   );
-  const dotProps = [0, 1, 2].map((i) =>
-    // biome-ignore lint/correctness/useHookAtTopLevel: fixed-length list (three dots)
+  const swooshProps = Array.from({ length: SWOOSH_COUNT }, (_, i) =>
+    // biome-ignore lint/correctness/useHookAtTopLevel: fixed-length list (four arcs)
     useAnimatedProps(() => {
-      const dot = pose.value.dots[i]!;
-      return { cx: dot.x * R, cy: dot.y * R, r: dot.r * R, opacity: dot.opacity };
+      const { t, opacity } = pose.value.swoosh;
+      return { opacity, d: opacity > 0 ? swooshPath(i, t, R) : "" };
     }),
   );
 
@@ -257,15 +241,17 @@ function OrganicAvatar({
           </AnimatedG>
         </Mask>
       </Defs>
-      <AnimatedPath
-        animatedProps={bodyProps}
-        d={organicAvatarPath(seed)}
-        fill={color}
-        mask="url(#eyes)"
-      />
-      {dotProps.map((props, i) => (
-        <AnimatedCircle key={i} animatedProps={props} fill={color} />
+      {swooshProps.map((props, i) => (
+        <AnimatedPath
+          key={i}
+          animatedProps={props}
+          fill="none"
+          stroke={color}
+          strokeWidth={0.05 * R}
+          strokeLinecap="round"
+        />
       ))}
+      <Path d={organicAvatarPath(seed)} fill={color} mask="url(#eyes)" />
     </Svg>
   );
 }

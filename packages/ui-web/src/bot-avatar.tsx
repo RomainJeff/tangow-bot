@@ -6,6 +6,8 @@ import {
   organicAvatarFace,
   organicAvatarPath,
   REST_POSE,
+  SWOOSH_COUNT,
+  swooshPath,
   WORKING_STILL_SECONDS,
   workingPose,
 } from "@rakazo/core";
@@ -199,23 +201,18 @@ function OrganicAvatar({
     const svg = svgRef.current;
     if (!svg) return;
     const R = AVATAR_BODY_RADIUS;
-    const body = svg.querySelector<SVGElement>(".rakazo-organic-avatar-body")!;
     const eyes = svg.querySelector<SVGElement>(".rakazo-organic-avatar-eyes")!;
     const eye = Array.from(svg.querySelectorAll<SVGElement>(".rakazo-organic-avatar-eye"));
-    const dots = Array.from(svg.querySelectorAll<SVGCircleElement>(".rakazo-organic-avatar-dot"));
+    const arcs = Array.from(svg.querySelectorAll<SVGPathElement>(".rakazo-organic-avatar-swoosh"));
     const apply = (pose: AvatarPose) => {
-      body.style.transform = `translate(${pose.body.x * R}px, ${pose.body.y * R}px) scale(${pose.body.sx}, ${pose.body.sy})`;
-      eyes.style.opacity = String(pose.eyes.opacity);
       eyes.style.transform = `translate(${pose.eyes.x * R}px, ${pose.eyes.y * R}px) rotate(${pose.eyes.roll}deg)`;
       eye.forEach((el, i) => {
-        el.style.transform = `scale(${pose.eyes.scale[i]![0]}, ${pose.eyes.scale[i]![1]})`;
+        const [sx, sy] = pose.eyes.scale[i]!;
+        el.style.transform = `rotate(${pose.eyes.tilt[i]}deg) scale(${sx}, ${sy})`;
       });
-      dots.forEach((el, i) => {
-        const dot = pose.dots[i]!;
-        el.setAttribute("cx", String(dot.x * R));
-        el.setAttribute("cy", String(dot.y * R));
-        el.setAttribute("r", String(dot.r * R));
-        el.style.opacity = String(dot.opacity);
+      arcs.forEach((el, i) => {
+        el.style.opacity = String(pose.swoosh.opacity);
+        if (pose.swoosh.opacity > 0) el.setAttribute("d", swooshPath(i, pose.swoosh.t, R));
       });
     };
     if (!isWorking) {
@@ -267,15 +264,18 @@ function OrganicAvatar({
           </g>
         </mask>
       </defs>
-      <path
-        className="rakazo-organic-avatar-body"
-        d={organicAvatarPath(seed)}
-        fill={color}
-        mask={`url(#${maskId})`}
-      />
-      {[0, 1, 2].map((i) => (
-        <circle key={i} className="rakazo-organic-avatar-dot" r="0" fill={color} opacity="0" />
+      {Array.from({ length: SWOOSH_COUNT }, (_, i) => (
+        <path
+          key={i}
+          className="rakazo-organic-avatar-swoosh"
+          fill="none"
+          stroke={color}
+          strokeWidth={0.05 * AVATAR_BODY_RADIUS}
+          strokeLinecap="round"
+          opacity="0"
+        />
       ))}
+      <path d={organicAvatarPath(seed)} fill={color} mask={`url(#${maskId})`} />
     </svg>
   );
 }

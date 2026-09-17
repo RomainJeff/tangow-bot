@@ -97,15 +97,14 @@ describe("BotAvatar", () => {
     expect(html).toContain("rakazo-organic-avatar");
   });
 
-  it("renders the body, eye holes and ellipsis dots the working pose drives", () => {
+  it("renders the eye holes and swoosh arcs the working pose drives", () => {
     const html = renderToString(
       <BotAvatar color="#D9508A" identity="maya" status="running" variant="organic" />,
     );
 
-    expect(html).toContain("rakazo-organic-avatar-body");
     expect(html).toContain("rakazo-organic-avatar-eyes");
     expect(html.match(/rakazo-organic-avatar-eye"/g)).toHaveLength(2);
-    expect(html.match(/rakazo-organic-avatar-dot"/g)).toHaveLength(3);
+    expect(html.match(/rakazo-organic-avatar-swoosh"/g)).toHaveLength(4);
     expect(html).not.toContain("<animate");
   });
 });

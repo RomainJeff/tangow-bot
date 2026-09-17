@@ -99,20 +99,18 @@
 /* Organic (bloub) avatar: at rest nothing moves. While working, bot-avatar.tsx
    drives inline transforms from @rakazo/core `workingPose`; these transitions
    only ease the return to rest. */
-.rakazo-organic-avatar-body,
 .rakazo-organic-avatar-eyes,
 .rakazo-organic-avatar-eye,
-.rakazo-organic-avatar-dot {
+.rakazo-organic-avatar-swoosh {
   transform-origin: 0 0;
   transition:
     opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
     transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.rakazo-organic-avatar[data-working="true"] .rakazo-organic-avatar-body,
 .rakazo-organic-avatar[data-working="true"] .rakazo-organic-avatar-eyes,
 .rakazo-organic-avatar[data-working="true"] .rakazo-organic-avatar-eye,
-.rakazo-organic-avatar[data-working="true"] .rakazo-organic-avatar-dot {
+.rakazo-organic-avatar[data-working="true"] .rakazo-organic-avatar-swoosh {
   transition: none;
 }
 
@@ -149,10 +147,9 @@
     transition: none;
   }
 
-  .rakazo-organic-avatar-body,
   .rakazo-organic-avatar-eyes,
   .rakazo-organic-avatar-eye,
-  .rakazo-organic-avatar-dot {
+  .rakazo-organic-avatar-swoosh {
     transition: none;
   }
 }
