@@ -1,5 +1,10 @@
 import type { AvatarStyle } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, avatarIdentitySeed, organicAvatarPath } from "@rakazo/core";
+import {
+  ACTIVE_RUN_STATUSES,
+  avatarIdentitySeed,
+  organicAvatarFace,
+  organicAvatarPath,
+} from "@rakazo/core";
 import { memo, useEffect } from "react";
 import { View } from "react-native";
 import Animated, {
@@ -12,13 +17,13 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { G, Path, Rect } from "react-native-svg";
+import Svg, { Defs, G, Mask, Path, Rect } from "react-native-svg";
 import { workingAvatarDuration, workingAvatarFrame } from "../lib/avatar-motion";
 import { useI18n } from "../lib/i18n";
 import { useAvatarStyle } from "./avatar-style";
 import { NativeSymbol } from "./native-symbol";
 
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
+const AnimatedG = Animated.createAnimatedComponent(G);
 
 export const BotAvatar = memo(function BotAvatar({
   color,
@@ -182,36 +187,28 @@ function OrganicAvatar({
       ],
     };
   });
-  const leftEyeProps = useAnimatedProps(() => {
+  const face = organicAvatarFace(seed);
+  const eyesProps = useAnimatedProps(() => {
     const frame = workingAvatarFrame(seed, progress.value);
-    return { x: -14 + frame.eyeOffsetX, y: -12 + frame.eyeOffsetY };
-  });
-  const rightEyeProps = useAnimatedProps(() => {
-    const frame = workingAvatarFrame(seed, progress.value);
-    return { x: 7 + frame.eyeOffsetX, y: -12 + frame.eyeOffsetY };
+    return { x: face.x + frame.eyeOffsetX, y: face.y + frame.eyeOffsetY };
   });
 
   return (
     <View style={{ width: size, height: size }}>
       <Animated.View style={[{ width: size, height: size }, bodyStyle]}>
         <Svg width={size} height={size} viewBox="-60 -60 120 120">
-          <Path d={organicAvatarPath(seed)} fill={color} />
-          <G transform={`rotate(${(seed % 9) - 4})`}>
-            <AnimatedRect
-              animatedProps={leftEyeProps}
-              width={7}
-              height={24}
-              rx={3.5}
-              fill="#101014"
-            />
-            <AnimatedRect
-              animatedProps={rightEyeProps}
-              width={7}
-              height={24}
-              rx={3.5}
-              fill="#101014"
-            />
-          </G>
+          <Defs>
+            {/* Eyes are holes cut out of the body (bloub): luminance mask, black = hole. */}
+            <Mask id="eyes" maskUnits="userSpaceOnUse" x={-60} y={-60} width={120} height={120}>
+              <Rect x={-60} y={-60} width={120} height={120} fill="#fff" />
+              <AnimatedG animatedProps={eyesProps} fill="#000">
+                {face.eyes.map((eye) => (
+                  <Path key={eye.transform} d={eye.d} transform={eye.transform} />
+                ))}
+              </AnimatedG>
+            </Mask>
+          </Defs>
+          <Path d={organicAvatarPath(seed)} fill={color} mask="url(#eyes)" />
         </Svg>
       </Animated.View>
     </View>

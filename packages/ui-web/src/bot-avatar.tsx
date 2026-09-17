@@ -1,4 +1,9 @@
-import { ACTIVE_RUN_STATUSES, avatarIdentitySeed, organicAvatarPath } from "@rakazo/core";
+import {
+  ACTIVE_RUN_STATUSES,
+  avatarIdentitySeed,
+  organicAvatarFace,
+  organicAvatarPath,
+} from "@rakazo/core";
 import { type CSSProperties, memo, useId, useSyncExternalStore } from "react";
 import { type AvatarStyle, useAvatarStyle } from "./avatar-style.js";
 import { cn } from "./lib/utils.js";
@@ -183,6 +188,9 @@ function OrganicAvatar({
   const duration = `${4.8 + (seed % 24) / 10}s`;
   const shapeA = organicAvatarPath(seed);
   const shapeB = organicAvatarPath(seed, 0.42);
+  const face = organicAvatarFace(seed);
+  // Eyes are holes cut out of the body (bloub), so they live in a luminance mask.
+  const maskId = `organic-eyes-${useId().replace(/[^a-zA-Z0-9-_]/g, "")}`;
 
   return (
     <svg
@@ -198,42 +206,50 @@ function OrganicAvatar({
         flex: "none",
       }}
     >
-      {(["idle", "working"] as const).map((mode) => (
-        <path
-          key={mode}
-          className={`rakazo-organic-avatar-body rakazo-organic-avatar-body-${mode}`}
-          d={shapeA}
-          fill={color}
-          style={
-            {
-              "--rakazo-organic-path": `path("${shapeA}")`,
-              filter:
-                mode === "working"
-                  ? `drop-shadow(0 0 ${Math.round(size * 0.16)}px ${color})`
-                  : "drop-shadow(0 2px 3px rgba(0,0,0,.34))",
-            } as CSSProperties
-          }
-        >
-          {!reducedMotion ? (
-            <animate
-              attributeName="d"
-              values={`${shapeA};${shapeB};${shapeA}`}
-              dur={duration}
-              repeatCount="indefinite"
-            />
-          ) : null}
-        </path>
-      ))}
-      <g transform={`rotate(${(seed % 9) - 4})`}>
-        {(["idle", "working"] as const).map((mode) => (
-          <g
-            key={mode}
-            className={`rakazo-organic-avatar-eyes rakazo-organic-avatar-eyes-${mode}`}
-            fill="#101014"
-          >
-            <rect x="-14" y="-12" width="7" height="24" rx="3.5" />
-            <rect x="7" y="-12" width="7" height="24" rx="3.5" />
+      <defs>
+        <mask id={maskId} maskUnits="userSpaceOnUse" x="-60" y="-60" width="120" height="120">
+          <rect x="-60" y="-60" width="120" height="120" fill="#fff" />
+          <g transform={`translate(${face.x} ${face.y})`}>
+            {(["idle", "working"] as const).map((mode) => (
+              <g
+                key={mode}
+                className={`rakazo-organic-avatar-eyes rakazo-organic-avatar-eyes-${mode}`}
+                fill="#000"
+              >
+                {face.eyes.map((eye) => (
+                  <path key={eye.transform} d={eye.d} transform={eye.transform} />
+                ))}
+              </g>
+            ))}
           </g>
+        </mask>
+      </defs>
+      <g mask={`url(#${maskId})`}>
+        {(["idle", "working"] as const).map((mode) => (
+          <path
+            key={mode}
+            className={`rakazo-organic-avatar-body rakazo-organic-avatar-body-${mode}`}
+            d={shapeA}
+            fill={color}
+            style={
+              {
+                "--rakazo-organic-path": `path("${shapeA}")`,
+                filter:
+                  mode === "working"
+                    ? `drop-shadow(0 0 ${Math.round(size * 0.16)}px ${color})`
+                    : undefined,
+              } as CSSProperties
+            }
+          >
+            {!reducedMotion ? (
+              <animate
+                attributeName="d"
+                values={`${shapeA};${shapeB};${shapeA}`}
+                dur={duration}
+                repeatCount="indefinite"
+              />
+            ) : null}
+          </path>
         ))}
       </g>
     </svg>
