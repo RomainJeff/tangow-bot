@@ -99,6 +99,9 @@ export const GroupMemberSchema = z.object({
 });
 export type GroupMember = z.infer<typeof GroupMemberSchema>;
 
+/** Selected-text excerpt carried by a reply; capped so a quote stays a quote. */
+export const REPLY_QUOTE_MAX_LENGTH = 2_000;
+
 export const GROUP_MEMBER_MIN = 1;
 export const GROUP_MEMBER_MAX = 6;
 export const GROUP_DESCRIPTION_MAX_LENGTH = 4000;

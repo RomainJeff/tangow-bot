@@ -6,7 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-17
+
+#### Added
+
+- Quote selected text when replying: select part of a message and the reply carries that excerpt.
+- Avatar Studio replaces the color radio row on the web bot panel: pick a color and a geometric shape from the avatar popover. The organic shape picker stays on mobile.
+- Per-bot "Notifications" switch: get notified when a bot finishes or needs input. Name, title, description, instructions and avatar now autosave on blur.
+- Every run's system instructions now state the current date and time (UTC), so bots judge deadlines, recency and scheduling from the real present instead of guessing it from training data or quoted timestamps.
+
 ### 2026-09-08
+
+#### Added
+
+- Connect Slack, WhatsApp Business Cloud, or Telegram DMs to a bot from Messaging settings, alongside iMessage/SMS. Each app can use a different bot. Group conversations remain iMessage-only.
+- Model picker includes Grok 4.6 (xAI) and Ox Alpha Free / GLM-5.3 (OpenCode Go).
 
 #### Fixed
 

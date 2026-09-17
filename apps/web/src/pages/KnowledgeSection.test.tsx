@@ -28,7 +28,10 @@ vi.mock("@rakazo/ui-web", () => {
     NativeSelectOption: ({ children, ...props }: ComponentProps<"option">) => (
       <option {...props}>{children}</option>
     ),
-    Switch: ({ onCheckedChange: _onCheckedChange, ...props }: ComponentProps<"input">) => (
+    Switch: ({
+      onCheckedChange: _onCheckedChange,
+      ...props
+    }: ComponentProps<"input"> & { onCheckedChange?: (checked: boolean) => void }) => (
       <input type="checkbox" {...props} />
     ),
   };

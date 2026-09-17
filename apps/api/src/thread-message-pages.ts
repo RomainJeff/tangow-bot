@@ -176,6 +176,7 @@ function toThreadMessage(row: {
   blocks: Prisma.JsonValue;
   botId: string | null;
   replyToMessageId: string | null;
+  replyQuote: string | null;
   runId: string | null;
   clientNonce: string | null;
   createdAt: Date;
@@ -188,6 +189,7 @@ function toThreadMessage(row: {
     blocks: row.blocks as ThreadMessage["blocks"],
     botId: row.botId ?? undefined,
     replyToMessageId: row.replyToMessageId ?? undefined,
+    replyQuote: row.replyQuote ?? undefined,
     runId: row.runId ?? undefined,
     clientNonce: row.clientNonce ?? undefined,
     createdAt: row.createdAt.toISOString(),

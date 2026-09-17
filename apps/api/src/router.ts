@@ -192,6 +192,7 @@ import {
   threadSnapshot,
 } from "./thread-target.js";
 import {
+  disconnectVoiceCredential,
   listVoiceCatalog,
   loadDefaultVoiceCredential,
   loadVoiceCredential,
@@ -1983,12 +1984,15 @@ export function createRouter(deps: RouterDeps) {
             })
           : null;
         const waitingForTakeover =
-          executionRun?.botId === bot.id && executionRun.status === "waiting_takeover";
+          executionRun?.botId === bot.id &&
+          (executionRun.status === "waiting_takeover" ||
+            bot.computer.controlRunId === executionLease?.runId);
         if (
           executionBlocksUserTakeover({
             hasLease: Boolean(executionLease),
             leaseExpiresAt: executionLease?.expiresAt,
             runStatus: executionRun?.status,
+            takeoverRequested: waitingForTakeover,
           })
         ) {
           throw new ORPCError("CONFLICT", { message: "Stop the bot first" });
@@ -4729,6 +4733,9 @@ export function createRouter(deps: RouterDeps) {
           voiceId: input.voiceId,
           signal: context.signal,
         }),
+      ),
+      disconnect: authed.voice.disconnect.handler(async ({ context, input }) =>
+        disconnectVoiceCredential(deps, context.actor, { provider: input.provider }),
       ),
       setVoice: authed.voice.setVoice.handler(async ({ context, input }) => {
         const cred = await withSerializableRetry(() =>

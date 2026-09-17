@@ -3012,7 +3012,7 @@ const MessageBubble = memo(function MessageBubble({
             {speaker}
           </Text>
         ) : null}
-        {replyPreview ? (
+        {replyPreview || (message.replyToMessageId && message.replyQuote) ? (
           <Text
             style={{
               color: message.role === "user" ? tokens.secondaryForeground : tokens.mutedForeground,
@@ -3020,7 +3020,11 @@ const MessageBubble = memo(function MessageBubble({
             }}
             numberOfLines={2}
           >
-            {previewMessageText(replyPreview)}
+            {message.replyQuote
+              ? `“${message.replyQuote}”`
+              : replyPreview
+                ? previewMessageText(replyPreview)
+                : ""}
           </Text>
         ) : null}
         {caption ? (
@@ -3195,7 +3199,7 @@ function MessageTextCard({
           {speaker}
         </Text>
       ) : null}
-      {replyPreview ? (
+      {replyPreview || (message.replyToMessageId && message.replyQuote) ? (
         <Text
           style={{
             color: message.role === "user" ? tokens.secondaryForeground : tokens.mutedForeground,
@@ -3204,7 +3208,11 @@ function MessageTextCard({
           }}
           numberOfLines={2}
         >
-          {previewMessageText(replyPreview)}
+          {message.replyQuote
+            ? `“${message.replyQuote}”`
+            : replyPreview
+              ? previewMessageText(replyPreview)
+              : ""}
         </Text>
       ) : null}
       {message.role === "user" ? (

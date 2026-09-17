@@ -10,30 +10,24 @@ import type {
   VoiceInfo,
 } from "@rakazo/contracts";
 import {
-  AVATAR_SHAPE_COUNT,
-  BOT_COLORS,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_INSTRUCTIONS_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
 } from "@rakazo/contracts";
 import {
-  BotAvatar,
   Button,
   Input,
   NativeSelect,
   NativeSelectOption,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   Switch,
   Textarea,
   Toggle,
-  useAvatarStyle,
 } from "@rakazo/ui-web";
 import { X } from "lucide-react";
-import { lazy, Suspense, useEffect, useId, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
+import { AvatarStudioPopover } from "./avatar-studio-popover";
 
 const ScratchpadSection = lazy(() =>
   import("../ScratchpadSection").then((module) => ({ default: module.ScratchpadSection })),
@@ -194,98 +188,6 @@ export function CreateBotForm({
   );
 }
 
-/** Avatar popover: pick the bot color, and its organic shape when that avatar
- * style is on. Shapes stay hidden for the robot style, which ignores the seed. */
-function BotAppearancePicker({
-  botId,
-  status,
-  color,
-  shapeSeed,
-  onColorChange,
-  onShapeChange,
-}: {
-  botId: string;
-  status: Bot["status"];
-  color: string;
-  shapeSeed: number | null;
-  onColorChange: (color: string) => void;
-  onShapeChange: (shapeSeed: number | null) => void;
-}) {
-  const { t } = useLingui();
-  const avatarStyle = useAvatarStyle();
-
-  return (
-    <Popover>
-      <div className="flex justify-center">
-        <PopoverTrigger
-          data-testid="bot-appearance-trigger"
-          aria-label={t`Appearance`}
-          className="rounded-full outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          <BotAvatar
-            color={color}
-            identity={botId}
-            shapeSeed={shapeSeed}
-            size={64}
-            status={status}
-          />
-        </PopoverTrigger>
-      </div>
-      <PopoverContent data-testid="bot-appearance-picker" aria-label={t`Appearance`}>
-        {avatarStyle === "organic" ? (
-          <div className="grid grid-cols-4 gap-1">
-            {[null, ...Array.from({ length: AVATAR_SHAPE_COUNT }, (_, index) => index)].map(
-              (seed) => (
-                <button
-                  key={seed ?? "auto"}
-                  type="button"
-                  aria-pressed={shapeSeed === seed}
-                  aria-label={seed === null ? t`Automatic shape` : t`Shape ${seed + 1}`}
-                  onClick={() => onShapeChange(seed)}
-                  className={`flex h-[58px] items-center justify-center rounded-[12px] border transition-colors ${
-                    shapeSeed === seed
-                      ? "border-ring bg-muted"
-                      : "border-transparent hover:border-ring/60"
-                  }`}
-                >
-                  {seed === null ? (
-                    <span className="text-[12px] text-muted-foreground">
-                      <Trans>Auto</Trans>
-                    </span>
-                  ) : (
-                    <BotAvatar
-                      color={color}
-                      identity={botId}
-                      shapeSeed={seed}
-                      size={36}
-                      variant="organic"
-                    />
-                  )}
-                </button>
-              ),
-            )}
-          </div>
-        ) : null}
-        <div className="flex flex-wrap justify-center gap-3">
-          {BOT_COLORS.map((swatch, index) => (
-            <button
-              key={swatch}
-              type="button"
-              aria-pressed={color === swatch}
-              aria-label={t`Color ${index + 1}`}
-              onClick={() => onColorChange(swatch)}
-              style={{ background: swatch }}
-              className={`h-7 w-7 rounded-full transition-shadow ${
-                color === swatch ? "ring-1 ring-ring ring-offset-2 ring-offset-popover" : ""
-              }`}
-            />
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 export function BotSettings({
   bot,
   memoryProviderConfigured,
@@ -301,6 +203,7 @@ export function BotSettings({
     description?: string;
     instructions?: string;
     color?: string;
+    notifyOnFinish?: boolean;
     computerMode: ComputerMode;
     memoryScope?: "isolated" | "shared" | null;
     autoSpeak?: boolean;
@@ -321,8 +224,10 @@ export function BotSettings({
   const [title, setTitle] = useState(bot.title);
   const [description, setDescription] = useState(bot.description);
   const [instructions, setInstructions] = useState(bot.instructions);
-  const [shapeSeed, setShapeSeed] = useState(bot.shapeSeed);
+  // Organic shape seed still round-trips through save; the web picker is now Avatar Studio.
+  const shapeSeed = bot.shapeSeed;
   const [color, setColor] = useState(bot.color);
+  const [notifyOnFinish, setNotifyOnFinish] = useState(bot.notifyOnFinish ?? true);
   const [computerMode, setComputerMode] = useState(bot.computerMode);
   const [memoryScope, setMemoryScope] = useState(bot.memoryScope);
   const [autoSpeak, setAutoSpeak] = useState(bot.autoSpeak);
@@ -339,6 +244,17 @@ export function BotSettings({
   const [modelMetaReady, setModelMetaReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const saveQueueRef = useRef(Promise.resolve());
+  const executeSaveRef = useRef<
+    (patchOverrides?: {
+      name?: string;
+      title?: string;
+      description?: string;
+      instructions?: string;
+      color?: string;
+      notifyOnFinish?: boolean;
+    }) => Promise<void>
+  >(async () => undefined);
   useEffect(() => {
     void rpc.voice
       .voices({})
@@ -417,24 +333,108 @@ export function BotSettings({
   ).filter((level) => level !== "off");
   const defaultThinkingLevel = effectiveCredential?.thinkingLevel ?? "medium";
 
+  async function executeSave(patchOverrides?: {
+    name?: string;
+    title?: string;
+    description?: string;
+    instructions?: string;
+    color?: string;
+    notifyOnFinish?: boolean;
+  }) {
+    const selected = modelKey ? parseModelOptionKey(modelKey) : null;
+    const nextName = (patchOverrides?.name !== undefined ? patchOverrides.name : name).trim();
+    const nextTitle = (patchOverrides?.title !== undefined ? patchOverrides.title : title).trim();
+    const nextDescription = (
+      patchOverrides?.description !== undefined ? patchOverrides.description : description
+    ).trim();
+    const nextInstructions = (
+      patchOverrides?.instructions !== undefined ? patchOverrides.instructions : instructions
+    ).trim();
+    const nextColor = patchOverrides?.color !== undefined ? patchOverrides.color : color;
+    const nextNotify =
+      patchOverrides?.notifyOnFinish !== undefined ? patchOverrides.notifyOnFinish : notifyOnFinish;
+
+    if (nextName) setName(nextName);
+    setTitle(nextTitle);
+    setDescription(nextDescription);
+    setInstructions(nextInstructions);
+
+    try {
+      setSaving(true);
+      setError(null);
+      await onSave({
+        name: nextName || bot.name,
+        title: nextTitle,
+        description: nextDescription,
+        instructions: nextInstructions,
+        color: nextColor,
+        notifyOnFinish: nextNotify,
+        shapeSeed,
+        computerMode,
+        memoryScope,
+        autoSpeak,
+        chattyReplies,
+        voiceId: voiceId || null,
+        modelProvider: selected?.provider ?? null,
+        modelId: selected?.modelId ?? null,
+        // Only clear thinking when catalog metadata is available; otherwise
+        // preserve the stored override if models.list failed or is still loading.
+        ...(modelMetaReady
+          ? {
+              thinkingLevel: thinkingOptions.length
+                ? ((thinkingLevel || null) as ThinkingLevel | null)
+                : null,
+            }
+          : {}),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t`Could not save`);
+    } finally {
+      setSaving(false);
+    }
+  }
+  executeSaveRef.current = executeSave;
+
+  function enqueueSave(patchOverrides?: {
+    name?: string;
+    title?: string;
+    description?: string;
+    instructions?: string;
+    color?: string;
+    notifyOnFinish?: boolean;
+  }) {
+    // Serialize full-object auto-saves so an older in-flight request cannot
+    // finish after a newer one and clobber fields. Always call through a ref so
+    // queued work reads the latest field values, not a stale render closure.
+    saveQueueRef.current = saveQueueRef.current
+      .catch(() => undefined)
+      .then(() => executeSaveRef.current(patchOverrides));
+    return saveQueueRef.current;
+  }
+
   return (
     <div data-testid="bot-settings">
-      <BotAppearancePicker
-        botId={bot.id}
-        status={bot.status}
-        color={color}
-        shapeSeed={shapeSeed}
-        onColorChange={setColor}
-        onShapeChange={setShapeSeed}
-      />
-      <label htmlFor={`${ids}-name`} className="mt-6 block text-[14px] text-muted-foreground">
+      <div className="flex justify-center py-4">
+        <AvatarStudioPopover
+          value={color}
+          identity={bot.id}
+          status={bot.status}
+          size={76}
+          onChange={(newColor) => {
+            setColor(newColor);
+            void enqueueSave({ color: newColor });
+          }}
+        />
+      </div>
+      <label htmlFor={`${ids}-name`} className="mt-4 block text-[13.5px] text-muted-foreground/80">
         <Trans>Name</Trans>
         <Input
           id={`${ids}-name`}
           value={name}
           maxLength={BOT_NAME_MAX_LENGTH}
           onChange={(e) => setName(e.target.value)}
-          className="mt-2"
+          onBlur={() => void enqueueSave()}
+          className="mt-1.5"
         />
       </label>
       <label htmlFor={`${ids}-title`} className={fieldLabelClass}>
@@ -444,7 +444,9 @@ export function BotSettings({
           value={title}
           maxLength={BOT_TITLE_MAX_LENGTH}
           onChange={(e) => setTitle(e.target.value)}
-          className="mt-2"
+          onBlur={() => void enqueueSave()}
+          placeholder={t`e.g. Hivenet Agent, Presales, Timesheets bot`}
+          className="mt-1.5"
         />
       </label>
       <label htmlFor={`${ids}-description`} className={fieldLabelClass}>
@@ -454,8 +456,9 @@ export function BotSettings({
           value={description}
           maxLength={BOT_DESCRIPTION_MAX_LENGTH}
           onChange={(e) => setDescription(e.target.value)}
-          rows={4}
-          className="mt-2"
+          onBlur={() => void enqueueSave()}
+          rows={3}
+          className="mt-1.5"
         />
       </label>
       <label htmlFor={`${ids}-instructions`} className={fieldLabelClass}>
@@ -466,11 +469,35 @@ export function BotSettings({
           value={instructions}
           maxLength={BOT_INSTRUCTIONS_MAX_LENGTH}
           onChange={(e) => setInstructions(e.target.value)}
+          onBlur={() => void enqueueSave()}
           rows={10}
           placeholder={t`How this bot should behave`}
           className="mt-2"
         />
       </label>
+      <div className="mt-6 flex items-center justify-between pt-4 border-t border-border/20">
+        <div className="space-y-0.5 pe-4">
+          <div
+            id={`${ids}-notify-finish-label`}
+            className="text-[13.5px] font-medium text-foreground"
+          >
+            <Trans>Notifications</Trans>
+          </div>
+          <div id={`${ids}-notify-finish-desc`} className="text-[12px] text-muted-foreground/70">
+            <Trans>Get notified when this Bot finishes or needs input</Trans>
+          </div>
+        </div>
+        <Switch
+          id={`${ids}-notify-finish`}
+          checked={notifyOnFinish}
+          aria-labelledby={`${ids}-notify-finish-label`}
+          aria-describedby={`${ids}-notify-finish-desc`}
+          onCheckedChange={(checked) => {
+            setNotifyOnFinish(checked);
+            void enqueueSave({ notifyOnFinish: checked });
+          }}
+        />
+      </div>
       <details
         data-testid="bot-settings-advanced"
         className="group mt-5"
@@ -618,43 +645,7 @@ export function BotSettings({
         <Button
           disabled={saving}
           onClick={() => {
-            setSaving(true);
-            setError(null);
-            const selected = modelKey ? parseModelOptionKey(modelKey) : null;
-            const nextName = name.trim();
-            const nextTitle = title.trim();
-            const nextDescription = description.trim();
-            const nextInstructions = instructions.trim();
-            setName(nextName);
-            setTitle(nextTitle);
-            setDescription(nextDescription);
-            setInstructions(nextInstructions);
-            void onSave({
-              name: nextName,
-              title: nextTitle,
-              description: nextDescription,
-              instructions: nextInstructions,
-              color,
-              shapeSeed,
-              computerMode,
-              memoryScope,
-              autoSpeak,
-              chattyReplies,
-              voiceId: voiceId || null,
-              modelProvider: selected?.provider ?? null,
-              modelId: selected?.modelId ?? null,
-              // Only clear thinking when catalog metadata is available; otherwise
-              // preserve the stored override if models.list failed or is still loading.
-              ...(modelMetaReady
-                ? {
-                    thinkingLevel: thinkingOptions.length
-                      ? ((thinkingLevel || null) as ThinkingLevel | null)
-                      : null,
-                  }
-                : {}),
-            })
-              .catch((err) => setError(err instanceof Error ? err.message : t`Could not save`))
-              .finally(() => setSaving(false));
+            void enqueueSave({ name, title, description, instructions, color, notifyOnFinish });
           }}
         >
           <Trans>Save</Trans>

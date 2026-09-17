@@ -340,6 +340,7 @@ export const ThreadMessageSchema = z.object({
   blocks: z.array(MessageBlock),
   botId: Id.optional(),
   replyToMessageId: Id.optional(),
+  replyQuote: z.string().optional(),
   runId: Id.optional(),
   // Set for message_user output (user-progress prefix); lets delegated (peer) runs still
   // surface messages the bot addressed to the user. See core/message-visibility.

@@ -79,6 +79,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  resolvePersonaColorDef,
 } from "@rakazo/ui-web";
 import {
   ArrowDown,
@@ -108,6 +109,7 @@ import {
   SlidersHorizontal,
   Smile,
   Square,
+  TextQuote,
   Trash2,
   X,
 } from "lucide-react";
@@ -128,6 +130,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AgentSteps, isHiddenActivityBlock } from "../components/AgentSteps";
 import { ArtifactFileCard } from "../components/ArtifactFileCard";
@@ -172,6 +175,7 @@ import {
   revokePendingAttachmentPreviews,
 } from "../lib/pending-attachments";
 import { markAfterPaint, markOnce } from "../lib/performance";
+import { quoteDraftForSelection } from "../lib/quote-selection";
 import { clearSpaceSelection, rpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
 import { sharedInflight } from "../lib/shared-inflight";
@@ -365,6 +369,7 @@ export function ShellPage() {
   // `key` re-seeds the composer draft: once when rewind starts, again when a failed send
   // has to hand the typed text back.
   const [rewindDraft, setRewindDraft] = useState<{ key: string; text: string } | null>(null);
+  const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
@@ -1649,6 +1654,11 @@ export function ShellPage() {
       ? rewindTarget
       : null;
   const rewindFromSeq = activeRewindTarget?.seq ?? null;
+  const activeReplyQuote = activeReplyTarget ? replyQuote : null;
+  const clearReply = useCallback(() => {
+    setReplyTarget(null);
+    setReplyQuote(null);
+  }, []);
   const currentRuns = activeThreadRuns(activeSnapshot);
   const answerableAskMessageId = latestAnswerableAskMessageId(activeSnapshot);
   const workingRuns = currentRuns.filter((run) =>
@@ -2002,7 +2012,7 @@ export function ShellPage() {
         }
         if (!plan.shouldSend) {
           dropDelayedSetup();
-          setReplyTarget(null);
+          clearReply();
           revokePendingAttachmentPreviews(attachments);
           setPendingAttachments((current) =>
             current.filter((attachment) => attachment.threadKey !== originThreadKey),
@@ -2050,6 +2060,7 @@ export function ShellPage() {
             mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
             artifactIds: artifactIds.length ? artifactIds : undefined,
             replyToMessageId: reroutedToGroup ? undefined : activeReplyTarget?.id,
+            replyQuote: reroutedToGroup ? undefined : (activeReplyQuote ?? undefined),
           });
         } else if (botTarget) {
           const sent = await rpc.threads.send({
@@ -2059,6 +2070,7 @@ export function ShellPage() {
             mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
             artifactIds: artifactIds.length ? artifactIds : undefined,
             replyToMessageId: activeReplyTarget?.id,
+            replyQuote: activeReplyQuote ?? undefined,
           });
           if (activeBotId.current === botTarget) {
             updateSnapshot((current) =>
@@ -2075,7 +2087,7 @@ export function ShellPage() {
           }
         }
         dropDelayedSetup();
-        setReplyTarget(null);
+        clearReply();
         cancelRewind();
         revokePendingAttachmentPreviews(attachments);
         setPendingAttachments((current) =>
@@ -2111,6 +2123,8 @@ export function ShellPage() {
       activeReplyTarget?.id,
       activeRewindTarget?.id,
       cancelRewind,
+      activeReplyQuote,
+      clearReply,
       flushPendingBrowserNotifications,
       navigate,
       pendingAttachments,
@@ -2418,11 +2432,11 @@ export function ShellPage() {
       revokePendingAttachmentPreviews(stale);
       return attachmentsForThread(current, threadKey);
     });
-    setReplyTarget(null);
+    clearReply();
     cancelRewind();
     setAttachmentNotice(null);
     setSendError(null);
-  }, [active?.id, groupId, inGroup, cancelRewind]);
+  }, [active?.id, clearReply, groupId, inGroup, cancelRewind]);
 
   useEffect(() => {
     if (!computerOpen) return;
@@ -2692,7 +2706,7 @@ export function ShellPage() {
         </div>
         <InputGroup
           data-testid="sidebar-search"
-          className="mx-2.5 mb-3 w-auto rounded-xl bg-card dark:bg-input"
+          className="mx-2.5 mb-3 w-auto rounded-xl bg-card dark:bg-input border border-border text-muted-foreground focus-within:border-ring"
         >
           <InputGroupAddon>
             <Search size={16} strokeWidth={1.8} aria-hidden="true" />
@@ -2731,10 +2745,10 @@ export function ShellPage() {
                 return (
                   <div key={group.key} data-sidebar-group={group.key}>
                     {group.title ? (
-                      <div className="flex items-center pt-2">
+                      <div className="flex items-center pt-3 pb-0.5">
                         <button
                           type="button"
-                          className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground/80 hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                          className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2.5 py-1 text-[11px] font-semibold tracking-wider uppercase text-muted-foreground/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                           onClick={() => {
                             if (group.emptySpaceId) {
                               openSpaceChat(group.emptySpaceId, "/onboarding");
@@ -2886,7 +2900,7 @@ export function ShellPage() {
                               position: { x: event.clientX, y: event.clientY },
                             });
                           }}
-                          className={`flex w-full gap-3 rounded-xl px-2.5 py-[11px] text-start ${
+                          className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-[10px] text-start ${
                             item.kind === "bot" ? "cursor-grab active:cursor-grabbing" : ""
                           } ${
                             (item.kind === "bot" && !inGroup && active?.id === item.chat.id) ||
@@ -2920,69 +2934,54 @@ export function ShellPage() {
                             />
                           )}
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span
-                                dir="auto"
-                                data-roster-bot-name={item.kind === "bot" ? "" : undefined}
-                                className={`truncate text-[15px] text-foreground ${
-                                  item.chat.unread ? "font-semibold" : "font-medium"
-                                }`}
-                              >
-                                {item.chat.name}
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                                <span
+                                  dir="auto"
+                                  data-roster-bot-name={item.kind === "bot" ? "" : undefined}
+                                  className={`truncate text-[14px] text-foreground ${
+                                    item.chat.unread ? "font-semibold" : "font-medium"
+                                  }`}
+                                >
+                                  {item.chat.name}
+                                </span>
+                                {item.kind === "bot" && item.chat.title ? (
+                                  <span className="max-w-[130px] shrink-0 truncate rounded-md border border-border bg-muted px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
+                                    {item.chat.title}
+                                  </span>
+                                ) : null}
                                 {item.chat.unread ? (
                                   <span className="sr-only">
                                     <Trans> (unread)</Trans>
                                   </span>
                                 ) : null}
-                              </span>
-                              <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] text-muted-foreground/80">
-                                {item.kind === "bot" && item.chat.status !== "idle"
-                                  ? item.chat.status
-                                  : ""}
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1.5">
+                                <span className="text-[11.5px] text-muted-foreground/60 tabular-nums">
+                                  {formatRosterTime(item.chat.updatedAt)}
+                                </span>
                                 {item.chat.unread ? (
                                   <span
                                     aria-hidden="true"
                                     className="inline-block h-2 w-2 rounded-full bg-foreground"
                                   />
                                 ) : null}
-                              </span>
-                            </div>
-                            {item.kind === "bot" && item.chat.title ? (
-                              <>
-                                <div
-                                  dir="auto"
-                                  className={`mt-0.5 truncate text-[13.5px] ${
-                                    item.chat.unread
-                                      ? "font-medium text-foreground/75"
-                                      : "text-muted-foreground"
-                                  }`}
-                                >
-                                  {item.chat.title}
-                                </div>
-                                {item.chat.preview ? (
-                                  <div
-                                    dir="auto"
-                                    className="truncate text-[12.5px] text-muted-foreground/80"
-                                  >
-                                    {item.chat.preview}
-                                  </div>
-                                ) : null}
-                              </>
-                            ) : (
-                              <div
-                                dir="auto"
-                                className={`mt-0.5 truncate text-[13.5px] ${
-                                  item.chat.unread
-                                    ? "font-medium text-foreground/75"
-                                    : "text-muted-foreground"
-                                }`}
-                              >
-                                {item.kind === "bot"
-                                  ? item.chat.preview
-                                  : item.chat.preview ||
-                                    item.chat.members.map((member) => member.name).join(", ")}
                               </div>
-                            )}
+                            </div>
+                            <div
+                              dir="auto"
+                              className={`mt-0.5 truncate text-[12.5px] ${
+                                item.chat.unread
+                                  ? "font-medium text-foreground/75"
+                                  : "text-muted-foreground/60"
+                              }`}
+                            >
+                              {item.kind === "bot"
+                                ? item.chat.preview ||
+                                  (item.chat.status !== "idle" ? item.chat.status : "")
+                                : item.chat.preview ||
+                                  item.chat.members.map((member) => member.name).join(", ")}
+                            </div>
                           </div>
                         </button>
                       ))}
@@ -3284,7 +3283,7 @@ export function ShellPage() {
                     void refreshThread(active.id).catch(() => undefined);
                   }
                 }}
-                data-active={panel ? "" : undefined}
+                data-active={panel === "computer" ? "" : undefined}
                 className="app-no-drag grid h-[30px] w-[34px] place-items-center rounded-[9px] hover:bg-accent data-active:bg-accent"
               >
                 <Monitor size={18} strokeWidth={1.6} className="text-foreground/75" />
@@ -3313,7 +3312,14 @@ export function ShellPage() {
             onLoadOlder={loadOlder}
             onOpenBot={openBot}
             onAnswer={answerMessage}
-            onReply={setReplyTarget}
+            onReply={(message) => {
+              setReplyTarget(message);
+              setReplyQuote(null);
+            }}
+            onQuote={(message, quote) => {
+              setReplyTarget(message);
+              setReplyQuote(quote);
+            }}
             onEdit={startRewind}
             rewindFromSeq={rewindFromSeq}
             onReact={reactToMessage}
@@ -3367,8 +3373,9 @@ export function ShellPage() {
                 : undefined
             }
             replyTarget={activeReplyTarget}
+            replyQuote={activeReplyQuote}
             replyTargetName={replyTargetName}
-            onClearReply={() => setReplyTarget(null)}
+            onClearReply={clearReply}
             rewindTarget={activeRewindTarget}
             rewindDraft={rewindDraft}
             rewindRemovedCount={rewindRemovedCount}
@@ -4352,9 +4359,7 @@ export function ShellPage() {
     </div>
   );
 
-  return (
-    <AvatarStyleProvider value={bootstrapMe?.avatarStyle ?? "robot"}>{shell}</AvatarStyleProvider>
-  );
+  return <AvatarStyleProvider value="organic">{shell}</AvatarStyleProvider>;
 }
 
 const Transcript = memo(function Transcript({
@@ -4372,6 +4377,7 @@ const Transcript = memo(function Transcript({
   onReply,
   onEdit,
   rewindFromSeq,
+  onQuote,
   onReact,
   onJumpToMessage,
   onOpenPeerMessages,
@@ -4398,6 +4404,7 @@ const Transcript = memo(function Transcript({
   onReply: (message: ThreadMessage) => void;
   onEdit: (message: ThreadMessage) => void;
   rewindFromSeq: number | null;
+  onQuote: (message: ThreadMessage, quote: string) => void;
   onReact: (message: ThreadMessage, reaction: MessageReaction) => Promise<void>;
   onJumpToMessage: (messageId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
@@ -4444,6 +4451,65 @@ const Transcript = memo(function Transcript({
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const workingLabel =
     (workingBots.length === 1 ? latestActivityLabel(messages) : undefined) ?? workingFallback;
+  const [quoteDraft, setQuoteDraft] = useState<{
+    message: ThreadMessage;
+    text: string;
+    range: Range;
+  } | null>(null);
+  const selectingWithMouse = useRef(false);
+
+  const evaluateSelection = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      setQuoteDraft(null);
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const rowOf = (node: Node) =>
+      (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>(
+        "[data-message-id]",
+      ) ?? null;
+    const draft = quoteDraftForSelection(
+      {
+        startRow: rowOf(range.startContainer),
+        endRow: rowOf(range.endContainer),
+        text: selection.toString(),
+      },
+      messageById,
+    );
+    setQuoteDraft(draft ? { ...draft, range } : null);
+  }, [messageById]);
+
+  // Keyboard and assistive-tech selections never reach a mouseup, so the pill
+  // lifecycle listens on selectionchange; the mouse flag keeps it hidden while
+  // a drag is still in flight.
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      selectingWithMouse.current = true;
+      if ((event.target as Element | null)?.closest?.("[data-quote-selection]")) return;
+      setQuoteDraft(null);
+    };
+    const onMouseUp = () => {
+      selectingWithMouse.current = false;
+      evaluateSelection();
+    };
+    const onSelectionChange = () => {
+      if (!selectingWithMouse.current) evaluateSelection();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setQuoteDraft(null);
+    };
+    document.addEventListener("mousedown", onMouseDown, true);
+    document.addEventListener("mouseup", onMouseUp, true);
+    document.addEventListener("selectionchange", onSelectionChange);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown, true);
+      document.removeEventListener("mouseup", onMouseUp, true);
+      document.removeEventListener("selectionchange", onSelectionChange);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [evaluateSelection]);
   const snapToEnd = useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
@@ -4587,6 +4653,9 @@ const Transcript = memo(function Transcript({
               ) : null}
               <div
                 data-message-id={message.id}
+                // Only persisted messages can be reply targets; synthetic rows
+                // (progress:, subagent:) carry a `prefix:` id.
+                data-quotable={message.id.includes(":") ? undefined : ""}
                 data-rewound={rewound ? "true" : undefined}
                 className={`${
                   peerReceipt ? "relative py-0.5" : "group/message relative hover:z-20"
@@ -4702,6 +4771,16 @@ const Transcript = memo(function Transcript({
           <ActiveBotGlyph bots={workingBots} label={workingLabel} />
         ) : null}
       </div>
+      {quoteDraft ? (
+        <QuoteSelectionButton
+          range={quoteDraft.range}
+          onQuote={() => {
+            onQuote(quoteDraft.message, quoteDraft.text);
+            window.getSelection()?.removeAllRanges();
+            setQuoteDraft(null);
+          }}
+        />
+      ) : null}
       <button
         ref={jumpButtonRef}
         type="button"
@@ -4716,6 +4795,80 @@ const Transcript = memo(function Transcript({
         <ArrowDown size={17} strokeWidth={1.8} />
       </button>
     </div>
+  );
+});
+
+/**
+ * Floating Quote action anchored to the selection's bounding rect. Measures
+ * itself after mount so it can flip below the selection when there is no room
+ * above and stay clamped inside the viewport; re-anchors on scroll/resize.
+ */
+const QuoteSelectionButton = memo(function QuoteSelectionButton({
+  range,
+  onQuote,
+}: {
+  range: Range;
+  onQuote: () => void;
+}) {
+  const { t } = useLingui();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [placement, setPlacement] = useState<{
+    top: number;
+    left: number;
+    above: boolean;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    const update = () => {
+      if (range.collapsed || !document.contains(range.commonAncestorContainer)) {
+        setPlacement(null);
+        return;
+      }
+      const rect = range.getBoundingClientRect();
+      const width = buttonRef.current?.offsetWidth ?? 0;
+      const height = buttonRef.current?.offsetHeight ?? 0;
+      const above = rect.top >= height + 8;
+      setPlacement({
+        top: above ? rect.top - 8 : rect.bottom + 8,
+        left: Math.min(
+          Math.max(rect.left + rect.width / 2, width / 2 + 8),
+          window.innerWidth - width / 2 - 8,
+        ),
+        above,
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    // Scroll doesn't bubble — listen on the capture phase to catch any scroller.
+    window.addEventListener("scroll", update, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [range]);
+
+  return createPortal(
+    <button
+      ref={buttonRef}
+      type="button"
+      data-quote-selection
+      data-testid="quote-selection"
+      onMouseDown={(event) => {
+        // Keep the highlight alive until the click commits the quote.
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onClick={onQuote}
+      style={placement ? { top: placement.top, left: placement.left } : { visibility: "hidden" }}
+      className={cn(
+        "fixed z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[13px] font-medium text-foreground shadow-md hover:bg-muted",
+        placement?.above === false ? "translate-y-0" : "-translate-y-full",
+      )}
+    >
+      <TextQuote size={13} strokeWidth={2} />
+      {t`Quote`}
+    </button>,
+    document.body,
   );
 });
 
@@ -4738,6 +4891,7 @@ const Composer = memo(function Composer({
   onStop,
   onVoice,
   replyTarget,
+  replyQuote,
   replyTargetName,
   onClearReply,
   rewindTarget,
@@ -4769,6 +4923,7 @@ const Composer = memo(function Composer({
   onStop: () => Promise<void>;
   onVoice?: () => void;
   replyTarget?: ThreadMessage | null;
+  replyQuote?: string | null;
   replyTargetName?: string;
   onClearReply?: () => void;
   rewindTarget?: ThreadMessage | null;
@@ -5089,7 +5244,11 @@ const Composer = memo(function Composer({
           data-testid="reply-chip"
           className="mb-2 flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-[13px] text-foreground/75"
         >
-          <span className="min-w-0 flex-1 truncate text-muted-foreground">{t`Replying to ${replyName}`}</span>
+          <span className="min-w-0 flex-1 truncate text-muted-foreground">
+            {replyQuote
+              ? t`Replying to ${replyName}: “${replyQuote}”`
+              : t`Replying to ${replyName}`}
+          </span>
           <button
             type="button"
             aria-label={t`Cancel reply`}
@@ -5264,7 +5423,7 @@ const Composer = memo(function Composer({
       ) : null}
       <div
         data-testid="composer-bar"
-        className="flex items-center gap-3.5 rounded-full border border-border bg-background py-[9px] pe-2.5 ps-3"
+        className="flex items-center gap-3.5 rounded-full border border-border bg-background py-[9px] pe-2.5 ps-3 transition-colors focus-within:border-ring"
       >
         <input
           ref={fileInputRef}
@@ -5275,14 +5434,14 @@ const Composer = memo(function Composer({
           onChange={(event) => void onAttachmentPick(event.target.files)}
         />
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon"
           aria-label={t`Attach file`}
           disabled={disabled}
           onClick={() => fileInputRef.current?.click()}
-          className="rounded-full text-foreground/75"
+          className="size-8 shrink-0 rounded-full border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
-          <Plus size={17} strokeWidth={1.8} />
+          <Plus size={16} strokeWidth={2} />
         </Button>
         <div className="flex min-w-0 flex-1 flex-wrap items-end gap-1.5">
           {selectedSkill ? (
@@ -5411,21 +5570,21 @@ const Composer = memo(function Composer({
             title={t`Voice`}
             disabled={disabled}
             onClick={onVoice}
-            className="rounded-full text-foreground/75"
+            className="size-8 shrink-0 rounded-full text-foreground/75"
           >
             <Mic size={16} strokeWidth={1.8} />
           </Button>
         ) : null}
         {running ? (
-          <>
+          <div className="flex items-center gap-1.5 shrink-0">
             <Button
               size="icon"
               aria-label={t`Send`}
               disabled={sending || !canSend || disabled}
               onClick={send}
-              className="size-10 rounded-full"
+              className="size-8 rounded-full bg-white text-black hover:bg-white/90 shadow-sm transition-transform active:scale-95"
             >
-              <ArrowUp size={18} strokeWidth={2} />
+              <ArrowUp size={16} strokeWidth={2.2} />
             </Button>
             <Button
               variant="outline"
@@ -5433,20 +5592,20 @@ const Composer = memo(function Composer({
               aria-label={t`Stop`}
               disabled={sending}
               onClick={() => void onStop()}
-              className="size-10 rounded-full text-foreground/75"
+              className="size-8 rounded-full border border-border bg-muted text-foreground/80 shadow-sm transition-colors hover:bg-accent hover:text-foreground"
             >
-              <Square size={12} strokeWidth={0} fill="currentColor" />
+              <Square size={11} strokeWidth={0} fill="currentColor" />
             </Button>
-          </>
+          </div>
         ) : (
           <Button
             size="icon"
             aria-label={t`Send`}
             disabled={sending || !canSend || disabled}
             onClick={send}
-            className="size-9 rounded-full"
+            className="size-8 shrink-0 rounded-full bg-white text-black hover:bg-white/90 shadow-sm transition-transform active:scale-95 disabled:bg-white/10 disabled:text-muted-foreground/30 disabled:shadow-none"
           >
-            <ArrowUp size={18} strokeWidth={2} />
+            <ArrowUp size={16} strokeWidth={2.2} />
           </Button>
         )}
       </div>
@@ -5531,6 +5690,37 @@ function previewMessageText(message: ThreadMessage): string {
     return t`Attachment`;
   }
   return t`Message`;
+}
+
+function formatRosterTime(isoDate?: string | null): string {
+  if (!isoDate) return "";
+  try {
+    const d = new Date(isoDate);
+    if (Number.isNaN(d.getTime())) return "";
+    const locale = i18n.locale || "en";
+    const now = new Date();
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+    if (isToday) {
+      return d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+    }
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday =
+      d.getDate() === yesterday.getDate() &&
+      d.getMonth() === yesterday.getMonth() &&
+      d.getFullYear() === yesterday.getFullYear();
+    if (isYesterday) return t`Yesterday`;
+    const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 7) {
+      return d.toLocaleDateString(locale, { weekday: "short" });
+    }
+    return d.toLocaleDateString(locale, { month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
 }
 
 function MessageHoverActions({
@@ -5761,10 +5951,24 @@ const MessageView = memo(function MessageView({
     (block) => !isHiddenActivityBlock(block, showSteps),
   );
   const parentJumpId = replyPreview?.id ?? replyToMessageId;
+  const speakerBot = message.botId ? peerBot?.(message.botId) : undefined;
+  const speakerColorDef = useMemo(
+    () => resolvePersonaColorDef(message.botId ?? "bot", speakerBot?.color),
+    [message.botId, speakerBot?.color],
+  );
   const messageContext = (
     <>
       {speakerName ? (
-        <div className="mb-1 text-[12.5px] font-medium text-muted-foreground" dir="auto">
+        <div
+          className="mb-1.5 flex items-center gap-2 text-[13px] font-semibold tracking-tight"
+          dir="auto"
+          style={{ color: speakerColorDef.light }}
+        >
+          <BotAvatar
+            color={speakerBot?.color ?? FALLBACK_BOT_COLOR}
+            identity={message.botId}
+            size={22}
+          />
           {speakerName}
         </div>
       ) : null}
@@ -5777,7 +5981,11 @@ const MessageView = memo(function MessageView({
           className="mb-2 block max-w-[74%] truncate rounded-[14px] border border-border bg-background px-3 py-2 text-start text-[12.5px] text-muted-foreground hover:border-border hover:text-foreground/75"
           dir="auto"
         >
-          {replyPreview ? previewMessageText(replyPreview) : t`Earlier message`}
+          {message.replyQuote
+            ? `“${message.replyQuote}”`
+            : replyPreview
+              ? previewMessageText(replyPreview)
+              : t`Earlier message`}
         </button>
       ) : null}
     </>
