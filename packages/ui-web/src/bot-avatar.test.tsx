@@ -51,7 +51,6 @@ describe("BotAvatar", () => {
 
     expect(html).toContain("rakazo-organic-avatar");
     expect(html).toContain('data-working="true"');
-    expect(html).toContain('data-state="thinking"');
     expect(html).toContain("<mask");
     expect(html).not.toContain("rakazo-bot-avatar-visor");
   });
@@ -59,7 +58,7 @@ describe("BotAvatar", () => {
   it("punches two eye holes into an idle body", () => {
     const html = renderToString(<BotAvatar color="#00C46A" identity="maya" variant="organic" />);
 
-    expect(html).toContain('data-state="idle"');
+    expect(html).toContain('data-working="false"');
     expect(html.match(/fill="#000"/g)).toHaveLength(2);
     expect(html).toContain('fill="#00C46A"');
     // A mid-luminance hue keeps ink eyes and no body outline.

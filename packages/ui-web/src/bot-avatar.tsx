@@ -3,11 +3,12 @@ import {
   avatarIdentitySeed,
   BotEngine,
   type BotFrame,
+  EXPRESSION_BY_ID,
+  type ExpressionId,
   mixHex,
   NOTIF_BLUE,
   RAYON,
   SHAPES,
-  type StateId,
 } from "@rakazo/core";
 import type { CSSProperties } from "react";
 import { memo, useEffect, useId, useRef, useState } from "react";
@@ -173,11 +174,22 @@ export const BotAvatar = memo(function BotAvatar({
 
 /** Half of the viewBox side: the resting body radius plus room for the blink squash. */
 const BLOUB_HALF_VIEWBOX = RAYON * 1.12;
+// Zero-roll moods only (upstream's cursor-follow list): roll tilts the head and
+// makes the eyes jump vertically between two moods.
+const WORKING_MOODS: readonly ExpressionId[] = [
+  "surpris",
+  "heureux",
+  "hilare",
+  "excite",
+  "fier",
+  "blase",
+];
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 /**
  * The organic avatar, drawn by the vendored bloub engine (`@rakazo/core/bloub`): a
- * morphing ink body with the eyes punched out as holes, idle blinks and the
- * three-dot "thinking" state while a run is active.
+ * morphing ink body with the eyes punched out as holes and idle blinks. While a run
+ * is active the bot glances around and changes mood at random intervals.
  */
 function BloubAvatar({
   color,
@@ -197,22 +209,26 @@ function BloubAvatar({
   const reducedMotion = usePrefersReducedMotion();
   const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
   const shape = SHAPES[seed % SHAPES.length]!;
-  const state: StateId = isWorking ? "thinking" : "idle";
   const uid = useId().replace(/[^a-zA-Z0-9-_]/g, "");
-  const [engine] = useState(() => new BotEngine(RAYON, state, shape.radii));
+  const [engine] = useState(() => new BotEngine(RAYON, "idle", shape.radii));
   const clock = useRef(0);
   const [frame, setFrame] = useState<BotFrame>(() => engine.sample(0));
 
   useEffect(() => {
     if (reducedMotion) {
       // One still frame, settled into the state: no morph, no loop.
-      engine.reset(state, clock.current);
+      engine.reset("idle", clock.current);
       engine.setShape(shape.radii, clock.current - BotEngine.SHAPE_MORPH);
       setFrame(engine.sample(clock.current + 1));
       return;
     }
     engine.setShape(shape.radii, clock.current);
-    engine.setState(state, clock.current);
+    if (!isWorking) {
+      engine.setLook(null, clock.current);
+      engine.setExpression(null, clock.current);
+    }
+    // A working bot glances around and changes mood at random intervals.
+    let nextGlance = clock.current;
     // ponytail: one rAF loop per avatar; share a ticker if a long sidebar burns CPU.
     let raf = 0;
     let last = performance.now();
@@ -220,12 +236,22 @@ function BloubAvatar({
       // Clamp the step like upstream so a backgrounded tab resumes without a jump.
       clock.current += Math.min((now - last) / 1000, 0.064);
       last = now;
+      if (isWorking && clock.current >= nextGlance) {
+        engine.setLook(
+          { yaw: rand(-26, 26), pitch: rand(-8, 18), mix: 1, spin: 0, wander: 0.3 },
+          clock.current,
+          0.35,
+        );
+        const mood = WORKING_MOODS[Math.floor(Math.random() * WORKING_MOODS.length)]!;
+        engine.setExpression(EXPRESSION_BY_ID.get(mood) ?? null, clock.current);
+        nextGlance = clock.current + rand(0.6, 1.8);
+      }
       setFrame(engine.sample(clock.current));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [engine, shape, state, reducedMotion]);
+  }, [engine, shape, isWorking, reducedMotion]);
 
   // Same eye rule as before: the eyes show the "paper" behind the ink, so pick it
   // from the body luminance, and ink a pale body's outline so it stays visible.
@@ -273,7 +299,6 @@ function BloubAvatar({
       aria-hidden="true"
       className={cn("rakazo-organic-avatar overflow-visible select-none", className)}
       data-working={isWorking}
-      data-state={engine.state}
       style={{
         width: size,
         height: size,

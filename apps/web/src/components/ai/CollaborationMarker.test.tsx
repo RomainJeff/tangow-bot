@@ -42,6 +42,6 @@ describe("collaboration transcript markers", () => {
     expect(html).toContain("Research is working");
     expect(html).not.toContain("sr-only");
     expect(html).toContain('data-working="true"');
-    expect(html).toContain('data-state="thinking"');
+    expect(html).toContain('data-working="true"');
   });
 });
