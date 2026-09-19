@@ -2059,6 +2059,38 @@ describe("resumeAskWithComposerTextInTransaction", () => {
     expect(result).toEqual({ resolvable: false });
     expect(tx.run.updateMany).not.toHaveBeenCalled();
   });
+
+  // A block written by another build version must neither hide the pending ask (the client
+  // renders the card as pending, so CONFLICT there is a lie) nor vanish from the stored message.
+  it("resolves past a block this build does not recognise and writes it back untouched", async () => {
+    const unknownBlock = { kind: "future_widget", payload: { anything: 1 } };
+    const tx = baseTx({ kind: "ask", text: "Where next?", status: "pending", input: "text" });
+    tx.message.findFirst = vi.fn().mockResolvedValue({
+      id: "ask-msg-1",
+      blocks: [
+        unknownBlock,
+        { kind: "ask", text: "Where next?", status: "pending", input: "text" },
+      ],
+    });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "Kyoto",
+    });
+
+    expect(result).toMatchObject({ resolvable: true });
+    expect(tx.message.update).toHaveBeenCalledWith({
+      where: { id: "ask-msg-1" },
+      data: {
+        blocks: [
+          unknownBlock,
+          { kind: "ask", text: "Where next?", status: "answered", input: "text" },
+        ],
+      },
+    });
+  });
 });
 
 describe("sendUserMessage", () => {

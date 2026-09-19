@@ -361,9 +361,20 @@ export const USER_MESSAGE_CLIENT_NONCE_PREFIX = "user-message:";
  */
 export const MessageBlocks = z
   .array(z.unknown())
-  .transform((blocks) =>
-    blocks.filter((block): block is MessageBlock => MessageBlock.safeParse(block).success),
-  );
+  .transform((blocks) => parseKnownMessageBlocks(blocks).map(({ block }) => block));
+
+/**
+ * Same tolerance as `MessageBlocks`, but keeps each known block's position in the original
+ * array. A writer that has to rewrite one block (marking an ask answered, say) maps over the
+ * stored array by index, so unrecognised entries survive the write instead of being dropped.
+ */
+export function parseKnownMessageBlocks(blocks: unknown): { index: number; block: MessageBlock }[] {
+  if (!Array.isArray(blocks)) return [];
+  return blocks.flatMap((entry, index) => {
+    const parsed = MessageBlock.safeParse(entry);
+    return parsed.success ? [{ index, block: parsed.data }] : [];
+  });
+}
 
 export const ThreadMessageSchema = z.object({
   id: Id,

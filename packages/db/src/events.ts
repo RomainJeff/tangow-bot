@@ -3,8 +3,8 @@ import {
   type AskQuestion,
   type BotSecretDestination,
   type MessageBlock,
-  MessageBlock as MessageBlockSchema,
   type ProductEvent,
+  parseKnownMessageBlocks,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -683,12 +683,13 @@ export async function answerRunInputInTransaction(
         role: "bot",
       },
     });
-    const parsed = MessageBlockSchema.array().safeParse(message?.blocks);
-    if (!message || !parsed.success) return null;
-    const pendingAsk = parsed.data.find(
-      (block) => block.kind === "ask" && block.status !== "answered",
-    );
-    if (pendingAsk?.kind !== "ask") return null;
+    // Tolerant lookup, and the rewrites below map over the stored array by index: a block this
+    // build does not recognise neither hides the pending ask nor gets dropped from the message.
+    const known = parseKnownMessageBlocks(message?.blocks);
+    const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
+    if (!message || pending?.block.kind !== "ask") return null;
+    const pendingAsk = pending.block;
+    const storedBlocks = message.blocks as Prisma.InputJsonValue[];
 
     // ask_user v2: a multi-question card submits one JSON payload of per-question answers.
     if (pendingAsk.questions?.length) {
@@ -769,9 +770,9 @@ export async function answerRunInputInTransaction(
         },
       });
       if (task.count !== 1) throw new Error("Run task was not available to answer");
-      const answeredBlocks = parsed.data.map((block) =>
-        block === pendingAsk
-          ? { ...block, status: "answered" as const, answers: storedAnswers }
+      const answeredBlocks = storedBlocks.map((block, index) =>
+        index === pending.index
+          ? { ...pendingAsk, status: "answered" as const, answers: storedAnswers }
           : block,
       );
       await tx.message.update({ where: { id: message.id }, data: { blocks: answeredBlocks } });
@@ -902,10 +903,10 @@ export async function answerRunInputInTransaction(
       if (task.count !== 1) throw new Error("Run task was not available to answer");
     }
 
-    const blocks = parsed.data.map((block) =>
-      block === pendingAsk
+    const blocks = storedBlocks.map((block, index) =>
+      index === pending.index
         ? {
-            ...block,
+            ...pendingAsk,
             status: "answered" as const,
             answer: secretAsk ? "" : freeTextAnswer || input.answer,
           }
@@ -940,7 +941,8 @@ export type ResumeAskWithComposerTextResult =
       runId: string;
       botId: string;
       messageId: string;
-      blocks: MessageBlock[];
+      /** The stored blocks with the ask marked answered — unrecognised entries passed through. */
+      blocks: Prisma.InputJsonValue[];
       eventSeq: number;
     }
   | { resolvable: false };
@@ -1002,12 +1004,13 @@ export async function resumeAskWithComposerTextInTransaction(
     where: { threadId: input.threadId, runId: input.runId, role: "bot" },
     orderBy: { seq: "desc" },
   });
-  const parsed = MessageBlockSchema.array().safeParse(message?.blocks);
-  if (!message || !parsed.success) return { resolvable: false };
-  const pendingAsk = parsed.data.find(
-    (block) => block.kind === "ask" && block.status !== "answered",
-  );
-  if (pendingAsk?.kind !== "ask") return { resolvable: false };
+  // Tolerant lookup: a block this build does not recognise (older/newer writer) must not hide a
+  // pending ask the client is already rendering as pending — that mismatch is what makes the
+  // caller throw CONFLICT on a card the user can see.
+  const known = parseKnownMessageBlocks(message?.blocks);
+  const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
+  if (!message || pending?.block.kind !== "ask") return { resolvable: false };
+  const pendingAsk = pending.block;
 
   // Approval and secret asks stay blocked in PR 1 — classification reuses the same audited
   // helpers `answerRunInputInTransaction` already relies on (packages/core/action-approval.ts).
@@ -1039,8 +1042,10 @@ export async function resumeAskWithComposerTextInTransaction(
   // their own message bubble right below, so storing `answer`/`answers` here would duplicate them
   // (design D2). Absent `answer` makes the card render a plain resolved "Answered" state, and
   // absent `answers` keeps the multi-question card from fabricating a per-question breakdown.
-  const blocks = parsed.data.map((block) =>
-    block === pendingAsk ? { ...block, status: "answered" as const } : block,
+  // Map over the stored array, not the parsed copy: every other block is written back exactly as
+  // it came out of the database, unrecognised ones included.
+  const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block, index) =>
+    index === pending.index ? { ...pendingAsk, status: "answered" as const } : block,
   );
   await tx.message.update({ where: { id: message.id }, data: { blocks } });
   const updated = await appendEventInTransaction(tx, {
