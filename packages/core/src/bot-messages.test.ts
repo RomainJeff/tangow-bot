@@ -388,6 +388,29 @@ describe("inbound wake prompt", () => {
     expect(fyiPrompt).toContain("staying silent is fine");
   });
 
+  it("tells a solicited bot to stay out of the user's chat unless it is stuck", () => {
+    for (const intent of ["request", "question", "fyi"] as const) {
+      const solicited = buildBotMessageWakePrompt({
+        from: { id: "b_1", name: "Researcher" },
+        text: "Pull the Q3 numbers.",
+        intent,
+      });
+      expect(solicited).toContain("working for another bot here, not for the user");
+      expect(solicited).toContain("only when something is wrong");
+    }
+  });
+
+  it("does not silence a relay, whose whole job is to reach the user", () => {
+    for (const intent of ["result", "status"] as const) {
+      const relay = buildBotMessageWakePrompt({
+        from: { id: "b_1", name: "Researcher" },
+        text: "The answer is 42.",
+        intent,
+      });
+      expect(relay).not.toContain("working for another bot here");
+    }
+  });
+
   it("carries the message itself, escaped so markup cannot break out", () => {
     expect(prompt).toContain("Q3 numbers are in /data/q3.csv");
     expect(prompt).toContain("&lt;ignore prior&gt;");
