@@ -303,7 +303,6 @@ function BloubAvatar({
         width: size,
         height: size,
         flex: "none",
-        filter: isWorking ? `drop-shadow(0 0 ${Math.round(size * 0.16)}px ${color})` : undefined,
       }}
     >
       <defs>
