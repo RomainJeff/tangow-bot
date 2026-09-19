@@ -115,7 +115,7 @@ msgstr "{botName} 的电脑"
 msgid "{days}d ago"
 msgstr "{days} 天前"
 
-#: src/pages/shell/message-view.tsx:193
+#: src/pages/shell/message-view.tsx:232
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -198,7 +198,7 @@ msgstr "访问令牌（可选）"
 msgid "Account"
 msgstr "账户"
 
-#: src/pages/shell/bot-panel.tsx:625
+#: src/pages/shell/bot-panel.tsx:623
 msgid "Account default"
 msgstr "账户默认"
 
@@ -359,7 +359,7 @@ msgstr "正在添加…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/PluginsOverlay.tsx:896
 #: src/pages/RoutineSchedule.tsx:44
-#: src/pages/shell/bot-panel.tsx:502
+#: src/pages/shell/bot-panel.tsx:500
 msgid "Advanced"
 msgstr "高级"
 
@@ -520,7 +520,7 @@ msgstr "批准此服务器后，Agent 才能使用它的工具。"
 msgid "Archive"
 msgstr "归档"
 
-#: src/pages/shell/message-view.tsx:301
+#: src/pages/shell/message-view.tsx:340
 msgid "archived"
 msgstr "已归档"
 
@@ -528,7 +528,7 @@ msgstr "已归档"
 msgid "Archived"
 msgstr "已归档"
 
-#: src/pages/shell/message-view.tsx:312
+#: src/pages/shell/message-view.tsx:351
 msgid "Archived. Chat, memory, and files kept."
 msgstr "已归档。对话、记忆和文件保留。"
 
@@ -586,7 +586,7 @@ msgstr "{timeSelect}"
 msgid "Attach file"
 msgstr "附加文件"
 
-#: src/pages/shell/message-view.tsx:55
+#: src/pages/shell/message-view.tsx:94
 msgid "Attachment"
 msgstr "附件"
 
@@ -608,7 +608,7 @@ msgstr "授权"
 msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "授权此服务器后，Agent 才能使用其工具。将打开弹窗。"
 
-#: src/pages/shell/bot-panel.tsx:253
+#: src/pages/shell/bot-panel.tsx:252
 msgid "Auto"
 msgstr "自动"
 
@@ -620,7 +620,7 @@ msgstr ""
 msgid "Automated senders will appear after they post here."
 msgstr ""
 
-#: src/pages/shell/bot-panel.tsx:243
+#: src/pages/shell/bot-panel.tsx:242
 msgid "Automatic shape"
 msgstr "自动形状"
 
@@ -662,15 +662,15 @@ msgstr "正在启动实时桌面…"
 msgid "Booting up {0}’s computer"
 msgstr "正在启动 {0} 的电脑"
 
-#: src/pages/shell/message-view.tsx:181
-#: src/pages/shell/message-view.tsx:182
-#: src/pages/shell/message-view.tsx:305
+#: src/pages/shell/message-view.tsx:220
+#: src/pages/shell/message-view.tsx:221
+#: src/pages/shell/message-view.tsx:344
 msgid "bot"
 msgstr "Bot"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1603
-#: src/pages/shell/message-view.tsx:144
+#: src/pages/shell/message-view.tsx:183
 msgid "Bot"
 msgstr "Bot"
 
@@ -852,7 +852,7 @@ msgid "Clear {0}’s conversation?"
 msgstr "清空与 {0} 的对话？"
 
 #: src/pages/BotContextMenu.tsx:140
-#: src/pages/shell/bot-panel.tsx:694
+#: src/pages/shell/bot-panel.tsx:692
 msgid "Clear conversation"
 msgstr "清空对话"
 
@@ -952,7 +952,7 @@ msgid "Collapse {0}"
 msgstr "折叠 {0}"
 
 #. placeholder {0}: index + 1
-#: src/pages/shell/bot-panel.tsx:275
+#: src/pages/shell/bot-panel.tsx:273
 msgid "Color {0}"
 msgstr "颜色 {0}"
 
@@ -974,7 +974,7 @@ msgstr ""
 
 #: src/pages/SettingsOverlay.tsx:90
 #: src/pages/shell/bot-panel.tsx:64
-#: src/pages/shell/message-view.tsx:447
+#: src/pages/shell/message-view.tsx:486
 msgid "Computer"
 msgstr "电脑"
 
@@ -1427,7 +1427,7 @@ msgstr "无法运行例行任务"
 
 #: src/pages/ExternalConversationSettings.tsx:250
 #: src/pages/KnowledgeSection.tsx:162
-#: src/pages/shell/bot-panel.tsx:678
+#: src/pages/shell/bot-panel.tsx:676
 msgid "Could not save"
 msgstr "无法保存"
 
@@ -1656,7 +1656,7 @@ msgid "Default"
 msgstr "默认"
 
 #. placeholder {0}: thinkingLevelLabel(defaultThinkingLevel)
-#: src/pages/shell/bot-panel.tsx:557
+#: src/pages/shell/bot-panel.tsx:555
 msgid "Default ({0})"
 msgstr ""
 
@@ -1701,7 +1701,7 @@ msgstr "同时删除记忆"
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:303
+#: src/pages/shell/message-view.tsx:342
 msgid "deleted"
 msgstr "已删除"
 
@@ -1731,7 +1731,7 @@ msgstr "描述这个 Bot 做什么"
 #: src/pages/GroupPanel.tsx:143
 #: src/pages/GroupPanel.tsx:252
 #: src/pages/shell/bot-panel.tsx:167
-#: src/pages/shell/bot-panel.tsx:454
+#: src/pages/shell/bot-panel.tsx:452
 msgid "Description"
 msgstr "描述"
 
@@ -1842,7 +1842,7 @@ msgstr "技能草稿"
 msgid "Duplicate"
 msgstr "复制"
 
-#: src/pages/shell/message-view.tsx:121
+#: src/pages/shell/message-view.tsx:160
 msgid "Earlier message"
 msgstr "更早的消息"
 
@@ -1944,7 +1944,7 @@ msgstr "展开"
 msgid "Expand {0}"
 msgstr "展开 {0}"
 
-#: src/pages/shell/bot-panel.tsx:686
+#: src/pages/shell/bot-panel.tsx:684
 msgid "Export"
 msgstr "导出"
 
@@ -1959,7 +1959,7 @@ msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx:569
 #: src/pages/Onboarding.tsx:507
-#: src/pages/shell/bot-panel.tsx:707
+#: src/pages/shell/bot-panel.tsx:705
 msgid "Extra high"
 msgstr "极高"
 
@@ -2058,7 +2058,7 @@ msgstr "通用"
 msgid "Get credentials"
 msgstr ""
 
-#: src/pages/shell/bot-panel.tsx:484
+#: src/pages/shell/bot-panel.tsx:482
 msgid "Get notified when this Bot finishes or needs input"
 msgstr ""
 
@@ -2142,7 +2142,7 @@ msgstr "隐藏密码"
 
 #: src/pages/ModelSettingsOverlay.tsx:568
 #: src/pages/Onboarding.tsx:506
-#: src/pages/shell/bot-panel.tsx:710
+#: src/pages/shell/bot-panel.tsx:708
 msgid "High"
 msgstr "高"
 
@@ -2159,7 +2159,7 @@ msgstr "小时"
 msgid "How often"
 msgstr "频率"
 
-#: src/pages/shell/bot-panel.tsx:473
+#: src/pages/shell/bot-panel.tsx:471
 msgid "How this bot should behave"
 msgstr "此机器人应如何表现"
 
@@ -2187,7 +2187,7 @@ msgstr "导入"
 msgid "Import OpenAPI JSON"
 msgstr "导入 OpenAPI JSON"
 
-#: src/pages/shell/bot-panel.tsx:573
+#: src/pages/shell/bot-panel.tsx:571
 msgid "Inherit default"
 msgstr "沿用默认"
 
@@ -2228,7 +2228,7 @@ msgstr "实例 API 密钥"
 msgid "Instruction"
 msgstr "指令"
 
-#: src/pages/shell/bot-panel.tsx:465
+#: src/pages/shell/bot-panel.tsx:463
 msgid "Instructions"
 msgstr "指令"
 
@@ -2259,7 +2259,7 @@ msgid "Interval unit"
 msgstr "间隔单位"
 
 #: src/pages/MemorySettingsOverlay.tsx:49
-#: src/pages/shell/bot-panel.tsx:574
+#: src/pages/shell/bot-panel.tsx:572
 msgid "Isolated"
 msgstr "隔离"
 
@@ -2271,7 +2271,7 @@ msgstr "它的对话、文件和例行任务将被永久删除。它创建的 Bo
 msgid "Jump to latest"
 msgstr "跳到最新"
 
-#: src/pages/shell/message-view.tsx:116
+#: src/pages/shell/message-view.tsx:155
 msgid "Jump to replied message"
 msgstr "跳到被回复的消息"
 
@@ -2388,7 +2388,7 @@ msgstr "退出登录"
 
 #: src/pages/ModelSettingsOverlay.tsx:566
 #: src/pages/Onboarding.tsx:504
-#: src/pages/shell/bot-panel.tsx:708
+#: src/pages/shell/bot-panel.tsx:706
 msgid "Low"
 msgstr "低"
 
@@ -2439,7 +2439,7 @@ msgstr "市场"
 
 #: src/pages/ModelSettingsOverlay.tsx:570
 #: src/pages/Onboarding.tsx:508
-#: src/pages/shell/bot-panel.tsx:712
+#: src/pages/shell/bot-panel.tsx:710
 msgid "Max"
 msgstr "最大"
 
@@ -2463,7 +2463,7 @@ msgstr "MCP 服务器"
 
 #: src/pages/ModelSettingsOverlay.tsx:567
 #: src/pages/Onboarding.tsx:505
-#: src/pages/shell/bot-panel.tsx:709
+#: src/pages/shell/bot-panel.tsx:707
 msgid "Medium"
 msgstr "中"
 
@@ -2481,7 +2481,7 @@ msgstr "成员（选择 {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} 个）"
 msgid "Memory"
 msgstr "记忆"
 
-#: src/pages/shell/bot-panel.tsx:569
+#: src/pages/shell/bot-panel.tsx:567
 msgid "Memory scope"
 msgstr "记忆范围"
 
@@ -2494,7 +2494,7 @@ msgid "Mentions only"
 msgstr ""
 
 #: src/pages/shell/composer.tsx:770
-#: src/pages/shell/message-view.tsx:57
+#: src/pages/shell/message-view.tsx:96
 msgid "Message"
 msgstr ""
 
@@ -2517,7 +2517,7 @@ msgstr "消息输入框"
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:205
+#: src/pages/shell/message-view.tsx:244
 msgid "Message from {peer}"
 msgstr "来自 {peer} 的消息"
 
@@ -2525,7 +2525,7 @@ msgstr "来自 {peer} 的消息"
 msgid "Message…"
 msgstr "消息…"
 
-#: src/pages/shell/message-view.tsx:205
+#: src/pages/shell/message-view.tsx:244
 msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
@@ -2540,7 +2540,7 @@ msgstr "麦克风失败"
 
 #: src/pages/ModelSettingsOverlay.tsx:565
 #: src/pages/Onboarding.tsx:503
-#: src/pages/shell/bot-panel.tsx:711
+#: src/pages/shell/bot-panel.tsx:709
 msgid "Minimal"
 msgstr "最低"
 
@@ -2567,7 +2567,7 @@ msgstr "分钟"
 #: src/pages/Onboarding.tsx:433
 #: src/pages/Onboarding.tsx:529
 #: src/pages/Onboarding.tsx:541
-#: src/pages/shell/bot-panel.tsx:519
+#: src/pages/shell/bot-panel.tsx:517
 msgid "Model"
 msgstr "模型"
 
@@ -2633,7 +2633,7 @@ msgstr ""
 #: src/pages/GroupPanel.tsx:243
 #: src/pages/RoutineEditor.tsx:349
 #: src/pages/shell/bot-panel.tsx:145
-#: src/pages/shell/bot-panel.tsx:434
+#: src/pages/shell/bot-panel.tsx:432
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
@@ -2853,7 +2853,7 @@ msgstr "没有仍在运行的任务"
 msgid "Nothing remembered yet"
 msgstr "暂无记忆"
 
-#: src/pages/shell/bot-panel.tsx:482
+#: src/pages/shell/bot-panel.tsx:480
 msgid "Notifications"
 msgstr ""
 
@@ -2943,7 +2943,7 @@ msgstr "待办"
 msgid "OpenAI-compatible server URL"
 msgstr "OpenAI 兼容服务器 URL"
 
-#: src/pages/shell/message-view.tsx:314
+#: src/pages/shell/message-view.tsx:353
 msgid "Opened its thread."
 msgstr "已打开其对话。"
 
@@ -3126,7 +3126,7 @@ msgstr "回应"
 msgid "Reactions"
 msgstr "表情回应"
 
-#: src/pages/shell/bot-panel.tsx:603
+#: src/pages/shell/bot-panel.tsx:601
 msgid "Read replies aloud"
 msgstr "朗读回复"
 
@@ -3278,7 +3278,7 @@ msgstr "移除技能 {0}"
 msgid "Remove webhook"
 msgstr "移除 Webhook"
 
-#: src/pages/shell/message-view.tsx:313
+#: src/pages/shell/message-view.tsx:352
 msgid "Removed with chat, computer, and memory."
 msgstr "已连同对话、电脑和记忆一起移除。"
 
@@ -3317,7 +3317,7 @@ msgstr "替换密钥"
 msgid "Reply"
 msgstr "回复"
 
-#: src/pages/shell/bot-panel.tsx:614
+#: src/pages/shell/bot-panel.tsx:612
 msgid "Reply in several short messages"
 msgstr "分成多条简短消息回复"
 
@@ -3454,7 +3454,7 @@ msgstr ""
 #: src/pages/KnowledgeSection.tsx:657
 #: src/pages/ModelSettingsOverlay.tsx:791
 #: src/pages/RoutineEditor.tsx:528
-#: src/pages/shell/bot-panel.tsx:682
+#: src/pages/shell/bot-panel.tsx:680
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
 msgstr "保存"
@@ -3636,12 +3636,12 @@ msgid "Setup help"
 msgstr "设置帮助"
 
 #. placeholder {0}: seed + 1
-#: src/pages/shell/bot-panel.tsx:243
+#: src/pages/shell/bot-panel.tsx:242
 msgid "Shape {0}"
 msgstr "形状 {0}"
 
 #: src/pages/MemorySettingsOverlay.tsx:49
-#: src/pages/shell/bot-panel.tsx:575
+#: src/pages/shell/bot-panel.tsx:573
 msgid "Shared"
 msgstr "共享"
 
@@ -3667,7 +3667,12 @@ msgstr "显示机器人"
 msgid "Show details"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx:64
+msgid "Show less"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx:873
+#: src/pages/shell/message-view.tsx:64
 msgid "Show more"
 msgstr "显示更多"
 
@@ -3743,7 +3748,7 @@ msgstr ""
 msgid "Software update"
 msgstr "软件更新"
 
-#: src/pages/shell/bot-panel.tsx:530
+#: src/pages/shell/bot-panel.tsx:528
 msgid "Space default"
 msgstr "工作区默认"
 
@@ -3813,7 +3818,7 @@ msgstr "已加密存储"
 msgid "Stored securely. Never shown here."
 msgstr "已安全存储。不会显示在这里。"
 
-#: src/pages/shell/message-view.tsx:267
+#: src/pages/shell/message-view.tsx:306
 msgid "subagent"
 msgstr "子 Agent"
 
@@ -3899,7 +3904,7 @@ msgstr "API 未恢复。请刷新此页面。"
 msgid "The selected memory provider is not available in this build."
 msgstr "所选记忆提供方在此构建中不可用。"
 
-#: src/pages/shell/bot-panel.tsx:549
+#: src/pages/shell/bot-panel.tsx:547
 msgid "Thinking"
 msgstr "思考"
 
@@ -3965,7 +3970,7 @@ msgid "Time of day"
 msgstr "时间"
 
 #: src/pages/shell/bot-panel.tsx:156
-#: src/pages/shell/bot-panel.tsx:444
+#: src/pages/shell/bot-panel.tsx:442
 msgid "Title"
 msgstr "标题"
 
@@ -4128,7 +4133,7 @@ msgid "Verifying…"
 msgstr "正在校验…"
 
 #: src/pages/SettingsOverlay.tsx:88
-#: src/pages/shell/bot-panel.tsx:618
+#: src/pages/shell/bot-panel.tsx:616
 #: src/pages/shell/composer.tsx:673
 #: src/pages/shell/composer.tsx:674
 #: src/pages/VoiceSettingsOverlay.tsx:170

@@ -15,7 +15,7 @@ import {
 } from "@rakazo/ui-web";
 import { ArrowRight, Check, Clock } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
 import { AskCard } from "../../components/AskCard";
@@ -28,6 +28,45 @@ import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blo
 import { messageTimeLabel } from "../../lib/message-time";
 import { messageProviderLabel } from "../../lib/messaging";
 import { FALLBACK_BOT_COLOR } from "./layout";
+
+const USER_TEXT_FOLD_LINES = 20;
+
+/** A long user message folds after 20 lines behind a fade until "Show more" is clicked. */
+function UserText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  // ponytail: counts newlines, not wrapped lines; a 20-line max-height hides the rest either way.
+  const foldable = text.split("\n").length > USER_TEXT_FOLD_LINES;
+  if (!foldable) return text;
+  return (
+    <>
+      <div
+        data-testid="message-user-text"
+        data-folded={!expanded}
+        className={
+          expanded
+            ? undefined
+            : "relative max-h-[calc(20*var(--type-body-leading)*var(--type-body-size))] overflow-hidden"
+        }
+      >
+        {text}
+        {expanded ? null : (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-chat-user to-transparent"
+          />
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => setExpanded((open) => !open)}
+        className="mt-1.5 text-meta font-medium text-chat-user-foreground/70 duration-(--duration-hover) ease-quiet hover:text-chat-user-foreground"
+      >
+        {expanded ? <Trans>Show less</Trans> : <Trans>Show more</Trans>}
+      </button>
+    </>
+  );
+}
+
 import {
   AppConnectCard,
   ArtifactImage,
@@ -393,7 +432,7 @@ export const MessageView = memo(function MessageView({
             className="wrap-anywhere"
             dir="auto"
           >
-            {block.text}
+            <UserText text={block.text} />
           </UserBubble>
         );
       }
