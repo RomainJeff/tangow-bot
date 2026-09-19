@@ -131,12 +131,15 @@ export async function isPeerRun(
   return peerRun;
 }
 
-/** Peer-run SSE events that must still reach an open thread (terminals, waits, receipts, asks, text). */
+/** Peer-run SSE events that must still reach an open thread (starts, terminals, waits, receipts, asks, text). */
 export function shouldForwardPeerThreadEvent(event: {
   type: string;
   payload: { blocks?: unknown };
 }): boolean {
   if (
+    // The start drives the working indicator, and the terminals below clear it again. Without
+    // the pair an open chat sits inert for the whole run and only catches up on reload.
+    event.type === "run.started" ||
     event.type === "run.completed" ||
     event.type === "run.failed" ||
     event.type === "run.cancelled" ||

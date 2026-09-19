@@ -267,10 +267,14 @@ describe("threadSnapshot", () => {
         where: expect.objectContaining({
           botId: "bot-1",
           threadId: "thread-1",
-          trigger: { not: "bot_message" },
-          status: {
-            in: ["queued", "leased", "running", "waiting_input", "waiting_takeover", "failed"],
-          },
+          OR: [
+            {
+              status: {
+                in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"],
+              },
+            },
+            { trigger: { not: "bot_message" }, status: "failed" },
+          ],
         }),
       }),
     );
@@ -414,6 +418,90 @@ describe("threadSnapshot", () => {
     expect(snapshot.run).toBeNull();
   });
 
+  it("shows a busy peer run as the bot thread's run without leaking its live events", async () => {
+    const peerRunning = {
+      id: "run-peer-running",
+      botId: "bot-1",
+      threadId: "thread-1",
+      taskId: "task-peer",
+      status: "running",
+      trigger: "bot_message",
+      modelProvider: null,
+      modelId: null,
+      error: null,
+      startedAt: new Date("2026-08-23T00:00:05.000Z"),
+      completedAt: null,
+      createdAt: new Date("2026-08-23T00:00:05.000Z"),
+    };
+    const findManyEvents = vi.fn();
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
+      message: { findMany: vi.fn().mockResolvedValue([]) },
+      event: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findMany: findManyEvents,
+      },
+      run: { findFirst: botRunFindFirst([peerRunning]) },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+    const target = {
+      kind: "bot",
+      botId: "bot-1",
+      threadId: "thread-1",
+      bot: { computer: null },
+    } as ThreadTarget;
+
+    const snapshot = await threadSnapshot({ prisma }, target);
+
+    // The bot really is working, so the chat must say so...
+    expect(snapshot.run).toEqual(
+      expect.objectContaining({ id: "run-peer-running", status: "running" }),
+    );
+    // ...without replaying what it is doing for the other bot.
+    expect(findManyEvents).not.toHaveBeenCalled();
+  });
+
+  it("hides a failed peer run from the bot thread", async () => {
+    const peerFailed = {
+      id: "run-peer-failed",
+      botId: "bot-1",
+      threadId: "thread-1",
+      taskId: "task-peer",
+      status: "failed",
+      trigger: "bot_message",
+      modelProvider: null,
+      modelId: null,
+      error: "peer exploded",
+      startedAt: new Date("2026-08-23T00:00:01.000Z"),
+      completedAt: new Date("2026-08-23T00:00:02.000Z"),
+      createdAt: new Date("2026-08-23T00:00:01.000Z"),
+    };
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
+      message: { findMany: vi.fn().mockResolvedValue([]) },
+      event: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn(),
+      },
+      run: { findFirst: botRunFindFirst([peerFailed]) },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+    const target = {
+      kind: "bot",
+      botId: "bot-1",
+      threadId: "thread-1",
+      bot: { computer: null },
+    } as ThreadTarget;
+
+    const snapshot = await threadSnapshot({ prisma }, target);
+
+    expect(snapshot.run).toBeNull();
+  });
+
   it("does not return a cancelled or completed run", async () => {
     const findManyEvents = vi.fn();
     const findFirstRun = botRunFindFirst([]);
@@ -441,9 +529,14 @@ describe("threadSnapshot", () => {
     expect(findFirstRun).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          status: {
-            in: ["queued", "leased", "running", "waiting_input", "waiting_takeover", "failed"],
-          },
+          OR: [
+            {
+              status: {
+                in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"],
+              },
+            },
+            { trigger: { not: "bot_message" }, status: "failed" },
+          ],
         }),
       }),
     );
@@ -484,10 +577,6 @@ describe("threadSnapshot", () => {
         where: {
           threadId: "thread-1",
           status: { in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"] },
-          OR: [
-            { trigger: { not: "bot_message" } },
-            { status: { in: ["waiting_input", "waiting_takeover"] } },
-          ],
         },
       }),
     );
@@ -497,7 +586,7 @@ describe("threadSnapshot", () => {
     expect(snapshot.activeRuns).toEqual([]);
   });
 
-  it("omits peer bot_message runs from group activeRuns and displayed terminal run", async () => {
+  it("shows a busy peer run in group activeRuns but hides its failure", async () => {
     const peerActive = {
       id: "run-peer-active",
       botId: "bot-a",
@@ -532,15 +621,15 @@ describe("threadSnapshot", () => {
     });
     const snapshot = await threadSnapshot({ prisma: groupPrisma(findManyRuns) }, groupTarget());
 
-    expect(snapshot.activeRuns).toEqual([]);
-    expect(snapshot.run).toBeNull();
+    // The chat must look busy while a peer waits on this bot...
+    expect(snapshot.activeRuns).toEqual([
+      expect.objectContaining({ id: "run-peer-active", status: "running" }),
+    ]);
+    expect(snapshot.run).toEqual(expect.objectContaining({ id: "run-peer-active" }));
+    // ...but the peer's failure belongs to the bot that ordered the work, not to this user.
     expect(findManyRuns).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          OR: [
-            { trigger: { not: "bot_message" } },
-            { status: { in: ["waiting_input", "waiting_takeover"] } },
-          ],
           status: { in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"] },
         }),
       }),
@@ -582,8 +671,12 @@ describe("threadSnapshot", () => {
       groupTarget(),
     );
 
-    // The ask must be answerable (the client gates AskCard on activeRuns)...
-    expect(snapshot.activeRuns?.map((run) => run.id)).toEqual(["run-peer-asking"]);
+    // The ask must be answerable (the client gates AskCard on activeRuns), and the merely-busy
+    // peer run keeps the working indicator alive...
+    expect(snapshot.activeRuns?.map((run) => run.id)).toEqual([
+      "run-peer-asking",
+      "run-peer-running",
+    ]);
     // ...but no peer narration may be streamed into the transcript.
     expect(findManyEvents).not.toHaveBeenCalled();
   });
@@ -882,27 +975,29 @@ describe("threadSnapshot", () => {
   });
 });
 
-function isTerminalRunQuery(where: { status?: { in?: string[] } } | undefined) {
-  const statuses = where?.status?.in;
+function isTerminalRunQuery(where: RunWhereClause | undefined) {
+  const statuses = typeof where?.status === "object" ? where.status?.in : undefined;
   return Array.isArray(statuses) && statuses.includes("failed") && statuses.includes("completed");
 }
 
-function matchesPeerActiveFilter(
+type RunWhereClause = {
+  status?: { in?: string[] } | string;
+  trigger?: { not?: string };
+  OR?: RunWhereClause[];
+};
+
+/** The subset of Prisma's run filter the snapshot actually builds: status, trigger, and one OR. */
+function matchesRunWhere(
   row: { trigger?: string; status?: string },
-  where:
-    | {
-        trigger?: { not?: string };
-        OR?: Array<{ trigger?: { not?: string }; status?: { in?: string[] } }>;
-      }
-    | undefined,
-) {
-  if (where?.trigger?.not === "bot_message") return row.trigger !== "bot_message";
-  if (!where?.OR) return true;
-  return where.OR.some((clause) => {
-    if (clause.trigger?.not === "bot_message") return row.trigger !== "bot_message";
-    if (clause.status?.in) return clause.status.in.includes(row.status ?? "");
-    return false;
-  });
+  where: RunWhereClause | undefined,
+): boolean {
+  if (!where) return true;
+  if (typeof where.status === "string" && row.status !== where.status) return false;
+  const statuses = typeof where.status === "object" ? where.status?.in : undefined;
+  if (statuses && !statuses.includes(row.status ?? "")) return false;
+  if (where.trigger?.not !== undefined && row.trigger === where.trigger.not) return false;
+  if (where.OR && !where.OR.some((clause) => matchesRunWhere(row, clause))) return false;
+  return true;
 }
 
 function botRunFindFirst(
@@ -913,20 +1008,11 @@ function botRunFindFirst(
     createdAt?: Date;
   }>,
 ) {
-  return vi.fn().mockImplementation(
-    async (args: {
-      where?: {
-        status?: { in?: string[] };
-        trigger?: { not?: string };
-      };
-      select?: { id?: boolean };
-    }) => {
-      const statuses = args.where?.status?.in;
+  return vi
+    .fn()
+    .mockImplementation(async (args: { where?: RunWhereClause; select?: { id?: boolean } }) => {
       const matched = rows
-        .filter((row) => !statuses || statuses.includes(row.status))
-        .filter((row) =>
-          args.where?.trigger?.not === "bot_message" ? row.trigger !== "bot_message" : true,
-        )
+        .filter((row) => matchesRunWhere(row, args.where))
         .sort((a, b) => {
           const byCreated = (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0);
           return byCreated !== 0 ? byCreated : b.id.localeCompare(a.id);
@@ -934,25 +1020,16 @@ function botRunFindFirst(
       const row = matched[0] ?? null;
       if (!row) return null;
       return args.select?.id ? { id: row.id } : row;
-    },
-  );
+    });
 }
 
 function groupRunFindMany(input: { active?: unknown[]; terminals?: unknown[] }) {
-  return vi.fn().mockImplementation(
-    async (args: {
-      where?: {
-        status?: { in?: string[] };
-        trigger?: { not?: string };
-        OR?: Array<{ trigger?: { not?: string }; status?: { in?: string[] } }>;
-      };
-    }) => {
-      const rows = isTerminalRunQuery(args.where) ? (input.terminals ?? []) : (input.active ?? []);
-      return rows.filter((row) =>
-        matchesPeerActiveFilter(row as { trigger?: string; status?: string }, args.where),
-      );
-    },
-  );
+  return vi.fn().mockImplementation(async (args: { where?: RunWhereClause }) => {
+    const rows = isTerminalRunQuery(args.where) ? (input.terminals ?? []) : (input.active ?? []);
+    return rows.filter((row) =>
+      matchesRunWhere(row as { trigger?: string; status?: string }, args.where),
+    );
+  });
 }
 
 function groupPrisma(

@@ -138,16 +138,11 @@ function flattenForQuoteMatch(text: string, markdownSource = false): string {
 }
 
 /**
- * Peer (`bot_message`) runs stay out of the snapshot — their activity is noise in the
- * recipient's own chat. The one exception is a run parked on `ask_user`: the client only lets
- * the user answer an ask whose run is in the snapshot, so hiding it leaves a question that
- * renders but can never be answered. `threads.answer` already accepts peer runs.
+ * A peer (`bot_message`) run is hidden work, not absent work: its messages and live events stay
+ * out of the recipient's own chat, but the bot really is busy, and a chat that shows nothing at
+ * all looks dead while a peer waits on it. So active peer runs count for the busy indicator and
+ * `isPeerRunRow` only silences their event stream.
  */
-const SNAPSHOT_RUN_VISIBILITY: Prisma.RunWhereInput["OR"] = [
-  { trigger: { not: "bot_message" } },
-  { status: { in: ["waiting_input", "waiting_takeover"] } },
-];
-
 function isPeerRunRow(run: { trigger: string }): boolean {
   return run.trigger === "bot_message";
 }
@@ -453,9 +448,13 @@ export async function threadSnapshot(
             where: {
               botId: target.botId,
               threadId: target.threadId,
-              // Hide peer bot_message busy/failed noise; waiting is handled above.
-              trigger: { not: "bot_message" },
-              status: { in: [...ACTIVE_RUN_STATUSES, "failed"] },
+              // A busy peer run drives the working indicator; a failed one stays hidden, since
+              // that failure belongs to the bot that ordered the work and would otherwise bury a
+              // user-visible failure in the composer error strip.
+              OR: [
+                { status: { in: [...ACTIVE_RUN_STATUSES] } },
+                { trigger: { not: "bot_message" }, status: "failed" },
+              ],
             },
             // The id tiebreak keeps ordering deterministic under equal
             // timestamps, matching the supersession probe below.
@@ -529,7 +528,6 @@ export async function threadSnapshot(
         where: {
           threadId: target.threadId,
           status: { in: [...ACTIVE_RUN_STATUSES] },
-          OR: SNAPSHOT_RUN_VISIBILITY,
         },
         orderBy: { createdAt: "desc" },
       }),

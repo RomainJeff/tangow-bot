@@ -152,6 +152,13 @@ describe("thread message pages", () => {
     ).toBe(false);
   });
 
+  it("forwards a peer run's start and terminals so the working indicator lives and clears", () => {
+    expect(shouldForwardPeerThreadEvent({ type: "run.started", payload: {} })).toBe(true);
+    for (const type of ["run.completed", "run.failed", "run.cancelled"]) {
+      expect(shouldForwardPeerThreadEvent({ type, payload: {} })).toBe(true);
+    }
+  });
+
   it("keeps peer receipt rows when filtering peer-run output from pages", async () => {
     const findMany = vi.fn(async () => [
       {
