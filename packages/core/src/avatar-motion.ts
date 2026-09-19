@@ -15,7 +15,7 @@ export interface WorkingAvatarFrame {
   eyeOffsetY: number;
 }
 
-/** Per shape-family loop length in ms — keep in sync with web CSS animation durations. */
+/** Per shape-family loop length in ms for the mobile organic avatar (web draws bloub). */
 export const WORKING_AVATAR_DURATIONS_MS = [
   1800, 1350, 1600, 2400, 2400, 1350, 1100, 1350, 1600, 1350, 1600, 1350,
 ] as const;

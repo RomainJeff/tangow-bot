@@ -69,7 +69,7 @@ describe("GroupAvatar", () => {
       />,
     );
     expect(html).toContain('data-working="true"');
-    expect(html).toContain("rakazo-organic-avatar-body-working");
+    expect(html).toContain('data-state="thinking"');
   });
 
   it("renders 3 mini bot avatars for 3 members", () => {

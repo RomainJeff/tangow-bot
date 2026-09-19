@@ -10,13 +10,13 @@ import type {
   VoiceInfo,
 } from "@rakazo/contracts";
 import {
-  AVATAR_SHAPE_COUNT,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_INSTRUCTIONS_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
   SELECTABLE_BOT_COLORS,
 } from "@rakazo/contracts";
+import { SHAPES } from "@rakazo/core";
 import {
   BotAvatar,
   Button,
@@ -234,36 +234,34 @@ function BotAppearancePicker({
       <PopoverContent data-testid="bot-appearance-picker" aria-label={t`Appearance`}>
         {avatarStyle === "organic" ? (
           <div className="grid grid-cols-4 gap-1">
-            {[null, ...Array.from({ length: AVATAR_SHAPE_COUNT }, (_, index) => index)].map(
-              (seed) => (
-                <button
-                  key={seed ?? "auto"}
-                  type="button"
-                  aria-pressed={shapeSeed === seed}
-                  aria-label={seed === null ? t`Automatic shape` : t`Shape ${seed + 1}`}
-                  onClick={() => onShapeChange(seed)}
-                  className={`flex h-[58px] items-center justify-center rounded-[12px] border transition-colors ${
-                    shapeSeed === seed
-                      ? "border-ring bg-muted"
-                      : "border-transparent hover:border-ring/60"
-                  }`}
-                >
-                  {seed === null ? (
-                    <span className="text-[12px] text-muted-foreground">
-                      <Trans>Auto</Trans>
-                    </span>
-                  ) : (
-                    <BotAvatar
-                      color={color}
-                      identity={botId}
-                      shapeSeed={seed}
-                      size={36}
-                      variant="organic"
-                    />
-                  )}
-                </button>
-              ),
-            )}
+            {[null, ...Array.from({ length: SHAPES.length }, (_, index) => index)].map((seed) => (
+              <button
+                key={seed ?? "auto"}
+                type="button"
+                aria-pressed={shapeSeed === seed}
+                aria-label={seed === null ? t`Automatic shape` : t`Shape ${seed + 1}`}
+                onClick={() => onShapeChange(seed)}
+                className={`flex h-[58px] items-center justify-center rounded-[12px] border transition-colors ${
+                  shapeSeed === seed
+                    ? "border-ring bg-muted"
+                    : "border-transparent hover:border-ring/60"
+                }`}
+              >
+                {seed === null ? (
+                  <span className="text-[12px] text-muted-foreground">
+                    <Trans>Auto</Trans>
+                  </span>
+                ) : (
+                  <BotAvatar
+                    color={color}
+                    identity={botId}
+                    shapeSeed={seed}
+                    size={36}
+                    variant="organic"
+                  />
+                )}
+              </button>
+            ))}
           </div>
         ) : null}
         <div className="flex flex-wrap justify-center gap-3">

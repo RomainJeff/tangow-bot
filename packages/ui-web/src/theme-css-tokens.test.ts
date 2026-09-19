@@ -82,7 +82,6 @@ describe("ui-web theme CSS matches the ui-tokens source", () => {
         }
       }
       expect(block).toContain(".rakazo-bot-avatar-eyes-working");
-      expect(block).toContain(".rakazo-organic-avatar-eyes-working");
     });
   });
 });

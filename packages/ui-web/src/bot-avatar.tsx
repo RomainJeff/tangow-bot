@@ -1,12 +1,16 @@
 import {
   ACTIVE_RUN_STATUSES,
   avatarIdentitySeed,
-  avatarShapeEyeOffset,
-  avatarShapeFamily,
-  organicAvatarPath,
+  BotEngine,
+  type BotFrame,
+  mixHex,
+  NOTIF_BLUE,
+  RAYON,
+  SHAPES,
+  type StateId,
 } from "@rakazo/core";
 import type { CSSProperties } from "react";
-import { memo, useId } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import { type AvatarStyle, useAvatarStyle } from "./avatar-style.js";
 import { usePrefersReducedMotion } from "./lib/reduced-motion.js";
 import { cn } from "./lib/utils.js";
@@ -37,7 +41,7 @@ export const BotAvatar = memo(function BotAvatar({
   const preferredVariant = useAvatarStyle();
   if ((variant ?? preferredVariant) === "organic") {
     return (
-      <OrganicAvatar
+      <BloubAvatar
         color={color}
         identity={identity}
         shapeSeed={shapeSeed}
@@ -167,7 +171,15 @@ export const BotAvatar = memo(function BotAvatar({
   );
 });
 
-function OrganicAvatar({
+/** Half of the viewBox side: the resting body radius plus room for the blink squash. */
+const BLOUB_HALF_VIEWBOX = RAYON * 1.12;
+
+/**
+ * The organic avatar, drawn by the vendored bloub engine (`@rakazo/core/bloub`): a
+ * morphing ink body with the eyes punched out as holes, idle blinks and the
+ * three-dot "thinking" state while a run is active.
+ */
+function BloubAvatar({
   color,
   identity,
   shapeSeed,
@@ -184,71 +196,142 @@ function OrganicAvatar({
 }) {
   const reducedMotion = usePrefersReducedMotion();
   const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
-  const duration = `${4.8 + (seed % 24) / 10}s`;
-  const shapeA = organicAvatarPath(seed);
-  const shapeB = organicAvatarPath(seed, 0.42);
+  const shape = SHAPES[seed % SHAPES.length]!;
+  const state: StateId = isWorking ? "thinking" : "idle";
+  const uid = useId().replace(/[^a-zA-Z0-9-_]/g, "");
+  const [engine] = useState(() => new BotEngine(RAYON, state, shape.radii));
+  const clock = useRef(0);
+  const [frame, setFrame] = useState<BotFrame>(() => engine.sample(0));
 
-  // The 2a grammar keeps one consistent eye rule; identity variation comes from
-  // the 12 silhouettes and the hue, never a per-bot tilt.
+  useEffect(() => {
+    if (reducedMotion) {
+      // One still frame, settled into the state: no morph, no loop.
+      engine.reset(state, clock.current);
+      engine.setShape(shape.radii, clock.current - BotEngine.SHAPE_MORPH);
+      setFrame(engine.sample(clock.current + 1));
+      return;
+    }
+    engine.setShape(shape.radii, clock.current);
+    engine.setState(state, clock.current);
+    // ponytail: one rAF loop per avatar; share a ticker if a long sidebar burns CPU.
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      // Clamp the step like upstream so a backgrounded tab resumes without a jump.
+      clock.current += Math.min((now - last) / 1000, 0.064);
+      last = now;
+      setFrame(engine.sample(clock.current));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [engine, shape, state, reducedMotion]);
+
+  // Same eye rule as before: the eyes show the "paper" behind the ink, so pick it
+  // from the body luminance, and ink a pale body's outline so it stays visible.
   const luminance = relativeLuminance(color);
-  const eyeFill = luminance < 0.4 ? "#FFFFFF" : "#101014";
-  const needsInk = luminance > 0.78;
-  const bodyStroke = needsInk ? "#17181A" : "none";
-  const bodyStrokeWidth = needsInk ? 3.5 : 0;
-  const eyeY = -10.5 + avatarShapeEyeOffset(seed);
+  const paper = luminance < 0.4 ? "#FFFFFF" : "#101014";
+  const outline = luminance > 0.78 ? "#17181A" : null;
+  const VB = BLOUB_HALF_VIEWBOX;
+  const maskId = `${uid}-mask`;
+  const dots = (
+    <g>
+      {frame.dots.map((dot, index) => {
+        const fill =
+          dot.color ?? (dot.depth === undefined ? color : mixHex(paper, color, dot.depth));
+        return dot.d ? (
+          <path
+            key={index}
+            d={dot.d}
+            fill={fill}
+            opacity={dot.opacity}
+            transform={`translate(${dot.x} ${dot.y}) rotate(${dot.rot ?? 0}) scale(${RAYON})`}
+          />
+        ) : (
+          <circle key={index} cx={dot.x} cy={dot.y} r={dot.r} fill={fill} opacity={dot.opacity} />
+        );
+      })}
+    </g>
+  );
+  const arcs = (side: "back" | "front") => (
+    <g fill="none" strokeLinecap="round">
+      {frame.arcs.map((arc) => (
+        <path
+          key={arc.id}
+          d={arc[side]}
+          stroke={`url(#${uid}-${arc.id})`}
+          strokeWidth={arc.width}
+          opacity={arc.opacity}
+        />
+      ))}
+    </g>
+  );
 
   return (
     <svg
-      viewBox="-60 -60 120 120"
+      viewBox={`${-VB} ${-VB} ${VB * 2} ${VB * 2}`}
       aria-hidden="true"
       className={cn("rakazo-organic-avatar overflow-visible select-none", className)}
       data-working={isWorking}
-      data-shape-family={avatarShapeFamily(seed)}
-      data-eye-pattern={seed % 4}
+      data-state={engine.state}
       style={{
         width: size,
         height: size,
         flex: "none",
+        filter: isWorking
+          ? `drop-shadow(0 0 ${Math.round(size * 0.16)}px ${color})`
+          : "drop-shadow(0 2px 3px rgba(0,0,0,.34))",
       }}
     >
-      {(["idle", "working"] as const).map((mode) => (
-        <path
-          key={mode}
-          className={`rakazo-organic-avatar-body rakazo-organic-avatar-body-${mode}`}
-          d={shapeA}
-          fill={color}
-          stroke={bodyStroke}
-          strokeWidth={bodyStrokeWidth}
-          style={
-            {
-              "--rakazo-organic-path": `path("${shapeA}")`,
-              filter:
-                mode === "working"
-                  ? `drop-shadow(0 0 ${Math.round(size * 0.16)}px ${color})`
-                  : "drop-shadow(0 2px 3px rgba(0,0,0,.34))",
-            } as CSSProperties
-          }
-        >
-          {!reducedMotion ? (
-            <animate
-              attributeName="d"
-              values={`${shapeA};${shapeB};${shapeA}`}
-              dur={duration}
-              repeatCount="indefinite"
-            />
+      <defs>
+        {/* The eyes are holes punched in the body, so the silhouette clips them. */}
+        <mask id={maskId} maskUnits="userSpaceOnUse" x={-VB} y={-VB} width={VB * 2} height={VB * 2}>
+          <path d={frame.bodyPath} fill="#fff" />
+          {frame.eyes.map((eye, index) => (
+            <path key={index} d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill="#000" />
+          ))}
+          {frame.notch ? (
+            <circle cx={frame.notch.x} cy={frame.notch.y} r={frame.notch.r} fill="#000" />
           ) : null}
-        </path>
-      ))}
-      {(["idle", "working"] as const).map((mode) => (
-        <g
-          key={mode}
-          className={`rakazo-organic-avatar-eyes rakazo-organic-avatar-eyes-${mode}`}
-          fill={eyeFill}
-        >
-          <rect x="-15" y={eyeY} width="7" height="21" rx="3.5" />
-          <rect x="8" y={eyeY} width="7" height="21" rx="3.5" />
-        </g>
-      ))}
+        </mask>
+        {frame.arcs.map((arc) => (
+          <linearGradient
+            key={arc.id}
+            id={`${uid}-${arc.id}`}
+            gradientUnits="userSpaceOnUse"
+            x1={arc.grad.x1}
+            y1={arc.grad.y1}
+            x2={arc.grad.x2}
+            y2={arc.grad.y2}
+          >
+            {arc.grad.stops.map((stop, index) => (
+              <stop key={index} offset={index / (arc.grad.stops.length - 1)} stopColor={stop} />
+            ))}
+          </linearGradient>
+        ))}
+      </defs>
+      {arcs("back")}
+      {frame.dotsBehind ? dots : null}
+      <g opacity={frame.bodyAlpha}>
+        {/* Opaque backing in the body shape: what the eye holes show through. */}
+        <path d={frame.bodyPath} fill={paper} />
+        <rect
+          x={-VB}
+          y={-VB}
+          width={VB * 2}
+          height={VB * 2}
+          fill={color}
+          mask={`url(#${maskId})`}
+        />
+        {outline ? (
+          <path d={frame.bodyPath} fill="none" stroke={outline} strokeWidth={RAYON * 0.06} />
+        ) : null}
+      </g>
+      {frame.dotsBehind ? null : dots}
+      {frame.notif ? (
+        <circle cx={frame.notif.x} cy={frame.notif.y} r={frame.notif.r} fill={NOTIF_BLUE} />
+      ) : null}
+      {arcs("front")}
     </svg>
   );
 }
