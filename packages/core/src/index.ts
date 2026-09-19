@@ -47,3 +47,4 @@ export * from "./thread-message-updates.js";
 export * from "./thread-subscription.js";
 export * from "./thread-time-markers.js";
 export * from "./tool-activity.js";
+export * from "./bloub/index.js";
