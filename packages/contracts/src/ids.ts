@@ -12,17 +12,24 @@ export const ActorSchema = z.object({
 export type Actor = z.infer<typeof ActorSchema>;
 
 /** Number of organic avatar shape families a seed can select. */
-export const AVATAR_SHAPE_COUNT = 10;
+export const AVATAR_SHAPE_COUNT = 12;
 
 export const BOT_COLORS = [
-  "#3EC5A8",
-  "#F5A03C",
-  "#6A6BF5",
-  "#9B5CF6",
-  "#3B82F6",
-  "#F2622A",
-  "#D9508A",
+  "#00C46A",
+  "#3BC9A0",
+  "#2E8CF0",
+  "#8B5CF6",
+  "#E45C9C",
+  "#E0524A",
+  "#F0913A",
 ] as const;
+
+// Two hue-less bodies a bot can be given on purpose — ink (white eyes) and
+// white (ink eyes, ink outline). Not part of the automatic rotation, which
+// keeps handing new bots an identity hue; offered only as a deliberate choice.
+export const SPECIAL_BOT_COLORS = ["#17181A", "#FFFFFF"] as const;
+
+export const SELECTABLE_BOT_COLORS = [...BOT_COLORS, ...SPECIAL_BOT_COLORS] as const;
 
 export const RunStatus = z.enum([
   "queued",

@@ -1,6 +1,6 @@
 import type { ThreadMessage } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { userVisibleMessages } from "./message-visibility.js";
+import { isAsideOnlyMessage, userVisibleMessages } from "./message-visibility.js";
 
 function message(
   id: string,
@@ -126,5 +126,56 @@ describe("user-visible messages", () => {
     expect(
       userVisibleMessages(messages, { knownPeerRunIds: ["run-peer"] }).map((item) => item.id),
     ).toEqual(["ask", "reply", "answer"]);
+  });
+});
+
+describe("isAsideOnlyMessage", () => {
+  it("treats a delegation, a handoff, a channel note and a meta line as asides", () => {
+    expect(
+      isAsideOnlyMessage([
+        { kind: "bot_message_sent", toBotId: "coder", toBotName: "Coder", text: "Check this." },
+      ]),
+    ).toBe(true);
+    expect(
+      isAsideOnlyMessage([
+        { kind: "handoff", fromBotId: "chief", toBotId: "coder", text: "over to you" },
+      ]),
+    ).toBe(true);
+    expect(
+      isAsideOnlyMessage([
+        {
+          kind: "channel_message",
+          provider: "matrix",
+          channelId: "room-1",
+          fromAddress: "someone@example.test",
+          fromLabel: "Someone",
+          text: "hello",
+        },
+      ]),
+    ).toBe(true);
+    expect(isAsideOnlyMessage([{ kind: "meta", text: "Run stopped" }])).toBe(true);
+  });
+
+  it("treats a bot_message_received-only message as an aside regardless of role", () => {
+    // The server stores an inbound peer receipt with role "user" (it is the
+    // recipient's prompt, but still peer activity: see bot-messages.ts). The
+    // predicate takes no role argument, so this documents that callers must
+    // classify it as an aside the same as any other role.
+    expect(
+      isAsideOnlyMessage([
+        { kind: "bot_message_received", fromBotId: "coder", fromBotName: "Coder", text: "Done." },
+      ]),
+    ).toBe(true);
+  });
+
+  it("is not an aside as soon as the message says something itself", () => {
+    expect(isAsideOnlyMessage([])).toBe(false);
+    expect(isAsideOnlyMessage([{ kind: "text", text: "Done." }])).toBe(false);
+    expect(
+      isAsideOnlyMessage([
+        { kind: "handoff", fromBotId: "chief", toBotId: "coder", text: "over to you" },
+        { kind: "text", text: "Done." },
+      ]),
+    ).toBe(false);
   });
 });

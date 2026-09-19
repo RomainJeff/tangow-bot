@@ -30,7 +30,7 @@ model User {
   image                       String?
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
-  avatarStyle                 String                       @default("robot")
+  avatarStyle                 String                       @default("organic")
   sessions                    Session[]
   accounts                    Account[]
   members                     Member[]
@@ -715,7 +715,9 @@ model Routine {
   crons          String[]
   timezone       String    @default("UTC")
   active         Boolean   @default(false)
-  notify         Boolean   @default(true)
+  // "Notify the user on each run of this routine." Was written but never read; now wired
+  // (background-work-visibility) to gate the per-routine notification toggle, default silence.
+  notify         Boolean   @default(false)
   webhookEnabled Boolean   @default(false)
   githubEnabled  Boolean   @default(false)
   messageProvider String?

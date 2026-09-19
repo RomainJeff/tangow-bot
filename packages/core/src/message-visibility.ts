@@ -28,6 +28,28 @@ export function isPeerReceiptBlocks(blocks: readonly MessageBlock[]): boolean {
   );
 }
 
+/** A note about the conversation rather than something a bot said to the user. */
+const ASIDE_BLOCK_KINDS = new Set<MessageBlock["kind"]>([
+  "handoff",
+  "bot_message_sent",
+  "bot_message_received",
+  "channel_message",
+  "meta",
+]);
+
+/**
+ * The whole message is an aside: it reads as one centred line between messages,
+ * with no author, no bubble and no message actions. Callers pass the blocks they
+ * are about to render, so a hidden activity block cannot make a delegation look
+ * like a reply. Role is not an input of this predicate and callers must not gate
+ * on it either: an inbound `bot_message_received` receipt is stored with
+ * `role: "user"` (it is the recipient's prompt, but still peer activity), and it
+ * must render as an aside just the same as an outbound `bot_message_sent` one.
+ */
+export function isAsideOnlyMessage(blocks: readonly MessageBlock[]): boolean {
+  return blocks.length > 0 && blocks.every((block) => ASIDE_BLOCK_KINDS.has(block.kind));
+}
+
 /**
  * A message a bot addressed to the user on purpose: `message_user` output (carries the
  * user-message clientNonce) or an `ask_user` question (an `ask` block). These must reach the

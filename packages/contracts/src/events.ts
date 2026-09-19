@@ -307,6 +307,25 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     /** Links in a bot-started chain; absent when a person started it. */
     hop: z.number().int().nonnegative().optional(),
   }),
+  z.object({
+    /** A sub-bot's routine run, traced in its own thread instead of a free closing text.
+        Driven by the run lifecycle (queued/running/completed/failed/cancelled), not by
+        model-authored narration; `headline`/`digest` are untrusted content, rendered as
+        escaped text with no remote resource loads. */
+    kind: z.literal("routine_run"),
+    routineId: Id.optional(),
+    routineName: z.string(),
+    state: z.enum(["queued", "running", "completed", "failed", "cancelled"]),
+    /** One-line summary shown at rest; the first non-empty line of `digest`, truncated. */
+    headline: z.string().optional(),
+    /** Full result text, shown in a collapsed-by-default toggle. */
+    digest: z.string().optional(),
+    startedAt: z.string().optional(),
+    endedAt: z.string().optional(),
+    /** Mirrors the routine's `notify` setting at the time this card was rendered, so the
+        client can default the toggle open/closed without a second lookup. */
+    notify: z.boolean().optional(),
+  }),
 ]);
 export type MessageBlock = z.infer<typeof MessageBlock>;
 
@@ -332,12 +351,26 @@ export const USER_PROGRESS_CLIENT_NONCE_PREFIX = "user-progress:";
  * Single source of truth (adapters user-progress + core message-visibility import this). */
 export const USER_MESSAGE_CLIENT_NONCE_PREFIX = "user-message:";
 
+/**
+ * A block whose `kind` this build does not know must not take the whole conversation down
+ * with it. The union is exhaustive, so one unrecognised entry fails output validation and
+ * the response carrying it is lost: every message in the thread disappears at once, and the
+ * ORPCError it raises is not logged, which leaves no trace of why. That happens whenever the
+ * data outlives the code that reads it, after a rollback or between two deployed versions.
+ * Unrecognised entries are dropped instead, so the rest of the conversation still renders.
+ */
+export const MessageBlocks = z
+  .array(z.unknown())
+  .transform((blocks) =>
+    blocks.filter((block): block is MessageBlock => MessageBlock.safeParse(block).success),
+  );
+
 export const ThreadMessageSchema = z.object({
   id: Id,
   threadId: Id,
   seq: z.number().int().nonnegative(),
   role: MessageRole,
-  blocks: z.array(MessageBlock),
+  blocks: MessageBlocks,
   botId: Id.optional(),
   replyToMessageId: Id.optional(),
   replyQuote: z.string().optional(),
