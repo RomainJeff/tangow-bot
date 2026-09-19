@@ -5,7 +5,7 @@ import {
   type SpaceBot,
   type SpaceGroup,
 } from "@rakazo/contracts";
-import { botColors } from "@rakazo/ui-tokens";
+import { botColors, sizes } from "@rakazo/ui-tokens";
 import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -67,6 +67,7 @@ import { setProfilePhoto, useProfilePhoto } from "../lib/profile-photo";
 import { registerPushToken } from "../lib/push";
 import { querySpaceSearch } from "../lib/search";
 import { mobileSearchDestination } from "../lib/search-destination";
+import { nativeTextStyle } from "../lib/typography";
 
 const FALLBACK_COLOR = botColors[3];
 
@@ -778,15 +779,20 @@ function ActivityRow({
   const title = run.groupName ? `${run.botName} · ${run.groupName}` : run.botName;
   const status = activityStatusLabel(run.status);
   const preview = run.promptSnippet ? `${run.promptSnippet} · ${status}` : status;
+  const time = formatActivityRelativeTime(run.updatedAt);
   return (
     <ConversationRow
       title={title}
       preview={preview}
-      time={formatActivityRelativeTime(run.updatedAt)}
-      accessibilityLabel={`${title}, ${status}`}
+      accessibilityLabel={[title, status, time].filter(Boolean).join(", ")}
       onPress={onPress}
       avatar={
-        <BotAvatar identity={run.botId} color={bot?.color ?? FALLBACK_COLOR} status={run.status} />
+        <BotAvatar
+          identity={run.botId}
+          color={bot?.color ?? FALLBACK_COLOR}
+          status={run.status}
+          size={sizes.row}
+        />
       }
     />
   );
@@ -795,7 +801,6 @@ function ActivityRow({
 function ConversationRow({
   title,
   preview,
-  time,
   avatar,
   tag,
   unread,
@@ -806,7 +811,6 @@ function ConversationRow({
 }: {
   title: string;
   preview: string;
-  time: string;
   avatar: ReactNode;
   tag?: string | null;
   unread?: boolean;
@@ -816,6 +820,9 @@ function ConversationRow({
   accessibilityHint?: string;
 }) {
   const styles = useThemedStyles(createHomeStyles);
+  // A quiet roster: avatar, name, one status line — no card, no separate tag
+  // chip or time column. `time` still rides along in `accessibilityLabel`.
+  const status = [tag, preview].filter(Boolean).join(" · ");
   return (
     <Pressable
       accessibilityRole="button"
@@ -827,26 +834,14 @@ function ConversationRow({
     >
       {avatar}
       <View style={styles.rowBody}>
-        <View style={styles.rowTop}>
-          <View style={styles.titleRow}>
-            <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
-              {title}
-            </Text>
-            {tag ? (
-              <View style={styles.tag}>
-                <Text style={styles.tagLabel} numberOfLines={1}>
-                  {tag}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.rowMeta}>
-            {time ? <Text style={styles.time}>{time}</Text> : null}
-            {unread ? <View accessibilityElementsHidden style={styles.unreadDot} /> : null}
-          </View>
+        <View style={styles.titleRow}>
+          <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
+            {title}
+          </Text>
+          {unread ? <View accessibilityElementsHidden style={styles.unreadDot} /> : null}
         </View>
-        <Text style={[styles.preview, unread && styles.unreadPreview]} numberOfLines={1}>
-          {preview}
+        <Text style={styles.status} numberOfLines={1}>
+          {status}
         </Text>
       </View>
     </Pressable>
@@ -892,13 +887,13 @@ function SearchRow({ hit, onPress }: { hit: SearchHit; onPress: () => void }) {
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
     >
       <View style={styles.rowBody}>
-        <View style={styles.rowTop}>
+        <View style={styles.searchRowTop}>
           <Text style={styles.name} numberOfLines={1}>
             {hit.title}
           </Text>
-          <Text style={styles.time}>{hit.kind}</Text>
+          <Text style={styles.searchRowKind}>{hit.kind}</Text>
         </View>
-        <Text style={styles.preview} numberOfLines={2}>
+        <Text style={styles.searchRowSnippet} numberOfLines={2}>
           {hit.groupName ?? hit.botName} · {hit.snippet}
         </Text>
       </View>
@@ -934,7 +929,6 @@ function BotRow({
     <ConversationRow
       title={bot.name}
       preview={preview}
-      time={time}
       tag={tag}
       unread={bot.unread}
       accessibilityLabel={label}
@@ -950,6 +944,7 @@ function BotRow({
           shapeSeed={bot.shapeSeed}
           status={bot.status}
           muted={!bot.notifyOnFinish}
+          size={sizes.row}
         />
       }
     />
@@ -977,7 +972,6 @@ function GroupRow({
     <ConversationRow
       title={group.name}
       preview={preview}
-      time={time}
       unread={group.unread}
       accessibilityLabel={[group.name, group.unread ? t("unread") : null, time, preview]
         .filter(Boolean)
@@ -988,7 +982,7 @@ function GroupRow({
       avatar={
         <GroupAvatar
           members={group.members}
-          size={54}
+          size={sizes.row}
           userInitials={userInitials}
           userImage={userImage}
         />
@@ -1077,8 +1071,8 @@ function createHomeStyles() {
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: 16,
-      paddingVertical: 10,
-      gap: 12,
+      paddingVertical: 9,
+      gap: 11,
     },
     rowPressed: {
       opacity: 0.55,
@@ -1088,62 +1082,42 @@ function createHomeStyles() {
       minWidth: 0,
       gap: 2,
     },
-    rowTop: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
     titleRow: {
-      flex: 1,
-      minWidth: 0,
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
     },
-    rowMeta: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 7,
-    },
     name: {
       flexShrink: 1,
-      color: native.label,
-      fontSize: 17,
-      fontWeight: "600",
+      color: tokens.foreground,
+      ...nativeTextStyle("rowName"),
       writingDirection: "auto",
     },
-    tag: {
-      flexShrink: 1,
-      borderRadius: 999,
-      backgroundColor: native.fill,
-      paddingHorizontal: 7,
-      paddingVertical: 2,
-    },
-    tagLabel: {
-      color: native.secondaryLabel,
-      fontSize: 11,
-      fontWeight: "500",
+    status: {
+      color: tokens.foregroundSubtle,
+      ...nativeTextStyle("rowStatus"),
       writingDirection: "auto",
-    },
-    time: {
-      color: native.secondaryLabel,
-      fontSize: 15,
-    },
-    preview: {
-      color: native.secondaryLabel,
-      fontSize: 15,
-      lineHeight: 20,
-      writingDirection: "auto",
-    },
-    unreadPreview: {
-      color: native.label,
-      fontWeight: "600",
     },
     unreadDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
       backgroundColor: tokens.foreground,
+    },
+    searchRowTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    searchRowKind: {
+      color: native.secondaryLabel,
+      fontSize: 13,
+    },
+    searchRowSnippet: {
+      color: native.secondaryLabel,
+      fontSize: 14,
+      lineHeight: 19,
+      writingDirection: "auto",
     },
     spaceHeading: {
       flexDirection: "row",

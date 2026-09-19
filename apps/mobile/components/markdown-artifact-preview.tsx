@@ -9,7 +9,9 @@ import {
 } from "../lib/artifact-open";
 import { useI18n } from "../lib/i18n";
 import { useResolvedAppearance } from "../lib/native";
+import { nativeTextStyle } from "../lib/typography";
 import { NativeSymbol } from "./native-symbol";
+import { Surface } from "./surface";
 
 export type MarkdownArtifactPreviewTarget = {
   artifactId: string;
@@ -112,21 +114,15 @@ export function MarkdownArtifactPreview({
         </View>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 28 }}>
           {state.status === "loading" ? (
-            <Text style={{ color: tokens.mutedForeground, fontSize: 15 }}>
+            <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("body") }}>
               {t("Loading preview…")}
             </Text>
           ) : state.status === "error" ? (
-            <View
-              style={{
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: tokens.destructive,
-                backgroundColor: tokens.card,
-                padding: 14,
-              }}
-            >
-              <Text style={{ color: tokens.destructive, fontSize: 15 }}>{state.message}</Text>
-            </View>
+            <Surface style={{ borderColor: tokens.destructive, padding: 14 }}>
+              <Text style={{ color: tokens.destructive, ...nativeTextStyle("body") }}>
+                {state.message}
+              </Text>
+            </Surface>
           ) : (
             <ChatMarkdown palette={tokens} colorScheme={colorScheme}>
               {state.markdown}

@@ -12,6 +12,7 @@ import {
   changePassword,
   currentApiBase,
   deleteAccount,
+  earliestRunStartMs,
   loadApiBase,
   MAX_MOBILE_AUTH_RESPONSE_BYTES,
   MAX_MOBILE_RPC_RESPONSE_BYTES,
@@ -1796,6 +1797,26 @@ describe("mobile thread event reduction", () => {
     ).toBe("Slack · Alex: Hello from the group");
   });
 
+  it("formats a routine run card", () => {
+    expect(
+      blockText(
+        mobileMessage("routine-run-1", [
+          {
+            kind: "routine_run",
+            routineId: "routine-1",
+            routineName: "Morning check-in",
+            state: "completed",
+            headline: "Nothing needs your attention",
+            digest: "Checked the inbox: nothing needs your attention.",
+            startedAt: "2026-01-01T00:00:00.000Z",
+            endedAt: "2026-01-01T00:00:05.000Z",
+            notify: false,
+          },
+        ]),
+      ),
+    ).toBe("Morning check-in: completed — Nothing needs your attention");
+  });
+
   it("deduplicates durable messages and replaces matching transient subagent state", () => {
     const initial = snapshot([
       mobileMessage("message-1", [{ kind: "text", text: "old" }]),
@@ -2182,5 +2203,28 @@ describe("mobile clipboard text", () => {
         ],
       }),
     ).toBe("Hello\nSMS · Sender: Reply");
+  });
+});
+
+describe("earliestRunStartMs", () => {
+  it("reads the earliest start across the working runs", () => {
+    expect(
+      earliestRunStartMs([
+        { startedAt: "2026-09-17T10:05:00.000Z" },
+        { startedAt: "2026-09-17T10:01:30.000Z" },
+      ]),
+    ).toBe(Date.parse("2026-09-17T10:01:30.000Z"));
+  });
+
+  it("falls back to when a run was created before it reported a start", () => {
+    expect(earliestRunStartMs([{ startedAt: null, createdAt: "2026-09-17T10:00:00.000Z" }])).toBe(
+      Date.parse("2026-09-17T10:00:00.000Z"),
+    );
+  });
+
+  it("leaves the clock to the caller when no run carries a usable time", () => {
+    expect(earliestRunStartMs([])).toBeUndefined();
+    expect(earliestRunStartMs([{ startedAt: null }])).toBeUndefined();
+    expect(earliestRunStartMs([{ startedAt: "not a date" }])).toBeUndefined();
   });
 });

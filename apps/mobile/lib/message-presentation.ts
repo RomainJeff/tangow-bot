@@ -1,13 +1,18 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import { isToolActivityBlock } from "@rakazo/core";
 
-export function isCenteredAgentEvent(blocks: readonly MessageBlock[]): boolean {
-  return blocks.some(
-    (block) =>
-      block.kind === "handoff" ||
-      block.kind === "bot_message_sent" ||
-      block.kind === "bot_message_received" ||
-      block.kind === "channel_message",
+/**
+ * The blocks the thread is about to draw: tool activity is hidden, except the
+ * `steps` the "Display agent steps" setting asks for. Mirrors the web
+ * `isHiddenActivityBlock`; the thread passes the result to `isAsideOnlyMessage`
+ * so a hidden block cannot change how a message reads.
+ */
+export function visibleMessageBlocks(
+  blocks: readonly MessageBlock[],
+  showSteps = false,
+): MessageBlock[] {
+  return blocks.filter(
+    (block) => !isToolActivityBlock(block) || (showSteps && block.kind === "steps"),
   );
 }
 
@@ -29,9 +34,7 @@ export function hasVisibleMessagePresentation(
   blocks: readonly MessageBlock[],
   showSteps = false,
 ): boolean {
-  return blocks.some(
-    (block) => !isToolActivityBlock(block) || (showSteps && block.kind === "steps"),
-  );
+  return visibleMessageBlocks(blocks, showSteps).length > 0;
 }
 
 export function stepsBlocks(

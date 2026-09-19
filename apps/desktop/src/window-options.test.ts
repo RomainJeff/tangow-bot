@@ -12,7 +12,7 @@ describe("desktop window chrome", () => {
     const opts = browserWindowOptions("darwin");
     expect(opts.frame).toBe(true);
     expect(opts.titleBarStyle).toBe("hiddenInset");
-    expect(opts.trafficLightPosition).toEqual({ x: 16, y: 16 });
+    expect(opts.trafficLightPosition).toEqual({ x: 16, y: 21 });
   });
 
   it("is frameless on Windows and Linux so in-app buttons control the window", () => {
@@ -73,6 +73,8 @@ describe("development icon", () => {
 describe("window background", () => {
   it("matches the shared dark background token so startup chrome does not flash", async () => {
     const { darkTokens } = await import("@rakazo/ui-tokens");
+    const { WINDOW_BACKGROUND } = await import("./window-options");
+    expect(WINDOW_BACKGROUND).toBe(darkTokens.background);
     for (const platform of ["darwin", "win32", "linux"] as const) {
       expect(browserWindowOptions(platform).backgroundColor).toBe(darkTokens.background);
       expect(setupWindowOptions(platform).backgroundColor).toBe(darkTokens.background);

@@ -1,16 +1,9 @@
 import type { AvatarStyle } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
-  AVATAR_BODY_RADIUS,
   avatarIdentitySeed,
-  lerpPose,
-  organicAvatarFace,
+  avatarShapeEyeOffset,
   organicAvatarPath,
-  REST_POSE,
-  SWOOSH_COUNT,
-  swooshPath,
-  WORKING_STILL_SECONDS,
-  workingPose,
 } from "@rakazo/core";
 import { memo, useEffect } from "react";
 import { View } from "react-native";
@@ -18,22 +11,20 @@ import Animated, {
   cancelAnimation,
   Easing,
   useAnimatedProps,
-  useDerivedValue,
+  useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { Defs, G, type GProps, Mask, Path, Rect } from "react-native-svg";
+import Svg, { G, Path, Rect } from "react-native-svg";
+import { workingAvatarDuration, workingAvatarFrame } from "../lib/avatar-motion";
 import { useI18n } from "../lib/i18n";
+import { useMobileTokens } from "../lib/native";
 import { useAvatarStyle } from "./avatar-style";
 import { NativeSymbol } from "./native-symbol";
 
-const AnimatedG = Animated.createAnimatedComponent(G);
-const AnimatedPath = Animated.createAnimatedComponent(Path);
-
-// react-native-svg leaves `matrix` out of its element props, but the native spec has it.
-type Matrix = [number, number, number, number, number, number];
-const svgProps = <P extends GProps>(props: { matrix: Matrix }) => props as unknown as Partial<P>;
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 export const BotAvatar = memo(function BotAvatar({
   color,
@@ -54,6 +45,7 @@ export const BotAvatar = memo(function BotAvatar({
   muted?: boolean;
 }) {
   const { t } = useI18n();
+  const tokens = useMobileTokens();
   const isWorking = ACTIVE_RUN_STATUSES.some((activeStatus) => activeStatus === status);
   const { avatarStyle } = useAvatarStyle();
   const visorW = Math.round(size * 0.68);
@@ -145,7 +137,7 @@ export const BotAvatar = memo(function BotAvatar({
             ios="bell.slash.fill"
             android="notifications-off"
             size={Math.max(8, Math.round(size * 0.17))}
-            color="#ECECEE"
+            color={tokens.foreground}
           />
         </View>
       ) : null}
@@ -167,91 +159,97 @@ function OrganicAvatar({
   isWorking: boolean;
 }) {
   const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
-  const face = organicAvatarFace(seed);
+  const progress = useSharedValue(0);
   const reducedMotion = useReducedMotion();
-  const clock = useSharedValue(0);
-  const working = useSharedValue(0);
+
+  // Same eye grammar as web: fixed 7×21 bars, 16u apart, colour and optional
+  // ink outline driven by the body luminance; no per-bot tilt.
+  const luminance = relativeLuminance(color);
+  const eyeFill = luminance < 0.4 ? "#FFFFFF" : "#101014";
+  const needsInk = luminance > 0.78;
+  const eyeBaseY = -10.5 + avatarShapeEyeOffset(seed);
 
   useEffect(() => {
-    cancelAnimation(clock);
-    working.value = withTiming(isWorking ? 1 : 0, {
-      duration: 450,
-      easing: Easing.out(Easing.quad),
-    });
-    if (!isWorking) return;
-    if (reducedMotion) {
-      clock.value = WORKING_STILL_SECONDS;
-      return;
+    cancelAnimation(progress);
+    progress.value = 0;
+    if (isWorking && !reducedMotion) {
+      progress.value = withRepeat(
+        withTiming(1, {
+          duration: workingAvatarDuration(seed),
+          easing: Easing.linear,
+        }),
+        -1,
+      );
     }
-    // ponytail: a linear one-hour clock; a bot working longer restarts its cycle once.
-    clock.value = 0;
-    clock.value = withTiming(3600, { duration: 3_600_000, easing: Easing.linear });
-    return () => cancelAnimation(clock);
-  }, [clock, isWorking, reducedMotion, working]);
+    return () => cancelAnimation(progress);
+  }, [isWorking, progress, reducedMotion, seed]);
 
-  const pose = useDerivedValue(() => lerpPose(REST_POSE, workingPose(clock.value), working.value));
-  const R = AVATAR_BODY_RADIUS;
-  const eyesProps = useAnimatedProps(() => {
-    const { x, y, roll } = pose.value.eyes;
-    const a = (roll * Math.PI) / 180;
-    return svgProps<GProps>({
-      matrix: [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), face.x + x * R, face.y + y * R],
-    });
+  const bodyStyle = useAnimatedStyle(() => {
+    const frame = workingAvatarFrame(seed, progress.value);
+    return {
+      transform: [
+        { translateX: (frame.translationX * size) / 120 },
+        { translateY: (frame.translationY * size) / 120 },
+        { rotate: `${frame.rotation}deg` },
+        { scaleX: frame.scaleX },
+        { scaleY: frame.scaleY },
+      ],
+    };
   });
-  const eyeProps = face.eyes.map((eye, i) =>
-    // biome-ignore lint/correctness/useHookAtTopLevel: fixed-length list (two eyes)
-    useAnimatedProps(() => {
-      // rotate(tilt) · scale(sx, sy) about the eye centre
-      const [sx, sy] = pose.value.eyes.scale[i]!;
-      const a = (pose.value.eyes.tilt[i]! * Math.PI) / 180;
-      const c = Math.cos(a);
-      const s = Math.sin(a);
-      return svgProps<GProps>({
-        matrix: [
-          c * sx,
-          s * sx,
-          -s * sy,
-          c * sy,
-          eye.x - (c * sx * eye.x - s * sy * eye.y),
-          eye.y - (s * sx * eye.x + c * sy * eye.y),
-        ],
-      });
-    }),
-  );
-  const swooshProps = Array.from({ length: SWOOSH_COUNT }, (_, i) =>
-    // biome-ignore lint/correctness/useHookAtTopLevel: fixed-length list (four arcs)
-    useAnimatedProps(() => {
-      const { t, opacity } = pose.value.swoosh;
-      return { opacity, d: opacity > 0 ? swooshPath(i, t, R) : "" };
-    }),
-  );
+  const leftEyeProps = useAnimatedProps(() => {
+    const frame = workingAvatarFrame(seed, progress.value);
+    return { x: -15 + frame.eyeOffsetX, y: eyeBaseY + frame.eyeOffsetY };
+  });
+  const rightEyeProps = useAnimatedProps(() => {
+    const frame = workingAvatarFrame(seed, progress.value);
+    return { x: 8 + frame.eyeOffsetX, y: eyeBaseY + frame.eyeOffsetY };
+  });
 
   return (
-    <Svg width={size} height={size} viewBox="-60 -60 120 120">
-      <Defs>
-        {/* Eyes are holes cut out of the body (bloub): luminance mask, black = hole. */}
-        <Mask id="eyes" maskUnits="userSpaceOnUse" x={-60} y={-60} width={120} height={120}>
-          <Rect x={-60} y={-60} width={120} height={120} fill="#fff" />
-          <AnimatedG animatedProps={eyesProps} fill="#000">
-            {face.eyes.map((eye, i) => (
-              <AnimatedG key={eye.transform} animatedProps={eyeProps[i]!}>
-                <Path d={eye.d} transform={eye.transform} />
-              </AnimatedG>
-            ))}
-          </AnimatedG>
-        </Mask>
-      </Defs>
-      {swooshProps.map((props, i) => (
-        <AnimatedPath
-          key={i}
-          animatedProps={props}
-          fill="none"
-          stroke={color}
-          strokeWidth={0.05 * R}
-          strokeLinecap="round"
-        />
-      ))}
-      <Path d={organicAvatarPath(seed)} fill={color} mask="url(#eyes)" />
-    </Svg>
+    <View style={{ width: size, height: size }}>
+      <Animated.View style={[{ width: size, height: size }, bodyStyle]}>
+        <Svg width={size} height={size} viewBox="-60 -60 120 120">
+          <Path
+            d={organicAvatarPath(seed)}
+            fill={color}
+            stroke={needsInk ? "#17181A" : undefined}
+            strokeWidth={needsInk ? 3.5 : undefined}
+          />
+          <G>
+            <AnimatedRect
+              animatedProps={leftEyeProps}
+              width={7}
+              height={21}
+              rx={3.5}
+              fill={eyeFill}
+            />
+            <AnimatedRect
+              animatedProps={rightEyeProps}
+              width={7}
+              height={21}
+              rx={3.5}
+              fill={eyeFill}
+            />
+          </G>
+        </Svg>
+      </Animated.View>
+    </View>
   );
+}
+
+/** WCAG relative luminance (0..1) of a hex colour. */
+function relativeLuminance(hex: string): number {
+  const clean = hex.replace(/^#/, "");
+  const expanded =
+    clean.length === 3
+      ? clean
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : clean;
+  const r = parseInt(expanded.slice(0, 2), 16);
+  const g = parseInt(expanded.slice(2, 4), 16);
+  const b = parseInt(expanded.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return 0.5;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }

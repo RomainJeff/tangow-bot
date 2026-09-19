@@ -1,7 +1,7 @@
 import type { Routine } from "@rakazo/contracts";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from "react-native";
 import { rpc } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
@@ -18,6 +18,8 @@ export default function RoutineDetail() {
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notifyPending, setNotifyPending] = useState(false);
+  const [notifyError, setNotifyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!botId || !routineId) {
@@ -46,6 +48,30 @@ export default function RoutineDetail() {
       cancelled = true;
     };
   }, [botId, routineId]);
+
+  // Minimal edit affordance: only the `notify` field. Everything else about
+  // the routine stays read-only here (a full editor lives on web/desktop).
+  async function setNotify(nextNotify: boolean) {
+    if (!routine) return;
+    const previous = routine.notify;
+    setRoutine({ ...routine, notify: nextNotify });
+    setNotifyPending(true);
+    setNotifyError(null);
+    try {
+      const updated = await rpc<Routine>("routines/update", {
+        routineId: routine.id,
+        notify: nextNotify,
+      });
+      setRoutine(updated);
+    } catch (updateError) {
+      setRoutine((current) => (current ? { ...current, notify: previous } : current));
+      setNotifyError(
+        updateError instanceof Error ? updateError.message : t("Could not update routine"),
+      );
+    } finally {
+      setNotifyPending(false);
+    }
+  }
 
   return (
     <ScrollView
@@ -93,6 +119,38 @@ export default function RoutineDetail() {
                 routine.timezone,
               ].join(" · ")}
             </Text>
+          </View>
+          <View
+            style={{
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: tokens.border,
+              backgroundColor: tokens.card,
+              padding: 18,
+              gap: 4,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: tokens.foreground, fontSize: 15 }}>
+                  {t("Notify me on every run")}
+                </Text>
+                <Text style={{ color: tokens.mutedForeground, fontSize: 12.5, marginTop: 2 }}>
+                  {t(
+                    "On sends a notification and expands the card in this thread. Off keeps a silent trace here.",
+                  )}
+                </Text>
+              </View>
+              <Switch
+                accessibilityLabel={t("Notify me on every run")}
+                disabled={notifyPending}
+                value={routine.notify}
+                onValueChange={(value) => void setNotify(value)}
+              />
+            </View>
+            {notifyError ? (
+              <Text style={{ color: tokens.destructive, fontSize: 13 }}>{notifyError}</Text>
+            ) : null}
           </View>
           <View style={{ gap: 8 }}>
             <Text

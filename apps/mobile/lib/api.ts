@@ -802,6 +802,35 @@ export type MobileGroup = Pick<
 export type MobileSpace = Space;
 export type MobileSpaceNavigation = SpaceNavigation;
 
+/** The slice of a run a thread screen reads. `startedAt` / `createdAt` are
+ * absent on a run this client learned from a waiting event rather than a
+ * snapshot, which is why both are optional. */
+export type MobileRun = {
+  id: string;
+  botId?: string;
+  status: string;
+  error?: string | null;
+  startedAt?: string | null;
+  createdAt?: string;
+};
+
+/**
+ * Epoch ms the earliest of these runs began, for the working line's clock: a
+ * run that has not reported a start yet falls back to when it was created, and
+ * runs with neither leave the clock to tick from mount instead.
+ */
+export function earliestRunStartMs(
+  runs: readonly Pick<MobileRun, "startedAt" | "createdAt">[],
+): number | undefined {
+  const times = runs.flatMap((run) => {
+    const value = run.startedAt ?? run.createdAt;
+    if (!value) return [];
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? [parsed] : [];
+  });
+  return times.length > 0 ? Math.min(...times) : undefined;
+}
+
 export type MobileSnapshot = {
   botId?: string;
   groupId?: string;
@@ -810,8 +839,8 @@ export type MobileSnapshot = {
   cursor?: number;
   messages: MobileMessage[];
   olderCursor: number | null;
-  run: { id: string; botId?: string; status: string; error?: string | null } | null;
-  activeRuns?: Array<{ id: string; botId?: string; status: string }>;
+  run: MobileRun | null;
+  activeRuns?: MobileRun[];
   members?: MobileGroup["members"];
   computer?: {
     state: string;
@@ -894,6 +923,9 @@ export function blockText(message: MobileMessage) {
         return `${block.title}: ${block.status}${block.prUrl ? ` ${block.prUrl}` : ""}`;
       if (block.kind === "subagent") {
         return `${block.name ?? "subagent"}: ${block.result || block.progress || block.task || ""}`;
+      }
+      if (block.kind === "routine_run") {
+        return `${block.routineName}: ${block.state}${block.headline ? ` — ${block.headline}` : ""}`;
       }
       if (block.kind === "child_bot") {
         return `${block.status === "archived" ? "Archived" : block.status === "deleted" ? "Deleted" : "Bot"} ${block.name ?? ""}`;

@@ -7,6 +7,7 @@ import {
   BOT_TITLE_MAX_LENGTH,
   type ComputerMode,
   normalizeCreateBotProfile,
+  SELECTABLE_BOT_COLORS,
   type ThinkingLevel,
 } from "@rakazo/contracts";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -290,13 +291,38 @@ export default function BotSettingsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t("Chat settings") }} />
+      <Stack.Screen
+        options={{
+          title: t("Chat settings"),
+          // Save lives in the nav bar so it stays reachable without scrolling the form.
+          headerRight: () => {
+            const disabled = !name.trim() || pending || !bot;
+            return (
+              <Pressable
+                onPress={() => void save()}
+                disabled={disabled}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t("Save")}
+                style={{ paddingHorizontal: 4, paddingVertical: 4, opacity: disabled ? 0.4 : 1 }}
+              >
+                <Text style={{ color: tokens.primary, fontSize: 16, fontWeight: "600" }}>
+                  {pending ? t("Saving…") : t("Save")}
+                </Text>
+              </Pressable>
+            );
+          },
+        }}
+      />
       <ScrollView
         style={{ flex: 1, backgroundColor: tokens.background }}
         contentContainerStyle={{ padding: 24 }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
+        {error ? (
+          <Text style={{ color: tokens.destructive, marginBottom: 16 }}>{error}</Text>
+        ) : null}
         {bot ? (
           <View style={{ alignItems: "center", marginBottom: 24 }}>
             <BotAvatar
@@ -360,27 +386,31 @@ export default function BotSettingsScreen() {
             textAlignVertical: "top",
           }}
         />
-        <Text style={{ color: "#85858A", marginTop: 16, fontSize: 14 }}>Instructions</Text>
+        <Text style={{ color: tokens.mutedForeground, marginTop: 16, fontSize: 14 }}>
+          Instructions
+        </Text>
         <TextInput
           value={instructions}
           maxLength={BOT_INSTRUCTIONS_MAX_LENGTH}
           onChangeText={setInstructions}
           placeholder="How this bot should behave"
-          placeholderTextColor="#6C6C70"
+          placeholderTextColor={tokens.mutedForeground}
           multiline
           style={{
             marginTop: 8,
             backgroundColor: "#1A1A1D",
             borderRadius: 11,
             padding: 16,
-            color: "#ECECEE",
+            color: tokens.foreground,
             minHeight: 180,
             textAlignVertical: "top",
           }}
         />
         {avatarStyle === "organic" && bot ? (
           <>
-            <Text style={{ color: "#85858A", marginTop: 16, fontSize: 14 }}>Shape</Text>
+            <Text style={{ color: tokens.mutedForeground, marginTop: 16, fontSize: 14 }}>
+              Shape
+            </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               {[null, ...Array.from({ length: AVATAR_SHAPE_COUNT }, (_, index) => index)].map(
                 (seed) => (
@@ -395,14 +425,14 @@ export default function BotSettingsScreen() {
                       height: 44,
                       borderRadius: 12,
                       borderWidth: 1,
-                      borderColor: shapeSeed === seed ? "#5A5A62" : "#26262A",
+                      borderColor: shapeSeed === seed ? "#5A5A62" : tokens.border,
                       backgroundColor: shapeSeed === seed ? "#1A1A1D" : "transparent",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
                     {seed === null ? (
-                      <Text style={{ color: "#85858A", fontSize: 12 }}>Auto</Text>
+                      <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>Auto</Text>
                     ) : (
                       <BotAvatar
                         color={color}
@@ -427,7 +457,7 @@ export default function BotSettingsScreen() {
           contentContainerStyle={{ gap: 10, marginTop: 8 }}
           accessibilityRole="radiogroup"
         >
-          {BOT_COLORS.map((option, index) => (
+          {SELECTABLE_BOT_COLORS.map((option, index) => (
             <Pressable
               key={option}
               accessibilityRole="radio"
@@ -439,8 +469,8 @@ export default function BotSettingsScreen() {
                 height: 36,
                 borderRadius: 18,
                 backgroundColor: option,
-                borderWidth: 3,
-                borderColor: color === option ? tokens.foreground : "transparent",
+                borderWidth: color === option ? 3 : 1,
+                borderColor: color === option ? tokens.foreground : tokens.outline,
               }}
             />
           ))}
@@ -527,23 +557,6 @@ export default function BotSettingsScreen() {
             ) : null}
           </View>
         ) : null}
-        {error ? <Text style={{ color: tokens.destructive, marginTop: 16 }}>{error}</Text> : null}
-        <Pressable
-          onPress={() => void save()}
-          disabled={!name.trim() || pending || !bot}
-          style={{
-            marginTop: 24,
-            backgroundColor: tokens.primary,
-            borderRadius: 11,
-            padding: 16,
-            alignItems: "center",
-            opacity: !name.trim() || pending || !bot ? 0.4 : 1,
-          }}
-        >
-          <Text style={{ color: tokens.primaryForeground, fontSize: 16 }}>
-            {pending ? t("Saving…") : t("Save")}
-          </Text>
-        </Pressable>
       </ScrollView>
     </>
   );

@@ -1,11 +1,14 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import { abortableDelay } from "@rakazo/core";
+import { radii } from "@rakazo/ui-tokens";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, Text, View, type ViewProps } from "react-native";
 import { rpc } from "../lib/api";
 import { appConnectPresentation } from "../lib/app-connect";
 import { useI18n } from "../lib/i18n";
 import { native, useMobileTokens } from "../lib/native";
+import { nativeTextStyle } from "../lib/typography";
+import { Surface } from "./surface";
 
 export function AppConnectCard({
   botId,
@@ -81,25 +84,16 @@ export function AppConnectCard({
   }
 
   return (
-    <View
+    <Surface
       accessibilityLabel={t("{name} connection", { name: block.name })}
-      style={{
-        width: "90%",
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: tokens.border,
-        backgroundColor: tokens.card,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        gap: 8,
-      }}
+      style={{ width: "90%", paddingHorizontal: 16, paddingVertical: 14, gap: 8 }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <View
           style={{
             width: 40,
             height: 40,
-            borderRadius: 10,
+            borderRadius: radii.chip,
             backgroundColor: tokens.muted,
             alignItems: "center",
             justifyContent: "center",
@@ -117,7 +111,10 @@ export function AppConnectCard({
           >
             {view.title}
           </Text>
-          <Text style={{ color: tokens.mutedForeground, fontSize: 13.5 }} numberOfLines={2}>
+          <Text
+            style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}
+            numberOfLines={2}
+          >
             {view.description}
           </Text>
         </View>
@@ -130,7 +127,7 @@ export function AppConnectCard({
             style={{
               minHeight: 36,
               paddingHorizontal: 14,
-              borderRadius: 999,
+              borderRadius: radii.pill,
               backgroundColor: native.fillPressed,
               alignItems: "center",
               justifyContent: "center",
@@ -139,18 +136,20 @@ export function AppConnectCard({
             {busy ? (
               <ActivityIndicator color={native.label} />
             ) : (
-              <Text style={{ color: native.label, fontSize: 14, fontWeight: "600" }}>
+              <Text style={{ color: native.label, ...nativeTextStyle("capsule") }}>
                 {view.actionLabel}
               </Text>
             )}
           </Pressable>
         ) : (
-          <Text style={{ color: tokens.success, fontSize: 13.5, fontWeight: "600" }}>
+          <Text style={{ color: tokens.success, ...nativeTextStyle("label", { weight: 600 }) }}>
             {view.actionLabel}
           </Text>
         )}
       </View>
-      {error ? <Text style={{ color: tokens.destructive, fontSize: 13 }}>{error}</Text> : null}
-    </View>
+      {error ? (
+        <Text style={{ color: tokens.destructive, ...nativeTextStyle("meta") }}>{error}</Text>
+      ) : null}
+    </Surface>
   );
 }
