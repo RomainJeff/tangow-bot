@@ -50,7 +50,11 @@ describe("thread message pages", () => {
     ]);
     const prisma = {
       message: { findMany },
-      run: { findMany: vi.fn(async () => [{ id: "run-peer" }]) },
+      run: {
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+        ]),
+      },
     } as unknown as PrismaClient;
 
     const page = await loadMessagePage(prisma, "thread-1", undefined, 3);
@@ -60,30 +64,67 @@ describe("thread message pages", () => {
   });
 
   it("caches peer-run classification for live events", async () => {
-    const findUnique = vi.fn(async () => ({
-      trigger: "bot_message",
-      bot: { parentBotId: "claudius-1" },
-    }));
-    const prisma = { run: { findUnique } } as unknown as PrismaClient;
+    const findMany = vi.fn(async () => [
+      { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+    ]);
+    const prisma = { run: { findMany } } as unknown as PrismaClient;
     const cache = new Map<string, Promise<boolean>>();
 
     await expect(isPeerRun(prisma, "run-peer", cache)).resolves.toBe(true);
     await expect(isPeerRun(prisma, "run-peer", cache)).resolves.toBe(true);
-    expect(findUnique).toHaveBeenCalledTimes(1);
+    expect(findMany).toHaveBeenCalledTimes(1);
   });
 
-  it("does not treat a top-level bot's bot_message run as a peer run (CA5/CA6)", async () => {
+  it("does not treat a top-level bot's relay of delegated work as a peer run (CA5/CA6)", async () => {
     // background-work-visibility: a top-level bot (no parent) has no orchestrator above it, so
-    // its own `bot_message` run IS its user-facing relay, not a hidden delegated run.
-    const findUnique = vi.fn(async () => ({ trigger: "bot_message", bot: { parentBotId: null } }));
-    const prisma = { run: { findUnique } } as unknown as PrismaClient;
-    const cache = new Map<string, Promise<boolean>>();
+    // the run where it carries a peer's `result` back IS its user-facing relay.
+    const findMany = vi.fn(async () => [
+      {
+        id: "run-relay",
+        bot: { parentBotId: null },
+        sourceMessage: {
+          blocks: [
+            {
+              kind: "bot_message_received",
+              fromBotId: "warren",
+              fromBotName: "Warren",
+              text: "Done.",
+              intent: "result",
+            },
+          ],
+          replyTo: null,
+        },
+      },
+    ]);
+    const prisma = { run: { findMany } } as unknown as PrismaClient;
 
-    await expect(isPeerRun(prisma, "run-relay", cache)).resolves.toBe(false);
-    expect(findUnique).toHaveBeenCalledWith({
-      where: { id: "run-relay" },
-      select: { trigger: true, bot: { select: { parentBotId: true } } },
-    });
+    await expect(isPeerRun(prisma, "run-relay", new Map())).resolves.toBe(false);
+  });
+
+  it("hides a top-level bot's run answering a peer's own request", async () => {
+    // The turn's output is returned to the peer that asked; it is not addressed to the user, so
+    // it stays out of their thread and out of the live event stream.
+    const findMany = vi.fn(async () => [
+      {
+        id: "run-answer",
+        bot: { parentBotId: null },
+        sourceMessage: {
+          blocks: [
+            {
+              kind: "bot_message_received",
+              fromBotId: "warren",
+              fromBotName: "Warren",
+              text: "Peux-tu me donner le contexte ?",
+              intent: "request",
+            },
+          ],
+          replyTo: null,
+        },
+      },
+    ]);
+    const prisma = { run: { findMany } } as unknown as PrismaClient;
+
+    await expect(isPeerRun(prisma, "run-answer", new Map())).resolves.toBe(true);
   });
 
   it("forwards peer waiting, ask, and text events on an open thread", () => {
@@ -157,7 +198,11 @@ describe("thread message pages", () => {
     ]);
     const prisma = {
       message: { findMany },
-      run: { findMany: vi.fn(async () => [{ id: "run-peer" }]) },
+      run: {
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+        ]),
+      },
     } as unknown as PrismaClient;
 
     const page = await loadMessagePage(prisma, "thread-1", undefined, 3);
@@ -184,10 +229,27 @@ describe("thread message pages", () => {
         createdAt: new Date("2026-09-12T00:00:01.000Z"),
       },
     ]);
-    // The DB-side filter (`bot.parentBotId not null`) excludes a top-level bot's bot_message
-    // run, so it never enters peerRunIds even though its trigger is "bot_message" — this is
-    // Claudius's relay to the user (CA5/CA6), not a hidden delegated run.
-    const runFindMany = vi.fn(async () => []);
+    // A top-level bot answering a `result` its peer sent back is relaying delegated work, so it
+    // never enters peerRunIds even though its trigger is "bot_message" — this is Claudius's
+    // relay to the user (CA5/CA6), not a hidden delegated run.
+    const runFindMany = vi.fn(async () => [
+      {
+        id: "run-relay",
+        bot: { parentBotId: null },
+        sourceMessage: {
+          blocks: [
+            {
+              kind: "bot_message_received",
+              fromBotId: "warren",
+              fromBotName: "Warren",
+              text: "Rien à signaler.",
+              intent: "result",
+            },
+          ],
+          replyTo: null,
+        },
+      },
+    ]);
     const prisma = {
       message: { findMany },
       run: { findMany: runFindMany },
@@ -196,14 +258,9 @@ describe("thread message pages", () => {
     const page = await loadMessagePage(prisma, "thread-1", undefined, 1);
 
     expect(page.messages.map((message) => message.id)).toEqual(["message-relay"]);
-    expect(runFindMany).toHaveBeenCalledWith({
-      where: {
-        id: { in: ["run-relay"] },
-        trigger: "bot_message",
-        bot: { parentBotId: { not: null } },
-      },
-      select: { id: true },
-    });
+    expect(runFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ["run-relay"] }, trigger: "bot_message" } }),
+    );
   });
 
   it("filters peer-run activity when its receipt is outside the loaded page", async () => {
@@ -233,7 +290,11 @@ describe("thread message pages", () => {
     ]);
     const prisma = {
       message: { findMany },
-      run: { findMany: vi.fn(async () => [{ id: "run-peer" }]) },
+      run: {
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+        ]),
+      },
     } as unknown as PrismaClient;
 
     const page = await loadMessagePage(prisma, "thread-1", undefined, 2);
@@ -279,7 +340,9 @@ describe("thread message pages", () => {
       },
     ]);
     const count = vi.fn(async () => 1);
-    const runFindMany = vi.fn(async () => [{ id: "run-peer" }]);
+    const runFindMany = vi.fn(async () => [
+      { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+    ]);
     const prisma = {
       message: { findMany, count },
       run: { findMany: runFindMany },
@@ -344,7 +407,11 @@ describe("thread message pages", () => {
     const count = vi.fn(async () => 0);
     const prisma = {
       message: { findMany, count },
-      run: { findMany: vi.fn(async () => [{ id: "run-peer" }]) },
+      run: {
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+        ]),
+      },
     } as unknown as PrismaClient;
 
     const page = await loadMessagePage(prisma, "thread-1", undefined, 4, {
@@ -417,7 +484,9 @@ describe("thread message pages", () => {
       run: {
         findMany: vi
           .fn()
-          .mockResolvedValueOnce([{ id: "run-peer" }])
+          .mockResolvedValueOnce([
+            { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+          ])
           .mockResolvedValueOnce([]),
       },
     } as unknown as PrismaClient;
@@ -497,7 +566,9 @@ describe("thread message pages", () => {
       run: {
         findMany: vi
           .fn()
-          .mockResolvedValueOnce([{ id: "run-peer" }])
+          .mockResolvedValueOnce([
+            { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+          ])
           .mockResolvedValueOnce([]),
       },
     } as unknown as PrismaClient;
@@ -530,7 +601,11 @@ describe("thread message pages", () => {
     const findMany = vi.fn(async () => [receipt(3), receipt(2), receipt(1)]);
     const prisma = {
       message: { findMany },
-      run: { findMany: vi.fn(async () => [{ id: "run-peer" }]) },
+      run: {
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+        ]),
+      },
     } as unknown as PrismaClient;
 
     const page = await loadMessagePage(prisma, "thread-1", undefined, 2, undefined, false, true);

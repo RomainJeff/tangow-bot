@@ -10,6 +10,7 @@ export * from "./memory-config.js";
 export * from "./messages.js";
 export * from "./messaging.js";
 export * from "./model-credentials.js";
+export * from "./peer-runs.js";
 export * from "./repos.js";
 export * from "./scope.js";
 export * from "./spaces.js";

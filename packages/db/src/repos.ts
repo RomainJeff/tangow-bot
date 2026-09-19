@@ -10,6 +10,7 @@ import { userVisibleMessages } from "@rakazo/core";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
 import { createThreadMessageInTransaction } from "./messages.js";
+import { hiddenPeerRunIds } from "./peer-runs.js";
 import { BotSectionNameConflictError, IsolationError } from "./scope.js";
 import { lockSpaceForContentCreation } from "./spaces.js";
 import { activeRunSelection, previewFromBlocks } from "./thread-listing.js";
@@ -311,19 +312,7 @@ export function createRepos(prisma: PrismaClient) {
           ),
         ),
       ];
-      // Only a sub-bot's delegated `bot_message` run is a hidden peer run; a top-level bot's
-      // `bot_message` run is its visible relay to the user (background-work-visibility CA5/CA7).
-      const peerRuns = candidateRunIds.length
-        ? await prisma.run.findMany({
-            where: {
-              id: { in: candidateRunIds },
-              trigger: "bot_message",
-              bot: { parentBotId: { not: null } },
-            },
-            select: { id: true },
-          })
-        : [];
-      const peerRunIds = new Set(peerRuns.map((run) => run.id));
+      const peerRunIds = await hiddenPeerRunIds(prisma, candidateRunIds);
       // Cache negative results too; ordinary runs were already checked in the batch above.
       const checkedRunIds = new Set(candidateRunIds);
       return Promise.all(
@@ -335,15 +324,9 @@ export function createRepos(prisma: PrismaClient) {
               ...new Set(messages.flatMap((message) => (message.runId ? [message.runId] : []))),
             ].filter((runId) => !checkedRunIds.has(runId));
             if (windowRunIds.length > 0) {
-              const morePeers = await prisma.run.findMany({
-                where: {
-                  id: { in: windowRunIds },
-                  trigger: "bot_message",
-                  bot: { parentBotId: { not: null } },
-                },
-                select: { id: true },
-              });
-              for (const run of morePeers) peerRunIds.add(run.id);
+              for (const runId of await hiddenPeerRunIds(prisma, windowRunIds)) {
+                peerRunIds.add(runId);
+              }
               for (const runId of windowRunIds) checkedRunIds.add(runId);
             }
             const visible = userVisibleMessages(

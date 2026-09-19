@@ -80,14 +80,11 @@ describe("createRepos.listBots", () => {
     const bots = await createRepos(prisma as unknown as PrismaClient).listBots(actor);
 
     expect(bots.map((bot) => bot.preview)).toEqual(["Answer one", "Answer two"]);
-    expect(prisma.run.findMany).toHaveBeenCalledExactlyOnceWith({
-      where: {
-        id: { in: ["run-one", "run-two"] },
-        trigger: "bot_message",
-        bot: { parentBotId: { not: null } },
-      },
-      select: { id: true },
-    });
+    expect(prisma.run.findMany).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        where: { id: { in: ["run-one", "run-two"] }, trigger: "bot_message" },
+      }),
+    );
   });
 
   it("classifies unseen runs in older pages and retains negative results between pages", async () => {
@@ -108,8 +105,12 @@ describe("createRepos.listBots", () => {
       run: {
         findMany: vi
           .fn()
-          .mockResolvedValueOnce([{ id: "peer-new" }])
-          .mockResolvedValueOnce([{ id: "peer-old" }]),
+          .mockResolvedValueOnce([
+            { id: "peer-new", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+          ])
+          .mockResolvedValueOnce([
+            { id: "peer-old", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+          ]),
       },
       message: {
         findMany: vi
@@ -129,14 +130,12 @@ describe("createRepos.listBots", () => {
 
     expect(bots[0]?.preview).toBe("Visible answer");
     expect(prisma.run.findMany).toHaveBeenCalledTimes(2);
-    expect(prisma.run.findMany).toHaveBeenNthCalledWith(2, {
-      where: {
-        id: { in: ["peer-old", "user-old"] },
-        trigger: "bot_message",
-        bot: { parentBotId: { not: null } },
-      },
-      select: { id: true },
-    });
+    expect(prisma.run.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: { in: ["peer-old", "user-old"] }, trigger: "bot_message" },
+      }),
+    );
     expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
   });
 
@@ -172,7 +171,9 @@ describe("createRepos.listBots", () => {
         findMany,
       },
       run: {
-        findMany: vi.fn(async () => [{ id: "run-peer" }]),
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+        ]),
       },
     };
 
@@ -192,10 +193,9 @@ describe("createRepos.listBots", () => {
     );
   });
 
-  it("keeps a top-level bot's bot_message run in the sidebar preview (CA5/CA6)", async () => {
-    // background-work-visibility: a top-level bot's `bot_message` run is its own user-facing
-    // relay, not a hidden delegated run. The DB-side filter (`bot.parentBotId not null`)
-    // excludes it, so `run.findMany` reports no peer runs even though the trigger matches.
+  it("keeps a top-level bot's relay of delegated work in the sidebar preview (CA5/CA6)", async () => {
+    // background-work-visibility: a top-level bot carrying back a peer's `result` is relaying to
+    // the user, not running hidden delegated work, so it is not reported as a peer run.
     const findMany = vi.fn(async () => [
       {
         ...baseBot,
@@ -210,7 +210,24 @@ describe("createRepos.listBots", () => {
         },
       },
     ]);
-    const runFindMany = vi.fn(async () => []);
+    const runFindMany = vi.fn(async () => [
+      {
+        id: "run-relay",
+        bot: { parentBotId: null },
+        sourceMessage: {
+          blocks: [
+            {
+              kind: "bot_message_received",
+              fromBotId: "warren",
+              fromBotName: "Warren",
+              text: "Rien à signaler.",
+              intent: "result",
+            },
+          ],
+          replyTo: null,
+        },
+      },
+    ]);
     const prisma = {
       bot: { findMany },
       run: { findMany: runFindMany },
@@ -219,14 +236,9 @@ describe("createRepos.listBots", () => {
     await expect(createRepos(prisma as unknown as PrismaClient).listBots(actor)).resolves.toEqual([
       expect.objectContaining({ preview: "Point marché de Warren : rien à signaler." }),
     ]);
-    expect(runFindMany).toHaveBeenCalledWith({
-      where: {
-        id: { in: ["run-relay"] },
-        trigger: "bot_message",
-        bot: { parentBotId: { not: null } },
-      },
-      select: { id: true },
-    });
+    expect(runFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ["run-relay"] }, trigger: "bot_message" } }),
+    );
   });
 
   it("skips a peer-run preview tail when the receipt is outside the window", async () => {
@@ -249,7 +261,9 @@ describe("createRepos.listBots", () => {
         ]),
       },
       run: {
-        findMany: vi.fn(async () => [{ id: "run-peer" }]),
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+        ]),
       },
       message: {
         findMany: vi.fn(async () => []),
@@ -284,7 +298,9 @@ describe("createRepos.listBots", () => {
         ]),
       },
       run: {
-        findMany: vi.fn(async () => [{ id: "run-peer" }]),
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+        ]),
       },
       message: {
         findMany: messageFindMany,
@@ -327,7 +343,9 @@ describe("createRepos.listBots", () => {
         ]),
       },
       run: {
-        findMany: vi.fn(async () => [{ id: "run-peer" }]),
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
+        ]),
       },
       message: {
         findMany: messageFindMany,

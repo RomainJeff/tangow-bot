@@ -44,6 +44,7 @@ import {
   applyJudgeDecision,
   assertTransition,
   botMessageAllowsSilence,
+  botMessageRelaysToUser,
   connectorKindFromToolName,
   containsSecret,
   createStreamingRedactor,
@@ -1465,6 +1466,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
               notify: routineForCard?.notify,
+              relaysToUser: botMessageRelaysToUser(peerMessage),
             })
           ) {
             await notifyRun(
@@ -4271,6 +4273,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
               notify: routineForCard?.notify,
+              relaysToUser: botMessageRelaysToUser(peerMessage),
             })
           ) {
             await notifyRun(
@@ -4357,6 +4360,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
               notify: routineForCard?.notify,
+              relaysToUser: botMessageRelaysToUser(peerMessage),
             })
           ) {
             await notifyRun(
@@ -4631,9 +4635,12 @@ export function completionMarksUnread(trigger: string, text: string): boolean {
  *
  * A delegated (`bot_message`) run's result is returned to the ordering bot; when that ordering
  * bot is itself a sub-bot, the relay stays internal and a push would be pure back-office noise.
- * But when the ordering bot is top-level (the orchestrator, no parent), its `bot_message` run
- * *is* the user-facing relay of what a sub-bot reported — that must page like any other reply
- * (background-work-visibility CA5/CA6). A sub-bot's scheduled `routine` reports to its
+ * But when the ordering bot is top-level (the orchestrator, no parent) and the delivery carries
+ * back work it delegated, its `bot_message` run *is* the user-facing relay of what a sub-bot
+ * reported — that must page like any other reply (background-work-visibility CA5/CA6). A
+ * top-level bot answering a peer's own solicitation relays nothing (`relaysToUser` false): that
+ * reply is returned to the peer, so paging the user about it is noise. A sub-bot's scheduled
+ * `routine` reports to its
  * orchestrator too (via `message_bot`); its own thread instead gets a routine-run card, silent
  * by default. The routine's own per-run `notify` toggle is the explicit, user-chosen exception:
  * with it on, the sub-bot pages from its own thread regardless of Claudius's triage. A top-level
@@ -4642,9 +4649,9 @@ export function completionMarksUnread(trigger: string, text: string): boolean {
  */
 export function notifiesUserOnRunEnd(
   trigger: string,
-  opts?: { isSubBot?: boolean; notify?: boolean },
+  opts?: { isSubBot?: boolean; notify?: boolean; relaysToUser?: boolean },
 ): boolean {
-  if (trigger === "bot_message") return !opts?.isSubBot;
+  if (trigger === "bot_message") return !opts?.isSubBot && opts?.relaysToUser === true;
   if (trigger === "routine" && opts?.isSubBot === true) return opts?.notify === true;
   return true;
 }

@@ -7,6 +7,7 @@ import {
   buildBotMessageWakePrompt,
   clampBotMessage,
   nextBotMessageHop,
+  repliesToOwnRequest,
   resolveBotAddress,
 } from "@rakazo/core";
 import {
@@ -51,11 +52,7 @@ export async function loadBotMessageContext(
   const replyBlocks = Array.isArray(source?.replyTo?.blocks)
     ? (source.replyTo.blocks as MessageBlock[])
     : [];
-  const repliesToRequest = replyBlocks.some(
-    (block) =>
-      block.kind === "bot_message_sent" &&
-      (block.intent === undefined || block.intent === "request" || block.intent === "question"),
-  );
+  const repliesToRequest = repliesToOwnRequest(replyBlocks);
   return { ...context, repliesToRequest };
 }
 

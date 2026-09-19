@@ -80,11 +80,18 @@ describe("notifiesUserOnRunEnd", () => {
     expect(notifiesUserOnRunEnd("bot_message", { isSubBot: true })).toBe(false);
   });
 
-  it("pages the human for a top-level bot's bot_message run (the orchestrator's relay)", () => {
-    // A top-level bot's `bot_message` run IS the user-facing relay of what a sub-bot reported
+  it("pages the human for a top-level bot's relay of work it delegated", () => {
+    // A top-level bot's `bot_message` run IS the user-facing relay of what a peer reported
     // (background-work-visibility CA5/CA6); it must notify like any other reply.
-    expect(notifiesUserOnRunEnd("bot_message")).toBe(true);
-    expect(notifiesUserOnRunEnd("bot_message", { isSubBot: false })).toBe(true);
+    expect(notifiesUserOnRunEnd("bot_message", { relaysToUser: true })).toBe(true);
+    expect(notifiesUserOnRunEnd("bot_message", { isSubBot: false, relaysToUser: true })).toBe(true);
+  });
+
+  it("stays silent when a top-level bot answers a peer's own solicitation", () => {
+    // The reply is returned to the peer, not written for the user; paging them about half a
+    // conversation they never started is the same noise as showing it in their thread.
+    expect(notifiesUserOnRunEnd("bot_message")).toBe(false);
+    expect(notifiesUserOnRunEnd("bot_message", { relaysToUser: false })).toBe(false);
   });
 
   it("keeps user-initiated and top-level runs, including a top-level bot's routine", () => {
