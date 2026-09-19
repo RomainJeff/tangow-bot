@@ -1,30 +1,23 @@
 import type { AvatarStyle } from "@rakazo/contracts";
+import type { BotFrame } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
   avatarIdentitySeed,
-  avatarShapeEyeOffset,
-  organicAvatarPath,
+  BotEngine,
+  EXPRESSION_BY_ID,
+  GLANCE_MORPH,
+  nextWorkingGlance,
+  RAYON,
+  SHAPES,
 } from "@rakazo/core";
-import { memo, useEffect } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import { View } from "react-native";
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedProps,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
-import Svg, { G, Path, Rect } from "react-native-svg";
-import { workingAvatarDuration, workingAvatarFrame } from "../lib/avatar-motion";
+import { useReducedMotion } from "react-native-reanimated";
+import Svg, { ClipPath, Defs, G, Path } from "react-native-svg";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { useAvatarStyle } from "./avatar-style";
 import { NativeSymbol } from "./native-symbol";
-
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 export const BotAvatar = memo(function BotAvatar({
   color,
@@ -145,6 +138,14 @@ export const BotAvatar = memo(function BotAvatar({
   );
 });
 
+/** Half of the viewBox side: the resting body radius plus room for the blink squash. */
+const BLOUB_HALF_VIEWBOX = RAYON * 1.12;
+
+/**
+ * The organic avatar, drawn by the bloub engine (`@rakazo/core/bloub`) like web and
+ * desktop: a morphing ink body with the eyes punched out and idle blinks. While a
+ * run is active the bot glances around and changes mood at random intervals.
+ */
 function OrganicAvatar({
   color,
   identity,
@@ -158,82 +159,77 @@ function OrganicAvatar({
   size: number;
   isWorking: boolean;
 }) {
-  const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
-  const progress = useSharedValue(0);
   const reducedMotion = useReducedMotion();
-
-  // Same eye grammar as web: fixed 7×21 bars, 16u apart, colour and optional
-  // ink outline driven by the body luminance; no per-bot tilt.
-  const luminance = relativeLuminance(color);
-  const eyeFill = luminance < 0.4 ? "#FFFFFF" : "#101014";
-  const needsInk = luminance > 0.78;
-  const eyeBaseY = -10.5 + avatarShapeEyeOffset(seed);
+  const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
+  const shape = SHAPES[seed % SHAPES.length]!;
+  const clipId = `bloub-${useId().replace(/[^a-zA-Z0-9-_]/g, "")}`;
+  const [engine] = useState(() => new BotEngine(RAYON, "idle", shape.radii));
+  const clock = useRef(0);
+  const [frame, setFrame] = useState<BotFrame>(() => engine.sample(0));
 
   useEffect(() => {
-    cancelAnimation(progress);
-    progress.value = 0;
-    if (isWorking && !reducedMotion) {
-      progress.value = withRepeat(
-        withTiming(1, {
-          duration: workingAvatarDuration(seed),
-          easing: Easing.linear,
-        }),
-        -1,
-      );
+    if (reducedMotion) {
+      // One still frame, settled into the state: no morph, no loop.
+      engine.reset("idle", clock.current);
+      engine.setShape(shape.radii, clock.current - BotEngine.SHAPE_MORPH);
+      setFrame(engine.sample(clock.current + 1));
+      return;
     }
-    return () => cancelAnimation(progress);
-  }, [isWorking, progress, reducedMotion, seed]);
-
-  const bodyStyle = useAnimatedStyle(() => {
-    const frame = workingAvatarFrame(seed, progress.value);
-    return {
-      transform: [
-        { translateX: (frame.translationX * size) / 120 },
-        { translateY: (frame.translationY * size) / 120 },
-        { rotate: `${frame.rotation}deg` },
-        { scaleX: frame.scaleX },
-        { scaleY: frame.scaleY },
-      ],
+    engine.setShape(shape.radii, clock.current);
+    if (!isWorking) {
+      engine.setLook(null, clock.current);
+      engine.setExpression(null, clock.current);
+    }
+    let nextGlance = clock.current;
+    // ponytail: one rAF loop per avatar, like web; share a ticker if a long inbox burns CPU.
+    let raf = 0;
+    let last = 0;
+    const tick = (now: number) => {
+      // Clamp the step like web so a backgrounded app resumes without a jump.
+      if (last) clock.current += Math.min((now - last) / 1000, 0.064);
+      last = now;
+      if (isWorking && clock.current >= nextGlance) {
+        const glance = nextWorkingGlance();
+        engine.setLook(glance.look, clock.current, GLANCE_MORPH);
+        engine.setExpression(EXPRESSION_BY_ID.get(glance.mood) ?? null, clock.current);
+        nextGlance = clock.current + glance.delay;
+      }
+      setFrame(engine.sample(clock.current));
+      raf = requestAnimationFrame(tick);
     };
-  });
-  const leftEyeProps = useAnimatedProps(() => {
-    const frame = workingAvatarFrame(seed, progress.value);
-    return { x: -15 + frame.eyeOffsetX, y: eyeBaseY + frame.eyeOffsetY };
-  });
-  const rightEyeProps = useAnimatedProps(() => {
-    const frame = workingAvatarFrame(seed, progress.value);
-    return { x: 8 + frame.eyeOffsetX, y: eyeBaseY + frame.eyeOffsetY };
-  });
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [engine, shape, isWorking, reducedMotion]);
+
+  // Same eye rule as web: the eyes show the "paper" behind the ink, so pick it from
+  // the body luminance, and ink a pale body's outline so it stays visible.
+  const luminance = relativeLuminance(color);
+  const paper = luminance < 0.4 ? "#FFFFFF" : "#101014";
+  const outline = luminance > 0.78 ? "#17181A" : null;
+  const VB = BLOUB_HALF_VIEWBOX;
 
   return (
-    <View style={{ width: size, height: size }}>
-      <Animated.View style={[{ width: size, height: size }, bodyStyle]}>
-        <Svg width={size} height={size} viewBox="-60 -60 120 120">
-          <Path
-            d={organicAvatarPath(seed)}
-            fill={color}
-            stroke={needsInk ? "#17181A" : undefined}
-            strokeWidth={needsInk ? 3.5 : undefined}
-          />
-          <G>
-            <AnimatedRect
-              animatedProps={leftEyeProps}
-              width={7}
-              height={21}
-              rx={3.5}
-              fill={eyeFill}
-            />
-            <AnimatedRect
-              animatedProps={rightEyeProps}
-              width={7}
-              height={21}
-              rx={3.5}
-              fill={eyeFill}
-            />
-          </G>
-        </Svg>
-      </Animated.View>
-    </View>
+    <Svg width={size} height={size} viewBox={`${-VB} ${-VB} ${VB * 2} ${VB * 2}`}>
+      <Defs>
+        {/* The eyes are holes in the body, so the silhouette clips them. */}
+        <ClipPath id={clipId}>
+          <Path d={frame.bodyPath} />
+        </ClipPath>
+      </Defs>
+      {/* ponytail: body and eyes only — the idle state the avatar stays in never
+          emits the engine's particles, arcs or notification dot. */}
+      <G opacity={frame.bodyAlpha}>
+        <Path d={frame.bodyPath} fill={color} />
+        <G clipPath={`url(#${clipId})`}>
+          {frame.eyes.map((eye, index) => (
+            <Path key={index} d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill={paper} />
+          ))}
+        </G>
+        {outline ? (
+          <Path d={frame.bodyPath} fill="none" stroke={outline} strokeWidth={RAYON * 0.06} />
+        ) : null}
+      </G>
+    </Svg>
   );
 }
 

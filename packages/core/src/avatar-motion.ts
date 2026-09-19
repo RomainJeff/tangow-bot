@@ -1,96 +1,50 @@
 /**
- * Shared working-avatar choreography used by mobile (Reanimated) and mirrored
- * by web CSS in `@rakazo/ui-web` (`styles.css` organic working keyframes).
+ * Shared working-avatar choreography: while a run is active the bot glances
+ * around and changes mood at random intervals.
  *
- * Duration families and transform midpoints must stay aligned across surfaces.
+ * Web (`@rakazo/ui-web`) and mobile (`apps/mobile`) both drive the same bloub
+ * engine, so the ranges live here and neither surface drifts from the other.
  */
 
-export interface WorkingAvatarFrame {
-  translationX: number;
-  translationY: number;
-  scaleX: number;
-  scaleY: number;
-  rotation: number;
-  eyeOffsetX: number;
-  eyeOffsetY: number;
+import type { Look } from "./bloub/engine.js";
+import type { ExpressionId } from "./bloub/expressions.js";
+
+/**
+ * Zero-roll moods only (upstream's cursor-follow list): roll tilts the head and
+ * makes the eyes jump vertically between two moods.
+ */
+export const WORKING_MOODS: readonly ExpressionId[] = [
+  "surpris",
+  "heureux",
+  "hilare",
+  "excite",
+  "fier",
+  "blase",
+];
+
+/** Seconds the look takes to reach a new target — slower than a saccade, on purpose. */
+export const GLANCE_MORPH = 0.35;
+
+export interface Glance {
+  look: Look;
+  mood: ExpressionId;
+  /** Seconds to hold this glance before drawing the next one. */
+  delay: number;
 }
 
-/** Per shape-family loop length in ms for the mobile organic avatar (web draws bloub). */
-export const WORKING_AVATAR_DURATIONS_MS = [
-  1800, 1350, 1600, 2400, 2400, 1350, 1100, 1350, 1600, 1350, 1600, 1350,
-] as const;
+const rand = (random: () => number, min: number, max: number) => min + random() * (max - min);
 
-export function workingAvatarDuration(seed: number): number {
-  "worklet";
-  return WORKING_AVATAR_DURATIONS_MS[seed % WORKING_AVATAR_DURATIONS_MS.length] ?? 1800;
-}
-
-export function workingAvatarFrame(seed: number, progress: number): WorkingAvatarFrame {
-  "worklet";
-  const middle = (1 - Math.cos(progress * Math.PI * 2)) / 2;
-  const frame: WorkingAvatarFrame = {
-    translationX: 0,
-    translationY: 0,
-    scaleX: 1,
-    scaleY: 1,
-    rotation: 0,
-    eyeOffsetX: 0,
-    eyeOffsetY: 0,
+/** One glance: where to look, which mood to wear, and how long to keep both. */
+export function nextWorkingGlance(random: () => number = Math.random): Glance {
+  return {
+    look: {
+      yaw: rand(random, -26, 26),
+      pitch: rand(random, -8, 18),
+      mix: 1,
+      spin: 0,
+      wander: 0.3,
+    },
+    mood: WORKING_MOODS[Math.floor(random() * WORKING_MOODS.length)] ?? "heureux",
+    delay: rand(random, 1.2, 3.6),
   };
-
-  switch (seed % WORKING_AVATAR_DURATIONS_MS.length) {
-    case 0:
-      frame.translationY = 2 - 5 * middle;
-      frame.scaleX = 1.02 - 0.04 * middle;
-      break;
-    case 1:
-      frame.translationY = 2 - 5 * middle;
-      frame.scaleX = 1.04 - 0.08 * middle;
-      frame.scaleY = 0.96 + 0.09 * middle;
-      break;
-    case 2:
-    case 8:
-    case 10:
-      frame.translationX = -1 + 2 * middle;
-      frame.rotation = -3 + 6 * middle;
-      break;
-    case 3:
-    case 4:
-      frame.scaleX = 0.98 + 0.06 * middle;
-      frame.scaleY = 0.98 + 0.06 * middle;
-      frame.rotation = -4 + 8 * middle;
-      break;
-    case 5:
-    case 9:
-    case 11:
-      frame.scaleX = 1.04 - 0.08 * middle;
-      frame.scaleY = 0.96 + 0.08 * middle;
-      break;
-    case 6:
-      frame.scaleX = 0.96 + 0.1 * middle;
-      frame.scaleY = 0.96 + 0.1 * middle;
-      break;
-    default:
-      frame.rotation = -4 + 9 * middle;
-  }
-
-  const angle = progress * Math.PI * 2;
-  switch (seed % 4) {
-    case 0:
-      frame.eyeOffsetX = Math.sin(angle) * 9;
-      frame.eyeOffsetY = Math.cos(angle) * 2;
-      break;
-    case 1:
-      frame.eyeOffsetX = Math.cos(angle) * 7;
-      frame.eyeOffsetY = Math.sin(angle) * 4;
-      break;
-    case 2:
-      frame.eyeOffsetX = Math.cos(angle) * 8;
-      frame.eyeOffsetY = Math.sin(angle) * 3;
-      break;
-    default:
-      frame.eyeOffsetX = Math.sin(angle * 2) * 6;
-      frame.eyeOffsetY = Math.cos(angle * 2) * 3;
-  }
-  return frame;
 }

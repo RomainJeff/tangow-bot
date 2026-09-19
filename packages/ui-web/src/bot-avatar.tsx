@@ -4,9 +4,10 @@ import {
   BotEngine,
   type BotFrame,
   EXPRESSION_BY_ID,
-  type ExpressionId,
+  GLANCE_MORPH,
   mixHex,
   NOTIF_BLUE,
+  nextWorkingGlance,
   RAYON,
   SHAPES,
 } from "@rakazo/core";
@@ -174,17 +175,6 @@ export const BotAvatar = memo(function BotAvatar({
 
 /** Half of the viewBox side: the resting body radius plus room for the blink squash. */
 const BLOUB_HALF_VIEWBOX = RAYON * 1.12;
-// Zero-roll moods only (upstream's cursor-follow list): roll tilts the head and
-// makes the eyes jump vertically between two moods.
-const WORKING_MOODS: readonly ExpressionId[] = [
-  "surpris",
-  "heureux",
-  "hilare",
-  "excite",
-  "fier",
-  "blase",
-];
-const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 /**
  * The organic avatar, drawn by the vendored bloub engine (`@rakazo/core/bloub`): a
@@ -237,14 +227,10 @@ function BloubAvatar({
       clock.current += Math.min((now - last) / 1000, 0.064);
       last = now;
       if (isWorking && clock.current >= nextGlance) {
-        engine.setLook(
-          { yaw: rand(-26, 26), pitch: rand(-8, 18), mix: 1, spin: 0, wander: 0.3 },
-          clock.current,
-          0.35,
-        );
-        const mood = WORKING_MOODS[Math.floor(Math.random() * WORKING_MOODS.length)]!;
-        engine.setExpression(EXPRESSION_BY_ID.get(mood) ?? null, clock.current);
-        nextGlance = clock.current + rand(1.2, 3.6);
+        const glance = nextWorkingGlance();
+        engine.setLook(glance.look, clock.current, GLANCE_MORPH);
+        engine.setExpression(EXPRESSION_BY_ID.get(glance.mood) ?? null, clock.current);
+        nextGlance = clock.current + glance.delay;
       }
       setFrame(engine.sample(clock.current));
       raf = requestAnimationFrame(tick);
