@@ -1,7 +1,8 @@
--- The organic avatar is now the default look; a new account starts on it and can still opt
--- into the robot avatar from Settings.
+-- The organic avatar is now the default look; a new account starts on it and can still opt into
+-- the robot avatar from Settings.
 ALTER TABLE "user" ALTER COLUMN "avatarStyle" SET DEFAULT 'organic';
 
--- Every existing row carries the old column default, so it cannot be told apart from an
--- explicit choice: move everyone to the organic look; the robot look stays a per-user opt-in.
-UPDATE "user" SET "avatarStyle" = 'organic' WHERE "avatarStyle" = 'robot';
+-- No backfill. "avatarStyle" is NOT NULL and has defaulted to 'robot' since it was added, so a
+-- stored 'robot' cannot be told apart from a user who picked robot in Settings › Appearance.
+-- Rewriting those rows would silently overturn that choice for the users who made it, so existing
+-- accounts keep the look they already have and only new accounts start organic.
