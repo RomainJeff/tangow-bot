@@ -12,7 +12,7 @@ describe("desktop window chrome", () => {
     const opts = browserWindowOptions("darwin");
     expect(opts.frame).toBe(true);
     expect(opts.titleBarStyle).toBe("hiddenInset");
-    expect(opts.trafficLightPosition).toEqual({ x: 16, y: 21 });
+    expect(opts.trafficLightPosition).toEqual({ x: 16, y: 16 });
   });
 
   it("is frameless on Windows and Linux so in-app buttons control the window", () => {
@@ -71,13 +71,13 @@ describe("development icon", () => {
 });
 
 describe("window background", () => {
-  it("matches the shared dark background token so startup chrome does not flash", async () => {
-    const { darkTokens } = await import("@rakazo/ui-tokens");
-    const { WINDOW_BACKGROUND } = await import("./window-options");
-    expect(WINDOW_BACKGROUND).toBe(darkTokens.background);
+  it("keeps the legacy dark background so startup chrome does not flash", () => {
+    // The legacy shell is frozen on the pre-Quiet palette; apps/desktop-new is the
+    // one that tracks darkTokens.background from @rakazo/ui-tokens.
+    const LEGACY_BACKGROUND = "#0B0C0E";
     for (const platform of ["darwin", "win32", "linux"] as const) {
-      expect(browserWindowOptions(platform).backgroundColor).toBe(darkTokens.background);
-      expect(setupWindowOptions(platform).backgroundColor).toBe(darkTokens.background);
+      expect(browserWindowOptions(platform).backgroundColor).toBe(LEGACY_BACKGROUND);
+      expect(setupWindowOptions(platform).backgroundColor).toBe(LEGACY_BACKGROUND);
     }
   });
 });

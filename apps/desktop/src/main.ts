@@ -74,7 +74,6 @@ import {
   browserWindowOptions,
   developmentIconFile,
   setupWindowOptions,
-  WINDOW_BACKGROUND,
   warmWindowTtlMs,
 } from "./window-options.js";
 
@@ -612,7 +611,7 @@ function oauthPopupWindowOptions() {
     frame: true,
     titleBarStyle: "default" as const,
     autoHideMenuBar: true,
-    backgroundColor: WINDOW_BACKGROUND,
+    backgroundColor: "#0B0C0E",
     webPreferences: {
       preload: "",
       nodeIntegration: false,
