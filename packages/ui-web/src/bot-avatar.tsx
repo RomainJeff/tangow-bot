@@ -278,9 +278,7 @@ function BloubAvatar({
         width: size,
         height: size,
         flex: "none",
-        filter: isWorking
-          ? `drop-shadow(0 0 ${Math.round(size * 0.16)}px ${color})`
-          : "drop-shadow(0 2px 3px rgba(0,0,0,.34))",
+        filter: isWorking ? `drop-shadow(0 0 ${Math.round(size * 0.16)}px ${color})` : undefined,
       }}
     >
       <defs>
