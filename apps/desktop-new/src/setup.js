@@ -1,5 +1,5 @@
 (() => {
-  const bridge = window.rakazoSetup;
+  const bridge = window.daxSetup;
   document.documentElement.dataset.platform = bridge?.platform ?? "browser";
 
   const form = document.getElementById("setup");
@@ -373,7 +373,7 @@
         continueButton.focus();
       }
     } catch {
-      setStatus("Setup could not start. Quit Rakazo and try again.", "error");
+      setStatus("Setup could not start. Quit Dax and try again.", "error");
       setBusy(true);
     }
   }

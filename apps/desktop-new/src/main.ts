@@ -758,7 +758,7 @@ function installApplicationMenu() {
     },
   };
   const changeServer: Electron.MenuItemConstructorOptions = {
-    id: "change-rakazo-server",
+    id: "change-server",
     label: "Change Rakazo Server…",
     accelerator: "CmdOrCtrl+Shift+K",
     click: () => showSetupWindow(),

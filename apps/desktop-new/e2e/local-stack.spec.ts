@@ -115,7 +115,7 @@ async function writeFakeDocker(mode: FakeDockerMode) {
       ? '    echo "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?" >&2; exit 1 ;;'
       : '    echo "27.1.1"; exit 0 ;;',
     "esac",
-    "# compose --env-file .env -f docker-compose.images.yml --project-name rakazo-desktop <command> ...",
+    "# compose --env-file .env -f docker-compose.images.yml --project-name dax-desktop <command> ...",
     'case "$8" in',
     "  pull)",
     mode === "pull-fails"
@@ -210,8 +210,7 @@ test("This computer installs and starts the stack, then opens the app", async ()
     await readFile(path.join(COMPOSE_DIR, "docker-compose.images.yml"), "utf8"),
   );
 
-  const compose =
-    "compose --env-file .env -f docker-compose.images.yml --project-name rakazo-desktop";
+  const compose = "compose --env-file .env -f docker-compose.images.yml --project-name dax-desktop";
   expect(await readLog()).toEqual([
     `${stackDir} | ${IMAGE_TAG} | compose version --short`,
     `${stackDir} | ${IMAGE_TAG} | info --format {{.ServerVersion}}`,

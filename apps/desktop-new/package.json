@@ -1,6 +1,6 @@
 {
   "name": "@rakazo/desktop-new",
-  "productName": "Rakazo",
+  "productName": "Dax",
   "version": "0.1.6",
   "license": "Apache-2.0",
   "type": "module",
@@ -28,7 +28,7 @@
     "vitest": "4.1.11"
   },
   "build": {
-    "appId": "dev.rakazo.desktop",
+    "appId": "dev.dax.desktop",
     "directories": {
       "output": "out",
       "buildResources": "assets"
@@ -71,7 +71,7 @@
       "verifyUpdateCodeSignature": true
     },
     "linux": {
-      "executableName": "rakazo",
+      "executableName": "dax",
       "icon": "assets/icon.png",
       "target": [
         "AppImage"
@@ -80,8 +80,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "elie222",
-        "repo": "rakazo"
+        "owner": "RomainJeff",
+        "repo": "rakazo-bot"
       }
     ]
   }

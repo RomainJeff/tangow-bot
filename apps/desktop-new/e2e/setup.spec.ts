@@ -83,7 +83,7 @@ test("first run asks whether to use a local or existing instance", async () => {
   }
   const setup = await app.firstWindow();
 
-  await expect(setup.getByRole("heading", { name: "Welcome to Rakazo" })).toBeVisible();
+  await expect(setup.getByRole("heading", { name: "Welcome to Dax" })).toBeVisible();
   await expect(setup.getByText("Choose which server this app should use.")).toBeVisible();
   await expect(setup.getByText("This computer")).toBeVisible();
   await expect(setup.getByText("Existing instance")).toBeVisible();
@@ -506,7 +506,7 @@ test("an unreachable saved server falls back to setup with a recovery message", 
   app = await launch();
   const setup = await app.firstWindow();
 
-  await expect(setup.getByRole("heading", { name: "Welcome to Rakazo" })).toBeVisible();
+  await expect(setup.getByRole("heading", { name: "Welcome to Dax" })).toBeVisible();
   await expect(setup.getByRole("radio", { name: /Existing instance/ })).toBeChecked();
   await expect(setup.locator("#server-url")).toHaveValue(closedUrl);
   await expect(setup.locator("#status")).toContainText("Could not reconnect to the saved server.");
@@ -522,13 +522,13 @@ test("the native application menu can reopen setup without exposing setup IPC to
 
   const setupPromise = app.waitForEvent("window");
   await app.evaluate(({ Menu }) => {
-    const item = Menu.getApplicationMenu()?.getMenuItemById("change-rakazo-server");
+    const item = Menu.getApplicationMenu()?.getMenuItemById("change-server");
     if (!item) throw new Error("Change server menu item is missing");
     item.click();
   });
   const setup = await setupPromise;
 
-  await expect(setup.getByRole("heading", { name: "Welcome to Rakazo" })).toBeVisible();
+  await expect(setup.getByRole("heading", { name: "Welcome to Dax" })).toBeVisible();
   await expect(setup.locator("#status")).toBeEmpty();
 
   // Closing setup without saving restores the connected instance.
@@ -591,7 +591,7 @@ test("setup IPC is not reachable from the connected app window", async () => {
   await expect(appWindow.getByText(APP_MARKER)).toBeVisible();
 
   const exposed = await appWindow.evaluate(() =>
-    Object.keys((window as typeof window & { rakazoSetup?: unknown }).rakazoSetup ?? {}),
+    Object.keys((window as typeof window & { daxSetup?: unknown }).daxSetup ?? {}),
   );
   expect(exposed).toEqual([]);
 });

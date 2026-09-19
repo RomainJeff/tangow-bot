@@ -445,7 +445,7 @@ describe("LocalStackController", () => {
       "stop",
     ]);
     for (const call of commands) {
-      expect(call.args.slice(5, 7)).toEqual(["--project-name", "rakazo-desktop"]);
+      expect(call.args.slice(5, 7)).toEqual(["--project-name", "dax-desktop"]);
       expect(call.env).not.toHaveProperty("COMPOSE_PROJECT_NAME");
     }
   });
@@ -646,7 +646,7 @@ describe("LocalStackController", () => {
           return {
             code: 1,
             [stream]:
-              "failed to create network rakazo-desktop_data: Error response from daemon: all predefined address pools have been fully subnetted",
+              "failed to create network dax-desktop_data: Error response from daemon: all predefined address pools have been fully subnetted",
           };
         }
         return ok(args);

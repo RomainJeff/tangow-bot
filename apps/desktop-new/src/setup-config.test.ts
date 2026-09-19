@@ -192,7 +192,7 @@ describe("remote-content isolation", () => {
     const first = sessionPartitionForServerUrl("https://one.example.com/path");
     expect(first).toBe(sessionPartitionForServerUrl("https://one.example.com/other"));
     expect(first).not.toBe(sessionPartitionForServerUrl("https://one.example.com:8443"));
-    expect(first).toMatch(/^persist:rakazo-[a-f0-9]{24}$/);
+    expect(first).toMatch(/^persist:dax-[a-f0-9]{24}$/);
     expect(first).not.toContain("one.example.com");
     expect(sessionPartitionForServerUrl("data:text/html,fixture")).toBeNull();
   });
