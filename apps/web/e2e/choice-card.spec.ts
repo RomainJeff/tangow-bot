@@ -42,21 +42,19 @@ test("renders tappable choice buttons and submits the offered action id", async 
   await expect(toronto).toBeVisible();
   await expect(lisbon).toBeVisible();
 
-  // Options render as a vertical full-width list, not wrapping chips.
+  // Options render as wrapping quick-reply capsules inside the shared options container;
+  // these short labels share one row at this width.
+  const optionsContainer = page.getByTestId("ask-options");
+  await expect(optionsContainer).toBeVisible();
   const berlinBox = await berlin.boundingBox();
   const seoulBox = await seoul.boundingBox();
   const torontoBox = await toronto.boundingBox();
   expect(berlinBox).toBeTruthy();
   expect(seoulBox).toBeTruthy();
   expect(torontoBox).toBeTruthy();
-  expect(seoulBox!.y).toBeGreaterThan(berlinBox!.y + berlinBox!.height - 2);
-  expect(torontoBox!.y).toBeGreaterThan(seoulBox!.y + seoulBox!.height - 2);
-  expect(Math.abs(berlinBox!.x - seoulBox!.x)).toBeLessThan(2);
-  expect(Math.abs(berlinBox!.width - seoulBox!.width)).toBeLessThan(2);
-  const optionList = berlin.locator("xpath=ancestor::div[contains(@class,'space-y-1.5')][1]");
-  const listBox = await optionList.boundingBox();
-  expect(listBox).toBeTruthy();
-  expect(Math.abs(berlinBox!.width - listBox!.width)).toBeLessThan(2);
+  expect(Math.abs(berlinBox!.y - seoulBox!.y)).toBeLessThan(2);
+  expect(Math.abs(seoulBox!.y - torontoBox!.y)).toBeLessThan(2);
+  expect(seoulBox!.x).toBeGreaterThan(berlinBox!.x + berlinBox!.width - 2);
   await captureScreenshot(page, testInfo, "choice-card");
 
   await page.setViewportSize({ width: 390, height: 844 });

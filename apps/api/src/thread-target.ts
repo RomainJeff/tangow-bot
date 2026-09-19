@@ -29,6 +29,7 @@ import {
   lockOwnedGroup,
   type Prisma,
   type PrismaClient,
+  resumeAskWithComposerTextInTransaction,
   type ThreadEvents,
   touchGroupUpdatedAt,
 } from "@rakazo/db";
@@ -755,6 +756,49 @@ export async function sendThreadMessage(
           },
           select: { id: true, taskId: true, status: true },
         });
+        // A run parked on an ask_user card resolves with this text instead of blocking (spec
+        // ask-answer-via-composer, PR 1). Approval/secret asks and any other unresolvable state
+        // fall through to the CONFLICT guard below, unchanged. The ask only resolves when it is
+        // the bot's only active run: with a second run alive the send must still hit that guard,
+        // otherwise the other run is neither steered nor rejected.
+        const soleActiveRun = activeRuns.length === 1 ? activeRuns[0] : undefined;
+        const waitingRun = soleActiveRun?.status === "waiting_input" ? soleActiveRun : undefined;
+        if (waitingRun) {
+          const resolution = await resumeAskWithComposerTextInTransaction(tx, {
+            spaceId: actor.spaceId,
+            threadId: target.threadId,
+            runId: waitingRun.id,
+            text: input.text ?? "",
+          });
+          if (!resolution.resolvable) {
+            throw new ORPCError("CONFLICT", {
+              message: "Answer the pending ask first.",
+            });
+          }
+          await tx.message.update({
+            where: { id: message.id },
+            data: { runId: resolution.runId },
+          });
+          const event = await appendEventInTransaction(tx, {
+            spaceId: actor.spaceId,
+            threadId: target.threadId,
+            botId: target.botId,
+            type: "thread.message.created",
+            runId: resolution.runId,
+            payload: {
+              messageId: message.id,
+              role: "user",
+              blocks,
+              replyToMessageId: input.replyToMessageId,
+              replyQuote,
+            },
+          });
+          return {
+            message,
+            runs: [{ id: resolution.runId, taskId: waitingRun.taskId, status: "queued" }],
+            eventSeq: event.seq,
+          };
+        }
         if (activeRuns.some((run) => !STEERABLE_RUN_STATUSES.has(run.status))) {
           throw new ORPCError("CONFLICT", {
             message: "Answer the pending ask first.",
@@ -871,18 +915,48 @@ export async function sendThreadMessage(
         },
         select: { id: true, taskId: true, botId: true, status: true },
       });
-      const activeByBotId = new Map<string, (typeof activeRuns)[number]>();
+      const activeRunsByBotId = new Map<string, typeof activeRuns>();
       for (const run of activeRuns) {
-        if (!STEERABLE_RUN_STATUSES.has(run.status)) {
+        const botRuns = activeRunsByBotId.get(run.botId);
+        if (botRuns) botRuns.push(run);
+        else activeRunsByBotId.set(run.botId, [run]);
+      }
+      // Dispatch per bot in this one transaction (spec ask-answer-via-composer, PR 1): each
+      // targeted bot is resolved on its own state — an ask_user run resolves, a steerable run
+      // gets steered, an idle bot gets a new run — so one bot's pending ask never blocks the
+      // rest of the group. Any bot that can't resolve (approval/secret ask, waiting_takeover,
+      // or anything else non-steerable) still aborts the whole send via CONFLICT, same net
+      // effect as the old blanket throw since a transaction throw rolls back every bot's work.
+      const runs: Array<{ id: string; taskId: string; botId: string; status: string }> = [];
+      for (const botId of targetBotIds) {
+        const botRuns = activeRunsByBotId.get(botId) ?? [];
+        const active = botRuns[0];
+        const soleActiveRun = botRuns.length === 1 ? active : undefined;
+        if (soleActiveRun?.status === "waiting_input") {
+          const resolution = await resumeAskWithComposerTextInTransaction(tx, {
+            spaceId: actor.spaceId,
+            threadId: target.threadId,
+            runId: soleActiveRun.id,
+            text: input.text ?? "",
+          });
+          if (!resolution.resolvable) {
+            throw new ORPCError("CONFLICT", {
+              message: "Answer the pending ask first.",
+            });
+          }
+          runs.push({
+            id: resolution.runId,
+            taskId: soleActiveRun.taskId,
+            botId,
+            status: "queued",
+          });
+          continue;
+        }
+        if (botRuns.some((run) => !STEERABLE_RUN_STATUSES.has(run.status))) {
           throw new ORPCError("CONFLICT", {
             message: "Answer the pending ask first.",
           });
         }
-        if (!activeByBotId.has(run.botId)) activeByBotId.set(run.botId, run);
-      }
-      const runs: Array<{ id: string; taskId: string; botId: string; status: string }> = [];
-      for (const botId of targetBotIds) {
-        const active = activeByBotId.get(botId);
         if (active) {
           await tx.steeringMessage.create({
             data: { messageId: message.id, botId, userId: actor.userId, runId: active.id },
@@ -920,7 +994,7 @@ export async function sendThreadMessage(
       if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       if (firstRun) {
         await tx.message.update({ where: { id: message.id }, data: { runId: firstRun.id } });
-        const createdRuns = runs.filter((run) => !activeByBotId.has(run.botId));
+        const createdRuns = runs.filter((run) => !activeRunsByBotId.has(run.botId));
         if (createdRuns.length) {
           await cancelSupersededQueuedRuns(tx, {
             threadId: target.threadId,

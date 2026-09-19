@@ -87,16 +87,21 @@ const components: Components = {
   },
 };
 
+// Untrusted content: drop every image node so no remote request is made,
+// whatever the URL scheme (threat model S-R1). Nothing is rendered in its place.
+const componentsNoImages: Components = { ...components, img: () => null };
+
 export const ChatMarkdown = memo(function ChatMarkdown({
   children,
   streaming = false,
+  allowImages = true,
 }: ChatMarkdownProps) {
   const source = streaming ? closeUnterminatedFence(children) : children;
 
   return (
     <div className={streaming ? "rk-chat-markdown rk-chat-markdown-streaming" : "rk-chat-markdown"}>
       <ReactMarkdown
-        components={components}
+        components={allowImages ? components : componentsNoImages}
         remarkPlugins={[remarkGfm]}
         skipHtml
         urlTransform={(url) => sanitizeMarkdownUrl(url, true) ?? ""}
@@ -109,3 +114,4 @@ export const ChatMarkdown = memo(function ChatMarkdown({
 });
 
 export type { ChatMarkdownProps } from "./markdown";
+export { truncateMarkdownForRender } from "./markdown";

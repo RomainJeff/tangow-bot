@@ -1,0 +1,79 @@
+import { expect, test } from "@playwright/test";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+
+// A run parked on an ask_user card can be answered from the main composer instead of the card
+// (feature ask-answer-via-composer, PR 1). Typing a reply must resolve the ask and resume the
+// run, never the old "Answer the pending ask first." block.
+test("resolves a pending ask from the main composer", async ({ page }, testInfo) => {
+  const stamp = Date.now();
+  await signup(page, `ask-composer-${stamp}@rakazo.test`, "password12", "Ask Composer");
+  await completeOnboarding(page);
+
+  const botId = activeBotId(page);
+  const composer = page.getByPlaceholder(/Message/);
+  await composer.fill("ask me which city to use");
+  await page.keyboard.press("Enter");
+
+  await expect
+    .poll(
+      async () => {
+        const snapshot = await rpc<{ run?: { status: string } | null }>(page, "threads/get", {
+          botId,
+        });
+        return snapshot.run?.status ?? null;
+      },
+      { timeout: 60_000 },
+    )
+    .toBe("waiting_input");
+
+  // threads/get can observe waiting_input before the shell realtime feed paints the ask card.
+  const prompt = page.locator("p").filter({ hasText: /^Which city should I use\?$/ });
+  if ((await prompt.count()) === 0) {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByPlaceholder(/Message/)).toBeVisible({ timeout: 15_000 });
+  }
+  await expect(prompt).toBeVisible({ timeout: 15_000 });
+  // The card offers its own affordances, but the composer is a first-class answer channel too.
+  await expect(page.getByRole("button", { name: "Send it" })).toBeVisible();
+  await captureScreenshot(page, testInfo, "ask-composer-pending");
+
+  // Answer in the main composer, not the card. Prose avoids any scripted-runtime trigger so the
+  // resumed run falls through to the default completing turn.
+  await composer.fill("Go with the northern one.");
+  await page.keyboard.press("Enter");
+
+  // The old hostile guard must be gone: no error strip.
+  await expect(page.getByText("Answer the pending ask first.", { exact: true })).toHaveCount(0);
+
+  // The user's own words appear as a message bubble.
+  await expect(page.getByText("Go with the northern one.", { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // The card resolves. Its own reply text is NOT echoed onto the card (design D2 — the words live
+  // in the bubble above), so the block is answered without an `answer` payload.
+  await expect
+    .poll(
+      async () => {
+        const history = await rpc<{
+          messages: Array<{ blocks: Array<{ kind: string; status?: string; answer?: string }> }>;
+        }>(page, "threads/messages", { botId });
+        const answered = history.messages
+          .flatMap((message) => message.blocks)
+          .find((block) => block.kind === "ask" && block.status === "answered");
+        return answered ? { found: true, answer: answered.answer ?? null } : null;
+      },
+      { timeout: 30_000 },
+    )
+    .toEqual({ found: true, answer: null });
+
+  // The card no longer repeats the reply: exactly one instance of the prose (the bubble).
+  await expect(page.getByText("Go with the northern one.", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Send it" })).toHaveCount(0);
+  await expect(
+    page.getByText("on it. i will work this in the background and come back with a result.", {
+      exact: true,
+    }),
+  ).toBeVisible({ timeout: 30_000 });
+  await captureScreenshot(page, testInfo, "ask-composer-resolved");
+});

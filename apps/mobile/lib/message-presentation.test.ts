@@ -2,34 +2,22 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,
-  isCenteredAgentEvent,
   messagePresentationSegments,
   stepsBlocks,
+  visibleMessageBlocks,
 } from "./message-presentation";
 
 describe("mobile message presentation", () => {
-  it("centers handoffs, inter-agent messages, and channel mirrors", () => {
-    const blocks = [
-      { kind: "handoff", fromBotId: "a", toBotId: "b", text: "Go" },
-      { kind: "bot_message_sent", toBotId: "b", toBotName: "Research", text: "Go" },
-      {
-        kind: "bot_message_received",
-        fromBotId: "b",
-        fromBotName: "Research",
-        text: "Done",
-      },
-      {
-        kind: "channel_message",
-        provider: "sendblue",
-        channelId: "ch-1",
-        fromAddress: "+15551234567",
-        fromLabel: "Alex",
-        text: "Hello from the group",
-      },
-    ] as MessageBlock[];
+  it("keeps only the blocks the thread draws", () => {
+    const text = { kind: "text", text: "Hello" } as MessageBlock;
+    const steps = {
+      kind: "steps",
+      steps: [{ label: "Read file", count: 1 }],
+    } as MessageBlock;
+    const activity = { kind: "progress", text: "Reading", activity: true } as MessageBlock;
 
-    for (const block of blocks) expect(isCenteredAgentEvent([block])).toBe(true);
-    expect(isCenteredAgentEvent([{ kind: "text", text: "Hello" }])).toBe(false);
+    expect(visibleMessageBlocks([text, steps, activity])).toEqual([text]);
+    expect(visibleMessageBlocks([text, steps, activity], true)).toEqual([text, steps]);
   });
 
   it("hides completed tool activity", () => {

@@ -231,6 +231,23 @@ describe("run tool selection", () => {
     expect(describeMessageUser(false)).not.toBe(CHATTY_MESSAGE_USER_DESCRIPTION);
     expect(describeMessageUser(false)).toBeTruthy();
   });
+
+  it("tells every bot to end the turn empty once message_user said everything", () => {
+    // Without this rule a bot splits its answer into bubbles and then repeats the whole
+    // answer as its final reply, so the user reads it twice.
+    for (const chattyReplies of [false, true]) {
+      const description = selectBuiltinToolsForRun({
+        graphicalToolsAllowed: true,
+        groupId: null,
+        trigger: "user",
+        semanticMemoryEnabled: false,
+        messagingChannelRun: false,
+        chattyReplies,
+      }).find((tool) => tool.name === "message_user")?.description;
+      expect(description).toContain("end the turn with an empty response");
+      expect(description).toContain("Never repeat or rephrase a point you already made");
+    }
+  });
 });
 
 describe("steering attachment hydration", () => {
@@ -481,6 +498,26 @@ describe("run notification preference", () => {
         userId: "user-1",
       }),
     ).resolves.toBe(true);
+  });
+
+  it("lets a subscribed routine (notify: true) page regardless of the bot's own preference", async () => {
+    // The user explicitly turned this routine's notify toggle on; that must not be gated by
+    // the bot's own notifyOnFinish setting (background-work-visibility CA13).
+    const findFirst = vi.fn(async () => ({
+      bot: { notifyOnFinish: false },
+      thread: { groupId: null },
+    }));
+    const prisma = { run: { findFirst } } as unknown as PrismaClient;
+
+    await expect(
+      runNotificationsEnabled(
+        prisma,
+        { botId: "bot-1", threadId: "thread-1", spaceId: "workspace-1", userId: "user-1" },
+        { forceEnabled: true },
+      ),
+    ).resolves.toBe(true);
+    // forceEnabled short-circuits before any lookup.
+    expect(findFirst).not.toHaveBeenCalled();
   });
 });
 

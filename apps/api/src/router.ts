@@ -36,6 +36,7 @@ import {
   buildModelConnectPlaintext,
   ComputerBusyError,
   cancelComputerRunWork,
+  cancelRoutineRunCards,
   checkpointAndRecordComputerWorkspace,
   clearInactiveUserComputerControl,
   computerSupportsUpdate,
@@ -1505,7 +1506,22 @@ export function createRouter(deps: RouterDeps) {
       }),
       stop: authed.threads.stop.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
+        // Snapshot the routine runs Stop is about to cancel: once they are cancelled there is
+        // no worker left to settle their run cards, and the card would tick on "running"
+        // forever. Taken before the cancel so a waiting_input / queued run is included too.
+        const stopping = await deps.prisma.run.findMany({
+          where: {
+            threadId: target.threadId,
+            trigger: "routine",
+            status: { in: [...ACTIVE_RUN_STATUSES] },
+          },
+          select: { id: true },
+        });
         await stopThreadRuns(deps, context.actor, target);
+        await cancelRoutineRunCards(
+          deps,
+          stopping.map((run) => run.id),
+        ).catch((error) => getLogger().error("routine run card cancel", error));
         return { ok: true as const };
       }),
       clear: authed.threads.clear.handler(async ({ context, input }) => {
@@ -4997,7 +5013,7 @@ async function meDto(deps: RouterDeps, actor: Actor): Promise<Me> {
     computerHost: computerHostFor(setup.settings?.computerHost, deps.env.sandboxProvider),
     canChooseHostComputer: actor.isDeploymentOwner && deps.env.sandboxProvider === "docker",
     sandboxProvider: deps.env.sandboxProvider,
-    avatarStyle: user.avatarStyle === "organic" ? "organic" : "robot",
+    avatarStyle: user.avatarStyle === "robot" ? "robot" : "organic",
   };
 }
 

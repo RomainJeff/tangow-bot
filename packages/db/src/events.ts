@@ -1,9 +1,10 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
 import {
+  type AskQuestion,
   type BotSecretDestination,
   type MessageBlock,
-  MessageBlock as MessageBlockSchema,
   type ProductEvent,
+  parseKnownMessageBlocks,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -154,6 +155,14 @@ export interface PauseRunForInput {
 }
 
 const CHOICE_ASK_CHECKPOINT_KIND = "choice_ask_v1";
+
+/**
+ * Appended to the prompt that resumes a run after the user answers an ask (from the card or the
+ * composer). Without it the model tends to "go back up" the conversation and re-explain or
+ * re-answer things already settled before the ask; this keeps it on the delta the answer adds.
+ */
+const RESUME_DELTA_RULE =
+  "Respond only to what this reply adds or changes. Do not go back over the earlier conversation to re-explain, re-justify, or re-answer points that were already settled — the user has read all of that. If the reply needs no substantive answer, just continue the task or end the turn.";
 
 function choiceAskCheckpoint(actions: Array<{ id: string; label: string }>): string {
   return JSON.stringify({ kind: CHOICE_ASK_CHECKPOINT_KIND, actions });
@@ -674,12 +683,13 @@ export async function answerRunInputInTransaction(
         role: "bot",
       },
     });
-    const parsed = MessageBlockSchema.array().safeParse(message?.blocks);
-    if (!message || !parsed.success) return null;
-    const pendingAsk = parsed.data.find(
-      (block) => block.kind === "ask" && block.status !== "answered",
-    );
-    if (pendingAsk?.kind !== "ask") return null;
+    // Tolerant lookup, and the rewrites below map over the stored array by index: a block this
+    // build does not recognise neither hides the pending ask nor gets dropped from the message.
+    const known = parseKnownMessageBlocks(message?.blocks);
+    const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
+    if (!message || pending?.block.kind !== "ask") return null;
+    const pendingAsk = pending.block;
+    const storedBlocks = message.blocks as Prisma.InputJsonValue[];
 
     // ask_user v2: a multi-question card submits one JSON payload of per-question answers.
     if (pendingAsk.questions?.length) {
@@ -755,12 +765,14 @@ export async function answerRunInputInTransaction(
       if (queued.count !== 1) return null;
       const task = await tx.task.updateMany({
         where: { runs: { some: { id: input.runId } } },
-        data: { prompt: `The user answered your questions:\n${lines.join("\n")}` },
+        data: {
+          prompt: `The user answered your questions:\n${lines.join("\n")}\n\n${RESUME_DELTA_RULE}`,
+        },
       });
       if (task.count !== 1) throw new Error("Run task was not available to answer");
-      const answeredBlocks = parsed.data.map((block) =>
-        block === pendingAsk
-          ? { ...block, status: "answered" as const, answers: storedAnswers }
+      const answeredBlocks = storedBlocks.map((block, index) =>
+        index === pending.index
+          ? { ...pendingAsk, status: "answered" as const, answers: storedAnswers }
           : block,
       );
       await tx.message.update({ where: { id: message.id }, data: { blocks: answeredBlocks } });
@@ -879,20 +891,22 @@ export async function answerRunInputInTransaction(
       const task = await tx.task.updateMany({
         where: { runs: { some: { id: input.runId } } },
         data: {
-          prompt: selectedChoice
-            ? `Selected choice ${selectedChoice.id}: ${resumeLabel}`
-            : freeTextAnswer
-              ? `Free-text answer (none of the offered choices): ${freeTextAnswer}`
-              : input.answer,
+          prompt: `${
+            selectedChoice
+              ? `Selected choice ${selectedChoice.id}: ${resumeLabel}`
+              : freeTextAnswer
+                ? `Free-text answer (none of the offered choices): ${freeTextAnswer}`
+                : input.answer
+          }\n\n${RESUME_DELTA_RULE}`,
         },
       });
       if (task.count !== 1) throw new Error("Run task was not available to answer");
     }
 
-    const blocks = parsed.data.map((block) =>
-      block === pendingAsk
+    const blocks = storedBlocks.map((block, index) =>
+      index === pending.index
         ? {
-            ...block,
+            ...pendingAsk,
             status: "answered" as const,
             answer: secretAsk ? "" : freeTextAnswer || input.answer,
           }
@@ -909,6 +923,149 @@ export async function answerRunInputInTransaction(
     });
     return { threadId: updated.threadId, seq: updated.seq };
   }
+}
+
+export interface ResumeAskWithComposerTextInput {
+  spaceId: string;
+  threadId: string;
+  runId: string;
+  /** Free text typed in the main composer while the run is parked on an ask. */
+  text: string;
+}
+
+/** Reconciliation happens at the next agent turn, never inside this transaction (spec §3/§5). */
+export type ResumeAskWithComposerTextResult =
+  | {
+      resolvable: true;
+      threadId: string;
+      runId: string;
+      botId: string;
+      messageId: string;
+      /** The stored blocks with the ask marked answered — unrecognised entries passed through. */
+      blocks: Prisma.InputJsonValue[];
+      eventSeq: number;
+    }
+  | { resolvable: false };
+
+/**
+ * Builds the resume prompt: the user's raw composer text, plus (for a multi-question card) the
+ * still-open questions so the model can map what applies and only re-ask the remainder — never a
+ * structured re-ask of the whole batch.
+ */
+function buildComposerResumePrompt(text: string, questions: AskQuestion[] | undefined): string {
+  if (!questions?.length) {
+    return `The user replied in the composer instead of the ask card:\n${text}\n\n${RESUME_DELTA_RULE}`;
+  }
+  const lines = questions.map((question, index) => `${index + 1}. ${question.question}`);
+  return [
+    "The user replied in the composer instead of the ask card:",
+    text,
+    "",
+    "Pending questions (offered as a convenience, not a constraint): map what the reply already",
+    "answers, only re-ask what's genuinely left uncovered, and pivot instead of re-asking if the",
+    "reply asks for something else entirely.",
+    ...lines,
+    "",
+    RESUME_DELTA_RULE,
+  ].join("\n");
+}
+
+/**
+ * Resolves a pending ask_user card with the main composer's free text instead of the card's own
+ * UI (spec `ask-answer-via-composer`, PR 1). Unlike `answerRunInputInTransaction`'s
+ * `questions[]` branch, this never JSON-parses the answer and never requires full question
+ * coverage — the model reconciles prose against the pending questions at the next agent turn.
+ *
+ * Approval and secret asks are refused outright (`resolvable: false`, zero writes): this
+ * function never calls `externalEffect.update` or `RunSecretWriter.store`, so even a
+ * classification bug can at worst leave the run blocked, never approve an effect or store a
+ * secret (threat model T1/T2). The caller is expected to throw `CONFLICT` on `resolvable: false`,
+ * preserving today's "answer the pending ask first" guard for those two types and for a run whose
+ * last bot message carries no resolvable pending ask.
+ */
+export async function resumeAskWithComposerTextInTransaction(
+  tx: Prisma.TransactionClient,
+  input: ResumeAskWithComposerTextInput,
+): Promise<ResumeAskWithComposerTextResult> {
+  const run = await tx.run.findFirst({
+    where: {
+      id: input.runId,
+      spaceId: input.spaceId,
+      threadId: input.threadId,
+      status: "waiting_input",
+    },
+    select: { botId: true },
+  });
+  if (!run) return { resolvable: false };
+
+  // The card is always the run's own pausing message (pauseRunForInput writes the ask blocks
+  // directly onto it), so the latest bot message for this run is the one to inspect.
+  const message = await tx.message.findFirst({
+    where: { threadId: input.threadId, runId: input.runId, role: "bot" },
+    orderBy: { seq: "desc" },
+  });
+  // Tolerant lookup: a block this build does not recognise (older/newer writer) must not hide a
+  // pending ask the client is already rendering as pending — that mismatch is what makes the
+  // caller throw CONFLICT on a card the user can see.
+  const known = parseKnownMessageBlocks(message?.blocks);
+  const pending = known.find(({ block }) => block.kind === "ask" && block.status !== "answered");
+  if (!message || pending?.block.kind !== "ask") return { resolvable: false };
+  const pendingAsk = pending.block;
+
+  // Approval and secret asks stay blocked in PR 1 — classification reuses the same audited
+  // helpers `answerRunInputInTransaction` already relies on (packages/core/action-approval.ts).
+  if (isApprovalAskBlock(pendingAsk) || isSecretAskBlock(pendingAsk)) {
+    return { resolvable: false };
+  }
+
+  const text = input.text.trim();
+  if (!text) return { resolvable: false };
+
+  const queued = await tx.run.updateMany({
+    where: {
+      id: input.runId,
+      spaceId: input.spaceId,
+      threadId: input.threadId,
+      status: "waiting_input",
+    },
+    data: { status: "queued", checkpoint: null },
+  });
+  if (queued.count !== 1) return { resolvable: false };
+
+  const task = await tx.task.updateMany({
+    where: { runs: { some: { id: input.runId } } },
+    data: { prompt: buildComposerResumePrompt(text, pendingAsk.questions) },
+  });
+  if (task.count !== 1) throw new Error("Run task was not available to answer");
+
+  // Mark answered without echoing the reply onto the card: the user's words already live in
+  // their own message bubble right below, so storing `answer`/`answers` here would duplicate them
+  // (design D2). Absent `answer` makes the card render a plain resolved "Answered" state, and
+  // absent `answers` keeps the multi-question card from fabricating a per-question breakdown.
+  // Map over the stored array, not the parsed copy: every other block is written back exactly as
+  // it came out of the database, unrecognised ones included.
+  const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block, index) =>
+    index === pending.index ? { ...pendingAsk, status: "answered" as const } : block,
+  );
+  await tx.message.update({ where: { id: message.id }, data: { blocks } });
+  const updated = await appendEventInTransaction(tx, {
+    spaceId: input.spaceId,
+    threadId: input.threadId,
+    botId: run.botId,
+    type: "thread.message.updated",
+    runId: input.runId,
+    payload: { messageId: message.id, role: "bot", blocks },
+  });
+
+  return {
+    resolvable: true,
+    threadId: updated.threadId,
+    runId: input.runId,
+    botId: run.botId,
+    messageId: message.id,
+    blocks,
+    eventSeq: updated.seq,
+  };
 }
 
 export async function pauseRunForInput(

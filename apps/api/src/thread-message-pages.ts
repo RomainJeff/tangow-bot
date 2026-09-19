@@ -98,8 +98,11 @@ async function withoutPeerRunMessages<
 >(prisma: MessageDb, rows: T[]): Promise<T[]> {
   const runIds = [...new Set(rows.flatMap((row) => (row.runId ? [row.runId] : [])))];
   if (runIds.length === 0) return rows;
+  // Only a sub-bot's delegated `bot_message` run is a hidden peer run. A top-level bot's
+  // `bot_message` run is the orchestrator's user-facing relay and must stay visible
+  // (background-work-visibility CA5/CA7; strictly `parentBotId == null` de-masks it).
   const peerRuns = await prisma.run.findMany({
-    where: { id: { in: runIds }, trigger: "bot_message" },
+    where: { id: { in: runIds }, trigger: "bot_message", bot: { parentBotId: { not: null } } },
     select: { id: true },
   });
   const peerRunIds = new Set(peerRuns.map((run) => run.id));
@@ -127,9 +130,14 @@ export async function isPeerRun(
   if (!runId) return false;
   let peerRun = cache.get(runId);
   if (!peerRun) {
+    // Same de-masking rule as withoutPeerRunMessages: a top-level bot's `bot_message` run is
+    // the visible relay, not a hidden peer run (CA5/CA6), so its live thread events forward too.
     peerRun = prisma.run
-      .findUnique({ where: { id: runId }, select: { trigger: true } })
-      .then((run) => run?.trigger === "bot_message");
+      .findUnique({
+        where: { id: runId },
+        select: { trigger: true, bot: { select: { parentBotId: true } } },
+      })
+      .then((run) => run?.trigger === "bot_message" && run.bot.parentBotId != null);
     cache.set(runId, peerRun);
   }
   return peerRun;

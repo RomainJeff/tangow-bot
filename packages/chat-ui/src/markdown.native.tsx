@@ -6,7 +6,7 @@ import Markdown, {
 import { memo, useMemo } from "react";
 import { Linking, StyleSheet, Text, View } from "react-native";
 import type { ChatMarkdownProps } from "./markdown";
-import { sanitizeMarkdownUrl } from "./markdown";
+import { nativeImagePolicy, sanitizeMarkdownUrl } from "./markdown";
 
 function markdownStyles(palette: ColorTokens) {
   return StyleSheet.create({
@@ -125,18 +125,27 @@ const renderRules: RenderRules = {
   ),
 };
 
+// Untrusted content: drop every image node. The render rule returning null is
+// the robust guard (independent of the library's `defaultImageHandler`, which
+// defaults to `'https://'` and would otherwise reload a scheme-less URL);
+// `allowedImageHandlers: []` + `defaultImageHandler={null}` below back it up.
+const renderRulesNoImages: RenderRules = { ...renderRules, image: () => null };
+
 export const ChatMarkdown = memo(function ChatMarkdown({
   children,
   streaming = false,
+  allowImages = true,
   palette = darkTokens,
   colorScheme = "dark",
 }: ChatMarkdownProps & { palette?: ColorTokens; colorScheme?: ResolvedAppearance }) {
   const styles = useMemo(() => markdownStyles(palette), [palette]);
+  const imagePolicy = nativeImagePolicy(allowImages);
   const sharedProps = {
     colorScheme,
     style: styles,
-    rules: renderRules,
-    allowedImageHandlers: ["https://", "http://"],
+    rules: imagePolicy.blockImages ? renderRulesNoImages : renderRules,
+    allowedImageHandlers: imagePolicy.allowedImageHandlers,
+    defaultImageHandler: imagePolicy.defaultImageHandler,
     onLinkPress: (url: string) => {
       void openSafeLink(url);
       return false;
@@ -165,3 +174,4 @@ const layout = StyleSheet.create({
 });
 
 export type { ChatMarkdownProps } from "./markdown";
+export { truncateMarkdownForRender } from "./markdown";

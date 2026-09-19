@@ -13,6 +13,7 @@ import {
   InvalidAnswerError,
   pauseRunForInput,
   pauseRunForTakeover,
+  resumeAskWithComposerTextInTransaction,
   rewindThread,
   sendUserMessage,
 } from "./events.js";
@@ -796,7 +797,7 @@ describe("answerRunInput", () => {
     });
     expect(tx.task.updateMany).toHaveBeenCalledWith({
       where: { runs: { some: { id: "run-1" } } },
-      data: { prompt: "Selected choice choice-2: Paris" },
+      data: { prompt: expect.stringContaining("Selected choice choice-2: Paris") },
     });
     expect(tx.event.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -878,7 +879,7 @@ describe("answerRunInput", () => {
 
     expect(tx.task.updateMany).toHaveBeenCalledWith({
       where: { runs: { some: { id: "run-1" } } },
-      data: { prompt: `Selected choice choice-1: use ${secret}` },
+      data: { prompt: expect.stringContaining(`Selected choice choice-1: use ${secret}`) },
     });
     expect(tx.message.update).toHaveBeenCalledWith({
       where: { id: "message-1" },
@@ -962,7 +963,9 @@ describe("answerRunInput", () => {
     // with the free-text prompt rather than being dropped.
     expect(tx.task.updateMany).toHaveBeenCalledWith({
       where: { runs: { some: { id: "run-1" } } },
-      data: { prompt: "Free-text answer (none of the offered choices): Toronto" },
+      data: {
+        prompt: expect.stringContaining("Free-text answer (none of the offered choices): Toronto"),
+      },
     });
     expect(tx.run.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1037,8 +1040,9 @@ describe("answerRunInput", () => {
     expect(tx.task.updateMany).toHaveBeenCalledWith({
       where: { runs: { some: { id: "run-1" } } },
       data: {
-        prompt:
+        prompt: expect.stringContaining(
           "The user answered your questions:\n1. Ta cible ? — DG PME\n2. Ton horizon ? — Other: 6 mois",
+        ),
       },
     });
     expect(tx.run.updateMany).toHaveBeenCalledWith(
@@ -1114,7 +1118,11 @@ describe("answerRunInput", () => {
 
     expect(tx.task.updateMany).toHaveBeenCalledWith({
       where: { runs: { some: { id: "run-1" } } },
-      data: { prompt: "The user answered your questions:\n1. Ta cible ? — DG PME" },
+      data: {
+        prompt: expect.stringContaining(
+          "The user answered your questions:\n1. Ta cible ? — DG PME",
+        ),
+      },
     });
     const updatedBlocks = tx.message.update.mock.calls[0]![0].data.blocks;
     expect(updatedBlocks[0].answers).toEqual({ q1: { selected: ["q1o1"] } });
@@ -1808,6 +1816,280 @@ describe("answerRunInput", () => {
     ).resolves.toBe(false);
 
     expect(tx.run.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("resumeAskWithComposerTextInTransaction", () => {
+  function baseTx(askBlock: Record<string, unknown>) {
+    return {
+      run: {
+        findFirst: vi.fn().mockResolvedValue({ botId: "bot-1" }),
+        findUnique: vi.fn().mockResolvedValue({ status: "queued", startedAt: new Date() }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      message: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "ask-msg-1",
+          blocks: [askBlock],
+        }),
+        update: vi.fn().mockResolvedValue({ id: "ask-msg-1" }),
+      },
+      task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 5 }) },
+      event: {
+        create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({
+          ...event(data.seq),
+          type: data.type,
+        })),
+      },
+    };
+  }
+
+  it("resolves a mono-question ask_user with the composer text, queues the run, and answers the card", async () => {
+    const tx = baseTx({
+      kind: "ask",
+      text: "What's the target city?",
+      status: "pending",
+      input: "text",
+    });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "Lisbon, flexible dates",
+    });
+
+    expect(result).toMatchObject({ resolvable: true, runId: "run-1", botId: "bot-1" });
+    expect(tx.run.updateMany).toHaveBeenCalledWith({
+      where: { id: "run-1", spaceId: "workspace-1", threadId: "thread-1", status: "waiting_input" },
+      data: { status: "queued", checkpoint: null },
+    });
+    expect(tx.task.updateMany).toHaveBeenCalledWith({
+      where: { runs: { some: { id: "run-1" } } },
+      data: { prompt: expect.stringContaining("Lisbon, flexible dates") },
+    });
+    expect(tx.message.update).toHaveBeenCalledWith({
+      where: { id: "ask-msg-1" },
+      data: {
+        blocks: [
+          {
+            kind: "ask",
+            text: "What's the target city?",
+            status: "answered",
+            input: "text",
+          },
+        ],
+      },
+    });
+    // Never echo the reply onto the card (design D2 — the words live in the user's bubble) and
+    // never fabricate a structured per-question map from free text.
+    const updatedBlock = tx.message.update.mock.calls[0]![0].data.blocks[0];
+    expect(updatedBlock.answer).toBeUndefined();
+    expect(updatedBlock.answers).toBeUndefined();
+  });
+
+  it("resolves a multi-question ask_user from prose without JSON-parsing the answer", async () => {
+    const tx = baseTx({
+      kind: "ask",
+      text: "",
+      status: "pending",
+      questions: [
+        { id: "q1", question: "Where do you want to go?", required: true },
+        { id: "q2", question: "What's your budget?", required: true },
+        { id: "q3", question: "Any dietary constraints?", required: false },
+      ],
+    });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "Somewhere warm, budget doesn't matter much",
+    });
+
+    expect(result).toMatchObject({ resolvable: true });
+    expect(tx.run.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "queued", checkpoint: null } }),
+    );
+    const prompt = tx.task.updateMany.mock.calls[0]![0].data.prompt as string;
+    expect(prompt).toContain("Somewhere warm, budget doesn't matter much");
+    expect(prompt).toContain("Where do you want to go?");
+    expect(prompt).toContain("What's your budget?");
+  });
+
+  it("resolves a partial reply even when required questions in the batch stay uncovered", async () => {
+    const tx = baseTx({
+      kind: "ask",
+      text: "",
+      status: "pending",
+      questions: [
+        { id: "q1", question: "Which city?", required: true },
+        { id: "q2", question: "Which dates?", required: true },
+      ],
+    });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "Let's do Lisbon",
+    });
+
+    // No coverage requirement: reconciliation (and any re-ask of the remainder) happens at the
+    // next agent turn, not as a validation error here.
+    expect(result).toMatchObject({ resolvable: true });
+    expect(tx.message.update).toHaveBeenCalled();
+  });
+
+  it("refuses a pending secret ask without writing a secret or resuming the run", async () => {
+    const tx = baseTx({
+      kind: "ask",
+      text: "Enter your code",
+      input: "secret",
+      status: "pending",
+    });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "123456",
+    });
+
+    expect(result).toEqual({ resolvable: false });
+    expect(tx.run.updateMany).not.toHaveBeenCalled();
+    expect(tx.message.update).not.toHaveBeenCalled();
+    expect(tx.task.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses a pending approval ask without approving the effect or resuming the run", async () => {
+    const tx = baseTx({
+      kind: "ask",
+      approvalEffectId: "effect-1",
+      text: "Allow this?",
+      status: "pending",
+      actions: [
+        { id: "allow", label: "Allow" },
+        { id: "deny", label: "Deny" },
+      ],
+    });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "yes go ahead",
+    });
+
+    expect(result).toEqual({ resolvable: false });
+    expect(tx.run.updateMany).not.toHaveBeenCalled();
+    expect(tx.message.update).not.toHaveBeenCalled();
+    expect(tx.task.updateMany).not.toHaveBeenCalled();
+    expect((tx as Record<string, unknown>).externalEffect).toBeUndefined();
+  });
+
+  it("never touches steeringMessage while resolving an ask_user", async () => {
+    const tx = baseTx({
+      kind: "ask",
+      text: "Where next?",
+      status: "pending",
+      input: "text",
+    });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "Kyoto",
+    });
+
+    expect(result).toMatchObject({ resolvable: true });
+    expect((tx as Record<string, unknown>).steeringMessage).toBeUndefined();
+  });
+
+  it("is a clean no-op when a concurrent resolution already answered the run (atomic guard)", async () => {
+    const tx = baseTx({
+      kind: "ask",
+      text: "Where next?",
+      status: "pending",
+      input: "text",
+    });
+    // The conditional updateMany is the final atomic gate: another resolution (e.g. a card
+    // click) won the race and already flipped the run off waiting_input.
+    tx.run.updateMany = vi.fn().mockResolvedValue({ count: 0 });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "Kyoto",
+    });
+
+    expect(result).toEqual({ resolvable: false });
+    expect(tx.message.update).not.toHaveBeenCalled();
+    expect(tx.task.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not resolve when the run is no longer waiting on input", async () => {
+    const tx = baseTx({ kind: "ask", text: "Where next?", status: "pending", input: "text" });
+    tx.run.findFirst = vi.fn().mockResolvedValue(null);
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "Kyoto",
+    });
+
+    expect(result).toEqual({ resolvable: false });
+    expect(tx.message.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("does not resolve an empty composer message (attachment-only send)", async () => {
+    const tx = baseTx({ kind: "ask", text: "Where next?", status: "pending", input: "text" });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "   ",
+    });
+
+    expect(result).toEqual({ resolvable: false });
+    expect(tx.run.updateMany).not.toHaveBeenCalled();
+  });
+
+  // A block written by another build version must neither hide the pending ask (the client
+  // renders the card as pending, so CONFLICT there is a lie) nor vanish from the stored message.
+  it("resolves past a block this build does not recognise and writes it back untouched", async () => {
+    const unknownBlock = { kind: "future_widget", payload: { anything: 1 } };
+    const tx = baseTx({ kind: "ask", text: "Where next?", status: "pending", input: "text" });
+    tx.message.findFirst = vi.fn().mockResolvedValue({
+      id: "ask-msg-1",
+      blocks: [
+        unknownBlock,
+        { kind: "ask", text: "Where next?", status: "pending", input: "text" },
+      ],
+    });
+
+    const result = await resumeAskWithComposerTextInTransaction(tx as never, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      text: "Kyoto",
+    });
+
+    expect(result).toMatchObject({ resolvable: true });
+    expect(tx.message.update).toHaveBeenCalledWith({
+      where: { id: "ask-msg-1" },
+      data: {
+        blocks: [
+          unknownBlock,
+          { kind: "ask", text: "Where next?", status: "answered", input: "text" },
+        ],
+      },
+    });
   });
 });
 

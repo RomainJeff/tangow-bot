@@ -60,11 +60,17 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   const composer = page.getByPlaceholder(/Message/);
   await composer.fill("say hello");
   await page.keyboard.press("Enter");
+  // Speak now lives in the row's hover pill, so the row needs a hover first.
   // A reply can render more than one text bubble; speak the latest one.
-  const speakReply = page.getByRole("button", { name: "Speak this reply" }).last();
-  await expect(speakReply).toBeVisible({
-    timeout: 30_000,
-  });
+  const replyRow = page
+    .getByTestId("transcript")
+    .locator("[data-message-id]")
+    .filter({ has: page.getByRole("button", { name: "Speak this reply" }) })
+    .last();
+  await expect(replyRow).toBeVisible({ timeout: 30_000 });
+  await replyRow.hover();
+  const speakReply = replyRow.getByRole("button", { name: "Speak this reply" });
+  await expect(speakReply).toBeVisible();
 
   const replySpoken = page.waitForResponse(
     (response) => response.url().includes("/api/voice/speak") && response.ok(),
@@ -77,13 +83,28 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close voice settings" }).click();
 
+  // The computer & routines panel sits above the call view; starting a call
+  // must close it so it can never hide Mute/End call behind it.
+  await page.getByTestId("open-computer-panel").click();
+  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "computer");
+
   await page
     .getByTestId("composer-bar")
     .getByRole("button", { name: "Voice", exact: true })
     .click();
   await expect(page.getByTestId("call-view")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Hang up" })).toBeVisible();
-  await page.getByRole("button", { name: "Hang up" }).click();
+  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "closed");
+  await expect(page.getByRole("button", { name: "End call" })).toBeVisible();
+  await captureScreenshot(page, testInfo, "call-view");
+
+  const appearanceSettings = await openUserSettings(page);
+  await appearanceSettings.getByTestId("ui-appearance-dark").click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await appearanceSettings.getByRole("button", { name: "Close user settings" }).click();
+  await expect(appearanceSettings).toBeHidden();
+  await captureScreenshot(page, testInfo, "call-view-dark");
+
+  await page.getByRole("button", { name: "End call" }).click();
   await expect(page.getByTestId("call-view")).toHaveCount(0);
 
   await openUserSettings(page, "voice");

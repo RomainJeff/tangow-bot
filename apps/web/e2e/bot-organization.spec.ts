@@ -181,6 +181,9 @@ test("chat composer controls are vertically centered", async ({ page }) => {
   await signup(page, `composer-layout-${stamp}@rakazo.test`, "password12", "Composer Layout");
   await completeOnboarding(page);
 
+  // Send only mounts once there is a draft to send.
+  await page.getByRole("combobox", { name: "Message Chief" }).fill("hi");
+
   const centers = await page.getByTestId("composer-bar").evaluate((composer) =>
     ["Attach file", "Message Chief", "Voice", "Send"].map((label) => {
       const element = composer.querySelector<HTMLElement>(`[aria-label="${label}"]`);

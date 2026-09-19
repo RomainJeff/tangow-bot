@@ -152,10 +152,7 @@ test("changes and recovers an email password", async ({ page }, testInfo) => {
   await completeOnboarding(page);
   await page.waitForURL(/\/app\/[^/]+$/);
 
-  await page.getByTestId("user-menu-trigger").click();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
-  const settings = page.getByTestId("user-settings");
-  await expect(settings).toBeVisible();
+  // The sidebar search is always visible, and stays out of the password manager's way.
   await expect(page.getByTestId("sidebar-search").locator("input")).toHaveAttribute(
     "autocomplete",
     "off",
@@ -164,6 +161,11 @@ test("changes and recovers an email password", async ({ page }, testInfo) => {
     "name",
     "sidebar-search",
   );
+
+  await page.getByTestId("user-menu-trigger").click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = page.getByTestId("user-settings");
+  await expect(settings).toBeVisible();
   await expect(settings.locator('input[name="username"]')).toHaveAttribute(
     "autocomplete",
     "username",

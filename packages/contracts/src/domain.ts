@@ -396,7 +396,9 @@ export const CreateRoutineInput = z
     prompt: z.string().min(1),
     crons: z.array(z.string().min(1)).default([]),
     timezone: z.string().default("UTC"),
-    notify: z.boolean().default(true),
+    /** Notify the user on each run of this routine. Default off: the routine's trace lives in
+        its own thread as a run card; the toggle is the explicit opt-in to also page the user. */
+    notify: z.boolean().default(false),
     active: z.boolean().default(false),
     webhookEnabled: z.boolean().default(false),
     githubEnabled: z.boolean().default(false),

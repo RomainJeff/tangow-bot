@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatElapsed } from "./primitives";
+import { formatElapsed, formatShortDuration } from "./format-elapsed.js";
 
 describe("formatElapsed", () => {
   it("formats sub-minute elapsed time to one decimal second", () => {
@@ -28,5 +28,28 @@ describe("formatElapsed", () => {
     const later = Date.parse("2026-08-25T12:00:42.300Z");
     expect(formatElapsed(startedAt, later)).toBe("42.3s");
     expect(formatElapsed(startedAt, later + 60_000)).toBe("1m 42.3s");
+  });
+});
+
+describe("formatShortDuration", () => {
+  it("reads a sub-minute total in whole seconds", () => {
+    expect(formatShortDuration(0)).toBe("0s");
+    expect(formatShortDuration(41_000)).toBe("41s");
+    expect(formatShortDuration(41_400)).toBe("41s");
+    expect(formatShortDuration(59_499)).toBe("59s");
+  });
+
+  it("pads the seconds past a minute", () => {
+    expect(formatShortDuration(60_000)).toBe("1m 00s");
+    expect(formatShortDuration(124_000)).toBe("2m 04s");
+    expect(formatShortDuration(3_600_000)).toBe("60m 00s");
+  });
+
+  it("rounds to the second before choosing the minute boundary", () => {
+    expect(formatShortDuration(59_500)).toBe("1m 00s");
+  });
+
+  it("clamps a negative duration to zero", () => {
+    expect(formatShortDuration(-5_000)).toBe("0s");
   });
 });

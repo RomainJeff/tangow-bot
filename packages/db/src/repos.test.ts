@@ -81,7 +81,11 @@ describe("createRepos.listBots", () => {
 
     expect(bots.map((bot) => bot.preview)).toEqual(["Answer one", "Answer two"]);
     expect(prisma.run.findMany).toHaveBeenCalledExactlyOnceWith({
-      where: { id: { in: ["run-one", "run-two"] }, trigger: "bot_message" },
+      where: {
+        id: { in: ["run-one", "run-two"] },
+        trigger: "bot_message",
+        bot: { parentBotId: { not: null } },
+      },
       select: { id: true },
     });
   });
@@ -126,7 +130,11 @@ describe("createRepos.listBots", () => {
     expect(bots[0]?.preview).toBe("Visible answer");
     expect(prisma.run.findMany).toHaveBeenCalledTimes(2);
     expect(prisma.run.findMany).toHaveBeenNthCalledWith(2, {
-      where: { id: { in: ["peer-old", "user-old"] }, trigger: "bot_message" },
+      where: {
+        id: { in: ["peer-old", "user-old"] },
+        trigger: "bot_message",
+        bot: { parentBotId: { not: null } },
+      },
       select: { id: true },
     });
     expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
@@ -182,6 +190,43 @@ describe("createRepos.listBots", () => {
         }),
       }),
     );
+  });
+
+  it("keeps a top-level bot's bot_message run in the sidebar preview (CA5/CA6)", async () => {
+    // background-work-visibility: a top-level bot's `bot_message` run is its own user-facing
+    // relay, not a hidden delegated run. The DB-side filter (`bot.parentBotId not null`)
+    // excludes it, so `run.findMany` reports no peer runs even though the trigger matches.
+    const findMany = vi.fn(async () => [
+      {
+        ...baseBot,
+        thread: {
+          ...baseBot.thread,
+          messages: [
+            {
+              runId: "run-relay",
+              blocks: [{ kind: "text", text: "Point marché de Warren : rien à signaler." }],
+            },
+          ],
+        },
+      },
+    ]);
+    const runFindMany = vi.fn(async () => []);
+    const prisma = {
+      bot: { findMany },
+      run: { findMany: runFindMany },
+    };
+
+    await expect(createRepos(prisma as unknown as PrismaClient).listBots(actor)).resolves.toEqual([
+      expect.objectContaining({ preview: "Point marché de Warren : rien à signaler." }),
+    ]);
+    expect(runFindMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["run-relay"] },
+        trigger: "bot_message",
+        bot: { parentBotId: { not: null } },
+      },
+      select: { id: true },
+    });
   });
 
   it("skips a peer-run preview tail when the receipt is outside the window", async () => {

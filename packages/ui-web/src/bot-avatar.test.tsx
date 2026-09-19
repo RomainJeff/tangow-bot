@@ -1,4 +1,4 @@
-import { avatarIdentitySeed } from "@rakazo/core";
+import { avatarIdentitySeed, SHAPES } from "@rakazo/core";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AvatarStyleProvider } from "./avatar-style.js";
@@ -8,8 +8,8 @@ describe("BotAvatar", () => {
   it("renders distinct SVG gradient IDs for concurrent working avatars", () => {
     const html = renderToString(
       <div>
-        <BotAvatar color="#8B5CF6" status="running" />
-        <BotAvatar color="#10B981" status="running" />
+        <BotAvatar color="#8B5CF6" status="running" variant="robot" />
+        <BotAvatar color="#10B981" status="running" variant="robot" />
       </div>,
     );
 
@@ -26,28 +26,53 @@ describe("BotAvatar", () => {
   it.each(["running", "queued", "leased", "waiting_input", "waiting_takeover"])(
     "renders active working ring for %s status",
     (status) => {
-      const html = renderToString(<BotAvatar color="#3B82F6" status={status} />);
+      const html = renderToString(<BotAvatar color="#3B82F6" status={status} variant="robot" />);
       expect(html).toContain("<svg");
       expect(html).toContain("rakazo-bot-avatar-ring");
     },
   );
 
   it("keeps the working ring mounted when idle so its timeline does not reset", () => {
-    const html = renderToString(<BotAvatar color="#F59E0B" status="idle" />);
+    const html = renderToString(<BotAvatar color="#F59E0B" status="idle" variant="robot" />);
     expect(html).toContain('data-working="false"');
     expect(html).toContain("rakazo-bot-avatar-ring");
   });
 
-  it("generates an organic avatar from the bot color", () => {
+  it("defaults to the organic avatar when no style preference is provided", () => {
+    const html = renderToString(<BotAvatar color="#D9508A" identity="maya" status="running" />);
+    expect(html).toContain("rakazo-organic-avatar");
+    expect(html).not.toContain("rakazo-bot-avatar-ring");
+  });
+
+  it("draws the organic avatar with the bloub engine", () => {
     const html = renderToString(
       <BotAvatar color="#D9508A" identity="maya" size={28} status="running" variant="organic" />,
     );
 
     expect(html).toContain("rakazo-organic-avatar");
     expect(html).toContain('data-working="true"');
-    expect(html).toMatch(/data-shape-family="\d"/);
-    expect(html).toMatch(/data-eye-pattern="[0-3]"/);
+    expect(html).toContain("<mask");
     expect(html).not.toContain("rakazo-bot-avatar-visor");
+  });
+
+  it("punches two eye holes into an idle body", () => {
+    const html = renderToString(<BotAvatar color="#00C46A" identity="maya" variant="organic" />);
+
+    expect(html).toContain('data-working="false"');
+    expect(html.match(/fill="#000"/g)).toHaveLength(2);
+    expect(html).toContain('fill="#00C46A"');
+    // A mid-luminance hue keeps ink eyes and no body outline.
+    expect(html).toContain('fill="#101014"');
+    expect(html).not.toContain('stroke="#17181A"');
+  });
+
+  it("uses white eyes on a dark body and inks a pale body", () => {
+    const dark = renderToString(<BotAvatar color="#17181A" identity="ivo" variant="organic" />);
+    expect(dark).toContain('fill="#FFFFFF"');
+
+    const pale = renderToString(<BotAvatar color="#FFFFFF" identity="nour" variant="organic" />);
+    expect(pale).toContain('stroke="#17181A"');
+    expect(pale).toContain('fill="#101014"');
   });
 
   it("generates distinct organic silhouettes for distinct bot identities", () => {
@@ -59,32 +84,17 @@ describe("BotAvatar", () => {
     expect(maya).not.toEqual(github);
   });
 
-  it("renders the picked shape seed instead of the identity-derived family", () => {
-    const picked = renderToString(
-      <BotAvatar color="#D9508A" identity="maya" shapeSeed={3} variant="organic" />,
-    );
-    const derived = renderToString(<BotAvatar color="#D9508A" identity="maya" variant="organic" />);
-
-    expect(picked).toContain('data-shape-family="3"');
-    expect(derived).toContain(`data-shape-family="${avatarIdentitySeed("maya") % 10}"`);
-  });
-
-  it("assigns animation hooks across every organic shape family", () => {
-    const identities = new Map<number, string>();
-    for (let index = 0; index < 500 && identities.size < 10; index++) {
-      const identity = `avatar-${index}`;
-      identities.set(avatarIdentitySeed(identity) % 10, identity);
-    }
-    expect(identities.size).toBe(10);
-
-    for (const [family, identity] of identities) {
-      const html = renderToString(
-        <BotAvatar color="#D9508A" identity={identity} status="running" variant="organic" />,
+  it("renders the picked shape seed, wrapping around the bloub shape catalogue", () => {
+    const body = (html: string) => html.match(/<mask[^>]*><path d="([^"]+)"/)?.[1];
+    const render = (shapeSeed?: number) =>
+      renderToString(
+        <BotAvatar color="#D9508A" identity="maya" shapeSeed={shapeSeed} variant="organic" />,
       );
-      expect(html).toContain(`data-shape-family="${family}"`);
-      expect(html).toMatch(/data-eye-pattern="[0-3]"/);
-      expect(html).toContain('data-working="true"');
-    }
+
+    expect(body(render(1))).toBeTruthy();
+    expect(body(render(1))).not.toBe(body(render(2)));
+    expect(body(render(1))).toBe(body(render(1 + SHAPES.length)));
+    expect(body(render())).toBe(body(render(avatarIdentitySeed("maya") % SHAPES.length)));
   });
 
   it("uses the account avatar preference when no local variant is provided", () => {
@@ -95,16 +105,5 @@ describe("BotAvatar", () => {
     );
 
     expect(html).toContain("rakazo-organic-avatar");
-  });
-
-  it("renders the eye holes and swoosh arcs the working pose drives", () => {
-    const html = renderToString(
-      <BotAvatar color="#D9508A" identity="maya" status="running" variant="organic" />,
-    );
-
-    expect(html).toContain("rakazo-organic-avatar-eyes");
-    expect(html.match(/rakazo-organic-avatar-eye"/g)).toHaveLength(2);
-    expect(html.match(/rakazo-organic-avatar-swoosh"/g)).toHaveLength(4);
-    expect(html).not.toContain("<animate");
   });
 });

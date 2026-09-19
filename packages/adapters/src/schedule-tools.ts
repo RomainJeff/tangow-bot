@@ -183,6 +183,9 @@ export async function createScheduleFromTool(
     name: string;
     prompt: string;
     timezone?: string;
+    /** "…and notify me every time" captured in natural language. Defaults to silent (the run
+        stays a browsable card in this thread); the routine setup UI remains the point of truth. */
+    notify?: boolean;
     schedule: Record<string, unknown>;
   },
 ) {
@@ -205,7 +208,7 @@ export async function createScheduleFromTool(
       prompt,
       crons: [resolved.cron],
       timezone,
-      notify: true,
+      notify: input.notify === true,
       active: true,
       nextRunAt: resolved.nextRunAt,
     },

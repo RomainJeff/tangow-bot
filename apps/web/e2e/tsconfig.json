@@ -1,0 +1,31 @@
+{
+  // Fixtures and specs are outside the app's `src` project, so they were never
+  // type-checked. This picks them up. `*.spec.ts` is not included wholesale
+  // because `onboarding-conversation` and `page-browser` do not compile under
+  // the repo's strict index checks yet; add them here once they do.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../../..",
+    "types": ["vite/client", "node"]
+  },
+  "include": [
+    "fixtures",
+    "activity-list.spec.ts",
+    "auth-lifecycle.spec.ts",
+    "cloud-agent-card.spec.ts",
+    "collapsible-sidebar-sections.spec.ts",
+    "design-system.spec.ts",
+    "golden.spec.ts",
+    "helpers.ts",
+    "message-grouping.spec.ts",
+    "message-hover-actions.spec.ts",
+    "peer-messages.spec.ts",
+    "quiet-blocks.spec.ts",
+    "quiet-composer.spec.ts",
+    "quiet-messages.spec.ts",
+    "quiet-motion.spec.ts",
+    "quiet-shell.spec.ts",
+    "ui-appearance.spec.ts",
+    "voice.spec.ts"
+  ]
+}

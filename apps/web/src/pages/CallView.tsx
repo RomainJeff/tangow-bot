@@ -1,16 +1,32 @@
-import { Trans, useLingui } from "@lingui/react/macro";
+import { t as translate } from "@lingui/core/macro";
+import { useLingui } from "@lingui/react/macro";
 import type { ThreadMessage, ThreadSnapshot } from "@rakazo/contracts";
-import { isSecretAskBlock, narrateTool, speechFromBlocks, spokenDecision } from "@rakazo/core";
-import { Button, Dialog, DialogContent, DialogHeader, DialogTitle } from "@rakazo/ui-web";
+import {
+  isApprovalAskBlock,
+  isSecretAskBlock,
+  narrateTool,
+  speechFromBlocks,
+  spokenDecision,
+} from "@rakazo/core";
+import { BotAvatar, Button, useElapsed } from "@rakazo/ui-web";
+import { Mic, MicOff, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { dictation } from "../lib/dictation";
 import { speaker } from "../lib/tts";
+import { type AskBlock, canAnswerAskByVoice } from "../lib/voice-ask";
 
 type Phase = "listening" | "thinking" | "speaking";
+type AskAction = NonNullable<AskBlock["actions"]>[number];
+type PendingAsk = { message: ThreadMessage; block: AskBlock };
+
+const BAR_DELAYS_MS = [0, 90, 180, 270, 360];
 
 export function CallView({
   botId,
   botName,
+  botColor,
+  botShapeSeed,
+  botIdentity,
   transcribe,
   snapshot,
   onSend,
@@ -20,6 +36,9 @@ export function CallView({
 }: {
   botId: string;
   botName: string;
+  botColor: string;
+  botShapeSeed?: number | null;
+  botIdentity?: string;
   transcribe: boolean;
   snapshot: ThreadSnapshot | null;
   onSend: (text: string) => Promise<void>;
@@ -32,16 +51,20 @@ export function CallView({
   const [caption, setCaption] = useState("");
   const [heard, setHeard] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [muted, setMuted] = useState(false);
   const phaseRef = useRef<Phase>("listening");
+  const mutedRef = useRef(false);
   const spokenMessage = useRef<string | null>(null);
   const narrated = useRef(new Set<string>());
   const closing = useRef(false);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
+  const rootRef = useRef<HTMLDivElement>(null);
   const askPromptRef = useRef(t`Say yes or no, or answer in a sentence.`);
   askPromptRef.current = t`Say yes or no, or answer in a sentence.`;
   const secretPromptRef = useRef(t`Hang up first, then enter the code on screen.`);
   secretPromptRef.current = t`Hang up first, then enter the code on screen.`;
+  const duration = useElapsed();
 
   function setCallPhase(next: Phase) {
     phaseRef.current = next;
@@ -55,6 +78,19 @@ export function CallView({
     onClose();
   }
 
+  function toggleMute() {
+    setMuted((current) => {
+      const next = !current;
+      mutedRef.current = next;
+      if (next) {
+        dictation.stop("cancel");
+      } else {
+        void listen();
+      }
+      return next;
+    });
+  }
+
   function interrupt() {
     if (phaseRef.current === "speaking") speaker.stop();
     else dictation.stop("cancel");
@@ -63,6 +99,16 @@ export function CallView({
 
   async function listen() {
     if (closing.current) return;
+    if (mutedRef.current) {
+      // Muting only stops the mic from transmitting; it must not leave the
+      // phase stuck on "thinking"/"speaking" once the bot is done, or the
+      // bars and "{bot} is speaking" caption would linger forever.
+      dictation.stop("cancel");
+      speaker.stop();
+      setCallPhase("listening");
+      setHeard("");
+      return;
+    }
     if (pendingSecretAsk(snapshotRef.current)) {
       dictation.stop("cancel");
       setCallPhase("listening");
@@ -96,19 +142,38 @@ export function CallView({
       setError(t`Hang up, then enter the code on screen.`);
       return;
     }
+    const pendingAsk = currentAsk(current);
+    if (pendingAsk && !canAnswerAskByVoice(pendingAsk.block)) {
+      // A multi-question ask needs a structured answer the server can parse;
+      // routing a spoken sentence into it always fails, so it is left for
+      // the "Answer in text" quick reply instead.
+      setHeard("");
+      void listen();
+      return;
+    }
     setHeard(text);
     setCallPhase("thinking");
-    const askId = latestAskId(current);
-    const askMessage = current?.messages.find((message) => message.id === askId);
     try {
-      if (askMessage) {
+      if (pendingAsk) {
         const decision = spokenDecision(text);
-        await onAnswer(askMessage, decision ?? text);
+        await onAnswer(pendingAsk.message, decision ?? text);
       } else if (current?.run && ["running", "queued", "leased"].includes(current.run.status)) {
         await onFollowUp(text);
       } else {
         await onSend(text);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t`Could not send that`);
+      void listen();
+    }
+  }
+
+  async function chooseAskAction(message: ThreadMessage, action: AskAction) {
+    dictation.stop("cancel");
+    setHeard(action.label);
+    setCallPhase("thinking");
+    try {
+      await onAnswer(message, action.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : t`Could not send that`);
       void listen();
@@ -145,13 +210,19 @@ export function CallView({
     };
   }, [botId]);
 
+  // Focus the call view when it opens; Shell.tsx returns focus to the
+  // composer's Voice button once it closes.
+  useEffect(() => {
+    rootRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
         hangUp();
       }
-      if (event.key === " " && phaseRef.current !== "listening") {
+      if (event.key === " " && !mutedRef.current && phaseRef.current !== "listening") {
         event.preventDefault();
         interrupt();
       }
@@ -219,64 +290,151 @@ export function CallView({
   }, [snapshot, botId]);
 
   useEffect(() => {
-    if (!pendingSecretAsk(snapshot)) return;
-    dictation.stop("cancel");
-    setHeard("");
+    const pendingAsk = currentAsk(snapshot);
+    if (!pendingAsk) return;
+    if (isSecretAskBlock(pendingAsk.block) || !canAnswerAskByVoice(pendingAsk.block)) {
+      dictation.stop("cancel");
+      setHeard("");
+    }
   }, [snapshot]);
 
+  const pendingAsk = currentAsk(snapshot);
+  const askMessage = pendingAsk?.message;
+  const askBlock = pendingAsk?.block;
+  const isApproval = Boolean(askBlock && isApprovalAskBlock(askBlock));
+  const voiceAnswerable = !askBlock || canAnswerAskByVoice(askBlock);
+  const askActions = askBlock && voiceAnswerable ? (askBlock.actions ?? []) : [];
+
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) hangUp();
-      }}
+    <div
+      ref={rootRef}
+      data-testid="call-view"
+      tabIndex={-1}
+      className="flex h-full min-h-0 flex-col outline-none"
     >
-      <DialogContent
-        data-testid="call-view"
-        showCloseButton={false}
-        className="max-w-[420px] rounded-3xl p-6 text-center sm:max-w-[420px]"
-      >
-        <DialogHeader className="items-center gap-2">
-          <div className="text-[13px] uppercase tracking-[0.12em] text-muted-foreground/80">
-            <Trans>Call</Trans>
+      <div className="flex h-header shrink-0 items-center justify-between px-[22px]">
+        <span className="truncate text-title text-foreground">{botName}</span>
+        <span aria-hidden="true" className="font-mono text-mono text-muted-foreground tabular-nums">
+          {duration}
+        </span>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-7 overflow-y-auto px-3.5 py-7">
+        <div className="relative flex size-50 shrink-0 items-center justify-center">
+          <span
+            aria-hidden="true"
+            className="rk-halo absolute inset-0 rounded-full opacity-50 blur-3xl"
+            style={{ backgroundColor: botColor }}
+          />
+          <BotAvatar
+            className="relative"
+            color={botColor}
+            identity={botIdentity}
+            shapeSeed={botShapeSeed}
+            size={120}
+            status={phase !== "listening" ? "running" : undefined}
+          />
+        </div>
+
+        {phase === "speaking" ? (
+          <div role="status" className="flex flex-col items-center gap-2.5">
+            <div aria-hidden="true" className="flex items-end gap-1">
+              {BAR_DELAYS_MS.map((delay) => (
+                <span
+                  key={delay}
+                  className="rk-bar h-4 w-0.75 rounded-full bg-foreground"
+                  style={{ animationDelay: `${delay}ms` }}
+                />
+              ))}
+            </div>
+            <p className="text-working text-foreground">{t`${botName} is speaking`}</p>
           </div>
-          <DialogTitle className="text-[22px]">{botName}</DialogTitle>
-        </DialogHeader>
-        <div className="mt-1 text-[15px] text-foreground/75">
-          {phase === "listening" ? (
-            <Trans>Listening…</Trans>
-          ) : phase === "speaking" ? (
-            <Trans>Speaking…</Trans>
-          ) : (
-            <Trans>Working…</Trans>
-          )}
+        ) : null}
+
+        <div className="flex w-full max-w-thread flex-col gap-2.5">
+          {heard ? <p className="text-end text-body text-foreground-subtle">{heard}</p> : null}
+          {caption ? <p className="font-normal text-title text-foreground">{caption}</p> : null}
         </div>
-        <p className="min-h-[3.2em] text-[14.5px] leading-[1.5] text-muted-foreground">
-          {phase === "listening" ? heard || t`Say something. Silence sends it.` : caption}
-        </p>
-        {error ? <p className="text-[13px] text-destructive">{error}</p> : null}
-        <div className="mt-2 flex justify-center gap-3">
-          <Button variant="outline" className="rounded-full" onClick={interrupt}>
-            <Trans>Interrupt</Trans>
-          </Button>
-          <Button variant="destructive" className="rounded-full" onClick={hangUp}>
-            <Trans>Hang up</Trans>
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground/80">
-          <Trans>Space interrupts · Esc hangs up</Trans>
-        </p>
-      </DialogContent>
-    </Dialog>
+
+        {error ? <p className="text-center text-meta text-destructive">{error}</p> : null}
+
+        {askMessage && askBlock ? (
+          <div className="flex flex-wrap justify-center gap-2">
+            {voiceAnswerable ? (
+              askActions.map((action) => (
+                <Button
+                  key={action.id}
+                  type="button"
+                  variant="quickReply"
+                  size="quickReply"
+                  consequential={isApproval && action.id !== "deny"}
+                  onClick={() => void chooseAskAction(askMessage, action)}
+                >
+                  {askActionLabel(action, isApproval)}
+                </Button>
+              ))
+            ) : (
+              // The mic cannot answer a multi-question ask (the server always
+              // rejects a spoken sentence for it), so this is the only way
+              // left to tell the person why and let them finish it in text.
+              <Button type="button" variant="quickReply" size="quickReply" onClick={hangUp}>
+                {t`Answer in text`}
+              </Button>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex shrink-0 items-center justify-center gap-4 pb-7">
+        <Button
+          type="button"
+          variant="capsuleSecondary"
+          size="call"
+          aria-label={t`Mute`}
+          aria-pressed={muted}
+          onClick={toggleMute}
+        >
+          {muted ? <MicOff aria-hidden="true" /> : <Mic aria-hidden="true" />}
+        </Button>
+        <Button
+          type="button"
+          variant="capsule"
+          size="call"
+          aria-label={t`End call`}
+          onClick={hangUp}
+        >
+          <Square aria-hidden="true" />
+        </Button>
+      </div>
+    </div>
   );
 }
 
-function pendingSecretAsk(snapshot: ThreadSnapshot | null) {
+function askActionLabel(action: AskAction, isApproval: boolean): string {
+  if (!isApproval) return action.label;
+  if (action.outcome === "created") return translate`Create space`;
+  if (action.outcome === "cancelled") return translate`Cancel`;
+  if (action.id === "allow") return translate`Allow once`;
+  if (action.id === "always") return translate`Always allow this tool`;
+  if (action.id === "deny") return translate`Deny`;
+  return action.label;
+}
+
+function pendingSecretAsk(snapshot: ThreadSnapshot | null): boolean {
+  const pending = currentAsk(snapshot);
+  return Boolean(pending && isSecretAskBlock(pending.block));
+}
+
+function currentAsk(snapshot: ThreadSnapshot | null): PendingAsk | null {
   const askId = latestAskId(snapshot);
-  const askMessage = snapshot?.messages.find((message) => message.id === askId);
-  return askMessage?.blocks.some(
-    (block) => block.kind === "ask" && isSecretAskBlock(block) && block.status !== "answered",
+  const message = snapshot?.messages.find((candidate) => candidate.id === askId);
+  if (!message) return null;
+  const block = message.blocks.find(
+    (candidate): candidate is AskBlock =>
+      candidate.kind === "ask" && candidate.status !== "answered",
   );
+  if (!block) return null;
+  return { message, block };
 }
 
 function latestAskId(snapshot: ThreadSnapshot | null): string | null {

@@ -1,14 +1,24 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
 import type { MessageBlock } from "@rakazo/contracts";
 import { abortableDelay } from "@rakazo/core";
-import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
-import { X } from "lucide-react";
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  FramedBlock,
+  Surface,
+} from "@rakazo/ui-web";
+import { Bell, Check, ChevronDown, Clock, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { BuiCard, SuccessPop } from "../../components/ai/primitives";
+import { SuccessPop } from "../../components/ai/primitives";
 import { type ArtifactTarget, decodeArtifactBase64 } from "../../lib/artifact-open";
 import { chartViewport } from "../../lib/chart-viewport";
 import { connectMcpOauth } from "../../lib/mcp-connect";
 import { rpc } from "../../lib/rpc";
+import { formatRelativeTime } from "../ActivityList";
 
 export function ChoiceCard({
   botId,
@@ -21,12 +31,14 @@ export function ChoiceCard({
 }) {
   const { t } = useLingui();
   const [pending, setPending] = useState(false);
+  const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [locallyDismissed, setLocallyDismissed] = useState(false);
   const dismissed = locallyDismissed || block.answerId === "_dismissed";
 
   async function choose(optionId: string) {
     setPending(true);
+    setPendingOptionId(optionId);
     setError(null);
     try {
       await rpc.onboarding.choose({ botId, optionId });
@@ -34,6 +46,7 @@ export function ChoiceCard({
     } catch (err) {
       setError(err instanceof Error ? err.message : t`Could not save this choice`);
       setPending(false);
+      setPendingOptionId(null);
     }
   }
 
@@ -52,53 +65,48 @@ export function ChoiceCard({
 
   if (dismissed) return null;
 
+  const answeredOption = block.answerId
+    ? block.options.find((option) => option.id === block.answerId)
+    : undefined;
+
   return (
-    <div className="flex justify-start">
-      <div className="relative w-[420px] max-w-full rounded-[20px] border border-border bg-card px-[18px] py-[14px]">
-        {!block.answerId ? (
+    <FramedBlock
+      question={block.question}
+      consequence={block.subtitle}
+      answered={
+        block.answerId ? t`Answered: ${answeredOption?.label ?? block.answerId}` : undefined
+      }
+      actions={
+        !block.answerId ? (
           <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t`Dismiss`}
+            type="button"
+            variant="tertiary"
+            size="capsule"
             disabled={pending}
             onClick={() => void dismiss()}
-            className="absolute end-2 top-2 text-muted-foreground"
           >
-            <X size={16} strokeWidth={1.8} />
+            <Trans>Dismiss</Trans>
           </Button>
-        ) : null}
-        <div className="pe-8 text-[15.5px] text-foreground/90">{block.question}</div>
-        {block.subtitle ? (
-          <div className="mt-0.5 text-[13px] text-foreground/75">{block.subtitle}</div>
-        ) : null}
-        <div className="mt-3 space-y-2.5">
-          {block.options
-            .filter((option) => !block.answerId || option.id === block.answerId)
-            .map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                disabled={Boolean(block.answerId) || pending}
-                onClick={() => void choose(option.id)}
-                className={`flex w-full items-start gap-3 rounded-xl px-3.5 py-3.5 text-start text-foreground disabled:opacity-60 ${block.answerId ? "bg-accent" : "bg-muted hover:bg-accent"}`}
-              >
-                <span className="mt-0.5 grid h-[24px] w-[24px] shrink-0 place-items-center rounded-[7px] bg-background text-[12.5px] font-medium text-foreground/75">
-                  {option.letter}
-                </span>
-                <span
-                  className={`flex-1 text-[15px] leading-[1.35] ${block.answerId ? "text-foreground/75" : "text-foreground"}`}
-                >
-                  {option.label}
-                </span>
-                {block.answerId === option.id ? (
-                  <span className="mt-0.5 text-foreground/75">✓</span>
-                ) : null}
-              </button>
-            ))}
-        </div>
-        {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+        ) : undefined
+      }
+    >
+      <div data-testid="ask-options" className="flex flex-wrap gap-2">
+        {block.options.map((option) => (
+          <Button
+            key={option.id}
+            type="button"
+            variant={pendingOptionId === option.id ? "capsule" : "quickReply"}
+            size="quickReply"
+            aria-pressed={pendingOptionId === option.id}
+            disabled={pending}
+            onClick={() => void choose(option.id)}
+          >
+            {option.letter}. {option.label}
+          </Button>
+        ))}
       </div>
-    </div>
+      {error ? <p className="mt-2 text-meta text-destructive">{error}</p> : null}
+    </FramedBlock>
   );
 }
 
@@ -160,7 +168,7 @@ export function AppConnectCard({
     }
   }
   return (
-    <BuiCard
+    <Surface
       role="group"
       aria-label={t`${block.name} connection`}
       className="w-[min(420px,80%)] px-4 py-3.5"
@@ -170,16 +178,16 @@ export function AppConnectCard({
           <img
             src={block.logo}
             alt=""
-            className="h-10 w-10 rounded-[10px] bg-white object-contain p-1"
+            className="h-10 w-10 rounded-row bg-card object-contain p-1"
           />
         ) : (
-          <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-muted text-[15px] text-foreground">
+          <span className="grid h-10 w-10 place-items-center rounded-row bg-muted text-meta text-foreground">
             {block.name.slice(0, 1).toUpperCase()}
           </span>
         )}
         <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-medium text-foreground">{block.name}</span>
-          <span className="block truncate text-[13px] text-muted-foreground">
+          <span className="block text-author font-medium text-foreground">{block.name}</span>
+          <span className="block truncate text-meta text-muted-foreground">
             {block.description}
           </span>
         </span>
@@ -196,8 +204,8 @@ export function AppConnectCard({
           </Button>
         )}
       </div>
-      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
-    </BuiCard>
+      {error ? <p className="mt-2 text-time text-destructive">{error}</p> : null}
+    </Surface>
   );
 }
 
@@ -254,21 +262,21 @@ function ChartCanvas({
   }, [spec, data, width, height, t]);
   if (error)
     return (
-      <div className="text-[13px] text-destructive">
+      <div className="text-meta text-destructive">
         <Trans>Chart failed to render: {error}</Trans>
       </div>
     );
   return (
     <div className="text-foreground/75">
       {meta.title ? (
-        <div className="mb-1 text-[14.5px] font-semibold text-foreground">{meta.title}</div>
+        <div className="mb-1 text-row-name font-semibold text-foreground">{meta.title}</div>
       ) : null}
       {meta.swatches.length > 0 ? (
         <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1">
           {meta.swatches.map((swatch) => (
             <span
               key={swatch.label}
-              className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
+              className="flex items-center gap-1.5 text-time text-muted-foreground"
             >
               {/* Series colours are data-driven and intentionally distinct. */}
               <span
@@ -333,24 +341,24 @@ export function McpApprovalCard({
 
   const summary = endpoint ?? `stdio · ${transport}`;
   return (
-    <BuiCard className="max-w-[74%] p-4">
+    <Surface className="max-w-[74%] p-4">
       <div className="flex items-center gap-2">
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-muted text-xs text-foreground">
+        <span className="grid h-7 w-7 place-items-center rounded-row bg-muted text-time text-foreground">
           M
         </span>
-        <span className="text-[14.5px] font-medium text-foreground">
+        <span className="text-author font-medium text-foreground">
           <Trans>Connect MCP server “{name}”</Trans>
         </span>
       </div>
-      <p className="mt-1.5 truncate text-[12px] text-muted-foreground">{summary}</p>
+      <p className="mt-1.5 truncate text-time text-muted-foreground">{summary}</p>
       {state === "pending" || state === "connecting" ? (
         <>
-          <p className="mt-2 text-[13px] leading-[1.5] text-foreground/75">
+          <p className="mt-2 text-meta text-foreground">
             {needsOAuth
               ? t`Authorize this server so agents can use its tools. A popup opens.`
               : t`Approve this server to let your agent use its tools.`}
           </p>
-          {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+          {error ? <p className="mt-2 text-time text-destructive">{error}</p> : null}
           <div className="mt-3 flex gap-2">
             <Button
               className="rounded-full"
@@ -375,11 +383,11 @@ export function McpApprovalCard({
         </div>
       ) : null}
       {state === "dismissed" ? (
-        <p className="mt-2 text-[13px] text-muted-foreground">
+        <p className="mt-2 text-meta text-muted-foreground">
           <Trans>Dismissed. Reconnect anytime from MCP settings.</Trans>
         </p>
       ) : null}
-    </BuiCard>
+    </Surface>
   );
 }
 
@@ -408,7 +416,7 @@ export function ChartBlockView({
   const expandedViewport = chartViewport(viewport.width, viewport.height);
   return (
     <>
-      <div className="group relative max-w-[74%] rounded-[20px] bg-muted p-4">
+      <Surface className="group relative max-w-[74%] p-4">
         <ChartCanvas spec={spec} data={data} width={520} />
         <Button
           variant="outline"
@@ -418,14 +426,14 @@ export function ChartBlockView({
         >
           <Trans>Expand</Trans>
         </Button>
-      </div>
+      </Surface>
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent
           showCloseButton={false}
           className="max-h-[92vh] w-[min(1320px,94vw)] max-w-none overflow-auto p-8 sm:max-w-none"
         >
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-[13px] font-normal text-muted-foreground">
+            <DialogTitle className="text-meta font-normal text-muted-foreground">
               {name}
             </DialogTitle>
             <DialogClose
@@ -515,14 +523,12 @@ export function ArtifactImage({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="max-w-[240px] overflow-hidden rounded-[20px]"
+          className="max-w-[240px] overflow-hidden rounded-card"
         >
           <img src={src} alt={name} className="max-h-48 w-full object-cover" />
         </button>
       ) : (
-        <div className="rounded-[20px] border border-border bg-muted px-4 py-3 text-[14px] text-muted-foreground">
-          {name}
-        </div>
+        <Surface className="px-4 py-3 text-meta text-muted-foreground">{name}</Surface>
       )}
       {src ? (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -540,11 +546,132 @@ export function ArtifactImage({
             <img
               src={src}
               alt={name}
-              className="max-h-[85vh] max-w-[90vw] rounded-xl object-contain"
+              className="max-h-[85vh] max-w-[90vw] rounded-card object-contain"
             />
           </DialogContent>
         </Dialog>
       ) : null}
+    </div>
+  );
+}
+
+type RoutineRunBlock = Extract<MessageBlock, { kind: "routine_run" }>;
+
+const ROUTINE_STATE_ICON_SIZE = 14;
+
+function RoutineRunStatePill({ state }: { state: RoutineRunBlock["state"] }) {
+  if (state === "queued") {
+    return (
+      <span className="flex items-center gap-1.5 text-label text-muted-foreground">
+        <Clock size={ROUTINE_STATE_ICON_SIZE} strokeWidth={1.8} aria-hidden />
+        <Trans>Queued</Trans>
+      </span>
+    );
+  }
+  if (state === "running") {
+    return (
+      <span className="flex items-center gap-1.5 text-label text-foreground/80">
+        <span
+          aria-hidden
+          className="size-2 rounded-full bg-foreground/70 animate-pulse motion-reduce:animate-none"
+        />
+        <Trans>Running</Trans>
+      </span>
+    );
+  }
+  if (state === "failed") {
+    return (
+      <span className="flex items-center gap-1.5 text-label text-destructive">
+        <X size={ROUTINE_STATE_ICON_SIZE} strokeWidth={2} aria-hidden />
+        <Trans>Failed</Trans>
+      </span>
+    );
+  }
+  if (state === "cancelled") {
+    return (
+      <span className="flex items-center gap-1.5 text-label text-muted-foreground">
+        <Trans>Cancelled</Trans>
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1.5 text-label text-success">
+      <Check size={ROUTINE_STATE_ICON_SIZE} strokeWidth={2.2} aria-hidden />
+      <Trans>Completed</Trans>
+    </span>
+  );
+}
+
+/** Background-routine run card: a bot's own thread trace for a routine run, driven by
+ * lifecycle state (never by free-form model text). Collapsed by default; expanded when the
+ * routine's notify toggle is on (CA2/CA13). The digest renders as sanitised markdown with
+ * remote images blocked (CA-R4/CA-R5/CA-R12) — never raw HTML, never live network loads. */
+export function RoutineRunCard({ block }: { block: RoutineRunBlock }) {
+  const { t } = useLingui();
+  const subscribed = block.notify === true;
+  const hasDigest = Boolean(block.digest?.trim());
+  const [expanded, setExpanded] = useState(subscribed);
+  const timestamp = block.endedAt ?? block.startedAt;
+
+  return (
+    <div className="flex justify-start">
+      <Surface data-testid="routine-run-card" className="w-[min(500px,100%)] px-4 py-3.5">
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
+          <span
+            className="min-w-0 flex-1 basis-48 text-author font-medium text-foreground"
+            dir="auto"
+          >
+            {block.routineName}
+          </span>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5">
+            {subscribed ? (
+              <span
+                role="img"
+                aria-label={t`Notifications on`}
+                className="flex items-center text-muted-foreground"
+              >
+                <Bell size={14} strokeWidth={1.8} aria-hidden />
+              </span>
+            ) : null}
+            <RoutineRunStatePill state={block.state} />
+            {timestamp ? (
+              <span className="text-meta text-muted-foreground">
+                {formatRelativeTime(timestamp)}
+              </span>
+            ) : null}
+            {hasDigest ? (
+              <button
+                type="button"
+                aria-expanded={expanded}
+                aria-label={expanded ? t`Hide details` : t`Show details`}
+                onClick={() => setExpanded((open) => !open)}
+                className="-m-2.5 rounded-full p-3.5 text-muted-foreground hover:bg-accent hover:text-foreground/75"
+              >
+                <ChevronDown
+                  size={16}
+                  strokeWidth={1.8}
+                  className={expanded ? "rotate-180 transition-transform" : "transition-transform"}
+                />
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {block.headline ? (
+          <p className="mt-1.5 truncate text-meta text-muted-foreground" dir="auto">
+            {block.headline}
+          </p>
+        ) : null}
+        {expanded && hasDigest ? (
+          <div
+            className="rk-scroll mt-2.5 max-h-64 overflow-y-auto overflow-x-hidden rounded-row bg-muted px-3 py-2.5"
+            dir="auto"
+          >
+            <ChatMarkdown allowImages={false}>
+              {truncateMarkdownForRender(block.digest ?? "")}
+            </ChatMarkdown>
+          </div>
+        ) : null}
+      </Surface>
     </div>
   );
 }

@@ -67,16 +67,19 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
     })
     .toBe("waiting_takeover");
   await captureScreenshot(page, testInfo, "08-protected-input-request");
-  await page.getByTitle("Agent computer").click();
+  await page.getByTestId("open-computer-panel").click();
   const sidePanel = page.getByTestId("side-panel");
   await expect(sidePanel).toHaveCSS("width", "384px");
+  // The panel lies over the thread: it ends at the viewport edge and overlaps main.
   const [mainBox, panelBox] = await Promise.all([
     page.locator("main").boundingBox(),
     sidePanel.boundingBox(),
   ]);
   expect(mainBox).not.toBeNull();
   expect(panelBox).not.toBeNull();
-  expect((mainBox?.x ?? 0) + (mainBox?.width ?? 0)).toBeLessThanOrEqual(panelBox?.x ?? 0);
+  const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
+  expect((panelBox?.x ?? 0) + (panelBox?.width ?? 0)).toBeCloseTo(viewportWidth, 0);
+  expect(panelBox?.x ?? 0).toBeLessThan((mainBox?.x ?? 0) + (mainBox?.width ?? 0));
   await sidePanel.getByTestId("computer-preview").hover();
   await sidePanel.getByTestId("computer-preview-open").click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
@@ -98,11 +101,11 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
       message: "the second protected-input run must be ready for takeover",
     })
     .toBe("waiting_takeover");
-  // Agent computer toggles the panel. Re-open when closed so Open can refresh computer status.
+  // Computer & routines toggles the panel. Re-open when closed so Open can refresh computer status.
   if ((await sidePanel.getAttribute("data-panel")) === "computer") {
-    await page.getByTitle("Agent computer").click();
+    await page.getByTestId("open-computer-panel").click();
   }
-  await page.getByTitle("Agent computer").click();
+  await page.getByTestId("open-computer-panel").click();
   await expect(sidePanel).toHaveAttribute("data-panel", "computer");
   await sidePanel.getByTestId("computer-preview").hover();
   const openComputer = sidePanel.getByTestId("computer-preview-open");
@@ -321,11 +324,7 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await page.getByRole("button", { name: "Close integrations" }).click();
 
   await page.getByText("Chief").first().click();
-  const gear = page.getByRole("button", { name: "Show settings" });
-  if (!(await gear.isVisible().catch(() => false))) {
-    await page.getByTitle("Agent computer").click();
-  }
-  await gear.click();
+  await page.getByTestId("open-settings-panel").click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export" }).click();
   const download = await downloadPromise;
@@ -391,8 +390,13 @@ test("sign-in, spawn, and stop work in the shell", async ({ page }, testInfo) =>
   await expect(page.getByText("Messages sent now guide the next turn.")).toHaveCount(0);
   await expect(page.getByText(/^Steer /)).toHaveCount(0);
   await expect(composer).toHaveAttribute("placeholder", "Message Chief");
-  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+  // The Send icon only appears once there is a draft to send.
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toHaveCount(0);
   await composer.fill("Use the newer report and keep the answer short.");
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByTestId("composer-bar").getByRole("button", { name: "Attach file", exact: true }),
+  ).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(
     page.getByTestId("composer-bar").getByRole("button", { name: "Voice", exact: true }),
@@ -410,7 +414,7 @@ test("sign-in, spawn, and stop work in the shell", async ({ page }, testInfo) =>
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "14-active-bot-work");
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeVisible();
   await expect(composer).toHaveAttribute("placeholder", "Message Chief");
   await captureScreenshot(page, testInfo, "14-active-bot-work-mobile");
@@ -431,14 +435,15 @@ test("sign-in, spawn, and stop work in the shell", async ({ page }, testInfo) =>
   });
   await page.getByRole("button", { name: "Stop", exact: true }).click();
   await stopRequestStarted;
-  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
+  // The Send icon stays hidden with an empty draft; only Stop is left to go disabled.
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeDisabled();
   releaseStopRequest();
-  // Idle Send stays disabled with an empty draft; wait for Stop to leave instead.
+  // Idle Send stays hidden with an empty draft; wait for Stop to leave instead.
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0, {
     timeout: 30_000,
   });
-  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toHaveCount(0);
 
   await page.context().clearCookies();
   await page.goto("/sign-in");

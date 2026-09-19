@@ -99,7 +99,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Allowed once": "Разрешено один раз",
   "Allow once": "Разрешить один раз",
   "Already have an account?": "У вас уже есть аккаунт?",
-  "Always allow": "Всегда разрешать",
+  "Always allow this tool": "Всегда разрешать этот инструмент",
   "Always allowed": "Всегда разрешено",
   "Android blocked notifications.": "Android заблокировал уведомления.",
   Answer: "Ответ",
@@ -123,6 +123,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Bearer token": "Bearer-токен",
   "Back to sign in": "Вернуться ко входу",
   Back: "Назад",
+  "Needs your call": "Требуется ваше решение",
   Bot: "Бот",
   "Bot actions": "Действия бота",
   "Booting live desktop…": "Запуск рабочего стола…",
@@ -681,7 +682,9 @@ export const RU_MESSAGES: Record<string, string> = {
   Skills: "Навыки",
   Skipped: "Пропущено",
   "Specific agents": "Определенные агенты",
-  "Steps ({count})": "Шаги ({count})",
+  "Thought for {duration} · {steps}": "Размышления: {duration} · {steps}",
+  "1 step": "1 шаг",
+  "{count} steps": "Шагов: {count}",
   "Teach agents recipes.": "Обучайте агентов рецептам.",
   "That image could not be read": "Не удалось прочитать это изображение",
   "That image is too detailed to store, try a simpler one":
@@ -700,4 +703,12 @@ export const RU_MESSAGES: Record<string, string> = {
   "{count} plugins installed": "Установлено плагинов: {count}",
   "{count} selected": "Выбрано: {count}",
   "{count} skills installed": "Установлено навыков: {count}",
+
+  "Notifications on": "Уведомления включены",
+  "Show details": "Показать детали",
+  "Hide details": "Скрыть детали",
+  "Notify me on every run": "Уведомлять меня при каждом запуске",
+  "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
+    "Включено — уведомление и развёрнутая карточка при каждом запуске. Выключено — только тихий след в этом чате.",
+  "Could not update routine": "Не удалось обновить программу",
 };

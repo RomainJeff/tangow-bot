@@ -6,10 +6,12 @@ export function WindowChrome() {
   const desktop = desktopBridge();
   const kind = windowChromeKind(desktop);
   if (kind === "spacer") {
-    return <div className="h-3 w-[72px]" aria-hidden="true" />;
+    return <div className="h-3 w-[72px] shrink-0" aria-hidden="true" />;
   }
   if (kind === "darwin") {
-    return <div className="app-drag h-3 w-[72px]" aria-hidden="true" />;
+    // shrink-0 so a crowded header never lets the traffic lights overlap the
+    // controls: this reserves their width whatever else is in the row.
+    return <div className="app-drag h-3 w-[72px] shrink-0" aria-hidden="true" />;
   }
   return (
     <div className="app-drag flex gap-[7px]">

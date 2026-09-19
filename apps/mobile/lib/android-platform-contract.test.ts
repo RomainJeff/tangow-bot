@@ -166,19 +166,16 @@ describe("Android mobile platform contract", () => {
     expect(scroll).toContain('this.contentReady && !this.currentState.detached ? "jump" : null');
   });
 
-  it("stacks every currently working agent in a group footer", () => {
+  it("stacks every currently working agent on the thread working line", () => {
     const thread = readFileSync(resolve(mobileRoot, "app/thread.tsx"), "utf8");
-    expect(thread).toContain("workingGroupBots.map");
-    expect(thread).toContain("inGroup && workingGroupBots.length > 0 ?");
-    expect(thread).toContain("workingGroupBots.length - index");
+    expect(thread).toContain("const workingBotsForLine = inGroup");
+    expect(thread).toContain("? workingGroupBots");
+    expect(thread).toContain("<GroupAvatar members={workingBotsForLine} size={sizes.message} />");
     expect(thread).toContain("agents working");
-    // Visible chrome is avatar-only; copy stays on accessibilityLabel.
-    expect(thread).toMatch(
-      /accessibilityLabel=\{\s*workingGroupBots\.length === 1[\s\S]*agents working/,
-    );
-    expect(thread).not.toMatch(
-      /workingGroupBots\.length === 1\s*\?[\s\S]*<Text[^>]*>\s*\{t\("\{name\} is working"/,
-    );
+    expect(thread).toMatch(/workingBotsForLine\.length === 1[\s\S]*agents working/);
+    // One WorkingLine, and it is the only thing that moves during a run.
+    expect(thread.match(/<WorkingLine/g)).toHaveLength(1);
+    expect(thread).not.toContain("<ShimmerText style={{ color: tokens.mutedForeground");
   });
 
   it("keeps send and stop separate while steering active work", () => {
@@ -186,8 +183,10 @@ describe("Android mobile platform contract", () => {
     const stopStart = thread.indexOf("async function stop()");
     const stopSource = thread.slice(stopStart, thread.indexOf("const answerMessage", stopStart));
     expect(stopStart).toBeGreaterThan(-1);
-    expect(thread).toContain('accessibilityLabel={t("Send")}');
-    expect(thread).toContain('accessibilityLabel={t("Stop")}');
+    // Both names ride on ComposerButton, which is what sets accessibilityLabel.
+    expect(thread).toContain('label={t("Send")}');
+    expect(thread).toContain('label={t("Stop")}');
+    expect(thread).toContain("accessibilityLabel={label}");
     expect(thread).not.toContain("Messages sent now guide the next turn.");
     expect(thread).not.toContain("Steer ");
     expect(thread).not.toContain("steering message");

@@ -93,7 +93,7 @@ export function ActivityList({ onOpenRun }: ActivityListProps) {
 function ActivityRow({ run, onOpen }: { run: RunActivityRow; onOpen: () => void }) {
   const { t } = useLingui();
   const title = run.groupName ? `${run.botName} · ${run.groupName}` : run.botName;
-  const label = statusLabel(run.status);
+  const label = runStatusLabel(run.status);
   const activityLabel = t`${title}, ${label}`;
   const tone = statusTone(run.status);
   return (
@@ -127,7 +127,7 @@ function ActivityRow({ run, onOpen }: { run: RunActivityRow; onOpen: () => void 
   );
 }
 
-function formatRelativeTime(iso: string, now = new Date()): string {
+export function formatRelativeTime(iso: string, now = new Date()): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -141,7 +141,8 @@ function formatRelativeTime(iso: string, now = new Date()): string {
   return date.toLocaleDateString(i18n.locale || "en", { month: "short", day: "numeric" });
 }
 
-function statusLabel(status: RunActivityRow["status"]): string {
+/** The one translated word for a run's state, shared with the sidebar rows. */
+export function runStatusLabel(status: string): string {
   switch (status) {
     case "queued":
       return t`Queued`;

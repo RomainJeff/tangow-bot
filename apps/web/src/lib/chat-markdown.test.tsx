@@ -42,4 +42,27 @@ describe("ChatMarkdown", () => {
     expect(html).toContain('aria-label="Copy code"');
     expect(html).toContain("rk-chat-markdown-copy");
   });
+
+  it("renders images by default (normal bot messages)", () => {
+    const html = renderToStaticMarkup(
+      <ChatMarkdown>{"![logo](https://example.com/logo.png)"}</ChatMarkdown>,
+    );
+
+    expect(html).toContain("<img");
+  });
+
+  it("drops every image when allowImages is false, whatever the URL form", () => {
+    for (const src of [
+      "https://tracker.example/pixel.png",
+      "tracker.example/pixel.gif",
+      "//tracker.example/pixel.gif",
+    ]) {
+      const html = renderToStaticMarkup(
+        <ChatMarkdown allowImages={false}>{`digest ![x](${src}) end`}</ChatMarkdown>,
+      );
+
+      expect(html).not.toContain("<img");
+      expect(html).not.toContain("tracker.example");
+    }
+  });
 });

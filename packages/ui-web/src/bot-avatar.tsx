@@ -1,18 +1,19 @@
 import {
   ACTIVE_RUN_STATUSES,
-  AVATAR_BODY_RADIUS,
-  type AvatarPose,
   avatarIdentitySeed,
-  organicAvatarFace,
-  organicAvatarPath,
-  REST_POSE,
-  SWOOSH_COUNT,
-  swooshPath,
-  WORKING_STILL_SECONDS,
-  workingPose,
+  BotEngine,
+  type BotFrame,
+  EXPRESSION_BY_ID,
+  type ExpressionId,
+  mixHex,
+  NOTIF_BLUE,
+  RAYON,
+  SHAPES,
 } from "@rakazo/core";
-import { type CSSProperties, memo, useEffect, useId, useRef, useSyncExternalStore } from "react";
+import type { CSSProperties } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import { type AvatarStyle, useAvatarStyle } from "./avatar-style.js";
+import { usePrefersReducedMotion } from "./lib/reduced-motion.js";
 import { cn } from "./lib/utils.js";
 import "./styles.css";
 
@@ -41,7 +42,7 @@ export const BotAvatar = memo(function BotAvatar({
   const preferredVariant = useAvatarStyle();
   if ((variant ?? preferredVariant) === "organic") {
     return (
-      <OrganicAvatar
+      <BloubAvatar
         color={color}
         identity={identity}
         shapeSeed={shapeSeed}
@@ -171,7 +172,26 @@ export const BotAvatar = memo(function BotAvatar({
   );
 });
 
-function OrganicAvatar({
+/** Half of the viewBox side: the resting body radius plus room for the blink squash. */
+const BLOUB_HALF_VIEWBOX = RAYON * 1.12;
+// Zero-roll moods only (upstream's cursor-follow list): roll tilts the head and
+// makes the eyes jump vertically between two moods.
+const WORKING_MOODS: readonly ExpressionId[] = [
+  "surpris",
+  "heureux",
+  "hilare",
+  "excite",
+  "fier",
+  "blase",
+];
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
+
+/**
+ * The organic avatar, drawn by the vendored bloub engine (`@rakazo/core/bloub`): a
+ * morphing ink body with the eyes punched out as holes and idle blinks. While a run
+ * is active the bot glances around and changes mood at random intervals.
+ */
+function BloubAvatar({
   color,
   identity,
   shapeSeed,
@@ -186,60 +206,99 @@ function OrganicAvatar({
   isWorking: boolean;
   className?: string;
 }) {
-  const reducedMotion = useSyncExternalStore(
-    subscribeToReducedMotion,
-    reducedMotionSnapshot,
-    () => false,
-  );
+  const reducedMotion = usePrefersReducedMotion();
   const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
-  const face = organicAvatarFace(seed);
-  // Eyes are holes cut out of the body (bloub), so they live in a luminance mask.
-  const maskId = `organic-eyes-${useId().replace(/[^a-zA-Z0-9-_]/g, "")}`;
-  const svgRef = useRef<SVGSVGElement>(null);
+  const shape = SHAPES[seed % SHAPES.length]!;
+  const uid = useId().replace(/[^a-zA-Z0-9-_]/g, "");
+  const [engine] = useState(() => new BotEngine(RAYON, "idle", shape.radii));
+  const clock = useRef(0);
+  const [frame, setFrame] = useState<BotFrame>(() => engine.sample(0));
 
   useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const R = AVATAR_BODY_RADIUS;
-    const eyes = svg.querySelector<SVGElement>(".rakazo-organic-avatar-eyes")!;
-    const eye = Array.from(svg.querySelectorAll<SVGElement>(".rakazo-organic-avatar-eye"));
-    const arcs = Array.from(svg.querySelectorAll<SVGPathElement>(".rakazo-organic-avatar-swoosh"));
-    const apply = (pose: AvatarPose) => {
-      eyes.style.transform = `translate(${pose.eyes.x * R}px, ${pose.eyes.y * R}px) rotate(${pose.eyes.roll}deg)`;
-      eye.forEach((el, i) => {
-        const [sx, sy] = pose.eyes.scale[i]!;
-        el.style.transform = `rotate(${pose.eyes.tilt[i]}deg) scale(${sx}, ${sy})`;
-      });
-      arcs.forEach((el, i) => {
-        el.style.opacity = String(pose.swoosh.opacity);
-        if (pose.swoosh.opacity > 0) el.setAttribute("d", swooshPath(i, pose.swoosh.t, R));
-      });
-    };
-    if (!isWorking) {
-      apply(REST_POSE);
-      return;
-    }
     if (reducedMotion) {
-      apply(workingPose(WORKING_STILL_SECONDS));
+      // One still frame, settled into the state: no morph, no loop.
+      engine.reset("idle", clock.current);
+      engine.setShape(shape.radii, clock.current - BotEngine.SHAPE_MORPH);
+      setFrame(engine.sample(clock.current + 1));
       return;
     }
-    const start = performance.now();
-    let frame = requestAnimationFrame(function tick(now) {
-      apply(workingPose((now - start) / 1000));
-      frame = requestAnimationFrame(tick);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [isWorking, reducedMotion]);
+    engine.setShape(shape.radii, clock.current);
+    if (!isWorking) {
+      engine.setLook(null, clock.current);
+      engine.setExpression(null, clock.current);
+    }
+    // A working bot glances around and changes mood at random intervals.
+    let nextGlance = clock.current;
+    // ponytail: one rAF loop per avatar; share a ticker if a long sidebar burns CPU.
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      // Clamp the step like upstream so a backgrounded tab resumes without a jump.
+      clock.current += Math.min((now - last) / 1000, 0.064);
+      last = now;
+      if (isWorking && clock.current >= nextGlance) {
+        engine.setLook(
+          { yaw: rand(-26, 26), pitch: rand(-8, 18), mix: 1, spin: 0, wander: 0.3 },
+          clock.current,
+          0.35,
+        );
+        const mood = WORKING_MOODS[Math.floor(Math.random() * WORKING_MOODS.length)]!;
+        engine.setExpression(EXPRESSION_BY_ID.get(mood) ?? null, clock.current);
+        nextGlance = clock.current + rand(1.2, 3.6);
+      }
+      setFrame(engine.sample(clock.current));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [engine, shape, isWorking, reducedMotion]);
+
+  // Same eye rule as before: the eyes show the "paper" behind the ink, so pick it
+  // from the body luminance, and ink a pale body's outline so it stays visible.
+  const luminance = relativeLuminance(color);
+  const paper = luminance < 0.4 ? "#FFFFFF" : "#101014";
+  const outline = luminance > 0.78 ? "#17181A" : null;
+  const VB = BLOUB_HALF_VIEWBOX;
+  const maskId = `${uid}-mask`;
+  const dots = (
+    <g>
+      {frame.dots.map((dot, index) => {
+        const fill =
+          dot.color ?? (dot.depth === undefined ? color : mixHex(paper, color, dot.depth));
+        return dot.d ? (
+          <path
+            key={index}
+            d={dot.d}
+            fill={fill}
+            opacity={dot.opacity}
+            transform={`translate(${dot.x} ${dot.y}) rotate(${dot.rot ?? 0}) scale(${RAYON})`}
+          />
+        ) : (
+          <circle key={index} cx={dot.x} cy={dot.y} r={dot.r} fill={fill} opacity={dot.opacity} />
+        );
+      })}
+    </g>
+  );
+  const arcs = (side: "back" | "front") => (
+    <g fill="none" strokeLinecap="round">
+      {frame.arcs.map((arc) => (
+        <path
+          key={arc.id}
+          d={arc[side]}
+          stroke={`url(#${uid}-${arc.id})`}
+          strokeWidth={arc.width}
+          opacity={arc.opacity}
+        />
+      ))}
+    </g>
+  );
 
   return (
     <svg
-      ref={svgRef}
-      viewBox="-60 -60 120 120"
+      viewBox={`${-VB} ${-VB} ${VB * 2} ${VB * 2}`}
       aria-hidden="true"
       className={cn("rakazo-organic-avatar overflow-visible select-none", className)}
       data-working={isWorking}
-      data-shape-family={seed % 10}
-      data-eye-pattern={seed % 4}
       style={{
         width: size,
         height: size,
@@ -247,49 +306,73 @@ function OrganicAvatar({
       }}
     >
       <defs>
-        <mask id={maskId} maskUnits="userSpaceOnUse" x="-60" y="-60" width="120" height="120">
-          <rect x="-60" y="-60" width="120" height="120" fill="#fff" />
-          <g transform={`translate(${face.x} ${face.y})`}>
-            <g className="rakazo-organic-avatar-eyes" fill="#000">
-              {face.eyes.map((eye) => (
-                <g
-                  key={eye.transform}
-                  className="rakazo-organic-avatar-eye"
-                  style={{ transformOrigin: `${eye.x}px ${eye.y}px` }}
-                >
-                  <path d={eye.d} transform={eye.transform} />
-                </g>
-              ))}
-            </g>
-          </g>
+        {/* The eyes are holes punched in the body, so the silhouette clips them. */}
+        <mask id={maskId} maskUnits="userSpaceOnUse" x={-VB} y={-VB} width={VB * 2} height={VB * 2}>
+          <path d={frame.bodyPath} fill="#fff" />
+          {frame.eyes.map((eye, index) => (
+            <path key={index} d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill="#000" />
+          ))}
+          {frame.notch ? (
+            <circle cx={frame.notch.x} cy={frame.notch.y} r={frame.notch.r} fill="#000" />
+          ) : null}
         </mask>
+        {frame.arcs.map((arc) => (
+          <linearGradient
+            key={arc.id}
+            id={`${uid}-${arc.id}`}
+            gradientUnits="userSpaceOnUse"
+            x1={arc.grad.x1}
+            y1={arc.grad.y1}
+            x2={arc.grad.x2}
+            y2={arc.grad.y2}
+          >
+            {arc.grad.stops.map((stop, index) => (
+              <stop key={index} offset={index / (arc.grad.stops.length - 1)} stopColor={stop} />
+            ))}
+          </linearGradient>
+        ))}
       </defs>
-      {Array.from({ length: SWOOSH_COUNT }, (_, i) => (
-        <path
-          key={i}
-          className="rakazo-organic-avatar-swoosh"
-          fill="none"
-          stroke={color}
-          strokeWidth={0.05 * AVATAR_BODY_RADIUS}
-          strokeLinecap="round"
-          opacity="0"
+      {arcs("back")}
+      {frame.dotsBehind ? dots : null}
+      <g opacity={frame.bodyAlpha}>
+        {/* Opaque backing in the body shape: what the eye holes show through. */}
+        <path d={frame.bodyPath} fill={paper} />
+        <rect
+          x={-VB}
+          y={-VB}
+          width={VB * 2}
+          height={VB * 2}
+          fill={color}
+          mask={`url(#${maskId})`}
         />
-      ))}
-      <path d={organicAvatarPath(seed)} fill={color} mask={`url(#${maskId})`} />
+        {outline ? (
+          <path d={frame.bodyPath} fill="none" stroke={outline} strokeWidth={RAYON * 0.06} />
+        ) : null}
+      </g>
+      {frame.dotsBehind ? null : dots}
+      {frame.notif ? (
+        <circle cx={frame.notif.x} cy={frame.notif.y} r={frame.notif.r} fill={NOTIF_BLUE} />
+      ) : null}
+      {arcs("front")}
     </svg>
   );
 }
 
-const reducedMotionMedia = "(prefers-reduced-motion: reduce)";
-
-function reducedMotionSnapshot(): boolean {
-  return window.matchMedia(reducedMotionMedia).matches;
-}
-
-function subscribeToReducedMotion(onChange: () => void): () => void {
-  const media = window.matchMedia(reducedMotionMedia);
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
+/** WCAG relative luminance (0..1) of a hex colour. */
+function relativeLuminance(hex: string): number {
+  const clean = hex.replace(/^#/, "");
+  const expanded =
+    clean.length === 3
+      ? clean
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : clean;
+  const r = parseInt(expanded.slice(0, 2), 16);
+  const g = parseInt(expanded.slice(2, 4), 16);
+  const b = parseInt(expanded.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return 0.5;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }
 
 function hashString(str: string): number {
@@ -338,9 +421,7 @@ export function Wordmark({ className }: { className?: string }) {
         <span className="h-4 w-[7px] rounded-full bg-primary" />
         <span className="h-4 w-[7px] rounded-full bg-primary" />
       </div>
-      <span className="font-[Aeonik,ui-sans-serif] text-[28px] tracking-tight text-foreground">
-        Rakazo
-      </span>
+      <span className="font-sans text-[28px] tracking-tight text-foreground">Rakazo</span>
     </div>
   );
 }

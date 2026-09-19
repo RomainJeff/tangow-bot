@@ -147,7 +147,9 @@ tags:
 - tapOn: "Reply"
 - assertVisible: "Replying to"
 - tapOn: "Cancel reply"
-- tapOn: "Bot actions"
+# Bot actions now live on a long press of the header title (its accessible
+# name is "Chat settings"; a short press opens the chat settings screen).
+- longPressOn: "Chat settings"
 - assertVisible: "Clear conversation"
 - takeScreenshot: "16-bot-actions"
 - back

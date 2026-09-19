@@ -1,0 +1,20 @@
+/** Format wall-clock seconds since `startedAtMs` as `0.0s` / `1m 2.3s`. */
+export function formatElapsed(startedAtMs: number, nowMs: number): string {
+  const totalTenths = Math.round(Math.max(0, nowMs - startedAtMs) / 100);
+  const minutes = Math.floor(totalTenths / 600);
+  const seconds = (totalTenths % 600) / 10;
+  if (minutes === 0) return `${seconds.toFixed(1)}s`;
+  return `${minutes}m ${seconds.toFixed(1)}s`;
+}
+
+/**
+ * Format a finished duration as `41s` / `2m 04s`. A reasoning summary reads a
+ * total after the fact, so it drops the tenths a running clock needs.
+ */
+export function formatShortDuration(durationMs: number): string {
+  const totalSeconds = Math.round(Math.max(0, durationMs) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}

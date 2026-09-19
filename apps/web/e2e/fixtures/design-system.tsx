@@ -1,0 +1,251 @@
+import { botColors } from "@rakazo/ui-tokens";
+import {
+  AvatarStyleProvider,
+  BotAvatar,
+  Button,
+  ComposerShell,
+  FramedBlock,
+  HoverPill,
+  Interstitial,
+  MessageRow,
+  ReasoningDisclosure,
+  Shimmer,
+  StackedAvatars,
+  Surface,
+  UserBubble,
+  WorkingLine,
+} from "@rakazo/ui-web";
+import { Copy, Mic, MoreHorizontal, Plus, Reply, Square, Volume2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { createRoot } from "react-dom/client";
+import "../../src/styles.css";
+
+const MAYA = { color: botColors[0], identity: "maya" };
+const ATLAS = { color: botColors[1], identity: "atlas" };
+const IVY = { color: botColors[2], identity: "ivy" };
+const ORB = { color: botColors[3], identity: "orb" };
+const BOTS = [MAYA, ATLAS, IVY, ORB];
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section data-section={title} className="flex flex-col gap-3">
+      <h2 className="text-label text-muted-foreground">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function Kitchen() {
+  return (
+    <main className="mx-auto flex w-full max-w-thread flex-col gap-7 bg-background px-3.5 py-8">
+      <Section title="capsules">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="capsule" size="capsule">
+            Allow once
+          </Button>
+          <Button consequential variant="capsule" size="capsule">
+            Always allow this tool
+          </Button>
+          <Button variant="capsuleSecondary" size="capsule">
+            Deny
+          </Button>
+          <Button variant="tertiary" size="capsule">
+            Skip
+          </Button>
+          <Button disabled variant="capsule" size="capsule">
+            Sending
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="quickReply" size="quickReply">
+            Tuesday afternoon
+          </Button>
+          <Button variant="quickReply" size="quickReply">
+            Thursday morning
+          </Button>
+          <Button variant="capsule" size="quickReply">
+            Thursday morning
+          </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button aria-label="Attach file" variant="roundIcon" size="roundIcon">
+            <Plus />
+          </Button>
+          <Button aria-label="Reply" variant="roundIcon" size="roundIconSm">
+            <Reply />
+          </Button>
+          <Button variant="capsule" size="stack">
+            Allow once
+          </Button>
+          <Button aria-label="End call" variant="capsule" size="call">
+            <Square />
+          </Button>
+        </div>
+      </Section>
+
+      <Section title="stacked avatars">
+        <div className="flex flex-wrap items-center gap-6">
+          <StackedAvatars items={BOTS.slice(0, 2)} size={20} label="Maya and Atlas" />
+          <StackedAvatars items={BOTS} size={17} />
+          <StackedAvatars items={BOTS} size={16} max={2} />
+          <StackedAvatars items={[{ ...MAYA, working: true }]} size={14} />
+        </div>
+      </Section>
+
+      <Section title="messages">
+        <MessageRow
+          avatar={<BotAvatar color={MAYA.color} identity="maya" size={26} />}
+          author="Maya"
+          time="09:12"
+          meta={{ label: "2 sources" }}
+          trailing={
+            <HoverPill>
+              <Button aria-label="Reply" variant="roundIcon" size="roundIconSm">
+                <Reply />
+              </Button>
+              <Button aria-label="Copy" variant="roundIcon" size="roundIconSm">
+                <Copy />
+              </Button>
+              <Button aria-label="Speak this reply" variant="roundIcon" size="roundIconSm">
+                <Volume2 />
+              </Button>
+              <Button aria-label="More" variant="roundIcon" size="roundIconSm">
+                <MoreHorizontal />
+              </Button>
+            </HoverPill>
+          }
+        >
+          Tuesday afternoon is the only slot that works for everyone. I can hold it until the end of
+          the day.
+        </MessageRow>
+        <UserBubble>Hold it, and tell the team.</UserBubble>
+        <Interstitial
+          avatars={<StackedAvatars items={BOTS.slice(0, 2)} size={17} />}
+          onClick={() => undefined}
+        >
+          Maya asked Atlas for the room list · 40s
+        </Interstitial>
+        <WorkingLine
+          avatar={<BotAvatar color={MAYA.color} identity="maya" size={26} status="running" />}
+          label="Maya is drafting the recap"
+          startedAt={Date.now() - 41_300}
+        />
+        <div className="text-reasoning text-muted-foreground">
+          <Shimmer>Reading the calendar</Shimmer>
+        </div>
+        {/* A caller's utility has to beat the class the primitive brings. */}
+        <div className="text-reasoning">
+          <Shimmer className="text-destructive" data-testid="shimmer-override">
+            A utility passed by the caller wins
+          </Shimmer>
+        </div>
+      </Section>
+
+      <Section title="reasoning">
+        <ReasoningDisclosure summary="Thought for 41s · 3 steps" open={false} onToggle={() => {}}>
+          <span>Read the calendar</span>
+        </ReasoningDisclosure>
+        <ReasoningDisclosure summary="Thought for 41s · 3 steps" open live onToggle={() => {}}>
+          <span>Read the calendar</span>
+          <span>Compared four rooms</span>
+          <span>Drafting the recap</span>
+        </ReasoningDisclosure>
+      </Section>
+
+      <Section title="framed blocks">
+        <FramedBlock
+          header={{ who: "Maya needs your call", dot: true }}
+          question="Send the recap to #ops?"
+          consequence="They will see the last 12 messages of this thread."
+          actions={
+            <>
+              <Button consequential variant="capsule" size="capsule">
+                Allow once
+              </Button>
+              <Button variant="capsuleSecondary" size="capsule">
+                Always allow this tool
+              </Button>
+              <Button variant="tertiary" size="capsule">
+                Deny
+              </Button>
+            </>
+          }
+        />
+        {/* Once answered the block drops its controls and its actions, even
+            though both are still passed. */}
+        <FramedBlock
+          header={{ who: "Maya asked" }}
+          question="Which room should I hold?"
+          answered="Answered: the roof terrace"
+          actions={
+            <Button variant="capsule" size="capsule">
+              Send
+            </Button>
+          }
+        >
+          <Button variant="quickReply" size="quickReply">
+            The roof terrace
+          </Button>
+        </FramedBlock>
+      </Section>
+
+      <Section title="surfaces">
+        <Surface as="section" className="p-3 text-meta text-muted-foreground">
+          An unframed card: one fill, one hairline, no shadow.
+        </Surface>
+        <Surface radius="block" className="p-3 font-mono text-mono text-foreground">
+          pnpm --filter @rakazo/ui-tokens generate
+        </Surface>
+      </Section>
+
+      <Section title="composer">
+        <ComposerShell
+          trailing={
+            <Button aria-label="Attach file" variant="roundIcon" size="roundIcon">
+              <Plus />
+            </Button>
+          }
+        >
+          <span className="text-body text-foreground-subtle">Message Maya</span>
+        </ComposerShell>
+        <ComposerShell
+          state="dictating"
+          trailing={
+            <Button aria-label="Voice" variant="roundIcon" size="roundIcon">
+              <Mic />
+            </Button>
+          }
+        >
+          <span className="text-body text-foreground">Hold the roof terrace</span>
+        </ComposerShell>
+        <ComposerShell
+          state="working"
+          trailing={
+            <Button aria-label="Stop" variant="capsuleSecondary" size="roundIcon">
+              <Square />
+            </Button>
+          }
+        >
+          <span className="text-body text-foreground-subtle">working</span>
+        </ComposerShell>
+        <ComposerShell
+          state="speaking"
+          leading={<BotAvatar color={IVY.color} identity="ivy" size={26} status="running" />}
+          trailing={
+            <Button variant="capsuleSecondary" size="capsule">
+              Stop
+            </Button>
+          }
+        >
+          <span className="text-working text-muted-foreground">Ivy is speaking</span>
+        </ComposerShell>
+      </Section>
+    </main>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(
+  <AvatarStyleProvider value="organic">
+    <Kitchen />
+  </AvatarStyleProvider>,
+);

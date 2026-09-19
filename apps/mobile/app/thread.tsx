@@ -1,4 +1,4 @@
-import { ChatMarkdown } from "@rakazo/chat-ui/native";
+import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/native";
 import type {
   AgentSkillCatalogEntry,
   Connection,
@@ -18,6 +18,7 @@ import {
   type ComposerMention,
   cloudAgentHttpsUrl,
   isApprovalAskBlock,
+  isAsideOnlyMessage,
   isRunTerminalEvent,
   isSecretAskBlock,
   latestActivityLabel,
@@ -34,9 +35,11 @@ import {
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
+import { radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
+import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActionSheetIOS,
@@ -52,30 +55,47 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   type TextProps,
   View,
+  type ViewStyle,
 } from "react-native";
 import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
 import { useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppConnectCard } from "../components/AppConnectCard";
-import { AskActions } from "../components/AskActions";
+import {
+  AskActions,
+  CapsuleButton,
+  QuickReplyCapsules,
+  TERTIARY_CAPSULE_HEIGHT,
+} from "../components/AskActions";
 import { AgentSteps } from "../components/agent-steps";
 import { BotAvatar } from "../components/bot-avatar";
+import { ComposerShell } from "../components/composer-shell";
+import { FramedBlock } from "../components/framed-block";
+import { GroupAvatar } from "../components/group-avatar";
+import { Interstitial } from "../components/interstitial";
 import {
   MarkdownArtifactPreview,
   type MarkdownArtifactPreviewTarget,
 } from "../components/markdown-artifact-preview";
+import { MessageRow } from "../components/message-row";
 import { NativeSymbol } from "../components/native-symbol";
 import { ShimmerText } from "../components/shimmer-text";
+import { StackedAvatars } from "../components/stacked-avatars";
+import { Surface } from "../components/surface";
+import { UserBubble } from "../components/user-bubble";
+import { WorkingLine } from "../components/working-line";
 import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import {
   applyMobileThreadEvent,
   blockText,
   copyableMobileMessageText,
   currentApiBase,
+  earliestRunStartMs,
   loadSessionToken,
   type MobileBot,
   type MobileGroup,
@@ -105,9 +125,9 @@ import {
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import {
   hasVisibleMessagePresentation,
-  isCenteredAgentEvent,
   messagePresentationSegments,
   stepsBlocks,
+  visibleMessageBlocks,
 } from "../lib/message-presentation";
 import { native, useMobileTokens, useResolvedAppearance } from "../lib/native";
 import {
@@ -122,10 +142,39 @@ import {
   ThreadScrollBehavior,
   type ThreadScrollState,
 } from "../lib/thread-scroll";
+import { nativeTextStyle } from "../lib/typography";
 import { speakText } from "../lib/voice";
 
 type PendingAttachment = PickedAttachment & { threadKey: string };
 type AskAction = NonNullable<Extract<MessageBlock, { kind: "ask" }>["actions"]>[number];
+
+/**
+ * How the thread frames a message, derived from the blocks it is about to draw
+ * — same two shapes as the web transcript. `row` is something a bot or the
+ * person said (a bot's question or approval is a normal row too, its
+ * FramedBlock card is just the row's body), `aside` a quiet note between
+ * messages.
+ */
+type MessageChrome = "row" | "aside";
+
+/** Gaps from the design contract's space scale: 28 between messages, 22 for
+ * the quieter asides. */
+const MESSAGE_GAP = 28;
+const ASIDE_GAP = 22;
+/** Avatar column plus its gap: a bot row's reactions line up under its prose. */
+const FRAMED_INDENT = sizes.message + 11;
+
+/** The 30 pt capsule a mention or a skill rides in, inside the composer. */
+const composerChip: ViewStyle = {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  height: 30,
+  borderRadius: radii.pill,
+  paddingStart: 5,
+  paddingEnd: 10,
+  maxWidth: "100%",
+};
 
 function newClientNonce(): string {
   const webCrypto = globalThis.crypto;
@@ -166,6 +215,14 @@ function formatAttachmentSkip(item: { name: string; reason: string }): string {
     });
   }
   return `${name} (${item.reason})`;
+}
+
+/** The clock beside a bot's name, and the title of the message action sheet. */
+function messageClockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(dateLocaleForUi(), {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function isWorkingStatus(status: string | undefined): boolean {
@@ -411,18 +468,22 @@ function Thread() {
   const hasLiveProgress = visibleMessages.some((message) => message.id.startsWith("progress:"));
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const activityLabel = latestActivityLabel(snap?.messages ?? []);
+  // The runs a working line speaks for, and the source of its clock.
+  const workingRuns = useMemo(() => {
+    const runs = snap?.activeRuns ?? (snap?.run ? [snap.run] : []);
+    return runs.filter((run) => isWorkingStatus(run.status));
+  }, [snap?.activeRuns, snap?.run]);
   const workingGroupBots = useMemo(() => {
     if (!inGroup) return [];
     const seen = new Set<string>();
-    const working = snap?.activeRuns ?? (snap?.run ? [snap.run] : []);
-    return working.flatMap((run) => {
-      if (!run.botId || seen.has(run.botId) || !isWorkingStatus(run.status)) return [];
+    return workingRuns.flatMap((run) => {
+      if (!run.botId || seen.has(run.botId)) return [];
       const member = snap?.members?.find((candidate) => candidate.botId === run.botId);
       if (!member) return [];
       seen.add(run.botId);
       return [{ ...member, status: run.status }];
     });
-  }, [inGroup, snap?.activeRuns, snap?.members, snap?.run]);
+  }, [inGroup, snap?.members, workingRuns]);
   const working = inGroup ? workingGroupBots.length > 0 : isWorkingStatus(currentBotStatus);
 
   useEffect(() => {
@@ -536,9 +597,38 @@ function Thread() {
     return activeBotId.current === targetBotId && activeGroupId.current === targetGroupId;
   }
 
+  const workingBotIds = useMemo(
+    () => new Set(workingGroupBots.flatMap((bot) => (bot.botId ? [bot.botId] : []))),
+    [workingGroupBots],
+  );
+  const groupAvatarItems = useMemo(
+    () =>
+      (snap?.members ?? []).map((member) => ({
+        color: member.color,
+        identity: member.botId,
+        shapeSeed: member.shapeSeed,
+        working: workingBotIds.has(member.botId),
+      })),
+    [snap?.members, workingBotIds],
+  );
+  const groupMemberNames = useMemo(
+    () => (snap?.members ?? []).map((member) => member.name).join(", "),
+    [snap?.members],
+  );
+
+  // `showBotActions` closes over `botActions` (and `name`), which are rebuilt
+  // every render; keeping only this ref out of the header effect's deps means
+  // a long press always reads the latest bot-actions sheet without the
+  // effect re-running (and reassigning `navigation.setOptions`) on renders
+  // that don't otherwise change the header.
+  const showBotActionsRef = useRef(showBotActions);
+  showBotActionsRef.current = showBotActions;
+
   useLayoutEffect(() => {
     navigation.setOptions({
       title: displayName || t("Thread"),
+      // Bot actions (chat settings, open computer, clear, archive, delete) now
+      // live on a long press; a short press still opens chat settings.
       headerTitle: () => (
         <Pressable
           accessibilityRole="button"
@@ -548,33 +638,42 @@ function Thread() {
             if (!botId || inGroup) return;
             router.push({ pathname: "/bot-settings", params: { botId } });
           }}
+          onLongPress={!inGroup && botId ? () => showBotActionsRef.current() : undefined}
           style={{
-            flexDirection: "row",
             alignItems: "center",
-            gap: 10,
-            maxWidth: 220,
+            maxWidth: 240,
           }}
         >
-          {!inGroup && currentBot ? (
-            <BotAvatar
-              color={currentBot.color}
-              identity={currentBot.id}
-              shapeSeed={currentBot.shapeSeed}
-              size={34}
-              status={currentBotStatus}
-              muted={!currentBot.notifyOnFinish}
-            />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            {!inGroup && currentBot ? (
+              <BotAvatar
+                color={currentBot.color}
+                identity={currentBot.id}
+                shapeSeed={currentBot.shapeSeed}
+                size={34}
+                status={currentBotStatus}
+                muted={!currentBot.notifyOnFinish}
+              />
+            ) : null}
+            <Text
+              numberOfLines={1}
+              style={{
+                ...nativeTextStyle("title", { size: 17, weight: 600 }),
+                color: tokens.foreground,
+              }}
+            >
+              {displayName || t("Thread")}
+            </Text>
+          </View>
+          {inGroup && groupAvatarItems.length > 0 ? (
+            <View style={{ marginTop: 2 }}>
+              <StackedAvatars
+                items={groupAvatarItems}
+                size={sizes.stackXs}
+                label={groupMemberNames || undefined}
+              />
+            </View>
           ) : null}
-          <Text
-            numberOfLines={1}
-            style={{
-              color: tokens.foreground,
-              fontSize: 18,
-              fontWeight: "600",
-            }}
-          >
-            {displayName || t("Thread")}
-          </Text>
         </Pressable>
       ),
       headerRight: () =>
@@ -597,10 +696,19 @@ function Thread() {
             />
           </Pressable>
         ) : (
-          <Pressable accessibilityLabel={t("Bot actions")} hitSlop={8} onPress={showBotActions}>
+          <Pressable
+            accessibilityLabel={t("Open computer")}
+            hitSlop={8}
+            onPress={() =>
+              router.push({
+                pathname: "/computer",
+                params: { botId: botId ?? "", name: displayName ?? t("Bot") },
+              })
+            }
+          >
             <NativeSymbol
-              ios="ellipsis"
-              android="ellipsis-horizontal"
+              ios="desktopcomputer"
+              android="desktop-outline"
               size={21}
               color={tokens.foreground}
             />
@@ -612,7 +720,9 @@ function Thread() {
     currentBot,
     currentBotStatus,
     displayName,
+    groupAvatarItems,
     groupId,
+    groupMemberNames,
     inGroup,
     navigation,
     router,
@@ -1441,12 +1551,7 @@ function Thread() {
       onLongPress: () =>
         presentMessageActionSheet({
           actions,
-          title: message.createdAt
-            ? new Date(message.createdAt).toLocaleTimeString(dateLocaleForUi(), {
-                hour: "numeric",
-                minute: "2-digit",
-              })
-            : undefined,
+          title: message.createdAt ? messageClockTime(message.createdAt) : undefined,
           cancel: t("Cancel"),
           more: t("More"),
           colorScheme,
@@ -1455,6 +1560,18 @@ function Thread() {
       onAccessibilityAction: (event) => {
         actions.find((action) => action.name === event.nativeEvent.actionName)?.onPress();
       },
+    };
+  }
+
+  /** Colour, name and shape of the bot behind a message: the group roster
+   * first, the bot list second, the route name last. */
+  function messageBot(id: string | undefined) {
+    const member = snap?.members?.find((candidate) => candidate.botId === id);
+    const bot = mentionBots.find((candidate) => candidate.id === id);
+    return {
+      color: member?.color ?? bot?.color ?? tokens.mutedForeground,
+      name: member?.name ?? bot?.name ?? displayName ?? t("Bot"),
+      shapeSeed: member?.shapeSeed ?? bot?.shapeSeed,
     };
   }
 
@@ -1473,18 +1590,38 @@ function Thread() {
           })
         : "";
     const messageReactions = reactionView.reactions.get(message.id);
-    const activityBotId =
-      !inGroup && message.role === "bot" && message.id.startsWith("progress:")
-        ? (message.botId ?? botId)
-        : undefined;
-    const activityBot = activityBotId
-      ? (snap?.members?.find((member) => member.botId === activityBotId) ??
-        (currentBot?.id === activityBotId ? currentBot : undefined))
+    const drawnBlocks = visibleMessageBlocks(message.blocks, showSteps);
+    // An aside is a note between messages and carries no author; a bot's
+    // question or approval is a normal row, its FramedBlock card just the
+    // row's body. Aside is decided by the blocks alone (a peer receipt is
+    // stored with role "user" but is still an aside).
+    const chrome: MessageChrome = isAsideOnlyMessage(drawnBlocks) ? "aside" : "row";
+    const authorBotId = message.botId ?? botId;
+    const author = messageBot(authorBotId);
+    const authorStatus = message.id.startsWith("progress:")
+      ? (snap?.activeRuns?.find((run) => run.botId === authorBotId)?.status ??
+        (snap?.run?.botId === authorBotId ? snap?.run?.status : currentBotStatus))
       : undefined;
-    const activityStatus = activityBotId
-      ? (snap?.activeRuns?.find((run) => run.botId === activityBotId)?.status ??
-        (snap?.run?.botId === activityBotId ? snap.run.status : currentBotStatus))
-      : undefined;
+    const bubble = (
+      <MessageBubble
+        botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+        groupId={groupId}
+        message={message}
+        botName={displayName}
+        bots={mentionBots}
+        members={snap?.members}
+        replyPreview={
+          chrome === "row" && message.replyToMessageId
+            ? messagesById.get(message.replyToMessageId)
+            : undefined
+        }
+        canAnswer={message.id === answerableAskMessageId}
+        onAnswer={answerMessage}
+        onOpenBot={openBot}
+        onPreviewMarkdown={setMarkdownPreview}
+        actionProps={actionProps}
+      />
+    );
     return (
       <View
         key={message.id}
@@ -1501,14 +1638,15 @@ function Thread() {
               }
             : undefined
         }
+        style={{ marginTop: chrome === "aside" ? ASIDE_GAP : MESSAGE_GAP }}
       >
         {timeMarker ? (
           <Text
             style={{
               alignSelf: "center",
+              marginBottom: MESSAGE_GAP,
               color: tokens.mutedForeground,
-              fontSize: 11,
-              marginTop: 16,
+              ...nativeTextStyle("label"),
             }}
           >
             {timeMarker}
@@ -1516,168 +1654,104 @@ function Thread() {
         ) : null}
         <View
           style={{
-            marginTop: 12,
-            width: "100%",
             opacity: rewindTarget && (message.seq ?? 0) >= (rewindTarget.seq ?? 0) ? 0.4 : 1,
-            flexDirection: "row",
-            alignItems: "flex-start",
-            gap: 8,
-            justifyContent: message.role === "user" ? "flex-end" : "flex-start",
           }}
         >
-          {activityBotId ? (
-            <View style={{ paddingTop: 22 }}>
-              <BotAvatar
-                color={activityBot?.color ?? tokens.mutedForeground}
-                identity={activityBotId}
-                shapeSeed={activityBot?.shapeSeed}
-                size={inGroup ? 20 : 28}
-                status={activityStatus}
-              />
+          {chrome === "row" && message.role === "bot" ? (
+            <MessageRow
+              avatar={
+                <BotAvatar
+                  color={author.color}
+                  identity={authorBotId}
+                  shapeSeed={author.shapeSeed}
+                  size={sizes.message}
+                  status={authorStatus}
+                />
+              }
+              author={author.name}
+              time={createdAt ? messageClockTime(createdAt) : undefined}
+            >
+              <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+                {bubble}
+              </Pressable>
+            </MessageRow>
+          ) : chrome === "row" ? (
+            <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+              {bubble}
+            </Pressable>
+          ) : (
+            <View>{bubble}</View>
+          )}
+          {messageReactions ? (
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 4,
+                marginTop: 6,
+                marginStart: chrome === "row" && message.role === "bot" ? FRAMED_INDENT : 0,
+                justifyContent: message.role === "user" ? "flex-end" : "flex-start",
+              }}
+            >
+              {[...messageReactions].map(([emoji, count]) => (
+                <Text
+                  key={emoji}
+                  style={{
+                    color: tokens.foreground,
+                    backgroundColor: tokens.muted,
+                    borderColor: tokens.border,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderRadius: radii.pill,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    ...nativeTextStyle("meta"),
+                  }}
+                >
+                  {emoji}
+                  {count > 1 ? ` ${count}` : ""}
+                </Text>
+              ))}
             </View>
           ) : null}
-          <View
-            style={{
-              width: isCenteredAgentEvent(message.blocks) ? "100%" : undefined,
-              maxWidth: isCenteredAgentEvent(message.blocks)
-                ? "100%"
-                : activityBotId
-                  ? undefined
-                  : "90%",
-              flex: activityBotId ? 1 : undefined,
-              flexShrink: 1,
-            }}
-          >
-            <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
-              <MessageBubble
-                botId={botId ?? snap?.members?.[0]?.botId ?? ""}
-                groupId={groupId}
-                message={message}
-                botName={displayName}
-                bots={mentionBots}
-                members={snap?.members}
-                replyPreview={
-                  message.replyToMessageId ? messagesById.get(message.replyToMessageId) : undefined
-                }
-                canAnswer={message.id === answerableAskMessageId}
-                onAnswer={answerMessage}
-                onOpenBot={openBot}
-                onPreviewMarkdown={setMarkdownPreview}
-                actionProps={actionProps}
-              />
-            </Pressable>
-            {messageReactions ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 4,
-                  marginTop: 4,
-                  justifyContent: message.role === "user" ? "flex-end" : "flex-start",
-                }}
-              >
-                {[...messageReactions].map(([emoji, count]) => (
-                  <Text
-                    key={emoji}
-                    style={{
-                      color: tokens.foreground,
-                      backgroundColor: tokens.muted,
-                      borderColor: tokens.border,
-                      borderWidth: 1,
-                      borderRadius: 16,
-                      paddingHorizontal: 8,
-                      paddingVertical: 2,
-                      fontSize: 13,
-                    }}
-                  >
-                    {emoji}
-                    {count > 1 ? ` ${count}` : ""}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-          </View>
         </View>
       </View>
     );
   }
 
-  const workingFooter =
-    !inGroup && currentBot && isWorkingStatus(currentBotStatus) && !hasLiveProgress ? (
-      <View
-        accessibilityLabel={t("{name} is working", { name: currentBot.name })}
-        accessibilityRole="text"
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          minHeight: 40,
-          marginTop: 12,
-        }}
-      >
-        <BotAvatar
-          color={currentBot.color}
-          identity={currentBot.id}
-          shapeSeed={currentBot.shapeSeed}
-          size={28}
-          status={currentBotStatus}
-        />
-        <ShimmerText style={{ color: tokens.mutedForeground, fontSize: 13.5, flexShrink: 1 }}>
-          {activityLabel ?? `${t("{name} is working", { name: currentBot.name })}…`}
-        </ShimmerText>
-      </View>
-    ) : inGroup && workingGroupBots.length > 0 ? (
-      <View
-        accessibilityLabel={
-          workingGroupBots.length === 1
-            ? t("{name} is working", { name: workingGroupBots[0]?.name ?? t("Agent") })
-            : t("{count} agents working", { count: workingGroupBots.length })
-        }
-        accessibilityRole="text"
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          minHeight: 40,
-          marginTop: 12,
-        }}
-      >
-        <View style={{ flexDirection: "row", paddingRight: 8 }}>
-          {workingGroupBots.map((bot, index) => (
-            <View
-              key={bot.botId}
-              style={{
-                marginLeft: index === 0 ? 0 : -8,
-                zIndex: workingGroupBots.length - index,
-              }}
-            >
-              <BotAvatar
-                color={bot.color}
-                identity={bot.botId}
-                shapeSeed={bot.shapeSeed}
-                size={28}
-                status={bot.status}
-              />
-            </View>
-          ))}
-        </View>
-        <ShimmerText
-          style={{
-            color: tokens.mutedForeground,
-            fontSize: 13.5,
-            flexShrink: 1,
-          }}
-        >
-          {(workingGroupBots.length === 1 ? activityLabel : undefined) ??
-            `${
-              workingGroupBots.length === 1
-                ? t("{name} is working", {
-                    name: workingGroupBots[0]?.name ?? t("Agent"),
-                  })
-                : t("{count} agents working", { count: workingGroupBots.length })
-            }…`}
-        </ShimmerText>
-      </View>
-    ) : null;
+  const workingBotsForLine = inGroup
+    ? workingGroupBots
+    : currentBot && isWorkingStatus(currentBotStatus) && !hasLiveProgress
+      ? [
+          {
+            botId: currentBot.id,
+            name: currentBot.name,
+            color: currentBot.color,
+            shapeSeed: currentBot.shapeSeed,
+            status: currentBotStatus,
+          },
+        ]
+      : [];
+  // One bot only: an activity line names one bot's tool, so it would mislabel a group.
+  const workingLabel =
+    (workingBotsForLine.length === 1 ? activityLabel : undefined) ??
+    `${
+      workingBotsForLine.length === 1
+        ? t("{name} is working", { name: workingBotsForLine[0]?.name ?? t("Agent") })
+        : t("{count} agents working", { count: workingBotsForLine.length })
+    }…`;
+  // The clock reads from when the run began, not from when this screen
+  // mounted, so reopening a thread does not restart it at zero.
+  const workingStartedAt = earliestRunStartMs(workingRuns);
+  // The one thing that keeps moving during a run; everything else is still.
+  const workingFooter = workingBotsForLine.length ? (
+    <View style={{ marginTop: MESSAGE_GAP }}>
+      <WorkingLine
+        avatar={<GroupAvatar members={workingBotsForLine} size={sizes.message} />}
+        label={workingLabel}
+        startedAt={workingStartedAt}
+      />
+    </View>
+  ) : null;
 
   const loadEarlierControl =
     snap?.olderCursor != null ? (
@@ -1861,8 +1935,8 @@ function Thread() {
               marginTop: 12,
               borderRadius: 14,
               borderWidth: 1,
-              borderColor: "#26262A",
-              backgroundColor: "#17171A",
+              borderColor: tokens.border,
+              backgroundColor: tokens.sidebar,
               paddingHorizontal: 12,
               paddingVertical: 10,
               flexDirection: "row",
@@ -1870,11 +1944,14 @@ function Thread() {
               gap: 8,
             }}
           >
-            <Text style={{ color: "#85858A", fontSize: 12, flex: 1 }} numberOfLines={2}>
+            <Text
+              style={{ color: tokens.mutedForeground, fontSize: 12, flex: 1 }}
+              numberOfLines={2}
+            >
               {`Editing message · ${rewindRemovedCount} messages after it will be removed`}
             </Text>
             <Pressable accessibilityLabel="Cancel edit" onPress={cancelRewind}>
-              <Text style={{ color: "#85858A" }}>✕</Text>
+              <Text style={{ color: tokens.mutedForeground }}>✕</Text>
             </Pressable>
           </View>
         ) : null}
@@ -2054,137 +2131,143 @@ function Thread() {
             ))}
           </View>
         ) : null}
-        <View
-          style={{
-            flexDirection: "row",
-            gap: 8,
-            marginTop: 16,
-            alignItems: "flex-end",
-          }}
-        >
-          <Pressable
-            accessibilityLabel={t("Attach file")}
-            onPress={showAttachMenu}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              borderWidth: 1,
-              borderColor: tokens.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <NativeSymbol ios="plus" android="add" size={18} color={tokens.mutedForeground} />
-          </Pressable>
-          <View
-            style={{
-              flex: 1,
-              flexDirection: "row",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 6,
-              backgroundColor: tokens.card,
-              borderRadius: 20,
-              paddingHorizontal: 10,
-              paddingVertical: 8,
-              minHeight: 44,
-            }}
-          >
-            {selectedSkill ? (
-              <View
-                testID="skill-chip"
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  backgroundColor: tokens.muted,
-                  borderRadius: 999,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  maxWidth: "100%",
-                }}
-              >
-                <NativeSymbol
-                  ios="cube"
-                  android="cube-outline"
-                  size={13}
-                  color={tokens.mutedForeground}
-                />
-                <Text
-                  numberOfLines={1}
+        <View style={{ marginTop: 16 }}>
+          <ComposerShell
+            leading={
+              selectedSkill || selectedMentions.length > 0 ? (
+                <View
                   style={{
-                    color: tokens.foreground,
-                    fontSize: 13,
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    gap: 6,
                     flexShrink: 1,
+                    maxWidth: "60%",
                   }}
                 >
-                  {selectedSkill.name}
-                </Text>
-                <Pressable
-                  accessibilityLabel={t("Remove skill {name}", {
-                    name: selectedSkill.name,
-                  })}
-                  hitSlop={8}
-                  onPress={() => setSelectedSkill(null)}
-                >
-                  <NativeSymbol
-                    ios="xmark"
-                    android="close"
-                    size={12}
-                    color={tokens.mutedForeground}
+                  {selectedSkill ? (
+                    <View
+                      testID="skill-chip"
+                      style={[composerChip, { backgroundColor: tokens.accent }]}
+                    >
+                      <NativeSymbol
+                        ios="cube"
+                        android="cube-outline"
+                        size={14}
+                        color={tokens.mutedForeground}
+                      />
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          color: tokens.foreground,
+                          flexShrink: 1,
+                          ...nativeTextStyle("capsule"),
+                        }}
+                      >
+                        {selectedSkill.name}
+                      </Text>
+                      <Pressable
+                        accessibilityLabel={t("Remove skill {name}", {
+                          name: selectedSkill.name,
+                        })}
+                        hitSlop={8}
+                        onPress={() => setSelectedSkill(null)}
+                      >
+                        <NativeSymbol
+                          ios="xmark"
+                          android="close"
+                          size={12}
+                          color={tokens.mutedForeground}
+                        />
+                      </Pressable>
+                    </View>
+                  ) : null}
+                  {selectedMentions.map((mention) => (
+                    <View
+                      key={mentionChipKey(mention)}
+                      testID="mention-chip"
+                      style={[composerChip, { backgroundColor: tokens.chatUser }]}
+                    >
+                      <MentionChipIcon mention={mention} />
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          color: tokens.chatUserForeground,
+                          flexShrink: 1,
+                          ...nativeTextStyle("capsule"),
+                        }}
+                      >
+                        {mention.name}
+                      </Text>
+                      <Pressable
+                        accessibilityLabel={t("Remove mention {name}", {
+                          name: mention.name,
+                        })}
+                        hitSlop={8}
+                        onPress={() =>
+                          setSelectedMentions((current) =>
+                            current.filter(
+                              (selected) => mentionChipKey(selected) !== mentionChipKey(mention),
+                            ),
+                          )
+                        }
+                      >
+                        <NativeSymbol
+                          ios="xmark"
+                          android="close"
+                          size={12}
+                          color={tokens.mutedForeground}
+                        />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              ) : undefined
+            }
+            trailing={
+              <>
+                <ComposerButton label={t("Attach file")} onPress={showAttachMenu}>
+                  <NativeSymbol ios="plus" android="add" size={17} color={tokens.mutedForeground} />
+                </ComposerButton>
+                {canSend ? (
+                  <ComposerButton
+                    label={t("Send")}
+                    tone="primary"
+                    disabled={sending}
+                    onPress={() => void send()}
+                  >
+                    <NativeSymbol
+                      ios="arrow.up"
+                      android="arrow-up"
+                      size={16}
+                      color={tokens.primaryForeground}
+                    />
+                  </ComposerButton>
+                ) : (
+                  // Reserves Send's footprint so the field does not jump when it arrives.
+                  <View
+                    accessibilityElementsHidden
+                    style={{ width: sizes.composerIcon, height: sizes.composerIcon }}
                   />
-                </Pressable>
-              </View>
-            ) : null}
-            {selectedMentions.map((mention) => (
-              <View
-                key={mentionChipKey(mention)}
-                testID="mention-chip"
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  backgroundColor: tokens.muted,
-                  borderRadius: 999,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  maxWidth: "100%",
-                }}
-              >
-                <MentionChipIcon mention={mention} />
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: tokens.foreground,
-                    fontSize: 13,
-                    flexShrink: 1,
-                  }}
-                >
-                  {mention.name}
-                </Text>
-                <Pressable
-                  accessibilityLabel={t("Remove mention {name}", {
-                    name: mention.name,
-                  })}
-                  hitSlop={8}
-                  onPress={() =>
-                    setSelectedMentions((current) =>
-                      current.filter(
-                        (selected) => mentionChipKey(selected) !== mentionChipKey(mention),
-                      ),
-                    )
-                  }
-                >
-                  <NativeSymbol
-                    ios="xmark"
-                    android="close"
-                    size={12}
-                    color={tokens.mutedForeground}
-                  />
-                </Pressable>
-              </View>
-            ))}
+                )}
+                {working ? (
+                  <ComposerButton
+                    label={t("Stop")}
+                    tone="secondary"
+                    disabled={sending}
+                    onPress={() => void stop()}
+                  >
+                    <NativeSymbol
+                      ios="stop.fill"
+                      android="stop"
+                      size={13}
+                      color={tokens.foreground}
+                    />
+                  </ComposerButton>
+                ) : null}
+              </>
+            }
+          >
             <TextInput
               value={draft}
               onChangeText={updateDraft}
@@ -2207,62 +2290,20 @@ function Thread() {
                     ? t("Message {name}", { name: displayName })
                     : t("Message…")
               }
-              placeholderTextColor={tokens.mutedForeground}
+              placeholderTextColor={tokens.foregroundSubtle}
               keyboardAppearance={colorScheme}
               multiline
               textAlignVertical="center"
               blurOnSubmit={false}
               style={{
-                flexGrow: 1,
-                flexShrink: 1,
-                minWidth: 96,
                 color: tokens.foreground,
-                paddingVertical: 2,
+                paddingVertical: 4,
                 maxHeight: 100,
                 writingDirection: "auto",
+                ...nativeTextStyle("body"),
               }}
             />
-          </View>
-          <Pressable
-            accessibilityLabel={t("Send")}
-            disabled={sending || !canSend}
-            onPress={() => void send()}
-            style={{
-              backgroundColor: tokens.primary,
-              borderRadius: 22,
-              width: 44,
-              height: 44,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: sending || !canSend ? 0.5 : 1,
-            }}
-          >
-            <NativeSymbol
-              ios="arrow.up"
-              android="arrow-up"
-              size={18}
-              color={tokens.primaryForeground}
-            />
-          </Pressable>
-          {working ? (
-            <Pressable
-              accessibilityLabel={t("Stop")}
-              disabled={sending}
-              onPress={() => void stop()}
-              style={{
-                borderColor: tokens.border,
-                borderWidth: 1,
-                borderRadius: 22,
-                width: 44,
-                height: 44,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: sending ? 0.5 : 1,
-              }}
-            >
-              <NativeSymbol ios="stop.fill" android="stop" size={15} color={tokens.foreground} />
-            </Pressable>
-          ) : null}
+          </ComposerShell>
         </View>
       </View>
       <Modal
@@ -2397,6 +2438,49 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
   );
 }
 
+/** A round 34 pt control of the composer capsule; `hitSlop` brings the tap
+ * target back to 44 pt without widening the capsule. */
+function ComposerButton({
+  label,
+  onPress,
+  disabled,
+  tone = "plain",
+  children,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  tone?: "plain" | "primary" | "secondary";
+  children: ReactNode;
+}) {
+  const tokens = useMobileTokens();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      hitSlop={5}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        width: sizes.composerIcon,
+        height: sizes.composerIcon,
+        borderRadius: radii.pill,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor:
+          tone === "primary"
+            ? tokens.primary
+            : tone === "secondary"
+              ? tokens.secondary
+              : "transparent",
+        opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
+      })}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
 function MentionChipIcon({ mention }: { mention: ComposerMention }) {
   const tokens = useMobileTokens();
   if (mention.kind === "routine") {
@@ -2433,13 +2517,11 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
     );
   }
   return (
-    <View
-      style={{
-        width: 14,
-        height: 14,
-        borderRadius: 4,
-        backgroundColor: mention.color ?? tokens.mutedForeground,
-      }}
+    <BotAvatar
+      color={mention.color ?? tokens.mutedForeground}
+      identity={mention.id}
+      shapeSeed={mention.shapeSeed}
+      size={sizes.chip}
     />
   );
 }
@@ -2452,7 +2534,15 @@ function previewMessageText(message: MobileMessage): string {
           `${messagingProviderLabel(block.provider, block.transport)} · ${block.fromLabel}: ${block.text}`,
         ];
       }
-      return block.kind === "text" && block.text ? [block.text] : [];
+      if (
+        (block.kind === "text" ||
+          block.kind === "bot_message_sent" ||
+          block.kind === "bot_message_received") &&
+        block.text
+      ) {
+        return [block.text];
+      }
+      return [];
     })
     .join(" ")
     .trim();
@@ -2516,7 +2606,6 @@ const MessageBubble = memo(function MessageBubble({
   const { t } = useI18n();
   const router = useRouter();
   const showSteps = useDisplayAgentSteps();
-  const [peerExpanded, setPeerExpanded] = useState(false);
   const artifactTarget: MobileArtifactTarget = groupId ? { groupId } : { botId };
   const cardBotId = message.botId ?? botId;
   const appConnectBlocks = message.blocks.filter(
@@ -2577,18 +2666,33 @@ const MessageBubble = memo(function MessageBubble({
       </View>
     );
   }
+  const botColorOf = (id: string | undefined) =>
+    bots.find((bot) => bot.id === id)?.color ??
+    members?.find((member) => member.botId === id)?.color ??
+    tokens.mutedForeground;
+  const avatarOf = (id: string | undefined) => ({
+    color: botColorOf(id),
+    identity: id,
+    shapeSeed: members?.find((member) => member.botId === id)?.shapeSeed,
+  });
+  // An aside is a note between messages, not something a bot said: like the
+  // web transcript it carries no author, no bubble and no message actions.
   const handoff = message.blocks.find((block) => block.kind === "handoff");
   if (handoff) {
     const from = memberName(members, handoff.fromBotId) ?? t("bot");
     const to = memberName(members, handoff.toBotId) ?? t("bot");
+    const label = t("{from} messaged {to}", { from, to });
     return (
-      <AgentEventLabel
-        actionProps={actionProps}
-        label={t("{from} messaged {to}", { from, to })}
-        detail={handoff.text}
-        expanded={peerExpanded}
-        onToggle={() => setPeerExpanded((expanded) => !expanded)}
-      />
+      <Interstitial
+        avatars={
+          <StackedAvatars
+            items={[avatarOf(handoff.fromBotId), avatarOf(handoff.toBotId)]}
+            size={sizes.stackXs}
+          />
+        }
+      >
+        {handoff.text ? `${label} · ${handoff.text}` : label}
+      </Interstitial>
     );
   }
   const peerMessage = message.blocks.find(
@@ -2604,18 +2708,13 @@ const MessageBubble = memo(function MessageBubble({
     const label = sent
       ? t("Messaged {peer}", { peer: peer ?? t("Bot") })
       : t("Message from {peer}", { peer: peer ?? t("Bot") });
-    const botColorOf = (id: string) =>
-      bots.find((bot) => bot.id === id)?.color ??
-      members?.find((member) => member.botId === id)?.color ??
-      tokens.mutedForeground;
-    const peerColor = botColorOf(peerBotId);
+    const pair = sent ? [cardBotId, peerBotId] : [peerBotId, cardBotId];
     // Compact receipt only: peer bodies stay out of the human thread; the full
     // view-only exchange opens on its own screen.
     return (
-      <Pressable
-        {...actionProps}
-        accessibilityRole="button"
+      <Interstitial
         accessibilityLabel={label}
+        avatars={<StackedAvatars items={pair.map(avatarOf)} size={sizes.stackXs} />}
         onPress={() =>
           router.push({
             pathname: "/peer-messages",
@@ -2625,32 +2724,13 @@ const MessageBubble = memo(function MessageBubble({
               botColor: botColorOf(cardBotId),
               peerBotId,
               peerBotName: peer ?? "",
-              peerColor,
+              peerColor: botColorOf(peerBotId),
             },
           })
         }
-        hitSlop={8}
-        style={{
-          width: "100%",
-          paddingVertical: 4,
-          alignItems: "center",
-          justifyContent: "flex-start",
-          flexDirection: "row",
-          gap: 6,
-        }}
       >
-        <BotAvatar color={peerColor} identity={peerBotId} size={16} />
-        <Text
-          numberOfLines={1}
-          style={{
-            color: tokens.mutedForeground,
-            fontSize: 13.5,
-            flexShrink: 1,
-          }}
-        >
-          {label}
-        </Text>
-      </Pressable>
+        {label}
+      </Interstitial>
     );
   }
   const channelMessage = message.blocks.find(
@@ -2659,16 +2739,25 @@ const MessageBubble = memo(function MessageBubble({
   );
   if (channelMessage) {
     return (
-      <Pressable
-        {...actionProps}
-        style={{ width: "100%", paddingVertical: 4, alignItems: "center" }}
-      >
-        <Text style={{ color: tokens.mutedForeground, fontSize: 13.5, textAlign: "center" }}>
-          {messagingProviderLabel(channelMessage.provider, channelMessage.transport)} ·{" "}
-          {channelMessage.fromLabel}: {channelMessage.text}
-        </Text>
-      </Pressable>
+      <Interstitial avatars={null}>
+        {`${messagingProviderLabel(channelMessage.provider, channelMessage.transport)} · ${
+          channelMessage.fromLabel
+        }: ${channelMessage.text}`}
+      </Interstitial>
     );
+  }
+  const metaNote = message.blocks.find(
+    (block): block is Extract<MessageBlock, { kind: "meta" }> => block.kind === "meta",
+  );
+  if (metaNote) {
+    return <Interstitial avatars={null}>{metaNote.text}</Interstitial>;
+  }
+  const routineRun = message.blocks.find(
+    (block): block is Extract<MessageBlock, { kind: "routine_run" }> =>
+      block.kind === "routine_run",
+  );
+  if (routineRun) {
+    return <RoutineRunCard block={routineRun} actionProps={actionProps} />;
   }
   const special = message.blocks.find(
     (block) =>
@@ -2678,67 +2767,58 @@ const MessageBubble = memo(function MessageBubble({
     const running = special.status === "running";
     const failed = special.status === "failed";
     return (
-      <Pressable
-        {...actionProps}
-        style={{
-          width: "90%",
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor: tokens.border,
-          backgroundColor: tokens.card,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            gap: 8,
-          }}
-        >
-          <Text
+      <Pressable {...actionProps} style={{ width: "90%" }}>
+        <Surface style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
+          <View
             style={{
-              color: tokens.foreground,
-              fontSize: 15,
-              fontWeight: "600",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              gap: 8,
             }}
           >
-            {special.name || t("subagent")}
-          </Text>
-          <Text
-            style={{
-              color: failed ? tokens.destructive : running ? tokens.warning : tokens.success,
-              fontSize: 13,
-            }}
-          >
-            {running
-              ? t("Running")
-              : special.status === "failed"
-                ? t("Failed")
-                : special.status === "completed"
-                  ? t("Completed")
-                  : special.status}
-          </Text>
-        </View>
-        {special.task ? (
-          <Text
-            style={{
-              color: tokens.mutedForeground,
-              marginTop: 8,
-              fontSize: 13.5,
-            }}
-          >
-            {special.task}
-          </Text>
-        ) : null}
-        {special.result || special.progress ? (
-          <View style={{ marginTop: 8 }}>
-            <ChatMarkdown palette={tokens} colorScheme={colorScheme} streaming={running}>
-              {special.result || special.progress || ""}
-            </ChatMarkdown>
+            <Text
+              style={{
+                color: tokens.foreground,
+                fontSize: 15,
+                fontWeight: "600",
+              }}
+            >
+              {special.name || t("subagent")}
+            </Text>
+            <Text
+              style={{
+                color: failed
+                  ? tokens.destructive
+                  : running
+                    ? tokens.mutedForeground
+                    : tokens.success,
+                ...nativeTextStyle("label"),
+              }}
+            >
+              {running
+                ? t("Running")
+                : special.status === "failed"
+                  ? t("Failed")
+                  : special.status === "completed"
+                    ? t("Completed")
+                    : special.status}
+            </Text>
           </View>
-        ) : null}
+          {special.task ? (
+            <Text
+              style={{ color: tokens.mutedForeground, marginTop: 8, ...nativeTextStyle("meta") }}
+            >
+              {special.task}
+            </Text>
+          ) : null}
+          {special.result || special.progress ? (
+            <View style={{ marginTop: 8 }}>
+              <ChatMarkdown palette={tokens} colorScheme={colorScheme} streaming={running}>
+                {special.result || special.progress || ""}
+              </ChatMarkdown>
+            </View>
+          ) : null}
+        </Surface>
       </Pressable>
     );
   }
@@ -2752,8 +2832,8 @@ const MessageBubble = memo(function MessageBubble({
           : special.status === "cancelled"
             ? t("cancelled")
             : t("failed");
-    const running = special.status === "running";
-    const failed = special.status === "failed" || special.status === "cancelled";
+    const failed = special.status === "failed";
+    const finished = special.status === "finished";
     const prHref = cloudAgentHttpsUrl(special.prUrl);
     const href = prHref ?? cloudAgentHttpsUrl(special.url);
     return (
@@ -2765,38 +2845,40 @@ const MessageBubble = memo(function MessageBubble({
         accessibilityRole={href ? "link" : "text"}
         accessibilityLabel={`${title}: ${statusLabel}`}
         disabled={!href}
-        style={{
-          width: "90%",
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor: tokens.border,
-          backgroundColor: tokens.card,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-        }}
+        style={{ width: "90%" }}
       >
-        <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
-          <Text style={{ color: tokens.cardForeground, fontSize: 15, fontWeight: "600" }}>
-            {title}
-          </Text>
-          <Text
-            style={{
-              color: failed ? tokens.destructive : running ? tokens.warning : tokens.success,
-              fontSize: 13,
-            }}
-          >
-            {statusLabel}
-          </Text>
-        </View>
-        {prHref ? (
-          <Text style={{ color: tokens.mutedForeground, marginTop: 8, fontSize: 14.5 }}>
-            {t("Pull request")}
-          </Text>
-        ) : special.branch ? (
-          <Text style={{ color: tokens.mutedForeground, marginTop: 8, fontSize: 13.5 }}>
-            {special.branch}
-          </Text>
-        ) : null}
+        <Surface style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
+            <Text style={{ color: tokens.cardForeground, fontSize: 15, fontWeight: "600" }}>
+              {title}
+            </Text>
+            <Text
+              style={{
+                color: failed
+                  ? tokens.destructive
+                  : finished
+                    ? tokens.success
+                    : tokens.mutedForeground,
+                ...nativeTextStyle("label"),
+              }}
+            >
+              {statusLabel}
+            </Text>
+          </View>
+          {prHref ? (
+            <Text
+              style={{ color: tokens.mutedForeground, marginTop: 8, ...nativeTextStyle("meta") }}
+            >
+              {t("Pull request")}
+            </Text>
+          ) : special.branch ? (
+            <Text
+              style={{ color: tokens.mutedForeground, marginTop: 8, ...nativeTextStyle("meta") }}
+            >
+              {special.branch}
+            </Text>
+          ) : null}
+        </Surface>
       </Pressable>
     );
   }
@@ -2808,60 +2890,46 @@ const MessageBubble = memo(function MessageBubble({
         onPress={
           removed ? undefined : () => onOpenBot(special.botId ?? "", special.name ?? t("Bot"))
         }
-        style={{
-          width: "90%",
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor: tokens.border,
-          backgroundColor: tokens.card,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-          opacity: removed ? 0.6 : 1,
-        }}
+        style={{ width: "90%", opacity: removed ? 0.6 : 1 }}
       >
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            gap: 8,
-          }}
-        >
-          <Text
+        <Surface style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
+          <View
             style={{
-              color: tokens.foreground,
-              fontSize: 15,
-              fontWeight: "600",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              gap: 8,
             }}
           >
-            {special.name || t("Bot")}
+            <Text
+              style={{
+                color: tokens.foreground,
+                fontSize: 15,
+                fontWeight: "600",
+              }}
+            >
+              {special.name || t("Bot")}
+            </Text>
+            <Text
+              style={{
+                color: removed ? tokens.destructive : tokens.success,
+                ...nativeTextStyle("label"),
+              }}
+            >
+              {special.status === "archived"
+                ? t("archived")
+                : special.status === "deleted"
+                  ? t("deleted")
+                  : t("bot")}
+            </Text>
+          </View>
+          <Text style={{ color: tokens.mutedForeground, marginTop: 8, ...nativeTextStyle("meta") }}>
+            {removed
+              ? special.status === "archived"
+                ? t("Archived. Chat, memory, and files kept.")
+                : t("Removed with chat, computer, and memory.")
+              : special.title || t("Opened its thread.")}
           </Text>
-          <Text
-            style={{
-              color: removed ? tokens.destructive : tokens.success,
-              fontSize: 13,
-            }}
-          >
-            {special.status === "archived"
-              ? t("archived")
-              : special.status === "deleted"
-                ? t("deleted")
-                : t("bot")}
-          </Text>
-        </View>
-        <Text
-          style={{
-            color: tokens.mutedForeground,
-            marginTop: 8,
-            fontSize: 14.5,
-            lineHeight: 21,
-          }}
-        >
-          {removed
-            ? special.status === "archived"
-              ? t("Archived. Chat, memory, and files kept.")
-              : t("Removed with chat, computer, and memory.")
-            : special.title || t("Opened its thread.")}
-        </Text>
+        </Surface>
       </Pressable>
     );
   }
@@ -2884,82 +2952,37 @@ const MessageBubble = memo(function MessageBubble({
     (block) => block.kind === "ask" && Boolean(block.actions?.length),
   );
   if (askBlock?.kind === "ask" && askBlock.actions?.length) {
+    const approval = isApprovalAskBlock(askBlock);
+    // The row above already names the bot; the card only repeats itself for a
+    // consequential approval, name-less. A question with fixed options opens
+    // with no header.
+    const header = approval ? { who: t("Needs your call") } : undefined;
+    const answeredLine =
+      askBlock.status === "answered"
+        ? formatApprovalAnswer(askBlock.answer, askBlock.actions, approval)
+        : !canAnswer
+          ? t("No longer active")
+          : undefined;
     return (
       <View style={{ gap: 8, width: "100%" }}>
-        <View
-          style={{
-            width: "90%",
-            borderRadius: 18,
-            borderWidth: 1,
-            borderColor: tokens.border,
-            backgroundColor: tokens.card,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-          }}
-        >
-          {askBlock.text ? (
-            <Text
-              {...actionProps}
-              style={{
-                color: tokens.foreground,
-                fontSize: 15.5,
-                lineHeight: 23,
-              }}
-            >
-              {askBlock.text}
-            </Text>
-          ) : null}
-          {askBlock.detail ? (
-            <Text
-              {...(askBlock.text ? {} : actionProps)}
-              style={{
-                color: tokens.mutedForeground,
-                marginTop: askBlock.text ? 8 : 0,
-                fontSize: 12.5,
-                fontFamily: "Menlo",
-                lineHeight: 20,
-              }}
-            >
-              {askBlock.detail}
-            </Text>
-          ) : null}
-          {askBlock.status === "answered" ? (
-            <Text
-              {...actionProps}
-              style={{
-                color: tokens.success,
-                marginTop: 12,
-                fontSize: 13.5,
-                fontWeight: "600",
-              }}
-            >
-              {formatApprovalAnswer(
-                askBlock.answer,
-                askBlock.actions,
-                isApprovalAskBlock(askBlock),
-              )}
-            </Text>
-          ) : canAnswer && onAnswer ? (
-            <AskActions
-              actions={askBlock.actions}
-              allowFreeText={!isApprovalAskBlock(askBlock)}
-              accessibilityActions={actionProps.accessibilityActions}
-              onAccessibilityAction={actionProps.onAccessibilityAction}
-              onAnswer={(answer) => onAnswer(message, answer)}
-            />
-          ) : (
-            <Text
-              {...actionProps}
-              style={{
-                color: tokens.mutedForeground,
-                marginTop: 12,
-                fontSize: 13.5,
-              }}
-            >
-              {t("No longer active")}
-            </Text>
-          )}
-        </View>
+        <FramedBlock
+          header={header ? { ...header, dot: answeredLine === undefined } : undefined}
+          question={<Text {...actionProps}>{askBlock.text}</Text>}
+          consequence={askBlock.detail}
+          answered={answeredLine}
+          actions={
+            answeredLine === undefined ? (
+              <AskActions
+                actions={askBlock.actions}
+                approval={approval}
+                allowFreeText={!approval}
+                accessibilityActions={actionProps.accessibilityActions}
+                onAccessibilityAction={actionProps.onAccessibilityAction}
+                onAnswer={(answer) => onAnswer(message, answer)}
+              />
+            ) : undefined
+          }
+        />
         {appConnectBlocks.map((block, index) => (
           <AppConnectCard
             key={`${block.provider}-${index}`}
@@ -2986,37 +3009,24 @@ const MessageBubble = memo(function MessageBubble({
     })
     .join("\n");
   if (attachments.length > 0) {
-    const speaker =
-      message.role === "bot" ? (memberName(members, message.botId) ?? botName) : undefined;
+    // The author now lives in the row above (`MessageRow`), so the card only
+    // carries what was attached.
     return (
-      <View
+      <Surface
         style={{
           maxWidth: "100%",
-          borderRadius: 20,
-          borderWidth: 1,
-          borderColor: tokens.border,
-          backgroundColor: message.role === "user" ? tokens.secondary : tokens.muted,
+          alignSelf: message.role === "user" ? "flex-end" : "flex-start",
           paddingHorizontal: 14,
           paddingVertical: 12,
           gap: 8,
+          ...(message.role === "user" ? { backgroundColor: tokens.chatUser } : null),
         }}
       >
-        {speaker ? (
-          <Text
-            style={{
-              color: tokens.mutedForeground,
-              fontSize: 12.5,
-              fontWeight: "600",
-            }}
-          >
-            {speaker}
-          </Text>
-        ) : null}
         {replyPreview || (message.replyToMessageId && message.replyQuote) ? (
           <Text
             style={{
-              color: message.role === "user" ? tokens.secondaryForeground : tokens.mutedForeground,
-              fontSize: 12.5,
+              color: message.role === "user" ? tokens.chatUserForeground : tokens.mutedForeground,
+              ...nativeTextStyle("meta"),
             }}
             numberOfLines={2}
           >
@@ -3030,8 +3040,8 @@ const MessageBubble = memo(function MessageBubble({
         {caption ? (
           <Text
             style={{
-              color: message.role === "user" ? tokens.secondaryForeground : tokens.foreground,
-              fontSize: 15,
+              color: message.role === "user" ? tokens.chatUserForeground : tokens.foreground,
+              ...nativeTextStyle("body"),
             }}
           >
             {caption}
@@ -3060,8 +3070,8 @@ const MessageBubble = memo(function MessageBubble({
             >
               <Text
                 style={{
-                  color: message.role === "user" ? tokens.secondaryForeground : tokens.foreground,
-                  fontSize: 15,
+                  color: message.role === "user" ? tokens.chatUserForeground : tokens.foreground,
+                  ...nativeTextStyle("body"),
                 }}
               >
                 🖼 {attachment.name ?? t("Image")}
@@ -3095,8 +3105,8 @@ const MessageBubble = memo(function MessageBubble({
             >
               <Text
                 style={{
-                  color: message.role === "user" ? tokens.secondaryForeground : tokens.foreground,
-                  fontSize: 15,
+                  color: message.role === "user" ? tokens.chatUserForeground : tokens.foreground,
+                  ...nativeTextStyle("body"),
                 }}
               >
                 📎 {attachment.name ?? t("File")}
@@ -3105,9 +3115,9 @@ const MessageBubble = memo(function MessageBubble({
                 <Text
                   style={{
                     color:
-                      message.role === "user" ? tokens.secondaryForeground : tokens.mutedForeground,
+                      message.role === "user" ? tokens.chatUserForeground : tokens.mutedForeground,
                     marginTop: 4,
-                    fontSize: 13,
+                    ...nativeTextStyle("meta"),
                   }}
                 >
                   {attachment.mimeType ?? "file"} · {attachment.size} bytes
@@ -3125,24 +3135,22 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
         ))}
-      </View>
+      </Surface>
     );
   }
   const segments = messagePresentationSegments(message.blocks);
   const steps = showSteps ? stepsBlocks(message.blocks) : [];
-  const speaker =
-    message.role === "bot" ? (memberName(members, message.botId) ?? botName) : undefined;
+  const live = message.id.startsWith("progress:");
   const firstContent = segments.findIndex((segment) => segment.kind === "content");
   return (
     <View style={{ gap: 8, width: "100%" }}>
       {steps.map((block, index) => (
-        <AgentSteps key={`${message.id}-steps-${index}`} block={block} />
+        <AgentSteps key={`${message.id}-steps-${index}`} block={block} live={live} />
       ))}
       {segments.map((segment, index) => (
-        <MessageTextCard
+        <MessageText
           key={`${message.id}-content-${index}`}
           message={{ ...message, blocks: segment.blocks }}
-          speaker={index === firstContent ? speaker : undefined}
           replyPreview={index === firstContent ? replyPreview : undefined}
           actionProps={actionProps}
         />
@@ -3160,14 +3168,162 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-function MessageTextCard({
+/** "3m ago"-style label from an ISO timestamp, in the active UI locale. Falls
+    back to a clock time when `Intl.RelativeTimeFormat` isn't available. */
+function routineRunTimeLabel(iso: string | undefined): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const locale = dateLocaleForUi();
+  const diffMin = Math.round((Date.now() - date.getTime()) / 60_000);
+  try {
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    if (Math.abs(diffMin) < 1) return rtf.format(0, "minute");
+    if (Math.abs(diffMin) < 60) return rtf.format(-diffMin, "minute");
+    const diffHour = Math.round(diffMin / 60);
+    if (Math.abs(diffHour) < 24) return rtf.format(-diffHour, "hour");
+    return rtf.format(-Math.round(diffHour / 24), "day");
+  } catch {
+    return date.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  }
+}
+
+/** Native routine-run card: a sub-bot's routine traced by its run lifecycle
+    (queued/running/completed/failed/cancelled) instead of a free closing
+    text. Mirrors the web `RoutineRunCard`'s semantics; visual template is the
+    `subagent` card above. Collapsed by default, expanded when the routine's
+    `notify` toggle is on (spec CA2/CA13). The digest is untrusted content
+    (a sub-bot's routine can summarize scanned mail or web pages): it is
+    rendered as sanitized markdown via `ChatMarkdown`, with remote images
+    blocked (`allowImages={false}`) so no remote resource is ever loaded from
+    it (threat model S1, spec CA-R5/CA-R12). The card's chrome never carries
+    the bot's color (spec CA-R10): a subscribed routine is only ever
+    distinguished by being expanded by default and by a monochrome bell. */
+function RoutineRunCard({
+  block,
+  actionProps,
+}: {
+  block: Extract<MessageBlock, { kind: "routine_run" }>;
+  actionProps: MessageActionProps;
+}) {
+  const tokens = mobileTokens();
+  const colorScheme = useResolvedAppearance();
+  const { t } = useI18n();
+  const digest = block.digest?.trim() || undefined;
+  const subscribed = Boolean(block.notify);
+  const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
+  const expanded = manualExpanded ?? subscribed;
+  const statusColor =
+    block.state === "completed"
+      ? tokens.success
+      : block.state === "failed"
+        ? tokens.destructive
+        : tokens.mutedForeground;
+  const statusLabel =
+    block.state === "queued"
+      ? t("Queued")
+      : block.state === "running"
+        ? t("Running")
+        : block.state === "completed"
+          ? t("Completed")
+          : block.state === "failed"
+            ? t("Failed")
+            : t("Cancelled");
+  const timeLabel = routineRunTimeLabel(
+    block.state === "queued" || block.state === "running"
+      ? block.startedAt
+      : (block.endedAt ?? block.startedAt),
+  );
+  return (
+    <Pressable {...actionProps} style={{ width: "90%" }}>
+      <Surface
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 14,
+          gap: 6,
+        }}
+      >
+        {/* The routine name owns the full width and is never truncated by the
+            state pill or timestamp (explicit requirement): they always sit on
+            their own row below it, not squeezed onto the same line. */}
+        <Text style={{ color: tokens.foreground, fontSize: 15, fontWeight: "600" }}>
+          {block.routineName}
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          {block.state === "running" ? (
+            <ShimmerText
+              style={{ color: statusColor, ...nativeTextStyle("label", { weight: 600 }) }}
+            >
+              {`● ${statusLabel}`}
+            </ShimmerText>
+          ) : (
+            // The dot never carries the status alone: the word is always shown too.
+            <Text style={{ color: statusColor, ...nativeTextStyle("label", { weight: 600 }) }}>
+              {`● ${statusLabel}`}
+            </Text>
+          )}
+          {timeLabel ? (
+            <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("time") }}>
+              {timeLabel}
+            </Text>
+          ) : null}
+          {subscribed ? (
+            <View accessibilityRole="image" accessibilityLabel={t("Notifications on")}>
+              <NativeSymbol
+                ios="bell"
+                android="notifications-outline"
+                size={14}
+                color={tokens.mutedForeground}
+              />
+            </View>
+          ) : null}
+        </View>
+        {block.headline ? (
+          <Text
+            numberOfLines={1}
+            style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}
+          >
+            {block.headline}
+          </Text>
+        ) : null}
+        {digest ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={expanded ? t("Hide details") : t("Show details")}
+            onPress={() => setManualExpanded(!expanded)}
+            hitSlop={15}
+            style={{ flexDirection: "row", alignItems: "center", marginTop: 2 }}
+          >
+            <NativeSymbol
+              ios={expanded ? "chevron.up" : "chevron.down"}
+              android={expanded ? "chevron-up-outline" : "chevron-down-outline"}
+              size={14}
+              color={tokens.mutedForeground}
+            />
+          </Pressable>
+        ) : null}
+        {expanded && digest ? (
+          <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled>
+            <ChatMarkdown allowImages={false} palette={tokens} colorScheme={colorScheme}>
+              {truncateMarkdownForRender(digest)}
+            </ChatMarkdown>
+          </ScrollView>
+        ) : null}
+      </Surface>
+    </Pressable>
+  );
+}
+
+/**
+ * What was said: the person's words in the one filled bubble of the thread,
+ * a bot's in prose the thread does not frame.
+ */
+function MessageText({
   message,
-  speaker,
   replyPreview,
   actionProps,
 }: {
   message: MobileMessage;
-  speaker?: string;
   replyPreview?: MobileMessage;
   actionProps: MessageActionProps;
 }) {
@@ -3175,114 +3331,41 @@ function MessageTextCard({
   const tokens = mobileTokens();
   const contentText = blockText(message);
   if (!contentText) return null;
-  return (
-    <Pressable
-      {...actionProps}
-      style={{
-        flexShrink: 1,
-        minWidth: 0,
-        maxWidth: "100%",
-        backgroundColor: message.role === "user" ? tokens.secondary : tokens.muted,
-        padding: 12,
-        borderRadius: 20,
-      }}
-    >
-      {speaker ? (
-        <Text
-          style={{
-            color: tokens.mutedForeground,
-            fontSize: 12.5,
-            fontWeight: "600",
-            marginBottom: 4,
-          }}
-        >
-          {speaker}
-        </Text>
-      ) : null}
-      {replyPreview || (message.replyToMessageId && message.replyQuote) ? (
-        <Text
-          style={{
-            color: message.role === "user" ? tokens.secondaryForeground : tokens.mutedForeground,
-            fontSize: 12.5,
-            marginBottom: 6,
-          }}
-          numberOfLines={2}
-        >
-          {message.replyQuote
-            ? `“${message.replyQuote}”`
-            : replyPreview
-              ? previewMessageText(replyPreview)
-              : ""}
-        </Text>
-      ) : null}
-      {message.role === "user" ? (
-        <Text style={{ color: tokens.secondaryForeground, fontSize: 15.5, lineHeight: 23 }}>
-          {contentText}
-        </Text>
-      ) : (
-        <ChatMarkdown
-          palette={tokens}
-          colorScheme={colorScheme}
-          streaming={message.id.startsWith("progress:")}
-        >
-          {contentText}
-        </ChatMarkdown>
-      )}
-    </Pressable>
-  );
-}
-
-function AgentEventLabel({
-  label,
-  detail,
-  expanded,
-  onToggle,
-  actionProps,
-}: {
-  label: string;
-  detail?: string;
-  expanded: boolean;
-  onToggle: () => void;
-  actionProps: MessageActionProps;
-}) {
-  const colorScheme = useResolvedAppearance();
-  const tokens = mobileTokens();
-  const { t } = useI18n();
-  return (
-    <Pressable
-      {...actionProps}
-      onPress={onToggle}
-      accessibilityRole="button"
-      accessibilityLabel={expanded ? t("Hide {label}", { label }) : t("Show {label}", { label })}
-      style={{ width: "100%", paddingVertical: 4, alignItems: "center" }}
-    >
+  const parent =
+    replyPreview || (message.replyToMessageId && message.replyQuote) ? (
       <Text
+        numberOfLines={2}
         style={{
+          marginBottom: 6,
           color: tokens.mutedForeground,
-          fontSize: 13.5,
-          textAlign: "center",
+          ...nativeTextStyle("meta"),
         }}
       >
-        ↔ {label}
+        {message.replyQuote
+          ? `“${message.replyQuote}”`
+          : replyPreview
+            ? previewMessageText(replyPreview)
+            : ""}
       </Text>
-      {expanded && detail ? (
-        <View
-          style={{
-            width: "100%",
-            marginTop: 6,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: tokens.border,
-            backgroundColor: tokens.card,
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-          }}
-        >
-          <ChatMarkdown palette={tokens} colorScheme={colorScheme}>
-            {detail}
-          </ChatMarkdown>
-        </View>
-      ) : null}
+    ) : null;
+  if (message.role === "user") {
+    return (
+      <View style={{ alignItems: "flex-end" }}>
+        {parent}
+        <UserBubble {...actionProps}>{contentText}</UserBubble>
+      </View>
+    );
+  }
+  return (
+    <Pressable {...actionProps} style={{ minWidth: 0, maxWidth: "100%" }}>
+      {parent}
+      <ChatMarkdown
+        palette={tokens}
+        colorScheme={colorScheme}
+        streaming={message.id.startsWith("progress:")}
+      >
+        {contentText}
+      </ChatMarkdown>
     </Pressable>
   );
 }
@@ -3330,39 +3413,34 @@ function AskBlock({
     }
   }
 
+  const answeredLine = answered
+    ? secretInput
+      ? t("Saved")
+      : t("Answered: {answer}", { answer: ask.answer ?? t("Done") })
+    : !canAnswer
+      ? t("Waiting for this bot’s response.")
+      : undefined;
+  const disabled = (secretInput ? answer.length === 0 : !answer.trim()) || submitting;
+
   return (
-    <View
-      style={{
-        width: "90%",
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: tokens.border,
-        backgroundColor: tokens.card,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        gap: 10,
-      }}
+    <FramedBlock
+      question={<Text {...actionProps}>{ask.text}</Text>}
+      consequence={secretInput ? ask.credential?.origin : ask.detail}
+      answered={answeredLine}
+      actions={
+        answeredLine === undefined ? (
+          <CapsuleButton
+            kind="primary"
+            height={sizes.mobileStack}
+            label={submitting ? submittingLabel : submitLabel}
+            disabled={disabled}
+            onPress={() => void submit()}
+          />
+        ) : undefined
+      }
     >
-      <Text
-        {...actionProps}
-        style={{ color: tokens.foreground, fontSize: 15.5, fontWeight: "600" }}
-      >
-        {ask.text}
-      </Text>
-      {secretInput && ask.credential ? (
-        <Text style={{ color: tokens.mutedForeground, fontSize: 13.5 }}>
-          {ask.credential.origin}
-        </Text>
-      ) : null}
-      {ask.detail && !secretInput ? (
-        <Text style={{ color: tokens.mutedForeground, fontSize: 13.5 }}>{ask.detail}</Text>
-      ) : null}
-      {answered ? (
-        <Text style={{ color: tokens.success, fontSize: 14 }}>
-          {secretInput ? t("Saved") : t("Answered: {answer}", { answer: ask.answer ?? t("Done") })}
-        </Text>
-      ) : canAnswer ? (
-        <>
+      {answeredLine === undefined ? (
+        <View style={{ gap: 10 }}>
           <TextInput
             accessibilityLabel={secretInput ? secretLabel : t("Answer")}
             value={answer}
@@ -3376,41 +3454,23 @@ function AskBlock({
             editable={!submitting}
             onSubmitEditing={() => void submit()}
             style={{
-              minHeight: 42,
-              borderRadius: 12,
+              minHeight: 44,
+              borderRadius: radii.card,
               borderWidth: 1,
-              borderColor: tokens.border,
+              borderColor: tokens.outline,
+              backgroundColor: tokens.surface,
               color: tokens.foreground,
-              paddingHorizontal: 12,
-              paddingVertical: 9,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              ...nativeTextStyle("body"),
             }}
           />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={submitLabel}
-            disabled={(secretInput ? answer.length === 0 : !answer.trim()) || submitting}
-            onPress={() => void submit()}
-            style={{
-              alignSelf: "flex-end",
-              borderRadius: 999,
-              backgroundColor: tokens.foreground,
-              opacity: (secretInput ? answer.length === 0 : !answer.trim()) || submitting ? 0.5 : 1,
-              paddingHorizontal: 16,
-              paddingVertical: 9,
-            }}
-          >
-            <Text style={{ color: tokens.primaryForeground, fontWeight: "600" }}>
-              {submitting ? submittingLabel : submitLabel}
-            </Text>
-          </Pressable>
-        </>
-      ) : (
-        <Text style={{ color: tokens.mutedForeground, fontSize: 13.5 }}>
-          {t("Waiting for this bot’s response.")}
-        </Text>
-      )}
-      {error ? <Text style={{ color: tokens.destructive, fontSize: 13 }}>{error}</Text> : null}
-    </View>
+          {error ? (
+            <Text style={{ color: tokens.destructive, ...nativeTextStyle("meta") }}>{error}</Text>
+          ) : null}
+        </View>
+      ) : null}
+    </FramedBlock>
   );
 }
 
@@ -3517,257 +3577,211 @@ function MultiQuestionAskBlock({
     }
   }
 
-  return (
-    <View
-      style={{
-        width: "90%",
-        borderRadius: 18,
-        borderWidth: 1,
-        borderColor: tokens.border,
-        backgroundColor: tokens.card,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 10,
-        }}
-      >
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          {questions.map((question, dotIndex) => {
-            const done = answered || mobileAnswered(get(question.id));
-            const active = !answered && dotIndex === index;
-            return (
-              <View
-                key={question.id}
-                style={{
-                  height: 6,
-                  width: active ? 22 : 6,
-                  borderRadius: 3,
-                  backgroundColor: active
-                    ? tokens.foreground
-                    : done
-                      ? tokens.success
-                      : tokens.mutedForeground,
-                  opacity: active ? 1 : done ? 1 : 0.4,
-                }}
-              />
-            );
-          })}
-        </View>
-        {!answered ? (
-          <Text style={{ color: tokens.mutedForeground, fontSize: 12, fontWeight: "600" }}>
-            {index + 1}/{total}
-          </Text>
-        ) : null}
+  const progressRow = (
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <View style={{ flexDirection: "row", gap: 6 }}>
+        {questions.map((question, dotIndex) => {
+          const done = answered || mobileAnswered(get(question.id));
+          const active = !answered && dotIndex === index;
+          return (
+            <View
+              key={question.id}
+              style={{
+                height: 6,
+                width: active ? 22 : 6,
+                borderRadius: 3,
+                backgroundColor: active
+                  ? tokens.foreground
+                  : done
+                    ? tokens.success
+                    : tokens.mutedForeground,
+                opacity: active ? 1 : done ? 1 : 0.4,
+              }}
+            />
+          );
+        })}
       </View>
-
-      {answered ? (
-        <View style={{ gap: 10 }}>
-          {questions.map((question, qIndex) => {
-            const stored = ask.answers?.[question.id];
-            const labels = (stored?.selected ?? []).map(
-              (id) => question.options?.find((option) => option.id === id)?.label ?? id,
-            );
-            if (stored?.other) labels.push(`${t("Other")}: ${stored.other}`);
-            const value = stored?.skipped && labels.length === 0 ? t("Skipped") : labels.join(", ");
-            return (
-              <View key={question.id}>
-                <Text style={{ color: tokens.mutedForeground, fontSize: 13, fontWeight: "600" }}>
-                  {qIndex + 1}. {question.question}
-                </Text>
-                <Text style={{ color: tokens.foreground, fontSize: 14.5 }}>
-                  {value || t("Answered")}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      ) : !canAnswer ? (
-        <Text style={{ color: tokens.mutedForeground, fontSize: 13.5 }}>
-          {t("No longer active")}
+      {!answered ? (
+        <Text
+          style={{ color: tokens.mutedForeground, ...nativeTextStyle("label", { weight: 600 }) }}
+        >
+          {index + 1}/{total}
         </Text>
-      ) : (
-        <View>
+      ) : null}
+    </View>
+  );
+
+  const answeredContent =
+    answered || !canAnswer ? (
+      <View style={{ gap: 10 }}>
+        {progressRow}
+        {answered ? (
+          <View style={{ gap: 10 }}>
+            {questions.map((question, qIndex) => {
+              const stored = ask.answers?.[question.id];
+              const labels = (stored?.selected ?? []).map(
+                (id) => question.options?.find((option) => option.id === id)?.label ?? id,
+              );
+              if (stored?.other) labels.push(`${t("Other")}: ${stored.other}`);
+              const value =
+                stored?.skipped && labels.length === 0 ? t("Skipped") : labels.join(", ");
+              return (
+                <View key={question.id}>
+                  <Text
+                    style={{
+                      color: tokens.mutedForeground,
+                      ...nativeTextStyle("meta", { weight: 600 }),
+                    }}
+                  >
+                    {qIndex + 1}. {question.question}
+                  </Text>
+                  <Text style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
+                    {value || t("Answered")}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+            {t("No longer active")}
+          </Text>
+        )}
+      </View>
+    ) : undefined;
+
+  const optionEntries = current.options ?? [];
+  const withOther =
+    optionEntries.length && current.multiSelect
+      ? [...optionEntries, { id: "__other__", label: t("Other…") }]
+      : optionEntries;
+  const selectedIds = [
+    ...get(current.id).selected,
+    ...(get(current.id).otherOpen ? ["__other__"] : []),
+  ];
+  const showOtherField =
+    !current.options?.length || !current.multiSelect || get(current.id).otherOpen;
+
+  return (
+    <FramedBlock
+      question={
+        <>
           {current.header ? (
-            <Text style={{ color: tokens.mutedForeground, fontSize: 11.5, marginBottom: 4 }}>
+            <Text
+              style={{
+                alignSelf: "flex-start",
+                marginBottom: 4,
+                borderRadius: radii.chip,
+                backgroundColor: tokens.muted,
+                paddingHorizontal: 10,
+                paddingVertical: 2,
+                color: tokens.mutedForeground,
+                ...nativeTextStyle("time"),
+              }}
+            >
               {current.header}
             </Text>
           ) : null}
-          <Text
-            {...actionProps}
-            style={{ color: tokens.foreground, fontSize: 15.5, lineHeight: 23 }}
-          >
-            {current.question}
-          </Text>
-          <View style={{ marginTop: 10, gap: 6 }}>
-            {current.options?.map((option) => {
-              const selected = get(current.id).selected.includes(option.id);
-              return (
-                <Pressable
-                  key={option.id}
-                  disabled={submitting}
-                  onPress={() => toggleOption(option.id)}
-                  style={{
-                    borderRadius: 12,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    borderWidth: 1,
-                    borderColor: selected ? tokens.foreground : tokens.border,
-                    backgroundColor: selected ? tokens.muted : "transparent",
-                    opacity: submitting ? 0.5 : 1,
-                  }}
-                >
-                  <Text style={{ color: tokens.foreground, fontSize: 15 }}>
-                    {current.multiSelect ? (selected ? "☑ " : "☐ ") : ""}
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            {current.options?.length && current.multiSelect ? (
-              <Pressable
+          <Text {...actionProps}>{current.question}</Text>
+        </>
+      }
+      answered={answeredContent}
+      actions={
+        answeredContent === undefined ? (
+          <View style={{ gap: 8 }}>
+            {index > 0 ? (
+              <CapsuleButton
+                kind="tertiary"
+                height={TERTIARY_CAPSULE_HEIGHT}
+                label={t("Back")}
+                disabled={submitting}
+                onPress={() => setIndex(index - 1)}
+              />
+            ) : null}
+            {current.required === false ? (
+              <CapsuleButton
+                kind="tertiary"
+                height={TERTIARY_CAPSULE_HEIGHT}
+                label={t("Skip")}
                 disabled={submitting}
                 onPress={() => {
-                  const open = !get(current.id).otherOpen;
-                  update(current.id, {
-                    otherOpen: open,
-                    ...(open ? {} : { other: "" }),
-                    skipped: false,
-                  });
-                }}
-                style={{
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  borderWidth: 1,
-                  borderColor: get(current.id).otherOpen ? tokens.foreground : tokens.border,
-                  backgroundColor: get(current.id).otherOpen ? tokens.muted : "transparent",
-                  opacity: submitting ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: tokens.foreground, fontSize: 15 }}>
-                  {get(current.id).otherOpen ? "☑ " : "☐ "}
-                  {t("Other…")}
-                </Text>
-              </Pressable>
-            ) : current.options?.length ? (
-              <Text style={{ color: tokens.mutedForeground, fontSize: 12, marginTop: 4 }}>
-                {t("Or type your own answer")}
-              </Text>
-            ) : null}
-            {!current.options?.length || !current.multiSelect || get(current.id).otherOpen ? (
-              <TextInput
-                value={get(current.id).other}
-                onChangeText={(value) =>
-                  update(current.id, {
-                    other: value,
-                    ...(current.multiSelect || !value.trim() ? {} : { selected: [] }),
-                    skipped: false,
-                  })
-                }
-                editable={!submitting}
-                autoFocus={current.multiSelect && get(current.id).otherOpen}
-                placeholder={
-                  current.options?.length ? t("Type a different answer") : t("Type your answer")
-                }
-                placeholderTextColor={tokens.mutedForeground}
-                multiline
-                style={{
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: tokens.border,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  color: tokens.foreground,
-                  fontSize: 15,
-                  minHeight: 44,
+                  update(current.id, { selected: [], other: "", skipped: true });
+                  if (!isLast) setIndex(index + 1);
                 }}
               />
             ) : null}
+            <CapsuleButton
+              kind="primary"
+              height={sizes.mobileStack}
+              label={isLast ? (submitting ? t("Sending…") : t("Send answers")) : t("Next")}
+              disabled={submitting || (isLast && !requiredSatisfied)}
+              onPress={() => (isLast ? void submit() : setIndex(index + 1))}
+            />
           </View>
-          <View
-            style={{
-              marginTop: 14,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
+        ) : undefined
+      }
+    >
+      {answeredContent === undefined ? (
+        <View style={{ gap: 10 }}>
+          {progressRow}
+          <QuickReplyCapsules
+            options={withOther}
+            selectedIds={selectedIds}
+            disabled={submitting}
+            multiSelect={current.multiSelect}
+            onSelect={(id) => {
+              if (id === "__other__") {
+                const open = !get(current.id).otherOpen;
+                update(current.id, {
+                  otherOpen: open,
+                  ...(open ? {} : { other: "" }),
+                  skipped: false,
+                });
+              } else {
+                toggleOption(id);
+              }
             }}
-          >
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              {index > 0 ? (
-                <Pressable
-                  disabled={submitting}
-                  onPress={() => setIndex(index - 1)}
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    opacity: submitting ? 0.5 : 1,
-                  }}
-                >
-                  <Text style={{ color: tokens.foreground, fontSize: 15 }}>{t("Back")}</Text>
-                </Pressable>
-              ) : null}
-              {current.required === false ? (
-                <Pressable
-                  disabled={submitting}
-                  onPress={() => {
-                    update(current.id, { selected: [], other: "", skipped: true });
-                    if (!isLast) setIndex(index + 1);
-                  }}
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    opacity: submitting ? 0.5 : 1,
-                  }}
-                >
-                  <Text style={{ color: tokens.mutedForeground, fontSize: 15 }}>{t("Skip")}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-            {isLast ? (
-              <Pressable
-                disabled={submitting || !requiredSatisfied}
-                onPress={() => void submit()}
-                style={{
-                  borderRadius: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  backgroundColor: tokens.foreground,
-                  opacity: submitting || !requiredSatisfied ? 0.4 : 1,
-                }}
-              >
-                <Text style={{ color: tokens.background, fontSize: 15, fontWeight: "600" }}>
-                  {submitting ? t("Sending…") : t("Send answers")}
-                </Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                disabled={submitting}
-                onPress={() => setIndex(index + 1)}
-                style={{
-                  borderRadius: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  backgroundColor: tokens.foreground,
-                  opacity: submitting ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: tokens.background, fontSize: 15, fontWeight: "600" }}>
-                  {t("Next")}
-                </Text>
-              </Pressable>
-            )}
-          </View>
+          />
+          {current.options?.length && !current.multiSelect ? (
+            <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+              {t("Or type your own answer")}
+            </Text>
+          ) : null}
+          {showOtherField ? (
+            <TextInput
+              value={get(current.id).other}
+              onChangeText={(value) =>
+                update(current.id, {
+                  other: value,
+                  ...(current.multiSelect || !value.trim() ? {} : { selected: [] }),
+                  skipped: false,
+                })
+              }
+              editable={!submitting}
+              autoFocus={current.multiSelect && get(current.id).otherOpen}
+              placeholder={
+                current.options?.length ? t("Type a different answer") : t("Type your answer")
+              }
+              placeholderTextColor={tokens.mutedForeground}
+              multiline
+              style={{
+                borderRadius: radii.card,
+                borderWidth: 1,
+                borderColor: tokens.outline,
+                backgroundColor: tokens.surface,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                color: tokens.foreground,
+                minHeight: 44,
+                ...nativeTextStyle("body"),
+              }}
+            />
+          ) : null}
           {error ? (
-            <Text style={{ color: tokens.destructive, fontSize: 13, marginTop: 8 }}>{error}</Text>
+            <Text style={{ color: tokens.destructive, ...nativeTextStyle("meta") }}>{error}</Text>
           ) : null}
         </View>
-      )}
-    </View>
+      ) : null}
+    </FramedBlock>
   );
 }

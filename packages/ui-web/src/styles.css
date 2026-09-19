@@ -9,6 +9,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-foreground-subtle: var(--foreground-subtle);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -26,6 +27,7 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-outline: var(--outline);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
@@ -33,6 +35,7 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-surface: var(--surface);
   --color-link: var(--link);
   --color-success: var(--success);
   --color-warning: var(--warning);
@@ -44,6 +47,100 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+  --radius-chip: var(--corner-chip);
+  --radius-row: var(--corner-row);
+  --radius-card: var(--corner-card);
+  --radius-block: var(--corner-block);
+  --radius-bubble: var(--corner-bubble);
+  --radius-composer: var(--corner-composer);
+
+  --shadow-row: var(--elevation-row);
+  --shadow-card: var(--elevation-card);
+  --shadow-composer: var(--elevation-composer);
+  --shadow-floating: var(--elevation-floating);
+
+  --spacing-sidebar: var(--space-sidebar);
+  --spacing-thread: var(--space-thread);
+  --spacing-header: var(--space-header);
+  --spacing-panel: var(--space-panel);
+  --spacing-block: var(--space-block);
+
+  /* Control and avatar sizes, so primitives spend `--size-*` through the
+     spacing namespace (`size-composer-icon`) instead of a literal. */
+  --spacing-hover-icon: var(--size-hover-icon);
+  --spacing-quick-reply: var(--size-quick-reply);
+  --spacing-composer-icon: var(--size-composer-icon);
+  --spacing-capsule: var(--size-capsule);
+  --spacing-mobile-stack: var(--size-mobile-stack);
+  --spacing-call-button: var(--size-call-button);
+  --spacing-message: var(--size-message);
+
+  --ease-quiet: var(--motion-ease);
+  --animate-arrive: rk-arrive var(--duration-arrive) var(--motion-ease) both;
+
+  --text-body: var(--type-body-size);
+  --text-body--line-height: var(--type-body-leading);
+  --text-body--letter-spacing: var(--type-body-tracking);
+  --text-body--font-weight: var(--type-body-weight);
+  --text-author: var(--type-author-size);
+  --text-author--line-height: var(--type-author-leading);
+  --text-author--letter-spacing: var(--type-author-tracking);
+  --text-author--font-weight: var(--type-author-weight);
+  --text-time: var(--type-time-size);
+  --text-time--line-height: var(--type-time-leading);
+  --text-time--letter-spacing: var(--type-time-tracking);
+  --text-time--font-weight: var(--type-time-weight);
+  --text-meta: var(--type-meta-size);
+  --text-meta--line-height: var(--type-meta-leading);
+  --text-meta--letter-spacing: var(--type-meta-tracking);
+  --text-meta--font-weight: var(--type-meta-weight);
+  --text-label: var(--type-label-size);
+  --text-label--line-height: var(--type-label-leading);
+  --text-label--letter-spacing: var(--type-label-tracking);
+  --text-label--font-weight: var(--type-label-weight);
+  --text-row-name: var(--type-row-name-size);
+  --text-row-name--line-height: var(--type-row-name-leading);
+  --text-row-name--letter-spacing: var(--type-row-name-tracking);
+  --text-row-name--font-weight: var(--type-row-name-weight);
+  --text-row-status: var(--type-row-status-size);
+  --text-row-status--line-height: var(--type-row-status-leading);
+  --text-row-status--letter-spacing: var(--type-row-status-tracking);
+  --text-row-status--font-weight: var(--type-row-status-weight);
+  --text-title: var(--type-title-size);
+  --text-title--line-height: var(--type-title-leading);
+  --text-title--letter-spacing: var(--type-title-tracking);
+  --text-title--font-weight: var(--type-title-weight);
+  --text-capsule: var(--type-capsule-size);
+  --text-capsule--line-height: var(--type-capsule-leading);
+  --text-capsule--letter-spacing: var(--type-capsule-tracking);
+  --text-capsule--font-weight: var(--type-capsule-weight);
+  --text-working: var(--type-working-size);
+  --text-working--line-height: var(--type-working-leading);
+  --text-working--letter-spacing: var(--type-working-tracking);
+  --text-working--font-weight: var(--type-working-weight);
+  --text-reasoning: var(--type-reasoning-size);
+  --text-reasoning--line-height: var(--type-reasoning-leading);
+  --text-reasoning--letter-spacing: var(--type-reasoning-tracking);
+  --text-reasoning--font-weight: var(--type-reasoning-weight);
+  --text-block-header: var(--type-block-header-size);
+  --text-block-header--line-height: var(--type-block-header-leading);
+  --text-block-header--letter-spacing: var(--type-block-header-tracking);
+  --text-block-header--font-weight: var(--type-block-header-weight);
+  --text-question: var(--type-question-size);
+  --text-question--line-height: var(--type-question-leading);
+  --text-question--letter-spacing: var(--type-question-tracking);
+  --text-question--font-weight: var(--type-question-weight);
+  --text-mono: var(--type-mono-size);
+  --text-mono--line-height: var(--type-mono-leading);
+  --text-mono--letter-spacing: var(--type-mono-tracking);
+  --text-mono--font-weight: var(--type-mono-weight);
+}
+
+/* Not `inline`: the families have to reach `:root` as real variables, because
+   stylesheets outside Tailwind's reach (the chat markdown) spend them. */
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @layer base {
@@ -52,6 +149,112 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@keyframes rk-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dictation bars and the working dots of the composer. */
+@keyframes rk-bar {
+  0%,
+  100% {
+    transform: scaleY(0.32);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes rk-dot {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+/* The call view's glow behind the working avatar. */
+@keyframes rk-halo {
+  0%,
+  100% {
+    transform: scale(0.94);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+/* A light sweep travelling across a text label.
+   Ported from beautifului.dev (github.com/TurboKach/ai-native-react-components,
+   MIT (c) 2026 Turbo); the keyframe keeps its upstream name. */
+@keyframes bui-shimmer-text {
+  0% {
+    background-position: 150%;
+  }
+  100% {
+    background-position: -50%;
+  }
+}
+
+/* The plain classes the primitives apply. They sit in `components` so any
+   Tailwind utility a caller passes through `className` still wins. */
+@layer components {
+  /* Press: capsules settle at 0.96, round controls at 0.94 (design contract). */
+  .rk-press:active {
+    transform: scale(0.96);
+  }
+
+  .rk-press-round:active {
+    transform: scale(0.94);
+  }
+
+  .rk-bar {
+    animation: rk-bar 1.1s var(--motion-ease) infinite;
+  }
+
+  .rk-dot {
+    animation: rk-dot 1.2s var(--motion-ease) infinite;
+  }
+
+  .rk-halo {
+    animation: rk-halo 3.2s var(--motion-ease) infinite;
+  }
+
+  .rk-shimmer {
+    animation: bui-shimmer-text 1.4s linear infinite;
+    background-image: linear-gradient(
+      to right,
+      var(--muted-foreground) 35%,
+      var(--foreground) 50%,
+      var(--muted-foreground) 65%
+    );
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+
+  /* Matches the interpolation `bg-linear-to-r` used before the sweep became a class. */
+  @supports (background-image: linear-gradient(in lab, red, red)) {
+    .rk-shimmer {
+      background-image: linear-gradient(
+        to right in oklab,
+        var(--muted-foreground) 35%,
+        var(--foreground) 50%,
+        var(--muted-foreground) 65%
+      );
+    }
   }
 }
 
@@ -96,22 +299,116 @@
   opacity: 1;
 }
 
-/* Organic (bloub) avatar: at rest nothing moves. While working, bot-avatar.tsx
-   drives inline transforms from @rakazo/core `workingPose`; these transitions
-   only ease the return to rest. */
-.rakazo-organic-avatar-eyes,
-.rakazo-organic-avatar-eye,
-.rakazo-organic-avatar-swoosh {
-  transform-origin: 0 0;
-  transition:
-    opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+@keyframes rakazo-eyes-idle-0 {
+  0%,
+  32%,
+  100% {
+    transform: translate(0, 0) scaleY(1);
+  }
+  35% {
+    transform: translate(0, 0) scaleY(0.08);
+  }
+  38% {
+    transform: translate(0, 0) scaleY(1);
+  }
+  48%,
+  62% {
+    transform: translate(3px, -0.5px) scaleY(1);
+  }
+  70%,
+  84% {
+    transform: translate(-2.5px, 0.5px) scaleY(1);
+  }
+  89% {
+    transform: translate(0, 0) scaleY(0.12);
+  }
+  91% {
+    transform: translate(0, 0) scaleY(1);
+  }
 }
 
-.rakazo-organic-avatar[data-working="true"] .rakazo-organic-avatar-eyes,
-.rakazo-organic-avatar[data-working="true"] .rakazo-organic-avatar-eye,
-.rakazo-organic-avatar[data-working="true"] .rakazo-organic-avatar-swoosh {
-  transition: none;
+@keyframes rakazo-eyes-idle-1 {
+  0%,
+  25%,
+  100% {
+    transform: translate(0, 0) scaleY(1);
+  }
+  32%,
+  48% {
+    transform: translate(-3px, -1px) scaleY(1);
+  }
+  54% {
+    transform: translate(0, 0) scaleY(0.08);
+  }
+  56% {
+    transform: translate(0, 0) scaleY(1);
+  }
+  59% {
+    transform: translate(0, 0) scaleY(0.08);
+  }
+  61% {
+    transform: translate(0, 0) scaleY(1);
+  }
+  68%,
+  82% {
+    transform: translate(2.5px, 0.5px) scaleY(1);
+  }
+}
+
+@keyframes rakazo-eyes-idle-2 {
+  0%,
+  28%,
+  100% {
+    transform: translate(0, 0) scaleY(1);
+  }
+  36%,
+  52% {
+    transform: translate(0.5px, -1.8px) scaleY(1.05);
+  }
+  58% {
+    transform: translate(0, 0) scaleY(0.08);
+  }
+  60% {
+    transform: translate(0, 0) scaleY(1);
+  }
+  68%,
+  85% {
+    transform: translate(3px, 0) scaleY(1);
+  }
+  92% {
+    transform: translate(0, 0) scaleY(0.1);
+  }
+  94% {
+    transform: translate(0, 0) scaleY(1);
+  }
+}
+
+@keyframes rakazo-eyes-idle-3 {
+  0%,
+  24%,
+  100% {
+    transform: translate(0, 0) scaleY(1);
+  }
+  30%,
+  46% {
+    transform: translate(-2.5px, 1.2px) scaleY(0.95);
+  }
+  52% {
+    transform: translate(0, 0) scaleY(0.08);
+  }
+  54% {
+    transform: translate(0, 0) scaleY(1);
+  }
+  62%,
+  78% {
+    transform: translate(2.8px, -1px) scaleY(1);
+  }
+  86% {
+    transform: translate(0, 0) scaleY(0.08);
+  }
+  88% {
+    transform: translate(0, 0) scaleY(1);
+  }
 }
 
 @keyframes rakazo-eyes-working {
@@ -133,10 +430,35 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rakazo-bot-avatar-ring,
-  .rakazo-bot-avatar-eyes {
+  .animate-arrive {
+    animation: none;
+  }
+
+  .rk-bar,
+  .rk-dot,
+  .rk-halo,
+  .rk-shimmer {
+    animation: none;
+  }
+
+  .rk-press:active,
+  .rk-press-round:active {
+    transform: none;
+  }
+
+  .rakazo-bot-avatar-ring {
     animation: none;
     transition: none;
+  }
+
+  .rakazo-bot-avatar-eyes {
+    transition: none;
+  }
+
+  /* The blink is the one motion that survives reduced motion (design contract
+     §5): only the working eye loop stops. The organic avatar freezes in code. */
+  .rakazo-bot-avatar-eyes-working {
+    animation: none;
   }
 
   .rakazo-bot-avatar {
@@ -144,12 +466,6 @@
   }
 
   .rakazo-bot-avatar-visor {
-    transition: none;
-  }
-
-  .rakazo-organic-avatar-eyes,
-  .rakazo-organic-avatar-eye,
-  .rakazo-organic-avatar-swoosh {
     transition: none;
   }
 }

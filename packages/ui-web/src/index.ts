@@ -25,6 +25,37 @@ export * from "./components/ui/tabs.js";
 export * from "./components/ui/textarea.js";
 export * from "./components/ui/toggle.js";
 export * from "./components/ui/tooltip.js";
+export { ComposerShell, type ComposerShellProps, type ComposerState } from "./composer-shell.js";
+export { formatElapsed, formatShortDuration } from "./format-elapsed.js";
+export {
+  FramedBlock,
+  type FramedBlockHeader,
+  type FramedBlockProps,
+} from "./framed-block.js";
 export { GroupAvatar, type GroupAvatarMember, type GroupAvatarProps } from "./group-avatar.js";
+export { HoverPill, type HoverPillProps } from "./hover-pill.js";
+export { Interstitial, type InterstitialProps } from "./interstitial.js";
+export { usePrefersReducedMotion } from "./lib/reduced-motion.js";
 export { cn } from "./lib/utils.js";
+export {
+  MessageRow,
+  type MessageRowMeta,
+  type MessageRowProps,
+} from "./message-row.js";
 export { ModelThinkingOptions } from "./model-thinking-options.js";
+export {
+  type DataAttributes,
+  ReasoningDisclosure,
+  type ReasoningDisclosureProps,
+} from "./reasoning-disclosure.js";
+export { Shimmer, type ShimmerProps } from "./shimmer.js";
+export {
+  type StackedAvatarItem,
+  type StackedAvatarSize,
+  StackedAvatars,
+  type StackedAvatarsProps,
+} from "./stacked-avatars.js";
+export { Surface, type SurfaceProps, type SurfaceRadius } from "./surface.js";
+export { useElapsed } from "./use-elapsed.js";
+export { UserBubble, type UserBubbleProps } from "./user-bubble.js";
+export { WorkingLine, type WorkingLineProps } from "./working-line.js";
