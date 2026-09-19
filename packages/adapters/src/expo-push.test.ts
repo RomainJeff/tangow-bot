@@ -221,6 +221,46 @@ describe("expo push", () => {
     ).rejects.toThrow("Expo push response is too large.");
   });
 
+  it("drops a token the device no longer owns, and keeps one a bad push key rejected", async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-push-"));
+    dirs.push(dataDir);
+    const message = {
+      kind: "completion" as const,
+      title: "done",
+      body: "ok",
+      botId: "b",
+      threadId: "t",
+    };
+
+    await savePushToken(dataDir, "user-1", "ExponentPushToken[dead]");
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ data: { status: "error", details: { error: "DeviceNotRegistered" } } }),
+        ),
+    );
+    await expect(new ExpoPushProvider(dataDir).send(message, notifyContext)).rejects.toThrow(
+      "DeviceNotRegistered",
+    );
+    await expect(loadPushToken(dataDir, "user-1")).resolves.toBeUndefined();
+
+    await savePushToken(dataDir, "user-1", "ExponentPushToken[live]");
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ data: { status: "error", details: { error: "InvalidCredentials" } } }),
+        ),
+    );
+    await expect(new ExpoPushProvider(dataDir).send(message, notifyContext)).rejects.toThrow(
+      "InvalidCredentials",
+    );
+    await expect(loadPushToken(dataDir, "user-1")).resolves.toBe("ExponentPushToken[live]");
+  });
+
   it("rejects malformed successful responses", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-push-"));
     dirs.push(dataDir);
@@ -270,7 +310,7 @@ describe("expo push", () => {
     ).rejects.toThrow("offline");
   });
 
-  it("reports DeviceNotRegistered without deleting a stored or replacement token", async () => {
+  it("keeps a replacement token minted while Expo was condemning the old one", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-push-"));
     dirs.push(dataDir);
     await savePushToken(dataDir, "user-1", "ExponentPushToken[old]");

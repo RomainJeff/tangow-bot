@@ -178,7 +178,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!hasSession) return;
-    void registerPushToken().catch(() => undefined);
+    // Nothing to show the user here, but a silent failure means the device quietly
+    // stops being paged — leave a breadcrumb in the device log instead.
+    void registerPushToken().catch((cause) => console.warn("push registration", cause));
   }, [hasSession]);
 
   useFocusEffect(

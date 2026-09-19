@@ -186,7 +186,15 @@ export default function Account() {
       if (next.liveConnection && !(await canPostPromotedNotifications())) {
         await openPromotedNotificationSettings();
       }
-      await registerPushToken();
+      try {
+        await registerPushToken();
+      } catch (cause) {
+        // The live settings saved; only the push token failed. Report it without
+        // reverting the toggle the user just moved.
+        setNotificationError(
+          cause instanceof Error ? cause.message : t("Could not update notifications"),
+        );
+      }
     } catch (cause) {
       setNotifications(previous);
       setNotificationError(

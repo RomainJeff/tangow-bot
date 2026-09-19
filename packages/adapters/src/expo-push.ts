@@ -87,6 +87,18 @@ export function expoPushErrorMessage(body: unknown, status: number): string | un
   return undefined;
 }
 
+/**
+ * True when Expo says the device behind the token is gone — the app was deleted, or
+ * the token was minted for another EAS project or bundle id. Only this one error
+ * condemns the token; `InvalidCredentials` blames the sender's push key instead, and
+ * dropping a good token over it would silence a user until they reopen the app.
+ */
+export function expoPushTokenIsDead(body: unknown): boolean {
+  return expoPushTickets(body).some(
+    (ticket) => ticket.details?.error === "DeviceNotRegistered",
+  );
+}
+
 export class ExpoPushProvider implements NotificationProvider {
   constructor(private readonly dataDir: string) {}
 
@@ -128,6 +140,17 @@ export class ExpoPushProvider implements NotificationProvider {
     }
     const failure = expoPushErrorMessage(body, response.status);
     if (!failure) return;
+    if (expoPushTokenIsDead(body)) {
+      // Expo asks senders to stop pushing to a dead token. Keeping it also hides the
+      // breakage: every later notification fails the same way and nothing ever asks
+      // the device for a fresh one. Dropping it makes the next app open re-register.
+      // ponytail: re-read instead of locking — the device can register a fresh token
+      // while this request is in flight, and that one is not the one Expo condemned.
+      if ((await loadPushToken(this.dataDir, context.userId)) === token) {
+        await deletePushToken(this.dataDir, context.userId);
+        getLogger().warn(`expo push dropped a dead token: ${failure}`);
+      }
+    }
     getLogger().error(failure);
     throw new Error(failure);
   }

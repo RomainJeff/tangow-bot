@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- iPhone push notifications come back on their own. A device whose push token had gone stale — after the app moved to a new Expo project and bundle id — kept failing to register silently, so the server went on pushing to a token nobody owned and nothing ever asked the phone for a new one. Registration failures now surface (in the notification settings screen when you flip the toggle, in the device log otherwise), and the server drops a token Expo reports as dead so the next time you open the app it registers a fresh one.
 - On a phone browser the bot settings footer no longer lets the form scroll over it: Save, Export and Clear sit in a footer fixed to the bottom of the panel with Save a full-width, comfortably tappable button, and the panel's close button now stays in view while the content scrolls. On web and desktop.
 
 ### 2026-09-18
