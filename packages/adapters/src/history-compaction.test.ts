@@ -392,14 +392,27 @@ describe("compactHistory", () => {
     expect(harness.runtime.run).toHaveBeenCalledOnce();
     const [request] = harness.runtime.run.mock.calls[0]!;
     expect(request.instructions).toContain("Current date and time");
+    expect(request.instructions).toContain("context summarization assistant");
     expect(request.tools).toEqual([]);
     expect(request.model).toEqual({
       provider: "openrouter",
       id: "openai/gpt-5.6-luna",
       apiKey: "openrouter-key",
+      maxTokens: 13_107,
     });
     expect(request.prompt).toContain("message 0");
     expect(request.prompt).toContain("message 49");
+    for (const heading of [
+      "## Goal",
+      "## Constraints & Preferences",
+      "## Progress",
+      "## Key Decisions",
+      "## Next Steps",
+      "## Critical Context",
+    ]) {
+      expect(request.prompt).toContain(heading);
+    }
+    expect(request.prompt).not.toContain("<previous-summary>");
 
     expect(harness.saveMemory).toHaveBeenCalledWith(
       {
@@ -528,6 +541,7 @@ describe("compactHistory", () => {
       provider: "anthropic",
       id: "claude-sonnet",
       apiKey: "user-model-key",
+      maxTokens: 13_107,
     });
   });
 
@@ -625,7 +639,10 @@ describe("compactHistory", () => {
     await compactHistory(harness.deps, "thread-1");
 
     const [secondRequest] = harness.runtime.run.mock.calls[1]!;
-    expect(secondRequest.prompt).toContain("Summary through 49.");
+    expect(secondRequest.prompt).toContain(
+      "<previous-summary>\nSummary through 49.\n</previous-summary>",
+    );
+    expect(secondRequest.prompt).toContain("incorporate into the existing summary");
     expect(secondRequest.prompt).toContain("message 50");
     expect(harness.thread.historyCompactionSummary).toBe("Summary through 99.");
     expect(harness.thread.historyCompactedUpToSeq).toBe(99);
@@ -787,6 +804,7 @@ describe("compactHistory", () => {
       provider: "openrouter",
       id: "deepseek/deepseek-v4-flash-0731",
       apiKey: undefined,
+      maxTokens: 13_107,
     });
   });
 
@@ -806,6 +824,7 @@ describe("compactHistory", () => {
       provider: "openrouter",
       id: "moonshotai/kimi-k2",
       apiKey: "openrouter-key",
+      maxTokens: 13_107,
     });
   });
 
@@ -859,13 +878,17 @@ describe("compactHistory", () => {
     await compactHistory(harness.deps, "thread-1");
 
     const [request] = harness.runtime.run.mock.calls[0]!;
-    expect(request.prompt.length).toBeLessThanOrEqual(MAX_TRANSCRIPT_CHARS);
+    const conversation = request.prompt.slice(
+      request.prompt.indexOf("<conversation>"),
+      request.prompt.indexOf("</conversation>"),
+    );
+    expect(conversation.length).toBeLessThanOrEqual(MAX_TRANSCRIPT_CHARS);
     expect(request.prompt).toContain("marker-0");
     expect(request.prompt).not.toContain("marker-49 ");
     expect(harness.thread.historyCompactedUpToSeq).toBeLessThan(49);
   });
 
-  it("keeps the cursor unchanged when the summary exceeds the safe context budget", async () => {
+  it("truncates an oversized summary and still advances, instead of replaying the batch forever", async () => {
     const harness = compactionHarness({ deploymentModelKey: "openrouter-key" });
     harness.runtime.run.mockImplementation(async function* () {
       yield { type: "done", text: "x".repeat(MAX_COMPACTED_SUMMARY_CHARS + 1) };
@@ -873,8 +896,32 @@ describe("compactHistory", () => {
 
     await compactHistory(harness.deps, "thread-1");
 
-    expect(harness.prisma.thread.updateMany).not.toHaveBeenCalled();
-    expect(harness.thread.historyCompactedUpToSeq).toBeNull();
+    expect(harness.thread.historyCompactedUpToSeq).toBe(49);
+    expect(harness.thread.historyCompactionSummary!.length).toBeLessThanOrEqual(
+      MAX_COMPACTED_SUMMARY_CHARS,
+    );
+    expect(harness.thread.historyCompactionSummary).toContain("[summary truncated]");
+  });
+
+  it("truncates an oversized stored summary rather than refusing to compact the thread", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      historyCompactedUpToSeq: 49,
+      historyCompactionSummary: "y".repeat(MAX_COMPACTED_SUMMARY_CHARS + 1),
+      messages: Array.from({ length: 100 }, (_, i) => ({
+        seq: i,
+        role: "user",
+        blocks: [{ kind: "text", text: `message ${i}` }],
+      })),
+      nextMessageSeq: 100,
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.runtime.run).toHaveBeenCalledOnce();
+    const [request] = harness.runtime.run.mock.calls[0]!;
+    expect(request.prompt).toContain("[summary truncated]");
+    expect(harness.thread.historyCompactedUpToSeq).toBe(99);
   });
 
   it("re-enqueues itself while a full batch of backlog still remains", async () => {
