@@ -11,13 +11,16 @@ import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import {
   compactHistory,
+  estimateHistoryTokens,
   formatCompactedSummary,
   formatRecalledMemory,
   historyWindowSize,
   MAX_COMPACTED_SUMMARY_CHARS,
   MAX_TRANSCRIPT_CHARS,
+  NON_HISTORY_TOKEN_ESTIMATE,
   nextCompactionBatchRange,
   selectCompactedHistory,
+  selectHistoryWindow,
   shouldEnqueueCompaction,
 } from "./history-compaction.js";
 
@@ -35,6 +38,73 @@ describe("shouldEnqueueCompaction", () => {
     // nextMessageSeq 151) is the first point a full batch has aged out beyond the window.
     expect(shouldEnqueueCompaction(150, 50, 50, 50)).toBe(false);
     expect(shouldEnqueueCompaction(151, 50, 50, 50)).toBe(true);
+  });
+
+  it("is true for a few very large messages, long before the message count threshold", () => {
+    // Four pasted logs of ~25k characters each: nowhere near 100 messages, well past the tokens
+    // compaction is willing to keep verbatim.
+    const uncompacted = Array.from({ length: 4 }, () => ({ content: "x".repeat(25_000) }));
+    const tokens = estimateHistoryTokens(uncompacted);
+    expect(tokens).toBeGreaterThan(20_000);
+    expect(shouldEnqueueCompaction(4, null, 50, 50, tokens)).toBe(true);
+  });
+
+  it("is false for the same number of ordinary messages", () => {
+    const uncompacted = Array.from({ length: 4 }, () => ({ content: "sounds good" }));
+    expect(shouldEnqueueCompaction(4, null, 50, 50, estimateHistoryTokens(uncompacted))).toBe(
+      false,
+    );
+  });
+});
+
+describe("selectHistoryWindow", () => {
+  const turn = (index: number, content = `message ${index}`) => [
+    { role: "user" as const, content },
+    { role: "assistant" as const, content: `reply ${index}` },
+  ];
+  const conversation = (turns: number, content?: (index: number) => string) =>
+    Array.from({ length: turns }, (_, index) => turn(index, content?.(index))).flat();
+
+  it("falls back to the message count when the context window is unknown", () => {
+    const history = conversation(10);
+    expect(
+      selectHistoryWindow({ history, contextWindow: undefined, messageWindowSize: 4 }),
+    ).toEqual(history.slice(-4));
+    expect(selectHistoryWindow({ history, contextWindow: 0, messageWindowSize: 4 })).toEqual(
+      history.slice(-4),
+    );
+  });
+
+  it("keeps far more than the count window when the messages are small and the window is large", () => {
+    const history = conversation(200);
+    const kept = selectHistoryWindow({ history, contextWindow: 200_000, messageWindowSize: 4 });
+    expect(kept.length).toBeGreaterThan(4);
+    expect(kept[kept.length - 1]).toEqual(history[history.length - 1]);
+  });
+
+  it("drops older turns when the messages are large", () => {
+    const history = conversation(40, () => "x".repeat(20_000));
+    const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 400 });
+    expect(kept.length).toBeLessThan(history.length);
+    expect(estimateHistoryTokens(kept)).toBeLessThanOrEqual(
+      128_000 - 16_384 - NON_HISTORY_TOKEN_ESTIMATE + estimateHistoryTokens([history[0]!]),
+    );
+  });
+
+  it("opens the window on a user message, never mid-reply", () => {
+    const history = conversation(40, () => "x".repeat(20_000));
+    const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 400 });
+    expect(kept[0]!.role).toBe("user");
+  });
+
+  it("keeps the most recent message even when it alone is over budget", () => {
+    const history = [
+      { role: "user" as const, content: "hi" },
+      { role: "assistant" as const, content: "hello" },
+      { role: "user" as const, content: "x".repeat(2_000_000) },
+    ];
+    const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 2 });
+    expect(kept).toEqual(history.slice(-1));
   });
 });
 

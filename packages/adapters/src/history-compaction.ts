@@ -1,4 +1,4 @@
-import { DEFAULT_COMPACTION_SETTINGS } from "@earendil-works/pi-agent-core";
+import { DEFAULT_COMPACTION_SETTINGS, estimateTokens } from "@earendil-works/pi-agent-core";
 import type { AgentRunRequest, AgentRuntime, JobPublisher } from "@rakazo/adapter-kit";
 import { historyCompactJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
@@ -23,11 +23,15 @@ export function shouldEnqueueCompaction(
   historyCompactedUpToSeq: number | null,
   windowSize: number,
   batchSize: number,
+  uncompactedTokens?: number,
 ): boolean {
   const compactedUpTo = historyCompactedUpToSeq ?? NOTHING_COMPACTED;
   // Messages occupy seq 0..nextMessageSeq-1, and everything up to and including compactedUpTo is
   // already compacted, so the uncompacted count is (nextMessageSeq - 1) - compactedUpTo.
-  return nextMessageSeq - compactedUpTo - 1 >= windowSize + batchSize;
+  if (nextMessageSeq - compactedUpTo - 1 >= windowSize + batchSize) return true;
+  // A thread of pasted logs fills a context window long before it reaches that message count, so
+  // compact on whichever arrives first.
+  return (uncompactedTokens ?? 0) > DEFAULT_COMPACTION_SETTINGS.keepRecentTokens;
 }
 
 export function nextCompactionBatchRange(
@@ -99,6 +103,63 @@ export function historyWindowSize(options: {
   return options.semanticMemoryEnabled && options.compacted && options.recallSucceeded
     ? HISTORY_WINDOW_SIZE
     : LEGACY_HISTORY_WINDOW_SIZE;
+}
+
+/**
+ * Rough cost of everything that shares the context window with the conversation: the bot's
+ * instructions, tool schemas, memory and scratchpad context, and the current turn.
+ * ponytail: one number for every bot and every model; estimate the rendered instructions per run
+ * if history starts being cut while the window still had room.
+ */
+export const NON_HISTORY_TOKEN_ESTIMATE = 12_000;
+
+/**
+ * pi's estimator takes a pi `AgentMessage`; Rakazo history rows are `{ role, content }` with the
+ * content already rendered to text, and the estimator reads a user message's content as-is.
+ */
+function estimateMessageTokens(content: string): number {
+  return estimateTokens({ role: "user", content, timestamp: 0 });
+}
+
+export function estimateHistoryTokens(messages: Array<{ content: string }>): number {
+  return messages.reduce((total, message) => total + estimateMessageTokens(message.content), 0);
+}
+
+/**
+ * Message count is a poor proxy for context: fifty one-line replies and fifty pasted stack traces
+ * cost wildly different amounts, so a fixed count either wastes a large window or overflows a
+ * small one. Size by tokens whenever the model's context window is known, and start the window on
+ * a user message — one that opens on a bot reply shows an answer with the request cut away.
+ */
+export function selectHistoryWindow<T extends { role: string; content: string }>(options: {
+  history: T[];
+  contextWindow: number | undefined;
+  messageWindowSize: number;
+}): T[] {
+  const { history } = options;
+  const contextWindow = options.contextWindow ?? 0;
+  if (contextWindow <= 0) return history.slice(-options.messageWindowSize);
+
+  const budget = Math.max(
+    DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
+    contextWindow - DEFAULT_COMPACTION_SETTINGS.reserveTokens - NON_HISTORY_TOKEN_ESTIMATE,
+  );
+  let used = 0;
+  let start = history.length;
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const tokens = estimateMessageTokens(history[index]!.content);
+    // The most recent message is kept even when it alone is over budget; dropping it would hand
+    // the model a turn with no content at all.
+    if (used + tokens > budget && start < history.length) break;
+    used += tokens;
+    start = index;
+  }
+  for (let index = start; index < history.length; index += 1) {
+    if (history[index]!.role === "user") return history.slice(index);
+  }
+  // Nothing within budget starts a turn, so the budget is smaller than the last exchange. Fall
+  // back to the count window rather than opening mid-reply.
+  return history.slice(-options.messageWindowSize);
 }
 
 export function formatRecalledMemory(

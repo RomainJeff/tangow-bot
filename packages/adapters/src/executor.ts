@@ -202,6 +202,7 @@ import { resolveDeploymentModel } from "./deployment-model.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import {
   COMPACTION_BATCH_SIZE,
+  estimateHistoryTokens,
   formatCompactedSummary,
   formatRecalledMemory,
   HISTORY_WINDOW_SIZE,
@@ -209,6 +210,7 @@ import {
   LEGACY_HISTORY_WINDOW_SIZE,
   MAX_RECALLED_MEMORIES,
   selectCompactedHistory,
+  selectHistoryWindow,
   shouldEnqueueCompaction,
 } from "./history-compaction.js";
 import {
@@ -1414,15 +1416,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             getLogger().error("semantic memory recall failed", recalled.error);
           }
         }
-        if (!compactedHistory.usedLocalSummary) {
-          history = history.slice(
-            -historyWindowSize({
-              semanticMemoryEnabled: semanticMemoryEnabled && !thread.historyCompactionSummary,
-              compacted: thread.historyCompactedUpToSeq != null,
-              recallSucceeded,
-            }),
-          );
-        }
         const runDeployment = deps.deploymentModelKey ? resolveDeploymentModel() : null;
         const runtimeFallback = runtimeFallbackModel(deps.runtime);
         const selected = selectConfiguredModel({
@@ -1499,6 +1492,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
           (values) => runSecrets.push(...values),
         );
         runSecrets.push(...resolved.redact);
+        // Sized here rather than where `history` is built, because the window depends on the
+        // resolved model's context window.
+        if (!compactedHistory.usedLocalSummary) {
+          history = selectHistoryWindow({
+            history,
+            contextWindow: resolved.contextWindow,
+            messageWindowSize: historyWindowSize({
+              semanticMemoryEnabled: semanticMemoryEnabled && !thread.historyCompactionSummary,
+              compacted: thread.historyCompactedUpToSeq != null,
+              recallSucceeded,
+            }),
+          });
+        }
         await deps.prisma.run.updateMany({
           where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
           data: { modelProvider: runModelProvider, modelId: runModelId },
@@ -4297,6 +4303,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 updatedThread.historyCompactedUpToSeq,
                 HISTORY_WINDOW_SIZE,
                 COMPACTION_BATCH_SIZE,
+                // This run's own messages are not in here, so a thread crossing the token
+                // threshold during this run is enqueued at the end of the next one.
+                estimateHistoryTokens(compactedHistory.history),
               )
             ) {
               await deps.jobs.enqueue(historyCompactJob(thread.id));
