@@ -2,7 +2,7 @@ import type { AgentRunRequest } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
-import { createRunExecutor } from "./executor.js";
+import { cancelRoutineRunCards, createRunExecutor } from "./executor.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -291,5 +291,124 @@ describe("sub-bot routine run card", () => {
     // A top-level bot's routine is its own user-facing brief; finalizeRun still gets the
     // ordinary blocks (not suppressed).
     expect(f.finalizeRun).not.toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
+  });
+});
+
+/**
+ * A cancelled run has no worker left to settle its card: the executor simply returns when it
+ * notices the cancellation (and may not be running at all, e.g. the run was parked on an ask).
+ * The API's thread stop calls `cancelRoutineRunCards` instead.
+ */
+function cancelFixture({
+  runStatus = "cancelled",
+  cardState = "running" as Extract<MessageBlock, { kind: "routine_run" }>["state"],
+}: {
+  runStatus?: string;
+  cardState?: Extract<MessageBlock, { kind: "routine_run" }>["state"];
+} = {}) {
+  const card = {
+    id: "message-1",
+    threadId: "thread-1",
+    clientNonce: "routine-run-card:run-1",
+    blocks: [
+      {
+        kind: "routine_run",
+        routineId: "routine-1",
+        routineName: "Morning inbox check",
+        state: cardState,
+        notify: false,
+        startedAt: "2026-01-01T08:00:00.000Z",
+      },
+    ] as MessageBlock[],
+  };
+  const events: Array<Record<string, unknown>> = [];
+  let nextEventSeq = 1;
+  const prisma = {
+    run: {
+      findMany: vi.fn(async ({ where }: { where: { status: string } }) =>
+        where.status === runStatus
+          ? [{ id: "run-1", spaceId: "space-1", threadId: "thread-1", botId: "bot-1" }]
+          : [],
+      ),
+      findUnique: vi.fn(async () => ({ status: runStatus, startedAt: null })),
+    },
+    message: {
+      findUnique: vi.fn(async ({ where }: { where: { id?: string } }) =>
+        where.id && where.id !== card.id ? null : card,
+      ),
+      update: vi.fn(async ({ data }: { data: { blocks: MessageBlock[] } }) => {
+        card.blocks = data.blocks;
+        return card;
+      }),
+    },
+    thread: {
+      update: vi.fn(async () => ({ nextEventSeq: ++nextEventSeq })),
+    },
+    event: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        events.push(data);
+        return { ...data, id: `event-${events.length}` };
+      }),
+    },
+  };
+  (prisma as unknown as { $transaction: unknown }).$transaction = vi.fn(
+    async (fn: (tx: typeof prisma) => unknown) => fn(prisma),
+  );
+  const notify = vi.fn(async () => undefined);
+  return {
+    card,
+    events,
+    notify,
+    async cancel(runIds: string[] = ["run-1"]) {
+      await cancelRoutineRunCards(
+        { prisma, events: { notify } } as unknown as Parameters<typeof cancelRoutineRunCards>[0],
+        runIds,
+      );
+    },
+  };
+}
+
+describe("cancelRoutineRunCards", () => {
+  it("flips a running card to cancelled so the elapsed timer stops", async () => {
+    const f = cancelFixture();
+    await f.cancel();
+
+    const block = f.card.blocks[0] as Extract<MessageBlock, { kind: "routine_run" }>;
+    expect(block.state).toBe("cancelled");
+    expect(block.endedAt).toBeTruthy();
+    // The rest of the card survives: it is patched, not rebuilt.
+    expect(block.routineName).toBe("Morning inbox check");
+    expect(block.startedAt).toBe("2026-01-01T08:00:00.000Z");
+    expect(f.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it("appends the card update without a runId (a cancelled run may not write history)", async () => {
+    const f = cancelFixture();
+    await f.cancel();
+
+    expect(f.events).toHaveLength(1);
+    expect(f.events[0]).toMatchObject({ type: "thread.message.updated" });
+    expect(f.events[0]!.runId).toBeUndefined();
+  });
+
+  it("leaves an already finalized card alone (no event, no notify)", async () => {
+    const f = cancelFixture({ cardState: "completed" });
+    await f.cancel();
+
+    expect((f.card.blocks[0] as Extract<MessageBlock, { kind: "routine_run" }>).state).toBe(
+      "completed",
+    );
+    expect(f.events).toHaveLength(0);
+    expect(f.notify).not.toHaveBeenCalled();
+  });
+
+  it("ignores a run that finished instead of being cancelled", async () => {
+    const f = cancelFixture({ runStatus: "completed" });
+    await f.cancel();
+
+    expect((f.card.blocks[0] as Extract<MessageBlock, { kind: "routine_run" }>).state).toBe(
+      "running",
+    );
+    expect(f.notify).not.toHaveBeenCalled();
   });
 });

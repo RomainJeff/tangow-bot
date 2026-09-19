@@ -1301,6 +1301,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
             routineRunCardMessageId = card?.id ?? null;
           }
         }
+        // One place to flip the card to its terminal state, whichever way the run ends.
+        // `routineForCard` is only set for a sub-bot routine run, so this is a no-op elsewhere.
+        // Non-terminal pauses (ask -> waiting_input, takeover -> waiting_takeover) and lease
+        // loss deliberately leave the card on "running": the run is not over, and the retry
+        // reuses this very card via its stable clientNonce.
+        const settleRoutineRunCard = async (state: "completed" | "failed", digest: string) => {
+          if (!routineForCard || !routineRunCardMessageId) return;
+          await finalizeRoutineRunCard(
+            deps,
+            { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, id: runId },
+            routineRunCardMessageId,
+            routineForCard,
+            state,
+            digest,
+            { startedAt: routineCardStartedAt.toISOString(), endedAt: new Date().toISOString() },
+          );
+        };
 
         const discoveredPromise = deps.connector
           ? deps.connector.discoverTools(context)
@@ -1432,17 +1449,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: MISSING_MODEL_MESSAGE,
           });
           if (!failed) return;
-          if (isSubBotRoutineRun && routineForCard && routineRunCardMessageId) {
-            await finalizeRoutineRunCard(
-              deps,
-              { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, id: runId },
-              routineRunCardMessageId,
-              routineForCard,
-              "failed",
-              MISSING_MODEL_MESSAGE,
-              { startedAt: routineCardStartedAt.toISOString(), endedAt: new Date().toISOString() },
-            );
-          }
+          await settleRoutineRunCard("failed", MISSING_MODEL_MESSAGE);
           if (failed.continuationRunId) {
             await deps.jobs
               .enqueue(runContinueJob(failed.continuationRunId))
@@ -4229,17 +4236,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             markUnread: completionMarksUnread(run.trigger, text),
           });
           if (!completed) return;
-          if (isSubBotRoutineRun && routineForCard && routineRunCardMessageId) {
-            await finalizeRoutineRunCard(
-              deps,
-              { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, id: runId },
-              routineRunCardMessageId,
-              routineForCard,
-              "completed",
-              text,
-              { startedAt: routineCardStartedAt.toISOString(), endedAt: new Date().toISOString() },
-            );
-          }
+          await settleRoutineRunCard("completed", text);
           if (completed.continuationRunId) {
             await deps.jobs
               .enqueue(runContinueJob(completed.continuationRunId))
@@ -4328,17 +4325,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: message,
           });
           if (!failed) return;
-          if (isSubBotRoutineRun && routineForCard && routineRunCardMessageId) {
-            await finalizeRoutineRunCard(
-              deps,
-              { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, id: runId },
-              routineRunCardMessageId,
-              routineForCard,
-              "failed",
-              message,
-              { startedAt: routineCardStartedAt.toISOString(), endedAt: new Date().toISOString() },
-            );
-          }
+          await settleRoutineRunCard("failed", message);
           if (failed.continuationRunId) {
             await deps.jobs
               .enqueue(runContinueJob(failed.continuationRunId))
@@ -4955,11 +4942,57 @@ async function publishRoutineRunCard(
 }
 
 /**
- * Mutates the routine-run card in place to its terminal state (background-work-visibility
- * CA2/CA12), the same "load the message, replace the block, append thread.message.updated"
- * mechanism used for `ask` answers and `cloud_agent` status flips. `digest` is untrusted content
- * already redacted by the caller; it is stored as plain text and escaped at render time, never
- * interpreted as HTML/markdown (M1) and never used to fetch a remote resource (M2).
+ * Mutates the routine-run card in place (background-work-visibility CA2/CA12), the same "load
+ * the message, replace the block, append thread.message.updated" mechanism used for `ask`
+ * answers and `cloud_agent` status flips. `next` returns the replacement block, or null to
+ * leave the card (and the thread) untouched.
+ */
+async function updateRoutineRunCard(
+  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  // `runId` is deliberately optional: a cancelled run may not write thread history, so the
+  // card's own closing event is appended unattributed rather than rejected.
+  target: { spaceId: string; threadId: string; botId: string; runId?: string },
+  cardMessageId: string,
+  next: (block: RoutineRunBlock) => RoutineRunBlock | null,
+): Promise<void> {
+  const committed = await deps.prisma
+    .$transaction(async (tx) => {
+      const message = await tx.message.findUnique({ where: { id: cardMessageId } });
+      if (!message) return null;
+      let changed = false;
+      const blocks = (message.blocks as MessageBlock[]).map((existingBlock) => {
+        if (existingBlock.kind !== "routine_run") return existingBlock;
+        const replacement = next(existingBlock);
+        if (!replacement) return existingBlock;
+        changed = true;
+        return replacement;
+      });
+      if (!changed) return null;
+      await tx.message.update({ where: { id: cardMessageId }, data: { blocks } });
+      const event = await appendEventInTransaction(tx, {
+        spaceId: target.spaceId,
+        threadId: target.threadId,
+        botId: target.botId,
+        type: "thread.message.updated",
+        ...(target.runId ? { runId: target.runId } : {}),
+        payload: { messageId: cardMessageId, role: "bot", blocks },
+      });
+      return event.seq;
+    })
+    .catch((error) => {
+      getLogger().error("routine run card update", error);
+      return null;
+    });
+  if (committed === null) return;
+  await deps.events.notify(target.threadId, committed).catch((error) => {
+    getLogger().error("routine run card realtime notification", error);
+  });
+}
+
+/**
+ * Flips the card to its terminal state. `digest` is untrusted content already redacted by the
+ * caller; it is stored as plain text and escaped at render time, never interpreted as
+ * HTML/markdown (M1) and never used to fetch a remote resource (M2).
  */
 async function finalizeRoutineRunCard(
   deps: ExecutorDeps,
@@ -4970,34 +5003,46 @@ async function finalizeRoutineRunCard(
   digest: string,
   timing: { startedAt?: string; endedAt: string },
 ): Promise<void> {
-  const committed = await deps.prisma
-    .$transaction(async (tx) => {
-      const message = await tx.message.findUnique({ where: { id: cardMessageId } });
-      if (!message) return null;
-      const blocks = (message.blocks as MessageBlock[]).map((existingBlock) =>
-        existingBlock.kind === "routine_run"
-          ? routineRunCardBlock(routine, state, timing, digest)
-          : existingBlock,
-      );
-      await tx.message.update({ where: { id: cardMessageId }, data: { blocks } });
-      const event = await appendEventInTransaction(tx, {
-        spaceId: run.spaceId,
-        threadId: run.threadId,
-        botId: run.botId,
-        type: "thread.message.updated",
-        runId: run.id,
-        payload: { messageId: cardMessageId, role: "bot", blocks },
-      });
-      return event.seq;
-    })
-    .catch((error) => {
-      getLogger().error("routine run card finalize", error);
-      return null;
-    });
-  if (committed === null) return;
-  await deps.events.notify(run.threadId, committed).catch((error) => {
-    getLogger().error("routine run card realtime notification", error);
+  await updateRoutineRunCard(deps, { ...run, runId: run.id }, cardMessageId, () =>
+    routineRunCardBlock(routine, state, timing, digest),
+  );
+}
+
+/**
+ * Settles the routine-run cards of runs that were just cancelled. The executor never does this
+ * itself: when it notices the cancellation it simply returns, so without this the card would
+ * stay on "running" with a live elapsed timer forever. Cancellation is also the only terminal
+ * status written outside the executor, which is why this is called from the API's thread stop —
+ * the other cancel paths (clear, rewind, archive) drop the thread or the card with it.
+ *
+ * Idempotent: only a card still in `running` is touched, and the run must actually be cancelled,
+ * so a run that completed between the caller's snapshot and this call keeps its real outcome.
+ */
+export async function cancelRoutineRunCards(
+  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  runIds: readonly string[],
+): Promise<void> {
+  if (runIds.length === 0) return;
+  const cancelled = await deps.prisma.run.findMany({
+    where: { id: { in: [...runIds] }, status: "cancelled" },
+    select: { id: true, spaceId: true, threadId: true, botId: true },
   });
+  const endedAt = new Date().toISOString();
+  for (const { id, ...target } of cancelled) {
+    const card = await deps.prisma.message.findUnique({
+      where: {
+        threadId_clientNonce: {
+          threadId: target.threadId,
+          clientNonce: `${ROUTINE_RUN_CARD_NONCE_PREFIX}${id}`,
+        },
+      },
+      select: { id: true },
+    });
+    if (!card) continue;
+    await updateRoutineRunCard(deps, target, card.id, (block) =>
+      block.state === "running" ? { ...block, state: "cancelled", endedAt } : null,
+    );
+  }
 }
 
 async function recordEffect(
