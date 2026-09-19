@@ -758,8 +758,11 @@ export async function sendThreadMessage(
         });
         // A run parked on an ask_user card resolves with this text instead of blocking (spec
         // ask-answer-via-composer, PR 1). Approval/secret asks and any other unresolvable state
-        // fall through to the CONFLICT guard below, unchanged.
-        const waitingRun = activeRuns.find((run) => run.status === "waiting_input");
+        // fall through to the CONFLICT guard below, unchanged. The ask only resolves when it is
+        // the bot's only active run: with a second run alive the send must still hit that guard,
+        // otherwise the other run is neither steered nor rejected.
+        const soleActiveRun = activeRuns.length === 1 ? activeRuns[0] : undefined;
+        const waitingRun = soleActiveRun?.status === "waiting_input" ? soleActiveRun : undefined;
         if (waitingRun) {
           const resolution = await resumeAskWithComposerTextInTransaction(tx, {
             spaceId: actor.spaceId,
@@ -787,6 +790,7 @@ export async function sendThreadMessage(
               role: "user",
               blocks,
               replyToMessageId: input.replyToMessageId,
+              replyQuote,
             },
           });
           return {
@@ -911,9 +915,11 @@ export async function sendThreadMessage(
         },
         select: { id: true, taskId: true, botId: true, status: true },
       });
-      const activeByBotId = new Map<string, (typeof activeRuns)[number]>();
+      const activeRunsByBotId = new Map<string, typeof activeRuns>();
       for (const run of activeRuns) {
-        if (!activeByBotId.has(run.botId)) activeByBotId.set(run.botId, run);
+        const botRuns = activeRunsByBotId.get(run.botId);
+        if (botRuns) botRuns.push(run);
+        else activeRunsByBotId.set(run.botId, [run]);
       }
       // Dispatch per bot in this one transaction (spec ask-answer-via-composer, PR 1): each
       // targeted bot is resolved on its own state — an ask_user run resolves, a steerable run
@@ -923,12 +929,14 @@ export async function sendThreadMessage(
       // effect as the old blanket throw since a transaction throw rolls back every bot's work.
       const runs: Array<{ id: string; taskId: string; botId: string; status: string }> = [];
       for (const botId of targetBotIds) {
-        const active = activeByBotId.get(botId);
-        if (active?.status === "waiting_input") {
+        const botRuns = activeRunsByBotId.get(botId) ?? [];
+        const active = botRuns[0];
+        const soleActiveRun = botRuns.length === 1 ? active : undefined;
+        if (soleActiveRun?.status === "waiting_input") {
           const resolution = await resumeAskWithComposerTextInTransaction(tx, {
             spaceId: actor.spaceId,
             threadId: target.threadId,
-            runId: active.id,
+            runId: soleActiveRun.id,
             text: input.text ?? "",
           });
           if (!resolution.resolvable) {
@@ -936,10 +944,15 @@ export async function sendThreadMessage(
               message: "Answer the pending ask first.",
             });
           }
-          runs.push({ id: resolution.runId, taskId: active.taskId, botId, status: "queued" });
+          runs.push({
+            id: resolution.runId,
+            taskId: soleActiveRun.taskId,
+            botId,
+            status: "queued",
+          });
           continue;
         }
-        if (active && !STEERABLE_RUN_STATUSES.has(active.status)) {
+        if (botRuns.some((run) => !STEERABLE_RUN_STATUSES.has(run.status))) {
           throw new ORPCError("CONFLICT", {
             message: "Answer the pending ask first.",
           });
@@ -981,7 +994,7 @@ export async function sendThreadMessage(
       if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       if (firstRun) {
         await tx.message.update({ where: { id: message.id }, data: { runId: firstRun.id } });
-        const createdRuns = runs.filter((run) => !activeByBotId.has(run.botId));
+        const createdRuns = runs.filter((run) => !activeRunsByBotId.has(run.botId));
         if (createdRuns.length) {
           await cancelSupersededQueuedRuns(tx, {
             threadId: target.threadId,
