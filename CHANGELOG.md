@@ -13,7 +13,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A background routine's run card now reads like a message: its summary renders as formatted text (headings, lists, bold, tables, links) rather than raw markdown, the card is a touch wider to fit it, and a routine you're subscribed to is marked with a small bell instead of a coloured edge and a "Subscribed" label while still opening expanded; images inside a summary are never loaded. Same on web, desktop and mobile.
 - The bot's thread header drops the "Computer & routines" wording for two icon buttons, a screen and a gear, that open the computer or the settings panel and mark whichever is open, the bot name and both icons now respond on hover so it's clear they're clickable, and the settings panel's own duplicate switch is gone; on web and desktop.
 - Saving a bot's settings no longer means scrolling to the bottom of the form: on web and desktop Save, Export and Clear conversation ride a footer pinned to the bottom of the panel, and on mobile Save moves to an always-visible button in the nav bar.
-- If you had picked the robot avatar in Settings › Appearance, it stays picked: the organic look is the default for new accounts rather than a one-off switch applied to everyone.
 
 #### Fixed
 
