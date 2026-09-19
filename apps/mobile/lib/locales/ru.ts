@@ -190,6 +190,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Could not delete group": "Не удалось удалить группу",
   "Could not delete space": "Не удалось удалить пространство",
   "Could not finish sign-in": "Не удалось завершить вход",
+  "Could not get a push token: {reason}": "Не удалось получить push-токен: {reason}",
   "Could not load bot": "Не удалось загрузить бота",
   "Could not load bots": "Не удалось загрузить ботов",
   "Could not load earlier messages": "Не удалось загрузить предыдущие сообщения",

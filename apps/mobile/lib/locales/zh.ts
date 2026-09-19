@@ -185,6 +185,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Could not delete group": "无法删除群组",
   "Could not delete space": "无法删除空间",
   "Could not finish sign-in": "无法完成登录",
+  "Could not get a push token: {reason}": "无法获取推送令牌：{reason}",
   "Could not load bot": "无法加载 Bot",
   "Could not load bots": "无法加载 Bot 列表",
   "Could not load earlier messages": "无法加载更早的消息",
