@@ -1,5 +1,13 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+
+/** Nothing hovered: the captures below are meant to show the resting state. */
+async function restPointer(page: Page) {
+  const transcript = await page.getByTestId("transcript").boundingBox();
+  if (!transcript) throw new Error("no transcript to park the pointer in");
+  await page.mouse.move(transcript.x + transcript.width / 2, transcript.y + transcript.height / 2);
+}
 
 test("titled sidebar section expands and collapses", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -25,8 +33,8 @@ test("titled sidebar section expands and collapses", async ({ page }, testInfo) 
   const toggle = projects.getByRole("button", { name: /Collapse Projects|Expand Projects/ });
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
 
-  // Rest (no hover): move pointer off the header before capturing.
-  await sidebar.getByPlaceholder("Search").hover();
+  // Rest (no hover): park the pointer in the thread, away from every control.
+  await restPointer(page);
   await captureScreenshot(page, testInfo, "sidebar-section-expanded");
 
   // Hover header with Chief selected underneath — outer edges must match.
@@ -43,7 +51,7 @@ test("titled sidebar section expands and collapses", async ({ page }, testInfo) 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(projects.getByRole("button", { name: /^Chief/ })).toHaveCount(0);
-  await sidebar.getByPlaceholder("Search").hover();
+  await restPointer(page);
   await captureScreenshot(page, testInfo, "sidebar-section-collapsed");
 
   await toggle.click();

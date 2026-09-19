@@ -77,7 +77,11 @@ test("sidebar Now and Recent surface active and terminal runs", async ({ page },
   await captureActivitySidebar(page, testInfo, "58-activity-now");
 
   await page.getByRole("button", { name: "Stop", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 30_000 });
+  // The composer draft is empty, so Send stays hidden; Stop leaving the DOM is the signal
+  // that the run actually stopped.
+  await expect(page.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0, {
+    timeout: 30_000,
+  });
 
   await page.reload();
   await expect(activityToggle).toHaveAttribute("aria-pressed", "true");
@@ -89,11 +93,11 @@ test("sidebar Now and Recent surface active and terminal runs", async ({ page },
   await expect(aside.getByText("Now", { exact: true })).toHaveCount(0);
   await captureActivitySidebar(page, testInfo, "59-activity-recent");
 
-  await page.getByPlaceholder("Search").fill("Chief");
+  await aside.getByTestId("sidebar-search").locator("input").fill("Chief");
   await expect(aside.getByText("Recent", { exact: true })).toHaveCount(0);
   await expect(activityRow(page, "Chief")).toHaveCount(0);
 
-  await page.getByPlaceholder("Search").fill("");
+  await aside.getByTestId("sidebar-search").locator("input").fill("");
   await expect(aside.getByText("Recent", { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(activityRow(page, "Chief")).toBeVisible();
 });

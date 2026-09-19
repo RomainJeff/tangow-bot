@@ -45,7 +45,11 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
     )
     .toBe(true);
 
-  await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
+  // The composer draft is empty, so Send stays hidden; the combobox being enabled is the
+  // signal that the peer exchange finished and the thread is interactive again.
+  await expect(page.getByRole("combobox", { name: "Message Chief" })).toBeEnabled({
+    timeout: 60_000,
+  });
 
   const transcript = page.getByTestId("transcript");
   const chip = transcript
@@ -55,22 +59,26 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await expect(chip).toBeVisible({ timeout: 30_000 });
   await expect(chip.getByText(/Messaged|Message from/)).toBeVisible();
   await expect(chip).toHaveAccessibleName(/Messaged Researcher|Message from Researcher/);
-  await expect(chip.locator(".rakazo-bot-avatar")).toBeVisible();
+  // Both sides of the exchange: the bot whose thread this is, then its peer.
+  await expect(chip.locator(".rakazo-organic-avatar")).toHaveCount(2);
+  await expect(chip.locator(".rakazo-organic-avatar").first()).toBeVisible();
   await expect(chip).not.toContainText("{peer}");
   // User bubble still contains the phrase; peer body must not appear outside the chip.
   await expect(chip).not.toContainText("peer-exchange-alpha");
   await expect(transcript.getByText("peer-exchange-alpha")).toHaveCount(1);
-  const assertChipLeftAligned = async () => {
+  const assertChipCentered = async () => {
     const transcriptBox = await transcript.boundingBox();
     const chipBox = await chip.boundingBox();
     expect(transcriptBox).not.toBeNull();
     expect(chipBox).not.toBeNull();
-    // Transcript padding is 16px mobile / 28px desktop; centering must fail this assertion.
-    expect(chipBox!.x - transcriptBox!.x).toBeLessThanOrEqual(32);
+    // A delegation is an aside between messages: centred, and never as wide as a reply.
+    const chipMid = chipBox!.x + chipBox!.width / 2;
+    const transcriptMid = transcriptBox!.x + transcriptBox!.width / 2;
+    expect(Math.abs(chipMid - transcriptMid)).toBeLessThanOrEqual(2);
     expect(chipBox!.width).toBeLessThan(transcriptBox!.width / 2);
   };
 
-  await assertChipLeftAligned();
+  await assertChipCentered();
   await expect(composer).toBeVisible();
   await captureScreenshot(page, testInfo, "peer-chip-desktop");
 
@@ -78,7 +86,7 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await chip.scrollIntoViewIfNeeded();
   await expect(chip).toBeVisible();
   await expect(composer).toBeVisible();
-  await assertChipLeftAligned();
+  await assertChipCentered();
   await captureScreenshot(page, testInfo, "peer-chip-mobile");
 
   await chip.focus();
@@ -95,9 +103,7 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await expect(view.getByRole("textbox")).toHaveCount(0);
   await expect(view.getByText("Loading")).toHaveCount(0);
   const peerTranscript = view.getByTestId("peer-conversation-transcript");
-  await peerTranscript.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
+  // Oldest-first, but the view must open on the latest exchange without scrolling.
   await expect
     .poll(() =>
       peerTranscript.evaluate(

@@ -23,8 +23,10 @@ test("edit and resend rewinds the thread to the edited message", async ({ page }
   const secondRow = transcript.locator("[data-message-id]").filter({ hasText: secondText }).first();
   await expect(secondRow).toBeVisible({ timeout: 20_000 });
 
+  // Edit and resend lives inside More at every pointer density.
   await firstRow.hover();
-  await firstRow.getByRole("button", { name: "Edit and resend" }).click();
+  await firstRow.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Edit and resend" }).click();
 
   const chip = page.getByTestId("rewind-chip");
   await expect(chip).toBeVisible();
@@ -40,7 +42,8 @@ test("edit and resend rewinds the thread to the edited message", async ({ page }
   await expect(secondRow).toBeVisible();
 
   await firstRow.hover();
-  await firstRow.getByRole("button", { name: "Edit and resend" }).click();
+  await firstRow.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Edit and resend" }).click();
   await expect(page.getByTestId("rewind-chip")).toBeVisible();
   await composer.fill(editedText);
   await composer.press("Enter");

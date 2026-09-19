@@ -3,7 +3,8 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type { ThreadMessage } from "@rakazo/contracts";
 import { isApprovalAskBlock, isSecretAskBlock, selectedAskActionLabel } from "@rakazo/core";
-import { Button, Input } from "@rakazo/ui-web";
+import { Button, FramedBlock, Input } from "@rakazo/ui-web";
+import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useState } from "react";
 
 export type AskBlock = Extract<ThreadMessage["blocks"][number], { kind: "ask" }>;
@@ -39,10 +40,59 @@ function approvalActionLabel(
   return fallback;
 }
 
+function approvalActionVariant(id: string): "capsule" | "capsuleSecondary" | "tertiary" {
+  if (id === "allow") return "capsule";
+  if (id === "always") return "capsuleSecondary";
+  return "tertiary";
+}
+
 function secretFieldLabel(purpose: AskBlock["purpose"]): string {
   if (purpose === "password") return t`Password`;
   if (purpose === "api_key") return t`API key`;
   return t`Code`;
+}
+
+/** The row of answer capsules shared by approvals, plain asks and the multi-question stepper. */
+function OptionsRow({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <div data-testid="ask-options" className={`flex flex-wrap gap-2 ${className ?? ""}`.trim()}>
+      {children}
+    </div>
+  );
+}
+
+/** A footer split between a leading group (Back/Skip/Cancel/Other) and a trailing primary action. */
+function FooterRow({ leading, trailing }: { leading?: ReactNode; trailing: ReactNode }) {
+  return (
+    <div className="flex w-full items-center justify-between">
+      <div className="flex gap-2">{leading}</div>
+      {trailing}
+    </div>
+  );
+}
+
+/** A free-text field styled with tokens, optionally submitting on Enter. */
+function AnswerInput({
+  className,
+  onSubmit,
+  ...props
+}: Omit<ComponentProps<typeof Input>, "onKeyDown"> & { onSubmit?: () => void }) {
+  return (
+    <Input
+      className={`rounded-card border-outline bg-surface text-body ${className ?? ""}`.trim()}
+      onKeyDown={
+        onSubmit
+          ? (event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onSubmit();
+              }
+            }
+          : undefined
+      }
+      {...props}
+    />
+  );
 }
 
 export function AskCard({
@@ -62,7 +112,8 @@ export function AskCard({
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submitting = pendingAction !== null;
-  const approvalActions = isApprovalAskBlock(block) ? block.actions : undefined;
+  const approval = isApprovalAskBlock(block);
+  const approvalActions = approval ? block.actions : undefined;
   const askActions = block.actions;
   const secretInput = isSecretAskBlock(block);
   const secretLabel = secretFieldLabel(block.purpose);
@@ -96,145 +147,120 @@ export function AskCard({
     );
   }
 
-  return (
-    <div
-      data-testid={secretInput ? "secret-ask-card" : undefined}
-      className="max-w-[74%] rounded-2xl border border-border bg-card px-5 py-4"
-    >
-      <div className="text-[15.5px] leading-[1.5] text-foreground">
-        <ChatMarkdown>{block.text}</ChatMarkdown>
-      </div>
-      {secretInput && block.credential ? (
-        <div className="mt-2 break-all text-[13px] text-muted-foreground">
-          {block.credential.origin}
-        </div>
-      ) : null}
-      {block.detail && !secretInput ? (
-        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-muted px-3.5 py-3 font-mono text-[12.5px] leading-[1.7] text-muted-foreground">
-          {block.detail}
-        </pre>
-      ) : null}
-      {block.status === "answered" ? (
-        <div className="mt-3.5 text-[13.5px] font-medium text-success">
-          {formatAnsweredState(
-            block.answer,
-            Boolean(approvalActions),
-            secretInput,
-            approvalActions?.find((action) => action.id === block.answer)?.outcome,
-            askActions,
-          )}
-        </div>
-      ) : !canAnswer ? (
-        <div className="mt-3.5 text-[13.5px] font-medium text-muted-foreground">
-          <Trans>No longer active</Trans>
-        </div>
-      ) : askActions?.length ? (
-        <div className="mt-3.5 space-y-1.5">
-          {askActions.map((action) => (
+  // The row above already names the bot; the card only repeats itself for a
+  // consequential approval, name-less. A plain question opens with no header.
+  const header = approval ? { who: t`Needs your call` } : undefined;
+  const consequence = secretInput ? (
+    block.credential?.origin ? (
+      <span className="break-all">{block.credential.origin}</span>
+    ) : undefined
+  ) : block.detail ? (
+    <pre className="max-h-72 overflow-auto rounded-card bg-muted px-3.5 py-3 font-mono text-mono whitespace-pre-wrap break-words text-muted-foreground">
+      {block.detail}
+    </pre>
+  ) : undefined;
+
+  const answered =
+    block.status === "answered"
+      ? formatAnsweredState(
+          block.answer,
+          Boolean(approvalActions),
+          secretInput,
+          approvalActions?.find((action) => action.id === block.answer)?.outcome,
+          askActions,
+        )
+      : !canAnswer
+        ? t`No longer active`
+        : undefined;
+
+  let children: ReactNode = null;
+  let actions: ReactNode = null;
+
+  if (answered === undefined) {
+    if (approvalActions?.length) {
+      actions = (
+        <OptionsRow>
+          {approvalActions.map((action) => (
             <Button
               key={action.id}
-              variant={approvalActions && action.id === "allow" ? "default" : "outline"}
-              className="h-auto w-full justify-start whitespace-normal px-3.5 py-3 text-start font-normal"
+              variant={approvalActionVariant(action.id)}
+              size="capsule"
+              consequential={action.id === "allow"}
               disabled={submitting}
               onClick={() => void submitAnswer(action.id)}
             >
               {pendingAction === action.id ? (
                 <Trans>Sending…</Trans>
-              ) : approvalActions ? (
-                approvalActionLabel(action.id, action.label, action.outcome)
               ) : (
-                action.label
+                approvalActionLabel(action.id, action.label, action.outcome)
               )}
             </Button>
           ))}
-          {!approvalActions ? (
-            editing ? (
-              <form
-                className="flex flex-col gap-2 pt-1"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void submitAnswer(answer);
-                }}
-              >
-                <Input
-                  aria-label={t`Other answer`}
-                  value={answer}
-                  onChange={(event) => setAnswer(event.target.value)}
-                  placeholder={t`Type a different answer`}
-                  autoFocus
-                />
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={submitting}
-                    onClick={() => {
-                      setAnswer("");
-                      setEditing(false);
-                    }}
-                  >
-                    <Trans>Cancel</Trans>
-                  </Button>
-                  <Button type="submit" disabled={!answer.trim() || submitting}>
-                    {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
-                  </Button>
-                </div>
-              </form>
-            ) : (
+        </OptionsRow>
+      );
+    } else if (secretInput) {
+      children = (
+        <AnswerInput
+          aria-label={secretLabel}
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          disabled={submitting}
+          value={answer}
+          onChange={(event) => setAnswer(event.target.value)}
+          onSubmit={() => void submitAnswer(answer)}
+          placeholder={secretLabel}
+        />
+      );
+      actions = (
+        <Button
+          variant="capsule"
+          size="capsule"
+          disabled={answer.length === 0 || submitting}
+          onClick={() => void submitAnswer(answer)}
+        >
+          {submitting ? <Trans>Saving…</Trans> : <Trans>Save</Trans>}
+        </Button>
+      );
+    } else if (askActions?.length) {
+      children = (
+        <>
+          <OptionsRow>
+            {askActions.map((action) => (
               <Button
+                key={action.id}
                 type="button"
-                variant="ghost"
-                className="h-auto w-full justify-start px-3.5 py-2 text-start font-normal text-muted-foreground"
+                variant={pendingAction === action.id ? "capsule" : "quickReply"}
+                size="quickReply"
+                aria-pressed={pendingAction === action.id}
                 disabled={submitting}
-                onClick={() => setEditing(true)}
+                onClick={() => void submitAnswer(action.id)}
               >
-                <Trans>Other answer…</Trans>
+                {pendingAction === action.id ? <Trans>Sending…</Trans> : action.label}
               </Button>
-            )
+            ))}
+          </OptionsRow>
+          {editing ? (
+            <AnswerInput
+              className="mt-2.5"
+              aria-label={t`Other answer`}
+              value={answer}
+              onChange={(event) => setAnswer(event.target.value)}
+              onSubmit={() => void submitAnswer(answer)}
+              placeholder={t`Type a different answer`}
+              autoFocus
+              disabled={submitting}
+            />
           ) : null}
-        </div>
-      ) : secretInput ? (
-        <form
-          className="mt-3.5 flex flex-col gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitAnswer(answer);
-          }}
-        >
-          <Input
-            aria-label={secretLabel}
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            disabled={submitting}
-            value={answer}
-            onChange={(event) => setAnswer(event.target.value)}
-            placeholder={secretLabel}
-          />
-          <Button type="submit" className="self-start" disabled={answer.length === 0 || submitting}>
-            {submitting ? <Trans>Saving…</Trans> : <Trans>Save</Trans>}
-          </Button>
-        </form>
-      ) : editing ? (
-        <form
-          className="mt-3.5 flex flex-col gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitAnswer(answer);
-          }}
-        >
-          <Input
-            aria-label={t`Answer`}
-            value={answer}
-            onChange={(event) => setAnswer(event.target.value)}
-            placeholder={t`Type your answer`}
-          />
-          <div className="flex gap-2">
-            <Button type="submit" disabled={!answer.trim() || submitting}>
-              {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
-            </Button>
+        </>
+      );
+      actions = editing ? (
+        <FooterRow
+          leading={
             <Button
-              variant="outline"
+              type="button"
+              variant="tertiary"
+              size="capsule"
               disabled={submitting}
               onClick={() => {
                 setAnswer("");
@@ -243,20 +269,112 @@ export function AskCard({
             >
               <Trans>Cancel</Trans>
             </Button>
-          </div>
-        </form>
+          }
+          trailing={
+            <Button
+              type="button"
+              variant="capsule"
+              size="capsule"
+              disabled={!answer.trim() || submitting}
+              onClick={() => void submitAnswer(answer)}
+            >
+              {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
+            </Button>
+          }
+        />
       ) : (
-        <div className="mt-3.5 flex gap-2">
-          <Button disabled={submitting} onClick={() => void submitAnswer("approved")}>
-            {submitting ? <Trans>Sending…</Trans> : <Trans>Send it</Trans>}
-          </Button>
-          <Button variant="outline" disabled={submitting} onClick={() => setEditing(true)}>
-            <Trans>Edit first</Trans>
-          </Button>
-        </div>
-      )}
-      {error ? <p className="mt-3 text-[13px] text-destructive">{error}</p> : null}
-    </div>
+        <Button
+          type="button"
+          variant="tertiary"
+          size="capsule"
+          disabled={submitting}
+          onClick={() => setEditing(true)}
+        >
+          <Trans>Other answer…</Trans>
+        </Button>
+      );
+    } else {
+      children = editing ? (
+        <AnswerInput
+          aria-label={t`Answer`}
+          value={answer}
+          onChange={(event) => setAnswer(event.target.value)}
+          onSubmit={() => void submitAnswer(answer)}
+          placeholder={t`Type your answer`}
+          autoFocus
+          disabled={submitting}
+        />
+      ) : null;
+      actions = editing ? (
+        <FooterRow
+          leading={
+            <Button
+              type="button"
+              variant="tertiary"
+              size="capsule"
+              disabled={submitting}
+              onClick={() => {
+                setAnswer("");
+                setEditing(false);
+              }}
+            >
+              <Trans>Cancel</Trans>
+            </Button>
+          }
+          trailing={
+            <Button
+              type="button"
+              variant="capsule"
+              size="capsule"
+              disabled={!answer.trim() || submitting}
+              onClick={() => void submitAnswer(answer)}
+            >
+              {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
+            </Button>
+          }
+        />
+      ) : (
+        <FooterRow
+          leading={
+            <Button
+              type="button"
+              variant="tertiary"
+              size="capsule"
+              disabled={submitting}
+              onClick={() => setEditing(true)}
+            >
+              <Trans>Edit first</Trans>
+            </Button>
+          }
+          trailing={
+            <Button
+              type="button"
+              variant="capsule"
+              size="capsule"
+              disabled={submitting}
+              onClick={() => void submitAnswer("approved")}
+            >
+              {submitting ? <Trans>Sending…</Trans> : <Trans>Send it</Trans>}
+            </Button>
+          }
+        />
+      );
+    }
+  }
+
+  return (
+    <FramedBlock
+      className="mt-1.5"
+      data-testid={secretInput ? "secret-ask-card" : undefined}
+      header={header ? { ...header, dot: answered === undefined } : undefined}
+      question={<ChatMarkdown>{block.text}</ChatMarkdown>}
+      consequence={consequence}
+      answered={answered}
+      actions={actions}
+    >
+      {children}
+      {error ? <p className="text-meta text-destructive">{error}</p> : null}
+    </FramedBlock>
   );
 }
 
@@ -300,6 +418,7 @@ function MultiQuestionAsk({
   const isLast = index === total - 1;
   const get = (id: string): LocalAnswer =>
     answers[id] ?? { selected: [], other: "", otherOpen: false, skipped: false };
+  const settled = block.status === "answered";
 
   function update(id: string, patch: Partial<LocalAnswer>) {
     setAnswers((prev) => ({
@@ -336,9 +455,9 @@ function MultiQuestionAsk({
     const payload: Record<string, { selected?: string[]; other?: string; skipped?: boolean }> = {};
     for (const question of questions) {
       const state = get(question.id);
-      const answered = isAnswered(state);
+      const answeredQuestion = isAnswered(state);
       const other = state.other.trim();
-      if (answered) {
+      if (answeredQuestion) {
         payload[question.id] = {
           ...(state.selected.length ? { selected: state.selected } : {}),
           ...(other ? { other } : {}),
@@ -359,86 +478,166 @@ function MultiQuestionAsk({
     }
   }
 
-  const answered = block.status === "answered";
-
-  return (
-    <div className="max-w-[74%] rounded-2xl border border-border bg-card px-5 py-4">
-      {/* progress dots + counter */}
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex gap-1.5">
-          {questions.map((question, dotIndex) => {
-            const done = answered || isAnswered(get(question.id));
-            const active = !answered && dotIndex === index;
-            return (
-              <button
-                key={question.id}
-                type="button"
-                disabled={answered}
-                onClick={() => setIndex(dotIndex)}
-                aria-label={question.header || question.question}
-                className={`h-1.5 rounded-full transition-all ${
-                  active
-                    ? "w-6 bg-foreground"
-                    : done
-                      ? "w-1.5 bg-success"
-                      : "w-1.5 bg-muted-foreground/40"
-                }`}
-              />
-            );
-          })}
-        </div>
-        {!answered ? (
-          <span className="text-[12px] font-medium text-muted-foreground">
-            {index + 1}/{total}
-          </span>
-        ) : null}
+  const progressRow = (
+    <div className="flex items-center gap-2.5">
+      <div className="flex gap-1.5">
+        {questions.map((question, dotIndex) => {
+          const done = settled || isAnswered(get(question.id));
+          const active = !settled && dotIndex === index;
+          return (
+            <button
+              key={question.id}
+              type="button"
+              disabled={settled}
+              onClick={() => setIndex(dotIndex)}
+              aria-label={question.header || question.question}
+              className={`h-1.5 rounded-full transition-all ${
+                active
+                  ? "w-6 bg-foreground"
+                  : done
+                    ? "w-1.5 bg-success"
+                    : "w-1.5 bg-muted-foreground/40"
+              }`}
+            />
+          );
+        })}
       </div>
+      {!settled ? (
+        <span className="text-label text-muted-foreground">
+          {index + 1}/{total}
+        </span>
+      ) : null}
+    </div>
+  );
 
-      {answered ? (
-        <div className="space-y-3">
-          {questions.map((question, qIndex) => {
-            const stored = block.answers?.[question.id];
-            const labels = (stored?.selected ?? []).map(
-              (id) => question.options?.find((option) => option.id === id)?.label ?? id,
-            );
-            if (stored?.other) labels.push(`${t`Other`}: ${stored.other}`);
-            const value = stored?.skipped && labels.length === 0 ? t`Skipped` : labels.join(", ");
-            return (
-              <div key={question.id}>
-                <div className="text-[13px] font-medium text-muted-foreground">
+  const answered =
+    settled || !canAnswer ? (
+      <>
+        {progressRow}
+        {settled ? (
+          block.answers && Object.keys(block.answers).length > 0 ? (
+            <div className="mt-2 flex flex-col gap-3">
+              {questions.map((question, qIndex) => {
+                const stored = block.answers?.[question.id];
+                const labels = (stored?.selected ?? []).map(
+                  (id) => question.options?.find((option) => option.id === id)?.label ?? id,
+                );
+                if (stored?.other) labels.push(`${t`Other`}: ${stored.other}`);
+                const value =
+                  stored?.skipped && labels.length === 0 ? t`Skipped` : labels.join(", ");
+                return (
+                  <div key={question.id}>
+                    <div className="text-meta text-muted-foreground">
+                      {qIndex + 1}. {question.question}
+                    </div>
+                    <div className="text-body text-foreground">{value || t`Answered`}</div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            // Resolved from the composer: the user's own words are in their message bubble
+            // right below, so this header only keeps the questions as a resolved trace — no
+            // fabricated per-question value, no repeated "Answered" (design D2).
+            <div className="mt-2 flex flex-col gap-1.5">
+              {questions.map((question, qIndex) => (
+                <div key={question.id} className="text-meta text-muted-foreground">
                   {qIndex + 1}. {question.question}
                 </div>
-                <div className="text-[14.5px] text-foreground">{value || t`Answered`}</div>
-              </div>
-            );
-          })}
-        </div>
-      ) : !canAnswer ? (
-        <div className="text-[13.5px] font-medium text-muted-foreground">
-          <Trans>No longer active</Trans>
-        </div>
-      ) : (
-        <div>
-          {current.header ? (
-            <div className="mb-1 inline-block rounded-full bg-muted px-2.5 py-0.5 text-[11.5px] font-medium text-muted-foreground">
-              {current.header}
+              ))}
             </div>
-          ) : null}
-          <div className="text-[15.5px] leading-[1.5] text-foreground">{current.question}</div>
+          )
+        ) : (
+          <div className="mt-2 text-meta text-muted-foreground">
+            <Trans>No longer active</Trans>
+          </div>
+        )}
+      </>
+    ) : undefined;
 
-          <div className="mt-3 space-y-1.5">
+  const showOtherField =
+    !current.options?.length || !current.multiSelect || get(current.id).otherOpen;
+
+  return (
+    <FramedBlock
+      className="mt-1.5"
+      question={current.question}
+      answered={answered}
+      actions={
+        answered === undefined ? (
+          <FooterRow
+            leading={
+              <>
+                {index > 0 ? (
+                  <Button
+                    type="button"
+                    variant="tertiary"
+                    size="capsule"
+                    disabled={submitting}
+                    onClick={() => setIndex(index - 1)}
+                  >
+                    <Trans>Back</Trans>
+                  </Button>
+                ) : null}
+                {current.required === false ? (
+                  <Button
+                    type="button"
+                    variant="tertiary"
+                    size="capsule"
+                    disabled={submitting}
+                    onClick={() => {
+                      update(current.id, { selected: [], other: "", skipped: true });
+                      if (!isLast) setIndex(index + 1);
+                    }}
+                  >
+                    <Trans>Skip</Trans>
+                  </Button>
+                ) : null}
+              </>
+            }
+            trailing={
+              isLast ? (
+                <Button
+                  type="button"
+                  variant="capsule"
+                  size="capsule"
+                  disabled={submitting || !requiredSatisfied}
+                  onClick={() => void submit()}
+                >
+                  {submitting ? <Trans>Sending…</Trans> : <Trans>Send answers</Trans>}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="capsule"
+                  size="capsule"
+                  disabled={submitting}
+                  onClick={() => setIndex(index + 1)}
+                >
+                  <Trans>Next</Trans>
+                </Button>
+              )
+            }
+          />
+        ) : null
+      }
+    >
+      {answered === undefined ? (
+        <>
+          {progressRow}
+          <OptionsRow className="mt-3">
             {current.options?.map((option) => {
               const selected = get(current.id).selected.includes(option.id);
               return (
                 <Button
                   key={option.id}
                   type="button"
-                  variant={selected ? "default" : "outline"}
-                  className="h-auto w-full justify-start whitespace-normal px-3.5 py-3 text-start font-normal"
+                  variant={selected ? "capsule" : "quickReply"}
+                  size="quickReply"
+                  aria-pressed={selected}
                   disabled={submitting}
                   onClick={() => toggleOption(current, option.id)}
                 >
-                  {current.multiSelect ? (selected ? "☑ " : "☐ ") : null}
                   {option.label}
                 </Button>
               );
@@ -446,8 +645,9 @@ function MultiQuestionAsk({
             {current.options?.length && current.multiSelect ? (
               <Button
                 type="button"
-                variant={get(current.id).otherOpen ? "default" : "outline"}
-                className="h-auto w-full justify-start whitespace-normal px-3.5 py-3 text-start font-normal"
+                variant={get(current.id).otherOpen ? "capsule" : "quickReply"}
+                size="quickReply"
+                aria-pressed={get(current.id).otherOpen}
                 disabled={submitting}
                 onClick={() => {
                   const open = !get(current.id).otherOpen;
@@ -458,21 +658,15 @@ function MultiQuestionAsk({
                   });
                 }}
               >
-                {get(current.id).otherOpen ? "☑ " : "☐ "}
                 <Trans>Other…</Trans>
               </Button>
             ) : null}
-          </div>
+          </OptionsRow>
           {/* Single-select and free-text questions type inline; multi-select reveals the field
               only when the "Other" checkbox is on. */}
-          {!current.options?.length || !current.multiSelect || get(current.id).otherOpen ? (
+          {showOtherField ? (
             <div className="mt-2.5">
-              {current.options?.length && !current.multiSelect ? (
-                <div className="mb-1 text-[12px] text-muted-foreground">
-                  <Trans>Or type your own answer</Trans>
-                </div>
-              ) : null}
-              <Input
+              <AnswerInput
                 aria-label={t`Other answer`}
                 value={get(current.id).other}
                 autoFocus={current.multiSelect && get(current.id).otherOpen}
@@ -491,50 +685,9 @@ function MultiQuestionAsk({
               />
             </div>
           ) : null}
-
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex gap-2">
-              {index > 0 ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={submitting}
-                  onClick={() => setIndex(index - 1)}
-                >
-                  <Trans>Back</Trans>
-                </Button>
-              ) : null}
-              {current.required === false ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={submitting}
-                  onClick={() => {
-                    update(current.id, { selected: [], other: "", skipped: true });
-                    if (!isLast) setIndex(index + 1);
-                  }}
-                >
-                  <Trans>Skip</Trans>
-                </Button>
-              ) : null}
-            </div>
-            {isLast ? (
-              <Button
-                type="button"
-                disabled={submitting || !requiredSatisfied}
-                onClick={() => void submit()}
-              >
-                {submitting ? <Trans>Sending…</Trans> : <Trans>Send answers</Trans>}
-              </Button>
-            ) : (
-              <Button type="button" disabled={submitting} onClick={() => setIndex(index + 1)}>
-                <Trans>Next</Trans>
-              </Button>
-            )}
-          </div>
-          {error ? <p className="mt-3 text-[13px] text-destructive">{error}</p> : null}
-        </div>
-      )}
-    </div>
+          {error ? <p className="mt-2 text-meta text-destructive">{error}</p> : null}
+        </>
+      ) : null}
+    </FramedBlock>
   );
 }

@@ -67,6 +67,7 @@ export type RoutineDraftState = {
   githubEnabled: boolean;
   messageProvider: string | null;
   active: boolean;
+  notify: boolean;
   runAtLocal: string;
 };
 
@@ -79,6 +80,7 @@ export function emptyRoutineDraft(): RoutineDraftState {
     githubEnabled: false,
     messageProvider: null,
     active: true,
+    notify: false,
     runAtLocal: "",
   };
 }
@@ -92,6 +94,7 @@ export function draftFromRoutine(routine: Routine): RoutineDraftState {
     githubEnabled: routine.githubEnabled,
     messageProvider: routine.messageProvider,
     active: routine.active,
+    notify: routine.notify,
     runAtLocal: routineNeedsOneShotArm(routine, routine.crons) ? defaultArmRunAtLocal() : "",
   };
 }
@@ -275,35 +278,71 @@ export function RoutineEditor({
         </Button>
       </div>
 
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <label className="flex items-center gap-2.5 text-sm text-foreground/75">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={draft.active}
-            onClick={() => onChange({ ...draft, active: !draft.active })}
-            className={`relative h-[22px] w-[40px] rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-              draft.active ? "bg-primary" : "bg-input"
-            }`}
-          >
-            <span
-              className={`absolute top-[2px] left-0 h-[18px] w-[18px] rounded-full bg-background transition-transform ${
-                draft.active
-                  ? "translate-x-[20px] dark:bg-primary-foreground"
-                  : "translate-x-[2px] dark:bg-foreground"
-              }`}
-            />
-          </button>
-          <Trans>Active</Trans>
-        </label>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" disabled={saving || running} onClick={onDelete}>
-            <Trans>Delete</Trans>
-          </Button>
-          <Button variant="secondary" disabled={!canTest} onClick={onTestRun}>
-            {running ? t`Running…` : t`Test run`}
-          </Button>
+      <div className="mb-5 flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <label className="flex items-center gap-2.5 text-sm text-foreground/75">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={draft.active}
+                onClick={() => onChange({ ...draft, active: !draft.active })}
+                className={`relative h-[22px] w-[40px] rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                  draft.active ? "bg-primary" : "bg-input"
+                }`}
+              >
+                <span
+                  className={`absolute top-[2px] left-0 h-[18px] w-[18px] rounded-full bg-background transition-transform ${
+                    draft.active
+                      ? "translate-x-[20px] dark:bg-primary-foreground"
+                      : "translate-x-[2px] dark:bg-foreground"
+                  }`}
+                />
+              </button>
+              <Trans>Active</Trans>
+            </label>
+            <label className="flex items-center gap-2.5 text-sm text-foreground/75">
+              <button
+                type="button"
+                role="switch"
+                data-testid="routine-notify-switch"
+                aria-checked={draft.notify}
+                onClick={() => onChange({ ...draft, notify: !draft.notify })}
+                className={`relative h-[22px] w-[40px] rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                  draft.notify ? "bg-primary" : "bg-input"
+                }`}
+              >
+                <span
+                  className={`absolute top-[2px] left-0 h-[18px] w-[18px] rounded-full bg-background transition-transform ${
+                    draft.notify
+                      ? "translate-x-[20px] dark:bg-primary-foreground"
+                      : "translate-x-[2px] dark:bg-foreground"
+                  }`}
+                />
+              </button>
+              <Trans>Notify me on every run</Trans>
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" disabled={saving || running} onClick={onDelete}>
+              <Trans>Delete</Trans>
+            </Button>
+            <Button variant="secondary" disabled={!canTest} onClick={onTestRun}>
+              {running ? t`Running…` : t`Test run`}
+            </Button>
+          </div>
         </div>
+        <p className="text-xs text-muted-foreground/70">
+          {draft.notify ? (
+            <Trans>
+              You’ll be notified each time it runs, and its card in this thread starts expanded.
+            </Trans>
+          ) : (
+            <Trans>
+              Off by default: it stays silent. Its trace is still browsable in this thread.
+            </Trans>
+          )}
+        </p>
       </div>
 
       <label htmlFor={`${fieldId}-name`} className="block text-sm text-muted-foreground">

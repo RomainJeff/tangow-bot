@@ -1,29 +1,10 @@
 /* Beautiful UI primitives — hand-ported from beautifului.dev
    (github.com/TurboKach/ai-native-react-components, MIT © 2026 Turbo).
    Colours come from the shared semantic tokens; keyframes are ported
-   verbatim with a bui- prefix to avoid collisions. */
+   verbatim with a bui- prefix to avoid collisions. Only the success beat's
+   one-shot pop and fade remain — the working beat now moves through
+   `WorkingLine` instead of its own pixel-grid loader. */
 
-@keyframes bui-shimmer-text {
-  0% {
-    background-position: 150%;
-  }
-  100% {
-    background-position: -50%;
-  }
-}
-@keyframes bui-pixel-on {
-  0%,
-  100% {
-    opacity: 0.15;
-  }
-  18%,
-  42% {
-    opacity: 1;
-  }
-  62% {
-    opacity: 0.15;
-  }
-}
 @keyframes bui-pop-in {
   0% {
     opacity: 0;

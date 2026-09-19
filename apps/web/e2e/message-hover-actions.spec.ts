@@ -10,40 +10,61 @@ async function sendComposerMessage(page: Page, composer: Locator, text: string) 
   await expect(composer).toHaveValue("");
 }
 
-async function revealHoverRail(row: Locator): Promise<Locator> {
-  const rail = row.getByTestId("message-hover-rail");
+/** Hover the row and wait for its floating pill to reveal, then park focus on More for stable screenshots. */
+async function revealHoverPill(row: Locator): Promise<Locator> {
+  const pill = row.getByTestId("message-hover-rail");
   await expect
     .poll(async () => {
       await row.hover();
-      return rail.evaluate((element) => {
+      return pill.evaluate((element) => {
         const style = getComputedStyle(element);
         return { opacity: style.opacity, pointerEvents: style.pointerEvents };
       });
     })
     .toEqual({ opacity: "1", pointerEvents: "auto" });
   // Incoming replies can move the row away from the pointer; keep real focus for screenshots.
-  await rail.getByRole("button", { name: "More" }).focus();
-  return rail;
+  await pill.getByRole("button", { name: "More" }).focus();
+  return pill;
 }
 
-/** Park the pointer outside the message and blur focus so the rail returns to opacity-0. */
-async function expectRailAtRest(page: Page, row: Locator) {
-  const rail = row.getByTestId("message-hover-rail");
+/** Park the pointer outside the message and blur focus so the pill returns to opacity-0. */
+async function expectPillAtRest(page: Page, row: Locator) {
+  const pill = row.getByTestId("message-hover-rail");
   const box = await row.boundingBox();
   if (box) {
     // (0,0) can still sit on the first transcript row; leave below the row instead.
     await page.mouse.move(Math.max(0, box.x) + 8, box.y + box.height + 32);
   }
-  // More keeps focus after Escape; blur so focus-within does not leave the rail visible.
+  // More keeps focus after Escape; blur so focus-within does not leave the pill visible.
   await page.evaluate(() => {
     (document.activeElement as HTMLElement | null)?.blur();
   });
-  await expect(rail).toHaveCSS("opacity", "0");
-  await expect(rail).toHaveCSS("pointer-events", "none");
-  await expect(row.getByTestId("message-hover-time")).toHaveCSS("opacity", "0");
+  await expect(pill).toHaveCSS("opacity", "0");
+  await expect(pill).toHaveCSS("pointer-events", "none");
+  // Only a user bubble carries a hover time; a bot row states it beside the name.
+  const hoverTime = row.getByTestId("message-hover-time");
+  if ((await hoverTime.count()) > 0) await expect(hoverTime).toHaveCSS("opacity", "0");
 }
 
-test("message hover shows beside-bubble actions; reply links to parent", async ({
+/** The pill floats at the row's own top-end corner, inside the row's bounds. */
+async function expectPillAtTopEnd(pill: Locator, row: Locator) {
+  await expect
+    .poll(async () => {
+      const pillBox = await pill.boundingBox();
+      const rowBox = await row.boundingBox();
+      if (!pillBox || !rowBox) return null;
+      return {
+        // "end" edge: within a few px of the row's own end edge, never past it.
+        nearEndEdge: Math.abs(pillBox.x + pillBox.width - (rowBox.x + rowBox.width)) < 20,
+        withinRowWidth: pillBox.x + pillBox.width <= rowBox.x + rowBox.width + 1,
+        // "top": at or just above the row's own top edge, never near its middle or end.
+        nearTop: pillBox.y <= rowBox.y + 4,
+      };
+    })
+    .toEqual({ nearEndEdge: true, withinRowWidth: true, nearTop: true });
+}
+
+test("message hover shows a floating action pill; reply links to parent", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
@@ -63,42 +84,26 @@ test("message hover shows beside-bubble actions; reply links to parent", async (
   await expect(botText).toBeVisible({ timeout: 20_000 });
   const botRow = transcript.locator(`[data-message-id]`).filter({ has: botText }).first();
   await expect(botRow).toBeVisible();
-  await expectRailAtRest(page, botRow);
+  await expectPillAtRest(page, botRow);
   await captureScreenshot(page, testInfo, "message-actions-rest-desktop");
 
-  const botRail = await revealHoverRail(botRow);
+  const botPill = await revealHoverPill(botRow);
   const botToolbar = botRow.getByTestId("message-hover-actions");
-  const botTime = botRow.getByTestId("message-hover-time");
-  await expect(botTime).toHaveCSS("opacity", "1");
-  const botTimeBox = await botTime.boundingBox();
-  const botRowBox = await botRow.boundingBox();
-  expect(botTimeBox).not.toBeNull();
-  expect(botRowBox).not.toBeNull();
-  expect(
-    Math.abs(botTimeBox!.x + botTimeBox!.width - botRowBox!.x - botRowBox!.width),
-  ).toBeLessThan(2);
+  // A bot row states its time beside the author, so it needs no hover clock.
+  await expect(botRow.getByTestId("message-hover-time")).toHaveCount(0);
+  await expect(botRow.locator('[data-slot="message-row-time"]')).toHaveText(/\d/);
 
+  // On a fine (desktop) pointer the pill shows Reply/Copy directly; More only
+  // carries what isn't already a pill icon (Edit, user rows only), so a bot
+  // row — nothing left to add — hides it there rather than open onto nothing.
   await expect(botToolbar.getByRole("button", { name: "Reply" })).toBeVisible();
-  await expect(botToolbar.getByRole("button", { name: "More" })).toBeVisible();
-  // Measure a unique visible bubble, so an oversized wrapper cannot hide a gap.
-  const botBubble = botRow.getByTestId("message-bot-bubble").first();
-  await expect
-    .poll(async () => {
-      const railBox = await botRail.boundingBox();
-      const bubbleBox = await botBubble.boundingBox();
-      if (!railBox || !bubbleBox) return null;
-      const railMid = railBox.y + railBox.height / 2;
-      const bubbleMid = bubbleBox.y + bubbleBox.height / 2;
-      return {
-        beside: railBox.x >= bubbleBox.x + bubbleBox.width - 2,
-        flush: railBox.x - (bubbleBox.x + bubbleBox.width) < 8,
-        centered: Math.abs(railMid - bubbleMid) <= 12,
-        notBelow: railBox.y + railBox.height <= bubbleBox.y + bubbleBox.height + 12,
-      };
-    })
-    .toEqual({ beside: true, flush: true, centered: true, notBelow: true });
+  await expect(botToolbar.getByRole("button", { name: "Copy" })).toBeVisible();
+  await expect(botToolbar.getByRole("button", { name: "More" })).toBeHidden();
+  // Voice is not configured in this test, so the pill carries no Speak button.
+  await expect(botToolbar.getByRole("button", { name: "Speak this reply" })).toHaveCount(0);
+  await expectPillAtTopEnd(botPill, botRow);
   await captureScreenshot(page, testInfo, "message-bot-actions-desktop");
-  await expectRailAtRest(page, botRow);
+  await expectPillAtRest(page, botRow);
 
   const parentText = `hover-parent-${stamp}`;
   const replyText = `hover-reply-${stamp}`;
@@ -108,11 +113,24 @@ test("message hover shows beside-bubble actions; reply links to parent", async (
 
   const parentRow = transcript.locator(`[data-message-id]`).filter({ hasText: parentText }).first();
   await expect(parentRow).toBeVisible({ timeout: 20_000 });
+  // Your own message is a bare right-aligned bubble: it never wears the bot
+  // avatar-and-name row header (a regression once labelled it "Bot").
+  await expect(parentRow.locator('[data-slot="message-row-author"]')).toHaveCount(0);
+  await expect(parentRow.locator('[data-slot="message-row-avatar"]')).toHaveCount(0);
 
-  const rail = await revealHoverRail(parentRow);
+  const pill = await revealHoverPill(parentRow);
   const toolbar = parentRow.getByTestId("message-hover-actions");
   await expect(toolbar.getByRole("button", { name: "Reply" })).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: "Copy" })).toBeVisible();
+  // A user row is the one case More still shows on a fine pointer — Edit and
+  // resend is never a pill icon, on either density.
   await expect(toolbar.getByRole("button", { name: "More" })).toBeVisible();
+  await toolbar.getByRole("button", { name: "More" }).click();
+  await expect(page.getByRole("menuitem", { name: "Edit and resend" })).toBeVisible();
+  // Reply/Copy already sit in the pill on a fine pointer, so More does not repeat them.
+  await expect(page.getByRole("menuitem", { name: "Reply" })).toBeHidden();
+  await expect(page.getByRole("menuitem", { name: "Copy" })).toBeHidden();
+  await page.keyboard.press("Escape");
   const react = toolbar.getByRole("button", { name: "React" });
   await expect(react).toBeVisible();
   // Default reaction matches Reply/More: muted control color, not yellow.
@@ -126,32 +144,30 @@ test("message hover shows beside-bubble actions; reply links to parent", async (
     })
     .toBe(true);
 
-  // User bubble (right): icons sit to the left, vertically centered — not under the bubble.
+  await expectPillAtTopEnd(pill, parentRow);
+
+  // Bot prose now runs the column's width — nothing narrows it to hug the pill.
   const frame = parentRow.getByTestId("message-bubble-frame");
+  const botFrame = botRow.getByTestId("message-bubble-frame");
   await expect
     .poll(async () => {
-      const railBox = await rail.boundingBox();
-      const frameBox = await frame.boundingBox();
-      if (!railBox || !frameBox) return null;
-      const railMid = railBox.y + railBox.height / 2;
-      const frameMid = frameBox.y + frameBox.height / 2;
-      return {
-        beside: railBox.x + railBox.width <= frameBox.x + 2,
-        flush: frameBox.x - (railBox.x + railBox.width) < 8,
-        centered: Math.abs(railMid - frameMid) <= 12,
-        notBelow: railBox.y >= frameBox.y - 12,
-      };
+      const frameBox = await botFrame.boundingBox();
+      const transcriptBox = await transcript.boundingBox();
+      if (!frameBox || !transcriptBox) return null;
+      return transcriptBox.width - frameBox.width;
     })
-    .toEqual({ beside: true, flush: true, centered: true, notBelow: true });
+    .toBeLessThan(4);
 
-  // User bubble is a muted elevated surface (not cream invert / bright pill).
+  // User bubble is a muted elevated surface (not cream invert / bright pill),
+  // and keeps its own 78% cap regardless of message length.
   const userSurface = parentRow.getByTestId("message-user-bubble");
   await expect(userSurface).toBeVisible();
   await expect
     .poll(async () => userSurface.evaluate((el) => getComputedStyle(el).backgroundColor))
     .not.toMatch(/^rgb\(241,\s*241,\s*239\)$/); // not cream primary foreground
 
-  // Long user bubble: rail stays ~6px beside the bubble edge, not the full row width.
+  // Long user bubble: the bubble itself still caps near 78%, and the pill
+  // still sits at the row's own top-end corner, not stretched with content.
   const longText = `hover-long-${stamp}-${"x".repeat(220)}`;
   await sendComposerMessage(page, composer, longText);
   const longRow = transcript
@@ -159,19 +175,20 @@ test("message hover shows beside-bubble actions; reply links to parent", async (
     .filter({ hasText: longText.slice(0, 40) })
     .first();
   await expect(longRow).toBeVisible({ timeout: 20_000 });
-  const longRail = await revealHoverRail(longRow);
-  const longFrame = longRow.getByTestId("message-bubble-frame");
+  const longPill = await revealHoverPill(longRow);
+  await expectPillAtTopEnd(longPill, longRow);
+  const longBubble = longRow.getByTestId("message-user-bubble");
   await expect
     .poll(async () => {
-      const railBox = await longRail.boundingBox();
-      const frameBox = await longFrame.boundingBox();
-      if (!railBox || !frameBox) return null;
-      return Math.abs(frameBox.x - (railBox.x + railBox.width));
+      const bubbleBox = await longBubble.boundingBox();
+      const transcriptBox = await transcript.boundingBox();
+      if (!bubbleBox || !transcriptBox) return null;
+      return bubbleBox.width / transcriptBox.width;
     })
-    .toBeLessThan(8);
+    .toBeLessThan(0.8);
 
-  // Time appears at the opposite row edge on hover, outside More.
-  await revealHoverRail(parentRow);
+  // Time appears at the opposite row edge on hover, outside the pill.
+  await revealHoverPill(parentRow);
   const rowTime = parentRow.getByTestId("message-hover-time");
   await expect(rowTime).toHaveCSS("opacity", "1");
   await expect(rowTime).toHaveText(/\d/);
@@ -182,29 +199,29 @@ test("message hover shows beside-bubble actions; reply links to parent", async (
   expect(Math.abs(timeBox!.x - rowBox!.x)).toBeLessThan(2);
   await toolbar.getByRole("button", { name: "More" }).click();
   await expect(page.getByRole("menu").locator("time")).toHaveCount(0);
-  // Escape closes More and restores focus to the trigger so the rail stays up.
+  // Escape closes More and restores focus to the trigger so the pill stays up.
   await page.keyboard.press("Escape");
   await expect(toolbar.getByRole("button", { name: "More" })).toBeFocused();
   await captureScreenshot(page, testInfo, "message-user-actions-hover-desktop");
-  // Default transcript shot: rail at rest (no hover pin, mouse clear).
-  await expectRailAtRest(page, parentRow);
+  // Default transcript shot: pill at rest (no hover pin, mouse clear).
+  await expectPillAtRest(page, parentRow);
   await captureScreenshot(page, testInfo, "message-user-bubble-desktop");
 
-  // Clip shot of bubble + rail for gallery geometry.
-  await revealHoverRail(parentRow);
-  const railBox = await rail.boundingBox();
+  // Clip shot of bubble + pill for gallery geometry.
+  await revealHoverPill(parentRow);
+  const pillBox = await pill.boundingBox();
   const frameBox = await frame.boundingBox();
-  if (!railBox || !frameBox) throw new Error("missing hover toolbar geometry");
+  if (!pillBox || !frameBox) throw new Error("missing hover pill geometry");
   const pad = 16;
-  const top = Math.min(railBox.y, frameBox.y);
+  const top = Math.min(pillBox.y, frameBox.y);
   const clip = {
-    x: Math.max(0, Math.min(railBox.x, frameBox.x) - pad),
+    x: Math.max(0, Math.min(pillBox.x, frameBox.x) - pad),
     y: Math.max(0, top - pad),
     width:
-      Math.max(railBox.x + railBox.width, frameBox.x + frameBox.width) -
-      Math.min(railBox.x, frameBox.x) +
+      Math.max(pillBox.x + pillBox.width, frameBox.x + frameBox.width) -
+      Math.min(pillBox.x, frameBox.x) +
       pad * 2,
-    height: Math.max(railBox.y + railBox.height, frameBox.y + frameBox.height) - top + pad * 2,
+    height: Math.max(pillBox.y + pillBox.height, frameBox.y + frameBox.height) - top + pad * 2,
   };
   const hoverPath = testInfo.outputPath("message-hover-toolbar.png");
   await page.screenshot({
@@ -236,12 +253,11 @@ test("message hover shows beside-bubble actions; reply links to parent", async (
   await expect(parentRow.getByTestId("message-reactions")).toContainText("👍");
 
   await parentRow.hover();
-  await toolbar.getByRole("button", { name: "More" }).click();
-  await page.getByRole("menuitem", { name: "Copy" }).click();
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await toolbar.getByRole("button", { name: "Copy" }).click();
   await expect
     .poll(async () => page.evaluate(() => navigator.clipboard.readText()))
     .toBe(parentText);
-  await expect(toolbar.getByRole("button", { name: "More" })).toBeFocused();
 
   await parentRow.hover();
   await toolbar.getByRole("button", { name: "Reply" }).click();
@@ -264,10 +280,10 @@ test("message hover shows beside-bubble actions; reply links to parent", async (
 
   await page.setViewportSize({ width: 390, height: 844 });
   await botRow.scrollIntoViewIfNeeded();
-  await revealHoverRail(botRow);
+  await revealHoverPill(botRow);
   await captureScreenshot(page, testInfo, "message-bot-actions-mobile");
   await parentRow.scrollIntoViewIfNeeded();
-  await revealHoverRail(parentRow);
+  await revealHoverPill(parentRow);
   await captureScreenshot(page, testInfo, "message-user-actions-mobile");
 });
 
@@ -357,7 +373,7 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
 test.describe("touch message actions", () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
-  test("More exposes actions without simulated hover", async ({ page }, testInfo) => {
+  test("the pill needs no hover to be reachable", async ({ page }, testInfo) => {
     await signup(page, `touch-actions-${Date.now()}@rakazo.test`, "password12", "Touch Actions");
     await completeOnboarding(page);
     expect(
@@ -374,22 +390,27 @@ test.describe("touch message actions", () => {
       .locator("[data-message-id]")
       .filter({ has: botText })
       .first();
-    const rail = row.getByTestId("message-hover-rail");
-    await expect(rail).toHaveCSS("opacity", "1");
-    await expect(rail.getByRole("button", { name: "Reply", exact: true })).toBeHidden();
-    await rail.getByRole("button", { name: "React", exact: true }).tap();
+    // A touch pointer has no hover to reveal the pill with, so it stays put —
+    // but stays down to React and More, not six permanent buttons.
+    const pill = row.getByTestId("message-hover-rail");
+    await expect(pill).toHaveCSS("opacity", "1");
+    await expect(pill).toHaveCSS("pointer-events", "auto");
+    await expect(pill.getByRole("button", { name: "Reply", exact: true })).toBeHidden();
+    await expect(pill.getByRole("button", { name: "Copy", exact: true })).toBeHidden();
+    await expect(pill.getByRole("button", { name: "React", exact: true })).toBeVisible();
+    await expect(pill.getByRole("button", { name: "More", exact: true })).toBeVisible();
+    await pill.getByRole("button", { name: "React", exact: true }).tap();
     await expect(page.getByRole("button", { name: "🎉", exact: true })).toBeVisible();
     await captureScreenshot(page, testInfo, "message-reaction-picker-touch");
     await page.getByRole("button", { name: "🎉", exact: true }).tap();
     await expect(row.getByTestId("message-reactions")).toHaveText("🎉");
-    await rail.getByRole("button", { name: "React", exact: true }).tap();
+    await pill.getByRole("button", { name: "React", exact: true }).tap();
     await page.getByRole("button", { name: "🎉", exact: true }).tap();
     await expect(row.getByTestId("message-reactions")).toHaveText("🎉 2");
-    await rail.getByRole("button", { name: "More" }).tap();
+    // Reply is not a pill icon on a coarse pointer; More is the only way to it.
+    await pill.getByRole("button", { name: "More" }).tap();
+    await expect(page.getByRole("menuitem", { name: "Reply" })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: "Copy" })).toBeVisible();
-    await expect(row.getByTestId("message-hover-time")).toHaveCSS("opacity", "1");
-    await expect(row.getByTestId("message-hover-time")).toHaveText(/\d/);
-    await expect(page.getByRole("menu").locator("time")).toHaveCount(0);
     await captureScreenshot(page, testInfo, "message-actions-touch-menu");
     await page.getByRole("menuitem", { name: "Reply", exact: true }).tap();
     await expect(page.getByRole("button", { name: "Cancel reply" })).toBeVisible();

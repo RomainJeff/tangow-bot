@@ -3,9 +3,11 @@ import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type { ThreadMessage } from "@rakazo/contracts";
 import { peerConversations } from "@rakazo/core";
 import { BotAvatar, Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { desktopBridge } from "../lib/desktop";
 import { loadPeerHistory } from "../lib/peer-history";
 import { rpc } from "../lib/rpc";
+import { WindowChrome } from "./WindowChrome";
 
 /**
  * Full-screen view-only transcript of a bot-to-bot exchange.
@@ -42,6 +44,14 @@ export function PeerMessagesOverlay({
     return peerConversations(messages).find((entry) => entry.peerBotId === peerBotId) ?? null;
   }, [historyReady, messages, peerBotId]);
   const peerBotName = conversation?.peerBotName ?? initialPeerBotName;
+  const transcriptRef = useRef<HTMLDivElement>(null);
+
+  // Oldest-first order stays, but the view opens on the latest exchange.
+  useLayoutEffect(() => {
+    const element = transcriptRef.current;
+    if (!element || !conversation) return;
+    element.scrollTop = element.scrollHeight;
+  }, [conversation]);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -82,8 +92,10 @@ export function PeerMessagesOverlay({
         showCloseButton={false}
         className="inset-0 top-0 left-0 flex h-full w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none bg-background p-0 text-foreground ring-0 sm:max-w-none"
       >
-        <div className="flex items-center justify-between gap-4 border-b border-sidebar-border px-[18px] py-3.5">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="app-drag flex items-center justify-between gap-4 border-b border-sidebar-border px-[18px] py-3.5">
+          <div className="app-no-drag flex min-w-0 flex-1 items-center gap-3">
+            {/* The overlay covers the shell header, so it reserves room for the window controls itself. */}
+            {desktopBridge() ? <WindowChrome /> : null}
             <div className="flex items-center -space-x-2">
               <BotAvatar color={botColor} identity={botId} shapeSeed={botShapeSeed} size={28} />
               <BotAvatar
@@ -97,7 +109,10 @@ export function PeerMessagesOverlay({
               {title}
             </DialogTitle>
           </div>
-          <DialogClose aria-label={t`Close`} render={<Button variant="ghost" size="sm" />}>
+          <DialogClose
+            aria-label={t`Close`}
+            render={<Button variant="ghost" size="sm" className="app-no-drag" />}
+          >
             <Trans>Close</Trans>
           </DialogClose>
         </div>
@@ -125,6 +140,7 @@ export function PeerMessagesOverlay({
           </div>
         ) : (
           <div
+            ref={transcriptRef}
             data-testid="peer-conversation-transcript"
             className="rk-scroll flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
           >

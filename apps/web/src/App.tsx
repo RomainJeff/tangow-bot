@@ -182,12 +182,11 @@ function ShellSkeleton() {
       className="flex h-full overflow-hidden bg-background"
       data-rakazo-app-state="session-pending"
     >
-      <aside className="hidden w-[316px] shrink-0 border-e border-sidebar-border bg-sidebar px-3.5 pt-16 md:block">
-        <Skeleton className="h-10 rounded-xl" />
-        <div className="mt-5 space-y-2 px-1">
+      <aside className="hidden w-sidebar shrink-0 bg-sidebar px-2.5 pt-header md:block">
+        <div className="space-y-0.5">
           {[0, 1, 2, 3].map((row) => (
-            <div key={row} className="flex items-center gap-3 rounded-xl px-2 py-2.5">
-              <Skeleton className="size-9 rounded-full" />
+            <div key={row} className="flex items-center gap-2.75 rounded-row px-2.5 py-2.25">
+              <Skeleton className="size-7 rounded-full" />
               <div className="flex-1 space-y-2">
                 <Skeleton className="h-3 w-2/5" />
                 <Skeleton className="h-2.5 w-4/5" />
@@ -197,7 +196,7 @@ function ShellSkeleton() {
         </div>
       </aside>
       <main className="flex flex-1 flex-col">
-        <div className="h-[74px] border-b border-sidebar-border" />
+        <div className="h-header" />
         <div className="flex flex-1 items-center justify-center text-[14px] text-muted-foreground">
           <Trans>Opening your Space…</Trans>
         </div>

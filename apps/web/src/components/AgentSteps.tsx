@@ -1,7 +1,12 @@
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import type { MessageBlock } from "@rakazo/contracts";
-import { isToolActivityBlock } from "@rakazo/core";
-import { Dialog, DialogContent, DialogTitle } from "@rakazo/ui-web";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  formatShortDuration,
+  ReasoningDisclosure,
+} from "@rakazo/ui-web";
 import { useState } from "react";
 
 type StepsBlock = Extract<MessageBlock, { kind: "steps" }>;
@@ -15,41 +20,45 @@ function callsOf(block: StepsBlock): StepCall[] {
   );
 }
 
-/** "Steps (n)" toggle listing the tools used; each one opens its own detail popin. */
-export function AgentSteps({ block }: { block: StepsBlock }) {
+/** How long the bot thought and what it did, folded away; each step opens its detail popin. */
+export function AgentSteps({ block, live = false }: { block: StepsBlock; live?: boolean }) {
   const { t } = useLingui();
   const [expanded, setExpanded] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const calls = callsOf(block);
   if (calls.length === 0) return null;
   const openCall = openIndex === null ? undefined : calls[openIndex];
+  const stepCount = calls.length;
+  const duration = block.durationMs === undefined ? null : formatShortDuration(block.durationMs);
   return (
-    <div className="mb-1.5 flex flex-col items-start gap-1">
-      <button
-        type="button"
-        data-testid="agent-steps-toggle"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((open) => !open)}
-        className="rounded-full border border-border px-3 py-1 text-[12.5px] text-muted-foreground hover:bg-muted hover:text-foreground/75"
+    <div className="mb-1.5">
+      <ReasoningDisclosure
+        open={expanded}
+        onToggle={() => setExpanded((open) => !open)}
+        live={live}
+        toggleProps={{ "data-testid": "agent-steps-toggle" }}
+        summary={
+          duration === null ? (
+            <Plural value={stepCount} one="# step" other="# steps" />
+          ) : (
+            <Trans>
+              Thought for {duration} · <Plural value={stepCount} one="# step" other="# steps" />
+            </Trans>
+          )
+        }
       >
-        <Trans>Steps ({calls.length})</Trans>
-      </button>
-      {expanded ? (
-        <ul className="flex flex-col items-start gap-0.5 pl-1">
-          {calls.map((call, i) => (
-            <li key={i}>
-              <button
-                type="button"
-                onClick={() => setOpenIndex(i)}
-                className="rounded-md px-2 py-0.5 text-[12.5px] text-muted-foreground hover:bg-muted hover:text-foreground/75"
-                dir="auto"
-              >
-                {call.name}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+        {calls.map((call, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setOpenIndex(i)}
+            className="self-start text-start duration-(--duration-hover) ease-quiet hover:text-foreground"
+            dir="auto"
+          >
+            {call.name}
+          </button>
+        ))}
+      </ReasoningDisclosure>
       <Dialog
         open={openCall !== undefined}
         onOpenChange={(open) => {
@@ -58,9 +67,9 @@ export function AgentSteps({ block }: { block: StepsBlock }) {
       >
         <DialogContent
           data-testid="agent-steps-detail"
-          className="rk-scroll block max-h-[calc(100%-2rem)] w-[720px] overflow-y-auto overscroll-contain rounded-2xl p-6 sm:max-h-[calc(100%-5rem)] sm:max-w-[calc(100%-5rem)]"
+          className="rk-scroll block max-h-[calc(100%-2rem)] w-[720px] overflow-y-auto overscroll-contain rounded-block p-6 sm:max-h-[calc(100%-5rem)] sm:max-w-[calc(100%-5rem)]"
         >
-          <DialogTitle className="text-xl font-medium text-foreground" dir="auto">
+          <DialogTitle className="text-title font-medium text-foreground" dir="auto">
             {openCall?.name ?? ""}
           </DialogTitle>
           {openCall ? (
@@ -70,7 +79,7 @@ export function AgentSteps({ block }: { block: StepsBlock }) {
                 <StepPayload label={t`Output`} value={openCall.output} />
               </>
             ) : (
-              <p className="mt-3 text-[12.5px] text-muted-foreground/80">
+              <p className="mt-3 text-label text-muted-foreground/80">
                 <Trans>This call ran before step details were recorded.</Trans>
               </p>
             )
@@ -85,15 +94,10 @@ function StepPayload({ label, value }: { label: string; value: string }) {
   const { t } = useLingui();
   return (
     <div className="mt-3">
-      <p className="text-[12.5px] text-muted-foreground/80">{label}</p>
-      <pre className="rk-scroll mt-1 max-h-64 overflow-auto rounded-lg bg-muted px-3 py-2 text-[12.5px] leading-[1.5] whitespace-pre-wrap text-foreground/90">
+      <p className="text-label text-muted-foreground/80">{label}</p>
+      <pre className="rk-scroll mt-1 max-h-64 overflow-auto rounded-row bg-muted px-3 py-2 text-mono leading-[1.5] whitespace-pre-wrap text-foreground/90">
         <code>{value || t`(empty)`}</code>
       </pre>
     </div>
   );
-}
-
-/** Like isToolActivityBlock, but keeps `steps` visible when the pref is on. */
-export function isHiddenActivityBlock(block: MessageBlock, showSteps: boolean): boolean {
-  return isToolActivityBlock(block) && !(showSteps && block.kind === "steps");
 }

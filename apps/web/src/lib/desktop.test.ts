@@ -54,26 +54,46 @@ describe("window chrome", () => {
 
   it("does not paint fake traffic lights into the browser shell or welcome page", () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
-    const shell = readFileSync(path.join(root, "Shell.tsx"), "utf8");
-    const welcome = readFileSync(path.join(root, "Welcome.tsx"), "utf8");
-    expect(shell).not.toContain("FF5F57");
-    expect(welcome).not.toContain("FF5F57");
+    for (const file of [
+      "Shell.tsx",
+      "shell/sidebar.tsx",
+      "shell/thread-header.tsx",
+      "Welcome.tsx",
+    ]) {
+      expect(readFileSync(path.join(root, file), "utf8"), file).not.toContain("FF5F57");
+    }
+  });
+
+  it("reserves room for window controls in the peer chat view", () => {
+    const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
+    const overlay = readFileSync(path.join(root, "PeerMessagesOverlay.tsx"), "utf8");
+    expect(overlay).toContain("{desktopBridge() ? <WindowChrome /> : null}");
+    expect(overlay).toContain('className="app-drag flex items-center justify-between');
+    expect(overlay).not.toContain("FF5F57");
   });
 
   it("keeps conversation header controls clickable", () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
-    const shell = readFileSync(path.join(root, "Shell.tsx"), "utf8");
+    const shell = readFileSync(path.join(root, "shell/thread-header.tsx"), "utf8");
+    expect(shell).toContain('className="app-drag flex h-header shrink-0 items-center');
+    // The mobile-nav toggle is a roundIcon Button that stays out of the drag region.
+    expect(shell).toContain('className="app-no-drag shrink-0 md:hidden"');
+    // The bot-name trigger stays clickable (and out of the drag region) while
+    // carrying its hover affordance.
     expect(shell).toContain(
-      'className="app-drag flex items-center justify-between border-b border-sidebar-border',
+      'className="app-no-drag -mx-2 flex min-w-0 items-center gap-3 rounded-lg px-2 py-1 transition-colors hover:bg-muted"',
     );
-    expect(shell).toContain('className="app-no-drag grid h-8 w-8');
-    expect(shell).toContain('className="app-no-drag flex min-w-0 items-center gap-3"');
-    expect(shell.match(/className="app-no-drag grid h-\[30px\] w-\[34px\]/g)).toHaveLength(1);
+    // One computer button and one settings button, each out of the drag region.
+    expect(shell.match(/data-testid="open-computer-panel"/g)).toHaveLength(1);
+    expect(shell.match(/data-testid="open-settings-panel"/g)).toHaveLength(1);
+    // No `<` in between: both attributes belong to the same element.
+    expect(shell).toMatch(/data-testid="open-computer-panel"[^<]*?className="app-no-drag"/);
+    expect(shell).toMatch(/data-testid="open-settings-panel"[^<]*?className="app-no-drag"/);
   });
 
   it("moves window chrome into the conversation header when the bots sidebar is collapsed", () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
-    const shell = readFileSync(path.join(root, "Shell.tsx"), "utf8");
+    const shell = readFileSync(path.join(root, "shell/thread-header.tsx"), "utf8");
     expect(shell).toContain("{botsSidebarCollapsed && desktopBridge() ? <WindowChrome /> : null}");
   });
 });

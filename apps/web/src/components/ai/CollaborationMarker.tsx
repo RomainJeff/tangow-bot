@@ -1,44 +1,53 @@
-import { BotAvatar, GroupAvatar, type GroupAvatarMember } from "@rakazo/ui-web";
-import { LoadingState } from "./primitives";
+import type { GroupAvatarMember, StackedAvatarItem } from "@rakazo/ui-web";
+import { GroupAvatar, Interstitial, StackedAvatars, WorkingLine } from "@rakazo/ui-web";
 
 /** Lightweight peer event shown without exposing the exchanged message body. */
 export function CollaborationMarker({
   ariaLabel,
-  color,
-  identity,
-  shapeSeed,
+  bots,
   label,
   onClick,
 }: {
   ariaLabel: string;
-  color: string;
-  identity: string;
-  shapeSeed?: number | null;
+  /** The bots the exchange involved, sender first. */
+  bots: StackedAvatarItem[];
   label: string;
   onClick: () => void;
 }) {
   return (
-    <div className="flex justify-start">
-      <button
-        type="button"
+    <div className="flex flex-col">
+      <Interstitial
         data-testid="peer-receipt-chip"
         aria-label={ariaLabel}
+        // Unlabelled on purpose: the button's own name says who the exchange
+        // was with, so the stack is decoration.
+        avatars={<StackedAvatars items={bots} size={17} />}
         onClick={onClick}
-        className="inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground/75"
       >
-        <BotAvatar color={color} identity={identity} shapeSeed={shapeSeed} size={16} />
-        <span dir="auto" className="truncate">
-          {label}
-        </span>
-      </button>
+        <span dir="auto">{label}</span>
+      </Interstitial>
     </div>
   );
 }
 
-export function ActiveBotGlyph({ bots, label }: { bots: GroupAvatarMember[]; label: string }) {
+/** The bottom-of-thread working state: the only thing that keeps moving during a run. */
+export function ActiveBotGlyph({
+  bots,
+  label,
+  startedAt,
+}: {
+  bots: GroupAvatarMember[];
+  label: string;
+  /** Epoch ms the run started. Falls back to mount time when omitted. */
+  startedAt?: number;
+}) {
   return (
     <div className="flex min-h-10 items-center px-1">
-      <LoadingState indicator={<GroupAvatar members={bots} size={28} />} label={label} />
+      <WorkingLine
+        avatar={<GroupAvatar members={bots} size={28} />}
+        label={label}
+        startedAt={startedAt}
+      />
     </div>
   );
 }

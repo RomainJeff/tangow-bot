@@ -2,7 +2,7 @@ import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
+import { Button, Dialog, DialogClose, DialogContent, DialogTitle, Surface } from "@rakazo/ui-web";
 import { Download, FileText, X } from "lucide-react";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import {
@@ -40,16 +40,18 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   if (!markdown) {
     return (
       <div>
-        <button
-          type="button"
-          onClick={() => void startDownload()}
-          className="rounded-2xl border border-border bg-card px-4 py-3 text-left text-[14px] text-foreground hover:bg-accent"
-        >
-          <div className="font-medium">{props.name}</div>
-          <div className="mt-1 text-muted-foreground">
-            {props.mimeType} · {formatBytes(props.size)}
-          </div>
-        </button>
+        <Surface className="overflow-hidden">
+          <button
+            type="button"
+            onClick={() => void startDownload()}
+            className="block w-full px-4 py-3 text-start text-sm text-foreground hover:bg-accent"
+          >
+            <div className="font-medium">{props.name}</div>
+            <div className="mt-1 text-meta text-muted-foreground">
+              {props.mimeType} · {formatBytes(props.size)}
+            </div>
+          </button>
+        </Surface>
         {downloadError ? <DownloadError message={downloadError} /> : null}
       </div>
     );
@@ -58,20 +60,20 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
   return (
     <>
       <div>
-        <div className="flex min-w-[280px] overflow-hidden rounded-2xl border border-border bg-card text-left text-foreground">
+        <Surface className="flex min-w-[280px] overflow-hidden text-start text-foreground">
           <button
             ref={previewButton}
             type="button"
             aria-label={t`Preview ${props.name}`}
             onClick={() => setPreviewOpen(true)}
-            className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-accent"
+            className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-start hover:bg-accent"
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-muted text-foreground">
               <FileText size={21} strokeWidth={1.8} />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-[14px] font-medium">{props.name}</span>
-              <span className="mt-0.5 block text-[13px] text-muted-foreground">
+              <span className="block truncate text-sm font-medium">{props.name}</span>
+              <span className="mt-0.5 block text-meta text-muted-foreground">
                 {formatBytes(props.size)}
               </span>
             </span>
@@ -81,11 +83,11 @@ export function ArtifactFileCard(props: ArtifactFileCardProps) {
             aria-label={t`Download ${props.name}`}
             title={t`Download ${props.name}`}
             onClick={() => void startDownload()}
-            className="grid w-14 shrink-0 place-items-center border-l border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="grid w-14 shrink-0 place-items-center border-s border-border text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <Download size={19} strokeWidth={1.8} />
           </button>
-        </div>
+        </Surface>
         {downloadError ? <DownloadError message={downloadError} /> : null}
       </div>
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>

@@ -62,13 +62,14 @@ test("actions run by default while optional confirmations live in advanced user 
   expect(allowBox).toBeTruthy();
   expect(alwaysBox).toBeTruthy();
   expect(denyBox).toBeTruthy();
-  expect(alwaysBox!.y).toBeGreaterThan(allowBox!.y + allowBox!.height - 2);
-  expect(denyBox!.y).toBeGreaterThan(alwaysBox!.y + alwaysBox!.height - 2);
-  expect(Math.abs(allowBox!.x - alwaysBox!.x)).toBeLessThan(2);
-  const optionList = allowOnce.locator("xpath=ancestor::div[contains(@class,'space-y-1.5')][1]");
-  const listBox = await optionList.boundingBox();
-  expect(listBox).toBeTruthy();
-  expect(Math.abs(allowBox!.width - listBox!.width)).toBeLessThan(2);
+  // The three capsules (Allow once, Always allow this tool, Deny) share one wrapping
+  // row inside the shared options container at this width.
+  const optionsContainer = page.getByTestId("ask-options");
+  await expect(optionsContainer).toBeVisible();
+  expect(Math.abs(allowBox!.y - alwaysBox!.y)).toBeLessThan(2);
+  expect(Math.abs(alwaysBox!.y - denyBox!.y)).toBeLessThan(2);
+  expect(alwaysBox!.x).toBeGreaterThan(allowBox!.x + allowBox!.width - 2);
+  expect(denyBox!.x).toBeGreaterThan(alwaysBox!.x + alwaysBox!.width - 2);
   await captureScreenshot(page, testInfo, "53-action-confirmation-pending");
 
   await page.getByRole("button", { name: "Deny", exact: true }).click();

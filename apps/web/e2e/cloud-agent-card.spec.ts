@@ -24,6 +24,17 @@ test("renders a compact cloud agent card from an emulator launch", async ({ page
   );
   await captureScreenshot(page, testInfo, "cloud-agent-card");
 
+  // Same quiet surface (fill, hairline, no shadow) in dark mode.
+  await page.getByTestId("user-menu-trigger").click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = page.getByTestId("user-settings");
+  await expect(settings).toBeVisible();
+  await settings.getByTestId("ui-appearance-dark").click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await settings.getByRole("button", { name: "Close user settings" }).click();
+  await expect(settings).toBeHidden();
+  await captureScreenshot(page, testInfo, "cloud-agent-card-dark");
+
   await expect
     .poll(
       async () => {

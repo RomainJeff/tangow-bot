@@ -1,14 +1,17 @@
+import { botColors } from "@rakazo/ui-tokens";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ActiveBotGlyph, CollaborationMarker } from "./CollaborationMarker";
 
 describe("collaboration transcript markers", () => {
-  it("shows a left-aligned peer event with its avatar and full label", () => {
+  it("shows a centred peer event with both bots and its full label", () => {
     const html = renderToString(
       <CollaborationMarker
         ariaLabel="Message from Research"
-        color="#14B8A6"
-        identity="research"
+        bots={[
+          { color: botColors[0], identity: "chief" },
+          { color: botColors[1], identity: "research" },
+        ]}
         label="Message from Research"
         onClick={() => undefined}
       />,
@@ -16,10 +19,13 @@ describe("collaboration transcript markers", () => {
 
     expect(html).toContain('data-testid="peer-receipt-chip"');
     expect(html).toContain('aria-label="Message from Research"');
-    expect(html).toContain('class="flex justify-start"');
-    expect(html).toContain('class="inline-flex max-w-full');
-    expect(html).toContain('class="truncate"');
-    expect(html).toContain("rakazo-bot-avatar");
+    expect(html).toContain('data-slot="interstitial"');
+    expect(html).toContain("self-center");
+    expect(html).toContain('data-slot="stacked-avatars"');
+    expect(html).toContain('data-size="17"');
+    // The button already carries the name; the stack stays decoration.
+    expect(html).toContain('data-slot="stacked-avatars" data-size="17" aria-hidden="true"');
+    expect(html.match(/rakazo-organic-avatar/g)?.length).toBeGreaterThan(1);
     expect(html).toContain("Message from Research");
     expect(html).not.toContain("{peer}");
   });
@@ -27,7 +33,7 @@ describe("collaboration transcript markers", () => {
   it("animates the active bot glyph from its run status", () => {
     const html = renderToString(
       <ActiveBotGlyph
-        bots={[{ botId: "research", color: "#14B8A6", status: "running" }]}
+        bots={[{ botId: "research", color: botColors[1], status: "running" }]}
         label="Research is working"
       />,
     );
@@ -36,6 +42,6 @@ describe("collaboration transcript markers", () => {
     expect(html).toContain("Research is working");
     expect(html).not.toContain("sr-only");
     expect(html).toContain('data-working="true"');
-    expect(html).toContain("rakazo-bot-avatar-ring");
+    expect(html).toContain("rakazo-organic-avatar-body-working");
   });
 });

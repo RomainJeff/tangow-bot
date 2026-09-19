@@ -164,7 +164,7 @@ export function GeneralSettingsPanels({
               className="h-auto justify-start gap-3 px-3.5 py-3 text-[14px] font-normal"
             >
               <BotAvatar
-                color="#D9508A"
+                color="#E45C9C"
                 identity="avatar-style-preview"
                 size={32}
                 variant={style}
