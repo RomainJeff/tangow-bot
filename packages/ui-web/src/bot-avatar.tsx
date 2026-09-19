@@ -244,7 +244,7 @@ function BloubAvatar({
         );
         const mood = WORKING_MOODS[Math.floor(Math.random() * WORKING_MOODS.length)]!;
         engine.setExpression(EXPRESSION_BY_ID.get(mood) ?? null, clock.current);
-        nextGlance = clock.current + rand(0.6, 1.8);
+        nextGlance = clock.current + rand(1.2, 3.6);
       }
       setFrame(engine.sample(clock.current));
       raf = requestAnimationFrame(tick);
