@@ -12,7 +12,10 @@ export type UserVisibleMessagesOptions = {
    * (web CollaborationMarker; mobile AgentEventLabel). Peer bodies stay hidden.
    */
   includePeerReceipts?: boolean;
-  /** Peer-run ids from `run.trigger === "bot_message"` when receipts may be out of window. */
+  /**
+   * The peer runs to hide, resolved by the caller from the database. This is the only
+   * source of peer runs: see `userVisibleMessages`.
+   */
   knownPeerRunIds?: Iterable<string>;
   /**
    * Surface a peer-run's own `text` reply (e.g. a delegating bot's summary to the user)
@@ -65,17 +68,23 @@ export function isUserDirectedMessage(message: {
   return message.blocks.some((block) => block.kind === "ask");
 }
 
-/** Drop peer-run activity/replies; keep messages the bot addressed to the user; optionally keep receipts. */
+/**
+ * Drop peer-run activity/replies; keep messages the bot addressed to the user; optionally keep receipts.
+ *
+ * Peer runs come from `knownPeerRunIds` only, never from the blocks in the page. Whether a
+ * `bot_message` run is hidden peer work depends on `bot.parentBotId`, which lives in the
+ * database: a sub-bot's delegated run is hidden, a top-level bot's run is its visible relay to
+ * the user (background-work-visibility CA5/CA7). Callers holding that answer pass it in; the
+ * API already applies the same rule in `withoutPeerRunMessages` before a page or snapshot ships,
+ * so a caller rendering server-filtered messages has nothing left to hide. Inferring a peer run
+ * from a `bot_message_received` block instead swallowed every top-level relay: the orchestrator
+ * replied, the push notification and the sidebar preview carried it, and the thread showed nothing.
+ */
 export function userVisibleMessages<T extends PresentableMessage>(
   messages: readonly T[],
   options: UserVisibleMessagesOptions = {},
 ): T[] {
-  const peerRunIds = new Set([
-    ...(options.knownPeerRunIds ?? []),
-    ...messages
-      .filter((message) => message.blocks.some((block) => block.kind === "bot_message_received"))
-      .flatMap((message) => (message.runId ? [message.runId] : [])),
-  ]);
+  const peerRunIds = new Set(options.knownPeerRunIds ?? []);
   const includePeerReceipts = options.includePeerReceipts === true;
 
   return messages.filter((message) => {

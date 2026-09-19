@@ -46,17 +46,33 @@ const peerExchange = [
 
 describe("user-visible messages", () => {
   it("hides peer activity but keeps the bot's text reply to the user", () => {
-    expect(userVisibleMessages(peerExchange).map((item) => item.id)).toEqual([
-      "user",
-      "reply",
-      "answer",
-    ]);
+    expect(
+      userVisibleMessages(peerExchange, { knownPeerRunIds: ["run-peer"] }).map((item) => item.id),
+    ).toEqual(["user", "reply", "answer"]);
   });
 
   it("keeps compact peer receipts when includePeerReceipts is set", () => {
     expect(
-      userVisibleMessages(peerExchange, { includePeerReceipts: true }).map((item) => item.id),
+      userVisibleMessages(peerExchange, {
+        knownPeerRunIds: ["run-peer"],
+        includePeerReceipts: true,
+      }).map((item) => item.id),
     ).toEqual(["user", "sent", "received", "reply", "answer"]);
+  });
+
+  it("keeps a top-level bot's relay run, which the caller does not list as a peer run", () => {
+    // A `bot_message` run on a bot with no parent is the orchestrator answering the user with
+    // what its peer reported (background-work-visibility CA5/CA7). The server leaves those rows
+    // in the page precisely because they must show, so nothing here may hide them again: the
+    // `bot_message_received` receipt sharing their run id is not evidence of a hidden peer run.
+    const relay = [
+      message("received", "run-relay", [
+        { kind: "bot_message_received", fromBotId: "coder", fromBotName: "Coder", text: "Done." },
+      ]),
+      message("relayed", "run-relay", [{ kind: "text", text: "Coder finished: it is done." }]),
+    ];
+
+    expect(userVisibleMessages(relay).map((item) => item.id)).toEqual(["relayed"]);
   });
 
   it("keeps message_user and ask_user output from a delegated (peer) run", () => {
@@ -81,10 +97,12 @@ describe("user-visible messages", () => {
       message("question", "run-peer", [{ kind: "ask", text: "Ton horizon ?" }]),
     ];
     // message_user (nonce) and ask_user (ask block) reach the user; narration/receipts do not.
-    expect(userVisibleMessages(messages).map((item) => item.id)).toEqual(["hello", "question"]);
+    expect(
+      userVisibleMessages(messages, { knownPeerRunIds: ["run-peer"] }).map((item) => item.id),
+    ).toEqual(["hello", "question"]);
   });
 
-  it("uses authoritative peer run ids when the receipt is outside the loaded page", () => {
+  it("hides a delegated run named by the caller even with no receipt in the page", () => {
     const messages = [
       message("activity", "run-peer", [
         { kind: "steps", steps: [{ label: "Echoed peer reply", count: 1 }] },
