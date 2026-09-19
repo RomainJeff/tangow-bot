@@ -51,7 +51,7 @@
 
 .rk-chat-markdown ul,
 .rk-chat-markdown ol {
-  padding-left: 1.45em;
+  padding-inline-start: 1.45em;
 }
 
 .rk-chat-markdown ul {
@@ -76,7 +76,7 @@
 }
 
 .rk-chat-markdown .contains-task-list {
-  padding-left: 0;
+  padding-inline-start: 0;
 }
 
 .rk-chat-markdown a {
@@ -92,7 +92,7 @@
   background: var(--muted);
   color: var(--foreground);
   padding: 0.08em 0.32em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 0.88em;
   direction: ltr;
   unicode-bidi: isolate;
@@ -102,8 +102,8 @@
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: 0.75em;
-  background: var(--card);
+  border-radius: var(--corner-card);
+  background: var(--surface);
   color: var(--foreground);
   padding: 0.8em 0.9em;
   direction: ltr;
@@ -114,7 +114,9 @@
   border: 0;
   background: transparent;
   padding: 0;
-  font-size: 0.84em;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--type-mono-size);
+  line-height: var(--type-mono-leading);
   white-space: pre;
 }
 
@@ -129,19 +131,19 @@
 
 .rk-chat-markdown-copy {
   position: absolute;
-  top: 0.5em;
-  right: 0.5em;
+  inset-block-start: 0.5em;
+  inset-inline-end: 0.5em;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.75em;
-  height: 1.75em;
-  border: 1px solid var(--border);
-  border-radius: 0.4em;
-  background: var(--muted);
+  width: var(--size-quick-reply);
+  height: var(--size-quick-reply);
+  border: 0;
+  border-radius: var(--corner-pill);
+  background: var(--secondary);
   color: var(--muted-foreground);
   opacity: 0;
-  transition: opacity 0.12s;
+  transition: opacity var(--duration-hover) var(--motion-ease);
   cursor: pointer;
 }
 
@@ -156,8 +158,8 @@
 }
 
 .rk-chat-markdown blockquote {
-  border-left: 3px solid var(--border);
-  padding-left: 0.85em;
+  border-inline-start: 3px solid var(--border);
+  padding-inline-start: 0.85em;
   color: var(--muted-foreground);
 }
 
@@ -165,24 +167,53 @@
   display: block;
   max-width: 100%;
   overflow-x: auto;
-  border-collapse: collapse;
+  /* Separate borders so the surface can round its own corners; the hairlines
+     below draw the grid instead. */
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--corner-card);
+  background: var(--surface);
   font-size: 0.92em;
 }
 
 .rk-chat-markdown th,
 .rk-chat-markdown td {
-  border: 1px solid var(--border);
-  padding: 0.4em 0.6em;
-  text-align: left;
+  padding: 9px 12px;
+  text-align: start;
   /* Not the container's `anywhere`: its break opportunities count toward
      min-content, so columns collapse to 1ch and the table never overflows. */
   overflow-wrap: break-word;
 }
 
 .rk-chat-markdown th {
-  background: var(--muted);
-  color: var(--foreground);
-  font-weight: 600;
+  border-block-end: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: var(--type-time-size);
+  font-weight: var(--type-time-weight);
+  line-height: var(--type-time-leading);
+}
+
+.rk-chat-markdown td {
+  border-block-start: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+/* mdast carries a column's markdown alignment as a presentational attribute;
+   map it to the logical side so figures line up and RTL still mirrors. */
+.rk-chat-markdown th[align="right"],
+.rk-chat-markdown td[align="right"] {
+  text-align: end;
+}
+
+.rk-chat-markdown th[align="center"],
+.rk-chat-markdown td[align="center"] {
+  text-align: center;
+}
+
+/* The header hairline already closes the first body row. */
+.rk-chat-markdown tbody tr:first-child td {
+  border-block-start: 0;
 }
 
 .rk-chat-markdown hr {
@@ -200,19 +231,19 @@
 }
 
 .rk-chat-markdown input[type="checkbox"] {
-  margin-right: 0.4em;
+  margin-inline-end: 0.4em;
   accent-color: var(--primary);
 }
 
 .rk-chat-markdown-streaming {
   position: relative;
-  padding-right: 0.8em;
+  padding-inline-end: 0.8em;
 }
 
 .rk-chat-markdown-cursor {
   position: absolute;
-  right: 0;
-  bottom: 0.24em;
+  inset-inline-end: 0;
+  inset-block-end: 0.24em;
   width: 0.16em;
   height: 1em;
   border-radius: 999px;

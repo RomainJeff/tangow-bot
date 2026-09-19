@@ -106,4 +106,14 @@ describe("tokens.css", () => {
     expect(css).toContain(`--background: ${lightTokens.background.toLowerCase()};`);
     expect(css).toContain(`--background: ${darkTokens.background.toLowerCase()};`);
   });
+
+  it("emits typography, space, corner, elevation, motion and size tokens", () => {
+    const css = renderTokensCss();
+    expect(css).toContain("--elevation-card");
+    expect(css).toContain("--type-body-size: 16.5px");
+    expect(css).toContain("--corner-block: 18px");
+    expect(css).toContain("--space-sidebar: 280px");
+    expect(css).toContain("--duration-arrive: 240ms");
+    expect(css).toContain("--motion-ease");
+  });
 });

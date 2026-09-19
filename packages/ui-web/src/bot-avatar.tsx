@@ -1,18 +1,14 @@
 import {
   ACTIVE_RUN_STATUSES,
-  AVATAR_BODY_RADIUS,
-  type AvatarPose,
   avatarIdentitySeed,
-  organicAvatarFace,
+  avatarShapeEyeOffset,
+  avatarShapeFamily,
   organicAvatarPath,
-  REST_POSE,
-  SWOOSH_COUNT,
-  swooshPath,
-  WORKING_STILL_SECONDS,
-  workingPose,
 } from "@rakazo/core";
-import { type CSSProperties, memo, useEffect, useId, useRef, useSyncExternalStore } from "react";
+import type { CSSProperties } from "react";
+import { memo, useId } from "react";
 import { type AvatarStyle, useAvatarStyle } from "./avatar-style.js";
+import { usePrefersReducedMotion } from "./lib/reduced-motion.js";
 import { cn } from "./lib/utils.js";
 import "./styles.css";
 
@@ -186,59 +182,28 @@ function OrganicAvatar({
   isWorking: boolean;
   className?: string;
 }) {
-  const reducedMotion = useSyncExternalStore(
-    subscribeToReducedMotion,
-    reducedMotionSnapshot,
-    () => false,
-  );
+  const reducedMotion = usePrefersReducedMotion();
   const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
-  const face = organicAvatarFace(seed);
-  // Eyes are holes cut out of the body (bloub), so they live in a luminance mask.
-  const maskId = `organic-eyes-${useId().replace(/[^a-zA-Z0-9-_]/g, "")}`;
-  const svgRef = useRef<SVGSVGElement>(null);
+  const duration = `${4.8 + (seed % 24) / 10}s`;
+  const shapeA = organicAvatarPath(seed);
+  const shapeB = organicAvatarPath(seed, 0.42);
 
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const R = AVATAR_BODY_RADIUS;
-    const eyes = svg.querySelector<SVGElement>(".rakazo-organic-avatar-eyes")!;
-    const eye = Array.from(svg.querySelectorAll<SVGElement>(".rakazo-organic-avatar-eye"));
-    const arcs = Array.from(svg.querySelectorAll<SVGPathElement>(".rakazo-organic-avatar-swoosh"));
-    const apply = (pose: AvatarPose) => {
-      eyes.style.transform = `translate(${pose.eyes.x * R}px, ${pose.eyes.y * R}px) rotate(${pose.eyes.roll}deg)`;
-      eye.forEach((el, i) => {
-        const [sx, sy] = pose.eyes.scale[i]!;
-        el.style.transform = `rotate(${pose.eyes.tilt[i]}deg) scale(${sx}, ${sy})`;
-      });
-      arcs.forEach((el, i) => {
-        el.style.opacity = String(pose.swoosh.opacity);
-        if (pose.swoosh.opacity > 0) el.setAttribute("d", swooshPath(i, pose.swoosh.t, R));
-      });
-    };
-    if (!isWorking) {
-      apply(REST_POSE);
-      return;
-    }
-    if (reducedMotion) {
-      apply(workingPose(WORKING_STILL_SECONDS));
-      return;
-    }
-    const start = performance.now();
-    let frame = requestAnimationFrame(function tick(now) {
-      apply(workingPose((now - start) / 1000));
-      frame = requestAnimationFrame(tick);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [isWorking, reducedMotion]);
+  // The 2a grammar keeps one consistent eye rule; identity variation comes from
+  // the 12 silhouettes and the hue, never a per-bot tilt.
+  const luminance = relativeLuminance(color);
+  const eyeFill = luminance < 0.4 ? "#FFFFFF" : "#101014";
+  const needsInk = luminance > 0.78;
+  const bodyStroke = needsInk ? "#17181A" : "none";
+  const bodyStrokeWidth = needsInk ? 3.5 : 0;
+  const eyeY = -10.5 + avatarShapeEyeOffset(seed);
 
   return (
     <svg
-      ref={svgRef}
       viewBox="-60 -60 120 120"
       aria-hidden="true"
       className={cn("rakazo-organic-avatar overflow-visible select-none", className)}
       data-working={isWorking}
-      data-shape-family={seed % 10}
+      data-shape-family={avatarShapeFamily(seed)}
       data-eye-pattern={seed % 4}
       style={{
         width: size,
@@ -246,50 +211,63 @@ function OrganicAvatar({
         flex: "none",
       }}
     >
-      <defs>
-        <mask id={maskId} maskUnits="userSpaceOnUse" x="-60" y="-60" width="120" height="120">
-          <rect x="-60" y="-60" width="120" height="120" fill="#fff" />
-          <g transform={`translate(${face.x} ${face.y})`}>
-            <g className="rakazo-organic-avatar-eyes" fill="#000">
-              {face.eyes.map((eye) => (
-                <g
-                  key={eye.transform}
-                  className="rakazo-organic-avatar-eye"
-                  style={{ transformOrigin: `${eye.x}px ${eye.y}px` }}
-                >
-                  <path d={eye.d} transform={eye.transform} />
-                </g>
-              ))}
-            </g>
-          </g>
-        </mask>
-      </defs>
-      {Array.from({ length: SWOOSH_COUNT }, (_, i) => (
+      {(["idle", "working"] as const).map((mode) => (
         <path
-          key={i}
-          className="rakazo-organic-avatar-swoosh"
-          fill="none"
-          stroke={color}
-          strokeWidth={0.05 * AVATAR_BODY_RADIUS}
-          strokeLinecap="round"
-          opacity="0"
-        />
+          key={mode}
+          className={`rakazo-organic-avatar-body rakazo-organic-avatar-body-${mode}`}
+          d={shapeA}
+          fill={color}
+          stroke={bodyStroke}
+          strokeWidth={bodyStrokeWidth}
+          style={
+            {
+              "--rakazo-organic-path": `path("${shapeA}")`,
+              filter:
+                mode === "working"
+                  ? `drop-shadow(0 0 ${Math.round(size * 0.16)}px ${color})`
+                  : "drop-shadow(0 2px 3px rgba(0,0,0,.34))",
+            } as CSSProperties
+          }
+        >
+          {!reducedMotion ? (
+            <animate
+              attributeName="d"
+              values={`${shapeA};${shapeB};${shapeA}`}
+              dur={duration}
+              repeatCount="indefinite"
+            />
+          ) : null}
+        </path>
       ))}
-      <path d={organicAvatarPath(seed)} fill={color} mask={`url(#${maskId})`} />
+      {(["idle", "working"] as const).map((mode) => (
+        <g
+          key={mode}
+          className={`rakazo-organic-avatar-eyes rakazo-organic-avatar-eyes-${mode}`}
+          fill={eyeFill}
+        >
+          <rect x="-15" y={eyeY} width="7" height="21" rx="3.5" />
+          <rect x="8" y={eyeY} width="7" height="21" rx="3.5" />
+        </g>
+      ))}
     </svg>
   );
 }
 
-const reducedMotionMedia = "(prefers-reduced-motion: reduce)";
-
-function reducedMotionSnapshot(): boolean {
-  return window.matchMedia(reducedMotionMedia).matches;
-}
-
-function subscribeToReducedMotion(onChange: () => void): () => void {
-  const media = window.matchMedia(reducedMotionMedia);
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
+/** WCAG relative luminance (0..1) of a hex colour. */
+function relativeLuminance(hex: string): number {
+  const clean = hex.replace(/^#/, "");
+  const expanded =
+    clean.length === 3
+      ? clean
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : clean;
+  const r = parseInt(expanded.slice(0, 2), 16);
+  const g = parseInt(expanded.slice(2, 4), 16);
+  const b = parseInt(expanded.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return 0.5;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }
 
 function hashString(str: string): number {
@@ -338,9 +316,7 @@ export function Wordmark({ className }: { className?: string }) {
         <span className="h-4 w-[7px] rounded-full bg-primary" />
         <span className="h-4 w-[7px] rounded-full bg-primary" />
       </div>
-      <span className="font-[Aeonik,ui-sans-serif] text-[28px] tracking-tight text-foreground">
-        Rakazo
-      </span>
+      <span className="font-sans text-[28px] tracking-tight text-foreground">Rakazo</span>
     </div>
   );
 }

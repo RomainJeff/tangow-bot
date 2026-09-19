@@ -136,7 +136,7 @@ export const GroupAvatar = memo(function GroupAvatar({
       ) : null}
       {members.length > 3 ? (
         <div
-          className="absolute right-0 bottom-0 z-[3] flex items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-foreground"
+          className="absolute right-0 bottom-0 z-[3] flex items-center justify-center rounded-full bg-accent text-label font-semibold text-foreground"
           style={{
             width: miniSize,
             height: miniSize,
