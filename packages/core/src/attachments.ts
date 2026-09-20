@@ -128,7 +128,17 @@ function toolStepsToHistoryText(steps: Extract<MessageBlock, { kind: "steps" }>[
   return lines.join("\n");
 }
 
-export function blocksToAgentHistoryText(blocks: MessageBlock[]): string {
+/**
+ * Render stored blocks as the text a later turn reads.
+ *
+ * `botNames` maps a bot id to its display name. Callers that know the roster
+ * (a group thread) pass it so a handoff reads as people rather than as two
+ * opaque identifiers; everyone else keeps the ids.
+ */
+export function blocksToAgentHistoryText(
+  blocks: MessageBlock[],
+  botNames?: ReadonlyMap<string, string>,
+): string {
   return blocks
     .map((block) => {
       if (block.kind === "text") return block.text;
@@ -149,7 +159,9 @@ export function blocksToAgentHistoryText(blocks: MessageBlock[]): string {
       }
       if (block.kind === "bot_message_sent") return `[to ${block.toBotName}] ${block.text}`;
       if (block.kind === "handoff") {
-        return `[handoff ${block.fromBotId} -> ${block.toBotId}] ${block.text}`;
+        const from = botNames?.get(block.fromBotId) ?? block.fromBotId;
+        const to = botNames?.get(block.toBotId) ?? block.toBotId;
+        return `[handoff ${from} -> ${to}] ${block.text}`;
       }
       if ("text" in block && typeof block.text === "string") return block.text;
       return "";

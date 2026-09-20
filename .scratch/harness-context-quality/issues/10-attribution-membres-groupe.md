@@ -14,10 +14,10 @@ Le marquage d'un tour de membre réutilise celui d'un message de pair (bloc nomm
 
 **Status:** ready-for-agent
 
-- [ ] Dans un thread de groupe, un post d'un autre bot membre est attribué à ce bot dans l'historique, avec son nom, et ne porte pas le marqueur de tour assistant
-- [ ] Un `handoff` entre deux membres se lit avec les noms des bots, pas leurs identifiants
-- [ ] Les tours du bot lecteur lui-même restent marqués comme siens
-- [ ] Un membre archivé ou absent du roster dégrade proprement (pas de nom inventé, pas d'exception)
-- [ ] Le chemin canal messagerie garde son comportement actuel
-- [ ] La résolution id→nom réutilise le roster déjà chargé pour le contexte groupe, sans requête supplémentaire par message
-- [ ] Test offline : historique de groupe où le membre B écrit « j'ai déployé », relu par le bot A — le rendu attribue l'action à B
+- [x] Dans un thread de groupe, un post d'un autre bot membre est attribué à ce bot dans l'historique, avec son nom, et ne porte pas le marqueur de tour assistant
+- [x] Un `handoff` entre deux membres se lit avec les noms des bots, pas leurs identifiants
+- [x] Les tours du bot lecteur lui-même restent marqués comme siens
+- [x] Un membre archivé ou absent du roster dégrade proprement (pas de nom inventé, pas d'exception)
+- [x] Le chemin canal messagerie garde son comportement actuel
+- [x] La résolution id→nom réutilise le roster déjà chargé pour le contexte groupe, sans requête supplémentaire par message
+- [x] Test offline : historique de groupe où le membre B écrit « j'ai déployé », relu par le bot A — le rendu attribue l'action à B
