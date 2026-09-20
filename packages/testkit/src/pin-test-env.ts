@@ -17,6 +17,8 @@ if (!process.env.VERIFY_PROVIDERS) {
 }
 delete process.env.AXIOM_TOKEN;
 delete process.env.AXIOM_DATASET;
+delete process.env.LANGFUSE_PUBLIC_KEY;
+delete process.env.LANGFUSE_SECRET_KEY;
 if (!process.env.VERIFY_LOGGING) {
   process.env.LOG_LEVEL = "off";
 }

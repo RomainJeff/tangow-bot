@@ -27,7 +27,8 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import type { AskQuestion } from "@rakazo/contracts";
-import { getLogger } from "@rakazo/logging";
+import { redactSecrets } from "@rakazo/core";
+import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
@@ -42,6 +43,7 @@ import {
   registerOpenAiCompatibleCatalog,
   registerOpenAiCompatibleRuntime,
 } from "./pi-openai-compatible-provider.js";
+import { RunTraceRecorder } from "./pi-run-trace.js";
 import {
   billedPromptTokens,
   clipToolResultContent,
@@ -57,6 +59,7 @@ import {
   type PiSessionRecorder,
 } from "./pi-session.js";
 import { textContentArg } from "./tool-text.js";
+import type { TraceExporter } from "./trace-export.js";
 
 /**
  * Normalize the ask_user v2 `questions` argument into validated AskQuestion[] with stable ids.
@@ -164,15 +167,23 @@ export function maxToolCallsPerTurn(env: NodeJS.ProcessEnv = process.env): numbe
 export interface PiAgentRuntimeOptions {
   /** Directory where Pi JSONL sessions are written. Omit to disable recording. */
   sessionRoot?: string;
+  /** Optional trace exporter. Omit to record nothing at all. */
+  traceExporter?: TraceExporter;
+  /** Name this process appears under in exported traces. */
+  serviceName?: string;
 }
 
 export class PiAgentRuntime implements AgentRuntime {
   private readonly sessionRecorder?: PiSessionRecorder;
+  private readonly traceExporter?: TraceExporter;
+  private readonly serviceName?: string;
 
   constructor(options: PiAgentRuntimeOptions = {}) {
     this.sessionRecorder = options.sessionRoot
       ? new PiJsonlSessionRecorder(options.sessionRoot)
       : undefined;
+    this.traceExporter = options.traceExporter;
+    this.serviceName = options.serviceName;
   }
 
   describe() {
@@ -227,6 +238,9 @@ export class PiAgentRuntime implements AgentRuntime {
     const work = (async () => {
       let trackedBudget: ToolCallBudget | undefined;
       let resumeHost: ToolHost | undefined;
+      let traceRecorder: RunTraceRecorder | undefined;
+      let traceOutput = "";
+      let traceError: unknown;
       try {
         const selectedModel = resolveRuntimeModel(request.model);
         if (!selectedModel.model) {
@@ -304,6 +318,22 @@ export class PiAgentRuntime implements AgentRuntime {
           }
         }
 
+        // Tracing stays entirely inert unless an exporter is installed.
+        if (this.traceExporter) {
+          traceRecorder = new RunTraceRecorder({
+            runId: request.runId,
+            threadId: request.threadId,
+            botId: request.botId,
+            userId: context?.userId,
+            correlationTraceId: context?.traceId,
+            provider: model.provider,
+            model: model.id,
+            systemPrompt,
+            history,
+            prompt: initialPrompt,
+          });
+        }
+
         let agent: Agent;
         agent = new Agent({
           sessionId: conversationSessionId(request.threadId, request.botId),
@@ -356,8 +386,16 @@ export class PiAgentRuntime implements AgentRuntime {
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             await piSession?.appendMessage(event.message);
+            traceRecorder?.message(event.message);
+          }
+          if (event.type === "turn_start") {
+            traceRecorder?.turnStart();
+          }
+          if (event.type === "tool_execution_end") {
+            traceRecorder?.toolEnd(event.toolCallId, event.result, event.isError);
           }
           if (event.type === "tool_execution_start") {
+            traceRecorder?.toolStart(event.toolCallId, event.toolName, event.args);
             if (host.toolCallBudget.exceeded) return;
             toolCalls += 1;
             // Live activity feedback: without this the thread shows a bare
@@ -420,6 +458,10 @@ export class PiAgentRuntime implements AgentRuntime {
               streamed = text;
               queue.push({ type: "text", text });
             }
+            traceRecorder?.assistantMessage(
+              event.message,
+              "usage" in event.message ? event.message.usage : undefined,
+            );
             if ("usage" in event.message && event.message.usage) {
               queue.push({
                 type: "usage",
@@ -487,12 +529,24 @@ export class PiAgentRuntime implements AgentRuntime {
             queue.push({ type: "text", text: streamed });
           }
         }
+        traceOutput = streamed;
         queue.push(streamed.trim() ? { type: "done", text: streamed } : { type: "done" });
       } catch (error) {
+        traceError = error;
         const message = sanitizeError(error instanceof Error ? error.message : String(error));
         queue.fail(new Error(message));
       } finally {
         queue.close();
+        if (traceRecorder && this.traceExporter) {
+          traceRecorder.finish(traceOutput, traceError);
+          const secrets = request.secrets ?? [];
+          this.traceExporter.export(traceRecorder.trace, {
+            userId: context?.userId,
+            spaceId: context?.spaceId,
+            serviceName: this.serviceName,
+            redact: (text) => redactSensitiveText(redactSecrets(text, [...secrets])),
+          });
+        }
         if (trackedBudget) {
           const keepForResume =
             (signal.aborted || Boolean(resumeHost?.pausePending)) && !trackedBudget.exceeded;

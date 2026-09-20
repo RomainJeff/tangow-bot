@@ -2,6 +2,7 @@ import {
   resolveCloudAgentProvider,
   resolveDeploymentModel,
   resolveSandboxProvider,
+  resolveTraceExportConfig,
 } from "@rakazo/adapters";
 import {
   resolveAuthSecret,
@@ -37,6 +38,8 @@ export interface AppEnv {
   cloudAgentSpaceId: string | undefined;
   cursorApiKey: string | undefined;
   agentRuntime: string;
+  /** Endpoint agent traces are exported to, when one is configured. */
+  traceExportBaseUrl: string | undefined;
   deploymentModelKey: string | undefined;
   e2bApiKey: string | undefined;
   daytonaApiKey: string | undefined;
@@ -125,6 +128,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     cloudAgentSpaceId: optional(source.CLOUD_AGENT_SPACE_ID),
     cursorApiKey: optional(source.CURSOR_API_KEY),
     agentRuntime: source.AGENT_RUNTIME ?? "pi",
+    // Only used to name the consent recipient; the worker owns the export itself.
+    traceExportBaseUrl: resolveTraceExportConfig(source).config?.baseUrl,
     // Provider, model and key resolve together: see resolveDeploymentModel.
     deploymentModelKey: deploymentModel.key,
     e2bApiKey: source.E2B_API_KEY,

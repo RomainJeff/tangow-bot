@@ -380,6 +380,11 @@ export interface AgentRunRequest {
   history: Array<{ id?: string; role: "user" | "assistant" | "system"; content: string }>;
   currentTurnImages?: AgentInputImage[];
   tools: ConnectorTool[];
+  /**
+   * Values the run must never disclose. Live list: it grows while the run
+   * resolves credentials, and anything exported is redacted against it.
+   */
+  secrets?: readonly string[];
   model: AgentRunModel;
   /** Resolve an explicitly requested helper model within the active user and space scope. */
   resolveModel?: (provider: string, modelId: string) => Promise<AgentRunModel>;

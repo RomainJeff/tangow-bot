@@ -174,6 +174,21 @@ regional hostname; `AXIOM_EDGE_URL` must be https and wins when both are set.
 Compose passes these into the API, worker, supervisor, and updater. Computer containers and updater
 child commands do not receive them.
 
+### Agent traces
+
+Exporting agent traces is optional and off unless configured. Set both `LANGFUSE_PUBLIC_KEY` and
+`LANGFUSE_SECRET_KEY` to send each run to an OpenTelemetry endpoint as a tree: the run, one
+generation per turn, one span per tool call, with prompts, responses, tool results, token counts and
+cost. `LANGFUSE_BASE_URL` defaults to `https://cloud.langfuse.com` and points a self-hosted instance
+or any other OTLP/HTTP backend at the same traces; it must be https unless it is loopback.
+`LANGFUSE_ENVIRONMENT` labels the traces (`production`, `staging`). A partial configuration logs a
+one-time warning and stays off.
+
+Traces carry full conversation content and the user's identifier, so the endpoint is a data
+recipient like any model provider: it appears in the AI data sharing screen, and nothing is exported
+for a user who has not allowed it. Run secrets and the values the log redactor already removes are
+stripped before anything leaves the process, and an unreachable endpoint never fails a run.
+
 Optional:
 
 ```env

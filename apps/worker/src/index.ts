@@ -15,6 +15,7 @@ import {
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
+  createTraceExporterFromEnv,
   createWebProvider,
   databaseCapacityBackoffMs,
   EncryptedSecretStore,
@@ -78,10 +79,19 @@ async function main() {
     runSecretWriter: createRunSecretWriter(secrets),
   });
   const dataDir = process.env.DATA_DIR ?? "./data";
+  // Optional agent trace export. Absent configuration resolves to nothing here,
+  // so the runtime records no spans and no vendor endpoint is ever contacted.
+  const traceExport = createTraceExporterFromEnv(prisma, process.env);
+  if (traceExport.warning) logger.warn(traceExport.warning);
   const runtime =
     process.env.AGENT_RUNTIME === "scripted"
       ? new ScriptedAgentRuntime()
-      : new PiAgentRuntime({ sessionRoot: resolvePiSessionRoot(dataDir) });
+      : new PiAgentRuntime({
+          sessionRoot: resolvePiSessionRoot(dataDir),
+          ...(traceExport.exporter
+            ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.worker }
+            : {}),
+        });
   // Same resolver the API uses, so both processes agree on provider, model and key.
   const { key: deploymentModelKey } = resolveDeploymentModel();
   const sandboxProvider = resolveSandboxProvider(process.env);
@@ -257,6 +267,7 @@ async function main() {
       await prisma.$disconnect().catch(() => undefined);
       await pool.end().catch(() => undefined);
     } finally {
+      await traceExport.exporter?.flush(2_000);
       await logger.flush({ timeoutMs: 2_000 });
     }
   };

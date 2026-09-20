@@ -3797,6 +3797,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               history: runtimeHistory,
               currentTurnImages,
               tools,
+              secrets: runSecrets,
               model: {
                 provider: runModelProvider,
                 id: runModelId,

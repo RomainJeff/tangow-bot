@@ -1,0 +1,181 @@
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { Usage } from "@earendil-works/pi-ai";
+
+import { RunTrace, type RunTraceSpan } from "./run-trace.js";
+
+/** Upper bound on a single exported string, so one huge tool result cannot bloat a trace. */
+const MAX_TRACE_TEXT = 20_000;
+
+export interface RunTraceRecorderOptions {
+  runId: string;
+  threadId: string;
+  botId: string;
+  userId?: string;
+  correlationTraceId?: string;
+  provider: string;
+  model: string;
+  systemPrompt: string;
+  /** Replayed history, recorded as trace input only. */
+  history: readonly AgentMessage[];
+  prompt: string;
+}
+
+function clip(text: string): string {
+  return text.length <= MAX_TRACE_TEXT ? text : `${text.slice(0, MAX_TRACE_TEXT)}… [truncated]`;
+}
+
+function traceContent(content: unknown): unknown {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return content;
+  // Image bytes are useless in a trace and would dwarf everything else.
+  return content.map((part: { type?: string; mimeType?: string }) =>
+    part?.type === "image" ? { type: "image", mimeType: part.mimeType } : part,
+  );
+}
+
+function traceMessage(message: AgentMessage): unknown {
+  return { role: message.role, content: traceContent((message as { content?: unknown }).content) };
+}
+
+function serialize(value: unknown): string {
+  try {
+    return clip(JSON.stringify(value) ?? "");
+  } catch {
+    return "";
+  }
+}
+
+function usageDetails(usage: Usage): string {
+  return serialize({
+    input: usage.input,
+    output: usage.output,
+    cache_read: usage.cacheRead,
+    cache_write: usage.cacheWrite,
+    ...(usage.reasoning === undefined ? {} : { reasoning: usage.reasoning }),
+    total: usage.totalTokens,
+  });
+}
+
+function costDetails(usage: Usage): string {
+  // Mirrors the usage keys: Langfuse pairs the two maps by name.
+  return serialize({
+    input: usage.cost.input,
+    output: usage.cost.output,
+    cache_read: usage.cost.cacheRead,
+    cache_write: usage.cost.cacheWrite,
+    total: usage.cost.total,
+  });
+}
+
+/**
+ * Builds the span tree of one agent run: a root span for the run, a generation
+ * per model turn, and a span per tool call.
+ *
+ * Replayed history is recorded as the input of the run, never as a generation.
+ * A replayed message carries the current run's model and no usage, so exporting
+ * it as a generation would invent free calls against a model that never ran.
+ */
+export class RunTraceRecorder {
+  readonly trace = new RunTrace();
+  private readonly root?: RunTraceSpan;
+  private generation?: RunTraceSpan;
+  private readonly tools = new Map<string, RunTraceSpan>();
+  private pendingInput: unknown[] = [];
+  private turns = 0;
+
+  constructor(private readonly options: RunTraceRecorderOptions) {
+    this.root = this.trace.openSpan({
+      name: "rakazo.run",
+      attributes: {
+        "langfuse.observation.type": "span",
+        "langfuse.trace.name": "agent run",
+        "langfuse.session.id": options.threadId,
+        ...(options.userId ? { "langfuse.user.id": options.userId } : {}),
+        "langfuse.trace.input": serialize({
+          system: options.systemPrompt,
+          history: options.history.map(traceMessage),
+          prompt: options.prompt,
+        }),
+        "langfuse.trace.metadata.runId": options.runId,
+        "langfuse.trace.metadata.botId": options.botId,
+        ...(options.correlationTraceId
+          ? { "langfuse.trace.metadata.correlationId": options.correlationTraceId }
+          : {}),
+        "langfuse.observation.model.name": options.model,
+        "langfuse.trace.metadata.provider": options.provider,
+      },
+    });
+    this.pendingInput.push({ role: "user", content: options.prompt });
+  }
+
+  turnStart(): void {
+    if (this.generation) return;
+    this.turns += 1;
+    this.generation = this.trace.openSpan(
+      {
+        name: `generation ${this.turns}`,
+        attributes: {
+          "langfuse.observation.type": "generation",
+          "langfuse.observation.model.name": this.options.model,
+          "langfuse.observation.input": serialize(this.pendingInput),
+        },
+      },
+      this.root,
+    );
+    this.pendingInput = [];
+  }
+
+  /** Records a message produced during the run as input to the next generation. */
+  message(message: AgentMessage): void {
+    if (message.role === "assistant") return;
+    this.pendingInput.push(traceMessage(message));
+  }
+
+  assistantMessage(message: AgentMessage, usage?: Usage): void {
+    const span = this.generation;
+    this.generation = undefined;
+    if (!span) return;
+    span.setAttributes({
+      "langfuse.observation.output": serialize(traceMessage(message)),
+      ...(usage
+        ? {
+            "langfuse.observation.usage_details": usageDetails(usage),
+            "langfuse.observation.cost_details": costDetails(usage),
+          }
+        : {}),
+    });
+    span.end();
+  }
+
+  toolStart(toolCallId: string, toolName: string, args: unknown): void {
+    const span = this.trace.openSpan(
+      {
+        name: `tool ${toolName}`,
+        attributes: {
+          "langfuse.observation.type": "tool",
+          "langfuse.observation.input": serialize(args),
+        },
+      },
+      this.root,
+    );
+    if (span) this.tools.set(toolCallId, span);
+  }
+
+  toolEnd(toolCallId: string, result: unknown, isError: boolean): void {
+    const span = this.tools.get(toolCallId);
+    if (!span) return;
+    this.tools.delete(toolCallId);
+    span.setAttributes({ "langfuse.observation.output": serialize(result) });
+    span.end(isError ? { ok: false, error: new Error("tool failed") } : { ok: true });
+  }
+
+  /** Closes every span still open, including ones abandoned by an aborted run. */
+  finish(output: string, error?: unknown): void {
+    for (const span of this.tools.values()) span.end({ ok: false, error });
+    this.tools.clear();
+    this.generation?.end({ ok: error === undefined, error });
+    this.generation = undefined;
+    this.root?.setAttributes({ "langfuse.trace.output": clip(output) });
+    this.root?.end(error === undefined ? { ok: true } : { ok: false, error });
+  }
+}

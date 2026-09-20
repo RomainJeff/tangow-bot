@@ -27,8 +27,9 @@ export {
   wrapJobPayload,
 } from "./jobs.js";
 export { createLogger, getLogger, installLogger } from "./logger.js";
-export { redactBindings } from "./redaction.js";
+export { redactBindings, redactSensitiveText } from "./redaction.js";
 export { serializeError } from "./serialize-error.js";
+export { guardedFlush, guardedWrite, reportSinkError } from "./sink-guard.js";
 export { createTestSink, type TestSink } from "./test-sink.js";
 export type {
   CreateLoggerOptions,
