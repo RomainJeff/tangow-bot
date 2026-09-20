@@ -260,7 +260,7 @@ import {
   searchChartCatalog,
 } from "./plot-tool.js";
 import type { RemoteTransportDependencies } from "./remote-mcp.js";
-import { loadReplyContext, messageToAgentHistoryText } from "./reply-context.js";
+import { loadReplyContext, messageToAgentHistoryTurn } from "./reply-context.js";
 import {
   commitConsumedRunSecret,
   normalizeSecretAskPurpose,
@@ -1391,17 +1391,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const discoveredPromise = deps.connector
           ? deps.connector.discoverTools(context)
           : Promise.resolve([]);
+        // Loaded before history so a member's turn can be attributed to its author; the
+        // rendered half feeds the group prompt further down.
+        const group = thread.groupId
+          ? await loadGroupContext(deps.prisma, thread.groupId, { id: bot.id, name: bot.name })
+          : undefined;
         const threadContext = threadContextForRun(
           run.trigger,
           {
             messages: [...messages].reverse().map((m) => ({
               id: m.id,
               seq: m.seq,
-              role: (m.role === "user" ? "user" : m.role === "system" ? "system" : "assistant") as
-                | "user"
-                | "assistant"
-                | "system",
-              content: messageToAgentHistoryText(m),
+              ...messageToAgentHistoryTurn(m, bot.id, group?.memberNames),
             })),
             summary: thread.historyCompactionSummary,
             historyCompactedUpToSeq: thread.historyCompactedUpToSeq,
@@ -1603,9 +1604,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const acceptsImages =
           deps.runtime.describe().capabilities.scripted ||
           modelAcceptsImageInput(runModelProvider, runModelId, resolved.acceptsImages);
-        const groupContext = thread.groupId
-          ? await loadGroupContext(deps.prisma, thread.groupId, { id: bot.id, name: bot.name })
-          : undefined;
+        const groupContext = group?.context;
         const hasMessagingIdentity = deps.messaging
           ? await deps.messaging.hasIdentity(bot.id)
           : false;

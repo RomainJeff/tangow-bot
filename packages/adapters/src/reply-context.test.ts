@@ -1,7 +1,11 @@
 import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import { loadReplyContext, messageToAgentHistoryText } from "./reply-context.js";
+import {
+  loadReplyContext,
+  messageToAgentHistoryText,
+  messageToAgentHistoryTurn,
+} from "./reply-context.js";
 
 function harness(replyTo: unknown = null, replyQuote: string | null = null) {
   const findFirst = vi.fn().mockResolvedValue({
@@ -153,5 +157,68 @@ describe("reply context", () => {
     expect(text).toContain("User reacted with ❤️ to");
     expect(text).toContain("Test message 1/3: Hello!");
     expect(text).not.toContain("quotedText");
+  });
+});
+
+describe("group history turns", () => {
+  const roster = new Map([
+    ["bot-a", "Atlas"],
+    ["bot-b", "Beacon"],
+  ]);
+  const post = (botId: string, blocks: unknown[]) => ({
+    id: "group-1",
+    threadId: "thread-1",
+    role: "bot",
+    botId,
+    blocks,
+  });
+
+  it("attributes another member's post to that member", () => {
+    const turn = messageToAgentHistoryTurn(
+      post("bot-b", [{ kind: "text", text: "I deployed the API" }]),
+      "bot-a",
+      roster,
+    );
+    expect(turn.role).toBe("user");
+    expect(turn.content).toBe('<bot_message from="Beacon">\nI deployed the API\n</bot_message>');
+  });
+
+  it("keeps the reading bot's own turns as its own", () => {
+    const turn = messageToAgentHistoryTurn(
+      post("bot-a", [{ kind: "text", text: "I deployed the API" }]),
+      "bot-a",
+      roster,
+    );
+    expect(turn).toEqual({ role: "assistant", content: "I deployed the API" });
+  });
+
+  it("reads a handoff between members by name", () => {
+    const turn = messageToAgentHistoryTurn(
+      post("bot-b", [
+        { kind: "handoff", fromBotId: "bot-b", toBotId: "bot-a", text: "your turn", hop: 1 },
+      ]),
+      "bot-a",
+      roster,
+    );
+    expect(turn.content).toContain("[handoff Beacon -&gt; Atlas] your turn");
+    expect(turn.content).not.toContain("bot-b");
+  });
+
+  it("degrades without inventing a name for a member outside the roster", () => {
+    const turn = messageToAgentHistoryTurn(
+      post("bot-gone", [{ kind: "text", text: "archived note" }]),
+      "bot-a",
+      roster,
+    );
+    expect(turn.role).toBe("user");
+    expect(turn.content).toBe('<bot_message from="bot">\narchived note\n</bot_message>');
+  });
+
+  it("leaves a thread without a roster on its existing mapping", () => {
+    const turn = messageToAgentHistoryTurn(
+      post("bot-b", [{ kind: "text", text: "I deployed the API" }]),
+      "bot-a",
+    );
+    expect(turn).toEqual({ role: "assistant", content: "I deployed the API" });
   });
 });
