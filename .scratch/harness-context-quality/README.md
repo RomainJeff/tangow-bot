@@ -13,8 +13,8 @@ Issu d'un audit du stack de messages envoyé au modèle : prompt système, histo
 | 05 | Conserver les traces d'outils d'un tour à l'autre | — | ready-for-agent |
 | 06 | Ne plus faire passer les messages de bots pairs pour les siens | — | ready-for-agent |
 | 07 | Rappeler la mémoire sémantique dès le premier tour | — | ready-for-agent |
-| 08 | Décision — simplifier le fallback de fenêtre | 03 | needs-decision |
-| 09 | Décision — borner les outils de connecteurs exposés | 01 | needs-decision |
+| 08 | Décision — simplifier le fallback de fenêtre | — (03 mergé) | needs-decision |
+| 09 | Décision — borner les outils de connecteurs exposés | — (01 mergé) | needs-decision |
 
 ## Ordre conseillé
 

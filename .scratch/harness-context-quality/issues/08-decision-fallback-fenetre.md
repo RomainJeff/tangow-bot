@@ -1,15 +1,46 @@
 # 08: Décision — simplifier le fallback de fenêtre en nombre de messages
 
-**What to build:** Une décision, pas du code. Le nombre de messages conservés en fallback dépend aujourd'hui d'une condition triple (mémoire sémantique activée, thread compacté, rappel réussi) qui choisit entre deux tailles. Cette logique défensive ne joue que dans la branche fallback — celle qui, une fois le ticket 03 livré, ne concerne plus que les modèles absents du catalogue.
+**What to build:** Une décision, pas du code. `historyWindowSize()` (`packages/adapters/src/history-compaction.ts:98`) choisit entre deux tailles de fenêtre — `HISTORY_WINDOW_SIZE = 50` et `LEGACY_HISTORY_WINDOW_SIZE = 200` — selon une condition triple : mémoire sémantique activée, thread compacté, rappel réussi. Cette taille n'est utilisée que quand `selectHistoryWindow` retombe en mode `count`.
 
-Question à trancher : garde-t-on la condition triple, ou la supprime-t-on au profit d'une seule taille de fallback ? Supprimer, c'est moins de code et moins de tests pour un chemin devenu rare ; garder, c'est une assurance sur les modèles exotiques.
+Question à trancher : garde-t-on la condition triple, ou la supprime-t-on au profit d'une seule taille de fallback ?
 
-À instruire après que le ticket 03 tourne en conditions réelles, avec le chiffre qui manque aujourd'hui : quelle part des runs passe encore par le fallback.
+## Ce que le cadrage a corrigé
 
-**Blocked by:** 03 (fenêtre de contexte depuis le catalogue)
+**Le fallback ne concerne pas que les modèles hors catalogue.** `selectHistoryWindow` renvoie `mode: "count"` depuis deux endroits :
+
+| Site | Cause | Concerné par le ticket 03 |
+|---|---|---|
+| `history-compaction.ts:174` | `contextWindow` inconnue | oui — se raréfie depuis 03 |
+| `history-compaction.ts:197` | budget plus petit que le dernier échange, aucun message dans le budget n'ouvre un tour | **non** — se déclenche aussi sur les modèles catalogués |
+
+Le second chemin survit au ticket 03 : sur un thread à longs échanges, un modèle parfaitement catalogué y tombe. C'est là que l'écart 50 vs 200 coûte le plus cher — un facteur 4 sur une fenêtre déjà jugée trop petite pour le budget.
+
+**Un troisième cas échappe entièrement à la fenêtre.** Quand `compactedHistory.usedLocalSummary` est vrai, `executor.ts:3740` saute `selectHistoryWindow` : ni budget tokens, ni taille de fallback, ni condition triple. À compter séparément, sinon il gonfle artificiellement la part « ni tokens ni count ».
+
+**La mesure est déjà disponible, sans code supplémentaire.** La ligne `agent.run.context` livrée au ticket 01 porte `historyWindowMode` *et* `contextWindow`. Le croisement des deux sépare les causes :
+
+- `mode="count"` et `contextWindow` absente ou nulle → chemin hors catalogue
+- `mode="count"` et `contextWindow > 0` → chemin dépassement de budget
+- pas de ligne `agent.run.context` avec un `historyWindowMode` → résumé local, fenêtre non appliquée
+
+**Si simplifier : les constantes ne disparaissent pas.** Seule la fonction `historyWindowSize()` et sa condition triple partent. `LEGACY_HISTORY_WINDOW_SIZE` reste utilisée en `history-compaction.ts:389` (borne du `take` Prisma) et `HISTORY_WINDOW_SIZE` en `history-compaction.ts:646` (ordonnancement de la compaction). Le diff est l'appelant `executor.ts:3745` plus les tests de `historyWindowSize`.
+
+**Choisir la valeur unique est la vraie décision, pas la suppression.** Supprimer la condition impose de retenir 50 ou 200. Sur le chemin dépassement de budget, 200 messages dans une fenêtre déjà saturée est exactement ce que le ticket 04 cherchait à éviter ; 50 sur un thread non compacté sans mémoire sémantique perd de l'historique que rien ne rattrape.
+
+## Critère de décision
+
+Écrire le seuil **avant** de regarder les chiffres, sinon la décision se justifie après coup.
+
+- Part des runs en `mode="count"` sous 2 %, tous chemins confondus → simplifier, valeur unique `HISTORY_WINDOW_SIZE`
+- Chemin dépassement de budget au-dessus de 5 % des runs → ne pas toucher à la condition ; ouvrir un ticket sur le dimensionnement du budget, qui est le vrai problème
+- Entre les deux → garder en l'état et reconduire la mesure après un mois
+
+**Blocked by:** Rien. Le ticket 03 est mergé (`6c114898`), le ticket 01 aussi (`cb407626`).
 
 **Status:** needs-decision
 
-- [ ] Part des runs en fallback mesurée après livraison du ticket 03
-- [ ] Décision tranchée et consignée : simplifier ou garder
-- [ ] Si simplifier : ticket de suppression créé, avec les tests correspondants
+- [ ] Destination des logs vérifiée : `AXIOM_TOKEN` / `AXIOM_DATASET` sont optionnels (`infra/compose/docker-compose.prod.yml:215`). Sans Axiom configuré, aucun agrégat n'existe — soit l'activer, soit collecter depuis les logs conteneur sur une fenêtre datée
+- [ ] Part des runs par mode relevée sur au moins sept jours, avec les trois cas séparés : hors catalogue, dépassement de budget, résumé local
+- [ ] Critère de décision écrit avant lecture des chiffres
+- [ ] Décision tranchée et consignée : simplifier (et avec quelle valeur) ou garder
+- [ ] Si simplifier : ticket de suppression créé — `historyWindowSize()` et son appelant `executor.ts:3745`, tests compris, constantes conservées
