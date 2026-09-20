@@ -461,7 +461,8 @@ describe("compactHistory", () => {
 
     expect(harness.runtime.run).toHaveBeenCalledOnce();
     const [request] = harness.runtime.run.mock.calls[0]!;
-    expect(request.instructions).toContain("Current date and time");
+    expect(request.instructions).not.toContain("Current date and time");
+    expect(request.prompt).toContain("Current date and time");
     expect(request.instructions).toContain("context summarization assistant");
     expect(request.tools).toEqual([]);
     expect(request.model).toEqual({
