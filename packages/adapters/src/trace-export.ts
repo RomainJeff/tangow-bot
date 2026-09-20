@@ -94,7 +94,13 @@ export function createTraceExportClient(config: TraceExportConfig): TraceExportC
     async send(payload) {
       const response = await request(endpoint, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization },
+        headers: {
+          "content-type": "application/json",
+          authorization,
+          // Without this Langfuse routes the span through its legacy queue and the run shows up
+          // minutes late. Version 4 is its real-time OTLP path.
+          "x-langfuse-ingestion-version": "4",
+        },
         body: JSON.stringify(payload),
       });
       response.body.dump().catch(() => {});
