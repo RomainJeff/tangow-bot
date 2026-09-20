@@ -227,6 +227,7 @@ import {
 import { loadAgentMemoryContext } from "./memory-context.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { selectMemoryTools } from "./memory-tools.js";
+import { catalogContextWindow } from "./model-catalog.js";
 import {
   isCatalogModelChoice,
   selectConfiguredModel,
@@ -5245,7 +5246,21 @@ function deploymentKeyFor(deps: ExecutorDeps, provider: string): string | undefi
   return provider === resolveDeploymentModel().provider ? deps.deploymentModelKey : undefined;
 }
 
+/**
+ * Only an OpenAI-compatible connection stores a context window, so every other provider would
+ * leave history sizing on its message-count fallback. Fill the gap from the model catalog, which
+ * already knows the window, and leave it unset for a model the catalog does not carry.
+ */
 async function resolveModelKey(
+  ...args: Parameters<typeof resolveCredentialModelKey>
+): Promise<Awaited<ReturnType<typeof resolveCredentialModelKey>>> {
+  const resolved = await resolveCredentialModelKey(...args);
+  if (resolved.contextWindow !== undefined) return resolved;
+  const [, , , , provider, modelId] = args;
+  return { ...resolved, contextWindow: catalogContextWindow(provider, modelId) };
+}
+
+async function resolveCredentialModelKey(
   deps: ExecutorDeps,
   userId: string,
   spaceId: string,
