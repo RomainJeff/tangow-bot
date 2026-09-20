@@ -125,6 +125,36 @@ export function estimateHistoryTokens(messages: Array<{ content: string }>): num
   return messages.reduce((total, message) => total + estimateMessageTokens(message.content), 0);
 }
 
+/** Same heuristic, for context that is not a history message (instructions, tool schemas). */
+export function estimateTextTokens(text: string): number {
+  return estimateMessageTokens(text);
+}
+
+/**
+ * What the tool catalog costs in the window: only the fields a provider sends to the model, so
+ * in-process `route` metadata is left out.
+ */
+export function estimateToolSchemaTokens(
+  tools: Array<{ name: string; description: string; inputSchema: unknown }>,
+): number {
+  return tools.reduce(
+    (total, tool) =>
+      total +
+      estimateMessageTokens(
+        `${tool.name}${tool.description}${JSON.stringify(tool.inputSchema) ?? ""}`,
+      ),
+    0,
+  );
+}
+
+/** Which rule ended up sizing the window: the token budget, or the message-count fallback. */
+export type HistoryWindowMode = "tokens" | "count";
+
+export interface HistoryWindow<T> {
+  messages: T[];
+  mode: HistoryWindowMode;
+}
+
 /**
  * Message count is a poor proxy for context: fifty one-line replies and fifty pasted stack traces
  * cost wildly different amounts, so a fixed count either wastes a large window or overflows a
@@ -135,10 +165,11 @@ export function selectHistoryWindow<T extends { role: string; content: string }>
   history: T[];
   contextWindow: number | undefined;
   messageWindowSize: number;
-}): T[] {
+}): HistoryWindow<T> {
   const { history } = options;
   const contextWindow = options.contextWindow ?? 0;
-  if (contextWindow <= 0) return history.slice(-options.messageWindowSize);
+  if (contextWindow <= 0)
+    return { messages: history.slice(-options.messageWindowSize), mode: "count" };
 
   const budget = Math.max(
     DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
@@ -155,11 +186,11 @@ export function selectHistoryWindow<T extends { role: string; content: string }>
     start = index;
   }
   for (let index = start; index < history.length; index += 1) {
-    if (history[index]!.role === "user") return history.slice(index);
+    if (history[index]!.role === "user") return { messages: history.slice(index), mode: "tokens" };
   }
   // Nothing within budget starts a turn, so the budget is smaller than the last exchange. Fall
   // back to the count window rather than opening mid-reply.
-  return history.slice(-options.messageWindowSize);
+  return { messages: history.slice(-options.messageWindowSize), mode: "count" };
 }
 
 export function formatRecalledMemory(

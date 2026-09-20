@@ -47,6 +47,7 @@ import {
   clipToolResultText,
   MODEL_STREAM_MAX_RETRIES,
   MODEL_STREAM_TIMEOUT_MS,
+  providerCacheTokens,
   resolveCompletionMaxTokens,
 } from "./pi-runtime-limits.js";
 import {
@@ -421,6 +422,7 @@ export class PiAgentRuntime implements AgentRuntime {
               queue.push({
                 type: "usage",
                 ...billedPromptTokens(event.message.usage),
+                ...providerCacheTokens(event.message.usage),
                 provider: model.provider,
                 model: model.id,
               });
@@ -1157,6 +1159,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
         host.queue.push({
           type: "usage",
           ...billedPromptTokens(event.message.usage),
+          ...providerCacheTokens(event.message.usage),
           provider: subagentModel.provider,
           model: subagentModel.id,
         });

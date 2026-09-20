@@ -201,9 +201,12 @@ import { sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
+import type { HistoryWindowMode } from "./history-compaction.js";
 import {
   COMPACTION_BATCH_SIZE,
   estimateHistoryTokens,
+  estimateTextTokens,
+  estimateToolSchemaTokens,
   formatCompactedSummary,
   formatRecalledMemory,
   HISTORY_WINDOW_SIZE,
@@ -1414,6 +1417,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           role,
           content,
         }));
+        // Stays null when a local summary already narrowed history and no window sizing ran.
+        let historyWindowMode: HistoryWindowMode | null = null;
         const turnBlocks = userTurnBlocksForRun(
           run.trigger,
           runId,
@@ -1560,7 +1565,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Sized here rather than where `history` is built, because the window depends on the
         // resolved model's context window.
         if (!compactedHistory.usedLocalSummary) {
-          history = selectHistoryWindow({
+          const window = selectHistoryWindow({
             history,
             contextWindow: resolved.contextWindow,
             messageWindowSize: historyWindowSize({
@@ -1569,6 +1574,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               recallSucceeded,
             }),
           });
+          history = window.messages;
+          historyWindowMode = window.mode;
         }
         await deps.prisma.run.updateMany({
           where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
@@ -3722,6 +3729,42 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
 
         try {
+          const instructions = buildSystemInstructions({
+            botInstructions: bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`,
+            groupContext,
+            messagingContext,
+            hasHistoricalContext: historicalContext.length > 0,
+            computerInstruction,
+            pageBrowserAllowed,
+            workspaceInstruction,
+            agentEnvironmentInstruction,
+            pluginLine,
+            agentSkillsLine,
+            taughtSkillsLine,
+            memoryContext: memoryContext ? redactSecrets(memoryContext, runSecrets) : undefined,
+            scratchpadContext: scratchpadContext
+              ? redactSecrets(scratchpadContext, runSecrets)
+              : undefined,
+            botDirectory,
+          });
+          // Counters only, never content: this is the per-run context budget the next
+          // optimizations are measured against.
+          getLogger().info("agent.run.context", {
+            runId,
+            botId: bot.id,
+            provider: runModelProvider,
+            model: runModelId,
+            contextWindow: resolved.contextWindow,
+            instructionTokens: estimateTextTokens(instructions),
+            toolSchemaTokens: estimateToolSchemaTokens(tools),
+            toolCount: tools.length,
+            // Everything handed to the runtime as history, including the compacted summary and
+            // recalled-memory blocks that sit in front of the thread messages.
+            historyTokens: estimateHistoryTokens(runtimeHistory),
+            historyMessagesKept: history.length,
+            historyMessagesAvailable: compactedHistory.history.length,
+            historyWindowMode,
+          });
           const runtimeEvents = deps.runtime.run(
             {
               botId: bot.id,
@@ -3729,25 +3772,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               runId,
               sourceMessageId: run.sourceMessageId,
               prompt,
-              instructions: buildSystemInstructions({
-                botInstructions:
-                  bot.instructions || `${bot.name}: ${bot.title}\n${bot.description}`,
-                groupContext,
-                messagingContext,
-                hasHistoricalContext: historicalContext.length > 0,
-                computerInstruction,
-                pageBrowserAllowed,
-                workspaceInstruction,
-                agentEnvironmentInstruction,
-                pluginLine,
-                agentSkillsLine,
-                taughtSkillsLine,
-                memoryContext: memoryContext ? redactSecrets(memoryContext, runSecrets) : undefined,
-                scratchpadContext: scratchpadContext
-                  ? redactSecrets(scratchpadContext, runSecrets)
-                  : undefined,
-                botDirectory,
-              }),
+              instructions,
               history: runtimeHistory,
               currentTurnImages,
               tools,
@@ -4183,6 +4208,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 );
               }
             } else if (event.type === "usage") {
+              getLogger().info("agent.run.usage", {
+                runId,
+                botId: bot.id,
+                provider: event.provider,
+                model: event.model,
+                inputTokens: event.inputTokens,
+                outputTokens: event.outputTokens,
+                // Left out entirely when the provider reports no cache counters.
+                ...(event.cacheReadTokens === undefined
+                  ? {}
+                  : { cacheReadTokens: event.cacheReadTokens }),
+                ...(event.cacheWriteTokens === undefined
+                  ? {}
+                  : { cacheWriteTokens: event.cacheWriteTokens }),
+              });
               await deps.prisma.usageRecord.create({
                 data: {
                   spaceId: run.spaceId,
