@@ -74,15 +74,18 @@ export function messageToAgentHistoryText(
  * row stays this bot's own turn, which is what a private thread holds.
  *
  * Stored `system` rows are thread asides ("Run stopped", "Created by …"), not
- * conversation, and the caller drops them before it gets here.
+ * conversation. They keep their own role here so the caller can drop them by name
+ * once it no longer needs their sequence numbers, rather than having them fall
+ * through and read as a turn this bot took.
  */
 export function messageToAgentHistoryTurn(
   message: HistoryMessage,
   selfBotId: string,
   groupMemberNames?: ReadonlyMap<string, string>,
-): { role: "user" | "assistant"; content: string } {
+): { role: "user" | "assistant" | "system"; content: string } {
   const content = messageToAgentHistoryText(message, groupMemberNames);
   if (message.role === "user") return { role: "user", content };
+  if (message.role === "system") return { role: "system", content };
   const author = message.botId;
   if (!groupMemberNames || !author || author === selfBotId) return { role: "assistant", content };
   // ponytail: a member archived or removed since it posted is no longer in the roster, so it

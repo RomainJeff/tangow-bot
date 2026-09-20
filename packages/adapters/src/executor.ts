@@ -1399,16 +1399,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const threadContext = threadContextForRun(
           run.trigger,
           {
-            // `system` rows are thread asides, never conversation: they were already
-            // dropped further down, and this is now the one place that decides so.
-            messages: [...messages]
-              .reverse()
-              .filter((m) => m.role !== "system")
-              .map((m) => ({
-                id: m.id,
-                seq: m.seq,
-                ...messageToAgentHistoryTurn(m, bot.id, group?.memberNames),
-              })),
+            messages: [...messages].reverse().map((m) => ({
+              id: m.id,
+              seq: m.seq,
+              ...messageToAgentHistoryTurn(m, bot.id, group?.memberNames),
+            })),
             summary: thread.historyCompactionSummary,
             historyCompactedUpToSeq: thread.historyCompactedUpToSeq,
           },
@@ -1419,11 +1414,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
           summary: threadContext.summary,
           historyCompactedUpToSeq: threadContext.historyCompactedUpToSeq,
         });
-        let history = compactedHistory.history.map(({ id, role, content }) => ({
-          id,
-          role,
-          content,
-        }));
+        // `system` rows are thread asides, never conversation, and this is the one place
+        // that drops them. It has to happen after the selection above: those rows hold a
+        // seq of their own, and removing them earlier punches a hole in the run of
+        // sequence numbers the compaction summary is only trusted against.
+        let history = compactedHistory.history
+          .filter(({ role }) => role !== "system")
+          .map(({ id, role, content }) => ({
+            id,
+            role,
+            content,
+          }));
         // Stays null when a local summary already narrowed history and no window sizing ran.
         let historyWindowMode: HistoryWindowMode | null = null;
         const turnBlocks = userTurnBlocksForRun(
