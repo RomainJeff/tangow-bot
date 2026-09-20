@@ -104,6 +104,37 @@ describe("selectHistoryWindow", () => {
     expect(mode).toBe("tokens");
   });
 
+  it("keeps fewer messages when the run's non-history context is larger", () => {
+    const history = conversation(200, () => "x".repeat(2_000));
+    const lean = selectHistoryWindow({
+      history,
+      contextWindow: 128_000,
+      messageWindowSize: 4,
+      nonHistoryTokens: 2_000,
+    });
+    const heavy = selectHistoryWindow({
+      history,
+      contextWindow: 128_000,
+      messageWindowSize: 4,
+      nonHistoryTokens: 60_000,
+    });
+    expect(lean.mode).toBe("tokens");
+    expect(heavy.mode).toBe("tokens");
+    expect(heavy.messages.length).toBeLessThan(lean.messages.length);
+  });
+
+  it("falls back to the shared estimate when the caller measures nothing", () => {
+    const history = conversation(200, () => "x".repeat(2_000));
+    expect(selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 4 })).toEqual(
+      selectHistoryWindow({
+        history,
+        contextWindow: 128_000,
+        messageWindowSize: 4,
+        nonHistoryTokens: NON_HISTORY_TOKEN_ESTIMATE,
+      }),
+    );
+  });
+
   it("opens the window on a user message, never mid-reply", () => {
     const history = conversation(40, () => "x".repeat(20_000));
     const { messages: kept } = selectHistoryWindow({

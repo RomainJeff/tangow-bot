@@ -106,10 +106,10 @@ export function historyWindowSize(options: {
 }
 
 /**
- * Rough cost of everything that shares the context window with the conversation: the bot's
- * instructions, tool schemas, memory and scratchpad context, and the current turn.
- * ponytail: one number for every bot and every model; estimate the rendered instructions per run
- * if history starts being cut while the window still had room.
+ * Fallback cost of everything that shares the context window with the conversation: the bot's
+ * instructions, tool schemas, memory and scratchpad context, and the current turn. The agent run
+ * measures its own and passes `nonHistoryTokens`; this covers callers that have nothing to measure
+ * yet.
  */
 export const NON_HISTORY_TOKEN_ESTIMATE = 12_000;
 
@@ -165,6 +165,8 @@ export function selectHistoryWindow<T extends { role: string; content: string }>
   history: T[];
   contextWindow: number | undefined;
   messageWindowSize: number;
+  /** What the run's non-history context actually costs; `NON_HISTORY_TOKEN_ESTIMATE` when unknown. */
+  nonHistoryTokens?: number;
 }): HistoryWindow<T> {
   const { history } = options;
   const contextWindow = options.contextWindow ?? 0;
@@ -173,7 +175,9 @@ export function selectHistoryWindow<T extends { role: string; content: string }>
 
   const budget = Math.max(
     DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
-    contextWindow - DEFAULT_COMPACTION_SETTINGS.reserveTokens - NON_HISTORY_TOKEN_ESTIMATE,
+    contextWindow -
+      DEFAULT_COMPACTION_SETTINGS.reserveTokens -
+      (options.nonHistoryTokens ?? NON_HISTORY_TOKEN_ESTIMATE),
   );
   let used = 0;
   let start = history.length;
