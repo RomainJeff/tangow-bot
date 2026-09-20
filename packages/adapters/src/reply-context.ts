@@ -70,17 +70,19 @@ export function messageToAgentHistoryText(
  * decisions as its own. `groupMemberNames` — the roster already loaded for the
  * group context — says who wrote what: a member's turn is delivered as the same
  * named peer block a direct bot message arrives in, on the user side so it never
- * carries the assistant-turn marker. Outside a group the map is absent and every
- * bot row stays this bot's own turn, which is what a private thread holds.
+ * reads as this bot's own turn. Outside a group the map is absent and every bot
+ * row stays this bot's own turn, which is what a private thread holds.
+ *
+ * Stored `system` rows are thread asides ("Run stopped", "Created by …"), not
+ * conversation, and the caller drops them before it gets here.
  */
 export function messageToAgentHistoryTurn(
   message: HistoryMessage,
   selfBotId: string,
   groupMemberNames?: ReadonlyMap<string, string>,
-): { role: "user" | "assistant" | "system"; content: string } {
+): { role: "user" | "assistant"; content: string } {
   const content = messageToAgentHistoryText(message, groupMemberNames);
   if (message.role === "user") return { role: "user", content };
-  if (message.role === "system") return { role: "system", content };
   const author = message.botId;
   if (!groupMemberNames || !author || author === selfBotId) return { role: "assistant", content };
   // ponytail: a member archived or removed since it posted is no longer in the roster, so it

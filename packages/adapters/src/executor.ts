@@ -1399,11 +1399,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const threadContext = threadContextForRun(
           run.trigger,
           {
-            messages: [...messages].reverse().map((m) => ({
-              id: m.id,
-              seq: m.seq,
-              ...messageToAgentHistoryTurn(m, bot.id, group?.memberNames),
-            })),
+            // `system` rows are thread asides, never conversation: they were already
+            // dropped further down, and this is now the one place that decides so.
+            messages: [...messages]
+              .reverse()
+              .filter((m) => m.role !== "system")
+              .map((m) => ({
+                id: m.id,
+                seq: m.seq,
+                ...messageToAgentHistoryTurn(m, bot.id, group?.memberNames),
+              })),
             summary: thread.historyCompactionSummary,
             historyCompactedUpToSeq: thread.historyCompactedUpToSeq,
           },
@@ -3752,6 +3757,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyWindowMode = window.mode;
           }
           const runtimeHistory = [...historicalContext, ...history];
+          // Split by role so a change in how past turns are rehydrated is visible here.
+          const historyTokensByRole = runtimeHistory.reduce<Record<string, number>>(
+            (totals, message) => {
+              totals[message.role] =
+                (totals[message.role] ?? 0) + estimateTextTokens(message.content);
+              return totals;
+            },
+            {},
+          );
           // Counters only, never content: this is the per-run context budget the next
           // optimizations are measured against.
           getLogger().info("agent.run.context", {
@@ -3766,6 +3780,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // Everything handed to the runtime as history, including the compacted summary and
             // recalled-memory blocks that sit in front of the thread messages.
             historyTokens: estimateHistoryTokens(runtimeHistory),
+            historyTokensByRole,
             historyMessagesKept: history.length,
             historyMessagesAvailable: compactedHistory.history.length,
             historyWindowMode,
