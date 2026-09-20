@@ -1563,21 +1563,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           (values) => runSecrets.push(...values),
         );
         runSecrets.push(...resolved.redact);
-        // Sized here rather than where `history` is built, because the window depends on the
-        // resolved model's context window.
-        if (!compactedHistory.usedLocalSummary) {
-          const window = selectHistoryWindow({
-            history,
-            contextWindow: resolved.contextWindow,
-            messageWindowSize: historyWindowSize({
-              semanticMemoryEnabled: semanticMemoryEnabled && !thread.historyCompactionSummary,
-              compacted: thread.historyCompactedUpToSeq != null,
-              recallSucceeded,
-            }),
-          });
-          history = window.messages;
-          historyWindowMode = window.mode;
-        }
         await deps.prisma.run.updateMany({
           where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
           data: { modelProvider: runModelProvider, modelId: runModelId },
@@ -3688,7 +3673,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             content: redactSecrets(recalledMemory, runSecrets),
           });
         }
-        const runtimeHistory = [...historicalContext, ...history];
         // Without a roster a bot only knows the bots it spawned itself.
         const botDirectory = thread.groupId
           ? undefined
@@ -3748,6 +3732,27 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : undefined,
             botDirectory,
           });
+          const instructionTokens = estimateTextTokens(instructions);
+          const toolSchemaTokens = estimateToolSchemaTokens(tools);
+          // Sized here rather than where `history` is built, because the window depends on the
+          // resolved model's context window and on what the rest of the run costs: the rendered
+          // instructions already carry memory, scratchpad and the peer directory, so a bot with a
+          // large durable memory or many connector tools keeps fewer messages than a bare one.
+          if (!compactedHistory.usedLocalSummary) {
+            const window = selectHistoryWindow({
+              history,
+              contextWindow: resolved.contextWindow,
+              nonHistoryTokens: instructionTokens + toolSchemaTokens,
+              messageWindowSize: historyWindowSize({
+                semanticMemoryEnabled: semanticMemoryEnabled && !thread.historyCompactionSummary,
+                compacted: thread.historyCompactedUpToSeq != null,
+                recallSucceeded,
+              }),
+            });
+            history = window.messages;
+            historyWindowMode = window.mode;
+          }
+          const runtimeHistory = [...historicalContext, ...history];
           // Counters only, never content: this is the per-run context budget the next
           // optimizations are measured against.
           getLogger().info("agent.run.context", {
@@ -3756,8 +3761,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             provider: runModelProvider,
             model: runModelId,
             contextWindow: resolved.contextWindow,
-            instructionTokens: estimateTextTokens(instructions),
-            toolSchemaTokens: estimateToolSchemaTokens(tools),
+            instructionTokens,
+            toolSchemaTokens,
             toolCount: tools.length,
             // Everything handed to the runtime as history, including the compacted summary and
             // recalled-memory blocks that sit in front of the thread messages.
