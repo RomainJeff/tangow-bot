@@ -8,7 +8,7 @@ Le coût contextuel reste borné par le plafond existant de mémoires rappelées
 
 **Blocked by:** None (can start immediately)
 
-**Status:** done
+**Status:** done — mergé en `9e866f88`
 
 - [x] Le rappel automatique ne dépend plus de l'existence d'une compaction
 - [x] Vérifié explicitement : le provider mémoire retourne bien les mémoires hors-historique à la génération par défaut ; sinon le ticket est refermé avec le constat

@@ -8,7 +8,7 @@ Ce ticket n'a d'effet que sur les runs qui budgétisent en tokens : il faut la f
 
 **Blocked by:** 03 (fenêtre de contexte depuis le catalogue)
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `b3c55d11`
 
 - [ ] La sélection de fenêtre accepte une estimation hors-historique fournie par l'appelant, la constante restant le défaut
 - [ ] L'executor fournit cette estimation à partir des blocs réellement chargés pour le run

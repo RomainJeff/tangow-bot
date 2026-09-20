@@ -16,7 +16,7 @@ Le rendu des blocs accepte déjà une table id→nom optionnelle depuis le ticke
 
 **Blocked by:** 10 (attribution des membres dans l'historique), mergé
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `ec33b9a6`
 
 - [x] Dans un thread de groupe compacté, le transcript soumis au résumé attribue chaque message de membre à son auteur par son nom
 - [x] Les `handoff` du transcript se lisent avec des noms, pas des identifiants

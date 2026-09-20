@@ -10,7 +10,7 @@ Le même rendu alimente le transcript de compaction : les résumés pourront enf
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `815f8372`
 
 - [ ] Les appels d'outils d'un tour apparaissent dans l'historique du tour suivant, une ligne par appel
 - [ ] Plafonds durs sur l'entrée et la sortie de chaque appel, et sur le bloc entier ; pas de secret ni de charge utile brute recopiée

@@ -8,7 +8,7 @@ Contrainte : rien de spécifique à un provider en dehors des adapters. Le catal
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `6c114898`
 
 - [ ] La fenêtre de contexte est résolue depuis le catalogue quand elle n'est pas fournie par le credential
 - [ ] Un modèle absent du catalogue garde le comportement actuel (fallback en nombre de messages), sans erreur

@@ -25,7 +25,7 @@
 
 **Blocked by:** Ticket 01 (instrumentation), pour disposer d'une mesure avant/après. Le ticket 06 est mergé et fournit le rendu actuel que ce ticket remplace.
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `6d2a85d5`
 
 - [ ] Les tours passés du bot arrivent au modèle avec `role: "assistant"` ; ceux des pairs et de l'utilisateur restent `user`
 - [ ] Les champs obligatoires d'un `AssistantMessage` sont renseignés à partir du run courant, sans appel réseau ni valeur inventée qui fausserait une mesure de coût

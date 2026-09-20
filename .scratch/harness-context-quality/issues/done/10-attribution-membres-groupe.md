@@ -12,7 +12,7 @@ Le marquage d'un tour de membre réutilise celui d'un message de pair (bloc nomm
 
 **Blocked by:** 06 (marquage explicite des tours), mergé
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `88176952`
 
 - [x] Dans un thread de groupe, un post d'un autre bot membre est attribué à ce bot dans l'historique, avec son nom, et ne porte pas le marqueur de tour assistant
 - [x] Un `handoff` entre deux membres se lit avec les noms des bots, pas leurs identifiants

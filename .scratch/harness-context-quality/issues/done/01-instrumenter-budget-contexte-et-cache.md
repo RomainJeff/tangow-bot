@@ -8,7 +8,7 @@ Estimation des tokens : `ceil(chars / 4)`, la même heuristique que la compactio
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `cb407626`
 
 - [ ] Chaque run logue : tokens estimés instructions, tokens estimés schémas d'outils, tokens estimés historique, messages retenus / disponibles, mode de sélection de fenêtre (tokens ou fallback count)
 - [ ] Les compteurs `cacheRead` / `cacheWrite` du provider sont propagés jusqu'au log de run quand le provider les fournit, absents sinon (jamais de zéro inventé)

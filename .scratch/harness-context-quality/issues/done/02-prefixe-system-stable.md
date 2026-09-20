@@ -9,7 +9,7 @@ Le run de synthèse de la compaction utilise la même instruction de date ; mêm
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `c88ba4b6`
 
 - [ ] La chaîne `Current date and time` n'apparaît plus dans les instructions système ; le modèle reçoit toujours la date du jour dans le tour
 - [ ] Les fragments système sont ordonnés : stables d'abord, variables (mémoire, scratchpad, annuaire) en fin

@@ -6,7 +6,7 @@ Le changement reste dans l'aplatissement actuel — on ne fabrique pas de faux m
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `f8333a95`
 
 - [ ] Un message reçu d'un bot pair est marqué comme tel dans l'historique, avec le nom du pair, et n'est plus présenté comme un tour de l'assistant
 - [ ] Les tours de l'assistant portent un marquage explicite, non imitable par du texte utilisateur
