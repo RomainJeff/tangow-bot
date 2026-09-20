@@ -62,6 +62,24 @@ export function billedPromptTokens(usage: {
 }
 
 /**
+ * Provider cache counters, passed through untouched. A provider that reports nothing keeps the
+ * fields absent: a zero here would read as "the cache was cold", which is a different claim.
+ */
+export function providerCacheTokens(usage: { cacheRead?: number; cacheWrite?: number }): {
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+} {
+  return {
+    ...(isCount(usage.cacheRead) ? { cacheReadTokens: usage.cacheRead } : {}),
+    ...(isCount(usage.cacheWrite) ? { cacheWriteTokens: usage.cacheWrite } : {}),
+  };
+}
+
+function isCount(value: number | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/**
  * Completions default to a modest output cap so OpenRouter-style providers do not
  * hold credit for a model card's 128k ceiling. A configured maxTokens is the escape.
  */

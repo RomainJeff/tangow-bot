@@ -4,6 +4,7 @@ import {
   billedPromptTokens,
   clipToolResultContent,
   clipToolResultText,
+  providerCacheTokens,
   resolveCompletionMaxTokens,
   TOOL_RESULT_TEXT_LIMIT,
 } from "./pi-runtime-limits.js";
@@ -36,6 +37,28 @@ describe("billedPromptTokens", () => {
         cacheWrite: 0,
       }),
     ).toEqual({ inputTokens: 12_500, outputTokens: 15 });
+  });
+});
+
+describe("providerCacheTokens", () => {
+  it("passes the provider counters through untouched", () => {
+    expect(providerCacheTokens({ cacheRead: 8_000, cacheWrite: 200 })).toEqual({
+      cacheReadTokens: 8_000,
+      cacheWriteTokens: 200,
+    });
+  });
+
+  it("keeps a reported zero, which means the cache was cold", () => {
+    expect(providerCacheTokens({ cacheRead: 0, cacheWrite: 0 })).toEqual({
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    });
+  });
+
+  it("omits counters a provider does not report rather than inventing zeros", () => {
+    expect(providerCacheTokens({})).toEqual({});
+    expect(providerCacheTokens({ cacheRead: 12 })).toEqual({ cacheReadTokens: 12 });
+    expect(providerCacheTokens({ cacheRead: Number.NaN })).toEqual({});
   });
 });
 

@@ -12,6 +12,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   compactHistory,
   estimateHistoryTokens,
+  estimateTextTokens,
+  estimateToolSchemaTokens,
   formatCompactedSummary,
   formatRecalledMemory,
   historyWindowSize,
@@ -69,31 +71,46 @@ describe("selectHistoryWindow", () => {
     const history = conversation(10);
     expect(
       selectHistoryWindow({ history, contextWindow: undefined, messageWindowSize: 4 }),
-    ).toEqual(history.slice(-4));
-    expect(selectHistoryWindow({ history, contextWindow: 0, messageWindowSize: 4 })).toEqual(
-      history.slice(-4),
-    );
+    ).toEqual({ messages: history.slice(-4), mode: "count" });
+    expect(selectHistoryWindow({ history, contextWindow: 0, messageWindowSize: 4 })).toEqual({
+      messages: history.slice(-4),
+      mode: "count",
+    });
   });
 
   it("keeps far more than the count window when the messages are small and the window is large", () => {
     const history = conversation(200);
-    const kept = selectHistoryWindow({ history, contextWindow: 200_000, messageWindowSize: 4 });
+    const { messages: kept, mode } = selectHistoryWindow({
+      history,
+      contextWindow: 200_000,
+      messageWindowSize: 4,
+    });
     expect(kept.length).toBeGreaterThan(4);
     expect(kept[kept.length - 1]).toEqual(history[history.length - 1]);
+    expect(mode).toBe("tokens");
   });
 
   it("drops older turns when the messages are large", () => {
     const history = conversation(40, () => "x".repeat(20_000));
-    const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 400 });
+    const { messages: kept, mode } = selectHistoryWindow({
+      history,
+      contextWindow: 128_000,
+      messageWindowSize: 400,
+    });
     expect(kept.length).toBeLessThan(history.length);
     expect(estimateHistoryTokens(kept)).toBeLessThanOrEqual(
       128_000 - 16_384 - NON_HISTORY_TOKEN_ESTIMATE + estimateHistoryTokens([history[0]!]),
     );
+    expect(mode).toBe("tokens");
   });
 
   it("opens the window on a user message, never mid-reply", () => {
     const history = conversation(40, () => "x".repeat(20_000));
-    const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 400 });
+    const { messages: kept } = selectHistoryWindow({
+      history,
+      contextWindow: 128_000,
+      messageWindowSize: 400,
+    });
     expect(kept[0]!.role).toBe("user");
   });
 
@@ -104,7 +121,53 @@ describe("selectHistoryWindow", () => {
       { role: "user" as const, content: "x".repeat(2_000_000) },
     ];
     const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 2 });
-    expect(kept).toEqual(history.slice(-1));
+    expect(kept).toEqual({ messages: history.slice(-1), mode: "tokens" });
+  });
+
+  it("reports the count fallback when no message within budget starts a turn", () => {
+    // The single oversized assistant reply cannot open a window, so sizing falls through to the
+    // message count even though a context window was known.
+    const history = [
+      { role: "user" as const, content: "hi" },
+      { role: "assistant" as const, content: "x".repeat(2_000_000) },
+    ];
+    expect(selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 1 })).toEqual({
+      messages: history.slice(-1),
+      mode: "count",
+    });
+  });
+});
+
+describe("context budget estimation", () => {
+  it("estimates text at one token per four characters", () => {
+    expect(estimateTextTokens("")).toBe(0);
+    expect(estimateTextTokens("x".repeat(400))).toBe(100);
+    expect(estimateTextTokens("x".repeat(401))).toBe(101);
+  });
+
+  it("counts only the tool fields a provider sends to the model", () => {
+    const schema = { type: "object", properties: {} };
+    const tools = [
+      { name: "web_fetch", description: "read a page", inputSchema: schema },
+      { name: "remember", description: "store a fact", inputSchema: schema },
+    ];
+    const withRoute = tools.map((tool) => ({
+      ...tool,
+      route: { connectorId: "c".repeat(500), toolName: "t".repeat(500) },
+    }));
+    expect(estimateToolSchemaTokens(tools)).toBe(estimateToolSchemaTokens(withRoute));
+    expect(estimateToolSchemaTokens(tools)).toBe(
+      tools.reduce(
+        (total, tool) =>
+          total +
+          estimateTextTokens(`${tool.name}${tool.description}${JSON.stringify(tool.inputSchema)}`),
+        0,
+      ),
+    );
+  });
+
+  it("is zero for an empty tool catalog", () => {
+    expect(estimateToolSchemaTokens([])).toBe(0);
   });
 });
 

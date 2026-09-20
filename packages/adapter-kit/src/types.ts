@@ -436,7 +436,16 @@ export type AgentRuntimeEvent =
       questions?: AskQuestion[];
     }
   | { type: "takeover"; reason: string }
-  | { type: "usage"; inputTokens: number; outputTokens: number; provider: string; model: string }
+  | {
+      type: "usage";
+      inputTokens: number;
+      outputTokens: number;
+      provider: string;
+      model: string;
+      /** Provider cache counters; absent when the provider does not report them. */
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+    }
   | { type: "checkpoint"; blob: string }
   | {
       type: "subagent";
