@@ -2,6 +2,7 @@ import type {
   AgentHomeStore,
   AgentRuntime,
   JobPublisher,
+  MemoryStore,
   MessagingSurface,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
@@ -42,6 +43,7 @@ describe("createBackgroundJobHandlers", () => {
       workerId: "worker-1",
       runtime: {} as unknown as AgentRuntime,
       secretStore: {} as unknown as EncryptedSecretStore,
+      memory: {} as unknown as MemoryStore,
       memoryProviders: { resolve: vi.fn(async () => null) },
       messaging: {} as unknown as MessagingSurface,
     });
@@ -68,6 +70,7 @@ describe("createBackgroundJobHandlers", () => {
     const runtime = {} as unknown as AgentRuntime;
     const jobs = {} as unknown as JobPublisher;
     const secretStore = {} as unknown as EncryptedSecretStore;
+    const memory = {} as unknown as MemoryStore;
     const memoryProviders = { resolve: vi.fn(async () => null) };
     const resolveModel = vi.fn();
     const handlers = createBackgroundJobHandlers({
@@ -80,6 +83,7 @@ describe("createBackgroundJobHandlers", () => {
       workerId: "worker-1",
       runtime,
       secretStore,
+      memory,
       memoryProviders,
       deploymentModelKey: "openrouter-key",
     });
@@ -91,6 +95,7 @@ describe("createBackgroundJobHandlers", () => {
         prisma,
         runtime,
         jobs,
+        memory,
         memoryProviders,
         deploymentModelKey: "openrouter-key",
         resolveModel,

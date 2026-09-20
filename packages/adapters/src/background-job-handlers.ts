@@ -3,6 +3,7 @@ import type {
   AgentRuntime,
   BackgroundJobHandlers,
   JobPublisher,
+  MemoryStore,
   MessagingSurface,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
@@ -31,6 +32,7 @@ export function createBackgroundJobHandlers(deps: {
   workerId: string;
   runtime: AgentRuntime;
   secretStore: EncryptedSecretStore;
+  memory: MemoryStore;
   memoryProviders: MemoryProviderResolver;
   deploymentModelKey?: string;
   messaging?: MessagingSurface;
@@ -104,6 +106,7 @@ export function createBackgroundJobHandlers(deps: {
           prisma: deps.prisma,
           runtime: deps.runtime,
           jobs: deps.jobs,
+          memory: deps.memory,
           memoryProviders: deps.memoryProviders,
           deploymentModelKey: deps.deploymentModelKey,
           ...(deps.executor.resolveModel ? { resolveModel: deps.executor.resolveModel } : {}),

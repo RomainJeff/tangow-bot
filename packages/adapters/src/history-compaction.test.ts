@@ -3,6 +3,7 @@ import type {
   AgentRuntime,
   AgentRuntimeEvent,
   JobPublisher,
+  MemoryStore,
   SemanticMemoryResponse,
 } from "@rakazo/adapter-kit";
 import { historyCompactJob } from "@rakazo/adapter-kit";
@@ -409,6 +410,7 @@ function compactionHarness(
       defaultMemoryScope: string;
     } | null;
     runtimeEvents?: AgentRuntimeEvent[];
+    memoryDocuments?: Array<{ path: string; content: string; revision: number }>;
   } = {},
 ) {
   const messages: HarnessMessage[] =
@@ -541,10 +543,19 @@ function compactionHarness(
     ),
   };
   const jobs = { enqueue: vi.fn(async () => undefined) };
+  const memoryRead = vi.fn(async () => ({ documents: options.memoryDocuments ?? [] }));
+  const memoryCommit = vi.fn(async () => ({
+    id: "memory-1",
+    path: "MEMORY.md",
+    revision: 1,
+    content: "",
+  }));
+  const memory = { read: memoryRead, commit: memoryCommit } as unknown as MemoryStore;
   const deps = {
     prisma: prisma as unknown as PrismaClient,
     runtime: runtime as unknown as AgentRuntime,
     jobs: jobs as unknown as JobPublisher,
+    memory,
     memoryProviders,
     deploymentModelKey: options.deploymentModelKey,
     ...(options.resolveModel ? { resolveModel: options.resolveModel } : {}),
@@ -558,6 +569,8 @@ function compactionHarness(
     purgeHistory,
     memoryProviders,
     jobs,
+    memoryRead,
+    memoryCommit,
     deps,
   };
 }

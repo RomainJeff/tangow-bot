@@ -1,5 +1,5 @@
 import { DEFAULT_COMPACTION_SETTINGS, estimateTokens } from "@earendil-works/pi-agent-core";
-import type { AgentRunRequest, AgentRuntime, JobPublisher } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, AgentRuntime, JobPublisher, MemoryStore } from "@rakazo/adapter-kit";
 import { historyCompactJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { blocksToAgentHistoryText, escapeDirectoryField } from "@rakazo/core";
@@ -343,6 +343,7 @@ export interface CompactHistoryDeps {
   prisma: PrismaClient;
   runtime: AgentRuntime;
   jobs: JobPublisher;
+  memory: MemoryStore;
   memoryProviders: MemoryProviderResolver;
   deploymentModelKey?: string;
   resolveModel?: (scope: {

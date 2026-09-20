@@ -415,6 +415,7 @@ export async function createApp(
     workerId: "api",
     runtime,
     secretStore: secrets,
+    memory,
     memoryProviders,
     deploymentModelKey: env.deploymentModelKey,
     messaging,

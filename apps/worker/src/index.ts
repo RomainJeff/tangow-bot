@@ -160,6 +160,7 @@ async function main() {
   const connector = stack.destination;
   await connector.start();
   integrationSettings.warmDirectories();
+  const memory = new MarkdownMemoryStore(prisma);
   const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
@@ -176,7 +177,7 @@ async function main() {
     prisma,
     runtime,
     sandbox,
-    memory: new MarkdownMemoryStore(prisma),
+    memory,
     memoryProviders,
     home,
     artifacts,
@@ -219,6 +220,7 @@ async function main() {
     workerId: process.pid.toString(),
     runtime,
     secretStore: secrets,
+    memory,
     memoryProviders,
     deploymentModelKey,
     messaging,
