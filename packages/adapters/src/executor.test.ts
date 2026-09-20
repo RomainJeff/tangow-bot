@@ -1522,6 +1522,68 @@ description: Prepare standup notes
     });
   });
 
+  it("takes the model context window from the credential, then the catalog, then neither", async () => {
+    const secrets: Record<string, string> = {
+      "secret-openai-compatible": serializeModelSecret({
+        kind: "openai_compatible",
+        baseUrl: "http://127.0.0.1:8000/v1",
+        contextWindow: 65536,
+      }),
+      "secret-anthropic": "anthropic-key",
+    };
+    const bot = {
+      modelProvider: "openai-compatible",
+      modelId: "space-model",
+      thinkingLevel: null,
+    };
+    const secretIdFor = (provider: string) =>
+      provider === "openai-compatible" ? "secret-openai-compatible" : "secret-anthropic";
+    const prisma = {
+      bot: { findFirst: vi.fn(async () => bot) },
+      spaceModelPreference: {
+        findFirst: vi.fn(
+          async (args: { where: { credential?: { provider?: string }; isDefault?: boolean } }) => {
+            if (args.where.credential?.provider === bot.modelProvider || args.where.isDefault) {
+              return modelPreference({
+                provider: bot.modelProvider,
+                secretId: secretIdFor(bot.modelProvider),
+                modelId: bot.modelId,
+                isDefault: Boolean(args.where.isDefault),
+              });
+            }
+            return null;
+          },
+        ),
+      },
+      userModelCredential: { findFirst: vi.fn(async () => null) },
+      deploymentSettings: { findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async (args: { where: { id: string } }) => ({
+          id: args.where.id,
+          ciphertext: secrets[args.where.id],
+        })),
+        findUnique: vi.fn(async () => null),
+      },
+    } as unknown as PrismaClient;
+    const executor = createRunExecutor({
+      prisma,
+      secretStore: { load: vi.fn((ciphertext: string) => ciphertext), put: vi.fn() },
+    } as unknown as Parameters<typeof createRunExecutor>[0]);
+    const scope = { userId: "user-1", spaceId: "ws-1", botId: "bot-1" };
+
+    const configured = await executor.resolveModel(scope);
+    expect(configured.contextWindow).toBe(65536);
+
+    bot.modelProvider = "anthropic";
+    bot.modelId = "claude-fable-5";
+    const fromCatalog = await executor.resolveModel(scope);
+    expect(fromCatalog.contextWindow).toBe(1_000_000);
+
+    bot.modelId = "rakazo-test/unknown-future-model";
+    const unknown = await executor.resolveModel(scope);
+    expect(unknown.contextWindow).toBeUndefined();
+  });
+
   it("falls back to the Space default when the override provider has no credential", async () => {
     const findFirst = vi.fn(
       async (args: { where: { credential?: { provider?: string }; isDefault?: boolean } }) => {
