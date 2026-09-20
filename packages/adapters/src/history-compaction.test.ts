@@ -3,6 +3,7 @@ import type {
   AgentRuntime,
   AgentRuntimeEvent,
   JobPublisher,
+  MemoryCommitRequest,
   MemoryStore,
   SemanticMemoryResponse,
 } from "@rakazo/adapter-kit";
@@ -411,6 +412,7 @@ function compactionHarness(
     } | null;
     runtimeEvents?: AgentRuntimeEvent[];
     memoryDocuments?: Array<{ path: string; content: string; revision: number }>;
+    learnedText?: string;
   } = {},
 ) {
   const messages: HarnessMessage[] =
@@ -503,9 +505,14 @@ function compactionHarness(
       adapterVersion: "1",
       capabilities: { streaming: true, compaction: true, tools: false, scripted: false },
     }),
-    run: vi.fn<AgentRuntime["run"]>(async function* () {
+    run: vi.fn<AgentRuntime["run"]>(async function* (request) {
       for (const event of options.runtimeEvents ?? []) yield event;
-      yield { type: "done", text: "Summary of 50 messages." };
+      yield {
+        type: "done",
+        text: request.runId.startsWith("learn:")
+          ? (options.learnedText ?? "NONE")
+          : "Summary of 50 messages.",
+      };
     }),
   };
   const saveMemory = vi.fn(
@@ -543,12 +550,14 @@ function compactionHarness(
     ),
   };
   const jobs = { enqueue: vi.fn(async () => undefined) };
-  const memoryRead = vi.fn(async () => ({ documents: options.memoryDocuments ?? [] }));
-  const memoryCommit = vi.fn(async () => ({
+  const memoryRead = vi.fn(async (request: { scope: string }) => ({
+    documents: request.scope === "bot" ? (options.memoryDocuments ?? []) : [],
+  }));
+  const memoryCommit = vi.fn(async (request: MemoryCommitRequest) => ({
     id: "memory-1",
-    path: "MEMORY.md",
+    path: request.path,
     revision: 1,
-    content: "",
+    content: request.content,
   }));
   const memory = { read: memoryRead, commit: memoryCommit } as unknown as MemoryStore;
   const deps = {
@@ -581,7 +590,7 @@ describe("compactHistory", () => {
 
     await compactHistory(harness.deps, "thread-1");
 
-    expect(harness.runtime.run).toHaveBeenCalledOnce();
+    expect(harness.runtime.run).toHaveBeenCalledTimes(2);
     const [request] = harness.runtime.run.mock.calls[0]!;
     expect(request.instructions).not.toContain("Current date and time");
     expect(request.prompt).toContain("Current date and time");
@@ -762,7 +771,7 @@ describe("compactHistory", () => {
 
     await compactHistory(harness.deps, "thread-1");
 
-    expect(harness.runtime.run).toHaveBeenCalledOnce();
+    expect(harness.runtime.run).toHaveBeenCalledTimes(2);
     expect(harness.saveMemory).not.toHaveBeenCalled();
     expect(harness.thread.historyCompactionSummary).toBe("Summary of 50 messages.");
     expect(harness.thread.historyCompactedUpToSeq).toBe(49);
@@ -887,18 +896,23 @@ describe("compactHistory", () => {
       })),
       nextMessageSeq: 100,
     });
-    harness.runtime.run
-      .mockImplementationOnce(async function* () {
-        yield { type: "done", text: "Summary through 49." };
-      })
-      .mockImplementationOnce(async function* () {
-        yield { type: "done", text: "Summary through 99." };
-      });
+    harness.runtime.run.mockImplementation(async function* (request) {
+      if (request.runId.startsWith("learn:")) {
+        yield { type: "done", text: "NONE" };
+        return;
+      }
+      yield {
+        type: "done",
+        text: request.runId.endsWith(":-1") ? "Summary through 49." : "Summary through 99.",
+      };
+    });
 
     await compactHistory(harness.deps, "thread-1");
     await compactHistory(harness.deps, "thread-1");
 
-    const [secondRequest] = harness.runtime.run.mock.calls[1]!;
+    const [secondRequest] = harness.runtime.run.mock.calls.filter(([request]) =>
+      request.runId.startsWith("compact:"),
+    )[1]!;
     expect(secondRequest.prompt).toContain(
       "<previous-summary>\nSummary through 49.\n</previous-summary>",
     );
@@ -919,7 +933,7 @@ describe("compactHistory", () => {
 
     await compactHistory(harness.deps, "thread-1");
 
-    expect(harness.runtime.run).toHaveBeenCalledTimes(1);
+    expect(harness.runtime.run).toHaveBeenCalledTimes(2);
     expect(harness.thread.historyCompactedUpToSeq).toBe(2);
   });
 
@@ -938,7 +952,7 @@ describe("compactHistory", () => {
 
     await compactHistory(harness.deps, "thread-1");
 
-    expect(harness.runtime.run).toHaveBeenCalledTimes(1);
+    expect(harness.runtime.run).toHaveBeenCalledTimes(2);
     expect(harness.thread.historyCompactedUpToSeq).toBe(149);
   });
 
@@ -1273,7 +1287,7 @@ describe("compactHistory", () => {
 
     await compactHistory(harness.deps, "thread-1");
 
-    expect(harness.runtime.run).toHaveBeenCalledOnce();
+    expect(harness.runtime.run).toHaveBeenCalledTimes(2);
     const [request] = harness.runtime.run.mock.calls[0]!;
     expect(request.prompt).toContain("[summary truncated]");
     expect(harness.thread.historyCompactedUpToSeq).toBe(99);
@@ -1373,5 +1387,150 @@ describe("compactHistory", () => {
     await compactHistory(harness.deps, "thread-1");
 
     expect(harness.jobs.enqueue).not.toHaveBeenCalled();
+  });
+  it("appends the batch's new durable facts to the bot's memory under a dated heading", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      memoryDocuments: [{ path: "MEMORY.md", content: "- Ships on Fridays", revision: 3 }],
+      learnedText: "- Call the user Rom\n- The repo is rakazo-bot",
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    // The extraction runs after the cursor advanced: the batch is archived either way.
+    expect(harness.thread.historyCompactedUpToSeq).toBe(49);
+    const [request] = harness.runtime.run.mock.calls[1]!;
+    expect(request.runId).toBe("learn:thread-1:-1");
+    expect(request.tools).toEqual([]);
+    expect(request.prompt).toContain("message 0");
+    expect(request.prompt).toContain("- Ships on Fridays");
+    expect(harness.memoryCommit).toHaveBeenCalledWith(
+      {
+        scope: "bot",
+        botId: "bot-1",
+        path: "MEMORY.md",
+        content: expect.stringMatching(
+          /^## Learned \d{4}-\d{2}-\d{2}\n- Call the user Rom\n- The repo is rakazo-bot$/,
+        ),
+        mode: "append",
+        sourceThreadId: "thread-1",
+      },
+      expect.objectContaining({ spaceId: "workspace-1", userId: "user-1", botId: "bot-1" }),
+    );
+  });
+
+  it("writes no revision when the batch taught nothing new", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      learnedText: "NONE",
+    });
+    const sink = createTestSink();
+    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.memoryCommit).not.toHaveBeenCalled();
+    // The count is logged even at zero, so the cost of the extraction stays accountable.
+    expect(sink.events.find((event) => event.message === "history.compact.learned")).toMatchObject({
+      threadId: "thread-1",
+      botId: "bot-1",
+      facts: 0,
+    });
+    installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
+  });
+
+  it("keeps ten facts at most and redacts secrets before they reach memory", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      learnedText: [
+        "- The deploy token is sk-live-abcdefgh12345678",
+        ...Array.from({ length: 12 }, (_, index) => `- Fact ${index}`),
+      ].join("\n"),
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    const [commit] = harness.memoryCommit.mock.calls[0]!;
+    const bullets = commit.content.split("\n").slice(1);
+    expect(bullets).toHaveLength(10);
+    expect(commit.content).not.toContain("sk-live-abcdefgh12345678");
+    expect(bullets[0]).toBe("- The deploy token is [Redacted]");
+    expect(bullets[9]).toBe("- Fact 8");
+  });
+
+  it("learns nothing from a batch that carries messaging channel posts", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      learnedText: "- Call the user Rom",
+      messages: [
+        { seq: 0, role: "user", blocks: [{ kind: "text", text: "message 0" }] },
+        {
+          seq: 1,
+          role: "user",
+          blocks: [
+            {
+              kind: "channel_message",
+              provider: "imessage",
+              channelId: "channel-1",
+              fromAddress: "+10000000000",
+              fromLabel: "Ada",
+              text: "our api key is in the vault",
+            },
+          ],
+        },
+      ],
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.runtime.run).toHaveBeenCalledOnce();
+    expect(harness.memoryCommit).not.toHaveBeenCalled();
+    expect(harness.thread.historyCompactedUpToSeq).toBe(1);
+  });
+
+  it("keeps the compaction valid when the extraction run fails", async () => {
+    const harness = compactionHarness({ deploymentModelKey: "openrouter-key" });
+    const summarize = harness.runtime.run.getMockImplementation()!;
+    harness.runtime.run.mockImplementation((request, context) => {
+      if (request.runId.startsWith("learn:")) throw new Error("extractor unavailable");
+      return summarize(request, context);
+    });
+
+    await expect(compactHistory(harness.deps, "thread-1")).resolves.toBeUndefined();
+
+    expect(harness.memoryCommit).not.toHaveBeenCalled();
+    expect(harness.thread.historyCompactedUpToSeq).toBe(49);
+    expect(harness.thread.historyCompactionSummary).toBe("Summary of 50 messages.");
+  });
+
+  it("records the extraction's spend the same way as the summarizer's", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      learnedText: "- Call the user Rom",
+      runtimeEvents: [
+        {
+          type: "usage",
+          provider: "openrouter",
+          model: "openai/gpt-5.6-luna",
+          inputTokens: 900,
+          outputTokens: 40,
+        },
+      ],
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.prisma.usageRecord.create).toHaveBeenCalledTimes(2);
+    expect(harness.prisma.usageRecord.create).toHaveBeenLastCalledWith({
+      data: {
+        spaceId: "workspace-1",
+        botId: "bot-1",
+        userId: "user-1",
+        provider: "openrouter",
+        model: "openai/gpt-5.6-luna",
+        inputTokens: 900,
+        outputTokens: 40,
+      },
+    });
   });
 });

@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
+- **A bot now remembers what you told it in passing, without being asked to.** Whenever a long conversation is condensed, the bot goes back over the stretch it just archived and writes the durable things it learned — how you want to be addressed, what you decided, the names of the repositories, channels and projects you work in, the corrections you made to it — into its Knowledge document under a dated "Learned" heading, where you can read, edit or delete them. Nothing is kept from a group chat or a messaging channel, secrets are stripped before anything is written, and a batch that taught it nothing leaves no trace.
 - **Agent runs can now be exported to an observability service, so you can see what a bot actually did.** An operator who sets a key pair for a Langfuse or other OpenTelemetry endpoint gets every run as a tree — the run, each turn, each tool call and its result, with prompts, responses, token counts and cost — while a deployment that sets nothing behaves exactly as before. Traces carry full conversation content and the user, session and bot identifiers, and there is no per-user opt-out: configuring an endpoint exports every run of every user on the deployment. See [docs/self-host.md](docs/self-host.md).
 
 #### Changed
