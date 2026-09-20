@@ -534,7 +534,7 @@ describe("compactHistory", () => {
     );
   });
 
-  it("serializes attachment metadata into the transcript", async () => {
+  it("serializes attachment metadata and tool traces into the transcript", async () => {
     const messages: HarnessMessage[] = Array.from({ length: 50 }, (_, i) => ({
       seq: i,
       role: "user",
@@ -553,6 +553,16 @@ describe("compactHistory", () => {
       mimeType: "image/png",
       name: "diagram.png",
     });
+    messages[2]!.blocks.push({
+      kind: "steps",
+      steps: [
+        {
+          label: "Read file",
+          count: 1,
+          calls: [{ name: "read_file", input: '{ "path": "plan.md" }', output: "Ship on Friday" }],
+        },
+      ],
+    });
     const harness = compactionHarness({ deploymentModelKey: "openrouter-key", messages });
 
     await compactHistory(harness.deps, "thread-1");
@@ -560,6 +570,7 @@ describe("compactHistory", () => {
     const [request] = harness.runtime.run.mock.calls[0]!;
     expect(request.prompt).toContain("[file: plan.pdf (application/pdf, 123 bytes)]");
     expect(request.prompt).toContain("[image: diagram.png]");
+    expect(request.prompt).toContain('[tool read_file({ "path": "plan.md" }) → Ship on Friday]');
   });
 
   it("compacts locally without a semantic memory provider", async () => {
