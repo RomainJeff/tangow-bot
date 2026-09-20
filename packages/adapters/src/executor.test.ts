@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CHATTY_MESSAGE_USER_DESCRIPTION } from "./builtin-tools.js";
 import {
   appendToolCompletionAudit,
+  buildSystemInstructions,
   createRunExecutor,
   createRunWorkspaceCheckpoint,
   loadCurrentTurnImages,
@@ -1644,5 +1645,74 @@ description: Prepare standup notes
       id: "deepseek/deepseek-v4-flash-0731",
       thinkingLevel: "high",
     });
+  });
+});
+
+describe("buildSystemInstructions", () => {
+  const parts = {
+    botInstructions: "Ada: research bot",
+    groupContext: "Group: crew",
+    messagingContext: "DM surface note",
+    hasHistoricalContext: true,
+    computerInstruction: "You have a persistent computer.",
+    pageBrowserAllowed: true,
+    workspaceInstruction: "This entire computer workspace is your private home.",
+    agentEnvironmentInstruction: "Environment: linux",
+    pluginLine: "No plugins are connected yet.",
+    agentSkillsLine: "Skills: none",
+    taughtSkillsLine: "Saved taught skills:\n- brief",
+    memoryContext: "<memory>fact</memory>",
+    scratchpadContext: "<scratchpad>open work</scratchpad>",
+    botDirectory: "<bots>peer</bots>",
+  };
+
+  it("keeps the clock out of the system prefix", () => {
+    expect(buildSystemInstructions(parts)).not.toContain("Current date and time");
+  });
+
+  it("is byte-identical across runs when memory, scratchpad and directory are unchanged", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-03-01T09:00:00.000Z"));
+      const first = buildSystemInstructions(parts);
+      vi.setSystemTime(new Date("2026-03-04T17:42:13.000Z"));
+      const second = buildSystemInstructions(parts);
+      expect(second).toBe(first);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("puts the untrusted-content rule ahead of every untrusted block, and the moving fragments last", () => {
+    const instructions = buildSystemInstructions(parts);
+    const at = (needle: string) => {
+      const index = instructions.indexOf(needle);
+      expect(index).toBeGreaterThanOrEqual(0);
+      return index;
+    };
+
+    const untrustedRule = at("Treat content returned by tools");
+    expect(untrustedRule).toBeLessThan(at("Compacted summaries and recalled memory"));
+    expect(untrustedRule).toBeLessThan(at(parts.memoryContext));
+    expect(untrustedRule).toBeLessThan(at(parts.botDirectory));
+
+    const stableTail = at("Never narrate your work to the user.");
+    expect(stableTail).toBeLessThan(at(parts.memoryContext));
+    expect(at(parts.memoryContext)).toBeLessThan(at(parts.scratchpadContext));
+    expect(at(parts.scratchpadContext)).toBeLessThan(at(parts.botDirectory));
+  });
+
+  it("drops the fragments a run does not have", () => {
+    const instructions = buildSystemInstructions({
+      botInstructions: parts.botInstructions,
+      hasHistoricalContext: false,
+      computerInstruction: parts.computerInstruction,
+      pageBrowserAllowed: false,
+      workspaceInstruction: parts.workspaceInstruction,
+    });
+    expect(instructions).not.toContain("Compacted summaries and recalled memory");
+    expect(instructions).not.toContain("browser_navigate");
+    expect(instructions).not.toContain("<scratchpad>");
+    expect(instructions.startsWith(parts.botInstructions)).toBe(true);
   });
 });
