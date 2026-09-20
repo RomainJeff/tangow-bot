@@ -14,7 +14,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `57620365`
 
 - [ ] Deux appels `remember` successifs sur le même bot produisent un document qui contient les deux faits, dans l'ordre d'appel
 - [ ] Chaque appel produit exactement une révision ; un document vide ou absent est créé au premier appel
