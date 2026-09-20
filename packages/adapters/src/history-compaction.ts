@@ -423,11 +423,18 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
       take: range.take,
       select: { seq: true, role: true, blocks: true, botId: true },
     });
-    if (batch.some((message, index) => message.seq !== fromSeqExclusive + index + 1)) {
-      getLogger().error(
-        `history.compact skipped for thread ${threadId}: message coverage has a gap`,
+    // A rewind deletes messages without rewinding nextMessageSeq, so seq holes are normal and
+    // permanent. A hole here is a gap that is real, not one this query failed to load: the
+    // select has no role or channel filter and `take` applies after the sort, so a seq missing
+    // from the run provably does not exist. Summarising across it claims coverage of nothing,
+    // which is exactly right. That proof dies the moment a `where` clause narrows the query
+    // above, so the contiguity guard lives on the read side, which genuinely cannot tell a
+    // deleted message from an unloaded one.
+    const missingSeqs = (batch.at(-1)?.seq ?? fromSeqExclusive) - fromSeqExclusive - batch.length;
+    if (missingSeqs > 0) {
+      getLogger().warn(
+        `history.compact spans deleted messages for thread ${threadId}: ${missingSeqs} missing`,
       );
-      return;
     }
   }
   if (batch.length === 0) return;

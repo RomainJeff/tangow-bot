@@ -889,7 +889,7 @@ describe("compactHistory", () => {
     expect(harness.thread.historyCompactedUpToSeq).toBe(99);
   });
 
-  it("does not advance across a message coverage gap", async () => {
+  it("summarises across messages a rewind deleted", async () => {
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
       messages: [
@@ -900,9 +900,27 @@ describe("compactHistory", () => {
 
     await compactHistory(harness.deps, "thread-1");
 
-    expect(harness.runtime.run).not.toHaveBeenCalled();
-    expect(harness.saveMemory).not.toHaveBeenCalled();
-    expect(harness.prisma.thread.updateMany).not.toHaveBeenCalled();
+    expect(harness.runtime.run).toHaveBeenCalledTimes(1);
+    expect(harness.thread.historyCompactedUpToSeq).toBe(2);
+  });
+
+  it("summarises a batch that starts past a hole left by a rewind", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      historyCompactedUpToSeq: 145,
+      historyCompactionSummary: "Summary through 145.",
+      messages: [147, 148, 149].map((seq) => ({
+        seq,
+        role: "user",
+        blocks: [{ kind: "text", text: `message ${seq}` }] as MessageBlock[],
+      })),
+      nextMessageSeq: 150,
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.runtime.run).toHaveBeenCalledTimes(1);
+    expect(harness.thread.historyCompactedUpToSeq).toBe(149);
   });
 
   it("does not resurrect a summary when clear wins while summarization is running", async () => {
