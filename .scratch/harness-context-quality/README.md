@@ -16,8 +16,10 @@ Les tickets livrés sont archivés dans `issues/done/`, avec le sha du merge dan
 | 16 | Rendre les compteurs de tokens lisibles dans les logs | — | needs-decision |
 | 17 | Mesurer la latence par tour et le coût de la compaction | — | ready-for-agent |
 | 18 | Exportateur de traces optionnel (Langfuse) | 17 | needs-decision |
+| 20 | Faire de `remember` un ajout, pas un remplacement | — | ready-for-agent |
+| 21 | Apprendre les faits durables au moment de la compaction | 20 | ready-for-agent |
 
-08, 09 et 12 sont des décisions produit ou des arbitrages qui demandent des chiffres, pas du code à écrire. 16 a son correctif déjà rédigé dans le ticket, volontairement non appliqué. 14 et 15 sortent de l'inspection du déploiement et sont indépendants du reste. 17 et 18 sortent du cadrage `langfuse-observabilite.md` : 17 est le trou de mesure réel et se répare sans dépendance ni tiers ; 18 est l'exportateur lui-même, et le critère pour l'ouvrir est qu'un besoin subsiste une fois 17 livré.
+08, 09 et 12 sont des décisions produit ou des arbitrages qui demandent des chiffres, pas du code à écrire. 16 a son correctif déjà rédigé dans le ticket, volontairement non appliqué. 14 et 15 sortent de l'inspection du déploiement et sont indépendants du reste. 17 et 18 sortent du cadrage `langfuse-observabilite.md` : 17 est le trou de mesure réel et se répare sans dépendance ni tiers ; 18 est l'exportateur lui-même, et le critère pour l'ouvrir est qu'un besoin subsiste une fois 17 livré. 20 et 21 sortent du plan `docs/plans/2026-09-19-harness-quality.md` (mémoire) : 20 corrige le contrat de l'outil `remember`, 21 fait apprendre le bot à la compaction et dépend de 20. Les deux autres items de ce plan étaient déjà couverts : préfixe cacheable par 02, rôles réels par 13.
 
 ## Livrés (`issues/done/`)
 
