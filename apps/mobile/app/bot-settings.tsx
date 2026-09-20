@@ -1,5 +1,4 @@
 import {
-  AVATAR_SHAPE_COUNT,
   BOT_COLORS,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_INSTRUCTIONS_MAX_LENGTH,
@@ -10,6 +9,7 @@ import {
   SELECTABLE_BOT_COLORS,
   type ThinkingLevel,
 } from "@rakazo/contracts";
+import { SHAPES } from "@rakazo/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -412,39 +412,37 @@ export default function BotSettingsScreen() {
               Shape
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-              {[null, ...Array.from({ length: AVATAR_SHAPE_COUNT }, (_, index) => index)].map(
-                (seed) => (
-                  <Pressable
-                    key={seed ?? "auto"}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: shapeSeed === seed }}
-                    accessibilityLabel={seed === null ? "Automatic shape" : `Shape ${seed + 1}`}
-                    onPress={() => setShapeSeed(seed)}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: shapeSeed === seed ? "#5A5A62" : tokens.border,
-                      backgroundColor: shapeSeed === seed ? "#1A1A1D" : "transparent",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {seed === null ? (
-                      <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>Auto</Text>
-                    ) : (
-                      <BotAvatar
-                        color={color}
-                        identity={bot.id}
-                        shapeSeed={seed}
-                        size={28}
-                        variant="organic"
-                      />
-                    )}
-                  </Pressable>
-                ),
-              )}
+              {[null, ...Array.from({ length: SHAPES.length }, (_, index) => index)].map((seed) => (
+                <Pressable
+                  key={seed ?? "auto"}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: shapeSeed === seed }}
+                  accessibilityLabel={seed === null ? "Automatic shape" : `Shape ${seed + 1}`}
+                  onPress={() => setShapeSeed(seed)}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: shapeSeed === seed ? "#5A5A62" : tokens.border,
+                    backgroundColor: shapeSeed === seed ? "#1A1A1D" : "transparent",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {seed === null ? (
+                    <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>Auto</Text>
+                  ) : (
+                    <BotAvatar
+                      color={color}
+                      identity={bot.id}
+                      shapeSeed={seed}
+                      size={28}
+                      variant="organic"
+                    />
+                  )}
+                </Pressable>
+              ))}
             </View>
           </>
         ) : null}
