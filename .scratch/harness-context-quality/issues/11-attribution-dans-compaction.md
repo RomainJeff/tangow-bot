@@ -18,11 +18,11 @@ Le rendu des blocs accepte déjà une table id→nom optionnelle depuis le ticke
 
 **Status:** ready-for-agent
 
-- [ ] Dans un thread de groupe compacté, le transcript soumis au résumé attribue chaque message de membre à son auteur par son nom
-- [ ] Les `handoff` du transcript se lisent avec des noms, pas des identifiants
-- [ ] Hors groupe, le transcript est inchangé
-- [ ] Un auteur absent du roster (membre archivé ou retiré) dégrade proprement, sans nom inventé ni exception
-- [ ] Le roster est chargé au plus une fois par compaction, et pas du tout hors groupe
-- [ ] Le budget de caractères du transcript reste respecté, en tenant compte du texte d'attribution ajouté
-- [ ] La fonction de correspondance de citation et le rendu des steering messages gardent leur comportement actuel
-- [ ] Test offline : un thread de groupe où les membres B et C ont chacun agi produit un transcript qui distingue les deux
+- [x] Dans un thread de groupe compacté, le transcript soumis au résumé attribue chaque message de membre à son auteur par son nom
+- [x] Les `handoff` du transcript se lisent avec des noms, pas des identifiants
+- [x] Hors groupe, le transcript est inchangé
+- [x] Un auteur absent du roster (membre archivé ou retiré) dégrade proprement, sans nom inventé ni exception
+- [x] Le roster est chargé au plus une fois par compaction, et pas du tout hors groupe
+- [x] Le budget de caractères du transcript reste respecté, en tenant compte du texte d'attribution ajouté
+- [x] La fonction de correspondance de citation et le rendu des steering messages gardent leur comportement actuel
+- [x] Test offline : un thread de groupe où les membres B et C ont chacun agi produit un transcript qui distingue les deux
