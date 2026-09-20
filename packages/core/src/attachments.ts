@@ -86,12 +86,55 @@ export function promptTextForAttachments(
   return [caption, ...notes].filter(Boolean).join("\n\n") || "See attached files.";
 }
 
+/** Hard caps: a tool trace reminds the next turn what it already did, it never
+    replaces the tool output, so it must not be able to crowd out the history. */
+const TOOL_TRACE_INPUT_MAX_CHARS = 160;
+const TOOL_TRACE_OUTPUT_MAX_CHARS = 320;
+const TOOL_TRACE_BLOCK_MAX_CHARS = 2000;
+
+function abbreviateToolPayload(text: string, max: number): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine;
+}
+
+/** Secrets are already redacted when the steps block is persisted, and the payloads were
+    truncated at write time, so this only abbreviates further — it never widens. */
+function toolStepsToHistoryText(steps: Extract<MessageBlock, { kind: "steps" }>["steps"]): string {
+  const lines: string[] = [];
+  let budget = TOOL_TRACE_BLOCK_MAX_CHARS;
+  let dropped = 0;
+  for (const step of steps) {
+    // Older blocks carry only a label and a count: degrade to the aggregate line.
+    const stepLines = step.calls?.length
+      ? step.calls.map((call) => {
+          const input = abbreviateToolPayload(call.input, TOOL_TRACE_INPUT_MAX_CHARS);
+          const output = abbreviateToolPayload(call.output, TOOL_TRACE_OUTPUT_MAX_CHARS);
+          return output
+            ? `[tool ${call.name}(${input}) → ${output}]`
+            : `[tool ${call.name}(${input})]`;
+        })
+      : [`[tools: ${step.label} ×${step.count}]`];
+    for (const line of stepLines) {
+      if (line.length > budget) {
+        dropped += 1;
+        continue;
+      }
+      budget -= line.length;
+      lines.push(line);
+    }
+  }
+  if (dropped > 0) lines.push(`[… ${dropped} more tool call${dropped === 1 ? "" : "s"} omitted]`);
+  return lines.join("\n");
+}
+
 export function blocksToAgentHistoryText(blocks: MessageBlock[]): string {
   return blocks
     .map((block) => {
       if (block.kind === "text") return block.text;
       // Legacy reasoning blocks are not part of the answer and stay out of history.
       if (block.kind === "reasoning") return "";
+      // Without this the next turn cannot tell which tools it already ran, and repeats them.
+      if (block.kind === "steps") return toolStepsToHistoryText(block.steps);
       if (block.kind === "chart") return `[chart: ${block.name}]`;
       if (block.kind === "image") return `[image: ${block.name}]`;
       if (block.kind === "file") {
