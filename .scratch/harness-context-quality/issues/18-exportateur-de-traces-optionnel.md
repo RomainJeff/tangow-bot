@@ -12,27 +12,41 @@ Le plugin est **une seule fonction qui reçoit un objet hôte**. De cet hôte il
 
 Deux réserves à vérifier avant de parier dessus. D'abord, sur les treize événements qu'il écoute, seuls ceux du cœur agent existent ici (fin de message, début et fin d'exécution d'outil) ; les événements de cycle de vie de session et de pré-requête appartiennent au CLI et devraient être **synthétisés** par l'adaptateur — c'est là que se cache le vrai travail, et c'est aussi là que se cache le risque de divergence à chaque version du plugin. Ensuite, il tire `@langfuse/otel` et le SDK OpenTelemetry dans les dépendances directes, ce que ce dépôt n'a pas aujourd'hui, et son peer sur le CLI n'est pas versionné. Elle reste précieuse à deux titres : c'est la cartographie de référence pi → Langfuse (traces, generations, appels d'outils, images, sous-agents), elle est sous licence MIT, et elle écoute **exactement les mêmes événements** que le runtime de ce dépôt (`message_update`, `message_end`, `tool_execution_start`, `tool_execution_end`, compaction). La logique de traduction est donc lisible et portable ; ce qui ne l'est pas, c'est son point d'accroche. Sa configuration est aussi un précédent utile : deux clés requises, hôte par défaut, étiquettes optionnelles d'environnement et d'utilisateur.
 
-Restent les décisions, inchangées par ces deux constats :
+## Décisions du mainteneur — prises
 
-1. **Que sort-il vers le tiers ?** Métriques seules ; métadonnées plus contenu expurgé ; ou contenu complet. La redaction existante protège des secrets techniques à motif connu, pas de la vie privée : la mémoire injectée et les sorties d'outils (un fichier lu, une page web) partiraient telles quelles. Le code existant penche deux fois vers les métriques seules, et le schéma pi va dans le même sens en recommandant de tenir prompts, complétions et sorties d'outils hors des attributs. Noter que l'extension Langfuse, elle, trace les prompts et les sorties par défaut : reprendre sa cartographie sans reprendre sa politique est un choix à faire consciemment. Le mode contenu n'est pas une nouvelle capacité — le transcript JSONL local trace déjà le contenu — c'est un **nouveau destinataire**, donc une question de gouvernance, et il implique de mettre le tiers dans le parcours de consentement documenté.
-2. **Le `userId` sort-il ?** Opaque, haché, ou omis. Aucune des trois n'est neutre : sans lui, plus de filtre « qu'est-il arrivé à cet utilisateur » ; avec lui, une donnée personnelle chez un tiers.
-3. **Faut-il ce ticket du tout ?** Après le ticket 17, ce que Langfuse apporte en exclusivité se réduit à une interface de navigation arborescente et, en mode contenu, à la relecture cross-run. Aucun des deux n'est un besoin exprimé par les tickets 01–17. **Ne pas ouvrir ce ticket tant qu'un besoin concret n'est pas apparu que les logs, `Event` et `UsageRecord` ne couvrent pas.**
+Les trois arbitrages ci-dessous sont tranchés. Ils ne sont plus ouverts ; ce qui suit dans ce ticket les décrit, il ne les rediscute pas.
 
-Si la décision est « oui », la forme est déjà déterminée par le dépôt : l'exportateur Axiom optionnel est le patron à copier trait pour trait — lecture d'environnement, config partielle qui logue un warning unique et reste éteinte, no-op total si rien n'est posé, installation au point de composition, test offline avec client injecté. Les garde-fous de sink existent déjà, donc « ne jamais faire échouer un run » est acquis. La clé de corrélation est le `runId`, déjà porté comme identifiant de trace et déjà en base.
+1. **Contenu complet.** Prompts, réponses, arguments et sorties d'outils partent vers le tiers, comme le fait l'extension publiée par défaut. C'est le mode qui donne la relecture cross-run complète.
+2. **`userId` brut.** L'identifiant sort tel quel, non haché, pour rester exploitable dans l'interface du tiers.
+3. **Adaptateur maison.** L'export s'écrit sur le contrat de télémétrie déjà présent dans le graphe de dépendances, en OTLP, sans dépendre du CLI pi ni de l'extension publiée. Celle-ci reste la référence de cartographie à lire, pas une dépendance.
+
+### Ce que la décision 1 entraîne mécaniquement
+
+Ce dépôt a déjà un mécanisme de consentement par destinataire : une table de consentements clée par `recipientKey`, un helper qui dérive une clé stable et un nom affichable à partir du couple usage/fournisseur, un statut exposé par l'API, et un vocabulaire d'usages fermé (`model`, `memory`, `voice`). Tout destinataire de données personnelles y passe.
+
+Un exportateur qui envoie du contenu de conversation **est** un destinataire de ce type. Il ne peut donc pas se contenter de lire deux clés d'environnement et d'émettre : il doit entrer dans ce mécanisme comme les autres — un nouvel usage dans le vocabulaire, un destinataire dérivé de l'endpoint, un statut visible par l'utilisateur, et une **porte à l'émission** qui n'exporte le contenu que pour les utilisateurs ayant consenti à ce destinataire.
+
+Conséquences de portée, à prendre en compte dans l'estimation : cela touche le schéma de données, les contrats, l'API de statut, la surface où l'utilisateur accorde son consentement, et le chemin d'export lui-même. Ajouter un destinataire n'invalide pas les consentements existants — ils sont versionnés, et une clé nouvelle est simplement non accordée par défaut — donc aucune migration de consentement n'est nécessaire.
+
+Ce que la porte implique aussi : pour un utilisateur qui n'a pas consenti, l'export **ne tombe pas silencieusement en mode métriques**. Le comportement attendu — ne rien exporter du tout pour cet utilisateur, ou exporter la trace sans contenu — est à décider à l'implémentation et à écrire dans le ticket, pas à improviser.
+
+La décision 2 vit sous la même porte : l'identifiant brut est une donnée personnelle, il sort avec le reste ou pas du tout.
+
+La forme est déjà déterminée par le dépôt : l'exportateur Axiom optionnel est le patron à copier trait pour trait — lecture d'environnement, config partielle qui logue un warning unique et reste éteinte, no-op total si rien n'est posé, installation au point de composition, test offline avec client injecté. Les garde-fous de sink existent déjà, donc « ne jamais faire échouer un run » est acquis. La clé de corrélation est le `runId`, déjà porté comme identifiant de trace et déjà en base.
 
 Un arbitrage technique reste ouvert : le SDK Langfuse v5 est bâti sur OpenTelemetry et ferait entrer cette pile dans le graphe direct, alors que ce dépôt ne l'utilise pas en propre. Une porte de sortie existe, l'adaptateur du ticket 17 étant neutre : exporter en OTLP sans SDK propriétaire. Contrat et format de l'endpoint OTLP de Langfuse à confirmer avant d'en faire une option.
 
 Deux réserves à ne pas perdre si le code s'écrit : les messages d'historique rejoués sont de l'**entrée de trace, jamais des generations** — ils portent le modèle du run courant et un usage à zéro, donc exportés naïvement ils s'affichent comme des appels gratuits sous un modèle qui ne les a pas produits. Et aucune signature d'API ni aucun nom de variable n'est figé ici ; ils sont à lire dans la doc de la version retenue.
 
-**Blocked by:** 17 (qui câble le contrat de télémétrie ; le critère d'ouverture est qu'un besoin subsiste après lui)
+**Blocked by:** 17
 
-**Status:** needs-decision — trois décisions du mainteneur avant tout code
+**Status:** ready-for-agent — les trois décisions sont prises et écrites plus haut
 
-- [ ] Le mainteneur a tranché la politique de données par défaut et l'a écrite dans le cadrage
-- [ ] Le mainteneur a tranché le sort du `userId`
-- [ ] Le mainteneur a confirmé, après le ticket 17, qu'un besoin concret subsiste — sinon ce ticket est clos avec ce constat, sans code
-- [ ] Si le code s'écrit : la voie « objet de compatibilité autour du plugin publié » a été comparée à « adaptateur maison sur le contrat de télémétrie », et le choix est écrit avec sa raison
-- [ ] Si le code s'écrit : rien posé en environnement = aucun import du SDK exécuté, aucun appel réseau, aucun changement de comportement
-- [ ] Si le code s'écrit : config partielle = un warning unique au démarrage, exportateur éteint
-- [ ] Si le code s'écrit : une panne du tiers ne fait jamais échouer un run ni retenir l'arrêt du process
-- [ ] Si le code s'écrit : variables documentées dans la doc self-host et entrée CHANGELOG, le comportement étant observable par l'opérateur
+- [ ] la voie « objet de compatibilité autour du plugin publié » a été comparée à « adaptateur maison sur le contrat de télémétrie », et le choix est écrit avec sa raison
+- [ ] rien posé en environnement = aucun import du SDK exécuté, aucun appel réseau, aucun changement de comportement
+- [ ] config partielle = un warning unique au démarrage, exportateur éteint
+- [ ] une panne du tiers ne fait jamais échouer un run ni retenir l'arrêt du process
+- [ ] variables documentées dans la doc self-host et entrée CHANGELOG, le comportement étant observable par l'opérateur
+- [ ] L'exportateur est déclaré comme destinataire dans le mécanisme de consentement existant, avec un usage nommé et un nom affichable dérivé de l'endpoint
+- [ ] Aucun contenu ni identifiant d'un utilisateur qui n'a pas consenti à ce destinataire ne quitte le processus, et le comportement retenu pour ce cas est écrit
+- [ ] Le contenu exporté passe par le redacteur de secrets existant avant de partir
