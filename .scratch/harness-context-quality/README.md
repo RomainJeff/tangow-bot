@@ -16,9 +16,8 @@ Les tickets livrés sont archivés dans `issues/done/`, avec le sha du merge dan
 | 16 | Rendre les compteurs de tokens lisibles dans les logs | — | needs-decision |
 | 17 | Mesurer la latence par tour et le coût de la compaction | — | ready-for-agent |
 | 18 | Exportateur de traces optionnel (Langfuse) | 17 | needs-decision |
-| 21 | Apprendre les faits durables au moment de la compaction | — (20 mergé) | ready-for-agent |
 
-08, 09 et 12 sont des décisions produit ou des arbitrages qui demandent des chiffres, pas du code à écrire. 16 a son correctif déjà rédigé dans le ticket, volontairement non appliqué. 14 et 15 sortent de l'inspection du déploiement et sont indépendants du reste. 17 et 18 sortent du cadrage `langfuse-observabilite.md` : 17 est le trou de mesure réel et se répare sans dépendance ni tiers ; 18 est l'exportateur lui-même, et le critère pour l'ouvrir est qu'un besoin subsiste une fois 17 livré. 20 et 21 sortent du plan `docs/plans/2026-09-19-harness-quality.md` (mémoire) : 20 corrige le contrat de l'outil `remember`, 21 fait apprendre le bot à la compaction et dépend de 20. Les deux autres items de ce plan étaient déjà couverts : préfixe cacheable par 02, rôles réels par 13.
+08, 09 et 12 sont des décisions produit ou des arbitrages qui demandent des chiffres, pas du code à écrire. 16 a son correctif déjà rédigé dans le ticket, volontairement non appliqué. 14 et 15 sortent de l'inspection du déploiement et sont indépendants du reste. 17 et 18 sortent du cadrage `langfuse-observabilite.md` : 17 est le trou de mesure réel et se répare sans dépendance ni tiers ; 18 est l'exportateur lui-même, et le critère pour l'ouvrir est qu'un besoin subsiste une fois 17 livré. Les quatre items mémoire/contexte du plan `docs/plans/2026-09-19-harness-quality.md` sont couverts : préfixe cacheable par 02, rôles réels par 13, `remember` en ajout par 20, apprentissage à la compaction par 21. Le coût de la compaction (moitié de 17) est enregistré depuis 21 ; il reste à 17 la latence par tour.
 
 ## Livrés (`issues/done/`)
 
@@ -35,6 +34,7 @@ Les tickets livrés sont archivés dans `issues/done/`, avec le sha du merge dan
 | 11 | Garder l'attribution des membres dans le résumé de compaction | `ec33b9a6` |
 | 13 | Rendre les tours passés du bot en messages `assistant` natifs | `6d2a85d5` |
 | 20 | Faire de `remember` un ajout, pas un remplacement | `57620365` |
+| 21 | Apprendre les faits durables au moment de la compaction | `d645ddc2` |
 
 Hors ticket, sur la même branche : un correctif de compaction (`0757d097`). Un thread dont un message a été édité pouvait cesser de se compacter définitivement — le rembobinage laisse un trou permanent dans les seq, que la garde de contiguïté côté écriture prenait pour une corruption. Bug pré-existant, trouvé en inspectant un déploiement de la branche, d'où les tickets 14 et 15.
 

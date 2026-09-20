@@ -18,7 +18,7 @@
 
 **Blocked by:** 20 (l'ajout atomique au document de mémoire)
 
-**Status:** ready-for-agent
+**Status:** done — mergé en `d645ddc2`
 
 - [ ] Après compaction d'un thread direct, les préférences, décisions et corrections exprimées dans le lot apparaissent dans `MEMORY.md` du bot sous un en-tête daté, et sont visibles et éditables dans l'écran Knowledge
 - [ ] Un lot sans fait durable nouveau ne produit aucune révision
