@@ -14,8 +14,10 @@ Les tickets livrés sont archivés dans `issues/done/`, avec le sha du merge dan
 | 14 | Remplacer la garde de contiguïté read-side par un comptage | — | ready-for-agent |
 | 15 | Débloquer la reconstruction de couverture legacy sur un thread rembobiné | — | ready-for-agent |
 | 16 | Rendre les compteurs de tokens lisibles dans les logs | — | needs-decision |
+| 17 | Mesurer la latence par tour et le coût de la compaction | — | ready-for-agent |
+| 18 | Exportateur de traces optionnel (Langfuse) | 17 | needs-decision |
 
-08, 09 et 12 sont des décisions produit ou des arbitrages qui demandent des chiffres, pas du code à écrire. 16 a son correctif déjà rédigé dans le ticket, volontairement non appliqué. 14 et 15 sortent de l'inspection du déploiement et sont indépendants du reste.
+08, 09 et 12 sont des décisions produit ou des arbitrages qui demandent des chiffres, pas du code à écrire. 16 a son correctif déjà rédigé dans le ticket, volontairement non appliqué. 14 et 15 sortent de l'inspection du déploiement et sont indépendants du reste. 17 et 18 sortent du cadrage `langfuse-observabilite.md` : 17 est le trou de mesure réel et se répare sans dépendance ni tiers ; 18 est l'exportateur lui-même, et le critère pour l'ouvrir est qu'un besoin subsiste une fois 17 livré.
 
 ## Livrés (`issues/done/`)
 
