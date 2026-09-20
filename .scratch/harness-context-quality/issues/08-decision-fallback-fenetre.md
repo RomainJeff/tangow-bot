@@ -23,6 +23,10 @@ Le second chemin survit au ticket 03 : sur un thread à longs échanges, un mod�
 - `mode="count"` et `contextWindow > 0` → chemin dépassement de budget
 - pas de ligne `agent.run.context` avec un `historyWindowMode` → résumé local, fenêtre non appliquée
 
+**La branche `LEGACY_HISTORY_WINDOW_SIZE` ne coupe rien.** L'historique est chargé avec `take: LEGACY_HISTORY_WINDOW_SIZE` (`executor.ts:1252` → `packages/db/src/messages.ts:27`), soit deux cents messages au maximum. Le `slice(-200)` de la branche « legacy » porte donc sur une liste qui n'a jamais plus de deux cents entrées : c'est un no-op. La condition triple ne choisit pas entre deux tailles, elle choisit entre **couper à cinquante** et **ne pas couper**. Tout le cadrage de la décision en dépend, et le ticket d'origine ne le disait pas.
+
+**Le chemin dépassement de budget est rare par construction.** Le budget est planchonné : `Math.max(DEFAULT_COMPACTION_SETTINGS.keepRecentTokens, ...)` avec `keepRecentTokens = 20 000` (défauts pi, `history-compaction.ts:176-181`). Le site `:197` ne se déclenche donc que si le dernier échange à lui seul dépasse vingt mille tokens. À vérifier dans les chiffres avant d'en faire un argument.
+
 **Si simplifier : les constantes ne disparaissent pas.** Seule la fonction `historyWindowSize()` et sa condition triple partent. `LEGACY_HISTORY_WINDOW_SIZE` reste utilisée en `history-compaction.ts:389` (borne du `take` Prisma) et `HISTORY_WINDOW_SIZE` en `history-compaction.ts:646` (ordonnancement de la compaction). Le diff est l'appelant `executor.ts:3745` plus les tests de `historyWindowSize`.
 
 **Choisir la valeur unique est la vraie décision, pas la suppression.** Supprimer la condition impose de retenir 50 ou 200. Sur le chemin dépassement de budget, 200 messages dans une fenêtre déjà saturée est exactement ce que le ticket 04 cherchait à éviter ; 50 sur un thread non compacté sans mémoire sémantique perd de l'historique que rien ne rattrape.
@@ -34,6 +38,8 @@ Le second chemin survit au ticket 03 : sur un thread à longs échanges, un mod�
 - Part des runs en `mode="count"` sous 2 %, tous chemins confondus → simplifier, valeur unique `HISTORY_WINDOW_SIZE`
 - Chemin dépassement de budget au-dessus de 5 % des runs → ne pas toucher à la condition ; ouvrir un ticket sur le dimensionnement du budget, qui est le vrai problème
 - Entre les deux → garder en l'état et reconduire la mesure après un mois
+
+Un contrôle sépare les deux lectures : sur les runs en `mode="count"`, comparer `historyMessagesKept` à `historyMessagesAvailable`. Égaux → branche legacy, rien n'a été coupé. `kept = 50` → branche `HISTORY_WINDOW_SIZE`. C'est la seule façon de savoir laquelle des deux branches sert réellement, le mode logué ne les distingue pas.
 
 **Blocked by:** Rien. Le ticket 03 est mergé (`6c114898`), le ticket 01 aussi (`cb407626`).
 
