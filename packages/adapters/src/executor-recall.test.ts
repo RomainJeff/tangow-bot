@@ -1,7 +1,15 @@
 import type { AgentRunRequest, SemanticMemoryRecallRequest } from "@rakazo/adapter-kit";
+import type { LogEvent } from "@rakazo/logging";
+import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import type * as HistoryCompactionModule from "./history-compaction.js";
+import {
+  estimateHistoryTokens,
+  estimateTextTokens,
+  estimateToolSchemaTokens,
+} from "./history-compaction.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -9,7 +17,21 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
 }));
 
-function fixture() {
+// Real windowing, observed: the budget the executor hands it is what this file asserts on.
+const selectHistoryWindow = vi.fn();
+vi.mock("./history-compaction.js", async (importOriginal) => {
+  const original = await importOriginal<typeof HistoryCompactionModule>();
+  return {
+    ...original,
+    selectHistoryWindow: (options: Parameters<typeof original.selectHistoryWindow>[0]) => {
+      selectHistoryWindow(options);
+      return original.selectHistoryWindow(options);
+    },
+  };
+});
+
+function fixture(options: { taskPrompt?: string } = {}) {
+  const taskPrompt = options.taskPrompt ?? "What did Ava decide?";
   const run = {
     id: "run-1",
     botId: "bot-1",
@@ -58,7 +80,7 @@ function fixture() {
     },
     message: { findMany: vi.fn(async () => []) },
     task: {
-      findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "What did Ava decide?" })),
+      findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: taskPrompt })),
     },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -155,5 +177,47 @@ describe("automatic semantic recall", () => {
       entry.content.includes("<recalled_memory>"),
     );
     expect(recalledBlock?.content).toContain("Ava decided to ship behind a feature flag.");
+  });
+
+  it("charges the turn prompt and the recalled-memory block to the history budget", async () => {
+    // A long task prompt and a recalled memory are exactly the run this used to get wrong: both
+    // ride into the request outside the window `selectHistoryWindow` chooses from.
+    const f = fixture({
+      taskPrompt: `What did Ava decide?\n\n${"Quoted reply line.\n".repeat(400)}`,
+    });
+    const sink = createTestSink();
+    selectHistoryWindow.mockClear();
+    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    try {
+      await f.run();
+
+      const [request] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
+      // The thread has no messages, so everything handed over as history is historical context.
+      expect(request.history.map((entry) => entry.content)).toEqual([
+        expect.stringContaining("<recalled_memory>"),
+      ]);
+      const logged = sink.events.find((event: LogEvent) => event.message === "agent.run.context") as
+        | (LogEvent & { nonHistoryTokens?: number })
+        | undefined;
+
+      const instructionTokens = estimateTextTokens(request.instructions);
+      const toolSchemaTokens = estimateToolSchemaTokens(request.tools);
+      const promptTokens = estimateTextTokens(request.prompt);
+      const historicalContextTokens = estimateHistoryTokens(request.history);
+      expect(promptTokens).toBeGreaterThan(500);
+      expect(historicalContextTokens).toBeGreaterThan(0);
+      const nonHistoryTokens =
+        instructionTokens + toolSchemaTokens + promptTokens + historicalContextTokens;
+
+      // The budget the window is sized against is the whole non-window cost, not just the
+      // instructions plus the tool schemas.
+      expect(selectHistoryWindow).toHaveBeenCalledOnce();
+      expect(selectHistoryWindow.mock.calls[0]![0]).toMatchObject({ nonHistoryTokens });
+      expect(nonHistoryTokens).toBeGreaterThan(instructionTokens + toolSchemaTokens);
+      // Same number on the log line, so it reconciles with `historyTokens` beside it.
+      expect(logged?.nonHistoryTokens).toBe(nonHistoryTokens);
+    } finally {
+      installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
+    }
   });
 });

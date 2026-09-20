@@ -3739,6 +3739,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           const instructionTokens = estimateTextTokens(instructions);
           const toolSchemaTokens = estimateToolSchemaTokens(tools);
+          // Everything the request carries that the window is not choosing from. The turn prompt
+          // (quoted reply context and inlined attachments) and the compacted-summary and
+          // recalled-memory blocks ride in front of the thread messages, so leaving them out let
+          // the window keep messages that no longer fit and the provider reject the request.
+          const nonHistoryTokens =
+            instructionTokens +
+            toolSchemaTokens +
+            estimateTextTokens(prompt) +
+            estimateHistoryTokens(historicalContext);
           // Sized here rather than where `history` is built, because the window depends on the
           // resolved model's context window and on what the rest of the run costs: the rendered
           // instructions already carry memory, scratchpad and the peer directory, so a bot with a
@@ -3747,7 +3756,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const window = selectHistoryWindow({
               history,
               contextWindow: resolved.contextWindow,
-              nonHistoryTokens: instructionTokens + toolSchemaTokens,
+              nonHistoryTokens,
               messageWindowSize: historyWindowSize({
                 semanticMemoryEnabled: semanticMemoryEnabled && !thread.historyCompactionSummary,
                 compacted: thread.historyCompactedUpToSeq != null,
@@ -3778,6 +3787,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             instructionTokens,
             toolSchemaTokens,
             toolCount: tools.length,
+            // The budget the window was sized against: instructions, tool schemas, the turn
+            // prompt and the historical-context blocks. `historyTokens` below counts those blocks
+            // too, so the two numbers overlap by design and can be read against each other.
+            nonHistoryTokens,
             // Everything handed to the runtime as history, including the compacted summary and
             // recalled-memory blocks that sit in front of the thread messages.
             historyTokens: estimateHistoryTokens(runtimeHistory),
