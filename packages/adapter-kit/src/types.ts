@@ -250,6 +250,12 @@ export interface MemoryCommitRequest {
   botId?: string;
   path: string;
   content: string;
+  /**
+   * "replace" (default) swaps the whole document, which is what the Knowledge screen and
+   * the Markdown import express. "append" adds `content` to the end of the existing
+   * document inside the same transaction, so concurrent writers cannot lose a fact.
+   */
+  mode?: "replace" | "append";
   sourceRunId?: string;
   sourceThreadId?: string;
 }

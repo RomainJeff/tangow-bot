@@ -138,6 +138,55 @@ describePostgres("memory commits (PostgreSQL)", () => {
     },
   );
 
+  it("keeps both facts when two appends overlap on the same document", async () => {
+    const path = "concurrent-append.md";
+    const append = (content: string): MemoryCommitRequest => ({
+      ...request(path, content),
+      content: `- ${content}`,
+      mode: "append",
+    });
+    await store.commit(append("initial"), context);
+    let reads = 0;
+    let release!: () => void;
+    const bothRead = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const concurrentStore = new MarkdownMemoryStore(
+      prisma.$extends({
+        query: {
+          memoryDocument: {
+            async findFirst({ args, query }) {
+              const result = await query(args);
+              reads += 1;
+              // Both first attempts see revision 1 before either can write.
+              if (reads === 2) release();
+              if (reads <= 2) await bothRead;
+              return result;
+            },
+          },
+        },
+      }) as PrismaClient,
+    );
+
+    const results = await Promise.allSettled([
+      concurrentStore.commit(append("first"), context),
+      concurrentStore.commit(append("second"), context),
+    ]);
+
+    expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+    // The loser re-reads the winner's document instead of overwriting it.
+    expect(reads).toBe(3);
+    const current = await document(path);
+    expect(current.revision).toBe(3);
+    expect(current.content.split("\n").sort()).toEqual(["- first", "- initial", "- second"]);
+    expect(current.content.startsWith("- initial\n")).toBe(true);
+    expect(current.revisions.map((revision) => revision.content)).toEqual([
+      "- initial",
+      expect.stringMatching(/^- initial\n- (first|second)$/),
+      current.content,
+    ]);
+  });
+
   it.each([false, true])(
     "rolls back a rejected history insert and permits a caller retry (existing: %s)",
     async (existing) => {

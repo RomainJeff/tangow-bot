@@ -71,6 +71,8 @@ export class MarkdownMemoryStore implements MemoryStore {
   async commit(request: MemoryCommitRequest, context: AdapterContext): Promise<MemoryRevision> {
     // A save replaces the current content and appends its history atomically.
     // Conflicts retry the whole transaction so revision numbers use fresh state.
+    // An append resolves its content from the same fresh read, so a retried attempt adds
+    // to the winner's document instead of overwriting it.
     return withTransactionRetry(() =>
       this.prisma.$transaction(
         async (tx) => {
@@ -83,10 +85,14 @@ export class MarkdownMemoryStore implements MemoryStore {
               path: request.path,
             },
           });
+          const content =
+            request.mode === "append"
+              ? appendToDocument(existing?.content ?? "", request.content)
+              : request.content;
           const doc = existing
             ? await tx.memoryDocument.update({
                 where: { id: existing.id },
-                data: { content: request.content, revision: existing.revision + 1 },
+                data: { content, revision: existing.revision + 1 },
               })
             : await tx.memoryDocument.create({
                 data: {
@@ -95,14 +101,14 @@ export class MarkdownMemoryStore implements MemoryStore {
                   botId: request.botId,
                   scope: request.scope,
                   path: request.path,
-                  content: request.content,
+                  content,
                 },
               });
           await tx.memoryRevision.create({
             data: {
               documentId: doc.id,
               revision: doc.revision,
-              content: request.content,
+              content,
               sourceRunId: request.sourceRunId,
               sourceThreadId: request.sourceThreadId,
             },
@@ -145,6 +151,12 @@ export class MarkdownMemoryStore implements MemoryStore {
     if (!last) throw new Error("No memory files to import");
     return last;
   }
+}
+
+/** Keeps exactly one newline between what the document already holds and the addition. */
+function appendToDocument(existing: string, addition: string): string {
+  if (!existing) return addition;
+  return existing.endsWith("\n") ? `${existing}${addition}` : `${existing}\n${addition}`;
 }
 
 function snippet(content: string, q: string): string {
