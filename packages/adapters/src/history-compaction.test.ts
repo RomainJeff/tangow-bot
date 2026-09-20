@@ -383,6 +383,7 @@ type HarnessMessage = {
   seq: number;
   role: string;
   blocks: MessageBlock[];
+  botId?: string | null;
 };
 
 function compactionHarness(
@@ -390,6 +391,8 @@ function compactionHarness(
     deploymentModelKey?: string;
     settings?: { defaultModelProvider: string | null; defaultModelId: string | null } | null;
     messages?: HarnessMessage[];
+    groupId?: string;
+    groupMembers?: Array<{ id: string; name: string }>;
     nextMessageSeq?: number;
     historyCompactedUpToSeq?: number | null;
     historyCompactionSummary?: string | null;
@@ -416,6 +419,7 @@ function compactionHarness(
   const thread = {
     id: "thread-1",
     botId: "bot-1",
+    groupId: options.groupId ?? null,
     spaceId: "workspace-1",
     userId: "user-1",
     nextEventSeq: 0,
@@ -478,6 +482,11 @@ function compactionHarness(
     },
     deploymentSettings: {
       findUnique: vi.fn(async () => options.settings ?? null),
+    },
+    chatGroupMember: {
+      findMany: vi.fn(async () =>
+        (options.groupMembers ?? []).map((bot) => ({ bot: { id: bot.id, name: bot.name } })),
+      ),
     },
   };
   const runtime = {
@@ -665,6 +674,62 @@ describe("compactHistory", () => {
     expect(request.prompt).toContain("[file: plan.pdf (application/pdf, 123 bytes)]");
     expect(request.prompt).toContain("[image: diagram.png]");
     expect(request.prompt).toContain('[tool read_file({ "path": "plan.md" }) → Ship on Friday]');
+  });
+
+  it("names each group member in the transcript and reads its handoffs by name", async () => {
+    const messages: HarnessMessage[] = Array.from({ length: 50 }, (_, i) => ({
+      seq: i,
+      role: "user",
+      blocks: [{ kind: "text", text: `message ${i}` }],
+    }));
+    messages[0] = {
+      seq: 0,
+      role: "bot",
+      botId: "bot-b",
+      blocks: [{ kind: "text", text: "I priced the migration at three weeks." }],
+    };
+    messages[1] = {
+      seq: 1,
+      role: "bot",
+      botId: "bot-c",
+      blocks: [
+        { kind: "handoff", fromBotId: "bot-c", toBotId: "bot-b", text: "take the rollout", hop: 1 },
+      ],
+    };
+    messages[2] = {
+      seq: 2,
+      role: "bot",
+      botId: "bot-gone",
+      blocks: [{ kind: "text", text: "leftover from a removed member" }],
+    };
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      messages,
+      groupId: "group-1",
+      groupMembers: [
+        { id: "bot-b", name: "Bea" },
+        { id: "bot-c", name: "Cyd" },
+      ],
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    const [request] = harness.runtime.run.mock.calls[0]!;
+    expect(request.prompt).toContain("Bea: I priced the migration at three weeks.");
+    expect(request.prompt).toContain("Cyd: [handoff Cyd -&gt; Bea] take the rollout");
+    expect(request.prompt).toContain("bot: leftover from a removed member");
+    expect(request.prompt).not.toContain("bot-b");
+    expect(harness.prisma.chatGroupMember.findMany).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the transcript unattributed outside a group", async () => {
+    const harness = compactionHarness({ deploymentModelKey: "openrouter-key" });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    const [request] = harness.runtime.run.mock.calls[0]!;
+    expect(request.prompt).toContain("bot: message 1");
+    expect(harness.prisma.chatGroupMember.findMany).not.toHaveBeenCalled();
   });
 
   it("compacts locally without a semantic memory provider", async () => {

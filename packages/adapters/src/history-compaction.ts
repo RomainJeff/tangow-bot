@@ -7,6 +7,7 @@ import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
+import { loadGroupMemberNames } from "./group-handoff.js";
 import type {
   ConfiguredMemoryProvider,
   MemoryProviderResolver,
@@ -376,7 +377,7 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
   }
 
   let fromSeqExclusive = previousCursor ?? NOTHING_COMPACTED;
-  let batch: Array<{ seq: number; role: string; blocks: unknown }> = [];
+  let batch: Array<{ seq: number; role: string; blocks: unknown; botId: string | null }> = [];
   let bootstrappingLocalSummary = false;
   if (needsLocalBootstrap) {
     if (previousCursor < 0) {
@@ -387,7 +388,7 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
       where: { threadId, seq: { lte: previousCursor } },
       orderBy: { seq: "desc" },
       take: LEGACY_HISTORY_WINDOW_SIZE + 1,
-      select: { seq: true, role: true, blocks: true },
+      select: { seq: true, role: true, blocks: true, botId: true },
     });
     batch = bootstrapCandidates.reverse();
     if (batch.length > 0) {
@@ -420,7 +421,7 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
       where: { threadId, seq: { gt: range.fromSeqExclusive } },
       orderBy: { seq: "asc" },
       take: range.take,
-      select: { seq: true, role: true, blocks: true },
+      select: { seq: true, role: true, blocks: true, botId: true },
     });
     if (batch.some((message, index) => message.seq !== fromSeqExclusive + index + 1)) {
       getLogger().error(
@@ -431,9 +432,20 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
   }
   if (batch.length === 0) return;
 
-  const transcriptParts = batch.map(
-    (message) => `${message.role}: ${blocksToAgentHistoryText(message.blocks as MessageBlock[])}`,
-  );
+  // A group thread stores every member's posts under role "bot", so the raw role collapses the
+  // whole roster into one speaker and leaves handoffs as bare ids. The summary outlives the
+  // history window, so attribution lost here is lost for the rest of the thread. One roster read
+  // per compaction, and none outside a group, where the role already names the only speaker.
+  const memberNames = thread.groupId
+    ? await loadGroupMemberNames(deps.prisma, thread.groupId)
+    : undefined;
+  const transcriptParts = batch.map((message) => {
+    // ponytail: an author archived or removed since it posted is no longer in the roster and
+    // keeps the generic role label rather than a name we would have to invent, same as the run
+    // history. Persist member names on the message if an old batch ever needs to name its author.
+    const speaker = (message.botId && memberNames?.get(message.botId)) || message.role;
+    return `${speaker}: ${blocksToAgentHistoryText(message.blocks as MessageBlock[], memberNames)}`;
+  });
   let transcript = transcriptParts.join("\n\n");
   if (transcript.length > MAX_TRANSCRIPT_CHARS) {
     if (bootstrappingLocalSummary) {
