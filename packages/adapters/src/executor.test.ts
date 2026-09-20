@@ -1718,6 +1718,7 @@ describe("buildSystemInstructions", () => {
     hasHistoricalContext: true,
     computerInstruction: "You have a persistent computer.",
     pageBrowserAllowed: true,
+    rememberExposed: true,
     workspaceInstruction: "This entire computer workspace is your private home.",
     agentEnvironmentInstruction: "Environment: linux",
     pluginLine: "No plugins are connected yet.",
@@ -1776,5 +1777,13 @@ describe("buildSystemInstructions", () => {
     expect(instructions).not.toContain("browser_navigate");
     expect(instructions).not.toContain("<scratchpad>");
     expect(instructions.startsWith(parts.botInstructions)).toBe(true);
+  });
+
+  it("promises remember only when the tool is exposed, and says when to call it", () => {
+    const exposed = buildSystemInstructions(parts);
+    expect(exposed).toContain("Call remember the moment the user states a preference");
+    expect(exposed).toContain("not at the end of the conversation");
+
+    expect(buildSystemInstructions({ ...parts, rememberExposed: false })).not.toContain("remember");
   });
 });

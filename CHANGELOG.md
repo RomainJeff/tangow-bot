@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- A bot now keeps every fact it memorises instead of only the last one. Each thing it commits to memory is added as its own line in the bot's Knowledge document, so a conversation where it notes three preferences leaves all three there; editing or clearing that memory from the Knowledge screen still replaces it outright, and the bot is now told to record a preference or a correction the moment you state it rather than at the end of the conversation.
 - A bot now remembers the tools it ran on an earlier turn — which tool, on what, and what came back — instead of only its own reply, so it stops re-reading the same file or repeating a search it already did, and a compacted conversation finally records the actions it took.
 
 #### Fixed

@@ -406,7 +406,8 @@ export const builtinAgentTools: ConnectorTool[] = [
   },
   {
     name: "remember",
-    description: "Store a durable fact in this bot's explicit memory.",
+    description:
+      "Append a durable fact to this bot's explicit memory. Each call adds one line; nothing already stored is replaced.",
     inputSchema: {
       type: "object",
       properties: {

@@ -251,6 +251,15 @@ describe("mutating tool effect idempotency keys", () => {
     await f.run();
 
     expect(f.memoryCommit).toHaveBeenCalledOnce();
+    // remember stores one bullet and appends it; it never replaces the document.
+    expect(f.memoryCommit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "MEMORY.md",
+        content: "- team preference",
+        mode: "append",
+      }),
+      expect.anything(),
+    );
     expect(f.scratchpadRows).toHaveLength(1);
     expect(f.effects.map((effect) => effect.idempotencyKey)).toEqual([
       toolEffectIdempotencyKey("run-a", "remember", {
