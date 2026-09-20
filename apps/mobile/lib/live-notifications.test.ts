@@ -6,7 +6,7 @@ vi.mock("expo-secure-store", () => ({
   deleteItemAsync: vi.fn(),
 }));
 
-vi.mock("expo-modules-core", () => ({ requireNativeModule: vi.fn() }));
+vi.mock("expo", () => ({ requireNativeModule: vi.fn() }));
 vi.mock("expo-notifications", () => ({
   setNotificationHandler: vi.fn(),
   getPresentedNotificationsAsync: vi.fn(async () => []),
