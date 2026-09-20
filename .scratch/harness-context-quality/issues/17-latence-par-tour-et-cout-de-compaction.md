@@ -1,24 +1,26 @@
-# 17: Mesurer la latence par tour et le coût de la compaction, sans tiers
+# 17: Mesurer la latence par tour et le coût de la compaction
 
 **What to build:** Un opérateur qui regarde ses logs peut répondre à « quel tour a été lent ? » et « combien me coûte la compaction ? ». Aujourd'hui il ne le peut pour ni l'un ni l'autre, et c'est le seul trou de mesure réel du harness — tout le reste (tokens d'entrée, composition de l'historique, durée d'appel d'outil, usage par run) est déjà émis ou persisté.
 
-Deux manques, tous deux réparables sans dépendance ni destinataire externe :
+Deux manques, de nature différente, qui se réparent séparément.
 
-- **Aucune latence par tour LLM.** `pi-runtime.ts` traite `turn_end` sans horodater, et aucune ligne `agent.turn.*` n'est émise. La durée totale d'un run est déductible de `Run.startedAt/completedAt`, la durée d'un appel d'outil existe déjà dans la table `Event` — mais entre les deux, le temps passé par le modèle à produire un tour est invisible. Si Pi n'expose pas d'horodatage de début de tour exploitable, mesurer côté Rakazo entre le premier `message_update` et le `message_end`.
-- **L'usage de la compaction est jeté.** La compaction lance un vrai run de modèle, mais ne consomme que `text` et `done` du flux ; l'événement `usage` est ignoré et aucune ligne `UsageRecord` n'est écrite. Le coût réel de la compaction n'apparaît donc nulle part — ni dans les logs, ni en base, ni dans la facture rapprochée d'un thread.
+**Le coût de la compaction est jeté.** La compaction lance un vrai run de modèle, mais ne consomme que `text` et `done` du flux ; l'événement `usage` que le runtime émet déjà est ignoré et aucune ligne `UsageRecord` n'est écrite. Le coût réel de la compaction n'apparaît donc nulle part — ni dans les logs, ni en base, ni dans la facture rapprochée d'un thread. Rien à inventer ici : l'événement arrive, il suffit de le consommer comme n'importe quel autre run.
 
-Ce que ce ticket ne fait pas : redire la composition de l'historique. `agent.run.context` porte déjà `historyTokens`, `historyTokensByRole`, `historyWindowMode`, `contextWindow`, `toolSchemaTokens`. Le nouveau log mesure l'**exécution**, pas l'**entrée** — zéro recouvrement, et rien à dupliquer.
+**La latence par tour n'est mesurée nulle part.** `turn_end` est traité sans horodatage et aucune ligne `agent.turn.*` n'est émise. Mais il ne faut pas l'instrumenter à la main : le harness **publie déjà un contrat de télémétrie**. `@earendil-works/pi-telemetry` est dans le graphe de dépendances (transitif, zéro dépendance propre) et définit des spans neutres, un no-op partagé, un adaptateur de référence en mémoire, des schémas typés et une suite de conformance d'adaptateur. `pi-agent-core` possède les schémas `pi.ai.*` et `pi.harness.*`, et le span `pi.ai.request` porte déjà exactement ce que ce ticket demande : durée, `time_to_first_chunk_ms`, tokens in/out/cache/reasoning/total, coût, `stop_reason`, provider, modèle, classe d'erreur. `pi-ai` accepte un `telemetryContext` dans ses options de requête.
 
-Contrainte de données : ces lignes sont des compteurs, jamais du contenu, comme `agent.run.context` l'affiche déjà en commentaire. Aucun prompt, aucune réponse, aucun argument d'outil.
+Rakazo n'en câble rien : aucune occurrence de `telemetryContext` dans `packages/` ni `apps/`. Le point d'injection est unique — attacher un contexte de télémétrie au `Context` pi — et le no-op partagé est le défaut quand on n'attache rien.
 
-Ce ticket est le chemin court du cadrage `langfuse-observabilite.md` (lot L1). Il est volontairement indépendant du ticket 18 : il ne suppose aucune décision sur un exportateur tiers, et il est le critère qui décide si le ticket 18 s'ouvre un jour.
+Le chemin le plus court est donc un adaptateur qui traduit les spans pi vers le logger structuré existant, pas un chronométrage maison. Il donne plus de champs, il est typé et versionné par le schéma, il est testable avec la suite de conformance fournie, et il rend le ticket 18 quasi gratuit : le même adaptateur, pointé ailleurs, est l'exportateur tiers.
+
+Contrainte de données inchangée : compteurs et identifiants, jamais de contenu. Le schéma pi va dans le même sens — il marque les attributs sensibles et recommande explicitement de tenir les prompts, complétions, arguments et sorties d'outils hors des attributs.
 
 **Blocked by:** None (can start immediately)
 
 **Status:** ready-for-agent
 
-- [ ] Chaque tour du modèle émet une ligne de log portant sa durée, ses tokens réels (in/out/cache si disponibles), le provider, le modèle et le `runId`
 - [ ] Un run de compaction écrit son usage au même endroit que n'importe quel autre run : log d'usage et ligne `UsageRecord`
+- [ ] La durée d'un tour de modèle, son temps jusqu'au premier chunk et ses tokens réels sont lisibles dans les logs
+- [ ] Ne rien attacher laisse le comportement strictement inchangé, via le no-op du contrat
+- [ ] L'adaptateur passe la suite de conformance fournie par le contrat, ou bien l'approche est abandonnée au profit d'un chronométrage local et le ticket dit pourquoi
 - [ ] Aucune des nouvelles lignes ne contient de contenu, seulement des compteurs et des identifiants
-- [ ] Les tests restent offline et déterministes, avec le runtime scripté existant
-- [ ] Le coût d'une compaction sur un thread réel est lisible a posteriori depuis les logs ou la base, sans outil tiers
+- [ ] Les tests restent offline et déterministes
