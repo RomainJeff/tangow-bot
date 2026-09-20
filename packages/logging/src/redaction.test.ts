@@ -84,6 +84,30 @@ describe("redaction", () => {
     expect(redacted).not.toContain("abc123");
   });
 
+  it("keeps token counters readable while still redacting credentials named token", () => {
+    expect(
+      redactBindings({
+        inputTokens: 4_200,
+        outputTokens: 310,
+        cacheReadTokens: 1_100,
+        cacheWriteTokens: 40,
+        reasoningTokens: 12,
+        totalTokens: 5_662,
+        refreshToken: "abc123",
+        tokens: "abc123",
+      }),
+    ).toEqual({
+      inputTokens: 4_200,
+      outputTokens: 310,
+      cacheReadTokens: 1_100,
+      cacheWriteTokens: 40,
+      reasoningTokens: 12,
+      totalTokens: 5_662,
+      refreshToken: "[Redacted]",
+      tokens: "[Redacted]",
+    });
+  });
+
   it("redacts bare API keys and JWTs in free text", () => {
     const redacted = redactSensitiveText(
       "key sk-or-v1-abc123456789 and sk-live-secret99 jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig ak_secretvaluehere",

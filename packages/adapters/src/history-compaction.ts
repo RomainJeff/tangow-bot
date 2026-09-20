@@ -559,6 +559,42 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
     if (event.type === "text" && /^(?:I hit a problem:|Unknown model )/i.test(event.text.trim())) {
       runtimeReportedFailure = true;
     }
+    if (event.type === "usage") {
+      // Compaction reads the whole backlog, so it is often the most expensive call in a thread.
+      // Recording that spend must never be able to fail the compaction that produced it.
+      try {
+        getLogger().info("history.compact.usage", {
+          threadId,
+          botId: thread.botId,
+          provider: event.provider,
+          model: event.model,
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+          // Left out entirely when the provider reports no cache counters.
+          ...(event.cacheReadTokens === undefined
+            ? {}
+            : { cacheReadTokens: event.cacheReadTokens }),
+          ...(event.cacheWriteTokens === undefined
+            ? {}
+            : { cacheWriteTokens: event.cacheWriteTokens }),
+        });
+        await deps.prisma.usageRecord.create({
+          data: {
+            spaceId: thread.spaceId,
+            botId: thread.botId,
+            userId: thread.userId,
+            // No `runId`: compaction has no `Run` row (it runs under `compact:<threadId>`) and the
+            // column is a real foreign key onto `Run`.
+            provider: event.provider,
+            model: event.model,
+            inputTokens: event.inputTokens,
+            outputTokens: event.outputTokens,
+          },
+        });
+      } catch (error) {
+        getLogger().error("history.compact could not record summarizer usage", error);
+      }
+    }
     if (event.type === "done" && event.text) {
       const text = event.text.trim();
       if (/^(?:I hit a problem:|Unknown model )/i.test(text)) runtimeReportedFailure = true;

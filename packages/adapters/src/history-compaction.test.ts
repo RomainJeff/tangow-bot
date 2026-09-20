@@ -1,6 +1,7 @@
 import type {
   AgentRunRequest,
   AgentRuntime,
+  AgentRuntimeEvent,
   JobPublisher,
   SemanticMemoryResponse,
 } from "@rakazo/adapter-kit";
@@ -407,6 +408,7 @@ function compactionHarness(
     memoryConfig?: {
       defaultMemoryScope: string;
     } | null;
+    runtimeEvents?: AgentRuntimeEvent[];
   } = {},
 ) {
   const messages: HarnessMessage[] =
@@ -488,6 +490,9 @@ function compactionHarness(
         (options.groupMembers ?? []).map((bot) => ({ bot: { id: bot.id, name: bot.name } })),
       ),
     },
+    usageRecord: {
+      create: vi.fn(async () => undefined),
+    },
   };
   const runtime = {
     describe: () => ({
@@ -497,6 +502,7 @@ function compactionHarness(
       capabilities: { streaming: true, compaction: true, tools: false, scripted: false },
     }),
     run: vi.fn<AgentRuntime["run"]>(async function* () {
+      for (const event of options.runtimeEvents ?? []) yield event;
       yield { type: "done", text: "Summary of 50 messages." };
     }),
   };
@@ -1021,6 +1027,83 @@ describe("compactHistory", () => {
     expect(harness.purgeHistory).toHaveBeenCalledWith(
       { botId: "bot-1", generations: [0] },
       expect.any(Object),
+    );
+  });
+
+  it("records the summarizer's spend as a usage log line and a usage record", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      runtimeEvents: [
+        {
+          type: "usage",
+          provider: "openrouter",
+          model: "openai/gpt-5.6-luna",
+          inputTokens: 4_200,
+          outputTokens: 310,
+          cacheReadTokens: 1_100,
+        },
+      ],
+    });
+    const sink = createTestSink();
+    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+
+    await compactHistory(harness.deps, "thread-1");
+
+    const logged = sink.events.find((event) => event.message === "history.compact.usage");
+    expect(logged).toMatchObject({
+      threadId: "thread-1",
+      botId: "bot-1",
+      provider: "openrouter",
+      model: "openai/gpt-5.6-luna",
+      inputTokens: 4_200,
+      outputTokens: 310,
+      cacheReadTokens: 1_100,
+    });
+    // Absent counters stay absent rather than logging an undefined key.
+    expect(logged).not.toHaveProperty("cacheWriteTokens");
+    // Counters and identifiers only: no transcript, no summary.
+    expect(JSON.stringify(logged)).not.toContain("message 0");
+    expect(JSON.stringify(logged)).not.toContain("Summary of 50 messages.");
+
+    // Exact shape: no `runId`. Compaction has no `Run` row and the column is a foreign key onto one.
+    expect(harness.prisma.usageRecord.create).toHaveBeenCalledWith({
+      data: {
+        spaceId: "workspace-1",
+        botId: "bot-1",
+        userId: "user-1",
+        provider: "openrouter",
+        model: "openai/gpt-5.6-luna",
+        inputTokens: 4_200,
+        outputTokens: 310,
+      },
+    });
+    installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
+  });
+
+  it("still compacts when writing the usage record fails", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      runtimeEvents: [
+        {
+          type: "usage",
+          provider: "openrouter",
+          model: "openai/gpt-5.6-luna",
+          inputTokens: 4_200,
+          outputTokens: 310,
+        },
+      ],
+    });
+    harness.prisma.usageRecord.create.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await expect(compactHistory(harness.deps, "thread-1")).resolves.toBeUndefined();
+
+    expect(harness.prisma.thread.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          historyCompactedUpToSeq: 49,
+          historyCompactionSummary: "Summary of 50 messages.",
+        },
+      }),
     );
   });
 

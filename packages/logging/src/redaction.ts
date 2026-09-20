@@ -12,6 +12,12 @@ const REDACT_KEYS = new Set([
   "api_key",
 ]);
 const SECRET_KEY = /password|secret|token|authorization|cookie|credential|apikey/;
+/**
+ * Usage counters, not credentials. `SECRET_KEY` matches any key containing "token", which was
+ * silently redacting the token counts every usage log line exists to report. Kept as an exact
+ * name list rather than a loosened pattern so nothing that could carry a real secret slips out.
+ */
+const TOKEN_COUNTER_KEY = /^(?:input|output|cacheread|cachewrite|reasoning|total)tokens$/;
 
 function redactValue(value: unknown, seen = new WeakSet<object>()): unknown {
   if (value === null || value === undefined) return value;
@@ -70,5 +76,6 @@ export function redactSensitiveText(text: string): string {
 
 function shouldRedactKey(key: string): boolean {
   const normalized = key.toLowerCase().replace(/[^a-z0-9_]/g, "");
+  if (TOKEN_COUNTER_KEY.test(normalized)) return false;
   return REDACT_KEYS.has(normalized) || SECRET_KEY.test(normalized);
 }
