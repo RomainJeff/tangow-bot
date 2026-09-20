@@ -1,4 +1,4 @@
-import { requireNativeModule } from "expo-modules-core";
+import { requireNativeModule } from "expo";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { accessFor } from "./access-store";
