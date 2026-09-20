@@ -8,10 +8,12 @@ Le coût contextuel reste borné par le plafond existant de mémoires rappelées
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Le rappel automatique ne dépend plus de l'existence d'une compaction
-- [ ] Vérifié explicitement : le provider mémoire retourne bien les mémoires hors-historique à la génération par défaut ; sinon le ticket est refermé avec le constat
-- [ ] Nombre de mémoires rappelées toujours borné par le plafond existant
-- [ ] Les runs de canaux de messagerie restent sans rappel (frontière de confidentialité, voir non-objectifs)
-- [ ] Test offline avec un provider mémoire scripté : un thread jamais compacté reçoit bien le bloc de mémoire rappelée
+- [x] Le rappel automatique ne dépend plus de l'existence d'une compaction
+- [x] Vérifié explicitement : le provider mémoire retourne bien les mémoires hors-historique à la génération par défaut ; sinon le ticket est refermé avec le constat
+- [x] Nombre de mémoires rappelées toujours borné par le plafond existant
+- [x] Les runs de canaux de messagerie restent sans rappel (frontière de confidentialité, voir non-objectifs)
+- [x] Test offline avec un provider mémoire scripté : un thread jamais compacté reçoit bien le bloc de mémoire rappelée
+
+Vérification du provider (préalable) : les deux providers de mémoire sémantique retournent les mémoires hors-historique à la génération par défaut. Supermemory construit les tags de rappel à partir du périmètre durable et n'ajoute le conteneur d'historique que lorsqu'une génération est fournie ; Serenity ignore complètement la génération d'historique. Le correctif était donc livrable.
