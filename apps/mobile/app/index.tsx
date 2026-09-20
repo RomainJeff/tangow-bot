@@ -784,6 +784,7 @@ function ActivityRow({
     <ConversationRow
       title={title}
       preview={preview}
+      time={time}
       accessibilityLabel={[title, status, time].filter(Boolean).join(", ")}
       onPress={onPress}
       avatar={
@@ -791,7 +792,7 @@ function ActivityRow({
           identity={run.botId}
           color={bot?.color ?? FALLBACK_COLOR}
           status={run.status}
-          size={sizes.row}
+          size={sizes.mobileStack}
         />
       }
     />
@@ -803,6 +804,7 @@ function ConversationRow({
   preview,
   avatar,
   tag,
+  time,
   unread,
   onPress,
   onLongPress,
@@ -813,6 +815,7 @@ function ConversationRow({
   preview: string;
   avatar: ReactNode;
   tag?: string | null;
+  time?: string | null;
   unread?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
@@ -820,8 +823,8 @@ function ConversationRow({
   accessibilityHint?: string;
 }) {
   const styles = useThemedStyles(createHomeStyles);
-  // A quiet roster: avatar, name, one status line — no card, no separate tag
-  // chip or time column. `time` still rides along in `accessibilityLabel`.
+  // No card and no tag chip, but the row is sized for a thumb: a 44 pt avatar,
+  // a name at reading size, one status line, and the time in its own column.
   const status = [tag, preview].filter(Boolean).join(" · ");
   return (
     <Pressable
@@ -835,10 +838,19 @@ function ConversationRow({
       {avatar}
       <View style={styles.rowBody}>
         <View style={styles.titleRow}>
-          <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
+          <Text
+            style={[styles.name, unread && styles.nameUnread]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {title}
           </Text>
           {unread ? <View accessibilityElementsHidden style={styles.unreadDot} /> : null}
+          {time ? (
+            <Text accessibilityElementsHidden style={styles.time} numberOfLines={1}>
+              {time}
+            </Text>
+          ) : null}
         </View>
         <Text style={styles.status} numberOfLines={1}>
           {status}
@@ -930,6 +942,7 @@ function BotRow({
       title={bot.name}
       preview={preview}
       tag={tag}
+      time={time}
       unread={bot.unread}
       accessibilityLabel={label}
       accessibilityHint={
@@ -944,7 +957,7 @@ function BotRow({
           shapeSeed={bot.shapeSeed}
           status={bot.status}
           muted={!bot.notifyOnFinish}
-          size={sizes.row}
+          size={sizes.mobileStack}
         />
       }
     />
@@ -972,6 +985,7 @@ function GroupRow({
     <ConversationRow
       title={group.name}
       preview={preview}
+      time={time}
       unread={group.unread}
       accessibilityLabel={[group.name, group.unread ? t("unread") : null, time, preview]
         .filter(Boolean)
@@ -982,7 +996,7 @@ function GroupRow({
       avatar={
         <GroupAvatar
           members={group.members}
-          size={sizes.row}
+          size={sizes.mobileStack}
           userInitials={userInitials}
           userImage={userImage}
         />
@@ -1071,8 +1085,8 @@ function createHomeStyles() {
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: 16,
-      paddingVertical: 9,
-      gap: 11,
+      paddingVertical: 12,
+      gap: 14,
     },
     rowPressed: {
       opacity: 0.55,
@@ -1080,28 +1094,39 @@ function createHomeStyles() {
     rowBody: {
       flex: 1,
       minWidth: 0,
-      gap: 2,
+      gap: 3,
     },
     titleRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
     },
+    // Mobile delta (design contract §1.2): the inbox is the one roster read at
+    // arm's length, so `rowName`/`rowStatus` run a few points above the shared
+    // sidebar sizes.
     name: {
       flexShrink: 1,
       color: tokens.foreground,
-      ...nativeTextStyle("rowName"),
+      ...nativeTextStyle("rowName", { size: 18, weight: 500 }),
       writingDirection: "auto",
+    },
+    nameUnread: {
+      fontWeight: "600",
     },
     status: {
       color: tokens.foregroundSubtle,
-      ...nativeTextStyle("rowStatus"),
+      ...nativeTextStyle("rowStatus", { size: 15 }),
       writingDirection: "auto",
     },
+    time: {
+      marginLeft: "auto",
+      color: tokens.foregroundSubtle,
+      ...nativeTextStyle("time", { size: 13 }),
+    },
     unreadDot: {
-      width: 5,
-      height: 5,
-      borderRadius: 2.5,
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
       backgroundColor: tokens.foreground,
     },
     searchRowTop: {
@@ -1149,11 +1174,11 @@ function createHomeStyles() {
     },
     sectionHeading: {
       color: native.secondaryLabel,
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: "600",
       paddingHorizontal: 16,
-      paddingTop: 12,
-      paddingBottom: 4,
+      paddingTop: 20,
+      paddingBottom: 6,
     },
     activitySection: {
       borderBottomWidth: StyleSheet.hairlineWidth,

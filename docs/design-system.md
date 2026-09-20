@@ -89,8 +89,8 @@ Utilities: `text-body`, `text-author`, `text-time`, `text-meta`, `text-label`,
 | `time` | 12 | 1.3 | 0 | 400 | time beside the name |
 | `meta` | 13 | 1.4 | 0 | 400 | proof line under a message |
 | `label` | 12.5 | 1.3 | 0 | 400 | sidebar section labels, day markers |
-| `rowName` | 14.5 | 1.3 | -0.005em | 400 | sidebar row name (500 selected) |
-| `rowStatus` | 12.5 | 1.3 | 0 | 400 | sidebar status line |
+| `rowName` | 14.5 | 1.3 | -0.005em | 400 | sidebar row name (500 selected, mobile inbox 18 / 500, 600 unread) |
+| `rowStatus` | 12.5 | 1.3 | 0 | 400 | sidebar status line (mobile inbox 15) |
 | `title` | 19 | 1.2 | -0.014em | 500 | thread title (mobile 17 / 600) |
 | `capsule` | 14 | 1 | 0 | 400 | capsule labels (500 primary) |
 | `working` | 15 | 1.3 | -0.006em | 400 | "… is drafting the recap" |
