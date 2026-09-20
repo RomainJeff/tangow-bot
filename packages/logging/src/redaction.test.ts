@@ -93,6 +93,12 @@ describe("redaction", () => {
         cacheWriteTokens: 40,
         reasoningTokens: 12,
         totalTokens: 5_662,
+        instructionTokens: 3_100,
+        toolSchemaTokens: 890,
+        historyTokens: 12_400,
+        historyTokensByRole: { user: 4_000, assistant: 8_000, tool: 400 },
+        nonHistoryTokens: 3_990,
+        maxTokens: 8_192,
         refreshToken: "abc123",
         tokens: "abc123",
       }),
@@ -103,7 +109,37 @@ describe("redaction", () => {
       cacheWriteTokens: 40,
       reasoningTokens: 12,
       totalTokens: 5_662,
+      instructionTokens: 3_100,
+      toolSchemaTokens: 890,
+      historyTokens: 12_400,
+      historyTokensByRole: { user: 4_000, assistant: 8_000, tool: 400 },
+      nonHistoryTokens: 3_990,
+      maxTokens: 8_192,
       refreshToken: "[Redacted]",
+      tokens: "[Redacted]",
+    });
+  });
+
+  it("redacts token-named bindings that do not carry counter values", () => {
+    expect(
+      redactBindings({
+        maxTokens: "abc123",
+        historyTokensByRole: { user: 4_000, assistant: "abc123" },
+        refreshTokens: ["abc123"],
+        oauthTokens: { google: "abc123" },
+        accessToken: "abc123",
+        apiToken: "abc123",
+        token: "abc123",
+        tokens: 5_662,
+      }),
+    ).toEqual({
+      maxTokens: "[Redacted]",
+      historyTokensByRole: "[Redacted]",
+      refreshTokens: "[Redacted]",
+      oauthTokens: "[Redacted]",
+      accessToken: "[Redacted]",
+      apiToken: "[Redacted]",
+      token: "[Redacted]",
       tokens: "[Redacted]",
     });
   });
