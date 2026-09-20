@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CHATTY_MESSAGE_USER_DESCRIPTION } from "./builtin-tools.js";
 import {
   appendToolCompletionAudit,
+  buildSystemInstructions,
   createRunExecutor,
   createRunWorkspaceCheckpoint,
   loadCurrentTurnImages,
@@ -1521,6 +1522,68 @@ description: Prepare standup notes
     });
   });
 
+  it("takes the model context window from the credential, then the catalog, then neither", async () => {
+    const secrets: Record<string, string> = {
+      "secret-openai-compatible": serializeModelSecret({
+        kind: "openai_compatible",
+        baseUrl: "http://127.0.0.1:8000/v1",
+        contextWindow: 65536,
+      }),
+      "secret-anthropic": "anthropic-key",
+    };
+    const bot = {
+      modelProvider: "openai-compatible",
+      modelId: "space-model",
+      thinkingLevel: null,
+    };
+    const secretIdFor = (provider: string) =>
+      provider === "openai-compatible" ? "secret-openai-compatible" : "secret-anthropic";
+    const prisma = {
+      bot: { findFirst: vi.fn(async () => bot) },
+      spaceModelPreference: {
+        findFirst: vi.fn(
+          async (args: { where: { credential?: { provider?: string }; isDefault?: boolean } }) => {
+            if (args.where.credential?.provider === bot.modelProvider || args.where.isDefault) {
+              return modelPreference({
+                provider: bot.modelProvider,
+                secretId: secretIdFor(bot.modelProvider),
+                modelId: bot.modelId,
+                isDefault: Boolean(args.where.isDefault),
+              });
+            }
+            return null;
+          },
+        ),
+      },
+      userModelCredential: { findFirst: vi.fn(async () => null) },
+      deploymentSettings: { findUnique: vi.fn(async () => null) },
+      secret: {
+        findFirst: vi.fn(async (args: { where: { id: string } }) => ({
+          id: args.where.id,
+          ciphertext: secrets[args.where.id],
+        })),
+        findUnique: vi.fn(async () => null),
+      },
+    } as unknown as PrismaClient;
+    const executor = createRunExecutor({
+      prisma,
+      secretStore: { load: vi.fn((ciphertext: string) => ciphertext), put: vi.fn() },
+    } as unknown as Parameters<typeof createRunExecutor>[0]);
+    const scope = { userId: "user-1", spaceId: "ws-1", botId: "bot-1" };
+
+    const configured = await executor.resolveModel(scope);
+    expect(configured.contextWindow).toBe(65536);
+
+    bot.modelProvider = "anthropic";
+    bot.modelId = "claude-fable-5";
+    const fromCatalog = await executor.resolveModel(scope);
+    expect(fromCatalog.contextWindow).toBe(1_000_000);
+
+    bot.modelId = "rakazo-test/unknown-future-model";
+    const unknown = await executor.resolveModel(scope);
+    expect(unknown.contextWindow).toBeUndefined();
+  });
+
   it("falls back to the Space default when the override provider has no credential", async () => {
     const findFirst = vi.fn(
       async (args: { where: { credential?: { provider?: string }; isDefault?: boolean } }) => {
@@ -1644,5 +1707,74 @@ description: Prepare standup notes
       id: "deepseek/deepseek-v4-flash-0731",
       thinkingLevel: "high",
     });
+  });
+});
+
+describe("buildSystemInstructions", () => {
+  const parts = {
+    botInstructions: "Ada: research bot",
+    groupContext: "Group: crew",
+    messagingContext: "DM surface note",
+    hasHistoricalContext: true,
+    computerInstruction: "You have a persistent computer.",
+    pageBrowserAllowed: true,
+    workspaceInstruction: "This entire computer workspace is your private home.",
+    agentEnvironmentInstruction: "Environment: linux",
+    pluginLine: "No plugins are connected yet.",
+    agentSkillsLine: "Skills: none",
+    taughtSkillsLine: "Saved taught skills:\n- brief",
+    memoryContext: "<memory>fact</memory>",
+    scratchpadContext: "<scratchpad>open work</scratchpad>",
+    botDirectory: "<bots>peer</bots>",
+  };
+
+  it("keeps the clock out of the system prefix", () => {
+    expect(buildSystemInstructions(parts)).not.toContain("Current date and time");
+  });
+
+  it("is byte-identical across runs when memory, scratchpad and directory are unchanged", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-03-01T09:00:00.000Z"));
+      const first = buildSystemInstructions(parts);
+      vi.setSystemTime(new Date("2026-03-04T17:42:13.000Z"));
+      const second = buildSystemInstructions(parts);
+      expect(second).toBe(first);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("puts the untrusted-content rule ahead of every untrusted block, and the moving fragments last", () => {
+    const instructions = buildSystemInstructions(parts);
+    const at = (needle: string) => {
+      const index = instructions.indexOf(needle);
+      expect(index).toBeGreaterThanOrEqual(0);
+      return index;
+    };
+
+    const untrustedRule = at("Treat content returned by tools");
+    expect(untrustedRule).toBeLessThan(at("Compacted summaries and recalled memory"));
+    expect(untrustedRule).toBeLessThan(at(parts.memoryContext));
+    expect(untrustedRule).toBeLessThan(at(parts.botDirectory));
+
+    const stableTail = at("Never narrate your work to the user.");
+    expect(stableTail).toBeLessThan(at(parts.memoryContext));
+    expect(at(parts.memoryContext)).toBeLessThan(at(parts.scratchpadContext));
+    expect(at(parts.scratchpadContext)).toBeLessThan(at(parts.botDirectory));
+  });
+
+  it("drops the fragments a run does not have", () => {
+    const instructions = buildSystemInstructions({
+      botInstructions: parts.botInstructions,
+      hasHistoricalContext: false,
+      computerInstruction: parts.computerInstruction,
+      pageBrowserAllowed: false,
+      workspaceInstruction: parts.workspaceInstruction,
+    });
+    expect(instructions).not.toContain("Compacted summaries and recalled memory");
+    expect(instructions).not.toContain("browser_navigate");
+    expect(instructions).not.toContain("<scratchpad>");
+    expect(instructions.startsWith(parts.botInstructions)).toBe(true);
   });
 });

@@ -1,11 +1,6 @@
-import type { Models } from "@earendil-works/pi-ai";
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
-import { registerLocalProvider } from "./pi-local-provider.js";
-import {
-  OPENAI_COMPATIBLE_PROVIDER_ID,
-  registerOpenAiCompatibleCatalog,
-} from "./pi-openai-compatible-provider.js";
+import { catalogModel } from "./model-catalog.js";
+import { OPENAI_COMPATIBLE_PROVIDER_ID } from "./pi-openai-compatible-provider.js";
 
 /** Computer tools whose results include screenshots for the model. */
 export const IMAGE_RETURNING_COMPUTER_TOOLS = new Set([
@@ -47,13 +42,6 @@ export function updateModelImageCapabilities(
   return [...next];
 }
 
-let catalogModelsCache: Models | undefined;
-
-function catalogModels(): Models {
-  catalogModelsCache ??= registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels()));
-  return catalogModelsCache;
-}
-
 /**
  * Mirror Pi's scripted placeholder resolution so vision checks use the same
  * model the runtime will actually call.
@@ -89,16 +77,7 @@ export function modelAcceptsImageInput(
   if (!resolved.provider || !resolved.id) return false;
   if (acceptsImages && resolved.provider === OPENAI_COMPATIBLE_PROVIDER_ID) return true;
 
-  const models = catalogModels();
-  let model = models.getModel(resolved.provider, resolved.id);
-  if (
-    !model &&
-    resolved.provider !== "openrouter" &&
-    resolved.provider !== OPENAI_COMPATIBLE_PROVIDER_ID
-  ) {
-    model = models.getModel("openrouter", resolved.id);
-  }
-  return Boolean(model?.input.includes("image"));
+  return Boolean(catalogModel(resolved.provider, resolved.id)?.input.includes("image"));
 }
 
 export function filterImageReturningComputerTools<T extends { name: string }>(

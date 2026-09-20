@@ -30,6 +30,7 @@ import {
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
+  createTraceExporterFromEnv,
   createWebProvider,
   destroyBot,
   EmailEmulator,
@@ -300,11 +301,18 @@ export async function createApp(
   const connector = stack.destination;
   await connector.start();
   integrationSettings.warmDirectories();
+  // Optional agent trace export. Without configuration this resolves to nothing,
+  // so the runtime records no spans and no vendor endpoint is ever contacted.
+  const traceExport = createTraceExporterFromEnv(process.env);
+  if (traceExport.warning) logger.warn(traceExport.warning);
   const runtime =
     env.agentRuntime === "scripted"
       ? new ScriptedAgentRuntime()
       : new PiAgentRuntime({
           sessionRoot: env.piSessionRecording ? piSessionsRoot(env.dataDir) : undefined,
+          ...(traceExport.exporter
+            ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.api }
+            : {}),
         });
   const notifications = new ExpoPushProvider(env.dataDir);
   const auth = createAuth(prisma, {
@@ -858,6 +866,7 @@ export async function createApp(
       await prisma.$disconnect().catch(() => undefined);
       await created.pool?.end().catch(() => undefined);
       await ownedJobPool?.end().catch(() => undefined);
+      await traceExport.exporter?.flush(2_000);
       await logger.flush({ timeoutMs: 2_000 });
     },
   };

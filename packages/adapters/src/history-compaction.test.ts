@@ -1,6 +1,7 @@
 import type {
   AgentRunRequest,
   AgentRuntime,
+  AgentRuntimeEvent,
   JobPublisher,
   SemanticMemoryResponse,
 } from "@rakazo/adapter-kit";
@@ -12,6 +13,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   compactHistory,
   estimateHistoryTokens,
+  estimateTextTokens,
+  estimateToolSchemaTokens,
   formatCompactedSummary,
   formatRecalledMemory,
   historyWindowSize,
@@ -69,31 +72,77 @@ describe("selectHistoryWindow", () => {
     const history = conversation(10);
     expect(
       selectHistoryWindow({ history, contextWindow: undefined, messageWindowSize: 4 }),
-    ).toEqual(history.slice(-4));
-    expect(selectHistoryWindow({ history, contextWindow: 0, messageWindowSize: 4 })).toEqual(
-      history.slice(-4),
-    );
+    ).toEqual({ messages: history.slice(-4), mode: "count" });
+    expect(selectHistoryWindow({ history, contextWindow: 0, messageWindowSize: 4 })).toEqual({
+      messages: history.slice(-4),
+      mode: "count",
+    });
   });
 
   it("keeps far more than the count window when the messages are small and the window is large", () => {
     const history = conversation(200);
-    const kept = selectHistoryWindow({ history, contextWindow: 200_000, messageWindowSize: 4 });
+    const { messages: kept, mode } = selectHistoryWindow({
+      history,
+      contextWindow: 200_000,
+      messageWindowSize: 4,
+    });
     expect(kept.length).toBeGreaterThan(4);
     expect(kept[kept.length - 1]).toEqual(history[history.length - 1]);
+    expect(mode).toBe("tokens");
   });
 
   it("drops older turns when the messages are large", () => {
     const history = conversation(40, () => "x".repeat(20_000));
-    const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 400 });
+    const { messages: kept, mode } = selectHistoryWindow({
+      history,
+      contextWindow: 128_000,
+      messageWindowSize: 400,
+    });
     expect(kept.length).toBeLessThan(history.length);
     expect(estimateHistoryTokens(kept)).toBeLessThanOrEqual(
       128_000 - 16_384 - NON_HISTORY_TOKEN_ESTIMATE + estimateHistoryTokens([history[0]!]),
+    );
+    expect(mode).toBe("tokens");
+  });
+
+  it("keeps fewer messages when the run's non-history context is larger", () => {
+    const history = conversation(200, () => "x".repeat(2_000));
+    const lean = selectHistoryWindow({
+      history,
+      contextWindow: 128_000,
+      messageWindowSize: 4,
+      nonHistoryTokens: 2_000,
+    });
+    const heavy = selectHistoryWindow({
+      history,
+      contextWindow: 128_000,
+      messageWindowSize: 4,
+      nonHistoryTokens: 60_000,
+    });
+    expect(lean.mode).toBe("tokens");
+    expect(heavy.mode).toBe("tokens");
+    expect(heavy.messages.length).toBeLessThan(lean.messages.length);
+  });
+
+  it("falls back to the shared estimate when the caller measures nothing", () => {
+    const history = conversation(200, () => "x".repeat(2_000));
+    expect(selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 4 })).toEqual(
+      selectHistoryWindow({
+        history,
+        contextWindow: 128_000,
+        messageWindowSize: 4,
+        nonHistoryTokens: NON_HISTORY_TOKEN_ESTIMATE,
+      }),
     );
   });
 
   it("opens the window on a user message, never mid-reply", () => {
     const history = conversation(40, () => "x".repeat(20_000));
-    const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 400 });
+    const { messages: kept } = selectHistoryWindow({
+      history,
+      contextWindow: 128_000,
+      messageWindowSize: 400,
+    });
     expect(kept[0]!.role).toBe("user");
   });
 
@@ -104,7 +153,53 @@ describe("selectHistoryWindow", () => {
       { role: "user" as const, content: "x".repeat(2_000_000) },
     ];
     const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 2 });
-    expect(kept).toEqual(history.slice(-1));
+    expect(kept).toEqual({ messages: history.slice(-1), mode: "tokens" });
+  });
+
+  it("reports the count fallback when no message within budget starts a turn", () => {
+    // The single oversized assistant reply cannot open a window, so sizing falls through to the
+    // message count even though a context window was known.
+    const history = [
+      { role: "user" as const, content: "hi" },
+      { role: "assistant" as const, content: "x".repeat(2_000_000) },
+    ];
+    expect(selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 1 })).toEqual({
+      messages: history.slice(-1),
+      mode: "count",
+    });
+  });
+});
+
+describe("context budget estimation", () => {
+  it("estimates text at one token per four characters", () => {
+    expect(estimateTextTokens("")).toBe(0);
+    expect(estimateTextTokens("x".repeat(400))).toBe(100);
+    expect(estimateTextTokens("x".repeat(401))).toBe(101);
+  });
+
+  it("counts only the tool fields a provider sends to the model", () => {
+    const schema = { type: "object", properties: {} };
+    const tools = [
+      { name: "web_fetch", description: "read a page", inputSchema: schema },
+      { name: "remember", description: "store a fact", inputSchema: schema },
+    ];
+    const withRoute = tools.map((tool) => ({
+      ...tool,
+      route: { connectorId: "c".repeat(500), toolName: "t".repeat(500) },
+    }));
+    expect(estimateToolSchemaTokens(tools)).toBe(estimateToolSchemaTokens(withRoute));
+    expect(estimateToolSchemaTokens(tools)).toBe(
+      tools.reduce(
+        (total, tool) =>
+          total +
+          estimateTextTokens(`${tool.name}${tool.description}${JSON.stringify(tool.inputSchema)}`),
+        0,
+      ),
+    );
+  });
+
+  it("is zero for an empty tool catalog", () => {
+    expect(estimateToolSchemaTokens([])).toBe(0);
   });
 });
 
@@ -289,6 +384,7 @@ type HarnessMessage = {
   seq: number;
   role: string;
   blocks: MessageBlock[];
+  botId?: string | null;
 };
 
 function compactionHarness(
@@ -296,6 +392,8 @@ function compactionHarness(
     deploymentModelKey?: string;
     settings?: { defaultModelProvider: string | null; defaultModelId: string | null } | null;
     messages?: HarnessMessage[];
+    groupId?: string;
+    groupMembers?: Array<{ id: string; name: string }>;
     nextMessageSeq?: number;
     historyCompactedUpToSeq?: number | null;
     historyCompactionSummary?: string | null;
@@ -310,6 +408,7 @@ function compactionHarness(
     memoryConfig?: {
       defaultMemoryScope: string;
     } | null;
+    runtimeEvents?: AgentRuntimeEvent[];
   } = {},
 ) {
   const messages: HarnessMessage[] =
@@ -322,6 +421,7 @@ function compactionHarness(
   const thread = {
     id: "thread-1",
     botId: "bot-1",
+    groupId: options.groupId ?? null,
     spaceId: "workspace-1",
     userId: "user-1",
     nextEventSeq: 0,
@@ -385,6 +485,14 @@ function compactionHarness(
     deploymentSettings: {
       findUnique: vi.fn(async () => options.settings ?? null),
     },
+    chatGroupMember: {
+      findMany: vi.fn(async () =>
+        (options.groupMembers ?? []).map((bot) => ({ bot: { id: bot.id, name: bot.name } })),
+      ),
+    },
+    usageRecord: {
+      create: vi.fn(async () => undefined),
+    },
   };
   const runtime = {
     describe: () => ({
@@ -394,6 +502,7 @@ function compactionHarness(
       capabilities: { streaming: true, compaction: true, tools: false, scripted: false },
     }),
     run: vi.fn<AgentRuntime["run"]>(async function* () {
+      for (const event of options.runtimeEvents ?? []) yield event;
       yield { type: "done", text: "Summary of 50 messages." };
     }),
   };
@@ -461,7 +570,8 @@ describe("compactHistory", () => {
 
     expect(harness.runtime.run).toHaveBeenCalledOnce();
     const [request] = harness.runtime.run.mock.calls[0]!;
-    expect(request.instructions).toContain("Current date and time");
+    expect(request.instructions).not.toContain("Current date and time");
+    expect(request.prompt).toContain("Current date and time");
     expect(request.instructions).toContain("context summarization assistant");
     expect(request.tools).toEqual([]);
     expect(request.model).toEqual({
@@ -533,7 +643,7 @@ describe("compactHistory", () => {
     );
   });
 
-  it("serializes attachment metadata into the transcript", async () => {
+  it("serializes attachment metadata and tool traces into the transcript", async () => {
     const messages: HarnessMessage[] = Array.from({ length: 50 }, (_, i) => ({
       seq: i,
       role: "user",
@@ -552,6 +662,16 @@ describe("compactHistory", () => {
       mimeType: "image/png",
       name: "diagram.png",
     });
+    messages[2]!.blocks.push({
+      kind: "steps",
+      steps: [
+        {
+          label: "Read file",
+          count: 1,
+          calls: [{ name: "read_file", input: '{ "path": "plan.md" }', output: "Ship on Friday" }],
+        },
+      ],
+    });
     const harness = compactionHarness({ deploymentModelKey: "openrouter-key", messages });
 
     await compactHistory(harness.deps, "thread-1");
@@ -559,6 +679,63 @@ describe("compactHistory", () => {
     const [request] = harness.runtime.run.mock.calls[0]!;
     expect(request.prompt).toContain("[file: plan.pdf (application/pdf, 123 bytes)]");
     expect(request.prompt).toContain("[image: diagram.png]");
+    expect(request.prompt).toContain('[tool read_file({ "path": "plan.md" }) → Ship on Friday]');
+  });
+
+  it("names each group member in the transcript and reads its handoffs by name", async () => {
+    const messages: HarnessMessage[] = Array.from({ length: 50 }, (_, i) => ({
+      seq: i,
+      role: "user",
+      blocks: [{ kind: "text", text: `message ${i}` }],
+    }));
+    messages[0] = {
+      seq: 0,
+      role: "bot",
+      botId: "bot-b",
+      blocks: [{ kind: "text", text: "I priced the migration at three weeks." }],
+    };
+    messages[1] = {
+      seq: 1,
+      role: "bot",
+      botId: "bot-c",
+      blocks: [
+        { kind: "handoff", fromBotId: "bot-c", toBotId: "bot-b", text: "take the rollout", hop: 1 },
+      ],
+    };
+    messages[2] = {
+      seq: 2,
+      role: "bot",
+      botId: "bot-gone",
+      blocks: [{ kind: "text", text: "leftover from a removed member" }],
+    };
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      messages,
+      groupId: "group-1",
+      groupMembers: [
+        { id: "bot-b", name: "Bea" },
+        { id: "bot-c", name: "Cyd" },
+      ],
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    const [request] = harness.runtime.run.mock.calls[0]!;
+    expect(request.prompt).toContain("Bea: I priced the migration at three weeks.");
+    expect(request.prompt).toContain("Cyd: [handoff Cyd -&gt; Bea] take the rollout");
+    expect(request.prompt).toContain("bot: leftover from a removed member");
+    expect(request.prompt).not.toContain("bot-b");
+    expect(harness.prisma.chatGroupMember.findMany).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the transcript unattributed outside a group", async () => {
+    const harness = compactionHarness({ deploymentModelKey: "openrouter-key" });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    const [request] = harness.runtime.run.mock.calls[0]!;
+    expect(request.prompt).toContain("bot: message 1");
+    expect(harness.prisma.chatGroupMember.findMany).not.toHaveBeenCalled();
   });
 
   it("compacts locally without a semantic memory provider", async () => {
@@ -718,7 +895,7 @@ describe("compactHistory", () => {
     expect(harness.thread.historyCompactedUpToSeq).toBe(99);
   });
 
-  it("does not advance across a message coverage gap", async () => {
+  it("summarises across messages a rewind deleted", async () => {
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
       messages: [
@@ -729,9 +906,27 @@ describe("compactHistory", () => {
 
     await compactHistory(harness.deps, "thread-1");
 
-    expect(harness.runtime.run).not.toHaveBeenCalled();
-    expect(harness.saveMemory).not.toHaveBeenCalled();
-    expect(harness.prisma.thread.updateMany).not.toHaveBeenCalled();
+    expect(harness.runtime.run).toHaveBeenCalledTimes(1);
+    expect(harness.thread.historyCompactedUpToSeq).toBe(2);
+  });
+
+  it("summarises a batch that starts past a hole left by a rewind", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      historyCompactedUpToSeq: 145,
+      historyCompactionSummary: "Summary through 145.",
+      messages: [147, 148, 149].map((seq) => ({
+        seq,
+        role: "user",
+        blocks: [{ kind: "text", text: `message ${seq}` }] as MessageBlock[],
+      })),
+      nextMessageSeq: 150,
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.runtime.run).toHaveBeenCalledTimes(1);
+    expect(harness.thread.historyCompactedUpToSeq).toBe(149);
   });
 
   it("does not resurrect a summary when clear wins while summarization is running", async () => {
@@ -832,6 +1027,83 @@ describe("compactHistory", () => {
     expect(harness.purgeHistory).toHaveBeenCalledWith(
       { botId: "bot-1", generations: [0] },
       expect.any(Object),
+    );
+  });
+
+  it("records the summarizer's spend as a usage log line and a usage record", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      runtimeEvents: [
+        {
+          type: "usage",
+          provider: "openrouter",
+          model: "openai/gpt-5.6-luna",
+          inputTokens: 4_200,
+          outputTokens: 310,
+          cacheReadTokens: 1_100,
+        },
+      ],
+    });
+    const sink = createTestSink();
+    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+
+    await compactHistory(harness.deps, "thread-1");
+
+    const logged = sink.events.find((event) => event.message === "history.compact.usage");
+    expect(logged).toMatchObject({
+      threadId: "thread-1",
+      botId: "bot-1",
+      provider: "openrouter",
+      model: "openai/gpt-5.6-luna",
+      inputTokens: 4_200,
+      outputTokens: 310,
+      cacheReadTokens: 1_100,
+    });
+    // Absent counters stay absent rather than logging an undefined key.
+    expect(logged).not.toHaveProperty("cacheWriteTokens");
+    // Counters and identifiers only: no transcript, no summary.
+    expect(JSON.stringify(logged)).not.toContain("message 0");
+    expect(JSON.stringify(logged)).not.toContain("Summary of 50 messages.");
+
+    // Exact shape: no `runId`. Compaction has no `Run` row and the column is a foreign key onto one.
+    expect(harness.prisma.usageRecord.create).toHaveBeenCalledWith({
+      data: {
+        spaceId: "workspace-1",
+        botId: "bot-1",
+        userId: "user-1",
+        provider: "openrouter",
+        model: "openai/gpt-5.6-luna",
+        inputTokens: 4_200,
+        outputTokens: 310,
+      },
+    });
+    installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
+  });
+
+  it("still compacts when writing the usage record fails", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      runtimeEvents: [
+        {
+          type: "usage",
+          provider: "openrouter",
+          model: "openai/gpt-5.6-luna",
+          inputTokens: 4_200,
+          outputTokens: 310,
+        },
+      ],
+    });
+    harness.prisma.usageRecord.create.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await expect(compactHistory(harness.deps, "thread-1")).resolves.toBeUndefined();
+
+    expect(harness.prisma.thread.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          historyCompactedUpToSeq: 49,
+          historyCompactionSummary: "Summary of 50 messages.",
+        },
+      }),
     );
   });
 

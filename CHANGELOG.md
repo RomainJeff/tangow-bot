@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-20
+
+#### Added
+
+- **Agent runs can now be exported to an observability service, so you can see what a bot actually did.** An operator who sets a key pair for a Langfuse or other OpenTelemetry endpoint gets every run as a tree — the run, each turn, each tool call and its result, with prompts, responses, token counts and cost — while a deployment that sets nothing behaves exactly as before. Traces carry full conversation content and the user, session and bot identifiers, and there is no per-user opt-out: configuring an endpoint exports every run of every user on the deployment. See [docs/self-host.md](docs/self-host.md).
+
+#### Changed
+
+- A bot now remembers the tools it ran on an earlier turn — which tool, on what, and what came back — instead of only its own reply, so it stops re-reading the same file or repeating a search it already did, and a compacted conversation finally records the actions it took.
+
+#### Fixed
+
+- Your usage totals now count what condensing a long conversation costs. The summarising call spends real tokens on every compaction and was recorded nowhere, so a long thread — where that call is often the most expensive one — read as cheaper than it actually was.
+- A conversation you had edited an earlier message in could stop condensing itself for good, leaving the bot to re-read the same long history on every reply and never record anything new in what it remembers. Editing a message deletes the ones that followed, and the leftover hole in the numbering made the condensing step refuse to run. It now condenses across the deleted stretch, and any conversation already stuck this way recovers on its own.
+- A bot now brings up what it remembers from the first message of a new conversation, instead of only once that conversation had grown long enough to be condensed. The same number of remembered facts is pulled in as before.
+- A bot on Anthropic, OpenAI or OpenRouter now sizes its conversation history by the model's real context window like an OpenAI-compatible connection already did, instead of falling back to a fixed number of messages and cutting the thread short.
+- A bot re-reading a thread no longer mistakes another bot's message for something it decided itself: a message from one of your other bots now stays attributed to that bot in the conversation history, the same way it is shown when the message first wakes the bot, and the bot's own past replies are marked distinctly so a message that merely starts with "Assistant:" cannot pass for one.
+- In a group chat, a bot re-reading the thread no longer takes another member's work for its own: a post from another bot in the group now stays attributed to that bot by name, and a handoff between two members reads with their names instead of internal identifiers.
+- A bot now measures what the rest of its run costs — its instructions, what it remembers, its scratchpad, the roster of your other bots, its tool descriptions, and the message you just sent along with any files and quoted reply attached to it — before deciding how much of the conversation fits, instead of assuming a fixed amount. A lean bot keeps more of the thread, and a bot with a large memory or many connected tools stops crowding its own context window.
+- A bot re-reading a long conversation now recognises its own past replies as its own turns rather than as text quoted back to it, so it keeps its voice and its earlier commitments instead of restating them, and no message from a person or another bot can dress itself up as something the bot decided. Replayed turns are counted as costing nothing, since they were already paid for on the run that produced them.
+
 ### 2026-09-19
 
 #### Changed

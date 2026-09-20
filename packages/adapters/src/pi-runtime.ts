@@ -13,6 +13,7 @@ import {
   type ModelThinkingLevel,
   type SimpleStreamOptions,
   Type,
+  type Usage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type {
@@ -26,7 +27,8 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import type { AskQuestion } from "@rakazo/contracts";
-import { getLogger } from "@rakazo/logging";
+import { redactSecrets } from "@rakazo/core";
+import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
@@ -41,12 +43,14 @@ import {
   registerOpenAiCompatibleCatalog,
   registerOpenAiCompatibleRuntime,
 } from "./pi-openai-compatible-provider.js";
+import { RunTraceRecorder } from "./pi-run-trace.js";
 import {
   billedPromptTokens,
   clipToolResultContent,
   clipToolResultText,
   MODEL_STREAM_MAX_RETRIES,
   MODEL_STREAM_TIMEOUT_MS,
+  providerCacheTokens,
   resolveCompletionMaxTokens,
 } from "./pi-runtime-limits.js";
 import {
@@ -55,6 +59,7 @@ import {
   type PiSessionRecorder,
 } from "./pi-session.js";
 import { textContentArg } from "./tool-text.js";
+import type { TraceExporter } from "./trace-export.js";
 
 /**
  * Normalize the ask_user v2 `questions` argument into validated AskQuestion[] with stable ids.
@@ -162,15 +167,23 @@ export function maxToolCallsPerTurn(env: NodeJS.ProcessEnv = process.env): numbe
 export interface PiAgentRuntimeOptions {
   /** Directory where Pi JSONL sessions are written. Omit to disable recording. */
   sessionRoot?: string;
+  /** Optional trace exporter. Omit to record nothing at all. */
+  traceExporter?: TraceExporter;
+  /** Name this process appears under in exported traces. */
+  serviceName?: string;
 }
 
 export class PiAgentRuntime implements AgentRuntime {
   private readonly sessionRecorder?: PiSessionRecorder;
+  private readonly traceExporter?: TraceExporter;
+  private readonly serviceName?: string;
 
   constructor(options: PiAgentRuntimeOptions = {}) {
     this.sessionRecorder = options.sessionRoot
       ? new PiJsonlSessionRecorder(options.sessionRoot)
       : undefined;
+    this.traceExporter = options.traceExporter;
+    this.serviceName = options.serviceName;
   }
 
   describe() {
@@ -225,6 +238,9 @@ export class PiAgentRuntime implements AgentRuntime {
     const work = (async () => {
       let trackedBudget: ToolCallBudget | undefined;
       let resumeHost: ToolHost | undefined;
+      let traceRecorder: RunTraceRecorder | undefined;
+      let traceOutput = "";
+      let traceError: unknown;
       try {
         const selectedModel = resolveRuntimeModel(request.model);
         if (!selectedModel.model) {
@@ -263,6 +279,7 @@ export class PiAgentRuntime implements AgentRuntime {
         const history = toHistory(
           withoutSteeringMessages(request.history, initialSteering),
           request.prompt,
+          completionModel,
           request.sourceMessageId,
         );
         const initialPrompt = initialSteering.length
@@ -299,6 +316,22 @@ export class PiAgentRuntime implements AgentRuntime {
               error,
             });
           }
+        }
+
+        // Tracing stays entirely inert unless an exporter is installed.
+        if (this.traceExporter) {
+          traceRecorder = new RunTraceRecorder({
+            runId: request.runId,
+            threadId: request.threadId,
+            botId: request.botId,
+            userId: context?.userId,
+            correlationTraceId: context?.traceId,
+            provider: model.provider,
+            model: model.id,
+            systemPrompt,
+            history,
+            prompt: initialPrompt,
+          });
         }
 
         let agent: Agent;
@@ -353,8 +386,16 @@ export class PiAgentRuntime implements AgentRuntime {
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             await piSession?.appendMessage(event.message);
+            traceRecorder?.message(event.message);
+          }
+          if (event.type === "turn_start") {
+            traceRecorder?.turnStart();
+          }
+          if (event.type === "tool_execution_end") {
+            traceRecorder?.toolEnd(event.toolCallId, event.result, event.isError);
           }
           if (event.type === "tool_execution_start") {
+            traceRecorder?.toolStart(event.toolCallId, event.toolName, event.args);
             if (host.toolCallBudget.exceeded) return;
             toolCalls += 1;
             // Live activity feedback: without this the thread shows a bare
@@ -417,10 +458,15 @@ export class PiAgentRuntime implements AgentRuntime {
               streamed = text;
               queue.push({ type: "text", text });
             }
+            traceRecorder?.assistantMessage(
+              event.message,
+              "usage" in event.message ? event.message.usage : undefined,
+            );
             if ("usage" in event.message && event.message.usage) {
               queue.push({
                 type: "usage",
                 ...billedPromptTokens(event.message.usage),
+                ...providerCacheTokens(event.message.usage),
                 provider: model.provider,
                 model: model.id,
               });
@@ -483,12 +529,24 @@ export class PiAgentRuntime implements AgentRuntime {
             queue.push({ type: "text", text: streamed });
           }
         }
+        traceOutput = streamed;
         queue.push(streamed.trim() ? { type: "done", text: streamed } : { type: "done" });
       } catch (error) {
+        traceError = error;
         const message = sanitizeError(error instanceof Error ? error.message : String(error));
         queue.fail(new Error(message));
       } finally {
         queue.close();
+        if (traceRecorder && this.traceExporter) {
+          traceRecorder.finish(traceOutput, traceError);
+          const secrets = request.secrets ?? [];
+          this.traceExporter.export(traceRecorder.trace, {
+            userId: context?.userId,
+            spaceId: context?.spaceId,
+            serviceName: this.serviceName,
+            redact: (text) => redactSensitiveText(redactSecrets(text, [...secrets])),
+          });
+        }
         if (trackedBudget) {
           const keepForResume =
             (signal.aborted || Boolean(resumeHost?.pausePending)) && !trackedBudget.exceeded;
@@ -721,11 +779,55 @@ function stableToolNameHash(name: string): string {
   return (hash >>> 0).toString(36);
 }
 
-function toHistory(
+const ASSISTANT_TURN_OPEN = "<assistant_turn>";
+const ASSISTANT_TURN_CLOSE = "</assistant_turn>";
+
+/**
+ * Stored text can contain anything, including our own turn delimiter, so a user
+ * (or a peer quoting one) could otherwise write a line the flattening cannot
+ * tell from a real assistant turn. Escape it the way prompt data is escaped
+ * elsewhere; only the wrapper below emits the literal tag.
+ */
+function sealAssistantTurnMarkers(content: string): string {
+  return content
+    .replaceAll(ASSISTANT_TURN_OPEN, "&lt;assistant_turn&gt;")
+    .replaceAll(ASSISTANT_TURN_CLOSE, "&lt;/assistant_turn&gt;");
+}
+
+/**
+ * What a rehydrated turn reports it cost: nothing. Those tokens were billed on
+ * the run that produced the turn, so replaying it must not reach a counter twice.
+ */
+function noUsage(): Usage {
+  return {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+}
+
+/**
+ * Rehydrate a thread into the messages this runtime sends.
+ *
+ * The bot's own past turns come back as `assistant` messages: the shape models
+ * are trained on, and structure a peer cannot forge from text. User turns and
+ * peer turns stay on the user side, peers keeping the `<bot_message from=…>`
+ * block the wake prompt already delivers them in. Historical tool calls stay the
+ * rendered text they were stored as — their call ids are not persisted.
+ *
+ * The oldest kept turn is the exception: a provider can refuse a request whose
+ * first message is an assistant turn, so that one falls back to the marked user
+ * rendering instead of being dropped.
+ */
+export function toHistory(
   history: AgentRunRequest["history"],
   prompt: string,
+  model: Pick<Model<Api>, "api" | "provider" | "id">,
   sourceMessageId?: string | null,
-) {
+): AgentMessage[] {
   let duplicatePromptIndex = -1;
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const message = history[index];
@@ -743,11 +845,30 @@ function toHistory(
       : history.filter((_, index) => index !== duplicatePromptIndex);
   return prior
     .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) =>
-      m.role === "assistant"
-        ? { role: "user" as const, content: `Assistant: ${m.content}`, timestamp: Date.now() }
-        : { role: "user" as const, content: m.content, timestamp: Date.now() },
-    );
+    .map((m, index) => {
+      const content = sealAssistantTurnMarkers(m.content);
+      const timestamp = Date.now();
+      if (m.role === "assistant" && index > 0) {
+        return {
+          role: "assistant",
+          content: [{ type: "text", text: content }],
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          usage: noUsage(),
+          stopReason: "stop",
+          timestamp,
+        };
+      }
+      return {
+        role: "user",
+        content:
+          m.role === "assistant"
+            ? `${ASSISTANT_TURN_OPEN}\n${content}\n${ASSISTANT_TURN_CLOSE}`
+            : content,
+        timestamp,
+      };
+    });
 }
 
 function withoutSteeringMessages(
@@ -1157,6 +1278,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
         host.queue.push({
           type: "usage",
           ...billedPromptTokens(event.message.usage),
+          ...providerCacheTokens(event.message.usage),
           provider: subagentModel.provider,
           model: subagentModel.id,
         });

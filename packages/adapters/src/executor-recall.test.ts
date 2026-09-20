@@ -1,0 +1,223 @@
+import type { AgentRunRequest, SemanticMemoryRecallRequest } from "@rakazo/adapter-kit";
+import type { LogEvent } from "@rakazo/logging";
+import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+import { describe, expect, it, vi } from "vitest";
+import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
+import { createRunExecutor } from "./executor.js";
+import type * as HistoryCompactionModule from "./history-compaction.js";
+import {
+  estimateHistoryTokens,
+  estimateTextTokens,
+  estimateToolSchemaTokens,
+} from "./history-compaction.js";
+
+vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ComputerLifecycleModule>()),
+  acquireComputerExecutionLease: async () => null,
+  provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
+}));
+
+// Real windowing, observed: the budget the executor hands it is what this file asserts on.
+const selectHistoryWindow = vi.fn();
+vi.mock("./history-compaction.js", async (importOriginal) => {
+  const original = await importOriginal<typeof HistoryCompactionModule>();
+  return {
+    ...original,
+    selectHistoryWindow: (options: Parameters<typeof original.selectHistoryWindow>[0]) => {
+      selectHistoryWindow(options);
+      return original.selectHistoryWindow(options);
+    },
+  };
+});
+
+function fixture(options: { taskPrompt?: string } = {}) {
+  const taskPrompt = options.taskPrompt ?? "What did Ava decide?";
+  const run = {
+    id: "run-1",
+    botId: "bot-1",
+    threadId: "thread-1",
+    taskId: "task-1",
+    spaceId: "space-1",
+    userId: "user-1",
+    status: "queued",
+    trigger: "user",
+    leaseFence: 0,
+  };
+  const prisma = {
+    run: {
+      findUnique: vi.fn(async () => run),
+      findUniqueOrThrow: vi.fn(async () => run),
+      updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        Object.assign(run, data);
+        return { count: 1 };
+      }),
+    },
+    bot: {
+      findUniqueOrThrow: vi.fn(async () => ({
+        id: run.botId,
+        name: "Assistant",
+        title: "Assistant",
+        description: "Test assistant",
+        memoryScope: "isolated",
+        computerId: "computer-1",
+        computer: { id: "computer-1", scope: "dedicated" },
+      })),
+      findMany: vi.fn(async () => []),
+    },
+    attempt: {
+      create: vi.fn(async () => ({ id: "attempt-1" })),
+      update: vi.fn(),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
+    thread: {
+      findUniqueOrThrow: vi.fn(async () => ({
+        id: run.threadId,
+        groupId: null,
+        historyCompactionSummary: null,
+        historyCompactedUpToSeq: null,
+        historyCompactionGeneration: 0,
+      })),
+    },
+    message: { findMany: vi.fn(async () => []) },
+    task: {
+      findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: taskPrompt })),
+    },
+    connection: { findMany: vi.fn(async () => []) },
+    spaceModelPreference: { findFirst: vi.fn(async () => null) },
+    userModelCredential: { findFirst: vi.fn(async () => null) },
+    deploymentSettings: {
+      findUnique: vi.fn(async () => ({
+        defaultModelProvider: "scripted",
+        defaultModelId: "scripted",
+      })),
+    },
+    taughtSkill: { findMany: vi.fn(async () => []) },
+    agentSecret: { findMany: vi.fn(async () => []) },
+    agentSkill: { findMany: vi.fn(async () => []) },
+    skillSetting: { findMany: vi.fn(async () => []) },
+    botSkill: { findMany: vi.fn(async () => []) },
+    scratchpadItem: { findMany: vi.fn(async () => []) },
+    actionApprovalRule: { findMany: vi.fn(async () => []) },
+    actionAutoReviewPreference: { findUnique: vi.fn(async () => ({ enabled: false })) },
+    externalEffect: {
+      findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => null),
+      create: vi.fn(async () => ({ id: "effect-1" })),
+      update: vi.fn(),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    },
+  };
+  const recall = vi.fn(async (_request: SemanticMemoryRecallRequest) => ({
+    ok: true as const,
+    value: [{ memory: "Ava decided to ship behind a feature flag.", score: 0.9 }],
+  }));
+  const runtimeRun = vi.fn(async function* () {
+    yield { type: "done" as const, text: "Done" };
+  });
+  const executor = createRunExecutor({
+    prisma,
+    runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
+    sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
+    memory: { read: async () => ({ documents: [] }) },
+    memoryProviders: {
+      resolve: async () => ({
+        defaultScope: "isolated" as const,
+        provider: {
+          describe: () => ({
+            id: "test-memory",
+            contractVersion: "1",
+            adapterVersion: "1",
+            capabilities: {
+              recall: true,
+              save: true,
+              purgeHistory: true,
+              sharedScope: true,
+            } as const,
+          }),
+          recall,
+          save: vi.fn(),
+          purgeHistory: vi.fn(),
+        },
+      }),
+    },
+    events: {
+      append: vi.fn(async () => undefined),
+      pauseRunForInput: vi.fn(async () => true),
+      finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
+    },
+    jobs: { enqueue: vi.fn(async () => undefined) },
+    secrets: [],
+  } as unknown as Parameters<typeof createRunExecutor>[0]);
+  return {
+    recall,
+    runtimeRun,
+    async run() {
+      await executor.continueRun(run.id, "worker-1");
+      expect(runtimeRun).toHaveBeenCalled();
+    },
+  };
+}
+
+describe("automatic semantic recall", () => {
+  it("recalls durable memory on a thread that was never compacted", async () => {
+    const f = fixture();
+
+    await f.run();
+
+    expect(f.recall).toHaveBeenCalledOnce();
+    const [request] = f.recall.mock.calls[0]!;
+    expect(request.query).toBe("What did Ava decide?");
+    expect(request.scope).toBe("isolated");
+    // No compaction yet, so the provider must not be pointed at a history generation.
+    expect(request).not.toHaveProperty("historyGeneration");
+    expect(request.limit).toBeGreaterThan(0);
+
+    const [runtimeRequest] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
+    const recalledBlock = runtimeRequest.history?.find((entry) =>
+      entry.content.includes("<recalled_memory>"),
+    );
+    expect(recalledBlock?.content).toContain("Ava decided to ship behind a feature flag.");
+  });
+
+  it("charges the turn prompt and the recalled-memory block to the history budget", async () => {
+    // A long task prompt and a recalled memory are exactly the run this used to get wrong: both
+    // ride into the request outside the window `selectHistoryWindow` chooses from.
+    const f = fixture({
+      taskPrompt: `What did Ava decide?\n\n${"Quoted reply line.\n".repeat(400)}`,
+    });
+    const sink = createTestSink();
+    selectHistoryWindow.mockClear();
+    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    try {
+      await f.run();
+
+      const [request] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
+      // The thread has no messages, so everything handed over as history is historical context.
+      expect(request.history.map((entry) => entry.content)).toEqual([
+        expect.stringContaining("<recalled_memory>"),
+      ]);
+      const logged = sink.events.find((event: LogEvent) => event.message === "agent.run.context") as
+        | (LogEvent & { nonHistoryTokens?: number })
+        | undefined;
+
+      const instructionTokens = estimateTextTokens(request.instructions);
+      const toolSchemaTokens = estimateToolSchemaTokens(request.tools);
+      const promptTokens = estimateTextTokens(request.prompt);
+      const historicalContextTokens = estimateHistoryTokens(request.history);
+      expect(promptTokens).toBeGreaterThan(500);
+      expect(historicalContextTokens).toBeGreaterThan(0);
+      const nonHistoryTokens =
+        instructionTokens + toolSchemaTokens + promptTokens + historicalContextTokens;
+
+      // The budget the window is sized against is the whole non-window cost, not just the
+      // instructions plus the tool schemas.
+      expect(selectHistoryWindow).toHaveBeenCalledOnce();
+      expect(selectHistoryWindow.mock.calls[0]![0]).toMatchObject({ nonHistoryTokens });
+      expect(nonHistoryTokens).toBeGreaterThan(instructionTokens + toolSchemaTokens);
+      // Same number on the log line, so it reconciles with `historyTokens` beside it.
+      expect(logged?.nonHistoryTokens).toBe(nonHistoryTokens);
+    } finally {
+      installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
+    }
+  });
+});

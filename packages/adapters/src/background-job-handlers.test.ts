@@ -117,6 +117,8 @@ describe("createBackgroundJobHandlers", () => {
       id: "openai/gpt-5.6-luna",
       apiKey: "deployment-key",
       baseUrl: undefined,
+      // The deployment model carries no stored context window, so it comes from the catalog.
+      contextWindow: 1_050_000,
       thinkingLevel: null,
       oauth: undefined,
     });

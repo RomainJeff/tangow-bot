@@ -187,11 +187,18 @@ export async function handoffToGroupBot(
   };
 }
 
+/**
+ * The group's rendered roster context, plus the id → name map it was built from.
+ *
+ * History rendering needs the same names to attribute a member's turn and to read
+ * a handoff, and this is the only read that already has them: returning the map
+ * keeps that to one query instead of one lookup per message.
+ */
 export async function loadGroupContext(
   prisma: PrismaClient,
   groupId: string,
   self: { id: string; name: string },
-): Promise<string | undefined> {
+): Promise<{ context: string; memberNames: Map<string, string> } | undefined> {
   const group = await prisma.chatGroup.findUnique({
     where: { id: groupId },
     include: {
@@ -205,10 +212,24 @@ export async function loadGroupContext(
     },
   });
   if (!group) return undefined;
-  return renderGroupMembersContext(
-    group.name,
-    group.members.map((member) => member.bot),
-    self,
-    group.description,
-  );
+  const members = group.members.map((member) => member.bot);
+  return {
+    context: renderGroupMembersContext(group.name, members, self, group.description),
+    memberNames: new Map(members.map((bot) => [bot.id, bot.name])),
+  };
+}
+
+/**
+ * The group's id → name roster on its own, for callers that name authors without rendering
+ * the roster context: background compaction has no running bot to describe the group to.
+ */
+export async function loadGroupMemberNames(
+  prisma: PrismaClient,
+  groupId: string,
+): Promise<Map<string, string>> {
+  const members = await prisma.chatGroupMember.findMany({
+    where: { groupId, bot: { archivedAt: null } },
+    select: { bot: { select: { id: true, name: true } } },
+  });
+  return new Map(members.map((member) => [member.bot.id, member.bot.name]));
 }
