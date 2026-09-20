@@ -190,7 +190,8 @@ function escapePromptData(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
-function escapeDirectoryField(value: string): string {
+/** A name or label going into prompt data: no markers, no line breaks to forge a line with. */
+export function escapeDirectoryField(value: string): string {
   return escapePromptData(value).replaceAll("\r", "\\r").replaceAll("\n", "\\n");
 }
 

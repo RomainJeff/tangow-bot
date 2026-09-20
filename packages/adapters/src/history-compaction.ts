@@ -2,7 +2,7 @@ import { DEFAULT_COMPACTION_SETTINGS, estimateTokens } from "@earendil-works/pi-
 import type { AgentRunRequest, AgentRuntime, JobPublisher } from "@rakazo/adapter-kit";
 import { historyCompactJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
-import { blocksToAgentHistoryText } from "@rakazo/core";
+import { blocksToAgentHistoryText, escapeDirectoryField } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { formatCurrentTimeInstruction } from "./current-time.js";
@@ -443,7 +443,10 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
     // ponytail: an author archived or removed since it posted is no longer in the roster and
     // keeps the generic role label rather than a name we would have to invent, same as the run
     // history. Persist member names on the message if an old batch ever needs to name its author.
-    const speaker = (message.botId && memberNames?.get(message.botId)) || message.role;
+    // A bot's name is user-chosen: escaped like any other prompt data so it cannot carry a line
+    // break and forge a speaker of its own. The role labels are fixed literals and need nothing.
+    const author = message.botId ? memberNames?.get(message.botId) : undefined;
+    const speaker = author ? escapeDirectoryField(author) : message.role;
     return `${speaker}: ${blocksToAgentHistoryText(message.blocks as MessageBlock[], memberNames)}`;
   });
   let transcript = transcriptParts.join("\n\n");
