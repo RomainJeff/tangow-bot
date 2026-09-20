@@ -94,9 +94,7 @@ export function expoPushErrorMessage(body: unknown, status: number): string | un
  * dropping a good token over it would silence a user until they reopen the app.
  */
 export function expoPushTokenIsDead(body: unknown): boolean {
-  return expoPushTickets(body).some(
-    (ticket) => ticket.details?.error === "DeviceNotRegistered",
-  );
+  return expoPushTickets(body).some((ticket) => ticket.details?.error === "DeviceNotRegistered");
 }
 
 export class ExpoPushProvider implements NotificationProvider {
