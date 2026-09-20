@@ -6,6 +6,7 @@ import {
   isAttachmentImageMimeType,
   type MessageBlock,
 } from "@rakazo/contracts";
+import { renderBotMessageBlock } from "./bot-messages.js";
 
 export class AttachmentValidationError extends Error {
   constructor(message: string) {
@@ -98,8 +99,11 @@ export function blocksToAgentHistoryText(blocks: MessageBlock[]): string {
         return `[file: ${block.name} (${block.mimeType}, ${block.size} bytes)]`;
       }
       // Keep attribution on peer messages: without it a later turn cannot tell
-      // which lines came from another bot rather than the user.
-      if (block.kind === "bot_message_received") return `[from ${block.fromBotName}] ${block.text}`;
+      // which lines came from another bot rather than the user. Same block the
+      // sender's wake prompt carries, so the peer reads identically either way.
+      if (block.kind === "bot_message_received") {
+        return renderBotMessageBlock(block.fromBotName, block.text);
+      }
       if (block.kind === "bot_message_sent") return `[to ${block.toBotName}] ${block.text}`;
       if (block.kind === "handoff") {
         return `[handoff ${block.fromBotId} -> ${block.toBotId}] ${block.text}`;
