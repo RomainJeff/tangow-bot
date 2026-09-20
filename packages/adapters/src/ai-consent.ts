@@ -38,9 +38,6 @@ export function aiRecipient(input: {
     name: origin ? `${name} (${origin})` : name,
     use: input.use,
     detail: [
-      input.use === "tracing"
-        ? "Traces are exported for troubleshooting and quality review. Turning this off stops every export for you, including the identifier."
-        : "",
       input.modelId ? `Model: ${input.modelId}.` : "",
       ["openrouter", "vercel-ai-gateway"].includes(input.provider)
         ? `${name} forwards requests to model providers using the routing and privacy settings configured for this connection.`
@@ -53,7 +50,6 @@ export function aiRecipient(input: {
 }
 
 function recipientName(provider: string, use: AiDataUse) {
-  if (use === "tracing") return provider === "langfuse" ? "Langfuse" : provider;
   if (use === "voice") return voiceCatalogEntry(provider)?.name ?? provider;
   if (use === "memory") return provider === "supermemory" ? "Supermemory" : provider;
   if (provider === "cursor") return "Cursor";

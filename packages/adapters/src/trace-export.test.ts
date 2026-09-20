@@ -6,7 +6,6 @@ import {
   resolveTraceExportConfig,
   type TraceExportClient,
   TraceExporter,
-  traceExportRecipient,
 } from "./trace-export.js";
 
 const KEYS = { LANGFUSE_PUBLIC_KEY: "pk-placeholder", LANGFUSE_SECRET_KEY: "sk-placeholder" };
@@ -77,16 +76,6 @@ describe("resolveTraceExportConfig", () => {
   });
 });
 
-describe("traceExportRecipient", () => {
-  it("names the recipient after its endpoint and stays stable", () => {
-    const recipient = traceExportRecipient("https://cloud.langfuse.com");
-    expect(recipient?.name).toBe("Langfuse (https://cloud.langfuse.com)");
-    expect(recipient?.use).toBe("tracing");
-    expect(recipient?.key).toBe(traceExportRecipient("https://cloud.langfuse.com")?.key);
-    expect(recipient?.key).not.toBe(traceExportRecipient("https://traces.example.com")?.key);
-  });
-});
-
 describe("encodeTrace", () => {
   it("emits an OTLP request with redacted content and parent links", () => {
     const payload = encodeTrace(recordedTrace(), {
@@ -113,37 +102,25 @@ describe("encodeTrace", () => {
 });
 
 describe("TraceExporter", () => {
-  it("exports a trace for a consenting user", async () => {
+  it("exports every run once an endpoint is configured", async () => {
     const client = new FakeClient();
-    const exporter = new TraceExporter(client, { isAllowed: async () => true });
+    const exporter = new TraceExporter(client);
     exporter.export(recordedTrace(), { userId: "user-1", spaceId: "space-1" });
     await exporter.flush();
     expect(client.payloads).toHaveLength(1);
   });
 
-  it("exports nothing at all for a user who has not consented", async () => {
+  it("exports a run that has no authenticated user", async () => {
     const client = new FakeClient();
-    const exporter = new TraceExporter(client, { isAllowed: async () => false });
-    exporter.export(recordedTrace(), { userId: "user-1", spaceId: "space-1" });
-    await exporter.flush();
-    expect(client.payloads).toEqual([]);
-  });
-
-  it("exports nothing when the run has no user who could consent", async () => {
-    const client = new FakeClient();
-    const exporter = new TraceExporter(client, {
-      isAllowed: async () => {
-        throw new Error("consent must not be consulted");
-      },
-    });
+    const exporter = new TraceExporter(client);
     exporter.export(recordedTrace(), {});
     await exporter.flush();
-    expect(client.payloads).toEqual([]);
+    expect(client.payloads).toHaveLength(1);
   });
 
   it("swallows a failing endpoint and still resolves its flush", async () => {
     const client = new FakeClient(true);
-    const exporter = new TraceExporter(client, { isAllowed: async () => true });
+    const exporter = new TraceExporter(client);
     expect(() =>
       exporter.export(recordedTrace(), { userId: "user-1", spaceId: "space-1" }),
     ).not.toThrow();
@@ -152,10 +129,7 @@ describe("TraceExporter", () => {
   });
 
   it("gives up on a hanging endpoint instead of holding shutdown", async () => {
-    const exporter = new TraceExporter(
-      { send: () => new Promise<void>(() => {}) },
-      { isAllowed: async () => true },
-    );
+    const exporter = new TraceExporter({ send: () => new Promise<void>(() => {}) });
     exporter.export(recordedTrace(), { userId: "user-1", spaceId: "space-1" });
     await expect(exporter.flush(5)).resolves.toBeUndefined();
   });

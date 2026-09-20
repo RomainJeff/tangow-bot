@@ -484,7 +484,6 @@ export interface RouterDeps {
     defaultProvider: string;
     defaultModel: string;
     deploymentModelKey?: string;
-    traceExportBaseUrl?: string;
     webOrigin: string;
     privacyPolicyUrl?: string;
     screenProxySecret: string;

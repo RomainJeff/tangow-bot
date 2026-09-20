@@ -11,13 +11,9 @@
  * and any OTLP backend can be pointed at instead.
  */
 import type { AttributeValue } from "@earendil-works/pi-telemetry";
-import type { AiRecipient } from "@rakazo/contracts";
-import { AI_DISCLOSURE_VERSION } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
 import { guardedWrite, reportSinkError } from "@rakazo/logging";
 import { request } from "undici";
 
-import { aiRecipient } from "./ai-consent.js";
 import type { RecordedSpan, RunTrace } from "./run-trace.js";
 
 const TRACE_PATH = "/api/public/otel/v1/traces";
@@ -36,27 +32,12 @@ export interface TraceExportClient {
   send(payload: unknown): Promise<void>;
 }
 
-/** Consent lookup for the user a trace belongs to. */
-export interface TraceExportConsent {
-  isAllowed(input: { userId: string; spaceId: string }): Promise<boolean>;
-}
-
 export interface TraceExportContext {
   userId?: string;
   spaceId?: string;
   serviceName?: string;
   /** Applied to every exported string, so run secrets never leave the process. */
   redact?: (text: string) => string;
-}
-
-/**
- * The consent recipient a deployment's trace exporter appears as.
- *
- * Shared by the API, which shows it in Account settings, and by the exporter,
- * which enforces it; both must derive the same key from the same endpoint.
- */
-export function traceExportRecipient(baseUrl: string): Omit<AiRecipient, "allowed"> | null {
-  return aiRecipient({ provider: "langfuse", use: "tracing", baseUrl });
 }
 
 export function resolveTraceExportConfig(source: NodeJS.ProcessEnv = process.env): {
@@ -136,15 +117,11 @@ export class TraceExporter {
 
   constructor(
     private readonly client: TraceExportClient,
-    private readonly consent: TraceExportConsent,
     private readonly environment?: string,
   ) {}
 
   export(trace: RunTrace, context: TraceExportContext): void {
     guardedWrite(() => {
-      const { userId, spaceId } = context;
-      // An unauthenticated run has nobody who could have consented.
-      if (!userId || !spaceId) return;
       const payload = encodeTrace(trace, {
         environment: this.environment,
         serviceName: context.serviceName,
@@ -153,9 +130,8 @@ export class TraceExporter {
       if (!payload) return;
       // Nothing downstream awaits this, so the chain swallows its own failure:
       // an unreachable endpoint must not surface as an unhandled rejection.
-      const pending: Promise<void> = this.consent
-        .isAllowed({ userId, spaceId })
-        .then((allowed) => (allowed ? this.client.send(payload) : undefined))
+      const pending: Promise<void> = this.client
+        .send(payload)
         .catch(reportSinkError)
         .finally(() => {
           this.inflight.delete(pending);
@@ -182,48 +158,22 @@ export class TraceExporter {
  * Builds the exporter a composition root installs, or nothing.
  *
  * Returns `{}` when the deployment configured no endpoint, so an unconfigured
- * process never resolves a recipient, never opens a connection and never pays
- * for the feature. A partial configuration returns a warning to log once.
+ * process never opens a connection and never pays for the feature.
+ * A partial configuration returns a warning to log once.
+ *
+ * Configuring an endpoint is the whole decision: every run of every user on the
+ * deployment is then exported, with no per-user opt-out. An operator who points
+ * this at a third party is disclosing their users' conversations to it.
  */
 export function createTraceExporterFromEnv(
-  prisma: PrismaClient,
   source: NodeJS.ProcessEnv = process.env,
   client?: TraceExportClient,
 ): { exporter?: TraceExporter; baseUrl?: string; warning?: string } {
   const { config, warning } = resolveTraceExportConfig(source);
   if (!config) return warning ? { warning } : {};
-  const recipient = traceExportRecipient(config.baseUrl);
-  if (!recipient) return { warning: "trace export disabled: endpoint is not a valid recipient" };
   return {
     baseUrl: config.baseUrl,
-    exporter: new TraceExporter(
-      client ?? createTraceExportClient(config),
-      createTraceExportConsent(prisma, recipient.key),
-      config.environment,
-    ),
-  };
-}
-
-/**
- * Reads consent for the trace export recipient straight from the database.
- *
- * A row exists only once the user allowed this exact recipient at the current
- * disclosure version, so the default for everyone is "do not export".
- */
-export function createTraceExportConsent(
-  prisma: PrismaClient,
-  recipientKey: string,
-): TraceExportConsent {
-  return {
-    async isAllowed({ userId, spaceId }) {
-      const granted = await prisma.aiDataConsent.findUnique({
-        where: {
-          userId_spaceId_recipientKey: { userId, spaceId, recipientKey },
-        },
-        select: { version: true },
-      });
-      return granted?.version === AI_DISCLOSURE_VERSION;
-    },
+    exporter: new TraceExporter(client ?? createTraceExportClient(config), config.environment),
   };
 }
 

@@ -184,10 +184,11 @@ or any other OTLP/HTTP backend at the same traces; it must be https unless it is
 `LANGFUSE_ENVIRONMENT` labels the traces (`production`, `staging`). A partial configuration logs a
 one-time warning and stays off.
 
-Traces carry full conversation content and the user's identifier, so the endpoint is a data
-recipient like any model provider: it appears in the AI data sharing screen, and nothing is exported
-for a user who has not allowed it. Run secrets and the values the log redactor already removes are
-stripped before anything leaves the process, and an unreachable endpoint never fails a run.
+Traces carry full conversation content along with the user, session and bot identifiers. There is no
+per-user opt-out: configuring an endpoint exports every run of every user on the deployment, so only
+point this at a service you are entitled to disclose your users' conversations to. Run secrets and
+the values the log redactor already removes are stripped before anything leaves the process, and an
+unreachable endpoint never fails a run.
 
 Optional:
 

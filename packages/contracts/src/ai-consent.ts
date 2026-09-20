@@ -2,7 +2,7 @@ import * as z from "zod";
 
 export const AI_DISCLOSURE_VERSION = "2026-09-14";
 export const AI_PRIVACY_URL = "https://rakazo.com/privacy/";
-export const AiDataUseSchema = z.enum(["model", "voice", "memory", "tracing"]);
+export const AiDataUseSchema = z.enum(["model", "voice", "memory"]);
 export type AiDataUse = z.infer<typeof AiDataUseSchema>;
 export const AI_DATA_DISCLOSURES: Record<AiDataUse, string> = {
   model:
@@ -11,8 +11,6 @@ export const AI_DATA_DISCLOSURES: Record<AiDataUse, string> = {
     "Audio you record is sent for transcription. Text you choose to play, including bot responses, is sent to generate speech.",
   memory:
     "Conversation summaries, saved memories, search queries, and bot and Space identifiers are sent to store and retrieve context for your bots.",
-  tracing:
-    "Full agent traces are sent to the observability service this deployment is configured with: prompts, bot instructions, conversation history, model responses, tool calls and their results, token counts, and your user identifier.",
 };
 export const AiConsentQuerySchema = z
   .object({

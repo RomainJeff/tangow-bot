@@ -6,7 +6,6 @@ import {
   parseModelSecret,
   selectConfiguredModel,
   toStringRecord,
-  traceExportRecipient,
 } from "@rakazo/adapters";
 import type { Actor, AiConsentQuery, AiConsentStatus, AiRecipient } from "@rakazo/contracts";
 import { AI_DISCLOSURE_VERSION, AI_PRIVACY_URL } from "@rakazo/contracts";
@@ -23,7 +22,7 @@ export async function aiConsentStatus(
   actor: Actor,
   query: AiConsentQuery = {},
 ): Promise<AiConsentStatus> {
-  const uses = query.uses ?? ["model", "memory", "voice", "tracing"];
+  const uses = query.uses ?? ["model", "memory", "voice"];
   const modelsEnabled = uses.includes("model") && deps.env.agentRuntime !== "scripted";
   const target =
     query.botId || query.groupId ? await resolveThreadTarget(deps.prisma, actor, query) : null;
@@ -170,10 +169,6 @@ export async function aiConsentStatus(
         baseUrl: toStringRecord(memory.settings).baseUrl,
       }),
     );
-  // The trace endpoint is an operator choice, so it is disclosed wherever consent
-  // is reviewed, but never demanded before a message can be sent.
-  if (uses.includes("tracing") && deps.env.traceExportBaseUrl)
-    add(traceExportRecipient(deps.env.traceExportBaseUrl));
   if (
     uses.includes("model") &&
     deps.cloudAgent &&

@@ -303,7 +303,7 @@ export async function createApp(
   integrationSettings.warmDirectories();
   // Optional agent trace export. Without configuration this resolves to nothing,
   // so the runtime records no spans and no vendor endpoint is ever contacted.
-  const traceExport = createTraceExporterFromEnv(prisma, process.env);
+  const traceExport = createTraceExporterFromEnv(process.env);
   if (traceExport.warning) logger.warn(traceExport.warning);
   const runtime =
     env.agentRuntime === "scripted"

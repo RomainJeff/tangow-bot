@@ -81,7 +81,7 @@ async function main() {
   const dataDir = process.env.DATA_DIR ?? "./data";
   // Optional agent trace export. Absent configuration resolves to nothing here,
   // so the runtime records no spans and no vendor endpoint is ever contacted.
-  const traceExport = createTraceExporterFromEnv(prisma, process.env);
+  const traceExport = createTraceExporterFromEnv(process.env);
   if (traceExport.warning) logger.warn(traceExport.warning);
   const runtime =
     process.env.AGENT_RUNTIME === "scripted"
