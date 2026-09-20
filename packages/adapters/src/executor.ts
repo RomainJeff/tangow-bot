@@ -1414,11 +1414,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
           summary: threadContext.summary,
           historyCompactedUpToSeq: threadContext.historyCompactedUpToSeq,
         });
-        let history = compactedHistory.history.map(({ id, role, content }) => ({
-          id,
-          role,
-          content,
-        }));
+        // `system` rows are thread asides, never conversation, and this is the one place
+        // that drops them. It has to happen after the selection above: those rows hold a
+        // seq of their own, and removing them earlier punches a hole in the run of
+        // sequence numbers the compaction summary is only trusted against.
+        let history = compactedHistory.history
+          .filter(({ role }) => role !== "system")
+          .map(({ id, role, content }) => ({
+            id,
+            role,
+            content,
+          }));
         // Stays null when a local summary already narrowed history and no window sizing ran.
         let historyWindowMode: HistoryWindowMode | null = null;
         const turnBlocks = userTurnBlocksForRun(
@@ -3752,6 +3758,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyWindowMode = window.mode;
           }
           const runtimeHistory = [...historicalContext, ...history];
+          // Split by role so a change in how past turns are rehydrated is visible here.
+          const historyTokensByRole = runtimeHistory.reduce<Record<string, number>>(
+            (totals, message) => {
+              totals[message.role] =
+                (totals[message.role] ?? 0) + estimateTextTokens(message.content);
+              return totals;
+            },
+            {},
+          );
           // Counters only, never content: this is the per-run context budget the next
           // optimizations are measured against.
           getLogger().info("agent.run.context", {
@@ -3766,6 +3781,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // Everything handed to the runtime as history, including the compacted summary and
             // recalled-memory blocks that sit in front of the thread messages.
             historyTokens: estimateHistoryTokens(runtimeHistory),
+            historyTokensByRole,
             historyMessagesKept: history.length,
             historyMessagesAvailable: compactedHistory.history.length,
             historyWindowMode,

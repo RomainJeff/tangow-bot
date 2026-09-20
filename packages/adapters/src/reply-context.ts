@@ -70,8 +70,13 @@ export function messageToAgentHistoryText(
  * decisions as its own. `groupMemberNames` — the roster already loaded for the
  * group context — says who wrote what: a member's turn is delivered as the same
  * named peer block a direct bot message arrives in, on the user side so it never
- * carries the assistant-turn marker. Outside a group the map is absent and every
- * bot row stays this bot's own turn, which is what a private thread holds.
+ * reads as this bot's own turn. Outside a group the map is absent and every bot
+ * row stays this bot's own turn, which is what a private thread holds.
+ *
+ * Stored `system` rows are thread asides ("Run stopped", "Created by …"), not
+ * conversation. They keep their own role here so the caller can drop them by name
+ * once it no longer needs their sequence numbers, rather than having them fall
+ * through and read as a turn this bot took.
  */
 export function messageToAgentHistoryTurn(
   message: HistoryMessage,

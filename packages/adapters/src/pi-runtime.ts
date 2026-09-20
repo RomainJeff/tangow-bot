@@ -13,6 +13,7 @@ import {
   type ModelThinkingLevel,
   type SimpleStreamOptions,
   Type,
+  type Usage,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type {
@@ -264,6 +265,7 @@ export class PiAgentRuntime implements AgentRuntime {
         const history = toHistory(
           withoutSteeringMessages(request.history, initialSteering),
           request.prompt,
+          completionModel,
           request.sourceMessageId,
         );
         const initialPrompt = initialSteering.length
@@ -739,19 +741,39 @@ function sealAssistantTurnMarkers(content: string): string {
 }
 
 /**
- * Flatten a thread into the user messages this runtime sends.
+ * What a rehydrated turn reports it cost: nothing. Those tokens were billed on
+ * the run that produced the turn, so replaying it must not reach a counter twice.
+ */
+function noUsage(): Usage {
+  return {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+}
+
+/**
+ * Rehydrate a thread into the messages this runtime sends.
  *
- * Every turn arrives as a user message, so the assistant's own turns need a
- * delimiter of their own: a bare `Assistant: ` prefix is text any message can
- * contain, and a peer's message rendered into history then reads as a decision
- * this bot made itself. Peer turns keep the `<bot_message from=…>` block the
- * wake prompt already delivers them in.
+ * The bot's own past turns come back as `assistant` messages: the shape models
+ * are trained on, and structure a peer cannot forge from text. User turns and
+ * peer turns stay on the user side, peers keeping the `<bot_message from=…>`
+ * block the wake prompt already delivers them in. Historical tool calls stay the
+ * rendered text they were stored as — their call ids are not persisted.
+ *
+ * The oldest kept turn is the exception: a provider can refuse a request whose
+ * first message is an assistant turn, so that one falls back to the marked user
+ * rendering instead of being dropped.
  */
 export function toHistory(
   history: AgentRunRequest["history"],
   prompt: string,
+  model: Pick<Model<Api>, "api" | "provider" | "id">,
   sourceMessageId?: string | null,
-) {
+): AgentMessage[] {
   let duplicatePromptIndex = -1;
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const message = history[index];
@@ -769,15 +791,28 @@ export function toHistory(
       : history.filter((_, index) => index !== duplicatePromptIndex);
   return prior
     .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => {
+    .map((m, index) => {
       const content = sealAssistantTurnMarkers(m.content);
+      const timestamp = Date.now();
+      if (m.role === "assistant" && index > 0) {
+        return {
+          role: "assistant",
+          content: [{ type: "text", text: content }],
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          usage: noUsage(),
+          stopReason: "stop",
+          timestamp,
+        };
+      }
       return {
-        role: "user" as const,
+        role: "user",
         content:
           m.role === "assistant"
             ? `${ASSISTANT_TURN_OPEN}\n${content}\n${ASSISTANT_TURN_CLOSE}`
             : content,
-        timestamp: Date.now(),
+        timestamp,
       };
     });
 }
