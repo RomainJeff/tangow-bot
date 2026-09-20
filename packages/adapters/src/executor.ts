@@ -1375,17 +1375,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ? `Update from ${peerMessage.fromBotName}: ${peerMessage.text}`
             : "The delegated bot completed its turn without a written summary."
           : undefined;
+        // Durable memories live outside the thread, so recall does not wait for a compaction.
+        // Same request shape as the recall_memory tool, which never carried that gate.
         const recallPromise =
-          threadContext.includeSemanticRecall &&
-          semanticMemory &&
-          memoryScope &&
-          thread.historyCompactedUpToSeq != null
+          threadContext.includeSemanticRecall && semanticMemory && memoryScope
             ? semanticMemory.recall(
                 {
                   query: task.prompt,
                   scope: memoryScope,
                   botId: bot.id,
-                  historyGeneration: thread.historyCompactionGeneration,
+                  ...(thread.historyCompactedUpToSeq == null
+                    ? {}
+                    : { historyGeneration: thread.historyCompactionGeneration }),
                   limit: MAX_RECALLED_MEMORIES,
                 },
                 context,

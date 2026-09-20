@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-20
+
+#### Fixed
+
+- A bot now brings up what it remembers from the first message of a new conversation, instead of only once that conversation had grown long enough to be condensed. The same number of remembered facts is pulled in as before.
+
 ### 2026-09-19
 
 #### Changed
