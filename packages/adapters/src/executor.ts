@@ -1425,8 +1425,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             role,
             content,
           }));
-        // Stays null when a local summary already narrowed history and no window sizing ran.
-        let historyWindowMode: HistoryWindowMode | null = null;
+        // What the window could have chosen from, counted after the system rows are dropped so it
+        // is comparable with the count kept below. Measured against the pre-filter length it
+        // reported a permanent phantom loss of one message per system row.
+        const historyMessagesAvailable = history.length;
+        // "not-sized" rather than null when a local summary already narrowed history and no window
+        // sizing ran: null read the same as "sized and kept everything".
+        let historyWindowMode: HistoryWindowMode | "not-sized" = "not-sized";
         const turnBlocks = userTurnBlocksForRun(
           run.trigger,
           runId,
@@ -3796,7 +3801,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyTokens: estimateHistoryTokens(runtimeHistory),
             historyTokensByRole,
             historyMessagesKept: history.length,
-            historyMessagesAvailable: compactedHistory.history.length,
+            historyMessagesAvailable,
             historyWindowMode,
           });
           const runtimeEvents = deps.runtime.run(

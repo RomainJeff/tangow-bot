@@ -1,4 +1,6 @@
 import type { AgentRunRequest, SemanticMemoryRecallRequest } from "@rakazo/adapter-kit";
+import type { LogEvent } from "@rakazo/logging";
+import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
@@ -180,5 +182,32 @@ describe("thread asides and the compaction summary", () => {
     const contents = (request.history ?? []).map((entry) => entry.content);
     expect(contents.some((content) => content.includes("Added to the group chat"))).toBe(false);
     expect(contents.some((content) => content.includes("First question"))).toBe(true);
+  });
+
+  // The aside is dropped before the window ever sees it, so counting it as "available" reported a
+  // message lost to truncation on every run of every thread that holds one.
+  it("counts only windowable messages as available, and says when no window was sized", async () => {
+    const sink = createTestSink();
+    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    const contextEvent = () =>
+      sink.events.find((event: LogEvent) => event.message === "agent.run.context") as
+        | (LogEvent & {
+            historyMessagesKept?: number;
+            historyMessagesAvailable?: number;
+            historyWindowMode?: string;
+          })
+        | undefined;
+
+    await fixture({ summary: null, compactedUpToSeq: null, messages: conversation }).run();
+
+    // Three stored messages, one of them the system aside: two are windowable and both survive.
+    expect(contextEvent()).toMatchObject({ historyMessagesKept: 2, historyMessagesAvailable: 2 });
+    expect(contextEvent()?.historyWindowMode).not.toBe("not-sized");
+
+    sink.events.length = 0;
+    await fixture({ summary, compactedUpToSeq: 4, messages: conversation }).run();
+
+    // A local summary already narrowed history, so no window sizing ran at all.
+    expect(contextEvent()).toMatchObject({ historyWindowMode: "not-sized" });
   });
 });
