@@ -723,7 +723,31 @@ function stableToolNameHash(name: string): string {
   return (hash >>> 0).toString(36);
 }
 
-function toHistory(
+const ASSISTANT_TURN_OPEN = "<assistant_turn>";
+const ASSISTANT_TURN_CLOSE = "</assistant_turn>";
+
+/**
+ * Stored text can contain anything, including our own turn delimiter, so a user
+ * (or a peer quoting one) could otherwise write a line the flattening cannot
+ * tell from a real assistant turn. Escape it the way prompt data is escaped
+ * elsewhere; only the wrapper below emits the literal tag.
+ */
+function sealAssistantTurnMarkers(content: string): string {
+  return content
+    .replaceAll(ASSISTANT_TURN_OPEN, "&lt;assistant_turn&gt;")
+    .replaceAll(ASSISTANT_TURN_CLOSE, "&lt;/assistant_turn&gt;");
+}
+
+/**
+ * Flatten a thread into the user messages this runtime sends.
+ *
+ * Every turn arrives as a user message, so the assistant's own turns need a
+ * delimiter of their own: a bare `Assistant: ` prefix is text any message can
+ * contain, and a peer's message rendered into history then reads as a decision
+ * this bot made itself. Peer turns keep the `<bot_message from=…>` block the
+ * wake prompt already delivers them in.
+ */
+export function toHistory(
   history: AgentRunRequest["history"],
   prompt: string,
   sourceMessageId?: string | null,
@@ -745,11 +769,17 @@ function toHistory(
       : history.filter((_, index) => index !== duplicatePromptIndex);
   return prior
     .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) =>
-      m.role === "assistant"
-        ? { role: "user" as const, content: `Assistant: ${m.content}`, timestamp: Date.now() }
-        : { role: "user" as const, content: m.content, timestamp: Date.now() },
-    );
+    .map((m) => {
+      const content = sealAssistantTurnMarkers(m.content);
+      return {
+        role: "user" as const,
+        content:
+          m.role === "assistant"
+            ? `${ASSISTANT_TURN_OPEN}\n${content}\n${ASSISTANT_TURN_CLOSE}`
+            : content,
+        timestamp: Date.now(),
+      };
+    });
 }
 
 function withoutSteeringMessages(

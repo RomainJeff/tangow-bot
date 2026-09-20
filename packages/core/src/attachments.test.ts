@@ -185,7 +185,7 @@ describe("peer message history", () => {
       blocksToAgentHistoryText([
         { kind: "bot_message_received", fromBotId: "b_1", fromBotName: "Researcher", text: "hi" },
       ]),
-    ).toBe("[from Researcher] hi");
+    ).toBe('<bot_message from="Researcher">\nhi\n</bot_message>');
     expect(
       blocksToAgentHistoryText([
         { kind: "bot_message_sent", toBotId: "b_2", toBotName: "Analyst", text: "chart it" },
