@@ -66,6 +66,33 @@ describe("connectorToolRequiresApproval", () => {
     expect(connectorToolRequiresApproval("list_items")).toBe(false);
     expect(connectorToolRequiresApproval("send_message")).toBe(true);
   });
+
+  it("reads through fetch and query verbs", () => {
+    expect(connectorToolRequiresApproval("fetch_page")).toBe(false);
+    expect(connectorToolRequiresApproval("query_data_sources")).toBe(false);
+    expect(connectorToolRequiresApproval("query_and_delete")).toBe(true);
+    expect(connectorToolRequiresApproval("delete_query")).toBe(true);
+  });
+
+  it("strips the mcp server slug and treats dashes as word boundaries", () => {
+    expect(connectorToolRequiresApproval("mcp__notion__notion-search")).toBe(false);
+    expect(connectorToolRequiresApproval("mcp__notion__notion-fetch")).toBe(false);
+    expect(connectorToolRequiresApproval("mcp__context7__get-library-docs")).toBe(false);
+    expect(connectorToolRequiresApproval("mcp__notion__notion-create-pages")).toBe(true);
+    expect(connectorToolRequiresApproval("mcp__fs__search-and-replace")).toBe(true);
+  });
+
+  it("does not let a read verb in the server slug allow the tool", () => {
+    expect(connectorToolRequiresApproval("mcp__my_get__nuke-everything")).toBe(true);
+    expect(connectorToolRequiresApproval("mcp__search__wipe-db")).toBe(true);
+    expect(connectorToolRequiresApproval("mcp__list_hub__delete-all")).toBe(true);
+    expect(connectorToolRequiresApproval("mcp__my_notion__notion-search")).toBe(false);
+  });
+
+  it("leaves non-mcp connector names untouched", () => {
+    expect(connectorToolRequiresApproval("GMAIL_LIST_THREADS")).toBe(false);
+    expect(connectorToolRequiresApproval("crm_create_note")).toBe(true);
+  });
 });
 
 describe("unattendedTriggerToolRequiresApproval", () => {

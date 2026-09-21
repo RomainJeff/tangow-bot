@@ -52,7 +52,7 @@ const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "web_search",
 ]);
 
-const READ_ONLY_CONNECTOR_PATTERN = /(^|_)(get|list|search|find|read)(_|$)/i;
+const READ_ONLY_CONNECTOR_PATTERN = /(^|_)(get|list|search|find|read|fetch|query)(_|$)/i;
 const MUTATING_CONNECTOR_PATTERN =
   /(^|_)(accept|add|approve|archive|assign|buy|cancel|charge|checkout|close|commit|copy|create|delete|deploy|disable|enable|execute|forward|grant|invite|link|mark|merge|modify|move|patch|pay|post|publish|purchase|put|register|reject|remove|rename|replace|reply|reset|revoke|run|schedule|send|set|share|start|stop|submit|subscribe|trigger|unassign|unlink|unsubscribe|update|upload|upsert|write)(_|$)/i;
 const COMPOUND_CONNECTOR_ACTION_PATTERN = /_(and|or|then)_/i;
@@ -76,10 +76,23 @@ export function connectorKindFromToolName(toolName: string, connectorKinds: stri
   return (segment ?? toolName).toLowerCase();
 }
 
+/**
+ * MCP tools reach us as `mcp__<slug>__<tool>`. A slug may contain `_` and `-`
+ * (deriveMcpSlug), so strip lazily up to the first `__`: a slug that itself
+ * contains `__` over-asks, never over-allows. Without this the slug stays in the
+ * tested string, and a server named `search` or `my_get` silently allows every
+ * tool it exposes. Dashes become `_` so `notion-search` hits the same word
+ * boundaries as `notion_search`.
+ */
+function normalizeConnectorToolName(toolName: string): string {
+  return toolName.replace(/^mcp__.+?__/, "").replace(/-/g, "_");
+}
+
 export function connectorToolRequiresApproval(toolName: string): boolean {
-  if (MUTATING_CONNECTOR_PATTERN.test(toolName)) return true;
-  if (COMPOUND_CONNECTOR_ACTION_PATTERN.test(toolName)) return true;
-  return !READ_ONLY_CONNECTOR_PATTERN.test(toolName);
+  const name = normalizeConnectorToolName(toolName);
+  if (MUTATING_CONNECTOR_PATTERN.test(name)) return true;
+  if (COMPOUND_CONNECTOR_ACTION_PATTERN.test(name)) return true;
+  return !READ_ONLY_CONNECTOR_PATTERN.test(name);
 }
 
 export function toolRequiresApproval(toolName: string, viaConnector: boolean): boolean {
