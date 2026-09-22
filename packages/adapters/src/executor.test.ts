@@ -19,6 +19,7 @@ import {
   threadContextForRun,
   toolCompletionAuditPayload,
   toolCompletionFromResult,
+  unreadConversationCount,
 } from "./executor.js";
 import { serializeModelSecret } from "./pi-oauth.js";
 import { userSkillsRoot, writeUserSkill } from "./skill-store.js";
@@ -519,6 +520,20 @@ describe("run notification preference", () => {
     ).resolves.toBe(true);
     // forceEnabled short-circuits before any lookup.
     expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  it("counts the user's unread live chats for the badge, not archived or channel threads", async () => {
+    const count = vi.fn(async () => 3);
+    const prisma = { thread: { count } } as unknown as PrismaClient;
+
+    await expect(unreadConversationCount(prisma, "user-1")).resolves.toBe(3);
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        unread: true,
+        OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+      },
+    });
   });
 });
 
