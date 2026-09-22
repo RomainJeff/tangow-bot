@@ -59,8 +59,13 @@ import {
   retryInboxSpaceFallback,
   selectInboxSpace,
   spaceInboxItems,
+  unreadConversationCount,
 } from "../lib/inbox-spaces";
-import { dismissThreadNotifications, resumeLiveNotifications } from "../lib/live-notifications";
+import {
+  dismissThreadNotifications,
+  resumeLiveNotifications,
+  syncAppBadge,
+} from "../lib/live-notifications";
 import { native, useThemedStyles } from "../lib/native";
 import { previewSnippet } from "../lib/preview";
 import { setProfilePhoto, useProfilePhoto } from "../lib/profile-photo";
@@ -150,6 +155,7 @@ export default function Home() {
       setGroups(navigation.current.groups);
       setSpaces(navigation.spaces);
       setMe(nextMe);
+      void syncAppBadge(unreadConversationCount(navigation.spaces)).catch(() => undefined);
       // The photo lives on the session user, not on `me`.
       void fetchProfileImage()
         .then(setProfilePhoto)

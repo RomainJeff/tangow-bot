@@ -29,6 +29,22 @@ export function canDeleteInboxSpace(
   return !space.isDefault && !space.hasContent && space.canDelete === true;
 }
 
+/** How many chats the inbox shows unread across every space: the app icon badge. */
+export function unreadConversationCount(
+  spaces: ReadonlyArray<{
+    bots: ReadonlyArray<{ unread: boolean }>;
+    groups: ReadonlyArray<{ unread: boolean }>;
+  }>,
+): number {
+  return spaces.reduce(
+    (total, space) =>
+      total +
+      space.bots.filter((bot) => bot.unread).length +
+      space.groups.filter((group) => group.unread).length,
+    0,
+  );
+}
+
 export function spaceInboxItems(spaces: InboxSpace[]): InboxSpaceItem[] {
   return spaces.flatMap((space): InboxSpaceItem[] => {
     const chats = [

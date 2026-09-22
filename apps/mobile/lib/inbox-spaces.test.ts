@@ -13,6 +13,7 @@ import {
   retryInboxSpaceFallback,
   selectInboxSpace,
   spaceInboxItems,
+  unreadConversationCount,
 } from "./inbox-spaces";
 
 vi.mock("./api", () => ({
@@ -233,5 +234,18 @@ describe("removeInboxSpace", () => {
     await expect(removeInboxSpace("space-work", refresh)).rejects.toThrow("Space is not empty");
     expect(selectSpace).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+describe("unreadConversationCount", () => {
+  it("adds up unread agents and groups across every space", () => {
+    expect(
+      unreadConversationCount([
+        { bots: [{ unread: true }, { unread: false }], groups: [{ unread: true }] },
+        { bots: [], groups: [{ unread: false }] },
+        { bots: [{ unread: true }], groups: [] },
+      ]),
+    ).toBe(3);
+    expect(unreadConversationCount([])).toBe(0);
   });
 });

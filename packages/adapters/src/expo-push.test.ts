@@ -115,7 +115,14 @@ describe("expo push", () => {
     vi.stubGlobal("fetch", fetchMock);
     const push = new ExpoPushProvider(dataDir);
     await push.send(
-      { kind: "takeover", title: "Need you", body: "on screen", botId: "bot-1", threadId: "th-1" },
+      {
+        kind: "takeover",
+        title: "Need you",
+        body: "on screen",
+        botId: "bot-1",
+        threadId: "th-1",
+        badge: 2,
+      },
       notifyContext,
     );
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -126,13 +133,31 @@ describe("expo push", () => {
       title: string;
       collapseId: string;
       tag: string;
+      badge: number;
       data: { kind: string };
     };
     expect(body.to).toBe("ExponentPushToken[test]");
     expect(body.title).toBe("Need you");
     expect(body.collapseId).toBe("th-1");
     expect(body.tag).toBe("th-1");
+    expect(body.badge).toBe(2);
     expect(body.data.kind).toBe("takeover");
+  });
+
+  it("leaves the badge out of the Expo body when no count is known", async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-push-"));
+    dirs.push(dataDir);
+    await savePushToken(dataDir, "user-1", "ExponentPushToken[test]");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: { status: "ok", id: "ticket" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await new ExpoPushProvider(dataDir).send(
+      { kind: "completion", title: "done", body: "ok", botId: "b", threadId: "t" },
+      notifyContext,
+    );
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).not.toHaveProperty("badge");
   });
 
   it("throws when Expo rejects the request", async () => {

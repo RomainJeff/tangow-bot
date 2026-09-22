@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-22
+
+#### Fixed
+
+- On iPhone and iPad, the Rakazo icon now shows a badge with the number of unread conversations when a bot finishes or needs you, and the badge drops as you read them; it never appeared before, so a message waiting in a closed app gave no sign on the home screen.
+
 ### 2026-09-20
 
 #### Added

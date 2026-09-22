@@ -102,6 +102,7 @@ import {
   type MobileMessage,
   type MobileMessagePage,
   type MobileSnapshot,
+  type MobileSpaceNavigation,
   mergeMobileSnapshot,
   messagingProviderLabel,
   prependMobileMessagePage,
@@ -116,11 +117,13 @@ import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-o
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
+import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
 import {
   dismissThreadNotifications,
   resumeLiveNotifications,
   setOpenNotificationThread,
+  syncAppBadge,
 } from "../lib/live-notifications";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import {
@@ -925,15 +928,16 @@ function Thread() {
         threadId: activeThreadId.current,
       }).catch(() => undefined);
     }
-    if (groupId) {
-      void rpc("threads/markRead", { groupId }).catch(() => {
+    void rpc("threads/markRead", groupId ? { groupId } : { botId: botId! }).then(
+      () => {
+        void rpc<MobileSpaceNavigation>("spaces/list")
+          .then((next) => syncAppBadge(unreadConversationCount(next.spaces)))
+          .catch(() => undefined);
+      },
+      () => {
         if (readVisibleTarget.current === target) readVisibleTarget.current = null;
-      });
-      return;
-    }
-    void rpc("threads/markRead", { botId: botId! }).catch(() => {
-      if (readVisibleTarget.current === target) readVisibleTarget.current = null;
-    });
+      },
+    );
   }, [botId, groupId, navigation]);
 
   useEffect(() => {

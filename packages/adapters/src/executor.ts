@@ -4625,6 +4625,24 @@ export async function runNotificationsEnabled(
   return Boolean(source && (source.thread.groupId || source.bot.notifyOnFinish));
 }
 
+/**
+ * The conversations the inbox shows with an unread mark: a live bot's or group's thread. An
+ * archived chat's thread and a messaging channel's thread are not listed there, so they do
+ * not count.
+ */
+export async function unreadConversationCount(
+  prisma: PrismaClient,
+  userId: string,
+): Promise<number> {
+  return prisma.thread.count({
+    where: {
+      userId,
+      unread: true,
+      OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+    },
+  });
+}
+
 async function notifyRun(
   deps: ExecutorDeps,
   run: { spaceId: string; userId: string; botId: string; threadId: string },
@@ -4637,8 +4655,14 @@ async function notifyRun(
     return false;
   });
   if (!enabled) return;
+  // Counted after the caller persisted its message, so a completion or an ask that marks this
+  // thread unread is already in; a failure or a takeover leaves the inbox as it was.
+  const badge = await unreadConversationCount(deps.prisma, run.userId).catch((error) => {
+    getLogger().error("unread conversation count", error);
+    return undefined;
+  });
   await deps.notifications
-    .send(message, {
+    .send(badge === undefined ? message : { ...message, badge }, {
       operationId: "notify",
       traceId: run.botId,
       spaceId: run.spaceId,
