@@ -75,8 +75,7 @@ export function configureForegroundNotifications(): void {
         shouldShowBanner: show,
         shouldShowList: show,
         shouldPlaySound: false,
-        // The server sends the unread total with every push; the badge follows it even when
-        // the banner is hidden for the open thread, and reading the thread corrects it.
+        // Unconditional, unlike the banner: the badge is a server total, not a per-push bump.
         shouldSetBadge: true,
       };
     },

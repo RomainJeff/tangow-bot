@@ -55,8 +55,6 @@ describe("notification thread targeting", () => {
     const handler = vi.mocked(Notifications.setNotificationHandler).mock.calls[0]?.[0];
     expect(handler).toBeTruthy();
 
-    // The badge carries the server's unread total, so it applies even when the banner is
-    // hidden for the open agent.
     await expect(
       handler?.handleNotification({ request: { content: { data: { botId: "bot-1" } } } } as never),
     ).resolves.toMatchObject({

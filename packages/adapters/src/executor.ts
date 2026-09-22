@@ -4656,8 +4656,7 @@ async function notifyRun(
   });
   if (!enabled) return;
   // Counted after the caller persisted its message, so a completion or an ask that marks this
-  // thread unread is already in; a failure or a takeover leaves the inbox as it was and the
-  // badge follows the inbox. A failed count still pages; the badge just stays where it was.
+  // thread unread is already in; a failure or a takeover leaves the inbox as it was.
   const badge = await unreadConversationCount(deps.prisma, run.userId).catch((error) => {
     getLogger().error("unread conversation count", error);
     return undefined;

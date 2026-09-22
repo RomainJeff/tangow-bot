@@ -930,7 +930,6 @@ function Thread() {
     }
     void rpc("threads/markRead", groupId ? { groupId } : { botId: botId! }).then(
       () => {
-        // The badge is the server's unread total; re-read it rather than guessing a delta.
         void rpc<MobileSpaceNavigation>("spaces/list")
           .then((next) => syncAppBadge(unreadConversationCount(next.spaces)))
           .catch(() => undefined);
