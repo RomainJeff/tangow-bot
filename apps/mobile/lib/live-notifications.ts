@@ -75,7 +75,6 @@ export function configureForegroundNotifications(): void {
         shouldShowBanner: show,
         shouldShowList: show,
         shouldPlaySound: false,
-        // Unconditional, unlike the banner: the badge is a server total, not a per-push bump.
         shouldSetBadge: true,
       };
     },

@@ -124,7 +124,6 @@ export class ExpoPushProvider implements NotificationProvider {
           body: message.body,
           collapseId: message.threadId,
           tag: message.threadId,
-          // Expo forwards this as `aps.badge`.
           badge: message.badge,
           data: { kind: message.kind, botId: message.botId, threadId: message.threadId },
         }),
