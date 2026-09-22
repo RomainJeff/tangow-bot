@@ -75,7 +75,9 @@ export function configureForegroundNotifications(): void {
         shouldShowBanner: show,
         shouldShowList: show,
         shouldPlaySound: false,
-        shouldSetBadge: false,
+        // The server sends the unread total with every push; the badge follows it even when
+        // the banner is hidden for the open thread, and reading the thread corrects it.
+        shouldSetBadge: true,
       };
     },
   });
@@ -155,6 +157,16 @@ export async function dismissThreadNotifications(target: {
       })
       .map(({ request }) => Notifications.dismissNotificationAsync(request.identifier)),
   );
+}
+
+/**
+ * Sets the app icon badge to the inbox's unread conversation total. iOS only: Android
+ * launchers count the active notifications themselves, and overriding that would clear a
+ * badge whose notifications are still posted.
+ */
+export async function syncAppBadge(unreadConversations: number): Promise<void> {
+  if (Platform.OS !== "ios") return;
+  await Notifications.setBadgeCountAsync(unreadConversations);
 }
 
 export async function openLiveNotificationSettings(): Promise<void> {

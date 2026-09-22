@@ -10,6 +10,7 @@ vi.mock("expo", () => ({ requireNativeModule: vi.fn() }));
 vi.mock("expo-notifications", () => ({
   setNotificationHandler: vi.fn(),
   getPresentedNotificationsAsync: vi.fn(async () => []),
+  setBadgeCountAsync: vi.fn(async () => true),
 }));
 vi.mock("react-native", () => ({ Platform: { OS: "ios" } }));
 
@@ -18,6 +19,7 @@ import {
   configureForegroundNotifications,
   notificationTargetsThread,
   setOpenNotificationThread,
+  syncAppBadge,
 } from "./live-notifications";
 
 beforeEach(() => vi.clearAllMocks());
@@ -53,11 +55,30 @@ describe("notification thread targeting", () => {
     const handler = vi.mocked(Notifications.setNotificationHandler).mock.calls[0]?.[0];
     expect(handler).toBeTruthy();
 
+    // The badge carries the server's unread total, so it applies even when the banner is
+    // hidden for the open agent.
     await expect(
       handler?.handleNotification({ request: { content: { data: { botId: "bot-1" } } } } as never),
-    ).resolves.toMatchObject({ shouldShowBanner: false, shouldShowList: false });
+    ).resolves.toMatchObject({
+      shouldShowBanner: false,
+      shouldShowList: false,
+      shouldSetBadge: true,
+    });
     await expect(
       handler?.handleNotification({ request: { content: { data: { botId: "bot-2" } } } } as never),
-    ).resolves.toMatchObject({ shouldShowBanner: true, shouldShowList: true });
+    ).resolves.toMatchObject({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldSetBadge: true,
+    });
+  });
+});
+
+describe("app icon badge", () => {
+  it("sets the badge to the unread conversation total on iOS", async () => {
+    await syncAppBadge(3);
+    expect(Notifications.setBadgeCountAsync).toHaveBeenCalledWith(3);
+    await syncAppBadge(0);
+    expect(Notifications.setBadgeCountAsync).toHaveBeenLastCalledWith(0);
   });
 });
