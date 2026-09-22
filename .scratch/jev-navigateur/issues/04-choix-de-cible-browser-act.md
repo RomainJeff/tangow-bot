@@ -4,8 +4,8 @@
 
 ## Pourquoi c'est le bon point d'accroche
 
-- La table est déjà là et déjà bornée : `BrowserSnapshotResult.elements`, ≤80 entrées, chacune `{ ref, role, name, value?, tag? }`. Elle devient la map d'options du `choice`, clé = `ref`, description = `role`, `name`, `value` (masqué pour les mots de passe, déjà fait par le helper).
-- Le fail-closed existe en deux endroits et on n'en ajoute pas un troisième : l'enveloppe du ticket 02 refuse une réponse hors map ; le préflight du helper (`rakazo-page-browser:567`) refuse un ref devenu périmé entre le snapshot et l'action. Si la page bouge entre les deux, c'est une erreur rendue au modèle avec un snapshot frais, pas un retargeting.
+- La table est déjà là : `BrowserSnapshotResult.elements`, chacune `{ ref, role, name, value?, tag? }`. Elle devient la map d'options du `choice`, clé = `ref`, description = `role`, `name`, `value` (omise pour les mots de passe, déjà fait par le helper). Bornée à 80 par le helper en production (`rakazo-page-browser:432`), **mais pas par le fake** : `PageBrowserSession` (`page-browser-session.ts:165`), derrière `FakeBrowserProvider`, énumère tout. `resolveBrowserTargets` borne donc lui-même à `min(80, maxOptions − 1)` (une place pour `none`) au lieu de compter sur le fournisseur navigateur, et un test du fake avec plus de 80 éléments le vérifie.
+- Le fail-closed existe en deux endroits et on n'en ajoute pas un troisième : l'enveloppe du ticket 02 refuse une réponse hors map ; le préflight du helper (`rakazo-page-browser:568`) refuse un ref devenu périmé entre le snapshot et l'action. Si la page bouge entre les deux, c'est une erreur rendue au modèle avec un snapshot frais, pas un retargeting.
 - `act` renvoie déjà le snapshot d'après ; le ticket 05 s'y branche sans appel supplémentaire.
 
 ## Ce qu'on change
@@ -15,7 +15,7 @@
 **La résolution** (`packages/adapters/src/browser-tools.ts`, nouvelle fonction `resolveBrowserTargets`) : pour chaque action à `target`, dans l'ordre —
 
 1. `browser.snapshot()` — un appel helper. Si `fallback`, on rend le fallback tel quel.
-2. `state` = `{ goal: target, page: { url, title }, elements: [{ id: ref, role, name, value }] }`. Pas de texte de page libre dans cet usage : la question porte sur les contrôles, et le texte est ce qui coûte. Le `state` passe par `redactSecrets` (`@rakazo/core`) avec les secrets du run, comme `redactToolArgsForReview`.
+2. `state` = `{ goal: target, page: { url, title }, elements: [{ id: ref, role, name, value }] }`. Pas de texte de page libre dans cet usage : la question porte sur les contrôles, et le texte est ce qui coûte. Concrètement le `state` se construit depuis `elements` et jamais depuis `tree`, qui commence par l'`innerText` de la page (≤12 000 caractères, `rakazo-page-browser:438`). Le `state` passe par `redactSecrets` (`@rakazo/core`) avec les secrets du run, comme `redactToolArgsForReview`.
 3. `questions = { target: choice("Which element matches the goal? Answer none if no element does.", { ...refs, none: "no listed element matches" }) }`. Une question, un appel.
 4. `decideWithin(provider, …, { timeoutMs })`. `unavailable` → on rend `{ ok: false, completed, needsRef: true, tree, elements, reason }` : le modèle reçoit le snapshot et choisit un ref, c'est-à-dire exactement le tour d'aujourd'hui avec un appel d'outil en moins.
 5. Gate : `confidence ≥ high` → exécuter ; sinon → même retour `needsRef` avec les trois meilleurs candidats et leurs probabilités dans `candidates`, pour que le modèle tranche sans relire toute la page. `none` choisi → `needsRef` sans candidats. Pas de niveau `caution` qui exécute : une cible incertaine ne se clique pas, elle se rend.
