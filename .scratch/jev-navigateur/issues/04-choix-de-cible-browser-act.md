@@ -23,13 +23,15 @@
 
 **Plusieurs actions dans un appel** : `MAX_BROWSER_ACTIONS = 24` reste pour les actions à `ref`. Les actions à `target` se résolvent une par une, chacune avec un snapshot frais, parce que la première change la page ; borne séparée (proposition : 6 par appel) écrite en constante à côté de l'autre. Une résolution qui rend `needsRef` arrête la séquence et rapporte `completed`, comme une action échouée aujourd'hui.
 
+**Restriction v1 — actions réversibles seulement** (décision du ticket 01) : `target` n'est accepté que pour les actions sans effet durable (naviguer, ouvrir, cliquer un lien, dérouler). Pour une action à effet, `ref` reste obligatoire et un `target` est refusé au parsing avec un message qui le dit. Motif : `planActionGate` juge l'action, pas la cible, et un mauvais clic sur « Payer » ou « Supprimer » ne s'annule pas. La liste des `kind` autorisés est une constante nommée à côté du seuil ; la restriction se lève avec les chiffres de 06.
+
 **Le seuil** `high` est une constante d'adaptateur avec une valeur de départ écrite avant mesure — 0,80 — et un commentaire qui renvoie au ticket 06 ; ni variable d'environnement ni réglage utilisateur.
 
 **Le résultat** garde la forme `BrowserActResult` ; deux champs optionnels s'ajoutent : `needsRef?: true` et `candidates?: { ref, name, probability }[]`. Absents quand aucune action à `target` n'a été demandée.
 
 ## Références de conception, pas de code
 
-`jev-use` : `none`/`abstain` réservé, ≤32 candidats par question — notre table monte à 80 et personne n'a publié l'effet du nombre d'options sur la justesse ; 06 doit le mesurer avant d'élargir ou de tronquer. `jev-ultrafast` : recheck de fraîcheur entre décision et exécution — chez nous c'est le préflight du helper, rien à ajouter. `fastbrowse` : les mots de passe ne passent jamais par un modèle — chez nous c'est déjà le cas, `value` est masqué et `text` vient de `request_secret` quand c'est un secret.
+`jev-use` : `none`/`abstain` réservé, ≤32 candidats par question — un plafond auto-imposé sans base : la documentation officielle autorise **255 options par `choice`**, donc nos 80 refs passent sans troncature (ticket 01). Ce qui reste inconnu n'est pas la limite mais l'effet du nombre d'options sur la justesse, que 06 doit mesurer. `jev-ultrafast` : recheck de fraîcheur entre décision et exécution — chez nous c'est le préflight du helper, rien à ajouter. `fastbrowse` : les mots de passe ne passent jamais par un modèle — chez nous c'est déjà le cas, `value` est masqué et `text` vient de `request_secret` quand c'est un secret.
 
 ## Fichiers
 
@@ -55,6 +57,7 @@ Offline, vitest, `FakeBrowserProvider` avec pages seedées et `FakeDecisionProvi
 **Status:** ready-for-agent
 
 - [ ] `browser_act` accepte `ref` ou `target`, jamais les deux, jamais aucun ; le schéma n'expose `target` que si un fournisseur est présent au run
+- [ ] `target` est refusé sur une action à effet ; `ref` y reste obligatoire, et un test l'affirme pour chaque `kind` de la liste
 - [ ] Une réponse hors table ou `none` n'exécute rien et rend `needsRef` avec un snapshot frais
 - [ ] Une confiance sous le seuil n'exécute rien et rend les trois meilleurs candidats avec leurs probabilités
 - [ ] Un ref choisi puis devenu périmé est rejeté par le chemin existant, sans retargeting, et le test l'affirme

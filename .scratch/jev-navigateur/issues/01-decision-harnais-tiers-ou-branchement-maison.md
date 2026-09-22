@@ -53,11 +53,35 @@ Deux réserves honnêtes, à ne pas perdre :
 
 Hors périmètre de cette décision : la boucle autonome `browser_run`, le bureau en pixels, le gate d'approbation par Jev — voir `NON-GOALS.md`.
 
+## Décision — 2026-09-22
+
+**Option C confirmée par le mainteneur.** Aucune dépendance tierce. On branche Jev nous-mêmes sur `BrowserProvider` derrière `DecisionProvider`. Raison consignée : les harnais étudiés n'apportent aucune brique qui nous manque — la table de candidats bornée, le fail-closed sur ref périmé et l'observation post-action existent déjà dans le dépôt — ils n'apportent qu'une boucle d'agent que `executor.ts` possède déjà, dans un langage qui n'est pas le nôtre. `NON-GOALS.md` reste tel quel.
+
+Quatre décisions de cadrage prises en même temps, qui contraignent les tickets suivants :
+
+**1. `target` est réservé aux actions réversibles en v1.** Le choix de cible par le fournisseur ne s'applique pas à une action à effet (paiement, suppression, soumission irréversible) : pour celles-là, le modèle fournit un `ref` explicite comme aujourd'hui. Motif : `planActionGate` juge *l'action*, pas *la cible* — il ne peut pas dire « ce bouton n'est pas celui que tu crois », et le contrat interdit déjà le rejeu. La restriction se lève quand 06 aura des chiffres. Porté au ticket 04.
+
+**2. Le premier lot livré s'arrête au choix de cible.** Ordre : 02, 03, 04, 08. Le ticket 05 (vérification post-action) est différé : il n'économise aucun token, il ajoute une latence, et livré en même temps que 04 il rendrait la mesure du 08 inattribuable. Il devient plus simple après 04, qui lui fournit le `before` complet sans faire retenir un snapshot à l'exécuteur.
+
+**3. Pas de mode observation préalable.** On expédie 04 avec le seuil `high` à 0,80 écrit en dur, on mesure avec 08, on ajuste avec 06. Un étage d'observation « Jev choisit mais n'exécute pas » a été proposé et écarté : sur-ingénierie avant le premier chiffre.
+
+**4. Le français n'est pas un gate.** La doc officielle confirme que l'anglais est la langue d'entraînement principale et ne publie aucun chiffre par langue (« test on your own content »). Le mainteneur a tranché : on ne construit pas de corpus francophone avant de livrer. La réserve reste écrite ci-dessus ; 06 la reprendra s'il y a lieu.
+
+## Faits résolus dans la documentation officielle
+
+`docs.typesafe.ai` était joignable ; l'échec noté plus haut était local à l'autre poste. Les trois inconnues du cadrage sont closes :
+
+- **255 options par `choice`**, documenté deux fois (`api.md`, `primitives/choice.md`). Le SDK n'impose rien côté client : le dépassement est un `422` serveur. Nos 80 refs passent sans troncature — le ≤32 de `jev-use` était auto-imposé et sans base. `score` est borné séparément à 10 niveaux.
+- **Taille de `state` : aucune limite en caractères ou en octets.** Le seul plafond documenté est le contexte : 32k tokens pour le `state` plus la question la plus longue, 64k pour l'ensemble (`models.md`). Nos états bornés sont très en dessous. À retenir tout de même : « accuracy falls as the state grows with content unrelated to the decision » — ce qui confirme le choix du ticket 04 de ne pas envoyer le texte de page.
+- **Pas de transport OpenAI-compatible.** `typesafe/jev-1.13` est absent du catalogue chat-completions d'OpenRouter ; il n'est servi que par une « Decisions API » hors du préfixe `/api/v1`, dont les SDK chat ne savent pas parler. La case est close dans sa forme initiale, mais avec une conclusion utile pour 02 : cette Decisions API est un quasi-clone du contrat TypeSafe (même corps, probabilités par option exposées), donc un second adaptateur reste possible à peu de frais si les quotas TypeSafe se resserrent. Noté, pas écrit.
+- **Prix et quotas** : 0,042 $/Mtok en entrée, sortie gratuite ; ~100 ms annoncés, 0,22 s P50 mesurés par OpenRouter ; 1 200 requêtes/min et 250k tokens/s, « adjusting dynamically, can change without notice ».
+- **Version du modèle épinglée** : `jev-latest` et `jev-preview` résolvent aujourd'hui vers `jev-1.13.0` mais bougent, et la doc conseille d'épingler dès qu'on règle des seuils de confiance. 04 en câble un. L'adaptateur épingle donc `jev-1.13.0` au lieu de `jev-latest` ; la réponse porte toujours la version qui a répondu, que 08 logue. Porté au ticket 03.
+
 **Blocked by:** Rien.
 
-**Status:** needs-decision — recommandation écrite, à valider par le mainteneur avant d'ouvrir 02
+**Status:** decided — 02 ouvert
 
-- [ ] Recommandation C confirmée ou infirmée par le mainteneur, avec la raison consignée dans ce ticket
-- [ ] Si C : `NON-GOALS.md` reste tel quel ; si B : le dépôt retenu, sa version épinglée, son mode d'exécution (hôte ou conteneur) et qui possède la boucle sont écrits avant tout code
-- [ ] La limite réelle d'options de `choice` et la taille maximale de `state` sont lues dans la documentation officielle dès qu'elle est joignable, et reportées dans le ticket 04 (le brief dit 255 ; les types du SDK n'imposent rien ; `jev-use` s'est borné à 32)
-- [ ] La disponibilité de Jev via un endpoint OpenAI-compatible (une fiche OpenRouter existe, non vérifiée depuis ce poste) est examinée : si le transport chat-completions expose les probabilités par option, la connexion générique OpenAI-compatible pourrait servir de second adaptateur sans SDK ; sinon le point est clos
+- [x] Recommandation C confirmée par le mainteneur, raison consignée ci-dessus
+- [x] `NON-GOALS.md` reste tel quel
+- [x] Limite d'options (255) et budget de `state` (32k tokens) lus dans la documentation officielle et reportés au ticket 04
+- [x] Transport OpenAI-compatible examiné : inexistant pour ce modèle ; la Decisions API d'OpenRouter reste un second adaptateur possible, noté sans être écrit

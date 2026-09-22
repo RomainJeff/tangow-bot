@@ -41,9 +41,9 @@ Offline, vitest, `FakeBrowserProvider` + `FakeDecisionProvider` scripté. Cinq p
 - L'anti-bot (Cloudflare « vérifiez que vous êtes humain ») rentre dans `auth` par la question `blocked` ; faut-il une classe `challenge` séparée ? Attendre 06 : si les deux se confondent dans les fixtures, une classe suffit.
 - Le coût : deux questions sur ~2 500 caractères, soit de l'ordre de 700 tokens, ~0,00003 $ par action. Négligeable ; la latence (une requête) est ce que 08 mesure.
 
-**Blocked by:** 02 (04 souhaitable pour disposer du `before` complet ; livrable indépendamment)
+**Blocked by:** 02, puis la mesure de 04 par 08
 
-**Status:** ready-for-agent
+**Status:** différé (décision du ticket 01) — n'économise aucun token, ajoute une latence, et livré avec 04 rendrait la mesure de 08 inattribuable. À rouvrir une fois 04 mesuré ; il héritera alors du `before` complet sans faire retenir un snapshot à l'exécuteur.
 
 - [ ] `outcome` est présent seulement quand un fournisseur a répondu ; jamais un défaut inventé
 - [ ] `uncertain: true` du provider empêche toute vérification
