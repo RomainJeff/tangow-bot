@@ -72,6 +72,16 @@ describe("window chrome", () => {
     expect(overlay).not.toContain("FF5F57");
   });
 
+  it("keeps computer overlay controls clickable under the window titlebar", () => {
+    const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
+    const panel = readFileSync(path.join(root, "shell/side-panel.tsx"), "utf8");
+    expect(panel).toContain("{desktopBridge() ? <WindowChrome /> : null}");
+    expect(panel).toContain(
+      'className="app-drag flex items-center justify-between gap-4 border-b border-sidebar-border px-4.5 py-3.5"',
+    );
+    expect(panel).toContain('<div className="app-no-drag flex items-center gap-3">');
+  });
+
   it("keeps conversation header controls clickable", () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../pages");
     const shell = readFileSync(path.join(root, "shell/thread-header.tsx"), "utf8");

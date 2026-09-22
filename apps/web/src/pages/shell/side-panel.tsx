@@ -25,6 +25,7 @@ import {
 import { TeachCaptureOverlay } from "../../components/teach/TeachCaptureOverlay";
 import { TeachComputerOverlayControl } from "../../components/teach/TeachComputerOverlay";
 import { TeachRecordingChrome, TeachStopButton } from "../../components/teach/TeachRecordingChrome";
+import { desktopBridge } from "../../lib/desktop";
 import { localTimezone } from "../../lib/local-timezone";
 import { rpc } from "../../lib/rpc";
 import { computerPanelNeedsMaintenance } from "../../lib/thread-events";
@@ -38,6 +39,7 @@ import {
   RoutineListRow,
   routineNeedsOneShotArm,
 } from "../RoutineEditor";
+import { WindowChrome } from "../WindowChrome";
 import { BotSettings, CreateBotForm } from "./bot-panel";
 import type { Panel } from "./layout";
 import { firstThreadRoute, panelIsOpen } from "./layout";
@@ -642,9 +644,11 @@ export function ComputerOverlay({
       >
         <div
           data-testid="computer-chrome"
-          className="flex items-center justify-between gap-4 border-b border-sidebar-border px-4.5 py-3.5"
+          className="app-drag flex items-center justify-between gap-4 border-b border-sidebar-border px-4.5 py-3.5"
         >
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="app-no-drag flex min-w-0 flex-1 items-center gap-3">
+            {/* The overlay covers the shell header, so it reserves room for the window controls itself. */}
+            {desktopBridge() ? <WindowChrome /> : null}
             <BotAvatar
               color={active.color}
               identity={active.id}
@@ -676,7 +680,7 @@ export function ComputerOverlay({
               )
             ) : null}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="app-no-drag flex items-center gap-3">
             {composerRunning ? (
               <Button
                 type="button"
