@@ -200,6 +200,19 @@ describe("context budget estimation", () => {
     );
   });
 
+  it("sizes a replayed tool turn by its parts, not its short text", () => {
+    const output = "x".repeat(4000);
+    const turn = {
+      content: "Done.",
+      parts: [
+        { type: "toolCalls" as const, calls: [{ id: "c1", name: "shell", args: {}, output }] },
+        { type: "text" as const, text: "Done." },
+      ],
+    };
+    expect(estimateHistoryTokens([turn])).toBeGreaterThan(1000);
+    expect(estimateHistoryTokens([{ content: "Done." }])).toBe(estimateTextTokens("Done."));
+  });
+
   it("is zero for an empty tool catalog", () => {
     expect(estimateToolSchemaTokens([])).toBe(0);
   });

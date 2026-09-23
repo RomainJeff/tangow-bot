@@ -204,6 +204,7 @@ import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import type { HistoryWindowMode } from "./history-compaction.js";
 import {
   COMPACTION_BATCH_SIZE,
+  estimateHistoryMessageTokens,
   estimateHistoryTokens,
   estimateTextTokens,
   estimateToolSchemaTokens,
@@ -1422,10 +1423,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // sequence numbers the compaction summary is only trusted against.
         let history = compactedHistory.history
           .filter(({ role }) => role !== "system")
-          .map(({ id, role, content }) => ({
+          .map(({ id, role, content, parts }) => ({
             id,
             role,
             content,
+            ...(parts ? { parts } : {}),
           }));
         // What the window could have chosen from, counted after the system rows are dropped so it
         // is comparable with the count kept below. Measured against the pre-filter length it
@@ -3783,7 +3785,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const historyTokensByRole = runtimeHistory.reduce<Record<string, number>>(
             (totals, message) => {
               totals[message.role] =
-                (totals[message.role] ?? 0) + estimateTextTokens(message.content);
+                (totals[message.role] ?? 0) + estimateHistoryMessageTokens(message);
               return totals;
             },
             {},

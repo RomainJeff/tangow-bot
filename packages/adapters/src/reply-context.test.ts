@@ -222,3 +222,75 @@ describe("group history turns", () => {
     expect(turn).toEqual({ role: "assistant", content: "I deployed the API" });
   });
 });
+
+describe("own tool turns", () => {
+  const ownTurn = (blocks: unknown[]) => ({
+    id: "m-1",
+    threadId: "thread-1",
+    role: "bot",
+    botId: "bot-a",
+    blocks,
+  });
+  const readFile = (call: Record<string, string>) => ({
+    kind: "steps",
+    steps: [{ label: "Read file", count: 1, calls: [{ name: "read_file", ...call }] }],
+  });
+
+  it("carries tool calls with a stored id as ordered parts", () => {
+    const turn = messageToAgentHistoryTurn(
+      ownTurn([
+        { kind: "text", text: "Let me check." },
+        readFile({ id: "toolu_1", input: '{\n  "path": "notes.md"\n}', output: "Ship Friday" }),
+        { kind: "text", text: "It ships Friday." },
+      ]),
+      "bot-a",
+    );
+    expect(turn.role).toBe("assistant");
+    expect(turn.parts).toEqual([
+      { type: "text", text: "Let me check." },
+      {
+        type: "toolCalls",
+        calls: [
+          { id: "toolu_1", name: "read_file", args: { path: "notes.md" }, output: "Ship Friday" },
+        ],
+      },
+      { type: "text", text: "It ships Friday." },
+    ]);
+    // The text rendering stays for every consumer that cannot replay tool turns.
+    expect(turn.content).toContain("It ships Friday.");
+    expect(turn.content).not.toMatch(/\[tool \w+\(/);
+  });
+
+  it("keeps old blocks without ids as text only", () => {
+    const turn = messageToAgentHistoryTurn(
+      ownTurn([readFile({ input: '{ "path": "a" }', output: "x" })]),
+      "bot-a",
+    );
+    expect(turn.parts).toBeUndefined();
+    expect(turn.content).toContain("already ran Read file");
+  });
+
+  it("replays truncated input as text args and caps outputs", () => {
+    const turn = messageToAgentHistoryTurn(
+      ownTurn([
+        readFile({ id: "c1", input: '{ "path": "a"\n… truncated', output: "y".repeat(5000) }),
+      ]),
+      "bot-a",
+    );
+    const part = turn.parts?.[0];
+    expect(part?.type).toBe("toolCalls");
+    const call = part?.type === "toolCalls" ? part.calls[0] : undefined;
+    expect(call?.args).toEqual({ input: '{ "path": "a"\n… truncated' });
+    expect(call?.output.length).toBeLessThan(2100);
+  });
+
+  it("never replays a peer bot's tool calls as this bot's own", () => {
+    const turn = messageToAgentHistoryTurn(
+      { ...ownTurn([readFile({ id: "c1", input: "{}", output: "" })]), botId: "bot-b" },
+      "bot-a",
+      new Map([["bot-b", "Beacon"]]),
+    );
+    expect(turn.role).toBe("user");
+    expect(turn.parts).toBeUndefined();
+  });
+});

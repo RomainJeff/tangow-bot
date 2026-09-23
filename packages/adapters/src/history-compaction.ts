@@ -1,6 +1,7 @@
 import { DEFAULT_COMPACTION_SETTINGS, estimateTokens } from "@earendil-works/pi-agent-core";
 import type {
   AdapterContext,
+  AgentHistoryMessage,
   AgentRunRequest,
   AgentRuntime,
   AgentRuntimeEvent,
@@ -62,6 +63,7 @@ export type CompactedHistoryMessage = {
   seq: number;
   role: "user" | "assistant" | "system";
   content: string;
+  parts?: AgentHistoryMessage["parts"];
 };
 
 export interface CompactedHistorySelection {
@@ -130,8 +132,15 @@ function estimateMessageTokens(content: string): number {
   return estimateTokens({ role: "user", content, timestamp: 0 });
 }
 
-export function estimateHistoryTokens(messages: Array<{ content: string }>): number {
-  return messages.reduce((total, message) => total + estimateMessageTokens(message.content), 0);
+type SizedHistoryMessage = Pick<AgentHistoryMessage, "content" | "parts">;
+
+/** A turn replayed as tool calls costs its parts (args and outputs), not its text rendering. */
+export function estimateHistoryMessageTokens(message: SizedHistoryMessage): number {
+  return estimateMessageTokens(message.parts ? JSON.stringify(message.parts) : message.content);
+}
+
+export function estimateHistoryTokens(messages: SizedHistoryMessage[]): number {
+  return messages.reduce((total, message) => total + estimateHistoryMessageTokens(message), 0);
 }
 
 /** Same heuristic, for context that is not a history message (instructions, tool schemas). */
@@ -170,7 +179,7 @@ export interface HistoryWindow<T> {
  * small one. Size by tokens whenever the model's context window is known, and start the window on
  * a user message — one that opens on a bot reply shows an answer with the request cut away.
  */
-export function selectHistoryWindow<T extends { role: string; content: string }>(options: {
+export function selectHistoryWindow<T extends SizedHistoryMessage & { role: string }>(options: {
   history: T[];
   contextWindow: number | undefined;
   messageWindowSize: number;
@@ -191,7 +200,7 @@ export function selectHistoryWindow<T extends { role: string; content: string }>
   let used = 0;
   let start = history.length;
   for (let index = history.length - 1; index >= 0; index -= 1) {
-    const tokens = estimateMessageTokens(history[index]!.content);
+    const tokens = estimateHistoryMessageTokens(history[index]!);
     // The most recent message is kept even when it alone is over budget; dropping it would hand
     // the model a turn with no content at all.
     if (used + tokens > budget && start < history.length) break;
