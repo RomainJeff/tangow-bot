@@ -796,6 +796,48 @@ function sealAssistantTurnMarkers(content: string): string {
     .replaceAll(ASSISTANT_TURN_CLOSE, "&lt;/assistant_turn&gt;");
 }
 
+const FAKE_TOOL_CALL_START = /\[tool \w+\(/g;
+const FAKE_TOOL_CALL_ONLY = "(earlier reply omitted: it was malformed)";
+
+/**
+ * Replies stored before tool calls were replayed as real turns can contain the
+ * old `[tool name(args) → output]` trace written as text. Replayed as-is they
+ * teach the model to keep writing calls instead of making them, so each span is
+ * cut, bracket-balanced and JSON-string aware; an unclosed span runs to the end.
+ */
+export function stripFakeToolCalls(content: string): string {
+  let result = "";
+  let cursor = 0;
+  let stripped = false;
+  for (const match of content.matchAll(FAKE_TOOL_CALL_START)) {
+    if (match.index < cursor) continue;
+    let end = content.length;
+    let depth = 0;
+    let inString = false;
+    for (let i = match.index; i < content.length; i += 1) {
+      const char = content[i];
+      if (inString) {
+        if (char === "\\") i += 1;
+        else if (char === '"') inString = false;
+      } else if (char === '"') inString = true;
+      else if (char === "[" || char === "(" || char === "{") depth += 1;
+      else if (char === "]" || char === ")" || char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    result += content.slice(cursor, match.index);
+    cursor = end;
+    stripped = true;
+  }
+  if (!stripped) return content;
+  const cleaned = (result + content.slice(cursor)).replace(/\n{3,}/g, "\n\n").trim();
+  return cleaned || FAKE_TOOL_CALL_ONLY;
+}
+
 /**
  * What a rehydrated turn reports it cost: nothing. Those tokens were billed on
  * the run that produced the turn, so replaying it must not reach a counter twice.
@@ -885,7 +927,10 @@ export function toHistory(
         let text: AssistantMessage["content"] = [];
         for (const part of m.parts) {
           if (part.type === "text") {
-            text.push({ type: "text", text: sealAssistantTurnMarkers(part.text) });
+            text.push({
+              type: "text",
+              text: sealAssistantTurnMarkers(stripFakeToolCalls(part.text)),
+            });
             continue;
           }
           const calls = part.calls.map((call) => ({ ...call, id: uniqueToolCallId(call.id) }));
@@ -913,7 +958,9 @@ export function toHistory(
         if (text.length > 0) messages.push(assistant(text, "stop"));
         return messages;
       }
-      const content = sealAssistantTurnMarkers(m.content);
+      const content = sealAssistantTurnMarkers(
+        m.role === "assistant" ? stripFakeToolCalls(m.content) : m.content,
+      );
       if (m.role === "assistant" && index > 0) {
         return [assistant([{ type: "text", text: content }], "stop")];
       }

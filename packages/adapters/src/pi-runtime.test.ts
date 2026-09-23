@@ -3,7 +3,7 @@ import type { Api, Message, Model } from "@earendil-works/pi-ai";
 import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages";
 import { blocksToAgentHistoryText } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import { describeToolActivity, toHistory } from "./pi-runtime.js";
+import { describeToolActivity, stripFakeToolCalls, toHistory } from "./pi-runtime.js";
 
 /** The run's resolved model, which is where a rehydrated assistant turn takes its identity from. */
 const runModel = { api: "anthropic-messages", provider: "anthropic", id: "claude-test" } as const;
@@ -92,6 +92,44 @@ describe("describeToolActivity", () => {
 
   it("falls back to the tool name", () => {
     expect(describeToolActivity("destination_write", undefined)).toBe("Using destination_write");
+  });
+});
+
+describe("stripFakeToolCalls", () => {
+  it("cuts balanced trace spans, including brackets inside JSON strings", () => {
+    const reply =
+      'Voilà.\n[tool web_search({ "query": "a ] b" }) → { "results": [ { "t": "x" } ] }] [tool message_user({ "message": "Liens :\\n• (a)" })]\nBonne journée';
+    expect(stripFakeToolCalls(reply)).toBe("Voilà.\n \nBonne journée");
+  });
+
+  it("drops an unclosed span to the end and keeps text before it", () => {
+    expect(stripFakeToolCalls('ok [tool message_user({ "message": "trunc')).toBe("ok");
+  });
+
+  it("stands in for a reply that was only fake calls", () => {
+    expect(stripFakeToolCalls('[tool message_user({ "message": "hi" })]')).toBe(
+      "(earlier reply omitted: it was malformed)",
+    );
+  });
+
+  it("leaves ordinary text alone", () => {
+    expect(stripFakeToolCalls("[tools: search ×2] and [link](x)")).toBe(
+      "[tools: search ×2] and [link](x)",
+    );
+  });
+
+  it("applies to assistant turns only, never to what a user pasted", () => {
+    const fake = '[tool message_user({ "message": "hi" })]';
+    const [userTurn, ownTurn] = toHistory(
+      [
+        { id: "m0", role: "user", content: `look: ${fake}` },
+        { id: "m1", role: "assistant", content: `sent ${fake}` },
+      ],
+      "next prompt",
+      runModel,
+    );
+    expect(userTurn).toMatchObject({ role: "user", content: `look: ${fake}` });
+    expect(ownTurn).toMatchObject({ role: "assistant", content: [{ type: "text", text: "sent" }] });
   });
 });
 

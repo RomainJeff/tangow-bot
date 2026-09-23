@@ -4798,12 +4798,12 @@ export function completionMessageSegments(
   return [{ kind: "text", text: fallback }];
 }
 
-/** User-facing text for completion notifications; empty when only tool/step activity remains. */
 /** The old history trace syntax, written as text instead of a real tool call. */
 export function looksLikeFakeToolCall(text: string): boolean {
   return /\[tool \w+\(/.test(text);
 }
 
+/** User-facing text for completion notifications; empty when only tool/step activity remains. */
 export function completionNotificationBody(assembled: string, blocks: MessageBlock[]): string {
   if (assembled) return assembled;
   return blocks
