@@ -1,4 +1,4 @@
-import { BotEngine, RAYON, SHAPES } from "@rakazo/core";
+import { AVATAR_INK, BotEngine, RAYON, SHAPES } from "@rakazo/core";
 import { darkTokens } from "@rakazo/ui-tokens";
 
 type Point = [number, number];
@@ -100,9 +100,11 @@ struct AvatarShape {
 
 let avatarRadius: CGFloat = ${swiftNumber(RAYON)}
 let avatarBackground = "${darkTokens.background}"
-let avatarLightEye = "#FFFFFF"
-let avatarDarkEye = "#101014"
-let avatarOutline = "#17181A"
+let avatarLightPaper = "${AVATAR_INK.lightPaper}"
+let avatarDarkPaper = "${AVATAR_INK.darkPaper}"
+let avatarOutline = "${AVATAR_INK.outline}"
+let avatarLightPaperBelow: CGFloat = ${swiftNumber(AVATAR_INK.lightPaperBelow)}
+let avatarOutlineAbove: CGFloat = ${swiftNumber(AVATAR_INK.outlineAbove)}
 
 let avatarShapes: [AvatarShape] = [
 ${shapes}

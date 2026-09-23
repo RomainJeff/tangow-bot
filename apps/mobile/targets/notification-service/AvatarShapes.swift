@@ -15,9 +15,11 @@ struct AvatarShape {
 
 let avatarRadius: CGFloat = 100.0
 let avatarBackground = "#0C0C0E"
-let avatarLightEye = "#FFFFFF"
-let avatarDarkEye = "#101014"
+let avatarLightPaper = "#FFFFFF"
+let avatarDarkPaper = "#101014"
 let avatarOutline = "#17181A"
+let avatarLightPaperBelow: CGFloat = 0.4
+let avatarOutlineAbove: CGFloat = 0.78
 
 let avatarShapes: [AvatarShape] = [
   AvatarShape(

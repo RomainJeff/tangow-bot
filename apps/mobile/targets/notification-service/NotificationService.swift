@@ -3,6 +3,7 @@ import UIKit
 import UserNotifications
 
 final class NotificationService: UNNotificationServiceExtension {
+  private let lock = NSLock()
   private var contentHandler: ((UNNotificationContent) -> Void)?
   private var bestAttempt: UNNotificationContent?
 
@@ -10,10 +11,12 @@ final class NotificationService: UNNotificationServiceExtension {
     _ request: UNNotificationRequest,
     withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
   ) {
+    lock.lock()
     self.contentHandler = contentHandler
     bestAttempt = request.content
+    lock.unlock()
     guard let sender = BotSender(request.content) else {
-      contentHandler(request.content)
+      deliver(request.content)
       return
     }
     let intent = sender.messageIntent(body: request.content.body)
@@ -26,13 +29,18 @@ final class NotificationService: UNNotificationServiceExtension {
   }
 
   override func serviceExtensionTimeWillExpire() {
-    if let bestAttempt { deliver(bestAttempt) }
+    lock.lock()
+    let content = bestAttempt
+    lock.unlock()
+    if let content { deliver(content) }
   }
 
   private func deliver(_ content: UNNotificationContent) {
-    guard let handler = contentHandler else { return }
+    lock.lock()
+    let handler = contentHandler
     contentHandler = nil
-    handler(content)
+    lock.unlock()
+    handler?(content)
   }
 }
 
@@ -124,7 +132,7 @@ enum AvatarRenderer {
       cg.saveGState()
       cg.addPath(body)
       cg.clip()
-      let paper = UIColor(hex: luminance < 0.4 ? avatarLightEye : avatarDarkEye) ?? .white
+      let paper = UIColor(hex: luminance < avatarLightPaperBelow ? avatarLightPaper : avatarDarkPaper) ?? .white
       cg.setFillColor(paper.cgColor)
       for eye in shape.eyes {
         cg.addPath(eyePath(eye))
@@ -132,7 +140,7 @@ enum AvatarRenderer {
       cg.fillPath()
       cg.restoreGState()
 
-      if luminance > 0.78, let outline = UIColor(hex: avatarOutline) {
+      if luminance > avatarOutlineAbove, let outline = UIColor(hex: avatarOutline) {
         cg.addPath(body)
         cg.setStrokeColor(outline.cgColor)
         cg.setLineWidth(avatarRadius * 0.06)
