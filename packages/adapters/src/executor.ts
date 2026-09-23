@@ -4343,6 +4343,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           terminalCheckpointComplete = true;
 
           flushPendingTools();
+          if (
+            [assembled, ...messageSegments.map((b) => (b.kind === "text" ? b.text : ""))].some(
+              looksLikeFakeToolCall,
+            )
+          ) {
+            // Signal only: the text already streamed to the thread, so a nudge would leave it visible.
+            getLogger().warn("agent reply contains a text tool call", { runId, botId: bot.id });
+          }
           if (!assembled) {
             // Mid-turn progress already posted durable chat messages; skip the empty
             // "…" fallback so we do not add a junk final bubble. Delegated bot_message
@@ -4791,6 +4799,11 @@ export function completionMessageSegments(
 }
 
 /** User-facing text for completion notifications; empty when only tool/step activity remains. */
+/** The old history trace syntax, written as text instead of a real tool call. */
+export function looksLikeFakeToolCall(text: string): boolean {
+  return /\[tool \w+\(/.test(text);
+}
+
 export function completionNotificationBody(assembled: string, blocks: MessageBlock[]): string {
   if (assembled) return assembled;
   return blocks
