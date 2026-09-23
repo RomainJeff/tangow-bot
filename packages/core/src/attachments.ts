@@ -7,6 +7,7 @@ import {
   type MessageBlock,
 } from "@rakazo/contracts";
 import { renderBotMessageBlock } from "./bot-messages.js";
+import { humanizeToolName } from "./events.js";
 
 export class AttachmentValidationError extends Error {
   constructor(message: string) {
@@ -99,7 +100,11 @@ function abbreviateToolPayload(text: string, max: number): string {
 }
 
 /** Secrets are already redacted when the steps block is persisted, and the payloads were
-    truncated at write time, so this only abbreviates further — it never widens. */
+    truncated at write time, so this only abbreviates further — it never widens.
+
+    Plain past-tense prose on purpose: a call-shaped trace (`name(args)`) taught models to
+    write fake tool calls as text instead of calling the tool. Turns that can be replayed
+    as real tool calls do not go through here. */
 function toolStepsToHistoryText(steps: Extract<MessageBlock, { kind: "steps" }>["steps"]): string {
   const lines: string[] = [];
   let budget = TOOL_TRACE_BLOCK_MAX_CHARS;
@@ -110,11 +115,10 @@ function toolStepsToHistoryText(steps: Extract<MessageBlock, { kind: "steps" }>[
       ? step.calls.map((call) => {
           const input = abbreviateToolPayload(call.input, TOOL_TRACE_INPUT_MAX_CHARS);
           const output = abbreviateToolPayload(call.output, TOOL_TRACE_OUTPUT_MAX_CHARS);
-          return output
-            ? `[tool ${call.name}(${input}) → ${output}]`
-            : `[tool ${call.name}(${input})]`;
+          const ran = `(already ran ${humanizeToolName(call.name)}, input: ${input}`;
+          return output ? `${ran}, result: ${output})` : `${ran})`;
         })
-      : [`[tools: ${step.label} ×${step.count}]`];
+      : [`(already ran ${step.label} ${step.count === 1 ? "once" : `${step.count} times`})`];
     for (const line of stepLines) {
       if (line.length > budget) {
         dropped += 1;
@@ -124,7 +128,7 @@ function toolStepsToHistoryText(steps: Extract<MessageBlock, { kind: "steps" }>[
       lines.push(line);
     }
   }
-  if (dropped > 0) lines.push(`[… ${dropped} more tool call${dropped === 1 ? "" : "s"} omitted]`);
+  if (dropped > 0) lines.push(`(${dropped} more tool call${dropped === 1 ? "" : "s"} omitted)`);
   return lines.join("\n");
 }
 

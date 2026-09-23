@@ -701,7 +701,9 @@ describe("compactHistory", () => {
     const [request] = harness.runtime.run.mock.calls[0]!;
     expect(request.prompt).toContain("[file: plan.pdf (application/pdf, 123 bytes)]");
     expect(request.prompt).toContain("[image: diagram.png]");
-    expect(request.prompt).toContain('[tool read_file({ "path": "plan.md" }) → Ship on Friday]');
+    expect(request.prompt).toContain(
+      '(already ran Read file, input: { "path": "plan.md" }, result: Ship on Friday)',
+    );
   });
 
   it("names each group member in the transcript and reads its handoffs by name", async () => {

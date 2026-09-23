@@ -119,14 +119,14 @@ describe("tool traces in history", () => {
         },
       ]),
     ).toBe(
-      'Checked.\n[tool read_file({ "path": "notes.md" }) → Ship on Friday]\n[tool read_file({ "path": "todo.md" })]',
+      'Checked.\n(already ran Read file, input: { "path": "notes.md" }, result: Ship on Friday)\n(already ran Read file, input: { "path": "todo.md" })',
     );
   });
 
   it("degrades old blocks without call details to the aggregate line", () => {
     expect(
       blocksToAgentHistoryText([{ kind: "steps", steps: [{ label: "Web search", count: 3 }] }]),
-    ).toBe("[tools: Web search ×3]");
+    ).toBe("(already ran Web search 3 times)");
   });
 
   it("caps each payload and the whole block", () => {
@@ -150,6 +150,25 @@ describe("tool traces in history", () => {
     expect(rendered).not.toContain("x".repeat(200));
     expect(rendered).not.toContain("y".repeat(400));
     expect(rendered).toContain("more tool calls omitted");
+  });
+
+  it("never renders a call-shaped trace the model could copy as text", () => {
+    const rendered = blocksToAgentHistoryText([
+      {
+        kind: "steps",
+        steps: [
+          {
+            label: "Web search",
+            count: 1,
+            calls: [{ name: "web_search", input: '{ "q": "x" }', output: "ok", id: "call_1" }],
+          },
+          { label: "Shell", count: 2 },
+        ],
+      },
+    ]);
+    expect(rendered).not.toMatch(/\[tool/);
+    expect(rendered).not.toMatch(/\w\(\{/);
+    expect(rendered).not.toContain("web_search(");
   });
 
   it("carries a turn's lookup into the next turn instead of forcing a second call", () => {
