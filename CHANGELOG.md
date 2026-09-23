@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-23
+
+#### Fixed
+
+- A bot no longer writes fake tool calls like `[tool web_search(...)]` into its replies instead of running the tool; its earlier tool calls now reach the model as real tool calls, and anything that still has to be shown as text reads as a plain note.
+
 ### 2026-09-22
 
 #### Fixed
