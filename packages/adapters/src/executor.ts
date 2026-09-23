@@ -4124,6 +4124,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 name: event.name,
                 input: describeToolPayload(event.args),
                 output: "",
+                id: event.executionId,
               };
               toolDetails.set(event.executionId, toolDetail);
               pendingToolNames.push({ name: event.name, detail: toolDetail });
@@ -4997,6 +4998,7 @@ function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[]
                   ...call,
                   input: redactSecrets(call.input, secrets),
                   output: redactSecrets(call.output, secrets),
+                  ...(call.id === undefined ? {} : { id: redactSecrets(call.id, secrets) }),
                 })),
               }
             : step,
