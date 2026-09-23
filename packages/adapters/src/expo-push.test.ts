@@ -144,6 +144,39 @@ describe("expo push", () => {
     expect(body.data.kind).toBe("takeover");
   });
 
+  it("marks an avatar push mutable so the iOS extension can draw the bot", async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-push-"));
+    dirs.push(dataDir);
+    await savePushToken(dataDir, "user-1", "ExponentPushToken[test]");
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => jsonResponse({ data: { status: "ok", id: "ticket" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const push = new ExpoPushProvider(dataDir);
+    await push.send(
+      {
+        kind: "completion",
+        title: "Maya finished",
+        body: "ok",
+        botId: "b",
+        threadId: "t",
+        avatar: { color: "#E5484D", shape: 3 },
+      },
+      notifyContext,
+    );
+    await push.send(
+      { kind: "completion", title: "done", body: "ok", botId: "b", threadId: "t" },
+      notifyContext,
+    );
+    const [withAvatar, plain] = fetchMock.mock.calls.map(([, init]) =>
+      JSON.parse(String((init as RequestInit).body)),
+    );
+    expect(withAvatar.mutableContent).toBe(true);
+    expect(withAvatar.data).toMatchObject({ avatarColor: "#E5484D", avatarShape: 3 });
+    expect(plain).not.toHaveProperty("mutableContent");
+    expect(plain.data).not.toHaveProperty("avatarColor");
+  });
+
   it("leaves the badge out of the Expo body when no count is known", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-push-"));
     dirs.push(dataDir);

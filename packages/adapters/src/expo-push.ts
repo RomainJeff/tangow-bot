@@ -125,7 +125,14 @@ export class ExpoPushProvider implements NotificationProvider {
           collapseId: message.threadId,
           tag: message.threadId,
           badge: message.badge,
-          data: { kind: message.kind, botId: message.botId, threadId: message.threadId },
+          mutableContent: message.avatar ? true : undefined,
+          data: {
+            kind: message.kind,
+            botId: message.botId,
+            threadId: message.threadId,
+            avatarColor: message.avatar?.color,
+            avatarShape: message.avatar?.shape,
+          },
         }),
         signal,
       });
