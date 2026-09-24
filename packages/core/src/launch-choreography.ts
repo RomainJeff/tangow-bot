@@ -2,13 +2,9 @@
  * Launch choreography: the "bot waking up" sequence the mobile splash plays
  * while the app boots.
  *
- * Translates the mockup's `SOLO` animation
- * (`maquette-splash.dc.html`, variants 1a/2a) into the bloub engine's moods
- * and looks. The mockup loops over ~7s of playback time meant for a page left
- * open; here the steps are held briefly so the whole wake-up fits in about
- * two seconds. The mockup's one gesture the engine can't reproduce is the
- * wink (no wink expression exists): it is replaced by `fier`, a proud
- * up-right glance.
+ * Held briefly so the whole wake-up fits in about two seconds. The design's
+ * one gesture the engine can't reproduce is a wink (no wink expression
+ * exists): it is replaced by `fier`, a proud up-right glance.
  *
  * A pure data sequence, not a timer: the caller (the mobile splash) drives
  * playback and decides when to stop or loop.

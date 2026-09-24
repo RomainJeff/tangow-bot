@@ -48,9 +48,9 @@ function withAlpha(hex: string, alpha: number): string {
 /**
  * The animated launch splash: covers the app while it boots (`ready === false`),
  * playing the bot's wake-up choreography, and fades out once the app is ready
- * and the wake-up has had its minimum time on screen. See `design.md` for the
- * full spec — this mirrors the native splash's frozen frame so the handoff has
- * no visible jump, then morphs the bot into the user's cached main bot.
+ * and the wake-up has played. It starts on the native splash's frozen frame so
+ * the handoff has no visible jump, then morphs the bot into the user's cached
+ * main bot.
  */
 export function LaunchSplash({
   ready,
