@@ -1657,6 +1657,39 @@ describe("mobile thread event reduction", () => {
     expect(next.olderCursor).toBeNull();
   });
 
+  it("keeps the previous snapshot when a refresh brings nothing new", () => {
+    const initial = snapshot([mobileMessage("m-1", [{ kind: "text", text: "hi" }], 1)], null);
+    const refreshed = snapshot([mobileMessage("m-1", [{ kind: "text", text: "hi" }], 1)], null);
+
+    expect(mergeMobileSnapshot(initial, refreshed)).toBe(initial);
+  });
+
+  it("keeps unchanged messages and replaces only the ones that changed", () => {
+    const initial = snapshot(
+      [
+        mobileMessage("m-1", [{ kind: "text", text: "hi" }], 1),
+        mobileMessage("m-2", [{ kind: "text", text: "draft" }], 2),
+      ],
+      null,
+    );
+    const refreshed = snapshot(
+      [
+        mobileMessage("m-1", [{ kind: "text", text: "hi" }], 1),
+        mobileMessage("m-2", [{ kind: "text", text: "final" }], 2),
+        mobileMessage("m-3", [], 3),
+      ],
+      null,
+    );
+
+    const next = mergeMobileSnapshot(initial, refreshed);
+
+    expect(next).not.toBe(initial);
+    expect(next.messages[0]).toBe(initial.messages[0]);
+    expect(next.messages[1]).toBe(refreshed.messages[1]);
+    expect(next.messages.map((item) => item.id)).toEqual(["m-1", "m-2", "m-3"]);
+    expect(next.computer).toBe(initial.computer);
+  });
+
   it("accumulates progress deltas for the same run", () => {
     const first = applyMobileThreadEvent(snapshot(), {
       type: "thread.progress",
