@@ -19,6 +19,7 @@
     "ios": "expo run:ios",
     "check": "expo install --check && tsc --noEmit -p tsconfig.json",
     "test": "vitest run --root ../.. apps/mobile/lib",
+    "generate-splash-assets": "tsx scripts/generate-splash-assets.ts",
     "test:e2e": "maestro test .maestro/smoke.yaml",
     "submit:ios": "npx eas-cli@latest submit --platform ios --profile production --latest"
   },
@@ -50,6 +51,7 @@
     "expo-splash-screen": "57.0.9",
     "expo-status-bar": "57.0.1",
     "expo-symbols": "57.0.3",
+    "expo-system-ui": "57.0.4",
     "expo-updates": "57.0.23",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -68,6 +70,7 @@
     "@react-native/metro-config": "0.86.3",
     "@types/node": "24.13.3",
     "@types/react": "19.2.18",
+    "sharp": "0.35.4",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   }

@@ -1,11 +1,12 @@
 import type { AvatarStyle } from "@rakazo/contracts";
-import type { BotFrame } from "@rakazo/core";
+import type { BotFrame, ExpressionId, Look } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
   avatarIdentitySeed,
   BotEngine,
   EXPRESSION_BY_ID,
   GLANCE_MORPH,
+  mixHex,
   nextWorkingGlance,
   RAYON,
   SHAPES,
@@ -141,23 +142,35 @@ export const BotAvatar = memo(function BotAvatar({
 /** Half of the viewBox side: the resting body radius plus room for the blink squash. */
 const BLOUB_HALF_VIEWBOX = RAYON * 1.12;
 
+/** An explicit mood + look, overriding the idle/working choreography (e.g. the launch splash). */
+export interface OrganicAvatarDrive {
+  mood: ExpressionId;
+  look: Look | null;
+}
+
 /**
  * The organic avatar, drawn by the bloub engine (`@rakazo/core/bloub`) like web and
  * desktop: a morphing ink body with the eyes punched out and idle blinks. While a
  * run is active the bot glances around and changes mood at random intervals.
+ *
+ * `drive`, when set, takes over the mood/look instead: the launch splash uses it to
+ * step through the wake-up choreography. Existing callers never pass it, so idle and
+ * working behave exactly as before.
  */
-function OrganicAvatar({
+export function OrganicAvatar({
   color,
   identity,
   shapeSeed,
   size,
   isWorking,
+  drive,
 }: {
   color: string;
   identity?: string;
   shapeSeed?: number | null;
   size: number;
   isWorking: boolean;
+  drive?: OrganicAvatarDrive | null;
 }) {
   const reducedMotion = useReducedMotion();
   const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
@@ -166,6 +179,16 @@ function OrganicAvatar({
   const [engine] = useState(() => new BotEngine(RAYON, "idle", shape.radii));
   const clock = useRef(0);
   const [frame, setFrame] = useState<BotFrame>(() => engine.sample(0));
+  // Colour crossfade: the engine only morphs shape, so the fill's own interpolation
+  // lives here, on the same timeline as `clock` and the same duration as a shape morph.
+  const colorMorph = useRef({ from: color, to: color, at: 0 });
+  const renderedColor = useRef(color);
+  const [fill, setFill] = useState(color);
+
+  useEffect(() => {
+    if (colorMorph.current.to === color) return;
+    colorMorph.current = { from: renderedColor.current, to: color, at: clock.current };
+  }, [color]);
 
   useEffect(() => {
     if (reducedMotion) {
@@ -173,10 +196,15 @@ function OrganicAvatar({
       engine.reset("idle", clock.current);
       engine.setShape(shape.radii, clock.current - BotEngine.SHAPE_MORPH);
       setFrame(engine.sample(clock.current + 1));
+      renderedColor.current = color;
+      setFill(color);
       return;
     }
     engine.setShape(shape.radii, clock.current);
-    if (!isWorking) {
+    if (drive) {
+      engine.setExpression(EXPRESSION_BY_ID.get(drive.mood) ?? null, clock.current);
+      engine.setLook(drive.look, clock.current, GLANCE_MORPH);
+    } else if (!isWorking) {
       engine.setLook(null, clock.current);
       engine.setExpression(null, clock.current);
     }
@@ -188,22 +216,27 @@ function OrganicAvatar({
       // Clamp the step like web so a backgrounded app resumes without a jump.
       if (last) clock.current += Math.min((now - last) / 1000, 0.064);
       last = now;
-      if (isWorking && clock.current >= nextGlance) {
+      if (!drive && isWorking && clock.current >= nextGlance) {
         const glance = nextWorkingGlance();
         engine.setLook(glance.look, clock.current, GLANCE_MORPH);
         engine.setExpression(EXPRESSION_BY_ID.get(glance.mood) ?? null, clock.current);
         nextGlance = clock.current + glance.delay;
       }
       setFrame(engine.sample(clock.current));
+      const { from, to, at } = colorMorph.current;
+      const k = Math.min(Math.max((clock.current - at) / BotEngine.SHAPE_MORPH, 0), 1);
+      const next = k >= 1 ? to : mixHex(from, to, k);
+      renderedColor.current = next;
+      setFill(next);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [engine, shape, isWorking, reducedMotion]);
+  }, [engine, shape, isWorking, reducedMotion, drive, color]);
 
   // Same eye rule as web: the eyes show the "paper" behind the ink, so pick it from
   // the body luminance, and ink a pale body's outline so it stays visible.
-  const luminance = relativeLuminance(color);
+  const luminance = relativeLuminance(fill);
   const paper = luminance < 0.4 ? "#FFFFFF" : "#101014";
   const outline = luminance > 0.78 ? "#17181A" : null;
   const VB = BLOUB_HALF_VIEWBOX;
@@ -219,7 +252,7 @@ function OrganicAvatar({
       {/* ponytail: body and eyes only — the idle state the avatar stays in never
           emits the engine's particles, arcs or notification dot. */}
       <G opacity={frame.bodyAlpha}>
-        <Path d={frame.bodyPath} fill={color} />
+        <Path d={frame.bodyPath} fill={fill} />
         <G clipPath={`url(#${clipId})`}>
           {frame.eyes.map((eye, index) => (
             <Path key={index} d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill={paper} />

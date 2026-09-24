@@ -6,15 +6,20 @@
     "scheme": "rakazo",
     "version": "1.0.3",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "plugins": [
       [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
+          "imageWidth": 96,
           "resizeMode": "contain",
-          "backgroundColor": "#050506"
+          "backgroundColor": "#FBFBF9",
+          "dark": {
+            "image": "./assets/splash-icon-dark.png",
+            "backgroundColor": "#0C0C0E"
+          }
         }
       ],
       "expo-router",
