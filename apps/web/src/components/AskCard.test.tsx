@@ -60,9 +60,9 @@ describe("AskCard multi-question answered rendering", () => {
     // into the card (it lives in the user's message bubble instead).
     expect(html).not.toContain("Answered");
     expect(html).not.toContain("Berlin, no restrictions");
-    // All progress dots render as resolved (success), never the muted "not done" state.
+    // Settled: the progress dots have nothing left to track.
+    expect(html).not.toContain("bg-success");
     expect(html).not.toContain("bg-muted-foreground/40");
-    expect((html.match(/bg-success/g) ?? []).length).toBe(questions.length);
   });
 
   it("resolved via the card (block.answers present): structured breakdown is unchanged", () => {
@@ -84,6 +84,25 @@ describe("AskCard multi-question answered rendering", () => {
 
     expect(html).toContain("Berlin");
     expect(html).toContain("Other: vegetarian");
+  });
+
+  it("a single settled question shows its answer under the question, once", () => {
+    const block: AskBlock = {
+      kind: "ask",
+      text: "",
+      status: "answered",
+      answer: "",
+      questions: [questions[0]!],
+      answers: { q1: { selected: ["berlin"] } },
+    };
+
+    const html = renderToStaticMarkup(
+      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-single" />,
+    );
+
+    expect(html.split("Which city should I use?").length - 1).toBe(1);
+    expect(html).not.toContain("1. ");
+    expect(html).toContain("Berlin");
   });
 });
 

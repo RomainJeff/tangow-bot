@@ -3640,44 +3640,50 @@ function MultiQuestionAskBlock({
     </View>
   );
 
-  const answeredContent =
-    answered || !canAnswer ? (
+  // Once settled the progress dots have nothing left to track, and a single
+  // question is already the card's own question line: only the answer stays.
+  // Mirrors `apps/web/src/components/AskCard.tsx`.
+  const answerValue = (question: (typeof questions)[number]) => {
+    const stored = ask.answers?.[question.id];
+    const labels = (stored?.selected ?? []).map(
+      (id) => question.options?.find((option) => option.id === id)?.label ?? id,
+    );
+    if (stored?.other) labels.push(`${t("Other")}: ${stored.other}`);
+    return stored?.skipped && labels.length === 0 ? t("Skipped") : labels.join(", ");
+  };
+  const hasStoredAnswers = Boolean(ask.answers && Object.keys(ask.answers).length > 0);
+  const answeredContent = answered ? (
+    total === 1 ? (
+      hasStoredAnswers ? (
+        <Text style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
+          {answerValue(current) || t("Answered")}
+        </Text>
+      ) : (
+        <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+          {t("Answered")}
+        </Text>
+      )
+    ) : (
       <View style={{ gap: 10 }}>
-        {progressRow}
-        {answered ? (
-          <View style={{ gap: 10 }}>
-            {questions.map((question, qIndex) => {
-              const stored = ask.answers?.[question.id];
-              const labels = (stored?.selected ?? []).map(
-                (id) => question.options?.find((option) => option.id === id)?.label ?? id,
-              );
-              if (stored?.other) labels.push(`${t("Other")}: ${stored.other}`);
-              const value =
-                stored?.skipped && labels.length === 0 ? t("Skipped") : labels.join(", ");
-              return (
-                <View key={question.id}>
-                  <Text
-                    style={{
-                      color: tokens.mutedForeground,
-                      ...nativeTextStyle("meta", { weight: 600 }),
-                    }}
-                  >
-                    {qIndex + 1}. {question.question}
-                  </Text>
-                  <Text style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
-                    {value || t("Answered")}
-                  </Text>
-                </View>
-              );
-            })}
+        {questions.map((question, qIndex) => (
+          <View key={question.id}>
+            <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+              {qIndex + 1}. {question.question}
+            </Text>
+            {hasStoredAnswers ? (
+              <Text style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
+                {answerValue(question) || t("Answered")}
+              </Text>
+            ) : null}
           </View>
-        ) : (
-          <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-            {t("No longer active")}
-          </Text>
-        )}
+        ))}
       </View>
-    ) : undefined;
+    )
+  ) : !canAnswer ? (
+    <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+      {t("No longer active")}
+    </Text>
+  ) : undefined;
 
   const optionEntries = current.options ?? [];
   const withOther =
@@ -3693,27 +3699,7 @@ function MultiQuestionAskBlock({
 
   return (
     <FramedBlock
-      question={
-        <>
-          {current.header ? (
-            <Text
-              style={{
-                alignSelf: "flex-start",
-                marginBottom: 4,
-                borderRadius: radii.chip,
-                backgroundColor: tokens.muted,
-                paddingHorizontal: 10,
-                paddingVertical: 2,
-                color: tokens.mutedForeground,
-                ...nativeTextStyle("time"),
-              }}
-            >
-              {current.header}
-            </Text>
-          ) : null}
-          <Text {...actionProps}>{current.question}</Text>
-        </>
-      }
+      question={<Text {...actionProps}>{current.question}</Text>}
       answered={answeredContent}
       actions={
         answeredContent === undefined ? (
