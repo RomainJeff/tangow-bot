@@ -2272,13 +2272,7 @@ function Thread() {
                       color={tokens.primaryForeground}
                     />
                   </ComposerButton>
-                ) : (
-                  // Reserves Send's footprint so the field does not jump when it arrives.
-                  <View
-                    accessibilityElementsHidden
-                    style={{ width: sizes.composerIcon, height: sizes.composerIcon }}
-                  />
-                )}
+                ) : null}
                 {working ? (
                   <ComposerButton
                     label={t("Stop")}
