@@ -6,7 +6,7 @@ import {
   SHAPES,
 } from "@rakazo/core";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, useColorScheme, View } from "react-native";
 import Animated, {
   Easing,
   runOnJS,
@@ -16,8 +16,8 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import { mobileTokens } from "../lib/appearance";
 import { loadMainBotCache, type MainBotCacheEntry } from "../lib/main-bot-cache";
-import { useMobileTokens, useResolvedAppearance } from "../lib/native";
 import { OrganicAvatar } from "./bot-avatar";
 
 const HALO_SIZE = 132;
@@ -64,9 +64,12 @@ export function LaunchSplash({
   onLayout?: () => void;
 }) {
   const reducedMotion = useReducedMotion();
-  const tokens = useMobileTokens();
-  const resolvedAppearance = useResolvedAppearance();
-  const dark = resolvedAppearance === "dark";
+  // Follow the device theme, not the in-app Appearance preference: the native
+  // splash can only see the device theme, so matching it keeps the handoff
+  // seamless, and any switch to the in-app theme happens under the fade-out.
+  const scheme = useColorScheme();
+  const tokens = mobileTokens("system", scheme);
+  const dark = scheme !== "light";
 
   const [cachedBot, setCachedBot] = useState<MainBotCacheEntry | null>(null);
   const bot = cachedBot ?? placeholderBot(dark);
