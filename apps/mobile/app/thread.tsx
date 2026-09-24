@@ -302,7 +302,7 @@ function Thread() {
   const colorScheme = useResolvedAppearance();
   const tokens = mobileTokens();
   const [botActionsOpen, setBotActionsOpen] = useState(false);
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const navigation = useNavigation();
   const router = useRouter();
   const headerHeight = useHeaderHeight();
@@ -1498,8 +1498,8 @@ function Thread() {
     }
   }
 
-  function messageActionProps(message: MobileMessage): MessageActionProps {
-    const actions = [
+  function messageActions(message: MobileMessage) {
+    return [
       {
         name: "reply",
         text: t("Reply"),
@@ -1551,20 +1551,45 @@ function Thread() {
         },
       },
     ];
-    return {
-      onLongPress: () =>
-        presentMessageActionSheet({
-          actions,
-          title: message.createdAt ? messageClockTime(message.createdAt) : undefined,
-          cancel: t("Cancel"),
-          more: t("More"),
-          colorScheme,
-        }),
-      accessibilityActions: actions.map((action) => ({ name: action.name, label: action.text })),
+  }
+
+  function showMessageActions(message: MobileMessage) {
+    presentMessageActionSheet({
+      actions: messageActions(message),
+      title: message.createdAt ? messageClockTime(message.createdAt) : undefined,
+      cancel: t("Cancel"),
+      more: t("More"),
+      colorScheme,
+    });
+  }
+
+  // One props object per message whose handlers reach the latest render, so
+  // `MessageBubble` can skip re-rendering while the thread scrolls or the
+  // composer changes. Rebuilt with the language: its labels are translated.
+  const latestActions = useRef({ messageActions, showMessageActions });
+  latestActions.current = { messageActions, showMessageActions };
+  const actionPropsCache = useMemo(
+    () => new WeakMap<MobileMessage, MessageActionProps>(),
+    [locale],
+  );
+  function messageActionProps(message: MobileMessage): MessageActionProps {
+    const cached = actionPropsCache.get(message);
+    if (cached) return cached;
+    const props: MessageActionProps = {
+      onLongPress: () => latestActions.current.showMessageActions(message),
+      accessibilityActions: messageActions(message).map((action) => ({
+        name: action.name,
+        label: action.text,
+      })),
       onAccessibilityAction: (event) => {
-        actions.find((action) => action.name === event.nativeEvent.actionName)?.onPress();
+        latestActions.current
+          .messageActions(message)
+          .find((action) => action.name === event.nativeEvent.actionName)
+          ?.onPress();
       },
     };
+    actionPropsCache.set(message, props);
+    return props;
   }
 
   /** Colour, name and shape of the bot behind a message: the group roster
