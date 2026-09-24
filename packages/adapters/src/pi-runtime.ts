@@ -7,11 +7,13 @@ import {
 } from "@earendil-works/pi-agent-core";
 import {
   type Api,
+  type AssistantMessage,
   clampThinkingLevel,
   type Model,
   type Models,
   type ModelThinkingLevel,
   type SimpleStreamOptions,
+  type ToolCall,
   Type,
   type Usage,
 } from "@earendil-works/pi-ai";
@@ -794,6 +796,48 @@ function sealAssistantTurnMarkers(content: string): string {
     .replaceAll(ASSISTANT_TURN_CLOSE, "&lt;/assistant_turn&gt;");
 }
 
+const FAKE_TOOL_CALL_START = /\[tool \w+\(/g;
+const FAKE_TOOL_CALL_ONLY = "(earlier reply omitted: it was malformed)";
+
+/**
+ * Replies stored before tool calls were replayed as real turns can contain the
+ * old `[tool name(args) → output]` trace written as text. Replayed as-is they
+ * teach the model to keep writing calls instead of making them, so each span is
+ * cut, bracket-balanced and JSON-string aware; an unclosed span runs to the end.
+ */
+export function stripFakeToolCalls(content: string): string {
+  let result = "";
+  let cursor = 0;
+  let stripped = false;
+  for (const match of content.matchAll(FAKE_TOOL_CALL_START)) {
+    if (match.index < cursor) continue;
+    let end = content.length;
+    let depth = 0;
+    let inString = false;
+    for (let i = match.index; i < content.length; i += 1) {
+      const char = content[i];
+      if (inString) {
+        if (char === "\\") i += 1;
+        else if (char === '"') inString = false;
+      } else if (char === '"') inString = true;
+      else if (char === "[" || char === "(" || char === "{") depth += 1;
+      else if (char === "]" || char === ")" || char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    result += content.slice(cursor, match.index);
+    cursor = end;
+    stripped = true;
+  }
+  if (!stripped) return content;
+  const cleaned = (result + content.slice(cursor)).replace(/\n{3,}/g, "\n\n").trim();
+  return cleaned || FAKE_TOOL_CALL_ONLY;
+}
+
 /**
  * What a rehydrated turn reports it cost: nothing. Those tokens were billed on
  * the run that produced the turn, so replaying it must not reach a counter twice.
@@ -810,17 +854,27 @@ function noUsage(): Usage {
 }
 
 /**
+ * Replayed turns are stamped with a model id no provider uses, so pi-ai always treats them as
+ * foreign: it rewrites stored tool-call ids into the current provider's format (the thread may
+ * have switched model since) and never pairs them with reasoning items we did not keep.
+ */
+const REPLAYED_HISTORY_MODEL = "rakazo-replayed-history";
+const NO_TOOL_OUTPUT = "(no output recorded)";
+
+/**
  * Rehydrate a thread into the messages this runtime sends.
  *
  * The bot's own past turns come back as `assistant` messages: the shape models
- * are trained on, and structure a peer cannot forge from text. User turns and
- * peer turns stay on the user side, peers keeping the `<bot_message from=…>`
- * block the wake prompt already delivers them in. Historical tool calls stay the
- * rendered text they were stored as — their call ids are not persisted.
+ * are trained on, and structure a peer cannot forge from text. When a turn ran
+ * tools with a stored call id, those calls come back as real tool calls, each
+ * followed by its result, so the model sees how it called tools instead of a
+ * text trace it could learn to imitate. User turns and peer turns stay on the
+ * user side, peers keeping the `<bot_message from=…>` block the wake prompt
+ * already delivers them in.
  *
  * The oldest kept turn is the exception: a provider can refuse a request whose
  * first message is an assistant turn, so that one falls back to the marked user
- * rendering instead of being dropped.
+ * rendering (tool calls as prose) instead of being dropped.
  */
 export function toHistory(
   history: AgentRunRequest["history"],
@@ -843,31 +897,83 @@ export function toHistory(
     duplicatePromptIndex < 0
       ? history
       : history.filter((_, index) => index !== duplicatePromptIndex);
+  const usedToolCallIds = new Set<string>();
+  // Ids must be unique across the whole request: pi-ai maps results to calls by id.
+  const uniqueToolCallId = (id: string) => {
+    let unique = id;
+    for (let n = 2; usedToolCallIds.has(unique); n += 1) unique = `h${n}_${id}`;
+    usedToolCallIds.add(unique);
+    return unique;
+  };
   return prior
     .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m, index) => {
-      const content = sealAssistantTurnMarkers(m.content);
+    .flatMap((m, index): AgentMessage[] => {
       const timestamp = Date.now();
-      if (m.role === "assistant" && index > 0) {
-        return {
-          role: "assistant",
-          content: [{ type: "text", text: content }],
-          api: model.api,
-          provider: model.provider,
-          model: model.id,
-          usage: noUsage(),
-          stopReason: "stop",
-          timestamp,
-        };
-      }
-      return {
-        role: "user",
-        content:
-          m.role === "assistant"
-            ? `${ASSISTANT_TURN_OPEN}\n${content}\n${ASSISTANT_TURN_CLOSE}`
-            : content,
+      const assistant = (
+        content: AssistantMessage["content"],
+        stopReason: AssistantMessage["stopReason"],
+      ): AssistantMessage => ({
+        role: "assistant",
+        content,
+        api: model.api,
+        provider: model.provider,
+        model: REPLAYED_HISTORY_MODEL,
+        usage: noUsage(),
+        stopReason,
         timestamp,
-      };
+      });
+      if (m.role === "assistant" && index > 0 && m.parts) {
+        const messages: AgentMessage[] = [];
+        let text: AssistantMessage["content"] = [];
+        for (const part of m.parts) {
+          if (part.type === "text") {
+            text.push({
+              type: "text",
+              text: sealAssistantTurnMarkers(stripFakeToolCalls(part.text)),
+            });
+            continue;
+          }
+          const calls = part.calls.map((call) => ({ ...call, id: uniqueToolCallId(call.id) }));
+          const toolCalls: ToolCall[] = calls.map((call) => ({
+            type: "toolCall",
+            id: call.id,
+            name: call.name,
+            arguments: call.args,
+          }));
+          messages.push(assistant([...text, ...toolCalls], "toolUse"));
+          text = [];
+          // Every call gets its result, also when none was recorded (the run stopped or failed
+          // mid-tool): a call without a result is refused by most providers.
+          for (const call of calls) {
+            messages.push({
+              role: "toolResult",
+              toolCallId: call.id,
+              toolName: call.name,
+              content: [{ type: "text", text: call.output || NO_TOOL_OUTPUT }],
+              isError: false,
+              timestamp,
+            });
+          }
+        }
+        if (text.length > 0) messages.push(assistant(text, "stop"));
+        return messages;
+      }
+      const content = sealAssistantTurnMarkers(
+        m.role === "assistant" ? stripFakeToolCalls(m.content) : m.content,
+      );
+      if (m.role === "assistant" && index > 0) {
+        return [assistant([{ type: "text", text: content }], "stop")];
+      }
+      return [
+        {
+          role: "user",
+          content:
+            m.role === "assistant"
+              ? `${ASSISTANT_TURN_OPEN}\n${content}\n${ASSISTANT_TURN_CLOSE}`
+              : content,
+          timestamp,
+        },
+      ];
     });
 }
 

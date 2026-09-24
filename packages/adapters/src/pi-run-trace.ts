@@ -72,8 +72,8 @@ function costDetails(usage: Usage): string {
  * per model turn, and a span per tool call.
  *
  * Replayed history is recorded as the input of the run, never as a generation.
- * A replayed message carries the current run's model and no usage, so exporting
- * it as a generation would invent free calls against a model that never ran.
+ * A replayed message carries the current run's provider and no usage, so exporting
+ * it as a generation would invent free calls that never ran.
  */
 export class RunTraceRecorder {
   readonly trace = new RunTrace();

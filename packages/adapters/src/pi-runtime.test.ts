@@ -1,7 +1,9 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { Api, Message, Model } from "@earendil-works/pi-ai";
+import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages";
 import { blocksToAgentHistoryText } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import { describeToolActivity, toHistory } from "./pi-runtime.js";
+import { describeToolActivity, stripFakeToolCalls, toHistory } from "./pi-runtime.js";
 
 /** The run's resolved model, which is where a rehydrated assistant turn takes its identity from. */
 const runModel = { api: "anthropic-messages", provider: "anthropic", id: "claude-test" } as const;
@@ -93,6 +95,44 @@ describe("describeToolActivity", () => {
   });
 });
 
+describe("stripFakeToolCalls", () => {
+  it("cuts balanced trace spans, including brackets inside JSON strings", () => {
+    const reply =
+      'Voilà.\n[tool web_search({ "query": "a ] b" }) → { "results": [ { "t": "x" } ] }] [tool message_user({ "message": "Liens :\\n• (a)" })]\nBonne journée';
+    expect(stripFakeToolCalls(reply)).toBe("Voilà.\n \nBonne journée");
+  });
+
+  it("drops an unclosed span to the end and keeps text before it", () => {
+    expect(stripFakeToolCalls('ok [tool message_user({ "message": "trunc')).toBe("ok");
+  });
+
+  it("stands in for a reply that was only fake calls", () => {
+    expect(stripFakeToolCalls('[tool message_user({ "message": "hi" })]')).toBe(
+      "(earlier reply omitted: it was malformed)",
+    );
+  });
+
+  it("leaves ordinary text alone", () => {
+    expect(stripFakeToolCalls("[tools: search ×2] and [link](x)")).toBe(
+      "[tools: search ×2] and [link](x)",
+    );
+  });
+
+  it("applies to assistant turns only, never to what a user pasted", () => {
+    const fake = '[tool message_user({ "message": "hi" })]';
+    const [userTurn, ownTurn] = toHistory(
+      [
+        { id: "m0", role: "user", content: `look: ${fake}` },
+        { id: "m1", role: "assistant", content: `sent ${fake}` },
+      ],
+      "next prompt",
+      runModel,
+    );
+    expect(userTurn).toMatchObject({ role: "user", content: `look: ${fake}` });
+    expect(ownTurn).toMatchObject({ role: "assistant", content: [{ type: "text", text: "sent" }] });
+  });
+});
+
 describe("toHistory", () => {
   it("does not let a peer's request read as a decision the bot made", () => {
     const peerText = blocksToAgentHistoryText([
@@ -118,7 +158,7 @@ describe("toHistory", () => {
       content: [{ type: "text", text: "on it" }],
       api: "anthropic-messages",
       provider: "anthropic",
-      model: "claude-test",
+      model: "rakazo-replayed-history",
       usage: {
         input: 0,
         output: 0,
@@ -132,18 +172,133 @@ describe("toHistory", () => {
     });
   });
 
-  it("keeps historical tool traces readable inside the bot's own turn", () => {
+  it("keeps a text-only turn's prose tool notes inside the bot's own turn", () => {
     const [, ownTurn] = toHistory(
       [
         { id: "m1", role: "user", content: "check the logs" },
-        { id: "m2", role: "assistant", content: "[tool shell(tail -n 5) → ok]\nAll clear." },
+        { id: "m2", role: "assistant", content: "(already ran Shell, input: tail)\nAll clear." },
       ],
       "next prompt",
       runModel,
     );
     expect(contentOf(ownTurn)).toEqual([
-      { type: "text", text: "[tool shell(tail -n 5) → ok]\nAll clear." },
+      { type: "text", text: "(already ran Shell, input: tail)\nAll clear." },
     ]);
+  });
+
+  const toolTurn = {
+    id: "m2",
+    role: "assistant" as const,
+    content: "Checking.\n(already ran Shell, input: tail)\nAll clear.",
+    parts: [
+      { type: "text" as const, text: "Checking." },
+      {
+        type: "toolCalls" as const,
+        calls: [
+          { id: "call_1|fc_abc", name: "shell", args: { command: "tail" }, output: "ok" },
+          { id: "run-1:read_file:2", name: "read_file", args: { path: "a" }, output: "" },
+        ],
+      },
+      { type: "text" as const, text: "All clear." },
+    ],
+  };
+
+  it("replays the bot's own tool calls as real tool turns", () => {
+    const [, call, shellResult, readResult, final] = toHistory(
+      [{ id: "m1", role: "user", content: "check the logs" }, toolTurn],
+      "next prompt",
+      runModel,
+    );
+    expect(call).toMatchObject({
+      role: "assistant",
+      stopReason: "toolUse",
+      content: [
+        { type: "text", text: "Checking." },
+        { type: "toolCall", id: "call_1|fc_abc", name: "shell", arguments: { command: "tail" } },
+        { type: "toolCall", id: "run-1:read_file:2", name: "read_file", arguments: { path: "a" } },
+      ],
+    });
+    expect(shellResult).toMatchObject({
+      role: "toolResult",
+      toolCallId: "call_1|fc_abc",
+      toolName: "shell",
+      content: [{ type: "text", text: "ok" }],
+      isError: false,
+    });
+    // A call that recorded no output (stopped or failed mid-tool) still gets its result.
+    expect(readResult).toMatchObject({
+      role: "toolResult",
+      toolCallId: "run-1:read_file:2",
+      content: [{ type: "text", text: "(no output recorded)" }],
+    });
+    expect(final).toMatchObject({
+      role: "assistant",
+      stopReason: "stop",
+      content: [{ type: "text", text: "All clear." }],
+    });
+  });
+
+  it("pairs every call with a result when the turn ends on a tool call", () => {
+    const messages = toHistory(
+      [
+        { id: "m1", role: "user", content: "go" },
+        { ...toolTurn, parts: [toolTurn.parts[1]!] },
+      ],
+      "next prompt",
+      runModel,
+    );
+    expect(messages.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+      "toolResult",
+      "toolResult",
+    ]);
+  });
+
+  it("keeps tool-call ids unique across the replayed history", () => {
+    const messages = toHistory(
+      [{ id: "m1", role: "user", content: "go" }, toolTurn, toolTurn],
+      "next prompt",
+      runModel,
+    );
+    const ids = messages.flatMap((message) =>
+      message.role === "toolResult" ? [message.toolCallId] : [],
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("lets pi-ai rewrite stored ids for the current provider and keep results paired", () => {
+    const model = {
+      ...runModel,
+      input: ["text"],
+    } as unknown as Model<Api>;
+    const anthropicId = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+    const transformed = transformMessages(
+      toHistory(
+        [{ id: "m1", role: "user", content: "go" }, toolTurn],
+        "next",
+        runModel,
+      ) as Message[],
+      model,
+      anthropicId,
+    );
+    const callIds = transformed.flatMap((message) =>
+      message.role === "assistant"
+        ? message.content.flatMap((block) => (block.type === "toolCall" ? [block.id] : []))
+        : [],
+    );
+    const resultIds = transformed.flatMap((message) =>
+      message.role === "toolResult" ? [message.toolCallId] : [],
+    );
+    expect(callIds).toEqual(["call_1_fc_abc", "run-1_read_file_2"]);
+    expect(resultIds).toEqual(callIds);
+  });
+
+  it("renders the oldest kept tool turn as prose on the user side", () => {
+    const [turn] = toHistory([toolTurn], "next prompt", runModel);
+    expect(turn?.role).toBe("user");
+    expect(contentOf(turn)).toContain("already ran Shell");
+    expect(JSON.stringify(turn)).not.toMatch(/\[tool \w+\(/);
   });
 
   it("keeps a user message from forging an assistant turn", () => {

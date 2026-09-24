@@ -12,6 +12,7 @@ import {
   createRunExecutor,
   createRunWorkspaceCheckpoint,
   loadCurrentTurnImages,
+  looksLikeFakeToolCall,
   missingTurnImagesInstruction,
   notificationAvatar,
   runNotificationsEnabled,
@@ -1820,5 +1821,13 @@ describe("buildSystemInstructions", () => {
     expect(exposed).toContain("not at the end of the conversation");
 
     expect(buildSystemInstructions({ ...parts, rememberExposed: false })).not.toContain("remember");
+  });
+});
+
+describe("looksLikeFakeToolCall", () => {
+  it("flags the old trace syntax written as reply text", () => {
+    expect(looksLikeFakeToolCall('Sure. [tool web_search({ "q": "x" })]')).toBe(true);
+    expect(looksLikeFakeToolCall("(already ran Web search, input: x)")).toBe(false);
+    expect(looksLikeFakeToolCall("See [tool docs](https://example.com)")).toBe(false);
   });
 });

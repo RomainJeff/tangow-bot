@@ -266,7 +266,7 @@ function liveMessageText(blocks: readonly MessageBlock[]): string {
     .join("");
 }
 
-export type ToolCallDetail = { name: string; input: string; output: string };
+export type ToolCallDetail = { name: string; input: string; output: string; id?: string };
 export type ToolStep = { label: string; count: number; calls?: ToolCallDetail[] };
 
 export function appendToolStep(

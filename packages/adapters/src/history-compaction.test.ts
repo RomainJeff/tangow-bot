@@ -200,6 +200,19 @@ describe("context budget estimation", () => {
     );
   });
 
+  it("sizes a replayed tool turn by its parts, not its short text", () => {
+    const output = "x".repeat(4000);
+    const turn = {
+      content: "Done.",
+      parts: [
+        { type: "toolCalls" as const, calls: [{ id: "c1", name: "shell", args: {}, output }] },
+        { type: "text" as const, text: "Done." },
+      ],
+    };
+    expect(estimateHistoryTokens([turn])).toBeGreaterThan(1000);
+    expect(estimateHistoryTokens([{ content: "Done." }])).toBe(estimateTextTokens("Done."));
+  });
+
   it("is zero for an empty tool catalog", () => {
     expect(estimateToolSchemaTokens([])).toBe(0);
   });
@@ -701,7 +714,9 @@ describe("compactHistory", () => {
     const [request] = harness.runtime.run.mock.calls[0]!;
     expect(request.prompt).toContain("[file: plan.pdf (application/pdf, 123 bytes)]");
     expect(request.prompt).toContain("[image: diagram.png]");
-    expect(request.prompt).toContain('[tool read_file({ "path": "plan.md" }) → Ship on Friday]');
+    expect(request.prompt).toContain(
+      '(already ran Read file, input: { "path": "plan.md" }, result: Ship on Friday)',
+    );
   });
 
   it("names each group member in the transcript and reads its handoffs by name", async () => {

@@ -194,7 +194,16 @@ export const MessageBlock = z.discriminatedUnion("kind", [
         count: z.number().int().positive(),
         /** One entry per collapsed call, for the "Display agent steps" detail view. */
         calls: z
-          .array(z.object({ name: z.string(), input: z.string(), output: z.string() }))
+          .array(
+            z.object({
+              name: z.string(),
+              input: z.string(),
+              output: z.string(),
+              /** Provider tool-call id: lets a later turn replay the call as a real tool
+                  turn. Absent on blocks recorded before it was stored. */
+              id: z.string().optional(),
+            }),
+          )
           .optional(),
       }),
     ),

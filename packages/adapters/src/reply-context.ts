@@ -1,3 +1,4 @@
+import type { AgentHistoryMessage, AgentHistoryPart } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { blocksToAgentHistoryText, messageReaction, renderBotMessageBlock } from "@rakazo/core";
@@ -62,6 +63,71 @@ export function messageToAgentHistoryText(
     .join("\n\n");
 }
 
+/** Per-call and per-turn caps on replayed tool output: history reminds the model what it
+    already learned, it must not crowd out the rest of the window. */
+const REPLAY_OUTPUT_MAX_CHARS = 2000;
+const REPLAY_TURN_OUTPUT_MAX_CHARS = 16_000;
+
+/** The stored input is the redacted, capped JSON of the call args; anything that no longer
+    parses to an object (truncated, legacy) is replayed as its text. */
+function replayedToolArgs(input: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(input);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Not JSON: fall through to the text form.
+  }
+  return { input };
+}
+
+/**
+ * The bot's own turn as ordered text and tool-call parts, so the runtime can replay the
+ * tools it ran as real tool turns instead of text the model learns to imitate. Only steps
+ * blocks whose every call carries a stored id are replayable; older blocks stay text.
+ * Undefined when nothing is replayable, so the turn stays plain `content`.
+ */
+function messageToAgentHistoryParts(
+  message: ReplyMessage,
+  botNames?: ReadonlyMap<string, string>,
+): AgentHistoryPart[] | undefined {
+  const parts: AgentHistoryPart[] = [];
+  const pushText = (text: string | undefined) => {
+    if (!text) return;
+    const last = parts.at(-1);
+    if (last?.type === "text") last.text = `${last.text}\n${text}`;
+    else parts.push({ type: "text", text });
+  };
+  let outputBudget = REPLAY_TURN_OUTPUT_MAX_CHARS;
+  pushText(replyContext(message, message.threadId, botNames));
+  for (const block of messageBlocks(message)) {
+    const replayable =
+      block.kind === "steps" &&
+      block.steps.every(
+        (step) => step.calls?.length === step.count && step.calls.every((call) => call.id),
+      );
+    if (!replayable || block.kind !== "steps") {
+      pushText(blocksToAgentHistoryText([block], botNames));
+      continue;
+    }
+    const calls = block.steps.flatMap((step) => step.calls ?? []);
+    parts.push({
+      type: "toolCalls",
+      calls: calls.map((call) => {
+        let output =
+          call.output.length > REPLAY_OUTPUT_MAX_CHARS
+            ? `${call.output.slice(0, REPLAY_OUTPUT_MAX_CHARS)}\n… truncated`
+            : call.output;
+        if (output.length > outputBudget) output = "(output omitted from history)";
+        else outputBudget -= output.length;
+        return { id: call.id ?? "", name: call.name, args: replayedToolArgs(call.input), output };
+      }),
+    });
+  }
+  return parts.some((part) => part.type === "toolCalls") ? parts : undefined;
+}
+
 /**
  * Turn a stored message into the history turn the running bot reads.
  *
@@ -82,12 +148,15 @@ export function messageToAgentHistoryTurn(
   message: HistoryMessage,
   selfBotId: string,
   groupMemberNames?: ReadonlyMap<string, string>,
-): { role: "user" | "assistant" | "system"; content: string } {
+): Omit<AgentHistoryMessage, "id"> {
   const content = messageToAgentHistoryText(message, groupMemberNames);
   if (message.role === "user") return { role: "user", content };
   if (message.role === "system") return { role: "system", content };
   const author = message.botId;
-  if (!groupMemberNames || !author || author === selfBotId) return { role: "assistant", content };
+  if (!groupMemberNames || !author || author === selfBotId) {
+    const parts = messageToAgentHistoryParts(message, groupMemberNames);
+    return parts ? { role: "assistant", content, parts } : { role: "assistant", content };
+  }
   // ponytail: a member archived or removed since it posted is no longer in the roster, so it
   // keeps the generic peer label rather than a name we would have to invent. Persist member
   // names on the message if an old turn ever needs to name its author.
