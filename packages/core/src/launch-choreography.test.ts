@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   LAUNCH_CHOREOGRAPHY,
   LAUNCH_LOOP_FROM_INDEX,
+  LAUNCH_WAKE_UP_LAST_INDEX,
   LAUNCH_WAKE_UP_MINIMUM_SECONDS,
 } from "./launch-choreography.js";
 
@@ -29,10 +30,15 @@ describe("launch choreography", () => {
     }
   });
 
-  it("sizes the wake-up minimum to exactly the asleep + startled steps", () => {
-    const expected = LAUNCH_CHOREOGRAPHY[0]!.holdSeconds + LAUNCH_CHOREOGRAPHY[1]!.holdSeconds;
+  it("plays the whole wake-up, through the smile, before the splash may leave", () => {
+    expect(LAUNCH_CHOREOGRAPHY[LAUNCH_WAKE_UP_LAST_INDEX]!.mood).toBe("heureux");
+    const expected = LAUNCH_CHOREOGRAPHY.slice(0, LAUNCH_WAKE_UP_LAST_INDEX + 1).reduce(
+      (total, step) => total + step.holdSeconds,
+      0,
+    );
     expect(LAUNCH_WAKE_UP_MINIMUM_SECONDS).toBeCloseTo(expected);
-    expect(LAUNCH_WAKE_UP_MINIMUM_SECONDS).toBeGreaterThan(0);
+    expect(LAUNCH_WAKE_UP_MINIMUM_SECONDS).toBeGreaterThan(1.5);
+    expect(LAUNCH_WAKE_UP_MINIMUM_SECONDS).toBeLessThan(2.5);
   });
 
   it("loops back to the looking-left step, never replaying the wake-up", () => {

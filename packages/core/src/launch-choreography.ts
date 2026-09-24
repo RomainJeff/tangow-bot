@@ -5,9 +5,8 @@
  * Translates the mockup's `SOLO` animation
  * (`maquette-splash.dc.html`, variants 1a/2a) into the bloub engine's moods
  * and looks. The mockup loops over ~7s of playback time meant for a page left
- * open; a real launch takes well under a second, so the steps here are held
- * far more briefly — see `design.md` ("on n'allonge jamais le démarrage pour
- * l'animation"). The mockup's one gesture the engine can't reproduce is the
+ * open; here the steps are held briefly so the whole wake-up fits in about
+ * two seconds. The mockup's one gesture the engine can't reproduce is the
  * wink (no wink expression exists): it is replaced by `fier`, a proud
  * up-right glance.
  *
@@ -46,20 +45,26 @@ const look = (yaw: number, pitch: number): Look => ({
  */
 export const LAUNCH_CHOREOGRAPHY: readonly LaunchStep[] = [
   { holdSeconds: 0.3, mood: "somnolent", look: look(0, -22) },
-  { holdSeconds: 0.3, mood: "surpris", look: look(0, 22) },
-  { holdSeconds: 0.5, mood: "neutre", look: look(-24, 0) },
-  { holdSeconds: 0.5, mood: "curieux", look: look(24, 0) },
-  { holdSeconds: 0.6, mood: "hilare", look: null },
-  { holdSeconds: 0.5, mood: "heureux", look: null },
+  { holdSeconds: 0.35, mood: "surpris", look: look(0, 22) },
+  { holdSeconds: 0.4, mood: "neutre", look: look(-24, 0) },
+  { holdSeconds: 0.4, mood: "curieux", look: look(24, 0) },
+  { holdSeconds: 0.45, mood: "hilare", look: null },
+  { holdSeconds: 0.35, mood: "heureux", look: null },
   { holdSeconds: 0.5, mood: "fier", look: look(20, 18) },
 ];
 
+/** Index of the smile that closes the wake-up: the splash always plays through it. */
+export const LAUNCH_WAKE_UP_LAST_INDEX = 5;
+
 /**
- * Minimum time the splash stays up once the app is ready, so a fast boot
- * never flashes past the wake-up: the "asleep" and "startled" steps.
+ * Minimum time the splash stays up, so the wake-up is seen in full (asleep,
+ * startled, looks around, joy, smile) rather than cut off by a fast boot.
+ * A deliberate trade: about two seconds of launch spent on the moment.
  */
-export const LAUNCH_WAKE_UP_MINIMUM_SECONDS =
-  LAUNCH_CHOREOGRAPHY[0]!.holdSeconds + LAUNCH_CHOREOGRAPHY[1]!.holdSeconds;
+export const LAUNCH_WAKE_UP_MINIMUM_SECONDS = LAUNCH_CHOREOGRAPHY.slice(
+  0,
+  LAUNCH_WAKE_UP_LAST_INDEX + 1,
+).reduce((total, step) => total + step.holdSeconds, 0);
 
 /**
  * Step index the sequence restarts at when the boot runs long and the

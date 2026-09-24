@@ -26,7 +26,6 @@ const BAR_WIDTH = 72;
 const BAR_HEIGHT = 2;
 const BAR_BOTTOM = 64;
 const BAR_INDICATOR_WIDTH = BAR_WIDTH * 0.4;
-const LOADER_DELAY_MS = 1000;
 const FADE_OUT_MS = 250;
 const PLACEHOLDER_SHAPE_ID = "cercle";
 const [INK, WHITE] = SPECIAL_BOT_COLORS;
@@ -75,7 +74,6 @@ export function LaunchSplash({
   const bot = cachedBot ?? placeholderBot(dark);
   const [stepIndex, setStepIndex] = useState(0);
   const [wakeUpElapsed, setWakeUpElapsed] = useState(reducedMotion);
-  const [showLoader, setShowLoader] = useState(false);
   const hiding = useRef(false);
 
   const opacity = useSharedValue(1);
@@ -123,11 +121,9 @@ export function LaunchSplash({
     return () => clearTimeout(timer);
   }, [reducedMotion]);
 
-  // Progressive disclosure: the loader only appears once the wait is long enough to notice.
-  useEffect(() => {
-    const timer = setTimeout(() => setShowLoader(true), LOADER_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, []);
+  // Progressive disclosure: the loader only appears when the app is still not
+  // ready once the wake-up has played, i.e. when there is a real wait to show.
+  const showLoader = wakeUpElapsed && !ready;
 
   useEffect(() => {
     if (reducedMotion) return;
