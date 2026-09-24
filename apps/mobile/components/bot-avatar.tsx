@@ -186,9 +186,16 @@ export function OrganicAvatar({
   const [fill, setFill] = useState(color);
 
   useEffect(() => {
+    if (reducedMotion) {
+      // No crossfade under reduced motion: snap straight to the new colour.
+      colorMorph.current = { from: color, to: color, at: clock.current };
+      renderedColor.current = color;
+      setFill(color);
+      return;
+    }
     if (colorMorph.current.to === color) return;
     colorMorph.current = { from: renderedColor.current, to: color, at: clock.current };
-  }, [color]);
+  }, [color, reducedMotion]);
 
   useEffect(() => {
     if (reducedMotion) {
@@ -196,8 +203,6 @@ export function OrganicAvatar({
       engine.reset("idle", clock.current);
       engine.setShape(shape.radii, clock.current - BotEngine.SHAPE_MORPH);
       setFrame(engine.sample(clock.current + 1));
-      renderedColor.current = color;
-      setFill(color);
       return;
     }
     engine.setShape(shape.radii, clock.current);
@@ -232,7 +237,7 @@ export function OrganicAvatar({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [engine, shape, isWorking, reducedMotion, drive, color]);
+  }, [engine, shape, isWorking, reducedMotion, drive]);
 
   // Same eye rule as web: the eyes show the "paper" behind the ink, so pick it from
   // the body luminance, and ink a pale body's outline so it stays visible.

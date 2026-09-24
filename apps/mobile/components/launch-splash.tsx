@@ -25,6 +25,7 @@ const BOT_SIZE = 96;
 const BAR_WIDTH = 72;
 const BAR_HEIGHT = 2;
 const BAR_BOTTOM = 64;
+const BAR_INDICATOR_WIDTH = BAR_WIDTH * 0.4;
 const LOADER_DELAY_MS = 1000;
 const FADE_OUT_MS = 250;
 const PLACEHOLDER_SHAPE_ID = "cercle";
@@ -77,7 +78,7 @@ export function LaunchSplash({
   const opacity = useSharedValue(1);
   const haloScale = useSharedValue(0.92);
   const haloOpacity = useSharedValue(0.9);
-  const barTranslate = useSharedValue(-100);
+  const barTranslate = useSharedValue(-BAR_INDICATOR_WIDTH);
 
   // The cached main bot loads fast (SecureStore), but never blocks: the placeholder
   // shows until it resolves, and stays if there is no cached bot yet.
@@ -138,7 +139,10 @@ export function LaunchSplash({
       false,
     );
     barTranslate.value = withRepeat(
-      withTiming(250, { duration: 1400, easing: Easing.bezier(0.4, 0, 0.2, 1) }),
+      withTiming(BAR_INDICATOR_WIDTH * 2.5, {
+        duration: 1400,
+        easing: Easing.bezier(0.4, 0, 0.2, 1),
+      }),
       -1,
       false,
     );
@@ -158,7 +162,7 @@ export function LaunchSplash({
     opacity: haloOpacity.value,
   }));
   const barIndicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: `${barTranslate.value}%` }],
+    transform: [{ translateX: barTranslate.value }],
   }));
 
   // Memoized so the avatar's engine effect only re-runs when the step actually changes.
@@ -242,7 +246,7 @@ const styles = StyleSheet.create({
   },
   barIndicator: {
     position: "absolute",
-    width: "40%",
+    width: BAR_INDICATOR_WIDTH,
     height: "100%",
     borderRadius: BAR_HEIGHT / 2,
   },
