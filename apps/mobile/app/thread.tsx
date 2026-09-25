@@ -140,6 +140,7 @@ import {
   takePhoto,
 } from "../lib/pick-attachments";
 import { threadRefreshDelayMs } from "../lib/refresh";
+import { shadowsForAppearance } from "../lib/theme";
 import {
   type ThreadScrollAction,
   ThreadScrollBehavior,
@@ -1897,6 +1898,7 @@ function Thread() {
               borderWidth: 1,
               borderColor: native.fillPressed,
               backgroundColor: native.fill,
+              boxShadow: shadowsForAppearance(colorScheme).floating,
               alignItems: "center",
               justifyContent: "center",
             }}
