@@ -35,7 +35,7 @@ import {
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import { motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
@@ -63,7 +63,14 @@ import {
   type ViewStyle,
 } from "react-native";
 import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
-import { useReducedMotion } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  Keyframe,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppConnectCard } from "../components/AppConnectCard";
 import {
@@ -116,6 +123,7 @@ import { mobileTokens } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
+import { commitHaptic, selectionHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
@@ -363,6 +371,7 @@ function Thread() {
   const [snap, setSnap] = useState<MobileSnapshot | null>(null);
   const activeThreadId = useRef<string | undefined>(undefined);
   const [draft, setDraft] = useState("");
+  const [composerFocused, setComposerFocused] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [agentSkills, setAgentSkills] = useState<AgentSkillCatalogEntry[]>([]);
@@ -2164,6 +2173,8 @@ function Thread() {
         ) : null}
         <View style={{ marginTop: 16 }}>
           <ComposerShell
+            state={working ? "working" : canSend ? "typing" : "idle"}
+            focused={composerFocused}
             leading={
               selectedSkill || selectedMentions.length > 0 ? (
                 <View
@@ -2264,6 +2275,7 @@ function Thread() {
                   <ComposerButton
                     label={t("Send")}
                     tone="primary"
+                    arrive
                     disabled={sending}
                     onPress={() => void send()}
                   >
@@ -2316,16 +2328,25 @@ function Thread() {
                     : t("Message…")
               }
               placeholderTextColor={tokens.foregroundSubtle}
+              selectionColor={tokens.foreground}
+              cursorColor={tokens.foreground}
               keyboardAppearance={colorScheme}
               multiline
               textAlignVertical="center"
               blurOnSubmit={false}
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setComposerFocused(false)}
               style={{
                 color: tokens.foreground,
-                paddingVertical: 4,
                 maxHeight: 100,
                 writingDirection: "auto",
                 ...nativeTextStyle("body"),
+                // A multiline iOS field puts all of a line height's extra
+                // leading above the glyphs, so the text sat low in the
+                // capsule; the font's own line box centres it.
+                ...(Platform.OS === "ios"
+                  ? { lineHeight: undefined, paddingVertical: 6 }
+                  : { paddingVertical: 4 }),
               }}
             />
           </ComposerShell>
@@ -2465,44 +2486,83 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
 
 /** A round 34 pt control of the composer capsule; `hitSlop` brings the tap
  * target back to 44 pt without widening the capsule. */
+/** The send arrow arrives like the web's `animate-arrive`: up from 6 pt, fading in. */
+const COMPOSER_ARRIVE = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: 6 }] },
+  100: {
+    opacity: 1,
+    transform: [{ translateY: 0 }],
+    easing: Easing.bezier(0.32, 0.72, 0, 1),
+  },
+}).duration(motion.arrive);
+
+/** A round composer control: settles to 0.94 while pressed, the web's
+ * `rk-press-round`, and a plain one fills with `accent` like its hover. */
 function ComposerButton({
   label,
   onPress,
   disabled,
   tone = "plain",
+  arrive = false,
   children,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   tone?: "plain" | "primary" | "secondary";
+  /** Animate in on mount — the send arrow appearing with the first character. */
+  arrive?: boolean;
   children: ReactNode;
 }) {
   const tokens = useMobileTokens();
+  const reducedMotion = useReducedMotion();
+  const pressed = useSharedValue(0);
+  const [held, setHeld] = useState(false);
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 - pressed.value * 0.06 }],
+  }));
+  const press = (down: boolean) => {
+    setHeld(down);
+    if (reducedMotion) return;
+    pressed.value = withTiming(down ? 1 : 0, {
+      duration: motion.press,
+      easing: Easing.bezier(0.32, 0.72, 0, 1),
+    });
+  };
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      disabled={disabled}
-      hitSlop={5}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        width: sizes.composerIcon,
-        height: sizes.composerIcon,
-        borderRadius: radii.pill,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor:
-          tone === "primary"
-            ? tokens.primary
-            : tone === "secondary"
-              ? tokens.secondary
-              : "transparent",
-        opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
-      })}
-    >
-      {children}
-    </Pressable>
+    <Animated.View entering={arrive ? COMPOSER_ARRIVE : undefined} style={pressStyle}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        disabled={disabled}
+        hitSlop={5}
+        onPress={() => {
+          if (tone === "plain") selectionHaptic();
+          else commitHaptic();
+          onPress();
+        }}
+        onPressIn={() => press(true)}
+        onPressOut={() => press(false)}
+        style={{
+          width: sizes.composerIcon,
+          height: sizes.composerIcon,
+          borderRadius: radii.pill,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor:
+            tone === "primary"
+              ? tokens.primary
+              : tone === "secondary"
+                ? tokens.secondary
+                : held
+                  ? tokens.accent
+                  : "transparent",
+          opacity: disabled ? 0.5 : tone !== "plain" && held ? 0.85 : 1,
+        }}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
   );
 }
 
