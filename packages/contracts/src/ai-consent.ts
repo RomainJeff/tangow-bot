@@ -1,6 +1,6 @@
 import * as z from "zod";
 
-export const AI_DISCLOSURE_VERSION = "2026-09-26";
+export const AI_DISCLOSURE_VERSION = "2026-09-14";
 export const AI_PRIVACY_URL = "https://rakazo.com/privacy/";
 export const AiDataUseSchema = z.enum(["model", "voice", "memory", "decision"]);
 export type AiDataUse = z.infer<typeof AiDataUseSchema>;
