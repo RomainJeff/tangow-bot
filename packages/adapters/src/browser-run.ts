@@ -225,6 +225,10 @@ interface RunStats {
   reportedCost: boolean;
 }
 
+/** browser_act answer before browser_run has been tried in this run. */
+export const BROWSER_ACT_LOCKED_MESSAGE =
+  "Call browser_run with the goal and the values you know first; browser_act becomes available once browser_run stops and asks for a confirmation, a value, or help.";
+
 /** Added to page tool results when browser_run is available. */
 export const BROWSER_RUN_HINT =
   "To do several steps on this page, call browser_run with the goal and the values you know instead of acting ref by ref.";

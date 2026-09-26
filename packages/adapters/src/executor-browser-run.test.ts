@@ -149,7 +149,9 @@ async function runWithDecisionProvider(
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
     tools = request.tools;
     instructions = request.instructions;
+    const act = { actions: [{ kind: "click", ref: "e-missing" }] };
     results.push(await request.executeTool!("browser_navigate", { url: PAGE }, "call-1"));
+    results.push(await request.executeTool!("browser_act", act, "call-act-before"));
     results.push(
       await request.executeTool!(
         "browser_run",
@@ -159,6 +161,7 @@ async function runWithDecisionProvider(
         trace,
       ),
     );
+    results.push(await request.executeTool!("browser_act", act, "call-act-after"));
     yield { type: "done" as const, text: "Done" };
   });
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
@@ -200,9 +203,10 @@ describe("browser_run executor wiring", () => {
     ]) {
       const hidden = await runWithDecisionProvider(resolve);
       expect(hidden).toMatchObject({ offered: false, instructed: false });
-      expect(hidden.results[1]).toMatchObject({ status: "unavailable" });
+      expect(hidden.results[2]).toMatchObject({ status: "unavailable" });
       expect(hidden.results[0]).not.toHaveProperty("next");
-      expect(hidden.browser.acts).toHaveLength(0);
+      // Without a provider browser_act is never held back.
+      expect(hidden.browser.acts).toHaveLength(2);
     }
 
     const sink = createTestSink();
@@ -220,11 +224,18 @@ describe("browser_run executor wiring", () => {
       expect(connected).toMatchObject({ offered: true, instructed: true });
       // The page result itself points at browser_run, where a light model actually looks.
       expect(connected.results[0]).toMatchObject({ next: expect.stringContaining("browser_run") });
+      // browser_act waits for browser_run, then opens once it stopped short.
       expect(connected.results[1]).toMatchObject({
+        error: expect.stringContaining("Call browser_run"),
+      });
+      expect(connected.results[3]).not.toMatchObject({
+        error: expect.stringContaining("Call browser_run"),
+      });
+      expect(connected.results[2]).toMatchObject({
         status: "step_limit",
         steps: [{ op: "click", role: "button", name: "Search", ok: true }],
       });
-      expect(connected.browser.acts).toHaveLength(1);
+      expect(connected.browser.acts).toHaveLength(2);
       expect(generations).toEqual(["decision step 1"]);
       // One effect for the whole call, however many steps ran inside it.
       expect(connected.effects.filter((name) => name === "browser_run")).toHaveLength(1);

@@ -161,7 +161,7 @@ import {
   sameSecretDestination,
 } from "./bot-secrets.js";
 import { createBrowserProvider } from "./browser-provider-factory.js";
-import { BROWSER_RUN_HINT, browserRunFromTool } from "./browser-run.js";
+import { BROWSER_ACT_LOCKED_MESSAGE, BROWSER_RUN_HINT, browserRunFromTool } from "./browser-run.js";
 import {
   browserActFromTool,
   browserNavigateFromTool,
@@ -1761,6 +1761,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // messageSegments). Treat that like tool/step durable activity so we do not invent
         // an empty-run "done." completion afterward.
         let publishedTerminalSubagent = false;
+        // With a decision provider, page tasks go through browser_run first; browser_act opens
+        // once browser_run has stopped short (a confirmation, a missing value, a block) or failed.
+        let browserActUnlocked = false;
         // Durable chat messages posted mid-turn (message_user / promoted narration).
         // Rehydrate from this run's prior progress rows so a resume after ask/takeover
         // still knows progress was already published (skip hollow finals; status outcome).
@@ -2770,15 +2773,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
             if (name !== "browser_snapshot") workspaceCheckpoint.markDirty();
             if (name === "browser_run") {
-              return computerScreenToolResult(
-                () =>
-                  browserRunFromTool(browser, computer, context, args, {
+              return computerScreenToolResult(async () => {
+                try {
+                  const result = await browserRunFromTool(browser, computer, context, args, {
                     provider: decisionProvider ?? undefined,
                     secrets: runSecrets,
                     trace,
-                  }),
-                finish,
-              );
+                  });
+                  if (!("status" in result) || result.status !== "done") browserActUnlocked = true;
+                  return result;
+                } catch (error) {
+                  browserActUnlocked = true;
+                  throw error;
+                }
+              }, finish);
+            }
+            if (name === "browser_act" && decisionProvider && !browserActUnlocked) {
+              return finish({ error: BROWSER_ACT_LOCKED_MESSAGE });
             }
             const tool =
               name === "browser_navigate"
