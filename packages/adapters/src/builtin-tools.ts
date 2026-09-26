@@ -28,6 +28,44 @@ export function withChattyReplies(tools: ConnectorTool[]): ConnectorTool[] {
   );
 }
 
+const BROWSER_TARGET_DESCRIPTION =
+  " Without reading the page, you may give target (a short description of a link, tab, or text field) instead of ref; buttons always need a ref. Put ref actions before target actions: each target takes a fresh snapshot, so later refs are stale. If the result has needsRef, pick a ref from elements or candidates.";
+
+/** Only runs with a decision provider see `target`; the base schema stays unchanged. */
+export function withBrowserTargets(tools: ConnectorTool[]): ConnectorTool[] {
+  return tools.map((tool) => {
+    if (tool.name !== "browser_act") return tool;
+    const schema = tool.inputSchema as {
+      properties: { actions: { items: { properties: Record<string, unknown> } } };
+    };
+    const items = schema.properties.actions.items;
+    return {
+      ...tool,
+      description: `${tool.description}${BROWSER_TARGET_DESCRIPTION}`,
+      inputSchema: {
+        ...tool.inputSchema,
+        properties: {
+          ...schema.properties,
+          actions: {
+            ...schema.properties.actions,
+            items: {
+              ...items,
+              properties: {
+                ...items.properties,
+                target: {
+                  type: "string",
+                  description: "Short description of the element, instead of ref.",
+                },
+              },
+              required: ["kind"],
+            },
+          },
+        },
+      },
+    };
+  });
+}
+
 export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "computer_observe",

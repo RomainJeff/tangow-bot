@@ -165,7 +165,12 @@ import {
   browserNavigateFromTool,
   browserSnapshotFromTool,
 } from "./browser-tools.js";
-import { agentConnectionTools, builtinAgentTools, withChattyReplies } from "./builtin-tools.js";
+import {
+  agentConnectionTools,
+  builtinAgentTools,
+  withBrowserTargets,
+  withChattyReplies,
+} from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import { type CloudAgentConnection, cloudAgentsEnabled } from "./cloud-agent-factory.js";
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
@@ -201,6 +206,7 @@ import { observationToolResult, parseComputerActions } from "./computer-tools.js
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
 import { sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
+import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import type { HistoryWindowMode } from "./history-compaction.js";
@@ -582,6 +588,8 @@ export interface ExecutorDeps {
   secretHttp?: RemoteTransportDependencies;
   /** Remote cloud coding agents. Null/omit means tools stay uninjected. */
   cloudAgent?: CloudAgentConnection | null;
+  /** Per-Space decision provider. Omit or resolve null and browser_act stays ref-only. */
+  decisionProviders?: DecisionProviderResolver;
   /** Aborted when createApp stop() begins so in-flight continueRun boot waits exit promptly. */
   shutdownSignal?: AbortSignal;
 }
@@ -1251,6 +1259,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       heartbeat.unref?.();
 
       const runSecrets = [...deps.secrets];
+      const browserTargetStats = { calls: 0, executed: 0, returned: 0 };
       try {
         const sourceBlocks =
           run.trigger === "messaging" && run.sourceMessageId
@@ -1276,6 +1285,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           savedSkills,
           agentSkills,
           agentSecretRows,
+          decisionProvider,
         ] = await Promise.all([
           deps.prisma.bot.findUniqueOrThrow({
             where: { id: run.botId },
@@ -1316,6 +1326,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               secret: { select: { id: true, ciphertext: true } },
             },
           }),
+          // Optional: a broken decision connection must never fail the run.
+          deps.decisionProviders?.resolve(run.spaceId).catch(() => null) ?? null,
         ]);
         const agentEnvironment = decryptAgentEnvironment(agentSecretRows, deps.secretStore);
         runSecrets.push(...Object.values(agentEnvironment));
@@ -1684,6 +1696,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             chattyReplies: bot.chattyReplies,
             cloudAgentEnabled: cloudAgentsEnabled(cloudAgent, run.spaceId),
             messagingChannelRun,
+            browserTargets: Boolean(decisionProvider),
           }),
           // Cross-owner agent connections only exist for chat-linked bots.
           ...(hasMessagingIdentity ? agentConnectionTools : []),
@@ -2763,7 +2776,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 : name === "browser_snapshot"
                   ? browserSnapshotFromTool
                   : browserActFromTool;
-            return computerScreenToolResult(() => tool(browser, computer, context, args), finish);
+            const targets =
+              name === "browser_act" && decisionProvider
+                ? { provider: decisionProvider, secrets: runSecrets, stats: browserTargetStats }
+                : undefined;
+            return computerScreenToolResult(
+              () => tool(browser, computer, context, args, targets),
+              finish,
+            );
           }
 
           if (name.startsWith("cloud_agent_")) {
@@ -4614,6 +4634,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
       } finally {
         detachShutdown?.();
         clearInterval(heartbeat);
+        if (browserTargetStats.executed + browserTargetStats.returned > 0) {
+          getLogger().info("agent.run.decision", {
+            runId,
+            botId: run.botId,
+            spaceId: run.spaceId,
+            decisionCalls: browserTargetStats.calls,
+            decisionExecuted: browserTargetStats.executed,
+            decisionReturned: browserTargetStats.returned,
+          });
+        }
         if (!retainComputerLease) {
           if (screenRelease) {
             await deps.sandbox
@@ -4770,6 +4800,8 @@ export function selectBuiltinToolsForRun(options: {
   chattyReplies?: boolean;
   cloudAgentEnabled?: boolean;
   messagingChannelRun: boolean;
+  /** A decision provider is resolved for this run, so browser_act accepts `target`. */
+  browserTargets?: boolean;
 }) {
   const selected = selectCloudAgentTools(
     selectMemoryTools(
@@ -4792,7 +4824,8 @@ export function selectBuiltinToolsForRun(options: {
       (!["remember", "save_memory", "recall_memory", "forget_memory"].includes(tool.name) &&
         !tool.name.startsWith("scratchpad_")),
   );
-  return options.chattyReplies ? withChattyReplies(selected) : selected;
+  const chatty = options.chattyReplies ? withChattyReplies(selected) : selected;
+  return options.browserTargets ? withBrowserTargets(chatty) : chatty;
 }
 
 export const PAGE_BROWSER_TOOL_NAMES = new Set([
