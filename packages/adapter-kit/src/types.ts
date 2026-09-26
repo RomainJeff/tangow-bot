@@ -813,6 +813,74 @@ export type PageBrowserCommand =
 
 export type PageBrowserResult = Partial<BrowserSnapshotResult & BrowserActResult> & { ok: boolean };
 
+/** Typed questions about a text state, answered with probabilities. Not a text generator. */
+export interface DecisionCapabilities {
+  noul: boolean;
+  choice: boolean;
+  score: boolean;
+  /** Largest option map a `choice` accepts. Callers truncate or give up; they never exceed it. */
+  maxOptions: number;
+  /** True when the adapter never leaves the process (tests / keyless core). */
+  offline?: boolean;
+}
+
+/**
+ * `noul` asks yes/no; `choice` picks one caller-named option; `score` picks a level
+ * on an ordered scale indexed from zero.
+ */
+export type DecisionQuestion =
+  | { type: "noul"; instructions: string }
+  | { type: "choice"; instructions: string; options: Record<string, string> }
+  | { type: "score"; instructions: string; levels: string[] };
+
+export interface DecisionRequest {
+  /** Caller must already redact secrets. */
+  state: string | Record<string, unknown>;
+  questions: Record<string, DecisionQuestion>;
+}
+
+export type DecisionAnswer =
+  | { type: "noul"; probability: number }
+  | {
+      type: "choice";
+      choice: string;
+      confidence: number;
+      probabilities: Record<string, number>;
+    }
+  | {
+      type: "score";
+      /** Expected level; may fall between integer levels. */
+      score: number;
+      confidence: number;
+      /** Keyed by level index. */
+      probabilities: Record<string, number>;
+    };
+
+export interface DecisionResponse {
+  answers: Record<string, DecisionAnswer>;
+  /** Model version that answered, when the provider reports one. */
+  model?: string;
+  /** Absent when the provider does not report usage; never an invented zero. */
+  usage?: { inputTokens: number };
+}
+
+export type DecisionUnavailableReason =
+  | "no_provider"
+  | "timeout"
+  | "aborted"
+  | "error"
+  | "invalid_answer";
+
+/** What callers see: an answer, or a reason to carry on exactly as without a provider. */
+export type DecisionResult =
+  | ({ ok: true } & DecisionResponse)
+  | {
+      ok: false;
+      reason: DecisionUnavailableReason;
+      /** Error class name only; never a raw message, which may carry URLs. */
+      error?: string;
+    };
+
 /** Vendor-neutral status for a remote cloud coding agent. */
 export type CloudAgentStatus = "running" | "finished" | "failed" | "cancelled";
 
