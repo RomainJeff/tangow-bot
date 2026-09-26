@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-26
+
+#### Fixed
+
+- In the mobile app, a bot's avatar draws again instead of failing with an error as soon as it appears, which a recent update had caused by leaving the avatar calling a colour helper that no longer existed.
+
 ### 2026-09-25
 
 #### Changed

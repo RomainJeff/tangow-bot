@@ -242,9 +242,7 @@ export function OrganicAvatar({
 
   // Same eye rule as web: the eyes show the "paper" behind the ink, so pick it from
   // the body luminance, and ink a pale body's outline so it stays visible.
-  const luminance = relativeLuminance(fill);
-  const paper = luminance < 0.4 ? "#FFFFFF" : "#101014";
-  const outline = luminance > 0.78 ? "#17181A" : null;
+  const { paper, outline } = avatarInk(fill);
   const VB = BLOUB_HALF_VIEWBOX;
 
   return (
