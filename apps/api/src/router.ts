@@ -105,6 +105,7 @@ import {
   CannotDeleteLastSpaceError,
   CannotDeleteSpaceAsNonOwnerError,
   claimEmptySpaceDeletionForMember,
+  conversationRunFilter,
   createExternalConversationRepos,
   createGroupRepos,
   createRepos,
@@ -1632,6 +1633,7 @@ export function createRouter(deps: RouterDeps) {
               threadId: target.threadId,
               botId,
               status: { in: [...ACTIVE_RUN_STATUSES] },
+              ...conversationRunFilter,
             },
             select: { id: true },
           });

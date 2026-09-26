@@ -7,6 +7,7 @@ import {
   claimSteering,
   clearThread,
   completedRunBlocks,
+  conversationRunFilter,
   finalizeComputerControlRelease,
   finalizeRun,
   followThreadEvents,
@@ -2211,6 +2212,10 @@ describe("sendUserMessage", () => {
 
     expect(tx.task.create).not.toHaveBeenCalled();
     expect(tx.run.create).not.toHaveBeenCalled();
+    // Only conversation runs take steering; a routine card run's reply never reaches the thread.
+    expect(tx.run.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining(conversationRunFilter) }),
+    );
     expect(tx.message.update).toHaveBeenCalledWith({
       where: { id: "message-1" },
       data: { runId: "run-0" },

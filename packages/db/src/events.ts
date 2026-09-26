@@ -238,6 +238,19 @@ export interface SendUserMessageResult {
   runId: string | null;
 }
 
+/**
+ * Keeps runs that report only through a routine run card (every inbound routine wake and a
+ * sub-bot's scheduled routine, mirroring `showsRoutineRunCard` in the executor) out of the
+ * steering lookup: a message the user sends starts its own run instead of being folded into
+ * one whose reply never reaches the conversation.
+ */
+export const conversationRunFilter = {
+  NOT: {
+    routineId: { not: null },
+    OR: [{ trigger: "webhook" }, { trigger: "routine", bot: { parentBotId: { not: null } } }],
+  },
+} satisfies Prisma.RunWhereInput;
+
 /** One routine woken by an inbound delivery (webhook, GitHub, message). */
 export interface StartInboundRoutineRunInput {
   spaceId: string;
@@ -524,6 +537,7 @@ export async function sendUserMessage(
                 status: {
                   in: ["running", "queued", "leased", "waiting_input", "waiting_takeover"],
                 },
+                ...conversationRunFilter,
               },
               select: { id: true, taskId: true },
             })

@@ -21,6 +21,7 @@ import {
 } from "@rakazo/core";
 import {
   appendEventInTransaction,
+  conversationRunFilter,
   createGroupRepos,
   createRepos,
   createThreadMessageInTransaction,
@@ -751,6 +752,7 @@ export async function sendThreadMessage(
             threadId: target.threadId,
             botId: target.botId,
             status: { in: [...ACTIVE_RUN_STATUSES] },
+            ...conversationRunFilter,
           },
           select: { id: true, taskId: true, status: true },
         });
@@ -910,6 +912,7 @@ export async function sendThreadMessage(
           threadId: target.threadId,
           botId: { in: targetBotIds },
           status: { in: [...ACTIVE_RUN_STATUSES] },
+          ...conversationRunFilter,
         },
         select: { id: true, taskId: true, botId: true, status: true },
       });
