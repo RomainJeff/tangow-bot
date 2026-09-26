@@ -15,6 +15,8 @@ import { selectBuiltinToolsForRun } from "./executor.js";
 import { FakeBrowserProvider } from "./fake-browser.js";
 import type { FakeDecisionStep } from "./fake-decision.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
+import { RunTraceRecorder } from "./pi-run-trace.js";
+import { encodeTrace } from "./trace-export.js";
 
 const context: AdapterContext = {
   operationId: "1",
@@ -681,5 +683,193 @@ describe("browser_act outcome", () => {
       kind: "click",
       name: "Download CSV",
     });
+  });
+});
+
+interface ExportedSpan {
+  name: string;
+  spanId: string;
+  parentSpanId?: string;
+  status: { code: number };
+  attributes: Record<string, string | number | boolean | undefined>;
+}
+
+/** A run trace whose browser_act call is open, as the runtime leaves it while the tool runs. */
+function tracedToolCall() {
+  const recorder = new RunTraceRecorder({
+    runId: "run-1",
+    threadId: "thread-1",
+    botId: "b1",
+    provider: "test",
+    model: "agent-model",
+    systemPrompt: "",
+    history: [],
+    prompt: "download the report",
+  });
+  recorder.toolStart("call-1", "browser_act", clickCsv);
+  return { recorder, trace: recorder.toolTrace("call-1") };
+}
+
+/** Settles the run and reads the spans back from the OTLP body the exporter would send. */
+function exportedSpans(recorder: RunTraceRecorder): { spans: ExportedSpan[]; body: string } {
+  recorder.finish("done");
+  const payload = encodeTrace(recorder.trace) as {
+    resourceSpans: Array<{
+      scopeSpans: Array<{
+        spans: Array<
+          Omit<ExportedSpan, "attributes"> & {
+            attributes: Array<{
+              key: string;
+              value: {
+                stringValue?: string;
+                intValue?: string;
+                doubleValue?: number;
+                boolValue?: boolean;
+              };
+            }>;
+          }
+        >;
+      }>;
+    }>;
+  };
+  const spans = payload.resourceSpans[0]!.scopeSpans[0]!.spans.map((span) => ({
+    ...span,
+    attributes: Object.fromEntries(
+      span.attributes.map(({ key, value }) => [
+        key,
+        value.stringValue ??
+          (value.intValue === undefined ? undefined : Number(value.intValue)) ??
+          value.doubleValue ??
+          value.boolValue,
+      ]),
+    ),
+  }));
+  return { spans, body: JSON.stringify(payload) };
+}
+
+function span(spans: ExportedSpan[], name: string): ExportedSpan {
+  const found = spans.find((candidate) => candidate.name === name);
+  if (!found) throw new Error(`no ${name} span`);
+  return found;
+}
+
+function json(value: string | number | boolean | undefined): unknown {
+  return JSON.parse(String(value));
+}
+
+describe("browser_act decision trace", () => {
+  afterEach(() => {
+    installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+  });
+
+  it("records each decision as a generation under the browser_act span", async () => {
+    const browser = await openLanding(
+      `${downloads}<a href="${PAGE}">Open sk-secret-value</a><input aria-label="Email" value="typed-value-marker" />`,
+      `<button>Close</button>`,
+    );
+    const { provider, options } = targets([
+      (request) => ({
+        ...chooseByName("Download CSV", 0.93)(request),
+        model: "decider-v1",
+        usage: { inputTokens: 321, cost: 0.0004 },
+      }),
+      answerOutcome("landed", 0.9),
+    ]);
+    const { recorder, trace } = tracedToolCall();
+    await browserActFromTool(browser, computer, context, clickCsv, { ...options, trace });
+
+    const { spans, body } = exportedSpans(recorder);
+    const tool = span(spans, "tool browser_act");
+    const target = span(spans, "decision target");
+    const verify = span(spans, "decision verify");
+    expect(target.parentSpanId).toBe(tool.spanId);
+    expect(verify.parentSpanId).toBe(tool.spanId);
+    expect(json(target.attributes["langfuse.observation.input"])).toEqual(provider.calls[0]);
+    expect(json(verify.attributes["langfuse.observation.input"])).toEqual(provider.calls[1]);
+    const clicked = browser.acts[0]!.actions[0]!.ref;
+    expect(json(target.attributes["langfuse.observation.output"])).toMatchObject({
+      target: { type: "choice", choice: clicked },
+    });
+    const question = provider.calls[0]!.questions.target;
+    expect(target.attributes).toMatchObject({
+      "langfuse.observation.type": "generation",
+      "langfuse.observation.model.name": "decider-v1",
+      "langfuse.observation.metadata.purpose": "target",
+      "langfuse.observation.metadata.provider": "fake",
+      "langfuse.observation.metadata.outcome": "answered",
+      "langfuse.observation.metadata.options":
+        question?.type === "choice" ? Object.keys(question.options).length : -1,
+      "langfuse.observation.metadata.gate": "executed",
+      "langfuse.observation.metadata.chosenProbability": 0.93,
+      "langfuse.observation.metadata.durationMs": expect.any(Number),
+    });
+    expect(json(target.attributes["langfuse.observation.usage_details"])).toEqual({ input: 321 });
+    expect(json(target.attributes["langfuse.observation.cost_details"])).toEqual({
+      total: 0.0004,
+    });
+    expect(target.status.code).toBe(1);
+    expect(verify.attributes).toMatchObject({
+      "langfuse.observation.type": "generation",
+      "langfuse.observation.metadata.purpose": "verify",
+      "langfuse.observation.metadata.outcome": "answered",
+    });
+    expect(json(verify.attributes["langfuse.observation.output"])).toMatchObject({
+      outcome: { choice: "landed" },
+    });
+    expect(body).not.toContain("sk-secret-value");
+    expect(body).not.toContain("typed-value-marker");
+  });
+
+  it("records which check rejected an answer, with the raw answers, as a failed call", async () => {
+    const links = Array.from({ length: 75 }, (_, i) => `<a href="${PAGE}">Link ${i}</a>`).join("");
+    const reshape =
+      (change: (answer: Record<string, unknown>) => void) =>
+      (request: DecisionRequest): DecisionResponse => {
+        const response = chooseByName("Link 3", 0.9)(request);
+        change(response.answers.target as unknown as Record<string, unknown>);
+        return response;
+      };
+    const halve = (answer: Record<string, unknown>) => {
+      const probabilities = answer.probabilities as Record<string, number>;
+      for (const key of Object.keys(probabilities)) probabilities[key]! /= 2;
+    };
+    for (const [step, detail] of [
+      [reshape(halve), { check: "bad_distribution", question: "target", sum: 0.5, entries: 76 }],
+      [reshape((answer) => (answer.choice = "e999")), { check: "not_in_options" }],
+      [reshape((answer) => (answer.confidence = 2)), { check: "bad_confidence" }],
+      [
+        reshape((answer) => {
+          delete (answer.probabilities as Record<string, number>)[answer.choice as string];
+          (answer.probabilities as Record<string, number>).none = 1;
+        }),
+        { check: "missing_chosen_probability" },
+      ],
+    ] as const) {
+      const sink = createTestSink();
+      installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+      const browser = await openPage(links);
+      const { provider, options } = targets([step]);
+      const { recorder, trace } = tracedToolCall();
+      const result = await browserActFromTool(
+        browser,
+        computer,
+        context,
+        { actions: [{ kind: "click", target: "link 3" }] },
+        { ...options, trace },
+      );
+      expect(result).toMatchObject({ needsRef: true, reason: "invalid_answer" });
+
+      const target = span(exportedSpans(recorder).spans, "decision target");
+      expect(json(target.attributes["langfuse.observation.output"])).toEqual({
+        unavailable: "invalid_answer",
+        invalid: expect.objectContaining(detail),
+        answers: expect.objectContaining({ target: expect.objectContaining({ type: "choice" }) }),
+      });
+      expect(target.attributes["langfuse.observation.metadata.gate"]).toBe("returned_unavailable");
+      expect(target.status.code).toBe(2);
+      expect(provider.calls).toHaveLength(1);
+      const logged = sink.events.find((event) => event.message === "agent.decision.call");
+      expect(logged).toMatchObject({ outcome: "invalid_answer", invalidDetail: detail.check });
+    }
   });
 });

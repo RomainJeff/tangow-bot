@@ -431,11 +431,36 @@ export interface AgentRunRequest {
     args: Record<string, unknown>,
     executionId: string,
     route?: ConnectorRoute,
+    /** Present only when the runtime traces this run. */
+    trace?: ToolCallTrace,
   ) => Promise<unknown>;
   /** Called after a tool returns; implementations must not persist raw result contents. */
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
+}
+
+/**
+ * Handed to one tool call by a runtime that traces the run, so a model call the
+ * tool makes itself is recorded nested under that call.
+ */
+export interface ToolCallTrace {
+  /** Returns undefined when the tool call is not being traced. */
+  generation(name: string, input: unknown): ToolCallGeneration | undefined;
+}
+
+export interface ToolCallGeneration {
+  /** Settles the observation; later calls are ignored. */
+  end(result: ToolCallGenerationResult): void;
+}
+
+export interface ToolCallGenerationResult {
+  output: unknown;
+  model?: string;
+  usage?: { inputTokens?: number; cost?: number };
+  metadata?: Record<string, string | number | boolean | undefined>;
+  /** Short machine-readable reason; marks the observation as failed. */
+  error?: string;
 }
 
 export interface ScriptedTurn {

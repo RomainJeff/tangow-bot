@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Bots can act on a web page element from its description when a decision provider is connected.** A Space owner connects an OpenRouter key in Settings → Browser on web and desktop, and bots then click links and tabs or fill text fields they describe without reading the whole page first; buttons still need the bot to pick the element itself, an uncertain match is handed back to the bot, and after acting the bot learns whether the page changed, opened a dialog, showed an error, or asked for a sign-in. See [computer runtime](docs/computer-runtime.md) and [self-hosting](docs/self-host.md).
+- **Bots can act on a web page element from its description when a decision provider is connected.** A Space owner connects an OpenRouter key in Settings → Browser on web and desktop, and bots then click links and tabs or fill text fields they describe without reading the whole page first; buttons still need the bot to pick the element itself, an uncertain match is handed back to the bot, and after acting the bot learns whether the page changed, opened a dialog, showed an error, or asked for a sign-in. When agent traces are exported, each of these decisions appears in the run's trace under the page action that asked for it. See [computer runtime](docs/computer-runtime.md) and [self-hosting](docs/self-host.md).
 
 ### 2026-09-25
 

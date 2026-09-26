@@ -18,6 +18,7 @@ import type {
   NotificationProvider,
   SandboxProvider,
   SemanticMemoryProvider,
+  ToolCallTrace,
   WebProvider,
 } from "@rakazo/adapter-kit";
 import {
@@ -1912,6 +1913,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           name: string,
           args: Record<string, unknown>,
           executionId: string,
+          trace?: ToolCallTrace,
         ) => {
           context.signal.throwIfAborted();
           if (handedOff) {
@@ -2784,7 +2786,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   : browserActFromTool;
             const targets =
               name === "browser_act" && decisionProvider
-                ? { provider: decisionProvider, secrets: runSecrets, stats: browserTargetStats }
+                ? {
+                    provider: decisionProvider,
+                    secrets: runSecrets,
+                    stats: browserTargetStats,
+                    trace,
+                  }
                 : undefined;
             return computerScreenToolResult(
               () => tool(browser, computer, context, args, targets),
@@ -3902,8 +3909,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               emptyResponseText,
               executeTool: scripted
                 ? undefined
-                : async (name, args, executionId) => {
-                    const result = await applyTool(name, args, executionId);
+                : async (name, args, executionId, _route, trace) => {
+                    const result = await applyTool(name, args, executionId, trace);
                     recordToolOutput(executionId, result);
                     return result;
                   },

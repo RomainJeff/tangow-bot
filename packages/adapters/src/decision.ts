@@ -7,6 +7,7 @@ import type {
   DecisionResponse,
   DecisionResult,
   DecisionUnavailableReason,
+  ToolCallTrace,
 } from "@rakazo/adapter-kit";
 import { getLogger } from "@rakazo/logging";
 import { combineSignals } from "./connector-safety.js";
@@ -23,6 +24,42 @@ class DecisionTimeoutError extends Error {}
 /** What a call is for, logged only, so each use is measured separately. */
 export type DecisionPurpose = "target" | "verify";
 
+/** Which validation check rejected a provider answer. Codes only, never content. */
+type InvalidCheck =
+  | "no_answers"
+  | "missing_answer"
+  | "wrong_type"
+  | "not_in_options"
+  | "bad_probability"
+  | "bad_confidence"
+  | "bad_score"
+  | "bad_distribution"
+  | "missing_chosen_probability";
+
+interface InvalidAnswer {
+  check: InvalidCheck;
+  question?: string;
+  key?: string;
+  sum?: number;
+  entries?: number;
+}
+
+interface DecisionOutcome {
+  result: DecisionResult;
+  /** What the provider returned, kept to trace a rejected answer. */
+  response?: unknown;
+  invalid?: InvalidAnswer;
+}
+
+export interface DecideOptions {
+  timeoutMs: number;
+  purpose?: DecisionPurpose;
+  /** Records the call nested under the tool call that made it, when the run is traced. */
+  trace?: ToolCallTrace;
+  /** Caller facts derived from the result, added to the trace only. */
+  traceMetadata?: (result: DecisionResult) => Record<string, string | number | boolean | undefined>;
+}
+
 /**
  * The only way callers ask a decision provider anything. Never throws: every
  * failure becomes an `unavailable` reason the caller treats as "carry on as
@@ -33,12 +70,33 @@ export async function decideWithin(
   provider: DecisionProvider | undefined,
   request: DecisionRequest,
   context: AdapterContext,
-  options: { timeoutMs: number; purpose?: DecisionPurpose },
+  options: DecideOptions,
 ): Promise<DecisionResult> {
   const started = Date.now();
-  const result = await decide(provider, request, context, options.timeoutMs);
-  logDecisionCall(provider, request, context, result, Date.now() - started, options.purpose);
-  return result;
+  const generation = options.trace?.generation(`decision ${options.purpose ?? "call"}`, request);
+  const outcome = await decide(provider, request, context, options.timeoutMs);
+  const call = describeCall(provider, request, outcome, Date.now() - started, options.purpose);
+  logDecisionCall(context, call, outcome);
+  if (generation) {
+    const { result, response, invalid } = outcome;
+    const reported = reportedResponse(response);
+    generation.end({
+      output: result.ok
+        ? result.answers
+        : {
+            unavailable: result.reason,
+            ...(result.error ? { error: result.error } : {}),
+            ...(invalid
+              ? { invalid, answers: (response as { answers?: unknown } | undefined)?.answers }
+              : {}),
+          },
+      model: reported.model,
+      usage: reported.usage,
+      metadata: { ...call, ...options.traceMetadata?.(result) },
+      ...(result.ok ? {} : { error: result.reason }),
+    });
+  }
+  return outcome.result;
 }
 
 async function decide(
@@ -46,7 +104,7 @@ async function decide(
   request: DecisionRequest,
   context: AdapterContext,
   timeoutMs: number,
-): Promise<DecisionResult> {
+): Promise<DecisionOutcome> {
   if (!provider) return unavailable("no_provider");
   if (context.signal.aborted) return unavailable("aborted");
   let supported: boolean;
@@ -87,9 +145,10 @@ async function decide(
     aborted.catch(() => undefined);
   }
   if (context.signal.aborted) return unavailable("aborted");
-  return validResponse(request, response)
-    ? { ok: true, ...response }
-    : unavailable("invalid_answer");
+  const invalid = responseIssue(request, response);
+  return invalid
+    ? { result: { ok: false, reason: "invalid_answer" }, response, invalid }
+    : { result: { ok: true, ...response }, response };
 }
 
 function supportsRequest(provider: DecisionProvider, request: DecisionRequest): boolean {
@@ -107,52 +166,65 @@ function supportsRequest(provider: DecisionProvider, request: DecisionRequest): 
   });
 }
 
-function validResponse(request: DecisionRequest, response: unknown): response is DecisionResponse {
-  if (!response || typeof response !== "object") return false;
-  const answers = (response as { answers?: unknown }).answers;
-  if (!answers || typeof answers !== "object") return false;
-  return Object.entries(request.questions).every(([name, question]) =>
-    validAnswer(question, (answers as Record<string, unknown>)[name]),
-  );
+function responseIssue(request: DecisionRequest, response: unknown): InvalidAnswer | undefined {
+  const answers =
+    response && typeof response === "object"
+      ? (response as { answers?: unknown }).answers
+      : undefined;
+  if (!answers || typeof answers !== "object") return { check: "no_answers" };
+  for (const [name, question] of Object.entries(request.questions)) {
+    const issue = answerIssue(question, (answers as Record<string, unknown>)[name]);
+    if (issue) return { ...issue, question: name };
+  }
+  return undefined;
 }
 
-function validAnswer(question: DecisionQuestion, raw: unknown): raw is DecisionAnswer {
-  if (!raw || typeof raw !== "object") return false;
+function answerIssue(question: DecisionQuestion, raw: unknown): InvalidAnswer | undefined {
+  if (!raw || typeof raw !== "object") return { check: "missing_answer" };
   const answer = raw as DecisionAnswer;
-  if (answer.type !== question.type) return false;
-  if (answer.type === "noul") return isProbability(answer.probability);
+  if (answer.type !== question.type) return { check: "wrong_type" };
+  if (answer.type === "noul") {
+    return isProbability(answer.probability) ? undefined : { check: "bad_probability" };
+  }
   if (answer.type === "choice" && question.type === "choice") {
-    return (
-      Object.hasOwn(question.options, answer.choice) &&
-      isProbability(answer.confidence) &&
-      validDistribution(answer.probabilities, Object.keys(question.options)) &&
-      Object.hasOwn(answer.probabilities, answer.choice)
-    );
+    if (!Object.hasOwn(question.options, answer.choice)) return { check: "not_in_options" };
+    if (!isProbability(answer.confidence)) return { check: "bad_confidence" };
+    const issue = distributionIssue(answer.probabilities, Object.keys(question.options));
+    if (issue) return issue;
+    return Object.hasOwn(answer.probabilities, answer.choice)
+      ? undefined
+      : { check: "missing_chosen_probability" };
   }
   if (answer.type === "score" && question.type === "score") {
-    const levels = question.levels.map((_, index) => String(index));
-    return (
-      typeof answer.score === "number" &&
-      answer.score >= 0 &&
-      answer.score <= question.levels.length - 1 &&
-      isProbability(answer.confidence) &&
-      validDistribution(answer.probabilities, levels)
+    if (
+      typeof answer.score !== "number" ||
+      answer.score < 0 ||
+      answer.score > question.levels.length - 1
+    ) {
+      return { check: "bad_score" };
+    }
+    if (!isProbability(answer.confidence)) return { check: "bad_confidence" };
+    return distributionIssue(
+      answer.probabilities,
+      question.levels.map((_, index) => String(index)),
     );
   }
-  return false;
+  return { check: "wrong_type" };
 }
 
-function validDistribution(value: unknown, keys: string[]): boolean {
-  if (!value || typeof value !== "object") return false;
+function distributionIssue(value: unknown, keys: string[]): InvalidAnswer | undefined {
+  if (!value || typeof value !== "object") return { check: "bad_distribution" };
   const allowed = new Set(keys);
   const entries = Object.entries(value);
   let total = 0;
   for (const [key, probability] of entries) {
-    if (!allowed.has(key) || !isProbability(probability)) return false;
+    if (!allowed.has(key)) return { check: "not_in_options", key };
+    if (!isProbability(probability)) return { check: "bad_distribution", key };
     total += probability;
   }
   const tolerance = PROBABILITY_TOLERANCE + ROUNDING_TOLERANCE_PER_ENTRY * entries.length;
-  return Math.abs(total - 1) <= tolerance;
+  if (Math.abs(total - 1) <= tolerance) return undefined;
+  return { check: "bad_distribution", sum: Number(total.toFixed(6)), entries: entries.length };
 }
 
 function isProbability(value: unknown): value is number {
@@ -170,8 +242,8 @@ export function topChoices(
     .slice(0, count);
 }
 
-function unavailable(reason: DecisionUnavailableReason, error?: string): DecisionResult {
-  return error ? { ok: false, reason, error } : { ok: false, reason };
+function unavailable(reason: DecisionUnavailableReason, error?: string): DecisionOutcome {
+  return { result: error ? { ok: false, reason, error } : { ok: false, reason } };
 }
 
 function errorName(error: unknown): string {
@@ -179,42 +251,80 @@ function errorName(error: unknown): string {
   return "Error";
 }
 
-function logDecisionCall(
+/** Model and usage the provider reported, read defensively since a rejected answer is untyped. */
+function reportedResponse(response: unknown): {
+  model?: string;
+  usage?: { inputTokens?: number; cost?: number };
+} {
+  if (!response || typeof response !== "object") return {};
+  const { model, usage } = response as { model?: unknown; usage?: unknown };
+  const reported: { model?: string; usage?: { inputTokens?: number; cost?: number } } = {};
+  if (typeof model === "string") reported.model = model;
+  if (usage && typeof usage === "object") {
+    const { inputTokens, cost } = usage as { inputTokens?: unknown; cost?: unknown };
+    reported.usage = {
+      ...(typeof inputTokens === "number" ? { inputTokens } : {}),
+      ...(typeof cost === "number" ? { cost } : {}),
+    };
+  }
+  return reported;
+}
+
+/** Counters and ids shared by the log line and the trace; never state or option text. */
+function describeCall(
   provider: DecisionProvider | undefined,
   request: DecisionRequest,
-  context: AdapterContext,
-  result: DecisionResult,
+  outcome: DecisionOutcome,
   durationMs: number,
   purpose: DecisionPurpose | undefined,
-): void {
+) {
   const questions = Object.values(request.questions);
   const options = questions.reduce(
     (total, question) =>
       total + (question.type === "choice" ? Object.keys(question.options).length : 0),
     0,
   );
-  const confidences = result.ok
-    ? Object.values(result.answers).flatMap((answer) =>
-        answer.type === "noul" ? [] : [Number(answer.confidence.toFixed(3))],
-      )
-    : [];
   let providerId: string | undefined;
   try {
     providerId = provider?.describe().id;
   } catch {
     providerId = undefined;
   }
-  getLogger().info("agent.decision.call", {
-    runId: context.runId,
-    botId: context.botId,
-    spaceId: context.spaceId,
+  const { result } = outcome;
+  return {
     provider: providerId,
     purpose,
     durationMs,
     outcome: result.ok ? "answered" : result.reason,
-    errorClass: result.ok ? undefined : result.error,
     questions: questions.length,
     options,
+    invalidDetail: outcome.invalid?.check,
+  };
+}
+
+function logDecisionCall(
+  context: AdapterContext,
+  call: ReturnType<typeof describeCall>,
+  outcome: DecisionOutcome,
+): void {
+  const { result } = outcome;
+  const confidences = result.ok
+    ? Object.values(result.answers).flatMap((answer) =>
+        answer.type === "noul" ? [] : [Number(answer.confidence.toFixed(3))],
+      )
+    : [];
+  getLogger().info("agent.decision.call", {
+    runId: context.runId,
+    botId: context.botId,
+    spaceId: context.spaceId,
+    provider: call.provider,
+    purpose: call.purpose,
+    durationMs: call.durationMs,
+    outcome: call.outcome,
+    invalidDetail: call.invalidDetail,
+    errorClass: result.ok ? undefined : result.error,
+    questions: call.questions,
+    options: call.options,
     confidence: confidences.length === 1 ? confidences[0] : undefined,
     model: result.ok ? result.model : undefined,
     inputTokens: result.ok ? result.usage?.inputTokens : undefined,

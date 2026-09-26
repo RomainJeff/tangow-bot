@@ -1,4 +1,4 @@
-import type { ConnectorTool } from "@rakazo/adapter-kit";
+import type { AdapterContext, ConnectorTool, ToolCallTrace } from "@rakazo/adapter-kit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fakeAgentState = vi.hoisted(() => ({
@@ -76,7 +76,12 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
         if (!target) throw new Error("expected tool was not exposed");
         const rawArgs = fakeAgentState.invoke.args;
         const args = target.prepareArguments?.(rawArgs) ?? rawArgs;
-        this.emit({ type: "tool_execution_start", toolName: target.name, args });
+        this.emit({
+          type: "tool_execution_start",
+          toolCallId: "call-1",
+          toolName: target.name,
+          args,
+        });
         fakeAgentState.toolResult = await target.execute("call-1", args);
         return;
       }
@@ -254,8 +259,11 @@ vi.mock("./pi-openai-compatible-provider.js", () => ({
   registerOpenAiCompatibleRuntime: (models: unknown) => models,
 }));
 
+import { decideWithin } from "./decision.js";
+import { FakeDecisionProvider } from "./fake-decision.js";
 import { maxToolCallsPerTurn, PiAgentRuntime } from "./pi-runtime.js";
 import { TOOL_RESULT_TEXT_LIMIT } from "./pi-runtime-limits.js";
+import { TraceExporter } from "./trace-export.js";
 
 const destinationTool: ConnectorTool = {
   name: "destination.write",
@@ -1375,5 +1383,79 @@ describe("Pi connector tool dispatch", () => {
       },
       "call-1",
     );
+  });
+
+  it("hands a traced tool call a trace that nests its decisions under the tool span", async () => {
+    fakeAgentState.invoke = { name: "write_file", args: { path: "a.txt", content: "x" } };
+    const sent: unknown[] = [];
+    const exporter = new TraceExporter({
+      send: async (payload) => {
+        sent.push(payload);
+      },
+    });
+    const context: AdapterContext = {
+      operationId: "4",
+      traceId: "4",
+      spaceId: "w",
+      userId: "u",
+      signal: new AbortController().signal,
+    };
+    const traces: Array<ToolCallTrace | undefined> = [];
+    const executeTool = vi.fn(
+      async (
+        _name: string,
+        _args: Record<string, unknown>,
+        _executionId: string,
+        _route?: unknown,
+        trace?: ToolCallTrace,
+      ) => {
+        traces.push(trace);
+        await decideWithin(
+          new FakeDecisionProvider({
+            script: [{ answers: { done: { type: "noul", probability: 0.9 } } }],
+          }),
+          { state: "s", questions: { done: { type: "noul", instructions: "Done?" } } },
+          context,
+          { timeoutMs: 1_000, purpose: "verify", trace },
+        );
+        return { ok: true };
+      },
+    );
+
+    for (const runtime of [new PiAgentRuntime(), new PiAgentRuntime({ traceExporter: exporter })]) {
+      for await (const _event of runtime.run(
+        {
+          botId: "b",
+          threadId: "t",
+          runId: "r",
+          prompt: "save",
+          instructions: "Use write_file.",
+          history: [],
+          tools: [writeFileTool],
+          model: { provider: "test", id: "dispatch-test-model" },
+          executeTool,
+        },
+        context,
+      )) {
+        // Exhaust the runtime event stream so tool execution completes.
+      }
+    }
+    await exporter.flush();
+
+    expect(executeTool.mock.calls[0]).toHaveLength(3);
+    expect(traces[0]).toBeUndefined();
+    const spans = (
+      sent[0] as {
+        resourceSpans: Array<{
+          scopeSpans: Array<{
+            spans: Array<{ name: string; spanId: string; parentSpanId?: string }>;
+          }>;
+        }>;
+      }
+    ).resourceSpans[0]!.scopeSpans[0]!.spans;
+    const tool = spans.find((span) => span.name === "tool write_file");
+    const decision = spans.find((span) => span.name === "decision verify");
+    expect(tool).toBeDefined();
+    expect(decision?.parentSpanId).toBe(tool?.spanId);
   });
 });

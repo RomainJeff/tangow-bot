@@ -5,6 +5,7 @@ import type {
   DecisionProvider,
   DecisionRequest,
   DecisionResponse,
+  ToolCallTrace,
 } from "@rakazo/adapter-kit";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
@@ -59,7 +60,10 @@ function landed(): DecisionResponse {
   };
 }
 
-async function runWithDecisionProvider(resolve: () => Promise<DecisionProvider | null>) {
+async function runWithDecisionProvider(
+  resolve: () => Promise<DecisionProvider | null>,
+  trace?: ToolCallTrace,
+) {
   const run = {
     id: "run-1",
     botId: "bot-1",
@@ -140,6 +144,8 @@ async function runWithDecisionProvider(resolve: () => Promise<DecisionProvider |
         "browser_act",
         { actions: [{ kind: "click", target: "the Download CSV link" }] },
         "call-2",
+        undefined,
+        trace,
       ),
     );
     yield { type: "done" as const, text: "Done" };
@@ -180,7 +186,15 @@ describe("run decision provider wiring", () => {
     installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
     try {
       const provider = new FakeDecisionProvider({ script: [chooseDownloadCsv, landed] });
-      const connected = await runWithDecisionProvider(async () => provider);
+      const generations: string[] = [];
+      const trace: ToolCallTrace = {
+        generation: (name) => {
+          generations.push(name);
+          return { end: () => undefined };
+        },
+      };
+      const connected = await runWithDecisionProvider(async () => provider, trace);
+      expect(generations).toEqual(["decision target", "decision verify"]);
       expect(connected.hasTarget).toBe(true);
       expect(provider.calls).toHaveLength(2);
       expect(connected.browser.acts).toHaveLength(1);

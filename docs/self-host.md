@@ -179,7 +179,9 @@ child commands do not receive them.
 Exporting agent traces is optional and off unless configured. Set both `LANGFUSE_PUBLIC_KEY` and
 `LANGFUSE_SECRET_KEY` to send each run to an OpenTelemetry endpoint as a tree: the run, one
 generation per turn, one span per tool call, with prompts, responses, tool results, token counts and
-cost. `LANGFUSE_BASE_URL` defaults to `https://cloud.langfuse.com` and points a self-hosted instance
+cost. A page action that asks the decision provider nests each decision call under its tool span as
+a generation carrying the exact redacted request, the answers (or why none was usable), model, tokens
+and cost. `LANGFUSE_BASE_URL` defaults to `https://cloud.langfuse.com` and points a self-hosted instance
 or any other OTLP/HTTP backend at the same traces; it must be https unless it is loopback.
 `LANGFUSE_ENVIRONMENT` labels the traces (`production`, `staging`). A partial configuration logs a
 one-time warning and stays off.

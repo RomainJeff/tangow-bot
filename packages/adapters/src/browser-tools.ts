@@ -10,6 +10,8 @@ import type {
   DecisionAnswer,
   DecisionProvider,
   DecisionRequest,
+  DecisionResult,
+  ToolCallTrace,
 } from "@rakazo/adapter-kit";
 import { redactSecrets } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
@@ -82,6 +84,7 @@ export interface BrowserTargetOptions {
   provider: DecisionProvider;
   secrets: string[];
   stats?: BrowserTargetStats;
+  trace?: ToolCallTrace;
 }
 
 type BrowserActToolResult = BrowserActResult & {
@@ -335,22 +338,26 @@ async function resolveBrowserTarget(
     targets.provider,
     targetRequest(snapshot, candidates, step.target, targets.secrets),
     context,
-    { timeoutMs: TARGET_DECISION_TIMEOUT_MS, purpose: "target" },
+    {
+      timeoutMs: TARGET_DECISION_TIMEOUT_MS,
+      purpose: "target",
+      trace: targets.trace,
+      traceMetadata: targetTraceMetadata,
+    },
   );
   if (!decision.ok) {
     if (decision.reason === "aborted") context.signal.throwIfAborted();
     report("returned_unavailable", { reason: decision.reason });
     return { returned: needsRef(snapshot, { reason: decision.reason }) };
   }
-  const answer = decision.answers.target;
-  if (answer?.type !== "choice" || answer.choice === NONE_OPTION) {
+  const gate = targetGate(decision);
+  if (!("answer" in gate)) {
     report("returned_none");
     return { returned: needsRef(snapshot) };
   }
+  const { answer, probability } = gate;
   const confidence = Number(answer.confidence.toFixed(3));
-  // decideWithin rejects a choice missing from its own probabilities.
-  const probability = answer.probabilities[answer.choice]!;
-  if (probability < TARGET_PROBABILITY_HIGH) {
+  if (gate.outcome === "returned_low_confidence") {
     report("returned_low_confidence", { confidence, probability: Number(probability.toFixed(3)) });
     const ranked = topChoices(answer, TARGET_CANDIDATE_COUNT + 1)
       .filter((choice) => choice.key !== NONE_OPTION)
@@ -369,6 +376,38 @@ async function resolveBrowserTarget(
     role: element.role,
   });
   return { element, snapshot };
+}
+
+type TargetGate =
+  | { outcome: "returned_unavailable" | "returned_none" }
+  | {
+      outcome: "returned_low_confidence" | "executed";
+      answer: Extract<DecisionAnswer, { type: "choice" }>;
+      probability: number;
+    };
+
+/** Whether a target decision may act: the chosen option's probability against the gate. */
+function targetGate(decision: DecisionResult): TargetGate {
+  if (!decision.ok) return { outcome: "returned_unavailable" };
+  const answer = decision.answers.target;
+  if (answer?.type !== "choice" || answer.choice === NONE_OPTION) {
+    return { outcome: "returned_none" };
+  }
+  // decideWithin rejects a choice missing from its own probabilities.
+  const probability = answer.probabilities[answer.choice]!;
+  return {
+    outcome: probability < TARGET_PROBABILITY_HIGH ? "returned_low_confidence" : "executed",
+    answer,
+    probability,
+  };
+}
+
+function targetTraceMetadata(result: DecisionResult) {
+  const gate = targetGate(result);
+  return {
+    gate: gate.outcome,
+    chosenProbability: "probability" in gate ? gate.probability : undefined,
+  };
 }
 
 /**
@@ -396,7 +435,7 @@ async function verifyBrowserOutcome(
     targets.provider,
     outcomeRequest(executed, after, targets.secrets),
     context,
-    { timeoutMs: OUTCOME_DECISION_TIMEOUT_MS, purpose: "verify" },
+    { timeoutMs: OUTCOME_DECISION_TIMEOUT_MS, purpose: "verify", trace: targets.trace },
   );
   if (!decision.ok) {
     if (decision.reason === "aborted") context.signal.throwIfAborted();
