@@ -16,7 +16,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { useThemedStyles } from "../lib/native";
-import { elevationForAppearance } from "../lib/theme";
+import { shadowsForAppearance } from "../lib/theme";
 
 export type ComposerState = "idle" | "typing" | "dictating" | "speaking" | "working";
 
@@ -31,6 +31,8 @@ export interface ComposerShellProps extends Omit<ViewProps, "children"> {
   /** Round-icon buttons: attach, dictate, send, stop. */
   trailing?: ReactNode;
   state?: ComposerState;
+  /** The field has focus: a hairline ring, the web's `focus-within` ring. */
+  focused?: boolean;
 }
 
 /**
@@ -42,13 +44,19 @@ export function ComposerShell({
   children,
   trailing,
   state = "idle",
+  focused = false,
   style,
   ...props
 }: ComposerShellProps) {
   const styles = useThemedStyles(createComposerShellStyles);
   return (
     <View
-      style={[styles.root, leading ? styles.withLeading : styles.withoutLeading, style]}
+      style={[
+        styles.root,
+        focused ? styles.focused : undefined,
+        leading ? styles.withLeading : styles.withoutLeading,
+        style,
+      ]}
       {...props}
     >
       {leading}
@@ -115,7 +123,7 @@ function Pulse({
 
 function createComposerShellStyles() {
   const tokens = mobileTokens();
-  const elevation = elevationForAppearance(resolveMobileAppearance());
+  const shadow = shadowsForAppearance(resolveMobileAppearance()).composer;
   return StyleSheet.create({
     root: {
       flexDirection: "row",
@@ -125,7 +133,10 @@ function createComposerShellStyles() {
       backgroundColor: tokens.surface,
       paddingVertical: 7,
       paddingEnd: 7,
-      ...elevation.composer,
+      boxShadow: shadow,
+    },
+    focused: {
+      boxShadow: `0 0 0 1px ${tokens.border}, ${shadow}`,
     },
     withLeading: { paddingStart: 10 },
     withoutLeading: { paddingStart: 16 },

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { MessageBlock } from "@rakazo/contracts";
-import { ONCE_ROUTINE_CRON } from "@rakazo/core";
+import { avatarIdentitySeed, ONCE_ROUTINE_CRON, SHAPES } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { CHATTY_MESSAGE_USER_DESCRIPTION } from "./builtin-tools.js";
@@ -15,6 +15,7 @@ import {
   loadCurrentTurnImages,
   looksLikeFakeToolCall,
   missingTurnImagesInstruction,
+  notificationAvatar,
   runNotificationsEnabled,
   selectBuiltinToolsForRun,
   settleSteeringAttachmentLoads,
@@ -545,6 +546,25 @@ describe("run notification preference", () => {
     ).resolves.toBe(true);
     // forceEnabled short-circuits before any lookup.
     expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  it("sends the bot's organic avatar, and none on the robot style", async () => {
+    const run = { botId: "bot-1", spaceId: "workspace-1", userId: "user-1" };
+    const prismaFor = (shapeSeed: number | null, avatarStyle: string) =>
+      ({
+        bot: { findFirst: vi.fn(async () => ({ id: "bot-1", color: "#E5484D", shapeSeed })) },
+        user: { findUnique: vi.fn(async () => ({ avatarStyle })) },
+      }) as unknown as PrismaClient;
+
+    await expect(notificationAvatar(prismaFor(11, "organic"), run)).resolves.toEqual({
+      color: "#E5484D",
+      shape: 11 % SHAPES.length,
+    });
+    await expect(notificationAvatar(prismaFor(null, "organic"), run)).resolves.toEqual({
+      color: "#E5484D",
+      shape: avatarIdentitySeed("bot-1") % SHAPES.length,
+    });
+    await expect(notificationAvatar(prismaFor(2, "robot"), run)).resolves.toBeUndefined();
   });
 
   it("counts the user's unread live chats for the badge, not archived or channel threads", async () => {

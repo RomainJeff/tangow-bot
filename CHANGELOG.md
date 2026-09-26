@@ -12,6 +12,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Bots now write in chat like a capable colleague rather than a help desk: shorter answers in plain prose, in the language you write in and with the tu or vous you use, without stock openers, closing offers or invented figures and menu paths, and in plain text on messaging apps, while the bot's own instructions, your stated preferences and any format you ask for still take precedence.
 
+#### Fixed
+
+- The mobile message field now looks and responds like the web one: a centred placeholder, the same tight shadow instead of a grey blur, an ink caret, a ring while you type, working dots while a bot runs, a send arrow and buttons that react to your touch, and a light tap under your finger when you send or stop.
+- Question and approval cards in the mobile app now carry the same soft shadow and ring as on web instead of a flat grey outline, and the jump-to-latest button floats above the thread as it does on web.
+- Scrolling a long conversation in the mobile app no longer stutters: the thread stops redrawing every message while you scroll, type, or when a background refresh brings nothing new.
+- An answered question card on mobile no longer glues its topic label onto the question or repeats the question under a lone dot; on web and mobile a single answered question now shows just the answer beneath it, and answered multi-question cards drop the progress dots.
+- The mobile message field no longer leaves an empty gap to the right of the attach button.
+- The mobile app now follows your device's light or dark setting when its own Appearance preference is "System", instead of always opening in dark mode regardless of that setting.
+
+#### Added
+
+- **The mobile app now opens on a bot waking up, in the shape and color of your first pinned bot.** It replaces the static blue square on black: a sleepy bot opens its eyes, glances around and smiles while the app loads, then fades into your inbox. With no bot yet, it shows a plain monochrome placeholder instead.
+
+### 2026-09-24
+
+#### Added
+
+- **iPhone notifications now show the bot's own avatar.** When a bot finishes, fails or needs you, the notification carries its shape and colour with the Rakazo icon as a small badge, the way messaging apps show a contact, instead of the bare app icon. It follows the organic avatar style; with the robot style the notification keeps the app icon.
+
 ### 2026-09-23
 
 #### Fixed

@@ -4,7 +4,7 @@ import type { ViewProps } from "react-native";
 import { StyleSheet, Text, View } from "react-native";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { useThemedStyles } from "../lib/native";
-import { elevationForAppearance } from "../lib/theme";
+import { shadowsForAppearance } from "../lib/theme";
 import { nativeTextStyle } from "../lib/typography";
 
 export interface FramedBlockHeader {
@@ -85,15 +85,13 @@ export function FramedBlock({
 
 function createFramedBlockStyles() {
   const tokens = mobileTokens();
-  const elevation = elevationForAppearance(resolveMobileAppearance());
   return StyleSheet.create({
+    // `card` carries its own 1px ring, so no separate hairline border.
     root: {
       overflow: "hidden",
       borderRadius: radii.block,
       backgroundColor: tokens.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: tokens.border,
-      ...elevation.card,
+      boxShadow: shadowsForAppearance(resolveMobileAppearance()).card,
     },
     header: {
       flexDirection: "row",

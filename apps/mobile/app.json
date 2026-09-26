@@ -4,17 +4,22 @@
     "slug": "rakazo",
     "owner": "romainjeff",
     "scheme": "rakazo",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "plugins": [
       [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
+          "imageWidth": 96,
           "resizeMode": "contain",
-          "backgroundColor": "#050506"
+          "backgroundColor": "#FBFBF9",
+          "dark": {
+            "image": "./assets/splash-icon-dark.png",
+            "backgroundColor": "#0C0C0E"
+          }
         }
       ],
       "expo-router",
@@ -40,7 +45,8 @@
       ],
       "expo-sharing",
       "./plugins/with-worklets-headers",
-      "./plugins/with-scene-lifecycle"
+      "./plugins/with-scene-lifecycle",
+      "@bacons/apple-targets"
     ],
     "ios": {
       "bundleIdentifier": "com.romainjeff.rakazo",
@@ -56,7 +62,11 @@
         "NSLocalNetworkUsageDescription": "Rakazo connects to a self-hosted Rakazo server on your local network.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "NSUserActivityTypes": ["INSendMessageIntent"]
+      },
+      "entitlements": {
+        "com.apple.developer.usernotifications.communication": true
       }
     },
     "android": {

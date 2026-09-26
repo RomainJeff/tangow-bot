@@ -510,50 +510,49 @@ function MultiQuestionAsk({
     </div>
   );
 
-  const answered =
-    settled || !canAnswer ? (
-      <>
-        {progressRow}
-        {settled ? (
-          block.answers && Object.keys(block.answers).length > 0 ? (
-            <div className="mt-2 flex flex-col gap-3">
-              {questions.map((question, qIndex) => {
-                const stored = block.answers?.[question.id];
-                const labels = (stored?.selected ?? []).map(
-                  (id) => question.options?.find((option) => option.id === id)?.label ?? id,
-                );
-                if (stored?.other) labels.push(`${t`Other`}: ${stored.other}`);
-                const value =
-                  stored?.skipped && labels.length === 0 ? t`Skipped` : labels.join(", ");
-                return (
-                  <div key={question.id}>
-                    <div className="text-meta text-muted-foreground">
-                      {qIndex + 1}. {question.question}
-                    </div>
-                    <div className="text-body text-foreground">{value || t`Answered`}</div>
-                  </div>
-                );
-              })}
+  // Once settled the progress dots have nothing left to track, and a single
+  // question is already the card's own question line: only the answer stays.
+  const answerValue = (question: (typeof questions)[number]) => {
+    const stored = block.answers?.[question.id];
+    const labels = (stored?.selected ?? []).map(
+      (id) => question.options?.find((option) => option.id === id)?.label ?? id,
+    );
+    if (stored?.other) labels.push(`${t`Other`}: ${stored.other}`);
+    return stored?.skipped && labels.length === 0 ? t`Skipped` : labels.join(", ");
+  };
+  const hasStoredAnswers = Boolean(block.answers && Object.keys(block.answers).length > 0);
+  const answered = settled ? (
+    total === 1 ? (
+      hasStoredAnswers ? (
+        <div className="text-body text-foreground">{answerValue(current) || t`Answered`}</div>
+      ) : (
+        <div className="text-meta text-muted-foreground">
+          <Trans>Answered</Trans>
+        </div>
+      )
+    ) : (
+      <div className="flex flex-col gap-3">
+        {questions.map((question, qIndex) => (
+          <div key={question.id}>
+            <div className="text-meta text-muted-foreground">
+              {qIndex + 1}. {question.question}
             </div>
-          ) : (
-            // Resolved from the composer: the user's own words are in their message bubble
-            // right below, so this header only keeps the questions as a resolved trace — no
-            // fabricated per-question value, no repeated "Answered" (design D2).
-            <div className="mt-2 flex flex-col gap-1.5">
-              {questions.map((question, qIndex) => (
-                <div key={question.id} className="text-meta text-muted-foreground">
-                  {qIndex + 1}. {question.question}
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          <div className="mt-2 text-meta text-muted-foreground">
-            <Trans>No longer active</Trans>
+            {/* Resolved from the composer: the user's own words are in their message bubble
+                right below, so only the questions stay as a resolved trace (design D2). */}
+            {hasStoredAnswers ? (
+              <div className="text-body text-foreground">
+                {answerValue(question) || t`Answered`}
+              </div>
+            ) : null}
           </div>
-        )}
-      </>
-    ) : undefined;
+        ))}
+      </div>
+    )
+  ) : !canAnswer ? (
+    <div className="text-meta text-muted-foreground">
+      <Trans>No longer active</Trans>
+    </div>
+  ) : undefined;
 
   const showOtherField =
     !current.options?.length || !current.multiSelect || get(current.id).otherOpen;

@@ -34,7 +34,7 @@ export class ThreadScrollBehavior {
     this.latestMessageId = latestMessageId;
     if (initial) return this.laidOut ? "jump" : null;
     if (this.currentState.detached) {
-      this.currentState = { detached: true, unread: true };
+      this.setState(true, true);
       return null;
     }
     return "smooth";
@@ -42,19 +42,23 @@ export class ThreadScrollBehavior {
 
   onUserScroll(distanceFromEnd: number): ThreadScrollState {
     const detached = distanceFromEnd > 80;
-    this.currentState = {
-      detached,
-      unread: detached ? this.currentState.unread : false,
-    };
+    this.setState(detached, detached && this.currentState.unread);
     return this.state();
   }
 
   jumpToLatest(): ThreadScrollAction {
-    this.currentState = { detached: false, unread: false };
+    this.setState(false, false);
     return "smooth";
   }
 
+  /** The same object until a value changes, so a scroll event that moves
+   * nothing does not re-render the thread. */
   state(): ThreadScrollState {
-    return { ...this.currentState };
+    return this.currentState;
+  }
+
+  private setState(detached: boolean, unread: boolean): void {
+    if (this.currentState.detached === detached && this.currentState.unread === unread) return;
+    this.currentState = { detached, unread };
   }
 }
