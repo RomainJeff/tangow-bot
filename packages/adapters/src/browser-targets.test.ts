@@ -58,8 +58,9 @@ const downloads = `
 /** Scripts a choice by element name, so tests never depend on ref numbering. */
 function chooseByName(
   name: string,
-  confidence: number,
+  probability: number,
   spread: string[] = [],
+  confidence = probability,
 ): (request: DecisionRequest) => DecisionResponse {
   return (request) => {
     const question = request.questions.target;
@@ -70,10 +71,10 @@ function chooseByName(
     const probabilities: Record<string, number> = Object.fromEntries(
       Object.keys(question.options).map((key) => [key, 0]),
     );
-    probabilities[choice] = confidence;
+    probabilities[choice] = probability;
     const rest = spread.map(keyFor);
-    for (const key of rest) probabilities[key] = (1 - confidence) / rest.length;
-    if (rest.length === 0) probabilities.none = 1 - confidence;
+    for (const key of rest) probabilities[key] = (1 - probability) / rest.length;
+    if (rest.length === 0) probabilities.none = 1 - probability;
     return { answers: { target: { type: "choice", choice, confidence, probabilities } } };
   };
 }
@@ -156,6 +157,26 @@ describe("browser_act targets", () => {
     ]);
     expect(candidates[0]?.probability).toBe(0.55);
     expect((result as { elements: unknown[] }).elements.length).toBeGreaterThan(0);
+  });
+
+  it("gates on the chosen option's probability, not the distribution confidence", async () => {
+    const act = async (probability: number, confidence: number) => {
+      const browser = await openPage(downloads);
+      const { options } = targets([
+        chooseByName("Download CSV", probability, ["Download"], confidence),
+      ]);
+      await browserActFromTool(
+        browser,
+        computer,
+        context,
+        { actions: [{ kind: "click", target: "the Download CSV link" }] },
+        options,
+      );
+      return browser.acts.length;
+    };
+    // Documented example: a 0.84 pick reported with confidence 0.75.
+    expect(await act(0.84, 0.75)).toBe(1);
+    expect(await act(0.6, 0.9)).toBe(0);
   });
 
   it("offers only reversible roles for the action kind, never buttons", async () => {

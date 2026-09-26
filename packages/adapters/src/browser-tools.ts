@@ -23,10 +23,11 @@ const MAX_TARGET_OPTIONS = 80;
 const MAX_OPTION_NAME_CHARS = 120;
 /**
  * Starting value before offline calibration (ticket 06); not a user setting. Compared
- * with the answer's `confidence`, a statistic of how peaked the whole distribution is,
- * not the chosen option's probability (documented example: 0.75 for a 0.84 pick).
+ * with the chosen option's probability, not the answer's `confidence`, which measures
+ * how peaked the whole distribution is (documented example: 0.75 for a 0.84 pick) and
+ * is only logged.
  */
-const TARGET_CONFIDENCE_HIGH = 0.8;
+const TARGET_PROBABILITY_HIGH = 0.8;
 const TARGET_DECISION_TIMEOUT_MS = 1_000;
 const TARGET_CANDIDATE_COUNT = 3;
 const NONE_OPTION = "none";
@@ -310,8 +311,9 @@ async function resolveBrowserTarget(
     return { returned: needsRef(snapshot) };
   }
   const confidence = Number(answer.confidence.toFixed(3));
-  if (answer.confidence < TARGET_CONFIDENCE_HIGH) {
-    report("returned_low_confidence", { confidence });
+  const probability = answer.probabilities[answer.choice] ?? 0;
+  if (probability < TARGET_PROBABILITY_HIGH) {
+    report("returned_low_confidence", { confidence, probability: Number(probability.toFixed(3)) });
     const ranked = topChoices(answer, TARGET_CANDIDATE_COUNT + 1)
       .filter((choice) => choice.key !== NONE_OPTION)
       .slice(0, TARGET_CANDIDATE_COUNT)
@@ -322,7 +324,11 @@ async function resolveBrowserTarget(
       }));
     return { returned: needsRef(snapshot, { candidates: ranked }) };
   }
-  report("executed", { confidence, role: byRef.get(answer.choice)?.role });
+  report("executed", {
+    confidence,
+    probability: Number(probability.toFixed(3)),
+    role: byRef.get(answer.choice)?.role,
+  });
   return { ref: answer.choice };
 }
 

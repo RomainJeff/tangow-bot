@@ -860,8 +860,8 @@ export interface DecisionResponse {
   answers: Record<string, DecisionAnswer>;
   /** Model version that answered, when the provider reports one. */
   model?: string;
-  /** Absent when the provider does not report usage; never an invented zero. */
-  usage?: { inputTokens: number };
+  /** Fields are absent when the provider does not report them; never an invented zero. */
+  usage?: { inputTokens?: number; cost?: number };
 }
 
 export type DecisionUnavailableReason =

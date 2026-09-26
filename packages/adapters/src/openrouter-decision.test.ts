@@ -61,7 +61,7 @@ describe("OpenRouter decision adapter", () => {
     // Documented values, field for field; `legend`, `id`, `provider`, `usage.cost` are dropped.
     expect(response).toEqual({
       model: "typesafe/jev-1.13-20260917",
-      usage: { inputTokens: 476 },
+      usage: { inputTokens: 476, cost: 1.9992e-5 },
       answers: {
         is_bug: { type: "noul", probability: 0.96 },
         team: {

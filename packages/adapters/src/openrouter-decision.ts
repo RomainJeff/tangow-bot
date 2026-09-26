@@ -204,7 +204,7 @@ type WireAnswer = {
 };
 
 /**
- * Copies documented fields only (`legend`, `id`, `provider` and `usage.cost` are
+ * Copies documented fields only (`legend`, `id` and `provider` are
  * dropped). Nothing is invented: a missing field stays missing and `decideWithin`
  * turns it into `invalid_answer`.
  */
@@ -212,7 +212,7 @@ function fromWire(body: unknown): DecisionResponse {
   const wire = (body && typeof body === "object" ? body : {}) as {
     model?: unknown;
     answers?: unknown;
-    usage?: { input_tokens?: unknown };
+    usage?: { input_tokens?: unknown; cost?: unknown };
   };
   const answers: Record<string, DecisionAnswer> = {};
   const rawAnswers = wire.answers && typeof wire.answers === "object" ? wire.answers : {};
@@ -237,9 +237,14 @@ function fromWire(body: unknown): DecisionResponse {
     }
   }
   const inputTokens = wire.usage?.input_tokens;
+  const cost = wire.usage?.cost;
+  const usage = {
+    ...(typeof inputTokens === "number" ? { inputTokens } : {}),
+    ...(typeof cost === "number" ? { cost } : {}),
+  };
   return {
     answers,
     ...(typeof wire.model === "string" ? { model: wire.model } : {}),
-    ...(typeof inputTokens === "number" ? { usage: { inputTokens } } : {}),
+    ...(Object.keys(usage).length > 0 ? { usage } : {}),
   };
 }

@@ -205,5 +205,6 @@ function logDecisionCall(
     confidence: confidences.length === 1 ? confidences[0] : undefined,
     model: result.ok ? result.model : undefined,
     inputTokens: result.ok ? result.usage?.inputTokens : undefined,
+    cost: result.ok ? result.usage?.cost : undefined,
   });
 }
