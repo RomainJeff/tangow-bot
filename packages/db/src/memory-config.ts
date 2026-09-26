@@ -14,3 +14,10 @@ export function effectiveMemoryScope(
   const scope = botScope ?? defaultScope;
   return scope === "shared" ? "shared" : "isolated";
 }
+
+export function findSpaceDecisionConfig(
+  prisma: Pick<PrismaClient, "spaceDecisionConfig">,
+  spaceId: string,
+) {
+  return prisma.spaceDecisionConfig.findUnique({ where: { spaceId } });
+}

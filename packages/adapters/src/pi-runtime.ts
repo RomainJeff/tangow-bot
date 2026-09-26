@@ -27,6 +27,7 @@ import type {
   AgentToolCompletion,
   AgentToolExecutionResult,
   ConnectorTool,
+  ToolCallTrace,
 } from "@rakazo/adapter-kit";
 import type { AskQuestion } from "@rakazo/contracts";
 import { redactSecrets } from "@rakazo/core";
@@ -334,6 +335,8 @@ export class PiAgentRuntime implements AgentRuntime {
             history,
             prompt: initialPrompt,
           });
+          const recorder = traceRecorder;
+          host.toolTrace = (toolCallId) => recorder.toolTrace(toolCallId);
         }
 
         let agent: Agent;
@@ -1217,9 +1220,12 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
             };
           }
           if (host.request.executeTool) {
-            const result = tool.route
-              ? await host.request.executeTool(tool.name, args, executionId, tool.route)
-              : await host.request.executeTool(tool.name, args, executionId);
+            const trace = host.toolTrace?.(executionId);
+            const result = trace
+              ? await host.request.executeTool(tool.name, args, executionId, tool.route, trace)
+              : tool.route
+                ? await host.request.executeTool(tool.name, args, executionId, tool.route)
+                : await host.request.executeTool(tool.name, args, executionId);
             if (isAgentToolExecutionResult(result)) {
               if (isToolPauseResult(result)) host.pausePending = true;
               return boundAgentToolResult(result);
@@ -1315,6 +1321,8 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     model: subagentModel,
     apiKey: selectedModel.apiKey,
     depth: 1,
+    // Nested tool calls have no span of their own in the run trace.
+    toolTrace: undefined,
   };
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
@@ -1865,6 +1873,8 @@ interface ToolHost {
   signal: AbortSignal;
   depth: number;
   pausePending: boolean;
+  /** Set only when the run is traced. */
+  toolTrace?: (toolCallId: string) => ToolCallTrace;
 }
 
 function toolCallBudgetExceededMessage(limit: number) {
