@@ -12,7 +12,7 @@ export const AI_DATA_DISCLOSURES: Record<AiDataUse, string> = {
   memory:
     "Conversation summaries, saved memories, search queries, and bot and Space identifiers are sent to store and retrieve context for your bots.",
   decision:
-    "The address and title of web pages your bots use, the names of links, tabs, and text fields on them, and the bot's short description of the one it wants are sent to choose which element to act on.",
+    "The address and title of web pages your bots use, the names of controls on them, and the bot's short description of the one it wants are sent to choose which element to act on and to check what an action did.",
 };
 export const AiConsentQuerySchema = z
   .object({

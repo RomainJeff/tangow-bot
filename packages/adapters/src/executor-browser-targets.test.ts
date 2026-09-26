@@ -6,6 +6,7 @@ import type {
   DecisionRequest,
   DecisionResponse,
 } from "@rakazo/adapter-kit";
+import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import type * as ComputerWorkspaceModule from "./computer-workspace.js";
@@ -49,6 +50,13 @@ function chooseDownloadCsv(request: DecisionRequest): DecisionResponse {
   probabilities[choice] = 0.95;
   probabilities.none = 0.05;
   return { answers: { target: { type: "choice", choice, confidence: 0.95, probabilities } } };
+}
+
+function landed(): DecisionResponse {
+  const probabilities = { landed: 0.9, dialog: 0.025, error: 0.025, auth: 0.025, unchanged: 0.025 };
+  return {
+    answers: { outcome: { type: "choice", choice: "landed", confidence: 0.9, probabilities } },
+  };
 }
 
 async function runWithDecisionProvider(resolve: () => Promise<DecisionProvider | null>) {
@@ -168,11 +176,27 @@ describe("run decision provider wiring", () => {
     expect(broken.results[1]).toMatchObject({ ok: false, error: expect.stringMatching(/ref/) });
     expect(broken.browser.acts).toHaveLength(0);
 
-    const provider = new FakeDecisionProvider({ script: [chooseDownloadCsv] });
-    const connected = await runWithDecisionProvider(async () => provider);
-    expect(connected.hasTarget).toBe(true);
-    expect(provider.calls).toHaveLength(1);
-    expect(connected.browser.acts).toHaveLength(1);
-    expect(connected.results[1]).toMatchObject({ ok: true, completed: 1 });
+    const sink = createTestSink();
+    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    try {
+      const provider = new FakeDecisionProvider({ script: [chooseDownloadCsv, landed] });
+      const connected = await runWithDecisionProvider(async () => provider);
+      expect(connected.hasTarget).toBe(true);
+      expect(provider.calls).toHaveLength(2);
+      expect(connected.browser.acts).toHaveLength(1);
+      expect(connected.results[1]).toMatchObject({
+        ok: true,
+        completed: 1,
+        outcome: { kind: "landed", probability: 0.9 },
+      });
+      expect(sink.events.find((event) => event.message === "agent.run.decision")).toMatchObject({
+        decisionCalls: 1,
+        decisionExecuted: 1,
+        verifyCalls: 1,
+        verifyAnswered: 1,
+      });
+    } finally {
+      installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+    }
   });
 });

@@ -15,6 +15,9 @@ const PROBABILITY_TOLERANCE = 1e-3;
 
 class DecisionTimeoutError extends Error {}
 
+/** What a call is for, logged only, so each use is measured separately. */
+export type DecisionPurpose = "target" | "verify";
+
 /**
  * The only way callers ask a decision provider anything. Never throws: every
  * failure becomes an `unavailable` reason the caller treats as "carry on as
@@ -25,11 +28,11 @@ export async function decideWithin(
   provider: DecisionProvider | undefined,
   request: DecisionRequest,
   context: AdapterContext,
-  options: { timeoutMs: number },
+  options: { timeoutMs: number; purpose?: DecisionPurpose },
 ): Promise<DecisionResult> {
   const started = Date.now();
   const result = await decide(provider, request, context, options.timeoutMs);
-  logDecisionCall(provider, request, context, result, Date.now() - started);
+  logDecisionCall(provider, request, context, result, Date.now() - started, options.purpose);
   return result;
 }
 
@@ -175,6 +178,7 @@ function logDecisionCall(
   context: AdapterContext,
   result: DecisionResult,
   durationMs: number,
+  purpose: DecisionPurpose | undefined,
 ): void {
   const questions = Object.values(request.questions);
   const options = questions.reduce(
@@ -198,6 +202,7 @@ function logDecisionCall(
     botId: context.botId,
     spaceId: context.spaceId,
     provider: providerId,
+    purpose,
     durationMs,
     outcome: result.ok ? "answered" : result.reason,
     errorClass: result.ok ? undefined : result.error,

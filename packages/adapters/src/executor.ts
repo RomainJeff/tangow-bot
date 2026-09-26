@@ -1259,7 +1259,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
       heartbeat.unref?.();
 
       const runSecrets = [...deps.secrets];
-      const browserTargetStats = { calls: 0, executed: 0, returned: 0 };
+      const browserTargetStats = {
+        calls: 0,
+        executed: 0,
+        returned: 0,
+        verifyCalls: 0,
+        verifyAnswered: 0,
+      };
       try {
         const sourceBlocks =
           run.trigger === "messaging" && run.sourceMessageId
@@ -4642,6 +4648,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             decisionCalls: browserTargetStats.calls,
             decisionExecuted: browserTargetStats.executed,
             decisionReturned: browserTargetStats.returned,
+            verifyCalls: browserTargetStats.verifyCalls,
+            verifyAnswered: browserTargetStats.verifyAnswered,
           });
         }
         if (!retainComputerLease) {

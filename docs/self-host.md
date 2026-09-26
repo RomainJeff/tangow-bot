@@ -258,8 +258,9 @@ OpenRouter API key, and under **Advanced** a base URL for a compatible proxy and
 Space and is separate from `OPENROUTER_API_KEY` and model connections, so page data only leaves
 once a Space owner connects it. No environment variable is read.
 With a connection, bots can ask `browser_act` for a link, tab, or text field by description (see
-[computer runtime](computer-runtime.md)); without one nothing changes. Page URLs, titles, and
-element names go to that recipient, which is listed in mobile AI data sharing
+[computer runtime](computer-runtime.md)), and the same provider then classifies what the action did
+from the controls that changed; without one nothing changes. Page URLs, titles, and element names
+go to that recipient, which is listed in mobile AI data sharing
 ([review notes](ai-data-sharing-review.md)). Loopback, private-network, and plain-HTTP base URLs
 can only be saved by the deployment owner.
 

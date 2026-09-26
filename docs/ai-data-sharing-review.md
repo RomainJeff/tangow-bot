@@ -19,7 +19,8 @@ using their existing controls. This flow is not a global data-access or run-revo
 - Verify the selected providers' agreements, retention, deletion, and security safeguards
   support the policy's equal-or-greater-protection commitment. A privacy link alone is not proof.
 - A Space decision provider (Settings → Browser) receives page URLs and titles, the role and
-  name of links, tabs, and text fields, and the bot's target description. Verify that
+  name of links, tabs, and text fields, the bot's target description, and, to check what an
+  action did, the names of controls that appeared or disappeared after it. Verify that
   provider's agreement, retention, and deletion terms before a release lists it. It appears
   only when the Space has a connection. Today it is OpenRouter's Decisions API, which forwards to
   TypeSafe (Jev); verify that onward routing like any other OpenRouter request.

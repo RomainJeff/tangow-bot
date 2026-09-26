@@ -122,7 +122,10 @@ describe("browser_act targets", () => {
     );
     expect(result).toMatchObject({ ok: true, completed: 1 });
     expect(browser.acts).toHaveLength(1);
-    expect(provider.calls).toHaveLength(1);
+    expect(provider.calls.map((call) => Object.keys(call.questions))).toEqual([
+      ["target"],
+      ["outcome"],
+    ]);
     const clicked = browser.acts[0]!.actions[0]!;
     const question = provider.calls[0]!.questions.target;
     expect(question?.type === "choice" && question.options[clicked.ref]).toBe(
@@ -336,7 +339,7 @@ describe("browser_act targets", () => {
     const browser = await openPage(`${downloads}<input aria-label="Name" />`);
     const snapshot = await browser.snapshot(computer, {}, context);
     const nameRef = snapshot.elements.find((element) => element.name === "Name")!.ref;
-    const stats = { calls: 0, executed: 0, returned: 0 };
+    const stats = { calls: 0, executed: 0, returned: 0, verifyCalls: 0, verifyAnswered: 0 };
     const { provider, options } = targets(
       [chooseByName("Search", 0.9), chooseByName("Download", 0.4, ["Download CSV"])],
       stats,
@@ -358,7 +361,14 @@ describe("browser_act targets", () => {
     expect(result).toMatchObject({ ok: false, completed: 2, needsRef: true });
     expect(browser.acts).toHaveLength(2);
     expect(provider.calls).toHaveLength(2);
-    expect(stats).toEqual({ calls: 2, executed: 1, returned: 1 });
+    // The sequence stopped at needsRef, so the executed fill is not verified.
+    expect(stats).toEqual({
+      calls: 2,
+      executed: 1,
+      returned: 1,
+      verifyCalls: 0,
+      verifyAnswered: 0,
+    });
   });
 
   it("redacts secrets from the request and keeps content out of logs", async () => {
@@ -447,5 +457,214 @@ describe("browser_act targets", () => {
         actions: [{ kind: "click", target: "download" }],
       }),
     ).toMatchObject({ ok: false, error: expect.stringMatching(/requires ref/) });
+  });
+});
+
+const LANDING = "https://example.test/export";
+
+/** The jsdom session cannot follow a link, so a successful click loads the seeded landing page. */
+class LandingBrowser extends CountingBrowser {
+  landing?: string;
+  override async act(...args: Parameters<FakeBrowserProvider["act"]>) {
+    const result = await super.act(...args);
+    if (!result.ok || !this.landing || args[1].actions[0]?.kind !== "click") return result;
+    const [target, , ctx] = args;
+    await this.navigate(target, { url: this.landing }, ctx);
+    return { ...result, ...(await this.snapshot(target, {}, ctx)) };
+  }
+}
+
+async function openLanding(before: string, after: string, afterTitle = "Export") {
+  const browser = new LandingBrowser({
+    pages: {
+      [PAGE]: { title: "Reports", html: `<html><body>${before}</body></html>` },
+      [LANDING]: { title: afterTitle, html: `<html><body>${after}</body></html>` },
+    },
+  });
+  browser.landing = LANDING;
+  await browserNavigateFromTool(browser, computer, context, { url: PAGE });
+  return browser;
+}
+
+function answerOutcome(kind: string, probability: number) {
+  return (request: DecisionRequest): DecisionResponse => {
+    const question = request.questions.outcome;
+    if (question?.type !== "choice") throw new Error("expected the outcome choice");
+    const others = Object.keys(question.options).filter((key) => key !== kind);
+    const probabilities: Record<string, number> = { [kind]: probability };
+    for (const key of others) probabilities[key] = (1 - probability) / others.length;
+    return {
+      answers: {
+        outcome: { type: "choice", choice: kind, confidence: probability, probabilities },
+      },
+    };
+  };
+}
+
+const clickCsv = { actions: [{ kind: "click", target: "the Download CSV link" }] };
+
+describe("browser_act outcome", () => {
+  afterEach(() => {
+    installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+  });
+
+  it("annotates the provider's class, or uncertain below 0.5, without acting again", async () => {
+    for (const [answered, probability, kind] of [
+      ["landed", 0.9, "landed"],
+      ["dialog", 0.7, "dialog"],
+      ["error", 0.6, "error"],
+      ["auth", 0.5, "auth"],
+      ["unchanged", 0.8, "unchanged"],
+      ["dialog", 0.45, "uncertain"],
+    ] as const) {
+      const browser = await openLanding(downloads, `<button>Close</button>`);
+      const { provider, options } = targets([
+        chooseByName("Download CSV", 0.95),
+        answerOutcome(answered, probability),
+      ]);
+      const result = await browserActFromTool(browser, computer, context, clickCsv, options);
+      expect(result).toMatchObject({ ok: true, completed: 1, outcome: { kind, probability } });
+      expect(browser.acts).toHaveLength(1);
+      const question = provider.calls[1]!.questions.outcome;
+      expect(question?.type === "choice" && Object.keys(question.options)).toEqual([
+        "landed",
+        "dialog",
+        "error",
+        "auth",
+        "unchanged",
+      ]);
+    }
+  });
+
+  it("sends a bounded, redacted diff of controls and keeps content out of logs", async () => {
+    const sink = createTestSink();
+    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    const marker = "zq-improbable-marker";
+    const nameMarker = "zq-name-marker";
+    const longName = `Accept ${"x".repeat(200)}`;
+    const before = `${downloads}<input aria-label="Email" value="typed-${marker}" />`;
+    const after = [
+      `<a href="${LANDING}">Download</a>`,
+      `<a href="${LANDING}">Download</a>`,
+      `<button>Continue as sk-secret-value ${nameMarker}</button>`,
+      `<button aria-label="${longName}">Accept</button>`,
+      `<input aria-label="Password" type="password" />`,
+      ...Array.from({ length: 25 }, (_, i) => `<button>Option ${i}</button>`),
+    ].join("");
+    const browser = await openLanding(before, after, "Sign in sk-secret-value");
+    const stats = { calls: 0, executed: 0, returned: 0, verifyCalls: 0, verifyAnswered: 0 };
+    const { provider, options } = targets(
+      [chooseByName("Download CSV", 0.95), answerOutcome("auth", 0.9)],
+      stats,
+    );
+    await browserActFromTool(browser, computer, context, clickCsv, options);
+
+    const state = provider.calls[1]!.state as Record<string, unknown>;
+    expect(Object.keys(state).sort()).toEqual(["action", "added", "after", "before", "removed"]);
+    expect(state.action).toEqual({ kind: "click", role: "link", name: "Download CSV" });
+    expect(state.before).toEqual({ url: PAGE, title: "Reports", elements: 6 });
+    expect(state.after).toEqual({ url: LANDING, title: "Sign in [redacted]", elements: 30 });
+    const added = state.added as string[];
+    expect(added).toHaveLength(20);
+    // A multiset diff: one of the two "Download" links matches the one that was there before.
+    expect(added.slice(0, 4)).toEqual([
+      'link "Download"',
+      `button "Continue as [redacted] ${nameMarker}"`,
+      `button ${JSON.stringify(`${longName.slice(0, 119)}…`)}`,
+      'textbox "Password"',
+    ]);
+    expect(state.removed).toEqual([
+      'link "Download CSV"',
+      'link "Download all"',
+      'button "Delete report"',
+      'textbox "Search"',
+      'textbox "Email"',
+    ]);
+    const sent = JSON.stringify(provider.calls[1]);
+    expect(sent).not.toContain("sk-secret-value");
+    expect(sent).not.toContain(marker);
+    expect(stats).toMatchObject({ verifyCalls: 1, verifyAnswered: 1 });
+
+    const logged = JSON.stringify(sink.events);
+    expect(logged).not.toContain(marker);
+    expect(logged).not.toContain(nameMarker);
+    const decisions = sink.events.filter((event) => event.message === "agent.decision.call");
+    expect(decisions.map((event) => event.purpose)).toEqual(["target", "verify"]);
+    const outcome = sink.events.find((event) => event.message === "agent.browser.outcome");
+    expect(outcome).toMatchObject({ kind: "click", outcome: "auth", probability: 0.9 });
+  });
+
+  it("adds no outcome when the provider is unavailable, leaving the result as it was", async () => {
+    const run = async (verify: FakeDecisionStep) => {
+      const browser = await openLanding(downloads, `<button>Close</button>`);
+      const { options } = targets([chooseByName("Download CSV", 0.95), verify]);
+      return browserActFromTool(browser, computer, context, clickCsv, options);
+    };
+    const { outcome, ...plain } = (await run(answerOutcome("dialog", 0.9))) as {
+      outcome?: unknown;
+    };
+    expect(outcome).toEqual({ kind: "dialog", probability: 0.9 });
+    const outOfTable = (): DecisionResponse => ({
+      answers: {
+        outcome: { type: "choice", choice: "done", confidence: 1, probabilities: { done: 1 } },
+      },
+    });
+    const slow = () => new Promise<DecisionResponse>((resolve) => setTimeout(resolve, 2_000));
+    for (const step of [new Error("down"), outOfTable, slow]) {
+      expect(await run(step)).toEqual(plain);
+    }
+  });
+
+  it("never verifies an act that failed or may not have happened", async () => {
+    class UncertainBrowser extends LandingBrowser {
+      override async act(...args: Parameters<FakeBrowserProvider["act"]>) {
+        const result = await super.act(...args);
+        return { ...result, ok: false, uncertain: true, error: "response lost" };
+      }
+    }
+    const browser = new UncertainBrowser({
+      pages: { [PAGE]: { title: "Reports", html: `<html><body>${downloads}</body></html>` } },
+    });
+    await browserNavigateFromTool(browser, computer, context, { url: PAGE });
+    const { provider, options } = targets([
+      chooseByName("Download CSV", 0.95),
+      answerOutcome("landed", 0.9),
+    ]);
+    const result = await browserActFromTool(browser, computer, context, clickCsv, options);
+    expect(result).toMatchObject({ ok: false, uncertain: true });
+    expect(result).not.toHaveProperty("outcome");
+    expect(provider.calls).toHaveLength(1);
+    expect(browser.acts).toHaveLength(1);
+  });
+
+  it("verifies once per call, on the last target action", async () => {
+    const browser = await openLanding(downloads, `<button>Close</button>`);
+    const { provider, options } = targets([
+      chooseByName("Search", 0.9),
+      chooseByName("Download CSV", 0.95),
+      answerOutcome("dialog", 0.8),
+    ]);
+    const result = await browserActFromTool(
+      browser,
+      computer,
+      context,
+      {
+        actions: [
+          { kind: "fill", target: "search", text: "Q3" },
+          { kind: "click", target: "the Download CSV link" },
+        ],
+      },
+      options,
+    );
+    expect(result).toMatchObject({ ok: true, completed: 2, outcome: { kind: "dialog" } });
+    expect(provider.calls.map((call) => Object.keys(call.questions))).toEqual([
+      ["target"],
+      ["target"],
+      ["outcome"],
+    ]);
+    expect((provider.calls[2]!.state as { action: unknown }).action).toMatchObject({
+      kind: "click",
+      name: "Download CSV",
+    });
   });
 });

@@ -7,6 +7,7 @@ import type {
   BrowserSnapshotNode,
   BrowserSnapshotResult,
   ComputerRef,
+  DecisionAnswer,
   DecisionProvider,
   DecisionRequest,
 } from "@rakazo/adapter-kit";
@@ -31,6 +32,18 @@ const TARGET_PROBABILITY_HIGH = 0.8;
 const TARGET_DECISION_TIMEOUT_MS = 1_000;
 const TARGET_CANDIDATE_COUNT = 3;
 const NONE_OPTION = "none";
+/** Controls added or removed by an action, each way, sent to verify its outcome. */
+const MAX_OUTCOME_DIFF = 20;
+/** Starting value before offline calibration (ticket 06); below it the outcome is uncertain. */
+const OUTCOME_PROBABILITY_LOW = 0.5;
+const OUTCOME_DECISION_TIMEOUT_MS = 1_000;
+const OUTCOME_OPTIONS = {
+  landed: "the page changed as the action intended",
+  dialog: "a dialog, modal, or popup opened",
+  error: "an error or validation message appeared",
+  auth: "the page asks to sign in, solve a challenge, or prove the user is human",
+  unchanged: "nothing visible changed",
+} as const;
 /**
  * v1 targets only reversible controls: navigation for click, text entry for
  * fill/type. Buttons and submits always need an explicit ref.
@@ -57,6 +70,8 @@ export interface BrowserTargetStats {
   calls: number;
   executed: number;
   returned: number;
+  verifyCalls: number;
+  verifyAnswered: number;
 }
 
 /** Present only when the run resolved a decision provider. */
@@ -71,7 +86,16 @@ type BrowserActToolResult = BrowserActResult & {
   candidates?: Array<{ ref: string; name: string; probability: number }>;
   reason?: string;
   note?: string;
+  /** Advisory classification of the last target action; never acted on by the backend. */
+  outcome?: { kind: keyof typeof OUTCOME_OPTIONS | "uncertain"; probability: number };
 };
+
+/** The last executed target action, kept to verify what it did. */
+interface ExecutedTarget {
+  kind: BrowserActKind;
+  element: BrowserSnapshotNode;
+  before: BrowserSnapshotResult;
+}
 
 export async function browserNavigateFromTool(
   browser: BrowserProvider,
@@ -232,6 +256,7 @@ async function actWithTargets(
   const refSteps = steps.filter((step): step is BrowserActStep => "ref" in step);
   let completed = 0;
   let last: BrowserActResult | undefined;
+  let executed: ExecutedTarget | undefined;
   if (refSteps.length > 0) {
     last = await browser.act(computer, { actions: refSteps, signal: context.signal }, context);
     if (!last.ok) return last;
@@ -241,16 +266,22 @@ async function actWithTargets(
     if (!("target" in step)) continue;
     const resolved = await resolveBrowserTarget(browser, computer, context, step, targets);
     if ("returned" in resolved) return { ...resolved.returned, completed };
+    const { ref } = resolved.element;
     const action: BrowserActStep =
-      step.kind === "click"
-        ? { kind: "click", ref: resolved.ref }
-        : { kind: step.kind, ref: resolved.ref, text: step.text };
+      step.kind === "click" ? { kind: "click", ref } : { kind: step.kind, ref, text: step.text };
     // A ref gone stale since the snapshot fails in the provider and is returned, never retargeted.
     last = await browser.act(computer, { actions: [action], signal: context.signal }, context);
     if (!last.ok) return { ...last, completed: completed + last.completed };
     completed += last.completed;
+    executed = { kind: step.kind, element: resolved.element, before: resolved.snapshot };
   }
-  return { ...last!, completed };
+  const result: BrowserActToolResult = { ...last!, completed };
+  // Only after a confirmed success: a failed or uncertain act has already returned above.
+  if (executed && last!.elements) {
+    const outcome = await verifyBrowserOutcome(executed, last!, targets, context);
+    if (outcome) result.outcome = outcome;
+  }
+  return result;
 }
 
 /**
@@ -264,7 +295,10 @@ async function resolveBrowserTarget(
   context: AdapterContext,
   step: BrowserTargetStep,
   targets: BrowserTargetOptions,
-): Promise<{ ref: string } | { returned: BrowserActToolResult }> {
+): Promise<
+  | { element: BrowserSnapshotNode; snapshot: BrowserSnapshotResult }
+  | { returned: BrowserActToolResult }
+> {
   const snapshot = await browser.snapshot(computer, { signal: context.signal }, context);
   if (snapshot.fallback) return { returned: { ok: false, completed: 0, ...snapshot } };
   const limit = Math.min(
@@ -298,7 +332,7 @@ async function resolveBrowserTarget(
     targets.provider,
     targetRequest(snapshot, candidates, step.target, targets.secrets),
     context,
-    { timeoutMs: TARGET_DECISION_TIMEOUT_MS },
+    { timeoutMs: TARGET_DECISION_TIMEOUT_MS, purpose: "target" },
   );
   if (!decision.ok) {
     if (decision.reason === "aborted") context.signal.throwIfAborted();
@@ -325,12 +359,115 @@ async function resolveBrowserTarget(
       }));
     return { returned: needsRef(snapshot, { candidates: ranked }) };
   }
+  const element = byRef.get(answer.choice)!;
   report("executed", {
     confidence,
     probability: Number(probability.toFixed(3)),
-    role: byRef.get(answer.choice)?.role,
+    role: element.role,
   });
-  return { ref: answer.choice };
+  return { element, snapshot };
+}
+
+/**
+ * Classify what the last target action produced from the before and after
+ * snapshots. Advisory only: the result is annotated, never replayed or escalated.
+ */
+async function verifyBrowserOutcome(
+  executed: ExecutedTarget,
+  after: BrowserActResult,
+  targets: BrowserTargetOptions,
+  context: AdapterContext,
+): Promise<BrowserActToolResult["outcome"]> {
+  const report = (outcome: string, fields: Record<string, unknown> = {}) => {
+    getLogger().info("agent.browser.outcome", {
+      runId: context.runId,
+      botId: context.botId,
+      kind: executed.kind,
+      outcome,
+      options: Object.keys(OUTCOME_OPTIONS).length,
+      ...fields,
+    });
+  };
+  if (targets.stats) targets.stats.verifyCalls += 1;
+  const decision = await decideWithin(
+    targets.provider,
+    outcomeRequest(executed, after, targets.secrets),
+    context,
+    { timeoutMs: OUTCOME_DECISION_TIMEOUT_MS, purpose: "verify" },
+  );
+  if (!decision.ok) {
+    if (decision.reason === "aborted") context.signal.throwIfAborted();
+    report(decision.reason);
+    return undefined;
+  }
+  // decideWithin guarantees a choice from the offered options with its probability.
+  const answer = decision.answers.outcome as Extract<DecisionAnswer, { type: "choice" }>;
+  if (targets.stats) targets.stats.verifyAnswered += 1;
+  const probability = Number(answer.probabilities[answer.choice]!.toFixed(3));
+  const kind =
+    probability < OUTCOME_PROBABILITY_LOW
+      ? "uncertain"
+      : (answer.choice as keyof typeof OUTCOME_OPTIONS);
+  report(kind, { probability, confidence: Number(answer.confidence.toFixed(3)) });
+  return { kind, probability };
+}
+
+function outcomeRequest(
+  executed: ExecutedTarget,
+  after: BrowserActResult,
+  secrets: string[],
+): DecisionRequest {
+  const redact = (text: string) => redactSecrets(text, secrets);
+  // Redact before truncating so a cut can never leave part of a secret behind.
+  const name = (element: BrowserSnapshotNode) =>
+    truncate(redact(element.name), MAX_OPTION_NAME_CHARS);
+  const label = (element: BrowserSnapshotNode) =>
+    `${element.role} ${JSON.stringify(name(element))}`;
+  const before = executed.before;
+  const afterElements = after.elements ?? [];
+  // Refs are renumbered on every snapshot, so compare controls by role and name.
+  const { added, removed } = multisetDiff(before.elements.map(label), afterElements.map(label));
+  // Counts and control names only: never `tree` (page text) or field values.
+  return {
+    state: {
+      action: { kind: executed.kind, role: executed.element.role, name: name(executed.element) },
+      before: {
+        url: redact(before.url),
+        title: redact(before.title),
+        elements: before.elements.length,
+      },
+      after: { url: redact(after.url), title: redact(after.title), elements: afterElements.length },
+      added: added.slice(0, MAX_OUTCOME_DIFF),
+      removed: removed.slice(0, MAX_OUTCOME_DIFF),
+    },
+    questions: {
+      outcome: {
+        type: "choice",
+        instructions: "What did the action produce?",
+        options: { ...OUTCOME_OPTIONS },
+      },
+    },
+  };
+}
+
+function multisetDiff(from: string[], to: string[]): { added: string[]; removed: string[] } {
+  const extra = new Map<string, number>();
+  for (const item of to) extra.set(item, (extra.get(item) ?? 0) + 1);
+  const removed: string[] = [];
+  for (const item of from) {
+    const count = extra.get(item) ?? 0;
+    if (count > 0) extra.set(item, count - 1);
+    else removed.push(item);
+  }
+  const added: string[] = [];
+  for (const item of to) {
+    const count = extra.get(item) ?? 0;
+    if (count > 0) {
+      added.push(item);
+      extra.set(item, count - 1);
+    }
+  }
+  return { added, removed };
 }
 
 function targetRequest(
