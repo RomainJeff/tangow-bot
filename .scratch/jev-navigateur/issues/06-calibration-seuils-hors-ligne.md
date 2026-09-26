@@ -110,12 +110,35 @@ Pas d'entrée CHANGELOG : rien d'observable par un utilisateur.
 
 **Blocked by:** 04 (livré) ; 05 pour la famille « issues » (les cas de cible peuvent se livrer avant)
 
-**Status:** ready-for-agent pour l'outillage hors ligne ; needs-decision pour les seuils, après un enregistrement réel
+**Status:** outillage livré (2026-09-26, branche `feat/jev-browser-calibration`), en attente d'enregistrements réels ; needs-decision pour les seuils après un enregistrement réel
 
-- [ ] Corpus de 150 à 200 cas, sans donnée réelle, cinq familles, parité français/anglais et cas croisés, relu par un humain
-- [ ] Requêtes construites par `browserActFromTool` et les fakes, pas par une copie du code de requête
-- [ ] Rejeu hors ligne qui vérifie les `requestHash` et passe par `decideWithin`
-- [ ] Rapport : justesse, `none`, par famille/langue/tranche d'options, exécution et mauvais ref par seuil, ECE, issues par classe
-- [ ] Enregistrement manuel avec clé lue sur stdin, jamais par variable d'environnement, jamais écrite ; refus hors `.test`
-- [ ] `pnpm test` tourne sans clé ni réseau ; le jeu synthétique est marqué comme tel
+- [ ] Corpus de 150 à 200 cas, sans donnée réelle, cinq familles, parité français/anglais et cas croisés, relu par un humain — **110 cas livrés, relecture humaine à faire**
+- [x] Requêtes construites par `browserActFromTool` et les fakes, pas par une copie du code de requête
+- [x] Rejeu hors ligne qui vérifie les `requestHash` et passe par `decideWithin`
+- [x] Rapport : justesse, `none`, par famille/langue/tranche d'options, exécution et mauvais ref par seuil, ECE, issues par classe
+- [x] Enregistrement manuel avec clé lue sur stdin, jamais par variable d'environnement, jamais écrite ; refus hors `.test`
+- [x] `pnpm test` tourne sans clé ni réseau ; le jeu synthétique est marqué comme tel
 - [ ] Après enregistrement réel : seuils fixés avec un commentaire qui renvoie au rapport, décision consignée (seuil, borne d'options, `target` conservé ou non)
+
+## Livré — écarts avec le texte ci-dessus
+
+- **Seuils inchangés** : 0,80 (cible) et 0,5 (issue) restent des valeurs de départ. Sans enregistrement réel, rien ne justifie de les bouger ; `browser-tools.ts` les exporte seulement, en lecture.
+- **Corpus** : 110 cas dans `packages/testkit/src/fixtures/decision/cases/` — cible 88 (fr 40, en 40, croisés 8 ; distracteurs 28 dont les croisés, densité 20, formulaires 20, aucune cible 20), issue 22 (fr 11, en 11, dont 8 `boundary`). En dessous des 150 à 200 visés. Rédigés par un agent : **relecture humaine à faire** (étiquettes « distracteurs », formulations françaises) avant de lire un enregistrement comme une décision. README court dans `fixtures/decision/`.
+- **Schéma** : deux champs ajoutés au schéma clos, tous deux optionnels — `targetLang` (cas croisé : langue de la description différente de celle de la page) et `boundary: true` (cas d'issue frontière, pour le critère « uncertain sur les frontières mal classées »). `html` est le corps seul ; le constructeur l'enveloppe avec `title`.
+- **Limites jsdom constatées** : un `<select>` n'est nommé que par `aria-label` (pas par `<label>`) ; `role="tab"` n'est capté que sur un `<a href>` ; `type="search"` sort en `textbox`, un `searchbox` exige `role="searchbox"`. Cinq liens « En savoir plus » identiques sont étiquetés `none` : les options ne portent aucun contexte pour les départager.
+- **Constructeur** (`decision-corpus.ts`) : conforme au ticket. Cible : `FakeDecisionProvider` dont le pas lève, `needsRef`, requête lue dans `calls`. Issue : premier pas qui choisit l'élément de l'action à 1,0, navigateur sous-classé dont `act` charge la page `after`, second pas qui lève ; la requête `verify` est le second appel. `requestHash` = sha256 du JSON canonique (clés triées) ; `corpusHash` sur les couples `id:requestHash`.
+- **Enregistrement** : le script appelle `createDecisionProvider("openrouter", …)` (la fabrique de production, donc `OpenRouterDecisionProvider` avec l'URL par défaut) plutôt que d'importer la classe, que `@rakazo/adapters` n'exporte pas. Délai 30 s par cas, une tentative, en séquence. `model` du fichier = premier `model` renvoyé. Clé sur stdin, masquée en TTY. Emplacement recommandé : `recordings/<modèle>-<AAAA-MM-JJ>.json`, committé après relecture.
+- **Jeu synthétique** : pas de `recordings/synthetic.json`. Le jeu est écrit dans `decision-calibration.test.ts` (neuf cas, modèle `synthetic`), avec les taux et l'ECE calculés à la main dans le test ; aucun fichier synthétique ne peut donc être pris pour un vrai enregistrement.
+- **Rapport** : par seuil, taux d'exécution, de mauvais ref, de retour et justesse des exécutés, pour cible (tous, fr, en, croisé) et issue (tous, fr, en) ; ECE sur la probabilité choisie et sur `confidence` ; justesse par famille et par tranche d'options ; `none` correct ; matrice de confusion ; seuil cible recommandé (plus petit à ≤ 1 % de mauvais ref) et seuils d'issue qui respectent le critère ; coût total. Les cas `stale` (hash changé) et `missing` sont comptés à part et jamais mesurés.
+- **Garde** : `decision-calibration.test.ts` vérifie les deux constantes sur chaque enregistrement de `recordings/` ; ignorée tant qu'il n'y en a aucun.
+- **Tests** : construction de tout le corpus (déterministe, jumeau fr/en), refus hors `.test`, requêtes cible et issue écrites à la main (régression si `targetRequest`/`outcomeRequest` change), métriques sur le jeu synthétique, aller-retour enregistreur → rejeu, chemin « aucun enregistrement » sans réseau. Chacun vu échouer en cassant la ligne protégée.
+
+## Commandes
+
+```bash
+pnpm test:decision-calibration                         # rejeu hors ligne de recordings/
+pnpm test:decision-calibration --recording=<fichier>   # un enregistrement précis
+pnpm test:decision-calibration \
+  --record=packages/testkit/src/fixtures/decision/recordings/jev-1.13-<AAAA-MM-JJ>.json
+# la clé OpenRouter est demandée sur stdin
+```
