@@ -605,6 +605,8 @@ export interface NotificationMessage {
   body: string;
   botId: string;
   threadId: string;
+  /** Set when the bot spoke in a group, so a tap opens the group rather than its chat. */
+  groupId?: string;
   /** The user's total unread conversations after this notification's message landed. An
       absolute count, never a delta: iOS renders it as the app icon badge and a missed push
       must not leave the badge off by one. */

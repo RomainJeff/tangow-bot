@@ -17,12 +17,39 @@ vi.mock("react-native", () => ({ Platform: { OS: "ios" } }));
 import * as Notifications from "expo-notifications";
 import {
   configureForegroundNotifications,
+  notificationDestination,
   notificationTargetsThread,
   setOpenNotificationThread,
   syncAppBadge,
 } from "./live-notifications";
 
 beforeEach(() => vi.clearAllMocks());
+
+describe("notification destination", () => {
+  it("opens the bot's chat in the space it came from", () => {
+    expect(notificationDestination({ botId: "bot-1", threadId: "t", spaceId: "s" })).toEqual({
+      pathname: "/thread",
+      params: { botId: "bot-1", spaceId: "s" },
+    });
+    expect(notificationDestination({ botId: "bot-1" })).toEqual({
+      pathname: "/thread",
+      params: { botId: "bot-1" },
+    });
+  });
+
+  it("opens the group when the bot spoke in one", () => {
+    expect(notificationDestination({ botId: "bot-1", groupId: "g", spaceId: "s" })).toEqual({
+      pathname: "/group-thread",
+      params: { groupId: "g", spaceId: "s" },
+    });
+  });
+
+  it("ignores a push without a conversation", () => {
+    expect(notificationDestination({})).toBeNull();
+    expect(notificationDestination(undefined)).toBeNull();
+    expect(notificationDestination({ botId: 3 })).toBeNull();
+  });
+});
 
 describe("notification thread targeting", () => {
   it("matches Expo and native notification keys for the open agent", () => {

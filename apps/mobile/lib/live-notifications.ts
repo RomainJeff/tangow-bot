@@ -65,6 +65,23 @@ export function notificationTargetsThread(
   );
 }
 
+export type NotificationDestination =
+  | { pathname: "/thread"; params: { botId: string; spaceId?: string } }
+  | { pathname: "/group-thread"; params: { groupId: string; spaceId?: string } };
+
+/** Where tapping a pushed bot notification leads: the group it spoke in, else its chat. */
+export function notificationDestination(
+  data: Record<string, unknown> | null | undefined,
+): NotificationDestination | null {
+  const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+  const spaceId = text(data?.spaceId);
+  const space = spaceId ? { spaceId } : {};
+  const groupId = text(data?.groupId);
+  if (groupId) return { pathname: "/group-thread", params: { groupId, ...space } };
+  const botId = text(data?.botId);
+  return botId ? { pathname: "/thread", params: { botId, ...space } } : null;
+}
+
 export function configureForegroundNotifications(): void {
   if (foregroundHandlerConfigured) return;
   foregroundHandlerConfigured = true;

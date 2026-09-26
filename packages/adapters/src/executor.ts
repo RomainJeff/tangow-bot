@@ -4772,7 +4772,7 @@ async function notifyRun(
   if (!enabled) return;
   // Counted after the caller persisted its message, so a completion or an ask that marks this
   // thread unread is already in; a failure or a takeover leaves the inbox as it was.
-  const [badge, avatar] = await Promise.all([
+  const [badge, avatar, thread] = await Promise.all([
     unreadConversationCount(deps.prisma, run.userId).catch((error) => {
       getLogger().error("unread conversation count", error);
       return undefined;
@@ -4781,10 +4781,19 @@ async function notifyRun(
       getLogger().error("notification avatar", error);
       return undefined;
     }),
+    deps.prisma.thread
+      .findFirst({
+        where: { id: run.threadId, spaceId: run.spaceId, userId: run.userId },
+        select: { groupId: true },
+      })
+      .catch((error) => {
+        getLogger().error("notification thread", error);
+        return null;
+      }),
   ]);
   await deps.notifications
     .send(
-      { ...message, badge, avatar },
+      { ...message, groupId: thread?.groupId ?? undefined, badge, avatar },
       {
         operationId: "notify",
         traceId: run.botId,
