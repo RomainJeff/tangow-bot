@@ -105,6 +105,7 @@ import {
   CannotDeleteLastSpaceError,
   CannotDeleteSpaceAsNonOwnerError,
   claimEmptySpaceDeletionForMember,
+  conversationRunFilter,
   createExternalConversationRepos,
   createGroupRepos,
   createRepos,
@@ -1518,7 +1519,7 @@ export function createRouter(deps: RouterDeps) {
         const stopping = await deps.prisma.run.findMany({
           where: {
             threadId: target.threadId,
-            trigger: "routine",
+            routineId: { not: null },
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
           select: { id: true },
@@ -1632,6 +1633,7 @@ export function createRouter(deps: RouterDeps) {
               threadId: target.threadId,
               botId,
               status: { in: [...ACTIVE_RUN_STATUSES] },
+              ...conversationRunFilter,
             },
             select: { id: true },
           });

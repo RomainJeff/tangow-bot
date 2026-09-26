@@ -21,12 +21,16 @@ function fixture({
   parentBotId = "claudius-1" as string | null,
   secrets = [] as string[],
   runtimeError,
+  trigger = "routine",
+  routineId = "routine-1" as string | null,
 }: {
   closingText?: string;
   routineNotify?: boolean;
   parentBotId?: string | null;
   secrets?: string[];
   runtimeError?: string;
+  trigger?: string;
+  routineId?: string | null;
 } = {}) {
   const messages: Array<{
     id: string;
@@ -50,8 +54,9 @@ function fixture({
     spaceId: "space-1",
     userId: "user-1",
     status: "queued",
-    trigger: "routine",
-    routineId: "routine-1",
+    trigger,
+    routineId,
+    requireToolApproval: true,
     leaseFence: 0,
   };
 
@@ -290,6 +295,30 @@ describe("sub-bot routine run card", () => {
     ).toBe(false);
     // A top-level bot's routine is its own user-facing brief; finalizeRun still gets the
     // ordinary blocks (not suppressed).
+    expect(f.finalizeRun).not.toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
+  });
+});
+
+describe("inbound routine run card", () => {
+  const hasCard = (f: ReturnType<typeof fixture>) =>
+    f.messages.some((message) => message.blocks.some((block) => block.kind === "routine_run"));
+
+  it("cards a webhook-woken routine even on a top-level bot", async () => {
+    const f = fixture({ trigger: "webhook", parentBotId: null });
+    await f.run();
+
+    expect(f.finalizeRun).toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
+    expect(hasCard(f)).toBe(true);
+    expect(
+      f.messages.some((message) => message.blocks.some((block) => block.kind === "text")),
+    ).toBe(false);
+  });
+
+  it("keeps a bare delivery with no routine as an ordinary reply", async () => {
+    const f = fixture({ trigger: "webhook", parentBotId: null, routineId: null });
+    await f.run();
+
+    expect(hasCard(f)).toBe(false);
     expect(f.finalizeRun).not.toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
   });
 });

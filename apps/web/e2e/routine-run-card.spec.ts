@@ -13,10 +13,10 @@ async function threadBlocks(page: Page, botId: string): Promise<ThreadBlock[]> {
   return history.messages.flatMap((message) => message.blocks);
 }
 
-// The routine-run card only renders for a sub-bot's own routine (parentBotId set, see
-// packages/adapters/src/executor.ts `isSubBotRoutineRun`); a top-level bot's routine stays a
-// normal message. spawn_bot is the only way to create a parented bot, so this spec asks the
-// real model to spawn one before creating and running a routine on it directly via RPC.
+// A scheduled routine only renders as a run card for a sub-bot (parentBotId set, see
+// packages/adapters/src/executor.ts `showsRoutineRunCard`); a top-level bot's scheduled routine
+// stays a normal message. spawn_bot is the only way to create a parented bot, so this spec asks
+// the real model to spawn one before creating and running a routine on it directly via RPC.
 test("renders a routine run card in a sub-bot's own thread", async ({ page }, testInfo) => {
   const stamp = Date.now();
   await signup(page, `routine-run-card-${stamp}@rakazo.test`, "password12", "Routine Run Card");
@@ -88,4 +88,54 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
       { timeout: 30_000 },
     )
     .toBe(true);
+});
+
+// An inbound wake reports through a run card on every bot: the routine's instructions and the
+// payload stay in the run, not in a user bubble on the main thread.
+test("renders a webhook-woken routine as a run card, not a user message", async ({
+  page,
+}, testInfo) => {
+  const stamp = Date.now();
+  await signup(page, `webhook-run-card-${stamp}@rakazo.test`, "password12", "Webhook Run Card");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+
+  await rpc<Routine>(page, "routines/create", {
+    botId,
+    name: "Deploy watch",
+    prompt: "Reply with a one-line status digest of the delivery. No preamble, no images.",
+    active: true,
+    notify: true,
+    webhookEnabled: true,
+    requireToolApproval: false,
+  });
+  const { secret, path } = await rpc<{ secret: string; path: string }>(
+    page,
+    "bots/rotateWebhookSecret",
+    { botId },
+  );
+  const delivered = await page.request.post(path, {
+    headers: { authorization: `Bearer ${secret}`, "idempotency-key": `deploy-${stamp}` },
+    data: { event: "deploy.finished", service: "checkout" },
+  });
+  expect(delivered.ok()).toBe(true);
+
+  const card = page.getByTestId("routine-run-card");
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await expect(card).toContainText("Deploy watch");
+  await expect(card).toContainText("Completed", { timeout: 60_000 });
+  await expect(page.getByText(/Run routine "Deploy watch"/)).toHaveCount(0);
+  await expect(page.getByText("deploy.finished")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "webhook-routine-run-card");
+
+  const history = await rpc<{ messages: Array<{ role: string; blocks: unknown[] }> }>(
+    page,
+    "threads/messages",
+    { botId },
+  );
+  expect(
+    history.messages.some(
+      (message) => message.role === "user" && JSON.stringify(message.blocks).includes("deploy."),
+    ),
+  ).toBe(false);
 });

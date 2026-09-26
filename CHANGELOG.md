@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Bots can complete multi-step web page tasks in one go when a decision provider is connected.** A Space owner connects an OpenRouter key in Settings → Browser on web and desktop; bots then hand a page task such as a form, filters or an onboarding flow, with the values they know, to a fast decision model that clicks, types and picks drop-down options step by step instead of the bot reading the page at every step. It stops and asks before paying, ordering, deleting, sending or a final submission, and hands back when a value is missing or the page is unclear. See [computer runtime](docs/computer-runtime.md) and [self-hosting](docs/self-host.md).
 - **Routines woken by a webhook, Git event or message can run without asking before every action.** On web, a new "Ask before every action" switch appears once such a trigger is added; it stays on by default, and turning it off lets those runs follow your usual action confirmations instead of pausing on each tool call.
 
+#### Changed
+
+- A routine woken by a webhook, Git event or message now shows up in the bot's thread on web, desktop and mobile as its own collapsible run card, one per routine, instead of posting its instructions and the raw payload as a message from you; like other background routines, it only notifies you when "Notify me on every run" is on.
+
 #### Fixed
 
 - Bots now fill drop-down menus on web pages by the option they read and no longer switch to screen clicks when a page shows hidden ad or tracker frames.
