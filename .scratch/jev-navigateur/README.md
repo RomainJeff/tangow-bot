@@ -31,6 +31,7 @@ Ce que Jev ne fait jamais dans ce lot : écrire une valeur de champ (le modèle 
 | 06 | Calibrer les seuils hors ligne sur un corpus étiqueté | 04, 05 (famille issues) | outillage livré (2026-09-26) ; en attente d'enregistrements réels et de relecture du corpus |
 | 07 | Déclarer le fournisseur de décision comme destinataire de données | 02 | retiré (2026-09-26, décision du mainteneur) |
 | 08 | Mesurer ce que le fournisseur de décision rapporte réellement | 04 | done (lot 1, 2026-09-26, logs seulement) ; lecture en attente |
+| 09 | `browser_run` : sous-tâche de page pilotée par Jev (rouvre un non-objectif) | 02, 03 | needs-review |
 
 **Décision du 2026-09-22 :** option C retenue (détail dans le ticket 01). 05 avait été différé pour que 08 mesure 04 seul ; le mainteneur a levé ce report le 2026-09-26.
 

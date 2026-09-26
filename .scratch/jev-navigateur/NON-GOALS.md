@@ -12,6 +12,8 @@ Tranché au ticket 01. Résumé : quatre sur six sont en Python (notre pile est 
 Jev ne génère pas de texte. Tous les harnais étudiés délèguent la valeur d'un `fill` à un petit modèle de langage séparé. Nous avons déjà ce modèle : c'est le modèle principal du run, qui fournit `text` dans `browser_act` aujourd'hui. Ajouter un second modèle de texte « rapide » pour les valeurs recréerait la sélection de modèle d'aide et ses réglages pour un gain non démontré. Les mots de passe ne passent de toute façon jamais par un modèle : ils viennent des secrets stockés (`request_secret`, `secret_request`).
 
 ## Une boucle autonome `browser_run(goal)` pilotée par Jev
+**Rouvert le 2026-09-26 par le ticket 09** (décision du mainteneur : `target` seul n'a pas été utilisé en production) ; le texte ci-dessous reste comme trace du raisonnement d'origine.
+
 Recette de `jev-ultrafast`, `jev-for-chrome` et `jev-browser` : Jev choisit opération et cible à chaque pas, juge « but atteint » et « bloqué », et le modèle de langage n'intervient qu'au début et pour les textes. C'est une seconde boucle d'agent, qui devrait ré-implémenter approbations, baux, garde anti-boucle, checkpoint et prise de contrôle — tout ce que `executor.ts` fait déjà pour un pas. Les tickets 04 (livré) et 05 obtiennent la moitié du gain (le modèle ne lit plus la page pour cliquer) sans nouvelle boucle. Si 08 montre que le tour de modèle restant domine encore le coût, un ticket suivant pourra rouvrir la question avec des chiffres.
 
 ## Rejouer automatiquement une action jugée `unchanged` ou `error`
