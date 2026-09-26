@@ -795,6 +795,13 @@ export interface BrowserSnapshotNode {
   tag?: string;
   /** A password input: its value is never reported. */
   password?: true;
+  /**
+   * A `<select>` only: the labels of its visible, enabled options in page order, trimmed and at
+   * most 80 characters each, at most 30. Its `value` is then the selected option's label.
+   */
+  options?: string[];
+  /** The select has more options than `options` lists. */
+  optionsTruncated?: true;
 }
 
 export interface BrowserSnapshotResult {

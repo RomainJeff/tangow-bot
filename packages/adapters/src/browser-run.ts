@@ -149,7 +149,7 @@ export type BrowserRunNeed =
   | {
       kind: "blocked";
       reason: string;
-      candidates?: Array<ElementRef & { value?: string; probability: number }>;
+      candidates?: Array<ElementRef & { value?: string; option?: string; probability: number }>;
       error?: string;
     };
 
@@ -159,6 +159,8 @@ export interface BrowserRunStep {
   name?: string;
   /** Key of `values` typed or chosen, never the value itself. */
   value?: string;
+  /** Label of the drop-down option chosen, as the page shows it. */
+  option?: string;
   ok: boolean;
 }
 
@@ -191,11 +193,23 @@ interface RunInput {
   maxSteps: number;
 }
 
-/** One option of a target question: the element it acts on and, for fill/select, the value key. */
+/**
+ * One option of a target question: the element it acts on and, for fill/select, the value key
+ * or, for a select, one of its own option labels.
+ */
 interface TargetOption {
   element: BrowserSnapshotNode;
   index: number;
   valueKey?: string;
+  option?: string;
+}
+
+interface RecentStep {
+  op: string;
+  element?: string;
+  value?: string;
+  option?: string;
+  pageChanged: boolean;
 }
 
 interface StepQuestions {
@@ -333,7 +347,7 @@ async function runLoop(
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? abortableDelay;
   const steps: BrowserRunStep[] = [];
-  const recent: Array<{ op: string; element?: string; value?: string; pageChanged: boolean }> = [];
+  const recent: RecentStep[] = [];
   const controls: string[] = [];
   let noProgress = 0;
   let waits = 0;
@@ -479,13 +493,16 @@ async function runLoop(
         : {
             kind: "fill",
             ref: target.element.ref,
-            text: input.values[target.valueKey ?? ""] ?? "",
+            text: target.option ?? input.values[target.valueKey ?? ""] ?? "",
           };
     const summary: BrowserRunStep = {
       op,
       role: target.element.role,
       name: resultName(target.element.name, options.secrets),
       ...(target.valueKey ? { value: target.valueKey } : {}),
+      ...(target.option !== undefined
+        ? { option: resultName(target.option, options.secrets) }
+        : {}),
       ok: false,
     };
     // The decision is consumed here: whatever happens next, it is never acted on twice.
@@ -537,6 +554,9 @@ async function runLoop(
       op,
       element: describe(target.element),
       ...(target.valueKey ? { value: target.valueKey } : {}),
+      ...(target.option !== undefined
+        ? { option: stateText(target.option, options.secrets, MAX_STATE_VALUE_CHARS) }
+        : {}),
       pageChanged: changed,
     });
     noProgress = changed ? 0 : noProgress + 1;
@@ -617,7 +637,7 @@ export function isConsequentialName(name: string): boolean {
 function stepQuestions(
   page: BrowserSnapshotResult,
   input: RunInput,
-  recent: Array<{ op: string; element?: string; value?: string; pageChanged: boolean }>,
+  recent: RecentStep[],
   secrets: string[],
   limits: { maxOptions: number; allowWait: boolean; allowDone: boolean },
 ): StepQuestions {
@@ -639,27 +659,54 @@ function stepQuestions(
 
   const clickOptions = new Map<string, TargetOption>();
   const fillOptions = new Map<string, TargetOption>();
-  const selectOptions = new Map<string, TargetOption>();
   const optionText = (option: TargetOption) => {
     const base = lines[option.index - 1] ?? "";
+    if (option.option !== undefined) {
+      return `${base} <- option ${JSON.stringify(stateText(option.option, secrets, MAX_STATE_VALUE_CHARS))}`;
+    }
     if (option.valueKey === undefined) return base;
     if (option.valueKey === MISSING_VALUE) return `${base} <- none of the provided values`;
     return `${base} <- ${option.valueKey}`;
   };
+  const selects: Array<{ element: BrowserSnapshotNode; index: number }> = [];
   shown.forEach((element, position) => {
     const index = position + 1;
     if (isPasswordField(element)) return;
-    const isSelect = element.tag === "select";
-    if (!isSelect && (CLICK_ROLES.has(element.role) || element.tag === "a")) {
+    if (element.tag === "select") {
+      selects.push({ element, index });
+      return;
+    }
+    if (CLICK_ROLES.has(element.role) || element.tag === "a") {
       if (clickOptions.size < optionLimit) clickOptions.set(String(index), { element, index });
     }
-    const pairs = isSelect ? selectOptions : TEXT_ROLES.has(element.role) ? fillOptions : undefined;
-    if (!pairs) return;
+    if (!TEXT_ROLES.has(element.role)) return;
     for (const valueKey of [...valueKeys, MISSING_VALUE]) {
-      if (pairs.size >= optionLimit) break;
-      pairs.set(`${index}:${valueKey}`, { element, index, valueKey });
+      if (fillOptions.size >= optionLimit) break;
+      fillOptions.set(`${index}:${valueKey}`, { element, index, valueKey });
     }
   });
+  // A select is set, as in jev-ultrafast, to one of its own options, or to a provided value.
+  // Past the provider's option limit, pairs are dropped from the end of this order: provided
+  // values first (the caller's intent), then asking for a value where the select lists no
+  // options, then each select's option labels in page order.
+  const selectPairs: Array<[string, TargetOption]> = [];
+  for (const { element, index } of selects) {
+    for (const valueKey of valueKeys) {
+      selectPairs.push([`${index}:${valueKey}`, { element, index, valueKey }]);
+    }
+  }
+  for (const { element, index } of selects) {
+    if (element.options?.length) continue;
+    selectPairs.push([`${index}:${MISSING_VALUE}`, { element, index, valueKey: MISSING_VALUE }]);
+  }
+  for (const { element, index } of selects) {
+    (element.options ?? []).forEach((option, position) => {
+      // Choosing the option already shown changes nothing.
+      if (option === element.value) return;
+      selectPairs.push([`${index}#${position + 1}`, { element, index, option }]);
+    });
+  }
+  const selectOptions = new Map(selectPairs.slice(0, optionLimit));
 
   const operationOptions: Partial<Record<Operation, string>> = {};
   const addTarget = (op: RunOp, options: Map<string, TargetOption>, instructions: string) => {
@@ -676,7 +723,7 @@ function stepQuestions(
   };
   if (clickOptions.size > 0) operationOptions.click = "click a link, button, tab, box or option";
   if (fillOptions.size > 0) operationOptions.fill = "type a provided value into a text field";
-  if (selectOptions.size > 0) operationOptions.select = "choose a provided value in a drop-down";
+  if (selectOptions.size > 0) operationOptions.select = "choose an option in a drop-down";
   if (limits.allowWait) operationOptions.wait = "wait: the control needed is still loading";
   if (limits.allowDone) operationOptions.done = "the page visibly shows the goal is reached";
   operationOptions.blocked = "the goal cannot progress on this page";
@@ -699,7 +746,7 @@ function stepQuestions(
   addTarget(
     "select",
     selectOptions,
-    "If the next operation is select: which drop-down should be set to which provided value? Pick 'none of the provided values' when the drop-down needs a value that is not provided.",
+    "If the next operation is select: which drop-down should be set to which of its options or provided values? Pick the option that best fits the goal and the provided values. Pick 'none of the provided values' when a drop-down without listed options needs a value that is not provided.",
   );
   if (limits.allowDone) {
     questions.goal_done = {
@@ -810,6 +857,7 @@ function candidatesOf(
           ...(option.valueKey && option.valueKey !== MISSING_VALUE
             ? { value: option.valueKey }
             : {}),
+          ...(option.option !== undefined ? { option: resultName(option.option, secrets) } : {}),
           probability: Number(probability.toFixed(3)),
         },
       ];

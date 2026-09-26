@@ -16,12 +16,20 @@ Module `packages/adapters/src/browser-run.ts`, fonction pure sur `BrowserProvide
 
 1. Observer : un snapshot au départ, puis celui que rend chaque `act`.
 2. État (après rédaction des secrets du run) : but, URL, titre, texte de page ≤ 4 000 caractères (le `tree` sans la table d'éléments), valeurs fournies (≤ 120 caractères), table d'éléments indexée avec valeurs courantes (≤ 120, jamais les mots de passe), 10 derniers pas.
-3. Une requête par pas (`decideWithin`, `purpose: "run_step"`, 1,5 s) : `operation` (click, fill, select, wait, done, blocked, restreint aux opérations qui ont des candidats), et par opération une question spéculative de cible : élément cliquable pour `click`, paire (champ, clé de `values`) ou (champ, « aucune valeur fournie ») pour `fill` et `select`  ; plus `goal_done` (oui/non). Seule `operation` est obligatoire : `DecideOptions.optional` écarte une réponse spéculative mal formée sans invalider le pas.
+3. Une requête par pas (`decideWithin`, `purpose: "run_step"`, 1,5 s) : `operation` (click, fill, select, wait, done, blocked, restreint aux opérations qui ont des candidats), et par opération une question spéculative de cible : élément cliquable pour `click`, paire (champ, clé de `values`) ou (champ, « aucune valeur fournie ») pour `fill`, et pour `select` les paires (liste, libellé d'une de ses options), (liste, clé de `values`) et (liste, « aucune valeur fournie ») seulement pour une liste sans options ; plus `goal_done` (oui/non). Seule `operation` est obligatoire : `DecideOptions.optional` écarte une réponse spéculative mal formée sans invalider le pas.
 4. Portes : cible choisie ≥ 0,80, ou ≥ 0,60 et au moins le double du meilleur autre élément (hors « aucun »), sinon `blocked` avec trois candidats ; la marge vient de la production, où deux boutons d'avancement équivalents (« CONTINUER » 0,65, « Suivant » 0,30) bloquaient une étape sans ambiguïté ; paire « aucune valeur » → `needs_input` `value` ; `done` contredit par `goal_done` < 0,5 refusé une fois ; `blocked` du fournisseur → `blocked`.
-5. Agir : une étape `act`, décision consommée avant (jamais rejouée). Un `select` natif passe par `fill` avec le libellé. `wait` = 500 ms puis snapshot, au plus deux de suite. Après un `fill` dans une combobox, 250 ms puis snapshot.
+5. Agir : une étape `act`, décision consommée avant (jamais rejouée). Un `select` natif passe par `fill` avec le libellé de l'option choisie ou la valeur fournie. `wait` = 500 ms puis snapshot, au plus deux de suite. Après un `fill` dans une combobox, 250 ms puis snapshot.
 6. Arrêts : trois pas sans changement de page, même contrôle une troisième fois en six pas, action incertaine ou deux échecs de suite, `maxSteps` (25 par défaut, 40 au plus), 120 s, 2 × `maxSteps` décisions, annulation du run (relancée, jamais convertie).
 
 Pas de second LLM pour le texte : les valeurs viennent de `values`, une valeur absente rend `needs_input`.
+
+## Listes déroulantes
+
+Comme `browser-use/jev-ultrafast` (`jev_ultrafast/snapshot.js`, commit `1231850a`, lignes 68-71 : chaque option non sélectionnée et active d'un `<select>` devient une action `select` « champ → libellé », avec la valeur courante en libellés ; `jev_ultrafast/browser.py` vérifie à l'exécution que l'option existe et n'est pas désactivée avant de poser `e.value`), le fournisseur choisit parmi les options de la liste elle-même : en production, `values` n'avait pas de durée et « Durée approximative » rendait `needs_input` alors que la page proposait les durées.
+
+- Snapshot (helper et session en mémoire, mêmes règles) : `options` sur un `<select>` seulement, libellés des options actives et affichées, rognés, ≤ 80 caractères, 30 au plus (`optionsTruncated` au-delà) ; la `value` d'un `<select>` devient le libellé choisi, jamais la valeur cachée.
+- Question `select_target` : clés de `values` d'abord, puis « aucune valeur fournie » pour une liste sans options, puis les libellés de chaque liste dans l'ordre de la page, sans l'option déjà affichée. Au-delà de la limite d'options du fournisseur, la fin de cet ordre est coupée.
+- Exécution : `fill` avec le libellé ; le helper apparie la valeur puis le libellé sans casse.
 
 ## Sûreté
 
@@ -39,6 +47,6 @@ Pas de second LLM pour le texte : les valeurs viennent de `values`, une valeur a
 
 - La garde « à effet » du fournisseur est spéculative (elle ne voit pas la cible choisie) ; les mots-clés restent la garde fiable, et un bouton neutre qui engage (« Continuer » en fin de tunnel) peut passer si le fournisseur ne le signale pas.
 - Le helper borne le snapshot à 80 éléments dans l'ordre du DOM ; pas de défilement, pas d'iframe.
-- Les options d'un `select` ne sont pas listées ; le fournisseur apparie la valeur fournie au champ, et le helper refuse un libellé inconnu en listant ceux qui existent.
+- Au-delà de 30 options par liste (`optionsTruncated`), les suivantes ne sont pas proposées ; un libellé inconnu est refusé par le helper, qui liste ceux qui existent.
 - Jev est annoncé meilleur en anglais ; la justesse sur des pages francophones n'est pas mesurée.
 - Seuils (0,80, 0,60 × 2, 0,5) de départ, non calibrés.

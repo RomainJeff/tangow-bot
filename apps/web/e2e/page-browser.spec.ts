@@ -21,7 +21,7 @@ test("live page helper preserves identity, masks passwords, and reports partial 
       <button id="save" onclick="this.dataset.clicks=Number(this.dataset.clicks||0)+1">Save</button>
       <label><input type="checkbox">Agree</label><button disabled>Disabled</button>
       <iframe style="display:none"></iframe><iframe width="1" height="1"></iframe>
-      <select aria-label="Month"><option value="">Choose</option><option value="2027-04">avril 2027</option></select>
+      <select aria-label="Month"><option value="">Choose</option><option value="2027-04">avril 2027</option><option disabled>mars 2027</option><option hidden>juin 2027</option></select>
       <script>window.__rakazoPageBrowser={snapshot:()=>({title:'spoofed'})};</script>`);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -58,6 +58,16 @@ test("live page helper preserves identity, masks passwords, and reports partial 
     expect(
       snapshot.elements.find((element: { name: string }) => element.name === "Password"),
     ).toMatchObject({ password: true });
+    // A select lists its enabled, shown option labels and reports the chosen label; nothing else
+    // carries options.
+    expect(
+      snapshot.elements.find((element: { name: string }) => element.name === "Month"),
+    ).toMatchObject({ value: "Choose", options: ["Choose", "avril 2027"] });
+    expect(
+      snapshot.elements
+        .filter((element: { options?: string[] }) => element.options)
+        .map((element: { name: string }) => element.name),
+    ).toEqual(["Month"]);
     const ref = (snapshot: { elements: { name: string; ref: string }[] }, name: string) =>
       snapshot.elements.find((element) => element.name === name)!.ref;
     const result = await command("act", {
@@ -90,8 +100,12 @@ test("live page helper preserves identity, masks passwords, and reports partial 
       }),
     ).toMatchObject({ ok: true, completed: 1 });
     await expect(page.getByLabel("Month")).toHaveValue("2027-04");
+    const filled = await command("snapshot");
+    expect(
+      filled.elements.find((element: { name: string }) => element.name === "Month"),
+    ).toMatchObject({ value: "avril 2027" });
     const missed = await command("act", {
-      actions: [{ kind: "fill", ref: ref(await command("snapshot"), "Month"), text: "mai 2027" }],
+      actions: [{ kind: "fill", ref: ref(filled, "Month"), text: "mai 2027" }],
     });
     expect(missed).toMatchObject({ ok: false, completed: 0 });
     expect(missed.error).toContain('options: "Choose", "avril 2027"');

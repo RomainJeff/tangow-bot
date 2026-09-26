@@ -48,6 +48,19 @@ const pages = {
     title: "Travellers",
     html: `<p>Who is going?</p><button>Just me</button><button>With family</button>`,
   },
+  duration: {
+    title: "Duration",
+    html: `<p>How long?</p><input aria-label="Destination" />
+      <select aria-label="Durée approximative"><option value="">Choisir</option><option value="7">1 semaine</option><option value="14">2 semaines</option><option value="21" disabled>3 semaines</option></select>
+      <button>Continuer</button>`,
+  },
+  longList: {
+    title: "Countries",
+    html: `<select aria-label="Country"><option value="" disabled selected>Choose</option>${Array.from(
+      { length: 40 },
+      (_, n) => `<option value="c${n + 1}">Country ${n + 1}</option>`,
+    ).join("")}</select>`,
+  },
   summary: {
     title: "Summary",
     html: `<p>All set: review your trip.</p><a href="${START}#edit">Edit</a><button>Pay 1 200 €</button><button>Go to next step</button>`,
@@ -242,6 +255,82 @@ describe("browser_run", () => {
     expect(
       (outcome as { elements: BrowserSnapshotNode[] }).elements.map((element) => element.name),
     ).toContain("Pay 1 200 €");
+  });
+
+  it("picks a drop-down option the values do not hold and fills it by its label", async () => {
+    const browser = await open(new FlowBrowser({}, "duration"));
+    const { provider, result } = run(
+      browser,
+      [
+        step({ op: "select", target: 'Durée approximative <- option "2 semaines"' }),
+        step({ op: "blocked" }),
+      ],
+      { goal: "Plan a two-week trip to Lisbon", values: { destination: "Lisbon" } },
+    );
+    const outcome = await result;
+    expect(outcome).toMatchObject({
+      steps: [{ op: "select", name: "Durée approximative", option: "2 semaines", ok: true }],
+    });
+    // Only a select carries options.
+    expect(
+      (outcome as { elements: BrowserSnapshotNode[] }).elements.map((element) => element.options),
+    ).toEqual([undefined, ["Choisir", "1 semaine", "2 semaines"], undefined]);
+    expect(browser.acts.map((act) => act.actions)).toEqual([
+      [{ kind: "fill", ref: expect.any(String), text: "2 semaines" }],
+    ]);
+    const offered = (call: number) => {
+      const question = provider.calls[call]!.questions.select_target;
+      return question?.type === "choice" ? Object.values(question.options) : [];
+    };
+    // Its own enabled options besides the one shown, and the provided value; no ask for a value.
+    expect(offered(0)).toEqual([
+      '[2] combobox "Durée approximative" value="Choisir" <- destination',
+      '[2] combobox "Durée approximative" value="Choisir" <- option "1 semaine"',
+      '[2] combobox "Durée approximative" value="Choisir" <- option "2 semaines"',
+      "no listed element fits",
+    ]);
+    const state = provider.calls[1]!.state as { elements: string[]; recent: unknown[] };
+    expect(state.elements).toContain('[2] combobox "Durée approximative" value="2 semaines"');
+    expect(state.recent).toEqual([
+      {
+        op: "select",
+        element: 'combobox "Durée approximative"',
+        option: "2 semaines",
+        pageChanged: true,
+      },
+    ]);
+  });
+
+  it("offers at most 30 options of a select, provided values first within the option limit", async () => {
+    const browser = await open(new FlowBrowser({}, "longList"));
+    const snap = await browser.snapshot(computer, {}, context);
+    expect(snap.elements[0]).toMatchObject({ value: "Choose", optionsTruncated: true });
+    expect(snap.elements[0]!.options).toHaveLength(30);
+    expect(snap.elements[0]!.options!.at(-1)).toBe("Country 30");
+
+    const offered = async (maxOptions: number) => {
+      const provider = new FakeDecisionProvider({ script: [step({ op: "blocked" })], maxOptions });
+      await browserRunFromTool(
+        browser,
+        computer,
+        context,
+        { goal: "Pick a country", values: { country: "Portugal" } },
+        { provider, secrets: [], sleep: async () => undefined },
+      );
+      const question = provider.calls[0]!.questions.select_target;
+      return question?.type === "choice" ? Object.values(question.options) : [];
+    };
+    const all = await offered(255);
+    expect(all).toHaveLength(32);
+    expect(all.join("\n")).toContain('<- option "Country 30"');
+    expect(all.join("\n")).not.toContain("Country 31");
+    // Past the provider's limit, option labels go first; the provided value stays.
+    expect(await offered(4)).toEqual([
+      '[1] combobox "Country" value="Choose" <- country',
+      '[1] combobox "Country" value="Choose" <- option "Country 1"',
+      '[1] combobox "Country" value="Choose" <- option "Country 2"',
+      "no listed element fits",
+    ]);
   });
 
   it("stops before a click named like a consequential action, and clicks nothing", async () => {

@@ -402,6 +402,19 @@ EVAL_HELPERS = r"""
     }
     return typeof el.onclick === "function" || el.hasAttribute("tabindex");
   }
+  // A select lists what the model may pick: enabled, shown options by their trimmed label.
+  function selectableOptions(select) {
+    return Array.from(select.options).filter((option) =>
+      !option.disabled && !option.closest("optgroup[disabled]")
+      && window.getComputedStyle(option).display !== "none");
+  }
+  function optionLabel(option) {
+    return option.label.trim().slice(0, 80);
+  }
+  function selectOptions(select) {
+    const labels = selectableOptions(select).map(optionLabel).filter(Boolean);
+    return { options: labels.slice(0, 30), ...(labels.length > 30 ? { optionsTruncated: true } : {}) };
+  }
   // Hidden and pixel-sized frames (ads, trackers) are not content the model could miss, and
   // a vague "frames require desktop tools" note pushes models off the page tools entirely.
   function frameNote() {
@@ -437,9 +450,11 @@ EVAL_HELPERS = r"""
           name: String(nameOf(el)).slice(0, 200),
           value: el.type === "password" ? undefined
             : ["checkbox", "radio"].includes(el.type) ? (el.checked ? "checked" : "unchecked")
+            : el instanceof HTMLSelectElement ? Array.from(el.selectedOptions, optionLabel).join(", ")
             : "value" in el ? String(el.value ?? "").slice(0, 2000) : undefined,
           tag: el.tagName.toLowerCase(),
           ...(el.type === "password" ? { password: true } : {}),
+          ...(el instanceof HTMLSelectElement ? selectOptions(el) : {}),
         });
         if (elements.length >= 80) break;
       }
@@ -478,11 +493,11 @@ EVAL_HELPERS = r"""
         if (el instanceof HTMLSelectElement) {
           // Models name an option by what they read: its label, not its hidden value.
           const wanted = String(value).trim().toLowerCase();
-          const options = Array.from(el.options).filter((option) => !option.disabled);
+          const options = selectableOptions(el);
           const match = options.find((option) => option.value === String(value))
-            || options.find((option) => option.label.trim().toLowerCase() === wanted);
+            || options.find((option) => optionLabel(option).toLowerCase() === wanted);
           if (!match) {
-            const labels = options.map((option) => JSON.stringify(option.label.trim())).slice(0, 20);
+            const labels = options.map((option) => JSON.stringify(optionLabel(option))).slice(0, 20);
             throw new Error(`No option matches the requested value; options: ${labels.join(", ")}`);
           }
           el.value = match.value;
