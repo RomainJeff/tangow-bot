@@ -17,7 +17,7 @@ import {
   resumeAskWithComposerTextInTransaction,
   rewindThread,
   sendUserMessage,
-  startInboundRoutineRun,
+  startInboundRoutineRuns,
 } from "./events.js";
 import { RunHistoryWriteError } from "./messages.js";
 
@@ -2226,99 +2226,144 @@ describe("sendUserMessage", () => {
   });
 });
 
-describe("startInboundRoutineRun", () => {
+describe("startInboundRoutineRuns", () => {
   const input = {
     spaceId: "workspace-1",
     threadId: "thread-1",
     botId: "bot-1",
     userId: "user-1",
-    routineId: "routine-1",
-    prompt: 'Run routine "Triage":\nOpen an issue',
-    requireToolApproval: false,
-    clientNonce: "webhook:bot-1:digest:routine-1",
+    runs: [
+      {
+        routineId: "routine-a",
+        prompt: 'Run routine "Triage":\nOpen an issue',
+        requireToolApproval: false,
+        clientNonce: "webhook:bot-1:digest:routine-a",
+      },
+      {
+        routineId: "routine-b",
+        prompt: 'Run routine "Notify":\nPost a summary',
+        requireToolApproval: true,
+        clientNonce: "webhook:bot-1:digest:routine-b",
+      },
+    ],
   };
 
-  it("queues the routine run without a user message and announces it once", async () => {
+  it("queues every routine run in one transaction, without a user message", async () => {
     const fanout = new TestFanout();
     const publish = vi.spyOn(fanout, "publish");
+    let eventSeq = 8;
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
-      thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 9 }) },
+      thread: { update: vi.fn(async () => ({ nextEventSeq: ++eventSeq + 1 })) },
       message: { create: vi.fn() },
-      task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
+      task: {
+        create: vi
+          .fn()
+          .mockResolvedValueOnce({ id: "task-a" })
+          .mockResolvedValueOnce({ id: "task-b" }),
+      },
       run: {
-        create: vi.fn().mockResolvedValue({ id: "run-1" }),
+        create: vi
+          .fn()
+          .mockResolvedValueOnce({ id: "run-a" })
+          .mockResolvedValueOnce({ id: "run-b" }),
         findUnique: vi.fn().mockResolvedValue({ status: "queued" }),
       },
       event: {
         create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({
           ...event(data.seq),
           type: data.type,
-          runId: "run-1",
         })),
       },
     };
     const prisma = {
-      run: { findUnique: vi.fn().mockResolvedValue(null) },
+      run: { findMany: vi.fn().mockResolvedValue([]) },
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
 
-    await expect(startInboundRoutineRun(prisma, input, fanout)).resolves.toEqual({
-      runId: "run-1",
+    await expect(startInboundRoutineRuns(prisma, input, fanout)).resolves.toEqual({
+      runIds: ["run-a", "run-b"],
     });
 
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(tx.message.create).not.toHaveBeenCalled();
-    expect(tx.task.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ prompt: input.prompt, status: "queued" }),
+    expect(tx.task.create).toHaveBeenNthCalledWith(1, {
+      data: expect.objectContaining({ prompt: input.runs[0]!.prompt, status: "queued" }),
     });
-    expect(tx.run.create).toHaveBeenCalledWith({
+    expect(tx.run.create).toHaveBeenNthCalledWith(1, {
       data: expect.objectContaining({
-        taskId: "task-1",
+        taskId: "task-a",
         trigger: "webhook",
-        routineId: "routine-1",
+        routineId: "routine-a",
         requireToolApproval: false,
-        clientNonce: input.clientNonce,
+        clientNonce: "webhook:bot-1:digest:routine-a",
+      }),
+    });
+    expect(tx.run.create).toHaveBeenNthCalledWith(2, {
+      data: expect.objectContaining({
+        taskId: "task-b",
+        routineId: "routine-b",
+        requireToolApproval: true,
       }),
     });
     expect(tx.event.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           type: "routine.fired",
-          runId: "run-1",
-          payload: { routineId: "routine-1" },
+          runId: "run-b",
+          payload: { routineId: "routine-b" },
         }),
       }),
     );
-    expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 8 }));
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 10 }));
   });
 
-  it("returns the existing run for a redelivered nonce", async () => {
+  it("returns the runs a redelivered nonce already started", async () => {
     const prisma = {
-      run: { findUnique: vi.fn().mockResolvedValue({ id: "run-0" }) },
+      run: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "run-b", clientNonce: "webhook:bot-1:digest:routine-b" },
+          { id: "run-a", clientNonce: "webhook:bot-1:digest:routine-a" },
+        ]),
+      },
       $transaction: vi.fn(),
     } as unknown as PrismaClient;
 
-    await expect(startInboundRoutineRun(prisma, input)).resolves.toEqual({ runId: "run-0" });
-    expect(prisma.run.findUnique).toHaveBeenCalledWith({
+    await expect(startInboundRoutineRuns(prisma, input)).resolves.toEqual({
+      runIds: ["run-a", "run-b"],
+    });
+    expect(prisma.run.findMany).toHaveBeenCalledWith({
       where: {
-        spaceId_clientNonce: { spaceId: "workspace-1", clientNonce: input.clientNonce },
+        spaceId: "workspace-1",
+        clientNonce: {
+          in: ["webhook:bot-1:digest:routine-a", "webhook:bot-1:digest:routine-b"],
+        },
       },
-      select: { id: true },
+      select: { id: true, clientNonce: true },
     });
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it("resolves a concurrent duplicate to the winning run", async () => {
+  it("resolves a concurrent duplicate to the winning runs", async () => {
     const prisma = {
       run: {
-        findUnique: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "run-won" }),
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            { id: "run-won-a", clientNonce: "webhook:bot-1:digest:routine-a" },
+            { id: "run-won-b", clientNonce: "webhook:bot-1:digest:routine-b" },
+          ]),
       },
       $transaction: vi
         .fn()
         .mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" })),
     } as unknown as PrismaClient;
 
-    await expect(startInboundRoutineRun(prisma, input)).resolves.toEqual({ runId: "run-won" });
+    await expect(startInboundRoutineRuns(prisma, input)).resolves.toEqual({
+      runIds: ["run-won-a", "run-won-b"],
+    });
   });
 });
 

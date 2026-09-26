@@ -1147,7 +1147,14 @@ describe("sendThreadMessage", () => {
         update: vi.fn(),
       },
       run: {
-        findMany: vi.fn().mockResolvedValue([]),
+        findMany: vi
+          .fn()
+          // Every active run, as the ask and conflict checks see them: a routine card run.
+          .mockResolvedValueOnce([{ id: "run-card", taskId: "task-card", status: "running" }])
+          // The conversation runs among them: none.
+          .mockResolvedValueOnce([])
+          // No superseded queued user run to cancel.
+          .mockResolvedValueOnce([]),
         findUnique: vi.fn().mockResolvedValue({ status: "queued" }),
         create: vi.fn().mockResolvedValue({ id: "run-1", taskId: "task-1", status: "queued" }),
       },
@@ -1180,9 +1187,12 @@ describe("sendThreadMessage", () => {
       { text: "hi", clientNonce: "nonce-1" },
     );
 
-    expect(tx.run.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining(conversationRunFilter) }),
-    );
+    // The ask/conflict lookup still sees the card run, so it can answer its own ask.
+    expect(tx.run.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("NOT");
+    expect(tx.run.findMany).toHaveBeenNthCalledWith(2, {
+      where: { id: { in: ["run-card"] }, ...conversationRunFilter },
+      select: { id: true },
+    });
     expect(tx.steeringMessage.create).not.toHaveBeenCalled();
     expect(tx.run.create).toHaveBeenCalled();
   });

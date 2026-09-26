@@ -30,7 +30,7 @@ import {
 
 export interface MessagingInboundDeps {
   prisma: PrismaClient;
-  events: Pick<ThreadEvents, "sendUserMessage" | "startInboundRoutineRun" | "notify">;
+  events: Pick<ThreadEvents, "sendUserMessage" | "startInboundRoutineRuns" | "notify">;
   jobs: Pick<JobPublisher, "enqueue">;
   provision: (
     request: MessagingIdentityRequest,

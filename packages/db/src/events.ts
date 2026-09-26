@@ -52,7 +52,9 @@ export interface ThreadEvents {
   pauseRunForInput(input: PauseRunForInput): Promise<boolean>;
   pauseRunForTakeover(input: PauseRunForTakeover): Promise<boolean>;
   sendUserMessage(input: SendUserMessageInput): Promise<SendUserMessageResult>;
-  startInboundRoutineRun(input: StartInboundRoutineRunInput): Promise<StartInboundRoutineRunResult>;
+  startInboundRoutineRuns(
+    input: StartInboundRoutineRunsInput,
+  ): Promise<StartInboundRoutineRunsResult>;
   follow(threadId: string, cursor: number, signal?: AbortSignal): AsyncGenerator<ProductEvent>;
 }
 
@@ -251,20 +253,22 @@ export const conversationRunFilter = {
   },
 } satisfies Prisma.RunWhereInput;
 
-/** One routine woken by an inbound delivery (webhook, GitHub, message). */
-export interface StartInboundRoutineRunInput {
+/** The routines one inbound delivery (webhook, GitHub, message) woke, one run each. */
+export interface StartInboundRoutineRunsInput {
   spaceId: string;
   threadId: string;
   botId: string;
   userId: string;
-  routineId: string;
-  prompt: string;
-  requireToolApproval: boolean;
-  clientNonce?: string;
+  runs: Array<{
+    routineId: string;
+    prompt: string;
+    requireToolApproval: boolean;
+    clientNonce?: string;
+  }>;
 }
 
-export interface StartInboundRoutineRunResult {
-  runId: string;
+export interface StartInboundRoutineRunsResult {
+  runIds: string[];
 }
 
 export interface RunSecretWriter {
@@ -297,7 +301,7 @@ export function createThreadEvents(
     pauseRunForInput: (input) => pauseRunForInput(prisma, input, realtime),
     pauseRunForTakeover: (input) => pauseRunForTakeover(prisma, input, realtime),
     sendUserMessage: (input) => sendUserMessage(prisma, input, realtime),
-    startInboundRoutineRun: (input) => startInboundRoutineRun(prisma, input, realtime),
+    startInboundRoutineRuns: (input) => startInboundRoutineRuns(prisma, input, realtime),
     follow: (threadId, cursor, signal) =>
       followThreadEvents(prisma, threadId, cursor, realtime, signal, options.catchUpMs),
   };
@@ -612,75 +616,84 @@ export async function sendUserMessage(
 }
 
 /**
- * Queue a routine run for an inbound delivery without writing a user message: the routine's
- * instructions and the payload stay in the task prompt, and the thread only shows the run card.
+ * Queue one run per routine an inbound delivery woke, without writing a user message: the
+ * routine's instructions and the payload stay in the task prompt, and the thread only shows the
+ * run card. All runs commit together, so a delivery is never left half-woken, and a redelivered
+ * nonce returns the runs it already started.
  */
-export async function startInboundRoutineRun(
+export async function startInboundRoutineRuns(
   prisma: PrismaClient,
-  input: StartInboundRoutineRunInput,
+  input: StartInboundRoutineRunsInput,
   realtime?: RealtimeFanout,
-): Promise<StartInboundRoutineRunResult> {
-  const replay = async () =>
-    input.clientNonce
-      ? prisma.run.findUnique({
-          where: {
-            spaceId_clientNonce: { spaceId: input.spaceId, clientNonce: input.clientNonce },
-          },
-          select: { id: true },
-        })
-      : null;
+): Promise<StartInboundRoutineRunsResult> {
+  const nonces = input.runs.flatMap((run) => (run.clientNonce ? [run.clientNonce] : []));
+  const replay = async () => {
+    if (nonces.length === 0) return null;
+    const existing = await prisma.run.findMany({
+      where: { spaceId: input.spaceId, clientNonce: { in: nonces } },
+      select: { id: true, clientNonce: true },
+    });
+    if (existing.length === 0) return null;
+    return nonces.flatMap((nonce) => existing.filter((run) => run.clientNonce === nonce));
+  };
   const existing = await replay();
-  if (existing) return { runId: existing.id };
+  if (existing) return { runIds: existing.map((run) => run.id) };
 
   const commit = () =>
     prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Same thread-row lock as sendUserMessage, so a concurrent clear either cancels this run
-      // or strictly precedes it.
+      // Same thread-row lock as sendUserMessage, so a concurrent clear either cancels these runs
+      // or strictly precedes them.
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
-      const task = await tx.task.create({
-        data: {
+      const runIds: string[] = [];
+      let lastEventSeq = 0;
+      for (const routineRun of input.runs) {
+        const task = await tx.task.create({
+          data: {
+            spaceId: input.spaceId,
+            botId: input.botId,
+            threadId: input.threadId,
+            userId: input.userId,
+            prompt: routineRun.prompt,
+            status: "queued",
+          },
+        });
+        const run = await tx.run.create({
+          data: {
+            spaceId: input.spaceId,
+            botId: input.botId,
+            threadId: input.threadId,
+            taskId: task.id,
+            userId: input.userId,
+            status: "queued",
+            trigger: "webhook",
+            routineId: routineRun.routineId,
+            requireToolApproval: routineRun.requireToolApproval,
+            clientNonce: routineRun.clientNonce,
+          },
+        });
+        const event = await appendEventInTransaction(tx, {
           spaceId: input.spaceId,
-          botId: input.botId,
           threadId: input.threadId,
-          userId: input.userId,
-          prompt: input.prompt,
-          status: "queued",
-        },
-      });
-      const run = await tx.run.create({
-        data: {
-          spaceId: input.spaceId,
           botId: input.botId,
-          threadId: input.threadId,
-          taskId: task.id,
-          userId: input.userId,
-          status: "queued",
-          trigger: "webhook",
-          routineId: input.routineId,
-          requireToolApproval: input.requireToolApproval,
-          clientNonce: input.clientNonce,
-        },
-      });
-      const event = await appendEventInTransaction(tx, {
-        spaceId: input.spaceId,
-        threadId: input.threadId,
-        botId: input.botId,
-        type: "routine.fired",
-        runId: run.id,
-        payload: { routineId: input.routineId },
-      });
-      return { run, event };
+          type: "routine.fired",
+          runId: run.id,
+          payload: { routineId: routineRun.routineId },
+        });
+        runIds.push(run.id);
+        lastEventSeq = event.seq;
+      }
+      return { runIds, lastEventSeq };
     });
   const committed = await commit().catch(async (error) => {
     const winner = await replay();
     if (winner) return { replay: winner } as const;
     throw error;
   });
-  if ("replay" in committed) return { runId: committed.replay.id };
-  await notifyRealtime(realtime, input.threadId, committed.event.seq).catch((error) => {
+  if ("replay" in committed) return { runIds: committed.replay.map((run) => run.id) };
+  await notifyRealtime(realtime, input.threadId, committed.lastEventSeq).catch((error) => {
     getLogger().error("routine run realtime notification", error);
   });
-  return { runId: committed.run.id };
+  return { runIds: committed.runIds };
 }
 
 export async function claimSteering(

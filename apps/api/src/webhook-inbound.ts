@@ -20,16 +20,18 @@ export type WebhookEvents = {
     requireToolApproval: boolean;
     clientNonce?: string;
   }): Promise<{ messageId: string; runId: string | null; seq: number }>;
-  startInboundRoutineRun(input: {
+  startInboundRoutineRuns(input: {
     spaceId: string;
     threadId: string;
     botId: string;
     userId: string;
-    routineId: string;
-    prompt: string;
-    requireToolApproval: boolean;
-    clientNonce?: string;
-  }): Promise<{ runId: string }>;
+    runs: Array<{
+      routineId: string;
+      prompt: string;
+      requireToolApproval: boolean;
+      clientNonce?: string;
+    }>;
+  }): Promise<{ runIds: string[] }>;
 };
 
 export type WebhookDeps = {
@@ -158,7 +160,7 @@ export function inboundDeliveryClientNonce(
   return `${source}:${botId}:${createHash("sha256").update(idempotencyKey).digest("base64url")}`;
 }
 
-/** Whether a delivery with this client nonce already started a routine run on the thread. */
+/** Whether a delivery with this client nonce already woke its routines (their runs commit together). */
 export async function findInboundRoutineRun(
   prisma: PrismaClient,
   threadId: string,
@@ -212,20 +214,18 @@ export async function deliverWebhookEvent(
         ? "Inbound messaging event:"
         : "Inbound webhook payload:";
   // One run per routine, off the conversation: the thread shows its run card, not the prompt.
-  const runIds: string[] = [];
-  for (const routine of input.routines) {
-    const { runId } = await deps.events.startInboundRoutineRun({
-      spaceId: target.bot.spaceId,
-      threadId: target.threadId,
-      botId: target.bot.id,
-      userId: target.bot.userId,
+  const { runIds } = await deps.events.startInboundRoutineRuns({
+    spaceId: target.bot.spaceId,
+    threadId: target.threadId,
+    botId: target.bot.id,
+    userId: target.bot.userId,
+    runs: input.routines.map((routine) => ({
       routineId: routine.id,
       prompt: `Run routine "${routine.name}":\n${routine.prompt.trim()}\n\n${payloadLabel}\n${input.prompt}`,
       requireToolApproval: routine.requireToolApproval,
       clientNonce: clientNonce ? `${clientNonce}:${routine.id}` : undefined,
-    });
-    await enqueue(runId);
-    runIds.push(runId);
-  }
+    })),
+  });
+  for (const runId of runIds) await enqueue(runId);
   return { ok: true as const, runIds };
 }

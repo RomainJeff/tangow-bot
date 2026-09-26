@@ -308,6 +308,23 @@ function sendResult(message: { seq: number }, runs: Array<{ id: string; taskId: 
   };
 }
 
+/**
+ * The active runs a new message may be steered into. A run that reports only through its
+ * routine card stays out: it still answers its own ask from the composer, but a message that
+ * would otherwise steer it starts a run of its own, whose reply reaches the conversation.
+ */
+async function findConversationRunIds(
+  tx: Prisma.TransactionClient,
+  activeRuns: ReadonlyArray<{ id: string }>,
+): Promise<Set<string>> {
+  if (activeRuns.length === 0) return new Set();
+  const rows = await tx.run.findMany({
+    where: { id: { in: activeRuns.map((run) => run.id) }, ...conversationRunFilter },
+    select: { id: true },
+  });
+  return new Set(rows.map((row) => row.id));
+}
+
 export async function cancelSupersededQueuedRuns(
   tx: Prisma.TransactionClient,
   input: { threadId: string; botIds: string[]; keepRunIds: string[] },
@@ -752,7 +769,6 @@ export async function sendThreadMessage(
             threadId: target.threadId,
             botId: target.botId,
             status: { in: [...ACTIVE_RUN_STATUSES] },
-            ...conversationRunFilter,
           },
           select: { id: true, taskId: true, status: true },
         });
@@ -804,7 +820,8 @@ export async function sendThreadMessage(
             message: "Answer the pending ask first.",
           });
         }
-        const active = activeRuns[0];
+        const conversationRunIds = await findConversationRunIds(tx, activeRuns);
+        const active = activeRuns.find((run) => conversationRunIds.has(run.id));
         if (active) {
           await tx.steeringMessage.create({
             data: {
@@ -912,7 +929,6 @@ export async function sendThreadMessage(
           threadId: target.threadId,
           botId: { in: targetBotIds },
           status: { in: [...ACTIVE_RUN_STATUSES] },
-          ...conversationRunFilter,
         },
         select: { id: true, taskId: true, botId: true, status: true },
       });
@@ -928,11 +944,13 @@ export async function sendThreadMessage(
       // rest of the group. Any bot that can't resolve (approval/secret ask, waiting_takeover,
       // or anything else non-steerable) still aborts the whole send via CONFLICT, same net
       // effect as the old blanket throw since a transaction throw rolls back every bot's work.
+      const conversationRunIds = await findConversationRunIds(tx, activeRuns);
       const runs: Array<{ id: string; taskId: string; botId: string; status: string }> = [];
+      const createdRuns: typeof runs = [];
       for (const botId of targetBotIds) {
         const botRuns = activeRunsByBotId.get(botId) ?? [];
-        const active = botRuns[0];
-        const soleActiveRun = botRuns.length === 1 ? active : undefined;
+        const active = botRuns.find((run) => conversationRunIds.has(run.id));
+        const soleActiveRun = botRuns.length === 1 ? botRuns[0] : undefined;
         if (soleActiveRun?.status === "waiting_input") {
           const resolution = await resumeAskWithComposerTextInTransaction(tx, {
             spaceId: actor.spaceId,
@@ -989,13 +1007,13 @@ export async function sendThreadMessage(
           },
         });
         runs.push(run);
+        createdRuns.push(run);
       }
       const firstRun = runs[0];
       const eventBotId = firstRun?.botId ?? targetBotIds[0];
       if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       if (firstRun) {
         await tx.message.update({ where: { id: message.id }, data: { runId: firstRun.id } });
-        const createdRuns = runs.filter((run) => !activeRunsByBotId.has(run.botId));
         if (createdRuns.length) {
           await cancelSupersededQueuedRuns(tx, {
             threadId: target.threadId,

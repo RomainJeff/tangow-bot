@@ -4482,7 +4482,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             leaseFence: fence,
             outcome: "completed",
             blocks,
-            markUnread: completionMarksUnread(run.trigger, text),
+            markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
           });
           if (!completed) return;
           await settleRoutineRunCard("completed", text);
@@ -4929,8 +4929,9 @@ export function completionNotificationBody(assembled: string, blocks: MessageBlo
     .join("");
 }
 
-export function completionMarksUnread(trigger: string, text: string): boolean {
-  return trigger !== "routine" || Boolean(text);
+/** Background routine work only marks the thread unread when it has something to say. */
+export function completionMarksUnread(trigger: string, text: string, routineCard = false): boolean {
+  return (trigger !== "routine" && !routineCard) || Boolean(text);
 }
 
 /**
