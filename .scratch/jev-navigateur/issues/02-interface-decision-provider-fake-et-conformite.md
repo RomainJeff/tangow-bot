@@ -1,5 +1,7 @@
 # 02: Interface `DecisionProvider`, fake en process et conformité offline
 
+> **Livré (lot 1, 2026-09-26).** Contrat dans `packages/adapter-kit/src/types.ts` (`DecisionCapabilities`, `DecisionQuestion`, `DecisionRequest`, `DecisionAnswer`, `DecisionResponse`, `DecisionUnavailableReason`, `DecisionResult`) et `interfaces.ts` (`DecisionProvider`). `decideWithin(provider, request, context, { timeoutMs })` et `topChoices` dans `packages/adapters/src/decision.ts` ; fake scripté dans `fake-decision.ts` ; conformité dans `decision-conformance.test.ts`. Le texte ci-dessous est l'intention d'origine ; les écarts sont listés en fin de ticket.
+
 **What to build:** Un contrat neutre dans `packages/adapter-kit` pour « poser des questions typées sur un état texte et recevoir des réponses avec probabilités », un fake déterministe qui y répond sans réseau, et une suite de conformité offline que tout adaptateur futur doit passer. Rien de ce ticket ne nomme TypeSafe ni Jev : c'est le patron `BrowserProvider` / `FakeBrowserProvider` / `browser-conformance.test.ts`, appliqué à une décision au lieu d'une page.
 
 ## Le contrat
@@ -20,12 +22,12 @@ La requête porte un `state` (chaîne ou objet JSON), une map nommée de questio
 
 ## Le fake
 
-`FakeDecisionProvider` dans `packages/adapters/src/fake-decision.ts`, en process, sans réseau. Deux comportements, choisis à la construction :
+`FakeDecisionProvider` dans `packages/adapters/src/fake-decision.ts`, en process, sans réseau. ~~Deux comportements, choisis à la construction :~~ *Écart : scripté seulement.*
 
 - **scripté** : une file de réponses fournie par le test, consommée dans l'ordre (le patron `startModelEmulator` du testkit) ; permet aux tests de 04 et 05 de forcer « confiant », « hésitant », « `none` », « option hors table », « lent », « erreur ».
-- **par règle** : sans script, répond par une heuristique déterministe lisible — pour `choice`, l'option dont la description contient le plus de mots de l'instruction, confiance proportionnelle à l'écart avec la deuxième ; pour `noul`, 0,5. Suffisant pour la conformité et pour un dépôt qui tourne sans vendeur ; il n'a pas vocation à être bon.
+- ~~**par règle**~~ (non livré) : sans script, répond par une heuristique déterministe lisible — pour `choice`, l'option dont la description contient le plus de mots de l'instruction, confiance proportionnelle à l'écart avec la deuxième ; pour `noul`, 0,5. Suffisant pour la conformité et pour un dépôt qui tourne sans vendeur ; il n'a pas vocation à être bon.
 
-Le fake expose les mêmes seams d'erreur que `FakeBrowserProvider` (`forceUnavailable`, `latencyMs`, `decideError`) pour les tests de repli.
+Le fake expose ~~les mêmes seams d'erreur que `FakeBrowserProvider` (`forceUnavailable`, `latencyMs`, `decideError`)~~ `latencyMs` et `decideError` pour les tests de repli ; `unavailable` s'obtient par un fournisseur absent, une erreur ou un pas scripté malformé.
 
 ## La conformité
 
@@ -52,11 +54,23 @@ Déterministe et offline : vitest sur le fake seul. Aucun test de ce ticket ne t
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done (lot 1, 2026-09-26)
 
-- [ ] `DecisionProvider` et ses types sont dans `adapter-kit`, sans mot vendeur dans les noms, les commentaires ni les tests
-- [ ] `decideWithin` ne lève jamais ; `no_provider`, `timeout`, `error`, `invalid_answer`, `aborted` sont couverts par un test chacun
-- [ ] Une réponse `choice` hors de la map d'options ne sort jamais de l'enveloppe autrement qu'en `unavailable(invalid_answer)`
-- [ ] Le fake scripté permet de forcer chaque cas ; le fake par règle est déterministe (même entrée, même sortie, test qui l'affirme)
-- [ ] `createDecisionProvider()` sans configuration rend `undefined`, et un run sans provider est strictement inchangé (test sur `browser_act` existant qui passe sans modification)
-- [ ] La conformité tourne dans `pnpm test` sans variable d'environnement
+- [x] `DecisionProvider` et ses types sont dans `adapter-kit`, sans mot vendeur dans les noms, les commentaires ni les tests
+- [x] `decideWithin` ne lève jamais ; `no_provider`, `timeout`, `error`, `invalid_answer`, `aborted` sont couverts par un test chacun
+- [x] Une réponse `choice` hors de la map d'options ne sort jamais de l'enveloppe autrement qu'en `unavailable(invalid_answer)`
+- [x] Le fake scripté permet de forcer chaque cas ; ~~le fake par règle est déterministe~~ (pas de mode par règle)
+- [x] ~~`createDecisionProvider()` sans configuration rend `undefined`~~ `SpaceDecisionProviderResolver.resolve(spaceId)` rend `null` sans connexion, et un run sans provider est strictement inchangé (`browser-targets.test.ts`, « leaves the schema and ref results unchanged without a provider »)
+- [x] La conformité tourne dans `pnpm test` sans variable d'environnement
+
+## Livré — écarts avec le texte ci-dessus
+
+- **Raisons closes** : `no_provider | timeout | aborted | error | invalid_answer`. Pas de `not_consented` : il n'y a pas de porte de consentement côté serveur (ticket 07). Après `aborted`, l'appelant relance l'abandon du run (`context.signal.throwIfAborted()` dans `browser-tools.ts`).
+- **Nommage** : la réponse d'un fournisseur est `DecisionResponse` (`answers`, `model?`, `usage?: { inputTokens?, cost? }`) ; `DecisionResult` est l'union `{ ok: true } & DecisionResponse | { ok: false, reason, error? }`. Une réponse `noul` porte `probability`. `error` ne porte que le nom de classe.
+- **Validation** : `decideWithin` refuse avant appel une requête que les capacités ne couvrent pas (primitive absente, `choice` vide ou au-delà de `maxOptions`, `score` à moins de deux niveaux) → `unavailable(error, "UnsupportedDecisionRequest")`. Après appel : clé hors map, distribution qui ne somme pas à 1 ± 1e-3, ou **option choisie absente de `probabilities`** → `invalid_answer`. Le délai est une course (`Promise.race`), donc un fournisseur qui ignore son `signal` ne retient pas l'appelant.
+- **Fake** : scripté seulement (`script`, `maxOptions` défaut 255, `latencyMs`, `decideError`, `calls`) ; ni mode par règle, ni `forceUnavailable`. Un script épuisé lève.
+- **Conformité** : `assertDecisionConformance` tourne contre l'adaptateur OpenRouter (`fetch` injecté, fixture documentée `fixtures/openrouter-decision.json`) ; les cas d'enveloppe (délai, abandon, erreur, hors table, `maxOptions`, logs sans contenu) tournent sur le fake. Requêtes de fixture neutres dans `fixtures/decision-requests.ts`.
+- **Fabrique** : pas de `createDecisionProvider(kind)` avec un `fake` ; `decision-provider-factory.ts` est une map `DECISION_PROVIDER_ADAPTERS` (seul `openrouter`) et un `SpaceDecisionProviderResolver` par espace (ticket 03).
+- **Branchement** (question ouverte tranchée) : `ExecutorDeps.decisionProviders` (résolveur), résolu une fois au démarrage du run par `spaceId` ; une erreur de résolution donne `null` et le run continue (`executor.ts`).
+- **Log** : `decideWithin` émet `agent.decision.call` à chaque appel (ticket 08).
+- `score` est resté dans le contrat, sans appelant.

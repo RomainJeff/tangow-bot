@@ -1,6 +1,8 @@
 # 04: Choix de cible pour `browser_act` par `choice` sur les refs du snapshot
 
-**What to build:** Le modèle peut dire « clique le bouton Télécharger CSV » sans avoir lu la page. `browser_act` accepte, pour chaque action, soit `ref` (inchangé, déterministe, sans fournisseur), soit `target` : une description courte de l'élément visé. Quand `target` est présent, le backend prend un snapshot, pose au fournisseur de décision un `choice` sur les refs courants plus une option réservée `none`, exécute l'action sur le ref choisi si la confiance passe le seuil, et sinon rend les candidats au modèle, qui choisit un ref lui-même comme aujourd'hui. Le modèle principal ne lit plus 12 000 caractères de page pour cliquer un bouton ; il les lit seulement quand la décision n'est pas nette.
+> **Livré (lot 1, 2026-09-26)** dans `packages/adapters/src/browser-tools.ts`, `builtin-tools.ts` (`withBrowserTargets`) et `executor.ts`, avec des écarts listés en fin de ticket — le principal : `target` est restreint par **rôle** de candidat, jamais de bouton.
+
+**What to build:** Le modèle peut dire « clique le ~~bouton~~ lien Télécharger CSV » sans avoir lu la page. `browser_act` accepte, pour chaque action, soit `ref` (inchangé, déterministe, sans fournisseur), soit `target` : une description courte de l'élément visé. Quand `target` est présent, le backend prend un snapshot, pose au fournisseur de décision un `choice` sur les refs courants plus une option réservée `none`, exécute l'action sur le ref choisi si la confiance passe le seuil, et sinon rend les candidats au modèle, qui choisit un ref lui-même comme aujourd'hui. ~~Le modèle principal ne lit plus 12 000 caractères de page pour cliquer un bouton ; il les lit seulement quand la décision n'est pas nette.~~ *Écart : les boutons ne sont jamais proposés ; et un retour `needsRef` contient le snapshot complet (`tree`, donc le texte de page), que le modèle relit alors.*
 
 ## Pourquoi c'est le bon point d'accroche
 
@@ -15,19 +17,19 @@
 **La résolution** (`packages/adapters/src/browser-tools.ts`, nouvelle fonction `resolveBrowserTargets`) : pour chaque action à `target`, dans l'ordre —
 
 1. `browser.snapshot()` — un appel helper. Si `fallback`, on rend le fallback tel quel.
-2. `state` = `{ goal: target, page: { url, title }, elements: [{ id: ref, role, name, value }] }`. Pas de texte de page libre dans cet usage : la question porte sur les contrôles, et le texte est ce qui coûte. Concrètement le `state` se construit depuis `elements` et jamais depuis `tree`, qui commence par l'`innerText` de la page (≤12 000 caractères, `rakazo-page-browser:438`). Le `state` passe par `redactSecrets` (`@rakazo/core`) avec les secrets du run, comme `redactToolArgsForReview`.
+2. ~~`state` = `{ goal: target, page: { url, title }, elements: [{ id: ref, role, name, value }] }`.~~ *Livré : `state` = `{ url, title }` ; la cible est dans l'`instructions` ; chaque option = `role "name"` (nom tronqué à 120), sans `value`.* Pas de texte de page libre dans cet usage : la question porte sur les contrôles, et le texte est ce qui coûte. Concrètement le `state` se construit depuis `elements` et jamais depuis `tree`, qui commence par l'`innerText` de la page (≤12 000 caractères, `rakazo-page-browser:438`). Le `state` passe par `redactSecrets` (`@rakazo/core`) avec les secrets du run, comme `redactToolArgsForReview`.
 3. `questions = { target: choice("Which element matches the goal? Answer none if no element does.", { ...refs, none: "no listed element matches" }) }`. Une question, un appel.
 4. `decideWithin(provider, …, { timeoutMs })`. `unavailable` → on rend `{ ok: false, completed, needsRef: true, tree, elements, reason }` : le modèle reçoit le snapshot et choisit un ref, c'est-à-dire exactement le tour d'aujourd'hui avec un appel d'outil en moins.
-5. Gate : `confidence ≥ high` → exécuter ; sinon → même retour `needsRef` avec les trois meilleurs candidats et leurs probabilités dans `candidates`, pour que le modèle tranche sans relire toute la page. `none` choisi → `needsRef` sans candidats. Pas de niveau `caution` qui exécute : une cible incertaine ne se clique pas, elle se rend.
+5. Gate : ~~`confidence ≥ high`~~ probabilité de l'option choisie ≥ 0,80 → exécuter ; sinon → même retour `needsRef` avec les trois meilleurs candidats et leurs probabilités dans `candidates`, pour que le modèle tranche sans relire toute la page. `none` choisi → `needsRef` sans candidats. Pas de niveau `caution` qui exécute : une cible incertaine ne se clique pas, elle se rend.
 6. Exécuter par le chemin existant : `browser.act({ actions: [{ kind, ref, text? }] })`. `text` reste celui du modèle ; Jev ne l'écrit jamais.
 
 **Plusieurs actions dans un appel** : `MAX_BROWSER_ACTIONS = 24` reste pour les actions à `ref`. Les actions à `target` se résolvent une par une, chacune avec un snapshot frais, parce que la première change la page ; borne séparée (proposition : 6 par appel) écrite en constante à côté de l'autre. Une résolution qui rend `needsRef` arrête la séquence et rapporte `completed`, comme une action échouée aujourd'hui.
 
-**Restriction v1 — actions réversibles seulement** (décision du ticket 01) : `target` n'est accepté que pour les actions sans effet durable (naviguer, ouvrir, cliquer un lien, dérouler). Pour une action à effet, `ref` reste obligatoire et un `target` est refusé au parsing avec un message qui le dit. Motif : `planActionGate` juge l'action, pas la cible, et un mauvais clic sur « Payer » ou « Supprimer » ne s'annule pas. La liste des `kind` autorisés est une constante nommée à côté du seuil ; la restriction se lève avec les chiffres de 06.
+**Restriction v1 — actions réversibles seulement** (décision du ticket 01). ~~`target` refusé au parsing pour une action à effet ; liste de `kind` autorisés ; motif : `planActionGate` juge l'action.~~ *Livré : le `kind` ne dit rien de l'effet (`click` couvre lien et bouton). La restriction porte sur les candidats offerts : `TARGET_ROLES` — `click` → `link`, `tab` ; `fill`/`type` → `textbox`, `searchbox`, `combobox`. Un bouton n'est jamais une option, donc une action qui soumet, paie ou supprime exige un `ref`. Motif corrigé : `browser_act` est exempté d'approbation (`packages/core/src/action-approval.ts`, `APPROVAL_EXEMPT_TOOLS`), aucun juge ne passe derrière un mauvais clic.*
 
-**Le seuil** `high` est une constante d'adaptateur avec une valeur de départ écrite avant mesure — 0,80 — et un commentaire qui renvoie au ticket 06 ; ni variable d'environnement ni réglage utilisateur.
+**Le seuil** `high` (`TARGET_PROBABILITY_HIGH`) est une constante d'adaptateur avec une valeur de départ écrite avant mesure — 0,80, comparée à la probabilité de l'option choisie, pas à `confidence` — et un commentaire qui renvoie au ticket 06 ; ni variable d'environnement ni réglage utilisateur.
 
-**Le résultat** garde la forme `BrowserActResult` ; deux champs optionnels s'ajoutent : `needsRef?: true` et `candidates?: { ref, name, probability }[]`. Absents quand aucune action à `target` n'a été demandée.
+**Le résultat** garde la forme `BrowserActResult` ; deux champs optionnels s'ajoutent : `needsRef?: true` et `candidates?: { ref, name, probability }[]` (*livré : plus `reason?` et `note?`, dans le type local `BrowserActToolResult` de `browser-tools.ts`, pas dans `adapter-kit`*). Absents quand aucune action à `target` n'a été demandée.
 
 ## Références de conception, pas de code
 
@@ -54,15 +56,27 @@ Offline, vitest, `FakeBrowserProvider` avec pages seedées et `FakeDecisionProvi
 
 **Blocked by:** 02 (03 pour un fournisseur réel ; le ticket se livre et se teste sur le fake)
 
-**Status:** ready-for-agent
+**Status:** done (lot 1, 2026-09-26)
 
-- [ ] `browser_act` accepte `ref` ou `target`, jamais les deux, jamais aucun ; le schéma n'expose `target` que si un fournisseur est présent au run
-- [ ] `target` est refusé sur une action à effet ; `ref` y reste obligatoire, et un test l'affirme pour chaque `kind` de la liste
-- [ ] Une réponse hors table ou `none` n'exécute rien et rend `needsRef` avec un snapshot frais
-- [ ] Une confiance sous le seuil n'exécute rien et rend les trois meilleurs candidats avec leurs probabilités
-- [ ] Un ref choisi puis devenu périmé est rejeté par le chemin existant, sans retargeting, et le test l'affirme
-- [ ] `unavailable` (aucun provider, timeout, erreur) rend le tour d'aujourd'hui ; un run sans provider est strictement inchangé
-- [ ] `text` vient toujours du modèle ; aucun chemin ne demande une valeur au fournisseur de décision
-- [ ] Le `state` passe par `redactSecrets` et ne contient jamais une valeur de champ mot de passe
-- [ ] Une action à `target` qui échoue rapporte `completed` et n'est jamais rejouée par le backend
-- [ ] `docs/computer-runtime.md` décrit `target` en une phrase ; entrée CHANGELOG (comportement observable par l'utilisateur : le bot clique sans relire la page)
+- [x] `browser_act` accepte `ref` ou `target`, jamais les deux, jamais aucun ; le schéma n'expose `target` que si un fournisseur est résolu au run (`selectBuiltinToolsForRun({ browserTargets })`)
+- [x] ~~`target` est refusé sur une action à effet~~ Aucun bouton n'est jamais proposé ; les rôles offerts dépendent du `kind` (test « offers only reversible roles for the action kind, never buttons »)
+- [x] Une réponse hors table ou `none` n'exécute rien et rend `needsRef` avec un snapshot frais
+- [x] Une probabilité sous le seuil n'exécute rien et rend au plus trois candidats avec leurs probabilités (`none` exclu)
+- [x] Un ref choisi puis devenu périmé est rejeté par le chemin existant, sans retargeting, et le test l'affirme
+- [x] `unavailable` (aucun provider, timeout, erreur, réponse invalide) rend le tour d'aujourd'hui ; un run sans provider est strictement inchangé
+- [x] `text` vient toujours du modèle ; aucun chemin ne demande une valeur au fournisseur de décision
+- [x] Le `state`, les options et l'instruction passent par `redactSecrets` avec les secrets du run ; aucune valeur de champ n'est envoyée
+- [x] Une action à `target` qui échoue rapporte `completed` et n'est jamais rejouée par le backend
+- [x] `docs/computer-runtime.md` décrit `target` ; entrée CHANGELOG du 2026-09-26
+
+## Livré — écarts avec le texte ci-dessus
+
+- **Candidats** : éléments du snapshot filtrés par `TARGET_ROLES[kind]`, puis bornés à `min(80, maxOptions − 1)`, plus `none`. Aucun candidat du bon rôle → `needsRef` sans appel au fournisseur (issue `returned_none`).
+- **Requête** (`targetRequest`) : `state: { url, title }`, une question `target` de type `choice`, instruction `Which element matches: <target>? Answer none if no listed element does.`, options `role "name"` ; jamais `tree`, jamais `value`. Tout passe par `redactSecrets(…, runSecrets)`.
+- **Gate** : exécuter si `probabilities[choice] ≥ 0,80` ; `confidence` (concentration de la distribution ; exemple documenté 0,75 pour un choix à 0,84) n'est que journalisée. `decideWithin` garantit que l'option choisie a une probabilité (`invalid_answer` sinon).
+- **Séquence** : les actions à `ref` doivent précéder les actions à `target` (sinon erreur de parsing : chaque `target` prend un snapshot frais qui périme les refs suivants) ; les `ref` partent en un seul `act`, puis chaque `target` est résolu et exécuté un par un. Bornes : `MAX_BROWSER_TARGET_ACTIONS = 6`, `target` ≤ 200 caractères, délai `TARGET_DECISION_TIMEOUT_MS = 1 000`. Le premier `needsRef` arrête la séquence avec `completed`.
+- **Retour `needsRef`** : `ok: false`, `url`, `title`, `tree`, `elements` du snapshot de résolution, `candidates?`, `reason?` (raison `unavailable`), `note` en anglais qui dit de choisir un ref.
+- **Copie modèle** : une phrase ajoutée à la description de `browser_act` par `withBrowserTargets` (`builtin-tools.ts`), seulement quand un fournisseur est résolu. ~~Phrase dans l'instruction système (`executor.ts:850`)~~ non ajoutée.
+- **Aborted** : une annulation du run pendant la décision est relancée, pas convertie en `needsRef`.
+- **Tests** : `browser-targets.test.ts` (au niveau de `browserActFromTool`, noms anglais « Download / Download CSV / Download all ») et `executor-browser-targets.test.ts` (câblage du résolveur dans l'exécuteur). ~~`browser-tools.test.ts`~~. Le replay contacts avec `target` n'est pas fait (ticket 06).
+- **Logs** : `agent.browser.target` par résolution, compteurs de run (ticket 08).

@@ -1,55 +1,130 @@
 # 05: Vérification post-action `landed / dialog / error / auth / unchanged`
 
-**What to build:** Après un `browser_act`, le résultat dit ce que l'action a produit — la page a changé comme attendu (`landed`), un dialogue ou une modale s'est ouvert (`dialog`), un message d'erreur est apparu (`error`), un mur d'authentification ou une vérification anti-bot bloque (`auth`), ou rien de visible n'a changé (`unchanged`) — avec une confiance. Le modèle lit une ligne au lieu de comparer deux snapshots. C'est consultatif : le backend n'agit jamais dessus tout seul.
+**What to build:** Après un `browser_act` dont une action à `target` a été exécutée, le résultat dit ce que l'action a produit — la page a changé comme attendu (`landed`), un dialogue ou une modale s'est ouvert (`dialog`), une erreur est apparue (`error`), un mur d'authentification ou une vérification anti-bot bloque (`auth`), ou rien de visible n'a changé (`unchanged`) — avec la probabilité de cette classe. Le modèle lit un champ au lieu de comparer deux listes d'éléments. Consultatif : le backend n'agit jamais dessus.
 
-## Pourquoi ce n'est pas un appel de plus
+**Historique.** Différé au ticket 01 pour que 08 mesure 04 seul. Le mainteneur lève le report le 2026-09-26 : 05 est le prochain ticket. La mesure de 04 reste attribuable par les logs (voir « Logs »).
 
-`BrowserActResult` contient déjà `url`, `title`, `tree`, `elements` d'après (`packages/adapter-kit/src/types.ts`), et `resolveBrowserTargets` (ticket 04) ou le modèle disposent du snapshot d'avant. La vérification est une question posée sur un état que nous avons déjà en main, entre le retour du helper et le retour au modèle. Un appel au fournisseur, aucun appel helper supplémentaire.
+## Point d'accroche, dans le code livré
 
-## Ce qu'on change
+Tout se passe dans `packages/adapters/src/browser-tools.ts`, dans `actWithTargets`, après la boucle des actions à `target` et avant le `return` final. À cet endroit on a déjà :
 
-**L'état** : `{ action: { kind, target: { role, name } }, before: { url, title, headings, dialogRoles, elementCount }, after: { url, title, headings, dialogRoles, elementCount, textHead } }`. `headings` = les entrées de rôle `heading` du snapshot (le helper les rend déjà, `rakazo-page-browser:375`), `dialogRoles` = présence d'éléments à rôle `dialog`/`alertdialog`/`alert` ou de mots-clés de modale dans les premiers éléments, `textHead` = les 1 500 premiers caractères du texte de page d'après, redigés par `redactSecrets`. Borné, structuré, pas de HTML.
+- **`before`** : le `BrowserSnapshotResult` que `resolveBrowserTarget` a pris pour résoudre la **dernière** action à `target` exécutée (aujourd'hui local à la fonction : la faire rendre `{ ref, snapshot, element }` au lieu de `{ ref }`).
+- **`after`** : `last`, le `BrowserActResult` de `browser.act` pour cette action. Le helper (`rakazo-page-browser`, `act`) et la session en process (`page-browser-session.ts`, `act`) rendent tous deux `url`, `title`, `tree`, `elements` d'après en cas de succès.
+- **`action`** : `kind` et l'élément choisi (`role`, `name`).
+- `targets.provider`, `targets.secrets`, `targets.stats`, `context`.
 
-**La question** : un seul appel, deux questions sur le même état pour ne payer le `state` qu'une fois —
-`outcome: choice(…, { landed, dialog, error, auth, unchanged })` et `blocked: noul("Is the page now asking the user to sign in, solve a challenge, or prove they are human?")`. `blocked` est là parce que `auth` est le cas le plus coûteux à manquer (le bot tourne en rond sur une page de connexion) et qu'une seconde lecture indépendante sur la même passe est gratuite. Règle de fusion, écrite : `blocked ≥ 0,8` force `auth` quelle que soit la `choice`.
+Aucun appel helper supplémentaire, un appel fournisseur.
 
-**Le résultat** : `BrowserActResult.outcome?: { kind, confidence }`, présent seulement quand un fournisseur a répondu ; absent sinon, jamais inventé. Sous un seuil bas (`low`, départ 0,5, calibré en 06), on rend `outcome: { kind: "uncertain", confidence }` plutôt que rien : le modèle sait qu'on a regardé et qu'on n'a pas su.
+## Portée : actions à `target` seulement
 
-**Ce que le backend fait de l'issue** : rien d'autre que la rendre. Pas de rejeu sur `unchanged`, pas de nouvelle tentative sur `error`, pas de `request_takeover` automatique sur `auth`. L'instruction système (`executor.ts:850`) gagne, conditionnée à la présence d'un fournisseur, une phrase : sur `auth`, demander la prise de contrôle plutôt que d'insister ; sur `unchanged`, inspecter avant de recommencer. C'est le modèle qui décide, comme le contrat l'exige.
+Décision, la plus petite : on ne vérifie que les appels où au moins une action à `target` a été exécutée, une fois par appel, sur la dernière. Pas les appels à `ref` seuls.
 
-**Où ça s'exécute** : dans `browserActFromTool` (`browser-tools.ts`), après le retour du provider et avant `formatBrowserResult`. Le snapshot d'avant vient de la résolution `target` (04) quand elle a eu lieu, sinon du dernier `browser_snapshot` du run si l'exécuteur le garde — sinon on vérifie avec `before` réduit à `url`/`title` seulement et on le dit dans le `state`. `uncertain: true` du provider (réponse d'action perdue) court-circuite la vérification : on ne classe pas l'issue d'une action dont on ne sait pas si elle a eu lieu.
+- `before` n'existe gratuitement que là. Pour un `ref`, il faudrait que l'exécuteur retienne le dernier snapshot par ordinateur (état de plus, périmé dès qu'un outil de bureau touche l'écran) — c'est exactement ce que le ticket 01 voulait éviter.
+- Pour une action à `ref`, le modèle vient de lire la page et reçoit déjà le snapshot d'après ; c'est pour `target`, où il n'a rien lu, que la ligne vaut quelque chose.
+- Une vérification par action à `target` multiplierait les appels (jusqu'à 6) ; la dernière suffit, les précédentes ont déjà été suivies d'un snapshot frais.
 
-## Références de conception
+On ne vérifie pas quand : aucun fournisseur (`targets` absent), le dernier `act` a échoué (`ok: false`, dont `uncertain: true` : on ne classe pas l'issue d'une action dont on ne sait pas si elle a eu lieu), `after.elements` est absent, ou la résolution a rendu `needsRef`.
 
-`jevkit.verify` : mêmes classes plus `gate`, et la règle « `auth` et `error` gatent toujours `stop` » — chez nous il n'y a pas de gate parce qu'il n'y a pas de boucle à arrêter : le modèle reprend la main après chaque action de toute façon. `jev-for-chrome` : la détection de boucle (même contrôle 3× en 6 pas sans changement) est une heuristique de compteur, pas une décision de modèle ; si 08 montre des boucles sur `unchanged`, elle se code en cinq lignes dans l'exécuteur sans fournisseur. `jev-use` : la vérification indépendante par un endpoint `/state` du fixture est le modèle de nos tests, pas du produit.
+## L'état envoyé
+
+Borné, structuré, **sans texte de page et sans valeur de champ**, tout passé par `redactSecrets(…, targets.secrets)` :
+
+```ts
+state = {
+  action: { kind, role, name },                 // name ≤ 120
+  before: { url, title, elements: number },
+  after:  { url, title, elements: number },
+  added:   string[],                            // `role "name"` présents après, pas avant ; ≤ 20, name ≤ 120
+  removed: string[],                            // présents avant, plus après ; ≤ 20
+}
+```
+
+- `added`/`removed` se calculent par multiensemble de `role "name"`, jamais par `ref` (le helper régénère tous les refs à chaque snapshot).
+- Tous les rôles comptent, boutons compris : une modale se voit à ses boutons « Fermer » / « Accepter », une page de connexion à ses champs « Mot de passe » et son bouton « Se connecter ».
+- Pas de `tree` : il commence par l'`innerText` de la page chez le helper (≤ 12 000 caractères) et contient les `value=` des champs ; la session en process n'a pas de texte du tout, donc un état fondé dessus ne serait pas testable pareil. Conséquence assumée : une erreur en texte seul (« Mot de passe incorrect » hors de tout contrôle) peut sortir en `unchanged`. 06 mesure cette perte ; y remédier demanderait un champ texte borné rendu par le helper, hors de ce ticket.
+- Constantes nommées à côté des autres : `MAX_OUTCOME_DIFF = 20`, réutiliser `MAX_OPTION_NAME_CHARS`.
+
+## La question
+
+Un seul appel, une seule question :
+
+```ts
+outcome: choice("What did the action produce?", {
+  landed:    "the page changed as the action intended",
+  dialog:    "a dialog, modal, or popup opened",
+  error:     "an error or validation message appeared",
+  auth:      "the page asks to sign in, solve a challenge, or prove the user is human",
+  unchanged: "nothing visible changed",
+})
+```
+
+Pas de `noul` `blocked` en plus (texte historique) : une seconde question sans chiffres pour la justifier. 06 dira si `auth` a besoin d'une lecture indépendante.
+
+Même règle que 04 : on lit `probabilities[choice]`, pas `confidence` (journalisée seulement). Sous `OUTCOME_PROBABILITY_LOW = 0.5` (valeur de départ, renvoi à 06), `kind: "uncertain"`. Délai `OUTCOME_DECISION_TIMEOUT_MS = 1_000`. `unavailable` → pas d'`outcome`, jamais un défaut inventé ; `aborted` → relancer l'abandon du run comme la résolution de cible.
+
+## Le résultat
+
+`BrowserActToolResult` (type local de `browser-tools.ts`, comme `needsRef`) gagne `outcome?: { kind: "landed" | "dialog" | "error" | "auth" | "unchanged" | "uncertain"; probability: number }`, présent seulement quand le fournisseur a répondu. Rien d'autre ne change dans le résultat.
+
+**Jamais de rejeu** (`docs/computer-runtime.md`, `NON-GOALS.md`) : pas de nouvel `act`, pas de relance sur `unchanged` ou `error`, pas de `request_takeover` automatique sur `auth`. Le modèle décide. La description d'outil ajoutée par `withBrowserTargets` (`builtin-tools.ts`, `BROWSER_TARGET_DESCRIPTION`) gagne une phrase : « A result may include outcome; on auth, request takeover instead of retrying; on unchanged, inspect before acting again. » Pas de phrase dans l'instruction système : 04 n'en a pas ajouté non plus.
+
+## Données et divulgation
+
+Nouveau par rapport à 04 : les noms de **tous** les contrôles ajoutés ou retirés (boutons compris) partent au fournisseur. La divulgation doit rester vraie, sans avancer `AI_DISCLOSURE_VERSION` (décision du mainteneur) :
+
+- `packages/contracts/src/ai-consent.ts`, `AI_DATA_DISCLOSURES.decision` : dire « the names of controls on them » au lieu de « links, tabs, and text fields », et « to choose which element to act on and to check what an action did ». Mettre à jour les tests qui figent ce texte s'il y en a.
+- `docs/computer-runtime.md` : le paragraphe `target` dit aujourd'hui « the role and name of each offered element … never field values or page text » ; ajouter la vérification et ce qu'elle envoie. La phrase « A failed action reports confirmed progress… » gagne : « and, when a decision provider is connected, a target action's result may carry a classified outcome to read before continuing ».
+- `docs/ai-data-sharing-review.md` (porte de release) et `docs/self-host.md` : une demi-phrase chacun.
+
+## Logs (pour 08)
+
+- `decideWithin` prend une option `purpose?: "target" | "verify"` (log seulement), reprise dans `agent.decision.call`. La résolution de cible passe `"target"`.
+- Nouvelle ligne `agent.browser.outcome` : `runId`, `botId`, `kind` (de l'action), `outcome` (classe, `uncertain` ou raison `unavailable`), `probability`, `confidence`, `options: 5`. Jamais de nom d'élément, d'URL ni de fragment d'état.
+- `BrowserTargetStats` gagne `verifyCalls` et `verifyAnswered`, émis dans `agent.run.decision` ; la condition d'émission de cette ligne reste celle d'aujourd'hui.
+
+Ainsi les appels `purpose = target` et les compteurs `decision*` mesurent 04 seul, et le coût/latence de 05 se lit à part. La comparaison de tours et de tokens du modèle principal, elle, devient moins attribuable dès que 05 est livré (le modèle lit `outcome`) : 08 la lit de préférence sur les jours d'avant.
 
 ## Fichiers
 
-- `packages/adapter-kit/src/types.ts` — `BrowserActResult.outcome`, type `BrowserActOutcome`.
-- `packages/adapters/src/browser-tools.ts` — `verifyBrowserOutcome(before, after, action, provider)`, construction de l'état borné, fusion `blocked`, seuil `low`.
-- `packages/adapters/src/executor.ts` — conserver le dernier snapshot du run par ordinateur pour servir de `before` quand l'action est à `ref` ; phrase d'instruction conditionnelle.
-- `packages/adapters/src/browser-tools.test.ts` — pages seedées avant/après pour chacune des cinq classes, fake scripté ; `uncertain` court-circuite ; `unavailable` → pas d'`outcome` ; `blocked` force `auth`.
-- `docs/computer-runtime.md` — la phrase « a failed action reports confirmed progress and whether its outcome is uncertain » gagne : « and, when a decision provider is connected, a classified outcome the model should read before continuing ».
+- `packages/adapters/src/browser-tools.ts` — `resolveBrowserTarget` rend aussi `snapshot` et l'élément ; `verifyBrowserOutcome(before, after, action, targets, context)` ; construction de l'état ; seuil ; log ; champ `outcome`.
+- `packages/adapters/src/decision.ts` — option `purpose` dans `decideWithin` et le log.
+- `packages/adapters/src/builtin-tools.ts` — une phrase dans `BROWSER_TARGET_DESCRIPTION`.
+- `packages/adapters/src/executor.ts` — compteurs `verify*` dans `agent.run.decision`.
+- `packages/contracts/src/ai-consent.ts` — texte de divulgation.
+- `docs/computer-runtime.md`, `docs/ai-data-sharing-review.md`, `docs/self-host.md`.
+- `CHANGELOG.md` — une entrée `#### Changed` du jour de livraison : un bot qui agit sur un élément décrit dit ensuite si la page a changé, ouvert un dialogue, affiché une erreur ou demandé une connexion (web, desktop, mobile : c'est côté serveur).
 
-## Vérification
+## Tests (frontière propriétaire : `browserActFromTool`)
 
-Offline, vitest, `FakeBrowserProvider` + `FakeDecisionProvider` scripté. Cinq paires de pages HTML seedées (`FakeBrowserProviderOptions.pages`) : formulaire → page de confirmation, bouton → modale, soumission → message d'erreur, lien → page de connexion, clic → même page. Le test affirme la forme de l'état envoyé (bornes, redaction, absence de mot de passe), la fusion, l'absence d'`outcome` sans fournisseur, et qu'aucun `act` supplémentaire n'est jamais émis par le vérificateur.
+Dans `packages/adapters/src/browser-targets.test.ts`, avec `FakeDecisionProvider` scripté (premier pas : la cible ; second : l'issue). La session en process **ne navigue pas** sur un clic de lien vers une autre URL (elle lève, `page-browser-session.ts`) et n'exécute pas de script : les paires avant/après se fabriquent en sous-classant `FakeBrowserProvider` (comme `CountingBrowser`) pour que `act` rende un snapshot d'après seedé.
+
+- Les cinq classes : une paire avant/après par classe, l'`outcome` rendu porte la classe et la probabilité.
+- Sous 0,5 → `uncertain`.
+- `unavailable` (erreur, délai, hors table) → pas d'`outcome`, résultat sinon identique.
+- `act` en échec ou `uncertain: true` → aucun appel de vérification (`provider.calls.length === 1`).
+- Appel à `ref` seul, ou sans fournisseur → aucun appel, résultat strictement inchangé (le test existant sans fournisseur passe sans modification).
+- Plusieurs `target` → une seule vérification, sur la dernière.
+- Forme de l'état : bornes (`added`/`removed` ≤ 20, noms ≤ 120), secrets redigés, aucune `value`, pas de `tree`.
+- Le vérificateur n'émet jamais d'`act` supplémentaire (`browser.acts.length`).
+- Logs : `purpose` présent, aucun marqueur de contenu dans les lignes émises.
+- Un test de contrat si la divulgation est figée quelque part.
 
 ## Ce qui reste ouvert
 
-- `before` pour une action à `ref` sans snapshot conservé : vérifier sur `url`/`title` seuls dégrade la classe `unchanged`/`landed` mais garde `auth`/`error`/`dialog`, qui ne dépendent que de l'après. Acceptable en v1 ; 06 mesure la perte.
-- L'anti-bot (Cloudflare « vérifiez que vous êtes humain ») rentre dans `auth` par la question `blocked` ; faut-il une classe `challenge` séparée ? Attendre 06 : si les deux se confondent dans les fixtures, une classe suffit.
-- Le coût : deux questions sur ~2 500 caractères, soit de l'ordre de 700 tokens, ~0,00003 $ par action. Négligeable ; la latence (une requête) est ce que 08 mesure.
+- La classe `error` sans texte de page : attendre les chiffres de 06 avant d'élargir l'état.
+- Une classe `challenge` séparée d'`auth` : même réponse.
+- Latence : une requête de plus par `browser_act` à `target` (budget 1 s) ; 08 la lit dans `agent.decision.call` (`purpose = verify`).
 
-**Blocked by:** 02, puis la mesure de 04 par 08
+**Blocked by:** 02, 04 (livrés)
 
-**Status:** différé (décision du ticket 01) — n'économise aucun token, ajoute une latence, et livré avec 04 rendrait la mesure de 08 inattribuable. À rouvrir une fois 04 mesuré ; il héritera alors du `before` complet sans faire retenir un snapshot à l'exécuteur.
+**Status:** ready-for-agent
 
-- [ ] `outcome` est présent seulement quand un fournisseur a répondu ; jamais un défaut inventé
-- [ ] `uncertain: true` du provider empêche toute vérification
-- [ ] `blocked ≥ 0,8` force `auth` ; test dédié
-- [ ] Sous le seuil `low`, `outcome.kind` vaut `uncertain` avec la confiance
-- [ ] Aucun chemin ne rejoue, ne relance ni ne déclenche `request_takeover` à partir de l'issue ; le test affirme qu'aucun appel provider n'est émis par le vérificateur
-- [ ] L'état envoyé est borné (constantes nommées), redigé, sans HTML ni valeur de mot de passe
-- [ ] Sans fournisseur, `browser_act` est strictement inchangé
-- [ ] `docs/computer-runtime.md` mis à jour ; entrée CHANGELOG (le bot dit ce que son action a produit)
+- [ ] `outcome` n'apparaît qu'après une action à `target` exécutée avec succès et une réponse du fournisseur ; jamais inventé
+- [ ] `act` en échec ou `uncertain` empêche toute vérification
+- [ ] Une seule vérification par appel, sur la dernière action à `target`
+- [ ] Sous `OUTCOME_PROBABILITY_LOW`, `outcome.kind` vaut `uncertain` avec la probabilité
+- [ ] Aucun chemin ne rejoue, ne relance ni ne déclenche `request_takeover` ; aucun `act` émis par le vérificateur
+- [ ] L'état est borné (constantes nommées), redigé, sans texte de page, sans `tree`, sans valeur de champ
+- [ ] Sans fournisseur ou pour un appel à `ref` seul, `browser_act` est strictement inchangé
+- [ ] `agent.decision.call` porte `purpose` ; `agent.browser.outcome` et les compteurs `verify*` sont émis sans contenu
+- [ ] Divulgation `decision` et docs mises à jour, `AI_DISCLOSURE_VERSION` inchangée ; entrée CHANGELOG
