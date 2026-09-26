@@ -58,7 +58,7 @@ export function mountWebhookHttpRoutes(app: Hono, deps: WebhookDeps) {
         active: true,
         webhookEnabled: true,
       },
-      select: { id: true, name: true, prompt: true },
+      select: { id: true, name: true, prompt: true, requireToolApproval: true },
       orderBy: { updatedAt: "desc" },
       take: 5,
     });

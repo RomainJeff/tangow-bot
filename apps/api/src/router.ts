@@ -2453,6 +2453,7 @@ export function createRouter(deps: RouterDeps) {
             webhookEnabled: input.webhookEnabled,
             githubEnabled: input.githubEnabled,
             messageProvider: input.messageProvider,
+            requireToolApproval: input.requireToolApproval,
             nextRunAt,
           },
         });
@@ -2557,6 +2558,7 @@ export function createRouter(deps: RouterDeps) {
             webhookEnabled: input.webhookEnabled,
             githubEnabled: input.githubEnabled,
             messageProvider: input.messageProvider,
+            requireToolApproval: input.requireToolApproval,
             nextRunAt,
           },
         });
@@ -5345,6 +5347,7 @@ function mapRoutine(row: {
   webhookEnabled: boolean;
   githubEnabled: boolean;
   messageProvider: string | null;
+  requireToolApproval: boolean;
   lastRunAt: Date | null;
   nextRunAt: Date | null;
   createdAt: Date;
@@ -5361,6 +5364,7 @@ function mapRoutine(row: {
     webhookEnabled: row.webhookEnabled,
     githubEnabled: row.githubEnabled,
     messageProvider: row.messageProvider,
+    requireToolApproval: row.requireToolApproval,
     lastRunAt: row.lastRunAt?.toISOString() ?? null,
     nextRunAt: row.nextRunAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),

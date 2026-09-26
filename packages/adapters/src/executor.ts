@@ -2102,7 +2102,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name);
           const requiresUnattendedApproval = unattendedTriggerToolRequiresApproval(
-            run.trigger,
+            run,
             name,
             viaConnector,
           );
