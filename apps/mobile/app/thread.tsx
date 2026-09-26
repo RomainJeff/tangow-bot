@@ -35,7 +35,7 @@ import {
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import { motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
@@ -63,7 +63,14 @@ import {
   type ViewStyle,
 } from "react-native";
 import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
-import { useReducedMotion } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  Keyframe,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppConnectCard } from "../components/AppConnectCard";
 import {
@@ -116,6 +123,7 @@ import { mobileTokens } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
+import { commitHaptic, selectionHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
@@ -140,6 +148,7 @@ import {
   takePhoto,
 } from "../lib/pick-attachments";
 import { threadRefreshDelayMs } from "../lib/refresh";
+import { shadowsForAppearance } from "../lib/theme";
 import {
   type ThreadScrollAction,
   ThreadScrollBehavior,
@@ -302,7 +311,7 @@ function Thread() {
   const colorScheme = useResolvedAppearance();
   const tokens = mobileTokens();
   const [botActionsOpen, setBotActionsOpen] = useState(false);
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const navigation = useNavigation();
   const router = useRouter();
   const headerHeight = useHeaderHeight();
@@ -362,6 +371,7 @@ function Thread() {
   const [snap, setSnap] = useState<MobileSnapshot | null>(null);
   const activeThreadId = useRef<string | undefined>(undefined);
   const [draft, setDraft] = useState("");
+  const [composerFocused, setComposerFocused] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [agentSkills, setAgentSkills] = useState<AgentSkillCatalogEntry[]>([]);
@@ -1498,8 +1508,8 @@ function Thread() {
     }
   }
 
-  function messageActionProps(message: MobileMessage): MessageActionProps {
-    const actions = [
+  function messageActions(message: MobileMessage) {
+    return [
       {
         name: "reply",
         text: t("Reply"),
@@ -1551,20 +1561,45 @@ function Thread() {
         },
       },
     ];
-    return {
-      onLongPress: () =>
-        presentMessageActionSheet({
-          actions,
-          title: message.createdAt ? messageClockTime(message.createdAt) : undefined,
-          cancel: t("Cancel"),
-          more: t("More"),
-          colorScheme,
-        }),
-      accessibilityActions: actions.map((action) => ({ name: action.name, label: action.text })),
+  }
+
+  function showMessageActions(message: MobileMessage) {
+    presentMessageActionSheet({
+      actions: messageActions(message),
+      title: message.createdAt ? messageClockTime(message.createdAt) : undefined,
+      cancel: t("Cancel"),
+      more: t("More"),
+      colorScheme,
+    });
+  }
+
+  // One props object per message whose handlers reach the latest render, so
+  // `MessageBubble` can skip re-rendering while the thread scrolls or the
+  // composer changes. Rebuilt with the language: its labels are translated.
+  const latestActions = useRef({ messageActions, showMessageActions });
+  latestActions.current = { messageActions, showMessageActions };
+  const actionPropsCache = useMemo(
+    () => new WeakMap<MobileMessage, MessageActionProps>(),
+    [locale],
+  );
+  function messageActionProps(message: MobileMessage): MessageActionProps {
+    const cached = actionPropsCache.get(message);
+    if (cached) return cached;
+    const props: MessageActionProps = {
+      onLongPress: () => latestActions.current.showMessageActions(message),
+      accessibilityActions: messageActions(message).map((action) => ({
+        name: action.name,
+        label: action.text,
+      })),
       onAccessibilityAction: (event) => {
-        actions.find((action) => action.name === event.nativeEvent.actionName)?.onPress();
+        latestActions.current
+          .messageActions(message)
+          .find((action) => action.name === event.nativeEvent.actionName)
+          ?.onPress();
       },
     };
+    actionPropsCache.set(message, props);
+    return props;
   }
 
   /** Colour, name and shape of the bot behind a message: the group roster
@@ -1872,6 +1907,7 @@ function Thread() {
               borderWidth: 1,
               borderColor: native.fillPressed,
               backgroundColor: native.fill,
+              boxShadow: shadowsForAppearance(colorScheme).floating,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -2137,6 +2173,8 @@ function Thread() {
         ) : null}
         <View style={{ marginTop: 16 }}>
           <ComposerShell
+            state={working ? "working" : canSend ? "typing" : "idle"}
+            focused={composerFocused}
             leading={
               selectedSkill || selectedMentions.length > 0 ? (
                 <View
@@ -2237,6 +2275,7 @@ function Thread() {
                   <ComposerButton
                     label={t("Send")}
                     tone="primary"
+                    arrive
                     disabled={sending}
                     onPress={() => void send()}
                   >
@@ -2247,13 +2286,7 @@ function Thread() {
                       color={tokens.primaryForeground}
                     />
                   </ComposerButton>
-                ) : (
-                  // Reserves Send's footprint so the field does not jump when it arrives.
-                  <View
-                    accessibilityElementsHidden
-                    style={{ width: sizes.composerIcon, height: sizes.composerIcon }}
-                  />
-                )}
+                ) : null}
                 {working ? (
                   <ComposerButton
                     label={t("Stop")}
@@ -2295,16 +2328,25 @@ function Thread() {
                     : t("Message…")
               }
               placeholderTextColor={tokens.foregroundSubtle}
+              selectionColor={tokens.foreground}
+              cursorColor={tokens.foreground}
               keyboardAppearance={colorScheme}
               multiline
               textAlignVertical="center"
               blurOnSubmit={false}
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setComposerFocused(false)}
               style={{
                 color: tokens.foreground,
-                paddingVertical: 4,
                 maxHeight: 100,
                 writingDirection: "auto",
                 ...nativeTextStyle("body"),
+                // A multiline iOS field puts all of a line height's extra
+                // leading above the glyphs, so the text sat low in the
+                // capsule; the font's own line box centres it.
+                ...(Platform.OS === "ios"
+                  ? { lineHeight: undefined, paddingVertical: 6 }
+                  : { paddingVertical: 4 }),
               }}
             />
           </ComposerShell>
@@ -2444,44 +2486,83 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
 
 /** A round 34 pt control of the composer capsule; `hitSlop` brings the tap
  * target back to 44 pt without widening the capsule. */
+/** The send arrow arrives like the web's `animate-arrive`: up from 6 pt, fading in. */
+const COMPOSER_ARRIVE = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: 6 }] },
+  100: {
+    opacity: 1,
+    transform: [{ translateY: 0 }],
+    easing: Easing.bezier(0.32, 0.72, 0, 1),
+  },
+}).duration(motion.arrive);
+
+/** A round composer control: settles to 0.94 while pressed, the web's
+ * `rk-press-round`, and a plain one fills with `accent` like its hover. */
 function ComposerButton({
   label,
   onPress,
   disabled,
   tone = "plain",
+  arrive = false,
   children,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   tone?: "plain" | "primary" | "secondary";
+  /** Animate in on mount — the send arrow appearing with the first character. */
+  arrive?: boolean;
   children: ReactNode;
 }) {
   const tokens = useMobileTokens();
+  const reducedMotion = useReducedMotion();
+  const pressed = useSharedValue(0);
+  const [held, setHeld] = useState(false);
+  const pressStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 - pressed.value * 0.06 }],
+  }));
+  const press = (down: boolean) => {
+    setHeld(down);
+    if (reducedMotion) return;
+    pressed.value = withTiming(down ? 1 : 0, {
+      duration: motion.press,
+      easing: Easing.bezier(0.32, 0.72, 0, 1),
+    });
+  };
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      disabled={disabled}
-      hitSlop={5}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        width: sizes.composerIcon,
-        height: sizes.composerIcon,
-        borderRadius: radii.pill,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor:
-          tone === "primary"
-            ? tokens.primary
-            : tone === "secondary"
-              ? tokens.secondary
-              : "transparent",
-        opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
-      })}
-    >
-      {children}
-    </Pressable>
+    <Animated.View entering={arrive ? COMPOSER_ARRIVE : undefined} style={pressStyle}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        disabled={disabled}
+        hitSlop={5}
+        onPress={() => {
+          if (tone === "plain") selectionHaptic();
+          else commitHaptic();
+          onPress();
+        }}
+        onPressIn={() => press(true)}
+        onPressOut={() => press(false)}
+        style={{
+          width: sizes.composerIcon,
+          height: sizes.composerIcon,
+          borderRadius: radii.pill,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor:
+            tone === "primary"
+              ? tokens.primary
+              : tone === "secondary"
+                ? tokens.secondary
+                : held
+                  ? tokens.accent
+                  : "transparent",
+          opacity: disabled ? 0.5 : tone !== "plain" && held ? 0.85 : 1,
+        }}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -3615,44 +3696,50 @@ function MultiQuestionAskBlock({
     </View>
   );
 
-  const answeredContent =
-    answered || !canAnswer ? (
+  // Once settled the progress dots have nothing left to track, and a single
+  // question is already the card's own question line: only the answer stays.
+  // Mirrors `apps/web/src/components/AskCard.tsx`.
+  const answerValue = (question: (typeof questions)[number]) => {
+    const stored = ask.answers?.[question.id];
+    const labels = (stored?.selected ?? []).map(
+      (id) => question.options?.find((option) => option.id === id)?.label ?? id,
+    );
+    if (stored?.other) labels.push(`${t("Other")}: ${stored.other}`);
+    return stored?.skipped && labels.length === 0 ? t("Skipped") : labels.join(", ");
+  };
+  const hasStoredAnswers = Boolean(ask.answers && Object.keys(ask.answers).length > 0);
+  const answeredContent = answered ? (
+    total === 1 ? (
+      hasStoredAnswers ? (
+        <Text style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
+          {answerValue(current) || t("Answered")}
+        </Text>
+      ) : (
+        <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+          {t("Answered")}
+        </Text>
+      )
+    ) : (
       <View style={{ gap: 10 }}>
-        {progressRow}
-        {answered ? (
-          <View style={{ gap: 10 }}>
-            {questions.map((question, qIndex) => {
-              const stored = ask.answers?.[question.id];
-              const labels = (stored?.selected ?? []).map(
-                (id) => question.options?.find((option) => option.id === id)?.label ?? id,
-              );
-              if (stored?.other) labels.push(`${t("Other")}: ${stored.other}`);
-              const value =
-                stored?.skipped && labels.length === 0 ? t("Skipped") : labels.join(", ");
-              return (
-                <View key={question.id}>
-                  <Text
-                    style={{
-                      color: tokens.mutedForeground,
-                      ...nativeTextStyle("meta", { weight: 600 }),
-                    }}
-                  >
-                    {qIndex + 1}. {question.question}
-                  </Text>
-                  <Text style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
-                    {value || t("Answered")}
-                  </Text>
-                </View>
-              );
-            })}
+        {questions.map((question, qIndex) => (
+          <View key={question.id}>
+            <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+              {qIndex + 1}. {question.question}
+            </Text>
+            {hasStoredAnswers ? (
+              <Text style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
+                {answerValue(question) || t("Answered")}
+              </Text>
+            ) : null}
           </View>
-        ) : (
-          <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-            {t("No longer active")}
-          </Text>
-        )}
+        ))}
       </View>
-    ) : undefined;
+    )
+  ) : !canAnswer ? (
+    <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+      {t("No longer active")}
+    </Text>
+  ) : undefined;
 
   const optionEntries = current.options ?? [];
   const withOther =
@@ -3668,27 +3755,7 @@ function MultiQuestionAskBlock({
 
   return (
     <FramedBlock
-      question={
-        <>
-          {current.header ? (
-            <Text
-              style={{
-                alignSelf: "flex-start",
-                marginBottom: 4,
-                borderRadius: radii.chip,
-                backgroundColor: tokens.muted,
-                paddingHorizontal: 10,
-                paddingVertical: 2,
-                color: tokens.mutedForeground,
-                ...nativeTextStyle("time"),
-              }}
-            >
-              {current.header}
-            </Text>
-          ) : null}
-          <Text {...actionProps}>{current.question}</Text>
-        </>
-      }
+      question={<Text {...actionProps}>{current.question}</Text>}
       answered={answeredContent}
       actions={
         answeredContent === undefined ? (

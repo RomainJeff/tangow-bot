@@ -61,3 +61,18 @@ describe("mobile thread initial scroll", () => {
     expect(behavior.state()).toEqual({ detached: false, unread: false });
   });
 });
+
+describe("mobile thread scroll state identity", () => {
+  it("keeps the same state object while scrolling does not change it", () => {
+    const behavior = new ThreadScrollBehavior();
+    behavior.openThread("thread-1");
+    const attached = behavior.state();
+
+    expect(behavior.onUserScroll(10)).toBe(attached);
+    expect(behavior.onUserScroll(40)).toBe(attached);
+
+    const detached = behavior.onUserScroll(200);
+    expect(detached).not.toBe(attached);
+    expect(behavior.onUserScroll(400)).toBe(detached);
+  });
+});

@@ -871,12 +871,53 @@ export function shouldApplyMobileThreadRefresh(input: {
 
 export type MobileMessagePage = ThreadHistory<MobileMessage>;
 
+/**
+ * Merges a refreshed snapshot, keeping the previous object for every message
+ * and field the refresh did not change — and the previous snapshot itself
+ * when nothing changed — so a poll that brings nothing new re-renders nothing.
+ */
 export function mergeMobileSnapshot(
   prev: MobileSnapshot | null,
   next: MobileSnapshot,
   preserveLoadedHistory = false,
 ): MobileSnapshot {
-  return mergeThreadHistory(prev, next, preserveLoadedHistory);
+  const merged = mergeThreadHistory(prev, next, preserveLoadedHistory);
+  if (!prev || prev.threadId !== merged.threadId) return merged;
+  const previousById = new Map(prev.messages.map((message) => [message.id, message]));
+  const messages = merged.messages.map((message) => {
+    const previous = previousById.get(message.id);
+    return previous && sameJson(previous, message) ? previous : message;
+  });
+  const sameMessages =
+    messages.length === prev.messages.length &&
+    messages.every((message, index) => message === prev.messages[index]);
+  const shared: Record<string, unknown> = {};
+  let unchanged = sameMessages && Object.keys(prev).length === Object.keys(merged).length;
+  for (const [key, value] of Object.entries(merged)) {
+    const previous = (prev as Record<string, unknown>)[key];
+    const kept = key === "messages" ? (sameMessages ? prev.messages : messages) : value;
+    shared[key] = key !== "messages" && sameJson(previous, kept) ? previous : kept;
+    if (shared[key] !== previous) unchanged = false;
+  }
+  return unchanged ? prev : (shared as MobileSnapshot);
+}
+
+/** Deep equality for JSON-shaped values (what the API returns). */
+function sameJson(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const other = b as unknown[];
+    return a.length === other.length && a.every((item, index) => sameJson(item, other[index]));
+  }
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const keys = Object.keys(left);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every((key) => Object.hasOwn(right, key) && sameJson(left[key], right[key]))
+  );
 }
 
 export function prependMobileMessagePage(
