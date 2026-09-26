@@ -23,6 +23,8 @@ Module `packages/adapters/src/browser-run.ts`, fonction pure sur `BrowserProvide
 
 Pas de second LLM pour le texte : les valeurs viennent de `values`, une valeur absente rend `needs_input`.
 
+`browser_act` reste fermé tant que `browser_run` n'a pas rendu `blocked`, `step_limit`, `unavailable`, `needs_input` `confirm` ou une erreur. Ni `done` ni `needs_input` `value` ne l'ouvrent : en production, après une valeur demandée, le modèle a fini le formulaire à la main par `browser_act` au lieu de rappeler `browser_run` avec la valeur ; le message de refus le lui dit.
+
 ## Listes déroulantes
 
 Comme `browser-use/jev-ultrafast` (`jev_ultrafast/snapshot.js`, commit `1231850a`, lignes 68-71 : chaque option non sélectionnée et active d'un `<select>` devient une action `select` « champ → libellé », avec la valeur courante en libellés ; `jev_ultrafast/browser.py` vérifie à l'exécution que l'option existe et n'est pas désactivée avant de poser `e.value`), le fournisseur choisit parmi les options de la liste elle-même : en production, `values` n'avait pas de durée et « Durée approximative » rendait `needs_input` alors que la page proposait les durées.

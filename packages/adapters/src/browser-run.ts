@@ -245,9 +245,19 @@ interface RunStats {
   reportedCost: boolean;
 }
 
-/** browser_act answer before browser_run has been tried in this run. */
+/** browser_act answer until browser_run has stopped short in this run. */
 export const BROWSER_ACT_LOCKED_MESSAGE =
-  "Call browser_run with the goal and the values you know first; browser_act becomes available once browser_run stops and asks for a confirmation, a value, or help.";
+  "Call browser_run with the goal and the values you know first; browser_act becomes available once browser_run stops for a confirmation, a block, or the step limit. If browser_run asked for a value, call browser_run again with that value in values.";
+
+/**
+ * Whether browser_act opens after this browser_run answer. A missing value goes back to
+ * browser_run: in production the model finished the form by hand instead of passing it.
+ */
+export function unlocksBrowserAct(result: BrowserRunResult | { error: string }): boolean {
+  if (!("status" in result)) return true;
+  if (result.status === "done") return false;
+  return !(result.status === "needs_input" && result.need?.kind === "value");
+}
 
 /** Added to page tool results when browser_run is available. */
 export const BROWSER_RUN_HINT =

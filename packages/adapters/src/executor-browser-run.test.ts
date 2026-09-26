@@ -9,6 +9,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
+import { BROWSER_ACT_LOCKED_MESSAGE } from "./browser-run.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import type * as ComputerWorkspaceModule from "./computer-workspace.js";
 import { createRunExecutor } from "./executor.js";
@@ -41,33 +42,37 @@ class CountingBrowser extends FakeBrowserProvider {
   }
 }
 
-/** Clicks the Search button; later calls are not scripted. */
-function clickSearch(request: DecisionRequest): DecisionResponse {
-  const operation = request.questions.operation;
-  const target = request.questions.click_target;
-  if (operation?.type !== "choice" || target?.type !== "choice") throw new Error("expected click");
-  const key = Object.entries(target.options).find(([, text]) => text.endsWith('"Search"'))![0];
-  const spread = (keys: string[], chosen: string) =>
-    Object.fromEntries(keys.map((k) => [k, k === chosen ? 0.95 : 0.05 / (keys.length - 1)]));
-  const ops = Object.keys(operation.options);
-  const options = Object.keys(target.options);
-  return {
-    answers: {
+/** Answers one step: the operation and, when given, the target whose option text matches. */
+function answer(op: string, target?: (text: string) => boolean) {
+  return (request: DecisionRequest): DecisionResponse => {
+    const spread = (keys: string[], chosen: string) =>
+      Object.fromEntries(keys.map((k) => [k, k === chosen ? 0.95 : 0.05 / (keys.length - 1)]));
+    const operation = request.questions.operation;
+    if (operation?.type !== "choice") throw new Error("expected the operation choice");
+    const answers: DecisionResponse["answers"] = {
       operation: {
         type: "choice",
-        choice: "click",
+        choice: op,
         confidence: 0.95,
-        probabilities: spread(ops, "click"),
+        probabilities: spread(Object.keys(operation.options), op),
       },
-      click_target: {
+    };
+    if (target) {
+      const question = request.questions[`${op}_target`];
+      if (question?.type !== "choice") throw new Error(`expected ${op}_target`);
+      const key = Object.entries(question.options).find(([, text]) => target(text))![0];
+      answers[`${op}_target`] = {
         type: "choice",
         choice: key,
         confidence: 0.95,
-        probabilities: spread(options, key),
-      },
-    },
+        probabilities: spread(Object.keys(question.options), key),
+      };
+    }
+    return { answers };
   };
 }
+
+const clickSearch = answer("click", (text) => text.endsWith('"Search"'));
 
 async function runWithDecisionProvider(
   resolve: () => Promise<DecisionProvider | null>,
@@ -139,7 +144,7 @@ async function runWithDecisionProvider(
     pages: {
       [PAGE]: {
         title: "Reports",
-        html: `<input aria-label="Query" /><button>Search</button>`,
+        html: `<input aria-label="Query" /><button>Search</button><button>Send report</button>`,
       },
     },
   });
@@ -246,6 +251,37 @@ describe("browser_run executor wiring", () => {
       });
     } finally {
       installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+    }
+  });
+
+  it("opens browser_act after browser_run stops short, but not when it asks for a value", async () => {
+    for (const [script, stop, unlocked] of [
+      [
+        answer("click", (text) => text.endsWith('"Send report"')),
+        { need: { kind: "confirm" } },
+        true,
+      ],
+      [answer("blocked"), { status: "blocked" }, true],
+      [
+        answer("fill", (text) => text.endsWith("<- none of the provided values")),
+        { need: { kind: "value", field: { name: "Query" } } },
+        false,
+      ],
+    ] as const) {
+      const provider = new FakeDecisionProvider({ script: [script] });
+      const { results, browser } = await runWithDecisionProvider(async () => provider);
+      expect(results[2]).toMatchObject(stop);
+      if (unlocked) {
+        // The act reaches the page (its stale ref fails there), not the lock.
+        expect(results[3]).not.toMatchObject({ error: BROWSER_ACT_LOCKED_MESSAGE });
+        expect(browser.acts).toHaveLength(1);
+      } else {
+        // The model passes the value to browser_run instead of finishing the form by hand.
+        expect(results[3]).toMatchObject({
+          error: expect.stringContaining("call browser_run again with that value in values"),
+        });
+        expect(browser.acts).toHaveLength(0);
+      }
     }
   });
 });
