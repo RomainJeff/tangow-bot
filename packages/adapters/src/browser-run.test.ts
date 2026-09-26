@@ -61,7 +61,7 @@ const pages = {
       (_, n) => `<option value="c${n + 1}">Country ${n + 1}</option>`,
     ).join("")}</select>`,
   },
-  // As evaneos.fr/travel-plans: both advance buttons stay disabled until the field has a value.
+  // As on a real onboarding page: both advance buttons stay disabled until the field has a value.
   destination: {
     title: "Destination",
     html: `<p>Where to?</p><input aria-label="Destination" /><button disabled>CONTINUER</button><button aria-disabled="true">Suivant</button>`,
