@@ -1396,19 +1396,27 @@ export function createRunExecutor(deps: ExecutorDeps) {
           payload: { trigger: run.trigger, routineId: run.routineId },
         });
 
-        // Background routine work gets a run card in the thread instead of conversation turns
-        // (background-work-visibility CA1/CA2); a top-level bot's scheduled routine (the
-        // orchestrator's own brief) is unaffected and keeps behaving as a normal reply.
-        const isRoutineCardRun = showsRoutineRunCard(run, bot.parentBotId != null);
+        // Routine work gets a run card in the thread instead of conversation turns
+        // (background-work-visibility CA1/CA2).
         const routineCardStartedAt = current.startedAt ?? new Date();
         let routineForCard: { id: string; name: string; notify: boolean } | null = null;
+        // The owner's own "Notify me on every run" choice, which alone may bypass bot-level
+        // notification settings.
+        let routineOptedIntoNotify = false;
         let routineRunCardMessageId: string | null = null;
-        if (isRoutineCardRun && run.routineId) {
-          routineForCard = await deps.prisma.routine.findUnique({
+        if (showsRoutineRunCard(run) && run.routineId) {
+          const routine = await deps.prisma.routine.findUnique({
             where: { id: run.routineId },
             select: { id: true, name: true, notify: true },
           });
-          if (routineForCard) {
+          if (routine) {
+            routineOptedIntoNotify = routine.notify;
+            // A top-level bot's scheduled routine is its user-facing brief, reminders included:
+            // it keeps paging and its card opens expanded whatever the toggle says.
+            routineForCard = {
+              ...routine,
+              notify: routine.notify || (run.trigger === "routine" && bot.parentBotId == null),
+            };
             const card = await publishRoutineRunCard(
               deps,
               { id: runId, spaceId: run.spaceId, threadId: thread.id, botId: bot.id },
@@ -1418,8 +1426,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             routineRunCardMessageId = card?.id ?? null;
           }
         }
+        // A routine deleted before its run started has no card to report into: reply normally.
+        const isRoutineCardRun = routineForCard != null;
         // One place to flip the card to its terminal state, whichever way the run ends.
-        // `routineForCard` is only set for a routine card run, so this is a no-op elsewhere.
         // Non-terminal pauses (ask -> waiting_input, takeover -> waiting_takeover) and lease
         // loss deliberately leave the card on "running": the run is not over, and the retry
         // reuses this very card via its stable clientNonce.
@@ -1610,7 +1619,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 botId: bot.id,
                 threadId: thread.id,
               },
-              { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
+              { forceEnabled: isRoutineCardRun && routineOptedIntoNotify },
             );
           }
           return;
@@ -4528,7 +4537,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 botId: bot.id,
                 threadId: thread.id,
               },
-              { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
+              { forceEnabled: isRoutineCardRun && routineOptedIntoNotify },
             );
           }
           // Last, and never fatal: the run is already finalized, so a failure here must not reach
@@ -4616,7 +4625,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 botId: bot.id,
                 threadId: thread.id,
               },
-              { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
+              { forceEnabled: isRoutineCardRun && routineOptedIntoNotify },
             );
           }
         }
@@ -4960,16 +4969,9 @@ export function notifiesUserOnRunEnd(
   return true;
 }
 
-/**
- * Whether a run reports through a routine run card instead of conversation turns: every inbound
- * (webhook, GitHub, message) routine wake, and a sub-bot's scheduled routine.
- */
-export function showsRoutineRunCard(
-  run: { trigger: string; routineId: string | null },
-  isSubBot: boolean,
-): boolean {
-  if (!run.routineId) return false;
-  return run.trigger === "webhook" || (run.trigger === "routine" && isSubBot);
+/** Every routine run, scheduled or woken by an inbound delivery, reports through its run card. */
+export function showsRoutineRunCard(run: { routineId: string | null }): boolean {
+  return run.routineId != null;
 }
 
 export function missingTurnImagesInstruction(

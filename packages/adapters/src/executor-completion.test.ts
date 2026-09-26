@@ -124,16 +124,12 @@ describe("notifiesUserOnRunEnd", () => {
 });
 
 describe("showsRoutineRunCard", () => {
-  it("cards every inbound routine wake and a sub-bot's scheduled routine", () => {
-    expect(showsRoutineRunCard({ trigger: "webhook", routineId: "routine-1" }, false)).toBe(true);
-    expect(showsRoutineRunCard({ trigger: "webhook", routineId: "routine-1" }, true)).toBe(true);
-    expect(showsRoutineRunCard({ trigger: "routine", routineId: "routine-1" }, true)).toBe(true);
+  it("cards every routine run, scheduled or inbound", () => {
+    expect(showsRoutineRunCard({ routineId: "routine-1" })).toBe(true);
   });
 
-  it("keeps a top-level scheduled routine and a bare delivery as normal replies", () => {
-    expect(showsRoutineRunCard({ trigger: "routine", routineId: "routine-1" }, false)).toBe(false);
-    expect(showsRoutineRunCard({ trigger: "webhook", routineId: null }, false)).toBe(false);
-    expect(showsRoutineRunCard({ trigger: "user", routineId: null }, true)).toBe(false);
+  it("keeps runs without a routine as normal replies", () => {
+    expect(showsRoutineRunCard({ routineId: null })).toBe(false);
   });
 });
 

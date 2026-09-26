@@ -11,8 +11,8 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
 }));
 
 /**
- * Exercises the sub-bot routine path end to end (background-work-visibility CA1/CA2): the
- * free closing text must not land as a plain message in the sub-bot's own thread, and a
+ * Exercises the routine path end to end (background-work-visibility CA1/CA2): the free
+ * closing text must not land as a plain message in the bot's thread, and a
  * `routine_run` card must be published on start and mutated to its terminal state on finish.
  */
 function fixture({
@@ -23,6 +23,7 @@ function fixture({
   runtimeError,
   trigger = "routine",
   routineId = "routine-1" as string | null,
+  routineMissing = false,
 }: {
   closingText?: string;
   routineNotify?: boolean;
@@ -31,6 +32,7 @@ function fixture({
   runtimeError?: string;
   trigger?: string;
   routineId?: string | null;
+  routineMissing?: boolean;
 } = {}) {
   const messages: Array<{
     id: string;
@@ -87,11 +89,11 @@ function fixture({
       findMany: vi.fn(async () => []),
     },
     routine: {
-      findUnique: vi.fn(async () => ({
-        id: "routine-1",
-        name: "Morning inbox check",
-        notify: routineNotify,
-      })),
+      findUnique: vi.fn(async () =>
+        routineMissing
+          ? null
+          : { id: "routine-1", name: "Morning inbox check", notify: routineNotify },
+      ),
     },
     attempt: {
       create: vi.fn(async () => ({ id: "attempt-1" })),
@@ -203,7 +205,7 @@ function fixture({
   };
 }
 
-describe("sub-bot routine run card", () => {
+describe("routine run card", () => {
   it("suppresses the free closing text and publishes a routine_run card (CA1/CA2)", async () => {
     const f = fixture();
     await f.run();
@@ -287,15 +289,30 @@ describe("sub-bot routine run card", () => {
     expect(card?.notify).toBe(true);
   });
 
-  it("does not touch a top-level bot's own routine (no card, ordinary reply)", async () => {
+  it("cards a top-level bot's scheduled routine too, expanded and still paging", async () => {
     const f = fixture({ parentBotId: null });
     await f.run();
+
+    expect(f.finalizeRun).toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
+    const card = f.messages
+      .flatMap((message) => message.blocks)
+      .find(
+        (block): block is Extract<MessageBlock, { kind: "routine_run" }> =>
+          block.kind === "routine_run",
+      );
+    expect(card?.state).toBe("completed");
+    // Its brief (or reminder) stays in front of the user even with the toggle off.
+    expect(card?.notify).toBe(true);
+  });
+
+  it("replies normally when the routine is gone before its run starts", async () => {
+    const f = fixture({ parentBotId: null, routineMissing: true });
+    await f.run();
+
+    expect(f.finalizeRun).not.toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
     expect(
       f.messages.some((message) => message.blocks.some((block) => block.kind === "routine_run")),
     ).toBe(false);
-    // A top-level bot's routine is its own user-facing brief; finalizeRun still gets the
-    // ordinary blocks (not suppressed).
-    expect(f.finalizeRun).not.toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
   });
 });
 
@@ -309,6 +326,12 @@ describe("inbound routine run card", () => {
 
     expect(f.finalizeRun).toHaveBeenCalledWith(expect.objectContaining({ blocks: [] }));
     expect(hasCard(f)).toBe(true);
+    // Unlike a scheduled brief, an inbound wake follows the routine's own toggle.
+    expect(
+      f.messages
+        .flatMap((message) => message.blocks)
+        .some((block) => block.kind === "routine_run" && block.notify === true),
+    ).toBe(false);
     expect(
       f.messages.some((message) => message.blocks.some((block) => block.kind === "text")),
     ).toBe(false);

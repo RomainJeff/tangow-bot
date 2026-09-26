@@ -13,10 +13,10 @@ async function threadBlocks(page: Page, botId: string): Promise<ThreadBlock[]> {
   return history.messages.flatMap((message) => message.blocks);
 }
 
-// A scheduled routine only renders as a run card for a sub-bot (parentBotId set, see
-// packages/adapters/src/executor.ts `showsRoutineRunCard`); a top-level bot's scheduled routine
-// stays a normal message. spawn_bot is the only way to create a parented bot, so this spec asks
-// the real model to spawn one before creating and running a routine on it directly via RPC.
+// Every routine run renders as a run card (packages/adapters/src/executor.ts
+// `showsRoutineRunCard`). This spec covers a sub-bot's own thread: spawn_bot is the only way to
+// create a parented bot, so it asks the real model to spawn one before creating and running a
+// routine on it directly via RPC.
 test("renders a routine run card in a sub-bot's own thread", async ({ page }, testInfo) => {
   const stamp = Date.now();
   await signup(page, `routine-run-card-${stamp}@rakazo.test`, "password12", "Routine Run Card");
@@ -90,8 +90,8 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
     .toBe(true);
 });
 
-// An inbound wake reports through a run card on every bot: the routine's instructions and the
-// payload stay in the run, not in a user bubble on the main thread.
+// An inbound wake reports through a run card too: the routine's instructions and the payload stay
+// in the run, not in a user bubble on the main thread.
 test("renders a webhook-woken routine as a run card, not a user message", async ({
   page,
 }, testInfo) => {
@@ -138,4 +138,33 @@ test("renders a webhook-woken routine as a run card, not a user message", async 
       (message) => message.role === "user" && JSON.stringify(message.blocks).includes("deploy."),
     ),
   ).toBe(false);
+});
+
+// A top-level bot's scheduled routine is its user-facing brief: it is carded like any routine,
+// but opens expanded and keeps paging even with "Notify me on every run" off.
+test("renders a top-level bot's scheduled routine as an expanded run card", async ({
+  page,
+}, testInfo) => {
+  const stamp = Date.now();
+  await signup(page, `brief-run-card-${stamp}@rakazo.test`, "password12", "Brief Run Card");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+
+  const routine = await rpc<Routine>(page, "routines/create", {
+    botId,
+    name: "Morning brief",
+    prompt: "Reply with a one-line status digest. No preamble, no images.",
+    crons: ["0 9 * * *"],
+    timezone: "UTC",
+    active: true,
+    notify: false,
+  });
+  await rpc(page, "routines/testRun", { routineId: routine.id });
+
+  const card = page.getByTestId("routine-run-card");
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await expect(card).toContainText("Morning brief");
+  await expect(card).toContainText("Completed", { timeout: 60_000 });
+  await expect(card.getByRole("button", { name: "Hide details" })).toBeVisible();
+  await captureScreenshot(page, testInfo, "scheduled-routine-run-card");
 });
