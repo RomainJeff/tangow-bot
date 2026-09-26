@@ -21,7 +21,7 @@ export function WorkingLine({ avatar, label, startedAt, className, ...props }: W
       className={cn("flex items-center gap-3.5", className)}
       {...props}
     >
-      {avatar ? <span className="w-message shrink-0">{avatar}</span> : null}
+      {avatar ? <span className="rk-buzz w-message shrink-0">{avatar}</span> : null}
       <span
         data-slot="working-line-label"
         className="min-w-0 truncate text-working text-muted-foreground"
