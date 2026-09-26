@@ -52,8 +52,11 @@ const GOAL_DONE_PROBABILITY = 0.5;
 /** At or above this, a click stops for confirmation. Low on purpose: a stop costs one turn. */
 const WAIT_MS = 500;
 const MAX_CONSECUTIVE_WAITS = 2;
-/** Suggestions of an autocomplete field appear after typing; observe again before deciding. */
-const COMBOBOX_SETTLE_MS = 250;
+/**
+ * A fill re-renders the page after it returns: suggestions appear, an advance button disabled
+ * until the field holds a value is enabled. Observe again after this before deciding.
+ */
+const FILL_SETTLE_MS = 300;
 const NO_PROGRESS_LIMIT = 3;
 const REPEAT_WINDOW = 6;
 const REPEAT_LIMIT = 3;
@@ -86,7 +89,7 @@ const CLICK_ROLES = new Set([
   "summary",
 ]);
 const TEXT_ROLES = new Set(["textbox", "searchbox", "combobox"]);
-const ELEMENT_LINE = /^- \S+ ".*" \[[^\]\s]+\](?: value=.*)?$/;
+const ELEMENT_LINE = /^- \S+ ".*" \[[^\]\s]+\](?: value=.*)?(?: disabled)?$/;
 const HELPER_NOTE = /^(?:\d+ embedded frames? (?:is|are) not listed|\(no interactive elements\))/;
 
 /**
@@ -552,8 +555,8 @@ async function runLoop(
             elements: acted.elements,
           }
         : await observe();
-    if (op === "fill" && target.element.role === "combobox") {
-      await sleep(COMBOBOX_SETTLE_MS, context.signal);
+    if (op !== "click") {
+      await sleep(FILL_SETTLE_MS, context.signal);
       context.signal.throwIfAborted();
       next = await observe();
     }
@@ -655,12 +658,14 @@ function stepQuestions(
   const lines = shown.map((element, position) => {
     const index = position + 1;
     const name = JSON.stringify(stateText(element.name, secrets, MAX_STATE_NAME_CHARS));
-    if (isPasswordField(element)) return `[${index}] ${element.role} ${name} (password)`;
+    // Marked so the model knows why a control it sees is not offered.
+    const disabled = element.disabled ? " disabled" : "";
+    if (isPasswordField(element)) return `[${index}] ${element.role} ${name} (password)${disabled}`;
     const value =
       element.value !== undefined && element.value !== ""
         ? ` value=${JSON.stringify(stateText(element.value, secrets, MAX_STATE_VALUE_CHARS))}`
         : "";
-    return `[${index}] ${element.role} ${name}${value}`;
+    return `[${index}] ${element.role} ${name}${value}${disabled}`;
   });
   const valueKeys = Object.keys(input.values);
   const optionLimit = Math.max(1, limits.maxOptions - 1);
@@ -681,7 +686,7 @@ function stepQuestions(
   const selects: Array<{ element: BrowserSnapshotNode; index: number }> = [];
   shown.forEach((element, position) => {
     const index = position + 1;
-    if (isPasswordField(element)) return;
+    if (isPasswordField(element) || element.disabled) return;
     if (element.tag === "select") {
       selects.push({ element, index });
       return;

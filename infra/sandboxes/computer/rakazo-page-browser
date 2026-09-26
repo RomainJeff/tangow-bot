@@ -426,13 +426,16 @@ EVAL_HELPERS = r"""
     if (!count) return "";
     return `\n${count} embedded frame${count === 1 ? " is" : "s are"} not listed; use the refs above for this page, and desktop tools only for content inside a frame.`;
   }
+  function isDisabled(el) {
+    return el.matches(":disabled") || el.getAttribute("aria-disabled") === "true";
+  }
   function formatTree(elements) {
     if (!elements.length) return "(no interactive elements)";
     return elements
       .map((el) => {
         const value =
           el.value !== undefined && el.value !== "" ? ` value=${JSON.stringify(el.value)}` : "";
-        return `- ${el.role} "${el.name}" [${el.ref}]${value}`;
+        return `- ${el.role} "${el.name}" [${el.ref}]${value}${el.disabled ? " disabled" : ""}`;
       })
       .join("\n");
   }
@@ -455,6 +458,7 @@ EVAL_HELPERS = r"""
           tag: el.tagName.toLowerCase(),
           ...(el.type === "password" ? { password: true } : {}),
           ...(el instanceof HTMLSelectElement ? selectOptions(el) : {}),
+          ...(isDisabled(el) ? { disabled: true } : {}),
         });
         if (elements.length >= 80) break;
       }
@@ -469,7 +473,7 @@ EVAL_HELPERS = r"""
     resolve(ref) {
       const el = refMap.get(String(ref));
       if (!el || !el.isConnected || !visible(el)) return null;
-      if (el.matches(":disabled") || el.getAttribute("aria-disabled") === "true") {
+      if (isDisabled(el)) {
         throw new Error("Element is disabled");
       }
       return el;

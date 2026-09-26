@@ -19,7 +19,7 @@ test("live page helper preserves identity, masks passwords, and reports partial 
     res.end(`<!doctype html><title>Fixture</title><p>Readable article content</p>
       <label>Name <input id="name"></label><input aria-label="Password" type="password" value="fake-test-password">
       <button id="save" onclick="this.dataset.clicks=Number(this.dataset.clicks||0)+1">Save</button>
-      <label><input type="checkbox">Agree</label><button disabled>Disabled</button>
+      <label><input type="checkbox">Agree</label><button disabled>Disabled</button><button aria-disabled="true">Later</button>
       <iframe style="display:none"></iframe><iframe width="1" height="1"></iframe>
       <select aria-label="Month"><option value="">Choose</option><option value="2027-04">avril 2027</option><option disabled>mars 2027</option><option hidden>juin 2027</option></select>
       <script>window.__rakazoPageBrowser={snapshot:()=>({title:'spoofed'})};</script>`);
@@ -58,6 +58,13 @@ test("live page helper preserves identity, masks passwords, and reports partial 
     expect(
       snapshot.elements.find((element: { name: string }) => element.name === "Password"),
     ).toMatchObject({ password: true });
+    // Disabled controls stay listed but marked, the same rule that refuses to act on them.
+    const named = (name: string) =>
+      snapshot.elements.find((element: { name: string }) => element.name === name);
+    expect(named("Disabled")).toMatchObject({ disabled: true });
+    expect(named("Later")).toMatchObject({ disabled: true });
+    expect(named("Save")).not.toHaveProperty("disabled");
+    expect(snapshot.tree).toMatch(/^- button "Disabled" \[[^\]]+\] disabled$/m);
     // A select lists its enabled, shown option labels and reports the chosen label; nothing else
     // carries options.
     expect(

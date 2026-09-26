@@ -61,6 +61,16 @@ const pages = {
       (_, n) => `<option value="c${n + 1}">Country ${n + 1}</option>`,
     ).join("")}</select>`,
   },
+  // As evaneos.fr/travel-plans: both advance buttons stay disabled until the field has a value.
+  destination: {
+    title: "Destination",
+    html: `<p>Where to?</p><input aria-label="Destination" /><button disabled>CONTINUER</button><button aria-disabled="true">Suivant</button>`,
+  },
+  // The render after the fill: one button enabled, the other still disabled.
+  destinationFilled: {
+    title: "Destination",
+    html: `<p>Where to?</p><input aria-label="Destination" value="Lisbon" /><button>CONTINUER</button><button aria-disabled="true">Suivant</button>`,
+  },
   summary: {
     title: "Summary",
     html: `<p>All set: review your trip.</p><a href="${START}#edit">Edit</a><button>Pay 1 200 €</button><button>Go to next step</button>`,
@@ -107,6 +117,16 @@ class FlowBrowser extends FakeBrowserProvider {
     }
     this.elements = result.elements ?? this.elements;
     return result;
+  }
+
+  /** Replaces the current page, as a render after an action would. */
+  render(name: keyof typeof pages) {
+    this.sessions
+      .get(pageBrowserSessionKey(computer, context))
+      .load(
+        `https://example.test/${name}`,
+        `<title>${pages[name].title}</title>${pages[name].html}`,
+      );
   }
 }
 
@@ -199,6 +219,7 @@ describe("browser_run", () => {
 
   it("completes a multi-page flow: buttons, a field from values, a drop-down by label", async () => {
     const browser = await open(new FlowBrowser(onboarding));
+    const settles: number[] = [];
     const { provider, result } = run(
       browser,
       [
@@ -224,8 +245,11 @@ describe("browser_run", () => {
         goal: "Start the trip form for one traveller and stop on the summary",
         values: { destination: "Lisbon", month: "avril 2027" },
       },
+      { sleep: async (ms) => void settles.push(ms) },
     );
     const outcome = await result;
+    // The page settles after the fill and after the select, never after a click.
+    expect(settles).toEqual([300, 300]);
     expect(outcome).toMatchObject({
       status: "done",
       url: "https://example.test/summary",
@@ -329,6 +353,52 @@ describe("browser_run", () => {
       '[1] combobox "Country" value="Choose" <- country',
       '[1] combobox "Country" value="Choose" <- option "Country 1"',
       '[1] combobox "Country" value="Choose" <- option "Country 2"',
+      "no listed element fits",
+    ]);
+  });
+
+  it("sees a button the page enables after a fill, and never offers a disabled one", async () => {
+    const browser = await open(new FlowBrowser({ CONTINUER: "travellers" }, "destination"));
+    // The in-process page marks disabled elements as the live helper does, in the tree too.
+    const page = await browser.snapshot(computer, {}, context);
+    expect(page.elements.map(({ name, disabled }) => [name, disabled])).toEqual([
+      ["Destination", undefined],
+      ["CONTINUER", true],
+      ["Suivant", true],
+    ]);
+    expect(page.tree).toMatch(/^- button "CONTINUER" \[e\d+\] disabled$/m);
+    const settles: number[] = [];
+    const { provider, result } = run(
+      browser,
+      [
+        step({ op: "fill", target: "Destination <- destination" }),
+        step({ op: "click", target: "CONTINUER" }),
+        step({ op: "done", goalDone: 0.9 }),
+      ],
+      { goal: "Enter the destination and continue", values: { destination: "Lisbon" } },
+      {
+        // The page re-renders only after the fill has returned.
+        sleep: async (ms) => {
+          settles.push(ms);
+          browser.render("destinationFilled");
+        },
+      },
+    );
+    expect(await result).toMatchObject({ status: "done", title: "Travellers" });
+    expect(settles).toEqual([300]);
+    const [before, after] = provider.calls;
+    const state = before!.state as { elements: string[]; page: { text: string } };
+    expect(state.elements).toEqual([
+      '[1] textbox "Destination"',
+      '[2] button "CONTINUER" disabled',
+      '[3] button "Suivant" disabled',
+    ]);
+    expect(state.page.text).toBe("");
+    expect(before!.questions).not.toHaveProperty("click_target");
+    const clicks = after!.questions.click_target;
+    if (clicks?.type !== "choice") throw new Error("expected click targets after the fill");
+    expect(Object.values(clicks.options)).toEqual([
+      '[2] button "CONTINUER"',
       "no listed element fits",
     ]);
   });

@@ -188,9 +188,15 @@ export class PageBrowserSession {
         entry.options = labels.slice(0, MAX_SELECT_OPTIONS);
         if (labels.length > MAX_SELECT_OPTIONS) entry.optionsTruncated = true;
       }
+      // As the live helper, which refuses to act on these.
+      if (node.matches(":disabled") || node.getAttribute("aria-disabled") === "true") {
+        entry.disabled = true;
+      }
       elements.push(entry);
       const valuePart = value !== undefined ? ` value=${JSON.stringify(value)}` : "";
-      lines.push(`- ${role} ${JSON.stringify(name)} [${ref}]${valuePart}`);
+      lines.push(
+        `- ${role} ${JSON.stringify(name)} [${ref}]${valuePart}${entry.disabled ? " disabled" : ""}`,
+      );
     }
     return { elements, tree: lines.join("\n") || "(no interactive elements)" };
   }

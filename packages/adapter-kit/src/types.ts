@@ -802,6 +802,8 @@ export interface BrowserSnapshotNode {
   options?: string[];
   /** The select has more options than `options` lists. */
   optionsTruncated?: true;
+  /** Matches `:disabled` or has `aria-disabled="true"`: listed, but no action reaches it. */
+  disabled?: true;
 }
 
 export interface BrowserSnapshotResult {
