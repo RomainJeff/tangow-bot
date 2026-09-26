@@ -66,6 +66,7 @@ import {
   resumeLiveNotifications,
   syncAppBadge,
 } from "../lib/live-notifications";
+import { saveMainBotCache } from "../lib/main-bot-cache";
 import { native, useThemedStyles } from "../lib/native";
 import { previewSnippet } from "../lib/preview";
 import { setProfilePhoto, useProfilePhoto } from "../lib/profile-photo";
@@ -151,6 +152,7 @@ export default function Home() {
       }
       if (requestId !== inboxRequestId.current) return;
       setBots(navigation.current.bots);
+      void saveMainBotCache(navigation.current.bots);
       setBotSections(navigation.current.botSections);
       setGroups(navigation.current.groups);
       setSpaces(navigation.spaces);
