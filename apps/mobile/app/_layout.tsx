@@ -1,11 +1,12 @@
 import { DarkTheme, Stack, ThemeProvider } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { AvatarStyleProvider } from "../components/avatar-style";
 import { ComputerUpdateProgress } from "../components/computer-update-progress";
+import { LaunchSplash } from "../components/launch-splash";
 import { loadDisplayAgentSteps } from "../lib/agent-steps-pref";
 import { currentApiBase, loadApiBase, loadSessionToken, selectedSpaceId } from "../lib/api";
 import { loadAppearancePreference, mobileTokens } from "../lib/appearance";
@@ -18,9 +19,15 @@ import { native, useResolvedAppearance } from "../lib/native";
 
 configureForegroundNotifications();
 
+// The animated `LaunchSplash` takes over immediately (see below); keep the
+// native splash frozen until it has mounted, so the native → JS handoff has
+// no flash of an empty screen.
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
 export default function Layout() {
   const { t } = useI18n();
   const [ready, setReady] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
   const resolved = useResolvedAppearance();
   const navigationTheme = useMemo(() => {
     const tokens = mobileTokens();
@@ -54,6 +61,13 @@ export default function Layout() {
       loadDisplayAgentSteps(),
     ]).finally(() => setReady(true));
   }, []);
+
+  // The animated splash mirrors the native one pixel-for-pixel, so the native
+  // screen can come down as soon as ours has laid out — no gap, no flash.
+  const revealSplash = useCallback(() => {
+    void SplashScreen.hideAsync().catch(() => undefined);
+  }, []);
+  const handleSplashHidden = useCallback(() => setSplashDone(true), []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -129,8 +143,9 @@ export default function Layout() {
               <ComputerUpdateProgress />
             </ThemeProvider>
           </AvatarStyleProvider>
-        ) : (
-          <View style={{ flex: 1, backgroundColor: String(native.page) }} />
+        ) : null}
+        {splashDone ? null : (
+          <LaunchSplash ready={ready} onHidden={handleSplashHidden} onLayout={revealSplash} />
         )}
       </KeyboardProvider>
     </GestureHandlerRootView>

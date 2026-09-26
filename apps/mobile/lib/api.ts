@@ -36,6 +36,7 @@ import { promptAiConsent } from "./ai-consent";
 import { defaultApiBase, type EndpointResult, normalizeApiBase } from "./endpoint";
 import { t } from "./i18n";
 import { resumeLiveNotifications } from "./live-notifications";
+import { clearMainBotCache } from "./main-bot-cache";
 import {
   clearSessionToken,
   loadSessionToken,
@@ -549,6 +550,7 @@ export async function signOut() {
   }
   const sessionCleared = await clearSessionToken();
   const spaceCleared = await clearSpace();
+  await clearMainBotCache();
   if (!sessionCleared || !spaceCleared) throw new Error(t("Could not clear the local session"));
 }
 
@@ -590,6 +592,7 @@ export async function deleteAccount(password: string) {
   }
   await clearSessionToken();
   await clearSpace();
+  await clearMainBotCache();
 }
 
 export async function rpc<T>(
