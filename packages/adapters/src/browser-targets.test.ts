@@ -371,6 +371,21 @@ describe("browser_act targets", () => {
     });
   });
 
+  it("never leaves a secret fragment in a truncated option name", async () => {
+    const browser = await openPage(
+      `<a href="${PAGE}" aria-label="${"x".repeat(112)}sk-secret-value">link</a>`,
+    );
+    const { provider, options } = targets([chooseByName("x", 0.9)]);
+    await browserActFromTool(
+      browser,
+      computer,
+      context,
+      { actions: [{ kind: "click", target: "the long link" }] },
+      options,
+    );
+    expect(JSON.stringify(provider.calls[0]!.questions)).not.toContain("sk-sec");
+  });
+
   it("redacts secrets from the request and keeps content out of logs", async () => {
     const sink = createTestSink();
     installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));

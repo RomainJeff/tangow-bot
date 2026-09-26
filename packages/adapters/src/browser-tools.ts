@@ -480,9 +480,9 @@ function targetRequest(
   // Role and name only: no field values, and never the page text that opens `tree`.
   const options: Record<string, string> = {};
   for (const element of candidates) {
-    options[element.ref] = redact(
-      `${element.role} ${JSON.stringify(truncate(element.name, MAX_OPTION_NAME_CHARS))}`,
-    );
+    // Redact before truncating so a cut can never leave part of a secret behind.
+    options[element.ref] =
+      `${element.role} ${JSON.stringify(truncate(redact(element.name), MAX_OPTION_NAME_CHARS))}`;
   }
   options[NONE_OPTION] = "no listed element matches";
   return {
