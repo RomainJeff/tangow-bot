@@ -1,5 +1,7 @@
 # Jev pour la partie navigateur du runtime ordinateur
 
+> **Remplacé** par [`docs/plans/2026-09-26-jev-browser-run.md`](../../docs/plans/2026-09-26-jev-browser-run.md) : ces tickets restent pour l'historique.
+
 Cadrage de l'usage d'un modèle de décision typée (Jev, « System One » de TypeSafe AI, septembre 2026) dans la boucle `browser_navigate` / `browser_snapshot` / `browser_act` des bots. Chaque ticket est ancré sur le contrat navigateur réellement livré dans le dépôt, pas sur la recette d'un harnais tiers — voir `NON-GOALS.md` pour ce qui a été écarté et pourquoi.
 
 ## Le problème
