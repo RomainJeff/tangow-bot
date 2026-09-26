@@ -402,6 +402,17 @@ EVAL_HELPERS = r"""
     }
     return typeof el.onclick === "function" || el.hasAttribute("tabindex");
   }
+  // Hidden and pixel-sized frames (ads, trackers) are not content the model could miss, and
+  // a vague "frames require desktop tools" note pushes models off the page tools entirely.
+  function frameNote() {
+    const count = Array.from(document.querySelectorAll("iframe,frame")).filter((frame) => {
+      if (!visible(frame)) return false;
+      const rect = frame.getBoundingClientRect();
+      return rect.width >= 50 && rect.height >= 50;
+    }).length;
+    if (!count) return "";
+    return `\n${count} embedded frame${count === 1 ? " is" : "s are"} not listed; use the refs above for this page, and desktop tools only for content inside a frame.`;
+  }
   function formatTree(elements) {
     if (!elements.length) return "(no interactive elements)";
     return elements
@@ -428,6 +439,7 @@ EVAL_HELPERS = r"""
             : ["checkbox", "radio"].includes(el.type) ? (el.checked ? "checked" : "unchecked")
             : "value" in el ? String(el.value ?? "").slice(0, 2000) : undefined,
           tag: el.tagName.toLowerCase(),
+          ...(el.type === "password" ? { password: true } : {}),
         });
         if (elements.length >= 80) break;
       }
@@ -436,7 +448,7 @@ EVAL_HELPERS = r"""
         title: (document.title || "").slice(0, 200),
         elements,
         tree: (document.body?.innerText || "").slice(0, 12000) + "\n" + formatTree(elements)
-          + (document.querySelector("iframe,frame") ? "\nEmbedded frames require desktop tools." : ""),
+          + frameNote(),
       };
     },
     resolve(ref) {
@@ -463,10 +475,22 @@ EVAL_HELPERS = r"""
         if (el instanceof HTMLInputElement && !["text", "search", "email", "url", "tel", "password", "number"].includes(el.type)) {
           throw new Error("Input type requires desktop tools");
         }
-        const prototype = el instanceof HTMLInputElement ? HTMLInputElement.prototype
-          : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLSelectElement.prototype;
-        Object.getOwnPropertyDescriptor(prototype, "value").set.call(el, String(value));
-        if (el.value !== String(value)) throw new Error("Input did not accept the requested value");
+        if (el instanceof HTMLSelectElement) {
+          // Models name an option by what they read: its label, not its hidden value.
+          const wanted = String(value).trim().toLowerCase();
+          const options = Array.from(el.options).filter((option) => !option.disabled);
+          const match = options.find((option) => option.value === String(value))
+            || options.find((option) => option.label.trim().toLowerCase() === wanted);
+          if (!match) {
+            const labels = options.map((option) => JSON.stringify(option.label.trim())).slice(0, 20);
+            throw new Error(`No option matches the requested value; options: ${labels.join(", ")}`);
+          }
+          el.value = match.value;
+        } else {
+          const prototype = el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+          Object.getOwnPropertyDescriptor(prototype, "value").set.call(el, String(value));
+          if (el.value !== String(value)) throw new Error("Input did not accept the requested value");
+        }
         el.dispatchEvent(new Event("input", { bubbles: true }));
         el.dispatchEvent(new Event("change", { bubbles: true }));
       } else if (el.isContentEditable) {
@@ -501,12 +525,12 @@ def eval_json(client: CdpClient, session_id: str, expression: str) -> Any:
     )
     if result.get("exceptionDetails"):
         details = result["exceptionDetails"]
-        text = (
-            details.get("text")
-            or (details.get("exception") or {}).get("description")
-            or "evaluate failed"
-        )
-        raise RuntimeError(str(text))
+        # "text" is only "Uncaught"; the thrown message is the first line of the description.
+        description = str((details.get("exception") or {}).get("description") or "")
+        message = description.splitlines()[0] if description else ""
+        if message.startswith("Error: "):
+            message = message[len("Error: ") :]
+        raise RuntimeError(message or str(details.get("text") or "evaluate failed"))
     return (result.get("result") or {}).get("value")
 
 

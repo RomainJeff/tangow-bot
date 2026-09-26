@@ -793,6 +793,8 @@ export interface BrowserSnapshotNode {
   name: string;
   value?: string;
   tag?: string;
+  /** A password input: its value is never reported. */
+  password?: true;
 }
 
 export interface BrowserSnapshotResult {

@@ -179,6 +179,7 @@ export class PageBrowserSession {
       const tag = node.tagName.toLowerCase();
       const entry: BrowserSnapshotNode = { ref, role, name, tag };
       if (value !== undefined) entry.value = value;
+      if (node instanceof win.HTMLInputElement && node.type === "password") entry.password = true;
       elements.push(entry);
       const valuePart = value !== undefined ? ` value=${JSON.stringify(value)}` : "";
       lines.push(`- ${role} ${JSON.stringify(name)} [${ref}]${valuePart}`);

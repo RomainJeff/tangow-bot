@@ -20,6 +20,8 @@ test("live page helper preserves identity, masks passwords, and reports partial 
       <label>Name <input id="name"></label><input aria-label="Password" type="password" value="fake-test-password">
       <button id="save" onclick="this.dataset.clicks=Number(this.dataset.clicks||0)+1">Save</button>
       <label><input type="checkbox">Agree</label><button disabled>Disabled</button>
+      <iframe style="display:none"></iframe><iframe width="1" height="1"></iframe>
+      <select aria-label="Month"><option value="">Choose</option><option value="2027-04">avril 2027</option></select>
       <script>window.__rakazoPageBrowser={snapshot:()=>({title:'spoofed'})};</script>`);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -49,7 +51,13 @@ test("live page helper preserves identity, masks passwords, and reports partial 
     expect(snapshot.ok).toBe(true);
     expect(snapshot.title).toBe("Fixture");
     expect(snapshot.tree).toContain("Readable article content");
+    // Hidden and pixel-sized frames stay silent; a visible frame is counted, not generalized.
+    expect(snapshot.tree).not.toMatch(/embedded frame/i);
     expect(JSON.stringify(snapshot)).not.toContain("fake-test-password");
+    // Marked so no caller ever offers the field for typing or reports its value.
+    expect(
+      snapshot.elements.find((element: { name: string }) => element.name === "Password"),
+    ).toMatchObject({ password: true });
     const ref = (snapshot: { elements: { name: string; ref: string }[] }, name: string) =>
       snapshot.elements.find((element) => element.name === name)!.ref;
     const result = await command("act", {
@@ -63,6 +71,30 @@ test("live page helper preserves identity, masks passwords, and reports partial 
     await expect(page.locator("#name")).toHaveValue("Example");
     await expect(page.locator("#save")).toHaveAttribute("data-clicks", "1");
 
+    await page.evaluate(() => {
+      const frame = document.createElement("iframe");
+      frame.id = "visible-frame";
+      frame.width = "300";
+      frame.height = "200";
+      document.body.append(frame);
+    });
+    const framed = await command("snapshot");
+    expect(framed.tree).toContain("1 embedded frame is not listed");
+    expect(framed.tree).not.toContain("require desktop tools");
+    await page.locator("#visible-frame").evaluate((el) => el.remove());
+    // A select is filled by the option label the model read; a miss says which labels exist.
+    const withSelect = await command("snapshot");
+    expect(
+      await command("act", {
+        actions: [{ kind: "fill", ref: ref(withSelect, "Month"), text: "Avril 2027" }],
+      }),
+    ).toMatchObject({ ok: true, completed: 1 });
+    await expect(page.getByLabel("Month")).toHaveValue("2027-04");
+    const missed = await command("act", {
+      actions: [{ kind: "fill", ref: ref(await command("snapshot"), "Month"), text: "mai 2027" }],
+    });
+    expect(missed).toMatchObject({ ok: false, completed: 0 });
+    expect(missed.error).toContain('options: "Choose", "avril 2027"');
     const stale = await command("snapshot");
     await page.locator("#save").evaluate((el) => {
       el.outerHTML = '<button id="save">Replacement</button>';
