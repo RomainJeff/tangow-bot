@@ -225,6 +225,10 @@ interface RunStats {
   reportedCost: boolean;
 }
 
+/** Added to page tool results when browser_run is available. */
+export const BROWSER_RUN_HINT =
+  "To do several steps on this page, call browser_run with the goal and the values you know instead of acting ref by ref.";
+
 export async function browserRunFromTool(
   browser: BrowserProvider,
   computer: ComputerRef,

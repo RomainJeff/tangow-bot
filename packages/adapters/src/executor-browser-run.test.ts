@@ -186,7 +186,7 @@ async function runWithDecisionProvider(
     results,
     effects,
     offered: tools.some((tool) => tool.name === "browser_run"),
-    instructed: instructions.includes("call browser_run"),
+    instructed: instructions.includes("hand the whole page task to browser_run"),
   };
 }
 
@@ -201,6 +201,7 @@ describe("browser_run executor wiring", () => {
       const hidden = await runWithDecisionProvider(resolve);
       expect(hidden).toMatchObject({ offered: false, instructed: false });
       expect(hidden.results[1]).toMatchObject({ status: "unavailable" });
+      expect(hidden.results[0]).not.toHaveProperty("next");
       expect(hidden.browser.acts).toHaveLength(0);
     }
 
@@ -217,6 +218,8 @@ describe("browser_run executor wiring", () => {
       };
       const connected = await runWithDecisionProvider(async () => provider, trace);
       expect(connected).toMatchObject({ offered: true, instructed: true });
+      // The page result itself points at browser_run, where a light model actually looks.
+      expect(connected.results[0]).toMatchObject({ next: expect.stringContaining("browser_run") });
       expect(connected.results[1]).toMatchObject({
         status: "step_limit",
         steps: [{ op: "click", role: "button", name: "Search", ok: true }],
