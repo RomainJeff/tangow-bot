@@ -22,7 +22,6 @@ function setup() {
         findMany: vi.fn(async () => [{ credential: { provider: "openai" } }]),
       },
       spaceMemoryConfig: { findUnique: vi.fn(async () => null) },
-      spaceDecisionConfig: { findUnique: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
       aiDataConsent: { findMany: vi.fn(async () => []), upsert },
       $transaction: vi.fn(async (queries) => Promise.all(queries)),
@@ -65,34 +64,6 @@ describe("consent grants", () => {
     expect(status.recipients).toHaveLength(1);
     expect(status.recipients[0]?.name).toBe("OpenAI");
     expect(deps.prisma.spaceVoicePreference.findMany).not.toHaveBeenCalled();
-  });
-  it("lists the decision provider only when the Space has a connection", async () => {
-    const { deps, actor } = setup();
-    const none = await aiConsentStatus(deps, actor, { uses: ["decision"] });
-    expect(none.recipients).toEqual([]);
-    vi.mocked(deps.prisma.spaceDecisionConfig.findUnique).mockResolvedValue({
-      provider: "openrouter",
-      settings: {},
-    } as never);
-    const status = await aiConsentStatus(deps, actor, { uses: ["decision"] });
-    expect(status.recipients).toEqual([
-      expect.objectContaining({
-        use: "decision",
-        name: "OpenRouter",
-        privacyUrl: "https://openrouter.ai/privacy",
-        allowed: false,
-      }),
-    ]);
-    expect(status.recipients[0]?.detail).toContain("forwards requests to model providers");
-    vi.mocked(deps.prisma.spaceDecisionConfig.findUnique).mockResolvedValue({
-      provider: "openrouter",
-      settings: { baseUrl: "https://proxy.example.test/v1", modelId: "~typesafe/jev-latest" },
-    } as never);
-    const proxied = await aiConsentStatus(deps, actor, { uses: ["decision"] });
-    expect(proxied.recipients[0]).toMatchObject({
-      name: "OpenRouter (https://proxy.example.test)",
-    });
-    expect(proxied.recipients[0]?.detail).toContain("Model: ~typesafe/jev-latest.");
   });
   it("returns an operator policy without requiring a hosted provider", async () => {
     const { deps, actor } = setup();

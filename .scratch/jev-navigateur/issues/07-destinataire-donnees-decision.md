@@ -1,6 +1,8 @@
 # 07: Déclarer le fournisseur de décision comme destinataire de données
 
-> **Livré en version minimale (lot 1, 2026-09-26).** Usage `decision`, divulgation et destinataire dérivé de la connexion ; porte mobile existante. **Pas** de porte serveur `not_consented`, **pas** d'avance d'`AI_DISCLOSURE_VERSION` (décision du mainteneur). Écarts en fin de ticket.
+> **Retiré (2026-09-26, décision du mainteneur).** L'usage `decision` et tout ce qui le concerne (divulgation, destinataire dérivé, tests, doc de revue) ont été supprimés d'ai-consent ; le fournisseur de décision n'est pas listé dans le partage de données IA. Le texte ci-dessous est historique.
+>
+> ~~**Livré en version minimale (lot 1, 2026-09-26).**~~ Usage `decision`, divulgation et destinataire dérivé de la connexion ; porte mobile existante. **Pas** de porte serveur `not_consented`, **pas** d'avance d'`AI_DISCLOSURE_VERSION` (décision du mainteneur). Écarts en fin de ticket.
 
 **What to build:** Un utilisateur qui regarde « Partage de données IA » voit le fournisseur de décision à côté du modèle, de la voix et de la mémoire, avec ce qui lui est envoyé ; sur mobile, la permission est demandée avant qu'une action l'utilise ; ~~et un utilisateur qui n'a pas accordé cette permission fait tourner ses bots exactement comme avant, sans fournisseur de décision, sans erreur.~~
 

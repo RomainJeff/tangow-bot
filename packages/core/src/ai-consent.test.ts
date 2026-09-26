@@ -84,13 +84,13 @@ describe("foreground AI consent", () => {
     });
     expect(prompt).not.toHaveBeenCalled();
     expect(aiDataUsesForProcedure("threads/get")).toEqual([]);
-    expect(aiDataUsesForProcedure("threads/send")).toEqual(["model", "memory", "decision"]);
+    expect(aiDataUsesForProcedure("threads/send")).toEqual(["model", "memory"]);
     expect(aiDataUsesForProcedure("voice/prepare")).toEqual(["voice"]);
     expect(
       aiDataUsesForProcedure("routines/update", { routineId: "routine", active: false }),
     ).toEqual([]);
     expect(
       aiDataUsesForProcedure("routines/update", { routineId: "routine", active: true }),
-    ).toEqual(["model", "memory", "decision"]);
+    ).toEqual(["model", "memory"]);
   });
 });
