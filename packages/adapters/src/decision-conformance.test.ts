@@ -204,6 +204,22 @@ describe("decision conformance", () => {
     }
   });
 
+  it("accepts a many-option distribution whose rounded entries drift from 1", async () => {
+    // 75 options at two decimals, as OpenRouter reports them: 0.30 + 74 × 0.01 = 1.04.
+    const keys = Array.from({ length: 74 }, (_, index) => `e${index + 1}`);
+    const options = Object.fromEntries([...keys, "none"].map((key) => [key, key]));
+    const probabilities = Object.fromEntries([...keys, "none"].map((key) => [key, 0.01]));
+    probabilities.e1 = 0.3;
+    const request = {
+      state: "page",
+      questions: { target: { type: "choice" as const, instructions: "pick", options } },
+    };
+    const provider = new FakeDecisionProvider({ script: [choiceAnswer("e1", probabilities)] });
+    expect(await decideWithin(provider, request, contextWith(), { timeoutMs: 50 })).toMatchObject({
+      ok: true,
+    });
+  });
+
   it("refuses a choice above maxOptions before calling the provider", async () => {
     const provider = new FakeDecisionProvider({ maxOptions: 2 });
     const result = await decideWithin(provider, choiceRequest, contextWith(), { timeoutMs: 50 });

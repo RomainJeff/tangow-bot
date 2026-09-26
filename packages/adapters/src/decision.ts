@@ -12,6 +12,11 @@ import { getLogger } from "@rakazo/logging";
 import { combineSignals } from "./connector-safety.js";
 
 const PROBABILITY_TOLERANCE = 1e-3;
+/**
+ * Providers round each probability (OpenRouter documents two decimals), so the sum of
+ * n rounded entries can drift from 1 by up to n × half a unit.
+ */
+const ROUNDING_TOLERANCE_PER_ENTRY = 0.005;
 
 class DecisionTimeoutError extends Error {}
 
@@ -140,12 +145,14 @@ function validAnswer(question: DecisionQuestion, raw: unknown): raw is DecisionA
 function validDistribution(value: unknown, keys: string[]): boolean {
   if (!value || typeof value !== "object") return false;
   const allowed = new Set(keys);
+  const entries = Object.entries(value);
   let total = 0;
-  for (const [key, probability] of Object.entries(value)) {
+  for (const [key, probability] of entries) {
     if (!allowed.has(key) || !isProbability(probability)) return false;
     total += probability;
   }
-  return Math.abs(total - 1) <= PROBABILITY_TOLERANCE;
+  const tolerance = PROBABILITY_TOLERANCE + ROUNDING_TOLERANCE_PER_ENTRY * entries.length;
+  return Math.abs(total - 1) <= tolerance;
 }
 
 function isProbability(value: unknown): value is number {
