@@ -76,6 +76,7 @@ import {
   shouldNotifyBrowser,
 } from "../lib/browser-notifications";
 import { loadComputerScreen } from "../lib/computer-screen";
+import { dictation } from "../lib/dictation";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { copyableMessageText } from "../lib/message-text";
 import { revokePendingAttachmentPreviews } from "../lib/pending-attachments";
@@ -2612,6 +2613,24 @@ export function ShellPage() {
             panel={panel}
             setPanel={setPanel}
             refreshThread={refreshThread}
+            disabled={Boolean(recordingSkill)}
+            onVoice={
+              !inGroup && active
+                ? () => {
+                    // The composer's dictation and the call share the same
+                    // `Dictation` instance; starting the call must cancel a
+                    // dictation in progress first (the composer restores its
+                    // draft once it sees dictation get cut off from under it).
+                    dictation.stop("cancel");
+                    if (!voiceStatus?.ready) {
+                      openSettings("voice");
+                      return;
+                    }
+                    setCallOpen(true);
+                  }
+                : undefined
+            }
+            voiceButtonRef={voiceButtonRef}
           />
           <div className="mx-auto flex min-h-0 w-full max-w-thread flex-1 flex-col px-3.5">
             {!active && !activeGroup && initialBotsLoaded ? (
@@ -2666,6 +2685,7 @@ export function ShellPage() {
                   inGroup ? (activeGroup?.name ?? activeSnapshot?.groupName) : active?.name
                 }
                 running={composerRunning}
+                botColor={active?.color}
                 disabled={Boolean(recordingSkill)}
                 pendingAttachments={activePendingAttachments}
                 attachmentNotice={attachmentNotice}
@@ -2680,18 +2700,7 @@ export function ShellPage() {
                 onRemoveAttachment={removeAttachment}
                 onSend={sendMessage}
                 onStop={stopRun}
-                onVoice={
-                  !inGroup && active
-                    ? () => {
-                        if (!voiceStatus?.ready) {
-                          openSettings("voice");
-                          return;
-                        }
-                        setCallOpen(true);
-                      }
-                    : undefined
-                }
-                voiceButtonRef={voiceButtonRef}
+                dictationTranscribe={Boolean(voiceStatus?.transcribe)}
                 replyTarget={activeReplyTarget}
                 replyTargetName={replyTargetName}
                 onClearReply={() => setReplyTarget(null)}

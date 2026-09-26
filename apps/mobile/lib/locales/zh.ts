@@ -696,4 +696,11 @@ export const ZH_MESSAGES: Record<string, string> = {
   "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
     "开启后每次运行都会通知并展开卡片；关闭则仅在此对话中保留静默记录。",
   "Could not update routine": "无法更新例行任务",
+
+  Dictate: "语音输入",
+  "Cancel dictation": "取消语音输入",
+  "Insert dictation": "插入语音输入的文字",
+  Dictating: "正在语音输入",
+  "Microphone access is off": "麦克风未授权",
+  "Open Settings": "打开设置",
 };

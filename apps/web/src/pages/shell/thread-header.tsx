@@ -2,8 +2,8 @@ import { useLingui } from "@lingui/react/macro";
 import type { Bot, Group, ThreadSnapshot } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { Button, StackedAvatars } from "@rakazo/ui-web";
-import { Menu, Monitor, PanelLeftOpen, Settings } from "lucide-react";
-import type { Dispatch, SetStateAction } from "react";
+import { Menu, Mic, Monitor, PanelLeftOpen, Settings } from "lucide-react";
+import type { Dispatch, RefObject, SetStateAction } from "react";
 import { desktopBridge } from "../../lib/desktop";
 import { WindowChrome } from "../WindowChrome";
 import type { Panel } from "./layout";
@@ -19,6 +19,9 @@ export function ThreadHeader({
   panel,
   setPanel,
   refreshThread,
+  onVoice,
+  voiceButtonRef,
+  disabled,
 }: {
   botsSidebarCollapsed: boolean;
   setMobileSidebarOpen: Dispatch<SetStateAction<boolean>>;
@@ -30,6 +33,11 @@ export function ThreadHeader({
   panel: Panel;
   setPanel: Dispatch<SetStateAction<Panel>>;
   refreshThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
+  /** 1:1 conversations only — a group has no call, only the composer's dictation. */
+  onVoice?: () => void;
+  voiceButtonRef?: RefObject<HTMLButtonElement | null>;
+  /** Same readiness logic as the composer's own buttons (e.g. a skill is being taught). */
+  disabled?: boolean;
 }) {
   const { t } = useLingui();
   const members = activeSnapshot?.members ?? activeGroup?.members ?? [];
@@ -87,6 +95,21 @@ export function ThreadHeader({
         </button>
       </div>
       <div className="flex items-center gap-1">
+        {!inGroup && active && onVoice ? (
+          <Button
+            ref={voiceButtonRef}
+            variant="tertiary"
+            size="capsule"
+            data-testid="open-voice-call"
+            aria-label={t`Voice`}
+            title={t`Voice`}
+            disabled={disabled}
+            onClick={onVoice}
+            className="app-no-drag"
+          >
+            <Mic size={17} strokeWidth={1.6} aria-hidden="true" />
+          </Button>
+        ) : null}
         {!inGroup && active ? (
           <>
             <Button

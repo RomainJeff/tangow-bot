@@ -80,7 +80,7 @@ colours. An `rgba` in a slot is a bug.
 Utilities: `text-body`, `text-author`, `text-time`, `text-meta`, `text-label`,
 `text-row-name`, `text-row-status`, `text-title`, `text-capsule`,
 `text-working`, `text-reasoning`, `text-block-header`, `text-question`,
-`text-mono`. Each carries its own line height, tracking and weight.
+`text-mono`, `text-composer`. Each carries its own line height, tracking and weight.
 
 | Key | Size | Leading | Tracking | Weight | Use |
 | --- | --- | --- | --- | --- | --- |
@@ -98,6 +98,7 @@ Utilities: `text-body`, `text-author`, `text-time`, `text-meta`, `text-label`,
 | `blockHeader` | 12.5 | 1.3 | 0.01em | 500 | framed-block header |
 | `question` | 16 | 1.45 | -0.008em | 400 | framed-block question |
 | `mono` | 12.5 | 1.3 | 0 | 400 | durations and figures |
+| `composer` | 17 | 1.294 | -0.01em | 400 | the mobile composer field (the native iOS body) |
 
 Fonts: `--font-sans` is Geist Variable, `--font-mono` is Geist Mono Variable,
 both bundled offline. `font-mono` pairs with `tabular-nums` wherever a number
@@ -107,9 +108,11 @@ ticks.
 
 Layout, in px: `sidebar 280`, `thread 800`, `header 56`, `panel 384`, `block
 520` — `w-sidebar`, `max-w-thread`, `h-header`, `w-panel`, `max-w-block` (a
-framed block standing alone in the thread, §3.3). Gaps use the native Tailwind
-scale, which accepts any multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22,
-`gap-7` is 28. Never `gap-[…]`.
+framed block standing alone in the thread, §3.3); `composerField 220` —
+`max-h-composer-field`, the web/desktop composer field before it scrolls
+internally. Gaps use the native Tailwind scale, which accepts any
+multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22, `gap-7` is 28. Never
+`gap-[…]`.
 
 ### Radii
 
@@ -129,10 +132,12 @@ scale, which accepts any multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22,
 | --- | --- | --- | --- |
 | `row` | `0 1px 2px rgba(17, 17, 20, 0.06)` | `none` | selected sidebar row |
 | `card` | `0 0 0 1px rgba(17, 17, 20, 0.08), 0 12px 30px -16px rgba(17, 17, 20, 0.4)` | `0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 30px -16px rgba(0, 0, 0, 0.8)` | framed blocks, the panel |
-| `composer` | `0 1px 2px rgba(17, 17, 20, 0.06), 0 12px 28px -18px rgba(17, 17, 20, 0.5)` | `0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 28px -18px rgba(0, 0, 0, 0.8)` | the composer capsule |
+| `composerRest` | `0 0 0 1px rgba(17, 17, 20, 0.09)` | `0 0 0 1px rgba(255, 255, 255, 0.08)` | the composer at rest: a hairline only |
+| `composerFocus` | `0 0 0 1px rgba(17, 17, 20, 0.09), 0 12px 28px -18px rgba(17, 17, 20, 0.55)` | `0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 28px -18px rgba(0, 0, 0, 0.8)` | the composer while its field has focus (dark also brightens the hairline) |
 | `floating` | `0 1px 2px rgba(17, 17, 20, 0.08), 0 8px 20px -10px rgba(17, 17, 20, 0.35)` | `0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px -10px rgba(0, 0, 0, 0.7)` | the hover pill |
 
-Utilities `shadow-row`, `shadow-card`, `shadow-composer`, `shadow-floating`.
+Utilities `shadow-row`, `shadow-card`, `shadow-composer-rest`, `shadow-composer-focus`,
+`shadow-floating`.
 Unframed cards have **no** shadow: `bg-surface` and a `border` hairline.
 
 ### Motion
@@ -145,19 +150,29 @@ Unframed cards have **no** shadow: `bg-surface` and a `border` hairline.
 | `hover` | 160 ms | colour and fill on hover (`duration-(--duration-hover)`) |
 | `breathe` | 5.6 s | the idle avatar |
 | `caret` | 1 s step-end | the typing caret |
+| `pivot` | 320 ms, rotate -90° → 0 with scale and fade | the send arrow arriving with the first character |
+| `morph` | 260 ms, rotate 45° | the mobile + turning into × while its sheet is open |
+| `flow` | 2.6 s per lap | the Stop contour while a reply streams (static under reduced motion) |
 
 ### Sizes
 
 Avatars: `receipt 14`, `stackXs 16`, `interstitial 17`, `chip 18`, `stack 20`,
 `message 26`, `row 28`, `call 120`. Controls: `hoverIcon 28`, `quickReply 32`,
-`composerIcon 34`, `capsule 36`, `mobileStack 44`, `callButton 52`.
+`composerIcon 34`, `capsule 36`, `mobileStack 44`, `callButton 52`. Mobile composer:
+`composerAttach 48` (the detached + bubble), `composerTarget 44` (a button's
+touch target in the capsule), `composerAction 36` (the send / stop disc).
+Composer attachments (both devices): `composerAttachmentThumb 64` (the image
+thumbnail / file-tile height), `composerAttachmentTile 200` (max width of a
+file tile before its name truncates), `composerRemove 22` (the × disc).
 
-The seven sizes a primitive needs as a class are mapped into Tailwind's spacing
+The sizes a primitive needs as a class are mapped into Tailwind's spacing
 namespace in `packages/ui-web/src/styles.css` — `--spacing-hover-icon`,
 `--spacing-quick-reply`, `--spacing-composer-icon`, `--spacing-capsule`,
-`--spacing-mobile-stack`, `--spacing-call-button`, `--spacing-message` — so
-`size-composer-icon`, `h-capsule` and `w-message` resolve to the token instead
-of an arbitrary value. The rest are spent through a `size` prop.
+`--spacing-mobile-stack`, `--spacing-call-button`, `--spacing-message`,
+`--spacing-composer-attachment-thumb`, `--spacing-composer-attachment-tile`,
+`--spacing-composer-remove` — so `size-composer-icon`, `h-capsule` and
+`w-message` resolve to the token instead of an arbitrary value. The rest are
+spent through a `size` prop.
 
 ## Primitives
 
@@ -354,18 +369,88 @@ Used by: Reply, React, Copy, Speak, Edit and resend, and More on a message.
 ### ComposerShell
 
 The capsule at the bottom of the thread, and the one elevation of that screen:
-`bg-surface rounded-full shadow-composer`.
+`bg-surface rounded-composer shadow-composer-rest`, lifting to
+`shadow-composer-focus` on `:focus-within` — a single elevation, not a
+separate focus ring layered on top. Bottom-aligned (`items-end`) so its buttons stay on the last line
+while the field grows; at least `min-h-12` (48 px) even empty.
 
-Props: `leading?` (a mention chip, or the speaking bot's avatar — it tightens
-the leading padding), `children` (the field), `trailing?` (round-icon buttons),
-`state?: idle | typing | dictating | speaking | working`. `dictating` draws four
-3 × 14 bars, `working` draws three dots; both are `aria-hidden` chrome. The
-`speaking` beat is composed from the slots, so its label stays translatable.
+Props: `attach?` (the attach button — the capsule's **leading edge**, before
+any chip: `+ · [chips] · text · [mic] · action(s)`), `leading?` (a
+mention/skill chip, or the speaking bot's avatar), `children` (the field),
+`trailing?` (round-icon buttons: dictate, then send / stop), `attachments?` (a
+row of `ComposerAttachment`, rendered **above** the input line, inside the
+capsule — pending attachments and rewind artifacts both land here, wrapping on
+web), `state?: idle | typing | dictating | speaking`.
 
-Do: show Send only when the draft or a chip is non-empty. Don't: put a second
-shadow inside the capsule.
+**Dictation mode** (`state="dictating"`): the capsule swaps its ambient
+`shadow-composer-rest`/`-focus` for a 1.5 px `foreground` ring (`+` and any
+chip stay in place, just inactive — the caller disables them). Two new props
+draw a row **under** the field: `dictationCancel?` (×, start) and
+`dictationConfirm?` (✓ — plus Stop when a reply is running — end), with this
+component's own four bars in between as the waveform (`data-slot="composer-
+dictating"`, `aria-hidden`, 3 × 14, reused unchanged from before dictation
+existed). Only drawn together with the row when `state="dictating"`. The
+field itself is the caller's job: `apps/web/src/pages/shell/composer.tsx`
+swaps its `<textarea>` for a read-only preview `<div>` while dictating (a
+textarea can't style a range), showing the pre-dictation draft plus each
+dictated word fading/blurring in over 260 ms (`rk-word-in`, off under reduced
+motion) and the not-yet-final tail in `mutedForeground`. The `speaking` beat
+is composed from the slots, so its label stays translatable.
 
-Used by: the thread composer.
+**Removed**: the `working` state and its three dots — a run in
+progress is now carried by the Stop button's own contour (`StopContour`), not
+by chrome inside the capsule.
+
+Do: show Send only when the draft or a chip is non-empty; put the attach
+button in `attach`, never in `trailing`; dictation and the call never fight
+over the composer — the call moved to the thread header (`Voice`, 1:1 only)
+and cancels a dictation in progress before it opens. Don't: put a second
+shadow inside the capsule, reach for `state="working"` (removed), or let
+dictation send anything itself — ✓ only inserts into the draft.
+
+Used by: the thread composer (`apps/web/src/pages/shell/composer.tsx`); the
+call button lives in `apps/web/src/pages/shell/thread-header.tsx` instead.
+
+### ComposerAttachment
+
+A pending attachment, or a rewind artifact, inside the composer's
+`attachments` slot: an image thumbnail, or a file tile with a paperclip and a
+truncated name, each carrying a × disc.
+
+Props: `name` (alt text, or the file tile's truncated label), `previewUrl?`
+(present → thumbnail; absent → file tile), `removeLabel` (the caller's
+translated "Remove {name}"), `onRemove?`, `disabled?` (× inert while
+dictating — the attachment itself stays visible and unchanged). Anatomy: `size-composer-attachment-thumb`
+(64 px) `rounded-card` thumbnail, or a `bg-secondary` `rounded-card` tile
+capped at `max-w-composer-attachment-tile` (200 px) with a truncated name; the
+× is a `size-composer-remove` (22 px) `bg-primary` disc with a `border-surface`
+ring, absolutely positioned at the top end corner.
+
+Do: use it for both `pendingAttachments` and `rewindArtifacts` — never a plain
+pill above the composer. Don't: let a long file name widen the tile; it
+truncates instead.
+
+Used by: the thread composer's `attachments` slot.
+
+### StopContour
+
+The Stop button's own edge: the contour **is** the rim
+of the disc, not a ring drawn outside it — two glows of the responding bot's
+colour chase each other around a 2 px ring, one lap per `--duration-flow`
+(2.6 s), while the disc (`bg-primary`) sits at `inset-0.5` and a small
+`bg-primary-foreground` square marks the button underneath. No head, no
+accessible name — it fills a `roundIcon` button that already has one.
+
+Props: `color?` — the bot's identity colour as a plain CSS colour string, the
+same precedent as `BotAvatar`'s `color` prop (data, not a token; carried as
+the inline custom property `--contour`). Omit it in a group, or when no bot is
+known: the contour falls back to `color-mix(in srgb, var(--foreground) 45%,
+transparent)`. Reduced motion: the ring holds still, fully lit, no rotation.
+
+Do: pass the room's single bot's colour when there is one. Don't: give it an
+`aria-label` — the wrapping button owns "Stop".
+
+Used by: the thread composer's Stop button, while a run is going.
 
 ### ReasoningDisclosure
 

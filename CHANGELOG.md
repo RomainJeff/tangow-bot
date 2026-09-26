@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-09-26
 
+#### Added
+
+- **Dictate into the message field on phone, web and desktop.** Tap the mic and your words appear in the field as you speak; ✓ keeps them for you to review and send, × puts the field back as it was. On iPhone the speech is recognised on the device, so the audio never leaves it.
+
+#### Changed
+
+- On phones the message field now keeps the attach button apart as a larger round button that opens the native photo, camera and file sheet, grows to five lines, shows pending attachments inside it as thumbnails, and closes the keyboard when you swipe the conversation down.
+- On web and desktop the message field is now a single capsule that starts with the attach button, grows taller before it scrolls, and shows pending attachments inside it as thumbnails.
+- The message field now rests on a thin outline and lifts only while you write, and the Stop button's edge glows in the answering bot's colour while it replies.
+- On web and desktop, the voice call now starts from an icon in the conversation header instead of the mic in the message field, which now dictates.
+
 #### Fixed
 
 - In the mobile app, a bot's avatar draws again instead of failing with an error as soon as it appears, which a recent update had caused by leaving the avatar calling a colour helper that no longer existed.

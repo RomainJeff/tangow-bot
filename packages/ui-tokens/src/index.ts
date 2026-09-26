@@ -170,6 +170,8 @@ export const typography = {
   blockHeader: { size: 12.5, leading: 1.3, tracking: "0.01em", weight: 500 },
   question: { size: 16, leading: 1.45, tracking: "-0.008em", weight: 400 },
   mono: { size: 12.5, leading: 1.3, tracking: "0", weight: 400 },
+  /** The mobile composer field: the native iOS body, 17/22. */
+  composer: { size: 17, leading: 1.294, tracking: "-0.01em", weight: 400 },
 } as const satisfies Record<string, TypographyToken>;
 
 export type TypographyKey = keyof typeof typography;
@@ -183,6 +185,8 @@ export const space = {
   panel: 384,
   /** A framed block standing alone in the thread: `max-w-block`. */
   block: 520,
+  /** Web/desktop composer field: `max-h-composer-field` before it scrolls internally. */
+  composerField: 220,
 } as const satisfies Record<string, number>;
 
 export type SpaceKey = keyof typeof space;
@@ -207,7 +211,10 @@ export type RadiiTokens = typeof radii;
 export const lightShadows = {
   row: "0 1px 2px rgba(17, 17, 20, 0.06)",
   card: "0 0 0 1px rgba(17, 17, 20, 0.08), 0 12px 30px -16px rgba(17, 17, 20, 0.4)",
-  composer: "0 1px 2px rgba(17, 17, 20, 0.06), 0 12px 28px -18px rgba(17, 17, 20, 0.5)",
+  /** The composer at rest: a hairline, no drop shadow. */
+  composerRest: "0 0 0 1px rgba(17, 17, 20, 0.09)",
+  /** The composer while its field has focus: the hairline and the one drop shadow. */
+  composerFocus: "0 0 0 1px rgba(17, 17, 20, 0.09), 0 12px 28px -18px rgba(17, 17, 20, 0.55)",
   floating: "0 1px 2px rgba(17, 17, 20, 0.08), 0 8px 20px -10px rgba(17, 17, 20, 0.35)",
 } as const satisfies Record<string, string>;
 
@@ -217,7 +224,9 @@ export type ShadowTokens = Record<ShadowKey, string>;
 export const darkShadows = {
   row: "none",
   card: "0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 30px -16px rgba(0, 0, 0, 0.8)",
-  composer: "0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 28px -18px rgba(0, 0, 0, 0.8)",
+  composerRest: "0 0 0 1px rgba(255, 255, 255, 0.08)",
+  // A drop shadow barely reads on a near-black page, so focus also brightens the hairline.
+  composerFocus: "0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 28px -18px rgba(0, 0, 0, 0.8)",
   floating: "0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px -10px rgba(0, 0, 0, 0.7)",
 } as const satisfies ShadowTokens;
 
@@ -227,7 +236,8 @@ export function shadowsForAppearance(appearance: ResolvedAppearance): ShadowToke
 
 /**
  * Motion — one easing curve, everything else is a duration in ms. Nothing
- * loops continuously except the working-avatar body and its idle breathing.
+ * loops continuously except the working-avatar body, its idle breathing and
+ * the Stop button's contour while a reply streams.
  */
 export type MotionTokens = {
   ease: string;
@@ -236,6 +246,12 @@ export type MotionTokens = {
   hover: number;
   breathe: number;
   caret: number;
+  /** The send arrow pivoting in with the first character. */
+  pivot: number;
+  /** The mobile attach button turning into a close button while its sheet is open. */
+  morph: number;
+  /** One lap of the Stop contour while a reply streams. */
+  flow: number;
 };
 
 export const motion: MotionTokens = {
@@ -245,6 +261,9 @@ export const motion: MotionTokens = {
   hover: 160,
   breathe: 5600,
   caret: 1000,
+  pivot: 320,
+  morph: 260,
+  flow: 2600,
 };
 
 /** Sizes — avatars and round controls, in px. Consumed via primitive `size` props. */
@@ -260,9 +279,21 @@ export const sizes = {
   hoverIcon: 28,
   quickReply: 32,
   composerIcon: 34,
+  /** Mobile: the detached attach bubble. */
+  composerAttach: 48,
+  /** Mobile: the touch target of a button inside the capsule. */
+  composerTarget: 44,
+  /** Mobile: the send / stop disc inside a target. */
+  composerAction: 36,
   capsule: 36,
   mobileStack: 44,
   callButton: 52,
+  /** The composer's attachment thumbnail / file-tile height (both devices). */
+  composerAttachmentThumb: 64,
+  /** Max width of a composer file tile before its name truncates. */
+  composerAttachmentTile: 200,
+  /** The × disc on a composer attachment. */
+  composerRemove: 22,
 } as const satisfies Record<string, number>;
 
 export type SizeKey = keyof typeof sizes;
@@ -327,6 +358,37 @@ export function tokensForAppearance(appearance: ResolvedAppearance): ColorTokens
   return appearance === "light" ? lightTokens : darkTokens;
 }
 
+/** WCAG relative luminance (0..1) of a `#rrggbb` colour. */
+export function relativeLuminance(hex: string): number {
+  const clean = hex.replace(/^#/, "");
+  const channel = (offset: number) => {
+    const c = Number.parseInt(clean.slice(offset, offset + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+}
+
+/** WCAG contrast ratio (1..21) between two `#rrggbb` colours. */
+export function contrastRatio(a: string, b: string): number {
+  const luminanceA = relativeLuminance(a);
+  const luminanceB = relativeLuminance(b);
+  return (Math.max(luminanceA, luminanceB) + 0.05) / (Math.min(luminanceA, luminanceB) + 0.05);
+}
+
+/**
+ * A bot's colour for a thin mark drawn on the page (the Stop contour), or
+ * `undefined` when it would not read against that appearance's background —
+ * the near-black bot colour on dark, white on light. 3:1 is WCAG's floor for
+ * non-text graphics.
+ */
+export function botAccentOn(
+  color: string | undefined,
+  appearance: ResolvedAppearance,
+): string | undefined {
+  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return undefined;
+  return contrastRatio(color, tokensForAppearance(appearance).background) >= 3 ? color : undefined;
+}
+
 function readStoredAppearance(storage: Pick<Storage, "getItem"> | null | undefined): string | null {
   if (!storage) return null;
   try {
@@ -346,10 +408,19 @@ export function cssVariableName(token: keyof ColorTokens): string {
   return `--${kebabCase(token)}`;
 }
 
+/** `biome`'s CSS formatter (100-col `lineWidth`) wraps a declaration that
+ * doesn't fit on one line onto two, indenting the value by 4 spaces: this
+ * keeps a fresh `generate` byte-identical to what `biome check --write`
+ * would produce, so `tokens.css` never has to be reformatted by hand. */
+function renderDeclaration(name: string, value: string): string {
+  const oneLine = `  ${name}: ${value};`;
+  return oneLine.length <= 100 ? oneLine : `  ${name}:\n    ${value};`;
+}
+
 function renderShadowLines(appearance: ResolvedAppearance): string[] {
   const palette = shadowsForAppearance(appearance);
-  return (Object.keys(palette) as ShadowKey[]).map(
-    (key) => `  --elevation-${kebabCase(key)}: ${palette[key]};`,
+  return (Object.keys(palette) as ShadowKey[]).map((key) =>
+    renderDeclaration(`--elevation-${kebabCase(key)}`, palette[key]),
   );
 }
 

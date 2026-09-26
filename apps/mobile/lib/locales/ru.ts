@@ -712,4 +712,11 @@ export const RU_MESSAGES: Record<string, string> = {
   "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
     "Включено — уведомление и развёрнутая карточка при каждом запуске. Выключено — только тихий след в этом чате.",
   "Could not update routine": "Не удалось обновить программу",
+
+  Dictate: "Диктовать",
+  "Cancel dictation": "Отменить надиктовку",
+  "Insert dictation": "Вставить надиктованный текст",
+  Dictating: "Идёт надиктовка",
+  "Microphone access is off": "Нет доступа к микрофону",
+  "Open Settings": "Открыть настройки",
 };

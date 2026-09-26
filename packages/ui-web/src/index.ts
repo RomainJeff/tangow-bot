@@ -25,6 +25,10 @@ export * from "./components/ui/tabs.js";
 export * from "./components/ui/textarea.js";
 export * from "./components/ui/toggle.js";
 export * from "./components/ui/tooltip.js";
+export {
+  ComposerAttachment,
+  type ComposerAttachmentProps,
+} from "./composer-attachment.js";
 export { ComposerShell, type ComposerShellProps, type ComposerState } from "./composer-shell.js";
 export { formatElapsed, formatShortDuration } from "./format-elapsed.js";
 export {
@@ -55,6 +59,7 @@ export {
   StackedAvatars,
   type StackedAvatarsProps,
 } from "./stacked-avatars.js";
+export { StopContour, type StopContourProps } from "./stop-contour.js";
 export { Surface, type SurfaceProps, type SurfaceRadius } from "./surface.js";
 export { useElapsed } from "./use-elapsed.js";
 export { UserBubble, type UserBubbleProps } from "./user-bubble.js";

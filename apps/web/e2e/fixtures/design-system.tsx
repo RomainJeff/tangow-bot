@@ -3,6 +3,7 @@ import {
   AvatarStyleProvider,
   BotAvatar,
   Button,
+  ComposerAttachment,
   ComposerShell,
   FramedBlock,
   HoverPill,
@@ -11,6 +12,7 @@ import {
   ReasoningDisclosure,
   Shimmer,
   StackedAvatars,
+  StopContour,
   Surface,
   UserBubble,
   WorkingLine,
@@ -200,16 +202,21 @@ function Kitchen() {
 
       <Section title="composer">
         <ComposerShell
-          trailing={
+          attach={
             <Button aria-label="Attach file" variant="roundIcon" size="roundIcon">
               <Plus />
             </Button>
           }
         >
-          <span className="text-body text-foreground-subtle">Message Maya</span>
+          <span className="text-body text-muted-foreground">Message Maya</span>
         </ComposerShell>
         <ComposerShell
           state="dictating"
+          attach={
+            <Button aria-label="Attach file" variant="roundIcon" size="roundIcon">
+              <Plus />
+            </Button>
+          }
           trailing={
             <Button aria-label="Voice" variant="roundIcon" size="roundIcon">
               <Mic />
@@ -219,14 +226,21 @@ function Kitchen() {
           <span className="text-body text-foreground">Hold the roof terrace</span>
         </ComposerShell>
         <ComposerShell
-          state="working"
+          attach={
+            <Button aria-label="Attach file" variant="roundIcon" size="roundIcon">
+              <Plus />
+            </Button>
+          }
+          attachments={
+            <ComposerAttachment name="roof-terrace.jpg" removeLabel="Remove roof-terrace.jpg" />
+          }
           trailing={
-            <Button aria-label="Stop" variant="capsuleSecondary" size="roundIcon">
-              <Square />
+            <Button aria-label="Stop" variant="roundIcon" size="roundIcon">
+              <StopContour color={IVY.color} />
             </Button>
           }
         >
-          <span className="text-body text-foreground-subtle">working</span>
+          <span className="text-body text-foreground-subtle">Message Ivy</span>
         </ComposerShell>
         <ComposerShell
           state="speaking"

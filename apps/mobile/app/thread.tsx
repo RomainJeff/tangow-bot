@@ -35,19 +35,20 @@ import {
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
-import { motion, radii, sizes } from "@rakazo/ui-tokens";
+import { botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   ActionSheetIOS,
   ActivityIndicator,
   Alert,
   AppState,
   FlatList,
-  Image,
+  findNodeHandle,
   Linking,
   Modal,
   type NativeScrollEvent,
@@ -81,7 +82,9 @@ import {
 } from "../components/AskActions";
 import { AgentSteps } from "../components/agent-steps";
 import { BotAvatar } from "../components/bot-avatar";
-import { ComposerShell } from "../components/composer-shell";
+import { ComposerAttachment } from "../components/composer-attachment";
+import { ComposerAttachBubble, ComposerShell } from "../components/composer-shell";
+import { DictationPreview } from "../components/dictation-preview";
 import { FramedBlock } from "../components/framed-block";
 import { GroupAvatar } from "../components/group-avatar";
 import { Interstitial } from "../components/interstitial";
@@ -93,6 +96,7 @@ import { MessageRow } from "../components/message-row";
 import { NativeSymbol } from "../components/native-symbol";
 import { ShimmerText } from "../components/shimmer-text";
 import { StackedAvatars } from "../components/stacked-avatars";
+import { StopContour } from "../components/stop-contour";
 import { Surface } from "../components/surface";
 import { UserBubble } from "../components/user-bubble";
 import { WorkingLine } from "../components/working-line";
@@ -119,11 +123,12 @@ import {
   shouldApplyMobileThreadRefresh,
   subscribeThread,
 } from "../lib/api";
-import { mobileTokens } from "../lib/appearance";
+import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
+import { presentAttachSheet } from "../lib/attach-sheet";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
-import { commitHaptic, selectionHaptic } from "../lib/haptics";
+import { commitHaptic, sendHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
@@ -148,6 +153,7 @@ import {
   takePhoto,
 } from "../lib/pick-attachments";
 import { threadRefreshDelayMs } from "../lib/refresh";
+import { hexWithAlpha } from "../lib/stop-contour-math";
 import { shadowsForAppearance } from "../lib/theme";
 import {
   type ThreadScrollAction,
@@ -155,6 +161,7 @@ import {
   type ThreadScrollState,
 } from "../lib/thread-scroll";
 import { nativeTextStyle } from "../lib/typography";
+import { useComposerDictation } from "../lib/use-composer-dictation";
 import { speakText } from "../lib/voice";
 
 type PendingAttachment = PickedAttachment & { threadKey: string };
@@ -389,6 +396,12 @@ function Thread() {
   const [selectedMentions, setSelectedMentions] = useState<ComposerMention[]>([]);
   const [selectedSkill, setSelectedSkill] = useState<AgentSkillCatalogEntry | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  // the single source of truth for the + bubble's icon/label and the
+  // attach sheet's open state — closed by `presentAttachSheet` on every path
+  // out, and as a safety net below when the app returns to the foreground.
+  const [attachSheetOpen, setAttachSheetOpen] = useState(false);
+  const attachBubbleRef = useRef<View>(null);
+  const textInputRef = useRef<TextInput>(null);
   const [replyTarget, setReplyTarget] = useState<MobileMessage | null>(null);
   const [rewindTarget, setRewindTarget] = useState<MobileMessage | null>(null);
   // ponytail: artifact ids ride along invisibly — mobile has no attachment chips to restore into.
@@ -996,6 +1009,9 @@ function Thread() {
   useEffect(() => {
     const appState = AppState.addEventListener("change", (state) => {
       if (state === "active") {
+        // Safety net: the attach sheet can only close
+        // itself while its host screen is in the foreground.
+        setAttachSheetOpen(false);
         if (!navigation.isFocused() || !notificationThreadId) return;
         void setOpenNotificationThread({
           botId,
@@ -1194,6 +1210,32 @@ function Thread() {
     if (selectedSkill) setSelectedSkill(null);
   }
 
+  // Entering dictation closes and disables both pickers — a draft starting
+  // with "@" or "/" must not stay tappable while the field is read-only.
+  const closePickers = useCallback(() => {
+    setMentionQuery(null);
+    setSlashQuery(null);
+  }, []);
+  const dictation = useComposerDictation({
+    draft,
+    setDraft,
+    threadKey,
+    closePickers,
+  });
+
+  useEffect(() => {
+    if (dictation.dictating) AccessibilityInfo.announceForAccessibility(t("Dictating"));
+  }, [dictation.dictating, t]);
+
+  function insertDictation() {
+    const caret = draft.length;
+    dictation.insert();
+    requestAnimationFrame(() => {
+      textInputRef.current?.focus();
+      textInputRef.current?.setSelection(caret, caret);
+    });
+  }
+
   function serializeComposerPromptText(): string {
     return serializeComposerPrompt(draft, selectedSkill, selectedMentions);
   }
@@ -1220,6 +1262,14 @@ function Thread() {
     selectedSkill !== null ||
     selectedMentions.length > 0 ||
     activePendingAttachments.length > 0;
+
+  // Stop contour colour: the answering bot's own identity colour in a 1:1
+  // thread. A group (several bots may be working), an unknown colour, or one
+  // that would vanish into the page (near-black on dark, white on light) dims
+  // to `foreground`.
+  const stopContourColor =
+    (!inGroup && botAccentOn(currentBot?.color, resolveMobileAppearance())) ||
+    hexWithAlpha(tokens.foreground, 0.45);
 
   async function send() {
     const initialBotTarget = botId;
@@ -1422,15 +1472,18 @@ function Thread() {
   );
 
   function showAttachMenu() {
-    Alert.alert(t("Attach"), undefined, [
-      {
-        text: t("Photo library"),
-        onPress: () => void addAttachments(pickFromLibrary),
-      },
-      { text: t("Camera"), onPress: () => void addAttachments(takePhoto) },
-      { text: t("File"), onPress: () => void addAttachments(pickDocuments) },
-      { text: t("Cancel"), style: "cancel" },
-    ]);
+    presentAttachSheet({
+      title: t("Attach"),
+      cancel: t("Cancel"),
+      colorScheme,
+      anchor: findNodeHandle(attachBubbleRef.current),
+      onOpenChange: setAttachSheetOpen,
+      options: [
+        { text: t("Photo library"), onPress: () => void addAttachments(pickFromLibrary) },
+        { text: t("Camera"), onPress: () => void addAttachments(takePhoto) },
+        { text: t("File"), onPress: () => void addAttachments(pickDocuments) },
+      ],
+    });
   }
 
   async function addAttachments(
@@ -1830,6 +1883,8 @@ function Thread() {
             ref={pinnedScroll}
             style={{ flex: 1, marginTop: 8 }}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+            keyboardShouldPersistTaps="handled"
           >
             {loadEarlierControl}
             {visibleMessages.map((message, index) =>
@@ -1851,6 +1906,12 @@ function Thread() {
             style={{ flex: 1, marginTop: 8 }}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             scrollEventThrottle={16}
+            // dragging the thread down dismisses the keyboard following the
+            // finger on iOS (Android has no true interactive equivalent, so it
+            // dismisses on the drag instead); a tap that lands on a row's own
+            // control still fires that control instead of just closing the keyboard.
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+            keyboardShouldPersistTaps="handled"
             onScrollBeginDrag={() => {
               userDragging.current = true;
             }}
@@ -1938,7 +1999,10 @@ function Thread() {
         style={{
           // Keyboard covers the nav bar / home indicator, so the safe-area
           // inset would render as dead space between composer and keyboard.
-          paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom + 12, 24),
+          // 8 px above the keyboard when it's open, 8 px above the
+          // safe area otherwise (floored so devices without a safe-area inset,
+          // e.g. Android's 3-button nav, still keep a little breathing room).
+          paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20),
         }}
       >
         {replyTarget ? (
@@ -1999,62 +2063,6 @@ function Thread() {
           <Text style={{ color: tokens.warning, marginTop: 12, fontSize: 13 }}>
             {attachmentNotice}
           </Text>
-        ) : null}
-        {activePendingAttachments.length ? (
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 8,
-              marginTop: 12,
-            }}
-          >
-            {activePendingAttachments.map((attachment) => (
-              <View
-                key={attachment.id}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: tokens.border,
-                  backgroundColor: tokens.card,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                }}
-              >
-                {attachment.previewUri ? (
-                  <Image
-                    source={{ uri: attachment.previewUri }}
-                    style={{ width: 28, height: 28, borderRadius: 6 }}
-                  />
-                ) : (
-                  <Text style={{ color: tokens.foreground }}>📎</Text>
-                )}
-                <Text style={{ color: tokens.foreground, maxWidth: 140 }} numberOfLines={1}>
-                  {attachment.name}
-                </Text>
-                <Pressable
-                  accessibilityLabel={t("Remove {name}", {
-                    name: attachment.name,
-                  })}
-                  onPress={() =>
-                    setPendingAttachments((current) =>
-                      current.filter((item) => item.id !== attachment.id),
-                    )
-                  }
-                >
-                  <NativeSymbol
-                    ios="xmark"
-                    android="close"
-                    size={14}
-                    color={tokens.mutedForeground}
-                  />
-                </Pressable>
-              </View>
-            ))}
-          </View>
         ) : null}
         {mentionOptions.length ? (
           <View
@@ -2171,10 +2179,53 @@ function Thread() {
             ))}
           </View>
         ) : null}
-        <View style={{ marginTop: 16 }}>
+        <View
+          style={{
+            marginTop: 16,
+            // 12 px side margins — the screen already gives the thread
+            // column 20 px (`paddingHorizontal` above), so this row claims
+            // back 8 of those to land on 12.
+            marginHorizontal: -8,
+            flexDirection: "row",
+            alignItems: "flex-end",
+            gap: 8,
+          }}
+        >
+          {dictation.dictating ? null : (
+            <ComposerAttachBubble
+              ref={attachBubbleRef}
+              open={attachSheetOpen}
+              focused={composerFocused}
+              onPress={showAttachMenu}
+            />
+          )}
           <ComposerShell
-            state={working ? "working" : canSend ? "typing" : "idle"}
+            style={{ flex: 1 }}
+            state={canSend ? "typing" : "idle"}
             focused={composerFocused}
+            dictating={dictation.dictating}
+            dictationVolume={dictation.volume}
+            attachments={
+              activePendingAttachments.length ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {activePendingAttachments.map((attachment) => (
+                      <ComposerAttachment
+                        key={attachment.id}
+                        name={attachment.name}
+                        previewUri={attachment.previewUri}
+                        disabled={dictation.dictating}
+                        onRemove={() =>
+                          setPendingAttachments((current) =>
+                            current.filter((item) => item.id !== attachment.id),
+                          )
+                        }
+                      />
+                    ))}
+                  </View>
+                </ScrollView>
+              ) : undefined
+            }
             leading={
               selectedSkill || selectedMentions.length > 0 ? (
                 <View
@@ -2213,6 +2264,7 @@ function Thread() {
                           name: selectedSkill.name,
                         })}
                         hitSlop={8}
+                        disabled={dictation.dictating}
                         onPress={() => setSelectedSkill(null)}
                       >
                         <NativeSymbol
@@ -2246,6 +2298,7 @@ function Thread() {
                           name: mention.name,
                         })}
                         hitSlop={8}
+                        disabled={dictation.dictating}
                         onPress={() =>
                           setSelectedMentions((current) =>
                             current.filter(
@@ -2267,88 +2320,169 @@ function Thread() {
               ) : undefined
             }
             trailing={
-              <>
-                <ComposerButton label={t("Attach file")} onPress={showAttachMenu}>
-                  <NativeSymbol ios="plus" android="add" size={17} color={tokens.mutedForeground} />
+              dictation.dictating ? undefined : (
+                <>
+                  {dictation.available ? (
+                    <ComposerButton
+                      label={t("Dictate")}
+                      haptic="none"
+                      variant="bare"
+                      disabled={sending}
+                      onPress={dictation.start}
+                    >
+                      <NativeSymbol
+                        ios="mic"
+                        android="mic-outline"
+                        size={20}
+                        color={tokens.foreground}
+                      />
+                    </ComposerButton>
+                  ) : null}
+                  {canSend ? (
+                    <ComposerButton
+                      label={t("Send")}
+                      haptic="send"
+                      arrive
+                      disabled={sending}
+                      onPress={() => void send()}
+                    >
+                      <NativeSymbol
+                        ios="arrow.up"
+                        android="arrow-up"
+                        size={16}
+                        color={tokens.primaryForeground}
+                      />
+                    </ComposerButton>
+                  ) : null}
+                  {working ? (
+                    <ComposerButton
+                      label={t("Stop")}
+                      haptic="commit"
+                      disabled={sending}
+                      contour={
+                        <StopContour size={sizes.composerAction + 4} color={stopContourColor} />
+                      }
+                      onPress={() => void stop()}
+                    >
+                      <NativeSymbol
+                        ios="stop.fill"
+                        android="stop"
+                        size={13}
+                        color={tokens.primaryForeground}
+                      />
+                    </ComposerButton>
+                  ) : null}
+                </>
+              )
+            }
+            dictationCancel={
+              dictation.dictating ? (
+                <ComposerButton
+                  label={t("Cancel dictation")}
+                  haptic="none"
+                  variant="bare"
+                  onPress={dictation.cancel}
+                >
+                  <NativeSymbol ios="xmark" android="close" size={16} color={tokens.foreground} />
                 </ComposerButton>
-                {canSend ? (
+              ) : undefined
+            }
+            dictationConfirm={
+              dictation.dictating ? (
+                <>
+                  {working ? (
+                    <ComposerButton
+                      label={t("Stop")}
+                      haptic="commit"
+                      disabled={sending}
+                      contour={
+                        <StopContour size={sizes.composerAction + 4} color={stopContourColor} />
+                      }
+                      onPress={() => void stop()}
+                    >
+                      <NativeSymbol
+                        ios="stop.fill"
+                        android="stop"
+                        size={13}
+                        color={tokens.primaryForeground}
+                      />
+                    </ComposerButton>
+                  ) : null}
                   <ComposerButton
-                    label={t("Send")}
-                    tone="primary"
-                    arrive
-                    disabled={sending}
-                    onPress={() => void send()}
+                    label={t("Insert dictation")}
+                    haptic="none"
+                    onPress={insertDictation}
                   >
                     <NativeSymbol
-                      ios="arrow.up"
-                      android="arrow-up"
+                      ios="checkmark"
+                      android="checkmark"
                       size={16}
                       color={tokens.primaryForeground}
                     />
                   </ComposerButton>
-                ) : null}
-                {working ? (
-                  <ComposerButton
-                    label={t("Stop")}
-                    tone="secondary"
-                    disabled={sending}
-                    onPress={() => void stop()}
-                  >
-                    <NativeSymbol
-                      ios="stop.fill"
-                      android="stop"
-                      size={13}
-                      color={tokens.foreground}
-                    />
-                  </ComposerButton>
-                ) : null}
-              </>
+                </>
+              ) : undefined
             }
           >
-            <TextInput
-              value={draft}
-              onChangeText={updateDraft}
-              accessibilityLabel={
-                displayName ? t("Message {name}", { name: displayName }) : t("Message")
-              }
-              onKeyPress={(event) => {
-                if (
-                  event.nativeEvent.key === "Backspace" &&
-                  draft.length === 0 &&
-                  (selectedSkill !== null || selectedMentions.length > 0)
-                ) {
-                  removeLastChip();
+            {dictation.dictating ? (
+              <DictationPreview
+                prefix={dictation.previewPrefix}
+                finalText={dictation.finalText}
+                interimText={dictation.interimText}
+              />
+            ) : (
+              <TextInput
+                ref={textInputRef}
+                value={draft}
+                onChangeText={updateDraft}
+                accessibilityLabel={
+                  displayName ? t("Message {name}", { name: displayName }) : t("Message")
                 }
-              }}
-              placeholder={
-                selectedSkill || selectedMentions.length
-                  ? undefined
-                  : displayName
-                    ? t("Message {name}", { name: displayName })
-                    : t("Message…")
-              }
-              placeholderTextColor={tokens.foregroundSubtle}
-              selectionColor={tokens.foreground}
-              cursorColor={tokens.foreground}
-              keyboardAppearance={colorScheme}
-              multiline
-              textAlignVertical="center"
-              blurOnSubmit={false}
-              onFocus={() => setComposerFocused(true)}
-              onBlur={() => setComposerFocused(false)}
-              style={{
-                color: tokens.foreground,
-                maxHeight: 100,
-                writingDirection: "auto",
-                ...nativeTextStyle("body"),
-                // A multiline iOS field puts all of a line height's extra
-                // leading above the glyphs, so the text sat low in the
-                // capsule; the font's own line box centres it.
-                ...(Platform.OS === "ios"
-                  ? { lineHeight: undefined, paddingVertical: 6 }
-                  : { paddingVertical: 4 }),
-              }}
-            />
+                onKeyPress={(event) => {
+                  if (
+                    event.nativeEvent.key === "Backspace" &&
+                    draft.length === 0 &&
+                    (selectedSkill !== null || selectedMentions.length > 0)
+                  ) {
+                    removeLastChip();
+                  }
+                }}
+                placeholder={
+                  selectedSkill || selectedMentions.length
+                    ? undefined
+                    : displayName
+                      ? t("Message {name}", { name: displayName })
+                      : t("Message…")
+                }
+                placeholderTextColor={tokens.mutedForeground}
+                selectionColor={tokens.foreground}
+                cursorColor={tokens.foreground}
+                keyboardAppearance={colorScheme}
+                multiline
+                textAlignVertical="center"
+                blurOnSubmit={false}
+                onFocus={() => setComposerFocused(true)}
+                onBlur={() => setComposerFocused(false)}
+                style={{
+                  color: tokens.foreground,
+                  // 5 lines max, then the field scrolls internally. iOS's
+                  // multiline box is border-box (Yoga), so its 11 pt of
+                  // vertical padding below counts against this height too —
+                  // without adding it back, only about 4 lines actually fit.
+                  maxHeight: Platform.OS === "ios" ? 5 * 22 + 2 * 11 : 110,
+                  writingDirection: "auto",
+                  ...nativeTextStyle("composer"),
+                  // A multiline iOS field puts all of a line height's extra
+                  // leading above the glyphs, so the text sat low in the
+                  // capsule; the font's own line box centres it. The row is
+                  // `sizes.composerTarget` (44) tall, and one composer line is
+                  // 22, so 11 on each side centres it there.
+                  ...(Platform.OS === "ios"
+                    ? { lineHeight: undefined, paddingVertical: 11 }
+                    : { paddingVertical: 4 }),
+                }}
+              />
+            )}
           </ComposerShell>
         </View>
       </View>
@@ -2484,45 +2618,52 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
   );
 }
 
-/** A round 34 pt control of the composer capsule; `hitSlop` brings the tap
- * target back to 44 pt without widening the capsule. */
-/** The send arrow arrives like the web's `animate-arrive`: up from 6 pt, fading in. */
-const COMPOSER_ARRIVE = new Keyframe({
-  0: { opacity: 0, transform: [{ translateY: 6 }] },
+/** The send arrow pivots in like the web's `animate-arrive`, but rotating —
+ * -90° to 0°, scaling up from .6, fading in — over `motion.pivot`. */
+const COMPOSER_PIVOT = new Keyframe({
+  0: { opacity: 0, transform: [{ rotate: "-90deg" }, { scale: 0.6 }] },
   100: {
     opacity: 1,
-    transform: [{ translateY: 0 }],
+    transform: [{ rotate: "0deg" }, { scale: 1 }],
     easing: Easing.bezier(0.32, 0.72, 0, 1),
   },
-}).duration(motion.arrive);
+}).duration(motion.pivot);
 
-/** A round composer control: settles to 0.94 while pressed, the web's
- * `rk-press-round`, and a plain one fills with `accent` like its hover. */
+/** A composer action disc: a `sizes.composerTarget` (44 pt) touch target
+ * around a `sizes.composerAction` (36 pt) `primary` disc — settles to scale
+ * .9 while pressed (skipped under reduced motion), the web's `rk-press-round`. */
 function ComposerButton({
   label,
   onPress,
   disabled,
-  tone = "plain",
   arrive = false,
+  haptic,
+  contour,
+  variant = "disc",
   children,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
-  tone?: "plain" | "primary" | "secondary";
-  /** Animate in on mount — the send arrow appearing with the first character. */
+  /** Animate in with a pivot on mount — the send arrow appearing with the first character. */
   arrive?: boolean;
+  /** "none" for a dictation control that already fires its own haptic (mic tap, ✓ insert) or has none (×). */
+  haptic: "send" | "commit" | "none";
+  /** The Stop button's animated ring, drawn just outside the disc. */
+  contour?: ReactNode;
+  /** "bare" draws just the icon at full size in the touch target, no ink
+   * disc — dictation's × (the design has no disc behind Cancel,
+   * unlike Send/Stop/✓). */
+  variant?: "disc" | "bare";
   children: ReactNode;
 }) {
   const tokens = useMobileTokens();
   const reducedMotion = useReducedMotion();
   const pressed = useSharedValue(0);
-  const [held, setHeld] = useState(false);
   const pressStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 - pressed.value * 0.06 }],
+    transform: [{ scale: 1 - pressed.value * 0.1 }],
   }));
   const press = (down: boolean) => {
-    setHeld(down);
     if (reducedMotion) return;
     pressed.value = withTiming(down ? 1 : 0, {
       duration: motion.press,
@@ -2530,39 +2671,45 @@ function ComposerButton({
     });
   };
   return (
-    <Animated.View entering={arrive ? COMPOSER_ARRIVE : undefined} style={pressStyle}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        disabled={disabled}
-        hitSlop={5}
-        onPress={() => {
-          if (tone === "plain") selectionHaptic();
-          else commitHaptic();
-          onPress();
-        }}
-        onPressIn={() => press(true)}
-        onPressOut={() => press(false)}
-        style={{
-          width: sizes.composerIcon,
-          height: sizes.composerIcon,
-          borderRadius: radii.pill,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor:
-            tone === "primary"
-              ? tokens.primary
-              : tone === "secondary"
-                ? tokens.secondary
-                : held
-                  ? tokens.accent
-                  : "transparent",
-          opacity: disabled ? 0.5 : tone !== "plain" && held ? 0.85 : 1,
-        }}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={() => {
+        if (haptic === "send") sendHaptic();
+        else if (haptic === "commit") commitHaptic();
+        onPress();
+      }}
+      onPressIn={() => press(true)}
+      onPressOut={() => press(false)}
+      style={{
+        width: sizes.composerTarget,
+        height: sizes.composerTarget,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {contour}
+      <Animated.View
+        entering={arrive && !reducedMotion ? COMPOSER_PIVOT : undefined}
+        style={[
+          variant === "disc"
+            ? {
+                width: sizes.composerAction,
+                height: sizes.composerAction,
+                borderRadius: radii.pill,
+                backgroundColor: tokens.primary,
+                alignItems: "center",
+                justifyContent: "center",
+              }
+            : { alignItems: "center", justifyContent: "center" },
+          pressStyle,
+        ]}
       >
         {children}
-      </Pressable>
-    </Animated.View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
