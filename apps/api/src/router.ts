@@ -18,6 +18,7 @@ import {
   runJobKey,
 } from "@rakazo/adapter-kit";
 import type {
+  BotMemoryClassificationService,
   CloudAgentConnection,
   ComposioProvider,
   ComputerExecutionLease,
@@ -138,10 +139,19 @@ import {
   touchGroupUpdatedAt,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import { MarkdownMemoryLibrary, MemoryAccessError, MemoryConflictError } from "@rakazo/memory";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
 import { aiConsentStatus, allowAiConsent } from "./ai-consent.js";
 import { createOwnedArtifact, getOwnedArtifact, getSpaceArtifact } from "./artifacts.js";
+import type { PrepareMemoryMethod } from "./bot-memory-methods.js";
+import {
+  disableBotMemoryMethod,
+  getBotMemoryMethod,
+  listBotMemoryMethods,
+  missingMemoryMethodPreparer,
+  updateBotMemoryMethod,
+} from "./bot-memory-methods.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
   executionBlocksUserTakeover,
@@ -151,6 +161,11 @@ import {
 import { searchIntegrationCatalog } from "./integration-catalog.js";
 import { createMarketplacesService } from "./marketplaces.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
+import {
+  connectMemoryClassifier,
+  disconnectMemoryClassifier,
+  getMemoryClassifierSettings,
+} from "./memory-classifier-config.js";
 import {
   disconnectMemoryProvider,
   persistMemoryProviderConfig,
@@ -333,6 +348,18 @@ function computerContext(actor: Actor, botId: string, operationId: string): Adap
   };
 }
 
+async function memoryLibraryCall<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof MemoryConflictError) {
+      throw new ORPCError("CONFLICT", { message: error.message });
+    }
+    if (error instanceof MemoryAccessError) throw new ORPCError("NOT_FOUND");
+    throw error;
+  }
+}
+
 /**
  * Durable memories remain in their Space-private containers. Truncating history only removes
  * conversation-derived summaries from the previous generation; including the new generation also
@@ -467,6 +494,8 @@ export interface RouterDeps {
   memoryProviders: MemoryProviderResolver;
   home: AgentHomeStore;
   secrets: EncryptedSecretStore;
+  prepareMemoryMethod?: PrepareMemoryMethod;
+  memoryMethodClassification?: BotMemoryClassificationService;
   oauthLogins: PiOAuthLogins;
   integrationSettings?: IntegrationProviderSettings;
   composio?: ComposioProvider;
@@ -809,6 +838,24 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     models: {
+      judgmentConnection: {
+        get: authed.models.judgmentConnection.get.handler(({ context }) =>
+          getMemoryClassifierSettings(
+            { prisma: deps.prisma, secrets: deps.secrets },
+            context.actor,
+          ),
+        ),
+        connect: authed.models.judgmentConnection.connect.handler(({ context, input }) =>
+          connectMemoryClassifier(
+            { prisma: deps.prisma, secrets: deps.secrets },
+            context.actor,
+            input,
+          ),
+        ),
+        disconnect: authed.models.judgmentConnection.disconnect.handler(({ context }) =>
+          disconnectMemoryClassifier({ prisma: deps.prisma, secrets: deps.secrets }, context.actor),
+        ),
+      },
       list: authed.models.list.handler(async () => [...listPiCatalog(), scriptedCatalogEntry]),
       credentials: authed.models.credentials.handler(async ({ context }) => {
         const rows = await deps.prisma.userModelCredential.findMany({
@@ -985,6 +1032,40 @@ export function createRouter(deps: RouterDeps) {
         if (!found) throw new IsolationError();
         return found;
       }),
+      memoryMethod: {
+        get: authed.bots.memoryMethod.get.handler(({ context, input }) =>
+          getBotMemoryMethod(
+            {
+              prisma: deps.prisma,
+              prepare: deps.prepareMemoryMethod ?? missingMemoryMethodPreparer,
+            },
+            context.actor,
+            input.botId,
+          ),
+        ),
+        update: authed.bots.memoryMethod.update.handler(({ context, input }) =>
+          updateBotMemoryMethod(
+            {
+              prisma: deps.prisma,
+              prepare: deps.prepareMemoryMethod ?? missingMemoryMethodPreparer,
+            },
+            context.actor,
+            input,
+          ),
+        ),
+        disable: authed.bots.memoryMethod.disable.handler(({ context, input }) =>
+          disableBotMemoryMethod(deps.prisma, context.actor, input.botId, input.expectedVersion),
+        ),
+        list: authed.bots.memoryMethod.list.handler(({ context }) =>
+          listBotMemoryMethods(
+            {
+              prisma: deps.prisma,
+              prepare: deps.prepareMemoryMethod ?? missingMemoryMethodPreparer,
+            },
+            context.actor,
+          ),
+        ),
+      },
       create: authed.bots.create.handler(async ({ context, input }) => {
         try {
           return await repos.createBot(context.actor, input);
@@ -2321,6 +2402,149 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     memory: {
+      library: {
+        list: authed.memory.library.list.handler(async ({ context, input }) =>
+          new MarkdownMemoryLibrary(deps.prisma).list(context.actor, input),
+        ),
+        get: authed.memory.library.get.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).get(context.actor, input.documentId),
+          ),
+        ),
+        classify: authed.memory.library.classify.handler(async ({ context, input }) =>
+          memoryLibraryCall(() => {
+            if (!deps.memoryMethodClassification)
+              throw new ORPCError("PRECONDITION_FAILED", {
+                message: "Memory classification is unavailable.",
+              });
+            return deps.memoryMethodClassification.classifyVisibleMethod({
+              actor: context.actor,
+              botId: input.botId,
+              memoryId: input.documentId,
+              expectedRevision: input.expectedRevision,
+            });
+          }),
+        ),
+        classificationRun: authed.memory.library.classificationRun.handler(
+          async ({ context, input }) =>
+            memoryLibraryCall(() =>
+              new MarkdownMemoryLibrary(deps.prisma).getBotClassificationRun(context.actor, input),
+            ),
+        ),
+        reviewClassification: authed.memory.library.reviewClassification.handler(
+          async ({ context, input }) =>
+            memoryLibraryCall(() =>
+              new MarkdownMemoryLibrary(deps.prisma).reviewBotClassification(context.actor, input),
+            ),
+        ),
+        annotations: authed.memory.library.annotations.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).memoryAnnotations(
+              context.actor,
+              input.documentId,
+            ),
+          ),
+        ),
+        revokeClassificationFeedback: authed.memory.library.revokeClassificationFeedback.handler(
+          async ({ context, input }) =>
+            new MarkdownMemoryLibrary(deps.prisma).revokeClassificationFeedback(
+              context.actor,
+              input.feedbackId,
+            ),
+        ),
+        create: authed.memory.library.create.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).create(context.actor, {
+              ...input,
+              active: true,
+            }),
+          ),
+        ),
+        capture: authed.memory.library.capture.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).captureMessage(context.actor, input),
+          ),
+        ),
+        update: authed.memory.library.update.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).update(context.actor, input),
+          ),
+        ),
+        accept: authed.memory.library.accept.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).accept(
+              context.actor,
+              input.documentId,
+              input.expectedRevision,
+            ),
+          ),
+        ),
+        acceptConsolidation: authed.memory.library.acceptConsolidation.handler(
+          async ({ context, input }) =>
+            memoryLibraryCall(() =>
+              new MarkdownMemoryLibrary(deps.prisma).acceptConsolidation(
+                context.actor,
+                input.documentId,
+                input.expectedRevision,
+                input.replaceSources,
+              ),
+            ),
+        ),
+        proposeConsolidation: authed.memory.library.proposeConsolidation.handler(
+          async ({ context, input }) =>
+            memoryLibraryCall(() =>
+              new MarkdownMemoryLibrary(deps.prisma).proposeConsolidation(context.actor, input),
+            ),
+        ),
+        restore: authed.memory.library.restore.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).restore(
+              context.actor,
+              input.documentId,
+              input.expectedRevision,
+            ),
+          ),
+        ),
+        publish: authed.memory.library.publish.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).publish(context.actor, input),
+          ),
+        ),
+        withdraw: authed.memory.library.withdraw.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).withdraw(
+              context.actor,
+              input.documentId,
+              input.expectedRevision,
+            ),
+          ),
+        ),
+        history: authed.memory.library.history.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).history(context.actor, input.documentId),
+          ),
+        ),
+        search: authed.memory.library.search.handler(async ({ context, input }) =>
+          new MarkdownMemoryLibrary(deps.prisma).search(context.actor, input),
+        ),
+        exportMarkdown: authed.memory.library.exportMarkdown.handler(async ({ context, input }) =>
+          new MarkdownMemoryLibrary(deps.prisma).exportMarkdown(context.actor, input),
+        ),
+        exportOkf: authed.memory.library.exportOkf.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).exportOkf(
+              context.actor,
+              input.documentId,
+              input.expectedRevision,
+            ),
+          ),
+        ),
+        importOkf: authed.memory.library.importOkf.handler(async ({ context, input }) =>
+          memoryLibraryCall(() =>
+            new MarkdownMemoryLibrary(deps.prisma).importOkf(context.actor, input),
+          ),
+        ),
+      },
       list: authed.memory.list.handler(async ({ context, input }) => {
         const docs = await deps.prisma.memoryDocument.findMany({
           where: {
@@ -2349,26 +2573,18 @@ export function createRouter(deps: RouterDeps) {
           },
         });
         if (!doc) throw new IsolationError();
-        const updated = await deps.memory.commit(
-          {
-            scope: doc.scope as "bot" | "user",
-            botId: doc.botId ?? undefined,
-            path: doc.path,
+        const updated = await memoryLibraryCall(() =>
+          new MarkdownMemoryLibrary(deps.prisma).update(context.actor, {
+            documentId: doc.id,
+            expectedRevision: input.expectedRevision,
             content: input.content,
-          },
-          {
-            operationId: "mem",
-            traceId: "mem",
-            spaceId: context.actor.spaceId,
-            userId: context.actor.userId,
-            signal: new AbortController().signal,
-          },
+          }),
         );
         return {
           id: updated.id,
           scope: doc.scope as "bot" | "user",
           botId: doc.botId,
-          path: updated.path,
+          path: doc.path,
           content: updated.content,
           revision: updated.revision,
           updatedAt: new Date().toISOString(),

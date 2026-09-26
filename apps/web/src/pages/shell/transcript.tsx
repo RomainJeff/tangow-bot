@@ -402,6 +402,7 @@ export const Transcript = memo(function Transcript({
                     {chrome === "row" ? (
                       <MessageHoverActions
                         message={message}
+                        memoryBotId={"botId" in artifactTarget ? artifactTarget.botId : undefined}
                         revealed={activeMessageId === message.id}
                         side={message.role === "user" ? "start" : "end"}
                         onReply={onReply}

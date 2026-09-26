@@ -22,10 +22,16 @@ export async function aiConsentStatus(
   actor: Actor,
   query: AiConsentQuery = {},
 ): Promise<AiConsentStatus> {
-  const uses = query.uses ?? ["model", "memory", "voice"];
-  const modelsEnabled = uses.includes("model") && deps.env.agentRuntime !== "scripted";
+  const uses = query.uses ?? ["model", "memory", "voice", "memory-classification"];
+  const preparationOnly = uses.includes("memory-method-preparation") && !uses.includes("model");
+  const modelsEnabled =
+    (uses.includes("model") || uses.includes("memory-method-preparation")) &&
+    deps.env.agentRuntime !== "scripted";
   const target =
-    query.botId || query.groupId ? await resolveThreadTarget(deps.prisma, actor, query) : null;
+    (uses.includes("model") || uses.includes("memory-method-preparation")) &&
+    (query.botId || query.groupId)
+      ? await resolveThreadTarget(deps.prisma, actor, query)
+      : null;
   const botIds = target
     ? target.kind === "bot"
       ? [target.botId]
@@ -33,7 +39,7 @@ export async function aiConsentStatus(
     : undefined;
   const [preferences, defaultCredential, bots, voices, memory, settings, consents] =
     await Promise.all([
-      modelsEnabled
+      uses.includes("model") && modelsEnabled
         ? deps.prisma.spaceModelPreference.findMany({
             where: { userId: actor.userId, spaceId: actor.spaceId },
             include: { credential: true },
@@ -97,18 +103,19 @@ export async function aiConsentStatus(
       }),
     );
     // Connected models remain reachable by helpers during a targeted bot run.
-    for (const preference of preferences)
-      selected.push({
-        provider: preference.credential.provider,
-        id: preference.modelId ?? "",
-        credential: {
-          ...preference.credential,
-          isDefault: preference.isDefault,
-          defaultModel: preference.modelId,
-        },
-        thinkingLevel: null,
-      });
-    if (deps.env.teamChatJudgeProvider && deps.env.teamChatJudgeModel) {
+    if (uses.includes("model"))
+      for (const preference of preferences)
+        selected.push({
+          provider: preference.credential.provider,
+          id: preference.modelId ?? "",
+          credential: {
+            ...preference.credential,
+            isDefault: preference.isDefault,
+            defaultModel: preference.modelId,
+          },
+          thinkingLevel: null,
+        });
+    if (uses.includes("model") && deps.env.teamChatJudgeProvider && deps.env.teamChatJudgeModel) {
       selected.push({
         provider: deps.env.teamChatJudgeProvider,
         id: deps.env.teamChatJudgeModel,
@@ -154,13 +161,49 @@ export async function aiConsentStatus(
           provider: model.provider!,
           modelId: model.id!,
           baseUrl: model.credential ? baseUrls.get(model.credential.secretId) : undefined,
-          use: "model",
+          use: preparationOnly ? "memory-method-preparation" : "model",
         }),
       );
     }
   }
   for (const voice of voices)
     add(aiRecipient({ provider: voice.credential.provider, use: "voice" }));
+  if (uses.includes("memory-classification")) {
+    const method = query.botId
+      ? await deps.prisma.botMemoryMethod.findFirst({
+          where: {
+            botId: query.botId,
+            bot: {
+              spaceId: actor.spaceId,
+              archivedAt: null,
+              memoryMethodDisabledAt: null,
+              space: { memberships: { some: { userId: actor.userId } } },
+            },
+          },
+          orderBy: { version: "desc" },
+          include: { bot: { select: { userId: true } } },
+        })
+      : null;
+    const methodVisible =
+      !method || method.bot.userId === actor.userId || method.sharing === "space";
+    const classifier = method
+      ? methodVisible && method.provider === "typesafe-jev"
+        ? { provider: method.provider, model: method.model }
+        : null
+      : query.botId
+        ? null
+        : await deps.prisma.spaceMemoryClassifierConfig.findUnique({
+            where: { spaceId: actor.spaceId },
+          });
+    if (classifier)
+      add(
+        aiRecipient({
+          provider: classifier.provider,
+          modelId: classifier.model,
+          use: "memory-classification",
+        }),
+      );
+  }
   if (memory)
     add(
       aiRecipient({
@@ -190,9 +233,10 @@ export async function aiConsentStatus(
 export async function allowAiConsent(
   deps: RouterDeps,
   actor: Actor,
-  input: { scope: string; version: string; keys: string[] },
+  input: { scope: string; version: string; keys: string[]; query?: AiConsentQuery },
 ) {
-  const current = await aiConsentStatus(deps, actor);
+  const query = input.query ?? {};
+  const current = await aiConsentStatus(deps, actor, query);
   const known = new Set(current.recipients.map((recipient) => recipient.key));
   if (
     input.scope !== current.scope ||

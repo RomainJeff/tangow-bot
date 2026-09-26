@@ -7,6 +7,9 @@ import { describe, expect, it, vi } from "vitest";
 import type * as AutoReviewModule from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import type * as MemoryManagementModule from "./memory-management-tools.js";
+import { runMemoryManagementTool } from "./memory-management-tools.js";
+import { MemoryClassificationConsentRequired } from "./memory-method-classification.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -19,6 +22,11 @@ vi.mock("./auto-review.js", async (importOriginal) => ({
   resolveAutoReviewChecker: () => ({ provider: "scripted", model: "checker" }),
   isAutoReviewCheckerConfigured: () => true,
   runAutoReviewJudge: vi.fn(),
+}));
+
+vi.mock("./memory-management-tools.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MemoryManagementModule>()),
+  runMemoryManagementTool: vi.fn(async () => ({ ok: true })),
 }));
 
 type Effect = {
@@ -38,7 +46,7 @@ type ToolCall = {
   executionId: string;
 };
 
-function fixture(runId = "run-1") {
+function fixture(runId = "run-1", options: { trigger?: string; groupId?: string | null } = {}) {
   const effects: Effect[] = [];
   const results: unknown[] = [];
   const scratchpadRows: Array<{
@@ -60,7 +68,7 @@ function fixture(runId = "run-1") {
     spaceId: "space-1",
     userId: "user-1",
     status: "queued",
-    trigger: "user",
+    trigger: options.trigger ?? "user",
     leaseFence: 0,
   };
   const memoryCommit = vi.fn(async () => ({ revision: "rev-1" }));
@@ -119,17 +127,29 @@ function fixture(runId = "run-1") {
         name: "Assistant",
         title: "Assistant",
         description: "Test assistant",
+        userId: run.userId,
         computerId: "computer-1",
         computer: { id: "computer-1", scope: "dedicated" },
       })),
       findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => ({ id: run.botId })),
     },
+    user: { findUniqueOrThrow: vi.fn(async () => ({ email: "fixture@rakazo.test" })) },
     attempt: {
       create: vi.fn(async () => ({ id: "attempt-1" })),
       update: vi.fn(),
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
-    thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
+    thread: {
+      findUniqueOrThrow: vi.fn(async () => ({
+        id: run.threadId,
+        groupId: options.groupId ?? null,
+      })),
+    },
+    chatGroup: { findUnique: vi.fn(async () => null) },
+    botMemoryMethod: {
+      findFirst: vi.fn(async () => ({ id: "method-1" })),
+    },
     message: { findMany: vi.fn(async () => []) },
     task: {
       findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Update shared state" })),
@@ -146,8 +166,11 @@ function fixture(runId = "run-1") {
     taughtSkill: { findMany: vi.fn(async () => []) },
     agentSecret: { findMany: vi.fn(async () => []) },
     agentSkill: { findMany: vi.fn(async () => []) },
-    skillSetting: { findMany: vi.fn(async () => []) },
-    botSkill: { findMany: vi.fn(async () => []) },
+    skillSetting: { findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null) },
+    botSkill: {
+      findMany: vi.fn(async () => [{ skillKey: "builtin:Memory management", enabled: true }]),
+      findFirst: vi.fn(async () => ({ enabled: true })),
+    },
     scratchpadItem: {
       findMany: vi.fn(async () => scratchpadRows),
       create: vi.fn(
@@ -184,6 +207,24 @@ function fixture(runId = "run-1") {
     return true;
   });
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
+  const classifyMemoryForBot = vi.fn(async () => ({
+    classificationId: "classification-1",
+    documentId: "memory-1",
+    revision: 1,
+    suggestion: {
+      answers: { topic: "interview" },
+      abstained: false,
+      metadata: { provider: "local", model: "reviewed-examples", schemaVersion: "1" },
+    },
+    questions: [
+      {
+        key: "topic",
+        label: "Topic",
+        options: [{ key: "interview", label: "Interview", description: "" }],
+      },
+    ],
+    reviewPath: "/app/bot-1",
+  }));
   let calls: ToolCall[] = [];
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
     for (const call of calls) {
@@ -209,6 +250,7 @@ function fixture(runId = "run-1") {
       exportMarkdown: async function* () {},
     },
     memoryProviders: { resolve: async () => null },
+    classifyMemoryForBot,
     events: { append: vi.fn(async () => undefined), pauseRunForInput, finalizeRun },
     jobs: { enqueue: vi.fn(async () => undefined) },
     secrets: [],
@@ -217,8 +259,11 @@ function fixture(runId = "run-1") {
   return {
     effects,
     results,
+    prisma,
+    pauseRunForInput,
     scratchpadRows,
     memoryCommit,
+    classifyMemoryForBot,
     setCalls(next: ToolCall[]) {
       calls = next;
     },
@@ -545,5 +590,138 @@ describe("mutating tool effect idempotency keys", () => {
     expect(f.memoryCommit).not.toHaveBeenCalled();
     expect(f.effects).toHaveLength(1);
     expect(f.results[0]).toEqual({ ok: true, legacy: true });
+  });
+
+  it("classifies only through the active bot callback and returns a review suggestion without editing memory", async () => {
+    const f = fixture("run-memory-classification");
+    f.setCalls([
+      {
+        name: "classify_memory",
+        args: { memoryId: "memory-1", botId: "attacker-bot", methodId: "attacker-method" },
+        executionId: "classification-call",
+      },
+    ]);
+
+    await f.run();
+
+    expect(f.classifyMemoryForBot).toHaveBeenCalledExactlyOnceWith({
+      actor: { userId: "user-1", spaceId: "space-1" },
+      botId: "bot-1",
+      memoryId: "memory-1",
+    });
+    expect(f.results[0]).toMatchObject({
+      classificationId: "classification-1",
+      suggestion: { answers: { topic: "interview" } },
+      reviewPath: "/app/bot-1",
+    });
+    expect(f.memoryCommit).not.toHaveBeenCalled();
+    expect(f.effects).toHaveLength(1);
+    expect(f.effects[0]).toMatchObject({ kind: "classify_memory", status: "completed" });
+  });
+
+  it("rejects a hostile classification tool call in a group even when the runtime emits it", async () => {
+    const f = fixture("run-group-memory-classification", { groupId: "group-1" });
+    f.setCalls([
+      {
+        name: "classify_memory",
+        args: { memoryId: "memory-1" },
+        executionId: "classification-call",
+      },
+    ]);
+
+    await f.run();
+
+    expect(f.classifyMemoryForBot).not.toHaveBeenCalled();
+    expect(f.results[0]).toEqual({ error: "Memory management is unavailable in this run." });
+    expect(f.effects).toHaveLength(0);
+  });
+
+  it.each(["prepare_memory_method", "review_memory_classification", "change_memory"])(
+    "waits for human approval and replays only the exact approved %s payload",
+    async (name) => {
+      vi.mocked(runMemoryManagementTool).mockClear();
+      const f = fixture(`run-approve-${name}`);
+      f.prisma.actionAutoReviewPreference.findUnique.mockResolvedValue({ enabled: true });
+      const args = { action: "withdraw", documentId: "memory-1", expectedRevision: 1 };
+      f.setCalls([{ name, args, executionId: "original" }]);
+      await f.run();
+      expect(runMemoryManagementTool).not.toHaveBeenCalled();
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+      expect(f.effects[0]).toMatchObject({ kind: name, status: "intended", request: args });
+      f.effects[0]!.status = "approved";
+      f.setCalls([
+        { name, args: { ...args, documentId: "unapproved-memory" }, executionId: "resume" },
+      ]);
+      await f.run();
+      expect(runMemoryManagementTool).toHaveBeenCalledExactlyOnceWith(
+        f.prisma,
+        expect.objectContaining({ userId: "user-1", spaceId: "space-1", isDeploymentOwner: false }),
+        "bot-1",
+        name,
+        args,
+        f.effects[0]!.id,
+      );
+      expect(f.effects[0]!.status).toBe("completed");
+      await f.run();
+      expect(runMemoryManagementTool).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("does not execute a denied memory change", async () => {
+    vi.mocked(runMemoryManagementTool).mockClear();
+    const f = fixture("run-denied-memory");
+    f.setCalls([
+      {
+        name: "change_memory",
+        args: { action: "withdraw", documentId: "memory-1", expectedRevision: 1 },
+        executionId: "denied",
+      },
+    ]);
+    await f.run();
+    f.effects[0]!.status = "denied";
+    await f.run();
+    expect(runMemoryManagementTool).not.toHaveBeenCalled();
+    expect(f.effects[0]!.status).toBe("denied");
+  });
+
+  it("rejects a revoked capability before any approval or memory operation", async () => {
+    vi.mocked(runMemoryManagementTool).mockClear();
+    const f = fixture("run-revoked-memory");
+    f.prisma.botSkill.findFirst.mockResolvedValue({ enabled: false });
+    f.setCalls([
+      {
+        name: "change_memory",
+        args: { action: "withdraw", documentId: "memory-1", expectedRevision: 1 },
+        executionId: "revoked",
+      },
+    ]);
+    await f.run();
+    expect(f.results[0]).toEqual({ error: "Memory management is unavailable in this run." });
+    expect(runMemoryManagementTool).not.toHaveBeenCalled();
+    expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    expect(f.effects).toHaveLength(0);
+  });
+
+  it("does not fall back when classification consent is missing", async () => {
+    const f = fixture("run-memory-classification-consent");
+    f.classifyMemoryForBot.mockRejectedValueOnce(
+      new MemoryClassificationConsentRequired("/app/memory?collection=personal&memory=memory-1"),
+    );
+    f.setCalls([
+      {
+        name: "classify_memory",
+        args: { memoryId: "memory-1" },
+        executionId: "classification-call",
+      },
+    ]);
+
+    await f.run();
+
+    expect(f.results[0]).toEqual({
+      error:
+        "Allow memory analysis in Settings → Models → Judgment model → Data sharing, then retry. No suggestion was created.",
+      reviewPath: "/app/memory?collection=personal&memory=memory-1",
+    });
+    expect(f.memoryCommit).not.toHaveBeenCalled();
   });
 });

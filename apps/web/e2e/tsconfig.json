@@ -18,6 +18,8 @@
     "golden.spec.ts",
     "helpers.ts",
     "message-grouping.spec.ts",
+    "memory-library.spec.ts",
+    "memory-classifier-settings.spec.ts",
     "message-hover-actions.spec.ts",
     "peer-messages.spec.ts",
     "quiet-blocks.spec.ts",

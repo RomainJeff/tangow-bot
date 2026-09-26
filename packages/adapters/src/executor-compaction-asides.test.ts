@@ -14,8 +14,24 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
 function fixture(options: {
   summary: string | null;
   compactedUpToSeq: number | null;
-  messages: { id: string; seq: number; role: string; blocks: { kind: string; text: string }[] }[];
+  summaryManifest?: unknown;
+  previousRunManifest?: unknown;
+  activeMemory?: Array<{
+    id: string;
+    path: string;
+    content: string;
+    revision: number;
+    accessVersion?: number;
+  }>;
+  messages: {
+    id: string;
+    seq: number;
+    role: string;
+    runId?: string;
+    blocks: unknown[];
+  }[];
 }) {
+  const persistedManifests: unknown[] = [];
   const run = {
     id: "run-1",
     botId: "bot-1",
@@ -32,9 +48,17 @@ function fixture(options: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
       updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        if ("memoryContextManifest" in data) persistedManifests.push(data.memoryContextManifest);
         Object.assign(run, data);
         return { count: 1 };
       }),
+      findMany: vi.fn(async () => [
+        {
+          id: "run-previous",
+          memoryContextManifest:
+            options.previousRunManifest === undefined ? [] : options.previousRunManifest,
+        },
+      ]),
     },
     bot: {
       findUniqueOrThrow: vi.fn(async () => ({
@@ -58,6 +82,7 @@ function fixture(options: {
         id: run.threadId,
         groupId: null,
         historyCompactionSummary: options.summary,
+        historyCompactionMemoryManifest: options.summary ? (options.summaryManifest ?? []) : null,
         historyCompactedUpToSeq: options.compactedUpToSeq,
         historyCompactionGeneration: 0,
       })),
@@ -65,7 +90,10 @@ function fixture(options: {
     // The executor loads newest-first and reverses; hand it the same order.
     message: { findMany: vi.fn(async () => [...options.messages].reverse()) },
     task: {
-      findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "What did Ava decide?" })),
+      findUniqueOrThrow: vi.fn(async () => ({
+        id: run.taskId,
+        prompt: "What did Ava decide?",
+      })),
     },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -83,7 +111,9 @@ function fixture(options: {
     botSkill: { findMany: vi.fn(async () => []) },
     scratchpadItem: { findMany: vi.fn(async () => []) },
     actionApprovalRule: { findMany: vi.fn(async () => []) },
-    actionAutoReviewPreference: { findUnique: vi.fn(async () => ({ enabled: false })) },
+    actionAutoReviewPreference: {
+      findUnique: vi.fn(async () => ({ enabled: false })),
+    },
     externalEffect: {
       findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => null),
@@ -96,14 +126,17 @@ function fixture(options: {
     ok: true as const,
     value: [{ memory: "Ava decided to ship behind a feature flag.", score: 0.9 }],
   }));
-  const runtimeRun = vi.fn(async function* () {
+  const runtimeRun = vi.fn(async function* (_request: AgentRunRequest) {
     yield { type: "done" as const, text: "Done" };
   });
   const executor = createRunExecutor({
     prisma,
-    runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
+    runtime: {
+      describe: () => ({ capabilities: { scripted: false } }),
+      run: runtimeRun,
+    },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
-    memory: { read: async () => ({ documents: [] }) },
+    memory: { read: async () => ({ documents: options.activeMemory ?? [] }) },
     memoryProviders: {
       resolve: async () => ({
         defaultScope: "isolated" as const,
@@ -136,6 +169,10 @@ function fixture(options: {
   return {
     recall,
     runtimeRun,
+    persistedManifests,
+    request() {
+      return runtimeRun.mock.calls[0]?.[0] as AgentRunRequest | undefined;
+    },
     async run() {
       await executor.continueRun(run.id, "worker-1");
       expect(runtimeRun).toHaveBeenCalled();
@@ -151,14 +188,25 @@ describe("thread asides and the compaction summary", () => {
   // form an unbroken run, so an aside must stay in place until that check has run — and
   // must still never reach the model as a turn.
   const conversation = [
-    { id: "m-5", seq: 5, role: "user", blocks: [{ kind: "text", text: "First question" }] },
+    {
+      id: "m-5",
+      seq: 5,
+      role: "user",
+      blocks: [{ kind: "text", text: "First question" }],
+    },
     {
       id: "m-6",
       seq: 6,
       role: "system",
       blocks: [{ kind: "meta", text: "Added to the group chat" }],
     },
-    { id: "m-7", seq: 7, role: "assistant", blocks: [{ kind: "text", text: "First answer" }] },
+    {
+      id: "m-7",
+      seq: 7,
+      role: "assistant",
+      runId: "run-previous",
+      blocks: [{ kind: "text", text: "First answer" }],
+    },
   ];
 
   it("keeps summarising a thread that holds an aside after the cursor", async () => {
@@ -174,7 +222,11 @@ describe("thread asides and the compaction summary", () => {
   });
 
   it("drops the aside on a thread that was never compacted", async () => {
-    const f = fixture({ summary: null, compactedUpToSeq: null, messages: conversation });
+    const f = fixture({
+      summary: null,
+      compactedUpToSeq: null,
+      messages: conversation,
+    });
 
     await f.run();
 
@@ -198,16 +250,153 @@ describe("thread asides and the compaction summary", () => {
           })
         | undefined;
 
-    await fixture({ summary: null, compactedUpToSeq: null, messages: conversation }).run();
+    await fixture({
+      summary: null,
+      compactedUpToSeq: null,
+      messages: conversation,
+    }).run();
 
     // Three stored messages, one of them the system aside: two are windowable and both survive.
-    expect(contextEvent()).toMatchObject({ historyMessagesKept: 2, historyMessagesAvailable: 2 });
+    expect(contextEvent()).toMatchObject({
+      historyMessagesKept: 2,
+      historyMessagesAvailable: 2,
+    });
     expect(contextEvent()?.historyWindowMode).not.toBe("not-sized");
 
     sink.events.length = 0;
-    await fixture({ summary, compactedUpToSeq: 4, messages: conversation }).run();
+    await fixture({
+      summary,
+      compactedUpToSeq: 4,
+      messages: conversation,
+    }).run();
 
     // A local summary already narrowed history, so no window sizing ran at all.
     expect(contextEvent()).toMatchObject({ historyWindowMode: "not-sized" });
+  });
+
+  it.each([false, true])(
+    "preserves tool history when a summary is revoked: %s",
+    async (revokedSummary) => {
+      const f = fixture({
+        summary: revokedSummary ? summary : null,
+        compactedUpToSeq: revokedSummary ? 4 : null,
+        summaryManifest: [{ documentId: "withdrawn-memory", revision: 1, accessVersion: 1 }],
+        messages: [
+          {
+            id: "tool-message",
+            seq: 5,
+            role: "assistant",
+            runId: "run-previous",
+            blocks: [
+              {
+                kind: "steps",
+                steps: [
+                  {
+                    label: "Read file",
+                    count: 1,
+                    calls: [
+                      {
+                        id: "read-1",
+                        name: "read_file",
+                        input: '{"path":"notes.md"}',
+                        output: "Ship Friday",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      await f.run();
+      expect(f.request()?.history.find((entry) => entry.id === "tool-message")?.parts).toEqual([
+        {
+          type: "toolCalls",
+          calls: [
+            { id: "read-1", name: "read_file", args: { path: "notes.md" }, output: "Ship Friday" },
+          ],
+        },
+      ]);
+    },
+  );
+
+  it("keeps known-empty assistant history but excludes unknown and revoked dependencies", async () => {
+    const known = fixture({
+      summary: null,
+      compactedUpToSeq: null,
+      messages: conversation,
+    });
+    await known.run();
+    expect(known.request()?.history.some((entry) => entry.content.includes("First answer"))).toBe(
+      true,
+    );
+
+    const unknown = fixture({
+      summary: null,
+      compactedUpToSeq: null,
+      previousRunManifest: null,
+      messages: conversation,
+    });
+    await unknown.run();
+    expect(unknown.request()?.history.some((entry) => entry.content.includes("First answer"))).toBe(
+      false,
+    );
+
+    const revoked = fixture({
+      summary: null,
+      compactedUpToSeq: null,
+      previousRunManifest: [{ documentId: "memory-1", revision: 2, accessVersion: 4 }],
+      messages: conversation,
+    });
+    await revoked.run();
+    expect(revoked.request()?.history.some((entry) => entry.content.includes("First answer"))).toBe(
+      false,
+    );
+  });
+
+  it("excludes a summary whose recalled memory was withdrawn", async () => {
+    const revoked = fixture({
+      summary,
+      compactedUpToSeq: 4,
+      summaryManifest: [{ documentId: "memory-1", revision: 2, accessVersion: 4 }],
+      messages: conversation,
+    });
+    await revoked.run();
+    expect(revoked.request()?.history.some((entry) => entry.content.includes(summary))).toBe(false);
+  });
+
+  it("carries validated assistant and summary dependencies into this run's manifest", async () => {
+    const dependency = {
+      documentId: "memory-1",
+      revision: 2,
+      accessVersion: 4,
+      scope: "user",
+      path: "MEMORY.md",
+      reason: "local_lexical_match",
+      excerptBytes: 12,
+    };
+    const f = fixture({
+      summary,
+      compactedUpToSeq: 4,
+      summaryManifest: [dependency],
+      previousRunManifest: [dependency],
+      activeMemory: [
+        {
+          id: "memory-1",
+          path: "MEMORY.md",
+          content: "private fact",
+          revision: 2,
+          accessVersion: 4,
+        },
+      ],
+      messages: conversation,
+    });
+
+    await f.run();
+
+    expect(f.persistedManifests).toContainEqual(
+      expect.arrayContaining([expect.objectContaining({ documentId: "memory-1", revision: 2 })]),
+    );
   });
 });

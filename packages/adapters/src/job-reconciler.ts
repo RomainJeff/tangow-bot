@@ -1,4 +1,5 @@
 import {
+  historyCompactJob,
   type JobPublisher,
   messagingDeliverJob,
   routineWakeupJob,
@@ -165,7 +166,14 @@ export function createJobReconciler(
             }
           : { controlLeaseExpiresAt: null, id: { gt: controlCursor.id } }
         : undefined;
-      const [runs, routines, controls, dueOutbound, unmirroredMessagingRuns] = await Promise.all([
+      const [
+        runs,
+        routines,
+        controls,
+        dueOutbound,
+        unmirroredMessagingRuns,
+        pendingCaptureRequests,
+      ] = await Promise.all([
         deps.prisma.run.findMany({
           where: {
             AND: [
@@ -190,7 +198,9 @@ export function createJobReconciler(
             AND: [
               {
                 active: true,
-                nextRunAt: { lte: new Date(now.getTime() + ROUTINE_LOOKAHEAD_MS) },
+                nextRunAt: {
+                  lte: new Date(now.getTime() + ROUTINE_LOOKAHEAD_MS),
+                },
               },
               ...(routineCursorFilter ? [routineCursorFilter] : []),
             ],
@@ -233,11 +243,21 @@ export function createJobReconciler(
           select: { id: true },
         }),
         deps.prisma.run.findMany({
-          where: { trigger: "messaging", status: "completed", messagingMirroredAt: null },
+          where: {
+            trigger: "messaging",
+            status: "completed",
+            messagingMirroredAt: null,
+          },
           orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
           take: batchSize,
           select: { id: true },
         }),
+        deps.prisma.memoryCaptureRequest?.findMany({
+          where: { status: "pending", availableAt: { lte: now } },
+          orderBy: { createdAt: "asc" },
+          take: batchSize,
+          select: { threadId: true },
+        }) ?? Promise.resolve([]),
       ]);
 
       const events = deps.events;
@@ -321,6 +341,9 @@ export function createJobReconciler(
         ),
         ...(dueOutbound ? [deps.jobs.enqueue(messagingDeliverJob())] : []),
         ...unmirroredMessagingRuns.map((run) => deps.jobs.enqueue(messagingDeliverJob(run.id))),
+        ...[...new Set(pendingCaptureRequests.map((request) => request.threadId))].map((threadId) =>
+          deps.jobs.enqueue(historyCompactJob(threadId)),
+        ),
       ]);
 
       const lastRun = runs.at(-1);
@@ -399,7 +422,10 @@ async function botRunOutcomeText(
   if (finalParts.length > 0) {
     return { text: finalParts[finalParts.length - 1]!, progressOnly: false };
   }
-  return { text: progressParts.join("\n\n"), progressOnly: progressParts.length > 0 };
+  return {
+    text: progressParts.join("\n\n"),
+    progressOnly: progressParts.length > 0,
+  };
 }
 
 function messageText(blocks: unknown): string {

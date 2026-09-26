@@ -15,14 +15,14 @@ const allThree = [
 ];
 
 describe("selectMemoryTools", () => {
-  it("keeps native remember and drops semantic memory tools when unconfigured", () => {
+  it("keeps native remember and canonical local recall when unconfigured", () => {
     const names = selectMemoryTools(allThree, false).map((t) => t.name);
-    expect(names).toEqual(["remember", "shell"]);
+    expect(names).toEqual(["remember", "recall_memory", "shell"]);
   });
 
-  it("keeps semantic memory tools and drops native remember when configured", () => {
+  it("keeps canonical tools and drops provider-direct tools when configured", () => {
     const names = selectMemoryTools(allThree, true).map((t) => t.name);
-    expect(names).toEqual(["recall_memory", "save_memory", "forget_memory", "shell"]);
+    expect(names).toEqual(["remember", "recall_memory", "shell"]);
   });
 
   it("is a no-op for tool lists with no memory tools at all", () => {

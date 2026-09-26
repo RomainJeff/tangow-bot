@@ -1,0 +1,137 @@
+<div id="rakazo-memory-spaces" lang="fr" aria-label="Rakazo — mémoires des agents et de l’équipe">
+  <style>
+    #rakazo-memory-spaces{--ms-bg:light-dark(#fff,#191919);--ms-fg:light-dark(#232323,#ededed);--ms-muted:light-dark(#696969,#aaa);--ms-line:light-dark(#e7e7e7,#383838);--ms-soft:light-dark(#f6f6f6,#222);--ms-chosen:light-dark(#ebebeb,#333);--ms-action:light-dark(#272727,#e9e9e9);--ms-on-action:light-dark(#fff,#202020);--ms-bot:light-dark(#718796,#94a9b8);color-scheme:light dark;background:var(--ms-bg);color:var(--ms-fg);font:14px/1.5 system-ui,sans-serif;border:1px solid var(--ms-line);border-radius:14px;overflow:hidden;max-width:100%}
+    #rakazo-memory-spaces *{box-sizing:border-box}
+    #rakazo-memory-spaces button,#rakazo-memory-spaces input,#rakazo-memory-spaces select{font:inherit;color:inherit}
+    #rakazo-memory-spaces button{cursor:inherit}
+    #rakazo-memory-spaces .ms-shellbar{display:flex;gap:12px 26px;align-items:center;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid var(--ms-line)}
+    #rakazo-memory-spaces .ms-brand{font-weight:500;font-size:18px;letter-spacing:-.6px}
+    #rakazo-memory-spaces .ms-small{font-size:12px;color:var(--ms-muted)}
+    #rakazo-memory-spaces .ms-shell{display:grid;grid-template-columns:192px minmax(0,1fr);min-height:570px}
+    #rakazo-memory-spaces .ms-sidebar{padding:18px 12px;background:var(--ms-soft);border-right:1px solid var(--ms-line)}
+    #rakazo-memory-spaces .ms-nav-label{font-size:11px;color:var(--ms-muted);letter-spacing:.06em;text-transform:uppercase;padding:20px 10px 7px}
+    #rakazo-memory-spaces .ms-nav-label:first-child{padding-top:0}
+    #rakazo-memory-spaces .ms-space{display:flex;align-items:center;gap:9px;border:0;border-radius:7px;background:transparent;text-align:left;width:100%;padding:9px 10px;min-height:38px}
+    #rakazo-memory-spaces .ms-space[aria-pressed=true]{background:var(--ms-chosen);font-weight:500}
+    #rakazo-memory-spaces .ms-dot{width:8px;height:8px;border-radius:50%;background:var(--ms-bot);flex-shrink:0}
+    #rakazo-memory-spaces .ms-work{padding:26px 30px;min-width:0}
+    #rakazo-memory-spaces h2{font-weight:500;font-size:25px;letter-spacing:-.7px;margin:0}
+    #rakazo-memory-spaces h3{font-weight:500;font-size:15px;margin:0}
+    #rakazo-memory-spaces p{margin:0}
+    #rakazo-memory-spaces .ms-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+    #rakazo-memory-spaces .ms-link{background:transparent;border:0;padding:0;text-decoration:underline;text-underline-offset:3px;color:var(--ms-muted)}
+    #rakazo-memory-spaces .ms-button{padding:7px 11px;border:1px solid var(--ms-line);background:var(--ms-bg);border-radius:7px;min-height:36px}
+    #rakazo-memory-spaces .ms-primary{background:var(--ms-action);color:var(--ms-on-action);border-color:var(--ms-action)}
+    #rakazo-memory-spaces .ms-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}
+    #rakazo-memory-spaces .ms-sources{padding:13px 0 19px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--ms-muted)}
+    #rakazo-memory-spaces .ms-tabs{display:flex;gap:20px;border-bottom:1px solid var(--ms-line);margin:21px 0 22px}
+    #rakazo-memory-spaces .ms-tab{border:0;background:transparent;padding:0 0 11px;color:var(--ms-muted)}
+    #rakazo-memory-spaces .ms-tab[aria-selected=true]{color:var(--ms-fg);box-shadow:0 1px var(--ms-fg)}
+    #rakazo-memory-spaces .ms-cluster{border-top:1px solid var(--ms-line);padding:17px 0}
+    #rakazo-memory-spaces .ms-cluster:first-child{border-top:0;padding-top:0}
+    #rakazo-memory-spaces .ms-cluster-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+    #rakazo-memory-spaces details.ms-fact{padding:10px 0}
+    #rakazo-memory-spaces summary{list-style:none}
+    #rakazo-memory-spaces summary::-webkit-details-marker{display:none}
+    #rakazo-memory-spaces .ms-fact summary{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+    #rakazo-memory-spaces .ms-fact summary:after{content:'+';color:var(--ms-muted)}
+    #rakazo-memory-spaces .ms-fact[open] summary:after{content:'−'}
+    #rakazo-memory-spaces .ms-fact-title{display:block}
+    #rakazo-memory-spaces .ms-evidence{padding:13px 15px;background:var(--ms-soft);border-radius:8px;margin:12px 0}
+    #rakazo-memory-spaces blockquote{padding:0;margin:6px 0 0;border:0}
+    #rakazo-memory-spaces .ms-meta{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 12px;font-size:12px;margin-top:13px}
+    #rakazo-memory-spaces .ms-meta dt{color:var(--ms-muted)}
+    #rakazo-memory-spaces .ms-meta dd{margin:0;overflow-wrap:anywhere}
+    #rakazo-memory-spaces .ms-task-controls{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+    #rakazo-memory-spaces .ms-field{display:grid;gap:5px;flex:1;min-width:180px}
+    #rakazo-memory-spaces select{width:100%;padding:8px 9px;border:1px solid var(--ms-line);border-radius:7px;background:var(--ms-bg)}
+    #rakazo-memory-spaces .ms-context-row{padding:15px 0;border-bottom:1px solid var(--ms-line)}
+    #rakazo-memory-spaces .ms-reason{color:var(--ms-muted);font-size:12px;margin-top:5px}
+    #rakazo-memory-spaces .ms-empty{padding:25px 0;color:var(--ms-muted)}
+    #rakazo-memory-spaces .ms-preview{margin-top:15px;border-top:1px solid var(--ms-line);padding-top:18px}
+    #rakazo-memory-spaces .ms-compare{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;margin-top:16px}
+    #rakazo-memory-spaces .ms-compare p{margin:8px 0}
+    #rakazo-memory-spaces .ms-status{font-size:12px;color:var(--ms-muted);padding:11px 20px;border-top:1px solid var(--ms-line);min-height:41px}
+    #rakazo-memory-spaces .ms-access{margin:15px 0;background:var(--ms-soft);border-radius:8px;padding:15px}
+    #rakazo-memory-spaces .ms-access summary{font-size:12px;color:var(--ms-muted)}
+    #rakazo-memory-spaces .ms-callout{padding:12px 14px;background:var(--ms-soft);border-radius:8px;margin:15px 0;font-size:12px;color:var(--ms-muted)}
+    #rakazo-memory-spaces .ms-inline-list{margin:8px 0 0;padding-left:18px}
+    #rakazo-memory-spaces[data-compact=true] .ms-fact{padding:6px 0}
+    @media(max-width:680px){#rakazo-memory-spaces .ms-shell{grid-template-columns:1fr}#rakazo-memory-spaces .ms-sidebar{border-right:0;border-bottom:1px solid var(--ms-line);display:flex;flex-wrap:wrap;gap:5px;padding:12px}#rakazo-memory-spaces .ms-nav-label{display:none}#rakazo-memory-spaces .ms-space{width:auto;font-size:12px}#rakazo-memory-spaces .ms-work{padding:22px 18px}#rakazo-memory-spaces .ms-compare{grid-template-columns:1fr}#rakazo-memory-spaces h2{font-size:22px}}
+    @media(pointer:coarse){#rakazo-memory-spaces button,#rakazo-memory-spaces select,#rakazo-memory-spaces summary{min-height:44px}#rakazo-memory-spaces select{font-size:16px}}
+  </style>
+  <header class="ms-shellbar"><span class="ms-brand">rakazo</span><span class="ms-small">Mémoire</span><span class="ms-small">Maquette · données fictives</span></header>
+  <div class="ms-shell"><nav class="ms-sidebar" aria-label="Espaces de mémoire"></nav><main class="ms-work"></main></div>
+  <div class="ms-status" role="status" aria-live="polite"></div>
+  <script>
+  (()=>{
+    const root=document.getElementById('rakazo-memory-spaces');
+    const nav=root.querySelector('.ms-sidebar'),work=root.querySelector('.ms-work'),status=root.querySelector('.ms-status');
+    const spaces={
+      atlas:{name:'Atlas',label:'Mémoire d’Atlas',owner:'Vous',readers:'Vous et Atlas',writers:'Vous',type:'agent',sources:['team','orion']},
+      nova:{name:'Nova',label:'Mémoire de Nova',owner:'Vous',readers:'Vous et Nova',writers:'Vous',type:'agent',sources:['team']},
+      team:{name:'Équipe Produit',label:'Mémoire de l’équipe',owner:'Équipe Produit',readers:'Les 3 membres · Atlas et Nova',writers:'Vous et Camille',type:'shared',sources:[]},
+      orion:{name:'Projet Orion',label:'Mémoire du projet Orion',owner:'Équipe Orion',readers:'Vous et Camille · Atlas',writers:'Camille',type:'shared',sources:[]},
+      personal:{name:'Mes préférences',label:'Mes préférences',owner:'Vous',readers:'Vous uniquement',writers:'Vous',type:'personal',sources:[]}
+    };
+    const memories=[
+      {id:'a1',space:'atlas',topic:'Lancements',kind:'Retour d’expérience',text:'Au dernier pilote, l’absence de test du parcours d’invitation a retardé l’ouverture.',source:'Bilan du pilote · 12 septembre',quote:'Le parcours d’invitation n’avait pas été testé. Son échec a retardé l’ouverture du pilote.',origin:'Bilan validé par vous',valid:'Épisode du 12 septembre'},
+      {id:'a2',space:'atlas',topic:'Recherche',kind:'Connaissance',text:'Les entretiens du pilote portent sur la recherche de documents, pas sur leur édition.',source:'Périmètre de recherche · version 2',quote:'Cette série d’entretiens couvre la recherche de documents. L’édition sera étudiée séparément.',origin:'Document validé par vous',valid:'Étude en cours'},
+      {id:'n1',space:'nova',topic:'Support',kind:'Retour d’expérience',text:'Lors du diagnostic de démonstration, le rôle lecteur expliquait le refus d’édition.',source:'Résolution du cas de démonstration · 17 septembre',quote:'L’édition a fonctionné après correction du rôle. Ce constat concerne ce cas.',origin:'Résultat observé',valid:'Épisode du 17 septembre'},
+      {id:'t1',space:'team',topic:'Coordination',kind:'Convention',text:'Les comptes rendus présentent les décisions, puis les questions encore ouvertes.',source:'Convention d’équipe · version 3',quote:'Dans les comptes rendus : décisions d’abord, puis questions encore ouvertes.',origin:'Adopté par l’équipe',valid:'Jusqu’à révision'},
+      {id:'t2',space:'team',topic:'Support',kind:'Connaissance',text:'Le rôle lecteur permet de consulter un document.',source:'Matrice des rôles · version 4',quote:'Lecteur : consultation autorisée.',origin:'Référentiel d’équipe',valid:'Version 4 en vigueur'},
+      {id:'t3',space:'team',topic:'Support',kind:'Connaissance',text:'Le rôle lecteur ne permet pas de modifier un document.',source:'Matrice des rôles · version 4',quote:'Lecteur : modification non autorisée.',origin:'Référentiel d’équipe',valid:'Version 4 en vigueur'},
+      {id:'o1',space:'orion',topic:'Lancement',kind:'Décision',text:'L’ouverture du projet Orion est fixée au 1er novembre.',source:'Décision de lancement · 18 septembre',quote:'La date d’ouverture retenue est le 1er novembre.',origin:'Décision de Camille',valid:'1er novembre'},
+      {id:'p1',space:'personal',topic:'Communication',kind:'Préférence',text:'Je préfère lire une synthèse courte avant les détails.',source:'Votre préférence explicite · 10 septembre',quote:'Je préfère une synthèse courte, puis les détails à la demande.',origin:'Déclaré par vous',valid:'Jusqu’à modification'}
+    ];
+    const byId=id=>memories.find(m=>m.id===id);
+    const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const button=(text,attr='',primary=false)=>`<button type="button" class="ms-button ${primary?'ms-primary ':''}cursor-interaction" ${attr}>${text}</button>`;
+    let space='atlas',view='library',tab='memories',agent='atlas',task='launch',preview=null,consolidation='none',share='none',notice='';
+    const design={grouping:'topic',compact:false};
+    function activeMemories(){let records=memories.slice();if(consolidation==='active'){records=records.filter(m=>!['t2','t3'].includes(m.id));records.push({id:'synth',space:'team',topic:'Support',kind:'Connaissance',text:'Le rôle lecteur permet de consulter un document, sans pouvoir le modifier.',source:'Matrice des rôles · version 4 · 2 éléments',quote:'Lecteur : consultation autorisée. Lecteur : modification non autorisée.',origin:'Synthèse retenue par vous',valid:'Version 4 en vigueur'});}if(share==='active')records.push({...byId('a1'),id:'shared-a1',space:'team',origin:'Publié par vous · proposé par Atlas'});return records;}
+    function persist(){if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{concept:'Mémoires distinctes et contexte de tâche',space,view,grouping:design.grouping},privateContent:{tab,agent,task,consolidation,share,compact:design.compact}}).catch(()=>{});}
+    function restore(s){const m=s?.modelContent,p=s?.privateContent;if(m?.concept==='Mémoires distinctes et contexte de tâche'){space=spaces[m.space]?m.space:'atlas';view=m.view==='context'?'context':'library';design.grouping=m.grouping==='kind'?'kind':'topic';if(p){tab=p.tab==='review'?'review':'memories';agent=p.agent==='nova'?'nova':'atlas';task=p.task==='support'?'support':'launch';consolidation=['none','pending','active'].includes(p.consolidation)?p.consolidation:'none';share=['none','pending','active'].includes(p.share)?p.share:'none';design.compact=p.compact===true;}}}
+    function go(next){space=next;view='library';tab='memories';preview=null;notice='';render();persist();}
+    function fact(m){const s=spaces[m.space];return `<details class="ms-fact"><summary class="cursor-interaction"><span><span class="ms-fact-title">${escape(m.text)}</span><span class="ms-small">${escape(m.kind)} · ${escape(m.source)}</span></span></summary><div class="ms-evidence"><div class="ms-small">Extrait source</div><blockquote>« ${escape(m.quote)} »</blockquote></div><dl class="ms-meta"><dt>Mémoire</dt><dd>${escape(s.name)}</dd><dt>Origine</dt><dd>${escape(m.origin)}</dd><dt>Validité</dt><dd>${escape(m.valid)}</dd></dl>${m.id==='a1'&&share==='none'?`<div class="ms-actions">${button('Proposer à l’équipe','data-share="preview"')}</div>`:''}</details>`;}
+    function navRender(){nav.innerHTML=`<div class="ms-nav-label">Agents</div>${['atlas','nova'].map(k=>`<button type="button" class="ms-space cursor-interaction" data-space="${k}" aria-pressed="${space===k&&view==='library'}"><span class="ms-dot"></span>${spaces[k].name}</button>`).join('')}<div class="ms-nav-label">Partagées</div>${['team','orion'].map(k=>`<button type="button" class="ms-space cursor-interaction" data-space="${k}" aria-pressed="${space===k&&view==='library'}">${spaces[k].name}</button>`).join('')}<div class="ms-nav-label">Personnel</div><button type="button" class="ms-space cursor-interaction" data-space="personal" aria-pressed="${space==='personal'&&view==='library'}">Mes préférences</button>`;nav.querySelectorAll('[data-space]').forEach(b=>b.onclick=()=>go(b.dataset.space));}
+    function library(){const s=spaces[space];const pending=space==='team'?(consolidation==='pending'?1:0)+(share==='pending'?1:0):0;if(!pending)tab='memories';
+      work.innerHTML=`<div class="ms-head"><h2>${s.label}</h2>${s.type==='agent'?button('Contexte d’une tâche','data-context="open"'):''}</div><p class="ms-small">${escape(s.readers)}</p><details class="ms-access"><summary class="cursor-interaction">Responsabilité et accès</summary><dl class="ms-meta"><dt>Responsable</dt><dd>${escape(s.owner)}</dd><dt>Peuvent lire</dt><dd>${escape(s.readers)}</dd><dt>Peuvent publier</dt><dd>${escape(s.writers)}</dd></dl></details>${s.sources.length?`<div class="ms-sources"><span>Mémoires partagées accessibles :</span>${s.sources.map(k=>`<button type="button" class="ms-link cursor-interaction" data-source="${k}">${spaces[k].name}</button>`).join('<span>·</span>')}</div>`:''}<div class="ms-tabs" role="tablist" aria-label="Contenu de la mémoire"><button type="button" role="tab" id="ms-tab-memories" aria-controls="ms-content" aria-selected="${tab==='memories'}" class="ms-tab cursor-interaction" data-tab="memories">${s.type==='agent'?'Souvenirs propres':'Souvenirs'}</button>${pending?`<button type="button" role="tab" id="ms-tab-review" aria-controls="ms-content" aria-selected="${tab==='review'}" class="ms-tab cursor-interaction" data-tab="review">À examiner · ${pending}</button>`:''}</div><section id="ms-content" role="tabpanel" aria-labelledby="ms-tab-${pending?tab:'memories'}"></section>`;
+      const content=work.querySelector('#ms-content');
+      if(tab==='review'&&pending){content.innerHTML=`${consolidation==='pending'?`<section class="ms-cluster"><h3>Consolider les informations sur le rôle lecteur</h3><div class="ms-callout">Proposition exclue du rappel. Deux éléments de la même source, aucune confirmation indépendante supplémentaire.</div><div class="ms-compare"><div><div class="ms-small">Sources conservées</div><p>${byId('t2').text}</p><p>${byId('t3').text}</p></div><div><div class="ms-small">Synthèse proposée</div><p>Le rôle lecteur permet de consulter un document, sans pouvoir le modifier.</p><p class="ms-small">Même mémoire, mêmes lecteurs. Les deux éléments restent consultables dans l’historique.</p></div></div><div class="ms-actions">${button('Écarter','data-consolidate="decline"')}${button('Retenir cette synthèse','data-consolidate="approve"',true)}</div></section>`:''}${share==='pending'?`<section class="ms-cluster"><h3>Retour d’expérience proposé par Atlas</h3><p>${byId('a1').text}</p><div class="ms-evidence"><div class="ms-small">Extrait proposé au partage</div><blockquote>« ${byId('a1').quote} »</blockquote></div><p class="ms-small">Après publication : les 3 membres de l’équipe, Atlas et Nova pourront le consulter.</p><div class="ms-actions">${button('Écarter','data-share="decline"')}${button('Publier pour l’équipe','data-share="approve"',true)}</div></section>`:''}`;
+      }else{
+        tab='memories';let records=activeMemories().filter(m=>m.space===space);
+        const groups=[...new Set(records.map(m=>m[design.grouping]))];
+        content.innerHTML=groups.map(g=>`<section class="ms-cluster"><div class="ms-cluster-head"><h3>${escape(g)}</h3>${space==='team'&&g===(design.grouping==='topic'?'Support':'Connaissance')&&consolidation==='none'?button('Consolider','data-consolidate="preview"'):''}</div>${records.filter(m=>m[design.grouping]===g).map(fact).join('')}</section>`).join('');
+      }
+      if(preview==='share')content.innerHTML+=`<section class="ms-preview"><h3>Proposer à l’équipe Produit</h3><p class="ms-small">Le souvenir reste dans la mémoire d’Atlas. La proposition et cet extrait seront visibles par l’équipe.</p><div class="ms-evidence">${byId('a1').text}</div><p class="ms-small">Lecteurs de la proposition : les 3 membres. Les agents pourront la rappeler seulement après publication.</p><div class="ms-actions">${button('Annuler','data-share="cancel"')}${button('Transmettre la proposition','data-share="submit"',true)}</div></section>`;
+      if(preview==='consolidate')content.innerHTML+=`<section class="ms-preview"><h3>Consolider deux souvenirs</h3><div class="ms-compare"><div><div class="ms-small">Deux éléments · une source</div><p>${byId('t2').text}</p><p>${byId('t3').text}</p></div><div><div class="ms-small">Proposition</div><p>Le rôle lecteur permet de consulter un document, sans pouvoir le modifier.</p></div></div><div class="ms-actions">${button('Annuler','data-consolidate="cancel"')}${button('Créer la proposition','data-consolidate="submit"',true)}</div></section>`;
+      if(space==='team'&&consolidation==='active'&&tab==='memories'){const synthesis=[...content.querySelectorAll('.ms-fact')].find(el=>el.textContent.includes('Synthèse retenue par vous'));if(synthesis){const evidence=document.createElement('details');evidence.className='ms-preview';evidence.innerHTML='<summary class="ms-small cursor-interaction">Souvenirs sources · historique conservé</summary>'+['t2','t3'].map(id=>fact(byId(id))).join('');synthesis.append(evidence);}}
+      work.querySelectorAll('[data-source]').forEach(b=>b.onclick=()=>go(b.dataset.source));
+      work.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;preview=null;render();persist();});
+      const contextButton=work.querySelector('[data-context]');if(contextButton)contextButton.onclick=()=>{agent=space;view='context';preview=null;render();persist();};
+      work.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>{const a=b.dataset.share;if(a==='preview')preview='share';if(a==='cancel')preview=null;if(a==='submit'){share='pending';preview=null;notice='Proposition transmise à l’équipe. Aucun agent supplémentaire ne peut encore la rappeler.';}if(a==='approve'){share='active';tab='memories';notice='Version publiée pour l’équipe, liée au souvenir et à son extrait source.';}if(a==='decline'){share='none';tab='memories';notice='Proposition écartée. Le souvenir d’Atlas est conservé.';}render();persist();});
+      work.querySelectorAll('[data-consolidate]').forEach(b=>b.onclick=()=>{const a=b.dataset.consolidate;if(a==='preview')preview='consolidate';if(a==='cancel')preview=null;if(a==='submit'){consolidation='pending';preview=null;tab='review';notice='Synthèse à examiner. Les éléments actuels restent actifs.';}if(a==='approve'){consolidation='active';tab='memories';notice='Synthèse retenue. Les deux éléments sources restent traçables.';}if(a==='decline'){consolidation='none';tab='memories';notice='Synthèse écartée. Les deux éléments restent actifs.';}render();persist();});
+    }
+    function context(){
+      const accessible=new Set([agent,...spaces[agent].sources]);
+      const current=activeMemories(),lookup=id=>current.find(m=>m.id===id);
+      const launch=[['o1','Date applicable au projet demandé.'],[agent==='nova'&&share==='active'?'shared-a1':'a1','Retour d’expérience utile pour préparer ce lancement.'],['t1','Convention applicable au compte rendu demandé.']];
+      const support=consolidation==='active'?[['synth','Deux éléments complémentaires regroupés ; source versionnée conservée.'],['n1','Cas antérieur comparable, conservé comme exemple.']]:[['t2','Capacité du rôle concerné par la demande.'],['t3','Limite du même rôle, nécessaire à la réponse.'],['n1','Cas antérieur comparable, conservé comme exemple.']];
+      let selection=(task==='launch'?launch:support).filter(([id])=>lookup(id)&&accessible.has(lookup(id).space));
+      const selected=new Set(selection.map(x=>x[0]));let unused=current.filter(m=>accessible.has(m.space)&&!selected.has(m.id));
+      const row=(m,why)=>`<div class="ms-context-row"><div class="ms-small">${spaces[m.space].name} · ${m.kind}</div><p>${m.text}</p><div class="ms-reason">${why}</div></div>`;
+      let rendered=selection.map(([id,reason])=>row(lookup(id),reason)).join('');
+      work.innerHTML=`<div class="ms-head"><div><h2>Contexte de tâche</h2><p class="ms-small">Simulation de sélection</p></div>${button('Retour à la mémoire','data-back="true"')}</div><div class="ms-task-controls"><label class="ms-field"><span class="ms-small">Agent</span><select aria-label="Agent"><option value="atlas" ${agent==='atlas'?'selected':''}>Atlas</option><option value="nova" ${agent==='nova'?'selected':''}>Nova</option></select></label><label class="ms-field"><span class="ms-small">Tâche</span><select aria-label="Tâche"><option value="launch" ${task==='launch'?'selected':''}>Préparer le compte rendu du lancement Orion</option><option value="support" ${task==='support'?'selected':''}>Expliquer pourquoi un lecteur ne peut pas modifier</option></select></label></div><div class="ms-sources"><span>Mémoires consultables :</span><span>${[agent,...spaces[agent].sources].map(k=>spaces[k].name).join(' · ')}</span></div>${task==='launch'&&agent==='nova'?'<div class="ms-callout">Les sources consultables ne suffisent pas à établir la date du lancement. Nova doit demander cette information.</div>':''}<h3>Sélection pour cette tâche</h3>${rendered||'<p class="ms-empty">Aucun souvenir suffisamment pertinent.</p>'}<details class="ms-preview"><summary class="ms-small cursor-interaction">Autres souvenirs accessibles, non sélectionnés · ${unused.length}</summary>${unused.map(m=>row(m,'Hors du besoin de cette tâche. Conservé dans sa mémoire.')).join('')}</details>`;
+      const audience=document.createElement('p');audience.className='ms-small';audience.textContent=`Conversation privée · Vous et ${spaces[agent].name}`;work.querySelector('.ms-head').after(audience);
+      work.querySelector('[data-back]').onclick=()=>go(agent);
+      work.querySelector('[aria-label="Agent"]').onchange=e=>{agent=e.target.value;render();persist();};
+      work.querySelector('[aria-label="Tâche"]').onchange=e=>{task=e.target.value;render();persist();};
+    }
+    function render(){root.dataset.compact=design.compact;navRender();if(view==='context')context();else library();status.textContent=notice;}
+    restore(window.openai?.widgetState);render();
+    window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState){restore(e.detail.globals.widgetState);render();}});
+    if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=>{render();persist();}});tweak.addSelect(design,'grouping',{label:'Regroupement des souvenirs',options:[{label:'Par sujet',value:'topic'},{label:'Par nature',value:'kind'}]});tweak.addToggle(design,'compact',{label:'Liste compacte'});}
+  })();
+  </script>
+</div>

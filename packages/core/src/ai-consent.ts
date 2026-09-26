@@ -1,4 +1,4 @@
-import type { AiConsentStatus, AiDataUse, AiRecipient } from "@rakazo/contracts";
+import type { AiConsentQuery, AiConsentStatus, AiDataUse, AiRecipient } from "@rakazo/contracts";
 import { AI_CONSENT_REQUIRED } from "@rakazo/contracts";
 
 /** A foreground check failed before the requested mutation was dispatched. */
@@ -11,6 +11,8 @@ export class AiConsentBlocked extends Error {
 /** Only user actions that can start AI processing need a foreground disclosure. */
 export function aiDataUsesForProcedure(procedure: string, input?: unknown): AiDataUse[] {
   const path = procedure.replaceAll(".", "/");
+  if (path === "memory/library/classify") return ["memory-classification"];
+  if (path === "bots/memoryMethod/update") return ["memory-method-preparation"];
   if (
     path === "routines/update" &&
     input &&
@@ -38,18 +40,34 @@ export function aiDataUsesForProcedure(procedure: string, input?: unknown): AiDa
 
 export async function ensureAiDataConsent(options: {
   uses: AiDataUse[];
+  query?: AiConsentQuery;
   status(): Promise<AiConsentStatus>;
   prompt(recipient: AiRecipient, privacyUrl?: string): Promise<boolean>;
-  allow(input: { scope: string; version: string; keys: string[] }): Promise<unknown>;
+  allow(input: {
+    scope: string;
+    version: string;
+    keys: string[];
+    query?: AiConsentQuery;
+  }): Promise<unknown>;
 }) {
   if (options.uses.length === 0) return;
   try {
     const status = await options.status();
+    if (
+      options.uses.includes("memory-method-preparation") &&
+      !status.recipients.some((recipient) => recipient.use === "memory-method-preparation")
+    )
+      throw new Error(AI_CONSENT_REQUIRED);
     for (const recipient of status.recipients) {
       if (recipient.allowed || !options.uses.includes(recipient.use)) continue;
       if (!(await options.prompt(recipient, status.privacyUrl)))
         throw new Error(AI_CONSENT_REQUIRED);
-      await options.allow({ scope: status.scope, version: status.version, keys: [recipient.key] });
+      await options.allow({
+        scope: status.scope,
+        version: status.version,
+        keys: [recipient.key],
+        ...(options.query ? { query: options.query } : {}),
+      });
     }
   } catch (error) {
     throw new AiConsentBlocked(error instanceof Error ? error.message : AI_CONSENT_REQUIRED);

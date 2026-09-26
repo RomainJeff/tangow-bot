@@ -74,6 +74,7 @@ function fixture(options: { taskPrompt?: string } = {}) {
         id: run.threadId,
         groupId: null,
         historyCompactionSummary: null,
+        historyCompactionMemoryManifest: [],
         historyCompactedUpToSeq: null,
         historyCompactionGeneration: 0,
       })),
@@ -118,7 +119,19 @@ function fixture(options: { taskPrompt?: string } = {}) {
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
-    memory: { read: async () => ({ documents: [] }) },
+    memory: {
+      read: async () => ({
+        documents: [
+          {
+            id: "memory-1",
+            path: "MEMORY.md",
+            content: "Ava decided to ship behind a feature flag.",
+            revision: 2,
+            accessVersion: 4,
+          },
+        ],
+      }),
+    },
     memoryProviders: {
       resolve: async () => ({
         defaultScope: "isolated" as const,
@@ -158,28 +171,22 @@ function fixture(options: { taskPrompt?: string } = {}) {
   };
 }
 
-describe("automatic semantic recall", () => {
-  it("recalls durable memory on a thread that was never compacted", async () => {
+describe("canonical memory recall", () => {
+  it("loads authorized local memory without calling an external provider", async () => {
     const f = fixture();
 
     await f.run();
 
-    expect(f.recall).toHaveBeenCalledOnce();
-    const [request] = f.recall.mock.calls[0]!;
-    expect(request.query).toBe("What did Ava decide?");
-    expect(request.scope).toBe("isolated");
-    // No compaction yet, so the provider must not be pointed at a history generation.
-    expect(request).not.toHaveProperty("historyGeneration");
-    expect(request.limit).toBeGreaterThan(0);
+    expect(f.recall).not.toHaveBeenCalled();
 
     const [runtimeRequest] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
     const recalledBlock = runtimeRequest.history?.find((entry) =>
-      entry.content.includes("<recalled_memory>"),
+      entry.content.includes("<durable_memory>"),
     );
     expect(recalledBlock?.content).toContain("Ava decided to ship behind a feature flag.");
   });
 
-  it("charges the turn prompt and the recalled-memory block to the history budget", async () => {
+  it("charges the turn prompt and local memory data to the history budget", async () => {
     // A long task prompt and a recalled memory are exactly the run this used to get wrong: both
     // ride into the request outside the window `selectHistoryWindow` chooses from.
     const f = fixture({
@@ -194,7 +201,7 @@ describe("automatic semantic recall", () => {
       const [request] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
       // The thread has no messages, so everything handed over as history is historical context.
       expect(request.history.map((entry) => entry.content)).toEqual([
-        expect.stringContaining("<recalled_memory>"),
+        expect.stringContaining("<durable_memory>"),
       ]);
       const logged = sink.events.find((event: LogEvent) => event.message === "agent.run.context") as
         | (LogEvent & { nonHistoryTokens?: number })

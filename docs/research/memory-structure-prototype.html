@@ -1,0 +1,476 @@
+<div id="rakazo-memory-structure" aria-label="Rakazo — mémoire structurée">
+<style>
+#rakazo-memory-structure{--ms-bg:light-dark(#ffffff,#191919);--ms-soft:light-dark(#f7f7f6,#202020);--ms-hover:light-dark(#eeeeec,#2b2b2b);--ms-ink:light-dark(#242422,#efefeb);--ms-muted:light-dark(#73736e,#a4a49d);--ms-line:light-dark(#e6e6e1,#363633);--ms-primary:light-dark(#292927,#e6e6df);--ms-on:light-dark(#ffffff,#191919);--ms-amber:light-dark(#936008,#f1bf69);--ms-amber-bg:light-dark(#fff4dc,#382d1c);--ms-red:light-dark(#b13e37,#f49b93);--ms-red-bg:light-dark(#fff0ed,#3b2423);--ms-green:light-dark(#37654d,#8fc5a1);--ms-green-bg:light-dark(#eef6f0,#203128);--ms-atlas:light-dark(#e8edf9,#263047);--ms-atlas-ink:light-dark(#456096,#adbeee);--ms-nova:light-dark(#eee9f8,#342941);--ms-nova-ink:light-dark(#795797,#cab0e0);--ms-veil:light-dark(#24242424,#00000055);font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ms-ink);width:100%;text-align:left}
+#rakazo-memory-structure *{box-sizing:border-box}
+#rakazo-memory-structure button,#rakazo-memory-structure input,#rakazo-memory-structure select,#rakazo-memory-structure textarea{font:inherit;color:inherit}
+#rakazo-memory-structure button{cursor:inherit}
+#rakazo-memory-structure h1,#rakazo-memory-structure h2,#rakazo-memory-structure h3,#rakazo-memory-structure p{margin:0}
+#rakazo-memory-structure h1{font-size:25px;line-height:1.25;letter-spacing:-.65px;font-weight:500}
+#rakazo-memory-structure h2{font-size:18px;line-height:1.35;letter-spacing:-.25px;font-weight:500}
+#rakazo-memory-structure h3{font-size:14px;font-weight:500}
+#rakazo-memory-structure strong{font-weight:500}
+#rakazo-memory-structure .ms-muted{color:var(--ms-muted)}
+#rakazo-memory-structure .ms-small{font-size:12px}
+#rakazo-memory-structure .ms-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:17px;height:17px}
+#rakazo-memory-structure .ms-icon svg{width:17px;height:17px}
+#rakazo-memory-structure .ms-demo{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:0 2px 12px;font-size:12px;color:var(--ms-muted)}
+#rakazo-memory-structure .ms-demo label{display:flex;align-items:center;gap:9px;min-width:0}
+#rakazo-memory-structure select{border:1px solid var(--ms-line);background:var(--ms-bg);border-radius:7px;padding:7px 10px;max-width:100%;min-width:0}
+#rakazo-memory-structure .ms-stage{border:1px solid var(--ms-line);border-radius:12px;overflow:hidden;display:grid;background:var(--ms-bg);min-width:0}
+#rakazo-memory-structure .ms-app,#rakazo-memory-structure .ms-overlay{grid-area:1/1;min-width:0}
+#rakazo-memory-structure .ms-app{display:grid;grid-template-columns:176px minmax(0,1fr);min-height:700px;background:var(--ms-bg)}
+#rakazo-memory-structure .ms-sidebar{padding:20px 11px;background:var(--ms-soft);border-right:1px solid var(--ms-line);display:flex;flex-direction:column;gap:4px;min-width:0}
+#rakazo-memory-structure .ms-brand{font-size:23px;font-weight:500;letter-spacing:-1px;padding:0 10px 24px}
+#rakazo-memory-structure .ms-workspace{padding:9px 10px 20px;display:flex;align-items:center;gap:9px;font-size:12px}
+#rakazo-memory-structure .ms-workspace-mark{display:grid;place-items:center;width:27px;height:27px;background:var(--ms-bg);border:1px solid var(--ms-line);border-radius:8px}
+#rakazo-memory-structure .ms-nav{display:flex;align-items:center;gap:10px;padding:9px 10px;min-height:37px;width:100%;border:0;background:transparent;border-radius:7px;text-align:left;font-size:12px}
+#rakazo-memory-structure .ms-nav[aria-current=page],#rakazo-memory-structure .ms-nav:hover{background:var(--ms-hover)}
+#rakazo-memory-structure .ms-nav[aria-current=page]{font-weight:500}
+#rakazo-memory-structure .ms-nav-label{font-size:11px;color:var(--ms-muted);padding:23px 10px 5px}
+#rakazo-memory-structure .ms-sidebar-bottom{margin-top:auto;padding-top:30px}
+#rakazo-memory-structure .ms-avatar{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9px;background:var(--ms-atlas);color:var(--ms-atlas-ink);font-size:12px;font-weight:500;flex-shrink:0}
+#rakazo-memory-structure .ms-avatar.nova{background:var(--ms-nova);color:var(--ms-nova-ink)}
+#rakazo-memory-structure .ms-avatar.human{background:var(--ms-hover);color:var(--ms-ink);border-radius:50%}
+#rakazo-memory-structure .ms-main{min-width:0;display:flex;flex-direction:column}
+#rakazo-memory-structure .ms-topbar{padding:15px 26px;border-bottom:1px solid var(--ms-line);min-height:57px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--ms-muted)}
+#rakazo-memory-structure .ms-crumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#rakazo-memory-structure .ms-content{padding:30px;flex:1;min-width:0}
+#rakazo-memory-structure .ms-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+#rakazo-memory-structure .ms-subtitle{color:var(--ms-muted);font-size:12px;margin-top:7px}
+#rakazo-memory-structure .ms-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#rakazo-memory-structure .ms-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:7px 11px;min-height:34px;border:1px solid var(--ms-line);background:var(--ms-bg);border-radius:7px;text-align:center}
+#rakazo-memory-structure .ms-button.primary{background:var(--ms-primary);color:var(--ms-on);border-color:var(--ms-primary)}
+#rakazo-memory-structure .ms-button.ghost{background:transparent;border-color:transparent}
+#rakazo-memory-structure .ms-button:disabled{opacity:.45;cursor:default}
+#rakazo-memory-structure .ms-link{border:0;background:transparent;padding:0;text-align:left;color:inherit;text-decoration:underline;text-underline-offset:3px}
+#rakazo-memory-structure .ms-back{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:0;color:var(--ms-muted);font-size:12px;margin-bottom:23px}
+#rakazo-memory-structure .ms-tabs{display:flex;gap:24px;flex-wrap:wrap;border-bottom:1px solid var(--ms-line);margin-bottom:23px}
+#rakazo-memory-structure .ms-tab{padding:0 0 12px;border:0;background:transparent;color:var(--ms-muted)}
+#rakazo-memory-structure .ms-tab[aria-pressed=true]{box-shadow:0 1px var(--ms-ink);color:var(--ms-ink);font-weight:500}
+#rakazo-memory-structure .ms-badge{display:inline-flex;gap:5px;align-items:center;padding:3px 7px;border-radius:5px;background:var(--ms-soft);color:var(--ms-muted);font-size:11px;line-height:1.35;max-width:100%}
+#rakazo-memory-structure .ms-badge.amber{color:var(--ms-amber);background:var(--ms-amber-bg)}
+#rakazo-memory-structure .ms-badge.red{color:var(--ms-red);background:var(--ms-red-bg)}
+#rakazo-memory-structure .ms-badge.green{color:var(--ms-green);background:var(--ms-green-bg)}
+#rakazo-memory-structure .ms-badge .ms-icon{width:13px;height:13px}
+#rakazo-memory-structure .ms-badge .ms-icon svg{width:13px;height:13px}
+#rakazo-memory-structure[data-labels=dots] .ms-badge.amber,#rakazo-memory-structure[data-labels=dots] .ms-badge.red,#rakazo-memory-structure[data-labels=dots] .ms-badge.green{background:transparent;padding-left:0}
+#rakazo-memory-structure .ms-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+#rakazo-memory-structure .ms-search{display:flex;align-items:center;gap:8px;color:var(--ms-muted);flex:1;min-width:140px}
+#rakazo-memory-structure .ms-search input{border:0;background:transparent;min-width:0;width:100%;padding:6px 0;font-size:12px}
+#rakazo-memory-structure .ms-objectives{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+#rakazo-memory-structure .ms-objective{border:1px solid var(--ms-line);border-radius:10px;padding:19px;background:var(--ms-bg);min-width:0}
+#rakazo-memory-structure .ms-overline{display:flex;align-items:center;gap:7px;color:var(--ms-muted);font-size:11px;margin-bottom:13px}
+#rakazo-memory-structure .ms-title-link{display:block;background:transparent;border:0;padding:0;text-align:left;font-size:17px;font-weight:500;line-height:1.35;letter-spacing:-.25px}
+#rakazo-memory-structure .ms-title-link:hover{text-decoration:underline;text-underline-offset:4px}
+#rakazo-memory-structure .ms-objective-description{font-size:12px;color:var(--ms-muted);margin-top:9px;min-height:36px}
+#rakazo-memory-structure .ms-objective-footer{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;padding-top:17px;margin-top:17px;border-top:1px solid var(--ms-line);font-size:12px}
+#rakazo-memory-structure .ms-group-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:26px 0 8px;font-size:12px}
+#rakazo-memory-structure .ms-memory{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;padding:16px 0;border:0;border-top:1px solid var(--ms-line);background:transparent}
+#rakazo-memory-structure .ms-memory>.ms-icon{color:var(--ms-muted);margin-top:3px}
+#rakazo-memory-structure .ms-memory-body{flex:1;min-width:0}
+#rakazo-memory-structure .ms-memory-title{display:block;font-weight:500}
+#rakazo-memory-structure .ms-memory:hover .ms-memory-title{text-decoration:underline;text-underline-offset:3px}
+#rakazo-memory-structure .ms-memory-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11px;color:var(--ms-muted);margin-top:6px}
+#rakazo-memory-structure .ms-memory-excerpt{font-size:12px;color:var(--ms-muted);margin-top:7px;display:block}
+#rakazo-memory-structure .ms-memory-end{display:flex;gap:7px;align-items:center;padding-top:2px;max-width:38%}
+#rakazo-memory-structure .ms-mini-row{padding:10px 0;display:flex;align-items:center;gap:8px;font-size:12px;border:0;border-top:1px solid var(--ms-line);background:transparent;text-align:left;width:100%}
+#rakazo-memory-structure .ms-mini-row:first-child{border:0}
+#rakazo-memory-structure .ms-mini-row .ms-icon{color:var(--ms-muted);width:14px;height:14px}
+#rakazo-memory-structure .ms-mini-row>span:nth-child(2){flex:1;min-width:0}
+#rakazo-memory-structure .ms-mini-row>.ms-badge{flex-shrink:0}
+#rakazo-memory-structure .ms-banner{border-radius:8px;background:var(--ms-soft);padding:13px 15px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:17px 0;font-size:12px}
+#rakazo-memory-structure .ms-banner.red{background:var(--ms-red-bg);color:var(--ms-red)}
+#rakazo-memory-structure .ms-banner.amber{background:var(--ms-amber-bg);color:var(--ms-amber)}
+#rakazo-memory-structure .ms-banner.green{background:var(--ms-green-bg);color:var(--ms-green)}
+#rakazo-memory-structure .ms-banner-text{display:flex;align-items:center;gap:9px}
+#rakazo-memory-structure .ms-krs{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:23px 0}
+#rakazo-memory-structure .ms-kr{padding:16px;background:var(--ms-soft);border-radius:9px;min-width:0}
+#rakazo-memory-structure .ms-kr-top{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--ms-muted);margin-bottom:8px}
+#rakazo-memory-structure .ms-kr-value{font-size:22px;font-weight:500;letter-spacing:-.4px;margin:12px 0 10px}
+#rakazo-memory-structure .ms-kr-value span{font-size:12px;color:var(--ms-muted);font-weight:400;letter-spacing:0}
+#rakazo-memory-structure .ms-kr-track{height:4px;background:var(--ms-hover);border-radius:5px;overflow:hidden;margin-bottom:12px}
+#rakazo-memory-structure .ms-kr-track>span{height:100%;display:block;background:var(--ms-primary);border-radius:5px}
+#rakazo-memory-structure .ms-split{display:grid;grid-template-columns:minmax(0,1fr) 225px;gap:27px}
+#rakazo-memory-structure .ms-properties{border-left:1px solid var(--ms-line);padding-left:22px;min-width:0}
+#rakazo-memory-structure .ms-property{margin-bottom:18px}
+#rakazo-memory-structure .ms-property dt{font-size:11px;color:var(--ms-muted);margin-bottom:5px}
+#rakazo-memory-structure .ms-property dd{margin:0;font-size:12px;overflow-wrap:anywhere}
+#rakazo-memory-structure .ms-body-text{font-size:16px;line-height:1.7;margin-bottom:22px}
+#rakazo-memory-structure .ms-section{padding-top:20px;border-top:1px solid var(--ms-line);margin-top:22px}
+#rakazo-memory-structure .ms-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}
+#rakazo-memory-structure .ms-section p{margin-top:7px}
+#rakazo-memory-structure .ms-source{display:block;width:100%;text-align:left;padding:13px 14px;margin:10px 0;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-bg)}
+#rakazo-memory-structure .ms-source-title{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:500}
+#rakazo-memory-structure .ms-source-sub{display:block;color:var(--ms-muted);font-size:11px;margin:4px 0 0 24px}
+#rakazo-memory-structure .ms-relationship{display:flex;gap:11px;align-items:flex-start;padding:10px 0;font-size:12px}
+#rakazo-memory-structure .ms-relationship>.ms-icon{color:var(--ms-muted);margin-top:2px}
+#rakazo-memory-structure .ms-relationship small{display:block;color:var(--ms-muted);font-size:11px;margin-bottom:3px}
+#rakazo-memory-structure .ms-relationship button{border:0;padding:0;text-align:left;background:transparent;font-weight:500}
+#rakazo-memory-structure .ms-field{display:flex;flex-direction:column;gap:7px;margin-bottom:18px;min-width:0}
+#rakazo-memory-structure .ms-field>span{font-size:12px;font-weight:500}
+#rakazo-memory-structure .ms-field input,#rakazo-memory-structure .ms-field textarea{padding:10px 11px;border:1px solid var(--ms-line);border-radius:7px;background:var(--ms-bg);width:100%;min-width:0}
+#rakazo-memory-structure .ms-field textarea{min-height:96px;resize:vertical;line-height:1.6}
+#rakazo-memory-structure .ms-field small{color:var(--ms-muted);font-size:11px}
+#rakazo-memory-structure .ms-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+#rakazo-memory-structure .ms-bottom-actions{display:flex;justify-content:flex-end;align-items:center;gap:9px;flex-wrap:wrap;border-top:1px solid var(--ms-line);padding-top:20px;margin-top:22px}
+#rakazo-memory-structure .ms-quote{background:var(--ms-soft);border-radius:8px;padding:15px;margin:14px 0;font-size:13px}
+#rakazo-memory-structure .ms-quote blockquote{margin:8px 0 0;padding:0;border:0;line-height:1.7}
+#rakazo-memory-structure .ms-comparison{display:grid;grid-template-columns:1fr 1fr;gap:17px;margin:23px 0}
+#rakazo-memory-structure .ms-version{padding:18px;border:1px solid var(--ms-line);border-radius:9px;min-width:0}
+#rakazo-memory-structure .ms-version-text{font-size:17px;line-height:1.5;margin:14px 0}
+#rakazo-memory-structure .ms-radio{display:flex;align-items:flex-start;gap:10px;padding:13px 0;border-top:1px solid var(--ms-line)}
+#rakazo-memory-structure .ms-radio input{margin-top:4px;accent-color:var(--ms-primary)}
+#rakazo-memory-structure .ms-radio small{display:block;font-size:12px;color:var(--ms-muted);margin-top:3px}
+#rakazo-memory-structure .ms-related-list{border-left:1px solid var(--ms-line);padding-left:17px;margin:15px 0}
+#rakazo-memory-structure .ms-history{border-left:1px solid var(--ms-line);padding:0 0 17px 13px;font-size:12px}
+#rakazo-memory-structure .ms-empty{padding:45px 16px;text-align:center;color:var(--ms-muted)}
+#rakazo-memory-structure .ms-empty h2{color:var(--ms-ink);margin-bottom:7px}
+#rakazo-memory-structure .ms-context-summary{background:var(--ms-soft);border-radius:9px;padding:18px;margin-bottom:24px}
+#rakazo-memory-structure .ms-context-summary p{margin-top:8px}
+#rakazo-memory-structure .ms-context-row{border-top:1px solid var(--ms-line);padding:17px 0}
+#rakazo-memory-structure .ms-context-row p{font-size:12px;color:var(--ms-muted);margin:8px 0}
+#rakazo-memory-structure .ms-agent-title{display:flex;align-items:center;gap:13px}
+#rakazo-memory-structure .ms-agent-title .ms-avatar{width:43px;height:43px;border-radius:14px;font-size:18px}
+#rakazo-memory-structure .ms-overlay{display:flex;justify-content:flex-end;z-index:4;background:var(--ms-veil)}
+#rakazo-memory-structure .ms-panel{width:440px;max-width:100%;background:var(--ms-bg);border-left:1px solid var(--ms-line);padding:25px;min-width:0}
+#rakazo-memory-structure .ms-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:24px}
+#rakazo-memory-structure .ms-notice{font-size:12px;padding:10px 2px;color:var(--ms-muted)}
+#rakazo-memory-structure .ms-notice:empty{display:none}
+#rakazo-memory-structure .ms-mobile-nav{display:none}
+#rakazo-memory-structure[data-density=compact] .ms-memory{padding:11px 0}
+#rakazo-memory-structure[data-density=compact] .ms-memory-excerpt{display:none}
+@media(max-width:800px){#rakazo-memory-structure .ms-app{grid-template-columns:152px minmax(0,1fr)}#rakazo-memory-structure .ms-content{padding:25px 23px}#rakazo-memory-structure .ms-topbar{padding:15px 23px}#rakazo-memory-structure .ms-split{grid-template-columns:1fr;gap:20px}#rakazo-memory-structure .ms-properties{border-left:0;border-top:1px solid var(--ms-line);padding:20px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:0 20px}}
+@media(max-width:600px){#rakazo-memory-structure .ms-app{grid-template-columns:1fr;min-height:610px}#rakazo-memory-structure .ms-sidebar{display:none}#rakazo-memory-structure .ms-mobile-nav{display:block;margin-bottom:17px;width:100%}#rakazo-memory-structure .ms-content{padding:23px 18px}#rakazo-memory-structure .ms-topbar{padding:14px 18px}#rakazo-memory-structure .ms-objectives,#rakazo-memory-structure .ms-krs,#rakazo-memory-structure .ms-comparison{grid-template-columns:1fr}#rakazo-memory-structure .ms-objective-description{min-height:0}#rakazo-memory-structure .ms-memory{flex-wrap:wrap;gap:8px}#rakazo-memory-structure .ms-memory-body{flex-basis:calc(100% - 29px)}#rakazo-memory-structure .ms-memory-end{margin-left:25px;max-width:100%;padding-top:0}#rakazo-memory-structure .ms-demo label{width:100%}#rakazo-memory-structure .ms-demo select{flex:1}#rakazo-memory-structure .ms-banner{align-items:flex-start;flex-wrap:wrap}#rakazo-memory-structure .ms-panel{width:100%;padding:22px}#rakazo-memory-structure h1{font-size:23px}}
+@media(max-width:390px){#rakazo-memory-structure .ms-form-grid,#rakazo-memory-structure .ms-properties{grid-template-columns:1fr}#rakazo-memory-structure .ms-tabs{gap:17px}#rakazo-memory-structure .ms-content{padding:22px 15px}}
+@media(pointer:coarse){#rakazo-memory-structure button,#rakazo-memory-structure select{min-height:44px}#rakazo-memory-structure input,#rakazo-memory-structure textarea,#rakazo-memory-structure select{font-size:16px}}
+</style>
+<div class="ms-demo"><span>Nouvelle proposition · données fictives</span><label>Écrans <select aria-label="Parcourir les écrans"></select></label></div>
+<div class="ms-stage"></div><div class="ms-notice" role="status" aria-live="polite"></div>
+<script>
+(()=>{
+const root=document.getElementById('rakazo-memory-structure');
+const stage=root.querySelector('.ms-stage'),picker=root.querySelector('.ms-demo select'),notice=root.querySelector('.ms-notice');
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const icon=n=>'<span class="ms-icon"><i data-lucide="'+n+'" aria-hidden="true"></i></span>';
+const button=(label,action,value='',style='',disabled=false)=>'<button type="button" class="ms-button '+style+' cursor-interaction" data-action="'+action+'" data-value="'+esc(value)+'"'+(disabled?' disabled':'')+'>'+label+'</button>';
+const link=(label,action,value='')=>'<button type="button" class="ms-link cursor-interaction" data-action="'+action+'" data-value="'+esc(value)+'">'+label+'</button>';
+const badge=(label,tone='',glyph='')=>'<span class="ms-badge '+tone+'">'+(glyph?icon(glyph):'')+esc(label)+'</span>';
+const avatar=(name='atlas')=>'<span class="ms-avatar '+name+'">'+(name==='nova'?'N':name==='human'?'V':'A')+'</span>';
+const labels={orion:'Projet Orion',team:'Équipe Produit',atlas:'Propre à Atlas',personal:'Personnel'};
+const objectives={
+ launch:{name:'Réussir le lancement Orion',description:'Ouvrir le pilote sans bloquer les premiers participants.',period:'Octobre · novembre 2026',krs:[{id:'access',name:'Accéder au pilote sans aide',current:8,target:10,unit:'participants',source:'measure-access'},{id:'first',name:'Créer un premier document',current:6,target:9,unit:'participants sur 10',source:'measure-first'}]},
+ activation:{name:'Faciliter les premiers pas',description:'Rendre le premier usage plus simple et plus autonome.',period:'4e trimestre 2026',krs:[{id:'first',name:'Créer un premier document',current:6,target:9,unit:'participants sur 10',source:'measure-first'}]}
+};
+const sources={
+ decision:{title:'Revue de lancement',date:'20 septembre 2026',scope:'Projet Orion',quote:'Avant l’ouverture, nous testerons le parcours d’invitation de bout en bout. Le pilote reste prévu le 1er novembre.',author:'Camille · responsable du projet'},
+ oldttl:{title:'Décision sur les invitations',date:'18 septembre 2026',scope:'Projet Orion · pilote',quote:'Pour ce pilote, un lien d’invitation est valable sept jours après son envoi.',author:'Camille · responsable du projet'},
+ newttl:{title:'Guide de configuration',date:'20 septembre 2026',scope:'Projet Orion · pilote',quote:'La durée de validité d’un lien d’invitation est de 24 heures.',author:'Document importé · attribution à vérifier'},
+ studyA:{title:'Tests du pilote · visibilité du message',date:'19 septembre 2026',scope:'Projet Orion',quote:'Sur cinq participants, trois n’ont pas repéré le courriel d’invitation dans leur boîte de réception.',author:'Étude pilote · même session que l’observation sur l’expéditeur'},
+ studyB:{title:'Tests du pilote · expéditeur',date:'19 septembre 2026',scope:'Projet Orion',quote:'Deux des cinq participants ne savaient pas si le message reçu provenait de notre équipe.',author:'Étude pilote · même session que l’observation sur la visibilité'},
+ hypothesis:{title:'Atelier premiers usages',date:'17 septembre 2026',scope:'Projet Orion',quote:'Nous faisons l’hypothèse qu’une checklist de trois étapes aidera les nouveaux participants à créer leur premier document.',author:'Équipe Produit · hypothèse non testée'},
+ convention:{title:'Conventions de l’équipe',date:'16 septembre 2026',scope:'Équipe Produit',quote:'Nos comptes rendus commencent par les décisions, suivies des questions encore ouvertes.',author:'Camille · publication pour l’équipe'},
+ own:{title:'Conversation avec Atlas',date:'21 septembre 2026',scope:'Privé · vous et Atlas',quote:'Pour les entretiens à venir, reste sur la recherche de documents. Nous aborderons l’édition plus tard.',author:'Vous'},
+ personal:{title:'Préférence déclarée',date:'10 septembre 2026',scope:'Personnel',quote:'Commence par une synthèse courte, puis donne-moi les détails à la demande.',author:'Vous'},
+ candidate:{title:'Conversation avec Atlas · tests mobiles',date:'21 septembre 2026',scope:'Privé · vous et Atlas',quote:'Sur les cinq essais mobiles du pilote, deux personnes sont revenues à l’écran de connexion après avoir ouvert le lien d’invitation.',author:'Vous'},
+ 'measure-access':{title:'Mesure · accès au pilote',date:'19 septembre 2026',scope:'Projet Orion · échantillon de 10 participants',quote:'8 participants sur 10 ont accédé au pilote sans aide. Cible pour le prochain test : 10 sur 10.',author:'Compte rendu des tests · mesure distincte des souvenirs'},
+ 'measure-first':{title:'Mesure · premier document',date:'19 septembre 2026',scope:'Projet Orion · échantillon de 10 participants',quote:'6 participants sur 10 ont créé un premier document. Cible pour le prochain test : 9 sur 10.',author:'Compte rendu des tests · mesure distincte des souvenirs'}
+};
+const base=[
+ {id:'invite',title:'Tester les invitations avant l’ouverture',text:'Tester le parcours d’invitation de bout en bout avant l’ouverture du pilote Orion.',kind:'Décision',scope:'orion',topic:'Invitations',objective:'launch',kr:'access',impact:'high',reason:'Un échec d’invitation empêcherait les participants d’accéder au pilote.',relation:'Conditionne',sources:['decision'],validity:'Du 20 septembre à l’ouverture du pilote',reviewer:'Camille · 20 septembre',status:'active'},
+ {id:'expiry',title:'Validité des liens d’invitation',text:'Les liens d’invitation du pilote sont valables sept jours après leur envoi.',kind:'Décision',scope:'orion',topic:'Invitations',objective:'launch',kr:'access',impact:'high',reason:'Une durée incorrecte pourrait empêcher un participant d’accéder au pilote.',relation:'Conditionne',sources:['oldttl'],validity:'Pilote Orion',reviewer:'Camille · 18 septembre',status:'conflict'},
+ {id:'visibility',title:'Le courriel d’invitation passe inaperçu',text:'Trois des cinq participants de la session du 19 septembre n’ont pas repéré le courriel d’invitation.',kind:'Observation',scope:'orion',topic:'Invitations',objective:'launch',kr:'access',impact:'medium',reason:'Cette difficulté peut expliquer une partie des échecs d’accès observés.',relation:'Éclaire',sources:['studyA'],validity:'Observation du 19 septembre · 5 participants',reviewer:'Camille · 20 septembre',status:'active'},
+ {id:'sender',title:'L’expéditeur du courriel est mal identifié',text:'Deux des cinq participants de la session du 19 septembre n’ont pas identifié l’expéditeur du courriel d’invitation.',kind:'Observation',scope:'orion',topic:'Invitations',objective:'launch',kr:'access',impact:'medium',reason:'L’identification de l’expéditeur peut affecter l’ouverture de l’invitation.',relation:'Éclaire',sources:['studyB'],validity:'Observation du 19 septembre · 5 participants',reviewer:'Camille · 20 septembre',status:'active'},
+ {id:'checklist',title:'Trois étapes pour créer un premier document',text:'Une checklist de trois étapes pourrait aider les nouveaux participants à créer leur premier document.',kind:'Hypothèse',scope:'orion',topic:'Premiers usages',objective:'activation',kr:'first',impact:'medium',reason:'L’effet sur la création du premier document reste à mesurer.',relation:'À tester pour',sources:['hypothesis'],validity:'À réexaminer après le prochain test',reviewer:'Camille · qualification le 17 septembre',status:'active'},
+ {id:'format',title:'Les décisions avant les questions ouvertes',text:'Commencer les comptes rendus par les décisions prises, puis les questions encore ouvertes.',kind:'Convention',scope:'team',topic:'Coordination',objective:null,kr:null,impact:'normal',reason:'Cette convention organise les comptes rendus de l’équipe.',relation:'',sources:['convention'],validity:'Jusqu’à remplacement',reviewer:'Camille · 16 septembre',status:'active'},
+ {id:'own',title:'Limiter les entretiens à la recherche',text:'Les prochains entretiens Orion portent sur la recherche de documents. L’édition sera étudiée séparément.',kind:'Décision',scope:'atlas',topic:'Entretiens',objective:'launch',kr:null,impact:'normal',reason:'Délimite le mandat d’Atlas pour ces entretiens.',relation:'Éclaire',sources:['own'],validity:'Prochaine série d’entretiens',reviewer:'Vous · 21 septembre',status:'active'},
+ {id:'personal',title:'Une synthèse avant les détails',text:'Commencer par une synthèse courte, avec les détails à la demande.',kind:'Préférence',scope:'personal',topic:'Communication',objective:null,kr:null,impact:'normal',reason:'Adapte la présentation des réponses à votre préférence.',relation:'',sources:['personal'],validity:'Jusqu’à modification par vous',reviewer:'Vous · 10 septembre',status:'active'}
+];
+const draftDefault={title:'Vérifier le retour après une invitation mobile',text:'Lors des cinq essais mobiles du pilote, deux personnes sont revenues à l’écran de connexion après avoir ouvert leur lien d’invitation.',kind:'Observation',objective:'launch',impact:'high',reason:'Un retour à la connexion peut interrompre l’accès au pilote.',validity:'2026-11-01'};
+const fresh=()=>({route:'library',view:'objectives',objective:'launch',selected:'invite',back:'library',agent:'atlas',agentTab:'own',panel:null,source:null,query:'',candidate:false,retainedDraft:null,draft:{...draftDefault},shareDraft:null,publicationRecord:null,publicationHistory:[],publication:'none',sharedText:draftDefault.text,sharedScope:'team',resolution:null,resolutionChoice:'',resolutionReason:'',merged:false,mergeText:'Lors de la session du 19 septembre (5 participants), deux difficultés ont été observées : repérer le courriel d’invitation (3 participants) et identifier son expéditeur (2 participants). Les groupes peuvent se recouper.',withdrawn:[],overrides:{},contextVersion:'original',latestContext:null,excludedNext:[],notice:''});
+let s=fresh();
+const design={labels:'tint',density:'comfortable'};
+function restore(w){const p=w?.privateContent;if(p?.version!==2)return;s={...fresh(),...p.state,draft:{...draftDefault,...p.state?.draft}};Object.assign(design,p.design||{});}
+restore(window.openai?.widgetState);
+function persist(){try{const result=window.openai?.setWidgetState({modelContent:{concept:'Mémoire structurée par objectifs',screen:s.route,view:s.view,selected:s.selected,agent:s.agent,labels:design.labels},privateContent:{version:2,state:s,design}});result?.catch(()=>{});}catch(e){}}
+window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState){restore(e.detail.globals.widgetState);render();}});
+function memories(){
+ let items=base.map(m=>({...m,...s.overrides[m.id]}));
+ if(s.resolution==='new'){items=items.map(m=>m.id==='expiry'?{...m,text:'Les liens d’invitation du pilote sont valables 24 heures après leur envoi.',sources:['newttl'],status:'active',reviewer:'Vous · 21 septembre',validity:'À partir du 21 septembre · pilote Orion'}:m);}
+ if(s.resolution==='old')items=items.map(m=>m.id==='expiry'?{...m,status:'active',reviewer:'Vous · confirmation le 21 septembre'}:m);
+ if(s.merged){items=items.map(m=>['visibility','sender'].includes(m.id)?{...m,status:'replaced'}:m);items.push({id:'merged',title:'Deux obstacles à l’ouverture des invitations',text:s.mergeText,kind:'Synthèse',scope:'orion',topic:'Invitations',objective:'launch',kr:'access',impact:'medium',reason:'La synthèse conserve les deux observations sans additionner leurs participants.',relation:'Éclaire',sources:['studyA','studyB'],validity:'Session du 19 septembre · 5 participants',reviewer:'Vous · 21 septembre',status:'active'});}
+ if(s.candidate){const d=s.retainedDraft;items.push({id:'candidate',...d,scope:'atlas',topic:'Invitations',kr:d.objective==='launch'?'access':d.objective==='activation'?'first':null,relation:'Éclaire',sources:['candidate'],validity:'À réexaminer le '+d.validity,reviewer:'Vous · qualification le 21 septembre',status:'active'});}
+ if(s.publicationRecord){const p=s.publicationRecord,d=p.draft;items.push({id:'shared',...d,text:p.text,scope:p.scope,topic:'Invitations',kr:d.objective==='launch'?'access':d.objective==='activation'?'first':null,relation:'Éclaire',sources:['excerpt'],validity:'À réexaminer le '+d.validity,reviewer:'Vous · publication le 21 septembre',status:'active'});}
+ return items.map(m=>({...m,...s.overrides[m.id]})).map(m=>s.withdrawn.includes(m.id)?{...m,status:'withdrawn'}:m);
+}
+const find=id=>memories().find(m=>m.id===id);
+const available=m=>!['withdrawn','replaced'].includes(m.status);
+const shared=()=>memories().filter(m=>['team','orion'].includes(m.scope)&&available(m));
+const kindIcon=k=>({'Décision':'git-commit-horizontal','Observation':'eye','Hypothèse':'flask-conical','Convention':'list-check','Préférence':'sliders-horizontal','Synthèse':'combine'}[k]||'file-text');
+function impact(m,full=false){if(m.status==='conflict')return badge('En conflit','red','triangle-alert');if(m.status==='withdrawn')return badge('Retiré');if(m.status==='replaced')return badge('Remplacé');if(m.impact==='high')return badge(full?'Impact estimé élevé':'Impact élevé','amber','flag');if(full)return badge(m.impact==='medium'?'Impact estimé modéré':'Impact courant');return '';}
+function row(m,excerpt=false){return '<button type="button" class="ms-memory cursor-interaction" data-action="detail" data-value="'+m.id+'">'+icon(kindIcon(m.kind))+'<span class="ms-memory-body"><span class="ms-memory-title">'+esc(m.title)+'</span><span class="ms-memory-meta">'+badge(m.kind)+'<span>'+esc(labels[m.scope])+'</span>'+(m.kr?'<span>·</span><span>'+esc(m.kr==='access'?'Accès au pilote':'Premier document')+'</span>':'')+'</span>'+(excerpt?'<span class="ms-memory-excerpt">'+esc(m.text)+'</span>':'')+'</span><span class="ms-memory-end">'+impact(m)+icon('chevron-right')+'</span></button>';}
+function nav(label,glyph,route,active=false,value=''){return '<button type="button" class="ms-nav cursor-interaction" data-action="'+(route==='agent'?'agent':'route')+'" data-value="'+(value||route)+'"'+(active?' aria-current="page"':'')+'>'+icon(glyph)+label+'</button>';}
+function sourceButton(id){const x=sourceData(id);return '<button type="button" class="ms-source cursor-interaction" data-action="source" data-value="'+id+'"><span class="ms-source-title">'+icon('file-text')+esc(x.title)+'</span><span class="ms-source-sub">'+esc(x.date)+' · '+esc(x.scope)+'</span></button>';}
+function sourceData(id){return id==='excerpt'?{title:'Tests mobiles · extrait publié',date:'21 septembre 2026',scope:labels[s.publicationRecord.scope],quote:sources.candidate.quote,author:'Extrait relu et publié par vous'}:sources[id];}
+const title=(heading,sub='',actions='')=>'<div class="ms-heading"><div><h1>'+heading+'</h1>'+(sub?'<p class="ms-subtitle">'+sub+'</p>':'')+'</div><div class="ms-actions">'+actions+'</div></div>';
+const back=(route,label)=>'<button type="button" class="ms-back cursor-interaction" data-action="route" data-value="'+route+'">'+icon('arrow-left')+label+'</button>';
+function objectiveCard(id){const o=objectives[id],list=shared().filter(m=>m.objective===id);return '<article class="ms-objective"><div class="ms-overline">'+icon('target')+esc(o.period)+'</div><button type="button" class="ms-title-link cursor-interaction" data-action="objective" data-value="'+id+'">'+esc(o.name)+'</button><p class="ms-objective-description">'+esc(o.description)+'</p><div style="margin-top:16px">'+list.slice(0,2).map(m=>'<button type="button" class="ms-mini-row cursor-interaction" data-action="detail" data-value="'+m.id+'">'+icon(kindIcon(m.kind))+'<span>'+esc(m.title)+(m.impact==='high'&&m.status==='active'?'<span style="display:block;margin-top:6px">'+impact(m)+'</span>':'')+'</span></button>').join('')+'</div><div class="ms-objective-footer"><span class="ms-muted">'+list.length+' souvenirs · '+o.krs.length+' résultat'+(o.krs.length>1?'s':'')+' clé'+(o.krs.length>1?'s':'')+'</span>'+(list.some(m=>m.status==='conflict')?badge('1 conflit','red','triangle-alert'):button('Ouvrir','objective',id,'ghost'))+'</div></article>';}
+function library(){
+ const items=shared().filter(m=>(m.title+' '+m.text+' '+m.kind+' '+m.topic).toLowerCase().includes(s.query.toLowerCase()));
+ let content='';
+ if(s.view==='objectives'&&!s.query){content='<div class="ms-objectives">'+objectiveCard('launch')+objectiveCard('activation')+'</div><div class="ms-group-heading"><strong>Connaissances transversales</strong><span class="ms-muted">Sans objectif</span></div>'+items.filter(m=>!m.objective).map(m=>row(m)).join('');}
+ else if(s.view==='topics'||s.view==='types'){const key=s.view==='topics'?'topic':'kind';content=[...new Set(items.map(m=>m[key]))].map(k=>'<div class="ms-group-heading"><strong>'+esc(k)+'</strong><span class="ms-muted">'+items.filter(m=>m[key]===k).length+' souvenirs</span></div>'+items.filter(m=>m[key]===k).map(m=>row(m)).join('')+(s.view==='topics'&&k==='Invitations'&&!s.merged?'<div class="ms-actions" style="padding:12px 0">'+button(icon('combine')+'Consolider 2 observations','route','consolidate','ghost')+'</div>':'')).join('');}
+ else content=items.map(m=>row(m,true)).join('')||'<div class="ms-empty">Aucun souvenir ne correspond à cette recherche.</div>';
+ return title('Mémoire d’équipe','Produit · connaissances communes et projets',button(icon('inbox')+'Propositions'+(s.publication==='pending'?' · 1':''),'route','publish'))+
+ '<div class="ms-tabs" aria-label="Organisation de la mémoire">'+[['objectives','Objectifs'],['topics','Sujets'],['types','Types'],['all','Tous les souvenirs']].map(([v,l])=>'<button type="button" class="ms-tab cursor-interaction" aria-pressed="'+(s.view===v)+'" data-action="view" data-value="'+v+'">'+l+'</button>').join('')+'</div>'+
+ '<div class="ms-toolbar"><label class="ms-search">'+icon('search')+'<input aria-label="Rechercher un souvenir" placeholder="Rechercher dans la mémoire" value="'+esc(s.query)+'" data-field="search"></label><span class="ms-small ms-muted">'+shared().length+' souvenirs</span></div>'+content+
+ (!s.merged&&s.view==='objectives'?'<div class="ms-banner"><span class="ms-banner-text">'+icon('combine')+'Deux observations sur les invitations peuvent être rapprochées.</span>'+button('Examiner','route','consolidate','ghost')+'</div>':'');
+}
+function objective(){
+ const o=objectives[s.objective],items=shared().filter(m=>m.objective===s.objective);
+ return back('library','Mémoire d’équipe')+title(esc(o.name),'Projet Orion · '+esc(o.period),button('Voir le contexte d’Atlas','route','context'))+
+ '<div class="ms-krs">'+o.krs.map(k=>'<article class="ms-kr"><div class="ms-kr-top"><span>Résultat clé</span><span>Mesure du 19 sept.</span></div><h3>'+esc(k.name)+'</h3><div class="ms-kr-value">'+k.current+' <span>/ '+k.target+' · cible</span></div><div class="ms-kr-track" role="meter" aria-label="'+esc(k.name)+'" aria-valuenow="'+k.current+'" aria-valuemin="0" aria-valuemax="'+k.target+'"><span style="width:'+(k.current/k.target*100)+'%"></span></div>'+link('Voir la mesure · '+esc(k.unit),'source',k.source)+'</article>').join('')+'</div>'+
+ (items.some(m=>m.status==='conflict')?'<div class="ms-banner red"><span class="ms-banner-text">'+icon('triangle-alert')+'La durée de validité des invitations est à arbitrer.</span>'+button('Comparer','route','conflict','ghost')+'</div>':'')+
+ '<div class="ms-group-heading"><strong>Ce qui éclaire cet objectif</strong><span class="ms-muted">'+items.length+' souvenirs</span></div>'+items.map(m=>row(m,true)).join('')+
+ '<div class="ms-bottom-actions">'+button(icon('plus')+'Qualifier une nouvelle observation','route','qualify')+'</div>';
+}
+function detail(){
+ const m=find(s.selected);if(!m)return '<div class="ms-empty">Ce souvenir n’est pas disponible.</div>';
+ const o=objectives[m.objective],historical=!available(m);
+ return '<button type="button" class="ms-back cursor-interaction" data-action="detail-back">'+icon('arrow-left')+'Retour</button>'+
+ title(esc(m.title),'',historical?'':button(icon('sliders-horizontal')+'Qualifier','panel','edit'))+
+ (m.status==='conflict'?'<div class="ms-banner red"><span class="ms-banner-text">'+icon('triangle-alert')+'Deux sources donnent des durées différentes.</span>'+button('Comparer les sources','route','conflict','ghost')+'</div>':'')+
+ (historical?'<div class="ms-banner"><span class="ms-banner-text">'+icon('history')+(m.status==='replaced'?'Version conservée dans l’historique de la synthèse.':'Retiré des prochains contextes.')+'</span></div>':'')+
+ '<div class="ms-split"><div><p class="ms-body-text">'+esc(m.text)+'</p>'+
+ '<div class="ms-section"><div class="ms-section-title"><h3>Impact'+(o?' sur cet objectif':'')+'</h3>'+impact(m,true)+'</div><p>'+esc(m.reason)+'</p><p class="ms-small ms-muted">Qualifié par '+esc(m.reviewer)+'.</p></div>'+
+ '<div class="ms-section"><h3>Relations</h3>'+(o?'<div class="ms-relationship">'+icon('target')+'<div><small>'+esc(m.relation)+'</small><button type="button" class="cursor-interaction" data-action="objective" data-value="'+m.objective+'">'+esc(o.name)+'</button>'+(m.kr?'<p class="ms-small ms-muted">Résultat clé · '+esc(m.kr==='access'?'Accéder au pilote sans aide':'Créer un premier document')+'</p>':'')+'</div></div>':'<p class="ms-small ms-muted">Connaissance transversale · aucun objectif requis.</p>')+
+ '<div class="ms-relationship">'+icon('tags')+'<div><small>Sujet</small><span>'+esc(m.topic)+'</span></div></div>'+
+ (m.id==='merged'?'<div class="ms-relationship">'+icon('combine')+'<div><small>Synthétise · originaux conservés</small>'+link('Courriel non repéré','detail','visibility')+'<br>'+link('Expéditeur mal identifié','detail','sender')+'</div></div>':'')+'</div>'+
+ '<div class="ms-section"><div class="ms-section-title"><h3>Sources</h3><span class="ms-small ms-muted">'+m.sources.length+' document'+(m.sources.length>1?'s':'')+'</span></div>'+m.sources.map(sourceButton).join('')+'</div>'+
+ '<div class="ms-section"><div class="ms-section-title"><h3>Historique</h3>'+link('Voir','panel','history')+'</div><p class="ms-small ms-muted">'+esc(m.reviewer)+'</p></div></div>'+
+ '<aside class="ms-properties" aria-label="Qualification du souvenir">'+
+ prop('Nature',badge(m.kind,'',kindIcon(m.kind)))+prop('Espace',esc(labels[m.scope]))+prop('Responsable',m.scope==='atlas'||m.scope==='personal'||m.id==='shared'?'Vous':'Camille · Produit')+
+ prop('Accessible à',m.scope==='atlas'?'Vous et Atlas':m.scope==='personal'?'Vous · autorisé pour Atlas':'Équipe Produit · Atlas et Nova')+
+ prop('Validité',esc(m.validity))+prop('Revue',esc(m.reviewer))+
+ prop('État',m.status==='conflict'?badge('À arbitrer','red'):m.status==='replaced'?badge('Remplacé'):m.status==='withdrawn'?badge('Retiré'):badge(m.kind==='Hypothèse'?'Hypothèse ouverte':'Actif'))+
+ (!historical?'<div class="ms-actions">'+(m.scope==='atlas'?button('Proposer à l’équipe','share',m.id):'')+button('Retirer','panel','withdraw','ghost')+'</div>':'')+'</aside></div>';
+}
+function prop(label,value){return '<dl class="ms-property"><dt>'+label+'</dt><dd>'+value+'</dd></dl>';}
+function option(value,label,selected){return '<option value="'+value+'"'+(selected===value?' selected':'')+'>'+label+'</option>';}
+function qualificationFields(d,prefix='draft'){
+ return '<div class="ms-form-grid"><label class="ms-field"><span>Nature</span><select data-field="'+prefix+'-kind">'+['Observation','Décision','Hypothèse','Retour d’expérience','Préférence','Convention','Synthèse'].map(k=>option(k,k,d.kind)).join('')+'</select></label>'+
+ '<label class="ms-field"><span>Objectif</span><select data-field="'+prefix+'-objective">'+option('','Aucun · transversal',d.objective||'')+Object.entries(objectives).map(([id,o])=>option(id,o.name,d.objective)).join('')+'</select></label>'+
+ '<label class="ms-field"><span>Impact estimé</span><select data-field="'+prefix+'-impact">'+option('normal','Courant',d.impact)+option('medium','Modéré',d.impact)+option('high','Élevé',d.impact)+'</select></label>'+
+ (prefix==='draft'?'<label class="ms-field"><span>À réexaminer le</span><input type="date" data-field="draft-validity" value="'+esc(d.validity)+'"></label>':'')+'</div>'+
+ '<label class="ms-field"><span>Pourquoi cet impact ?</span><textarea data-field="'+prefix+'-reason" rows="2" style="min-height:70px">'+esc(d.reason)+'</textarea></label>';
+}
+function qualify(){
+ return back('agent','Mémoire d’Atlas')+title(s.candidate?'Qualification du souvenir':'Un souvenir proposé par Atlas','Privé · vous et Atlas',badge(s.candidate?'Conservé pour Atlas':'Proposition à examiner',s.candidate?'green':''))+
+ '<div class="ms-split"><div><label class="ms-field"><span>Titre</span><input data-field="draft-title" value="'+esc(s.draft.title)+'"></label><label class="ms-field"><span>Contenu à conserver</span><textarea data-field="draft-text" rows="4">'+esc(s.draft.text)+'</textarea></label>'+
+ '<div class="ms-section"><div class="ms-section-title"><h3>Qualification</h3><span class="ms-small ms-muted">'+(s.candidate?'Modifiable par vous':'Suggestions d’Atlas')+'</span></div>'+qualificationFields(s.draft)+'</div>'+
+ '<div class="ms-bottom-actions">'+button('Annuler','route','agent')+button(s.candidate?'Enregistrer':'Conserver pour Atlas','save-candidate','','primary')+'</div></div>'+
+ '<aside class="ms-properties"><div><h3>À l’origine</h3><div class="ms-quote"><span class="ms-small ms-muted">Vous · 21 septembre</span><blockquote>« '+esc(sources.candidate.quote)+' »</blockquote></div>'+sourceButton('candidate')+'</div>'+prop('Destination',avatar('atlas')+' Mémoire propre à Atlas')+prop('Partage','Aucun · une publication sera proposée séparément')+prop('Rappel par l’agent',s.candidate?'Disponible pour Atlas dans ce périmètre':'Exclu tant que vous ne le conservez pas')+'</aside></div>';
+}
+function conflict(){
+ if(s.resolution)return back('library','Mémoire d’équipe')+title('Arbitrage enregistré','Validité des liens d’invitation')+'<div class="ms-banner green"><span class="ms-banner-text">'+icon('check')+(s.resolution==='new'?'La version de 24 heures remplace celle de sept jours.':'La durée de sept jours est confirmée pour le pilote.')+'</span></div><p class="ms-body-text">'+esc(s.resolutionReason)+'</p><div class="ms-section"><h3>Sources et versions conservées</h3>'+sourceButton('oldttl')+sourceButton('newttl')+'</div><div class="ms-bottom-actions">'+button('Voir le souvenir actuel','detail','expiry','primary')+'</div>';
+ return back('objective','Objectif de lancement')+title('Quelle durée fait référence ?','Invitations · même pilote, deux informations incompatibles',badge('En conflit','red','triangle-alert'))+
+ '<div class="ms-comparison"><article class="ms-version">'+badge('Version publiée')+'<p class="ms-version-text">Sept jours après l’envoi</p><p class="ms-small ms-muted">Décision publiée par Camille · 18 septembre</p>'+sourceButton('oldttl')+'</article><article class="ms-version">'+badge('Nouvelle information')+'<p class="ms-version-text">24 heures après l’envoi</p><p class="ms-small ms-muted">Guide importé · 20 septembre</p>'+sourceButton('newttl')+'</article></div>'+
+ '<p class="ms-small ms-muted">Le souvenir est exclu des prochains contextes tant que ce conflit reste ouvert.</p>'+
+ '<div class="ms-section"><h3>Votre arbitrage</h3>'+[
+ ['new','La durée est désormais de 24 heures','Fermer l’ancienne version et activer la nouvelle à partir d’aujourd’hui.'],
+ ['old','Sept jours restent valables pour ce pilote','Conserver la décision et écarter cette mise à jour pour le pilote.']
+ ].map(([v,l,d])=>'<label class="ms-radio"><input type="radio" name="ms-resolution" value="'+v+'" data-field="resolution-choice"'+(s.resolutionChoice===v?' checked':'')+'><span>'+l+'<small>'+d+'</small></span></label>').join('')+
+ '<label class="ms-field" style="margin-top:16px"><span>Justification de l’arbitrage</span><textarea data-field="resolution-reason" placeholder="Indiquez la vérification ou la décision qui justifie ce choix.">'+esc(s.resolutionReason)+'</textarea></label></div>'+
+ '<div class="ms-bottom-actions">'+button('Garder à vérifier','keep-conflict')+button('Enregistrer l’arbitrage','resolve','','primary')+'</div>';
+}
+function consolidate(){
+ if(s.merged)return back('library','Mémoire d’équipe')+title('Les observations ont été consolidées','Projet Orion · Invitations')+'<div class="ms-banner green"><span class="ms-banner-text">'+icon('check')+'Une synthèse, deux observations conservées dans l’historique.</span></div>'+row(find('merged'),true)+'<div class="ms-bottom-actions">'+button('Voir la synthèse','detail','merged','primary')+'</div>';
+ if(!canConsolidate())return back('library','Mémoire d’équipe')+title('Revoir les observations','Les souvenirs ont changé depuis la proposition.')+'<div class="ms-banner amber"><span class="ms-banner-text">'+icon('triangle-alert')+'La synthèse doit être réexaminée après un retrait ou une nouvelle qualification.</span></div>'+row(find('visibility'),true)+row(find('sender'),true);
+ return back('library','Mémoire d’équipe')+title('Rapprocher deux observations','Projet Orion · Invitations',badge('Proposition de synthèse'))+
+ '<div class="ms-split"><div><label class="ms-field"><span>Texte de la synthèse</span><textarea rows="6" data-field="merge-text">'+esc(s.mergeText)+'</textarea></label>'+
+ '<div class="ms-banner"><span class="ms-banner-text">'+icon('users')+'Une même session de cinq participants. Les groupes ne s’additionnent pas.</span></div>'+
+ '<div class="ms-section"><h3>Relations conservées</h3><div class="ms-relationship">'+icon('target')+'<div><small>Éclaire le résultat clé</small><strong>Accéder au pilote sans aide</strong><p class="ms-small ms-muted">Réussir le lancement Orion</p></div></div></div>'+
+ '<div class="ms-section"><h3>Après consolidation</h3><p class="ms-small">La synthèse apparaît dans les vues actives. Les deux observations restent accessibles depuis ses sources et son historique.</p></div>'+
+ '<div class="ms-bottom-actions">'+button('Annuler','route','library')+button('Valider la synthèse','merge','','primary')+'</div></div>'+
+ '<aside class="ms-properties"><div><h3>Observations d’origine</h3>'+sourceButton('studyA')+sourceButton('studyB')+'</div>'+prop('Espace conservé','Projet Orion')+prop('Accessible à','Équipe du projet · Atlas et Nova')+prop('Validité','Session du 19 septembre · 5 participants')+prop('Impact estimé',badge('Modéré')+'<p class="ms-small ms-muted">Ne change pas avec le regroupement.</p>')+'</aside></div>';
+}
+function canConsolidate(){return ['visibility','sender'].every(id=>available(find(id))&&!s.overrides[id]);}
+function agent(){
+ const own=memories().filter(m=>available(m)&&m.scope===(s.agent==='atlas'?'atlas':'nova'));
+ const list=s.agentTab==='own'?own:shared();
+ return title('<span class="ms-agent-title">'+avatar(s.agent)+'<span>'+esc(s.agent==='atlas'?'Atlas':'Nova')+'</span></span>','Mémoire de l’agent',s.agent==='atlas'?button('Qualifier une proposition','route','qualify'):'')+
+ '<div class="ms-tabs"><button type="button" class="ms-tab cursor-interaction" aria-pressed="'+(s.agentTab==='own')+'" data-action="agent-tab" data-value="own">Propre à '+(s.agent==='atlas'?'Atlas':'Nova')+' · '+own.length+'</button><button type="button" class="ms-tab cursor-interaction" aria-pressed="'+(s.agentTab==='shared')+'" data-action="agent-tab" data-value="shared">Partagé accessible · '+shared().length+'</button></div>'+
+ (s.agentTab==='own'&&!s.candidate&&s.agent==='atlas'?'<div class="ms-banner"><span class="ms-banner-text">'+icon('inbox')+'Une observation issue des tests mobiles attend votre revue.</span>'+button('Qualifier','route','qualify','ghost')+'</div>':'')+
+ (s.agentTab==='shared'?'<p class="ms-small ms-muted" style="margin-bottom:17px">Consulté depuis les espaces Équipe Produit et Projet Orion.</p>':'')+
+ (list.length?list.map(m=>row(m,true)).join(''):'<div class="ms-empty"><h2>Aucun souvenir propre</h2><p>Les connaissances partagées restent accessibles dans l’autre onglet.</p></div>');
+}
+function publish(){
+ if(s.publication==='published')return back('library','Mémoire d’équipe')+title('Souvenir publié','Accessible aux membres et agents autorisés de '+esc(labels[s.publicationRecord.scope]))+'<div class="ms-banner green"><span class="ms-banner-text">'+icon('check')+'Publication approuvée par vous · 21 septembre.</span></div>'+row(find('shared'),true)+'<div class="ms-bottom-actions">'+button('Voir depuis Nova','nova-shared','','primary')+'</div>';
+ if(!s.candidate)return title('Propositions pour l’équipe','Produit')+'<div class="ms-empty"><h2>Aucune proposition de publication</h2><p>Une observation privée d’Atlas peut être qualifiée puis proposée.</p><div class="ms-actions" style="justify-content:center;margin-top:20px">'+button('Examiner la proposition d’Atlas','route','qualify','primary')+'</div></div>';
+ const review=s.publication==='pending',d=review?s.proposedDraft:(s.shareDraft||s.retainedDraft);
+ return back(review?'library':'agent',review?'Mémoire d’équipe':'Mémoire d’Atlas')+title(review?'Publier pour l’équipe':'Proposer un souvenir à l’équipe',review?'Vous êtes responsable de cette publication.':'L’original reste dans la mémoire propre à Atlas.',badge(review?'À approuver':'Brouillon'))+
+ '<div class="ms-split"><div><h2 style="margin-bottom:20px">'+esc(d.title)+'</h2>'+
+ (review?'<p class="ms-body-text">'+esc(s.sharedText)+'</p>':'<label class="ms-field"><span>Texte qui sera partagé</span><textarea data-field="shared-text" rows="5">'+esc(s.sharedText)+'</textarea></label>')+
+ '<div class="ms-section"><div class="ms-section-title"><h3>Qualification publiée</h3>'+impact(d,true)+'</div><div class="ms-actions">'+badge(d.kind)+(d.objective?badge(objectives[d.objective].name):badge('Transversal'))+'</div><p class="ms-small ms-muted">'+esc(d.reason)+'</p></div>'+
+ '<div class="ms-section"><h3>Extrait de source partagé</h3><div class="ms-quote"><span class="ms-small ms-muted">Tests mobiles · extrait</span><blockquote>« '+esc(sources.candidate.quote)+' »</blockquote></div><p class="ms-small ms-muted">La conversation privée et son titre ne sont pas partagés.</p></div>'+
+ '<div class="ms-bottom-actions">'+button(review?'Renvoyer au brouillon':'Annuler',review?'reject-publication':'route',review?'':'agent')+button(review?'Approuver et publier':'Envoyer la proposition',review?'publish':'submit-publication','','primary')+'</div></div>'+
+ '<aside class="ms-properties">'+(review?prop('Destination',esc(labels[s.sharedScope])):'<label class="ms-field"><span>Destination</span><select data-field="shared-scope">'+option('team','Équipe Produit',s.sharedScope)+option('orion','Projet Orion',s.sharedScope)+'</select></label>')+prop('Audience','Membres de cet espace · Atlas et Nova')+prop('Original','Reste privé · vous et Atlas')+prop('Mises à jour','Une nouvelle publication sera nécessaire')+prop('Revue à effectuer','Texte, extrait de source, qualification et audience')+'</aside></div>';
+}
+const originalContext={stamp:'21 septembre · 10:42',items:[{id:'invite',title:base[0].title,text:base[0].text,kind:'Décision',scope:'orion',reason:'Conditionne le résultat clé « Accéder au pilote sans aide ».',impact:'high'},{id:'format',title:base[5].title,text:base[5].text,kind:'Convention',scope:'team',reason:'Convention applicable au compte rendu demandé.',impact:'normal'}],excluded:[{title:'Validité des liens d’invitation',reason:'Conflit ouvert · durée non retenue'},{title:'Trois étapes pour créer un premier document',reason:'Autre résultat clé · hypothèse non nécessaire à cette réponse'}]};
+function buildContext(){
+ const candidates=[...shared(),...memories().filter(m=>m.scope==='atlas')];
+ const items=candidates.filter(m=>available(m)&&m.status!=='conflict'&&!s.excludedNext.includes(m.id)&&((m.objective==='launch'&&m.kr==='access')||m.id==='format')).filter((m,i,a)=>a.findIndex(x=>x.text===m.text)===i).map(m=>({id:m.id,title:m.title,text:m.text,kind:m.kind,scope:m.scope,impact:m.impact,reason:m.id==='format'?'Convention du compte rendu.':m.scope==='atlas'?'Souvenir propre à Atlas, pertinent pour les tests d’accès.':m.impact==='high'?'Lien direct au résultat clé, source et période applicables.':'Observation ou synthèse pertinente pour préparer les tests.'}));
+ const excluded=shared().filter(m=>m.status==='conflict'||s.excludedNext.includes(m.id)).map(m=>({title:m.title,reason:m.status==='conflict'?'Conflit ouvert · exclu':'Écarté par vous pour cette tâche'}));
+ return {stamp:'Simulation suivante · 21 septembre',items,excluded};
+}
+function context(){
+ const c=s.contextVersion==='latest'&&s.latestContext?s.latestContext:originalContext;
+ return title('Contexte de la réponse','Atlas · '+c.stamp,button('Simuler le prochain contexte','next-context'))+
+ '<div class="ms-context-summary"><span class="ms-small ms-muted">Votre demande</span><p>Prépare le compte rendu de lancement Orion et les vérifications à faire avant l’ouverture.</p></div>'+
+ '<div class="ms-tabs"><button type="button" class="ms-tab cursor-interaction" aria-pressed="'+(s.contextVersion==='original')+'" data-action="context-version" data-value="original">Réponse d’origine</button>'+(s.latestContext?'<button type="button" class="ms-tab cursor-interaction" aria-pressed="'+(s.contextVersion==='latest')+'" data-action="context-version" data-value="latest">Simulation suivante</button>':'')+'</div>'+
+ '<div class="ms-group-heading"><strong>Souvenirs transmis · '+c.items.length+'</strong><span class="ms-muted">Instantané conservé</span></div>'+
+ c.items.map(m=>'<article class="ms-context-row"><div class="ms-actions">'+badge(m.kind)+badge(labels[m.scope])+(m.impact==='high'?badge('Impact élevé','amber','flag'):'')+'</div><h3 style="margin-top:10px">'+esc(m.title)+'</h3><p>'+esc(m.text)+'</p><p>'+esc(m.reason)+'</p><div class="ms-actions">'+button('Voir le souvenir actuel','detail',m.id,'ghost')+button(s.excludedNext.includes(m.id)?'Rétablir pour la suite':'Écarter pour cette tâche','exclude',m.id,'ghost')+'</div></article>').join('')+
+ '<details class="ms-section"><summary class="cursor-interaction">Non transmis · '+c.excluded.length+'</summary>'+c.excluded.map(m=>'<div class="ms-context-row"><strong>'+esc(m.title)+'</strong><p>'+esc(m.reason)+'</p></div>').join('')+'</details>'+
+ '<p class="ms-small ms-muted" style="margin-top:20px">« Transmis » décrit le contexte fourni à Atlas, sans prouver son influence sur la réponse.</p>';
+}
+function personal(){return title('Ma mémoire','Préférences et connaissances personnelles')+memories().filter(m=>m.scope==='personal'&&available(m)).map(m=>row(m,true)).join('');}
+function panel(){
+ if(!s.panel)return '';
+ const m=find(s.selected);
+ let heading='',body='',footer='';
+ if(s.panel==='source'){
+  const x=sourceData(s.source);heading=x.title;
+  body=prop('Date',esc(x.date))+prop('Périmètre',esc(x.scope))+prop('Origine',esc(x.author))+'<div class="ms-quote"><span class="ms-small ms-muted">Extrait conservé</span><blockquote>« '+esc(x.quote)+' »</blockquote></div>';
+ }else if(s.panel==='edit'){
+  heading='Qualifier le souvenir';body=qualificationFields(m,'edit')+'<p class="ms-small ms-muted">L’espace, les droits et le contenu de la source restent inchangés.</p>';
+  footer=button('Enregistrer la qualification','save-qualification','','primary');
+ }else if(s.panel==='withdraw'){
+  heading='Retirer ce souvenir ?';body='<p>'+esc(m.title)+'</p><p class="ms-small ms-muted" style="margin-top:14px">Il sera exclu des prochains contextes. Ses versions et les contextes déjà transmis restent consultables.</p>';
+  footer=button('Retirer des prochains contextes','withdraw','','primary');
+ }else if(s.panel==='history'){
+  heading='Historique du souvenir';
+  body='<div class="ms-history"><strong>21 septembre</strong><p class="ms-muted">'+(m.id==='expiry'&&s.resolution?esc(s.resolutionReason):m.id==='merged'?'Synthèse approuvée par vous. Deux observations conservées.':m.id==='shared'?'Version publiée pour '+esc(labels[s.publicationRecord.scope])+'.':s.overrides[m.id]?'Qualification modifiée par vous.':m.status==='withdrawn'?'Retiré des prochains contextes.':'Version actuelle consultable.')+'</p></div>'+
+  '<div class="ms-history"><strong>Source d’origine</strong><p class="ms-muted">'+esc(m.reviewer)+'</p></div>'+m.sources.map(sourceButton).join('')+
+  (m.id==='expiry'&&s.resolution?'<div class="ms-section"><h3>Autre version conservée</h3>'+sourceButton(s.resolution==='new'?'oldttl':'newttl')+'</div>':'')+
+  (m.id==='shared'&&s.publicationHistory.length?'<div class="ms-section"><h3>Publications précédentes</h3>'+s.publicationHistory.map((p,i)=>'<div class="ms-quote"><span class="ms-small ms-muted">Version '+(i+1)+' · '+esc(labels[p.scope])+'</span><p>'+esc(p.text)+'</p></div>').join('')+'</div>':'');
+ }
+ return '<div class="ms-overlay"><section class="ms-panel" role="dialog" aria-modal="true" aria-labelledby="ms-panel-title"><div class="ms-panel-head"><h2 id="ms-panel-title">'+heading+'</h2>'+button(icon('x')+'Fermer','close','','ghost')+'</div>'+body+(footer?'<div class="ms-bottom-actions">'+footer+'</div>':'')+'</section></div>';
+}
+const screens=[['library','01 · Bibliothèque structurée'],['objective','02 · Objectif et résultats clés'],['detail','03 · Souvenir, impact et relations'],['qualify','04 · Qualifier une proposition'],['publish','05 · Partager puis publier'],['conflict','06 · Arbitrer une contradiction'],['consolidate','07 · Consolider les observations'],['agent','08 · Mémoire propre et partagée'],['context','09 · Contexte d’une réponse'],['personal','10 · Mémoire personnelle']];
+picker.innerHTML=screens.map(([id,name])=>option(id,name,s.route)).join('');
+function render(){
+ root.dataset.labels=design.labels;root.dataset.density=design.density;
+ const activeTeam=['library','objective','detail','conflict','consolidate','publish'].includes(s.route);
+ const routeNames={library:'Mémoire d’équipe',objective:'Objectifs',detail:'Souvenir',qualify:'Proposition d’Atlas',publish:'Publication',conflict:'Arbitrage',consolidate:'Consolidation',agent:'Mémoire de '+(s.agent==='atlas'?'Atlas':'Nova'),context:'Contexte transmis',personal:'Ma mémoire'};
+ const views={library,objective,detail,qualify,conflict,consolidate,agent,publish,context,personal};
+ const main=(views[s.route]||library)();
+ stage.innerHTML='<div class="ms-app"'+(s.panel?' inert aria-hidden="true"':'')+'><aside class="ms-sidebar"><div class="ms-brand">rakazo</div><div class="ms-workspace"><span class="ms-workspace-mark">P</span><span>Équipe Produit</span></div>'+
+ nav('Mémoire d’équipe','library','library',activeTeam)+nav('Objectifs','target','objective',s.route==='objective')+
+ '<div class="ms-nav-label">Agents</div>'+nav('Atlas','bot','agent',s.route==='agent'&&s.agent==='atlas','atlas')+nav('Nova','bot','agent',s.route==='agent'&&s.agent==='nova','nova')+
+ '<div class="ms-nav-label">Votre espace</div>'+nav('Ma mémoire','bookmark','personal',s.route==='personal')+nav('Contexte d’Atlas','scan-text','context',s.route==='context')+
+ '<div class="ms-sidebar-bottom"><div class="ms-workspace" style="padding-bottom:0">'+avatar('human')+'<span>Vous<br><span class="ms-muted">Responsable mémoire</span></span></div></div></aside>'+
+ '<main class="ms-main"><header class="ms-topbar"><span class="ms-crumbs">Produit '+icon('chevron-right')+'<span>'+esc(routeNames[s.route]||'Mémoire')+'</span></span><span>'+avatar(s.route==='agent'?s.agent:'human')+'</span></header><div class="ms-content">'+
+ '<select class="ms-mobile-nav" aria-label="Navigation Rakazo" data-field="mobile-nav">'+[['library','Mémoire d’équipe'],['objective','Objectifs'],['agent','Mémoire d’Atlas'],['personal','Ma mémoire'],['context','Contexte d’Atlas']].map(([v,l])=>option(v,l,s.route)).join('')+'</select>'+main+'</div></main></div>'+panel();
+ picker.value=s.route;notice.textContent=s.notice;
+ if(globalThis.lucide)lucide.createIcons({attrs:{width:17,height:17}});
+}
+function inform(t){s.notice=t;}
+function go(route){s.route=route;s.panel=null;s.query='';if(route==='qualify'){s.agent='atlas';s.draft={...(s.retainedDraft||draftDefault)};}if(route==='conflict')s.objective='launch';}
+function readField(name){const el=stage.querySelector('[data-field="'+name+'"]');return el?el.value.trim():'';}
+function readDraft(){for(const k of ['title','text','kind','objective','impact','reason','validity']){const el=stage.querySelector('[data-field="draft-'+k+'"]');if(el)s.draft[k]=el.value;}if(!s.draft.objective)s.draft.objective=null;}
+function error(t){inform(t);notice.setAttribute('role','alert');notice.textContent=t;}
+stage.addEventListener('input',e=>{
+ const f=e.target.dataset.field;if(!f)return;
+ if(f==='search'){const pos=e.target.selectionStart;s.query=e.target.value;render();const input=stage.querySelector('[data-field="search"]');input.focus();input.setSelectionRange(pos,pos);return;}
+ if(f.startsWith('draft-'))readDraft();
+ if(f==='resolution-reason')s.resolutionReason=e.target.value;
+ if(f==='merge-text')s.mergeText=e.target.value;
+ if(f==='shared-text')s.sharedText=e.target.value;
+});
+stage.addEventListener('change',e=>{
+ const f=e.target.dataset.field;
+ if(f==='mobile-nav'){go(e.target.value);if(e.target.value==='agent')s.agent='atlas';}
+ if(f==='resolution-choice')s.resolutionChoice=e.target.value;
+ if(f==='shared-scope')s.sharedScope=e.target.value;
+ if(f?.startsWith('draft-'))readDraft();
+ if(f==='mobile-nav')render();persist();
+});
+stage.addEventListener('click',e=>{
+ const el=e.target.closest('[data-action]');if(!el||el.disabled)return;
+ const a=el.dataset.action,v=el.dataset.value;s.notice='';notice.setAttribute('role','status');
+ if(a==='route')go(v);
+ else if(a==='view'){s.view=v;s.query='';}
+ else if(a==='objective'){s.objective=v;go('objective');}
+ else if(a==='agent'){s.agent=v;s.agentTab='own';go('agent');}
+ else if(a==='agent-tab')s.agentTab=v;
+ else if(a==='detail'){
+  if(s.route==='detail'&&s.selected!==v)s.trail=[...(s.trail||[]),s.selected];
+  else if(s.route!=='detail'){s.back=s.route;s.trail=[];}
+  s.selected=v;go('detail');
+ }
+ else if(a==='detail-back'){if(s.trail?.length)s.selected=s.trail.pop();else go(s.back||'library');}
+ else if(a==='panel')s.panel=v;
+ else if(a==='source'){s.source=v;s.panel='source';}
+ else if(a==='close')s.panel=null;
+ else if(a==='save-candidate'){
+  readDraft();if(!s.draft.title.trim()||!s.draft.text.trim()||!s.draft.reason.trim()||!s.draft.validity){error('Complétez le contenu, sa justification et la date de revue.');return;}
+  s.retainedDraft={...s.draft};delete s.overrides.candidate;s.candidate=true;s.selected='candidate';s.back='agent';s.trail=[];s.agent='atlas';s.agentTab='own';go('detail');inform('Souvenir conservé pour Atlas. Son rattachement à un objectif ne le partage pas.');
+ }
+ else if(a==='share'){
+  if(v!=='candidate'){inform('Ce parcours illustre le partage de l’observation mobile.');go('qualify');}
+  else {s.shareDraft={...s.retainedDraft};s.sharedText=s.retainedDraft.text;s.publication='none';go('publish');}
+ }
+ else if(a==='submit-publication'){
+  s.sharedText=readField('shared-text');s.sharedScope=readField('shared-scope')||s.sharedScope;
+  if(!s.sharedText){error('Ajoutez le texte qui sera partagé.');return;}
+  s.proposedDraft={...(s.shareDraft||s.retainedDraft)};s.publication='pending';inform('Proposition prête pour la revue par un responsable de l’espace.');
+ }
+ else if(a==='reject-publication'){s.publication='none';inform('Publication renvoyée au brouillon. L’original reste privé.');}
+ else if(a==='publish'){
+  if(s.publicationRecord)s.publicationHistory.push(s.publicationRecord);
+  s.publicationRecord={draft:{...s.proposedDraft},text:s.sharedText,scope:s.sharedScope};delete s.overrides.shared;s.publication='published';inform('Le texte et l’extrait approuvés sont publiés dans '+labels[s.sharedScope]+'.');
+ }
+ else if(a==='nova-shared'){s.agent='nova';s.agentTab='shared';go('agent');}
+ else if(a==='resolve'){
+  s.resolutionReason=readField('resolution-reason');
+  if(!s.resolutionChoice||!s.resolutionReason){error('Choisissez une version et justifiez l’arbitrage.');return;}
+  s.resolution=s.resolutionChoice;inform('Arbitrage enregistré. Les deux sources restent dans l’historique.');
+ }
+ else if(a==='keep-conflict'){go('objective');inform('Conflit conservé pour vérification. Le souvenir reste exclu des prochains contextes.');}
+ else if(a==='merge'){
+  if(!canConsolidate()){error('Les observations ont changé. Réexaminez-les avant de consolider.');return;}
+  s.mergeText=readField('merge-text');if(!s.mergeText){error('Ajoutez le texte de la synthèse.');return;}
+  s.merged=true;inform('Synthèse validée. Les sources, le périmètre et les observations d’origine sont conservés.');
+ }
+ else if(a==='save-qualification'){
+  const objectiveId=readField('edit-objective')||null;
+  const patch={kind:readField('edit-kind'),objective:objectiveId,impact:readField('edit-impact'),reason:readField('edit-reason'),reviewer:'Vous · qualification le 21 septembre',kr:objectiveId==='launch'?'access':objectiveId==='activation'?'first':null};
+  if(!patch.reason){error('Indiquez pourquoi cette qualification est pertinente.');return;}
+  s.overrides[s.selected]={...s.overrides[s.selected],...patch};
+  if(s.selected==='candidate')Object.assign(s.retainedDraft,patch);
+  s.panel=null;inform('Qualification enregistrée. Les droits restent inchangés.');
+ }
+ else if(a==='withdraw'){s.withdrawn=[...new Set([...s.withdrawn,s.selected])];s.panel=null;inform('Souvenir retiré des prochains contextes. Les instantanés antérieurs sont conservés.');}
+ else if(a==='exclude'){s.excludedNext=s.excludedNext.includes(v)?s.excludedNext.filter(x=>x!==v):[...s.excludedNext,v];inform('Préférence appliquée à la prochaine simulation. Cet instantané reste inchangé.');}
+ else if(a==='next-context'){s.latestContext=buildContext();s.contextVersion='latest';inform('Nouveau contexte simulé à partir des versions actuellement disponibles.');}
+ else if(a==='context-version')s.contextVersion=v;
+ render();persist();
+ if(s.panel)stage.querySelector('.ms-panel button')?.focus();
+});
+root.addEventListener('keydown',e=>{if(e.key==='Escape'&&s.panel){s.panel=null;render();persist();}});
+picker.addEventListener('change',e=>{
+ const route=e.target.value;go(route);s.notice='';
+ if(route==='detail'){s.selected='invite';s.back='library';s.trail=[];}
+ if(route==='objective')s.objective='launch';
+ if(route==='agent'){s.agent='atlas';s.agentTab='own';}
+ if(route==='publish'&&!s.candidate){s.candidate=true;s.retainedDraft={...s.draft};s.proposedDraft={...s.draft};s.sharedText=s.draft.text;s.publication='pending';}
+ render();persist();
+});
+render();
+if(globalThis.Tweak){
+ const t=new Tweak({container:root,onChange:()=>{render();persist();}});
+ t.addSelect(design,'labels',{label:'Labels de couleur',options:[{label:'Fond discret',value:'tint'},{label:'Texte et icône',value:'dots'}]});
+ t.addSelect(design,'density',{label:'Densité des souvenirs',options:[{label:'Confortable',value:'comfortable'},{label:'Compacte',value:'compact'}]});
+}
+})();
+</script>
+</div>

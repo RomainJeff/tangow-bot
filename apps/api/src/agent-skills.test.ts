@@ -88,6 +88,23 @@ describe("agent skills service (filesystem)", () => {
 
   const service = () => createAgentSkillsService(prisma as unknown as PrismaClient, dataDir);
 
+  it("offers memory management disabled by default and enables only the selected bot", async () => {
+    const skills = createAgentSkillsService(prisma as never, dataDir);
+    const skillId = "builtin:Memory management";
+    expect((await skills.list(actor)).find((item) => item.id === skillId)).toMatchObject({
+      availability: "selected",
+      visibleBotIds: [],
+    });
+    await skills.setAccess(actor, { skillId, bots: [{ botId: "bot-1", enabled: true }] });
+    expect((await skills.list(actor)).find((item) => item.id === skillId)?.visibleBotIds).toEqual([
+      "bot-1",
+    ]);
+    await skills.setAccess(actor, { skillId, bots: [{ botId: "bot-1", enabled: false }] });
+    expect((await skills.list(actor)).find((item) => item.id === skillId)?.visibleBotIds).toEqual(
+      [],
+    );
+  });
+
   it("creates, lists, renames (cascading access rows) and removes a skill", async () => {
     const skills = service();
     const created = await skills.create(actor, {
@@ -193,6 +210,7 @@ describe("agent skills service (filesystem)", () => {
     const dir = path.join(userSkillsRoot(dataDir, actor), "deploy");
     expect(await readFile(path.join(dir, "scripts", "run.sh"), "utf8")).toBe("echo hi");
     expect((await skills.list(actor)).map((s) => s.id)).toEqual([
+      "builtin:Memory management",
       "builtin:Interrogate",
       "user:deploy",
     ]);

@@ -106,6 +106,9 @@ export default function Layout() {
                 <Stack.Screen name="voice" options={{ title: t("Voice") }} />
                 <Stack.Screen name="integrations" options={{ title: t("Integrations") }} />
                 <Stack.Screen name="skills" options={{ title: t("Skills") }} />
+                <Stack.Screen name="memory" options={{ title: t("Memory") }} />
+                <Stack.Screen name="judgment-connection" options={{ title: t("Judgment model") }} />
+                <Stack.Screen name="memory-detail" options={{ title: t("Memory") }} />
                 <Stack.Screen
                   name="new"
                   options={{

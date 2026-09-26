@@ -1,8 +1,14 @@
 import * as z from "zod";
 
-export const AI_DISCLOSURE_VERSION = "2026-09-14";
+export const AI_DISCLOSURE_VERSION = "2026-09-24";
 export const AI_PRIVACY_URL = "https://rakazo.com/privacy/";
-export const AiDataUseSchema = z.enum(["model", "voice", "memory"]);
+export const AiDataUseSchema = z.enum([
+  "model",
+  "voice",
+  "memory",
+  "memory-classification",
+  "memory-method-preparation",
+]);
 export type AiDataUse = z.infer<typeof AiDataUseSchema>;
 export const AI_DATA_DISCLOSURES: Record<AiDataUse, string> = {
   model:
@@ -11,6 +17,10 @@ export const AI_DATA_DISCLOSURES: Record<AiDataUse, string> = {
     "Audio you record is sent for transcription. Text you choose to play, including bot responses, is sent to generate speech.",
   memory:
     "Conversation summaries, saved memories, search queries, and bot and Space identifiers are sent to store and retrieve context for your bots.",
+  "memory-classification":
+    "This bot’s classification method, the selected memory, relevant memories and up to four reviewed examples are sent to Jev for a suggestion. Nothing changes without your review.",
+  "memory-method-preparation":
+    "This bot’s Markdown classification method is sent once to its connected model to prepare the method. No memories are included.",
 };
 export const AiConsentQuerySchema = z
   .object({

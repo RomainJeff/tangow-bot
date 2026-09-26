@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { SpaceMemoryConfig } from "@rakazo/contracts";
+import type { Space, SpaceMemoryConfig } from "@rakazo/contracts";
 import {
   Button,
   Dialog,
@@ -56,12 +56,14 @@ function ScopePicker({
 
 export function MemorySettingsOverlay({
   onClose,
+  workspace,
   config,
   onConfigChange,
   embedded = false,
   onBusyChange,
 }: {
   onClose: () => void;
+  workspace?: Pick<Space, "id" | "name">;
   config: SpaceMemoryConfig | null | undefined;
   onConfigChange: (config: SpaceMemoryConfig | null) => void;
   /** Render panel body only for the shared Settings shell. */
@@ -93,6 +95,10 @@ export function MemorySettingsOverlay({
 
   const registration = memoryProviderSettings(config?.provider ?? selectedProvider);
   const busy = pending !== null;
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
 
   useEffect(() => {
     return () => onBusyChange?.(false);
@@ -158,10 +164,8 @@ export function MemorySettingsOverlay({
             <DialogTitle className="text-2xl font-medium text-foreground">
               <Trans>Memory</Trans>
             </DialogTitle>
-            <DialogDescription className="mt-1 text-[13.5px] text-muted-foreground/70">
-              {registration?.description ?? (
-                <Trans>Manage the Space semantic memory provider.</Trans>
-              )}
+            <DialogDescription className="sr-only">
+              <Trans>Memory connections</Trans>
             </DialogDescription>
           </div>
           <DialogClose
@@ -172,80 +176,90 @@ export function MemorySettingsOverlay({
             <XIcon />
           </DialogClose>
         </div>
-      ) : (
-        <p className="px-6 pt-1 text-[13.5px] text-muted-foreground/70 sm:px-8">
-          {registration?.description ?? <Trans>Manage the Space semantic memory provider.</Trans>}
-        </p>
-      )}
+      ) : null}
 
       <div className="rk-scroll min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8">
-        {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}
+        <SpaceMemorySection workspace={workspace} />
+        <details className="mt-6 border-t border-border pt-4" open={busy || !!error || undefined}>
+          <summary className="cursor-pointer text-meta text-muted-foreground">
+            <Trans>Connections</Trans>
+          </summary>
+          <div className="pt-4">
+            {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}
 
-        {config === undefined ? (
-          <p className="text-sm text-muted-foreground">
-            <Trans>Loading memory settings…</Trans>
-          </p>
-        ) : config ? (
-          <div className="rounded-xl border border-border px-4 py-3">
-            <div className="text-[12.5px] uppercase tracking-[0.08em] text-muted-foreground/80">
-              <Trans>Connected</Trans>
-            </div>
-            <div className="mt-1 text-[15px] text-foreground">
-              {registration?.connectedLabel(config) ?? config.provider}
-            </div>
-            <div className="mt-3">
-              <ScopePicker
-                value={defaultScope}
-                disabled={busy}
-                onChange={(scope) => void updateDefaultScope(scope)}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => void disconnect()}
-              className="mt-3"
-            >
-              {pending === "disconnect" ? <Trans>Disconnecting…</Trans> : <Trans>Disconnect</Trans>}
-            </Button>
-          </div>
-        ) : registration ? (
-          <>
-            {MEMORY_PROVIDER_SETTINGS.length > 1 ? (
-              <Field className="mb-4">
-                <FieldLabel htmlFor={providerSelectId}>
-                  <Trans>Provider</Trans>
-                </FieldLabel>
-                <NativeSelect
-                  id={providerSelectId}
-                  className="w-full"
-                  value={selectedProvider}
+            {config === undefined ? (
+              <p className="text-sm text-muted-foreground">
+                <Trans>Loading memory settings…</Trans>
+              </p>
+            ) : config ? (
+              <div className="rounded-xl border border-border px-4 py-3">
+                <div className="text-[12.5px] uppercase tracking-[0.08em] text-muted-foreground/80">
+                  <Trans>Connected</Trans>
+                </div>
+                <div className="mt-1 text-[15px] text-foreground">
+                  {registration?.connectedLabel(config) ?? config.provider}
+                </div>
+                <div className="mt-1 text-meta text-muted-foreground">
+                  <Trans>Provider recall is paused</Trans>
+                </div>
+                <div className="mt-3">
+                  <ScopePicker
+                    value={defaultScope}
+                    disabled={busy}
+                    onChange={(scope) => void updateDefaultScope(scope)}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   disabled={busy}
-                  onChange={(event) => setSelectedProvider(event.target.value)}
+                  onClick={() => void disconnect()}
+                  className="mt-3"
                 >
-                  {MEMORY_PROVIDER_SETTINGS.map((entry) => (
-                    <NativeSelectOption key={entry.id} value={entry.id}>
-                      {entry.name}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </Field>
-            ) : null}
+                  {pending === "disconnect" ? (
+                    <Trans>Disconnecting…</Trans>
+                  ) : (
+                    <Trans>Disconnect</Trans>
+                  )}
+                </Button>
+              </div>
+            ) : registration ? (
+              <>
+                {MEMORY_PROVIDER_SETTINGS.length > 1 ? (
+                  <Field className="mb-4">
+                    <FieldLabel htmlFor={providerSelectId}>
+                      <Trans>Provider</Trans>
+                    </FieldLabel>
+                    <NativeSelect
+                      id={providerSelectId}
+                      className="w-full"
+                      value={selectedProvider}
+                      disabled={busy}
+                      onChange={(event) => setSelectedProvider(event.target.value)}
+                    >
+                      {MEMORY_PROVIDER_SETTINGS.map((entry) => (
+                        <NativeSelectOption key={entry.id} value={entry.id}>
+                          {entry.name}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  </Field>
+                ) : null}
 
-            <div className="mb-4">
-              <ScopePicker value={defaultScope} disabled={busy} onChange={setDefaultScope} />
-            </div>
+                <div className="mb-4">
+                  <ScopePicker value={defaultScope} disabled={busy} onChange={setDefaultScope} />
+                </div>
 
-            <registration.SettingsForm busy={busy} onConnect={connect} />
-          </>
-        ) : (
-          <p className="text-sm text-destructive">
-            <Trans>The selected memory provider is not available in this build.</Trans>
-          </p>
-        )}
-        <SpaceMemorySection />
+                <registration.SettingsForm busy={busy} onConnect={connect} />
+              </>
+            ) : (
+              <p className="text-sm text-destructive">
+                <Trans>The selected memory provider is not available in this build.</Trans>
+              </p>
+            )}
+          </div>
+        </details>
       </div>
     </>
   );

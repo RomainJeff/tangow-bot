@@ -15,6 +15,7 @@ import {
 import { IntegrationSetupPage } from "./pages/IntegrationSetup";
 import { LocalSettingsPage } from "./pages/LocalSettings";
 import { McpOAuthCallbackPage } from "./pages/McpOAuthCallback";
+import { MemoryLibraryPage } from "./pages/MemoryLibraryPage";
 import { ShellPage } from "./pages/Shell";
 
 const AuthPage = lazy(() =>
@@ -109,6 +110,10 @@ function SessionApp() {
             }
           />
           <Route path="/app" element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />} />
+          <Route
+            path="/app/memory"
+            element={user ? <MemoryLibraryPage /> : <Navigate to="/sign-in" replace />}
+          />
           <Route
             path="/app/g/:groupId"
             element={user ? <ShellPage /> : <Navigate to="/sign-in" replace />}

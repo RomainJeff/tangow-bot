@@ -229,7 +229,28 @@ export interface MemorySnapshot {
     path: string;
     content: string;
     revision: number;
+    /** Changes whenever a canonical document's content or access state changes. */
+    accessVersion?: number;
     updatedAt?: string;
+  }>;
+}
+
+/**
+ * Identifiers of the canonical revisions supplied to one model invocation.
+ * It deliberately contains no memory body: event/audit storage must not become
+ * another copy of private context.
+ */
+export interface MemoryContextManifest {
+  documents: Array<{
+    documentId: string;
+    revision: number;
+    accessVersion?: number;
+    scope: "bot" | "user";
+    path: string;
+    /** Deterministic selection reason, never a claim that a memory is true. */
+    reason: "local_lexical_match" | "recent_authorized";
+    /** Size of the escaped excerpt supplied to the runtime; the text is not logged. */
+    excerptBytes: number;
   }>;
 }
 
@@ -240,6 +261,10 @@ export interface MemorySearchRequest {
 }
 
 export interface MemorySearchResult {
+  /** Canonical identity when the store can hydrate a search hit safely. */
+  documentId?: string;
+  revision?: number;
+  accessVersion?: number;
   path: string;
   snippet: string;
   score: number;
@@ -258,6 +283,17 @@ export interface MemoryCommitRequest {
   mode?: "replace" | "append";
   sourceRunId?: string;
   sourceThreadId?: string;
+  /** Stable, caller-derived identity for retry-safe proposal creation. */
+  idempotencyKey?: string;
+  /** Verifiable source passages supporting this one memory candidate. */
+  evidence?: Array<{
+    sourceKind: "message" | "thread" | "run";
+    sourceReferenceId: string;
+    sourceVersion: string;
+    startOffset: number | null;
+    endOffset: number | null;
+    excerpt: string | null;
+  }>;
 }
 
 export interface MemoryRevision {
@@ -409,6 +445,8 @@ export interface AgentRunRequest {
   history: AgentHistoryMessage[];
   currentTurnImages?: AgentInputImage[];
   tools: ConnectorTool[];
+  /** Explicitly disable every runtime tool for bounded model-only operations. */
+  toolPolicy?: "default" | "none";
   /**
    * Values the run must never disclose. Live list: it grows while the run
    * resolves credentials, and anything exported is redacted against it.
@@ -434,6 +472,12 @@ export interface AgentRunRequest {
   ) => Promise<unknown>;
   /** Called after a tool returns; implementations must not persist raw result contents. */
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
+  /**
+   * Checks whether the data supplied to this run may still be sent to a model.
+   * Runtimes invoke it immediately before every provider request, including
+   * continuations after a tool result. Throwing cancels that request.
+   */
+  beforeModelCall?: () => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
 }
@@ -461,7 +505,12 @@ export type AgentRuntimeEvent =
       /** Provider-generated tool status rather than assistant-authored narration. */
       activity?: true;
     }
-  | { type: "tool"; name: string; args: Record<string, unknown>; executionId: string }
+  | {
+      type: "tool";
+      name: string;
+      args: Record<string, unknown>;
+      executionId: string;
+    }
   | {
       type: "ask";
       text: string;

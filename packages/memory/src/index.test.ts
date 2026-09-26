@@ -23,7 +23,10 @@ describe("memory store contract shape", () => {
       .mockResolvedValue([
         { id: "memory-1", path: "facts.md", content: "A fact", revision: 3, updatedAt },
       ]);
-    const store = new MarkdownMemoryStore({ memoryDocument: { findMany } } as never);
+    const store = new MarkdownMemoryStore({
+      memoryDocument: { findMany },
+      memoryEvidence: { findMany: vi.fn(async () => []) },
+    } as never);
 
     await expect(store.read({ scope: "bot", botId: "bot-1" }, context)).resolves.toEqual({
       documents: [
@@ -32,19 +35,43 @@ describe("memory store contract shape", () => {
           path: "facts.md",
           content: "A fact",
           revision: 3,
+          accessVersion: undefined,
           updatedAt: updatedAt.toISOString(),
         },
       ],
     });
-    expect(findMany).toHaveBeenCalledWith({
-      where: {
-        spaceId: "workspace-1",
-        userId: "user-1",
-        scope: "bot",
-        botId: "bot-1",
-      },
-      orderBy: [{ updatedAt: "desc" }, { path: "asc" }],
-    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          spaceId: "workspace-1",
+          scope: "bot",
+          botId: "bot-1",
+          status: "active",
+          collection: { kind: "agent", ownerUserId: "user-1" },
+        }),
+      }),
+    );
+  });
+
+  it("queries shared memory only through a current membership and validity window", async () => {
+    const findMany = vi.fn(async () => []);
+    const store = new MarkdownMemoryStore({ memoryDocument: { findMany } } as never);
+
+    await store.read({ scope: "user" }, context);
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          space: { memoryRecallEnabled: true, memberships: { some: { userId: "user-1" } } },
+          collection: { OR: [{ kind: "space" }, { kind: "personal", ownerUserId: "user-1" }] },
+          status: "active",
+          AND: expect.arrayContaining([
+            { OR: [{ validFrom: null }, { validFrom: { lte: expect.any(Date) } }] },
+            { OR: [{ validUntil: null }, { validUntil: { gte: expect.any(Date) } }] },
+          ]),
+        }),
+      }),
+    );
   });
 });
 
@@ -54,6 +81,17 @@ describe("append commits", () => {
     let row = seed ? { id: "memory-1", path: "MEMORY.md", ...seed } : undefined;
     const revisions: Array<{ revision: number; content: string }> = [];
     const tx = {
+      spaceMember: { findFirst: vi.fn(async () => ({ id: "membership-1" })) },
+      bot: { findFirst: vi.fn(async () => ({ id: "bot-1" })) },
+      memoryCommand: {
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async () => ({})),
+        update: vi.fn(async () => ({})),
+      },
+      memoryCollection: {
+        findFirst: vi.fn(async () => null),
+        create: vi.fn(async () => ({ id: "collection-1" })),
+      },
       memoryDocument: {
         findFirst: vi.fn(async () => row),
         update: vi.fn(async ({ data }: { data: { content: string; revision: number } }) => {
@@ -76,6 +114,8 @@ describe("append commits", () => {
       revisions,
       tx,
       prisma: {
+        spaceMember: { findFirst: vi.fn(async () => ({ id: "membership-1" })) },
+        bot: { findFirst: vi.fn(async () => ({ id: "bot-1" })) },
         $transaction: (run: (client: typeof tx) => Promise<unknown>) => run(tx),
       } as never,
     };
@@ -95,25 +135,25 @@ describe("append commits", () => {
     expect(db.revisions).toEqual([{ revision: 1, content: "- Prefers Rust" }]);
   });
 
-  it("keeps both facts, in call order, across two appends", async () => {
+  it("creates separate proposals instead of appending to an existing memory", async () => {
     const db = stubPrisma();
     const store = new MarkdownMemoryStore(db.prisma);
 
     await store.commit(append("- Prefers Rust"), context);
     const second = await store.commit(append("- Ships on Fridays"), context);
 
-    expect(second.content).toBe("- Prefers Rust\n- Ships on Fridays");
-    expect(second.revision).toBe(2);
+    expect(second.content).toBe("- Ships on Fridays");
+    expect(second.revision).toBe(1);
     expect(db.revisions).toHaveLength(2);
   });
 
-  it("does not double the separator when the document already ends with a newline", async () => {
+  it("does not alter an existing approved document", async () => {
     const db = stubPrisma({ content: "# Memory\n", revision: 4 });
     const store = new MarkdownMemoryStore(db.prisma);
 
     await expect(store.commit(append("- Prefers Rust"), context)).resolves.toMatchObject({
-      revision: 5,
-      content: "# Memory\n- Prefers Rust",
+      revision: 1,
+      content: "- Prefers Rust",
     });
   });
 
@@ -123,13 +163,15 @@ describe("append commits", () => {
 
     await expect(
       store.commit({ scope: "user", path: "MEMORY.md", content: "new" }, context),
-    ).resolves.toMatchObject({ revision: 2, content: "new" });
+    ).resolves.toMatchObject({ revision: 1, content: "new" });
   });
 
   it("appends onto the winning content when a conflicting attempt is retried", async () => {
     const db = stubPrisma({ content: "- Prefers Rust", revision: 1 });
     let attempts = 0;
     const prisma = {
+      spaceMember: { findFirst: vi.fn(async () => ({ id: "membership-1" })) },
+      bot: { findFirst: vi.fn(async () => ({ id: "bot-1" })) },
       $transaction: async (run: (client: unknown) => Promise<unknown>) => {
         attempts += 1;
         if (attempts === 1) {
@@ -145,8 +187,8 @@ describe("append commits", () => {
     const store = new MarkdownMemoryStore(prisma);
 
     await expect(store.commit(append("- Uses pnpm"), context)).resolves.toMatchObject({
-      revision: 3,
-      content: "- Prefers Rust\n- Ships on Fridays\n- Uses pnpm",
+      revision: 1,
+      content: "- Uses pnpm",
     });
     expect(attempts).toBe(2);
   });

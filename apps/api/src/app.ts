@@ -3,6 +3,8 @@ import { rm } from "node:fs/promises";
 import { ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import type {
+  AgentModelOAuthCredential,
+  AgentRunModel,
   AgentRuntime,
   JobPublisher,
   ManagedConnectorProvider,
@@ -18,10 +20,12 @@ import type {
   RemoteConnectorDependencies,
 } from "@rakazo/adapters";
 import {
+  aiRecipient,
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
   ComposioConnector,
   createBackgroundJobHandlers,
+  createBotMemoryClassificationService,
   createCloudAgentConnection,
   createConnectorStack,
   createJobReconciler,
@@ -60,18 +64,25 @@ import {
   reconcileComputerUpdates,
   removePiUserSessions,
   removeUserSkillDirs,
+  resolveModelAuth,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceMemoryProviderResolver,
+  selectConfiguredModel,
+  serializeModelSecret,
+  toOAuthCredential,
   toTeamChatInbound,
 } from "@rakazo/adapters";
 import { blockedAuthPaths, createAuth } from "@rakazo/auth";
+import { AI_CONSENT_REQUIRED, AI_DISCLOSURE_VERSION } from "@rakazo/contracts";
 import { signupPolicyFromEnv } from "@rakazo/core";
 import type { Pool, PrismaClient } from "@rakazo/db";
 import {
   createDb,
   createPool,
   createThreadEvents,
+  findDefaultModelCredential,
+  findModelCredential,
   parsePositiveInteger,
   provisionMessagingIdentity,
   requireMembership,
@@ -88,9 +99,11 @@ import { requestLogging } from "@rakazo/logging/hono";
 import { MarkdownMemoryStore } from "@rakazo/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import type { PrepareMemoryMethod } from "./bot-memory-methods.js";
 import type { AppEnv } from "./env.js";
 import { loadEnv } from "./env.js";
 import { mountLocalSettings } from "./local-settings.js";
+import { createMemoryClassificationMethodPreparer } from "./memory-classification-method-preparer.js";
 import {
   createMessagingInboundHandler,
   teamChatSenderCanWakeMessageRoutines,
@@ -126,6 +139,132 @@ export interface AppHandles {
   stop: () => Promise<void>;
 }
 
+async function resolveMemoryMethodPreparationModel(
+  deps: { prisma: PrismaClient; secrets: EncryptedSecretStore; env: AppEnv },
+  bot: { id: string; spaceId: string; userId: string },
+): Promise<AgentRunModel | null> {
+  const scope = { userId: bot.userId, spaceId: bot.spaceId };
+  const [row, defaultCredential, settings] = await Promise.all([
+    deps.prisma.bot.findFirst({
+      where: { id: bot.id, spaceId: bot.spaceId, userId: bot.userId, archivedAt: null },
+      select: { modelProvider: true, modelId: true, thinkingLevel: true },
+    }),
+    findDefaultModelCredential(deps.prisma, scope),
+    deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
+  ]);
+  if (!row) return null;
+  const overrideCredential =
+    row.modelProvider && row.modelId
+      ? await findModelCredential(deps.prisma, scope, row.modelProvider, row.modelId)
+      : null;
+  const selected = selectConfiguredModel({
+    bot: row,
+    overrideCredential,
+    defaultCredential,
+    settings,
+    deployment:
+      deps.env.deploymentModelKey && deps.env.defaultProvider && deps.env.defaultModel
+        ? { provider: deps.env.defaultProvider, model: deps.env.defaultModel }
+        : null,
+  });
+  if (!selected.provider || !selected.id) return null;
+  const base = {
+    provider: selected.provider,
+    id: selected.id,
+    ...(selected.thinkingLevel ? { thinkingLevel: selected.thinkingLevel } : {}),
+  };
+  if (!selected.credential) {
+    const apiKey =
+      selected.provider === deps.env.defaultProvider ? deps.env.deploymentModelKey : undefined;
+    return { ...base, ...(apiKey ? { apiKey } : {}) };
+  }
+  const secret = await deps.prisma.secret.findFirst({
+    where: { id: selected.credential.secretId, userId: bot.userId, spaceId: null },
+  });
+  if (!secret) return null;
+
+  const operationId = `memory-method-credential:${randomUUID()}`;
+  const persist = async (plaintext: string) => {
+    const stored = await deps.secrets.put(
+      plaintext,
+      {
+        operationId,
+        traceId: operationId,
+        spaceId: bot.spaceId,
+        userId: bot.userId,
+        botId: bot.id,
+        signal: new AbortController().signal,
+      },
+      secret.id,
+    );
+    await deps.prisma.secret.update({
+      where: { id: secret.id },
+      data: { ciphertext: stored.ciphertext },
+    });
+  };
+  const auth = await resolveModelAuth(
+    deps.secrets.load(secret.ciphertext, secret.id),
+    selected.provider,
+    {
+      persist,
+    },
+  );
+  if (auth.secret.kind === "oauth") {
+    return {
+      ...base,
+      oauth: {
+        credential: { ...auth.secret.credential },
+        persist: async (credential: AgentModelOAuthCredential) => {
+          await persist(
+            serializeModelSecret({ kind: "oauth", credential: toOAuthCredential(credential) }),
+          );
+        },
+      },
+    };
+  }
+  if (auth.secret.kind === "openai_compatible")
+    return { ...base, apiKey: auth.secret.apiKey, baseUrl: auth.secret.baseUrl };
+  return { ...base, apiKey: auth.apiKey };
+}
+
+async function requireMemoryMethodPreparationConsent(
+  prisma: PrismaClient,
+  bot: { id: string; spaceId: string; userId: string },
+  model: AgentRunModel,
+) {
+  const [visibleBot, membership] = await Promise.all([
+    prisma.bot.findFirst({
+      where: { id: bot.id, spaceId: bot.spaceId, userId: bot.userId, archivedAt: null },
+      select: { id: true },
+    }),
+    prisma.spaceMember.findUnique({
+      where: { spaceId_userId: { spaceId: bot.spaceId, userId: bot.userId } },
+      select: { id: true },
+    }),
+  ]);
+  if (!visibleBot) throw new ORPCError("NOT_FOUND");
+  if (!membership) throw new ORPCError("FORBIDDEN");
+  const recipient = aiRecipient({
+    provider: model.provider,
+    modelId: model.id,
+    baseUrl: model.baseUrl,
+    use: "memory-method-preparation",
+  });
+  if (!recipient) return;
+  const consent = await prisma.aiDataConsent.findUnique({
+    where: {
+      userId_spaceId_recipientKey: {
+        userId: bot.userId,
+        spaceId: bot.spaceId,
+        recipientKey: recipient.key,
+      },
+    },
+    select: { version: true },
+  });
+  if (!consent || consent.version !== AI_DISCLOSURE_VERSION)
+    throw new ORPCError("FORBIDDEN", { message: AI_CONSENT_REQUIRED });
+}
+
 export async function createApp(
   overrides: Partial<AppEnv> & {
     prisma?: PrismaClient;
@@ -137,6 +276,7 @@ export async function createApp(
     email?: TransactionalEmailProvider;
     remoteConnectors?: RemoteConnectorDependencies;
     logger?: Logger;
+    prepareMemoryMethod?: PrepareMemoryMethod;
   } = {},
 ): Promise<AppHandles> {
   const {
@@ -149,6 +289,7 @@ export async function createApp(
     email: emailOverride,
     remoteConnectors,
     logger: loggerOverride,
+    prepareMemoryMethod: prepareMemoryMethodOverride,
     ...envOverrides
   } = overrides;
   const env = { ...loadEnv(process.env), ...envOverrides };
@@ -239,6 +380,7 @@ export async function createApp(
   const home = new LocalAgentHomeStore(env.dataDir);
   const artifacts = new LocalArtifactStore(env.dataDir);
   const memory = new MarkdownMemoryStore(prisma);
+  const memoryMethodClassification = createBotMemoryClassificationService({ prisma, secrets });
   const mcp = new McpConnector(
     prisma,
     secrets,
@@ -314,6 +456,26 @@ export async function createApp(
             ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.api }
             : {}),
         });
+  const prepareMemoryMethod =
+    prepareMemoryMethodOverride ??
+    createMemoryClassificationMethodPreparer({
+      runtime,
+      resolveModel: (bot) => resolveMemoryMethodPreparationModel({ prisma, secrets, env }, bot),
+      beforeModelCall: (bot, model) => requireMemoryMethodPreparationConsent(prisma, bot, model),
+      recordUsage: async ({ bot, provider, model, inputTokens, outputTokens }) => {
+        await prisma.usageRecord.create({
+          data: {
+            spaceId: bot.spaceId,
+            botId: bot.id,
+            userId: bot.userId,
+            provider,
+            model,
+            inputTokens,
+            outputTokens,
+          },
+        });
+      },
+    });
   const notifications = new ExpoPushProvider(env.dataDir);
   const auth = createAuth(prisma, {
     secret: env.authSecret,
@@ -372,6 +534,7 @@ export async function createApp(
     sandbox,
     memory,
     memoryProviders,
+    classifyMemoryForBot: (request) => memoryMethodClassification.classifyForBot(request),
     home,
     artifacts,
     connector: stack.connector,
@@ -445,6 +608,8 @@ export async function createApp(
     memoryProviders,
     home,
     secrets,
+    prepareMemoryMethod,
+    memoryMethodClassification,
     oauthLogins,
     integrationSettings,
     mcpOAuth,

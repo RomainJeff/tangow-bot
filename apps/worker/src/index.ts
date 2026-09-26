@@ -7,6 +7,7 @@ loadRootEnv();
 import {
   ChatSdkMessagingSurface,
   createBackgroundJobHandlers,
+  createBotMemoryClassificationService,
   createCloudAgentConnection,
   createConnectorStack,
   createJobReconciler,
@@ -161,6 +162,7 @@ async function main() {
   await connector.start();
   integrationSettings.warmDirectories();
   const memory = new MarkdownMemoryStore(prisma);
+  const memoryMethodClassification = createBotMemoryClassificationService({ prisma, secrets });
   const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
@@ -179,6 +181,7 @@ async function main() {
     sandbox,
     memory,
     memoryProviders,
+    classifyMemoryForBot: (request) => memoryMethodClassification.classifyForBot(request),
     home,
     artifacts,
     connector: stack.connector,

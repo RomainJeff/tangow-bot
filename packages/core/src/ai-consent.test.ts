@@ -1,4 +1,4 @@
-import type { AiConsentStatus } from "@rakazo/contracts";
+import type { AiConsentQuery, AiConsentStatus } from "@rakazo/contracts";
 import { AI_DISCLOSURE_VERSION } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { AiConsentBlocked, aiDataUsesForProcedure, ensureAiDataConsent } from "./ai-consent.js";
@@ -71,6 +71,26 @@ describe("foreground AI consent", () => {
       keys: ["model"],
     });
   });
+  it("carries the exact bot and purpose query into the grant request", async () => {
+    const query: AiConsentQuery = { botId: "bot-1", uses: ["memory-classification"] };
+    const allow = vi.fn();
+    await ensureAiDataConsent({
+      uses: ["memory-classification"],
+      query,
+      status: async () => ({
+        ...status,
+        recipients: [{ ...status.recipients[0]!, use: "memory-classification", key: "jev-bot" }],
+      }),
+      prompt: async () => true,
+      allow,
+    });
+    expect(allow).toHaveBeenCalledExactlyOnceWith({
+      scope: status.scope,
+      version: status.version,
+      keys: ["jev-bot"],
+      query,
+    });
+  });
   it("does not prompt for already granted permissions or read-only procedures", async () => {
     const prompt = vi.fn();
     await ensureAiDataConsent({
@@ -86,11 +106,29 @@ describe("foreground AI consent", () => {
     expect(aiDataUsesForProcedure("threads/get")).toEqual([]);
     expect(aiDataUsesForProcedure("threads/send")).toEqual(["model", "memory"]);
     expect(aiDataUsesForProcedure("voice/prepare")).toEqual(["voice"]);
+    expect(aiDataUsesForProcedure("memory/library/classify")).toEqual(["memory-classification"]);
+    expect(aiDataUsesForProcedure("bots/memoryMethod/update")).toEqual([
+      "memory-method-preparation",
+    ]);
     expect(
       aiDataUsesForProcedure("routines/update", { routineId: "routine", active: false }),
     ).toEqual([]);
     expect(
       aiDataUsesForProcedure("routines/update", { routineId: "routine", active: true }),
     ).toEqual(["model", "memory"]);
+  });
+  it("does not let broad model consent stand in for memory method preparation consent", async () => {
+    const prompt = vi.fn();
+    const allow = vi.fn();
+    await expect(
+      ensureAiDataConsent({
+        uses: ["memory-method-preparation"],
+        status: async () => status,
+        prompt,
+        allow,
+      }),
+    ).rejects.toBeInstanceOf(AiConsentBlocked);
+    expect(prompt).not.toHaveBeenCalled();
+    expect(allow).not.toHaveBeenCalled();
   });
 });

@@ -607,16 +607,13 @@ export async function rpc<T>(
 ): Promise<T> {
   const requestSpaceGeneration = spaceSelectionGeneration;
   const uses = aiDataUsesForProcedure(proc, body);
+  const consentQuery = { uses, ...aiConsentTarget(body) };
   const consentContext =
     options.requestContext ?? (uses.length ? await captureApiRequestContext() : undefined);
   await ensureAiDataConsent({
     uses,
-    status: () =>
-      rpc(
-        "aiConsent/status",
-        { uses, ...aiConsentTarget(body) },
-        { requestContext: consentContext },
-      ),
+    query: consentQuery,
+    status: () => rpc("aiConsent/status", consentQuery, { requestContext: consentContext }),
     prompt: promptAiConsent,
     allow: (input) => rpc("aiConsent/allow", input, { requestContext: consentContext }),
   });

@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AvatarStyle, SpaceMemoryConfig } from "@rakazo/contracts";
+import type { AvatarStyle, Space, SpaceMemoryConfig } from "@rakazo/contracts";
 import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import { Brain, CloudDownload, Cpu, Gauge, Monitor, Settings, Volume2, XIcon } from "lucide-react";
 import { type ComponentType, useEffect, useRef, useState } from "react";
@@ -41,6 +41,7 @@ export function SettingsOverlay({
   sandboxProvider,
   messagingEnabled = false,
   onOpenMessaging,
+  memoryWorkspace,
   memoryConfig,
   onMemoryConfigChange,
   onClose,
@@ -57,6 +58,7 @@ export function SettingsOverlay({
   sandboxProvider?: string | null;
   messagingEnabled?: boolean;
   onOpenMessaging?: () => void;
+  memoryWorkspace?: Pick<Space, "id" | "name">;
   memoryConfig: SpaceMemoryConfig | null | undefined;
   onMemoryConfigChange: (config: SpaceMemoryConfig | null) => void;
   onClose: () => void;
@@ -223,6 +225,7 @@ export function SettingsOverlay({
               {section === "memory" ? (
                 <MemorySettingsOverlay
                   embedded
+                  workspace={memoryWorkspace}
                   onClose={requestClose}
                   config={memoryConfig}
                   onConfigChange={onMemoryConfigChange}

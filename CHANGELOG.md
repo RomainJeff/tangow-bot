@@ -11,8 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - The iPhone app opens again instead of closing right after launch: the launch screen's bot avatar called a colour helper that a merge had removed.
+- Memory browsing identifies the current workspace, lets you switch workspaces, and retains workspace and bot context in memory details; web and desktop settings put the library before optional provider connections.
 
 ### 2026-09-25
+
+#### Added
+
+- **The mobile app now opens on a bot waking up, in the shape and color of your first pinned bot.** It replaces the static blue square on black: a sleepy bot opens its eyes, glances around and smiles while the app loads, then fades into your inbox. With no bot yet, it shows a plain monochrome placeholder instead.
 
 #### Changed
 
@@ -26,16 +31,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - An answered question card on mobile no longer glues its topic label onto the question or repeats the question under a lone dot; on web and mobile a single answered question now shows just the answer beneath it, and answered multi-question cards drop the progress dots.
 - The mobile message field no longer leaves an empty gap to the right of the attach button.
 - The mobile app now follows your device's light or dark setting when its own Appearance preference is "System", instead of always opening in dark mode regardless of that setting.
-
-#### Added
-
-- **The mobile app now opens on a bot waking up, in the shape and color of your first pinned bot.** It replaces the static blue square on black: a sleepy bot opens its eyes, glances around and smiles while the app loads, then fades into your inbox. With no bot yet, it shows a plain monochrome placeholder instead.
+- On web and desktop, returning from memory browsing now reaches the original conversation without reopening a closed memory or retracing filters; direct links also provide a way back into the app.
 
 ### 2026-09-24
 
 #### Added
 
 - **iPhone notifications now show the bot's own avatar.** When a bot finishes, fails or needs you, the notification carries its shape and colour with the Rakazo icon as a small badge, the way messaging apps show a contact, instead of the bare app icon. It follows the organic avatar style; with the robot style the notification keeps the app icon.
+- **A chosen bot can manage memory through its conversation on web, desktop and mobile.** Assign the optional Memory management skill and write your method in the bot's ordinary Instructions. It can classify, incorporate your corrections, import and consolidate memories, with an exact one-time confirmation before changes; see [Memory](docs/memory.md).
+- **Captured memories show the passage they came from.** Details distinguish user and assistant sources, and individual extraction proposals can be reviewed independently.
+
+#### Changed
+
+- The shared judgment connection now lives under Models; existing Jev connections and historical labels are preserved.
+- Memory editing on web, desktop and mobile no longer asks for objectives or key results; previously saved values remain available in the details and history.
+- On web and desktop, personal memory opens from the user menu, while agent and shared memory remain accessible from their settings.
+
+#### Fixed
+
+- Interrupted extraction after conversation compaction retries without duplicating unchanged proposals or restoring a rejected candidate.
+- A withdrawn or changed source excludes dependent memory syntheses from future recall, including syntheses built from other syntheses.
+
+#### Reverted
+
+- Removed the Classification section from every bot and the editing, import, export, consolidation and review controls from memory browsing on web, desktop and mobile; memory browsing now retains reading, sources and history.
 
 ### 2026-09-23
 
@@ -48,6 +67,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On iPhone and iPad, the Rakazo icon now shows a badge with the number of unread conversations when a bot finishes or needs you, and the badge drops as you read them; it never appeared before, so a message waiting in a closed app gave no sign on the home screen.
+
+### 2026-09-21
+
+#### Added
+
+- **Memory has a shared library on web, desktop and mobile.** Keep a message, browse personal, agent and space memories, edit Markdown with a preview, inspect revisions and publish a reviewed excerpt while keeping the original private. Classification stays optional and details stay folded until needed; see [Memory](docs/memory.md).
+
+#### Changed
+
+- Facts extracted by an agent or during conversation compaction now remain proposals until accepted, and existing memories without verifiable human activation remain available for review instead of entering the new recall automatically.
 
 ### 2026-09-20
 

@@ -87,6 +87,10 @@ async function main() {
 
     if (integration) {
       const suites = [
+        "packages/testkit/src/memory-migration.postgres.test.ts",
+        "packages/testkit/src/memory-library.postgres.test.ts",
+        "packages/testkit/src/bot-memory-methods.postgres.test.ts",
+        "packages/testkit/src/memory-capture.postgres.test.ts",
         "packages/testkit/src/pi-offline.postgres.test.ts",
         "packages/testkit/src/computer-approval.postgres.test.ts",
         "packages/testkit/src/eval-history.postgres.test.ts",
@@ -126,7 +130,11 @@ async function main() {
         if (result.exitCode !== 0)
           throw new Error("Isolated integration database operation failed");
       };
-      for (const [index, suite] of suites.entries()) {
+      const selectedSuites = e2eSpec ? suites.filter((suite) => suite === e2eSpec) : suites;
+      if (selectedSuites.length === 0) {
+        throw new Error("The requested integration spec is not registered in the harness");
+      }
+      for (const [index, suite] of selectedSuites.entries()) {
         const database = `integration_${index}`;
         await databaseCommand(`CREATE DATABASE "${database}" TEMPLATE "${template}"`);
         const suiteUrl = new URL(databaseUrl);
@@ -180,6 +188,31 @@ async function main() {
         resolveHostname: thirdParties.resolveHostname,
       },
       integrationsCatalogUrl: "https://catalog.example.test/",
+      ...(agentRuntime === "scripted"
+        ? {
+            prepareMemoryMethod: async () => ({
+              questions: [
+                {
+                  key: "purpose",
+                  label: "Purpose",
+                  instructions: "Classify the function of this document, not its topic.",
+                  options: [
+                    {
+                      key: "guide",
+                      label: "Reusable guide",
+                      description: "A protocol for future interviews.",
+                    },
+                    {
+                      key: "record",
+                      label: "Event record",
+                      description: "Notes from a specific completed interview.",
+                    },
+                  ],
+                },
+              ],
+            }),
+          }
+        : {}),
     });
     let activeRequests = 0;
     const requestWaiters = new Set<() => void>();

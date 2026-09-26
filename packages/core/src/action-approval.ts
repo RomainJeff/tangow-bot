@@ -33,7 +33,12 @@ const APPROVAL_REQUIRED_BUILTIN_TOOLS = new Set([
   "cloud_agent_reply",
   "cloud_agent_cancel",
 ]);
-const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set(["create_space"]);
+const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set([
+  "create_space",
+  "prepare_memory_method",
+  "review_memory_classification",
+  "change_memory",
+]);
 
 const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "browser_snapshot",

@@ -3152,6 +3152,7 @@ export function ShellPage() {
               const nextMe = await rpc.preferences.update({ avatarStyle });
               setBootstrapMe(nextMe);
             }}
+            memoryWorkspace={spaces.find((space) => space.id === bootstrapMe?.spaceId)}
             memoryConfig={memoryProviderConfig}
             onMemoryConfigChange={(config) => {
               memoryProviderConfigRevision.current += 1;

@@ -485,14 +485,12 @@ export function createRepos(prisma: PrismaClient) {
               userId: actor.userId,
             },
           });
-          await tx.memoryDocument.create({
+          await tx.memoryCollection.create({
             data: {
               spaceId: actor.spaceId,
-              userId: actor.userId,
+              kind: "agent",
+              ownerUserId: actor.userId,
               botId: created.id,
-              scope: "bot",
-              path: "MEMORY.md",
-              content: `# ${input.name}\n\n`,
             },
           });
           return tx.bot.findFirstOrThrow({

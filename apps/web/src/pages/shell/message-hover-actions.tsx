@@ -13,10 +13,12 @@ import {
 } from "@rakazo/ui-web";
 import { Copy, MoreHorizontal, Pencil, Reply, Smile, Square, Volume2 } from "lucide-react";
 import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { copyableMessageText } from "../../lib/message-text";
 
 export function MessageHoverActions({
   message,
+  memoryBotId,
   revealed,
   side,
   onReply,
@@ -27,6 +29,7 @@ export function MessageHoverActions({
   onSpeak,
 }: {
   message: ThreadMessage;
+  memoryBotId?: string;
   /** Force the pill open on a touch tap, which has no hover to reveal it. */
   revealed?: boolean;
   side: "start" | "end";
@@ -38,6 +41,8 @@ export function MessageHoverActions({
   onSpeak: () => void;
 }) {
   const { t } = useLingui();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
   const [reactionsOpen, setReactionsOpen] = useState(false);
 
@@ -120,19 +125,29 @@ export function MessageHoverActions({
             )}
           </button>
         ) : null}
-        {isUser ? (
-          <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
-            <DropdownMenuTrigger aria-label={t`More`} className={iconClass}>
-              <MoreHorizontal size={15} strokeWidth={1.7} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align={side === "end" ? "start" : "end"}>
+        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+          <DropdownMenuTrigger aria-label={t`More`} className={iconClass}>
+            <MoreHorizontal size={15} strokeWidth={1.7} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align={side === "end" ? "start" : "end"}>
+            <DropdownMenuItem
+              onClick={() =>
+                navigate(
+                  `/app/memory?collection=${memoryBotId ? "agent" : "personal"}${memoryBotId ? `&bot=${encodeURIComponent(memoryBotId)}` : ""}&capture=${encodeURIComponent(message.id)}`,
+                  { state: { returnTo: location.pathname + location.search } },
+                )
+              }
+            >
+              <Trans>Remember</Trans>
+            </DropdownMenuItem>
+            {isUser ? (
               <DropdownMenuItem data-testid="message-edit" onClick={() => onEdit(message)}>
                 <Pencil size={15} />
                 <Trans>Edit and resend</Trans>
               </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </HoverPill>
   );

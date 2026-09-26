@@ -6,6 +6,7 @@ import {
   SecretHttpRequest,
 } from "@rakazo/contracts";
 import { z } from "zod";
+import { memoryManagementTools } from "./memory-management-tools.js";
 
 export const DELEGATION_TOOL_NAMES = new Set([
   "run_subagent",
@@ -407,7 +408,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "remember",
     description:
-      "Append a durable fact to this bot's explicit memory. Each call adds one line; nothing already stored is replaced.",
+      "Propose a durable fact for this bot. A human must accept it before recall; existing approved memories are not changed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -532,7 +533,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   },
   {
     name: "recall_memory",
-    description: "Semantically search this bot's durable memory for facts relevant to a query.",
+    description: "Search authorized, accepted memories for facts relevant to a query.",
     inputSchema: {
       type: "object",
       properties: {
@@ -557,6 +558,19 @@ export const builtinAgentTools: ConnectorTool[] = [
         reason: { type: "string", description: "Optional reason recorded with the forget." },
       },
       required: ["id"],
+    },
+  },
+  ...memoryManagementTools,
+  {
+    name: "classify_memory",
+    description:
+      "Create a classification suggestion for a memory using your active method. This never edits or activates the memory. Present its labels in this conversation and use review_memory_classification for human validation or corrections. Available only in your direct user chat; never use for another bot, group, messaging, or subagent context.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        memoryId: { type: "string", description: "Visible memory id to classify." },
+      },
+      required: ["memoryId"],
     },
   },
   {

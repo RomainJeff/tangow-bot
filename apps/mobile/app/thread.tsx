@@ -23,6 +23,7 @@ import {
   isSecretAskBlock,
   latestActivityLabel,
   latestAnswerableAskMessageId,
+  memoryReviewLink,
   mentionChipKey,
   projectMessageReactions,
   resolveComposerSendPlan,
@@ -1560,6 +1561,19 @@ function Thread() {
           if (text) void Clipboard.setStringAsync(text).catch(() => undefined);
         },
       },
+      ...(message.role === "user" || message.role === "bot"
+        ? [
+            {
+              name: "remember",
+              text: t("Remember"),
+              onPress: () =>
+                router.push({
+                  pathname: "/memory",
+                  params: { ...(botId ? { botId } : {}), messageId: message.id },
+                }),
+            },
+          ]
+        : []),
     ];
   }
 
@@ -3412,6 +3426,7 @@ function MessageText({
   replyPreview?: MobileMessage;
   actionProps: MessageActionProps;
 }) {
+  const router = useRouter();
   const colorScheme = useResolvedAppearance();
   const tokens = mobileTokens();
   const contentText = blockText(message);
@@ -3448,6 +3463,12 @@ function MessageText({
         palette={tokens}
         colorScheme={colorScheme}
         streaming={message.id.startsWith("progress:")}
+        onInternalLink={(url) => {
+          const target = memoryReviewLink(url);
+          if (!target) return false;
+          router.push({ pathname: "/memory-detail", params: target });
+          return true;
+        }}
       >
         {contentText}
       </ChatMarkdown>

@@ -34,6 +34,7 @@ import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
+import { MEMORY_MANAGEMENT_TOOL_NAMES } from "./memory-management-tools.js";
 import {
   normalizeOpenAiToolParameters,
   openAiToolParametersNeedNormalization,
@@ -193,7 +194,12 @@ export class PiAgentRuntime implements AgentRuntime {
       id: "pi",
       contractVersion: "1",
       adapterVersion: "0.1.0",
-      capabilities: { streaming: true, compaction: true, tools: true, scripted: false },
+      capabilities: {
+        streaming: true,
+        compaction: true,
+        tools: true,
+        scripted: false,
+      },
     };
   }
 
@@ -254,7 +260,12 @@ export class PiAgentRuntime implements AgentRuntime {
           return;
         }
         const { models, model, apiKey } = selectedModel;
-        const toolDefs = request.tools.length ? request.tools : builtinAgentTools;
+        const toolDefs =
+          request.toolPolicy === "none"
+            ? []
+            : request.tools.length
+              ? request.tools
+              : builtinAgentTools;
         const nestedAgents = new Set<Agent>();
         const completionModel = modelForCompletion(model, request.model.maxTokens);
         trackedBudget = toolCallBudgetFor(request.runId);
@@ -340,8 +351,14 @@ export class PiAgentRuntime implements AgentRuntime {
         agent = new Agent({
           sessionId: conversationSessionId(request.threadId, request.botId),
           steeringMode: "all",
-          streamFn: (m, ctx, options) =>
-            models.streamSimple(m, ctx, reliableStreamOptions(m, options, request.model.maxTokens)),
+          streamFn: async (m, ctx, options) => {
+            await request.beforeModelCall?.();
+            return models.streamSimple(
+              m,
+              ctx,
+              reliableStreamOptions(m, options, request.model.maxTokens),
+            );
+          },
           getApiKey: async () => apiKey,
           transformContext: async (messages) =>
             pruneComputerScreenshotContext(messages, request.model.maxImagesPerPrompt),
@@ -1039,7 +1056,10 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         };
       }
       if (tool.name === "remember") {
-        return { content: String(raw.content ?? ""), path: String(raw.path ?? "MEMORY.md") };
+        return {
+          content: String(raw.content ?? ""),
+          path: String(raw.path ?? "MEMORY.md"),
+        };
       }
       if (tool.name === "request_takeover") {
         return { reason: String(raw.reason ?? "I need you on the screen.") };
@@ -1230,7 +1250,12 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
             };
           }
           return {
-            content: [{ type: "text", text: `${tool.name} is unavailable without an executor.` }],
+            content: [
+              {
+                type: "text",
+                text: `${tool.name} is unavailable without an executor.`,
+              },
+            ],
             details: { error: "no executor" },
           };
         })();
@@ -1292,7 +1317,14 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     }
   } catch (error) {
     const message = sanitizeError(error instanceof Error ? error.message : String(error));
-    host.queue.push({ type: "subagent", agentId, name, task, status: "failed", result: message });
+    host.queue.push({
+      type: "subagent",
+      agentId,
+      name,
+      task,
+      status: "failed",
+      result: message,
+    });
     host.subagentGate.release();
     return `Subagent failed: ${message}`;
   }
@@ -1300,14 +1332,27 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   const selectedModel = resolveRuntimeModel(requestModel);
   if (!selectedModel.model) {
     const message = `Unknown model ${selectedModel.provider}/${selectedModel.modelId}`;
-    host.queue.push({ type: "subagent", agentId, name, task, status: "failed", result: message });
+    host.queue.push({
+      type: "subagent",
+      agentId,
+      name,
+      task,
+      status: "failed",
+      result: message,
+    });
     host.subagentGate.release();
     return `Subagent failed: ${message}`;
   }
   const subagentModel = modelForCompletion(selectedModel.model, requestModel.maxTokens);
 
-  const childDefs = (host.request.tools.length ? host.request.tools : builtinAgentTools).filter(
-    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name),
+  const childDefs = (
+    host.request.toolPolicy === "none"
+      ? []
+      : host.request.tools.length
+        ? host.request.tools
+        : builtinAgentTools
+  ).filter(
+    (tool) => !DELEGATION_TOOL_NAMES.has(tool.name) && !MEMORY_MANAGEMENT_TOOL_NAMES.has(tool.name),
   );
   const nestedHost: ToolHost = {
     ...host,
@@ -1318,12 +1363,14 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   };
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
-    streamFn: (m, ctx, options) =>
-      selectedModel.models.streamSimple(
+    streamFn: async (m, ctx, options) => {
+      await host.request.beforeModelCall?.();
+      return selectedModel.models.streamSimple(
         m,
         ctx,
         reliableStreamOptions(m, options, requestModel.maxTokens),
-      ),
+      );
+    },
     getApiKey: async () => selectedModel.apiKey,
     transformContext: async (messages) =>
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
@@ -1424,7 +1471,14 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     const error = nested.state.errorMessage;
     if (error && !budgetExceeded) {
       const message = sanitizeProviderError(subagentModel.provider, error);
-      host.queue.push({ type: "subagent", agentId, name, task, status: "failed", result: message });
+      host.queue.push({
+        type: "subagent",
+        agentId,
+        name,
+        task,
+        status: "failed",
+        result: message,
+      });
       return `Subagent failed: ${message}`;
     }
     const budgetMessage = budgetExceeded
@@ -1446,7 +1500,14 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     return clipped;
   } catch (error) {
     const message = sanitizeError(error instanceof Error ? error.message : String(error));
-    host.queue.push({ type: "subagent", agentId, name, task, status: "failed", result: message });
+    host.queue.push({
+      type: "subagent",
+      agentId,
+      name,
+      task,
+      status: "failed",
+      result: message,
+    });
     return `Subagent failed: ${message}`;
   } finally {
     host.nestedAgents.delete(nested);

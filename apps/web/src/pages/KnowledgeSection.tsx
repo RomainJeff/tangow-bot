@@ -3,10 +3,10 @@ import type {
   AgentSkill,
   AgentSkillCatalogEntry,
   Bot,
-  MemoryDocument,
   SkillAvailability,
+  Space,
 } from "@rakazo/contracts";
-import { filterSkillList, parseSkillMd } from "@rakazo/core";
+import { filterSkillList, MEMORY_MANAGEMENT_SKILL_KEY, parseSkillMd } from "@rakazo/core";
 import {
   Button,
   Input,
@@ -17,8 +17,8 @@ import {
 } from "@rakazo/ui-web";
 import { Check } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { formatBytes } from "../components/ArtifactFileCard";
-import { downloadArtifactBytes } from "../lib/artifact-open";
 import { rpc } from "../lib/rpc";
 
 const fieldClass =
@@ -31,11 +31,11 @@ function rowClass(open: boolean): string {
 type KnowledgeTab = "memory" | "files";
 
 /**
- * What the agent knows, editable: its own memory document and its working
- * files. Space-wide memory lives in the Memory settings overlay; skills sit
- * in their own section. Rides entirely on the existing memory.* RPCs.
+ * Agent knowledge links to the canonical memory library and exposes working files.
  */
 export function KnowledgeSection({ botId }: { botId: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [tab, setTab] = useState<KnowledgeTab>("memory");
   return (
     <div className="mt-6" data-testid="bot-knowledge">
@@ -63,13 +63,17 @@ export function KnowledgeSection({ botId }: { botId: string }) {
         ))}
       </div>
       {tab === "memory" ? (
-        <MemoryDocumentList
-          key={botId}
-          load={() => rpc.memory.list({ botId, scope: "bot" })}
-          exportFilename="memory.md"
-          emptyLabel={<Trans>Nothing remembered yet</Trans>}
-          testId="bot-knowledge-memory"
-        />
+        <Button
+          variant="capsuleSecondary"
+          size="capsule"
+          onClick={() =>
+            navigate(`/app/memory?collection=agent&bot=${encodeURIComponent(botId)}`, {
+              state: { returnTo: location.pathname + location.search },
+            })
+          }
+        >
+          <Trans>Open memory</Trans>
+        </Button>
       ) : null}
       {tab === "files" ? <AgentFiles key={botId} botId={botId} /> : null}
     </div>
@@ -89,166 +93,28 @@ export function BotSkillsSection({ botId }: { botId: string }) {
 }
 
 /** The space's shared memory documents, mounted in the Memory settings overlay. */
-export function SpaceMemorySection() {
+export function SpaceMemorySection({ workspace }: { workspace?: Pick<Space, "id" | "name"> }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   return (
-    <div className="mt-6" data-testid="space-memory-documents">
-      <div className="mb-2 text-[12.5px] uppercase tracking-[0.08em] text-muted-foreground/80">
-        <Trans>Shared documents</Trans>
+    <div data-testid="space-memory-documents">
+      <div className="mb-3 text-row-name" dir="auto">
+        {workspace?.name}
       </div>
-      <MemoryDocumentList
-        load={() => rpc.memory.list({ scope: "user" })}
-        exportFilename="space-memory.md"
-        emptyLabel={<Trans>Nothing remembered yet</Trans>}
-        testId="space-memory-list"
-      />
-    </div>
-  );
-}
-
-function MemoryDocumentList({
-  load,
-  exportFilename,
-  emptyLabel,
-  testId,
-}: {
-  load: () => Promise<MemoryDocument[]>;
-  exportFilename: string;
-  emptyLabel: ReactNode;
-  testId: string;
-}) {
-  const { t } = useLingui();
-  const [docs, setDocs] = useState<MemoryDocument[]>([]);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const generation = useRef(0);
-  const loadRef = useRef(load);
-  loadRef.current = load;
-
-  useEffect(() => {
-    const current = ++generation.current;
-    void loadRef
-      .current()
-      .then((list) => {
-        if (current !== generation.current) return;
-        setDocs(list);
-      })
-      .catch(() => {
-        if (current !== generation.current) return;
-        setDocs([]);
-        setError(t`Could not load`);
-      });
-    return () => {
-      generation.current += 1;
-    };
-  }, [t]);
-
-  function openDoc(doc: MemoryDocument) {
-    setOpenId(doc.id);
-    setDraft(doc.content);
-    setError(null);
-  }
-
-  async function save(doc: MemoryDocument) {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const updated = await rpc.memory.update({ documentId: doc.id, content: draft });
-      setDocs((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
-      setOpenId(null);
-    } catch {
-      setError(t`Could not save`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function exportMarkdown() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      // Re-fetch through the section's own loader so the file is current,
-      // then sync the list so the export matches what is displayed.
-      const fresh = await loadRef.current();
-      generation.current += 1;
-      setDocs(fresh);
-      const markdown = fresh.map((doc) => `# ${doc.path}\n\n${doc.content}`).join("\n\n");
-      downloadArtifactBytes(exportFilename, "text/markdown", new TextEncoder().encode(markdown));
-    } catch {
-      setError(t`Could not load`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div data-testid={testId}>
-      {error ? <div className="px-2.5 pb-2 text-[13px] text-destructive">{error}</div> : null}
-      {docs.length === 0 && !error ? (
-        <div className="px-2.5 py-1 text-[13.5px] text-muted-foreground/80">{emptyLabel}</div>
-      ) : null}
-      {docs.map((doc) => (
-        <div key={doc.id}>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => (openId === doc.id ? setOpenId(null) : openDoc(doc))}
-            className={rowClass(openId === doc.id)}
-          >
-            <span className="flex items-baseline justify-between gap-3">
-              <span className="min-w-0 truncate text-[14px] text-foreground" dir="auto">
-                {doc.path}
-              </span>
-              <span className="shrink-0 text-[12px] text-muted-foreground/80">
-                <Trans>rev {doc.revision}</Trans>
-              </span>
-            </span>
-          </button>
-          {openId === doc.id ? (
-            <div className="px-2.5 pb-2">
-              <textarea
-                value={draft}
-                disabled={busy}
-                onChange={(event) => setDraft(event.target.value)}
-                rows={Math.min(16, Math.max(4, draft.split("\n").length + 1))}
-                className={fieldClass}
-                dir="auto"
-              />
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  disabled={busy || draft === doc.content}
-                  onClick={() => void save(doc)}
-                  className="rounded-lg bg-muted px-3 py-1.5 text-[13px] text-foreground disabled:opacity-50"
-                >
-                  <Trans>Save</Trans>
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => setOpenId(null)}
-                  className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground disabled:opacity-50"
-                >
-                  <Trans>Cancel</Trans>
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ))}
-      {docs.length ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void exportMarkdown()}
-          className="mt-2 px-2.5 text-[13px] text-muted-foreground hover:text-foreground"
-        >
-          <Trans>Download as markdown</Trans>
-        </button>
-      ) : null}
+      <Button
+        variant="capsuleSecondary"
+        size="capsule"
+        onClick={() =>
+          navigate(
+            `/app/memory?collection=space${workspace ? `&space=${encodeURIComponent(workspace.id)}` : ""}`,
+            {
+              state: { returnTo: location.pathname + location.search },
+            },
+          )
+        }
+      >
+        <Trans>Open memory</Trans>
+      </Button>
     </div>
   );
 }
@@ -261,11 +127,7 @@ description: What this skill does and when the agent should use it.
 Steps the agent should follow.
 `;
 
-/**
- * The space's skill catalog. Space mode (no botId) manages each skill's reach:
- * disabled, every agent, or a picked set. Bot mode lists only the skills that
- * agent can install — globally disabled ones are out — with one toggle each.
- */
+/** Manage the space's skill catalog or the skills installed for one agent. */
 export function AgentSkills({ botId }: { botId?: string } = {}) {
   const { t } = useLingui();
   const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
@@ -526,7 +388,8 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
       {!editorOpen
         ? shown.map((entry) => {
             // Builtins are always on for every agent; only the rest carry access controls.
-            const controlled = entry.source !== "builtin";
+            const controlled =
+              entry.source !== "builtin" || entry.id === MEMORY_MANAGEMENT_SKILL_KEY;
             return (
               <div
                 key={entry.id}

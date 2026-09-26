@@ -7,7 +7,12 @@ import type {
   SkillAvailability,
   SpaceMarketplace,
 } from "@rakazo/contracts";
-import { filterSkillList, marketplaceSkillKey, parseSkillMd } from "@rakazo/core";
+import {
+  filterSkillList,
+  MEMORY_MANAGEMENT_SKILL_KEY,
+  marketplaceSkillKey,
+  parseSkillMd,
+} from "@rakazo/core";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState } from "react";
@@ -440,7 +445,7 @@ function InstalledTab({
 
       {shown.map((entry) => {
         // Builtins are always on for every agent; only the rest carry access controls.
-        const controlled = entry.source !== "builtin";
+        const controlled = entry.source !== "builtin" || entry.id === MEMORY_MANAGEMENT_SKILL_KEY;
         return (
           <View key={entry.id} style={styles.card} testID="skill-row">
             <Pressable accessibilityRole="button" onPress={() => void openSkill(entry)}>

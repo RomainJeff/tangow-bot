@@ -40,6 +40,7 @@ import { localizedProviderHint } from "../lib/localized-provider-hint";
 import type { ModelCatalogEntry, ModelCredential } from "../lib/model-auth";
 import { rpc } from "../lib/rpc";
 import { useModelOAuthSignIn } from "../lib/use-model-oauth-signin";
+import { JudgmentConnectionSettings } from "./JudgmentConnectionSettings";
 
 export function ModelSettingsOverlay({
   onClose,
@@ -363,6 +364,14 @@ export function ModelSettingsOverlay({
 
   const body = (
     <>
+      {!localOwner ? (
+        <details className="mx-6 my-3">
+          <summary className="cursor-pointer text-meta text-muted-foreground">
+            <Trans>Judgment model</Trans>
+          </summary>
+          <JudgmentConnectionSettings />
+        </details>
+      ) : null}
       {!embedded ? (
         <DialogHeader className="flex-row items-start justify-between px-6 pt-6 sm:px-8 sm:pt-7">
           <div>

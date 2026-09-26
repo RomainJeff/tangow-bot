@@ -102,7 +102,8 @@ function markdownStyles(palette: ColorTokens) {
   });
 }
 
-async function openSafeLink(url: string) {
+async function openSafeLink(url: string, onInternalLink?: (url: string) => boolean) {
+  if (url.startsWith("/") && !url.startsWith("//") && onInternalLink?.(url)) return;
   const safeUrl = sanitizeMarkdownUrl(url);
   if (!safeUrl) return;
   if (await Linking.canOpenURL(safeUrl)) await Linking.openURL(safeUrl);
@@ -110,44 +111,51 @@ async function openSafeLink(url: string) {
 
 // Keep links as Text so they stay inside textgroup; Pressable (a View) is laid out
 // outside the text flow and collapses the bubble height, overlapping later messages.
-const renderRules: RenderRules = {
+const renderRules = (onInternalLink?: (url: string) => boolean): RenderRules => ({
   link: (node, children, _parent, styleMap) => (
     <Text
       accessibilityRole="link"
       key={node.key}
       style={styleMap.link}
       onPress={() => {
-        void openSafeLink(node.attributes.href ?? "");
+        void openSafeLink(node.attributes.href ?? "", onInternalLink);
       }}
     >
       {children}
     </Text>
   ),
-};
+});
 
 // Untrusted content: drop every image node. The render rule returning null is
 // the robust guard (independent of the library's `defaultImageHandler`, which
 // defaults to `'https://'` and would otherwise reload a scheme-less URL);
 // `allowedImageHandlers: []` + `defaultImageHandler={null}` below back it up.
-const renderRulesNoImages: RenderRules = { ...renderRules, image: () => null };
-
 export const ChatMarkdown = memo(function ChatMarkdown({
   children,
   streaming = false,
   allowImages = true,
   palette = darkTokens,
   colorScheme = "dark",
-}: ChatMarkdownProps & { palette?: ColorTokens; colorScheme?: ResolvedAppearance }) {
+  onInternalLink,
+}: ChatMarkdownProps & {
+  palette?: ColorTokens;
+  colorScheme?: ResolvedAppearance;
+  onInternalLink?: (url: string) => boolean;
+}) {
   const styles = useMemo(() => markdownStyles(palette), [palette]);
   const imagePolicy = nativeImagePolicy(allowImages);
+  const rules = useMemo(() => {
+    const links = renderRules(onInternalLink);
+    return allowImages ? links : { ...links, image: () => null };
+  }, [allowImages, onInternalLink]);
   const sharedProps = {
     colorScheme,
     style: styles,
-    rules: imagePolicy.blockImages ? renderRulesNoImages : renderRules,
+    rules,
     allowedImageHandlers: imagePolicy.allowedImageHandlers,
     defaultImageHandler: imagePolicy.defaultImageHandler,
     onLinkPress: (url: string) => {
-      void openSafeLink(url);
+      void openSafeLink(url, onInternalLink);
       return false;
     },
   };

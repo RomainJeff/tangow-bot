@@ -22,6 +22,7 @@ import {
 } from "@rakazo/ui-web";
 import {
   Bell,
+  Brain,
   ChevronDown,
   Gauge,
   Lock,
@@ -35,6 +36,8 @@ import {
 } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { useRef } from "react";
+import type { NavigateOptions } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { authClient } from "../../lib/auth";
 import { BOTS_SIDEBAR_EDGE_DRAG_PX } from "../../lib/bots-sidebar-pref";
 import { desktopBridge } from "../../lib/desktop";
@@ -115,7 +118,7 @@ export function BotsSidebar({
   bots: Bot[];
   setMobileSidebarOpen: Dispatch<SetStateAction<boolean>>;
   setPanel: Dispatch<SetStateAction<Panel>>;
-  navigate: (path: string) => void;
+  navigate: (path: string, options?: NavigateOptions) => void;
   setNewSpaceOpen: Dispatch<SetStateAction<boolean>>;
   setPickerInfoTopic: Dispatch<SetStateAction<"group" | "space" | null>>;
   query: string;
@@ -173,6 +176,7 @@ export function BotsSidebar({
   botsSidebarEdgeDragRef: RefObject<{ startX: number; mode: "expand" | "collapse" } | null>;
 }) {
   const { t } = useLingui();
+  const location = useLocation();
   const searchRef = useRef<HTMLInputElement>(null);
   const hasUnread = sidebarGroups.some((group) => group.bots.some((item) => item.chat.unread));
   return (
@@ -695,6 +699,20 @@ export function BotsSidebar({
                 align="start"
                 className="w-56 gap-0 p-1 data-closed:animate-none"
               >
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start font-normal"
+                  aria-label={t`Memory`}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    navigate("/app/memory?collection=personal", {
+                      state: { returnTo: location.pathname + location.search },
+                    });
+                  }}
+                >
+                  <Brain className="text-muted-foreground" strokeWidth={1.75} />
+                  <Trans>Memory</Trans>
+                </Button>
                 <Button
                   variant="ghost"
                   className="w-full justify-start font-normal"

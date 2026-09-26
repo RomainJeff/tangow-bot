@@ -1,0 +1,134 @@
+<link rel="stylesheet" href="../../packages/ui-tokens/src/tokens.css" />
+<div id="memory-okf-prototype" aria-label="Prototype corrigé de la bibliothèque mémoire">
+  <style>
+    #memory-okf-prototype {
+      color: var(--foreground);
+      background: var(--background);
+      font: var(--type-body-weight) var(--type-body-size)/var(--type-body-leading) var(--font-sans, sans-serif);
+      max-width: var(--space-thread);
+      margin: 0 auto;
+    }
+    #memory-okf-prototype * { box-sizing: border-box; }
+    #memory-okf-prototype h1, #memory-okf-prototype h2, #memory-okf-prototype h3,
+    #memory-okf-prototype p { margin: 0; }
+    #memory-okf-prototype h1, #memory-okf-prototype h2 { font: var(--type-title-weight) var(--type-title-size)/var(--type-title-leading) var(--font-sans, sans-serif); }
+    #memory-okf-prototype h3 { font: var(--type-block-header-weight) var(--type-block-header-size)/var(--type-block-header-leading) var(--font-sans, sans-serif); }
+    #memory-okf-prototype button, #memory-okf-prototype input,
+    #memory-okf-prototype textarea { color: inherit; font: inherit; }
+    #memory-okf-prototype button { cursor: pointer; }
+    #memory-okf-prototype .frame { border: 1px solid var(--border); border-radius: var(--corner-card); overflow: hidden; }
+    #memory-okf-prototype .top { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); background: var(--surface); }
+    #memory-okf-prototype .top small, #memory-okf-prototype .muted { color: var(--muted-foreground); }
+    #memory-okf-prototype nav { display: flex; gap: .5rem; overflow-x: auto; padding: .75rem 1.25rem; border-bottom: 1px solid var(--border); }
+    #memory-okf-prototype nav a { flex: 0 0 auto; color: inherit; text-decoration: none; border: 1px solid var(--border); border-radius: var(--corner-pill); padding: .375rem .75rem; font: var(--type-meta-weight) var(--type-meta-size)/var(--type-meta-leading) var(--font-sans, sans-serif); }
+    #memory-okf-prototype nav a:hover, #memory-okf-prototype .button:hover { background: var(--accent); }
+    #memory-okf-prototype section.screen { padding: 1.5rem; border-bottom: 1px solid var(--border); scroll-margin-top: .5rem; }
+    #memory-okf-prototype .heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
+    #memory-okf-prototype .row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .875rem 0; border-bottom: 1px solid var(--border); }
+    #memory-okf-prototype .row strong { display: block; font-weight: 500; }
+    #memory-okf-prototype .row small { color: var(--muted-foreground); }
+    #memory-okf-prototype .button { border: 1px solid var(--border); border-radius: var(--corner-row); background: var(--background); padding: .5rem .75rem; }
+    #memory-okf-prototype .button.primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+    #memory-okf-prototype .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+    #memory-okf-prototype .card { border: 1px solid var(--border); border-radius: var(--corner-card); padding: 1rem; margin-top: .875rem; }
+    #memory-okf-prototype .source { border-inline-start: 2px solid var(--border); padding: .625rem .875rem; margin-top: .75rem; background: var(--surface); }
+    #memory-okf-prototype .fields { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: 1rem; }
+    #memory-okf-prototype label { display: grid; gap: .375rem; color: var(--muted-foreground); font: var(--type-meta-weight) var(--type-meta-size)/var(--type-meta-leading) var(--font-sans, sans-serif); }
+    #memory-okf-prototype input, #memory-okf-prototype textarea { width: 100%; border: 1px solid var(--input); border-radius: var(--corner-row); background: var(--background); padding: .625rem; }
+    #memory-okf-prototype textarea { min-height: 6rem; resize: vertical; }
+    #memory-okf-prototype .callout { border-inline-start: 2px solid var(--warning); background: var(--surface); padding: .75rem .875rem; margin-top: .75rem; }
+    #memory-okf-prototype .diff { display: grid; grid-template-columns: 1fr 1fr; gap: .875rem; }
+    #memory-okf-prototype .diff > div { padding: .875rem; background: var(--surface); border-radius: var(--corner-card); }
+    #memory-okf-prototype .diff p + p { margin-top: .5rem; }
+    #memory-okf-prototype details { margin-top: .875rem; border-top: 1px solid var(--border); padding-top: .75rem; }
+    #memory-okf-prototype summary { cursor: pointer; color: var(--muted-foreground); }
+    @media (max-width: 600px) {
+      #memory-okf-prototype section.screen { padding: 1.125rem; }
+      #memory-okf-prototype .fields, #memory-okf-prototype .diff { grid-template-columns: 1fr; }
+      #memory-okf-prototype .heading { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+  <div class="frame">
+    <header class="top"><strong>Rakazo</strong><span class="muted">Mémoire · prototype corrigé</span><small>M02–M09 · données fictives</small></header>
+    <nav aria-label="Écrans du prototype">
+      <a href="#m02">M02 Espaces</a><a href="#m03">M03 Liste</a><a href="#m04">M04 Édition</a>
+      <a href="#m05">M05 Détails</a><a href="#m07">M07 Proposition</a><a href="#m08">M08 Conflit</a><a href="#m09">M09 Synthèse</a>
+    </nav>
+    <section class="screen" id="m02">
+      <div class="heading"><div><h1>Mémoires accessibles</h1></div><button class="button">Menu utilisateur · Personnel</button></div>
+      <div class="row"><span><strong>Personnel</strong><small>Vos informations personnelles</small></span><button class="button">Ouvrir</button></div>
+      <div class="row"><span><strong>Atlas</strong><small>Mémoire de l’agent</small></span><button class="button">Ouvrir</button></div>
+      <div class="row"><span><strong>Équipe Produit</strong><small>Bibliothèque de l’espace partagé</small></span><button class="button">Ouvrir</button></div>
+    </section>
+    <section class="screen" id="m03">
+      <div class="heading"><div><h1>Équipe Produit</h1><p class="muted">3 membres autorisés</p></div><button class="button">Ajouter</button></div>
+      <label>Rechercher<input placeholder="Rechercher dans les mémoires" /></label>
+      <div class="row"><span><strong>Les comptes rendus commencent par les décisions.</strong><small>Convention · active</small></span><button class="button">Ouvrir</button></div>
+      <div class="row"><span><strong>Le rôle lecteur ne peut pas modifier un document.</strong><small>Non classé · active</small></span><button class="button">Ouvrir</button></div>
+    </section>
+    <section class="screen" id="m04">
+      <div class="heading"><div><h1>Modifier la mémoire</h1></div><div class="actions"><button class="button">Annuler</button><button class="button primary">Enregistrer</button></div></div>
+      <label>Titre<input value="Convention de compte rendu" /></label>
+      <label style="margin-top:12px">Écrire · Aperçu<textarea>Les comptes rendus commencent par les décisions, puis présentent les questions ouvertes.</textarea></label>
+      <details><summary>Rattachements suggérés</summary><div class="fields"><label>Projet<input value="Lancement Orion" /></label><label>Sujet<input value="Compte rendu" /></label></div><div class="actions"><button class="button">Modifier</button><button class="button">Ignorer</button></div></details>
+    </section>
+    <section class="screen" id="m05">
+      <div class="heading"><div><h1>Convention de compte rendu</h1><p>Les comptes rendus commencent par les décisions, puis présentent les questions ouvertes.</p></div><button class="button">Modifier</button></div>
+      <details open><summary>Source et détails</summary><div class="source"><small class="muted">Convention d’équipe · version 3</small><p>« Décisions d’abord, puis questions encore ouvertes. »</p></div><div class="fields"><p><span class="muted">Espace</span><br />Équipe Produit</p><p><span class="muted">Historique</span><br />3 versions</p></div><details><summary>Classification héritée</summary><p class="muted">Ancienne valeur conservée pour compatibilité ; elle n’est pas demandée à l’édition.</p></details></details>
+    </section>
+    <section class="screen" id="m07">
+      <div class="heading"><div><h1>Proposition à examiner</h1><p class="muted">Conversation · Atlas · aujourd’hui</p></div><span>En attente</span></div>
+      <div class="card"><h3>Le test d’invitation doit précéder l’ouverture.</h3><div class="source"><small class="muted">Message source · version conservée</small><p>« Nous devons tester les invitations avant d’ouvrir le pilote. »</p></div><p class="muted" style="margin-top:12px">Rattachement suggéré · Projet Orion</p></div>
+      <div class="actions"><button class="button primary" data-action="keep-candidate">Garder</button><button class="button" data-action="edit-candidate">Modifier</button><button class="button" data-action="ignore-candidate">Ignorer</button></div>
+      <label id="candidate-editor" hidden style="margin-top:12px">Texte de la proposition<textarea id="candidate-content">Le test d’invitation doit précéder l’ouverture.</textarea><button class="button primary" data-action="save-candidate">Enregistrer</button></label>
+      <p class="muted" style="margin-top:12px" id="candidate-result" aria-live="polite"></p>
+    </section>
+    <section class="screen" id="m08">
+      <div class="heading"><div><h1>Affirmations en désaccord</h1><p class="muted">Deux périodes se chevauchent · les sources restent consultables.</p></div></div>
+      <div class="diff"><div><small class="muted">Mémoire active · version 4</small><p>Les invitations expirent après 7 jours.</p><p class="muted">Valide depuis le 1er juin · source : procédure v4</p></div><div><small class="muted">Proposition · source récente</small><p>Les invitations expirent après 10 jours.</p><p class="muted">Valide depuis le 1er juin · source : note de lancement</p></div></div>
+      <div class="actions"><button class="button" data-action="keep-conflict">Conserver les deux</button><button class="button" data-action="replace-conflict">Remplacer explicitement</button><button class="button" data-action="ignore-conflict">Ignorer la proposition</button></div>
+      <p class="muted" id="conflict-result" aria-live="polite"></p>
+    </section>
+    <section class="screen" id="m09">
+      <div class="heading"><div><h1>Proposition de synthèse</h1><p class="muted">Groupe thématique · rôle lecteur</p></div><span>À examiner</span></div>
+      <div class="diff"><div><small class="muted">Sources conservées</small><p>Le rôle lecteur peut consulter un document.</p><p>Le rôle lecteur ne peut pas le modifier.</p></div><div><small class="muted">Synthèse proposée</small><p id="synthesis-text">Le rôle lecteur peut consulter un document, sans pouvoir le modifier.</p><textarea id="synthesis-editor" hidden>Le rôle lecteur peut consulter un document, sans pouvoir le modifier.</textarea></div></div>
+      <div class="source"><small class="muted">Sources</small><p>Matrice des rôles · version 4 · 2 affirmations</p></div>
+      <div class="actions"><button class="button" data-action="ignore-synthesis">Ignorer</button><button class="button" data-action="edit-synthesis">Modifier</button><button class="button primary" data-action="keep-synthesis">Garder la synthèse</button></div>
+      <p class="muted" style="margin-top:12px" id="synthesis-result" aria-live="polite"></p>
+    </section>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById("memory-okf-prototype");
+      if (!root) return;
+      const setResult = (id, message) => {
+        const target = root.querySelector(`#${id}`);
+        if (target) target.textContent = message;
+      };
+      root.addEventListener("click", (event) => {
+        const action = event.target.closest("[data-action]")?.dataset.action;
+        if (!action) return;
+        if (action === "keep-candidate") setResult("candidate-result", "Proposition gardée · elle devient active.");
+        if (action === "ignore-candidate") setResult("candidate-result", "Proposition ignorée.");
+        if (action === "edit-candidate") root.querySelector("#candidate-editor").hidden = false;
+        if (action === "save-candidate") setResult("candidate-result", "Modification enregistrée · à examiner avant de garder.");
+        if (action === "keep-conflict") setResult("conflict-result", "Les deux affirmations sont conservées.");
+        if (action === "replace-conflict") setResult("conflict-result", "Remplacement explicite choisi · les deux versions restent dans l’historique.");
+        if (action === "ignore-conflict") setResult("conflict-result", "Proposition ignorée.");
+        if (action === "ignore-synthesis") setResult("synthesis-result", "Synthèse ignorée · les sources restent inchangées.");
+        if (action === "edit-synthesis") {
+          root.querySelector("#synthesis-text").hidden = true;
+          root.querySelector("#synthesis-editor").hidden = false;
+        }
+        if (action === "keep-synthesis") {
+          const editor = root.querySelector("#synthesis-editor");
+          const text = root.querySelector("#synthesis-text");
+          text.textContent = editor.value;
+          editor.hidden = true;
+          text.hidden = false;
+          setResult("synthesis-result", "Synthèse gardée · les sources restent dans l’historique.");
+        }
+      });
+    })();
+  </script>
+</div>

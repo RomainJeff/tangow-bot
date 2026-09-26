@@ -37,6 +37,7 @@ export { HoverPill, type HoverPillProps } from "./hover-pill.js";
 export { Interstitial, type InterstitialProps } from "./interstitial.js";
 export { usePrefersReducedMotion } from "./lib/reduced-motion.js";
 export { cn } from "./lib/utils.js";
+export { MarkdownEditor, type MarkdownEditorProps } from "./markdown-editor.js";
 export {
   MessageRow,
   type MessageRowMeta,

@@ -1,5 +1,6 @@
 export * from "./ai-consent.js";
 export * from "./attachments.js";
+export * from "./bot-memory-method.js";
 export * from "./bot-secrets.js";
 export * from "./desktop.js";
 export * from "./domain.js";
@@ -8,6 +9,7 @@ export * from "./ids.js";
 export * from "./integration-settings.js";
 export * from "./local-settings.js";
 export * from "./mcp.js";
+export * from "./memory-classifier.js";
 export * from "./openai-compatible-ui.js";
 export * from "./reactions.js";
 export * from "./rpc.js";

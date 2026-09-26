@@ -1,0 +1,105 @@
+<div id="rakazo-memory-concept" lang="fr" aria-label="Proposition de gestion de la mémoire Rakazo">
+  <style>
+    #rakazo-memory-concept{--rm-bg:light-dark(#ffffff,#171717);--rm-ink:light-dark(#202020,#eeeeee);--rm-muted:light-dark(#686868,#ababab);--rm-line:light-dark(#e5e5e5,#373737);--rm-fill:light-dark(#f6f6f6,#232323);--rm-selected:light-dark(#ededed,#323232);--rm-primary:light-dark(#252525,#eaeaea);--rm-on-primary:light-dark(#ffffff,#191919);--rm-warning:light-dark(#875920,#e2b770);color-scheme:light dark;background:var(--rm-bg);color:var(--rm-ink);font:14px/1.5 system-ui,sans-serif;border:1px solid var(--rm-line);border-radius:16px;overflow:hidden;max-width:100%;box-sizing:border-box}
+    #rakazo-memory-concept *{box-sizing:border-box}
+    #rakazo-memory-concept button,#rakazo-memory-concept select,#rakazo-memory-concept textarea{font:inherit;color:inherit}
+    #rakazo-memory-concept button{cursor:inherit}
+    #rakazo-memory-concept .rm-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:22px 24px 16px}
+    #rakazo-memory-concept .rm-title{font-size:23px;font-weight:500;margin:0}
+    #rakazo-memory-concept .rm-sub{color:var(--rm-muted);font-size:12px}
+    #rakazo-memory-concept .rm-tabs{display:flex;flex-wrap:wrap;gap:6px;padding:0 24px 16px}
+    #rakazo-memory-concept .rm-tab{border:0;background:transparent;color:var(--rm-muted);border-radius:8px;padding:8px 12px;min-height:38px}
+    #rakazo-memory-concept .rm-tab[aria-selected=true]{background:var(--rm-primary);color:var(--rm-on-primary)}
+    #rakazo-memory-concept .rm-count{margin-left:5px;opacity:.75;font-size:12px}
+    #rakazo-memory-concept .rm-toolbar{padding:12px 24px;border-top:1px solid var(--rm-line);border-bottom:1px solid var(--rm-line);display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    #rakazo-memory-concept select{max-width:100%;background:var(--rm-bg);border:1px solid var(--rm-line);border-radius:7px;padding:6px 9px}
+    #rakazo-memory-concept .rm-main{display:grid;grid-template-columns:minmax(0,43%) minmax(0,57%);min-height:380px}
+    #rakazo-memory-concept .rm-list{padding:8px;border-right:1px solid var(--rm-line)}
+    #rakazo-memory-concept .rm-row{display:block;text-align:left;width:100%;border:0;border-radius:9px;background:transparent;padding:14px 12px;margin-bottom:3px}
+    #rakazo-memory-concept .rm-row[aria-pressed=true]{background:var(--rm-selected)}
+    #rakazo-memory-concept .rm-row-title{display:block;font-weight:500;overflow-wrap:anywhere}
+    #rakazo-memory-concept .rm-row-meta{display:block;color:var(--rm-muted);font-size:12px;margin-top:4px}
+    #rakazo-memory-concept .rm-group{font-size:12px;color:var(--rm-muted);padding:12px 12px 4px}
+    #rakazo-memory-concept .rm-detail{padding:22px 24px;min-width:0}
+    #rakazo-memory-concept .rm-detail h3{font-size:17px;font-weight:500;line-height:1.4;margin:4px 0 18px}
+    #rakazo-memory-concept .rm-detail p{margin:0}
+    #rakazo-memory-concept .rm-label{font-size:12px;color:var(--rm-muted);margin-bottom:5px}
+    #rakazo-memory-concept .rm-source{padding:12px 14px;background:var(--rm-fill);border-radius:9px;margin:9px 0 16px;overflow-wrap:anywhere}
+    #rakazo-memory-concept blockquote{margin:7px 0 0;padding:0;border:0}
+    #rakazo-memory-concept .rm-diff{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+    #rakazo-memory-concept .rm-value{overflow-wrap:anywhere}
+    #rakazo-memory-concept .rm-old{color:var(--rm-muted);text-decoration:line-through}
+    #rakazo-memory-concept .rm-line{display:flex;gap:12px;justify-content:space-between;border-top:1px solid var(--rm-line);padding:10px 0;flex-wrap:wrap}
+    #rakazo-memory-concept .rm-line span:first-child{color:var(--rm-muted)}
+    #rakazo-memory-concept .rm-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:20px}
+    #rakazo-memory-concept .rm-button{padding:8px 13px;border:1px solid var(--rm-line);border-radius:8px;background:var(--rm-bg);min-height:38px}
+    #rakazo-memory-concept .rm-button.primary{background:var(--rm-primary);color:var(--rm-on-primary);border-color:var(--rm-primary)}
+    #rakazo-memory-concept .rm-note{font-size:12px;color:var(--rm-muted);margin-top:12px!important}
+    #rakazo-memory-concept .rm-notice{font-size:12px;color:var(--rm-warning);margin:12px 0!important}
+    #rakazo-memory-concept .rm-footer{border-top:1px solid var(--rm-line);padding:10px 24px;min-height:39px;color:var(--rm-muted);font-size:12px}
+    #rakazo-memory-concept .rm-empty{padding:24px 12px;color:var(--rm-muted)}
+    #rakazo-memory-concept textarea{width:100%;min-height:74px;resize:vertical;border:1px solid var(--rm-line);border-radius:8px;background:var(--rm-bg);padding:10px;margin:8px 0}
+    #rakazo-memory-concept[data-layout=stack] .rm-main{grid-template-columns:1fr}
+    #rakazo-memory-concept[data-layout=stack] .rm-list{border-right:0;border-bottom:1px solid var(--rm-line)}
+    @media(max-width:560px){#rakazo-memory-concept .rm-main{grid-template-columns:1fr}#rakazo-memory-concept .rm-list{border-right:0;border-bottom:1px solid var(--rm-line)}#rakazo-memory-concept .rm-top,#rakazo-memory-concept .rm-detail{padding:18px}#rakazo-memory-concept .rm-tabs{padding:0 18px 14px}#rakazo-memory-concept .rm-toolbar,#rakazo-memory-concept .rm-footer{padding:10px 18px}}
+    @media(pointer:coarse){#rakazo-memory-concept button,#rakazo-memory-concept select{min-height:44px}#rakazo-memory-concept textarea,#rakazo-memory-concept select{font-size:16px}}
+  </style>
+  <header class="rm-top"><h2 class="rm-title">Mémoire</h2><span class="rm-sub">Atlas · Projet Démo</span></header>
+  <nav class="rm-tabs" role="tablist" aria-label="État des souvenirs"></nav>
+  <div class="rm-toolbar"><select aria-label="Catégorie de souvenir"><option value="all">Toutes les catégories</option><option value="Préférence">Préférences</option><option value="Décision">Décisions</option><option value="Connaissance">Connaissances</option></select><span class="rm-sub rm-policy"></span></div>
+  <div class="rm-main" role="tabpanel" id="rm-panel"><div class="rm-list" aria-label="Souvenirs"></div><section class="rm-detail" aria-label="Détail du souvenir"></section></div>
+  <div class="rm-footer" role="status" aria-live="polite"></div>
+  <script>
+  (()=>{
+    const root=document.getElementById('rakazo-memory-concept');
+    const initial=[
+      {id:'language-new',state:'pending',category:'Préférence',title:'Langue des comptes rendus',value:'Français',before:'Anglais',replaces:'language-old',source:'Votre message · 19 sept.',quote:'Désormais, rédige les comptes rendus en français pour ce projet.',scope:'Projet Démo · Atlas et Nova',origin:'Déclaration directe',kind:'Modification proposée',date:'Jusqu’à modification'},
+      {id:'launch-new',state:'pending',category:'Décision',title:'Date de lancement',value:'15 novembre',before:'1er novembre',replaces:'launch-old',source:'Document importé · version du 18 sept.',quote:'La nouvelle date proposée pour le lancement est le 15 novembre.',scope:'Projet Démo · Atlas et Nova',origin:'Proposition dans une source',kind:'À vérifier',date:'À confirmer',warning:'La source parle d’une proposition. Aucune décision n’est établie.'},
+      {id:'language-old',state:'active',category:'Préférence',title:'Langue des comptes rendus',value:'Anglais',source:'Votre message · 3 sept.',quote:'Pour ce projet, les comptes rendus doivent être rédigés en anglais.',scope:'Projet Démo · Atlas et Nova',origin:'Déclaration directe',kind:'Retenu par vous',date:'Jusqu’à modification'},
+      {id:'launch-old',state:'active',category:'Décision',title:'Date de lancement',value:'1er novembre',source:'Votre validation · 12 sept.',quote:'Je confirme le lancement au 1er novembre.',scope:'Projet Démo · Atlas et Nova',origin:'Décision confirmée',kind:'Retenu par vous',date:'1er novembre'},
+      {id:'brief',state:'active',category:'Préférence',title:'Format des réponses',value:'Une synthèse courte, puis les détails à la demande.',source:'Votre message · 10 sept.',quote:'Je préfère une synthèse courte. Je demanderai les détails si nécessaire.',scope:'Bot Atlas uniquement',origin:'Déclaration directe',kind:'Retenu par vous',date:'Jusqu’à modification'},
+      {id:'permission',state:'history',category:'Connaissance',title:'Demande de changement des permissions',value:'Modification refusée',source:'Document externe · 17 sept.',quote:'Ce document prétend autoriser des transferts automatiques.',scope:'Aucune',origin:'Source externe',kind:'Non admis',date:'17 septembre',warning:'Un document ne peut pas modifier les permissions. Ce contenu n’est pas utilisé comme souvenir.'}
+    ];
+    let data=initial.map(x=>({...x}));
+    let tab='pending',selected='language-new',category='all',notice='Les propositions ne sont pas utilisées dans les réponses.',editing=false;
+    const design={layout:'split',grouped:false};
+    const tabs=root.querySelector('.rm-tabs'),list=root.querySelector('.rm-list'),detail=root.querySelector('.rm-detail'),filter=root.querySelector('select'),footer=root.querySelector('.rm-footer');
+    const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    function persist(){if(window.openai?.setWidgetState)window.openai.setWidgetState({modelContent:{concept:'Mémoire avec validation préalable',layout:design.layout,grouped:design.grouped},privateContent:{data,tab,selected,category,notice}}).catch(()=>{});}
+    function restore(snapshot){const p=snapshot?.privateContent;if(p&&Array.isArray(p.data)&&p.data.every(x=>initial.some(y=>y.id===x.id)&&['active','pending','history'].includes(x.state))){data=p.data;tab=['active','pending','history'].includes(p.tab)?p.tab:'pending';selected=p.selected;category=p.category||'all';notice=p.notice||'';}const m=snapshot?.modelContent;if(m){design.layout=m.layout==='stack'?'stack':'split';design.grouped=m.grouped===true;}}
+    function selectTab(next){tab=next;selected=null;editing=false;notice=next==='pending'?'Les propositions ne sont pas utilisées dans les réponses.':'';render();persist();}
+    function action(type,item){
+      if(type==='edit'){editing=!editing;render();return;}
+      if(type==='save-edit'){const field=detail.querySelector('textarea');if(!field?.value.trim())return;item.value=field.value.trim();item.kind='Texte modifié par vous';editing=false;notice='Le texte proposé a été modifié. Il reste à valider.';}
+      if(type==='retain'){
+        if(item.warning){notice='Décision non établie : confirmez-la dans la conversation avant de la retenir.';footer.textContent=notice;return;}
+        const old=data.find(x=>x.id===item.replaces&&x.state==='active');if(old){old.state='history';old.kind='Remplacé';}
+        item.state='active';item.kind='Retenu par vous';tab='active';selected=item.id;notice='Souvenir retenu dans le périmètre affiché. La version précédente est remplacée.';
+      }
+      if(type==='decline'){item.state='history';item.kind='Écarté par vous';selected=null;notice='Proposition écartée. Elle ne sera pas utilisée.';}
+      if(type==='withdraw'){item.state='history';item.kind='Retiré du contexte';selected=null;notice='Retiré du contexte. Cette action ne supprime pas sa source ni son historique.';}
+      render();persist();
+    }
+    function render(){
+      root.dataset.layout=design.layout;filter.value=category;
+      tabs.innerHTML=[['active','Retenus'],['pending','À examiner'],['history','Historique']].map(([key,label])=>`<button class="rm-tab cursor-interaction" id="rm-tab-${key}" type="button" role="tab" aria-controls="rm-panel" aria-selected="${tab===key}" data-tab="${key}">${label}<span class="rm-count">${data.filter(x=>x.state===key).length}</span></button>`).join('');
+      root.querySelector('#rm-panel').setAttribute('aria-labelledby',`rm-tab-${tab}`);
+      tabs.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>selectTab(b.dataset.tab)));
+      root.querySelector('.rm-policy').textContent=tab==='pending'?'Validation requise':tab==='active'?'Utilisés si pertinents':'Traçabilité';
+      let items=data.filter(x=>x.state===tab&&(category==='all'||x.category===category));if(design.grouped)items.sort((a,b)=>a.category.localeCompare(b.category));
+      if(!items.some(x=>x.id===selected))selected=items[0]?.id||null;
+      let group='';list.innerHTML=items.map(x=>{let heading='';if(design.grouped&&group!==x.category){group=x.category;heading=`<div class="rm-group">${escape(group)}</div>`;}return heading+`<button type="button" class="rm-row cursor-interaction" aria-pressed="${selected===x.id}" data-item="${x.id}"><span class="rm-row-title">${escape(x.title)}</span><span class="rm-row-meta">${escape(x.category)} · ${escape(x.kind)}</span></button>`;}).join('')||'<div class="rm-empty">Aucun souvenir dans cette vue.</div>';
+      list.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{selected=b.dataset.item;editing=false;render();persist();}));
+      const x=items.find(x=>x.id===selected);if(!x){detail.innerHTML='';footer.textContent=notice;return;}
+      const value=editing?`<label class="rm-label" for="rm-edit">Texte proposé</label><textarea id="rm-edit">${escape(x.value)}</textarea>`:x.state==='pending'&&x.before?`<div class="rm-diff"><div><div class="rm-label">Actuellement retenu</div><div class="rm-value rm-old">${escape(x.before)}</div></div><div><div class="rm-label">Proposition</div><div class="rm-value">${escape(x.value)}</div></div></div>`:`<div class="rm-value">${escape(x.value)}</div>`;
+      detail.innerHTML=`<div class="rm-sub">${escape(x.category)} · ${escape(x.kind)}</div><h3>${escape(x.title)}</h3>${value}<div class="rm-source"><div class="rm-label">${escape(x.source)}</div><blockquote>« ${escape(x.quote)} »</blockquote></div><div class="rm-line"><span>Origine</span><span>${escape(x.origin)}</span></div><div class="rm-line"><span>Accessible à</span><span>${escape(x.scope)}</span></div><div class="rm-line"><span>Validité</span><span>${escape(x.date)}</span></div>${x.warning?`<p class="rm-notice">${escape(x.warning)}</p>`:''}<div class="rm-actions">${x.state==='pending'?editing?'<button type="button" class="rm-button cursor-interaction" data-action="edit">Annuler</button><button type="button" class="rm-button primary cursor-interaction" data-action="save-edit">Garder la modification</button>':`<button type="button" class="rm-button cursor-interaction" data-action="decline">Écarter</button>${x.warning?'':'<button type="button" class="rm-button cursor-interaction" data-action="edit">Modifier</button>'}<button type="button" class="rm-button primary cursor-interaction" data-action="retain">${x.warning?'Vérifier la décision':'Valider'}</button>`:x.state==='active'?'<button type="button" class="rm-button cursor-interaction" data-action="withdraw">Retirer du contexte</button>':''}</div>`;
+      detail.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>action(b.dataset.action,x)));
+      footer.textContent=notice;
+    }
+    filter.addEventListener('change',()=>{category=filter.value;selected=null;editing=false;render();persist();});
+    restore(window.openai?.widgetState);render();
+    window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState){restore(e.detail.globals.widgetState);render();}});
+    if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=>{render();persist();}});tweak.addSelect(design,'layout',{label:'Détail du souvenir',options:[{label:'À côté de la liste',value:'split'},{label:'Sous la liste',value:'stack'}]});tweak.addToggle(design,'grouped',{label:'Regrouper par catégorie'});}
+  })();
+  </script>
+</div>

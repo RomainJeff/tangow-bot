@@ -1,0 +1,253 @@
+<div id="rakazo-memory-simple" aria-label="Rakazo — mémoire simplifiée">
+<style>
+#rakazo-memory-simple{--mp-bg:light-dark(#ffffff,#191919);--mp-soft:light-dark(#f7f7f5,#212120);--mp-hover:light-dark(#eeeee9,#2c2c29);--mp-text:light-dark(#282826,#eeeee8);--mp-muted:light-dark(#777770,#aaa99f);--mp-border:light-dark(#e7e7e0,#353532);--mp-primary:light-dark(#282826,#eaeae1);--mp-on:light-dark(#ffffff,#191919);--mp-amber:light-dark(#92620e,#eac17b);--mp-amber-bg:light-dark(#fff4de,#382d1c);--mp-red:light-dark(#a9433a,#efa398);--mp-red-bg:light-dark(#fff0ed,#392521);--mp-blue:light-dark(#e8edf8,#293247);--mp-blue-text:light-dark(#4c659b,#b3c4ef);--mp-veil:light-dark(#25251d1c,#00000055);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--mp-text);width:100%;text-align:left}
+#rakazo-memory-simple *{box-sizing:border-box}
+#rakazo-memory-simple h1,#rakazo-memory-simple h2,#rakazo-memory-simple h3,#rakazo-memory-simple p{margin:0}
+#rakazo-memory-simple h1{font-size:27px;letter-spacing:-.8px;font-weight:500;line-height:1.2}
+#rakazo-memory-simple h2{font-size:20px;letter-spacing:-.4px;font-weight:500;line-height:1.35}
+#rakazo-memory-simple h3{font-size:13px;font-weight:500}
+#rakazo-memory-simple strong{font-weight:500}
+#rakazo-memory-simple button,#rakazo-memory-simple input,#rakazo-memory-simple select,#rakazo-memory-simple textarea{font:inherit;color:inherit}
+#rakazo-memory-simple button{cursor:inherit}
+#rakazo-memory-simple .mp-icon{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;flex-shrink:0}
+#rakazo-memory-simple .mp-icon svg{width:17px;height:17px}
+#rakazo-memory-simple .mp-demo{font-size:11px;color:var(--mp-muted);padding:0 2px 10px}
+#rakazo-memory-simple .mp-stage{display:grid;border:1px solid var(--mp-border);border-radius:12px;overflow:hidden;background:var(--mp-bg);min-width:0}
+#rakazo-memory-simple .mp-app,#rakazo-memory-simple .mp-overlay{grid-area:1/1;min-width:0}
+#rakazo-memory-simple .mp-app{display:grid;grid-template-columns:158px minmax(0,1fr);min-height:615px;background:var(--mp-bg)}
+#rakazo-memory-simple .mp-sidebar{display:flex;flex-direction:column;padding:24px 12px;background:var(--mp-soft);border-right:1px solid var(--mp-border);gap:5px}
+#rakazo-memory-simple .mp-brand{font-size:22px;font-weight:500;letter-spacing:-1px;padding:0 10px 36px}
+#rakazo-memory-simple .mp-nav{display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:10px;border-radius:7px;width:100%;text-align:left;font-size:13px}
+#rakazo-memory-simple .mp-nav[aria-current=page],#rakazo-memory-simple .mp-nav:hover{background:var(--mp-hover)}
+#rakazo-memory-simple .mp-sidebar-bottom{margin-top:auto;padding:30px 9px 0;display:flex;gap:9px;align-items:center;font-size:12px;color:var(--mp-muted)}
+#rakazo-memory-simple .mp-avatar{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;background:var(--mp-blue);color:var(--mp-blue-text);font-size:12px;font-weight:500;flex-shrink:0}
+#rakazo-memory-simple .mp-avatar.human{background:var(--mp-hover);color:var(--mp-text);border-radius:50%}
+#rakazo-memory-simple .mp-main{padding:37px 38px;min-width:0}
+#rakazo-memory-simple .mp-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:27px;flex-wrap:wrap}
+#rakazo-memory-simple .mp-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#rakazo-memory-simple .mp-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:35px;padding:7px 11px;background:var(--mp-bg);border:1px solid var(--mp-border);border-radius:7px;font-size:13px}
+#rakazo-memory-simple .mp-button.primary{background:var(--mp-primary);color:var(--mp-on);border-color:var(--mp-primary)}
+#rakazo-memory-simple .mp-button.ghost{border-color:transparent;background:transparent}
+#rakazo-memory-simple .mp-button:disabled{opacity:.4;cursor:default}
+#rakazo-memory-simple .mp-icon-button{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;background:transparent;border-radius:6px}
+#rakazo-memory-simple .mp-icon-button:hover{background:var(--mp-hover)}
+#rakazo-memory-simple .mp-scope{border:1px solid var(--mp-border);background:var(--mp-bg);padding:8px 11px;border-radius:7px;max-width:100%;font-size:13px}
+#rakazo-memory-simple .mp-toolbar{display:flex;align-items:center;gap:20px;margin-bottom:26px;flex-wrap:wrap}
+#rakazo-memory-simple .mp-search{display:flex;align-items:center;gap:8px;flex:1;min-width:140px;color:var(--mp-muted)}
+#rakazo-memory-simple .mp-search input{border:0;background:transparent;min-width:0;width:100%;padding:8px 0;font-size:13px}
+#rakazo-memory-simple .mp-group{display:flex;align-items:center;justify-content:space-between;margin:24px 0 6px}
+#rakazo-memory-simple .mp-group:first-child{margin-top:0}
+#rakazo-memory-simple .mp-group button{border:0;background:transparent;padding:0;text-align:left;color:var(--mp-muted);font-size:12px}
+#rakazo-memory-simple .mp-row{display:flex;gap:12px;align-items:center;width:100%;padding:18px 0;border:0;border-bottom:1px solid var(--mp-border);text-align:left;background:transparent}
+#rakazo-memory-simple .mp-row>.mp-icon{color:var(--mp-muted)}
+#rakazo-memory-simple .mp-row-title{flex:1;min-width:0;font-size:14px}
+#rakazo-memory-simple .mp-row:hover .mp-row-title{text-decoration:underline;text-underline-offset:4px}
+#rakazo-memory-simple .mp-row-end{display:flex;align-items:center;gap:8px;flex-shrink:0}
+#rakazo-memory-simple .mp-badge{display:inline-flex;gap:5px;align-items:center;border-radius:5px;background:var(--mp-soft);padding:3px 7px;color:var(--mp-muted);font-size:11px}
+#rakazo-memory-simple .mp-badge.red{background:var(--mp-red-bg);color:var(--mp-red)}
+#rakazo-memory-simple .mp-badge.amber{background:var(--mp-amber-bg);color:var(--mp-amber)}
+#rakazo-memory-simple .mp-badge .mp-icon,#rakazo-memory-simple .mp-badge .mp-icon svg{width:13px;height:13px}
+#rakazo-memory-simple .mp-small{font-size:12px;color:var(--mp-muted)}
+#rakazo-memory-simple .mp-link{border:0;background:transparent;padding:0;text-align:left;text-decoration:underline;text-underline-offset:3px;font-size:12px}
+#rakazo-memory-simple .mp-overlay{display:flex;justify-content:flex-end;background:var(--mp-veil);z-index:3}
+#rakazo-memory-simple .mp-panel{width:430px;max-width:100%;background:var(--mp-bg);border-left:1px solid var(--mp-border);padding:26px;display:flex;flex-direction:column;min-width:0}
+#rakazo-memory-simple .mp-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:28px}
+#rakazo-memory-simple .mp-panel-body{flex:1;min-width:0}
+#rakazo-memory-simple .mp-memory-text{font-size:20px;line-height:1.6;letter-spacing:-.2px;margin:18px 0 24px}
+#rakazo-memory-simple .mp-chips{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+#rakazo-memory-simple details.mp-details{border-top:1px solid var(--mp-border);padding-top:17px;margin-top:26px;font-size:12px}
+#rakazo-memory-simple details.mp-details>summary{color:var(--mp-muted);padding:2px 0}
+#rakazo-memory-simple .mp-meta{margin-top:20px}
+#rakazo-memory-simple .mp-meta dt{font-size:11px;color:var(--mp-muted);margin:15px 0 5px}
+#rakazo-memory-simple .mp-meta dd{margin:0;overflow-wrap:anywhere}
+#rakazo-memory-simple blockquote{border:0;margin:8px 0 0;padding:12px 14px;background:var(--mp-soft);border-radius:8px;font-size:12px;line-height:1.6}
+#rakazo-memory-simple .mp-panel-footer{margin-top:30px;padding-top:20px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+#rakazo-memory-simple .mp-field{display:flex;flex-direction:column;gap:7px;margin-bottom:18px;min-width:0;font-size:12px}
+#rakazo-memory-simple .mp-field input,#rakazo-memory-simple .mp-field textarea,#rakazo-memory-simple .mp-field select{width:100%;min-width:0;border:1px solid var(--mp-border);background:var(--mp-bg);border-radius:7px;padding:11px 12px;font-size:14px}
+#rakazo-memory-simple .mp-field textarea{resize:vertical;min-height:130px;line-height:1.6}
+#rakazo-memory-simple .mp-check{display:flex;align-items:center;gap:9px;margin:16px 0;font-size:12px}
+#rakazo-memory-simple .mp-check input,#rakazo-memory-simple .mp-radio input{accent-color:var(--mp-primary)}
+#rakazo-memory-simple .mp-radio{display:flex;align-items:center;gap:11px;border:1px solid var(--mp-border);padding:14px;border-radius:8px;margin:10px 0}
+#rakazo-memory-simple .mp-radio span{font-size:16px}
+#rakazo-memory-simple .mp-radio small{display:block;color:var(--mp-muted);font-size:11px;margin-top:3px}
+#rakazo-memory-simple .mp-empty{padding:50px 15px;text-align:center;color:var(--mp-muted);font-size:13px}
+#rakazo-memory-simple .mp-chat{max-width:610px;margin:35px auto 0}
+#rakazo-memory-simple .mp-message{max-width:90%;margin-left:auto;padding:15px 18px;background:var(--mp-soft);border-radius:14px 14px 3px 14px;line-height:1.7}
+#rakazo-memory-simple .mp-response{display:flex;align-items:flex-start;gap:13px;margin:30px 0}
+#rakazo-memory-simple .mp-response p{padding-top:4px}
+#rakazo-memory-simple .mp-capture{display:flex;justify-content:flex-end;gap:8px;align-items:center;margin:10px 0 0;flex-wrap:wrap}
+#rakazo-memory-simple .mp-capture-top{display:flex;align-items:center;gap:7px;color:var(--mp-muted);font-size:12px;margin-bottom:9px}
+#rakazo-memory-simple .mp-capture p{font-size:14px;line-height:1.6;margin-bottom:13px}
+#rakazo-memory-simple .mp-composer{display:flex;align-items:center;gap:8px;border:1px solid var(--mp-border);border-radius:12px;padding:10px 12px;margin-top:48px}
+#rakazo-memory-simple .mp-composer input{border:0;background:transparent;flex:1;min-width:0;padding:8px}
+#rakazo-memory-simple .mp-notice{padding:10px 2px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--mp-muted)}
+#rakazo-memory-simple .mp-notice:empty{display:none}
+#rakazo-memory-simple .mp-mobile-nav{display:none}
+#rakazo-memory-simple[data-panel=center] .mp-overlay{justify-content:center;align-items:center;padding:24px}
+#rakazo-memory-simple[data-panel=center] .mp-panel{border:1px solid var(--mp-border);border-radius:12px;width:460px}
+@media(max-width:760px){#rakazo-memory-simple .mp-app{grid-template-columns:132px minmax(0,1fr)}#rakazo-memory-simple .mp-sidebar{padding:23px 9px}#rakazo-memory-simple .mp-main{padding:30px 25px}#rakazo-memory-simple .mp-toolbar{gap:12px}}
+@media(max-width:540px){#rakazo-memory-simple .mp-app{grid-template-columns:1fr;min-height:570px}#rakazo-memory-simple .mp-sidebar{display:none}#rakazo-memory-simple .mp-main{padding:24px 19px}#rakazo-memory-simple .mp-mobile-nav{display:flex;gap:12px;margin-bottom:24px}#rakazo-memory-simple .mp-row{flex-wrap:wrap;gap:10px}#rakazo-memory-simple .mp-row-title{flex-basis:calc(100% - 27px)}#rakazo-memory-simple .mp-row-end:has(.mp-badge){margin-left:27px}#rakazo-memory-simple .mp-row-end:not(:has(.mp-badge)){display:none}#rakazo-memory-simple .mp-panel{width:100%;padding:23px}#rakazo-memory-simple .mp-capture{margin-left:0}#rakazo-memory-simple .mp-message{max-width:100%}#rakazo-memory-simple .mp-scope{max-width:100%}#rakazo-memory-simple[data-panel=center] .mp-overlay{padding:10px}#rakazo-memory-simple h1{font-size:25px}}
+@media(pointer:coarse){#rakazo-memory-simple button,#rakazo-memory-simple select,#rakazo-memory-simple summary{min-height:44px}#rakazo-memory-simple input,#rakazo-memory-simple textarea,#rakazo-memory-simple select{font-size:16px}}
+</style>
+<div class="mp-demo">Maquette interactive · données fictives</div>
+<div class="mp-stage"></div><div class="mp-notice" role="status" aria-live="polite"></div>
+<script>
+(()=>{
+const root=document.getElementById('rakazo-memory-simple'),stage=root.querySelector('.mp-stage'),notice=root.querySelector('.mp-notice');
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const icon=n=>'<span class="mp-icon"><i data-lucide="'+n+'" aria-hidden="true"></i></span>';
+const btn=(label,action,value='',style='',disabled=false)=>'<button type="button" class="mp-button '+style+' cursor-interaction" data-action="'+action+'" data-value="'+esc(value)+'"'+(disabled?' disabled':'')+'>'+label+'</button>';
+const ib=(name,label,action,value='')=>'<button type="button" class="mp-icon-button cursor-interaction" aria-label="'+label+'" data-action="'+action+'" data-value="'+esc(value)+'">'+icon(name)+'</button>';
+const badge=(label,tone='',glyph='')=>'<span class="mp-badge '+tone+'">'+(glyph?icon(glyph):'')+esc(label)+'</span>';
+const opt=(v,l,s)=>'<option value="'+v+'"'+(v===s?' selected':'')+'>'+l+'</option>';
+const scopeNames={team:'Équipe Produit',project:'Projet Orion',atlas:'Atlas · privé',nova:'Nova · privé',me:'Moi'};
+const goals={orion:'Lancement Orion',daily:'Au quotidien',none:'Sans objectif'};
+const proposal='Ouvrir le pilote le 1er novembre, après validation des invitations.';
+const base=[
+ {id:'tests',scope:'team',text:'Tester les invitations avant le lancement.',kind:'Décision',goal:'orion',impact:true,why:'Un échec d’invitation bloque l’accès au pilote.',source:'Revue de lancement · 20 sept.',quote:'Nous testerons les invitations de bout en bout avant d’ouvrir le pilote.',author:'Camille',date:'20 septembre',state:'active'},
+ {id:'duration',scope:'team',text:'Les invitations restent valables sept jours.',label:'Durée des invitations',kind:'Décision',goal:'orion',impact:true,why:'La durée détermine l’accès des participants.',source:'Décision · 18 sept.',quote:'Les liens du pilote sont valables sept jours après leur envoi.',author:'Camille',date:'18 septembre',state:'conflict'},
+ {id:'checklist',scope:'team',text:'Une checklist pourrait faciliter l’accueil.',kind:'Hypothèse',goal:'orion',impact:false,why:'Effet à tester sur le premier usage.',source:'Atelier accueil · 17 sept.',quote:'Nous faisons l’hypothèse qu’une checklist aidera les nouveaux participants.',author:'Camille',date:'17 septembre',state:'active'},
+ {id:'format',scope:'team',text:'Placer les décisions en tête des comptes rendus.',kind:'Convention',goal:'daily',impact:false,why:'Convention de présentation de l’équipe.',source:'Conventions d’équipe · 16 sept.',quote:'Les comptes rendus commencent par les décisions, puis les questions ouvertes.',author:'Camille',date:'16 septembre',state:'active'},
+ {id:'date',scope:'team',text:'Dater chaque décision de projet.',kind:'Convention',goal:'daily',impact:false,why:'Permet de retrouver la décision applicable.',source:'Conventions d’équipe · 16 sept.',quote:'Chaque décision de projet porte une date.',author:'Camille',date:'16 septembre',state:'active'},
+ {id:'research',scope:'atlas',text:'Limiter les entretiens à la recherche de documents.',kind:'Décision',goal:'orion',impact:false,why:'Cadre les prochains entretiens d’Atlas.',source:'Votre conversation · 21 sept.',quote:'Pour les prochains entretiens, restons sur la recherche de documents.',author:'Vous',date:'21 septembre',state:'active'},
+ {id:'personal',scope:'me',text:'Commencer par une synthèse courte.',kind:'Préférence',goal:'daily',impact:false,why:'Votre préférence de présentation.',source:'Votre préférence · 10 sept.',quote:'Je préfère une synthèse courte avant les détails.',author:'Vous',date:'10 septembre',state:'active'},
+ {id:'pilot',scope:'project',text:'Le pilote porte sur la recherche de documents.',kind:'Connaissance',goal:'orion',impact:false,why:'Délimite le projet Orion.',source:'Cadrage Orion · 18 sept.',quote:'Le pilote Orion porte sur la recherche de documents.',author:'Camille',date:'18 septembre',state:'active'}
+];
+const initial=()=>({view:'library',scope:'team',goal:null,query:'',panel:null,selected:'tests',kept:false,records:{},newRecords:[],removed:[],versions:{},shared:[],conflict:null,choice:'',draft:null,shareDraft:null,returnPanel:null,message:'',undo:null,extraMessage:''});
+let s=initial();const design={impact:false,panel:'side'};
+function restore(w){const p=w?.privateContent;if(p?.version!==1)return;s={...initial(),...p.state};Object.assign(design,p.design||{});}
+restore(window.openai?.widgetState);
+function persist(){try{window.openai?.setWidgetState({modelContent:{concept:'Mémoire simplifiée',view:s.view,scope:s.scope,panel:s.panel,showImpact:design.impact},privateContent:{version:1,state:s,design}})?.catch(()=>{});}catch(e){}}
+window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState){restore(e.detail.globals.widgetState);render();}});
+function all(){
+ let items=base.map(m=>({...m}));
+ if(s.kept)items.push({id:'captured',scope:'atlas',text:proposal,kind:'Décision',goal:'orion',impact:true,why:'Fixe l’ouverture du pilote et sa condition.',source:'Votre conversation · 21 sept.',quote:proposal,author:'Vous',date:'21 septembre',state:'active'});
+ items.push(...s.newRecords,...s.shared);
+ if(s.conflict)items=items.map(m=>m.id==='duration'?{...m,state:'active',text:s.conflict==='new'?'Les invitations restent valables 24 heures.':'Les invitations restent valables sept jours.',source:s.conflict==='new'?'Guide vérifié · 21 sept.':m.source,quote:s.conflict==='new'?'La durée de validité est de 24 heures.':m.quote,author:'Vous',date:'21 septembre'}:m);
+ items=items.map(m=>({...m,...s.records[m.id]}));
+ return items.map(m=>s.removed.includes(m.id)?{...m,state:'removed'}:m);
+}
+const find=id=>all().find(m=>m.id===id);
+const current=()=>find(s.selected);
+function rememberVersion(m){s.versions[m.id]=[...(s.versions[m.id]||[]),{text:m.text,date:m.date,scope:m.scope}];}
+function row(m){return '<button type="button" class="mp-row cursor-interaction" data-action="open" data-value="'+m.id+'">'+icon(m.state==='conflict'?'circle-alert':m.kind==='Hypothèse'?'flask-conical':'file-text')+'<span class="mp-row-title">'+esc(m.label||m.text)+'</span><span class="mp-row-end">'+(m.state==='conflict'?badge('À vérifier','red'):design.impact&&m.impact?badge('Important','amber','flag'):'')+icon('chevron-right')+'</span></button>';}
+function library(){
+ let items=all().filter(m=>m.scope===s.scope&&m.state!=='removed'&&(!s.goal||m.goal===s.goal)&&(m.text+' '+(m.label||'')).toLowerCase().includes(s.query.toLowerCase()));
+ return '<div class="mp-head"><h1>Mémoire</h1>'+btn(icon('plus')+'Ajouter','add')+'</div><div class="mp-toolbar"><select class="mp-scope" aria-label="Espace mémoire" data-field="scope">'+Object.entries(scopeNames).map(([v,l])=>opt(v,l,s.scope)).join('')+'</select><label class="mp-search">'+icon('search')+'<input data-field="query" aria-label="Rechercher un souvenir" placeholder="Rechercher" value="'+esc(s.query)+'"></label></div>'+
+ (s.goal?'<div class="mp-actions" style="margin-bottom:15px">'+badge(goals[s.goal])+ib('x','Effacer le filtre','clear-goal')+'</div>':'')+
+ (items.length?[...new Set(items.map(m=>m.goal))].map(goal=>'<div class="mp-group"><button type="button" class="cursor-interaction" data-action="goal" data-value="'+goal+'">'+esc(goals[goal])+'</button></div>'+items.filter(m=>m.goal===goal).map(row).join('')).join(''):'<div class="mp-empty">'+(s.query?'Aucun résultat.':'Aucun souvenir ici.')+'</div>');
+}
+function chat(){
+ const retained=s.kept&&!s.removed.includes('captured');
+ return '<div class="mp-head"><div class="mp-actions"><span class="mp-avatar">A</span><h2>Atlas</h2>'+badge('Privé','','lock')+'</div>'+btn(icon('bookmark')+'Mémoire','atlas-memory')+'</div><div class="mp-chat"><div class="mp-message">'+esc(proposal)+'</div>'+
+ '<div class="mp-capture">'+(retained?'<span class="mp-small">Retenu</span>'+btn('Voir','open','captured','ghost')+btn('Annuler','undo-retain','','ghost'):btn(icon('bookmark')+'Retenir pour Atlas','retain','','ghost'))+'</div>'+
+ '<div class="mp-response"><span class="mp-avatar">A</span><p>Je prévois la vérification des invitations avant l’ouverture.</p></div>'+
+ (s.extraMessage?'<div class="mp-message" style="margin-top:24px">'+esc(s.extraMessage)+'</div><div class="mp-response"><span class="mp-avatar">A</span><p>Message ajouté à cette maquette.</p></div>':'')+
+ '<div class="mp-composer"><input data-field="message" aria-label="Message à Atlas" placeholder="Écrire à Atlas…">'+ib('arrow-up','Envoyer','send')+'</div></div>';
+}
+function details(m){
+ const version=s.versions[m.id]||[];
+ return '<details class="mp-details"><summary class="cursor-interaction">Détails</summary><dl class="mp-meta"><dt>Source</dt><dd>'+esc(m.source)+(m.quote?'<blockquote>« '+esc(m.quote)+' »</blockquote>':'')+'</dd><dt>Classement</dt><dd>'+esc(m.kind)+' · '+esc(goals[m.goal])+'</dd><dt>Accès</dt><dd>'+esc(['team','project'].includes(m.scope)?scopeNames[m.scope]+' · Atlas et Nova':m.scope==='me'?'Vous':scopeNames[m.scope])+'</dd>'+
+ (m.impact?'<dt>Impact sur '+esc(goals[m.goal])+'</dt><dd>'+badge('Élevé','amber','flag')+'<p style="margin-top:8px">'+esc(m.why)+'</p></dd>':'')+
+ '<dt>Dernière revue</dt><dd>'+esc(m.author)+' · '+esc(m.date)+'</dd></dl>'+
+ (version.length?'<details class="mp-details"><summary class="cursor-interaction">Historique · '+version.length+'</summary>'+version.map(v=>'<blockquote>'+esc(v.text)+'<p class="mp-small" style="margin-top:6px">'+esc(v.date)+'</p></blockquote>').join('')+'</details>':'')+
+ (m.id==='duration'&&s.conflict?'<details class="mp-details"><summary class="cursor-interaction">Arbitrage</summary><p style="margin-top:12px">Vous avez retenu '+(s.conflict==='new'?'24 heures':'sept jours')+' le 21 septembre.</p><blockquote>Décision du 18 sept. : sept jours.</blockquote><blockquote>Guide du 20 sept. : 24 heures.</blockquote></details>':'')+
+ '<div style="margin-top:20px">'+btn('Retirer','remove',m.id,'ghost')+'</div></details>';
+}
+function field(label,input){return '<label class="mp-field"><span>'+label+'</span>'+input+'</label>';}
+function editor(){
+ const d=s.draft;
+ return field('Souvenir','<textarea data-field="edit-text" rows="5">'+esc(d.text)+'</textarea>')+
+ '<details class="mp-details"><summary class="cursor-interaction">Classement</summary><div style="margin-top:18px">'+field('Type','<select data-field="edit-kind">'+['Connaissance','Décision','Observation','Hypothèse','Préférence','Convention'].map(v=>opt(v,v,d.kind)).join('')+'</select>')+
+ field('Objectif','<select data-field="edit-goal">'+Object.entries(goals).map(([v,l])=>opt(v,l,d.goal)).join('')+'</select>')+
+ '<label class="mp-check"><input type="checkbox" data-field="edit-impact"'+(d.impact?' checked':'')+'>Important pour cet objectif</label>'+field('Motif','<input data-field="edit-why" value="'+esc(d.why||'')+'">')+'</div></details>';
+}
+function sheet(){
+ if(!s.panel)return '';
+ const m=current();let heading='Souvenir',body='',footer='';
+ if(s.panel==='detail'){
+  body='<div class="mp-chips">'+badge(scopeNames[m.scope],['atlas','nova','me'].includes(m.scope)?'':'', ['atlas','nova','me'].includes(m.scope)?'lock':'users')+(m.kind==='Hypothèse'?badge('Hypothèse'):'')+'</div><p class="mp-memory-text">'+esc(m.text)+'</p>'+details(m);
+  footer=btn('Modifier','edit','','primary')+(['atlas','nova','me'].includes(m.scope)?btn('Partager','share'):'');
+ }else if(s.panel==='edit'||s.panel==='add'){
+  heading=s.panel==='add'?'Ajouter':'Modifier';body=editor();footer=btn('Annuler','cancel-edit')+btn('Enregistrer','save','','primary');
+ }else if(s.panel==='share'){
+  heading='Partager';const d=s.shareDraft;
+  body=field('Avec','<select data-field="share-scope">'+opt('team','Équipe Produit',d.scope)+opt('project','Projet Orion',d.scope)+'</select>')+
+  field('Texte partagé','<textarea data-field="share-text" rows="5">'+esc(d.text)+'</textarea>')+
+  '<details class="mp-details"><summary class="cursor-interaction">Source</summary><label class="mp-check"><input type="checkbox" data-field="share-source"'+(d.includeSource?' checked':'')+'>Joindre cet extrait</label><blockquote>« '+esc(d.quote)+' »</blockquote></details><p class="mp-small" style="margin-top:22px">L’original reste privé.</p>';
+  footer=btn('Annuler','cancel-share')+btn('Partager','publish','','primary');
+ }else if(s.panel==='conflict'){
+  heading='Durée des invitations';body='<div class="mp-chips">'+badge('À vérifier','red')+'<span class="mp-small">Non utilisé</span></div><div style="margin-top:24px">'+[
+   ['old','7 jours','Décision · 18 sept.'],['new','24 heures','Guide · 20 sept.']
+  ].map(([v,l,src])=>'<label class="mp-radio"><input type="radio" name="mp-choice" data-field="choice" value="'+v+'"'+(s.choice===v?' checked':'')+'><span>'+l+'<small>'+src+'</small></span></label>').join('')+'</div>'+
+  '<details class="mp-details"><summary class="cursor-interaction">Comparer les sources</summary><blockquote>18 sept. · « Les liens du pilote sont valables sept jours après leur envoi. »</blockquote><blockquote>20 sept. · « La durée de validité est de 24 heures. »</blockquote></details>';
+  footer=btn('Plus tard','close')+btn('Confirmer','resolve','','primary',!s.choice);
+ }
+ return '<div class="mp-overlay"><section class="mp-panel" role="dialog" aria-modal="true" aria-labelledby="mp-dialog-title"><div class="mp-panel-head"><h2 id="mp-dialog-title">'+heading+'</h2>'+ib('x','Fermer','close')+'</div><div class="mp-panel-body">'+body+'</div><div class="mp-panel-footer">'+footer+'</div></section></div>';
+}
+function render(){
+ root.dataset.panel=design.panel;
+ const nav=(view,label,glyph)=>'<button type="button" class="mp-nav cursor-interaction" data-action="view" data-value="'+view+'"'+(s.view===view?' aria-current="page"':'')+'>'+icon(glyph)+label+'</button>';
+ stage.innerHTML='<div class="mp-app"'+(s.panel?' inert aria-hidden="true"':'')+'><aside class="mp-sidebar"><div class="mp-brand">rakazo</div>'+nav('chat','Atlas','message-circle')+nav('library','Mémoire','bookmark')+'<div class="mp-sidebar-bottom"><span class="mp-avatar human">P</span>Produit</div></aside><main class="mp-main"><nav class="mp-mobile-nav" aria-label="Navigation">'+btn('Atlas','view','chat','ghost')+btn('Mémoire','view','library','ghost')+'</nav>'+(s.view==='chat'?chat():library())+'</main></div>'+sheet();
+ notice.innerHTML=s.message?'<span>'+esc(s.message)+'</span>'+(s.undo?'<button type="button" class="mp-link cursor-interaction" data-action="undo">Annuler</button>':''):'';
+ if(globalThis.lucide)lucide.createIcons({attrs:{width:17,height:17}});
+}
+function showPanel(p){s.panel=p;render();stage.querySelector('.mp-panel button')?.focus();}
+function input(name){return stage.querySelector('[data-field="'+name+'"]');}
+function syncDraft(){for(const key of ['text','kind','goal','why']){const n=input('edit-'+key);if(n)s.draft[key]=n.value;}const n=input('edit-impact');if(n)s.draft.impact=n.checked;}
+function fail(text){s.message=text;notice.setAttribute('role','alert');notice.textContent=text;}
+root.addEventListener('input',e=>{
+ const f=e.target.dataset.field;
+ if(f==='query'){const pos=e.target.selectionStart;s.query=e.target.value;render();const n=input('query');n.focus();n.setSelectionRange(pos,pos);}
+ else if(f?.startsWith('edit-'))syncDraft();
+ else if(f==='share-text')s.shareDraft.text=e.target.value;
+});
+root.addEventListener('change',e=>{
+ const f=e.target.dataset.field;
+ if(f==='scope'){s.scope=e.target.value;s.goal=null;s.query='';render();}
+ if(f?.startsWith('edit-'))syncDraft();
+ if(f==='share-scope')s.shareDraft.scope=e.target.value;
+ if(f==='share-source')s.shareDraft.includeSource=e.target.checked;
+ if(f==='choice'){s.choice=e.target.value;const b=stage.querySelector('[data-action="resolve"]');if(b)b.disabled=false;}
+ persist();
+});
+root.addEventListener('click',e=>{
+ const n=e.target.closest('[data-action]');if(!n||n.disabled)return;const a=n.dataset.action,v=n.dataset.value;s.message='';notice.setAttribute('role','status');
+ if(a==='view'){s.view=v;s.panel=null;}
+ else if(a==='atlas-memory'){s.view='library';s.scope='atlas';s.goal=null;s.query='';}
+ else if(a==='open'){s.selected=v;s.panel=find(v).state==='conflict'?'conflict':'detail';}
+ else if(a==='close'){s.panel=null;s.draft=null;s.shareDraft=null;}
+ else if(a==='goal'){s.goal=v;}
+ else if(a==='clear-goal')s.goal=null;
+ else if(a==='retain'){s.kept=true;s.removed=s.removed.filter(id=>id!=='captured');s.message='Retenu pour Atlas.';s.undo={type:'retain'};}
+ else if(a==='undo-retain'){s.kept=false;s.undo=null;}
+ else if(a==='add'){s.draft={text:'',kind:'Connaissance',goal:s.goal||'none',impact:false,why:''};s.panel='add';}
+ else if(a==='edit'){s.draft={...current()};s.panel='edit';}
+ else if(a==='cancel-edit'){s.panel=s.panel==='add'?null:'detail';s.draft=null;}
+ else if(a==='save'){
+  syncDraft();if(!s.draft.text.trim()){fail('Ajoutez un souvenir.');return;}
+  if(s.draft.impact&&(s.draft.goal==='none'||!s.draft.why.trim())){fail('Précisez l’objectif et le motif dans « Classement ».');stage.querySelector('.mp-details').open=true;return;}
+  if(s.panel==='add'){const id='manual-'+s.newRecords.length;s.newRecords.push({...s.draft,id,scope:s.scope,source:'Votre saisie · 21 sept.',quote:s.draft.text,author:'Vous',date:'21 septembre',state:'active'});s.selected=id;}
+  else {rememberVersion(current());s.records[s.selected]={...s.draft,label:undefined,author:'Vous',date:'21 septembre'};}
+  s.panel='detail';s.draft=null;s.message='Enregistré.';
+ }
+ else if(a==='share'){const m=current();s.shareDraft={text:m.text,scope:'team',quote:m.quote||m.text,includeSource:false};s.panel='share';}
+ else if(a==='cancel-share'){s.shareDraft=null;s.panel='detail';}
+ else if(a==='publish'){
+  const d=s.shareDraft;if(!d.text.trim()){fail('Ajoutez le texte à partager.');return;}
+  const id='shared-'+s.shared.length;s.shared.push({id,text:d.text,scope:d.scope,source:d.includeSource?'Extrait partagé · 21 sept.':'Publication par vous · 21 sept.',quote:d.includeSource?d.quote:null,kind:'Connaissance',goal:'none',impact:false,why:'',author:'Vous',date:'21 septembre',state:'active'});
+  s.selected=id;s.scope=d.scope;s.goal=null;s.query='';s.view='library';s.panel=null;s.shareDraft=null;s.message='Partagé avec '+scopeNames[d.scope]+'.';s.undo=null;
+ }
+ else if(a==='remove'){const m=current();s.removed=[...new Set([...s.removed,m.id])];s.undo={type:'remove',id:m.id};s.panel=null;s.message='Retiré des prochains contextes.';}
+ else if(a==='undo'){if(s.undo?.type==='retain')s.kept=false;else if(s.undo?.type==='remove')s.removed=s.removed.filter(id=>id!==s.undo.id);s.undo=null;s.message='Annulé.';}
+ else if(a==='resolve'){if(!s.choice)return;rememberVersion(current());s.conflict=s.choice;s.panel='detail';s.message='Version confirmée.';}
+ else if(a==='send'){const text=input('message')?.value.trim();if(text){s.extraMessage=text;s.message='Message simulé.';}}
+ if(a!=='retain'&&a!=='remove'&&a!=='undo')s.undo=null;
+ render();persist();if(s.panel)stage.querySelector('.mp-panel button')?.focus();
+});
+root.addEventListener('keydown',e=>{if(e.key==='Escape'&&s.panel){s.panel=null;s.draft=null;s.shareDraft=null;render();persist();}});
+render();
+if(globalThis.Tweak){const t=new Tweak({container:root,onChange:()=>{render();persist();}});t.addToggle(design,'impact',{label:'Impact dans la liste'});t.addSelect(design,'panel',{label:'Détail',options:[{label:'Panneau latéral',value:'side'},{label:'Fiche centrée',value:'center'}]});}
+})();
+</script>
+</div>

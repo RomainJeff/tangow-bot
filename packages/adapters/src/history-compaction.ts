@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { DEFAULT_COMPACTION_SETTINGS, estimateTokens } from "@earendil-works/pi-agent-core";
 import type {
   AdapterContext,
@@ -6,21 +7,20 @@ import type {
   AgentRuntime,
   AgentRuntimeEvent,
   JobPublisher,
+  MemoryCommitRequest,
+  MemoryContextManifest,
   MemoryStore,
 } from "@rakazo/adapter-kit";
 import { historyCompactJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { blocksToAgentHistoryText, escapeDirectoryField } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import { Prisma, type PrismaClient } from "@rakazo/db";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { loadGroupMemberNames } from "./group-handoff.js";
-import { loadAgentMemoryContext } from "./memory-context.js";
-import type {
-  ConfiguredMemoryProvider,
-  MemoryProviderResolver,
-} from "./memory-provider-factory.js";
+import { loadAgentMemoryDataContext } from "./memory-context.js";
+import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 
 /**
  * Sentinel for "nothing compacted yet". Message `seq` is 0-based, so an exclusive lower bound of
@@ -48,7 +48,10 @@ export function nextCompactionBatchRange(
   historyCompactedUpToSeq: number | null,
   batchSize: number,
 ): { fromSeqExclusive: number; take: number } {
-  return { fromSeqExclusive: historyCompactedUpToSeq ?? NOTHING_COMPACTED, take: batchSize };
+  return {
+    fromSeqExclusive: historyCompactedUpToSeq ?? NOTHING_COMPACTED,
+    take: batchSize,
+  };
 }
 
 export const COMPACTION_BATCH_SIZE = 50;
@@ -60,6 +63,7 @@ export const MAX_RECALLED_MEMORIES = 5;
 
 export type CompactedHistoryMessage = {
   id?: string;
+  runId?: string | null;
   seq: number;
   role: "user" | "assistant" | "system";
   content: string;
@@ -70,6 +74,67 @@ export interface CompactedHistorySelection {
   history: CompactedHistoryMessage[];
   summary: string | null;
   usedLocalSummary: boolean;
+}
+
+type MemoryManifestEntry = MemoryContextManifest["documents"][number];
+
+function parseMemoryManifest(value: unknown): MemoryManifestEntry[] | null {
+  if (!Array.isArray(value)) return null;
+  const entries: MemoryManifestEntry[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") return null;
+    const row = entry as Record<string, unknown>;
+    if (
+      typeof row.documentId !== "string" ||
+      typeof row.revision !== "number" ||
+      (row.accessVersion !== undefined && typeof row.accessVersion !== "number") ||
+      (row.scope !== "bot" && row.scope !== "user") ||
+      typeof row.path !== "string" ||
+      (row.reason !== "local_lexical_match" && row.reason !== "recent_authorized") ||
+      typeof row.excerptBytes !== "number"
+    ) {
+      return null;
+    }
+    entries.push(row as MemoryManifestEntry);
+  }
+  return entries;
+}
+
+function mergeMemoryManifests(
+  manifests: Array<MemoryManifestEntry[] | null>,
+): MemoryManifestEntry[] | null {
+  if (manifests.some((manifest) => manifest === null)) return null;
+  const unique = new Map<string, MemoryManifestEntry>();
+  for (const manifest of manifests) {
+    for (const entry of manifest ?? []) {
+      const key = `${entry.documentId}:${entry.revision}:${entry.accessVersion ?? ""}`;
+      unique.set(key, entry);
+    }
+  }
+  return [...unique.values()];
+}
+
+async function memoryManifestStillAuthorized(
+  memory: MemoryStore,
+  botId: string,
+  context: AdapterContext,
+  manifest: MemoryManifestEntry[],
+): Promise<boolean> {
+  if (manifest.length === 0) return true;
+  const [botMemory, userMemory] = await Promise.all([
+    memory.read({ scope: "bot", botId }, context),
+    memory.read({ scope: "user" }, context),
+  ]);
+  const current = new Map(
+    [...botMemory.documents, ...userMemory.documents].map((document) => [document.id, document]),
+  );
+  return manifest.every((entry) => {
+    const document = current.get(entry.documentId);
+    return (
+      document?.revision === entry.revision &&
+      (entry.accessVersion === undefined || document.accessVersion === entry.accessVersion)
+    );
+  });
 }
 
 /**
@@ -189,7 +254,10 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
   const { history } = options;
   const contextWindow = options.contextWindow ?? 0;
   if (contextWindow <= 0)
-    return { messages: history.slice(-options.messageWindowSize), mode: "count" };
+    return {
+      messages: history.slice(-options.messageWindowSize),
+      mode: "count",
+    };
 
   const budget = Math.max(
     DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
@@ -216,7 +284,12 @@ export function selectHistoryWindow<T extends SizedHistoryMessage & { role: stri
 }
 
 export function formatRecalledMemory(
-  results: Array<{ memory: string; id?: string; provenance?: string; entity?: string }>,
+  results: Array<{
+    memory: string;
+    id?: string;
+    provenance?: string;
+    entity?: string;
+  }>,
 ): string {
   if (results.length === 0) return "";
   const items = results
@@ -364,13 +437,63 @@ const LEARNED_FACTS_MAX_TOKENS = 1_000;
 
 const LEARNING_SYSTEM_PROMPT = `You extract durable facts from a conversation. Do NOT continue the conversation. Do NOT answer anything in it. Output only the list you are asked for.`;
 
+const CAPTURE_EXTRACTOR_VERSION = "memory-capture-v1";
 const LEARNING_PROMPT = `The messages above are a conversation between a user and an assistant. <durable_memory>, when present, is what the assistant already remembers.
 
-List the durable facts this conversation establishes that are NOT already in that memory. Durable means: preferences of the user, decisions taken, identifiers of named resources (repository, channel, project), and corrections made to the assistant. The thread of the task in progress is NOT durable, leave it out.
+Find up to ${MAX_LEARNED_FACTS} durable facts established by the conversation that are NOT already in that memory. Durable means: preferences, decisions, stable resource identifiers, and corrections. Omit temporary tasks. Every candidate must be one independently reviewable assertion; keep its negation, conditions, exceptions, and time bounds intact. Do not combine unrelated assertions.
 
-Output one Markdown bullet per fact ("- the fact"), each a single self-contained line, at most ${MAX_LEARNED_FACTS}. Output exactly NONE when the conversation establishes nothing new.`;
+For every candidate, cite exactly one sourceMessageId shown in the transcript and copy an exact, contiguous quote from that message's text blocks. Never invent a message id or quote. If no exact supporting quote exists, omit the candidate. Return only JSON: {"candidates":[{"fact":"...","sourceMessageId":"...","quote":"..."}]}. Return {"candidates":[]} when there is nothing new.`;
 
-type CompactionThread = { id: string; botId: string; spaceId: string; userId: string };
+type CompactionThread = {
+  id: string;
+  botId: string;
+  spaceId: string;
+  userId: string;
+};
+
+type ExtractedCaptureCandidate = {
+  fact: string;
+  sourceMessageId: string;
+  quote: string;
+};
+type PersistedCaptureCandidate = {
+  fact: string;
+  idempotencyKey: string;
+  evidence: NonNullable<MemoryCommitRequest["evidence"]>[number];
+};
+
+function parseCaptureCandidates(answer: string): ExtractedCaptureCandidate[] {
+  try {
+    const parsed: unknown = JSON.parse(answer);
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !Array.isArray((parsed as { candidates?: unknown }).candidates)
+    ) {
+      throw new Error("Invalid memory extraction response");
+    }
+    return (parsed as { candidates: unknown[] }).candidates
+      .filter(
+        (candidate): candidate is ExtractedCaptureCandidate =>
+          Boolean(candidate) &&
+          typeof candidate === "object" &&
+          typeof (candidate as ExtractedCaptureCandidate).fact === "string" &&
+          typeof (candidate as ExtractedCaptureCandidate).sourceMessageId === "string" &&
+          typeof (candidate as ExtractedCaptureCandidate).quote === "string",
+      )
+      .slice(0, MAX_LEARNED_FACTS);
+  } catch {
+    throw new Error("Invalid memory extraction response");
+  }
+}
+
+function normalizedSourceText(blocks: MessageBlock[]): string {
+  return blocks.flatMap((block) => (block.kind === "text" ? [block.text] : [])).join("\n");
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
 
 /**
  * Compaction reads the whole backlog, so it is often the most expensive call in a thread.
@@ -414,8 +537,8 @@ async function recordCompactionUsage(
 
 /**
  * A second short run over the batch that just left the history window, asking for the durable
- * facts the bot has not been told to remember. Appending them keeps preferences and corrections
- * alive past compaction, where the structured summary would drop them within a batch or two.
+ * facts the bot has not been told to remember. It creates proposals for preferences and
+ * corrections that could otherwise disappear from the compacted history.
  * The summary's own contract stays untouched: mixing extraction into it degrades both.
  */
 async function learnDurableFacts(
@@ -423,16 +546,40 @@ async function learnDurableFacts(
   thread: CompactionThread,
   options: {
     transcript: string;
+    messages: Array<{ id: string; blocks: MessageBlock[] }>;
     fromSeqExclusive: number;
     model: AgentRunRequest["model"];
     context: AdapterContext;
+    dependencies: MemoryManifestEntry[];
   },
-): Promise<void> {
-  const explicitMemory = await loadAgentMemoryContext(deps.memory, thread.botId, options.context);
+): Promise<{
+  candidates: PersistedCaptureCandidate[];
+  dependencies: MemoryManifestEntry[];
+}> {
+  const memoryContext = await loadAgentMemoryDataContext(
+    deps.memory,
+    thread.botId,
+    options.context,
+  );
+  const extractionManifest = mergeMemoryManifests([
+    options.dependencies,
+    memoryContext?.manifest.documents ?? [],
+  ]);
+  if (
+    !extractionManifest ||
+    !(await memoryManifestStillAuthorized(
+      deps.memory,
+      thread.botId,
+      options.context,
+      extractionManifest,
+    ))
+  ) {
+    throw new Error("Memory access changed before durable-fact extraction.");
+  }
   // Both halves are untrusted data, escaped out of the tags they sit in, as in the summarizer.
   const prompt = [
     `<conversation>\n${escapePromptData(options.transcript)}\n</conversation>`,
-    explicitMemory,
+    memoryContext?.content,
     LEARNING_PROMPT,
   ]
     .filter(Boolean)
@@ -458,6 +605,18 @@ async function learnDurableFacts(
           options.model.maxTokens ?? LEARNED_FACTS_MAX_TOKENS,
         ),
       },
+      beforeModelCall: async () => {
+        if (
+          !(await memoryManifestStillAuthorized(
+            deps.memory,
+            thread.botId,
+            options.context,
+            extractionManifest,
+          ))
+        ) {
+          throw new Error("Memory access changed before durable-fact extraction.");
+        }
+      },
     },
     {
       operationId: `learn:${thread.id}`,
@@ -470,35 +629,377 @@ async function learnDurableFacts(
     if (event.type === "usage") await recordCompactionUsage(deps, thread, event);
     if (event.type === "done" && event.text) answer = event.text.trim();
   }
+  if (
+    !(await memoryManifestStillAuthorized(
+      deps.memory,
+      thread.botId,
+      options.context,
+      extractionManifest,
+    ))
+  ) {
+    throw new Error("Memory access changed before durable-fact proposal.");
+  }
 
   // A runtime failure answers in prose ("I hit a problem: ..."), which carries no bullets and so
   // lands on the same no-write path as a batch that taught nothing.
-  const facts = answer
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => /^[-*]\s+\S/.test(line))
-    .map((line) => redactSensitiveText(`- ${line.slice(1).trim()}`))
-    .slice(0, MAX_LEARNED_FACTS);
-  if (facts.length > 0) {
-    // ponytail: no semantic dedup, the run is told what is already remembered and a duplicate
-    // that slips through is one line to delete in Knowledge. Add a merge pass if they pile up.
-    await deps.memory.commit(
-      {
-        scope: "bot",
-        botId: thread.botId,
-        path: "MEMORY.md",
-        content: `## Learned ${new Date().toISOString().slice(0, 10)}\n${facts.join("\n")}`,
-        mode: "append",
-        sourceThreadId: thread.id,
-      },
-      options.context,
+  const sourceMessages = new Map(
+    options.messages.map((message) => [
+      message.id,
+      { blocks: message.blocks, text: normalizedSourceText(message.blocks) },
+    ]),
+  );
+  const candidates = parseCaptureCandidates(answer);
+  const validatedCandidates: PersistedCaptureCandidate[] = [];
+  for (const candidate of candidates) {
+    const source = sourceMessages.get(candidate.sourceMessageId);
+    const fact = redactSensitiveText(candidate.fact.trim());
+    const quote = candidate.quote.trim();
+    if (!source || !fact || !quote || quote.length > 4_000) continue;
+    const startOffset = source.text.indexOf(quote);
+    if (startOffset < 0) continue;
+    const endOffset = startOffset + quote.length;
+    const sourceVersion = sha256(JSON.stringify(source.blocks));
+    const candidateKey = sha256(
+      `${thread.id}\n${candidate.sourceMessageId}\n${sourceVersion}\n${CAPTURE_EXTRACTOR_VERSION}\n${fact}`,
     );
+    validatedCandidates.push({
+      fact,
+      idempotencyKey: `capture:${candidateKey}`,
+      evidence: {
+        sourceKind: "message",
+        sourceReferenceId: candidate.sourceMessageId,
+        sourceVersion,
+        startOffset,
+        endOffset,
+        excerpt: quote,
+      },
+    });
   }
   getLogger().info("history.compact.learned", {
     threadId: thread.id,
     botId: thread.botId,
-    facts: facts.length,
+    facts: validatedCandidates.length,
   });
+  return { candidates: validatedCandidates, dependencies: extractionManifest };
+}
+
+function parsePersistedCaptureCandidates(value: unknown): PersistedCaptureCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+  const candidates: PersistedCaptureCandidate[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const row = item as Record<string, unknown>;
+    const evidence = row.evidence;
+    if (
+      typeof row.fact !== "string" ||
+      typeof row.idempotencyKey !== "string" ||
+      !evidence ||
+      typeof evidence !== "object"
+    ) {
+      return null;
+    }
+    const proof = evidence as Record<string, unknown>;
+    if (
+      proof.sourceKind !== "message" ||
+      typeof proof.sourceReferenceId !== "string" ||
+      typeof proof.sourceVersion !== "string" ||
+      typeof proof.startOffset !== "number" ||
+      typeof proof.endOffset !== "number" ||
+      typeof proof.excerpt !== "string"
+    ) {
+      return null;
+    }
+    candidates.push({
+      fact: row.fact,
+      idempotencyKey: row.idempotencyKey,
+      evidence: proof as PersistedCaptureCandidate["evidence"],
+    });
+  }
+  return candidates;
+}
+
+type CaptureSourceMessage = { messageId: string; sourceVersion: string };
+
+async function runMemoryCaptureRequest(
+  deps: CompactHistoryDeps,
+  thread: CompactionThread,
+  requestId: string,
+): Promise<void> {
+  const request = await deps.prisma.memoryCaptureRequest.findUnique({
+    where: { id: requestId },
+  });
+  if (request?.status !== "pending") return;
+  const attemptsBefore = request.attempts;
+  if (attemptsBefore >= 5) {
+    await deps.prisma.memoryCaptureRequest.updateMany({
+      where: { id: request.id, status: "pending" },
+      data: {
+        status: "failed",
+        lastError: "capture_attempts_exhausted",
+        candidates: Prisma.DbNull,
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+  await deps.prisma.memoryCaptureRequest.updateMany({
+    where: { id: request.id, status: "pending" },
+    data: { attempts: { increment: 1 }, lastError: null },
+  });
+
+  const stale = async (reason: string) => {
+    await deps.prisma.memoryCaptureRequest.updateMany({
+      where: { id: request.id, status: "pending" },
+      data: {
+        status: "stale",
+        lastError: reason,
+        candidates: Prisma.DbNull,
+        completedAt: new Date(),
+      },
+    });
+  };
+
+  try {
+    const membership = await deps.prisma.spaceMember.findFirst({
+      where: { spaceId: thread.spaceId, userId: thread.userId },
+      select: { id: true },
+    });
+    if (!membership) {
+      await stale("source access revoked");
+      return;
+    }
+    const currentThread = await deps.prisma.thread.findUniqueOrThrow({
+      where: { id: request.threadId },
+      select: { historyCompactionGeneration: true },
+    });
+    if (currentThread.historyCompactionGeneration !== request.historyGeneration) {
+      await stale("history generation changed");
+      return;
+    }
+    const sourceMessages = Array.isArray(request.sourceMessages)
+      ? (request.sourceMessages as unknown as CaptureSourceMessage[])
+      : [];
+    if (
+      sourceMessages.length === 0 ||
+      sourceMessages.some(
+        (source) =>
+          !source ||
+          typeof source.messageId !== "string" ||
+          typeof source.sourceVersion !== "string",
+      )
+    ) {
+      await stale("source message manifest is invalid");
+      return;
+    }
+    const messages = await deps.prisma.message.findMany({
+      where: {
+        id: { in: sourceMessages.map((source) => source.messageId) },
+        threadId: thread.id,
+      },
+      select: { id: true, seq: true, role: true, blocks: true, botId: true },
+    });
+    const byId = new Map(messages.map((message) => [message.id, message]));
+    const orderedMessages = sourceMessages.map((source) => byId.get(source.messageId));
+    if (
+      orderedMessages.some(
+        (message, index) =>
+          !message ||
+          sha256(JSON.stringify(message.blocks)) !== sourceMessages[index]!.sourceVersion,
+      )
+    ) {
+      await stale("source message changed or was deleted");
+      return;
+    }
+    let parsedManifest = parseMemoryManifest(request.memoryManifest);
+    if (
+      parsedManifest === null ||
+      !(await memoryManifestStillAuthorized(
+        deps.memory,
+        thread.botId,
+        {
+          operationId: `history-compact:${thread.id}`,
+          traceId: `history-compact:${thread.id}`,
+          spaceId: thread.spaceId,
+          userId: thread.userId,
+          botId: thread.botId,
+          signal: AbortSignal.timeout(SUMMARIZE_TIMEOUT_MS),
+        },
+        parsedManifest,
+      ))
+    ) {
+      await stale("memory dependencies are no longer authorized");
+      return;
+    }
+    const captureContext: AdapterContext = {
+      operationId: `history-compact:${thread.id}`,
+      traceId: `history-compact:${thread.id}`,
+      spaceId: thread.spaceId,
+      userId: thread.userId,
+      botId: thread.botId,
+      signal: AbortSignal.timeout(SUMMARIZE_TIMEOUT_MS),
+    };
+    const captureMessages = orderedMessages.map((message) => ({
+      id: message!.id,
+      blocks: message!.blocks as MessageBlock[],
+    }));
+    const transcript = orderedMessages
+      .map((message) => {
+        const current = message!;
+        return `[sourceMessageId:${current.id}] ${current.role}: ${blocksToAgentHistoryText(current.blocks as MessageBlock[])}`;
+      })
+      .join("\n\n");
+    const model = deps.resolveModel
+      ? await deps.resolveModel({
+          userId: thread.userId,
+          spaceId: thread.spaceId,
+          botId: thread.botId,
+        })
+      : await (async () => {
+          const deploymentFallback = resolveDeploymentModel();
+          const settings = await deps.prisma.deploymentSettings.findUnique({
+            where: { id: "default" },
+          });
+          return {
+            provider: settings?.defaultModelProvider ?? deploymentFallback.provider,
+            id: settings?.defaultModelId ?? deploymentFallback.model,
+            apiKey: deps.deploymentModelKey,
+          };
+        })();
+    let candidates = parsePersistedCaptureCandidates(request.candidates);
+    if (candidates === null) {
+      const extraction = await learnDurableFacts(deps, thread, {
+        transcript,
+        messages: captureMessages,
+        fromSeqExclusive: request.fromSeqExclusive,
+        model,
+        context: captureContext,
+        dependencies: parsedManifest,
+      });
+      candidates = extraction.candidates;
+      parsedManifest = extraction.dependencies;
+      const stored = await deps.prisma.memoryCaptureRequest.updateMany({
+        where: {
+          id: request.id,
+          status: "pending",
+          candidates: { equals: Prisma.DbNull },
+        },
+        data: { candidates, memoryManifest: parsedManifest },
+      });
+      if (stored.count === 0) {
+        const currentRequest = await deps.prisma.memoryCaptureRequest.findUnique({
+          where: { id: request.id },
+        });
+        const persisted = parsePersistedCaptureCandidates(currentRequest?.candidates);
+        if (!persisted) throw new Error("capture candidates could not be persisted");
+        candidates = persisted;
+      }
+    }
+
+    // The model call and every memory write may take long enough for the source
+    // or its dependencies to change. Check all inputs at every write boundary,
+    // including after the final awaited write and before marking the request done.
+    const captureInputsChanged = async () => {
+      if (
+        !(await memoryManifestStillAuthorized(
+          deps.memory,
+          thread.botId,
+          captureContext,
+          parsedManifest,
+        ))
+      )
+        return "memory dependencies are no longer authorized";
+
+      const [latestMembership, latestThread, latestMessages] = await Promise.all([
+        deps.prisma.spaceMember.findFirst({
+          where: { spaceId: thread.spaceId, userId: thread.userId },
+          select: { id: true },
+        }),
+        deps.prisma.thread.findUnique({
+          where: { id: request.threadId },
+          select: { historyCompactionGeneration: true },
+        }),
+        deps.prisma.message.findMany({
+          where: {
+            id: { in: sourceMessages.map((source) => source.messageId) },
+            threadId: thread.id,
+          },
+          select: { id: true, blocks: true },
+        }),
+      ]);
+      if (!latestMembership) return "source access revoked";
+      if (!latestThread || latestThread.historyCompactionGeneration !== request.historyGeneration)
+        return "history generation changed";
+      const latestById = new Map(latestMessages.map((message) => [message.id, message]));
+      if (
+        sourceMessages.some((source) => {
+          const message = latestById.get(source.messageId);
+          return !message || sha256(JSON.stringify(message.blocks)) !== source.sourceVersion;
+        })
+      )
+        return "source message changed or was deleted";
+      return null;
+    };
+
+    const initialStaleReason = await captureInputsChanged();
+    if (initialStaleReason) {
+      await stale(initialStaleReason);
+      return;
+    }
+    for (const candidate of candidates) {
+      const staleReason = await captureInputsChanged();
+      if (staleReason) {
+        await stale(staleReason);
+        return;
+      }
+      await deps.memory.commit(
+        {
+          scope: "bot",
+          botId: thread.botId,
+          path: "MEMORY.md",
+          content: candidate.fact,
+          mode: "append",
+          sourceThreadId: thread.id,
+          idempotencyKey: candidate.idempotencyKey,
+          evidence: [candidate.evidence],
+        },
+        captureContext,
+      );
+    }
+    const finalStaleReason = await captureInputsChanged();
+    if (finalStaleReason) {
+      await stale(finalStaleReason);
+      return;
+    }
+    await deps.prisma.memoryCaptureRequest.updateMany({
+      where: { id: request.id, status: "pending" },
+      data: {
+        status: "completed",
+        completedAt: new Date(),
+        lastError: null,
+        candidates: Prisma.DbNull,
+      },
+    });
+  } catch (error) {
+    // Retry with bounded exponential delay; a permanently unavailable extractor
+    // must not turn the reconciliation loop into an unbounded model-call loop.
+    const attempts = attemptsBefore + 1;
+    const exhausted = attempts >= 5;
+    await deps.prisma.memoryCaptureRequest.updateMany({
+      where: { id: request.id, status: "pending" },
+      data: {
+        status: exhausted ? "failed" : "pending",
+        attempts,
+        lastError: "capture_attempt_failed",
+        availableAt: exhausted ? request.availableAt : new Date(Date.now() + 1_000 * 2 ** attempts),
+        ...(exhausted ? { candidates: Prisma.DbNull, completedAt: new Date() } : {}),
+      },
+    });
+    getLogger().warn("history.compact durable capture attempt failed", {
+      threadId: thread.id,
+      exhausted,
+      errorType: error instanceof Error ? error.name : "unknown",
+    });
+  }
 }
 
 export interface CompactHistoryDeps {
@@ -516,7 +1017,9 @@ export interface CompactHistoryDeps {
 }
 
 export async function compactHistory(deps: CompactHistoryDeps, threadId: string): Promise<void> {
-  const thread = await deps.prisma.thread.findUniqueOrThrow({ where: { id: threadId } });
+  const thread = await deps.prisma.thread.findUniqueOrThrow({
+    where: { id: threadId },
+  });
   if (!thread.botId) return;
   // Narrowed once for the writes below. A thread without an owning bot (a group, a team chat)
   // has no memory to write to, which is what the early return above already settles.
@@ -526,9 +1029,37 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
     spaceId: thread.spaceId,
     userId: thread.userId,
   };
+  const memoryContext: AdapterContext = {
+    operationId: `history-compact:${threadId}`,
+    traceId: `history-compact:${threadId}`,
+    spaceId: thread.spaceId,
+    userId: thread.userId,
+    botId: thread.botId,
+    signal: AbortSignal.timeout(SUMMARIZE_TIMEOUT_MS),
+  };
+  const pendingCapture = await deps.prisma.memoryCaptureRequest.findFirst({
+    where: { threadId, status: "pending", availableAt: { lte: new Date() } },
+    orderBy: { createdAt: "asc" },
+  });
+  if (pendingCapture) await runMemoryCaptureRequest(deps, botThread, pendingCapture.id);
   const previousCursor = thread.historyCompactedUpToSeq;
   const previousGeneration = thread.historyCompactionGeneration;
-  let previousSummary = thread.historyCompactionSummary?.trim() || null;
+  const previousManifest =
+    thread.historyCompactionSummary === null
+      ? ([] as MemoryManifestEntry[])
+      : parseMemoryManifest(thread.historyCompactionMemoryManifest);
+  // A legacy summary has no dependency proof. Do not carry it into a new
+  // summary, where it could preserve a withdrawn document indefinitely.
+  let previousSummary =
+    previousManifest === null ||
+    !(await memoryManifestStillAuthorized(
+      deps.memory,
+      thread.botId,
+      memoryContext,
+      previousManifest,
+    ))
+      ? null
+      : thread.historyCompactionSummary?.trim() || null;
   const needsLocalBootstrap =
     previousGeneration === 0 && previousCursor !== null && !previousSummary;
   const wasClearedBeforeGenerationTracking = needsLocalBootstrap
@@ -548,7 +1079,14 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
   }
 
   let fromSeqExclusive = previousCursor ?? NOTHING_COMPACTED;
-  let batch: Array<{ seq: number; role: string; blocks: unknown; botId: string | null }> = [];
+  let batch: Array<{
+    id: string;
+    seq: number;
+    role: string;
+    blocks: unknown;
+    botId: string | null;
+    runId: string | null;
+  }> = [];
   let bootstrappingLocalSummary = false;
   if (needsLocalBootstrap) {
     if (previousCursor < 0) {
@@ -559,7 +1097,14 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
       where: { threadId, seq: { lte: previousCursor } },
       orderBy: { seq: "desc" },
       take: LEGACY_HISTORY_WINDOW_SIZE + 1,
-      select: { seq: true, role: true, blocks: true, botId: true },
+      select: {
+        id: true,
+        seq: true,
+        role: true,
+        blocks: true,
+        botId: true,
+        runId: true,
+      },
     });
     batch = bootstrapCandidates.reverse();
     if (batch.length > 0) {
@@ -592,7 +1137,14 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
       where: { threadId, seq: { gt: range.fromSeqExclusive } },
       orderBy: { seq: "asc" },
       take: range.take,
-      select: { seq: true, role: true, blocks: true, botId: true },
+      select: {
+        id: true,
+        seq: true,
+        role: true,
+        blocks: true,
+        botId: true,
+        runId: true,
+      },
     });
     // A rewind deletes messages without rewinding nextMessageSeq, so seq holes are normal and
     // permanent. A hole here is a gap that is real, not one this query failed to load: the
@@ -608,6 +1160,38 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
       );
     }
   }
+  if (batch.length === 0) return;
+
+  // Assistant text and prior summaries are derived artefacts. Resolve and validate every
+  // dependency before any of their bodies reach the summarizer; user messages remain usable.
+  const dependentRunIds = [
+    ...new Set(batch.flatMap((message) => (message.runId ? [message.runId] : []))),
+  ];
+  const dependentRuns =
+    dependentRunIds.length === 0
+      ? []
+      : await deps.prisma.run.findMany({
+          where: { id: { in: dependentRunIds } },
+          select: { id: true, memoryContextManifest: true },
+        });
+  const manifestsByRun = new Map(
+    dependentRuns.map((run) => [run.id, parseMemoryManifest(run.memoryContextManifest)]),
+  );
+  const authorizedRuns = new Map<string, MemoryManifestEntry[]>();
+  for (const runId of dependentRunIds) {
+    const manifest = manifestsByRun.get(runId);
+    if (
+      manifest &&
+      (await memoryManifestStillAuthorized(deps.memory, thread.botId, memoryContext, manifest))
+    ) {
+      authorizedRuns.set(runId, manifest);
+    }
+  }
+  batch = batch.filter(
+    (message) =>
+      !["assistant", "bot"].includes(message.role) ||
+      Boolean(message.runId && authorizedRuns.has(message.runId)),
+  );
   if (batch.length === 0) return;
 
   // A group thread stores every member's posts under role "bot", so the raw role collapses the
@@ -652,6 +1236,13 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
     batch = batch.slice(0, fittingParts.length);
     transcript = fittingParts.join("\n\n");
   }
+  const summaryManifest = mergeMemoryManifests([
+    previousSummary ? previousManifest : [],
+    ...batch
+      .filter((message) => ["assistant", "bot"].includes(message.role) && Boolean(message.runId))
+      .map((message) => authorizedRuns.get(message.runId!) ?? null),
+  ]);
+  if (!summaryManifest) return;
   // Same shape as pi-agent-core's `generateSummaryWithRequest`: conversation, then the previous
   // summary when one exists, then the format instructions. Both halves are untrusted data, so the
   // tags they sit in are escaped out of their own content.
@@ -718,6 +1309,18 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
         ...model,
         maxTokens: Math.min(SUMMARY_MAX_TOKENS, model.maxTokens ?? SUMMARY_MAX_TOKENS),
       },
+      beforeModelCall: async () => {
+        if (
+          !(await memoryManifestStillAuthorized(
+            deps.memory,
+            botThread.botId,
+            memoryContext,
+            summaryManifest,
+          ))
+        ) {
+          throw new Error("Memory access changed before compaction.");
+        }
+      },
     },
     {
       operationId: `compact:${threadId}`,
@@ -748,56 +1351,83 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
     summary = truncateSummary(summary);
   }
 
-  const lastSeq = batch[batch.length - 1]!.seq;
-  const advanced = await deps.prisma.thread.updateMany({
-    where: {
-      id: threadId,
-      historyCompactedUpToSeq: previousCursor,
-      historyCompactionGeneration: previousGeneration,
-    },
-    data: {
-      historyCompactedUpToSeq: lastSeq,
-      historyCompactionSummary: summary,
-    },
+  const sourceVersions = new Map(
+    batch.map((message) => [message.id, sha256(JSON.stringify(message.blocks))]),
+  );
+  const latestSources = await deps.prisma.message.findMany({
+    where: { id: { in: [...sourceVersions.keys()] }, threadId },
+    select: { id: true, blocks: true },
   });
-  if (advanced.count === 0) return;
+  if (
+    latestSources.length !== sourceVersions.size ||
+    latestSources.some(
+      (message) => sourceVersions.get(message.id) !== sha256(JSON.stringify(message.blocks)),
+    )
+  ) {
+    getLogger().warn("history.compact source changed while summarizing", {
+      threadId,
+    });
+    return;
+  }
 
-  // Local compaction is first-party behavior and must not depend on an optional external store.
-  // Saving only after the compare-and-set also prevents losing workers from creating duplicates.
-  let semanticMemory: ConfiguredMemoryProvider | null = null;
-  try {
-    semanticMemory = await deps.memoryProviders.resolve(thread.spaceId);
-  } catch (error) {
-    getLogger().error("Failed to load semantic memory provider for history compaction", error);
+  if (
+    !(await memoryManifestStillAuthorized(
+      deps.memory,
+      thread.botId,
+      memoryContext,
+      summaryManifest,
+    ))
+  ) {
+    throw new Error("Memory access changed before saving compaction.");
   }
-  let externalSaveAttempted = false;
-  const memoryContext = {
-    operationId: `history-compact:${threadId}`,
-    traceId: `history-compact:${threadId}`,
-    spaceId: thread.spaceId,
-    userId: thread.userId,
-    botId: thread.botId,
-    signal: new AbortController().signal,
-  };
-  if (semanticMemory) {
-    externalSaveAttempted = true;
-    try {
-      const result = await semanticMemory.provider.save(
-        {
-          content: summary,
-          scope: "isolated",
-          botId: thread.botId,
-          source: { kind: "history", generation: previousGeneration },
+
+  const lastSeq = batch[batch.length - 1]!.seq;
+  const carriesChannelPosts = batch.some((message) =>
+    (message.blocks as MessageBlock[]).some((block) => block.kind === "channel_message"),
+  );
+  const captureKey = !carriesChannelPosts
+    ? `capture:${sha256(`${threadId}\n${previousGeneration}\n${fromSeqExclusive}\n${lastSeq}\n${CAPTURE_EXTRACTOR_VERSION}`)}`
+    : undefined;
+  const transactionResult = await deps.prisma.$transaction(async (tx) => {
+    const advanced = await tx.thread.updateMany({
+      where: {
+        id: threadId,
+        historyCompactedUpToSeq: previousCursor,
+        historyCompactionGeneration: previousGeneration,
+      },
+      data: {
+        historyCompactedUpToSeq: lastSeq,
+        historyCompactionSummary: summary,
+        // Include every model context dependency of assistant turns condensed in
+        // this summary. Null is fail-closed and makes the executor omit it.
+        historyCompactionMemoryManifest: summaryManifest,
+      },
+    });
+    if (advanced.count === 0) return { advanced: false };
+    let pendingCaptureId: string | undefined;
+    if (captureKey) {
+      const pendingCapture = await tx.memoryCaptureRequest.create({
+        data: {
+          idempotencyKey: captureKey,
+          threadId,
+          botId: botThread.botId,
+          spaceId: thread.spaceId,
+          userId: thread.userId,
+          historyGeneration: previousGeneration,
+          fromSeqExclusive,
+          toSeqInclusive: lastSeq,
+          sourceMessages: batch.map((message) => ({
+            messageId: message.id,
+            sourceVersion: sha256(JSON.stringify(message.blocks)),
+          })),
+          memoryManifest: summaryManifest,
         },
-        memoryContext,
-      );
-      if (!result.ok) {
-        getLogger().error(`Failed to save compacted semantic memory: ${result.error}`);
-      }
-    } catch (error) {
-      getLogger().error("Failed to save compacted memory", error);
+      });
+      pendingCaptureId = pendingCapture.id;
     }
-  }
+    return { advanced: true, captureRequestId: pendingCaptureId };
+  });
+  if (!transactionResult.advanced) return;
 
   const latest = await deps.prisma.thread.findUniqueOrThrow({
     where: { id: threadId },
@@ -808,49 +1438,8 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
     },
   });
 
-  // A clear can commit and purge while the network save above is still in flight. Purge the old
-  // generation again so that the late save cannot leave cleared conversation data behind.
-  if (
-    externalSaveAttempted &&
-    semanticMemory &&
-    latest.historyCompactionGeneration !== previousGeneration
-  ) {
-    try {
-      const removed = await semanticMemory.provider.purgeHistory(
-        { botId: thread.botId, generations: [previousGeneration] },
-        memoryContext,
-      );
-      if (!removed.ok) {
-        getLogger().error(
-          `history.compact could not purge stale semantic memory: ${removed.error}`,
-        );
-      }
-    } catch (error) {
-      getLogger().error("history.compact could not purge stale semantic memory", error);
-    }
-  }
-
-  // Channel posts are carried into the owner bot's own thread, so the batch, not the thread, is
-  // what says a conversation was public. A channel's content never reaches durable memory: that
-  // privacy boundary is the point of keeping channel runs memory-less.
-  // ponytail: one channel post skips the whole batch. Filter per message if bots that are active
-  // in a channel stop learning from their own direct conversation.
-  const carriesChannelPosts = batch.some((message) =>
-    (message.blocks as MessageBlock[]).some((block) => block.kind === "channel_message"),
-  );
-  if (!carriesChannelPosts) {
-    try {
-      await learnDurableFacts(deps, botThread, {
-        transcript,
-        fromSeqExclusive,
-        model,
-        context: memoryContext,
-      });
-    } catch (error) {
-      // The batch is already summarized and the cursor already moved: a failed extraction costs
-      // the facts of one batch, never the compaction. No retry, the next batch gets its own run.
-      getLogger().error("history.compact could not learn durable facts", error);
-    }
+  if (transactionResult.captureRequestId) {
+    await runMemoryCaptureRequest(deps, botThread, transactionResult.captureRequestId);
   }
 
   // Drain a pre-existing backlog at queue speed rather than one batch per completed run, which

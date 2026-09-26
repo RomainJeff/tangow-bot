@@ -12,7 +12,7 @@ import {
   parseModelMaxTokens,
 } from "@rakazo/contracts";
 import { createModelProbe, featuredModelProviders, initialModelProbeState } from "@rakazo/core";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -64,6 +64,7 @@ type ModelSelection = {
 export default function Models() {
   const styles = useThemedStyles(createModelsStyles);
   const { t } = useI18n();
+  const router = useRouter();
   const colorScheme = useResolvedAppearance();
   const [catalog, setCatalog] = useState<MobileModel[]>([]);
   const [credentials, setCredentials] = useState<MobileModelCredential[]>([]);
@@ -482,6 +483,13 @@ export default function Models() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/judgment-connection")}
+          style={styles.card}
+        >
+          <Text style={styles.sectionTitle}>{t("Judgment model")}</Text>
+        </Pressable>
         <Text style={styles.sectionTitle}>{t("Providers")}</Text>
         <View style={styles.card}>
           {visibleGroups.map((group) => {

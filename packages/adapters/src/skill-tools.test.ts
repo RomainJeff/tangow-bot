@@ -340,13 +340,13 @@ describe("skill tools", () => {
       update: {},
     });
 
-    // Builtins default to "all", so every bot sees them alongside its own visible skills.
+    // General builtins remain visible; the memory-management skill starts unassigned.
     const forA = await listAgentSkillRecords(deps, { ...scope, botId: "botA" });
     expect(forA.map((s) => s.name)).toEqual(["Interrogate", "Everyone", "Only bot A"]);
     const forB = await listAgentSkillRecords(deps, { ...scope, botId: "botB" });
     expect(forB.map((s) => s.name)).toEqual(["Interrogate", "Everyone", "Not for A"]);
     const all = await listAgentSkillRecords(deps, scope);
-    expect(all).toHaveLength(4);
+    expect(all).toHaveLength(5);
     // skill_read follows the same visibility.
     expect(
       await skillReadFromTool(deps, { ...scope, botId: "botB" }, { name: "Only bot A" }),

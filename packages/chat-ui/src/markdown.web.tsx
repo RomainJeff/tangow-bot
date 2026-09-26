@@ -77,7 +77,8 @@ function CodeBlock(props: React.ComponentPropsWithoutRef<"pre">) {
 
 const components: Components = {
   a({ node: _node, ...props }) {
-    return <a {...props} target="_blank" rel="noreferrer noopener" />;
+    const internal = props.href?.startsWith("/") && !props.href.startsWith("//");
+    return <a {...props} target={internal ? "_self" : "_blank"} rel="noreferrer noopener" />;
   },
   img({ node: _node, ...props }) {
     return <img {...props} alt={props.alt ?? ""} loading="lazy" />;

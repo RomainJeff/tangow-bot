@@ -93,12 +93,13 @@ test("message hover shows a floating action pill; reply links to parent", async 
   await expect(botRow.getByTestId("message-hover-time")).toHaveCount(0);
   await expect(botRow.locator('[data-slot="message-row-time"]')).toHaveText(/\d/);
 
-  // On a fine (desktop) pointer the pill shows Reply/Copy directly; More only
-  // carries what isn't already a pill icon (Edit, user rows only), so a bot
-  // row — nothing left to add — hides it there rather than open onto nothing.
+  // Reply/Copy stay direct actions; Remember belongs in More.
   await expect(botToolbar.getByRole("button", { name: "Reply" })).toBeVisible();
   await expect(botToolbar.getByRole("button", { name: "Copy" })).toBeVisible();
-  await expect(botToolbar.getByRole("button", { name: "More" })).toBeHidden();
+  await expect(botToolbar.getByRole("button", { name: "More" })).toBeVisible();
+  await botToolbar.getByRole("button", { name: "More" }).click();
+  await expect(page.getByRole("menuitem", { name: "Remember", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   // Voice is not configured in this test, so the pill carries no Speak button.
   await expect(botToolbar.getByRole("button", { name: "Speak this reply" })).toHaveCount(0);
   await expectPillAtTopEnd(botPill, botRow);
@@ -122,8 +123,7 @@ test("message hover shows a floating action pill; reply links to parent", async 
   const toolbar = parentRow.getByTestId("message-hover-actions");
   await expect(toolbar.getByRole("button", { name: "Reply" })).toBeVisible();
   await expect(toolbar.getByRole("button", { name: "Copy" })).toBeVisible();
-  // A user row is the one case More still shows on a fine pointer — Edit and
-  // resend is never a pill icon, on either density.
+  // Edit and resend remains in More alongside Remember.
   await expect(toolbar.getByRole("button", { name: "More" })).toBeVisible();
   await toolbar.getByRole("button", { name: "More" }).click();
   await expect(page.getByRole("menuitem", { name: "Edit and resend" })).toBeVisible();

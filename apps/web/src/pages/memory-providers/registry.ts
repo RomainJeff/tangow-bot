@@ -25,7 +25,7 @@ export const MEMORY_PROVIDER_SETTINGS: readonly MemoryProviderSettingsRegistrati
   {
     id: "supermemory",
     name: "Supermemory",
-    description: "Add semantic recall alongside native MEMORY.md memory.",
+    description: "Optional provider configuration. Library memories stay local to this Space.",
     SettingsForm: SupermemorySettingsForm,
     connectedLabel: (config) =>
       config.settings.mode === "cloud" ? "Supermemory Cloud" : `Local · ${config.settings.baseUrl}`,
@@ -33,7 +33,8 @@ export const MEMORY_PROVIDER_SETTINGS: readonly MemoryProviderSettingsRegistrati
   {
     id: "serenity",
     name: "Serenity",
-    description: "Self-hosted Serenity brain for durable memory.",
+    description:
+      "Optional provider configuration. Provider recall is paused until compatible memory IDs are available.",
     SettingsForm: SerenitySettingsForm,
     connectedLabel: (config) => {
       const label = config.settings.brainLabel?.trim();

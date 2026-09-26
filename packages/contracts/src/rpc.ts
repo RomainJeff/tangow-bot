@@ -3,6 +3,12 @@ import * as z from "zod";
 import { AiConsentQuerySchema, AiConsentStatusSchema } from "./ai-consent.js";
 import { ATTACHMENT_MAX_BASE64_LENGTH, ATTACHMENT_MAX_COUNT } from "./attachments.js";
 import {
+  BotMemoryClassificationResultSchema,
+  MemoryMethodAnnotationSchema,
+  MemoryMethodSnapshotSchema,
+  MemoryMethodUpdateInputSchema,
+} from "./bot-memory-method.js";
+import {
   ActionApprovalRuleSchema,
   ActionAutoReviewSettingsSchema,
   AgentSecretInputSchema,
@@ -39,8 +45,15 @@ import {
   MarketplaceUpdateCheckSchema,
   McpServerConfigInput,
   McpServerSchema,
+  MEMORY_CONTENT_MAX_LENGTH,
+  MemoryCollectionKindSchema,
   MemoryDocumentSchema,
+  MemoryLibraryDocumentSchema,
+  MemoryLibraryRevisionSchema,
+  MemoryLibrarySummarySchema,
+  MemoryQualificationSchema,
   MemoryScopeSchema,
+  MemoryStatusSchema,
   MeSchema,
   MessagingAgentConnectionSchema,
   MessagingChannelMembershipSchema,
@@ -85,6 +98,10 @@ import {
   IntegrationProviderConfigSchema,
   IntegrationSetupStateSchema,
 } from "./integration-settings.js";
+import {
+  MemoryClassifierConnectionInputSchema,
+  MemoryClassifierSettingsSchema,
+} from "./memory-classifier.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
@@ -157,6 +174,7 @@ export const appContract = {
           scope: z.string(),
           version: z.string(),
           keys: z.array(z.string()).min(1).max(200),
+          query: AiConsentQuerySchema.optional(),
         }),
       )
       .output(AiConsentStatusSchema),
@@ -198,6 +216,13 @@ export const appContract = {
     apply: oc.input(ServerUpdateRequestSchema).output(ServerUpdateRunSchema),
   },
   models: {
+    judgmentConnection: {
+      get: oc.output(MemoryClassifierSettingsSchema),
+      connect: oc
+        .input(MemoryClassifierConnectionInputSchema)
+        .output(MemoryClassifierSettingsSchema),
+      disconnect: oc.output(MemoryClassifierSettingsSchema),
+    },
     list: oc.output(z.array(ModelCatalogEntrySchema)),
     credentials: oc.output(z.array(ModelCredentialSchema)),
     connect: oc.input(ModelConnectInputSchema).output(ModelCredentialSchema),
@@ -252,6 +277,28 @@ export const appContract = {
     remove: oc
       .input(z.object({ botId: Id, deleteMemories: z.boolean().default(false) }))
       .output(z.object({ ok: z.literal(true) })),
+    memoryMethod: {
+      get: oc.input(botId).output(
+        z.object({
+          method: MemoryMethodSnapshotSchema.nullable(),
+          currentVersion: z.number().int().positive().nullable(),
+          canConfigure: z.boolean(),
+        }),
+      ),
+      update: oc.input(MemoryMethodUpdateInputSchema).output(MemoryMethodSnapshotSchema),
+      disable: oc
+        .input(z.object({ botId: Id, expectedVersion: z.number().int().positive() }))
+        .output(z.object({ ok: z.literal(true) })),
+      list: oc.output(
+        z.array(
+          z.object({
+            bot: z.object({ id: Id, name: z.string() }),
+            method: MemoryMethodSnapshotSchema,
+            isOwn: z.boolean(),
+          }),
+        ),
+      ),
+    },
     rotateWebhookSecret: oc.input(botId).output(
       z.object({
         secret: z.string(),
@@ -386,11 +433,197 @@ export const appContract = {
     heartbeat: oc.input(botId).output(z.object({ ok: z.literal(true) })),
   },
   memory: {
+    library: {
+      list: oc
+        .input(
+          z.object({
+            collection: MemoryCollectionKindSchema.optional(),
+            botId: Id.optional(),
+            query: z.string().max(500).optional(),
+            status: MemoryStatusSchema.optional(),
+            cursor: z.string().optional(),
+            limit: z.number().int().min(1).max(100).default(30),
+          }),
+        )
+        .output(
+          z.object({
+            items: z.array(MemoryLibrarySummarySchema),
+            nextCursor: z.string().nullable(),
+            facets: z.object({
+              active: z.number().int(),
+              proposed: z.number().int(),
+              withdrawn: z.number().int(),
+            }),
+          }),
+        ),
+      get: oc.input(z.object({ documentId: Id })).output(MemoryLibraryDocumentSchema),
+      classify: oc
+        .input(
+          z.object({ botId: Id, documentId: Id, expectedRevision: z.number().int().positive() }),
+        )
+        .output(BotMemoryClassificationResultSchema),
+      classificationRun: oc
+        .input(z.object({ classificationId: Id, documentId: Id }))
+        .output(BotMemoryClassificationResultSchema.nullable()),
+      reviewClassification: oc
+        .input(
+          z.object({
+            classificationId: Id,
+            expectedRevision: z.number().int().positive(),
+            reviewedQuestionKeys: z.array(z.string().min(1).max(40)).min(1).max(8),
+            answers: z.record(z.string().min(1).max(40), z.string().nullable()),
+            shareWithTeam: z.boolean().default(false),
+          }),
+        )
+        .output(z.object({ feedbackId: Id })),
+      annotations: oc
+        .input(z.object({ documentId: Id }))
+        .output(z.array(MemoryMethodAnnotationSchema)),
+      revokeClassificationFeedback: oc
+        .input(z.object({ feedbackId: Id }))
+        .output(z.object({ ok: z.literal(true) })),
+      create: oc
+        .input(
+          z.object({
+            collection: MemoryCollectionKindSchema,
+            botId: Id.optional(),
+            title: z.string().max(240).optional(),
+            content: z.string().max(MEMORY_CONTENT_MAX_LENGTH),
+            qualification: MemoryQualificationSchema.optional(),
+            validFrom: IsoDate.optional(),
+            validUntil: IsoDate.optional(),
+            idempotencyKey: z.string().min(1).max(200).optional(),
+          }),
+        )
+        .output(MemoryLibraryDocumentSchema),
+      capture: oc
+        .input(
+          z.object({
+            botId: Id.optional(),
+            messageId: Id,
+            title: z.string().max(240).optional(),
+            content: z.string().max(MEMORY_CONTENT_MAX_LENGTH).optional(),
+            qualification: MemoryQualificationSchema.optional(),
+            idempotencyKey: z.string().min(1).max(200).optional(),
+          }),
+        )
+        .output(MemoryLibraryDocumentSchema),
+      update: oc
+        .input(
+          z
+            .object({
+              documentId: Id,
+              expectedRevision: z.number().int().positive(),
+              title: z.string().max(240).optional(),
+              content: z.string().max(MEMORY_CONTENT_MAX_LENGTH).optional(),
+              qualification: MemoryQualificationSchema.optional(),
+              validFrom: IsoDate.nullable().optional(),
+              validUntil: IsoDate.nullable().optional(),
+              replaceDocumentId: Id.optional(),
+              replacedExpectedRevision: z.number().int().positive().optional(),
+            })
+            .superRefine((value, ctx) => {
+              if (value.replaceDocumentId && !value.replacedExpectedRevision)
+                ctx.addIssue({
+                  code: "custom",
+                  path: ["replacedExpectedRevision"],
+                  message: "Expected revision is required for the replaced memory",
+                });
+              if (!value.replaceDocumentId && value.replacedExpectedRevision)
+                ctx.addIssue({
+                  code: "custom",
+                  path: ["replaceDocumentId"],
+                  message: "A replacement target is required",
+                });
+            }),
+        )
+        .output(MemoryLibraryDocumentSchema),
+      accept: oc
+        .input(z.object({ documentId: Id, expectedRevision: z.number().int().positive() }))
+        .output(MemoryLibraryDocumentSchema),
+      acceptConsolidation: oc
+        .input(
+          z.object({
+            documentId: Id,
+            expectedRevision: z.number().int().positive(),
+            replaceSources: z.boolean().default(false),
+          }),
+        )
+        .output(MemoryLibraryDocumentSchema),
+      proposeConsolidation: oc
+        .input(
+          z.object({
+            sources: z
+              .array(z.object({ documentId: Id, revision: z.number().int().positive() }))
+              .min(2)
+              .max(8),
+            content: z.string().min(1).max(MEMORY_CONTENT_MAX_LENGTH),
+            title: z.string().max(240).optional(),
+            idempotencyKey: z.string().min(1).max(200).optional(),
+          }),
+        )
+        .output(MemoryLibraryDocumentSchema),
+      restore: oc
+        .input(z.object({ documentId: Id, expectedRevision: z.number().int().positive() }))
+        .output(MemoryLibraryDocumentSchema),
+      publish: oc
+        .input(
+          z.object({
+            documentId: Id,
+            expectedRevision: z.number().int().positive(),
+            title: z.string().max(240).optional(),
+            content: z.string().max(MEMORY_CONTENT_MAX_LENGTH),
+            qualification: MemoryQualificationSchema.optional(),
+            includeSourceExcerpt: z.boolean().default(false),
+            idempotencyKey: z.string().min(1).max(200).optional(),
+          }),
+        )
+        .output(MemoryLibraryDocumentSchema),
+      withdraw: oc
+        .input(z.object({ documentId: Id, expectedRevision: z.number().int().positive() }))
+        .output(MemoryLibraryDocumentSchema),
+      history: oc.input(z.object({ documentId: Id })).output(z.array(MemoryLibraryRevisionSchema)),
+      search: oc
+        .input(
+          z.object({
+            collection: MemoryCollectionKindSchema.optional(),
+            botId: Id.optional(),
+            query: z.string().min(1).max(500),
+            status: MemoryStatusSchema.optional(),
+            limit: z.number().int().min(1).max(100).default(30),
+          }),
+        )
+        .output(z.array(MemoryLibrarySummarySchema)),
+      exportMarkdown: oc
+        .input(
+          z.object({ collection: MemoryCollectionKindSchema.optional(), botId: Id.optional() }),
+        )
+        .output(z.string()),
+      exportOkf: oc
+        .input(z.object({ documentId: Id, expectedRevision: z.number().int().positive() }))
+        .output(z.string()),
+      importOkf: oc
+        .input(
+          z.object({
+            collection: MemoryCollectionKindSchema,
+            botId: Id.optional(),
+            content: z.string().min(1).max(MEMORY_CONTENT_MAX_LENGTH),
+            idempotencyKey: z.string().min(1).max(200).optional(),
+          }),
+        )
+        .output(MemoryLibraryDocumentSchema),
+    },
     list: oc
       .input(z.object({ botId: Id.optional(), scope: z.enum(["bot", "user"]).optional() }))
       .output(z.array(MemoryDocumentSchema)),
     update: oc
-      .input(z.object({ documentId: Id, content: z.string() }))
+      .input(
+        z.object({
+          documentId: Id,
+          content: z.string(),
+          expectedRevision: z.number().int().positive(),
+        }),
+      )
       .output(MemoryDocumentSchema),
     exportMarkdown: oc.input(z.object({ botId: Id.optional() })).output(z.string()),
     providerConfig: oc.output(SpaceMemoryConfigSchema.nullable()),

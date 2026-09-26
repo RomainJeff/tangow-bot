@@ -204,6 +204,39 @@ export interface MemoryStore {
   ): Promise<MemoryRevision>;
 }
 
+/** A durable-memory classification suggestion that never activates or edits the memory. */
+export type MemoryClassificationToolResult = {
+  classificationId: string;
+  documentId: string;
+  revision: number;
+  reviewPath: string;
+  questions: Array<{
+    key: string;
+    label: string;
+    options: Array<{ key: string; label: string; description: string }>;
+  }>;
+  suggestion: {
+    answers: Record<string, string | null>;
+    abstained: boolean;
+    abstentionReason?: string;
+    metadata: {
+      provider: string;
+      model: string;
+      schemaVersion: string;
+      confidence?: number;
+      dimensionConfidence?: Record<string, number>;
+      usage?: { inputTokens: number; outputTokens: number };
+    };
+  };
+};
+
+/** Callback supplied by the host. Bot identity comes from the active run, never the tool arguments. */
+export type ClassifyMemoryForBot = (input: {
+  actor: { userId: string; spaceId: string };
+  botId: string;
+  memoryId: string;
+}) => Promise<MemoryClassificationToolResult>;
+
 /** Optional semantic memory. Durable Markdown memory remains owned by MemoryStore. */
 export interface SemanticMemoryProvider {
   describe(): AdapterDescriptor<SemanticMemoryCapabilities>;

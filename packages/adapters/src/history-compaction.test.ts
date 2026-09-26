@@ -48,14 +48,18 @@ describe("shouldEnqueueCompaction", () => {
   it("is true for a few very large messages, long before the message count threshold", () => {
     // Four pasted logs of ~25k characters each: nowhere near 100 messages, well past the tokens
     // compaction is willing to keep verbatim.
-    const uncompacted = Array.from({ length: 4 }, () => ({ content: "x".repeat(25_000) }));
+    const uncompacted = Array.from({ length: 4 }, () => ({
+      content: "x".repeat(25_000),
+    }));
     const tokens = estimateHistoryTokens(uncompacted);
     expect(tokens).toBeGreaterThan(20_000);
     expect(shouldEnqueueCompaction(4, null, 50, 50, tokens)).toBe(true);
   });
 
   it("is false for the same number of ordinary messages", () => {
-    const uncompacted = Array.from({ length: 4 }, () => ({ content: "sounds good" }));
+    const uncompacted = Array.from({ length: 4 }, () => ({
+      content: "sounds good",
+    }));
     expect(shouldEnqueueCompaction(4, null, 50, 50, estimateHistoryTokens(uncompacted))).toBe(
       false,
     );
@@ -73,7 +77,11 @@ describe("selectHistoryWindow", () => {
   it("falls back to the message count when the context window is unknown", () => {
     const history = conversation(10);
     expect(
-      selectHistoryWindow({ history, contextWindow: undefined, messageWindowSize: 4 }),
+      selectHistoryWindow({
+        history,
+        contextWindow: undefined,
+        messageWindowSize: 4,
+      }),
     ).toEqual({ messages: history.slice(-4), mode: "count" });
     expect(selectHistoryWindow({ history, contextWindow: 0, messageWindowSize: 4 })).toEqual({
       messages: history.slice(-4),
@@ -128,7 +136,13 @@ describe("selectHistoryWindow", () => {
 
   it("falls back to the shared estimate when the caller measures nothing", () => {
     const history = conversation(200, () => "x".repeat(2_000));
-    expect(selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 4 })).toEqual(
+    expect(
+      selectHistoryWindow({
+        history,
+        contextWindow: 128_000,
+        messageWindowSize: 4,
+      }),
+    ).toEqual(
       selectHistoryWindow({
         history,
         contextWindow: 128_000,
@@ -154,7 +168,11 @@ describe("selectHistoryWindow", () => {
       { role: "assistant" as const, content: "hello" },
       { role: "user" as const, content: "x".repeat(2_000_000) },
     ];
-    const kept = selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 2 });
+    const kept = selectHistoryWindow({
+      history,
+      contextWindow: 128_000,
+      messageWindowSize: 2,
+    });
     expect(kept).toEqual({ messages: history.slice(-1), mode: "tokens" });
   });
 
@@ -165,7 +183,13 @@ describe("selectHistoryWindow", () => {
       { role: "user" as const, content: "hi" },
       { role: "assistant" as const, content: "x".repeat(2_000_000) },
     ];
-    expect(selectHistoryWindow({ history, contextWindow: 128_000, messageWindowSize: 1 })).toEqual({
+    expect(
+      selectHistoryWindow({
+        history,
+        contextWindow: 128_000,
+        messageWindowSize: 1,
+      }),
+    ).toEqual({
       messages: history.slice(-1),
       mode: "count",
     });
@@ -220,36 +244,58 @@ describe("context budget estimation", () => {
 
 describe("nextCompactionBatchRange", () => {
   it("starts before the first message when nothing has been compacted", () => {
-    expect(nextCompactionBatchRange(null, 50)).toEqual({ fromSeqExclusive: -1, take: 50 });
+    expect(nextCompactionBatchRange(null, 50)).toEqual({
+      fromSeqExclusive: -1,
+      take: 50,
+    });
   });
 
   it("continues from the cursor when something has already been compacted", () => {
-    expect(nextCompactionBatchRange(50, 50)).toEqual({ fromSeqExclusive: 50, take: 50 });
+    expect(nextCompactionBatchRange(50, 50)).toEqual({
+      fromSeqExclusive: 50,
+      take: 50,
+    });
   });
 });
 
 describe("historyWindowSize", () => {
   it("uses the smaller window only after compaction and a successful recall", () => {
     expect(
-      historyWindowSize({ semanticMemoryEnabled: true, compacted: true, recallSucceeded: true }),
+      historyWindowSize({
+        semanticMemoryEnabled: true,
+        compacted: true,
+        recallSucceeded: true,
+      }),
     ).toBe(50);
   });
 
   it("keeps the legacy window until a thread has actually been compacted", () => {
     expect(
-      historyWindowSize({ semanticMemoryEnabled: true, compacted: false, recallSucceeded: false }),
+      historyWindowSize({
+        semanticMemoryEnabled: true,
+        compacted: false,
+        recallSucceeded: false,
+      }),
     ).toBe(200);
   });
 
   it("keeps the legacy window when recall fails so compacted facts are not dropped", () => {
     expect(
-      historyWindowSize({ semanticMemoryEnabled: true, compacted: true, recallSucceeded: false }),
+      historyWindowSize({
+        semanticMemoryEnabled: true,
+        compacted: true,
+        recallSucceeded: false,
+      }),
     ).toBe(200);
   });
 
   it("uses the legacy 200-message window when semantic memory is not configured", () => {
     expect(
-      historyWindowSize({ semanticMemoryEnabled: false, compacted: true, recallSucceeded: true }),
+      historyWindowSize({
+        semanticMemoryEnabled: false,
+        compacted: true,
+        recallSucceeded: true,
+      }),
     ).toBe(200);
   });
 });
@@ -352,7 +398,9 @@ describe("formatRecalledMemory", () => {
   it("formats results into a durable-memory-style block", () => {
     const block = formatRecalledMemory([
       { memory: "User prefers conventional commits." },
-      { memory: "The VoC project's active repos are voc-backend, voc-brain, voc-frontend." },
+      {
+        memory: "The VoC project's active repos are voc-backend, voc-brain, voc-frontend.",
+      },
     ]);
     expect(block).toContain("<recalled_memory>");
     expect(block).toContain("User prefers conventional commits.");
@@ -360,7 +408,9 @@ describe("formatRecalledMemory", () => {
   });
 
   it("caps injected results at 5", () => {
-    const results = Array.from({ length: 8 }, (_, i) => ({ memory: `fact ${i}` }));
+    const results = Array.from({ length: 8 }, (_, i) => ({
+      memory: `fact ${i}`,
+    }));
     const block = formatRecalledMemory(results);
     expect(block).toContain("fact 4");
     expect(block).not.toContain("fact 5");
@@ -396,23 +446,30 @@ describe("formatRecalledMemory", () => {
 });
 
 type HarnessMessage = {
+  id?: string;
   seq: number;
   role: string;
   blocks: MessageBlock[];
   botId?: string | null;
+  runId?: string | null;
 };
 
 function compactionHarness(
   options: {
     deploymentModelKey?: string;
-    settings?: { defaultModelProvider: string | null; defaultModelId: string | null } | null;
+    settings?: {
+      defaultModelProvider: string | null;
+      defaultModelId: string | null;
+    } | null;
     messages?: HarnessMessage[];
     groupId?: string;
     groupMembers?: Array<{ id: string; name: string }>;
     nextMessageSeq?: number;
     historyCompactedUpToSeq?: number | null;
     historyCompactionSummary?: string | null;
+    historyCompactionMemoryManifest?: unknown;
     historyCompactionGeneration?: number;
+    runManifests?: Record<string, unknown>;
     wasCleared?: boolean;
     resolveModel?: (scope: {
       userId: string;
@@ -424,17 +481,35 @@ function compactionHarness(
       defaultMemoryScope: string;
     } | null;
     runtimeEvents?: AgentRuntimeEvent[];
-    memoryDocuments?: Array<{ path: string; content: string; revision: number }>;
+    memoryDocuments?: Array<{
+      id: string;
+      path: string;
+      content: string;
+      revision: number;
+      accessVersion?: number;
+    }>;
     learnedText?: string;
   } = {},
 ) {
-  const messages: HarnessMessage[] =
+  const sourceMessages: HarnessMessage[] =
     options.messages ??
     Array.from({ length: 50 }, (_, i) => ({
       seq: i,
       role: i % 2 === 0 ? "user" : "bot",
       blocks: [{ kind: "text", text: `message ${i}` }],
     }));
+  // Most legacy fixtures model bot replies without a Run row. Make their empty
+  // dependency explicit so they remain safe, while individual tests can still
+  // supply a null/revoked manifest to exercise fail-closed behavior.
+  const messages = sourceMessages.map((message) =>
+    message.role === "bot" && !message.runId
+      ? {
+          ...message,
+          id: message.id ?? `fixture-message-${message.seq}`,
+          runId: `fixture-run-${message.seq}`,
+        }
+      : { ...message, id: message.id ?? `fixture-message-${message.seq}` },
+  );
   const thread = {
     id: "thread-1",
     botId: "bot-1",
@@ -445,6 +520,10 @@ function compactionHarness(
     nextMessageSeq: options.nextMessageSeq ?? messages.length,
     historyCompactedUpToSeq: options.historyCompactedUpToSeq ?? (null as number | null),
     historyCompactionSummary: options.historyCompactionSummary ?? (null as string | null),
+    historyCompactionMemoryManifest:
+      options.historyCompactionSummary === undefined
+        ? null
+        : (options.historyCompactionMemoryManifest ?? []),
     historyCompactionGeneration: options.historyCompactionGeneration ?? 0,
   };
   const memoryConfig =
@@ -455,9 +534,15 @@ function compactionHarness(
             defaultMemoryScope: "isolated",
           }
       : options.memoryConfig;
+  const captureRequests: Array<Record<string, any>> = [];
   const prisma = {
+    spaceMember: {
+      findFirst: vi.fn<() => Promise<{ id: string } | null>>(async () => ({ id: "membership-1" })),
+    },
+    $transaction: vi.fn(async (operation: (tx: any) => Promise<unknown>) => operation(prisma)),
     thread: {
       findUniqueOrThrow: vi.fn(async () => thread),
+      findUnique: vi.fn(async () => thread),
       updateMany: vi.fn(
         async (args: {
           where: {
@@ -465,7 +550,11 @@ function compactionHarness(
             historyCompactedUpToSeq: number | null;
             historyCompactionGeneration: number;
           };
-          data: { historyCompactedUpToSeq: number; historyCompactionSummary: string };
+          data: {
+            historyCompactedUpToSeq: number;
+            historyCompactionSummary: string;
+            historyCompactionMemoryManifest?: unknown;
+          };
         }) => {
           if (
             thread.historyCompactedUpToSeq !== args.where.historyCompactedUpToSeq ||
@@ -475,6 +564,11 @@ function compactionHarness(
           }
           thread.historyCompactedUpToSeq = args.data.historyCompactedUpToSeq;
           thread.historyCompactionSummary = args.data.historyCompactionSummary;
+          thread.historyCompactionMemoryManifest = Array.isArray(
+            args.data.historyCompactionMemoryManifest,
+          )
+            ? args.data.historyCompactionMemoryManifest
+            : null;
           return { count: 1 };
         },
       ),
@@ -482,20 +576,77 @@ function compactionHarness(
     event: {
       findFirst: vi.fn(async () => (options.wasCleared ? { seq: 0 } : null)),
     },
+    run: {
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.map((id) => ({
+          id,
+          memoryContextManifest:
+            options.runManifests?.[id] === undefined ? [] : options.runManifests[id],
+        })),
+      ),
+    },
     message: {
       findMany: vi.fn(
         async (args: {
-          where: { seq: { gt?: number; lte?: number } };
+          where: { id?: { in: string[] }; seq?: { gt?: number; lte?: number } };
           orderBy?: { seq: "asc" | "desc" };
           take?: number;
         }) => {
-          const matching =
-            args.where.seq.lte !== undefined
-              ? messages.filter((message) => message.seq <= args.where.seq.lte!)
-              : messages.filter((message) => message.seq > args.where.seq.gt!);
+          const matching = args.where.id
+            ? messages.filter((message) => args.where.id!.in.includes(message.id!))
+            : args.where.seq!.lte !== undefined
+              ? messages.filter((message) => message.seq <= args.where.seq!.lte!)
+              : messages.filter((message) => message.seq > args.where.seq!.gt!);
           const ordered = [...matching].sort((left, right) => left.seq - right.seq);
           if (args.orderBy?.seq === "desc") ordered.reverse();
           return ordered.slice(0, args.take ?? ordered.length);
+        },
+      ),
+    },
+    memoryCaptureRequest: {
+      findFirst: vi.fn(
+        async ({ where }: { where: { threadId: string; status: string } }) =>
+          captureRequests.find(
+            (request) => request.threadId === where.threadId && request.status === where.status,
+          ) ?? null,
+      ),
+      findUnique: vi.fn(
+        async ({ where }: { where: { id: string } }) =>
+          captureRequests.find((request) => request.id === where.id) ?? null,
+      ),
+      findMany: vi.fn(async ({ where }: { where: { status: string } }) =>
+        captureRequests.filter((request) => request.status === where.status),
+      ),
+      create: vi.fn(async ({ data }: { data: Record<string, any> }) => {
+        const request = {
+          id: `capture-${captureRequests.length + 1}`,
+          attempts: 0,
+          status: "pending",
+          ...data,
+        };
+        captureRequests.push(request);
+        return request;
+      }),
+      updateMany: vi.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string; status?: string };
+          data: Record<string, any>;
+        }) => {
+          const request = captureRequests.find(
+            (row) => row.id === where.id && (!where.status || row.status === where.status),
+          );
+          if (!request) return { count: 0 };
+          for (const [key, value] of Object.entries(data)) {
+            if (key === "attempts" && value && typeof value === "object" && "increment" in value) {
+              request.attempts += Number(value.increment);
+            } else {
+              request[key] = value;
+            }
+          }
+          return { count: 1 };
         },
       ),
     },
@@ -504,7 +655,9 @@ function compactionHarness(
     },
     chatGroupMember: {
       findMany: vi.fn(async () =>
-        (options.groupMembers ?? []).map((bot) => ({ bot: { id: bot.id, name: bot.name } })),
+        (options.groupMembers ?? []).map((bot) => ({
+          bot: { id: bot.id, name: bot.name },
+        })),
       ),
     },
     usageRecord: {
@@ -516,7 +669,12 @@ function compactionHarness(
       id: "test-runtime",
       contractVersion: "1",
       adapterVersion: "1",
-      capabilities: { streaming: true, compaction: true, tools: false, scripted: false },
+      capabilities: {
+        streaming: true,
+        compaction: true,
+        tools: false,
+        scripted: false,
+      },
     }),
     run: vi.fn<AgentRuntime["run"]>(async function* (request) {
       for (const event of options.runtimeEvents ?? []) yield event;
@@ -529,10 +687,16 @@ function compactionHarness(
     }),
   };
   const saveMemory = vi.fn(
-    async (): Promise<SemanticMemoryResponse> => ({ ok: true, value: undefined }),
+    async (): Promise<SemanticMemoryResponse> => ({
+      ok: true,
+      value: undefined,
+    }),
   );
   const purgeHistory = vi.fn(
-    async (): Promise<SemanticMemoryResponse> => ({ ok: true, value: undefined }),
+    async (): Promise<SemanticMemoryResponse> => ({
+      ok: true,
+      value: undefined,
+    }),
   );
   const memoryProviders = {
     resolve: vi.fn(async () =>
@@ -572,7 +736,10 @@ function compactionHarness(
     revision: 1,
     content: request.content,
   }));
-  const memory = { read: memoryRead, commit: memoryCommit } as unknown as MemoryStore;
+  const memory = {
+    read: memoryRead,
+    commit: memoryCommit,
+  } as unknown as MemoryStore;
   const deps = {
     prisma: prisma as unknown as PrismaClient,
     runtime: runtime as unknown as AgentRuntime,
@@ -593,12 +760,13 @@ function compactionHarness(
     jobs,
     memoryRead,
     memoryCommit,
+    captureRequests,
     deps,
   };
 }
 
 describe("compactHistory", () => {
-  it("summarizes the next batch, saves it through the provider, and advances the cursor", async () => {
+  it("summarizes the next batch locally and advances the cursor", async () => {
     const harness = compactionHarness({ deploymentModelKey: "openrouter-key" });
 
     await compactHistory(harness.deps, "thread-1");
@@ -629,15 +797,7 @@ describe("compactHistory", () => {
     }
     expect(request.prompt).not.toContain("<previous-summary>");
 
-    expect(harness.saveMemory).toHaveBeenCalledWith(
-      {
-        content: "Summary of 50 messages.",
-        scope: "isolated",
-        botId: "bot-1",
-        source: { kind: "history", generation: 0 },
-      },
-      expect.objectContaining({ spaceId: "workspace-1", botId: "bot-1" }),
-    );
+    expect(harness.saveMemory).not.toHaveBeenCalled();
 
     const context = harness.runtime.run.mock.calls[0]![1];
     expect(context).toBeDefined();
@@ -653,6 +813,7 @@ describe("compactHistory", () => {
       data: {
         historyCompactedUpToSeq: 49,
         historyCompactionSummary: "Summary of 50 messages.",
+        historyCompactionMemoryManifest: [],
       },
     });
   });
@@ -667,15 +828,78 @@ describe("compactHistory", () => {
 
     await compactHistory(harness.deps, "thread-1");
 
-    expect(harness.saveMemory).toHaveBeenCalledOnce();
-    expect(harness.saveMemory).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: "Summary of 50 messages.",
-        scope: "isolated",
-        source: { kind: "history", generation: 0 },
-      }),
-      expect.any(Object),
-    );
+    expect(harness.saveMemory).not.toHaveBeenCalled();
+  });
+
+  it.each(["assistant", "bot"])(
+    "never sends revoked derived %s text or a revoked prior summary to the summarizer",
+    async (derivedRole) => {
+      const dependency = {
+        documentId: "memory-withdrawn",
+        revision: 2,
+        accessVersion: 4,
+        scope: "user" as const,
+        path: "MEMORY.md",
+        reason: "local_lexical_match" as const,
+        excerptBytes: 12,
+      };
+      const messages: HarnessMessage[] = Array.from({ length: 50 }, (_, index) => ({
+        seq: index + 50,
+        role: index === 0 ? derivedRole : "user",
+        ...(index === 0 ? { runId: "run-revoked" } : {}),
+        blocks: [
+          {
+            kind: "text",
+            text: index === 0 ? "revoked assistant secret" : `safe user message ${index}`,
+          },
+        ],
+      }));
+      const harness = compactionHarness({
+        deploymentModelKey: "openrouter-key",
+        messages,
+        nextMessageSeq: 100,
+        historyCompactedUpToSeq: 49,
+        historyCompactionGeneration: 1,
+        historyCompactionSummary: "revoked prior summary",
+        historyCompactionMemoryManifest: [dependency],
+        runManifests: { "run-revoked": [dependency] },
+      });
+
+      await compactHistory(harness.deps, "thread-1");
+
+      const [request] = harness.runtime.run.mock.calls[0]!;
+      expect(request.prompt).not.toContain("revoked assistant secret");
+      expect(request.prompt).not.toContain("revoked prior summary");
+      expect(request.prompt).toContain("safe user message 1");
+    },
+  );
+
+  it("does not create a durable proposal when memory is withdrawn during extraction", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      memoryDocuments: [
+        {
+          id: "memory-1",
+          path: "MEMORY.md",
+          content: "active fact",
+          revision: 1,
+          accessVersion: 1,
+        },
+      ],
+    });
+    harness.runtime.run.mockImplementation(async function* (request) {
+      if (request.runId.startsWith("learn:")) {
+        yield { type: "done", text: "- must not become a proposal" };
+        harness.memoryRead.mockResolvedValue({ documents: [] });
+        return;
+      }
+      yield { type: "done", text: "Summary of 50 messages." };
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.memoryCommit).not.toHaveBeenCalled();
+    expect(harness.thread.historyCompactionSummary).toBe("Summary of 50 messages.");
   });
 
   it("serializes attachment metadata and tool traces into the transcript", async () => {
@@ -703,11 +927,20 @@ describe("compactHistory", () => {
         {
           label: "Read file",
           count: 1,
-          calls: [{ name: "read_file", input: '{ "path": "plan.md" }', output: "Ship on Friday" }],
+          calls: [
+            {
+              name: "read_file",
+              input: '{ "path": "plan.md" }',
+              output: "Ship on Friday",
+            },
+          ],
         },
       ],
     });
-    const harness = compactionHarness({ deploymentModelKey: "openrouter-key", messages });
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      messages,
+    });
 
     await compactHistory(harness.deps, "thread-1");
 
@@ -736,7 +969,13 @@ describe("compactHistory", () => {
       role: "bot",
       botId: "bot-c",
       blocks: [
-        { kind: "handoff", fromBotId: "bot-c", toBotId: "bot-b", text: "take the rollout", hop: 1 },
+        {
+          kind: "handoff",
+          fromBotId: "bot-c",
+          toBotId: "bot-b",
+          text: "take the rollout",
+          hop: 1,
+        },
       ],
     };
     messages[2] = {
@@ -891,13 +1130,7 @@ describe("compactHistory", () => {
     const [request] = harness.runtime.run.mock.calls[0]!;
     expect(request.prompt).toContain("new message 50");
     expect(request.prompt).not.toContain("message 0");
-    expect(harness.saveMemory).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: "Summary of 50 messages.",
-        source: { kind: "history", generation: 1 },
-      }),
-      expect.any(Object),
-    );
+    expect(harness.saveMemory).not.toHaveBeenCalled();
     expect(harness.thread.historyCompactedUpToSeq).toBe(99);
   });
 
@@ -1028,48 +1261,17 @@ describe("compactHistory", () => {
     expect(harness.thread.historyCompactionSummary).toBe("valid summary");
   });
 
-  it("purges a stale provider save when clear advances the history generation", async () => {
+  it("does not create a provider cache when clear advances the history generation", async () => {
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
       memoryConfig: {
         defaultMemoryScope: "shared",
       },
     });
-    let releaseSave!: () => void;
-    let saveBegan!: () => void;
-    const saveCanFinish = new Promise<void>((resolve) => {
-      releaseSave = resolve;
-    });
-    const saveStarted = new Promise<void>((resolve) => {
-      saveBegan = resolve;
-    });
-    harness.saveMemory.mockImplementationOnce(async () => {
-      saveBegan();
-      await saveCanFinish;
-      return { ok: true, value: undefined };
-    });
+    await compactHistory(harness.deps, "thread-1");
 
-    const pending = compactHistory(harness.deps, "thread-1");
-    await saveStarted;
-    harness.thread.historyCompactedUpToSeq = 49;
-    harness.thread.historyCompactionSummary = null;
-    harness.thread.historyCompactionGeneration = 1;
-    releaseSave();
-    await pending;
-
-    expect(harness.thread.historyCompactionSummary).toBeNull();
-    expect(harness.saveMemory).toHaveBeenCalledOnce();
-    expect(harness.saveMemory).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: "Summary of 50 messages.",
-        source: { kind: "history", generation: 0 },
-      }),
-      expect.any(Object),
-    );
-    expect(harness.purgeHistory).toHaveBeenCalledWith(
-      { botId: "bot-1", generations: [0] },
-      expect.any(Object),
-    );
+    expect(harness.saveMemory).not.toHaveBeenCalled();
+    expect(harness.purgeHistory).not.toHaveBeenCalled();
   });
 
   it("records the summarizer's spend as a usage log line and a usage record", async () => {
@@ -1141,35 +1343,27 @@ describe("compactHistory", () => {
 
     expect(harness.prisma.thread.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: {
+        data: expect.objectContaining({
           historyCompactedUpToSeq: 49,
           historyCompactionSummary: "Summary of 50 messages.",
-        },
+          historyCompactionMemoryManifest: [],
+        }),
       }),
     );
   });
 
-  it("continues draining the backlog when a stale-history purge throws", async () => {
+  it("continues draining the backlog without a provider cache", async () => {
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
       nextMessageSeq: 150,
     });
-    harness.saveMemory.mockImplementationOnce(async () => {
-      harness.thread.historyCompactionGeneration = 1;
-      return { ok: true, value: undefined };
-    });
-    harness.purgeHistory.mockRejectedValueOnce(new Error("provider unavailable"));
     const sink = createTestSink();
     installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
 
     await expect(compactHistory(harness.deps, "thread-1")).resolves.toBeUndefined();
 
     expect(harness.jobs.enqueue).toHaveBeenCalledWith(historyCompactJob("thread-1"));
-    expect(
-      sink.events.some(
-        (event) => event.message === "history.compact could not purge stale semantic memory",
-      ),
-    ).toBe(true);
+    expect(harness.purgeHistory).not.toHaveBeenCalled();
     installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
   });
 
@@ -1228,7 +1422,12 @@ describe("compactHistory", () => {
       id: "test-runtime",
       contractVersion: "1",
       adapterVersion: "1",
-      capabilities: { streaming: true, compaction: false, tools: false, scripted: true },
+      capabilities: {
+        streaming: true,
+        compaction: false,
+        tools: false,
+        scripted: true,
+      },
     });
 
     await compactHistory(harness.deps, "thread-1");
@@ -1329,7 +1528,10 @@ describe("compactHistory", () => {
   });
 
   it("does nothing when no uncompacted messages remain", async () => {
-    const harness = compactionHarness({ deploymentModelKey: "openrouter-key", messages: [] });
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      messages: [],
+    });
 
     await compactHistory(harness.deps, "thread-1");
 
@@ -1382,9 +1584,12 @@ describe("compactHistory", () => {
     expect(harness.prisma.thread.updateMany).not.toHaveBeenCalled();
   });
 
-  it("keeps local compaction when the optional provider save fails", async () => {
+  it("keeps local compaction independent of provider availability", async () => {
     const harness = compactionHarness({ deploymentModelKey: "openrouter-key" });
-    harness.saveMemory.mockResolvedValueOnce({ ok: false, error: "network error" });
+    harness.saveMemory.mockResolvedValueOnce({
+      ok: false,
+      error: "network error",
+    });
 
     await compactHistory(harness.deps, "thread-1");
 
@@ -1403,11 +1608,48 @@ describe("compactHistory", () => {
 
     expect(harness.jobs.enqueue).not.toHaveBeenCalled();
   });
-  it("appends the batch's new durable facts to the bot's memory under a dated heading", async () => {
+  it("creates independent proposals with exact message evidence", async () => {
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
-      memoryDocuments: [{ path: "MEMORY.md", content: "- Ships on Fridays", revision: 3 }],
-      learnedText: "- Call the user Rom\n- The repo is rakazo-bot",
+      memoryDocuments: [
+        {
+          id: "memory-1",
+          path: "MEMORY.md",
+          content: "- Ships on Fridays",
+          revision: 3,
+        },
+      ],
+      learnedText: JSON.stringify({
+        candidates: [
+          {
+            fact: "Call the user Rom",
+            sourceMessageId: "fixture-message-0",
+            quote: "Please call me Rom",
+          },
+          {
+            fact: "The repo is rakazo-bot",
+            sourceMessageId: "fixture-message-1",
+            quote: "The repo is rakazo-bot",
+          },
+        ],
+      }),
+      messages: [
+        {
+          seq: 0,
+          role: "user",
+          blocks: [{ kind: "text", text: "Please call me Rom" }],
+        },
+        {
+          seq: 1,
+          role: "user",
+          blocks: [{ kind: "text", text: "The repo is rakazo-bot" }],
+        },
+        ...Array.from({ length: 48 }, (_, index) => ({
+          seq: index + 2,
+          role: "user",
+          blocks: [{ kind: "text" as const, text: `message ${index + 2}` }],
+        })),
+      ],
     });
 
     await compactHistory(harness.deps, "thread-1");
@@ -1417,27 +1659,44 @@ describe("compactHistory", () => {
     const [request] = harness.runtime.run.mock.calls[1]!;
     expect(request.runId).toBe("learn:thread-1:-1");
     expect(request.tools).toEqual([]);
-    expect(request.prompt).toContain("message 0");
+    expect(request.prompt).toContain("Please call me Rom");
     expect(request.prompt).toContain("- Ships on Fridays");
-    expect(harness.memoryCommit).toHaveBeenCalledWith(
-      {
+    expect(harness.memoryCommit).toHaveBeenCalledTimes(2);
+    expect(harness.memoryCommit).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
         scope: "bot",
         botId: "bot-1",
         path: "MEMORY.md",
-        content: expect.stringMatching(
-          /^## Learned \d{4}-\d{2}-\d{2}\n- Call the user Rom\n- The repo is rakazo-bot$/,
-        ),
+        content: "Call the user Rom",
         mode: "append",
         sourceThreadId: "thread-1",
-      },
-      expect.objectContaining({ spaceId: "workspace-1", userId: "user-1", botId: "bot-1" }),
+        idempotencyKey: expect.stringMatching(/^capture:/),
+        evidence: [
+          expect.objectContaining({
+            sourceKind: "message",
+            sourceReferenceId: "fixture-message-0",
+            startOffset: 0,
+            endOffset: 18,
+            excerpt: "Please call me Rom",
+          }),
+        ],
+      }),
+      expect.objectContaining({
+        spaceId: "workspace-1",
+        userId: "user-1",
+        botId: "bot-1",
+      }),
+    );
+    expect(harness.memoryCommit.mock.calls[0]![0].idempotencyKey).not.toBe(
+      harness.memoryCommit.mock.calls[1]![0].idempotencyKey,
     );
   });
 
   it("writes no revision when the batch taught nothing new", async () => {
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
-      learnedText: "NONE",
+      learnedText: '{"candidates":[]}',
     });
     const sink = createTestSink();
     installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
@@ -1454,29 +1713,202 @@ describe("compactHistory", () => {
     installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
   });
 
-  it("keeps ten facts at most and redacts secrets before they reach memory", async () => {
+  it("keeps ten atomic candidates at most and redacts secrets before they reach memory", async () => {
+    const factMessages: HarnessMessage[] = Array.from({ length: 50 }, (_, seq) => ({
+      seq,
+      role: "user",
+      blocks: [
+        {
+          kind: "text",
+          text: seq === 0 ? "The deploy token is sk-live-abcdefgh12345678" : `message ${seq}`,
+        },
+      ],
+    }));
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
-      learnedText: [
-        "- The deploy token is sk-live-abcdefgh12345678",
-        ...Array.from({ length: 12 }, (_, index) => `- Fact ${index}`),
-      ].join("\n"),
+      messages: factMessages,
+      learnedText: JSON.stringify({
+        candidates: [
+          {
+            fact: "The deploy token is sk-live-abcdefgh12345678",
+            sourceMessageId: "fixture-message-0",
+            quote: "The deploy token is sk-live-abcdefgh12345678",
+          },
+          ...Array.from({ length: 12 }, (_, index) => ({
+            fact: `Fact ${index}`,
+            sourceMessageId: "fixture-message-0",
+            quote: "The deploy token is sk-live-abcdefgh12345678",
+          })),
+        ],
+      }),
     });
 
     await compactHistory(harness.deps, "thread-1");
 
-    const [commit] = harness.memoryCommit.mock.calls[0]!;
-    const bullets = commit.content.split("\n").slice(1);
-    expect(bullets).toHaveLength(10);
-    expect(commit.content).not.toContain("sk-live-abcdefgh12345678");
-    expect(bullets[0]).toBe("- The deploy token is [Redacted]");
-    expect(bullets[9]).toBe("- Fact 8");
+    expect(harness.memoryCommit).toHaveBeenCalledTimes(10);
+    const candidates = harness.memoryCommit.mock.calls.map(([commit]) => commit.content);
+    expect(candidates).not.toContain("The deploy token is sk-live-abcdefgh12345678");
+    expect(candidates[0]).toBe("The deploy token is [Redacted]");
+    expect(candidates[9]).toBe("Fact 8");
+  });
+
+  it("reuses persisted candidates after a partial proposal commit", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      messages: [
+        {
+          seq: 0,
+          role: "user",
+          blocks: [{ kind: "text", text: "Please call me Rom" }],
+        },
+        {
+          seq: 1,
+          role: "user",
+          blocks: [{ kind: "text", text: "The repo is rakazo-bot" }],
+        },
+        ...Array.from({ length: 48 }, (_, index) => ({
+          seq: index + 2,
+          role: "user",
+          blocks: [{ kind: "text" as const, text: `message ${index + 2}` }],
+        })),
+      ],
+      learnedText: JSON.stringify({
+        candidates: [
+          {
+            fact: "Call the user Rom",
+            sourceMessageId: "fixture-message-0",
+            quote: "Please call me Rom",
+          },
+          {
+            fact: "The repo is rakazo-bot",
+            sourceMessageId: "fixture-message-1",
+            quote: "The repo is rakazo-bot",
+          },
+        ],
+      }),
+    });
+    const commit = harness.memoryCommit.getMockImplementation()!;
+    harness.memoryCommit
+      .mockImplementationOnce(commit)
+      .mockRejectedValueOnce(new Error("temporary store failure"));
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.thread.historyCompactedUpToSeq).toBe(49);
+    expect(harness.captureRequests[0]).toMatchObject({
+      status: "pending",
+      candidates: expect.arrayContaining([
+        expect.objectContaining({ fact: "Call the user Rom" }),
+        expect.objectContaining({ fact: "The repo is rakazo-bot" }),
+      ]),
+    });
+    expect(
+      harness.runtime.run.mock.calls.filter(([request]) => request.runId.startsWith("learn:")),
+    ).toHaveLength(1);
+
+    harness.captureRequests[0]!.availableAt = new Date(0);
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.captureRequests[0]).toMatchObject({ status: "completed" });
+    expect(
+      harness.runtime.run.mock.calls.filter(([request]) => request.runId.startsWith("learn:")),
+    ).toHaveLength(1);
+  });
+
+  it("keeps a malformed extraction pending instead of treating it as no facts", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "test-key",
+      learnedText: "I hit a problem: unavailable",
+    });
+    await compactHistory(harness.deps, "thread-1");
+    expect(harness.memoryCommit).not.toHaveBeenCalled();
+    expect(harness.captureRequests[0]).toMatchObject({ status: "pending", attempts: 1 });
+  });
+
+  it("does not send a pending capture to the model after membership revocation", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "test-key",
+      learnedText: "unavailable",
+    });
+    await compactHistory(harness.deps, "thread-1");
+    harness.captureRequests[0]!.availableAt = new Date(0);
+    harness.prisma.spaceMember.findFirst.mockResolvedValue(null);
+    const callsBefore = harness.runtime.run.mock.calls.length;
+    await compactHistory(harness.deps, "thread-1");
+    expect(harness.runtime.run.mock.calls).toHaveLength(callsBefore);
+    expect(harness.captureRequests[0]).toMatchObject({ status: "stale" });
+  });
+
+  it("stops between candidates and marks the request stale if membership is revoked during a commit", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      messages: [
+        { seq: 0, role: "user", blocks: [{ kind: "text", text: "Call me Rom." }] },
+        { seq: 1, role: "user", blocks: [{ kind: "text", text: "I live in Paris." }] },
+        ...Array.from({ length: 48 }, (_, index) => ({
+          seq: index + 2,
+          role: "user" as const,
+          blocks: [{ kind: "text" as const, text: `message ${index + 2}` }],
+        })),
+      ],
+      learnedText: JSON.stringify({
+        candidates: [
+          {
+            fact: "Call the user Rom.",
+            sourceMessageId: "fixture-message-0",
+            quote: "Call me Rom.",
+          },
+          {
+            fact: "The user lives in Paris.",
+            sourceMessageId: "fixture-message-1",
+            quote: "I live in Paris.",
+          },
+        ],
+      }),
+    });
+    harness.memoryCommit.mockImplementationOnce(async (request) => {
+      harness.prisma.spaceMember.findFirst.mockResolvedValue(null);
+      return {
+        id: "memory-first",
+        path: request.path,
+        revision: 1,
+        content: request.content,
+      };
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.memoryCommit).toHaveBeenCalledOnce();
+    expect(harness.captureRequests[0]).toMatchObject({
+      status: "stale",
+      lastError: "source access revoked",
+    });
+  });
+
+  it("drops candidates without an exact source quote", async () => {
+    const harness = compactionHarness({
+      deploymentModelKey: "openrouter-key",
+      learnedText: JSON.stringify({
+        candidates: [
+          {
+            fact: "Call the user Rom",
+            sourceMessageId: "fixture-message-0",
+            quote: "not in the message",
+          },
+        ],
+      }),
+    });
+
+    await compactHistory(harness.deps, "thread-1");
+
+    expect(harness.memoryCommit).not.toHaveBeenCalled();
+    expect(harness.captureRequests[0]).toMatchObject({ status: "completed" });
   });
 
   it("learns nothing from a batch that carries messaging channel posts", async () => {
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
-      learnedText: "- Call the user Rom",
+      learnedText: '{"candidates":[]}',
       messages: [
         { seq: 0, role: "user", blocks: [{ kind: "text", text: "message 0" }] },
         {
@@ -1503,7 +1935,7 @@ describe("compactHistory", () => {
     expect(harness.thread.historyCompactedUpToSeq).toBe(1);
   });
 
-  it("keeps the compaction valid when the extraction run fails", async () => {
+  it("keeps compaction available and bounds extraction retries after failures", async () => {
     const harness = compactionHarness({ deploymentModelKey: "openrouter-key" });
     const summarize = harness.runtime.run.getMockImplementation()!;
     harness.runtime.run.mockImplementation((request, context) => {
@@ -1516,12 +1948,27 @@ describe("compactHistory", () => {
     expect(harness.memoryCommit).not.toHaveBeenCalled();
     expect(harness.thread.historyCompactedUpToSeq).toBe(49);
     expect(harness.thread.historyCompactionSummary).toBe("Summary of 50 messages.");
+    expect(harness.captureRequests[0]).toMatchObject({
+      status: "pending",
+      attempts: 1,
+    });
+    expect(harness.captureRequests[0]!.availableAt.getTime()).toBeGreaterThan(Date.now());
+
+    for (let attempt = 2; attempt <= 5; attempt += 1) {
+      harness.captureRequests[0]!.availableAt = new Date(0);
+      await compactHistory(harness.deps, "thread-1");
+    }
+    expect(harness.captureRequests[0]).toMatchObject({
+      status: "failed",
+      attempts: 5,
+      lastError: "capture_attempt_failed",
+    });
   });
 
   it("records the extraction's spend the same way as the summarizer's", async () => {
     const harness = compactionHarness({
       deploymentModelKey: "openrouter-key",
-      learnedText: "- Call the user Rom",
+      learnedText: '{"candidates":[]}',
       runtimeEvents: [
         {
           type: "usage",

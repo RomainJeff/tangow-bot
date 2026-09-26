@@ -17,6 +17,7 @@
     "@rakazo/contracts": "workspace:*",
     "@rakazo/core": "workspace:*",
     "@rakazo/db": "workspace:*",
+    "@rakazo/memory": "workspace:*",
     "@testcontainers/postgresql": "12.1.0",
     "pngjs": "7.0.0"
   },

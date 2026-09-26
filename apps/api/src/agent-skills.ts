@@ -26,6 +26,7 @@ import {
   defaultSkillAvailability,
   findSkillByName,
   isSkillVisible,
+  MEMORY_MANAGEMENT_SKILL_KEY,
   mergeBuiltinSkills,
   parseSkillMd,
   userSkillKey,
@@ -209,8 +210,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
     const [rows, access] = await Promise.all([allFiles(actor), accessIndex(actor)]);
     const builtins = builtinCatalog().map((skill) => ({
       ...skill,
-      availability: "all" as const,
-      visibleBotIds: access.bots,
+      ...access.of(skill.id),
     }));
     const users = rows.map((file) => ({ ...toAgentSkill(file), ...access.of(file.id) }));
     const entries = mergeBuiltinSkills(builtins, users);
@@ -350,7 +350,10 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
         bots?: Array<{ botId: string; enabled: boolean }>;
       },
     ): Promise<AgentSkillCatalogEntry> {
-      const existing = await owned(actor, input.skillId);
+      const existing =
+        input.skillId === MEMORY_MANAGEMENT_SKILL_KEY
+          ? builtinCatalog().find((skill) => skill.id === input.skillId)!
+          : await owned(actor, input.skillId);
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
       const skillKey = existing.id;
       const bots = input.bots ?? [];

@@ -70,4 +70,17 @@ describe("buildApprovalAskBlock", () => {
     if (block.kind !== "ask") throw new Error("expected ask block");
     expect(block.detail).toContain("stay separate from other spaces");
   });
+  it.each(["prepare_memory_method", "review_memory_classification", "change_memory"])(
+    "shows the complete approved payload and never offers blanket approval for %s",
+    (tool) => {
+      const args = {
+        content: `${"a".repeat(5000)}LAST-REVIEWED-LINE`,
+        answers: { purpose: "guide" },
+      };
+      const block = buildApprovalAskBlock("effect-memory", tool, args, []);
+      if (block.kind !== "ask") throw new Error("expected ask block");
+      expect(JSON.parse(block.detail!)).toEqual(args);
+      expect(block.actions?.map((action) => action.id)).toEqual(["allow", "deny"]);
+    },
+  );
 });

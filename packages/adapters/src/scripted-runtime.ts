@@ -14,7 +14,12 @@ export class ScriptedAgentRuntime implements AgentRuntime {
       id: "scripted",
       contractVersion: "1",
       adapterVersion: "0.1.0",
-      capabilities: { streaming: true, compaction: false, tools: true, scripted: true },
+      capabilities: {
+        streaming: true,
+        compaction: false,
+        tools: true,
+        scripted: true,
+      },
     };
   }
 
@@ -48,6 +53,11 @@ export class ScriptedAgentRuntime implements AgentRuntime {
       // executionIds — delivery keys and effect replays key off this value.
       let toolCallSeq = 0;
       for (const turn of script) {
+        if (signal.aborted || controller.signal.aborted) {
+          yield { type: "done", text: "stopped" };
+          return;
+        }
+        await request.beforeModelCall?.();
         if (signal.aborted || controller.signal.aborted) {
           yield { type: "done", text: "stopped" };
           return;
@@ -249,14 +259,23 @@ export function inferScript(
     return [
       {
         assistant: "i need a decision before i continue.",
-        ask: { text: "Which city should I use?", detail: "Reply with one city name." },
+        ask: {
+          text: "Which city should I use?",
+          detail: "Reply with one city name.",
+        },
       },
     ];
   }
   if (lower.includes("take over") || lower.includes("sign in") || lower.includes("login")) {
     return [
-      { assistant: "i need you on the screen for a one-time sign-in. handing you the computer." },
-      { takeover: { reason: "Sign in to continue. Protected input stays off the thread." } },
+      {
+        assistant: "i need you on the screen for a one-time sign-in. handing you the computer.",
+      },
+      {
+        takeover: {
+          reason: "Sign in to continue. Protected input stays off the thread.",
+        },
+      },
     ];
   }
   if (
@@ -406,9 +425,16 @@ export function inferScript(
     const filePath =
       /(?:called|named|path|file)\s+([A-Za-z0-9._/-]+)/i.exec(prompt)?.[1] ?? "notes/result.txt";
     return [
-      { assistant: "writing that into my home and attaching it to the thread." },
-      { toolCalls: [{ name: "write_file", args: { path: filePath, content } }] },
-      { toolCalls: [{ name: "attach_file", args: { path: filePath } }], complete: true },
+      {
+        assistant: "writing that into my home and attaching it to the thread.",
+      },
+      {
+        toolCalls: [{ name: "write_file", args: { path: filePath, content } }],
+      },
+      {
+        toolCalls: [{ name: "attach_file", args: { path: filePath } }],
+        complete: true,
+      },
     ];
   }
   if (
@@ -431,7 +457,13 @@ export function inferScript(
     return [
       {
         assistant: "noted — i will keep that in memory.",
-        memory: [{ scope: "bot", path: "MEMORY.md", content: `# Memory\n\n- ${prompt}\n` }],
+        memory: [
+          {
+            scope: "bot",
+            path: "MEMORY.md",
+            content: `# Memory\n\n- ${prompt}\n`,
+          },
+        ],
         complete: true,
       },
     ];

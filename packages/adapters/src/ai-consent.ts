@@ -50,6 +50,7 @@ export function aiRecipient(input: {
 }
 
 function recipientName(provider: string, use: AiDataUse) {
+  if (provider === "typesafe-jev") return "Jev · TypeSafe";
   if (use === "voice") return voiceCatalogEntry(provider)?.name ?? provider;
   if (use === "memory") return provider === "supermemory" ? "Supermemory" : provider;
   if (provider === "cursor") return "Cursor";
