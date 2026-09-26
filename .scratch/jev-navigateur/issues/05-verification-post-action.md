@@ -1,5 +1,7 @@
 # 05: Vérification post-action `landed / dialog / error / auth / unchanged`
 
+> **Livré (lot 2, 2026-09-26)** sur la branche `feat/jev-browser-verify`, empilée sur `feat/jev-browser-target`. Écarts en fin de ticket.
+
 **What to build:** Après un `browser_act` dont une action à `target` a été exécutée, le résultat dit ce que l'action a produit — la page a changé comme attendu (`landed`), un dialogue ou une modale s'est ouvert (`dialog`), une erreur est apparue (`error`), un mur d'authentification ou une vérification anti-bot bloque (`auth`), ou rien de visible n'a changé (`unchanged`) — avec la probabilité de cette classe. Le modèle lit un champ au lieu de comparer deux listes d'éléments. Consultatif : le backend n'agit jamais dessus.
 
 **Historique.** Différé au ticket 01 pour que 08 mesure 04 seul. Le mainteneur lève le report le 2026-09-26 : 05 est le prochain ticket. La mesure de 04 reste attribuable par les logs (voir « Logs »).
@@ -117,14 +119,22 @@ Dans `packages/adapters/src/browser-targets.test.ts`, avec `FakeDecisionProvider
 
 **Blocked by:** 02, 04 (livrés)
 
-**Status:** ready-for-agent
+**Status:** done (lot 2, 2026-09-26)
 
-- [ ] `outcome` n'apparaît qu'après une action à `target` exécutée avec succès et une réponse du fournisseur ; jamais inventé
-- [ ] `act` en échec ou `uncertain` empêche toute vérification
-- [ ] Une seule vérification par appel, sur la dernière action à `target`
-- [ ] Sous `OUTCOME_PROBABILITY_LOW`, `outcome.kind` vaut `uncertain` avec la probabilité
-- [ ] Aucun chemin ne rejoue, ne relance ni ne déclenche `request_takeover` ; aucun `act` émis par le vérificateur
-- [ ] L'état est borné (constantes nommées), redigé, sans texte de page, sans `tree`, sans valeur de champ
-- [ ] Sans fournisseur ou pour un appel à `ref` seul, `browser_act` est strictement inchangé
-- [ ] `agent.decision.call` porte `purpose` ; `agent.browser.outcome` et les compteurs `verify*` sont émis sans contenu
-- [ ] Divulgation `decision` et docs mises à jour, `AI_DISCLOSURE_VERSION` inchangée ; entrée CHANGELOG
+- [x] `outcome` n'apparaît qu'après une action à `target` exécutée avec succès et une réponse du fournisseur ; jamais inventé
+- [x] `act` en échec ou `uncertain` empêche toute vérification
+- [x] Une seule vérification par appel, sur la dernière action à `target`
+- [x] Sous `OUTCOME_PROBABILITY_LOW`, `outcome.kind` vaut `uncertain` avec la probabilité
+- [x] Aucun chemin ne rejoue, ne relance ni ne déclenche `request_takeover` ; aucun `act` émis par le vérificateur
+- [x] L'état est borné (constantes nommées), redigé, sans texte de page, sans `tree`, sans valeur de champ
+- [x] Sans fournisseur ou pour un appel à `ref` seul, `browser_act` est strictement inchangé
+- [x] `agent.decision.call` porte `purpose` ; `agent.browser.outcome` et les compteurs `verify*` sont émis sans contenu
+- [x] Divulgation `decision` et docs mises à jour, `AI_DISCLOSURE_VERSION` inchangée ; entrée CHANGELOG
+
+## Livré — écarts avec le texte ci-dessus
+
+- **Code** conforme au ticket : `resolveBrowserTarget` rend `{ element, snapshot }` ; `verifyBrowserOutcome` et `outcomeRequest` dans `browser-tools.ts` ; `purpose` dans `decideWithin` (`decision.ts`), passé `"target"` puis `"verify"` ; `verifyCalls` / `verifyAnswered` dans `agent.run.decision` ; une phrase dans `BROWSER_TARGET_DESCRIPTION`. Aucune phrase dans l'instruction système.
+- **Noms** : rédaction des secrets **avant** la troncature à 120 (la résolution de cible fait l'inverse ; laissé tel quel, hors ticket). La session jsdom tronque déjà les noms textuels à 120 sans `…` ; le test passe par `aria-label` pour exercer la borne.
+- **`agent.browser.outcome`** : `outcome` vaut la classe, `uncertain`, ou la raison `unavailable` ; `probability` et `confidence` seulement quand le fournisseur a répondu. `verifyCalls` compte chaque tentative (dont délai et erreur), `verifyAnswered` les réponses valides.
+- **Tests** (`browser-targets.test.ts`) : pas une paire avant/après par classe — le fake est scripté et ne lit pas l'état, une paire par classe aurait promis plus qu'elle n'exerce. À la place : un tableau des cinq classes plus le seuil (0,5 → classe, 0,45 → `uncertain`) sur une même paire ; un test de forme de l'état (bornes 20/120, multiensemble, secrets, valeur de champ absente, clés exactes sans `tree`, logs sans nom d'élément, `purpose` `target` puis `verify`) ; `unavailable` (erreur, hors table, délai) → résultat identique sans `outcome` ; `act` `ok: false, uncertain: true` → aucun appel de vérification ; plusieurs `target` → une vérification sur la dernière. Le test existant « sans fournisseur / ref seul » passe sans modification. `executor-browser-targets.test.ts` vérifie les compteurs `verify*` dans `agent.run.decision`. Chaque test a été vu échouer en cassant la ligne qu'il protège.
+- **Docs** : divulgation `decision` élargie (« names of controls », « check what an action did »), `AI_DISCLOSURE_VERSION` inchangée ; `docs/computer-runtime.md`, `docs/ai-data-sharing-review.md`, `docs/self-host.md` ; entrée CHANGELOG `#### Changed` du 2026-09-26.

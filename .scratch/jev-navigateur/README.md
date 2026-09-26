@@ -15,7 +15,7 @@ Ce que Jev change : il prend un `state` texte et une map de questions typées, e
 Deux usages, dans cet ordre, tous deux derrière une interface neutre `DecisionProvider` avec fake en process et conformité offline :
 
 1. **Choix de cible** (livré) — `browser_act` accepte une description de cible (`target`) en plus du `ref`. Le backend prend un snapshot, pose un `choice` sur les liens, onglets ou champs texte courants plus une option `none`, exécute si la probabilité de l'option choisie atteint 0,80, sinon rend les candidats au modèle qui choisit lui-même comme aujourd'hui. Le modèle principal n'a plus à lire la page pour cliquer dessus.
-2. **Vérification post-action** (prochain ticket) — sur le snapshot d'après que `act` renvoie déjà, un `choice` classe l'issue en `landed | dialog | error | auth | unchanged`, annoté dans le résultat avec sa confiance. Consultatif : jamais de rejeu automatique, le contrat `docs/computer-runtime.md` reste intact.
+2. **Vérification post-action** (livré, lot 2) — sur le snapshot d'après que `act` renvoie déjà, un `choice` classe l'issue en `landed | dialog | error | auth | unchanged`, annoté dans le résultat avec sa confiance. Consultatif : jamais de rejeu automatique, le contrat `docs/computer-runtime.md` reste intact.
 
 Ce que Jev ne fait jamais dans ce lot : écrire une valeur de champ (le modèle garde `text`), choisir une URL, décider seul d'enchaîner des pas, produire un `ref` absent de la table, bloquer la boucle. Pas de provider configuré, timeout, erreur, réponse invalide ⇒ le tour actuel, inchangé.
 
@@ -27,7 +27,7 @@ Ce que Jev ne fait jamais dans ce lot : écrire une valeur de champ (le modèle 
 | 02 | Interface `DecisionProvider`, fake en process et conformité offline | 01 | done (lot 1, 2026-09-26) |
 | 03 | Adaptateur ~~TypeSafe~~ OpenRouter derrière une connexion par espace | 02 | done (lot 1, 2026-09-26) |
 | 04 | Choix de cible pour `browser_act` par `choice` sur les refs du snapshot | 02 | done (lot 1, 2026-09-26) |
-| 05 | Vérification post-action `landed / dialog / error / auth / unchanged` | 02, 04 | **ready-for-agent — prochain** |
+| 05 | Vérification post-action `landed / dialog / error / auth / unchanged` | 02, 04 | done (lot 2, 2026-09-26) |
 | 06 | Calibrer les seuils hors ligne sur un corpus étiqueté | 04, 05 (famille issues) | ready-for-agent (outillage) ; seuils après enregistrement réel |
 | 07 | Déclarer le fournisseur de décision comme destinataire de données | 02 | done (lot 1, 2026-09-26, minimal) |
 | 08 | Mesurer ce que le fournisseur de décision rapporte réellement | 04 | done (lot 1, 2026-09-26, logs seulement) ; lecture en attente |
@@ -49,7 +49,7 @@ Branche `feat/jev-browser-target`. Ces choix l'emportent sur le texte d'origine 
 
 ## Prochaines étapes
 
-1. **05** — vérification post-action sur les actions à `target`, consultative, sans texte de page ; ajoute `purpose` aux logs pour que 08 garde 04 séparable.
+1. ~~**05**~~ livré (lot 2, branche `feat/jev-browser-verify`) : `outcome` consultatif après la dernière action à `target`, `purpose` dans `agent.decision.call`, `agent.browser.outcome`, compteurs `verify*`.
 2. **06** — corpus étiqueté (français compris), constructeur par le chemin de production, évaluation hors ligne, puis enregistrement manuel de vraies réponses (clé sur stdin). Les seuils 0,80 et 0,5 restent des valeurs de départ jusque-là.
 3. Lecture de 08 sur un espace connecté, de préférence sur des jours d'avant 05 pour le gain de 04.
 
