@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-24
+
+#### Added
+
+- **iPhone notifications now show the bot's own avatar.** When a bot finishes, fails or needs you, the notification carries its shape and colour with the Rakazo icon as a small badge, the way messaging apps show a contact, instead of the bare app icon. It follows the organic avatar style; with the robot style the notification keeps the app icon.
+
 ### 2026-09-23
 
 #### Fixed

@@ -3,6 +3,7 @@ import type { BotFrame } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
   avatarIdentitySeed,
+  avatarInk,
   BotEngine,
   EXPRESSION_BY_ID,
   GLANCE_MORPH,
@@ -203,9 +204,7 @@ function OrganicAvatar({
 
   // Same eye rule as web: the eyes show the "paper" behind the ink, so pick it from
   // the body luminance, and ink a pale body's outline so it stays visible.
-  const luminance = relativeLuminance(color);
-  const paper = luminance < 0.4 ? "#FFFFFF" : "#101014";
-  const outline = luminance > 0.78 ? "#17181A" : null;
+  const { paper, outline } = avatarInk(color);
   const VB = BLOUB_HALF_VIEWBOX;
 
   return (
@@ -231,21 +230,4 @@ function OrganicAvatar({
       </G>
     </Svg>
   );
-}
-
-/** WCAG relative luminance (0..1) of a hex colour. */
-function relativeLuminance(hex: string): number {
-  const clean = hex.replace(/^#/, "");
-  const expanded =
-    clean.length === 3
-      ? clean
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : clean;
-  const r = parseInt(expanded.slice(0, 2), 16);
-  const g = parseInt(expanded.slice(2, 4), 16);
-  const b = parseInt(expanded.slice(4, 6), 16);
-  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return 0.5;
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }

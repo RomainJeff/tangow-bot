@@ -43,6 +43,7 @@ import {
   appendToolCallSegment,
   applyJudgeDecision,
   assertTransition,
+  avatarIdentitySeed,
   botMessageAllowsSilence,
   botMessageRelaysToUser,
   connectorKindFromToolName,
@@ -67,6 +68,7 @@ import {
   redactSecrets,
   renderBotDirectory,
   resolveActionApprovalDetail,
+  SHAPES,
   sandboxCommandTimeoutMs,
   type ToolCallDetail,
   type ToolCallStreak,
@@ -4654,6 +4656,24 @@ export async function unreadConversationCount(
   });
 }
 
+export async function notificationAvatar(
+  prisma: PrismaClient,
+  run: { spaceId: string; userId: string; botId: string },
+): Promise<NotificationMessage["avatar"]> {
+  const [bot, user] = await Promise.all([
+    prisma.bot.findFirst({
+      where: { id: run.botId, spaceId: run.spaceId },
+      select: { id: true, color: true, shapeSeed: true },
+    }),
+    prisma.user.findUnique({ where: { id: run.userId }, select: { avatarStyle: true } }),
+  ]);
+  if (!bot || user?.avatarStyle !== "organic") return undefined;
+  return {
+    color: bot.color,
+    shape: (bot.shapeSeed ?? avatarIdentitySeed(bot.id)) % SHAPES.length,
+  };
+}
+
 async function notifyRun(
   deps: ExecutorDeps,
   run: { spaceId: string; userId: string; botId: string; threadId: string },
@@ -4668,19 +4688,28 @@ async function notifyRun(
   if (!enabled) return;
   // Counted after the caller persisted its message, so a completion or an ask that marks this
   // thread unread is already in; a failure or a takeover leaves the inbox as it was.
-  const badge = await unreadConversationCount(deps.prisma, run.userId).catch((error) => {
-    getLogger().error("unread conversation count", error);
-    return undefined;
-  });
+  const [badge, avatar] = await Promise.all([
+    unreadConversationCount(deps.prisma, run.userId).catch((error) => {
+      getLogger().error("unread conversation count", error);
+      return undefined;
+    }),
+    notificationAvatar(deps.prisma, run).catch((error) => {
+      getLogger().error("notification avatar", error);
+      return undefined;
+    }),
+  ]);
   await deps.notifications
-    .send(badge === undefined ? message : { ...message, badge }, {
-      operationId: "notify",
-      traceId: run.botId,
-      spaceId: run.spaceId,
-      userId: run.userId,
-      botId: run.botId,
-      signal: new AbortController().signal,
-    })
+    .send(
+      { ...message, badge, avatar },
+      {
+        operationId: "notify",
+        traceId: run.botId,
+        spaceId: run.spaceId,
+        userId: run.userId,
+        botId: run.botId,
+        signal: new AbortController().signal,
+      },
+    )
     .catch((error) => {
       getLogger().error("run notification", error);
     });

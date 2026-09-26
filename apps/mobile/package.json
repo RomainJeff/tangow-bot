@@ -20,7 +20,8 @@
     "check": "expo install --check && tsc --noEmit -p tsconfig.json",
     "test": "vitest run --root ../.. apps/mobile/lib",
     "test:e2e": "maestro test .maestro/smoke.yaml",
-    "submit:ios": "npx eas-cli@latest submit --platform ios --profile production --latest"
+    "submit:ios": "npx eas-cli@latest submit --platform ios --profile production --latest",
+    "generate:notification-avatars": "tsx scripts/generate-notification-avatars.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "57.0.16",
@@ -65,6 +66,7 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@bacons/apple-targets": "5.0.0",
     "@react-native/metro-config": "0.86.3",
     "@types/node": "24.13.3",
     "@types/react": "19.2.18",
