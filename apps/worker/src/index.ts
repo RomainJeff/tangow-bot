@@ -43,6 +43,7 @@ import {
   resolvePiSessionRoot,
   resolveSandboxProvider,
   ScriptedAgentRuntime,
+  SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
 } from "@rakazo/adapters";
 import { resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
@@ -162,6 +163,7 @@ async function main() {
   integrationSettings.warmDirectories();
   const memory = new MarkdownMemoryStore(prisma);
   const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);
+  const decisionProviders = new SpaceDecisionProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
@@ -179,6 +181,7 @@ async function main() {
     sandbox,
     memory,
     memoryProviders,
+    decisionProviders,
     home,
     artifacts,
     connector: stack.connector,

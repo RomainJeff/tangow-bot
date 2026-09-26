@@ -721,7 +721,7 @@ export function describeToolActivity(toolName: string, args: unknown): string {
   if (toolName === "browser_navigate")
     return `Opening page: ${detail(redactActivityUrl(record.url))}`;
   if (toolName === "browser_snapshot") return "Reading the page";
-  if (toolName === "browser_act") return "Using the page";
+  if (toolName === "browser_act" || toolName === "browser_run") return "Using the page";
   if (toolName === "computer_act") return "Operating the computer";
   if (toolName === "run_subagent") return `Delegating to helper: ${detail(record.name)}`;
   if (toolName === "create_space") return `Creating space: ${detail(record.name)}`;
