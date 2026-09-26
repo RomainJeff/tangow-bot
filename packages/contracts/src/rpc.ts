@@ -61,6 +61,7 @@ import {
   ServerUpdateStatusSchema,
   SkillAvailabilitySchema,
   SkillPlaybookSchema,
+  SpaceDecisionConfigSchema,
   SpaceMarketplaceSchema,
   SpaceMemoryConfigSchema,
   SpaceNavigationSchema,
@@ -407,6 +408,19 @@ export const appContract = {
     setDefaultScope: oc
       .input(z.object({ defaultMemoryScope: MemoryScopeSchema }))
       .output(SpaceMemoryConfigSchema),
+    disconnectProvider: oc.output(z.object({ ok: z.literal(true) })),
+  },
+  decision: {
+    providerConfig: oc.output(SpaceDecisionConfigSchema.nullable()),
+    connectProvider: oc
+      .input(
+        z.object({
+          provider: z.string().min(1),
+          settings: z.record(z.string(), z.string()),
+          credentials: z.record(z.string(), z.string()),
+        }),
+      )
+      .output(SpaceDecisionConfigSchema),
     disconnectProvider: oc.output(z.object({ ok: z.literal(true) })),
   },
   routines: {

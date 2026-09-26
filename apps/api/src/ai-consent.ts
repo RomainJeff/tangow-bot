@@ -22,7 +22,7 @@ export async function aiConsentStatus(
   actor: Actor,
   query: AiConsentQuery = {},
 ): Promise<AiConsentStatus> {
-  const uses = query.uses ?? ["model", "memory", "voice"];
+  const uses = query.uses ?? ["model", "memory", "voice", "decision"];
   const modelsEnabled = uses.includes("model") && deps.env.agentRuntime !== "scripted";
   const target =
     query.botId || query.groupId ? await resolveThreadTarget(deps.prisma, actor, query) : null;
@@ -31,7 +31,7 @@ export async function aiConsentStatus(
       ? [target.botId]
       : target.memberBotIds
     : undefined;
-  const [preferences, defaultCredential, bots, voices, memory, settings, consents] =
+  const [preferences, defaultCredential, bots, voices, memory, decision, settings, consents] =
     await Promise.all([
       modelsEnabled
         ? deps.prisma.spaceModelPreference.findMany({
@@ -63,6 +63,9 @@ export async function aiConsentStatus(
         : [],
       uses.includes("memory")
         ? deps.prisma.spaceMemoryConfig.findUnique({ where: { spaceId: actor.spaceId } })
+        : null,
+      uses.includes("decision")
+        ? deps.prisma.spaceDecisionConfig.findUnique({ where: { spaceId: actor.spaceId } })
         : null,
       modelsEnabled
         ? deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } })
@@ -169,6 +172,17 @@ export async function aiConsentStatus(
         baseUrl: toStringRecord(memory.settings).baseUrl,
       }),
     );
+  if (decision) {
+    const settings = toStringRecord(decision.settings);
+    add(
+      aiRecipient({
+        provider: decision.provider,
+        use: "decision",
+        baseUrl: settings.baseUrl,
+        modelId: settings.modelId,
+      }),
+    );
+  }
   if (
     uses.includes("model") &&
     deps.cloudAgent &&

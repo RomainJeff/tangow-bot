@@ -22,6 +22,7 @@ function setup() {
         findMany: vi.fn(async () => [{ credential: { provider: "openai" } }]),
       },
       spaceMemoryConfig: { findUnique: vi.fn(async () => null) },
+      spaceDecisionConfig: { findUnique: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
       aiDataConsent: { findMany: vi.fn(async () => []), upsert },
       $transaction: vi.fn(async (queries) => Promise.all(queries)),
@@ -64,6 +65,25 @@ describe("consent grants", () => {
     expect(status.recipients).toHaveLength(1);
     expect(status.recipients[0]?.name).toBe("OpenAI");
     expect(deps.prisma.spaceVoicePreference.findMany).not.toHaveBeenCalled();
+  });
+  it("lists the decision provider only when the Space has a connection", async () => {
+    const { deps, actor } = setup();
+    const none = await aiConsentStatus(deps, actor, { uses: ["decision"] });
+    expect(none.recipients).toEqual([]);
+    vi.mocked(deps.prisma.spaceDecisionConfig.findUnique).mockResolvedValue({
+      provider: "typesafe",
+      settings: { baseUrl: "https://proxy.example.test/v1", modelId: "jev-1.13.0" },
+    } as never);
+    const status = await aiConsentStatus(deps, actor, { uses: ["decision"] });
+    expect(status.recipients).toEqual([
+      expect.objectContaining({
+        use: "decision",
+        name: "TypeSafe (https://proxy.example.test)",
+        detail: "Model: jev-1.13.0.",
+        allowed: false,
+      }),
+    ]);
+    expect(status.recipients[0]?.privacyUrl).toBeUndefined();
   });
   it("returns an operator policy without requiring a hosted provider", async () => {
     const { deps, actor } = setup();

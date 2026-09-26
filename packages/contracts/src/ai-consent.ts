@@ -1,8 +1,8 @@
 import * as z from "zod";
 
-export const AI_DISCLOSURE_VERSION = "2026-09-14";
+export const AI_DISCLOSURE_VERSION = "2026-09-26";
 export const AI_PRIVACY_URL = "https://rakazo.com/privacy/";
-export const AiDataUseSchema = z.enum(["model", "voice", "memory"]);
+export const AiDataUseSchema = z.enum(["model", "voice", "memory", "decision"]);
 export type AiDataUse = z.infer<typeof AiDataUseSchema>;
 export const AI_DATA_DISCLOSURES: Record<AiDataUse, string> = {
   model:
@@ -11,6 +11,8 @@ export const AI_DATA_DISCLOSURES: Record<AiDataUse, string> = {
     "Audio you record is sent for transcription. Text you choose to play, including bot responses, is sent to generate speech.",
   memory:
     "Conversation summaries, saved memories, search queries, and bot and Space identifiers are sent to store and retrieve context for your bots.",
+  decision:
+    "The address and title of web pages your bots use, the names of links, tabs, and text fields on them, and the bot's short description of the one it wants are sent to choose which element to act on.",
 };
 export const AiConsentQuerySchema = z
   .object({

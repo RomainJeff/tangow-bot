@@ -4,6 +4,7 @@ import { decideWithin } from "./decision.js";
 import {
   createDecisionProvider,
   prepareDecisionProviderConnection,
+  SpaceDecisionProviderResolver,
 } from "./decision-provider-factory.js";
 import {
   parseTypeSafeDecisionConnection,
@@ -214,5 +215,76 @@ describe("TypeSafe decision adapter", () => {
     ]) {
       expect(typesafeDecisionRequiresDeploymentOwner({ baseUrl })).toBe(true);
     }
+  });
+});
+
+function resolverFor(
+  options: {
+    provider?: string;
+    baseUrl?: string;
+    ownerUserId?: string | null;
+    none?: boolean;
+  } = {},
+) {
+  const prisma = {
+    spaceDecisionConfig: {
+      findUnique: vi.fn(async () =>
+        options.none
+          ? null
+          : {
+              userId: "config-author",
+              provider: options.provider ?? "typesafe",
+              settings: options.baseUrl ? { baseUrl: options.baseUrl } : {},
+              secret: { id: "secret-1", ciphertext: "encrypted" },
+            },
+      ),
+    },
+    deploymentSettings: {
+      findUnique: vi.fn(async () => ({ ownerUserId: options.ownerUserId ?? null })),
+    },
+  };
+  const secrets = { load: vi.fn(() => JSON.stringify({ apiKey: "test-key-not-real" })) };
+  return {
+    resolver: new SpaceDecisionProviderResolver(prisma as never, secrets as never),
+    secrets,
+  };
+}
+
+describe("SpaceDecisionProviderResolver", () => {
+  it("resolves nothing without a connection or for an unknown provider", async () => {
+    const empty = resolverFor({ none: true });
+    await expect(empty.resolver.resolve("space-1")).resolves.toBeNull();
+    const unknown = resolverFor({ provider: "retired" });
+    await expect(unknown.resolver.resolve("space-1")).resolves.toBeNull();
+    expect(unknown.secrets.load).not.toHaveBeenCalled();
+  });
+
+  it("builds the Space provider from stored credentials", async () => {
+    const { resolver } = resolverFor();
+    const provider = await resolver.resolve("space-1");
+    expect(provider?.describe()).toMatchObject({
+      id: "typesafe",
+      capabilities: { maxOptions: 255 },
+    });
+  });
+
+  it.each([null, "another-user"])(
+    "disables a private endpoint the deployment owner did not configure: %s",
+    async (ownerUserId) => {
+      const { resolver, secrets } = resolverFor({
+        baseUrl: "http://127.0.0.1:9000",
+        ownerUserId,
+      });
+      await expect(resolver.resolve("space-1")).resolves.toBeNull();
+      expect(secrets.load).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps a private endpoint configured by the deployment owner", async () => {
+    const { resolver } = resolverFor({
+      baseUrl: "http://127.0.0.1:9000",
+      ownerUserId: "config-author",
+    });
+    await expect(resolver.resolve("space-1")).resolves.not.toBeNull();
   });
 });

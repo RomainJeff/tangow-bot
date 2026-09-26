@@ -15,9 +15,13 @@ using their existing controls. This flow is not a global data-access or run-revo
 
 ## Release gates
 
-- Confirm the review account's actual model, voice, memory, and cloud-agent configuration.
+- Confirm the review account's actual model, voice, memory, decision, and cloud-agent configuration.
 - Verify the selected providers' agreements, retention, deletion, and security safeguards
   support the policy's equal-or-greater-protection commitment. A privacy link alone is not proof.
+- A Space decision provider (Settings → Browser) receives page URLs and titles, the role and
+  name of links, tabs, and text fields, and the bot's target description. Verify that
+  provider's agreement, retention, and deletion terms before a release lists it. It appears
+  only when the Space has a connection; it has no provider-policy link until one is verified.
 - For OpenRouter or Vercel AI Gateway, verify actual downstream routing and provider agreements.
   Apple's cited rejection requires recipient disclosure and permission, not a blanket ban on
   these gateways. The disclosure names the gateway and explains onward routing. Confirm the
@@ -51,7 +55,10 @@ Use synthetic content and a fresh review account on iPhone and an 11-inch iPad.
    and routines retain their previous behavior.
 8. Verify OpenRouter, Vercel AI Gateway, and custom/local providers remain selectable and keep
    their existing routing settings.
-9. Capture a native iPad consent screenshot; there is no new desktop/web consent screen.
+9. Connect a decision provider in Settings → Browser, then send from mobile. Confirm the alert
+   names it with the decision disclosure. Choose Not now and confirm nothing is submitted.
+   Without a connection, confirm it is not listed.
+10. Capture a native iPad consent screenshot; there is no new desktop/web consent screen.
 
 ## App Review notes template
 

@@ -1,4 +1,7 @@
 import type { DecisionProvider } from "@rakazo/adapter-kit";
+import type { PrismaClient } from "@rakazo/db";
+import { toStringRecord } from "./memory-provider-factory.js";
+import type { EncryptedSecretStore } from "./secrets.js";
 import {
   createTypeSafeDecisionProvider,
   prepareTypeSafeDecisionConnection,
@@ -66,4 +69,31 @@ export function createDecisionProvider(
   credentials: Record<string, string>,
 ): DecisionProvider {
   return decisionProviderAdapter(provider).create(settings, credentials);
+}
+
+export class SpaceDecisionProviderResolver implements DecisionProviderResolver {
+  constructor(
+    private readonly prisma: Pick<PrismaClient, "spaceDecisionConfig" | "deploymentSettings">,
+    private readonly secrets: EncryptedSecretStore,
+  ) {}
+
+  async resolve(spaceId: string): Promise<DecisionProvider | null> {
+    const config = await this.prisma.spaceDecisionConfig.findUnique({
+      where: { spaceId },
+      include: { secret: true },
+    });
+    if (!config || !DECISION_PROVIDER_ADAPTERS.has(config.provider)) return null;
+    const settings = toStringRecord(config.settings);
+    if (decisionProviderRequiresDeploymentOwner(config.provider, settings)) {
+      const deployment = await this.prisma.deploymentSettings.findUnique({
+        where: { id: "default" },
+        select: { ownerUserId: true },
+      });
+      if (!deployment?.ownerUserId || deployment.ownerUserId !== config.userId) return null;
+    }
+    const credentials = toStringRecord(
+      JSON.parse(this.secrets.load(config.secret.ciphertext, config.secret.id)),
+    );
+    return createDecisionProvider(config.provider, settings, credentials);
+  }
 }

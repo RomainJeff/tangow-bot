@@ -115,6 +115,7 @@ import {
   findDefaultModelCredential,
   findDefaultVoiceCredential,
   findModelCredential,
+  findSpaceDecisionConfig,
   findSpaceMemoryConfig,
   formatMessagingLinkCode,
   InvalidAnswerError,
@@ -148,6 +149,11 @@ import {
   resolveBusyBotName,
   toComputerStatus,
 } from "./computer-status.js";
+import {
+  disconnectDecisionProvider,
+  persistDecisionProviderConfig,
+  serializeSpaceDecisionConfig,
+} from "./decision-provider-config.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
 import { createMarketplacesService } from "./marketplaces.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
@@ -2396,6 +2402,18 @@ export function createRouter(deps: RouterDeps) {
       ),
       disconnectProvider: authed.memory.disconnectProvider.handler(async ({ context }) =>
         disconnectMemoryProvider(deps, context.actor),
+      ),
+    },
+    decision: {
+      providerConfig: authed.decision.providerConfig.handler(async ({ context }) => {
+        const config = await findSpaceDecisionConfig(deps.prisma, context.actor.spaceId);
+        return config ? serializeSpaceDecisionConfig(config) : null;
+      }),
+      connectProvider: authed.decision.connectProvider.handler(async ({ context, input }) =>
+        persistDecisionProviderConfig(deps, context.actor, input),
+      ),
+      disconnectProvider: authed.decision.disconnectProvider.handler(async ({ context }) =>
+        disconnectDecisionProvider(deps, context.actor),
       ),
     },
     routines: {

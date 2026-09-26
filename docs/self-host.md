@@ -251,6 +251,15 @@ support. Existing token limits still apply; effort is not a separate reasoning-t
 
 Do not commit `.env`. Never put `COMPOSIO_API_KEY`, OpenRouter keys, or provider tokens in git, logs, or chat.
 
+A Space owner can connect an optional decision provider from **Settings → Browser** on web and
+desktop. Today the only adapter is TypeSafe: an API key, and under **Advanced** a base URL for a
+compatible proxy and a model id (default `jev-1.13.0`, pinned). No environment variable is read.
+With a connection, bots can ask `browser_act` for a link, tab, or text field by description (see
+[computer runtime](computer-runtime.md)); without one nothing changes. Page URLs, titles, and
+element names go to that recipient, which is listed in mobile AI data sharing
+([review notes](ai-data-sharing-review.md)). Loopback, private-network, and plain-HTTP base URLs
+can only be saved by the deployment owner.
+
 Optional messaging platforms (iMessage, Slack, WhatsApp, Telegram, Feishu/Lark) mount when their env credentials are set — see `.env.example`. Point a Feishu/Lark bot event subscription at `/api/v1/messaging/webhook/lark` (webhook/HTTP inbound only; do not enable long connection). Groups stay iMessage-only.
 
 ## Choosing a computer provider

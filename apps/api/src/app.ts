@@ -62,6 +62,7 @@ import {
   removeUserSkillDirs,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
+  SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
   toTeamChatInbound,
 } from "@rakazo/adapters";
@@ -235,6 +236,7 @@ export async function createApp(
     });
   const mcpOAuth = new McpOAuthBroker(prisma, secrets, remoteConnectors);
   const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);
+  const decisionProviders = new SpaceDecisionProviderResolver(prisma, secrets);
   const oauthLogins = new PiOAuthLogins();
   const home = new LocalAgentHomeStore(env.dataDir);
   const artifacts = new LocalArtifactStore(env.dataDir);
@@ -372,6 +374,7 @@ export async function createApp(
     sandbox,
     memory,
     memoryProviders,
+    decisionProviders,
     home,
     artifacts,
     connector: stack.connector,

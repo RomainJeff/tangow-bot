@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
 
-test("settings shell is two-pane and deep-links Models Memory Voice Usage", async ({
+test("settings shell is two-pane and deep-links Models Memory Browser Voice Usage", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
@@ -45,6 +45,17 @@ test("settings shell is two-pane and deep-links Models Memory Voice Usage", asyn
   await expect(memory.getByLabel("Bearer token")).toBeVisible();
   await expect(memory.getByRole("button", { name: "Recall only" })).toBeVisible();
   await captureScreenshot(page, testInfo, "settings-shell-memory-serenity");
+
+  await settings.getByTestId("settings-nav-browser").click();
+  await expect(settings).toHaveAttribute("data-settings-section", "browser");
+  await expect(settings.getByRole("heading", { name: "Browser", exact: true })).toBeVisible();
+  const browserSettings = settings.getByTestId("browser-settings");
+  await expect(browserSettings.getByLabel("TypeSafe API key")).toBeVisible();
+  await expect(browserSettings.getByRole("button", { name: "Connect" })).toBeDisabled();
+  await browserSettings.getByText("Advanced").click();
+  await expect(browserSettings.getByLabel("Base URL")).toBeVisible();
+  await expect(browserSettings.getByLabel("Model")).toBeVisible();
+  await captureScreenshot(page, testInfo, "settings-shell-browser");
 
   await settings.getByTestId("settings-nav-voice").click();
   await expect(settings).toHaveAttribute("data-settings-section", "voice");
