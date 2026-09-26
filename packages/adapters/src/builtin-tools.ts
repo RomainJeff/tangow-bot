@@ -20,7 +20,7 @@ export const DELEGATION_TOOL_NAMES = new Set([
 // `chattyReplies` on additionally trade one long final answer for a run of short
 // bubbles.
 export const CHATTY_MESSAGE_USER_DESCRIPTION =
-  "Send one short chat message to the user immediately, without ending your turn. Each call posts one bubble. Use several short message_user calls instead of one long final answer, and to ask questions. Never narrate your work \u2014 no progress updates, no tool logs, no play-by-play. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation \u2014 not in other words, not from a new angle. When you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled.";
+  "Send one short chat message to the user immediately, without ending your turn. Each call posts one bubble. Use several short message_user calls instead of one long final answer, and to ask questions. Never narrate your work: no progress updates, no tool logs, no play-by-play. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation, not in other words, not from a new angle. When you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled. Let the number of bubbles follow the content: usually one or two, more only when there are that many separate points. A long deliverable the user asked for goes in your final reply, not in bubbles.";
 
 export function withChattyReplies(tools: ConnectorTool[]): ConnectorTool[] {
   return tools.map((tool) =>
@@ -247,7 +247,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "message_user",
     description:
-      "Talk to the user in this chat immediately, without ending your turn. Each call posts one bubble. Only two uses: saying something to the user as part of your reply, split into short natural messages like a human conversation, or asking a question you need answered. Never narrate your work \u2014 no announcing what you are about to do, no tool logs, no play-by-play, no status beats. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation \u2014 not in other words, not from a new angle; when you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled. HARD LIMIT: each bubble is cut off silently at 500 characters, so keep it short and never put a report or any long-form content in one.",
+      "Talk to the user in this chat immediately, without ending your turn. Each call posts one bubble. Only two uses: saying something to the user as part of your reply, split into short natural messages like a human conversation, or asking a question you need answered. Never narrate your work: no announcing what you are about to do, no tool logs, no play-by-play, no status beats. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation, not in other words, not from a new angle; when you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled. HARD LIMIT: each bubble is cut off silently at 500 characters, so keep it short and never put a report or any long-form content in one.",
     inputSchema: {
       type: "object",
       properties: {
@@ -255,7 +255,7 @@ export const builtinAgentTools: ConnectorTool[] = [
           type: "string",
           maxLength: 500,
           description:
-            "Short user-visible update, not the final answer \u2014 longer text is silently truncated.",
+            "Short user-visible update, not the final answer; longer text is silently truncated.",
         },
       },
       required: ["message"],
@@ -638,7 +638,7 @@ export const builtinAgentTools: ConnectorTool[] = [
         prompt: {
           type: "string",
           description:
-            "Concrete steps for when the schedule fires: name the connected plugin tools to call (e.g. GITHUB_LIST_RELEASES for owner/repo), what to extract, and how to report. Prefer plugin tools over computer browser or web search for app data.",
+            "Concrete steps for when the schedule fires: name the connected plugin tools to call (e.g. GITHUB_LIST_RELEASES for owner/repo), what to extract, and how to report. Prefer plugin tools over computer browser or web search for app data. Write it in the language the user uses.",
         },
         cron: { type: "string", description: "5-field cron for repeating schedules." },
         every: { type: "number", description: "Repeat interval amount for repeating schedules." },

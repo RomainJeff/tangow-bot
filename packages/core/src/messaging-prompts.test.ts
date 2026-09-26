@@ -13,6 +13,12 @@ describe("messagingDmSurfaceNote", () => {
     expect(note).toMatch(/same (thread|conversation)/i);
     expect(note).toMatch(/concise/i);
   });
+
+  it("asks for plain text, since chat apps do not render markdown", () => {
+    const note = messagingDmSurfaceNote();
+    expect(note).toMatch(/plain text/);
+    expect(note).toMatch(/bare URLs/);
+  });
 });
 
 describe("messagingChannelPrivacyBlock", () => {
