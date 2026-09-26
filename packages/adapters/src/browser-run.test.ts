@@ -107,6 +107,8 @@ interface Pick {
   /** Element name for click, or `name <- valueKey` for fill/select (`?` for none). */
   target?: string;
   probability?: number;
+  /** Probability of the first other non-`none` target; the rest is spread evenly. */
+  runnerUp?: number;
   goalDone?: number;
 }
 
@@ -134,6 +136,7 @@ function step(pick: Pick): (request: DecisionRequest) => DecisionResponse {
         Object.keys(question.options),
         key,
         pick.probability ?? 0.95,
+        pick.runnerUp,
       );
     }
     if (request.questions.goal_done) {
@@ -143,12 +146,14 @@ function step(pick: Pick): (request: DecisionRequest) => DecisionResponse {
   };
 }
 
-function choice(keys: string[], chosen: string, probability: number) {
-  const others = keys.filter((key) => key !== chosen);
-  const probabilities = Object.fromEntries(
-    others.map((key) => [key, (1 - probability) / others.length]),
-  );
+function choice(keys: string[], chosen: string, probability: number, runnerUp?: number) {
+  const second =
+    runnerUp === undefined ? undefined : keys.find((k) => k !== chosen && k !== "none");
+  const others = keys.filter((key) => key !== chosen && key !== second);
+  const rest = 1 - probability - (runnerUp ?? 0);
+  const probabilities = Object.fromEntries(others.map((key) => [key, rest / others.length]));
   probabilities[chosen] = probability;
+  if (second !== undefined) probabilities[second] = runnerUp!;
   return { type: "choice" as const, choice: chosen, confidence: probability, probabilities };
 }
 
@@ -280,25 +285,46 @@ describe("browser_run", () => {
     );
   });
 
-  it("hands ranked candidates back below 0.80 without acting", async () => {
-    const browser = await open(new FlowBrowser(onboarding));
-    const { result } = run(
-      browser,
-      [step({ op: "click", target: "Get started", probability: 0.6 })],
-      {
-        goal: "Start",
-      },
-    );
-    const outcome = await result;
-    expect(outcome).toMatchObject({
-      status: "blocked",
-      need: {
-        kind: "blocked",
-        reason: "low_confidence",
-        candidates: [{ name: "Get started", probability: 0.6 }, {}],
-      },
-    });
-    expect(browser.acts).toHaveLength(0);
+  it("acts on a clear leader or a sure target, and hands ranked candidates back otherwise", async () => {
+    // Production: two equivalent advance buttons split the mass, "CONTINUER" 0.65, "Suivant" 0.30.
+    for (const [probability, runnerUp, acts] of [
+      [0.65, 0.3, true],
+      // The rest (0.33) goes to "none": no competing element, so no doubt about the target.
+      [0.65, 0.02, true],
+      [0.8, 0.15, true],
+      [0.65, 0.35, false],
+      [0.59, 0.1, false],
+    ] as const) {
+      const browser = await open(new FlowBrowser(onboarding));
+      const { result } = run(
+        browser,
+        [
+          step({ op: "click", target: "Get started", probability, runnerUp }),
+          step({ op: "blocked" }),
+        ],
+        { goal: "Start" },
+      );
+      const outcome = await result;
+      if (acts) {
+        expect(outcome, `${probability} vs ${runnerUp}`).toMatchObject({
+          steps: [{ op: "click", name: "Get started", ok: true }],
+        });
+        expect(browser.acts).toHaveLength(1);
+        continue;
+      }
+      expect(outcome, `${probability} vs ${runnerUp}`).toMatchObject({
+        status: "blocked",
+        need: {
+          kind: "blocked",
+          reason: "low_confidence",
+          candidates: [
+            { name: "Get started", probability },
+            { name: "Help", probability: runnerUp },
+          ],
+        },
+      });
+      expect(browser.acts).toHaveLength(0);
+    }
   });
 
   it("stops a loop: no page change three times, or the same control a third time", async () => {

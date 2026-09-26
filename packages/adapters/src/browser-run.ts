@@ -40,6 +40,13 @@ const MAX_RESULT_NAME_CHARS = 80;
 const RECENT_STEPS = 10;
 /** The chosen target must reach this probability, as for any action taken without the model. */
 export const RUN_TARGET_PROBABILITY = 0.8;
+/**
+ * Below it, a target still acts from this probability when it holds at least this multiple of
+ * the runner-up: two equivalent advance buttons ("CONTINUER" 0.65, "Suivant" 0.30) split the
+ * mass without any doubt about the next step, and blocked there in production.
+ */
+const RUN_MARGIN_PROBABILITY = 0.6;
+const RUN_MARGIN_RATIO = 2;
 /** Below this, a `done` is vetoed once. */
 const GOAL_DONE_PROBABILITY = 0.5;
 /** At or above this, a click stops for confirmation. Low on purpose: a stop costs one turn. */
@@ -756,7 +763,7 @@ function planStep(
   // Asking for a value acts on nothing, so it needs no confidence: in production the model
   // put the text in the goal, and a 0.78 "no provided value" came back as a dead-end block.
   if (target.valueKey === MISSING_VALUE) return { gate: "needs_value", op, target, probability };
-  if (probability < RUN_TARGET_PROBABILITY) {
+  if (!confidentTarget(answer, probability)) {
     return {
       gate: "low_confidence",
       op,
@@ -770,6 +777,18 @@ function planStep(
     return { gate: "confirm", op, target, probability };
   }
   return { gate: "act", op, target, probability };
+}
+
+function confidentTarget(
+  answer: Extract<DecisionAnswer, { type: "choice" }>,
+  probability: number,
+): boolean {
+  if (probability >= RUN_TARGET_PROBABILITY) return true;
+  if (probability < RUN_MARGIN_PROBABILITY) return false;
+  const runnerUp =
+    topChoices(answer, 3).find(({ key }) => key !== answer.choice && key !== NONE)?.probability ??
+    0;
+  return probability >= RUN_MARGIN_RATIO * runnerUp;
 }
 
 function candidatesOf(
