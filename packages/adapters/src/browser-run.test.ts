@@ -108,7 +108,6 @@ interface Pick {
   target?: string;
   probability?: number;
   goalDone?: number;
-  consequential?: number;
 }
 
 /** Scripts one step by element names and value keys, never by ref numbering. */
@@ -139,9 +138,6 @@ function step(pick: Pick): (request: DecisionRequest) => DecisionResponse {
     }
     if (request.questions.goal_done) {
       answers.goal_done = { type: "noul", probability: pick.goalDone ?? 0.1 };
-    }
-    if (request.questions.click_consequential) {
-      answers.click_consequential = { type: "noul", probability: pick.consequential ?? 0.02 };
     }
     return { answers, usage: { inputTokens: 1_000, cost: 0.00004 } };
   };
@@ -243,22 +239,20 @@ describe("browser_run", () => {
     ).toContain("Pay 1 200 €");
   });
 
-  it("stops before a consequential click, by name or by the provider, and clicks nothing", async () => {
-    for (const pick of [
-      step({ op: "click", target: "Pay 1 200 €" }),
-      step({ op: "click", target: "Go to next step", consequential: 0.6 }),
-    ]) {
+  it("stops before a click named like a consequential action, and clicks nothing", async () => {
+    {
       const browser = await open(new FlowBrowser({}, "summary"));
-      const { result } = run(browser, [pick], { goal: "Finish the booking" });
-      const outcome = await result;
-      expect(outcome).toMatchObject({
+      const { result } = run(browser, [step({ op: "click", target: "Pay 1 200 €" })], {
+        goal: "Finish the booking",
+      });
+      expect(await result).toMatchObject({
         status: "needs_input",
         need: { kind: "confirm", element: { ref: expect.any(String), role: "button" } },
         steps: [],
       });
       expect(browser.acts).toHaveLength(0);
     }
-    // The same neutral button is clicked when the provider does not class it as consequential.
+    // A neutral button on the same page is clicked.
     const browser = await open(new FlowBrowser({}, "summary"));
     const { result } = run(browser, [step({ op: "click", target: "Go to next step" })], {
       goal: "Go on",

@@ -43,7 +43,6 @@ export const RUN_TARGET_PROBABILITY = 0.8;
 /** Below this, a `done` is vetoed once. */
 const GOAL_DONE_PROBABILITY = 0.5;
 /** At or above this, a click stops for confirmation. Low on purpose: a stop costs one turn. */
-const CONSEQUENTIAL_PROBABILITY = 0.3;
 const WAIT_MS = 500;
 const MAX_CONSECUTIVE_WAITS = 2;
 /** Suggestions of an autocomplete field appear after typing; observe again before deciding. */
@@ -701,13 +700,6 @@ function stepQuestions(
       instructions: "Does the page visibly show that the goal is fully reached?",
     };
   }
-  if (clickOptions.size > 0) {
-    questions.click_consequential = {
-      type: "noul",
-      instructions:
-        "Would the click that best advances the goal now pay, buy, order, book, delete, send, publish, make a final submission, or sign something?",
-    };
-  }
 
   const text = stateText(pageText(page.tree), secrets, MAX_PAGE_TEXT_CHARS);
   const request: DecisionRequest = {
@@ -772,14 +764,10 @@ function planStep(
       candidates: candidatesOf(answer, options, secrets),
     };
   }
-  if (op === "click") {
-    const consequential = result.answers.click_consequential;
-    if (
-      isConsequentialName(target.element.name) ||
-      (consequential?.type === "noul" && consequential.probability >= CONSEQUENTIAL_PROBABILITY)
-    ) {
-      return { gate: "confirm", op, target, probability };
-    }
+  // Names only: a yes/no asked in the same call cannot see which element gets picked, and
+  // in production it held back "J'ai une destination en tête".
+  if (op === "click" && isConsequentialName(target.element.name)) {
+    return { gate: "confirm", op, target, probability };
   }
   return { gate: "act", op, target, probability };
 }
