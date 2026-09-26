@@ -402,6 +402,17 @@ EVAL_HELPERS = r"""
     }
     return typeof el.onclick === "function" || el.hasAttribute("tabindex");
   }
+  // Hidden and pixel-sized frames (ads, trackers) are not content the model could miss, and
+  // a vague "frames require desktop tools" note pushes models off the page tools entirely.
+  function frameNote() {
+    const count = Array.from(document.querySelectorAll("iframe,frame")).filter((frame) => {
+      if (!visible(frame)) return false;
+      const rect = frame.getBoundingClientRect();
+      return rect.width >= 50 && rect.height >= 50;
+    }).length;
+    if (!count) return "";
+    return `\n${count} embedded frame${count === 1 ? " is" : "s are"} not listed; use the refs above for this page, and desktop tools only for content inside a frame.`;
+  }
   function formatTree(elements) {
     if (!elements.length) return "(no interactive elements)";
     return elements
@@ -436,7 +447,7 @@ EVAL_HELPERS = r"""
         title: (document.title || "").slice(0, 200),
         elements,
         tree: (document.body?.innerText || "").slice(0, 12000) + "\n" + formatTree(elements)
-          + (document.querySelector("iframe,frame") ? "\nEmbedded frames require desktop tools." : ""),
+          + frameNote(),
       };
     },
     resolve(ref) {

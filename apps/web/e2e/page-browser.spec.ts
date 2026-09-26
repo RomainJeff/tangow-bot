@@ -20,6 +20,7 @@ test("live page helper preserves identity, masks passwords, and reports partial 
       <label>Name <input id="name"></label><input aria-label="Password" type="password" value="fake-test-password">
       <button id="save" onclick="this.dataset.clicks=Number(this.dataset.clicks||0)+1">Save</button>
       <label><input type="checkbox">Agree</label><button disabled>Disabled</button>
+      <iframe style="display:none"></iframe><iframe width="1" height="1"></iframe>
       <script>window.__rakazoPageBrowser={snapshot:()=>({title:'spoofed'})};</script>`);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -49,6 +50,8 @@ test("live page helper preserves identity, masks passwords, and reports partial 
     expect(snapshot.ok).toBe(true);
     expect(snapshot.title).toBe("Fixture");
     expect(snapshot.tree).toContain("Readable article content");
+    // Hidden and pixel-sized frames stay silent; a visible frame is counted, not generalized.
+    expect(snapshot.tree).not.toMatch(/embedded frame/i);
     expect(JSON.stringify(snapshot)).not.toContain("fake-test-password");
     const ref = (snapshot: { elements: { name: string; ref: string }[] }, name: string) =>
       snapshot.elements.find((element) => element.name === name)!.ref;
@@ -63,6 +66,17 @@ test("live page helper preserves identity, masks passwords, and reports partial 
     await expect(page.locator("#name")).toHaveValue("Example");
     await expect(page.locator("#save")).toHaveAttribute("data-clicks", "1");
 
+    await page.evaluate(() => {
+      const frame = document.createElement("iframe");
+      frame.id = "visible-frame";
+      frame.width = "300";
+      frame.height = "200";
+      document.body.append(frame);
+    });
+    const framed = await command("snapshot");
+    expect(framed.tree).toContain("1 embedded frame is not listed");
+    expect(framed.tree).not.toContain("require desktop tools");
+    await page.locator("#visible-frame").evaluate((el) => el.remove());
     const stale = await command("snapshot");
     await page.locator("#save").evaluate((el) => {
       el.outerHTML = '<button id="save">Replacement</button>';
