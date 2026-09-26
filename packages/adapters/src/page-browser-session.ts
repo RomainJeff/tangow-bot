@@ -23,6 +23,9 @@ const INTERACTIVE_SELECTOR = [
   "[role='menuitem']",
   "[contenteditable='true']",
 ].join(",");
+/** As the live helper: a select lists at most this many option labels, each this long. */
+const MAX_SELECT_OPTIONS = 30;
+const MAX_OPTION_LABEL_CHARS = 80;
 
 type DomWindow = JSDOM["window"];
 type DomElement = InstanceType<DomWindow["Element"]>;
@@ -146,7 +149,7 @@ export class PageBrowserSession {
         return;
       }
       if (el instanceof win.HTMLSelectElement) {
-        const match = [...el.options].find((o) => o.value === text || o.text === text);
+        const match = [...el.options].find((o) => o.value === text || optionLabel(o) === text);
         el.value = match ? match.value : text;
         el.dispatchEvent(new win.Event("change", { bubbles: true }));
         return;
@@ -179,9 +182,21 @@ export class PageBrowserSession {
       const tag = node.tagName.toLowerCase();
       const entry: BrowserSnapshotNode = { ref, role, name, tag };
       if (value !== undefined) entry.value = value;
+      if (node instanceof win.HTMLInputElement && node.type === "password") entry.password = true;
+      if (node instanceof win.HTMLSelectElement) {
+        const labels = selectableOptions(win, node).map(optionLabel).filter(Boolean);
+        entry.options = labels.slice(0, MAX_SELECT_OPTIONS);
+        if (labels.length > MAX_SELECT_OPTIONS) entry.optionsTruncated = true;
+      }
+      // As the live helper, which refuses to act on these.
+      if (node.matches(":disabled") || node.getAttribute("aria-disabled") === "true") {
+        entry.disabled = true;
+      }
       elements.push(entry);
       const valuePart = value !== undefined ? ` value=${JSON.stringify(value)}` : "";
-      lines.push(`- ${role} ${JSON.stringify(name)} [${ref}]${valuePart}`);
+      lines.push(
+        `- ${role} ${JSON.stringify(name)} [${ref}]${valuePart}${entry.disabled ? " disabled" : ""}`,
+      );
     }
     return { elements, tree: lines.join("\n") || "(no interactive elements)" };
   }
@@ -232,8 +247,29 @@ function valueFor(win: DomWindow, el: DomElement): string | undefined {
     if (el.type === "password") return el.value ? "••••" : "";
     return el.value;
   }
-  if (el instanceof win.HTMLTextAreaElement || el instanceof win.HTMLSelectElement) return el.value;
+  if (el instanceof win.HTMLSelectElement)
+    return [...el.selectedOptions].map(optionLabel).join(", ");
+  if (el instanceof win.HTMLTextAreaElement) return el.value;
   return undefined;
+}
+
+type OptionElement = InstanceType<DomWindow["HTMLOptionElement"]>;
+
+function selectableOptions(
+  win: DomWindow,
+  select: InstanceType<DomWindow["HTMLSelectElement"]>,
+): OptionElement[] {
+  return [...select.options].filter(
+    (option) =>
+      !option.disabled &&
+      !option.closest("optgroup[disabled]") &&
+      win.getComputedStyle(option).display !== "none",
+  );
+}
+
+/** What the model reads and names: the trimmed label, cut as the snapshot cuts it. */
+function optionLabel(option: OptionElement): string {
+  return option.label.trim().slice(0, MAX_OPTION_LABEL_CHARS);
 }
 
 /**

@@ -115,6 +115,26 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    // Offered only when the Space has a decision provider (selectBuiltinToolsForRun).
+    name: "browser_run",
+    description:
+      "Complete a multi-step task on the current page (fill a form, set filters, open a result) without reading it at every step. Give the goal with its stop condition, and put every text to type or choose in values: it never types text from the goal, and asks for any value it lacks. It stops before paying, ordering, deleting, sending, or a final submission and returns status, steps, need, and the page's elements; confirm such a click yourself with browser_act by ref.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "What to reach on this page, and when to stop." },
+        values: {
+          type: "object",
+          additionalProperties: { type: "string" },
+          description:
+            'Every text to type or choose, by name, e.g. {"destination": "Japon", "month": "avril 2027"}.',
+        },
+        maxSteps: { type: "number", description: "Step limit, default 25, at most 40." },
+      },
+      required: ["goal"],
+    },
+  },
+  {
     name: "list_files",
     description:
       "List files and directories in this bot's home. On a Team Computer, relative paths use the bot folder; use shared/... for shared work or bots/... to inspect the Team root.",

@@ -431,11 +431,36 @@ export interface AgentRunRequest {
     args: Record<string, unknown>,
     executionId: string,
     route?: ConnectorRoute,
+    /** Present only when the runtime traces this run. */
+    trace?: ToolCallTrace,
   ) => Promise<unknown>;
   /** Called after a tool returns; implementations must not persist raw result contents. */
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
+}
+
+/**
+ * Handed to one tool call by a runtime that traces the run, so a model call the
+ * tool makes itself is recorded nested under that call.
+ */
+export interface ToolCallTrace {
+  /** Returns undefined when the tool call is not being traced. */
+  generation(name: string, input: unknown): ToolCallGeneration | undefined;
+}
+
+export interface ToolCallGeneration {
+  /** Settles the observation; later calls are ignored. */
+  end(result: ToolCallGenerationResult): void;
+}
+
+export interface ToolCallGenerationResult {
+  output: unknown;
+  model?: string;
+  usage?: { inputTokens?: number; cost?: number };
+  metadata?: Record<string, string | number | boolean | undefined>;
+  /** Short machine-readable reason; marks the observation as failed. */
+  error?: string;
 }
 
 export interface ScriptedTurn {
@@ -768,6 +793,17 @@ export interface BrowserSnapshotNode {
   name: string;
   value?: string;
   tag?: string;
+  /** A password input: its value is never reported. */
+  password?: true;
+  /**
+   * A `<select>` only: the labels of its visible, enabled options in page order, trimmed and at
+   * most 80 characters each, at most 30. Its `value` is then the selected option's label.
+   */
+  options?: string[];
+  /** The select has more options than `options` lists. */
+  optionsTruncated?: true;
+  /** Matches `:disabled` or has `aria-disabled="true"`: listed, but no action reaches it. */
+  disabled?: true;
 }
 
 export interface BrowserSnapshotResult {
@@ -812,6 +848,74 @@ export type PageBrowserCommand =
   | { command: "act"; actions: BrowserActStep[] };
 
 export type PageBrowserResult = Partial<BrowserSnapshotResult & BrowserActResult> & { ok: boolean };
+
+/** Typed questions about a text state, answered with probabilities. Not a text generator. */
+export interface DecisionCapabilities {
+  noul: boolean;
+  choice: boolean;
+  score: boolean;
+  /** Largest option map a `choice` accepts. Callers truncate or give up; they never exceed it. */
+  maxOptions: number;
+  /** True when the adapter never leaves the process (tests / keyless core). */
+  offline?: boolean;
+}
+
+/**
+ * `noul` asks yes/no; `choice` picks one caller-named option; `score` picks a level
+ * on an ordered scale indexed from zero.
+ */
+export type DecisionQuestion =
+  | { type: "noul"; instructions: string }
+  | { type: "choice"; instructions: string; options: Record<string, string> }
+  | { type: "score"; instructions: string; levels: string[] };
+
+export interface DecisionRequest {
+  /** Caller must already redact secrets. */
+  state: string | Record<string, unknown>;
+  questions: Record<string, DecisionQuestion>;
+}
+
+export type DecisionAnswer =
+  | { type: "noul"; probability: number }
+  | {
+      type: "choice";
+      choice: string;
+      confidence: number;
+      probabilities: Record<string, number>;
+    }
+  | {
+      type: "score";
+      /** Expected level; may fall between integer levels. */
+      score: number;
+      confidence: number;
+      /** Keyed by level index. */
+      probabilities: Record<string, number>;
+    };
+
+export interface DecisionResponse {
+  answers: Record<string, DecisionAnswer>;
+  /** Model version that answered, when the provider reports one. */
+  model?: string;
+  /** Fields are absent when the provider does not report them; never an invented zero. */
+  usage?: { inputTokens?: number; cost?: number };
+}
+
+export type DecisionUnavailableReason =
+  | "no_provider"
+  | "timeout"
+  | "aborted"
+  | "error"
+  | "invalid_answer";
+
+/** What callers see: an answer, or a reason to carry on exactly as without a provider. */
+export type DecisionResult =
+  | ({ ok: true } & DecisionResponse)
+  | {
+      ok: false;
+      reason: DecisionUnavailableReason;
+      /** Error class name only; never a raw message, which may carry URLs. */
+      error?: string;
+    };
 
 /** Vendor-neutral status for a remote cloud coding agent. */
 export type CloudAgentStatus = "running" | "finished" | "failed" | "cancelled";

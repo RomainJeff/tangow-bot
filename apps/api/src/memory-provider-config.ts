@@ -25,7 +25,7 @@ export interface MemoryProviderConfigDeps {
   ) => ReturnType<typeof prepareMemoryProviderConnection>;
 }
 
-async function requireSpaceOwner(prisma: PrismaClient, actor: Actor): Promise<void> {
+export async function requireSpaceOwner(prisma: PrismaClient, actor: Actor): Promise<void> {
   const member = await prisma.spaceMember.findUnique({
     where: { spaceId_userId: { spaceId: actor.spaceId, userId: actor.userId } },
     select: { role: true },

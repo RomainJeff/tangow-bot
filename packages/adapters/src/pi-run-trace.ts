@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Usage } from "@earendil-works/pi-ai";
+import type { ToolCallGenerationResult, ToolCallTrace } from "@rakazo/adapter-kit";
 
 import { RunTrace, type RunTraceSpan } from "./run-trace.js";
 
@@ -167,6 +168,52 @@ export class RunTraceRecorder {
     this.tools.delete(toolCallId);
     span.setAttributes({ "langfuse.observation.output": serialize(result) });
     span.end(isError ? { ok: false, error: new Error("tool failed") } : { ok: true });
+  }
+
+  /** Lets the tool call record the model calls it makes itself, nested under its span. */
+  toolTrace(toolCallId: string): ToolCallTrace {
+    return {
+      generation: (name, input) => {
+        const tool = this.tools.get(toolCallId);
+        if (!tool) return undefined;
+        const span = this.trace.openSpan(
+          {
+            name,
+            attributes: {
+              "langfuse.observation.type": "generation",
+              "langfuse.observation.input": serialize(input),
+            },
+          },
+          tool,
+        );
+        if (!span) return undefined;
+        return {
+          end: (result: ToolCallGenerationResult) => {
+            const metadata: Record<string, string | number | boolean> = {};
+            for (const [key, value] of Object.entries(result.metadata ?? {})) {
+              if (value !== undefined) metadata[`langfuse.observation.metadata.${key}`] = value;
+            }
+            const { inputTokens, cost } = result.usage ?? {};
+            span.setAttributes({
+              "langfuse.observation.output": serialize(result.output),
+              ...(result.model ? { "langfuse.observation.model.name": result.model } : {}),
+              ...(inputTokens === undefined
+                ? {}
+                : { "langfuse.observation.usage_details": serialize({ input: inputTokens }) }),
+              ...(cost === undefined
+                ? {}
+                : { "langfuse.observation.cost_details": serialize({ total: cost }) }),
+              ...metadata,
+            });
+            span.end(
+              result.error === undefined
+                ? { ok: true }
+                : { ok: false, error: new Error(result.error) },
+            );
+          },
+        };
+      },
+    };
   }
 
   /** Closes every span still open, including ones abandoned by an aborted run. */
