@@ -1208,6 +1208,10 @@ msgstr "No se pudo conectar"
 msgid "Could not connect {0}"
 msgstr "No se pudo conectar {0}"
 
+#: src/pages/BrowserSettingsPanel.tsx:62
+msgid "Could not connect OpenRouter"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:335
 msgid "Could not connect this provider"
 msgstr "No se pudo conectar este proveedor"
@@ -1219,10 +1223,6 @@ msgstr "No se pudo conectar este proveedor de voz"
 #: src/pages/Shell.tsx:822
 msgid "Could not connect to the computer screen"
 msgstr "No se pudo conectar a la pantalla de la computadora"
-
-#: src/pages/BrowserSettingsPanel.tsx:62
-msgid "Could not connect TypeSafe"
-msgstr ""
 
 #: src/pages/Auth.tsx:99
 #: src/pages/Shell.tsx:2385
@@ -1281,12 +1281,12 @@ msgstr "No se pudo desconectar el proveedor de memoria"
 msgid "Could not disconnect OAuth"
 msgstr "No se pudo desconectar OAuth"
 
-#: src/pages/VoiceSettingsOverlay.tsx:124
-msgid "Could not disconnect this voice provider"
+#: src/pages/BrowserSettingsPanel.tsx:75
+msgid "Could not disconnect OpenRouter"
 msgstr ""
 
-#: src/pages/BrowserSettingsPanel.tsx:75
-msgid "Could not disconnect TypeSafe"
+#: src/pages/VoiceSettingsOverlay.tsx:124
+msgid "Could not disconnect this voice provider"
 msgstr ""
 
 #: src/pages/shell/message-cards.tsx:61
@@ -2985,6 +2985,10 @@ msgstr "Abriendo el chat…"
 msgid "Opening your Space…"
 msgstr "Abriendo tu Space…"
 
+#: src/pages/BrowserSettingsPanel.tsx:111
+msgid "OpenRouter API key"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:748
 #: src/pages/Onboarding.tsx:636
 msgid "Optional"
@@ -4041,10 +4045,6 @@ msgstr ""
 #: src/components/AskCard.tsx:681
 msgid "Type your answer"
 msgstr "Escribe tu respuesta"
-
-#: src/pages/BrowserSettingsPanel.tsx:111
-msgid "TypeSafe API key"
-msgstr ""
 
 #: src/pages/BotContextMenu.tsx:108
 msgid "Unassigned"

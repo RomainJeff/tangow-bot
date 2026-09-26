@@ -1208,6 +1208,10 @@ msgstr "कनेक्ट नहीं हो सका"
 msgid "Could not connect {0}"
 msgstr "{0} कनेक्ट नहीं हो सका"
 
+#: src/pages/BrowserSettingsPanel.tsx:62
+msgid "Could not connect OpenRouter"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:335
 msgid "Could not connect this provider"
 msgstr "यह प्रोवाइडर कनेक्ट नहीं हो सका"
@@ -1219,10 +1223,6 @@ msgstr "यह आवाज़ प्रोवाइडर कनेक्ट �
 #: src/pages/Shell.tsx:822
 msgid "Could not connect to the computer screen"
 msgstr "कंप्यूटर स्क्रीन से कनेक्ट नहीं हो सका"
-
-#: src/pages/BrowserSettingsPanel.tsx:62
-msgid "Could not connect TypeSafe"
-msgstr ""
 
 #: src/pages/Auth.tsx:99
 #: src/pages/Shell.tsx:2385
@@ -1281,12 +1281,12 @@ msgstr "मेमोरी प्रोवाइडर डिस्कनेक�
 msgid "Could not disconnect OAuth"
 msgstr "OAuth डिस्कनेक्ट नहीं हो सका"
 
-#: src/pages/VoiceSettingsOverlay.tsx:124
-msgid "Could not disconnect this voice provider"
+#: src/pages/BrowserSettingsPanel.tsx:75
+msgid "Could not disconnect OpenRouter"
 msgstr ""
 
-#: src/pages/BrowserSettingsPanel.tsx:75
-msgid "Could not disconnect TypeSafe"
+#: src/pages/VoiceSettingsOverlay.tsx:124
+msgid "Could not disconnect this voice provider"
 msgstr ""
 
 #: src/pages/shell/message-cards.tsx:61
@@ -2985,6 +2985,10 @@ msgstr "चैट खुल रही है…"
 msgid "Opening your Space…"
 msgstr "आपका वर्कस्पेस खुल रहा है…"
 
+#: src/pages/BrowserSettingsPanel.tsx:111
+msgid "OpenRouter API key"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:748
 #: src/pages/Onboarding.tsx:636
 msgid "Optional"
@@ -4041,10 +4045,6 @@ msgstr ""
 #: src/components/AskCard.tsx:681
 msgid "Type your answer"
 msgstr "अपना उत्तर लिखें"
-
-#: src/pages/BrowserSettingsPanel.tsx:111
-msgid "TypeSafe API key"
-msgstr ""
 
 #: src/pages/BotContextMenu.tsx:108
 msgid "Unassigned"

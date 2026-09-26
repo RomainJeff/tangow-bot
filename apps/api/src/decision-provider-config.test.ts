@@ -53,13 +53,13 @@ describe("decision provider config", () => {
       existing: { id: "cfg-1", secretId: "secret-old" },
     });
     const config = await persistDecisionProviderConfig(deps, actor, {
-      provider: "typesafe",
-      settings: { modelId: "jev-1.13.0" },
+      provider: "openrouter",
+      settings: { modelId: "typesafe/jev-1.13" },
       credentials: { apiKey: "test-key-not-real" },
     });
     expect(config).toEqual({
-      provider: "typesafe",
-      settings: { modelId: "jev-1.13.0" },
+      provider: "openrouter",
+      settings: { modelId: "typesafe/jev-1.13" },
       updatedAt: "2026-09-26T00:00:00.000Z",
     });
     expect(put).toHaveBeenCalledWith(
@@ -77,7 +77,7 @@ describe("decision provider config", () => {
     ]) {
       const { deps, put } = makeDeps();
       await expect(
-        persistDecisionProviderConfig(deps, actor, { provider: "typesafe", ...input }),
+        persistDecisionProviderConfig(deps, actor, { provider: "openrouter", ...input }),
       ).rejects.toMatchObject({ code: "BAD_REQUEST" });
       expect(put).not.toHaveBeenCalled();
     }
@@ -85,7 +85,7 @@ describe("decision provider config", () => {
 
   it("keeps private endpoints with the deployment owner", async () => {
     const input = {
-      provider: "typesafe",
+      provider: "openrouter",
       settings: { baseUrl: "http://127.0.0.1:9000" },
       credentials: { apiKey: "k" },
     };
@@ -97,7 +97,7 @@ describe("decision provider config", () => {
     const owner = makeDeps();
     await expect(
       persistDecisionProviderConfig(owner.deps, { ...actor, isDeploymentOwner: true }, input),
-    ).resolves.toMatchObject({ provider: "typesafe" });
+    ).resolves.toMatchObject({ provider: "openrouter" });
   });
 
   it("is limited to Space owners and disconnects with its secret", async () => {

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 import type {
   AdapterContext,
   DecisionProvider,
@@ -10,7 +10,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { decideWithin, topChoices } from "./decision.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
 import { decisionConformanceRequests } from "./fixtures/decision-requests.js";
-import { TypeSafeDecisionProvider } from "./typesafe-decision.js";
+import {
+  documentedDecisionRequest,
+  documentedWireBody,
+  loadOpenRouterDecisionFixture,
+} from "./fixtures/openrouter-decision-example.js";
+import { OpenRouterDecisionProvider } from "./openrouter-decision.js";
 
 function contextWith(signal: AbortSignal = new AbortController().signal): AdapterContext {
   return { operationId: "op", traceId: "trace", spaceId: "space", userId: "user", signal };
@@ -20,18 +25,18 @@ const choiceRequest: DecisionRequest = decisionConformanceRequests.target;
 const noulRequest: DecisionRequest = decisionConformanceRequests.signin;
 const scoreRequest: DecisionRequest = decisionConformanceRequests.sure;
 
-/** Replays the recorded fixture by question name; a request the fixture lacks fails loudly. */
-function recordedFetch(requests: unknown[]): typeof fetch {
-  const fixture = JSON.parse(
-    readFileSync(new URL("./fixtures/typesafe-decision.json", import.meta.url), "utf8"),
-  ) as { responses: Record<string, unknown> };
+/**
+ * Replays the documented OpenRouter example: only the exact documented request body
+ * gets the documented response, anything else fails loudly.
+ */
+function documentedFetch(requests: unknown[]): typeof fetch {
+  const fixture = loadOpenRouterDecisionFixture();
+  const expected = documentedWireBody(fixture);
   return (async (_input: unknown, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body)) as { questions: Record<string, unknown> };
+    const body = JSON.parse(String(init?.body)) as unknown;
     requests.push(body);
-    const name = Object.keys(body.questions)[0] ?? "";
-    const recorded = fixture.responses[name];
-    if (!recorded) return new Response("missing fixture", { status: 404 });
-    return new Response(JSON.stringify(recorded), {
+    if (!isDeepStrictEqual(body, expected)) return new Response("unexpected", { status: 404 });
+    return new Response(JSON.stringify(fixture.response), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
@@ -112,19 +117,34 @@ describe("decision conformance", () => {
     );
   });
 
-  it("the TypeSafe adapter honours the contract against recorded responses", async () => {
+  it("the OpenRouter adapter honours the contract against the documented example", async () => {
     const requests: unknown[] = [];
-    await assertDecisionConformance(
-      new TypeSafeDecisionProvider(
-        {
-          apiKey: "test-key-not-real",
-          baseUrl: "https://decision.example.test",
-          modelId: "jev-1.13.0",
-        },
-        { fetch: recordedFetch(requests) },
-      ),
+    const provider = new OpenRouterDecisionProvider(
+      {
+        apiKey: "test-key-not-real",
+        baseUrl: "https://decision.example.test",
+        modelId: "typesafe/jev-1.13",
+      },
+      { fetch: documentedFetch(requests) },
     );
-    expect(requests).toHaveLength(3);
+    const request = documentedDecisionRequest(loadOpenRouterDecisionFixture());
+    const result = await decideWithin(provider, request, contextWith(), { timeoutMs: 1_000 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const { is_bug, team, urgency } = result.answers;
+    expect(is_bug?.type === "noul" && is_bug.probability).toBe(0.96);
+    expect(team?.type === "choice" && team.choice).toBe("payments");
+    if (team?.type === "choice") {
+      expect(Object.keys(team.probabilities).sort()).toEqual(["account", "frontend", "payments"]);
+      expect(topChoices(team, 1)).toEqual([{ key: "payments", probability: 0.84 }]);
+    }
+    expect(urgency?.type === "score" && urgency.score).toBe(1.99);
+    const controller = new AbortController();
+    controller.abort();
+    expect(
+      await decideWithin(provider, request, contextWith(controller.signal), { timeoutMs: 1_000 }),
+    ).toEqual({ ok: false, reason: "aborted" });
+    expect(requests).toHaveLength(1);
   });
 
   it("answers no_provider without a provider", async () => {

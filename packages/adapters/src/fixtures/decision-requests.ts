@@ -1,6 +1,6 @@
 import type { DecisionRequest } from "@rakazo/adapter-kit";
 
-/** Fixture-page requests shared by the conformance suite and the manual capture script. */
+/** Fixture-page requests for the fake adapters in the conformance suite. */
 export const decisionConformanceRequests = {
   target: {
     state: { page: { url: "https://example.test/", title: "Reports" } },

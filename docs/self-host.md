@@ -252,8 +252,11 @@ support. Existing token limits still apply; effort is not a separate reasoning-t
 Do not commit `.env`. Never put `COMPOSIO_API_KEY`, OpenRouter keys, or provider tokens in git, logs, or chat.
 
 A Space owner can connect an optional decision provider from **Settings → Browser** on web and
-desktop. Today the only adapter is TypeSafe: an API key, and under **Advanced** a base URL for a
-compatible proxy and a model id (default `jev-1.13.0`, pinned). No environment variable is read.
+desktop. Today the only adapter is OpenRouter's Decisions API, which serves TypeSafe's Jev model: an
+OpenRouter API key, and under **Advanced** a base URL for a compatible proxy and a model id (default
+`typesafe/jev-1.13`, pinned rather than the `~typesafe/jev-latest` alias). The key is stored for the
+Space and is separate from `OPENROUTER_API_KEY` and model connections, so page data only leaves
+once a Space owner connects it. No environment variable is read.
 With a connection, bots can ask `browser_act` for a link, tab, or text field by description (see
 [computer runtime](computer-runtime.md)); without one nothing changes. Page URLs, titles, and
 element names go to that recipient, which is listed in mobile AI data sharing

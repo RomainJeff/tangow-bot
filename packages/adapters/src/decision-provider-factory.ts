@@ -1,13 +1,13 @@
 import type { DecisionProvider } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { toStringRecord } from "./memory-provider-factory.js";
-import type { EncryptedSecretStore } from "./secrets.js";
 import {
-  createTypeSafeDecisionProvider,
-  prepareTypeSafeDecisionConnection,
-  TYPESAFE_DECISION_PROVIDER_ID,
-  typesafeDecisionRequiresDeploymentOwner,
-} from "./typesafe-decision.js";
+  createOpenRouterDecisionProvider,
+  OPENROUTER_DECISION_PROVIDER_ID,
+  openRouterDecisionRequiresDeploymentOwner,
+  prepareOpenRouterDecisionConnection,
+} from "./openrouter-decision.js";
+import type { EncryptedSecretStore } from "./secrets.js";
 
 export interface DecisionProviderResolver {
   /** Null when the Space has no usable decision connection; the run carries on without one. */
@@ -25,11 +25,11 @@ interface DecisionProviderAdapter {
 
 const DECISION_PROVIDER_ADAPTERS: ReadonlyMap<string, DecisionProviderAdapter> = new Map([
   [
-    TYPESAFE_DECISION_PROVIDER_ID,
+    OPENROUTER_DECISION_PROVIDER_ID,
     {
-      requiresDeploymentOwner: typesafeDecisionRequiresDeploymentOwner,
-      prepare: prepareTypeSafeDecisionConnection,
-      create: createTypeSafeDecisionProvider,
+      requiresDeploymentOwner: openRouterDecisionRequiresDeploymentOwner,
+      prepare: prepareOpenRouterDecisionConnection,
+      create: createOpenRouterDecisionProvider,
     },
   ],
 ]);

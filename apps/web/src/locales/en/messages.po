@@ -1208,6 +1208,10 @@ msgstr "Could not connect"
 msgid "Could not connect {0}"
 msgstr "Could not connect {0}"
 
+#: src/pages/BrowserSettingsPanel.tsx:62
+msgid "Could not connect OpenRouter"
+msgstr "Could not connect OpenRouter"
+
 #: src/pages/ModelSettingsOverlay.tsx:335
 msgid "Could not connect this provider"
 msgstr "Could not connect this provider"
@@ -1219,10 +1223,6 @@ msgstr "Could not connect this voice provider"
 #: src/pages/Shell.tsx:822
 msgid "Could not connect to the computer screen"
 msgstr "Could not connect to the computer screen"
-
-#: src/pages/BrowserSettingsPanel.tsx:62
-msgid "Could not connect TypeSafe"
-msgstr "Could not connect TypeSafe"
 
 #: src/pages/Auth.tsx:99
 #: src/pages/Shell.tsx:2385
@@ -1281,13 +1281,13 @@ msgstr "Could not disconnect memory provider"
 msgid "Could not disconnect OAuth"
 msgstr "Could not disconnect OAuth"
 
+#: src/pages/BrowserSettingsPanel.tsx:75
+msgid "Could not disconnect OpenRouter"
+msgstr "Could not disconnect OpenRouter"
+
 #: src/pages/VoiceSettingsOverlay.tsx:124
 msgid "Could not disconnect this voice provider"
 msgstr "Could not disconnect this voice provider"
-
-#: src/pages/BrowserSettingsPanel.tsx:75
-msgid "Could not disconnect TypeSafe"
-msgstr "Could not disconnect TypeSafe"
 
 #: src/pages/shell/message-cards.tsx:61
 msgid "Could not dismiss"
@@ -2985,6 +2985,10 @@ msgstr "Opening chat…"
 msgid "Opening your Space…"
 msgstr "Opening your Space…"
 
+#: src/pages/BrowserSettingsPanel.tsx:111
+msgid "OpenRouter API key"
+msgstr "OpenRouter API key"
+
 #: src/pages/ModelSettingsOverlay.tsx:748
 #: src/pages/Onboarding.tsx:636
 msgid "Optional"
@@ -4041,10 +4045,6 @@ msgstr "Type a different answer"
 #: src/components/AskCard.tsx:681
 msgid "Type your answer"
 msgstr "Type your answer"
-
-#: src/pages/BrowserSettingsPanel.tsx:111
-msgid "TypeSafe API key"
-msgstr "TypeSafe API key"
 
 #: src/pages/BotContextMenu.tsx:108
 msgid "Unassigned"

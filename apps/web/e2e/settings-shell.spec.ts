@@ -50,7 +50,7 @@ test("settings shell is two-pane and deep-links Models Memory Browser Voice Usag
   await expect(settings).toHaveAttribute("data-settings-section", "browser");
   await expect(settings.getByRole("heading", { name: "Browser", exact: true })).toBeVisible();
   const browserSettings = settings.getByTestId("browser-settings");
-  await expect(browserSettings.getByLabel("TypeSafe API key")).toBeVisible();
+  await expect(browserSettings.getByLabel("OpenRouter API key")).toBeVisible();
   await expect(browserSettings.getByRole("button", { name: "Connect" })).toBeDisabled();
   await browserSettings.getByText("Advanced").click();
   await expect(browserSettings.getByLabel("Base URL")).toBeVisible();

@@ -21,7 +21,8 @@ using their existing controls. This flow is not a global data-access or run-revo
 - A Space decision provider (Settings → Browser) receives page URLs and titles, the role and
   name of links, tabs, and text fields, and the bot's target description. Verify that
   provider's agreement, retention, and deletion terms before a release lists it. It appears
-  only when the Space has a connection; it has no provider-policy link until one is verified.
+  only when the Space has a connection. Today it is OpenRouter's Decisions API, which forwards to
+  TypeSafe (Jev); verify that onward routing like any other OpenRouter request.
 - For OpenRouter or Vercel AI Gateway, verify actual downstream routing and provider agreements.
   Apple's cited rejection requires recipient disclosure and permission, not a blanket ban on
   these gateways. The disclosure names the gateway and explains onward routing. Confirm the

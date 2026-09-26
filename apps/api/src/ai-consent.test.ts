@@ -71,19 +71,28 @@ describe("consent grants", () => {
     const none = await aiConsentStatus(deps, actor, { uses: ["decision"] });
     expect(none.recipients).toEqual([]);
     vi.mocked(deps.prisma.spaceDecisionConfig.findUnique).mockResolvedValue({
-      provider: "typesafe",
-      settings: { baseUrl: "https://proxy.example.test/v1", modelId: "jev-1.13.0" },
+      provider: "openrouter",
+      settings: {},
     } as never);
     const status = await aiConsentStatus(deps, actor, { uses: ["decision"] });
     expect(status.recipients).toEqual([
       expect.objectContaining({
         use: "decision",
-        name: "TypeSafe (https://proxy.example.test)",
-        detail: "Model: jev-1.13.0.",
+        name: "OpenRouter",
+        privacyUrl: "https://openrouter.ai/privacy",
         allowed: false,
       }),
     ]);
-    expect(status.recipients[0]?.privacyUrl).toBeUndefined();
+    expect(status.recipients[0]?.detail).toContain("forwards requests to model providers");
+    vi.mocked(deps.prisma.spaceDecisionConfig.findUnique).mockResolvedValue({
+      provider: "openrouter",
+      settings: { baseUrl: "https://proxy.example.test/v1", modelId: "~typesafe/jev-latest" },
+    } as never);
+    const proxied = await aiConsentStatus(deps, actor, { uses: ["decision"] });
+    expect(proxied.recipients[0]).toMatchObject({
+      name: "OpenRouter (https://proxy.example.test)",
+    });
+    expect(proxied.recipients[0]?.detail).toContain("Model: ~typesafe/jev-latest.");
   });
   it("returns an operator policy without requiring a hosted provider", async () => {
     const { deps, actor } = setup();

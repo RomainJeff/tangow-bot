@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Bots can act on a web page element from its description when a decision provider is connected.** A Space owner connects one in Settings → Browser on web and desktop, and bots then click links and tabs or fill text fields they describe without reading the whole page first; buttons still need the bot to pick the element itself, and an uncertain match is handed back to the bot. The provider is listed in AI data sharing on mobile; see [computer runtime](docs/computer-runtime.md) and [self-hosting](docs/self-host.md).
+- **Bots can act on a web page element from its description when a decision provider is connected.** A Space owner connects an OpenRouter key in Settings → Browser on web and desktop, and bots then click links and tabs or fill text fields they describe without reading the whole page first; buttons still need the bot to pick the element itself, and an uncertain match is handed back to the bot. The provider is listed in AI data sharing on mobile; see [computer runtime](docs/computer-runtime.md) and [self-hosting](docs/self-host.md).
 
 ### 2026-09-25
 

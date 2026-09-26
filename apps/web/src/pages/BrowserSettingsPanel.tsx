@@ -4,7 +4,7 @@ import { Button, Field, FieldLabel, Input } from "@rakazo/ui-web";
 import { useEffect, useId, useState } from "react";
 import { rpc } from "../lib/rpc";
 
-const DECISION_PROVIDER = "typesafe";
+const DECISION_PROVIDER = "openrouter";
 
 /** Space decision provider: lets browser_act resolve links and text fields from a description. */
 export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
@@ -59,7 +59,7 @@ export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: b
       setConfig(next);
       setApiKey("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : t`Could not connect TypeSafe`);
+      setError(err instanceof Error ? err.message : t`Could not connect OpenRouter`);
     } finally {
       markPending(null);
     }
@@ -72,7 +72,7 @@ export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: b
       await rpc.decision.disconnectProvider();
       setConfig(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t`Could not disconnect TypeSafe`);
+      setError(err instanceof Error ? err.message : t`Could not disconnect OpenRouter`);
     } finally {
       markPending(null);
     }
@@ -91,7 +91,7 @@ export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: b
               <Trans>Connected</Trans>
             </div>
             <div className="mt-1 text-row-name text-foreground">
-              {config.settings.baseUrl ? `TypeSafe (${config.settings.baseUrl})` : "TypeSafe"}
+              {config.settings.baseUrl ? `OpenRouter (${config.settings.baseUrl})` : "OpenRouter"}
             </div>
             <Button
               type="button"
@@ -108,7 +108,7 @@ export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: b
           <>
             <Field>
               <FieldLabel htmlFor={apiKeyId}>
-                <Trans>TypeSafe API key</Trans>
+                <Trans>OpenRouter API key</Trans>
               </FieldLabel>
               <Input
                 id={apiKeyId}
@@ -141,7 +141,7 @@ export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: b
                     value={baseUrl}
                     disabled={busy}
                     onChange={(event) => setBaseUrl(event.target.value)}
-                    placeholder="https://api.typesafe.ai"
+                    placeholder="https://openrouter.ai"
                   />
                 </Field>
                 <Field>
@@ -153,7 +153,7 @@ export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: b
                     value={model}
                     disabled={busy}
                     onChange={(event) => setModel(event.target.value)}
-                    placeholder="jev-1.13.0"
+                    placeholder="typesafe/jev-1.13"
                   />
                 </Field>
               </div>

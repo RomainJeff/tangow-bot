@@ -21,7 +21,11 @@ const MAX_TARGET_CHARS = 200;
 /** The helper caps a snapshot at 80 elements; in-process sessions do not. */
 const MAX_TARGET_OPTIONS = 80;
 const MAX_OPTION_NAME_CHARS = 120;
-/** Starting value before offline calibration (ticket 06); not a user setting. */
+/**
+ * Starting value before offline calibration (ticket 06); not a user setting. Compared
+ * with the answer's `confidence`, a statistic of how peaked the whole distribution is,
+ * not the chosen option's probability (documented example: 0.75 for a 0.84 pick).
+ */
 const TARGET_CONFIDENCE_HIGH = 0.8;
 const TARGET_DECISION_TIMEOUT_MS = 1_000;
 const TARGET_CANDIDATE_COUNT = 3;
