@@ -554,6 +554,10 @@ msgstr "Vor {0}-Aktionen nachfragen"
 msgid "Ask before {0} connector"
 msgstr "Vor {0}-Connector nachfragen"
 
+#: src/pages/RoutineEditor.tsx:456
+msgid "Ask before every action"
+msgstr "Vor jeder Aktion nachfragen"
+
 #: src/components/ApprovalRulesSettings.tsx:11
 msgid "Ask before email actions"
 msgstr "Vor E-Mail-Aktionen nachfragen"

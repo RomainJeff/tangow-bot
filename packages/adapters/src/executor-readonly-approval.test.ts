@@ -39,6 +39,7 @@ function fixture({
   rules = [] as ActionApprovalRule[],
   autoReview = false,
   trigger = "user",
+  requireToolApproval = true,
 } = {}) {
   const tool: ConnectorTool = {
     name,
@@ -62,6 +63,7 @@ function fixture({
     userId: "user-1",
     status: "queued",
     trigger,
+    requireToolApproval,
     leaseFence: 0,
   };
   const externalEffect = {
@@ -401,6 +403,29 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(f.pauseRunForInput).toHaveBeenCalledOnce();
       expect(isApprovalPausedResult(f.results[0])).toBe(true);
       expect(runAutoReviewJudge).not.toHaveBeenCalled();
+    });
+
+    it("applies the normal rules to an opted-out webhook run", async () => {
+      const allowed = fixture({
+        catalog,
+        name: "demo_send_message",
+        trigger: "webhook",
+        requireToolApproval: false,
+      });
+      await allowed.run();
+      expect(allowed.execute).toHaveBeenCalledOnce();
+      expect(allowed.pauseRunForInput).not.toHaveBeenCalled();
+
+      const asked = fixture({
+        catalog,
+        name: "demo_send_message",
+        trigger: "webhook",
+        requireToolApproval: false,
+        rules: [{ effect: "require_approval", matchKind: "tool", matchValue: "demo_send_message" }],
+      });
+      await asked.run();
+      expect(asked.execute).not.toHaveBeenCalled();
+      expect(asked.pauseRunForInput).toHaveBeenCalledOnce();
     });
 
     it.each(["ask", "error", "pass"] as const)(

@@ -27,7 +27,7 @@ function createDeps(
     } | null;
     secret?: { ciphertext: string; kind: string; userId: string; spaceId: string } | null;
     load?: (ciphertext: string) => string;
-    routines?: Array<{ id: string; name: string; prompt: string }>;
+    routines?: Array<{ id: string; name: string; prompt: string; requireToolApproval?: boolean }>;
   } = {},
 ): WebhookDeps & {
   sendUserMessage: ReturnType<typeof vi.fn>;
@@ -285,6 +285,38 @@ describe("inbound webhook HTTP route", () => {
       }),
     );
     expect(deps.enqueue).toHaveBeenCalled();
+  });
+
+  it.each([
+    { name: "no routine", routines: [], expected: true },
+    {
+      name: "every routine opted out",
+      routines: [{ requireToolApproval: false }, { requireToolApproval: false }],
+      expected: false,
+    },
+    {
+      name: "one routine still asking",
+      routines: [{ requireToolApproval: false }, { requireToolApproval: true }],
+      expected: true,
+    },
+  ])("records tool approval on the run with $name", async ({ routines, expected }) => {
+    const deps = createDeps({
+      routines: routines.map((routine, index) => ({
+        id: `routine-${index}`,
+        name: `Routine ${index}`,
+        prompt: "Handle it",
+        ...routine,
+      })),
+    });
+    const res = await mount(deps).request("/api/v1/bots/bot-1/webhook", {
+      method: "POST",
+      headers: { authorization: `Bearer ${SECRET}`, "content-type": "application/json" },
+      body: JSON.stringify({ event: "ci.failed" }),
+    });
+    expect(res.status).toBe(200);
+    expect(deps.sendUserMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ trigger: "webhook", requireToolApproval: expected }),
+    );
   });
 
   it("accepts a plain text payload as untrusted delivery data", async () => {

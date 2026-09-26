@@ -17,6 +17,7 @@ export type WebhookEvents = {
     blocks: Array<{ kind: "text"; text: string }>;
     prompt: string;
     trigger: "webhook";
+    requireToolApproval: boolean;
     clientNonce?: string;
     allowParallelRun?: boolean;
   }): Promise<{ messageId: string; runId: string | null; seq: number }>;
@@ -153,7 +154,7 @@ export async function deliverWebhookEvent(
   target: InboundTarget,
   input: {
     prompt: string;
-    routines: Array<{ name: string; prompt: string }>;
+    routines: Array<{ name: string; prompt: string; requireToolApproval: boolean }>;
     source: "webhook" | "github" | "messaging";
     idempotencyKey?: string;
     /** Messaging wakes share the live chat thread; keep a separate webhook run. */
@@ -188,6 +189,9 @@ export async function deliverWebhookEvent(
     blocks: [{ kind: "text", text: promptText }],
     prompt: promptText,
     trigger: "webhook",
+    // One run serves every woken routine, so the strictest wins; a bare delivery always asks.
+    requireToolApproval:
+      input.routines.length === 0 || input.routines.some((routine) => routine.requireToolApproval),
     clientNonce,
     ...(input.allowParallelRun ? { allowParallelRun: true } : {}),
   });

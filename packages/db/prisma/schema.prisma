@@ -585,6 +585,8 @@ model Run {
   sourceMessage        Message?         @relation("RunSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
   routineId            String?
   routine              Routine?         @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  // Inbound webhook runs only: false when every woken routine opted out of approving each action.
+  requireToolApproval  Boolean          @default(true)
   startedAt            DateTime?
   completedAt          DateTime?
   botOutcomeReturnedAt DateTime?
@@ -722,6 +724,8 @@ model Routine {
   webhookEnabled Boolean   @default(false)
   githubEnabled  Boolean   @default(false)
   messageProvider String?
+  // Inbound (webhook, GitHub, message) wakes ask before every action unless the owner opts out.
+  requireToolApproval Boolean @default(true)
   lastRunAt      DateTime?
   nextRunAt      DateTime?
   createdAt      DateTime  @default(now())

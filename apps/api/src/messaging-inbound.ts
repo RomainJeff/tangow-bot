@@ -191,7 +191,7 @@ export async function wakeMessageRoutines(
       active: true,
       messageProvider: event.provider,
     },
-    select: { id: true, name: true, prompt: true },
+    select: { id: true, name: true, prompt: true, requireToolApproval: true },
     orderBy: { updatedAt: "desc" },
   });
   if (routines.length === 0) return false;

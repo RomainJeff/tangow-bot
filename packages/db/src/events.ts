@@ -220,6 +220,8 @@ export interface SendUserMessageInput {
   blocks: MessageBlock[];
   prompt: string;
   trigger: "user" | "follow_up" | "webhook" | "messaging";
+  /** Webhook runs only: false lets the run follow the normal approval rules. Defaults to true. */
+  requireToolApproval?: boolean;
   clientNonce?: string;
   linkMessageToRun?: boolean;
   /** When false, persist the user message without starting a run (team-chat transcript). */
@@ -530,6 +532,7 @@ export async function sendUserMessage(
             userId: input.userId,
             status: "queued",
             trigger: input.trigger,
+            requireToolApproval: input.requireToolApproval,
             clientNonce: input.clientNonce ? `send:${message.id}` : undefined,
             sourceMessageId: message.id,
           },

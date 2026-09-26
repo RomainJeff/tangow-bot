@@ -383,6 +383,7 @@ export const RoutineSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9._-]+$/i)
     .nullable(),
+  requireToolApproval: z.boolean(),
   lastRunAt: z.string().nullable(),
   nextRunAt: z.string().nullable(),
   createdAt: z.string(),
@@ -409,6 +410,8 @@ export const CreateRoutineInput = z
       .regex(/^[a-z0-9._-]+$/i)
       .nullable()
       .default(null),
+    /** Inbound wakes ask before every action; false lets them follow the normal approval rules. */
+    requireToolApproval: z.boolean().default(true),
   })
   .superRefine((value, ctx) => {
     if (

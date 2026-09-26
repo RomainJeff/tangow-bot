@@ -96,9 +96,11 @@ describe("connectorToolRequiresApproval", () => {
 });
 
 describe("unattendedTriggerToolRequiresApproval", () => {
+  const webhook = { trigger: "webhook", requireToolApproval: true };
+
   it("forces approval for webhook-triggered local side effects", () => {
     for (const name of ["shell", "write_file", "browser_act", "browser_run", "computer_act"]) {
-      expect(unattendedTriggerToolRequiresApproval("webhook", name, false)).toBe(true);
+      expect(unattendedTriggerToolRequiresApproval(webhook, name, false)).toBe(true);
     }
   });
 
@@ -111,16 +113,28 @@ describe("unattendedTriggerToolRequiresApproval", () => {
       "request_takeover",
       "run_subagent",
     ]) {
-      expect(unattendedTriggerToolRequiresApproval("webhook", name, false)).toBe(false);
+      expect(unattendedTriggerToolRequiresApproval(webhook, name, false)).toBe(false);
     }
-    expect(unattendedTriggerToolRequiresApproval("webhook", "github_get_issue", true)).toBe(false);
+    expect(unattendedTriggerToolRequiresApproval(webhook, "github_get_issue", true)).toBe(false);
   });
 
   it("forces approval for webhook-triggered connector writes regardless of normal rules", () => {
-    expect(unattendedTriggerToolRequiresApproval("webhook", "github_create_issue", true)).toBe(
-      true,
+    expect(unattendedTriggerToolRequiresApproval(webhook, "github_create_issue", true)).toBe(true);
+    expect(
+      unattendedTriggerToolRequiresApproval(
+        { trigger: "user", requireToolApproval: true },
+        "shell",
+        false,
+      ),
+    ).toBe(false);
+  });
+
+  it("leaves webhook runs to the normal rules when their routines opted out", () => {
+    const optedOut = { trigger: "webhook", requireToolApproval: false };
+    expect(unattendedTriggerToolRequiresApproval(optedOut, "shell", false)).toBe(false);
+    expect(unattendedTriggerToolRequiresApproval(optedOut, "github_create_issue", true)).toBe(
+      false,
     );
-    expect(unattendedTriggerToolRequiresApproval("user", "shell", false)).toBe(false);
   });
 });
 

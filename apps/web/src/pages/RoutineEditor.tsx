@@ -20,6 +20,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   Input,
+  Label,
+  Switch,
   Textarea,
 } from "@rakazo/ui-web";
 import { ChevronLeft, Clock, GitBranch, Globe, MessageSquare, Pause, Plus, X } from "lucide-react";
@@ -66,6 +68,7 @@ export type RoutineDraftState = {
   webhookEnabled: boolean;
   githubEnabled: boolean;
   messageProvider: string | null;
+  requireToolApproval: boolean;
   active: boolean;
   notify: boolean;
   runAtLocal: string;
@@ -79,6 +82,7 @@ export function emptyRoutineDraft(): RoutineDraftState {
     webhookEnabled: false,
     githubEnabled: false,
     messageProvider: null,
+    requireToolApproval: true,
     active: true,
     notify: false,
     runAtLocal: "",
@@ -93,6 +97,7 @@ export function draftFromRoutine(routine: Routine): RoutineDraftState {
     webhookEnabled: routine.webhookEnabled,
     githubEnabled: routine.githubEnabled,
     messageProvider: routine.messageProvider,
+    requireToolApproval: routine.requireToolApproval,
     active: routine.active,
     notify: routine.notify,
     runAtLocal: routineNeedsOneShotArm(routine, routine.crons) ? defaultArmRunAtLocal() : "",
@@ -218,6 +223,8 @@ export function RoutineEditor({
   const fieldId = useId();
   const slackAvailable = messageProviders.includes("slack");
   const slackDisabledReasonId = `${fieldId}-slack-disabled-reason`;
+  const hasInboundTrigger =
+    draft.webhookEnabled || draft.githubEnabled || Boolean(draft.messageProvider);
   const hasTriggers =
     draft.schedules.length > 0 ||
     draft.webhookEnabled ||
@@ -432,6 +439,23 @@ export function RoutineEditor({
               provider={draft.messageProvider}
               onRemove={() => onChange({ ...draft, messageProvider: null })}
             />
+          ) : null}
+
+          {hasInboundTrigger ? (
+            <div className="flex items-center gap-3 px-0.5 pt-1">
+              <Switch
+                id={`${fieldId}-tool-approval`}
+                data-testid="routine-tool-approval-switch"
+                checked={draft.requireToolApproval}
+                onCheckedChange={(checked) => onChange({ ...draft, requireToolApproval: checked })}
+              />
+              <Label
+                htmlFor={`${fieldId}-tool-approval`}
+                className="text-sm font-normal text-foreground/75"
+              >
+                <Trans>Ask before every action</Trans>
+              </Label>
+            </div>
           ) : null}
 
           {needsOneShotArm ? (
