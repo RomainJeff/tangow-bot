@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-26
+
+#### Fixed
+
+- The iPhone app opens again instead of closing right after launch: the launch screen's bot avatar called a colour helper that a merge had removed.
+
 ### 2026-09-25
 
 #### Changed
