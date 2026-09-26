@@ -1396,14 +1396,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           payload: { trigger: run.trigger, routineId: run.routineId },
         });
 
-        // A sub-bot's scheduled routine gets a run card in its own thread instead of a free
-        // closing text (background-work-visibility CA1/CA2); a top-level bot's routine (the
+        // Background routine work gets a run card in the thread instead of conversation turns
+        // (background-work-visibility CA1/CA2); a top-level bot's scheduled routine (the
         // orchestrator's own brief) is unaffected and keeps behaving as a normal reply.
-        const isSubBotRoutineRun = run.trigger === "routine" && bot.parentBotId != null;
+        const isRoutineCardRun = showsRoutineRunCard(run, bot.parentBotId != null);
         const routineCardStartedAt = current.startedAt ?? new Date();
         let routineForCard: { id: string; name: string; notify: boolean } | null = null;
         let routineRunCardMessageId: string | null = null;
-        if (isSubBotRoutineRun && run.routineId) {
+        if (isRoutineCardRun && run.routineId) {
           routineForCard = await deps.prisma.routine.findUnique({
             where: { id: run.routineId },
             select: { id: true, name: true, notify: true },
@@ -1419,7 +1419,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
         }
         // One place to flip the card to its terminal state, whichever way the run ends.
-        // `routineForCard` is only set for a sub-bot routine run, so this is a no-op elsewhere.
+        // `routineForCard` is only set for a routine card run, so this is a no-op elsewhere.
         // Non-terminal pauses (ask -> waiting_input, takeover -> waiting_takeover) and lease
         // loss deliberately leave the card on "running": the run is not over, and the retry
         // reuses this very card via its stable clientNonce.
@@ -1445,7 +1445,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           ? await loadGroupContext(deps.prisma, thread.groupId, { id: bot.id, name: bot.name })
           : undefined;
         const threadContext = threadContextForRun(
-          run.trigger,
+          run.routineId != null,
           {
             messages: [...messages].reverse().map((m) => ({
               id: m.id,
@@ -1589,12 +1589,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ).catch((error) => getLogger().error("bot message failure return", error));
           }
           // A delegated run's failure is reported back to the ordering bot unless that bot is
-          // top-level (then it is the visible relay, CA5/CA6); a sub-bot's routine reports via
+          // top-level (then it is the visible relay, CA5/CA6); a routine card run reports via
           // its card and only pages when the user subscribed to that routine (`notify === true`).
           if (
             !failed.continuationRunId &&
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
+              routineCard: isRoutineCardRun,
               notify: routineForCard?.notify,
               relaysToUser: botMessageRelaysToUser(peerMessage),
             })
@@ -1609,7 +1610,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 botId: bot.id,
                 threadId: thread.id,
               },
-              { forceEnabled: isSubBotRoutineRun && routineForCard?.notify === true },
+              { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
             );
           }
           return;
@@ -1834,9 +1835,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const script = scripted ? inferScript(task.prompt, takeoverResume?.checkpoint) : undefined;
         const flushProgress = async () => {
           if (scripted || !pendingProgress) return;
-          // A sub-bot routine run shows only its run card; never stream live text into the
+          // A routine card run shows only its run card; never stream live text into the
           // thread. Drop the buffered progress instead of emitting a thread.progress delta.
-          if (isSubBotRoutineRun) {
+          if (isRoutineCardRun) {
             pendingProgress = "";
             return;
           }
@@ -1865,11 +1866,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           assembled = "";
           hasStreamedText = false;
           pendingProgress = "";
-          // A sub-bot routine run's only user-facing artifact is its run card. Drop the
+          // A routine card run's only user-facing artifact is its run card. Drop the
           // mid-turn narration instead of posting it as a separate bubble in the thread —
           // the text has already been lifted out of the segments above, so the card digest
           // stays the clean final report.
-          if (isSubBotRoutineRun) return;
+          if (isRoutineCardRun) return;
           await publishMessage(
             deps,
             run,
@@ -4051,8 +4052,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
             } else if (event.type === "progress") {
               toolCallStreak = { key: undefined, count: 0 };
-              if (isSubBotRoutineRun) {
-                // A sub-bot routine run streams nothing into the thread — its run card is the
+              if (isRoutineCardRun) {
+                // A routine card run streams nothing into the thread — its run card is the
                 // only surface. Drop batched text and skip the activity line.
                 pendingProgress = "";
               } else {
@@ -4447,7 +4448,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               skipEmptyFallback: publishedTerminalSubagent || publishedMidTurnUserMessage,
             });
           }
-          // A sub-bot routine's free closing text is replaced by the run card below (CA1/CA2):
+          // A routine card run's free closing text is replaced by the run card below (CA1/CA2):
           // suppress it from the thread the same way a handed-off turn suppresses its narration,
           // while still computing `text` (the digest) from the unsuppressed blocks so the card
           // and the notify decision see exactly what would have been said.
@@ -4464,7 +4465,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (containsSecret(text, runSecrets)) {
             throw new Error("refusing to persist a secret in the thread");
           }
-          const blocks = isSubBotRoutineRun ? [] : rawBlocks;
+          const blocks = isRoutineCardRun ? [] : rawBlocks;
           if (!(await renewRunLease(deps, runId, workerId, fence))) return;
           const botMessageOutcome =
             run.trigger === "bot_message"
@@ -4505,13 +4506,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           // A delegated run's result auto-returns to the ordering bot and is hidden from the
           // user's thread unless that bot is top-level (the orchestrator's relay, which does
-          // page — CA5/CA6); a sub-bot's routine reports to its orchestrator via its card and
-          // only pages when the user subscribed to that routine (`notify === true`).
+          // page — CA5/CA6); a routine card run reports via its card and only pages when the
+          // user subscribed to that routine (`notify === true`).
           if (
             text &&
             !completed.continuationRunId &&
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
+              routineCard: isRoutineCardRun,
               notify: routineForCard?.notify,
               relaysToUser: botMessageRelaysToUser(peerMessage),
             })
@@ -4526,7 +4528,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 botId: bot.id,
                 threadId: thread.id,
               },
-              { forceEnabled: isSubBotRoutineRun && routineForCard?.notify === true },
+              { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
             );
           }
           // Last, and never fatal: the run is already finalized, so a failure here must not reach
@@ -4593,12 +4595,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ).catch((returnError) => getLogger().error("bot message failure return", returnError));
           }
           // A delegated run's failure is reported back to the ordering bot unless that bot is
-          // top-level (then it is the visible relay, CA5/CA6); a sub-bot's routine reports via
+          // top-level (then it is the visible relay, CA5/CA6); a routine card run reports via
           // its card and only pages when the user subscribed to that routine (`notify === true`).
           if (
             !failed.continuationRunId &&
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
+              routineCard: isRoutineCardRun,
               notify: routineForCard?.notify,
               relaysToUser: botMessageRelaysToUser(peerMessage),
             })
@@ -4613,7 +4616,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 botId: bot.id,
                 threadId: thread.id,
               },
-              { forceEnabled: isSubBotRoutineRun && routineForCard?.notify === true },
+              { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
             );
           }
         }
@@ -4867,7 +4870,7 @@ export function filterPageBrowserTools<T extends { name: string }>(
 }
 
 export function threadContextForRun<T>(
-  trigger: string,
+  routineRun: boolean,
   context: {
     messages: T[];
     summary: string | null;
@@ -4875,7 +4878,7 @@ export function threadContextForRun<T>(
   },
   messagingChannelRun: boolean,
 ) {
-  return trigger === "routine"
+  return routineRun
     ? {
         messages: [] as T[],
         summary: null,
@@ -4939,21 +4942,33 @@ export function completionMarksUnread(trigger: string, text: string): boolean {
  * back work it delegated, its `bot_message` run *is* the user-facing relay of what a sub-bot
  * reported — that must page like any other reply (background-work-visibility CA5/CA6). A
  * top-level bot answering a peer's own solicitation relays nothing (`relaysToUser` false): that
- * reply is returned to the peer, so paging the user about it is noise. A sub-bot's scheduled
- * `routine` reports to its
- * orchestrator too (via `message_bot`); its own thread instead gets a routine-run card, silent
- * by default. The routine's own per-run `notify` toggle is the explicit, user-chosen exception:
- * with it on, the sub-bot pages from its own thread regardless of Claudius's triage. A top-level
- * bot's own routine (no parent) keeps notifying unconditionally — that is its user-facing brief.
+ * reply is returned to the peer, so paging the user about it is noise. A routine run that
+ * reports through its run card (`routineCard`: an inbound wake, or a sub-bot's scheduled routine,
+ * which also reports to its orchestrator via `message_bot`) is silent by default. The routine's
+ * own per-run `notify` toggle is the explicit, user-chosen exception: with it on, the run pages
+ * regardless of Claudius's triage. A top-level bot's own scheduled routine (no parent) keeps
+ * notifying unconditionally — that is its user-facing brief.
  * Asks/takeovers page through their own `help` path and are unaffected.
  */
 export function notifiesUserOnRunEnd(
   trigger: string,
-  opts?: { isSubBot?: boolean; notify?: boolean; relaysToUser?: boolean },
+  opts?: { isSubBot?: boolean; notify?: boolean; relaysToUser?: boolean; routineCard?: boolean },
 ): boolean {
   if (trigger === "bot_message") return !opts?.isSubBot && opts?.relaysToUser === true;
-  if (trigger === "routine" && opts?.isSubBot === true) return opts?.notify === true;
+  if (opts?.routineCard) return opts.notify === true;
   return true;
+}
+
+/**
+ * Whether a run reports through a routine run card instead of conversation turns: every inbound
+ * (webhook, GitHub, message) routine wake, and a sub-bot's scheduled routine.
+ */
+export function showsRoutineRunCard(
+  run: { trigger: string; routineId: string | null },
+  isSubBot: boolean,
+): boolean {
+  if (!run.routineId) return false;
+  return run.trigger === "webhook" || (run.trigger === "routine" && isSubBot);
 }
 
 export function missingTurnImagesInstruction(
@@ -5223,7 +5238,7 @@ function routineRunCardBlock(
 }
 
 /**
- * Publishes the "running" routine-run card into a sub-bot's own thread when its scheduled run
+ * Publishes the "running" routine-run card into the bot's thread when a routine card run
  * starts, replacing the free-text closing narration with a lifecycle-driven trace (spec
  * background-work-visibility CA1/CA2). Idempotent on the run id via a stable clientNonce, so a
  * worker crash + retry cannot duplicate the card (spec edge case: reprise après crash).

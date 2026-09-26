@@ -5,6 +5,7 @@ import {
   completionNotificationBody,
   notifiesUserOnRunEnd,
   routineRunHeadline,
+  showsRoutineRunCard,
   subagentMarksUnread,
 } from "./executor.js";
 
@@ -102,20 +103,37 @@ describe("notifiesUserOnRunEnd", () => {
     expect(notifiesUserOnRunEnd("routine", { isSubBot: false })).toBe(true);
   });
 
-  it("silences a sub-bot's routine by default but keeps its direct conversation with the user", () => {
-    // A sub-bot's routine reports to its orchestrator via its run card; any closing text it
-    // emits must not page the user unless the routine's own notify toggle is on. Its direct
-    // conversation (user/messaging) still notifies regardless.
-    expect(notifiesUserOnRunEnd("routine", { isSubBot: true })).toBe(false);
-    expect(notifiesUserOnRunEnd("routine", { isSubBot: true, notify: false })).toBe(false);
+  it("silences a routine card run by default but keeps direct conversation with the user", () => {
+    // A routine card run (a sub-bot's routine, or any inbound wake) reports through its run
+    // card; any closing text it emits must not page the user unless the routine's own notify
+    // toggle is on. Direct conversation (user/messaging) still notifies regardless.
+    expect(notifiesUserOnRunEnd("routine", { isSubBot: true, routineCard: true })).toBe(false);
+    expect(notifiesUserOnRunEnd("webhook", { routineCard: true, notify: false })).toBe(false);
     expect(notifiesUserOnRunEnd("user", { isSubBot: true })).toBe(true);
     expect(notifiesUserOnRunEnd("messaging", { isSubBot: true })).toBe(true);
+    // A bare inbound delivery with no routine is an ordinary reply.
+    expect(notifiesUserOnRunEnd("webhook")).toBe(true);
   });
 
-  it("pages the human for a sub-bot routine the user explicitly subscribed to (notify: true)", () => {
+  it("pages the human for a routine card run the user explicitly subscribed to (notify: true)", () => {
     // The per-routine notify toggle is the explicit exception: the user chose to hear from
     // this specific routine every time, independent of Claudius's own triage.
-    expect(notifiesUserOnRunEnd("routine", { isSubBot: true, notify: true })).toBe(true);
+    expect(notifiesUserOnRunEnd("routine", { routineCard: true, notify: true })).toBe(true);
+    expect(notifiesUserOnRunEnd("webhook", { routineCard: true, notify: true })).toBe(true);
+  });
+});
+
+describe("showsRoutineRunCard", () => {
+  it("cards every inbound routine wake and a sub-bot's scheduled routine", () => {
+    expect(showsRoutineRunCard({ trigger: "webhook", routineId: "routine-1" }, false)).toBe(true);
+    expect(showsRoutineRunCard({ trigger: "webhook", routineId: "routine-1" }, true)).toBe(true);
+    expect(showsRoutineRunCard({ trigger: "routine", routineId: "routine-1" }, true)).toBe(true);
+  });
+
+  it("keeps a top-level scheduled routine and a bare delivery as normal replies", () => {
+    expect(showsRoutineRunCard({ trigger: "routine", routineId: "routine-1" }, false)).toBe(false);
+    expect(showsRoutineRunCard({ trigger: "webhook", routineId: null }, false)).toBe(false);
+    expect(showsRoutineRunCard({ trigger: "user", routineId: null }, true)).toBe(false);
   });
 });
 

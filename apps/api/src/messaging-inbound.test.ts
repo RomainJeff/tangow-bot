@@ -40,6 +40,9 @@ function createDeps(
   const sendUserMessage = vi.fn(
     async () => overrides.sendResult ?? { messageId: "msg-1", runId: "run-1", seq: 3 },
   );
+  const startInboundRoutineRun = vi.fn(async (input: { routineId: string }) => ({
+    runId: `run-${input.routineId}`,
+  }));
   const notify = vi.fn(async () => undefined);
   const enqueue = vi.fn(async () => undefined);
   const typing = vi.fn(async (_threadId: string) => undefined);
@@ -241,13 +244,14 @@ function createDeps(
   };
   return {
     prisma,
-    events: { sendUserMessage, notify },
+    events: { sendUserMessage, startInboundRoutineRun, notify },
     jobs: { enqueue },
     provision,
     openSignup: true,
     signupPolicy,
     typing,
     sendUserMessage,
+    startInboundRoutineRun,
     notify,
     enqueue,
     outboundRows,
@@ -256,6 +260,7 @@ function createDeps(
     createdIdentities,
   } as unknown as MessagingInboundDeps & {
     sendUserMessage: ReturnType<typeof vi.fn>;
+    startInboundRoutineRun: ReturnType<typeof vi.fn>;
     notify: ReturnType<typeof vi.fn>;
     enqueue: ReturnType<typeof vi.fn>;
     typing: ReturnType<typeof vi.fn>;
@@ -389,22 +394,21 @@ describe("createMessagingInboundHandler DM routing", () => {
       }),
     );
     expect(deps.prisma.routine.findMany.mock.calls[0]?.[0]).not.toHaveProperty("take");
-    expect(deps.sendUserMessage).toHaveBeenCalledTimes(1);
-    expect(deps.sendUserMessage).toHaveBeenCalledWith(
+    expect(deps.sendUserMessage).not.toHaveBeenCalled();
+    expect(deps.startInboundRoutineRun).toHaveBeenCalledTimes(6);
+    expect(deps.startInboundRoutineRun).toHaveBeenCalledWith(
       expect.objectContaining({
-        trigger: "webhook",
-        clientNonce: expect.stringMatching(/^messaging:bot-1:/),
+        routineId: "routine-1",
+        clientNonce: expect.stringMatching(/^messaging:bot-1:.+:routine-1$/),
         prompt: expect.stringContaining('Run routine "Triage Slack 1":\nReview update 1'),
       }),
     );
-    expect(deps.sendUserMessage).not.toHaveBeenCalledWith(
-      expect.objectContaining({ trigger: "messaging" }),
-    );
-    const routinePrompt = deps.sendUserMessage.mock.calls[0]?.[0]?.prompt as string;
+    const routinePrompt = deps.startInboundRoutineRun.mock.calls[5]?.[0]?.prompt as string;
     expect(routinePrompt).toContain('Run routine "Triage Slack 6":\nReview update 6');
+    expect(routinePrompt).not.toContain("Review update 1");
     expect(routinePrompt).toContain("<untrusted_delivery_payload>");
     expect(routinePrompt).toContain("&lt;/untrusted_delivery_payload&gt;");
-    expect(deps.enqueue).toHaveBeenCalledTimes(1);
+    expect(deps.enqueue).toHaveBeenCalledTimes(6);
   });
 
   it("does not double-wake a DM when message routines match", async () => {
@@ -422,8 +426,8 @@ describe("createMessagingInboundHandler DM routing", () => {
     const handle = createMessagingInboundHandler(deps);
     await handle({ ...dmEvent, provider: "slack", handle: "Ev-dm-1", from: "U123" });
 
-    expect(deps.sendUserMessage).toHaveBeenCalledTimes(1);
-    expect(deps.sendUserMessage.mock.calls[0]?.[0]?.trigger).toBe("webhook");
+    expect(deps.sendUserMessage).not.toHaveBeenCalled();
+    expect(deps.startInboundRoutineRun).toHaveBeenCalledTimes(1);
     expect(deps.enqueue).toHaveBeenCalledTimes(1);
   });
 
@@ -454,11 +458,8 @@ describe("createMessagingInboundHandler DM routing", () => {
       "bot-1",
       messagingWakeIdempotencyKey("teamchat-emulator", "Ev-emulator-1"),
     );
-    expect(deps.sendUserMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        trigger: "webhook",
-        clientNonce: expected,
-      }),
+    expect(deps.startInboundRoutineRun).toHaveBeenCalledWith(
+      expect.objectContaining({ clientNonce: `${expected}:routine-1` }),
     );
     expect(expected).not.toBe(mismatched);
   });
@@ -493,6 +494,7 @@ describe("createMessagingInboundHandler DM routing", () => {
       }),
     );
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
+    expect(deps.startInboundRoutineRun).not.toHaveBeenCalled();
   });
 
   it("reasserts routing ownership before creating a TeamChat routine wake run", async () => {
@@ -532,7 +534,7 @@ describe("createMessagingInboundHandler DM routing", () => {
         }),
       }),
     );
-    expect(deps.sendUserMessage).toHaveBeenCalledTimes(1);
+    expect(deps.startInboundRoutineRun).toHaveBeenCalledTimes(1);
   });
 
   it("appends inbound media links to the message text", async () => {
@@ -910,15 +912,12 @@ describe("createMessagingInboundHandler channel routing", () => {
     const handle = createMessagingInboundHandler(deps);
     await handle(groupEvent);
 
-    expect(deps.sendUserMessage).toHaveBeenCalledTimes(1);
-    expect(deps.sendUserMessage).toHaveBeenCalledWith(
+    expect(deps.sendUserMessage).not.toHaveBeenCalled();
+    expect(deps.startInboundRoutineRun).toHaveBeenCalledWith(
       expect.objectContaining({
-        trigger: "webhook",
+        routineId: "routine-1",
         prompt: expect.stringContaining('Run routine "Channel triage":\nSummarize the update'),
       }),
-    );
-    expect(deps.sendUserMessage).not.toHaveBeenCalledWith(
-      expect.objectContaining({ trigger: "messaging" }),
     );
   });
 

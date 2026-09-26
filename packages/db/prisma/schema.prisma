@@ -585,7 +585,7 @@ model Run {
   sourceMessage        Message?         @relation("RunSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
   routineId            String?
   routine              Routine?         @relation(fields: [routineId], references: [id], onDelete: SetNull)
-  // Inbound webhook runs only: false when every woken routine opted out of approving each action.
+  // Inbound webhook runs only: false when the woken routine opted out of approving each action.
   requireToolApproval  Boolean          @default(true)
   startedAt            DateTime?
   completedAt          DateTime?

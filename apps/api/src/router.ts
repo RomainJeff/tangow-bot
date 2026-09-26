@@ -1518,7 +1518,7 @@ export function createRouter(deps: RouterDeps) {
         const stopping = await deps.prisma.run.findMany({
           where: {
             threadId: target.threadId,
-            trigger: "routine",
+            routineId: { not: null },
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
           select: { id: true },

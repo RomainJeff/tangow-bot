@@ -111,7 +111,7 @@ export function toolRequiresExplicitApproval(toolName: string): boolean {
 
 /**
  * External webhook runs may inspect state unattended, but side effects need the owner unless
- * every woken routine opted out, in which case the normal approval rules apply.
+ * the woken routine opted out, in which case the normal approval rules apply.
  */
 export function unattendedTriggerToolRequiresApproval(
   run: { trigger: string; requireToolApproval: boolean },

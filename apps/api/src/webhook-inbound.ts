@@ -19,8 +19,17 @@ export type WebhookEvents = {
     trigger: "webhook";
     requireToolApproval: boolean;
     clientNonce?: string;
-    allowParallelRun?: boolean;
   }): Promise<{ messageId: string; runId: string | null; seq: number }>;
+  startInboundRoutineRun(input: {
+    spaceId: string;
+    threadId: string;
+    botId: string;
+    userId: string;
+    routineId: string;
+    prompt: string;
+    requireToolApproval: boolean;
+    clientNonce?: string;
+  }): Promise<{ runId: string }>;
 };
 
 export type WebhookDeps = {
@@ -149,58 +158,74 @@ export function inboundDeliveryClientNonce(
   return `${source}:${botId}:${createHash("sha256").update(idempotencyKey).digest("base64url")}`;
 }
 
+/** Whether a delivery with this client nonce already started a routine run on the thread. */
+export async function findInboundRoutineRun(
+  prisma: PrismaClient,
+  threadId: string,
+  clientNonce: string,
+) {
+  return prisma.run.findFirst({
+    where: { threadId, clientNonce: { startsWith: `${clientNonce}:` } },
+    select: { id: true },
+  });
+}
+
 export async function deliverWebhookEvent(
   deps: Pick<WebhookDeps, "events" | "jobs">,
   target: InboundTarget,
   input: {
     prompt: string;
-    routines: Array<{ name: string; prompt: string; requireToolApproval: boolean }>;
+    routines: Array<{ id: string; name: string; prompt: string; requireToolApproval: boolean }>;
     source: "webhook" | "github" | "messaging";
     idempotencyKey?: string;
-    /** Messaging wakes share the live chat thread; keep a separate webhook run. */
-    allowParallelRun?: boolean;
   },
 ) {
-  const promptText =
-    input.routines.length > 0
-      ? [
-          ...input.routines.map(
-            (routine) => `Run routine "${routine.name}":\n${routine.prompt.trim()}`,
-          ),
-          "",
-          input.source === "github"
-            ? "Inbound GitHub event metadata:"
-            : input.source === "messaging"
-              ? "Inbound messaging event:"
-              : "Inbound webhook payload:",
-          input.prompt,
-        ].join("\n")
-      : input.prompt;
-
   const clientNonce = input.idempotencyKey
     ? inboundDeliveryClientNonce(input.source, target.bot.id, input.idempotencyKey)
     : undefined;
-
-  const sent = await deps.events.sendUserMessage({
-    spaceId: target.bot.spaceId,
-    threadId: target.threadId,
-    botId: target.bot.id,
-    userId: target.bot.userId,
-    blocks: [{ kind: "text", text: promptText }],
-    prompt: promptText,
-    trigger: "webhook",
-    // One run serves every woken routine, so the strictest wins; a bare delivery always asks.
-    requireToolApproval:
-      input.routines.length === 0 || input.routines.some((routine) => routine.requireToolApproval),
-    clientNonce,
-    ...(input.allowParallelRun ? { allowParallelRun: true } : {}),
-  });
-
-  if (sent.runId) {
-    await deps.jobs.enqueue(runContinueJob(sent.runId)).catch((error) => {
+  const enqueue = async (runId: string) => {
+    await deps.jobs.enqueue(runContinueJob(runId)).catch((error) => {
       getLogger().error(`${input.source} run enqueue error`, error);
     });
+  };
+
+  if (input.routines.length === 0) {
+    const sent = await deps.events.sendUserMessage({
+      spaceId: target.bot.spaceId,
+      threadId: target.threadId,
+      botId: target.bot.id,
+      userId: target.bot.userId,
+      blocks: [{ kind: "text", text: input.prompt }],
+      prompt: input.prompt,
+      trigger: "webhook",
+      requireToolApproval: true,
+      clientNonce,
+    });
+    if (sent.runId) await enqueue(sent.runId);
+    return { ok: true as const, messageId: sent.messageId, runId: sent.runId, seq: sent.seq };
   }
 
-  return { ok: true as const, messageId: sent.messageId, runId: sent.runId, seq: sent.seq };
+  const payloadLabel =
+    input.source === "github"
+      ? "Inbound GitHub event metadata:"
+      : input.source === "messaging"
+        ? "Inbound messaging event:"
+        : "Inbound webhook payload:";
+  // One run per routine, off the conversation: the thread shows its run card, not the prompt.
+  const runIds: string[] = [];
+  for (const routine of input.routines) {
+    const { runId } = await deps.events.startInboundRoutineRun({
+      spaceId: target.bot.spaceId,
+      threadId: target.threadId,
+      botId: target.bot.id,
+      userId: target.bot.userId,
+      routineId: routine.id,
+      prompt: `Run routine "${routine.name}":\n${routine.prompt.trim()}\n\n${payloadLabel}\n${input.prompt}`,
+      requireToolApproval: routine.requireToolApproval,
+      clientNonce: clientNonce ? `${clientNonce}:${routine.id}` : undefined,
+    });
+    await enqueue(runId);
+    runIds.push(runId);
+  }
+  return { ok: true as const, runIds };
 }

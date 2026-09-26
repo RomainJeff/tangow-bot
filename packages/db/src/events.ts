@@ -52,6 +52,7 @@ export interface ThreadEvents {
   pauseRunForInput(input: PauseRunForInput): Promise<boolean>;
   pauseRunForTakeover(input: PauseRunForTakeover): Promise<boolean>;
   sendUserMessage(input: SendUserMessageInput): Promise<SendUserMessageResult>;
+  startInboundRoutineRun(input: StartInboundRoutineRunInput): Promise<StartInboundRoutineRunResult>;
   follow(threadId: string, cursor: number, signal?: AbortSignal): AsyncGenerator<ProductEvent>;
 }
 
@@ -237,6 +238,22 @@ export interface SendUserMessageResult {
   runId: string | null;
 }
 
+/** One routine woken by an inbound delivery (webhook, GitHub, message). */
+export interface StartInboundRoutineRunInput {
+  spaceId: string;
+  threadId: string;
+  botId: string;
+  userId: string;
+  routineId: string;
+  prompt: string;
+  requireToolApproval: boolean;
+  clientNonce?: string;
+}
+
+export interface StartInboundRoutineRunResult {
+  runId: string;
+}
+
 export interface RunSecretWriter {
   store(input: {
     botId: string;
@@ -267,6 +284,7 @@ export function createThreadEvents(
     pauseRunForInput: (input) => pauseRunForInput(prisma, input, realtime),
     pauseRunForTakeover: (input) => pauseRunForTakeover(prisma, input, realtime),
     sendUserMessage: (input) => sendUserMessage(prisma, input, realtime),
+    startInboundRoutineRun: (input) => startInboundRoutineRun(prisma, input, realtime),
     follow: (threadId, cursor, signal) =>
       followThreadEvents(prisma, threadId, cursor, realtime, signal, options.catchUpMs),
   };
@@ -577,6 +595,78 @@ export async function sendUserMessage(
     taskId: committed.task?.id ?? null,
     runId: committed.run?.id ?? committed.busy?.id ?? null,
   };
+}
+
+/**
+ * Queue a routine run for an inbound delivery without writing a user message: the routine's
+ * instructions and the payload stay in the task prompt, and the thread only shows the run card.
+ */
+export async function startInboundRoutineRun(
+  prisma: PrismaClient,
+  input: StartInboundRoutineRunInput,
+  realtime?: RealtimeFanout,
+): Promise<StartInboundRoutineRunResult> {
+  const replay = async () =>
+    input.clientNonce
+      ? prisma.run.findUnique({
+          where: {
+            spaceId_clientNonce: { spaceId: input.spaceId, clientNonce: input.clientNonce },
+          },
+          select: { id: true },
+        })
+      : null;
+  const existing = await replay();
+  if (existing) return { runId: existing.id };
+
+  const commit = () =>
+    prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Same thread-row lock as sendUserMessage, so a concurrent clear either cancels this run
+      // or strictly precedes it.
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
+      const task = await tx.task.create({
+        data: {
+          spaceId: input.spaceId,
+          botId: input.botId,
+          threadId: input.threadId,
+          userId: input.userId,
+          prompt: input.prompt,
+          status: "queued",
+        },
+      });
+      const run = await tx.run.create({
+        data: {
+          spaceId: input.spaceId,
+          botId: input.botId,
+          threadId: input.threadId,
+          taskId: task.id,
+          userId: input.userId,
+          status: "queued",
+          trigger: "webhook",
+          routineId: input.routineId,
+          requireToolApproval: input.requireToolApproval,
+          clientNonce: input.clientNonce,
+        },
+      });
+      const event = await appendEventInTransaction(tx, {
+        spaceId: input.spaceId,
+        threadId: input.threadId,
+        botId: input.botId,
+        type: "routine.fired",
+        runId: run.id,
+        payload: { routineId: input.routineId },
+      });
+      return { run, event };
+    });
+  const committed = await commit().catch(async (error) => {
+    const winner = await replay();
+    if (winner) return { replay: winner } as const;
+    throw error;
+  });
+  if ("replay" in committed) return { runId: committed.replay.id };
+  await notifyRealtime(realtime, input.threadId, committed.event.seq).catch((error) => {
+    getLogger().error("routine run realtime notification", error);
+  });
+  return { runId: committed.run.id };
 }
 
 export async function claimSteering(

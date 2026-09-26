@@ -16,6 +16,7 @@ import {
   resumeAskWithComposerTextInTransaction,
   rewindThread,
   sendUserMessage,
+  startInboundRoutineRun,
 } from "./events.js";
 import { RunHistoryWriteError } from "./messages.js";
 
@@ -2217,6 +2218,102 @@ describe("sendUserMessage", () => {
     expect(tx.steeringMessage.create).toHaveBeenCalledWith({
       data: { messageId: "message-1", botId: "bot-1", userId: "user-1", runId: "run-0" },
     });
+  });
+});
+
+describe("startInboundRoutineRun", () => {
+  const input = {
+    spaceId: "workspace-1",
+    threadId: "thread-1",
+    botId: "bot-1",
+    userId: "user-1",
+    routineId: "routine-1",
+    prompt: 'Run routine "Triage":\nOpen an issue',
+    requireToolApproval: false,
+    clientNonce: "webhook:bot-1:digest:routine-1",
+  };
+
+  it("queues the routine run without a user message and announces it once", async () => {
+    const fanout = new TestFanout();
+    const publish = vi.spyOn(fanout, "publish");
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
+      thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 9 }) },
+      message: { create: vi.fn() },
+      task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
+      run: {
+        create: vi.fn().mockResolvedValue({ id: "run-1" }),
+        findUnique: vi.fn().mockResolvedValue({ status: "queued" }),
+      },
+      event: {
+        create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({
+          ...event(data.seq),
+          type: data.type,
+          runId: "run-1",
+        })),
+      },
+    };
+    const prisma = {
+      run: { findUnique: vi.fn().mockResolvedValue(null) },
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+
+    await expect(startInboundRoutineRun(prisma, input, fanout)).resolves.toEqual({
+      runId: "run-1",
+    });
+
+    expect(tx.message.create).not.toHaveBeenCalled();
+    expect(tx.task.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ prompt: input.prompt, status: "queued" }),
+    });
+    expect(tx.run.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        taskId: "task-1",
+        trigger: "webhook",
+        routineId: "routine-1",
+        requireToolApproval: false,
+        clientNonce: input.clientNonce,
+      }),
+    });
+    expect(tx.event.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "routine.fired",
+          runId: "run-1",
+          payload: { routineId: "routine-1" },
+        }),
+      }),
+    );
+    expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 8 }));
+  });
+
+  it("returns the existing run for a redelivered nonce", async () => {
+    const prisma = {
+      run: { findUnique: vi.fn().mockResolvedValue({ id: "run-0" }) },
+      $transaction: vi.fn(),
+    } as unknown as PrismaClient;
+
+    await expect(startInboundRoutineRun(prisma, input)).resolves.toEqual({ runId: "run-0" });
+    expect(prisma.run.findUnique).toHaveBeenCalledWith({
+      where: {
+        spaceId_clientNonce: { spaceId: "workspace-1", clientNonce: input.clientNonce },
+      },
+      select: { id: true },
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("resolves a concurrent duplicate to the winning run", async () => {
+    const prisma = {
+      run: {
+        findUnique: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "run-won" }),
+      },
+      $transaction: vi
+        .fn()
+        .mockRejectedValue(Object.assign(new Error("unique"), { code: "P2002" })),
+    } as unknown as PrismaClient;
+
+    await expect(startInboundRoutineRun(prisma, input)).resolves.toEqual({ runId: "run-won" });
   });
 });
 

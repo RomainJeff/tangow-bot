@@ -30,7 +30,7 @@ import {
 
 export interface MessagingInboundDeps {
   prisma: PrismaClient;
-  events: Pick<ThreadEvents, "sendUserMessage" | "notify">;
+  events: Pick<ThreadEvents, "sendUserMessage" | "startInboundRoutineRun" | "notify">;
   jobs: Pick<JobPublisher, "enqueue">;
   provision: (
     request: MessagingIdentityRequest,
@@ -246,8 +246,6 @@ export async function wakeMessageRoutines(
         options?.deliveryProvider ?? event.provider,
         event.handle,
       ),
-      // TeamChat channel wakes may share a live thread with an active chat run.
-      allowParallelRun: true,
     },
   );
   return true;
