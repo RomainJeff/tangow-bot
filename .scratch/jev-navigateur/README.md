@@ -24,15 +24,17 @@ Ce que Jev ne fait jamais dans ce lot : écrire une valeur de champ (le modèle 
 | # | Titre | Bloqué par | Statut |
 |---|---|---|---|
 | 01 | Décision — harnais navigateur tiers ou branchement de Jev sur `BrowserProvider` | — | decided (2026-09-22), option C |
-| 02 | Interface `DecisionProvider`, fake en process et conformité offline | 01 | ready-for-agent |
-| 03 | Adaptateur TypeSafe derrière une connexion partagée | 02 | ready-for-agent |
-| 04 | Choix de cible pour `browser_act` par `choice` sur les refs du snapshot | 02 | ready-for-agent |
+| 02 | Interface `DecisionProvider`, fake en process et conformité offline | 01 | done (lot 1) |
+| 03 | Adaptateur TypeSafe derrière une connexion partagée | 02 | done (lot 1) |
+| 04 | Choix de cible pour `browser_act` par `choice` sur les refs du snapshot | 02 | done (lot 1) |
 | 05 | Vérification post-action `landed / dialog / error / auth / unchanged` | 02 | différé après la mesure de 04 |
 | 06 | Calibrer les seuils hors ligne sur un corpus étiqueté | 03, 04, 05 | needs-decision |
-| 07 | Déclarer le fournisseur de décision comme destinataire de données | 02 | ready-for-agent |
-| 08 | Mesurer ce que le fournisseur de décision rapporte réellement | 04, 05 | ready-for-agent |
+| 07 | Déclarer le fournisseur de décision comme destinataire de données | 02 | done (lot 1, minimal) |
+| 08 | Mesurer ce que le fournisseur de décision rapporte réellement | 04 | done (lot 1, logs seulement) |
 
 **Décision du 2026-09-22 :** option C retenue. Premier lot livré : 02, 03, 04, 08. `target` réservé aux actions réversibles ; 05 différé pour que 08 mesure un seul changement. Détail et faits de documentation dans le ticket 01.
+
+**Lot 1 livré (2026-09-26), écarts tranchés par le mainteneur :** `target` restreint par rôle de candidat (`click` → `link`, `tab` ; `fill`/`type` → `textbox`, `searchbox`, `combobox`), jamais de bouton ; pas de porte serveur `not_consented`, seule la porte mobile au premier plan déclare l'usage `decision` ; connexion par espace (`SpaceDecisionConfig`, `baseUrl` + `modelId`, `maxOptions` 255) ; tokens de décision dans les logs seulement (`agent.decision.call`, `agent.browser.target`, `agent.run.decision`), sans `UsageRecord` ni colonnes `ExternalEffect`. Seuil 0,80, délai 1 000 ms, modèle `jev-1.13.0`. Ces choix l'emportent sur le texte des tickets 02, 03, 04, 07 et 08.
 
 01 est la seule vraie décision et elle est tranchée dans le ticket : aucune dépendance tierce, branchement maison sur le `BrowserProvider` existant, les harnais de la communauté servent de références de conception. 02 est le socle et se livre avec le fake seul, sans clé ni réseau. 03 est le seul ticket qui touche un SDK vendeur. 04 et 05 sont indépendants l'un de l'autre et testables sur le fake. 06 est le ticket qui dit si les seuils tiennent — et il commence par constater que les fixtures de replay actuelles sont trop maigres pour calibrer quoi que ce soit. 07 est une conséquence mécanique de `docs/ai-data-sharing-review.md` : du texte de page part vers un nouveau destinataire. 08 est l'équivalent du ticket 17 du lot `harness-context-quality` : sans lui personne ne saura si l'ensemble vaut son coût.
 
