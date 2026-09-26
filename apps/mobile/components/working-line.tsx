@@ -3,7 +3,14 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { ViewProps } from "react-native";
 import { Platform, StyleSheet, Text, View } from "react-native";
-import { useReducedMotion } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import { mobileTokens } from "../lib/appearance";
 import { formatElapsed } from "../lib/format-elapsed";
 import { useThemedStyles } from "../lib/native";
@@ -32,11 +39,30 @@ function useElapsedTicker(startedAt?: number): string {
   return formatElapsed(started, now);
 }
 
+/** A working bot buzzes: a steady, linear left-right jitter.
+ * Mirrors `rk-buzz` in `packages/ui-web/src/styles.css`. */
+function useBuzzStyle() {
+  const reducedMotion = useReducedMotion();
+  const x = useSharedValue(0);
+  useEffect(() => {
+    if (reducedMotion) return;
+    x.value = -1.5;
+    x.value = withRepeat(withTiming(1.5, { duration: 120, easing: Easing.linear }), -1, true);
+    return () => {
+      x.value = 0;
+    };
+  }, [reducedMotion, x]);
+  return useAnimatedStyle(() => ({
+    transform: [{ translateX: x.value }, { rotate: `${x.value * (4 / 3)}deg` }],
+  }));
+}
+
 /** The only thing that moves while a bot works. Mirrors
  * `packages/ui-web/src/working-line.tsx`. */
 export function WorkingLine({ avatar, label, startedAt, style, ...props }: WorkingLineProps) {
   const styles = useThemedStyles(createWorkingLineStyles);
   const elapsed = useElapsedTicker(startedAt);
+  const buzz = useBuzzStyle();
   return (
     <View
       accessible
@@ -45,7 +71,7 @@ export function WorkingLine({ avatar, label, startedAt, style, ...props }: Worki
       style={[styles.row, style]}
       {...props}
     >
-      <View style={styles.avatar}>{avatar}</View>
+      <Animated.View style={[styles.avatar, buzz]}>{avatar}</Animated.View>
       <Text numberOfLines={1} style={styles.label}>
         {label}
       </Text>

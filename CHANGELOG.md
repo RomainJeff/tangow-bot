@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- While a bot works in a thread, its avatar next to the working line now buzzes left and right on web, desktop and mobile, and stays still when reduced motion is on.
 - A routine woken by a webhook, Git event or message now shows up in the bot's thread on web, desktop and mobile as its own collapsible run card, one per routine, instead of posting its instructions and the raw payload as a message from you; like other background routines, it only notifies you when "Notify me on every run" is on.
 
 #### Fixed

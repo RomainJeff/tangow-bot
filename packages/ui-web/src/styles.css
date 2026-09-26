@@ -299,6 +299,20 @@
   opacity: 1;
 }
 
+/* A working bot buzzes: a steady, linear left-right jitter. */
+@keyframes rk-buzz {
+  from {
+    transform: translateX(-1.5px) rotate(-2deg);
+  }
+  to {
+    transform: translateX(1.5px) rotate(2deg);
+  }
+}
+
+.rk-buzz {
+  animation: rk-buzz 120ms linear infinite alternate;
+}
+
 @keyframes rakazo-eyes-idle-0 {
   0%,
   32%,
@@ -437,6 +451,7 @@
   .rk-bar,
   .rk-dot,
   .rk-halo,
+  .rk-buzz,
   .rk-shimmer {
     animation: none;
   }
