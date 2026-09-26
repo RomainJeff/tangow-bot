@@ -9,5 +9,8 @@
     "html": "<a href=\"/continuer-mes-achats\">Continuer mes achats</a><button>Valider la commande</button>"
   },
   "target": "valider la commande",
-  "expected": "none"
+  "expected": {
+    "role": "button",
+    "name": "Valider la commande"
+  }
 }

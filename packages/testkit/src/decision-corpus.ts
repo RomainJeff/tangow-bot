@@ -16,6 +16,7 @@ import {
   FakeBrowserProvider,
   FakeDecisionProvider,
   pageBrowserSessionKey,
+  TARGET_ROLES,
 } from "@rakazo/adapters";
 
 export type CorpusLang = "fr" | "en";
@@ -79,11 +80,6 @@ export const DECISION_CORPUS_DIR = fileURLToPath(
 const OUTCOME_CLASSES: readonly OutcomeClass[] = ["landed", "dialog", "error", "auth", "unchanged"];
 const TARGET_FAMILIES: readonly TargetFamily[] = ["distractors", "density", "forms", "none"];
 /** Mirrors the roles `browser_act` offers per kind; the builder fails loudly if they drift. */
-const ACTION_ROLES = {
-  click: ["link", "tab"],
-  fill: ["textbox", "searchbox", "combobox"],
-  type: ["textbox", "searchbox", "combobox"],
-} as const;
 /** Placeholder text for fill/type; the outcome request never carries field values. */
 const FILL_TEXT = "exemple";
 
@@ -121,10 +117,10 @@ export function parseDecisionCase(value: unknown): DecisionCase {
     const action = raw.action as Record<string, unknown>;
     assert.ok(action && typeof action === "object", `${where}: action`);
     assert.deepEqual(Object.keys(action).sort(), ["kind", "name", "role"], `${where}: action`);
-    const kind = action.kind as keyof typeof ACTION_ROLES;
-    assert.ok(kind in ACTION_ROLES, `${where}: action.kind`);
+    const kind = action.kind as keyof typeof TARGET_ROLES;
+    assert.ok(kind in TARGET_ROLES, `${where}: action.kind`);
     assert.ok(
-      (ACTION_ROLES[kind] as readonly string[]).includes(String(action.role)),
+      TARGET_ROLES[kind].has(String(action.role)),
       `${where}: action.role must be a role browser_act targets for ${kind}`,
     );
     assert.ok(typeof action.name === "string" && action.name, `${where}: action.name`);
@@ -153,7 +149,7 @@ export function parseDecisionCase(value: unknown): DecisionCase {
     assert.ok(expected && typeof expected === "object", `${where}: expected`);
     assert.deepEqual(Object.keys(expected).sort(), ["name", "role"], `${where}: expected`);
     assert.ok(
-      (ACTION_ROLES[raw.kind] as readonly string[]).includes(String(expected.role)),
+      TARGET_ROLES[raw.kind as keyof typeof TARGET_ROLES].has(String(expected.role)),
       `${where}: expected.role is never offered for ${raw.kind}`,
     );
   }

@@ -65,7 +65,11 @@ describe("decision corpus", () => {
         target: {
           type: "choice",
           instructions: "Which element matches: la facture? Answer none if no listed element does.",
-          options: { e2: 'link "Télécharger"', none: "no listed element matches" },
+          options: {
+            e1: 'button "Télécharger"',
+            e2: 'link "Télécharger"',
+            none: "no listed element matches",
+          },
         },
       },
     });

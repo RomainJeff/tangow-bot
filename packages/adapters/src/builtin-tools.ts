@@ -29,7 +29,7 @@ export function withChattyReplies(tools: ConnectorTool[]): ConnectorTool[] {
 }
 
 const BROWSER_TARGET_DESCRIPTION =
-  " Without reading the page, you may give target (a short description of a link, tab, or text field) instead of ref; buttons always need a ref. Put ref actions before target actions: each target takes a fresh snapshot, so later refs are stale. If the result has needsRef, pick a ref from elements or candidates. A result may include outcome; on auth, request takeover instead of retrying; on unchanged, inspect before acting again.";
+  " Without reading the page, you may give target (a short description of a link, tab, button, or text field) instead of ref. Put ref actions before target actions: each target takes a fresh snapshot, so later refs are stale. If the result has needsRef, pick a ref from elements or candidates. A result may include outcome; on auth, request takeover instead of retrying; on unchanged, inspect before acting again.";
 
 /** Only runs with a decision provider see `target`; the base schema stays unchanged. */
 export function withBrowserTargets(tools: ConnectorTool[]): ConnectorTool[] {

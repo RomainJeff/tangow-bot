@@ -9,5 +9,8 @@
     "html": "<a href=\"/continue-shopping\">Continue shopping</a><button>Place order</button>"
   },
   "target": "place the order",
-  "expected": "none"
+  "expected": {
+    "role": "button",
+    "name": "Place order"
+  }
 }

@@ -1,6 +1,8 @@
 # 04: Choix de cible pour `browser_act` par `choice` sur les refs du snapshot
 
 > **Livré (lot 1, 2026-09-26)** dans `packages/adapters/src/browser-tools.ts`, `builtin-tools.ts` (`withBrowserTargets`) et `executor.ts`, avec des écarts listés en fin de ticket — le principal : `target` est restreint par **rôle** de candidat, jamais de bouton.
+>
+> **Mise à jour 2026-09-26 (décision du mainteneur, après un test réel)** : les boutons sont désormais offerts pour `click` (`link`, `tab`, `button`), avec le même seuil de 0,80 sur la probabilité choisie. Motif : un parcours d'onboarding réel (evaneos.fr/travel-plans) ne contenait que 7 boutons, et la restriction rendait Jev inutilisable. `browser_act` étant déjà exempté d'approbation, un bouton cliqué par `ref` n'était pas mieux protégé. L'instruction système met aussi les outils de page en premier pour toute page web.
 
 **What to build:** Le modèle peut dire « clique le ~~bouton~~ lien Télécharger CSV » sans avoir lu la page. `browser_act` accepte, pour chaque action, soit `ref` (inchangé, déterministe, sans fournisseur), soit `target` : une description courte de l'élément visé. Quand `target` est présent, le backend prend un snapshot, pose au fournisseur de décision un `choice` sur les refs courants plus une option réservée `none`, exécute l'action sur le ref choisi si la confiance passe le seuil, et sinon rend les candidats au modèle, qui choisit un ref lui-même comme aujourd'hui. ~~Le modèle principal ne lit plus 12 000 caractères de page pour cliquer un bouton ; il les lit seulement quand la décision n'est pas nette.~~ *Écart : les boutons ne sont jamais proposés ; et un retour `needsRef` contient le snapshot complet (`tree`, donc le texte de page), que le modèle relit alors.*
 

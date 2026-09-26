@@ -181,7 +181,7 @@ describe("browser_act targets", () => {
     expect(await act(0.79, 0.79)).toBe(0);
   });
 
-  it("offers only reversible roles for the action kind, never buttons", async () => {
+  it("offers only the roles each action kind can use", async () => {
     const browser = await openPage(`${downloads}<button role="tab">Settings</button>`);
     const { provider, options } = targets([chooseByName("Download", 0.9)]);
     await browserActFromTool(
@@ -196,6 +196,7 @@ describe("browser_act targets", () => {
       'link "Download"',
       'link "Download CSV"',
       'link "Download all"',
+      'button "Delete report"',
       'tab "Settings"',
       "no listed element matches",
     ]);
@@ -217,14 +218,14 @@ describe("browser_act targets", () => {
     expect(browser.acts.at(-1)?.actions[0]).toMatchObject({ kind: "fill", text: "Q3" });
   });
 
-  it("returns needsRef without asking when no reversible control exists", async () => {
-    const browser = await openPage("<button>Pay now</button>");
+  it("returns needsRef without asking when no control fits the action kind", async () => {
+    const browser = await openPage('<input type="checkbox" aria-label="Agree" />');
     const { provider, options } = targets([]);
     const result = await browserActFromTool(
       browser,
       computer,
       context,
-      { actions: [{ kind: "click", target: "pay now" }] },
+      { actions: [{ kind: "click", target: "agree" }] },
       options,
     );
     expect(result).toMatchObject({ ok: false, needsRef: true });

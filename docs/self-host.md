@@ -259,7 +259,7 @@ OpenRouter API key, and under **Advanced** a base URL for a compatible proxy and
 `typesafe/jev-1.13`, pinned rather than the `~typesafe/jev-latest` alias). The key is stored for the
 Space and is separate from `OPENROUTER_API_KEY` and model connections, so page data only leaves
 once a Space owner connects it. No environment variable is read.
-With a connection, bots can ask `browser_act` for a link, tab, or text field by description (see
+With a connection, bots can ask `browser_act` for a link, tab, button, or text field by description (see
 [computer runtime](computer-runtime.md)), and the same provider then classifies what the action did
 from the controls that changed; without one nothing changes. Page URLs, titles, and element names
 go to that provider. Loopback, private-network, and plain-HTTP base URLs

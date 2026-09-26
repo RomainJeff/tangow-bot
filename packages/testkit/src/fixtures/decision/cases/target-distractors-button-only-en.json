@@ -9,5 +9,8 @@
     "html": "<h1>Settings</h1><a href=\"/profile\">Profile</a><a href=\"/notifications\">Notifications</a><button>Delete account</button>"
   },
   "target": "delete the account",
-  "expected": "none"
+  "expected": {
+    "role": "button",
+    "name": "Delete account"
+  }
 }

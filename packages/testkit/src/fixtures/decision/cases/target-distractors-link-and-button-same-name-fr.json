@@ -8,7 +8,7 @@
     "title": "Commande 1042",
     "html": "<h1>Commande 1042</h1><button>Télécharger la facture</button><p>Ou</p><a href=\"/telecharger-la-facture\">Télécharger la facture</a><a href=\"/suivre-le-colis\">Suivre le colis</a>"
   },
-  "target": "télécharger la facture",
+  "target": "le lien pour télécharger la facture",
   "expected": {
     "role": "link",
     "name": "Télécharger la facture"

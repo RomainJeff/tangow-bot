@@ -50,11 +50,11 @@ const OUTCOME_OPTIONS = {
   unchanged: "nothing visible changed",
 } as const;
 /**
- * v1 targets only reversible controls: navigation for click, text entry for
- * fill/type. Buttons and submits always need an explicit ref.
+ * Controls each action kind can target: links, tabs and buttons for click, text entry
+ * for fill/type. The probability gate is the guard, as for any clicked ref.
  */
-const TARGET_ROLES: Record<BrowserActKind, ReadonlySet<string>> = {
-  click: new Set(["link", "tab"]),
+export const TARGET_ROLES: Record<BrowserActKind, ReadonlySet<string>> = {
+  click: new Set(["link", "tab", "button"]),
   fill: new Set(["textbox", "searchbox", "combobox"]),
   type: new Set(["textbox", "searchbox", "combobox"]),
 };

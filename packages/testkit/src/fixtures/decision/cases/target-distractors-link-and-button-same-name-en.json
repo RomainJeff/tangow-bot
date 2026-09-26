@@ -8,7 +8,7 @@
     "title": "Order 1042",
     "html": "<h1>Order 1042</h1><button>Download invoice</button><p>Or</p><a href=\"/download-invoice\">Download invoice</a><a href=\"/track-parcel\">Track parcel</a>"
   },
-  "target": "download the invoice",
+  "target": "the download invoice link",
   "expected": {
     "role": "link",
     "name": "Download invoice"
