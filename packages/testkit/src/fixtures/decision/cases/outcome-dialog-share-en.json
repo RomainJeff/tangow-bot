@@ -1,0 +1,21 @@
+{
+  "id": "outcome-dialog-share-en",
+  "family": "outcome",
+  "lang": "en",
+  "before": {
+    "url": "https://shop.test/article",
+    "title": "Article",
+    "html": "<a href=\"#share\">Share</a><a href=\"/comments\">Comments</a>"
+  },
+  "after": {
+    "url": "https://shop.test/article",
+    "title": "Article",
+    "html": "<a href=\"#share\">Share</a><a href=\"/comments\">Comments</a><div role=\"dialog\"><button>Copy link</button><button>Close</button></div>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Share"
+  },
+  "expected": "dialog"
+}

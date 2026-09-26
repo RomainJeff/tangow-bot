@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-select-country-en",
+  "family": "forms",
+  "lang": "en",
+  "kind": "fill",
+  "page": {
+    "url": "https://shop.test/select-country",
+    "title": "Shipping",
+    "html": "<label for=\"c\">Country</label><select id=\"c\" aria-label=\"Country\"><option>France</option><option>Belgium</option></select><label for=\"l\">Language</label><select id=\"l\" aria-label=\"Language\"><option>English</option></select><label for=\"v\">City</label><input id=\"v\" />"
+  },
+  "target": "the shipping country",
+  "expected": {
+    "role": "combobox",
+    "name": "Country"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "outcome-landed-same-url-tab-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "boundary": true,
+  "before": {
+    "url": "https://boutique.test/tente",
+    "title": "Tente",
+    "html": "<a role=\"tab\" href=\"#apercu\">Aperçu</a><a role=\"tab\" href=\"#details\">Détails</a><a href=\"/guide-des-tailles\">Guide des tailles</a>"
+  },
+  "after": {
+    "url": "https://boutique.test/tente",
+    "title": "Tente",
+    "html": "<a role=\"tab\" href=\"#apercu\">Aperçu</a><a role=\"tab\" href=\"#details\">Détails</a><a href=\"/fiche-technique\">Fiche technique</a><a href=\"/notice-pdf\">Notice PDF</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "tab",
+    "name": "Détails"
+  },
+  "expected": "landed"
+}

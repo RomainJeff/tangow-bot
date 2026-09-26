@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-textarea-message-en",
+  "family": "forms",
+  "lang": "en",
+  "kind": "type",
+  "page": {
+    "url": "https://shop.test/textarea-message",
+    "title": "Contact us",
+    "html": "<label for=\"o\">Subject</label><input id=\"o\" /><label for=\"m\">Message</label><textarea id=\"m\"></textarea><button>Send</button>"
+  },
+  "target": "the message body",
+  "expected": {
+    "role": "textbox",
+    "name": "Message"
+  }
+}

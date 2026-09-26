@@ -1,0 +1,22 @@
+{
+  "id": "outcome-landed-same-url-tab-en",
+  "family": "outcome",
+  "lang": "en",
+  "boundary": true,
+  "before": {
+    "url": "https://shop.test/tent",
+    "title": "Tent",
+    "html": "<a role=\"tab\" href=\"#overview\">Overview</a><a role=\"tab\" href=\"#details\">Details</a><a href=\"/size-guide\">Size guide</a>"
+  },
+  "after": {
+    "url": "https://shop.test/tent",
+    "title": "Tent",
+    "html": "<a role=\"tab\" href=\"#overview\">Overview</a><a role=\"tab\" href=\"#details\">Details</a><a href=\"/spec-sheet\">Spec sheet</a><a href=\"/manual-pdf\">Manual PDF</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "tab",
+    "name": "Details"
+  },
+  "expected": "landed"
+}

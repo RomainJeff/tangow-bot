@@ -1,0 +1,16 @@
+{
+  "id": "target-density-20-first-en",
+  "family": "density",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/catalogue-20",
+    "title": "Catalog",
+    "html": "<h1>Catalog</h1><ul><li><a href=\"/p/waterproof-jacket\">Waterproof jacket</a></li><li><a href=\"/p/waterproof-backpack\">Waterproof backpack</a></li><li><a href=\"/p/waterproof-tent\">Waterproof tent</a></li><li><a href=\"/p/waterproof-headlamp\">Waterproof headlamp</a></li><li><a href=\"/p/waterproof-bottle\">Waterproof bottle</a></li><li><a href=\"/p/waterproof-beanie\">Waterproof beanie</a></li><li><a href=\"/p/waterproof-gloves\">Waterproof gloves</a></li><li><a href=\"/p/waterproof-socks\">Waterproof socks</a></li><li><a href=\"/p/waterproof-shorts\">Waterproof shorts</a></li><li><a href=\"/p/waterproof-trousers\">Waterproof trousers</a></li><li><a href=\"/p/light-jacket\">Light jacket</a></li><li><a href=\"/p/light-backpack\">Light backpack</a></li><li><a href=\"/p/light-tent\">Light tent</a></li><li><a href=\"/p/light-headlamp\">Light headlamp</a></li><li><a href=\"/p/light-bottle\">Light bottle</a></li><li><a href=\"/p/light-beanie\">Light beanie</a></li><li><a href=\"/p/light-gloves\">Light gloves</a></li><li><a href=\"/p/light-socks\">Light socks</a></li><li><a href=\"/p/light-shorts\">Light shorts</a></li><li><a href=\"/p/light-trousers\">Light trousers</a></li></ul>"
+  },
+  "target": "the \"Waterproof jacket\" product page",
+  "expected": {
+    "role": "link",
+    "name": "Waterproof jacket"
+  }
+}

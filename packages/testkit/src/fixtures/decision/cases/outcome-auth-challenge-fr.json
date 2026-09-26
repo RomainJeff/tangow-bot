@@ -1,0 +1,21 @@
+{
+  "id": "outcome-auth-challenge-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "before": {
+    "url": "https://boutique.test/",
+    "title": "Accueil",
+    "html": "<a href=\"/recherche\">Rechercher</a><a href=\"/aide\">Aide</a>"
+  },
+  "after": {
+    "url": "https://boutique.test/verification",
+    "title": "Vérification",
+    "html": "<input type=\"checkbox\" aria-label=\"Je ne suis pas un robot\"/><button>Vérifier</button>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Rechercher"
+  },
+  "expected": "auth"
+}

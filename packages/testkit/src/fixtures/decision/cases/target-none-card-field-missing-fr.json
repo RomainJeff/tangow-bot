@@ -1,0 +1,13 @@
+{
+  "id": "target-none-card-field-missing-fr",
+  "family": "none",
+  "lang": "fr",
+  "kind": "fill",
+  "page": {
+    "url": "https://boutique.test/card-field-missing",
+    "title": "Livraison",
+    "html": "<label for=\"n\">Nom</label><input id=\"n\" /><label for=\"a\">Adresse</label><input id=\"a\" />"
+  },
+  "target": "le numéro de carte bancaire",
+  "expected": "none"
+}

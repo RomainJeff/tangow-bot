@@ -1,0 +1,17 @@
+{
+  "id": "target-cross-link-and-button-same-name-en",
+  "family": "distractors",
+  "lang": "en",
+  "targetLang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/link-and-button-same-name",
+    "title": "Order 1042",
+    "html": "<h1>Order 1042</h1><button>Download invoice</button><p>Or</p><a href=\"/download-invoice\">Download invoice</a><a href=\"/track-parcel\">Track parcel</a>"
+  },
+  "target": "télécharger la facture",
+  "expected": {
+    "role": "link",
+    "name": "Download invoice"
+  }
+}

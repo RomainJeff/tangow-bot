@@ -1,0 +1,13 @@
+{
+  "id": "target-none-only-button-action-fr",
+  "family": "none",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/only-button-action",
+    "title": "Panier",
+    "html": "<a href=\"/continuer-mes-achats\">Continuer mes achats</a><button>Valider la commande</button>"
+  },
+  "target": "valider la commande",
+  "expected": "none"
+}

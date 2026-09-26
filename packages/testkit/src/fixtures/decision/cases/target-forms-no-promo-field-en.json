@@ -1,0 +1,13 @@
+{
+  "id": "target-forms-no-promo-field-en",
+  "family": "forms",
+  "lang": "en",
+  "kind": "fill",
+  "page": {
+    "url": "https://shop.test/no-promo-field",
+    "title": "Cart",
+    "html": "<label for=\"n\">Name</label><input id=\"n\" /><label for=\"e\">Email</label><input id=\"e\" /><button>Checkout</button>"
+  },
+  "target": "the promo code field",
+  "expected": "none"
+}

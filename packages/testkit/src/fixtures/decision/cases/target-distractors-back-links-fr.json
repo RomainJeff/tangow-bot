@@ -1,0 +1,16 @@
+{
+  "id": "target-distractors-back-links-fr",
+  "family": "distractors",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/back-links",
+    "title": "Chaussures de trail",
+    "html": "<a href=\"/r\">Retour aux résultats</a><a href=\"/\">Retour à l'accueil</a><button>Retour</button><a href=\"/ajouter-aux-favoris\">Ajouter aux favoris</a>"
+  },
+  "target": "revenir aux résultats de recherche",
+  "expected": {
+    "role": "link",
+    "name": "Retour aux résultats"
+  }
+}

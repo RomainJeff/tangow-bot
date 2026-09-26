@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-dates-fr",
+  "family": "forms",
+  "lang": "fr",
+  "kind": "fill",
+  "page": {
+    "url": "https://boutique.test/dates",
+    "title": "Réserver",
+    "html": "<label for=\"d1\">Date d'arrivée</label><input id=\"d1\" type=\"date\"/><label for=\"d2\">Date de départ</label><input id=\"d2\" type=\"date\"/><label for=\"t\">Voyageurs</label><input id=\"t\" type=\"number\"/>"
+  },
+  "target": "la date de départ",
+  "expected": {
+    "role": "textbox",
+    "name": "Date de départ"
+  }
+}

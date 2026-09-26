@@ -1,0 +1,13 @@
+{
+  "id": "target-none-only-button-action-en",
+  "family": "none",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/only-button-action",
+    "title": "Cart",
+    "html": "<a href=\"/continue-shopping\">Continue shopping</a><button>Place order</button>"
+  },
+  "target": "place the order",
+  "expected": "none"
+}

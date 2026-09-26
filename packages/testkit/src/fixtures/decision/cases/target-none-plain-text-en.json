@@ -1,0 +1,13 @@
+{
+  "id": "target-none-plain-text-en",
+  "family": "none",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/plain-text",
+    "title": "Summary",
+    "html": "<p>Total price: $42</p><a href=\"/edit-cart\">Edit cart</a>"
+  },
+  "target": "the total price",
+  "expected": "none"
+}

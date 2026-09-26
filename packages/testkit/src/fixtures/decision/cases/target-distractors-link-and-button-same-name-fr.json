@@ -1,0 +1,16 @@
+{
+  "id": "target-distractors-link-and-button-same-name-fr",
+  "family": "distractors",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/link-and-button-same-name",
+    "title": "Commande 1042",
+    "html": "<h1>Commande 1042</h1><button>Télécharger la facture</button><p>Ou</p><a href=\"/telecharger-la-facture\">Télécharger la facture</a><a href=\"/suivre-le-colis\">Suivre le colis</a>"
+  },
+  "target": "télécharger la facture",
+  "expected": {
+    "role": "link",
+    "name": "Télécharger la facture"
+  }
+}

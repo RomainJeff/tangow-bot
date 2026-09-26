@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-label-email-en",
+  "family": "forms",
+  "lang": "en",
+  "kind": "fill",
+  "page": {
+    "url": "https://shop.test/label-email",
+    "title": "Create account",
+    "html": "<label for=\"n\">Last name</label><input id=\"n\" /><label for=\"p\">First name</label><input id=\"p\" /><label for=\"e\">Email</label><input id=\"e\" type=\"email\"/><button>Create</button>"
+  },
+  "target": "the email field",
+  "expected": {
+    "role": "textbox",
+    "name": "Email"
+  }
+}

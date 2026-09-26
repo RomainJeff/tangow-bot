@@ -1,0 +1,17 @@
+{
+  "id": "target-cross-back-links-en",
+  "family": "distractors",
+  "lang": "en",
+  "targetLang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/back-links",
+    "title": "Trail shoes",
+    "html": "<a href=\"/r\">Back to results</a><a href=\"/\">Back to home</a><button>Back</button><a href=\"/add-to-wishlist\">Add to wishlist</a>"
+  },
+  "target": "revenir aux résultats de recherche",
+  "expected": {
+    "role": "link",
+    "name": "Back to results"
+  }
+}

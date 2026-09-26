@@ -11,6 +11,7 @@ model can demonstrate that it chooses a useful action for a natural request.
 | Pi product journey | API, saved model connection, Postgres, executor, Pi | Model endpoint, sandbox, connectors | `pnpm test:integration` |
 | Computer replay | Pi, browser tool handlers, page state | Model endpoint, browser and sandbox | `pnpm test` |
 | Docker computer replay | Pi, supervisor, Chromium, page helper, downloads and files | Model endpoint, local fixture website | `pnpm test:computer-replay` |
+| Browser decision calibration | `browser_act` target and verify requests, decision validation | Recorded decision answers, fixture pages | `pnpm test:decision-calibration` |
 | Agent quality | Product API, Postgres, executor, Pi, real model | Sandbox and connected services | `pnpm test:evals --live ...` |
 | Vision acceptance | Product API, Pi, real vision model, Box or E2B desktop | Fixture website | `pnpm test:computer` |
 
@@ -90,6 +91,40 @@ Box currently lacks the page-browser capability used here, so this capture uses
 local Docker. Box remains the default for the separate screenshot/coordinate
 acceptance journey. One successful captured run demonstrates replay coverage;
 it does not measure the live model's reliability.
+
+## Browser decision calibration
+
+`browser_act` can resolve a `target` and classify what its action did through an
+optional decision provider. Both steps compare a probability with a starting
+threshold. The labeled corpus in `packages/testkit/src/fixtures/decision/`
+turns fixture pages into the exact requests `browser_act` sends, and the
+offline evaluation replays recorded answers keyed by a hash of each request:
+
+```bash
+pnpm test:decision-calibration                        # every committed recording
+pnpm test:decision-calibration --recording=<file.json>
+```
+
+Without a recording it says so and exits successfully. It never calls the
+network. A case whose request changed since it was recorded is reported as
+stale and not measured.
+
+To record real answers manually (paid, one request per case):
+
+```bash
+pnpm test:decision-calibration \
+  --record=packages/testkit/src/fixtures/decision/recordings/<model>-<YYYY-MM-DD>.json \
+  [--model=typesafe/jev-1.13]
+```
+
+The OpenRouter key is read from stdin (hidden when typed in a terminal, else the
+first line of the piped input). It is never read from an environment variable
+or an argument, and never written. The recording keeps answers, the returned
+model and usage only; review it and commit it with its date. The recorder
+refuses to overwrite a file and replays the new recording right after. Once a
+real recording is committed, `pnpm test` checks the production thresholds
+against it. A recording holds for one model id and for the in-process page
+session's element names, which differ slightly from the Chrome helper's.
 
 ## Live computer acceptance
 

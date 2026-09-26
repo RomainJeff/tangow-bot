@@ -1,0 +1,13 @@
+{
+  "id": "target-distractors-button-only-en",
+  "family": "distractors",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/button-only",
+    "title": "Account settings",
+    "html": "<h1>Settings</h1><a href=\"/profile\">Profile</a><a href=\"/notifications\">Notifications</a><button>Delete account</button>"
+  },
+  "target": "delete the account",
+  "expected": "none"
+}

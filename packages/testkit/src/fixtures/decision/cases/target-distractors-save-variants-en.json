@@ -1,0 +1,16 @@
+{
+  "id": "target-distractors-save-variants-en",
+  "family": "distractors",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/save-variants",
+    "title": "Edit article",
+    "html": "<h1>Edit article</h1><a href=\"/save\">Save</a><a href=\"/save-and-close\">Save and close</a><a href=\"/save-as-draft\">Save as draft</a><button>Cancel</button>"
+  },
+  "target": "the Save as draft link",
+  "expected": {
+    "role": "link",
+    "name": "Save as draft"
+  }
+}

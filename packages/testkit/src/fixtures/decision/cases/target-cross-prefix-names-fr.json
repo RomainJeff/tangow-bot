@@ -1,0 +1,17 @@
+{
+  "id": "target-cross-prefix-names-fr",
+  "family": "distractors",
+  "lang": "fr",
+  "targetLang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/prefix-names",
+    "title": "Mon compte",
+    "html": "<nav><a href=\"/commandes\">Commandes</a><a href=\"/commandes-en-cours\">Commandes en cours</a><a href=\"/commandes-archivees\">Commandes archivées</a><a href=\"/retours\">Retours</a></nav>"
+  },
+  "target": "archived orders",
+  "expected": {
+    "role": "link",
+    "name": "Commandes archivées"
+  }
+}

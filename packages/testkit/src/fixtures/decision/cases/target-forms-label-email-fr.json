@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-label-email-fr",
+  "family": "forms",
+  "lang": "fr",
+  "kind": "fill",
+  "page": {
+    "url": "https://boutique.test/label-email",
+    "title": "Créer un compte",
+    "html": "<label for=\"n\">Nom</label><input id=\"n\" /><label for=\"p\">Prénom</label><input id=\"p\" /><label for=\"e\">E-mail</label><input id=\"e\" type=\"email\"/><button>Créer</button>"
+  },
+  "target": "le champ e-mail",
+  "expected": {
+    "role": "textbox",
+    "name": "E-mail"
+  }
+}

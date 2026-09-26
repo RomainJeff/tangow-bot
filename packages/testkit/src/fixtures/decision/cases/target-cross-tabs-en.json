@@ -1,0 +1,17 @@
+{
+  "id": "target-cross-tabs-en",
+  "family": "distractors",
+  "lang": "en",
+  "targetLang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/tabs",
+    "title": "3-person tent",
+    "html": "<div role=\"tablist\"><a role=\"tab\" href=\"#overview\">Overview</a><a role=\"tab\" href=\"#details\">Details</a><a role=\"tab\" href=\"#reviews-12\">Reviews (12)</a></div><a href=\"/size-guide\">Size guide</a><a href=\"/customer-reviews-of-the-brand\">Customer reviews of the brand</a>"
+  },
+  "target": "l'onglet des avis",
+  "expected": {
+    "role": "tab",
+    "name": "Reviews (12)"
+  }
+}

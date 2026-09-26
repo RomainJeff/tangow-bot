@@ -1,0 +1,16 @@
+{
+  "id": "target-distractors-language-switcher-fr",
+  "family": "distractors",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/language-switcher",
+    "title": "Accueil",
+    "html": "<nav><a href=\"/nouveautes\">Nouveautés</a><a href=\"/promotions\">Promotions</a></nav><footer><a href=\"/en\">English</a><a href=\"/fr\">Français</a><a href=\"/de\">Deutsch</a></footer>"
+  },
+  "target": "passer le site en allemand",
+  "expected": {
+    "role": "link",
+    "name": "Deutsch"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "target-distractors-generic-read-more-en",
+  "family": "distractors",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/generic-read-more",
+    "title": "Help",
+    "html": "<h2>Shipping</h2><a href=\"/help/shipping\">Learn more</a><h2>Returns</h2><a href=\"/help/returns\">Learn more</a><h2>Payment</h2><a href=\"/help/payment\">Learn more</a><h2>Warranty</h2><a href=\"/help/warranty\">Learn more</a><h2>Loyalty</h2><a href=\"/help/loyalty\">Learn more</a>"
+  },
+  "target": "learn more about shipping",
+  "expected": "none"
+}

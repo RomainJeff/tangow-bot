@@ -1,0 +1,13 @@
+{
+  "id": "target-none-tab-missing-en",
+  "family": "none",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/tab-missing",
+    "title": "Project",
+    "html": "<div role=\"tablist\"><a role=\"tab\" href=\"#overview\">Overview</a><a role=\"tab\" href=\"#details\">Details</a></div>"
+  },
+  "target": "the Settings tab",
+  "expected": "none"
+}

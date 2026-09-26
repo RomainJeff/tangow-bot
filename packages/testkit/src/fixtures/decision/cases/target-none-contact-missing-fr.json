@@ -1,0 +1,13 @@
+{
+  "id": "target-none-contact-missing-fr",
+  "family": "none",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/contact-missing",
+    "title": "Produits",
+    "html": "<nav><a href=\"/tentes\">Tentes</a><a href=\"/sacs\">Sacs</a><a href=\"/lampes\">Lampes</a></nav>"
+  },
+  "target": "le lien Contactez-nous",
+  "expected": "none"
+}

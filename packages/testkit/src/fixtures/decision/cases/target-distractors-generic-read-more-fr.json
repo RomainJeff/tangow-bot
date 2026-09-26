@@ -1,0 +1,13 @@
+{
+  "id": "target-distractors-generic-read-more-fr",
+  "family": "distractors",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/generic-read-more",
+    "title": "Aide",
+    "html": "<h2>Livraison</h2><a href=\"/aide/livraison\">En savoir plus</a><h2>Retours</h2><a href=\"/aide/retours\">En savoir plus</a><h2>Paiement</h2><a href=\"/aide/paiement\">En savoir plus</a><h2>Garantie</h2><a href=\"/aide/garantie\">En savoir plus</a><h2>Fidélité</h2><a href=\"/aide/fidelite\">En savoir plus</a>"
+  },
+  "target": "en savoir plus sur la livraison",
+  "expected": "none"
+}

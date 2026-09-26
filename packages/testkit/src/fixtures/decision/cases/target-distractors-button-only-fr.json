@@ -1,0 +1,13 @@
+{
+  "id": "target-distractors-button-only-fr",
+  "family": "distractors",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/button-only",
+    "title": "Paramètres du compte",
+    "html": "<h1>Paramètres</h1><a href=\"/profil\">Profil</a><a href=\"/notifications\">Notifications</a><button>Supprimer le compte</button>"
+  },
+  "target": "supprimer le compte",
+  "expected": "none"
+}

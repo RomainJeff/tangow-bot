@@ -1,0 +1,21 @@
+{
+  "id": "outcome-error-page-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "before": {
+    "url": "https://boutique.test/commande",
+    "title": "Commande 1042",
+    "html": "<a href=\"/voir-la-facture\">Voir la facture</a><a href=\"/suivre-le-colis\">Suivre le colis</a>"
+  },
+  "after": {
+    "url": "https://boutique.test/erreur",
+    "title": "Erreur 500 - Service indisponible",
+    "html": "<a href=\"/commande\">Réessayer</a><a href=\"/\">Retour à l'accueil</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Voir la facture"
+  },
+  "expected": "error"
+}

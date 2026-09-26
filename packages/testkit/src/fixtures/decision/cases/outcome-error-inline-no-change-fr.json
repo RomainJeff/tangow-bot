@@ -1,0 +1,22 @@
+{
+  "id": "outcome-error-inline-no-change-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "boundary": true,
+  "before": {
+    "url": "https://boutique.test/inscription",
+    "title": "Inscription",
+    "html": "<label for=\"e\">E-mail</label><input id=\"e\" /><button>Continuer</button>"
+  },
+  "after": {
+    "url": "https://boutique.test/inscription",
+    "title": "Inscription",
+    "html": "<label for=\"e\">E-mail</label><input id=\"e\" /><p>Adresse e-mail invalide</p><button>Continuer</button>"
+  },
+  "action": {
+    "kind": "fill",
+    "role": "textbox",
+    "name": "E-mail"
+  },
+  "expected": "error"
+}

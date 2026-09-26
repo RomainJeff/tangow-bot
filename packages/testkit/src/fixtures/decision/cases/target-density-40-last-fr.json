@@ -1,0 +1,16 @@
+{
+  "id": "target-density-40-last-fr",
+  "family": "density",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/catalogue-40",
+    "title": "Catalogue",
+    "html": "<h1>Catalogue</h1><ul><li><a href=\"/p/veste-impermeable\">Veste imperméable</a></li><li><a href=\"/p/sac-impermeable\">Sac imperméable</a></li><li><a href=\"/p/tente-impermeable\">Tente imperméable</a></li><li><a href=\"/p/lampe-impermeable\">Lampe imperméable</a></li><li><a href=\"/p/gourde-impermeable\">Gourde imperméable</a></li><li><a href=\"/p/bonnet-impermeable\">Bonnet imperméable</a></li><li><a href=\"/p/gants-impermeable\">Gants imperméable</a></li><li><a href=\"/p/chaussettes-impermeable\">Chaussettes imperméable</a></li><li><a href=\"/p/short-impermeable\">Short imperméable</a></li><li><a href=\"/p/pantalon-impermeable\">Pantalon imperméable</a></li><li><a href=\"/p/veste-legere\">Veste légère</a></li><li><a href=\"/p/sac-legere\">Sac légère</a></li><li><a href=\"/p/tente-legere\">Tente légère</a></li><li><a href=\"/p/lampe-legere\">Lampe légère</a></li><li><a href=\"/p/gourde-legere\">Gourde légère</a></li><li><a href=\"/p/bonnet-legere\">Bonnet légère</a></li><li><a href=\"/p/gants-legere\">Gants légère</a></li><li><a href=\"/p/chaussettes-legere\">Chaussettes légère</a></li><li><a href=\"/p/short-legere\">Short légère</a></li><li><a href=\"/p/pantalon-legere\">Pantalon légère</a></li><li><a href=\"/p/veste-compacte\">Veste compacte</a></li><li><a href=\"/p/sac-compacte\">Sac compacte</a></li><li><a href=\"/p/tente-compacte\">Tente compacte</a></li><li><a href=\"/p/lampe-compacte\">Lampe compacte</a></li><li><a href=\"/p/gourde-compacte\">Gourde compacte</a></li><li><a href=\"/p/bonnet-compacte\">Bonnet compacte</a></li><li><a href=\"/p/gants-compacte\">Gants compacte</a></li><li><a href=\"/p/chaussettes-compacte\">Chaussettes compacte</a></li><li><a href=\"/p/short-compacte\">Short compacte</a></li><li><a href=\"/p/pantalon-compacte\">Pantalon compacte</a></li><li><a href=\"/p/veste-isolante\">Veste isolante</a></li><li><a href=\"/p/sac-isolante\">Sac isolante</a></li><li><a href=\"/p/tente-isolante\">Tente isolante</a></li><li><a href=\"/p/lampe-isolante\">Lampe isolante</a></li><li><a href=\"/p/gourde-isolante\">Gourde isolante</a></li><li><a href=\"/p/bonnet-isolante\">Bonnet isolante</a></li><li><a href=\"/p/gants-isolante\">Gants isolante</a></li><li><a href=\"/p/chaussettes-isolante\">Chaussettes isolante</a></li><li><a href=\"/p/short-isolante\">Short isolante</a></li><li><a href=\"/p/pantalon-isolante\">Pantalon isolante</a></li></ul>"
+  },
+  "target": "la fiche produit « Pantalon isolante »",
+  "expected": {
+    "role": "link",
+    "name": "Pantalon isolante"
+  }
+}

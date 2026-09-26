@@ -1,0 +1,21 @@
+{
+  "id": "outcome-error-page-en",
+  "family": "outcome",
+  "lang": "en",
+  "before": {
+    "url": "https://shop.test/order",
+    "title": "Order 1042",
+    "html": "<a href=\"/view-invoice\">View invoice</a><a href=\"/track-parcel\">Track parcel</a>"
+  },
+  "after": {
+    "url": "https://shop.test/error",
+    "title": "Error 500 - Service unavailable",
+    "html": "<a href=\"/order\">Try again</a><a href=\"/\">Back to home</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "View invoice"
+  },
+  "expected": "error"
+}

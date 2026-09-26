@@ -1,0 +1,21 @@
+{
+  "id": "outcome-auth-login-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "before": {
+    "url": "https://boutique.test/",
+    "title": "Accueil",
+    "html": "<nav><a href=\"/mon-compte\">Mon compte</a><a href=\"/panier\">Panier</a></nav>"
+  },
+  "after": {
+    "url": "https://boutique.test/connexion",
+    "title": "Connexion",
+    "html": "<label for=\"e\">E-mail</label><input id=\"e\" /><label for=\"p\">Mot de passe</label><input id=\"p\" type=\"password\"/><button>Se connecter</button><a href=\"/mot-de-passe-oublie\">Mot de passe oublié ?</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Mon compte"
+  },
+  "expected": "auth"
+}

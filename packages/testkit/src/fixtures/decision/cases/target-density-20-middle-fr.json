@@ -1,0 +1,16 @@
+{
+  "id": "target-density-20-middle-fr",
+  "family": "density",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/catalogue-20",
+    "title": "Catalogue",
+    "html": "<h1>Catalogue</h1><ul><li><a href=\"/p/veste-impermeable\">Veste imperméable</a></li><li><a href=\"/p/sac-impermeable\">Sac imperméable</a></li><li><a href=\"/p/tente-impermeable\">Tente imperméable</a></li><li><a href=\"/p/lampe-impermeable\">Lampe imperméable</a></li><li><a href=\"/p/gourde-impermeable\">Gourde imperméable</a></li><li><a href=\"/p/bonnet-impermeable\">Bonnet imperméable</a></li><li><a href=\"/p/gants-impermeable\">Gants imperméable</a></li><li><a href=\"/p/chaussettes-impermeable\">Chaussettes imperméable</a></li><li><a href=\"/p/short-impermeable\">Short imperméable</a></li><li><a href=\"/p/pantalon-impermeable\">Pantalon imperméable</a></li><li><a href=\"/p/veste-legere\">Veste légère</a></li><li><a href=\"/p/sac-legere\">Sac légère</a></li><li><a href=\"/p/tente-legere\">Tente légère</a></li><li><a href=\"/p/lampe-legere\">Lampe légère</a></li><li><a href=\"/p/gourde-legere\">Gourde légère</a></li><li><a href=\"/p/bonnet-legere\">Bonnet légère</a></li><li><a href=\"/p/gants-legere\">Gants légère</a></li><li><a href=\"/p/chaussettes-legere\">Chaussettes légère</a></li><li><a href=\"/p/short-legere\">Short légère</a></li><li><a href=\"/p/pantalon-legere\">Pantalon légère</a></li></ul>"
+  },
+  "target": "la fiche produit « Veste légère »",
+  "expected": {
+    "role": "link",
+    "name": "Veste légère"
+  }
+}

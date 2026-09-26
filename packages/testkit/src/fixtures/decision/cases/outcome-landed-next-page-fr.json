@@ -1,0 +1,21 @@
+{
+  "id": "outcome-landed-next-page-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "before": {
+    "url": "https://boutique.test/r?p=1",
+    "title": "Résultats",
+    "html": "<a href=\"/veste-polaire\">Veste polaire</a><a href=\"/r?p=2\">Suivant</a>"
+  },
+  "after": {
+    "url": "https://boutique.test/r?p=2",
+    "title": "Résultats",
+    "html": "<a href=\"/gourde-isolante\">Gourde isolante</a><a href=\"/r?p=1\">Précédent</a><a href=\"/r?p=3\">Suivant</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Suivant"
+  },
+  "expected": "landed"
+}

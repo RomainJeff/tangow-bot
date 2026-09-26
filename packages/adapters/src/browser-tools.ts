@@ -26,16 +26,19 @@ const MAX_OPTION_NAME_CHARS = 120;
  * Starting value before offline calibration (ticket 06); not a user setting. Compared
  * with the chosen option's probability, not the answer's `confidence`, which measures
  * how peaked the whole distribution is (documented example: 0.75 for a 0.84 pick) and
- * is only logged.
+ * is only logged. Exported read-only for the calibration guard in `@rakazo/testkit`.
  */
-const TARGET_PROBABILITY_HIGH = 0.8;
+export const TARGET_PROBABILITY_HIGH = 0.8;
 const TARGET_DECISION_TIMEOUT_MS = 1_000;
 const TARGET_CANDIDATE_COUNT = 3;
 const NONE_OPTION = "none";
 /** Controls added or removed by an action, each way, sent to verify its outcome. */
 const MAX_OUTCOME_DIFF = 20;
-/** Starting value before offline calibration (ticket 06); below it the outcome is uncertain. */
-const OUTCOME_PROBABILITY_LOW = 0.5;
+/**
+ * Starting value before offline calibration (ticket 06); below it the outcome is uncertain.
+ * Exported read-only for the calibration guard in `@rakazo/testkit`.
+ */
+export const OUTCOME_PROBABILITY_LOW = 0.5;
 const OUTCOME_DECISION_TIMEOUT_MS = 1_000;
 const OUTCOME_OPTIONS = {
   landed: "the page changed as the action intended",

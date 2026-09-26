@@ -1,0 +1,21 @@
+{
+  "id": "outcome-unchanged-refresh-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "before": {
+    "url": "https://boutique.test/suivi",
+    "title": "Suivi du colis",
+    "html": "<a href=\"/suivi\">Actualiser</a><a href=\"/contacter-le-transporteur\">Contacter le transporteur</a>"
+  },
+  "after": {
+    "url": "https://boutique.test/suivi",
+    "title": "Suivi du colis",
+    "html": "<a href=\"/suivi\">Actualiser</a><a href=\"/contacter-le-transporteur\">Contacter le transporteur</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Actualiser"
+  },
+  "expected": "unchanged"
+}

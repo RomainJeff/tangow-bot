@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-placeholder-search-fr",
+  "family": "forms",
+  "lang": "fr",
+  "kind": "type",
+  "page": {
+    "url": "https://boutique.test/placeholder-search",
+    "title": "Accueil",
+    "html": "<input placeholder=\"Rechercher un produit\"/><a href=\"/promotions\">Promotions</a><footer><input placeholder=\"Votre e-mail pour la newsletter\"/></footer>"
+  },
+  "target": "la barre de recherche",
+  "expected": {
+    "role": "textbox",
+    "name": "Rechercher un produit"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "target-none-logout-missing-fr",
+  "family": "none",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/logout-missing",
+    "title": "Mon compte",
+    "html": "<nav><a href=\"/mon-compte\">Mon compte</a><a href=\"/mes-commandes\">Mes commandes</a></nav>"
+  },
+  "target": "se déconnecter",
+  "expected": "none"
+}

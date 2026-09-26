@@ -1,0 +1,22 @@
+{
+  "id": "outcome-dialog-cookie-banner-en",
+  "family": "outcome",
+  "lang": "en",
+  "boundary": true,
+  "before": {
+    "url": "https://shop.test/",
+    "title": "Home",
+    "html": "<nav><a href=\"/products\">Products</a><a href=\"/blog\">Blog</a></nav>"
+  },
+  "after": {
+    "url": "https://shop.test/products",
+    "title": "Products",
+    "html": "<nav><a href=\"/products\">Products</a><a href=\"/blog\">Blog</a></nav><a href=\"/3-person-tent\">3-person tent</a><button>Accept all</button><button>Reject all</button><button>Customize</button>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Products"
+  },
+  "expected": "dialog"
+}

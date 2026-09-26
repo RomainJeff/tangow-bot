@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-address-variants-en",
+  "family": "forms",
+  "lang": "en",
+  "kind": "fill",
+  "page": {
+    "url": "https://shop.test/address-variants",
+    "title": "Address",
+    "html": "<label for=\"a1\">Address</label><input id=\"a1\" /><label for=\"a2\">Address line 2</label><input id=\"a2\" /><label for=\"a3\">Billing address</label><input id=\"a3\" />"
+  },
+  "target": "the second address line",
+  "expected": {
+    "role": "textbox",
+    "name": "Address line 2"
+  }
+}

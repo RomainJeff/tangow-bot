@@ -1,0 +1,21 @@
+{
+  "id": "outcome-auth-challenge-en",
+  "family": "outcome",
+  "lang": "en",
+  "before": {
+    "url": "https://shop.test/",
+    "title": "Home",
+    "html": "<a href=\"/search\">Search</a><a href=\"/help\">Help</a>"
+  },
+  "after": {
+    "url": "https://shop.test/verify",
+    "title": "Verification",
+    "html": "<input type=\"checkbox\" aria-label=\"I am not a robot\"/><button>Verify</button>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Search"
+  },
+  "expected": "auth"
+}

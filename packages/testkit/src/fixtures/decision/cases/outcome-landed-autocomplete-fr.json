@@ -1,0 +1,22 @@
+{
+  "id": "outcome-landed-autocomplete-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "boundary": true,
+  "before": {
+    "url": "https://boutique.test/voyages",
+    "title": "Voyages",
+    "html": "<label for=\"d\">Destination</label><input id=\"d\" /><button>Rechercher</button>"
+  },
+  "after": {
+    "url": "https://boutique.test/voyages",
+    "title": "Voyages",
+    "html": "<label for=\"d\">Destination</label><input id=\"d\" /><ul role=\"listbox\"><a href=\"/v/lisbonne\">Lisbonne</a><a href=\"/v/lyon\">Lyon</a></ul><button>Rechercher</button>"
+  },
+  "action": {
+    "kind": "type",
+    "role": "textbox",
+    "name": "Destination"
+  },
+  "expected": "landed"
+}

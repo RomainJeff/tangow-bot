@@ -1,0 +1,16 @@
+{
+  "id": "target-distractors-pagination-en",
+  "family": "distractors",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/pagination",
+    "title": "Search results",
+    "html": "<a href=\"/rain-jacket\">Rain jacket</a><a href=\"/fleece-jacket\">Fleece jacket</a><nav><a href=\"/r?p=1\">Previous</a><a href=\"/r?p=1\">1</a><a href=\"/r?p=2\">2</a><a href=\"/r?p=3\">3</a><a href=\"/r?p=3\">Next</a></nav>"
+  },
+  "target": "the next page of results",
+  "expected": {
+    "role": "link",
+    "name": "Next"
+  }
+}

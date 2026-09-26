@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-aria-searchbox-fr",
+  "family": "forms",
+  "lang": "fr",
+  "kind": "type",
+  "page": {
+    "url": "https://boutique.test/aria-searchbox",
+    "title": "Centre d'aide",
+    "html": "<input role=\"searchbox\" aria-label=\"Rechercher dans l'aide\"/><label for=\"q\">Votre question</label><input id=\"q\" /><a href=\"/contact\">Contact</a>"
+  },
+  "target": "rechercher dans l'aide",
+  "expected": {
+    "role": "searchbox",
+    "name": "Rechercher dans l'aide"
+  }
+}

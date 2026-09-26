@@ -1,0 +1,22 @@
+{
+  "id": "outcome-error-inline-no-change-en",
+  "family": "outcome",
+  "lang": "en",
+  "boundary": true,
+  "before": {
+    "url": "https://shop.test/signup",
+    "title": "Sign up",
+    "html": "<label for=\"e\">Email</label><input id=\"e\" /><button>Continue</button>"
+  },
+  "after": {
+    "url": "https://shop.test/signup",
+    "title": "Sign up",
+    "html": "<label for=\"e\">Email</label><input id=\"e\" /><p>Invalid email address</p><button>Continue</button>"
+  },
+  "action": {
+    "kind": "fill",
+    "role": "textbox",
+    "name": "Email"
+  },
+  "expected": "error"
+}

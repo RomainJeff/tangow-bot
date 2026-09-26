@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-address-variants-fr",
+  "family": "forms",
+  "lang": "fr",
+  "kind": "fill",
+  "page": {
+    "url": "https://boutique.test/address-variants",
+    "title": "Adresse",
+    "html": "<label for=\"a1\">Adresse</label><input id=\"a1\" /><label for=\"a2\">Complément d'adresse</label><input id=\"a2\" /><label for=\"a3\">Adresse de facturation</label><input id=\"a3\" />"
+  },
+  "target": "le complément d'adresse",
+  "expected": {
+    "role": "textbox",
+    "name": "Complément d'adresse"
+  }
+}

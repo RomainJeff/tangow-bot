@@ -1,0 +1,17 @@
+{
+  "id": "target-cross-save-variants-fr",
+  "family": "distractors",
+  "lang": "fr",
+  "targetLang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/save-variants",
+    "title": "Modifier l'article",
+    "html": "<h1>Modifier l'article</h1><a href=\"/enregistrer\">Enregistrer</a><a href=\"/enregistrer-et-fermer\">Enregistrer et fermer</a><a href=\"/enregistrer-comme-brouillon\">Enregistrer comme brouillon</a><button>Annuler</button>"
+  },
+  "target": "the save as draft link",
+  "expected": {
+    "role": "link",
+    "name": "Enregistrer comme brouillon"
+  }
+}

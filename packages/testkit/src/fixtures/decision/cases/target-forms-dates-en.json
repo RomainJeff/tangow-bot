@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-dates-en",
+  "family": "forms",
+  "lang": "en",
+  "kind": "fill",
+  "page": {
+    "url": "https://shop.test/dates",
+    "title": "Book",
+    "html": "<label for=\"d1\">Check-in date</label><input id=\"d1\" type=\"date\"/><label for=\"d2\">Check-out date</label><input id=\"d2\" type=\"date\"/><label for=\"t\">Guests</label><input id=\"t\" type=\"number\"/>"
+  },
+  "target": "the check-out date",
+  "expected": {
+    "role": "textbox",
+    "name": "Check-out date"
+  }
+}

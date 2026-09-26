@@ -1,0 +1,13 @@
+{
+  "id": "target-forms-no-promo-field-fr",
+  "family": "forms",
+  "lang": "fr",
+  "kind": "fill",
+  "page": {
+    "url": "https://boutique.test/no-promo-field",
+    "title": "Panier",
+    "html": "<label for=\"n\">Nom</label><input id=\"n\" /><label for=\"e\">E-mail</label><input id=\"e\" /><button>Commander</button>"
+  },
+  "target": "le champ code promo",
+  "expected": "none"
+}

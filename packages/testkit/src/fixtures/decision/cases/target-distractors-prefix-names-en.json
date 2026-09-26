@@ -1,0 +1,16 @@
+{
+  "id": "target-distractors-prefix-names-en",
+  "family": "distractors",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/prefix-names",
+    "title": "My account",
+    "html": "<nav><a href=\"/orders\">Orders</a><a href=\"/open-orders\">Open orders</a><a href=\"/archived-orders\">Archived orders</a><a href=\"/returns\">Returns</a></nav>"
+  },
+  "target": "archived orders",
+  "expected": {
+    "role": "link",
+    "name": "Archived orders"
+  }
+}

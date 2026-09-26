@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-placeholder-search-en",
+  "family": "forms",
+  "lang": "en",
+  "kind": "type",
+  "page": {
+    "url": "https://shop.test/placeholder-search",
+    "title": "Home",
+    "html": "<input placeholder=\"Search products\"/><a href=\"/sale\">Sale</a><footer><input placeholder=\"Your email for the newsletter\"/></footer>"
+  },
+  "target": "the search bar",
+  "expected": {
+    "role": "textbox",
+    "name": "Search products"
+  }
+}

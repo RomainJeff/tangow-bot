@@ -1,0 +1,13 @@
+{
+  "id": "target-none-plain-text-fr",
+  "family": "none",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/plain-text",
+    "title": "Récapitulatif",
+    "html": "<p>Prix total : 42 €</p><a href=\"/modifier-le-panier\">Modifier le panier</a>"
+  },
+  "target": "le prix total",
+  "expected": "none"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "target-density-40-last-en",
+  "family": "density",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/catalogue-40",
+    "title": "Catalog",
+    "html": "<h1>Catalog</h1><ul><li><a href=\"/p/waterproof-jacket\">Waterproof jacket</a></li><li><a href=\"/p/waterproof-backpack\">Waterproof backpack</a></li><li><a href=\"/p/waterproof-tent\">Waterproof tent</a></li><li><a href=\"/p/waterproof-headlamp\">Waterproof headlamp</a></li><li><a href=\"/p/waterproof-bottle\">Waterproof bottle</a></li><li><a href=\"/p/waterproof-beanie\">Waterproof beanie</a></li><li><a href=\"/p/waterproof-gloves\">Waterproof gloves</a></li><li><a href=\"/p/waterproof-socks\">Waterproof socks</a></li><li><a href=\"/p/waterproof-shorts\">Waterproof shorts</a></li><li><a href=\"/p/waterproof-trousers\">Waterproof trousers</a></li><li><a href=\"/p/light-jacket\">Light jacket</a></li><li><a href=\"/p/light-backpack\">Light backpack</a></li><li><a href=\"/p/light-tent\">Light tent</a></li><li><a href=\"/p/light-headlamp\">Light headlamp</a></li><li><a href=\"/p/light-bottle\">Light bottle</a></li><li><a href=\"/p/light-beanie\">Light beanie</a></li><li><a href=\"/p/light-gloves\">Light gloves</a></li><li><a href=\"/p/light-socks\">Light socks</a></li><li><a href=\"/p/light-shorts\">Light shorts</a></li><li><a href=\"/p/light-trousers\">Light trousers</a></li><li><a href=\"/p/compact-jacket\">Compact jacket</a></li><li><a href=\"/p/compact-backpack\">Compact backpack</a></li><li><a href=\"/p/compact-tent\">Compact tent</a></li><li><a href=\"/p/compact-headlamp\">Compact headlamp</a></li><li><a href=\"/p/compact-bottle\">Compact bottle</a></li><li><a href=\"/p/compact-beanie\">Compact beanie</a></li><li><a href=\"/p/compact-gloves\">Compact gloves</a></li><li><a href=\"/p/compact-socks\">Compact socks</a></li><li><a href=\"/p/compact-shorts\">Compact shorts</a></li><li><a href=\"/p/compact-trousers\">Compact trousers</a></li><li><a href=\"/p/insulated-jacket\">Insulated jacket</a></li><li><a href=\"/p/insulated-backpack\">Insulated backpack</a></li><li><a href=\"/p/insulated-tent\">Insulated tent</a></li><li><a href=\"/p/insulated-headlamp\">Insulated headlamp</a></li><li><a href=\"/p/insulated-bottle\">Insulated bottle</a></li><li><a href=\"/p/insulated-beanie\">Insulated beanie</a></li><li><a href=\"/p/insulated-gloves\">Insulated gloves</a></li><li><a href=\"/p/insulated-socks\">Insulated socks</a></li><li><a href=\"/p/insulated-shorts\">Insulated shorts</a></li><li><a href=\"/p/insulated-trousers\">Insulated trousers</a></li></ul>"
+  },
+  "target": "the \"Insulated trousers\" product page",
+  "expected": {
+    "role": "link",
+    "name": "Insulated trousers"
+  }
+}

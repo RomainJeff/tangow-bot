@@ -1,0 +1,13 @@
+{
+  "id": "target-none-near-format-fr",
+  "family": "none",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/near-format",
+    "title": "Exports",
+    "html": "<a href=\"/telecharger-le-csv\">Télécharger le CSV</a><a href=\"/telecharger-le-xlsx\">Télécharger le XLSX</a>"
+  },
+  "target": "télécharger le PDF",
+  "expected": "none"
+}

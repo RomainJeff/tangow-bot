@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-phone-fr",
+  "family": "forms",
+  "lang": "fr",
+  "kind": "fill",
+  "page": {
+    "url": "https://boutique.test/phone",
+    "title": "Coordonnées",
+    "html": "<label for=\"t1\">Téléphone</label><input id=\"t1\" type=\"tel\"/><label for=\"t2\">Téléphone portable (facultatif)</label><input id=\"t2\" type=\"tel\"/>"
+  },
+  "target": "le numéro de portable",
+  "expected": {
+    "role": "textbox",
+    "name": "Téléphone portable (facultatif)"
+  }
+}

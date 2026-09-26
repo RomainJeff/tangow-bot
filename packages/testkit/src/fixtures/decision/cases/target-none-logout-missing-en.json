@@ -1,0 +1,13 @@
+{
+  "id": "target-none-logout-missing-en",
+  "family": "none",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/logout-missing",
+    "title": "My account",
+    "html": "<nav><a href=\"/my-account\">My account</a><a href=\"/my-orders\">My orders</a></nav>"
+  },
+  "target": "sign out",
+  "expected": "none"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "outcome-auth-login-en",
+  "family": "outcome",
+  "lang": "en",
+  "before": {
+    "url": "https://shop.test/",
+    "title": "Home",
+    "html": "<nav><a href=\"/my-account\">My account</a><a href=\"/cart\">Cart</a></nav>"
+  },
+  "after": {
+    "url": "https://shop.test/login",
+    "title": "Sign in",
+    "html": "<label for=\"e\">Email</label><input id=\"e\" /><label for=\"p\">Password</label><input id=\"p\" type=\"password\"/><button>Sign in</button><a href=\"/forgot-password\">Forgot password?</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "My account"
+  },
+  "expected": "auth"
+}

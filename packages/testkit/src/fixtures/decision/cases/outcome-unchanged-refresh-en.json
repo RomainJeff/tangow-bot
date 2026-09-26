@@ -1,0 +1,21 @@
+{
+  "id": "outcome-unchanged-refresh-en",
+  "family": "outcome",
+  "lang": "en",
+  "before": {
+    "url": "https://shop.test/tracking",
+    "title": "Parcel tracking",
+    "html": "<a href=\"/tracking\">Refresh</a><a href=\"/contact-the-carrier\">Contact the carrier</a>"
+  },
+  "after": {
+    "url": "https://shop.test/tracking",
+    "title": "Parcel tracking",
+    "html": "<a href=\"/tracking\">Refresh</a><a href=\"/contact-the-carrier\">Contact the carrier</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Refresh"
+  },
+  "expected": "unchanged"
+}

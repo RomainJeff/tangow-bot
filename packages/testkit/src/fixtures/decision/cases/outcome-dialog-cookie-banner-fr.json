@@ -1,0 +1,22 @@
+{
+  "id": "outcome-dialog-cookie-banner-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "boundary": true,
+  "before": {
+    "url": "https://boutique.test/",
+    "title": "Accueil",
+    "html": "<nav><a href=\"/produits\">Produits</a><a href=\"/blog\">Blog</a></nav>"
+  },
+  "after": {
+    "url": "https://boutique.test/produits",
+    "title": "Produits",
+    "html": "<nav><a href=\"/produits\">Produits</a><a href=\"/blog\">Blog</a></nav><a href=\"/tente-3-places\">Tente 3 places</a><button>Tout accepter</button><button>Tout refuser</button><button>Personnaliser</button>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Produits"
+  },
+  "expected": "dialog"
+}

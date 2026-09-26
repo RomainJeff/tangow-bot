@@ -1,0 +1,13 @@
+{
+  "id": "target-none-legal-missing-en",
+  "family": "none",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/legal-missing",
+    "title": "Home",
+    "html": "<a href=\"/\">Home</a>"
+  },
+  "target": "the legal notice",
+  "expected": "none"
+}

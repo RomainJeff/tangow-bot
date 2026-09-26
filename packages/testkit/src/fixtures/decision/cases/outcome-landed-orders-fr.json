@@ -1,0 +1,21 @@
+{
+  "id": "outcome-landed-orders-fr",
+  "family": "outcome",
+  "lang": "fr",
+  "before": {
+    "url": "https://boutique.test/compte",
+    "title": "Mon compte",
+    "html": "<nav><a href=\"/mes-commandes\">Mes commandes</a><a href=\"/mes-adresses\">Mes adresses</a></nav>"
+  },
+  "after": {
+    "url": "https://boutique.test/commandes",
+    "title": "Mes commandes",
+    "html": "<nav><a href=\"/mes-commandes\">Mes commandes</a><a href=\"/mes-adresses\">Mes adresses</a></nav><a href=\"/commande-1042\">Commande 1042</a><a href=\"/commande-1038\">Commande 1038</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Mes commandes"
+  },
+  "expected": "landed"
+}

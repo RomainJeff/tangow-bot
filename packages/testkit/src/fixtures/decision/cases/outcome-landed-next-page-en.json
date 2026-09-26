@@ -1,0 +1,21 @@
+{
+  "id": "outcome-landed-next-page-en",
+  "family": "outcome",
+  "lang": "en",
+  "before": {
+    "url": "https://shop.test/r?p=1",
+    "title": "Results",
+    "html": "<a href=\"/fleece-jacket\">Fleece jacket</a><a href=\"/r?p=2\">Next</a>"
+  },
+  "after": {
+    "url": "https://shop.test/r?p=2",
+    "title": "Results",
+    "html": "<a href=\"/insulated-bottle\">Insulated bottle</a><a href=\"/r?p=1\">Previous</a><a href=\"/r?p=3\">Next</a>"
+  },
+  "action": {
+    "kind": "click",
+    "role": "link",
+    "name": "Next"
+  },
+  "expected": "landed"
+}

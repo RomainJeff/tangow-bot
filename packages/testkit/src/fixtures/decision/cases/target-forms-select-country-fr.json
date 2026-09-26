@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-select-country-fr",
+  "family": "forms",
+  "lang": "fr",
+  "kind": "fill",
+  "page": {
+    "url": "https://boutique.test/select-country",
+    "title": "Livraison",
+    "html": "<label for=\"c\">Pays</label><select id=\"c\" aria-label=\"Pays\"><option>France</option><option>Belgique</option></select><label for=\"l\">Langue</label><select id=\"l\" aria-label=\"Langue\"><option>Français</option></select><label for=\"v\">Ville</label><input id=\"v\" />"
+  },
+  "target": "le pays de livraison",
+  "expected": {
+    "role": "combobox",
+    "name": "Pays"
+  }
+}

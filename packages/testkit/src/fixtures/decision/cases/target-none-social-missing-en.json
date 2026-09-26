@@ -1,0 +1,13 @@
+{
+  "id": "target-none-social-missing-en",
+  "family": "none",
+  "lang": "en",
+  "kind": "click",
+  "page": {
+    "url": "https://shop.test/social-missing",
+    "title": "Home",
+    "html": "<footer><a href=\"https://instagram.test/shop\">Instagram</a><a href=\"https://linkedin.test/shop\">LinkedIn</a></footer>"
+  },
+  "target": "our Facebook page",
+  "expected": "none"
+}

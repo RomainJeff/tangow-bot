@@ -1,0 +1,16 @@
+{
+  "id": "target-forms-phone-en",
+  "family": "forms",
+  "lang": "en",
+  "kind": "fill",
+  "page": {
+    "url": "https://shop.test/phone",
+    "title": "Contact details",
+    "html": "<label for=\"t1\">Phone</label><input id=\"t1\" type=\"tel\"/><label for=\"t2\">Mobile phone (optional)</label><input id=\"t2\" type=\"tel\"/>"
+  },
+  "target": "the mobile number",
+  "expected": {
+    "role": "textbox",
+    "name": "Mobile phone (optional)"
+  }
+}

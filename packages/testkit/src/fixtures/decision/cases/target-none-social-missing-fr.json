@@ -1,0 +1,13 @@
+{
+  "id": "target-none-social-missing-fr",
+  "family": "none",
+  "lang": "fr",
+  "kind": "click",
+  "page": {
+    "url": "https://boutique.test/social-missing",
+    "title": "Accueil",
+    "html": "<footer><a href=\"https://instagram.test/boutique\">Instagram</a><a href=\"https://linkedin.test/boutique\">LinkedIn</a></footer>"
+  },
+  "target": "notre page Facebook",
+  "expected": "none"
+}
