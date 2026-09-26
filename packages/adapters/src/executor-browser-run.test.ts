@@ -199,6 +199,16 @@ async function runWithDecisionProvider(
 }
 
 describe("browser_run executor wiring", () => {
+  it("resolves the connection again when browser_run is called, so a disconnect takes effect", async () => {
+    const provider = new FakeDecisionProvider({ script: [clickSearch] });
+    let resolves = 0;
+    // Connected when the run starts, disconnected by the time the model calls browser_run.
+    const outcome = await runWithDecisionProvider(async () => (++resolves === 1 ? provider : null));
+    expect(outcome.offered).toBe(true);
+    expect(outcome.results[2]).toMatchObject({ status: "unavailable" });
+    expect(provider.calls).toHaveLength(0);
+  });
+
   it("offers browser_run only when the Space decision provider resolves", async () => {
     for (const resolve of [
       async () => null,

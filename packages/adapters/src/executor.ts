@@ -2781,8 +2781,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (name === "browser_run") {
               return computerScreenToolResult(async () => {
                 try {
+                  // Resolve again per call: a disconnected or replaced connection stops
+                  // receiving page state at the next browser_run, not at the end of the run.
+                  const current = decisionProvider
+                    ? await deps.decisionProviders?.resolve(run.spaceId).catch(() => null)
+                    : null;
                   const result = await browserRunFromTool(browser, computer, context, args, {
-                    provider: decisionProvider ?? undefined,
+                    provider: current ?? undefined,
                     secrets: runSecrets,
                     trace,
                   });
