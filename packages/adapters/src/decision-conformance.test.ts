@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type {
   AdapterContext,
   DecisionProvider,
@@ -8,41 +9,34 @@ import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { decideWithin, topChoices } from "./decision.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
+import { decisionConformanceRequests } from "./fixtures/decision-requests.js";
+import { TypeSafeDecisionProvider } from "./typesafe-decision.js";
 
 function contextWith(signal: AbortSignal = new AbortController().signal): AdapterContext {
   return { operationId: "op", traceId: "trace", spaceId: "space", userId: "user", signal };
 }
 
-const choiceRequest: DecisionRequest = {
-  state: { page: { url: "https://example.test/", title: "Reports" } },
-  questions: {
-    target: {
-      type: "choice",
-      instructions: "Which element matches: download CSV?",
-      options: {
-        e1: 'link "Download"',
-        e2: 'link "Download CSV"',
-        none: "no listed element matches",
-      },
-    },
-  },
-};
+const choiceRequest: DecisionRequest = decisionConformanceRequests.target;
+const noulRequest: DecisionRequest = decisionConformanceRequests.signin;
+const scoreRequest: DecisionRequest = decisionConformanceRequests.sure;
 
-const noulRequest: DecisionRequest = {
-  state: "The page shows a sign-in form.",
-  questions: { signin: { type: "noul", instructions: "Is this a sign-in page?" } },
-};
-
-const scoreRequest: DecisionRequest = {
-  state: "Order placed.",
-  questions: {
-    sure: {
-      type: "score",
-      instructions: "How settled is the page?",
-      levels: ["no", "some", "yes"],
-    },
-  },
-};
+/** Replays the recorded fixture by question name; a request the fixture lacks fails loudly. */
+function recordedFetch(requests: unknown[]): typeof fetch {
+  const fixture = JSON.parse(
+    readFileSync(new URL("./fixtures/typesafe-decision.json", import.meta.url), "utf8"),
+  ) as { responses: Record<string, unknown> };
+  return (async (_input: unknown, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as { questions: Record<string, unknown> };
+    requests.push(body);
+    const name = Object.keys(body.questions)[0] ?? "";
+    const recorded = fixture.responses[name];
+    if (!recorded) return new Response("missing fixture", { status: 404 });
+    return new Response(JSON.stringify(recorded), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+}
 
 function choiceAnswer(
   choice: string,
@@ -116,6 +110,21 @@ describe("decision conformance", () => {
         ],
       }),
     );
+  });
+
+  it("the TypeSafe adapter honours the contract against recorded responses", async () => {
+    const requests: unknown[] = [];
+    await assertDecisionConformance(
+      new TypeSafeDecisionProvider(
+        {
+          apiKey: "test-key-not-real",
+          baseUrl: "https://decision.example.test",
+          modelId: "jev-1.13.0",
+        },
+        { fetch: recordedFetch(requests) },
+      ),
+    );
+    expect(requests).toHaveLength(3);
   });
 
   it("answers no_provider without a provider", async () => {

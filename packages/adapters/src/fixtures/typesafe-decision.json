@@ -1,0 +1,35 @@
+{
+  "note": "System One responses replayed by the decision conformance suite, keyed by question name. Written by hand in the @typesafe-ai/sdk 0.6.0 response shape until replaced by a capture from packages/adapters/src/fixtures/capture-typesafe-decision-fixtures.ts. Fixture pages only; no key and no customer URL.",
+  "responses": {
+    "target": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "target": {
+          "type": "choice",
+          "choice": "e2",
+          "confidence": 0.91,
+          "probabilities": { "e1": 0.06, "e2": 0.91, "none": 0.03 }
+        }
+      },
+      "usage": { "input_tokens": 74, "output_tokens": 0 }
+    },
+    "signin": {
+      "model": "jev-1.13.0",
+      "answers": { "signin": { "type": "noul", "noul": 0.97 } },
+      "usage": { "input_tokens": 21, "output_tokens": 0 }
+    },
+    "sure": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "sure": {
+          "type": "score",
+          "score": 1.8,
+          "confidence": 0.8,
+          "legend": { "0": "no", "1": "some", "2": "yes" },
+          "probabilities": { "0": 0.05, "1": 0.15, "2": 0.8 }
+        }
+      },
+      "usage": { "input_tokens": 25, "output_tokens": 0 }
+    }
+  }
+}
