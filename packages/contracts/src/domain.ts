@@ -1083,6 +1083,13 @@ export const SpaceMemoryConfigSchema = z.object({
 });
 export type SpaceMemoryConfig = z.infer<typeof SpaceMemoryConfigSchema>;
 
+export const SpaceDecisionConfigSchema = z.object({
+  provider: z.string(),
+  settings: z.record(z.string(), z.string()),
+  updatedAt: z.string(),
+});
+export type SpaceDecisionConfig = z.infer<typeof SpaceDecisionConfigSchema>;
+
 export const ModelCatalogEntrySchema = z.object({
   provider: z.string(),
   providerName: z.string().optional(),

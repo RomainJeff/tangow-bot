@@ -99,7 +99,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr "{0} по-прежнему будет отвечать на прямые упоминания."
 
 #. placeholder {0}: active.name
-#: src/pages/shell/side-panel.tsx:306
+#: src/pages/shell/side-panel.tsx:308
 msgid "{0}'s screen"
 msgstr "Экран {0}"
 
@@ -107,7 +107,7 @@ msgstr "Экран {0}"
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/side-panel.tsx:579
+#: src/pages/shell/side-panel.tsx:581
 msgid "{botName}’s computer"
 msgstr "Компьютер {botName}"
 
@@ -255,11 +255,11 @@ msgstr ""
 msgid "Add a model in Settings to use this."
 msgstr "Чтобы использовать это, добавьте модель в настройках."
 
-#: src/pages/shell/side-panel.tsx:437
+#: src/pages/shell/side-panel.tsx:439
 msgid "Add a run time for this one-shot."
 msgstr "Добавьте время выполнения для разового запуска."
 
-#: src/pages/shell/side-panel.tsx:415
+#: src/pages/shell/side-panel.tsx:417
 msgid "Add a schedule, webhook, GitHub, or message trigger"
 msgstr "Добавьте расписание, вебхук, GitHub или триггер сообщения."
 
@@ -354,6 +354,7 @@ msgid "Adding…"
 msgstr "Добавление…"
 
 #: src/pages/AccountSettingsOverlay.tsx:193
+#: src/pages/BrowserSettingsPanel.tsx:125
 #: src/pages/McpServersOverlay.tsx:342
 #: src/pages/ModelSettingsOverlay.tsx:556
 #: src/pages/Onboarding.tsx:496
@@ -450,7 +451,9 @@ msgid "Answer in text"
 msgstr ""
 
 #: src/components/AskCard.tsx:20
-#: src/components/AskCard.tsx:533
+#: src/components/AskCard.tsx:527
+#: src/components/AskCard.tsx:530
+#: src/components/AskCard.tsx:544
 msgid "Answered"
 msgstr "Ответил"
 
@@ -632,7 +635,7 @@ msgstr "Доступно после сохранения задачи"
 msgid "Avatars"
 msgstr "Аватары"
 
-#: src/components/AskCard.tsx:579
+#: src/components/AskCard.tsx:578
 #: src/pages/PluginsOverlay.tsx:554
 #: src/pages/RoutineEditor.tsx:263
 msgid "Back"
@@ -644,6 +647,7 @@ msgstr "Назад"
 msgid "Back to sign in"
 msgstr "Вернуться ко входу"
 
+#: src/pages/BrowserSettingsPanel.tsx:137
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:47
 msgid "Base URL"
 msgstr "Базовый URL"
@@ -653,12 +657,12 @@ msgstr "Базовый URL"
 msgid "Bearer token"
 msgstr "Bearer-токен"
 
-#: src/pages/shell/side-panel.tsx:571
+#: src/pages/shell/side-panel.tsx:573
 msgid "Booting live desktop…"
 msgstr "Загрузка рабочего стола…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:627
+#: src/pages/shell/side-panel.tsx:629
 msgid "Booting up {0}’s computer"
 msgstr "Загрузка компьютера {0}"
 
@@ -679,11 +683,11 @@ msgstr "Бот"
 msgid "Bot"
 msgstr "Бот"
 
-#: src/pages/shell/side-panel.tsx:744
+#: src/pages/shell/side-panel.tsx:748
 msgid "Bot screen"
 msgstr "Экран бота"
 
-#: src/pages/shell/side-panel.tsx:269
+#: src/pages/shell/side-panel.tsx:271
 msgid "Bot screen preview"
 msgstr "Предварительный просмотр экрана бота"
 
@@ -715,6 +719,10 @@ msgstr ""
 #: src/pages/PluginsOverlay.tsx:725
 msgid "Browse MCP servers"
 msgstr "Просмотреть MCP-серверы"
+
+#: src/pages/SettingsOverlay.tsx:101
+msgid "Browser"
+msgstr ""
 
 #: src/App.tsx:159
 msgid "Can't reach the server."
@@ -807,8 +815,8 @@ msgstr "Проверка не удалась"
 msgid "Check for updates"
 msgstr "Проверьте наличие обновлений"
 
-#: src/pages/shell/side-panel.tsx:453
-#: src/pages/shell/side-panel.tsx:466
+#: src/pages/shell/side-panel.tsx:455
+#: src/pages/shell/side-panel.tsx:468
 msgid "Check in."
 msgstr "Проверить."
 
@@ -882,7 +890,7 @@ msgstr "Закрыть"
 msgid "Close chart"
 msgstr "Закрыть график"
 
-#: src/pages/shell/side-panel.tsx:723
+#: src/pages/shell/side-panel.tsx:727
 msgid "Close computer"
 msgstr "Закрыть компьютер"
 
@@ -899,7 +907,7 @@ msgid "Close MCP servers"
 msgstr "Закрыть серверы MCP"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:102
+#: src/pages/SettingsOverlay.tsx:116
 msgid "Close memory settings"
 msgstr "Закрыть настройки памяти"
 
@@ -908,7 +916,7 @@ msgid "Close messaging settings"
 msgstr "Закрыть настройки обмена сообщениями"
 
 #: src/pages/ModelSettingsOverlay.tsx:377
-#: src/pages/SettingsOverlay.tsx:100
+#: src/pages/SettingsOverlay.tsx:114
 msgid "Close model settings"
 msgstr "Закрыть настройки модели"
 
@@ -916,8 +924,8 @@ msgstr "Закрыть настройки модели"
 msgid "Close navigation"
 msgstr "Закрыть навигацию"
 
-#: src/pages/shell/side-panel.tsx:185
-#: src/pages/shell/side-panel.tsx:245
+#: src/pages/shell/side-panel.tsx:187
+#: src/pages/shell/side-panel.tsx:247
 msgid "Close panel"
 msgstr "Закрыть панель"
 
@@ -929,11 +937,11 @@ msgstr "Закрыть предварительный просмотр"
 msgid "Close skills"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:105
+#: src/pages/SettingsOverlay.tsx:119
 msgid "Close user settings"
 msgstr "Закрыть настройки пользователя"
 
-#: src/pages/SettingsOverlay.tsx:104
+#: src/pages/SettingsOverlay.tsx:118
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "Закрыть настройки голоса"
@@ -972,7 +980,7 @@ msgstr "Завершить"
 msgid "Completed"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:90
+#: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:64
 #: src/pages/shell/message-view.tsx:486
 msgid "Computer"
@@ -983,19 +991,19 @@ msgstr "Компьютер"
 msgid "Computer & routines"
 msgstr ""
 
-#: src/pages/shell/side-panel.tsx:574
+#: src/pages/shell/side-panel.tsx:576
 msgid "Computer failed to boot"
 msgstr "Компьютер не смог загрузиться"
 
-#: src/pages/shell/side-panel.tsx:767
+#: src/pages/shell/side-panel.tsx:771
 msgid "Computer is asleep"
 msgstr "Компьютер спит"
 
-#: src/pages/shell/side-panel.tsx:573
+#: src/pages/shell/side-panel.tsx:575
 msgid "Computer is asleep. Open it to wake."
 msgstr "Компьютер спит. Откройте его, чтобы разбудить."
 
-#: src/pages/shell/side-panel.tsx:575
+#: src/pages/shell/side-panel.tsx:577
 msgid "Computer is stopped"
 msgstr "Компьютер остановлен"
 
@@ -1029,6 +1037,7 @@ msgstr "Подтвердите пароль"
 #: src/components/integrations/IntegrationSetup.tsx:267
 #: src/components/integrations/IntegrationSetup.tsx:291
 #: src/components/integrations/IntegrationSetup.tsx:324
+#: src/pages/BrowserSettingsPanel.tsx:169
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
 #: src/pages/VoiceSettingsOverlay.tsx:269
@@ -1065,6 +1074,7 @@ msgstr "Подключить Treg"
 
 #: src/components/integrations/IntegrationSetup.tsx:164
 #: src/components/integrations/IntegrationSetup.tsx:267
+#: src/pages/BrowserSettingsPanel.tsx:91
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
 #: src/pages/ModelSettingsOverlay.tsx:442
@@ -1096,6 +1106,7 @@ msgstr "Подключено. Его инструменты доступны и�
 
 #: src/components/integrations/IntegrationSetup.tsx:222
 #: src/components/integrations/IntegrationSetup.tsx:361
+#: src/pages/BrowserSettingsPanel.tsx:169
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1197,6 +1208,10 @@ msgstr "Не удалось подключиться"
 msgid "Could not connect {0}"
 msgstr "Не удалось подключить {0}"
 
+#: src/pages/BrowserSettingsPanel.tsx:62
+msgid "Could not connect OpenRouter"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:335
 msgid "Could not connect this provider"
 msgstr "Не удалось подключить этого провайдера"
@@ -1266,6 +1281,10 @@ msgstr "Не удалось отключить поставщика памяти
 msgid "Could not disconnect OAuth"
 msgstr "Не удалось отключить OAuth"
 
+#: src/pages/BrowserSettingsPanel.tsx:75
+msgid "Could not disconnect OpenRouter"
+msgstr ""
+
 #: src/pages/VoiceSettingsOverlay.tsx:124
 msgid "Could not disconnect this voice provider"
 msgstr ""
@@ -1312,6 +1331,10 @@ msgstr "Не удалось загрузить правила одобрения
 #: src/pages/IntegrationSetup.tsx:72
 msgid "Could not load bots. Reload to try again."
 msgstr "Не удалось загрузить ботов. Обновите страницу и попробуйте снова."
+
+#: src/pages/BrowserSettingsPanel.tsx:33
+msgid "Could not load browser settings"
+msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:70
 #: src/pages/PluginsOverlay.tsx:146
@@ -1421,7 +1444,7 @@ msgstr "Не удалось сбросить пароль"
 msgid "Could not revoke connection"
 msgstr "Не удалось отменить соединение"
 
-#: src/pages/shell/side-panel.tsx:520
+#: src/pages/shell/side-panel.tsx:522
 msgid "Could not run routine"
 msgstr "Не удалось запустить задачу"
 
@@ -1443,7 +1466,7 @@ msgstr "Не удалось сохранить группу"
 msgid "Could not save model"
 msgstr "Не удалось сохранить модель"
 
-#: src/pages/shell/side-panel.tsx:491
+#: src/pages/shell/side-panel.tsx:493
 msgid "Could not save routine"
 msgstr "Не удалось сохранить задачу"
 
@@ -1752,12 +1775,14 @@ msgstr "Прямой MCP"
 msgid "Disabled"
 msgstr ""
 
+#: src/pages/BrowserSettingsPanel.tsx:104
 #: src/pages/McpServersOverlay.tsx:493
 #: src/pages/MemorySettingsOverlay.tsx:211
 #: src/pages/VoiceSettingsOverlay.tsx:284
 msgid "Disconnect"
 msgstr "Отключить"
 
+#: src/pages/BrowserSettingsPanel.tsx:104
 #: src/pages/MemorySettingsOverlay.tsx:211
 #: src/pages/VoiceSettingsOverlay.tsx:282
 msgid "Disconnecting…"
@@ -2049,8 +2074,8 @@ msgstr "Бесплатно"
 msgid "Fullscreen"
 msgstr "Полноэкранный"
 
-#: src/pages/SettingsOverlay.tsx:85
-#: src/pages/SettingsOverlay.tsx:96
+#: src/pages/SettingsOverlay.tsx:98
+#: src/pages/SettingsOverlay.tsx:110
 msgid "General"
 msgstr "Общие"
 
@@ -2081,7 +2106,7 @@ msgid "Global"
 msgstr ""
 
 #: src/pages/MessagingSettingsOverlay.tsx:204
-#: src/pages/shell/side-panel.tsx:226
+#: src/pages/shell/side-panel.tsx:228
 #: src/pages/shell/thread-header.tsx:71
 msgid "Group"
 msgstr "Группа"
@@ -2167,7 +2192,7 @@ msgstr ""
 msgid "How to check"
 msgstr "Как проверить"
 
-#: src/pages/shell/side-panel.tsx:797
+#: src/pages/shell/side-panel.tsx:801
 msgid "I’m done"
 msgstr "Готово"
 
@@ -2304,6 +2329,10 @@ msgstr "Позже"
 #: src/pages/MessagingSettingsOverlay.tsx:249
 msgid "Leave"
 msgstr "Выйти"
+
+#: src/pages/BrowserSettingsPanel.tsx:84
+msgid "Let bots complete multi-step web page tasks faster."
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx:536
 msgid "Light"
@@ -2477,7 +2506,7 @@ msgstr "Участники (выберите {GROUP_MEMBER_MIN}–{GROUP_MEMBER_
 
 #: src/pages/KnowledgeSection.tsx:48
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:87
+#: src/pages/SettingsOverlay.tsx:100
 msgid "Memory"
 msgstr "Память"
 
@@ -2561,6 +2590,7 @@ msgstr "минута"
 msgid "minutes"
 msgstr "минуты"
 
+#: src/pages/BrowserSettingsPanel.tsx:149
 #: src/pages/ModelSettingsOverlay.tsx:497
 #: src/pages/ModelSettingsOverlay.tsx:607
 #: src/pages/ModelSettingsOverlay.tsx:1057
@@ -2590,7 +2620,7 @@ msgstr "Модель обновлена."
 
 #: src/pages/LocalSettings.tsx:36
 #: src/pages/ModelSettingsOverlay.tsx:370
-#: src/pages/SettingsOverlay.tsx:86
+#: src/pages/SettingsOverlay.tsx:99
 msgid "Models"
 msgstr "Модели"
 
@@ -2660,7 +2690,7 @@ msgstr "Требуется ввод данных"
 msgid "Needs takeover"
 msgstr "Требуется передача управления"
 
-#: src/pages/shell/side-panel.tsx:670
+#: src/pages/shell/side-panel.tsx:674
 msgid "Needs you"
 msgstr "Требуется ваше участие"
 
@@ -2698,7 +2728,7 @@ msgstr "Новый навык"
 msgid "New space"
 msgstr "Новое пространство"
 
-#: src/components/AskCard.tsx:617
+#: src/components/AskCard.tsx:616
 msgid "Next"
 msgstr ""
 
@@ -2747,7 +2777,7 @@ msgid "No integrations installed yet."
 msgstr ""
 
 #: src/components/AskCard.tsx:173
-#: src/components/AskCard.tsx:552
+#: src/components/AskCard.tsx:553
 msgid "No longer active"
 msgstr "Больше не активен"
 
@@ -2916,8 +2946,8 @@ msgid "Only the first 50 skills are shown to the agent."
 msgstr ""
 
 #: src/pages/ScratchpadSection.tsx:159
-#: src/pages/shell/side-panel.tsx:295
-#: src/pages/shell/side-panel.tsx:300
+#: src/pages/shell/side-panel.tsx:297
+#: src/pages/shell/side-panel.tsx:302
 msgid "Open"
 msgstr "Открыть"
 
@@ -2926,7 +2956,7 @@ msgstr "Открыть"
 msgid "Open {0}"
 msgstr "Открыть {0}"
 
-#: src/pages/shell/side-panel.tsx:261
+#: src/pages/shell/side-panel.tsx:263
 msgid "Open in full window"
 msgstr "Открыть в полном окне"
 
@@ -2954,6 +2984,10 @@ msgstr ""
 #: src/App.tsx:201
 msgid "Opening your Space…"
 msgstr "Открытие вашего пространства…"
+
+#: src/pages/BrowserSettingsPanel.tsx:111
+msgid "OpenRouter API key"
+msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx:748
 #: src/pages/Onboarding.tsx:636
@@ -2984,12 +3018,12 @@ msgstr "Органичный"
 msgid "Organization API key"
 msgstr "Ключ API организации"
 
-#: src/components/AskCard.tsx:525
+#: src/components/AskCard.tsx:520
 msgid "Other"
 msgstr ""
 
 #: src/components/AskCard.tsx:246
-#: src/components/AskCard.tsx:670
+#: src/components/AskCard.tsx:669
 msgid "Other answer"
 msgstr ""
 
@@ -3003,7 +3037,7 @@ msgstr ""
 msgid "Other model…"
 msgstr "Другая модель…"
 
-#: src/components/AskCard.tsx:661
+#: src/components/AskCard.tsx:660
 msgid "Other…"
 msgstr ""
 
@@ -3218,7 +3252,7 @@ msgstr "Обновить экран"
 msgid "Refreshing…"
 msgstr "Обновление…"
 
-#: src/pages/shell/side-panel.tsx:787
+#: src/pages/shell/side-panel.tsx:791
 msgid "Release"
 msgstr "Освободить управление"
 
@@ -3403,8 +3437,8 @@ msgid "Rotate key"
 msgstr "Сменить ключ"
 
 #: src/pages/RoutineEditor.tsx:268
-#: src/pages/shell/side-panel.tsx:452
-#: src/pages/shell/side-panel.tsx:465
+#: src/pages/shell/side-panel.tsx:454
+#: src/pages/shell/side-panel.tsx:467
 msgid "Routine"
 msgstr "Задача"
 
@@ -3421,7 +3455,7 @@ msgstr "Запустить в"
 msgid "Run history"
 msgstr "История запуска"
 
-#: src/pages/shell/side-panel.tsx:445
+#: src/pages/shell/side-panel.tsx:447
 msgid "Run time must be in the future."
 msgstr "Время выполнения должно быть в будущем."
 
@@ -3569,7 +3603,7 @@ msgstr "Отправьте <0>{linkCode}</0> в строку из вашего �
 msgid "Send answer"
 msgstr "Отправить ответ"
 
-#: src/components/AskCard.tsx:607
+#: src/components/AskCard.tsx:606
 msgid "Send answers"
 msgstr ""
 
@@ -3586,7 +3620,7 @@ msgstr "Отправить ссылку для сброса"
 #: src/components/AskCard.tsx:281
 #: src/components/AskCard.tsx:332
 #: src/components/AskCard.tsx:357
-#: src/components/AskCard.tsx:607
+#: src/components/AskCard.tsx:606
 msgid "Sending…"
 msgstr "Отправка…"
 
@@ -3613,10 +3647,10 @@ msgid "Server URL"
 msgstr "URL-адрес сервера"
 
 #: src/pages/MessagingSettingsOverlay.tsx:361
-#: src/pages/SettingsOverlay.tsx:96
-#: src/pages/SettingsOverlay.tsx:151
-#: src/pages/shell/side-panel.tsx:180
-#: src/pages/shell/side-panel.tsx:222
+#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:165
+#: src/pages/shell/side-panel.tsx:182
+#: src/pages/shell/side-panel.tsx:224
 #: src/pages/shell/sidebar.tsx:701
 #: src/pages/shell/sidebar.tsx:708
 msgid "Settings"
@@ -3713,9 +3747,9 @@ msgstr "Навык {0}"
 msgid "Skills"
 msgstr "Навыки"
 
-#: src/components/AskCard.tsx:593
+#: src/components/AskCard.tsx:592
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:794
+#: src/pages/shell/side-panel.tsx:798
 msgid "Skip"
 msgstr "Пропустить"
 
@@ -3723,7 +3757,7 @@ msgstr "Пропустить"
 msgid "Skip or deploy key"
 msgstr "Пропустить или добавить ключ"
 
-#: src/components/AskCard.tsx:527
+#: src/components/AskCard.tsx:521
 msgid "Skipped"
 msgstr ""
 
@@ -3791,8 +3825,8 @@ msgid "Steps"
 msgstr "Шаги"
 
 #: src/pages/shell/composer.tsx:701
-#: src/pages/shell/side-panel.tsx:685
-#: src/pages/shell/side-panel.tsx:690
+#: src/pages/shell/side-panel.tsx:689
+#: src/pages/shell/side-panel.tsx:694
 msgid "Stop"
 msgstr "Остановить"
 
@@ -3862,7 +3896,7 @@ msgstr "Обучение в процессе. Прекратите обучен�
 msgid "Team"
 msgstr "Команда"
 
-#: src/pages/shell/side-panel.tsx:579
+#: src/pages/shell/side-panel.tsx:581
 msgid "Team Computer"
 msgstr "Командный компьютер"
 
@@ -3908,7 +3942,7 @@ msgstr "Выбранный поставщик памяти недоступен 
 msgid "Thinking"
 msgstr "рассуждение"
 
-#: src/pages/shell/side-panel.tsx:548
+#: src/pages/shell/side-panel.tsx:550
 msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
 msgstr "Этот бот работает на этом компьютере, а не на рабочем столе Linux. Оболочка и файлы используют вашу домашнюю папку."
 
@@ -4003,12 +4037,12 @@ msgid "Try again"
 msgstr ""
 
 #: src/components/AskCard.tsx:250
-#: src/components/AskCard.tsx:682
+#: src/components/AskCard.tsx:681
 msgid "Type a different answer"
 msgstr ""
 
 #: src/components/AskCard.tsx:303
-#: src/components/AskCard.tsx:682
+#: src/components/AskCard.tsx:681
 msgid "Type your answer"
 msgstr "Введите ответ"
 
@@ -4081,7 +4115,7 @@ msgstr "Ход обновления"
 msgid "Updated"
 msgstr "Обновлено"
 
-#: src/pages/SettingsOverlay.tsx:91
+#: src/pages/SettingsOverlay.tsx:105
 msgid "Updates"
 msgstr "Обновления"
 
@@ -4100,7 +4134,7 @@ msgid "Updating…"
 msgstr "Обновление…"
 
 #: src/pages/AccountSettingsOverlay.tsx:226
-#: src/pages/SettingsOverlay.tsx:89
+#: src/pages/SettingsOverlay.tsx:103
 #: src/pages/shell/sidebar.tsx:713
 #: src/pages/shell/sidebar.tsx:724
 msgid "Usage"
@@ -4132,7 +4166,7 @@ msgstr "Проверить и добавить"
 msgid "Verifying…"
 msgstr "Проверка…"
 
-#: src/pages/SettingsOverlay.tsx:88
+#: src/pages/SettingsOverlay.tsx:102
 #: src/pages/shell/bot-panel.tsx:616
 #: src/pages/shell/composer.tsx:673
 #: src/pages/shell/composer.tsx:674
@@ -4235,7 +4269,7 @@ msgstr "Вы можете закрыть эту вкладку, если она 
 msgid "You can close this window."
 msgstr "Вы можете закрыть это окно."
 
-#: src/pages/shell/side-panel.tsx:674
+#: src/pages/shell/side-panel.tsx:678
 msgid "You have control"
 msgstr "Вы управляете"
 
