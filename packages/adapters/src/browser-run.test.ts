@@ -269,9 +269,12 @@ describe("browser_run", () => {
 
   it("asks for a value it was not given instead of typing anything", async () => {
     const browser = await open(new FlowBrowser({}, "details"));
-    const { provider, result } = run(browser, [step({ op: "fill", target: "Destination <- ?" })], {
-      goal: "Fill the trip details",
-    });
+    // Below the 0.80 action gate, as in production: asking acts on nothing, so it still asks.
+    const { provider, result } = run(
+      browser,
+      [step({ op: "fill", target: "Destination <- ?", probability: 0.78 })],
+      { goal: "Fill the trip details" },
+    );
     expect(await result).toMatchObject({
       status: "needs_input",
       need: { kind: "value", field: { role: "textbox", name: "Destination" } },

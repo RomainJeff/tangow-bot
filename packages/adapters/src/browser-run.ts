@@ -761,6 +761,9 @@ function planStep(
   const target = options.get(answer.choice);
   if (!target) return { gate: "invalid_target", op };
   const probability = answer.probabilities[answer.choice] ?? 0;
+  // Asking for a value acts on nothing, so it needs no confidence: in production the model
+  // put the text in the goal, and a 0.78 "no provided value" came back as a dead-end block.
+  if (target.valueKey === MISSING_VALUE) return { gate: "needs_value", op, target, probability };
   if (probability < RUN_TARGET_PROBABILITY) {
     return {
       gate: "low_confidence",
@@ -769,7 +772,6 @@ function planStep(
       candidates: candidatesOf(answer, options, secrets),
     };
   }
-  if (target.valueKey === MISSING_VALUE) return { gate: "needs_value", op, target, probability };
   if (op === "click") {
     const consequential = result.answers.click_consequential;
     if (
