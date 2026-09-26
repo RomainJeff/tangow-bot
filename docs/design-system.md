@@ -403,8 +403,8 @@ by chrome inside the capsule.
 
 Do: show Send only when the draft or a chip is non-empty; put the attach
 button in `attach`, never in `trailing`; dictation and the call never fight
-over the composer — the call moved to the thread header (`Voice`, 1:1 only)
-and cancels a dictation in progress before it opens. Don't: put a second
+over the composer — the call moved to the thread header (a phone icon labelled `Voice`, 1:1
+only; the mic always means dictation) and cancels a dictation in progress before it opens. Don't: put a second
 shadow inside the capsule, reach for `state="working"` (removed), or let
 dictation send anything itself — ✓ only inserts into the draft.
 

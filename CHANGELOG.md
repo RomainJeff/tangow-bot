@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On phones the message field now keeps the attach button apart as a larger round button that opens the native photo, camera and file sheet, grows to five lines, shows pending attachments inside it as thumbnails, and closes the keyboard when you swipe the conversation down.
 - On web and desktop the message field is now a single capsule that starts with the attach button, grows taller before it scrolls, and shows pending attachments inside it as thumbnails.
 - The message field now rests on a thin outline and lifts only while you write, and the Stop button's edge glows in the answering bot's colour while it replies.
-- On web and desktop, the voice call now starts from an icon in the conversation header instead of the mic in the message field, which now dictates.
+- On web and desktop, the voice call now starts from a phone icon in the conversation header instead of the mic in the message field, which now dictates.
 
 #### Fixed
 

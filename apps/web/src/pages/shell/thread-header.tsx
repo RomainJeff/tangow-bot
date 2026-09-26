@@ -2,7 +2,7 @@ import { useLingui } from "@lingui/react/macro";
 import type { Bot, Group, ThreadSnapshot } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { Button, StackedAvatars } from "@rakazo/ui-web";
-import { Menu, Mic, Monitor, PanelLeftOpen, Settings } from "lucide-react";
+import { Menu, Monitor, PanelLeftOpen, Phone, Settings } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { desktopBridge } from "../../lib/desktop";
 import { WindowChrome } from "../WindowChrome";
@@ -107,7 +107,7 @@ export function ThreadHeader({
             onClick={onVoice}
             className="app-no-drag"
           >
-            <Mic size={17} strokeWidth={1.6} aria-hidden="true" />
+            <Phone size={17} strokeWidth={1.6} aria-hidden="true" />
           </Button>
         ) : null}
         {!inGroup && active ? (
