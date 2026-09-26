@@ -466,7 +466,10 @@ async function runLoop(
       continue;
     }
     if (plan.gate === "provider_blocked") return blocked("provider_blocked");
-    if (plan.gate === "invalid_target" || plan.gate === "no_target") return blocked(plan.gate);
+    if (plan.gate === "invalid_target") return blocked(plan.gate);
+    // A page in transition (a submit still loading, an assistant still answering) often
+    // has nothing to act on yet: look again after a wait before giving up.
+    if (plan.gate === "no_target" && waits >= MAX_CONSECUTIVE_WAITS) return blocked(plan.gate);
     if (plan.gate === "low_confidence") {
       return blocked("low_confidence", { candidates: plan.candidates });
     }
@@ -481,7 +484,7 @@ async function runLoop(
       });
     }
 
-    if (plan.gate === "wait") {
+    if (plan.gate === "wait" || plan.gate === "no_target") {
       waits += 1;
       await sleep(WAIT_MS, context.signal);
       context.signal.throwIfAborted();

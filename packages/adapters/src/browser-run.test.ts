@@ -521,6 +521,40 @@ describe("browser_run", () => {
     expect(repeated.acts).toHaveLength(3);
   });
 
+  it("waits and looks again when nothing fits yet, then gives up", async () => {
+    const nothingYet: FakeDecisionStep = (request) => {
+      const operation = request.questions.operation;
+      const target = request.questions.click_target;
+      if (operation?.type !== "choice" || target?.type !== "choice") throw new Error("click");
+      return {
+        answers: {
+          operation: choice(Object.keys(operation.options), "click", 0.9),
+          click_target: choice(Object.keys(target.options), "none", 0.9),
+        },
+      };
+    };
+    const waited: number[] = [];
+    const recovered = run(
+      await open(new FlowBrowser({}, "summary")),
+      [nothingYet, step({ op: "done", goalDone: 0.9 })],
+      { goal: "Wait for the answer" },
+      { sleep: async (ms) => void waited.push(ms) },
+    );
+    expect(await recovered.result).toMatchObject({ status: "done", steps: [{ op: "wait" }] });
+    expect(waited).toEqual([500]);
+
+    const stuck = run(
+      await open(new FlowBrowser({}, "summary")),
+      [nothingYet, nothingYet, nothingYet],
+      { goal: "Wait for the answer" },
+    );
+    expect(await stuck.result).toMatchObject({
+      status: "blocked",
+      need: { kind: "blocked", reason: "no_target" },
+    });
+    expect(stuck.provider.calls).toHaveLength(3);
+  });
+
   it("stops at the step limit", async () => {
     const browser = await open(new FlowBrowser(onboarding));
     const { provider, result } = run(
