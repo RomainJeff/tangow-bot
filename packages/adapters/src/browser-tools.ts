@@ -177,7 +177,7 @@ export function parseBrowserActions(value: unknown): BrowserActStep[] {
 }
 
 /** Like parseBrowserActions, but each action carries exactly one of ref or target. */
-export function parseBrowserActToolSteps(value: unknown): BrowserActToolStep[] {
+function parseBrowserActToolSteps(value: unknown): BrowserActToolStep[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new Error("browser_act requires at least one action");
   }
@@ -311,7 +311,8 @@ async function resolveBrowserTarget(
     return { returned: needsRef(snapshot) };
   }
   const confidence = Number(answer.confidence.toFixed(3));
-  const probability = answer.probabilities[answer.choice] ?? 0;
+  // decideWithin rejects a choice missing from its own probabilities.
+  const probability = answer.probabilities[answer.choice]!;
   if (probability < TARGET_PROBABILITY_HIGH) {
     report("returned_low_confidence", { confidence, probability: Number(probability.toFixed(3)) });
     const ranked = topChoices(answer, TARGET_CANDIDATE_COUNT + 1)

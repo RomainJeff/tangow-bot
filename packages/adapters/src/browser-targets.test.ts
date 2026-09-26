@@ -2,18 +2,15 @@ import type {
   AdapterContext,
   BrowserActRequest,
   ComputerRef,
+  ConnectorTool,
   DecisionRequest,
   DecisionResponse,
 } from "@rakazo/adapter-kit";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BrowserTargetStats } from "./browser-tools.js";
-import {
-  browserActFromTool,
-  browserNavigateFromTool,
-  parseBrowserActToolSteps,
-} from "./browser-tools.js";
-import { builtinAgentTools, withBrowserTargets } from "./builtin-tools.js";
+import { browserActFromTool, browserNavigateFromTool } from "./browser-tools.js";
+import { builtinAgentTools } from "./builtin-tools.js";
 import { selectBuiltinToolsForRun } from "./executor.js";
 import { FakeBrowserProvider } from "./fake-browser.js";
 import type { FakeDecisionStep } from "./fake-decision.js";
@@ -39,9 +36,9 @@ class CountingBrowser extends FakeBrowserProvider {
   }
 }
 
-async function openPage(body: string) {
+async function openPage(body: string, title = "Reports") {
   const browser = new CountingBrowser({
-    pages: { [PAGE]: { title: "Reports", html: `<html><body>${body}</body></html>` } },
+    pages: { [PAGE]: { title, html: `<html><body>${body}</body></html>` } },
   });
   await browserNavigateFromTool(browser, computer, context, { url: PAGE });
   return browser;
@@ -89,30 +86,28 @@ describe("browser_act targets", () => {
     installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
   });
 
-  it("parses exactly one of ref or target, refs first, and bounds targets", () => {
-    expect(
-      parseBrowserActToolSteps([
-        { kind: "click", ref: "e1" },
-        { kind: "fill", target: "search field", text: "q" },
-      ]),
-    ).toEqual([
-      { kind: "click", ref: "e1" },
-      { kind: "fill", target: "search field", text: "q" },
-    ]);
-    expect(() => parseBrowserActToolSteps([{ kind: "click", ref: "e1", target: "x" }])).toThrow(
-      /not both/,
-    );
-    expect(() => parseBrowserActToolSteps([{ kind: "click" }])).toThrow(/ref/);
-    expect(() =>
-      parseBrowserActToolSteps([
-        { kind: "click", target: "x" },
-        { kind: "click", ref: "e1" },
-      ]),
-    ).toThrow(/ref actions before target actions/);
-    expect(() =>
-      parseBrowserActToolSteps(Array.from({ length: 7 }, () => ({ kind: "click", target: "x" }))),
-    ).toThrow(/at most 6 target/);
-    expect(() => parseBrowserActToolSteps([{ kind: "fill", target: "x" }])).toThrow(/text/);
+  it("rejects malformed ref and target mixes before asking or acting", async () => {
+    const browser = await openPage(downloads);
+    const { provider, options } = targets([]);
+    for (const [actions, error] of [
+      [[{ kind: "click", ref: "e1", target: "x" }], /not both/],
+      [[{ kind: "click" }], /requires ref/],
+      [
+        [
+          { kind: "click", target: "x" },
+          { kind: "click", ref: "e1" },
+        ],
+        /ref actions before target actions/,
+      ],
+      [Array.from({ length: 7 }, () => ({ kind: "click", target: "x" })), /at most 6 target/],
+      [[{ kind: "fill", target: "x" }], /requires text/],
+    ] as const) {
+      expect(
+        await browserActFromTool(browser, computer, context, { actions }, options),
+      ).toMatchObject({ ok: false, error: expect.stringMatching(error) });
+    }
+    expect(provider.calls).toHaveLength(0);
+    expect(browser.acts).toHaveLength(0);
   });
 
   it("clicks the confident choice with a single act", async () => {
@@ -177,6 +172,8 @@ describe("browser_act targets", () => {
     // Documented example: a 0.84 pick reported with confidence 0.75.
     expect(await act(0.84, 0.75)).toBe(1);
     expect(await act(0.6, 0.9)).toBe(0);
+    expect(await act(0.8, 0.8)).toBe(1);
+    expect(await act(0.79, 0.79)).toBe(0);
   });
 
   it("offers only reversible roles for the action kind, never buttons", async () => {
@@ -296,13 +293,31 @@ describe("browser_act targets", () => {
     expect(browser.acts).toHaveLength(0);
   });
 
+  it("rethrows a run abort that lands during the target decision", async () => {
+    const browser = await openPage(downloads);
+    const provider = new FakeDecisionProvider({ script: [chooseByName("Download CSV", 0.95)] });
+    provider.latencyMs = 5_000;
+    const controller = new AbortController();
+    const pending = browserActFromTool(
+      browser,
+      computer,
+      { ...context, signal: controller.signal },
+      { actions: [{ kind: "click", target: "download csv" }] },
+      { provider, secrets: [] },
+    );
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1));
+    controller.abort();
+    await expect(pending).rejects.toBeDefined();
+    expect(browser.acts).toHaveLength(0);
+  });
+
   it("returns a ref gone stale after the decision and never acts twice", async () => {
     const browser = await openPage(downloads);
     const choose = chooseByName("Download CSV", 0.95);
     const { options } = targets([
-      (request) => {
+      async (request) => {
         // Another snapshot renumbers refs, as a page change would.
-        void browser.snapshot(computer, {}, context);
+        await browser.snapshot(computer, {}, context);
         return choose(request);
       },
     ]);
@@ -351,9 +366,10 @@ describe("browser_act targets", () => {
     installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
     const marker = "zq-improbable-marker";
     const browser = await openPage(
-      `<a href="${PAGE}">Open sk-secret-value ${marker}</a><input type="password" aria-label="Password" value="hunter2-value" />`,
+      `<a href="${PAGE}">Open sk-secret-value ${marker}</a><input aria-label="Email" value="typed-value-marker" />`,
+      "Reports sk-secret-value",
     );
-    const { provider, options } = targets([chooseByName("x", 0.9)]);
+    const { provider, options } = targets([chooseByName("x", 0.9), chooseByName("x", 0.9)]);
     await browserActFromTool(
       browser,
       computer,
@@ -361,10 +377,20 @@ describe("browser_act targets", () => {
       { actions: [{ kind: "click", target: `open ${marker} sk-secret-value` }] },
       options,
     );
+    await browserActFromTool(
+      browser,
+      computer,
+      context,
+      { actions: [{ kind: "fill", target: "email", text: "new" }] },
+      options,
+    );
+    expect(provider.calls).toHaveLength(2);
     const sent = JSON.stringify(provider.calls);
     expect(sent).not.toContain("sk-secret-value");
-    expect(sent).not.toContain("hunter2-value");
-    expect(sent).toContain("[redacted]");
+    expect(sent).not.toContain("typed-value-marker");
+    expect(provider.calls[0]!.state).toMatchObject({ title: "Reports [redacted]" });
+    const link = provider.calls[0]!.questions.target;
+    expect(link?.type === "choice" && Object.values(link.options)[0]).toContain("[redacted]");
     const logged = JSON.stringify(sink.events);
     expect(logged).not.toContain(marker);
     expect(sink.events.map((event) => event.message)).toEqual(
@@ -382,9 +408,18 @@ describe("browser_act targets", () => {
         semanticMemoryEnabled: false,
         messagingChannelRun: false,
       });
+    const items = (tool: ConnectorTool | undefined) =>
+      (
+        tool!.inputSchema as {
+          properties: {
+            actions: { items: { properties: Record<string, unknown>; required: string[] } };
+          };
+        }
+      ).properties.actions.items;
     const act = base().find((tool) => tool.name === "browser_act");
     expect(act).toEqual(builtinAgentTools.find((tool) => tool.name === "browser_act"));
-    expect(JSON.stringify(act)).not.toContain("target");
+    expect(items(act).properties.target).toBeUndefined();
+    expect(items(act).required).toEqual(["kind", "ref"]);
     const withTargets = selectBuiltinToolsForRun({
       graphicalToolsAllowed: true,
       pageBrowserAllowed: true,
@@ -394,10 +429,8 @@ describe("browser_act targets", () => {
       messagingChannelRun: false,
       browserTargets: true,
     }).find((tool) => tool.name === "browser_act");
-    expect(JSON.stringify(withTargets)).toContain("refs are stale");
-    expect(withBrowserTargets([{ name: "x", description: "y", inputSchema: {} }])).toEqual([
-      { name: "x", description: "y", inputSchema: {} },
-    ]);
+    expect(items(withTargets).properties.target).toBeDefined();
+    expect(items(withTargets).required).toEqual(["kind"]);
 
     const plain = await openPage(downloads);
     const withProvider = await openPage(downloads);

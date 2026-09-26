@@ -111,5 +111,10 @@ describe("decision provider config", () => {
     await expect(disconnectDecisionProvider(deps, actor)).resolves.toEqual({ ok: true });
     expect(deleteConfig).toHaveBeenCalledWith({ where: { id: "cfg-1" } });
     expect(secretDeleteMany).toHaveBeenCalledWith({ where: { id: "secret-old" } });
+
+    const unset = makeDeps();
+    await expect(disconnectDecisionProvider(unset.deps, actor)).resolves.toEqual({ ok: true });
+    expect(unset.deleteConfig).not.toHaveBeenCalled();
+    expect(unset.secretDeleteMany).not.toHaveBeenCalled();
   });
 });

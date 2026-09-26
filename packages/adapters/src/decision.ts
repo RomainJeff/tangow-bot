@@ -117,7 +117,8 @@ function validAnswer(question: DecisionQuestion, raw: unknown): raw is DecisionA
     return (
       Object.hasOwn(question.options, answer.choice) &&
       isProbability(answer.confidence) &&
-      validDistribution(answer.probabilities, Object.keys(question.options))
+      validDistribution(answer.probabilities, Object.keys(question.options)) &&
+      Object.hasOwn(answer.probabilities, answer.choice)
     );
   }
   if (answer.type === "score" && question.type === "score") {

@@ -58,7 +58,7 @@ describe("OpenRouter decision adapter", () => {
     expect(init?.method).toBe("POST");
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-key-not-real");
     expect(JSON.parse(String(init?.body))).toEqual(documentedWireBody(fixture));
-    // Documented values, field for field; `legend`, `id`, `provider`, `usage.cost` are dropped.
+    // Documented values, field for field; `legend`, `id`, `provider`, output tokens are dropped.
     expect(response).toEqual({
       model: "typesafe/jev-1.13-20260917",
       usage: { inputTokens: 476, cost: 1.9992e-5 },
@@ -278,7 +278,7 @@ describe("SpaceDecisionProviderResolver", () => {
   it("resolves nothing without a connection or for an unknown provider", async () => {
     const empty = resolverFor({ none: true });
     await expect(empty.resolver.resolve("space-1")).resolves.toBeNull();
-    const unknown = resolverFor({ provider: "typesafe" });
+    const unknown = resolverFor({ provider: "unknown" });
     await expect(unknown.resolver.resolve("space-1")).resolves.toBeNull();
     expect(unknown.secrets.load).not.toHaveBeenCalled();
   });

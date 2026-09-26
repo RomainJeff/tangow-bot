@@ -56,6 +56,13 @@ test("settings shell is two-pane and deep-links Models Memory Browser Voice Usag
   await expect(browserSettings.getByLabel("Base URL")).toBeVisible();
   await expect(browserSettings.getByLabel("Model")).toBeVisible();
   await captureScreenshot(page, testInfo, "settings-shell-browser");
+  await browserSettings.getByLabel("OpenRouter API key").fill("test-key-not-real");
+  await browserSettings.getByRole("button", { name: "Connect" }).click();
+  await expect(browserSettings.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(browserSettings.getByLabel("OpenRouter API key")).toHaveCount(0);
+  await browserSettings.getByRole("button", { name: "Disconnect" }).click();
+  await expect(browserSettings.getByLabel("OpenRouter API key")).toBeVisible();
+  await expect(browserSettings.getByText("Connected", { exact: true })).toHaveCount(0);
 
   await settings.getByTestId("settings-nav-voice").click();
   await expect(settings).toHaveAttribute("data-settings-section", "voice");
