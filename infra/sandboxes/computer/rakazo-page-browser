@@ -474,10 +474,22 @@ EVAL_HELPERS = r"""
         if (el instanceof HTMLInputElement && !["text", "search", "email", "url", "tel", "password", "number"].includes(el.type)) {
           throw new Error("Input type requires desktop tools");
         }
-        const prototype = el instanceof HTMLInputElement ? HTMLInputElement.prototype
-          : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLSelectElement.prototype;
-        Object.getOwnPropertyDescriptor(prototype, "value").set.call(el, String(value));
-        if (el.value !== String(value)) throw new Error("Input did not accept the requested value");
+        if (el instanceof HTMLSelectElement) {
+          // Models name an option by what they read: its label, not its hidden value.
+          const wanted = String(value).trim().toLowerCase();
+          const options = Array.from(el.options).filter((option) => !option.disabled);
+          const match = options.find((option) => option.value === String(value))
+            || options.find((option) => option.label.trim().toLowerCase() === wanted);
+          if (!match) {
+            const labels = options.map((option) => JSON.stringify(option.label.trim())).slice(0, 20);
+            throw new Error(`No option matches the requested value; options: ${labels.join(", ")}`);
+          }
+          el.value = match.value;
+        } else {
+          const prototype = el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+          Object.getOwnPropertyDescriptor(prototype, "value").set.call(el, String(value));
+          if (el.value !== String(value)) throw new Error("Input did not accept the requested value");
+        }
         el.dispatchEvent(new Event("input", { bubbles: true }));
         el.dispatchEvent(new Event("change", { bubbles: true }));
       } else if (el.isContentEditable) {
@@ -512,12 +524,12 @@ def eval_json(client: CdpClient, session_id: str, expression: str) -> Any:
     )
     if result.get("exceptionDetails"):
         details = result["exceptionDetails"]
-        text = (
-            details.get("text")
-            or (details.get("exception") or {}).get("description")
-            or "evaluate failed"
-        )
-        raise RuntimeError(str(text))
+        # "text" is only "Uncaught"; the thrown message is the first line of the description.
+        description = str((details.get("exception") or {}).get("description") or "")
+        message = description.splitlines()[0] if description else ""
+        if message.startswith("Error: "):
+            message = message[len("Error: ") :]
+        raise RuntimeError(message or str(details.get("text") or "evaluate failed"))
     return (result.get("result") or {}).get("value")
 
 

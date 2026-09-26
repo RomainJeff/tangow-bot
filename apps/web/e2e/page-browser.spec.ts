@@ -21,6 +21,7 @@ test("live page helper preserves identity, masks passwords, and reports partial 
       <button id="save" onclick="this.dataset.clicks=Number(this.dataset.clicks||0)+1">Save</button>
       <label><input type="checkbox">Agree</label><button disabled>Disabled</button>
       <iframe style="display:none"></iframe><iframe width="1" height="1"></iframe>
+      <select aria-label="Month"><option value="">Choose</option><option value="2027-04">avril 2027</option></select>
       <script>window.__rakazoPageBrowser={snapshot:()=>({title:'spoofed'})};</script>`);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -77,6 +78,19 @@ test("live page helper preserves identity, masks passwords, and reports partial 
     expect(framed.tree).toContain("1 embedded frame is not listed");
     expect(framed.tree).not.toContain("require desktop tools");
     await page.locator("#visible-frame").evaluate((el) => el.remove());
+    // A select is filled by the option label the model read; a miss says which labels exist.
+    const withSelect = await command("snapshot");
+    expect(
+      await command("act", {
+        actions: [{ kind: "fill", ref: ref(withSelect, "Month"), text: "Avril 2027" }],
+      }),
+    ).toMatchObject({ ok: true, completed: 1 });
+    await expect(page.getByLabel("Month")).toHaveValue("2027-04");
+    const missed = await command("act", {
+      actions: [{ kind: "fill", ref: ref(await command("snapshot"), "Month"), text: "mai 2027" }],
+    });
+    expect(missed).toMatchObject({ ok: false, completed: 0 });
+    expect(missed.error).toContain('options: "Choose", "avril 2027"');
     const stale = await command("snapshot");
     await page.locator("#save").evaluate((el) => {
       el.outerHTML = '<button id="save">Replacement</button>';
