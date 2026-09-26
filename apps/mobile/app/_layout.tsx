@@ -1,7 +1,15 @@
-import { DarkTheme, Stack, ThemeProvider } from "expo-router";
+import * as Notifications from "expo-notifications";
+import {
+  DarkTheme,
+  Stack,
+  ThemeProvider,
+  useGlobalSearchParams,
+  usePathname,
+  useRouter,
+} from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { AvatarStyleProvider } from "../components/avatar-style";
@@ -13,6 +21,8 @@ import { loadAppearancePreference, mobileTokens } from "../lib/appearance";
 import { bootstrapI18n, useI18n } from "../lib/i18n";
 import {
   configureForegroundNotifications,
+  destinationIsOnScreen,
+  notificationDestination,
   resumeLiveNotifications,
 } from "../lib/live-notifications";
 import { native, useResolvedAppearance } from "../lib/native";
@@ -29,6 +39,10 @@ export default function Layout() {
   const [ready, setReady] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
   const resolved = useResolvedAppearance();
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams();
+  const notificationResponse = Notifications.useLastNotificationResponse();
   const navigationTheme = useMemo(() => {
     const tokens = mobileTokens();
     return {
@@ -61,6 +75,24 @@ export default function Layout() {
       loadDisplayAgentSteps(),
     ]).finally(() => setReady(true));
   }, []);
+
+  // A tapped push, cold start included, opens the conversation it came from once the
+  // stack exists; clearing it keeps a later remount from replaying the same tap. The
+  // route is read through a ref so navigating does not rerun this for the same tap.
+  const currentRoute = useRef({ pathname, params });
+  currentRoute.current = { pathname, params };
+  useEffect(() => {
+    if (!ready || !notificationResponse) return;
+    if (notificationResponse.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
+    Notifications.clearLastNotificationResponse();
+    const destination = notificationDestination(
+      notificationResponse.notification.request.content.data,
+    );
+    const { pathname: onScreen, params: onScreenParams } = currentRoute.current;
+    if (destination && !destinationIsOnScreen(destination, onScreen, onScreenParams)) {
+      router.push(destination);
+    }
+  }, [notificationResponse, ready, router]);
 
   // The animated splash mirrors the native one pixel-for-pixel, so the native
   // screen can come down as soon as ours has laid out — no gap, no flash.

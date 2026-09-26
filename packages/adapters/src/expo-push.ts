@@ -128,7 +128,9 @@ export class ExpoPushProvider implements NotificationProvider {
           mutableContent: message.avatar ? true : undefined,
           data: {
             kind: message.kind,
+            spaceId: context.spaceId,
             botId: message.botId,
+            groupId: message.groupId,
             threadId: message.threadId,
             avatarColor: message.avatar?.color,
             avatarShape: message.avatar?.shape,

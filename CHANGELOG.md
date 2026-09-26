@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Bots now fill drop-down menus on web pages by the option they read and no longer switch to screen clicks when a page shows hidden ad or tracker frames.
 - The iPhone app opens again instead of closing right after launch: the launch screen's bot avatar called a colour helper that a merge had removed.
+- Tapping a bot's push notification on mobile now opens that bot's conversation, or the group it spoke in, instead of just launching the app on the inbox.
 
 ### 2026-09-25
 

@@ -17,12 +17,57 @@ vi.mock("react-native", () => ({ Platform: { OS: "ios" } }));
 import * as Notifications from "expo-notifications";
 import {
   configureForegroundNotifications,
+  destinationIsOnScreen,
+  notificationDestination,
   notificationTargetsThread,
   setOpenNotificationThread,
   syncAppBadge,
 } from "./live-notifications";
 
 beforeEach(() => vi.clearAllMocks());
+
+describe("notification destination", () => {
+  it("opens the bot's chat in the space it came from", () => {
+    expect(notificationDestination({ botId: "bot-1", threadId: "t", spaceId: "s" })).toEqual({
+      pathname: "/thread",
+      params: { botId: "bot-1", spaceId: "s" },
+    });
+    expect(notificationDestination({ botId: "bot-1" })).toEqual({
+      pathname: "/thread",
+      params: { botId: "bot-1" },
+    });
+  });
+
+  it("opens the group when the bot spoke in one", () => {
+    expect(notificationDestination({ botId: "bot-1", groupId: "g", spaceId: "s" })).toEqual({
+      pathname: "/group-thread",
+      params: { groupId: "g", spaceId: "s" },
+    });
+  });
+
+  it("ignores a push without a conversation", () => {
+    expect(notificationDestination({})).toBeNull();
+    expect(notificationDestination(undefined)).toBeNull();
+    expect(notificationDestination({ botId: 3 })).toBeNull();
+  });
+});
+
+describe("notification destination on screen", () => {
+  const chat = { pathname: "/thread", params: { botId: "bot-1", spaceId: "s" } } as const;
+  const group = { pathname: "/group-thread", params: { groupId: "g" } } as const;
+
+  it("recognises the conversation already open", () => {
+    expect(destinationIsOnScreen(chat, "/thread", { botId: "bot-1", name: "Maya" })).toBe(true);
+    expect(destinationIsOnScreen(group, "/group-thread", { groupId: "g" })).toBe(true);
+  });
+
+  it("opens anything else", () => {
+    expect(destinationIsOnScreen(chat, "/", {})).toBe(false);
+    expect(destinationIsOnScreen(chat, "/thread", { botId: "bot-2" })).toBe(false);
+    expect(destinationIsOnScreen(chat, "/thread", { botId: "bot-1", groupId: "g" })).toBe(false);
+    expect(destinationIsOnScreen(group, "/group-thread", { groupId: "h" })).toBe(false);
+  });
+});
 
 describe("notification thread targeting", () => {
   it("matches Expo and native notification keys for the open agent", () => {
