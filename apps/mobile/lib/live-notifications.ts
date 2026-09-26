@@ -82,6 +82,18 @@ export function notificationDestination(
   return botId ? { pathname: "/thread", params: { botId, ...space } } : null;
 }
 
+/** True when the conversation a push leads to is already the screen on top. */
+export function destinationIsOnScreen(
+  destination: NotificationDestination,
+  pathname: string,
+  params: Record<string, string | string[] | undefined>,
+): boolean {
+  if (pathname !== destination.pathname) return false;
+  return "groupId" in destination.params
+    ? params.groupId === destination.params.groupId
+    : params.botId === destination.params.botId && !params.groupId;
+}
+
 export function configureForegroundNotifications(): void {
   if (foregroundHandlerConfigured) return;
   foregroundHandlerConfigured = true;
