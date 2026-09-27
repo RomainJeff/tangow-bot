@@ -89,6 +89,8 @@ import {
   MarkdownArtifactPreview,
   type MarkdownArtifactPreviewTarget,
 } from "../components/markdown-artifact-preview";
+import type { MessageSheetAction } from "../components/message-actions-sheet";
+import { MessageActionsSheet } from "../components/message-actions-sheet";
 import { MessageRow } from "../components/message-row";
 import { NativeSymbol } from "../components/native-symbol";
 import { ShimmerText } from "../components/shimmer-text";
@@ -133,7 +135,6 @@ import {
   setOpenNotificationThread,
   syncAppBadge,
 } from "../lib/live-notifications";
-import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
@@ -148,6 +149,7 @@ import {
   takePhoto,
 } from "../lib/pick-attachments";
 import { threadRefreshDelayMs } from "../lib/refresh";
+import { closeSheet, openSheet } from "../lib/sheet";
 import { shadowsForAppearance } from "../lib/theme";
 import {
   type ThreadScrollAction,
@@ -397,6 +399,8 @@ function Thread() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  // The sheet a long press opened, closed if the screen moves to another thread.
+  const messageSheetOwner = useRef<string | null>(null);
   const [markdownPreview, setMarkdownPreview] = useState<MarkdownArtifactPreviewTarget | null>(
     null,
   );
@@ -1137,6 +1141,8 @@ function Thread() {
     setSelectedMentions([]);
     setReplyTarget(null);
     setRewindTarget(null);
+    if (messageSheetOwner.current) closeSheet(messageSheetOwner.current);
+    messageSheetOwner.current = null;
     setRewindArtifactIds([]);
     setAttachmentNotice(null);
     setError(null);
@@ -1508,69 +1514,96 @@ function Thread() {
     }
   }
 
-  function messageActions(message: MobileMessage) {
+  function messageActionGroups(message: MobileMessage): MessageSheetAction[][] {
+    const text = copyableMobileMessageText(message);
     return [
-      {
-        name: "reply",
-        text: t("Reply"),
-        onPress: () => setReplyTarget(message),
-      },
-      ...(canReactToThreadMessage(message)
-        ? [
-            {
-              name: "react",
-              text: t("React"),
-              onPress: () =>
-                presentMessageActionSheet({
-                  cancel: t("Cancel"),
-                  more: t("More"),
-                  colorScheme,
-                  actions: MESSAGE_REACTIONS.map((emoji) => ({
-                    name: emoji,
-                    text: emoji,
-                    onPress: () => void reactToMessage(message, emoji),
-                  })),
-                }),
-            },
-          ]
-        : []),
-      ...(message.role === "user"
-        ? [
-            {
-              name: "rewind",
-              text: "Edit and resend",
-              onPress: () => startRewind(message),
-            },
-          ]
-        : []),
-      ...(message.role === "bot" && blockText(message)
-        ? [
-            {
-              name: "speak",
-              text: t("Speak message"),
-              onPress: () => void speak(message),
-            },
-          ]
-        : []),
-      {
-        name: "copy",
-        text: t("Copy"),
-        onPress: () => {
-          const text = copyableMobileMessageText(message);
-          if (text) void Clipboard.setStringAsync(text).catch(() => undefined);
+      [
+        {
+          name: "reply",
+          text: t("Reply"),
+          icon: { ios: "arrowshape.turn.up.left", android: "arrow-undo-outline" },
+          onPress: () => setReplyTarget(message),
         },
-      },
+        ...(message.role === "user"
+          ? [
+              {
+                name: "rewind",
+                text: "Edit and resend",
+                icon: { ios: "pencil", android: "create-outline" } as const,
+                onPress: () => startRewind(message),
+              },
+            ]
+          : []),
+        ...(message.role === "bot" && blockText(message)
+          ? [
+              {
+                name: "speak",
+                text: t("Speak message"),
+                icon: { ios: "speaker.wave.2", android: "volume-high-outline" } as const,
+                onPress: () => void speak(message),
+              },
+            ]
+          : []),
+      ],
+      text
+        ? [
+            {
+              name: "copy",
+              text: t("Copy"),
+              icon: { ios: "doc.on.doc", android: "copy-outline" },
+              onPress: () => void Clipboard.setStringAsync(text).catch(() => undefined),
+            },
+          ]
+        : [],
     ];
   }
 
-  function showMessageActions(message: MobileMessage) {
-    presentMessageActionSheet({
-      actions: messageActions(message),
-      title: message.createdAt ? messageClockTime(message.createdAt) : undefined,
-      cancel: t("Cancel"),
-      more: t("More"),
-      colorScheme,
-    });
+  /** The same actions for assistive tech, which has no long press. */
+  function messageActions(message: MobileMessage) {
+    const [primary = [], rest = []] = messageActionGroups(message);
+    return [
+      primary[0],
+      ...(canReactToThreadMessage(message)
+        ? [{ name: "react", text: t("React"), onPress: () => showMessageActions(message) }]
+        : []),
+      ...primary.slice(1),
+      ...rest,
+      ...(copyableMobileMessageText(message)
+        ? [
+            {
+              name: "select",
+              text: t("Select text"),
+              onPress: () => showMessageActions(message, "text"),
+            },
+          ]
+        : []),
+    ].filter((action) => action !== undefined);
+  }
+
+  function showMessageActions(message: MobileMessage, mode: "actions" | "text" = "actions") {
+    if (mode === "actions") selectionHaptic();
+    const owner = `thread:${threadKey}`;
+    messageSheetOwner.current = owner;
+    openSheet(
+      router,
+      (close) => (
+        <MessageActionsSheet
+          initialMode={mode}
+          reactions={
+            canReactToThreadMessage(message)
+              ? MESSAGE_REACTIONS.map((emoji) => ({
+                  emoji,
+                  onPress: () => void reactToMessage(message, emoji),
+                }))
+              : []
+          }
+          groups={messageActionGroups(message)}
+          text={copyableMobileMessageText(message)}
+          close={close}
+        />
+      ),
+      { owner, background: tokens.popover },
+    );
   }
 
   // One props object per message whose handlers reach the latest render, so
