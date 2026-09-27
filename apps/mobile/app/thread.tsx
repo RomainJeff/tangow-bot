@@ -1142,6 +1142,7 @@ function Thread() {
     setSelectedMentions([]);
     setReplyTarget(null);
     setRewindTarget(null);
+    setMessageSheet(null);
     setRewindArtifactIds([]);
     setAttachmentNotice(null);
     setError(null);

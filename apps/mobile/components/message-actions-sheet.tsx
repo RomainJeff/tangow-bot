@@ -59,6 +59,9 @@ export function MessageActionsSheet({
         <Animated.View
           key={mode}
           accessibilityViewIsModal
+          // The modal hides the backdrop from VoiceOver; the escape gesture
+          // is its way out, as Cancel was on the system action sheet.
+          onAccessibilityEscape={onClose}
           entering={SlideInDown.duration(220)}
           style={{
             maxHeight: height - insets.top - 24,
