@@ -89,6 +89,8 @@ import {
   MarkdownArtifactPreview,
   type MarkdownArtifactPreviewTarget,
 } from "../components/markdown-artifact-preview";
+import type { MessageSheetAction } from "../components/message-actions-sheet";
+import { MessageActionsSheet } from "../components/message-actions-sheet";
 import { MessageRow } from "../components/message-row";
 import { NativeSymbol } from "../components/native-symbol";
 import { ShimmerText } from "../components/shimmer-text";
@@ -133,7 +135,6 @@ import {
   setOpenNotificationThread,
   syncAppBadge,
 } from "../lib/live-notifications";
-import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
@@ -397,6 +398,10 @@ function Thread() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [messageSheet, setMessageSheet] = useState<{
+    message: MobileMessage;
+    mode: "actions" | "text";
+  } | null>(null);
   const [markdownPreview, setMarkdownPreview] = useState<MarkdownArtifactPreviewTarget | null>(
     null,
   );
@@ -1508,69 +1513,72 @@ function Thread() {
     }
   }
 
-  function messageActions(message: MobileMessage) {
+  function messageActionGroups(message: MobileMessage): MessageSheetAction[][] {
+    const text = copyableMobileMessageText(message);
     return [
-      {
-        name: "reply",
-        text: t("Reply"),
-        onPress: () => setReplyTarget(message),
-      },
-      ...(canReactToThreadMessage(message)
-        ? [
-            {
-              name: "react",
-              text: t("React"),
-              onPress: () =>
-                presentMessageActionSheet({
-                  cancel: t("Cancel"),
-                  more: t("More"),
-                  colorScheme,
-                  actions: MESSAGE_REACTIONS.map((emoji) => ({
-                    name: emoji,
-                    text: emoji,
-                    onPress: () => void reactToMessage(message, emoji),
-                  })),
-                }),
-            },
-          ]
-        : []),
-      ...(message.role === "user"
-        ? [
-            {
-              name: "rewind",
-              text: "Edit and resend",
-              onPress: () => startRewind(message),
-            },
-          ]
-        : []),
-      ...(message.role === "bot" && blockText(message)
-        ? [
-            {
-              name: "speak",
-              text: t("Speak message"),
-              onPress: () => void speak(message),
-            },
-          ]
-        : []),
-      {
-        name: "copy",
-        text: t("Copy"),
-        onPress: () => {
-          const text = copyableMobileMessageText(message);
-          if (text) void Clipboard.setStringAsync(text).catch(() => undefined);
+      [
+        {
+          name: "reply",
+          text: t("Reply"),
+          icon: { ios: "arrowshape.turn.up.left", android: "arrow-undo-outline" },
+          onPress: () => setReplyTarget(message),
         },
-      },
+        ...(message.role === "user"
+          ? [
+              {
+                name: "rewind",
+                text: "Edit and resend",
+                icon: { ios: "pencil", android: "create-outline" } as const,
+                onPress: () => startRewind(message),
+              },
+            ]
+          : []),
+        ...(message.role === "bot" && blockText(message)
+          ? [
+              {
+                name: "speak",
+                text: t("Speak message"),
+                icon: { ios: "speaker.wave.2", android: "volume-high-outline" } as const,
+                onPress: () => void speak(message),
+              },
+            ]
+          : []),
+      ],
+      text
+        ? [
+            {
+              name: "copy",
+              text: t("Copy"),
+              icon: { ios: "doc.on.doc", android: "copy-outline" },
+              onPress: () => void Clipboard.setStringAsync(text).catch(() => undefined),
+            },
+            {
+              name: "select",
+              text: t("Select text"),
+              icon: { ios: "character.cursor.ibeam", android: "text-outline" },
+              onPress: () => setMessageSheet({ message, mode: "text" }),
+            },
+          ]
+        : [],
     ];
   }
 
+  /** The same actions for assistive tech, which has no long press. */
+  function messageActions(message: MobileMessage) {
+    const [primary = [], rest = []] = messageActionGroups(message);
+    return [
+      primary[0],
+      ...(canReactToThreadMessage(message)
+        ? [{ name: "react", text: t("React"), onPress: () => showMessageActions(message) }]
+        : []),
+      ...primary.slice(1),
+      ...rest,
+    ].filter((action) => action !== undefined);
+  }
+
   function showMessageActions(message: MobileMessage) {
-    presentMessageActionSheet({
-      actions: messageActions(message),
-      title: message.createdAt ? messageClockTime(message.createdAt) : undefined,
-      cancel: t("Cancel"),
-      more: t("More"),
-      colorScheme,
-    });
+    selectionHaptic();
+    setMessageSheet({ message, mode: "actions" });
   }
 
   // One props object per message whose handlers reach the latest render, so
@@ -2412,6 +2420,22 @@ function Thread() {
           </View>
         </View>
       </Modal>
+      {messageSheet ? (
+        <MessageActionsSheet
+          mode={messageSheet.mode}
+          reactions={
+            canReactToThreadMessage(messageSheet.message)
+              ? MESSAGE_REACTIONS.map((emoji) => ({
+                  emoji,
+                  onPress: () => void reactToMessage(messageSheet.message, emoji),
+                }))
+              : []
+          }
+          groups={messageActionGroups(messageSheet.message)}
+          text={copyableMobileMessageText(messageSheet.message)}
+          onClose={() => setMessageSheet(null)}
+        />
+      ) : null}
       {markdownPreview && artifactTarget ? (
         <MarkdownArtifactPreview
           threadTarget={artifactTarget}

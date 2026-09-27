@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-09-27
 
+#### Added
+
+- **Long-pressing a message on mobile opens a drawer with quick reactions, its actions and Select text.** The drawer replaces the system action sheet; Select text shows the message on its own so you can select and copy just part of it.
+
 #### Fixed
 
 - Every link in a thread is now clickable on web, desktop and mobile: URLs you type in your own messages, bare `https://` and `www.` addresses in bot replies on mobile, and Markdown links that start with `www.` instead of `https://`; tapping a link on mobile now always opens it instead of sometimes doing nothing.

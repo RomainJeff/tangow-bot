@@ -165,6 +165,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Connected · {label}": "Подключено · {label}",
   "Connected and using {label}.": "Подключено и используется {label}.",
   Copy: "Копировать",
+  "Select text": "Выделить текст",
   More: "Ещё",
   "Could not add source": "Не удалось добавить источник",
   "Could not archive bot": "Не удалось заархивировать бота",
