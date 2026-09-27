@@ -1602,7 +1602,7 @@ function Thread() {
           close={close}
         />
       ),
-      owner,
+      { owner, background: tokens.popover },
     );
   }
 

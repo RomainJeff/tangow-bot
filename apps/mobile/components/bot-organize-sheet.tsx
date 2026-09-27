@@ -63,7 +63,7 @@ export function BotOrganizeSheet({
   }
 
   return (
-    <View>
+    <View style={styles.sheet}>
       <Text style={styles.title} numberOfLines={1}>
         {bot.name}
       </Text>
@@ -170,6 +170,9 @@ export function BotOrganizeSheet({
         </>
       )}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Pressable onPress={onClose} style={styles.cancel}>
+        <Text style={styles.cancelLabel}>{t("Cancel")}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -205,6 +208,11 @@ function SectionOption({
 
 function createBotOrganizeStyles() {
   return StyleSheet.create({
+    sheet: {
+      paddingHorizontal: 16,
+      paddingTop: 24,
+      paddingBottom: 8,
+    },
     title: {
       color: native.label,
       fontSize: 18,
@@ -238,6 +246,10 @@ function createBotOrganizeStyles() {
     },
     sectionOptions: {
       maxHeight: 230,
+      // The native sheet measures its content before it has a height; a
+      // shrinking list would collapse to nothing and draw over the rows below.
+      flexGrow: 0,
+      flexShrink: 0,
     },
     sectionOption: {
       minHeight: 44,
@@ -273,6 +285,16 @@ function createBotOrganizeStyles() {
     newSectionSubmitLabel: {
       color: native.page,
       fontSize: 14,
+      fontWeight: "600",
+    },
+    cancel: {
+      alignItems: "center",
+      paddingTop: 14,
+      paddingBottom: 2,
+    },
+    cancelLabel: {
+      color: native.secondaryLabel,
+      fontSize: 16,
       fontWeight: "600",
     },
     error: {

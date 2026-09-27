@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,7 +8,7 @@ import { registerSheetClose, sheetContent } from "../lib/sheet";
 export default function Sheet() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [render] = useState(sheetContent);
+  const [content] = useState(sheetContent);
   const close = useCallback(() => {
     if (router.canGoBack()) router.back();
     else router.replace("/");
@@ -17,13 +17,14 @@ export default function Sheet() {
   useEffect(() => registerSheetClose(close), [close]);
   // Reached without content (a stale link or a restored stack): nothing to show.
   useEffect(() => {
-    if (!render) close();
-  }, [render, close]);
+    if (!content) close();
+  }, [content, close]);
 
-  if (!render) return null;
+  if (!content) return null;
   return (
-    <View style={{ paddingTop: 24, paddingHorizontal: 16, paddingBottom: insets.bottom + 16 }}>
-      {render(close)}
+    <View style={{ backgroundColor: content.background, paddingBottom: insets.bottom }}>
+      <Stack.Screen options={{ contentStyle: { backgroundColor: content.background } }} />
+      {content.render(close)}
     </View>
   );
 }

@@ -391,35 +391,41 @@ export default function Home() {
       kind === "bot" ? bots.find((bot) => bot.id === id) : groups.find((group) => group.id === id);
     if (!chat) return;
     selectionHaptic();
-    openSheet(router, (close) => (
-      <BotOrganizeSheet
-        bot={chat}
-        sections={botSections}
-        onClose={close}
-        onUpdate={async (update) => {
-          await rpc(`${kind}s/update`, { [`${kind}Id`]: chat.id, ...update });
-          if (kind === "bot" && update.notifyOnFinish !== undefined) {
-            await resumeLiveNotifications(
-              currentApiBase(),
-              await loadSessionToken(),
-              selectedSpaceId() ?? "",
-            ).catch(() => undefined);
-            if (!update.notifyOnFinish && "threadId" in chat) {
-              await dismissThreadNotifications({ threadId: chat.threadId }).catch(() => undefined);
+    openSheet(
+      router,
+      (close) => (
+        <BotOrganizeSheet
+          bot={chat}
+          sections={botSections}
+          onClose={close}
+          onUpdate={async (update) => {
+            await rpc(`${kind}s/update`, { [`${kind}Id`]: chat.id, ...update });
+            if (kind === "bot" && update.notifyOnFinish !== undefined) {
+              await resumeLiveNotifications(
+                currentApiBase(),
+                await loadSessionToken(),
+                selectedSpaceId() ?? "",
+              ).catch(() => undefined);
+              if (!update.notifyOnFinish && "threadId" in chat) {
+                await dismissThreadNotifications({ threadId: chat.threadId }).catch(
+                  () => undefined,
+                );
+              }
             }
-          }
-          await loadBots();
-        }}
-        onCreateSection={async (name) => {
-          await rpc("botSections/create", { [`${kind}Id`]: chat.id, name });
-          await loadBots();
-        }}
-        onRenameSection={async (sectionId, name) => {
-          await rpc("botSections/update", { sectionId, name });
-          await loadBots();
-        }}
-      />
-    ));
+            await loadBots();
+          }}
+          onCreateSection={async (name) => {
+            await rpc("botSections/create", { [`${kind}Id`]: chat.id, name });
+            await loadBots();
+          }}
+          onRenameSection={async (sectionId, name) => {
+            await rpc("botSections/update", { sectionId, name });
+            await loadBots();
+          }}
+        />
+      ),
+      { background: native.fillPressed },
+    );
   }
 
   function showSpaceActions(space: InboxSpace) {

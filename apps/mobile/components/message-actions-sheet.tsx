@@ -48,26 +48,52 @@ export function MessageActionsSheet({
   const [mode, setMode] = useState(initialMode);
 
   if (mode === "text") {
-    return Platform.OS === "ios" ? (
-      // A read-only UITextView keeps range selection; iOS Text only offers
-      // select-all.
-      <TextInput
-        editable={false}
-        multiline
-        scrollEnabled
-        value={text}
-        style={{
-          maxHeight: height * 0.75,
-          color: tokens.foreground,
-          ...nativeTextStyle("body"),
-        }}
-      />
-    ) : (
-      <ScrollView style={{ maxHeight: height * 0.75 }}>
-        <Text selectable style={{ color: tokens.foreground, ...nativeTextStyle("body") }}>
-          {text}
-        </Text>
-      </ScrollView>
+    return (
+      <View style={{ paddingTop: 16, paddingHorizontal: 16, paddingBottom: 16 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 48 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("Close")}
+            hitSlop={8}
+            onPress={close}
+            style={{ padding: 8 }}
+          >
+            <NativeSymbol ios="xmark" android="close" size={18} />
+          </Pressable>
+          <Text style={{ color: tokens.popoverForeground, ...nativeTextStyle("rowName") }}>
+            {t("Message")}
+          </Text>
+        </View>
+        {Platform.OS === "ios" ? (
+          // A read-only UITextView keeps range selection; iOS Text only offers
+          // select-all.
+          <TextInput
+            editable={false}
+            multiline
+            scrollEnabled
+            value={text}
+            style={{
+              maxHeight: height * 0.75,
+              flexShrink: 0,
+              color: tokens.popoverForeground,
+              paddingTop: 8,
+              ...nativeTextStyle("body"),
+            }}
+          />
+        ) : (
+          <ScrollView
+            style={{ maxHeight: height * 0.75, flexGrow: 0, flexShrink: 0 }}
+            contentContainerStyle={{ paddingTop: 8 }}
+          >
+            <Text
+              selectable
+              style={{ color: tokens.popoverForeground, ...nativeTextStyle("body") }}
+            >
+              {text}
+            </Text>
+          </ScrollView>
+        )}
+      </View>
     );
   }
 
@@ -83,7 +109,7 @@ export function MessageActionsSheet({
     : groups;
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: 12, paddingTop: 29, paddingHorizontal: 16, paddingBottom: 16 }}>
       {reactions.length ? (
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
           {reactions.map((reaction) => (
