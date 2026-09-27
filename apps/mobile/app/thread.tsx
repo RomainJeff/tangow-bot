@@ -3438,7 +3438,7 @@ function MessageText({
       <View style={{ alignItems: "flex-end" }}>
         {parent}
         <UserBubble {...actionProps}>
-          <LinkifiedText>{contentText}</LinkifiedText>
+          <LinkifiedText onLongPress={actionProps.onLongPress}>{contentText}</LinkifiedText>
         </UserBubble>
       </View>
     );

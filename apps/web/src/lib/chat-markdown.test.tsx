@@ -66,13 +66,16 @@ describe("ChatMarkdown", () => {
     }
   });
 
-  it("makes bare URLs and scheme-less link targets clickable", () => {
+  it("makes bare URLs and www. link targets clickable, but not file names", () => {
     const html = renderToStaticMarkup(
-      <ChatMarkdown>{"See https://example.com/a and [docs](example.com/docs)"}</ChatMarkdown>,
+      <ChatMarkdown>
+        {"See https://example.com/a, [docs](www.example.com/docs) and [readme](README.md)"}
+      </ChatMarkdown>,
     );
 
     expect(html).toContain('href="https://example.com/a"');
-    expect(html).toContain('href="https://example.com/docs"');
+    expect(html).toContain('href="https://www.example.com/docs"');
+    expect(html).not.toContain("https://README.md");
   });
 
   it("links every URL in plain user text without rendering markdown", () => {

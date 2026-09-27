@@ -61,15 +61,16 @@ export function sanitizeMarkdownUrl(url: string, allowRelative = false): string 
   return undefined;
 }
 
-const bareDomainPattern = /^(?:[a-z\d-]+\.)+[a-z]{2,}(?:[/?#:]|$)/i;
-
-/** A link target the renderer may follow: a safe URL as written, or a bare
- * domain such as `example.com/docs` upgraded to https so it is not a dead link. */
+/** A link target the renderer may follow: a safe URL as written, or a `www.`
+ * address upgraded to https. Other scheme-less targets stay dead: `README.md`
+ * or `setup.py` look like domains (.md and .py are real TLDs) but are files. */
 export function linkHref(url: string, allowRelative = false): string | undefined {
   const safe = sanitizeMarkdownUrl(url, allowRelative);
   if (safe) return safe;
   const value = url.trim();
-  return bareDomainPattern.test(value) ? `https://${value}` : undefined;
+  return /^www\.[a-z\d-]+(?:\.[a-z\d-]+)+(?:[/?#:]|$)/i.test(value)
+    ? `https://${value}`
+    : undefined;
 }
 
 export type TextSegment = { text: string; href?: string };

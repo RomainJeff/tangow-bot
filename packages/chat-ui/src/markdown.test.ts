@@ -24,9 +24,10 @@ describe("sanitizeMarkdownUrl", () => {
 });
 
 describe("linkHref", () => {
-  it("upgrades a bare domain to https and keeps unsafe targets dead", () => {
-    expect(linkHref("example.com/docs")).toBe("https://example.com/docs");
-    expect(linkHref("www.example.com")).toBe("https://www.example.com");
+  it("upgrades a www. address to https and keeps other scheme-less targets dead", () => {
+    expect(linkHref("www.example.com/docs")).toBe("https://www.example.com/docs");
+    expect(linkHref("README.md")).toBeUndefined();
+    expect(linkHref("setup.py")).toBeUndefined();
     expect(linkHref("https://example.com")).toBe("https://example.com");
     expect(linkHref("javascript:alert(1)")).toBeUndefined();
     expect(linkHref("notes")).toBeUndefined();
