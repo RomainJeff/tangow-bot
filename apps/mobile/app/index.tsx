@@ -23,7 +23,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BotAvatar } from "../components/bot-avatar";
-import { BotOrganizeModal } from "../components/bot-organize-modal";
+import { BotOrganizeSheet } from "../components/bot-organize-sheet";
 import { GroupAvatar } from "../components/group-avatar";
 import { NativeSymbol } from "../components/native-symbol";
 import {
@@ -49,6 +49,7 @@ import {
 } from "../lib/api";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { allowFocusPrompt, scheduleFocusPrompt } from "../lib/focus-prompt";
+import { selectionHaptic } from "../lib/haptics";
 import { t, useI18n } from "../lib/i18n";
 import { botTag, filterBots, formatThreadTime, userInitials } from "../lib/inbox";
 import {
@@ -73,6 +74,7 @@ import { setProfilePhoto, useProfilePhoto } from "../lib/profile-photo";
 import { registerPushToken } from "../lib/push";
 import { querySpaceSearch } from "../lib/search";
 import { mobileSearchDestination } from "../lib/search-destination";
+import { openSheet } from "../lib/sheet";
 import { nativeTextStyle } from "../lib/typography";
 
 const FALLBACK_COLOR = botColors[3];
@@ -106,10 +108,6 @@ export default function Home() {
   const [searching, setSearching] = useState(false);
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [organizeTarget, setOrganizeTarget] = useState<{
-    kind: "bot" | "group";
-    id: string;
-  } | null>(null);
   const [activityMode, setActivityMode] = useState(false);
   const [activity, setActivity] = useState<{ active: RunActivityRow[]; recent: RunActivityRow[] }>({
     active: [],
@@ -321,11 +319,6 @@ export default function Home() {
   const photo = useProfilePhoto();
   // Tracking the failed source (not a boolean) retries on the next photo.
   const userImage = photo !== failedUserImage ? photo : null;
-  const organizeChat = organizeTarget
-    ? organizeTarget.kind === "bot"
-      ? bots.find((bot) => bot.id === organizeTarget.id)
-      : groups.find((group) => group.id === organizeTarget.id)
-    : null;
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -391,6 +384,42 @@ export default function Home() {
       spaceActionRef.current.busy = false;
       setSpaceBusy(false);
     }
+  }
+
+  function organize(kind: "bot" | "group", id: string) {
+    const chat =
+      kind === "bot" ? bots.find((bot) => bot.id === id) : groups.find((group) => group.id === id);
+    if (!chat) return;
+    selectionHaptic();
+    openSheet(router, (close) => (
+      <BotOrganizeSheet
+        bot={chat}
+        sections={botSections}
+        onClose={close}
+        onUpdate={async (update) => {
+          await rpc(`${kind}s/update`, { [`${kind}Id`]: chat.id, ...update });
+          if (kind === "bot" && update.notifyOnFinish !== undefined) {
+            await resumeLiveNotifications(
+              currentApiBase(),
+              await loadSessionToken(),
+              selectedSpaceId() ?? "",
+            ).catch(() => undefined);
+            if (!update.notifyOnFinish && "threadId" in chat) {
+              await dismissThreadNotifications({ threadId: chat.threadId }).catch(() => undefined);
+            }
+          }
+          await loadBots();
+        }}
+        onCreateSection={async (name) => {
+          await rpc("botSections/create", { [`${kind}Id`]: chat.id, name });
+          await loadBots();
+        }}
+        onRenameSection={async (sectionId, name) => {
+          await rpc("botSections/update", { sectionId, name });
+          await loadBots();
+        }}
+      />
+    ));
   }
 
   function showSpaceActions(space: InboxSpace) {
@@ -655,7 +684,7 @@ export default function Home() {
               }}
               onLongPress={
                 item.group.spaceId === me?.spaceId
-                  ? () => setOrganizeTarget({ kind: "group", id: item.group.id })
+                  ? () => organize("group", item.group.id)
                   : undefined
               }
             />
@@ -672,51 +701,12 @@ export default function Home() {
                 );
               }}
               onLongPress={
-                item.bot.spaceId === me?.spaceId
-                  ? () => setOrganizeTarget({ kind: "bot", id: item.bot.id })
-                  : undefined
+                item.bot.spaceId === me?.spaceId ? () => organize("bot", item.bot.id) : undefined
               }
             />
           )
         }
       />
-      {organizeChat && organizeTarget ? (
-        <BotOrganizeModal
-          bot={organizeChat}
-          sections={botSections}
-          onClose={() => setOrganizeTarget(null)}
-          onUpdate={async (update) => {
-            await rpc(`${organizeTarget.kind}s/update`, {
-              [`${organizeTarget.kind}Id`]: organizeChat.id,
-              ...update,
-            });
-            if (organizeTarget.kind === "bot" && update.notifyOnFinish !== undefined) {
-              await resumeLiveNotifications(
-                currentApiBase(),
-                await loadSessionToken(),
-                selectedSpaceId() ?? "",
-              ).catch(() => undefined);
-              if (!update.notifyOnFinish && "threadId" in organizeChat) {
-                await dismissThreadNotifications({ threadId: organizeChat.threadId }).catch(
-                  () => undefined,
-                );
-              }
-            }
-            await loadBots();
-          }}
-          onCreateSection={async (name) => {
-            await rpc("botSections/create", {
-              [`${organizeTarget.kind}Id`]: organizeChat.id,
-              name,
-            });
-            await loadBots();
-          }}
-          onRenameSection={async (sectionId, name) => {
-            await rpc("botSections/update", { sectionId, name });
-            await loadBots();
-          }}
-        />
-      ) : null}
     </View>
   );
 }

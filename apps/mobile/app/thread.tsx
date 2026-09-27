@@ -149,6 +149,7 @@ import {
   takePhoto,
 } from "../lib/pick-attachments";
 import { threadRefreshDelayMs } from "../lib/refresh";
+import { closeSheet, openSheet } from "../lib/sheet";
 import { shadowsForAppearance } from "../lib/theme";
 import {
   type ThreadScrollAction,
@@ -398,10 +399,8 @@ function Thread() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [messageSheet, setMessageSheet] = useState<{
-    message: MobileMessage;
-    mode: "actions" | "text";
-  } | null>(null);
+  // The sheet a long press opened, closed if the screen moves to another thread.
+  const messageSheetOwner = useRef<string | null>(null);
   const [markdownPreview, setMarkdownPreview] = useState<MarkdownArtifactPreviewTarget | null>(
     null,
   );
@@ -1142,7 +1141,8 @@ function Thread() {
     setSelectedMentions([]);
     setReplyTarget(null);
     setRewindTarget(null);
-    setMessageSheet(null);
+    if (messageSheetOwner.current) closeSheet(messageSheetOwner.current);
+    messageSheetOwner.current = null;
     setRewindArtifactIds([]);
     setAttachmentNotice(null);
     setError(null);
@@ -1553,12 +1553,6 @@ function Thread() {
               icon: { ios: "doc.on.doc", android: "copy-outline" },
               onPress: () => void Clipboard.setStringAsync(text).catch(() => undefined),
             },
-            {
-              name: "select",
-              text: t("Select text"),
-              icon: { ios: "character.cursor.ibeam", android: "text-outline" },
-              onPress: () => setMessageSheet({ message, mode: "text" }),
-            },
           ]
         : [],
     ];
@@ -1574,12 +1568,42 @@ function Thread() {
         : []),
       ...primary.slice(1),
       ...rest,
+      ...(copyableMobileMessageText(message)
+        ? [
+            {
+              name: "select",
+              text: t("Select text"),
+              onPress: () => showMessageActions(message, "text"),
+            },
+          ]
+        : []),
     ].filter((action) => action !== undefined);
   }
 
-  function showMessageActions(message: MobileMessage) {
-    selectionHaptic();
-    setMessageSheet({ message, mode: "actions" });
+  function showMessageActions(message: MobileMessage, mode: "actions" | "text" = "actions") {
+    if (mode === "actions") selectionHaptic();
+    const owner = `thread:${threadKey}`;
+    messageSheetOwner.current = owner;
+    openSheet(
+      router,
+      (close) => (
+        <MessageActionsSheet
+          initialMode={mode}
+          reactions={
+            canReactToThreadMessage(message)
+              ? MESSAGE_REACTIONS.map((emoji) => ({
+                  emoji,
+                  onPress: () => void reactToMessage(message, emoji),
+                }))
+              : []
+          }
+          groups={messageActionGroups(message)}
+          text={copyableMobileMessageText(message)}
+          close={close}
+        />
+      ),
+      owner,
+    );
   }
 
   // One props object per message whose handlers reach the latest render, so
@@ -2421,22 +2445,6 @@ function Thread() {
           </View>
         </View>
       </Modal>
-      {messageSheet ? (
-        <MessageActionsSheet
-          mode={messageSheet.mode}
-          reactions={
-            canReactToThreadMessage(messageSheet.message)
-              ? MESSAGE_REACTIONS.map((emoji) => ({
-                  emoji,
-                  onPress: () => void reactToMessage(messageSheet.message, emoji),
-                }))
-              : []
-          }
-          groups={messageActionGroups(messageSheet.message)}
-          text={copyableMobileMessageText(messageSheet.message)}
-          onClose={() => setMessageSheet(null)}
-        />
-      ) : null}
       {markdownPreview && artifactTarget ? (
         <MarkdownArtifactPreview
           threadTarget={artifactTarget}

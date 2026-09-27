@@ -136,7 +136,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Clear conversation?": "要清除对话吗？",
   "Client secret (saved)": "客户端密钥（已保存）",
   "Cloudflare Access protected": "受 Cloudflare Access 保护",
-  "Close chat organization": "关闭聊天整理",
   "Close computer": "关闭电脑",
   "Close preview": "关闭预览",
   Code: "验证码",

@@ -10,7 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Long-pressing a message on mobile opens a drawer with quick reactions, its actions and Select text.** The drawer replaces the system action sheet; Select text shows the message on its own so you can select and copy just part of it.
+- **Long-pressing a message on mobile opens a native sheet with quick reactions, its actions and Select text.** The sheet replaces the system action sheet; Select text shows the message on its own so you can select and copy just part of it.
+
+#### Changed
+
+- Long-pressing a chat in the mobile inbox now opens its pin, notification and section options in a native sheet you can swipe down to close, instead of a custom overlay.
 
 #### Fixed
 

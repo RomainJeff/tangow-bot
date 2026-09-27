@@ -139,7 +139,6 @@ export const RU_MESSAGES: Record<string, string> = {
   Clear: "Очистить",
   "Clear conversation": "Очистить диалог",
   "Clear conversation?": "Очистить диалог?",
-  "Close chat organization": "Закрыть организацию чатов",
   "Close computer": "Закрыть компьютер",
   "Close preview": "Закрыть предварительный просмотр",
   Code: "Код",
