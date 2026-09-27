@@ -256,3 +256,10 @@
     opacity: 0;
   }
 }
+
+/* A link in plain text (the person's own bubble) keeps the bubble's ink. */
+.rk-linkified {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
