@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { MobileBot, MobileBotSection } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { native, useThemedStyles } from "../lib/native";
@@ -98,7 +98,9 @@ export function BotOrganizeSheet({
         </Pressable>
       ) : null}
       <Text style={styles.sectionLabel}>{t("Move to")}</Text>
-      <ScrollView style={styles.sectionOptions} keyboardShouldPersistTaps="handled">
+      {/* Not a ScrollView: the native sheet stretches the first one it finds
+          over its whole height, drawing the sections on top of everything. */}
+      <View>
         {sections.map((section) => (
           <SectionOption
             key={section.id}
@@ -114,7 +116,7 @@ export function BotOrganizeSheet({
           disabled={saving || bot.sectionId === null}
           onPress={() => void save(() => onUpdate({ sectionId: null }))}
         />
-      </ScrollView>
+      </View>
       {mode === "create" || mode === "rename" ? (
         <View style={styles.newSectionRow}>
           <TextInput
@@ -243,13 +245,6 @@ function createBotOrganizeStyles() {
       paddingHorizontal: 10,
       paddingTop: 12,
       paddingBottom: 6,
-    },
-    sectionOptions: {
-      maxHeight: 230,
-      // The native sheet measures its content before it has a height; a
-      // shrinking list would collapse to nothing and draw over the rows below.
-      flexGrow: 0,
-      flexShrink: 0,
     },
     sectionOption: {
       minHeight: 44,
