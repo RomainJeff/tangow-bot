@@ -1,4 +1,4 @@
-import { ChatMarkdown } from "@rakazo/chat-ui/web";
+import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -64,5 +64,24 @@ describe("ChatMarkdown", () => {
       expect(html).not.toContain("<img");
       expect(html).not.toContain("tracker.example");
     }
+  });
+
+  it("makes bare URLs and www. link targets clickable, but not file names", () => {
+    const html = renderToStaticMarkup(
+      <ChatMarkdown>
+        {"See https://example.com/a, [docs](www.example.com/docs) and [readme](README.md)"}
+      </ChatMarkdown>,
+    );
+
+    expect(html).toContain('href="https://example.com/a"');
+    expect(html).toContain('href="https://www.example.com/docs"');
+    expect(html).not.toContain("https://README.md");
+  });
+
+  it("links every URL in plain user text without rendering markdown", () => {
+    const html = renderToStaticMarkup(<LinkifiedText text={"**hi** www.example.com"} />);
+
+    expect(html).toContain("**hi** ");
+    expect(html).toContain('<a class="rk-linkified" href="https://www.example.com"');
   });
 });

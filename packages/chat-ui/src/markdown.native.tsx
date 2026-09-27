@@ -1,12 +1,14 @@
 import { type ColorTokens, darkTokens, type ResolvedAppearance } from "@rakazo/ui-tokens";
 import Markdown, {
+  createMarkdownIt,
   MarkdownStream,
   type RenderRules,
 } from "@ronradtke/react-native-markdown-display";
 import { memo, useMemo } from "react";
+import type { TextProps } from "react-native";
 import { Linking, StyleSheet, Text, View } from "react-native";
 import type { ChatMarkdownProps } from "./markdown";
-import { nativeImagePolicy, sanitizeMarkdownUrl } from "./markdown";
+import { linkHref, linkifyText, nativeImagePolicy } from "./markdown";
 
 function markdownStyles(palette: ColorTokens) {
   return StyleSheet.create({
@@ -102,11 +104,28 @@ function markdownStyles(palette: ColorTokens) {
   });
 }
 
-async function openSafeLink(url: string) {
-  const safeUrl = sanitizeMarkdownUrl(url);
-  if (!safeUrl) return;
-  if (await Linking.canOpenURL(safeUrl)) await Linking.openURL(safeUrl);
+// No `canOpenURL` gate: its answer depends on per-platform scheme query
+// declarations and can be false for a link the OS would open, which silently
+// swallowed taps. A URL nothing can open just rejects.
+function openSafeLink(url: string) {
+  const safeUrl = linkHref(url);
+  if (safeUrl) Linking.openURL(safeUrl).catch(() => {});
 }
+
+// Bare `https://…` and `www.…` in the text become links too, as on web (remark-gfm).
+// Fuzzy matching stays off, or every `name.xx` word such as `setup.py` or
+// `README.md` would link to an outside domain; `www.` is matched as a prefix.
+const markdownit = createMarkdownIt().set({ linkify: true });
+let wwwTail: RegExp | undefined;
+markdownit.linkify.set({ fuzzyLink: false, fuzzyEmail: false }).add("www.", {
+  validate(text: string, pos: number, self: { re: Record<string, string> }) {
+    wwwTail ??= new RegExp(`^${self.re.src_host_port_strict}${self.re.src_path}`, "i");
+    return text.slice(pos).match(wwwTail)?.[0].length ?? 0;
+  },
+  normalize(match: { url: string }) {
+    match.url = `https://${match.url}`;
+  },
+});
 
 // Keep links as Text so they stay inside textgroup; Pressable (a View) is laid out
 // outside the text flow and collapses the bubble height, overlapping later messages.
@@ -116,9 +135,7 @@ const renderRules: RenderRules = {
       accessibilityRole="link"
       key={node.key}
       style={styleMap.link}
-      onPress={() => {
-        void openSafeLink(node.attributes.href ?? "");
-      }}
+      onPress={() => openSafeLink(node.attributes.href ?? "")}
     >
       {children}
     </Text>
@@ -146,8 +163,9 @@ export const ChatMarkdown = memo(function ChatMarkdown({
     rules: imagePolicy.blockImages ? renderRulesNoImages : renderRules,
     allowedImageHandlers: imagePolicy.allowedImageHandlers,
     defaultImageHandler: imagePolicy.defaultImageHandler,
+    markdownit,
     onLinkPress: (url: string) => {
-      void openSafeLink(url);
+      openSafeLink(url);
       return false;
     },
   };
@@ -165,7 +183,38 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   );
 });
 
+/** Plain text (what the person typed) with every URL in it made clickable. Nest
+ * it in a `Text` so links inherit the surrounding ink. A link is its own touch
+ * responder, so pass the bubble's `onLongPress` to keep its actions reachable. */
+export function LinkifiedText({
+  children,
+  onLongPress,
+}: {
+  children: string;
+  onLongPress?: TextProps["onLongPress"];
+}) {
+  return linkifyText(children).map((segment, i) => {
+    const href = segment.href;
+    return href ? (
+      <Text
+        accessibilityRole="link"
+        key={i}
+        style={layout.link}
+        onPress={() => openSafeLink(href)}
+        onLongPress={onLongPress}
+      >
+        {segment.text}
+      </Text>
+    ) : (
+      segment.text
+    );
+  });
+}
+
 const layout = StyleSheet.create({
+  link: {
+    textDecorationLine: "underline",
+  },
   wrap: {
     width: "100%",
     minWidth: 0,

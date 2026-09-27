@@ -1,4 +1,4 @@
-import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/native";
+import { ChatMarkdown, LinkifiedText, truncateMarkdownForRender } from "@rakazo/chat-ui/native";
 import type {
   AgentSkillCatalogEntry,
   Connection,
@@ -3437,7 +3437,9 @@ function MessageText({
     return (
       <View style={{ alignItems: "flex-end" }}>
         {parent}
-        <UserBubble {...actionProps}>{contentText}</UserBubble>
+        <UserBubble {...actionProps}>
+          <LinkifiedText onLongPress={actionProps.onLongPress}>{contentText}</LinkifiedText>
+        </UserBubble>
       </View>
     );
   }
