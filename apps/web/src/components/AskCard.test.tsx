@@ -146,3 +146,78 @@ describe("AskCard mono-question answered rendering", () => {
     expect(html).toContain("Answered: Seoul");
   });
 });
+
+describe("AskCard approval actions", () => {
+  const approvalBlock = (
+    text: string,
+    actions: NonNullable<AskBlock["actions"]>,
+    detail?: string,
+  ): AskBlock => ({
+    kind: "ask",
+    text,
+    approvalEffectId: "effect-1",
+    ...(detail ? { detail } : {}),
+    actions,
+  });
+  const render = (block: AskBlock) =>
+    renderToStaticMarkup(
+      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-approval" />,
+    );
+
+  it("labels a spawn_bot card Create bot / Cancel, not Create space", () => {
+    const html = render(
+      approvalBlock(
+        "Create bot “Veille”?",
+        [
+          { id: "allow", label: "Create bot", outcome: "created" },
+          { id: "deny", label: "Cancel", outcome: "cancelled" },
+        ],
+        "Title: Veille\nInstructions:\n  Watch competitors",
+      ),
+    );
+
+    expect(html).toContain("Create bot");
+    expect(html).not.toContain("Create space");
+    expect(html).toContain("Cancel");
+    expect(html).toContain("Instructions:");
+  });
+
+  it("keeps Create space on a create_space card", () => {
+    const html = render(
+      approvalBlock("Create space “Ops”?", [
+        { id: "allow", label: "Create space", outcome: "created" },
+        { id: "deny", label: "Cancel", outcome: "cancelled" },
+      ]),
+    );
+
+    expect(html).toContain("Create space");
+    expect(html).not.toContain("Create bot");
+  });
+
+  it("keeps the generic labels on a card without an outcome", () => {
+    const html = render(
+      approvalBlock("Send the email?", [
+        { id: "allow", label: "Allow once" },
+        { id: "always", label: "Always allow" },
+        { id: "deny", label: "Deny" },
+      ]),
+    );
+
+    expect(html).toContain("Allow once");
+    expect(html).toContain("Always allow this tool");
+    expect(html).toContain("Deny");
+  });
+
+  const spawnActions: NonNullable<AskBlock["actions"]> = [
+    { id: "allow", label: "Create bot", outcome: "created" },
+    { id: "deny", label: "Cancel", outcome: "cancelled" },
+  ];
+
+  it("drops an image in an approval question, but not in a plain ask", () => {
+    const image = "![](https://e.example/p.png)";
+    expect(render(approvalBlock(`Create bot “${image}”?`, spawnActions))).not.toContain("<img");
+
+    const plain = render({ kind: "ask", text: `Is this right? ${image}` });
+    expect(plain).toContain("<img");
+  });
+});

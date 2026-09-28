@@ -16,7 +16,7 @@ async function threadBlocks(page: Page, botId: string): Promise<ThreadBlock[]> {
 // A scheduled routine only renders as a run card for a sub-bot (parentBotId set, see
 // packages/adapters/src/executor.ts `showsRoutineRunCard`); a top-level bot's scheduled routine
 // stays a normal message. spawn_bot is the only way to create a parented bot, so this spec asks
-// the real model to spawn one before creating and running a routine on it directly via RPC.
+// the bot to spawn one, approves its card, then creates and runs a routine on it directly via RPC.
 test("renders a routine run card in a sub-bot's own thread", async ({ page }, testInfo) => {
   const stamp = Date.now();
   await signup(page, `routine-run-card-${stamp}@rakazo.test`, "password12", "Routine Run Card");
@@ -24,10 +24,12 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   const orchestratorId = activeBotId(page);
 
   const composer = page.getByPlaceholder(/Message/);
-  await composer.fill(
-    "Use spawn_bot to create a team bot named Aide whose only job is quick status checks.",
-  );
+  await composer.fill("Spawn a bot named Aide whose only job is quick status checks.");
   await page.keyboard.press("Enter");
+
+  // A bot never creates a bot on its own: the approval card comes first.
+  await page.getByRole("button", { name: "Create bot", exact: true }).click({ timeout: 30_000 });
+  await expect(page.getByText("Created", { exact: true })).toBeVisible();
 
   let subBotId: string | undefined;
   await expect

@@ -1605,6 +1605,10 @@ msgstr "새 스페이스 만들기"
 msgid "Create Routine"
 msgstr "자동 실행 만들기"
 
+#: src/lib/approval-labels.ts:11
+msgid "Create bot"
+msgstr "Bot 만들기"
+
 #: src/components/AskCard.tsx:35
 #: src/pages/CallView.tsx:415
 #: src/pages/shell/dialogs.tsx:91

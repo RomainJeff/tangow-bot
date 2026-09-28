@@ -517,10 +517,15 @@ describe("delegation prompt texts", () => {
     expect(BOT_DELEGATION_GUIDANCE).toContain(phrase);
   });
 
-  it.each(["give it no first prompt", "keep its instructions to that role"])(
-    "the offer says %j",
-    (phrase) => {
-      expect(BOT_OFFER_DEDICATED_BOT).toContain(phrase);
-    },
-  );
+  it.each([
+    "its approval card is the question",
+    "Give it no first prompt",
+    "keep its instructions to that role",
+  ])("the offer says %j", (phrase) => {
+    expect(BOT_OFFER_DEDICATED_BOT).toContain(phrase);
+  });
+
+  it("the offer proposes through spawn_bot, not a yes/no question", () => {
+    expect(BOT_OFFER_DEDICATED_BOT).not.toContain("ask_user as a yes/no");
+  });
 });

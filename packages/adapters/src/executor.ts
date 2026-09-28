@@ -39,6 +39,7 @@ import {
   OPENAI_COMPATIBLE_PROVIDER_ID,
 } from "@rakazo/contracts";
 import {
+  ACTIVE_RUN_STATUSES,
   type ActionApprovalRule,
   appendTextSegment,
   appendToolCallSegment,
@@ -67,6 +68,7 @@ import {
   messagingDmSurfaceNote,
   nextCronDateAcross,
   nextFence,
+  normalizeSpawnBotArgs,
   planActionGate,
   promptInvokesSkill,
   redactSecrets,
@@ -74,12 +76,15 @@ import {
   resolveActionApprovalDetail,
   SHAPES,
   sandboxCommandTimeoutMs,
+  spawnBotToolArgs,
   type ToolCallDetail,
   type ToolCallStreak,
   toolRequiresApproval,
   toolRequiresExplicitApproval,
   unattendedTriggerToolRequiresApproval,
   userTurnBlocksForRun,
+  validateBotNameText,
+  validateSpawnBotArgs,
 } from "@rakazo/core";
 import {
   approvalEffectKey,
@@ -142,6 +147,7 @@ import {
   parseCatalogApprovalTarget,
   replaceCompletedExternalEffectResult,
   resolveDuplicateEffectGate,
+  SPAWN_BOT_CANCELLED_RESULT,
   settleUncertainEffect,
   uncertainEffectResult,
 } from "./approval-effect.js";
@@ -899,7 +905,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     parts.agentEnvironmentInstruction,
     "A bot and a subagent are different. Never use both for the same request.",
     "create_space proposes a new privacy boundary inside the current organization. Use it when the user asks to create a space or separate data between teams or projects. It always pauses for explicit user approval; never claim the space exists before the tool succeeds.",
-    "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it. Never create a bot on your own initiative.",
+    "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it. Never create a bot on your own initiative. It always pauses for the user's approval; never claim the bot exists before the tool succeeds.",
     "update_bot updates this bot's own name (chat header / list label), title, and description. When the user asks you to rename yourself or change your title or description, call update_bot — do not claim you changed them without the tool.",
     "run_subagent is a short helper inside this turn only. It is not a bot, has no thread, and does not show in the list. Use it for parallel work you will summarize here.",
     parts.botDirectory ? BOT_DELEGATION_GUIDANCE : undefined,
@@ -1928,6 +1934,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (handedOff) {
             return { error: "This stage was handed off. End the turn without more tool calls." };
           }
+          // Mask secrets before anything else derives from the arguments: the effect key, the
+          // stored request, the approval card and the created bot all see the masked value.
+          args = redactBotToolArgs(name, args, runSecrets);
+          if (name === "spawn_bot") {
+            const normalized = normalizeSpawnBotArgs(args);
+            if (!("error" in normalized)) args = spawnBotToolArgs(normalized);
+          }
           if (PAGE_BROWSER_TOOL_NAMES.has(name) && !pageBrowserAllowed) {
             return { error: "Page browser is unavailable on this computer." };
           }
@@ -1961,6 +1974,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             };
           }
           let effectRequest: unknown = args;
+          let approvedReplayConsumed = false;
           if (connectorCall.route && deps.connector?.resolveCall) {
             try {
               const resolved = await deps.connector.resolveCall(connectorCall, context);
@@ -2080,6 +2094,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             );
             if (resourceError) return { error: resourceError };
             const approvedRequest = approvedEffectReplays.take(nextApprovedTool)!;
+            approvedReplayConsumed = true;
             const approvedCatalog = catalogApprovalDetails(approvedRequest, CATALOG_APPROVAL_TOOL);
             if (approvedCatalog && !catalogRemapped) {
               // Shrink-to-direct: restore approved inner arguments, not the wrapper envelope.
@@ -2173,6 +2188,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             usesApprovalKey && occurrence === 0
               ? approvalEffectKey(runId, replayEffectToolName, args)
               : toolEffectIdempotencyKey(runId, replayEffectToolName, args, occurrence);
+          // A first call is validated and rate-limited before it can record an effect or show a
+          // card. A resumed approval, or an effect that already exists for this key, returns its
+          // stored outcome instead: it must never trip over a name it took itself.
+          if (name === "spawn_bot" && !approvedReplayConsumed) {
+            const refusal = await spawnBotPreflight(deps, run, effectKey, args);
+            if (refusal) return refusal;
+          }
           // Connector read-only hints must not bypass approval, review, or replay decisions.
           const applied = READ_ONLY_AGENT_TOOLS.has(name)
             ? undefined
@@ -2185,6 +2207,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 executionId,
                 consumedEffectIds,
               );
+          if (name === "spawn_bot" && applied && !applied.duplicate) {
+            const lost = await spawnBotRaceLoss(deps, run, applied.effect.id);
+            if (lost) return lost;
+          }
 
           const runAutoReview = async () => {
             if (!checker) return;
@@ -3414,16 +3440,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
           }
           if (name === "spawn_bot") {
-            const computerModeArg = args.computer_mode;
-            let computerMode: "team" | "dedicated" | undefined;
-            if (computerModeArg != null && computerModeArg !== "") {
-              const value = String(computerModeArg);
-              if (value !== "team" && value !== "dedicated") {
-                return finish({
-                  error: 'computer_mode must be "team" or "dedicated".',
-                });
-              }
-              computerMode = value;
+            // Check again now that the effect is claimed: the name may have been taken while
+            // the card waited. finish() settles the effect, so nothing stays half-approved.
+            const invalid = validateSpawnBotArgs(args, await activeBotNames(deps, run));
+            const spawnArgs = normalizeSpawnBotArgs(args);
+            if (invalid || "error" in spawnArgs) {
+              return finish({ error: invalid ?? (spawnArgs as { error: string }).error });
             }
             const spawned = await spawnBot(deps, {
               spawnedBy: {
@@ -3433,12 +3455,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 userId: run.userId,
               },
               runId,
-              spawnKey: executionId,
-              name: String(args.name ?? ""),
-              title: args.title ? String(args.title) : undefined,
-              instructions: args.instructions ? String(args.instructions) : undefined,
-              prompt: args.prompt ? String(args.prompt) : undefined,
-              computerMode,
+              spawnKey: applied?.effect.id ?? executionId,
+              name: spawnArgs.name,
+              title: spawnArgs.title || undefined,
+              instructions: spawnArgs.instructions || undefined,
+              prompt: spawnArgs.prompt || undefined,
+              computerMode: spawnArgs.computerMode
+                ? (spawnArgs.computerMode as "team" | "dedicated")
+                : undefined,
             });
             if ("error" in spawned) return finish(spawned);
             if (!(await persistEffectResult(spawned))) return uncertainEffectResult(name);
@@ -3481,6 +3505,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (nextName.length > BOT_NAME_MAX_LENGTH) {
                 return finish({ error: `name must be at most ${BOT_NAME_MAX_LENGTH} characters.` });
               }
+              // A rename takes a name as surely as spawn_bot does, and shows no card.
+              const nameError = validateBotNameText(
+                nextName,
+                await activeBotNames(deps, run, bot.id),
+              );
+              if (nameError) return finish({ error: nameError });
               patch.name = nextName;
             }
             if (patch.title !== undefined) {
@@ -3508,7 +3538,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
               patch.title &&
               /^(New Bot|Bot|Untitled)$/i.test(bot.name)
             ) {
-              patch.name = patch.title.slice(0, BOT_NAME_MAX_LENGTH);
+              // The promoted name is a name like any other; if it is not allowed, only the title changes.
+              const promoted = patch.title.slice(0, BOT_NAME_MAX_LENGTH);
+              if (!validateBotNameText(promoted, await activeBotNames(deps, run, bot.id))) {
+                patch.name = promoted;
+              }
             }
             const updated = await deps.prisma.bot.update({
               where: { id: bot.id },
@@ -5394,6 +5428,125 @@ export async function cancelRoutineRunCards(
       block.state === "running" ? { ...block, state: "cancelled", endedAt } : null,
     );
   }
+}
+
+const BOT_TEXT_ARGS: Record<string, readonly string[]> = {
+  spawn_bot: ["name", "title", "instructions", "prompt"],
+  update_bot: ["name", "title", "description"],
+};
+
+function redactBotToolArgs(
+  toolName: string,
+  args: Record<string, unknown>,
+  secrets: string[],
+): Record<string, unknown> {
+  const keys = BOT_TEXT_ARGS[toolName];
+  if (!keys) return args;
+  const redacted = { ...args };
+  for (const key of keys) {
+    const value = redacted[key];
+    if (typeof value === "string") redacted[key] = redactSecrets(value, secrets);
+  }
+  return redacted;
+}
+
+/** Names of the user's active bots in the space, optionally without one bot. */
+async function activeBotNames(
+  deps: ExecutorDeps,
+  run: { spaceId: string; userId: string },
+  exceptBotId?: string,
+): Promise<string[]> {
+  const bots = await deps.prisma.bot.findMany({
+    where: {
+      spaceId: run.spaceId,
+      userId: run.userId,
+      archivedAt: null,
+      ...(exceptBotId ? { id: { not: exceptBotId } } : {}),
+    },
+    select: { name: true },
+  });
+  return bots.map((bot) => bot.name);
+}
+
+const SPAWN_BOT_PENDING_ERROR =
+  "Another bot creation from this bot is already waiting for the user's approval. Do not call spawn_bot again until they answer.";
+/** After a Cancel, a bot woken by something other than the user waits this long to ask again. */
+const SPAWN_BOT_CANCEL_LOCK_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Runs only for a first spawn_bot call: validation, then the anti-spam guard, both before
+ * an effect exists. Returns the tool result to give the model instead of showing a card.
+ */
+async function spawnBotPreflight(
+  deps: ExecutorDeps,
+  run: { id: string; botId: string; spaceId: string; userId: string; trigger: string },
+  effectKey: string,
+  args: Record<string, unknown>,
+): Promise<unknown | undefined> {
+  const existing = await deps.prisma.externalEffect.findUnique({
+    where: { idempotencyKey: effectKey },
+    select: { id: true },
+  });
+  if (existing) return undefined;
+
+  const invalid = validateSpawnBotArgs(args, await activeBotNames(deps, run));
+  if (invalid) return { error: invalid };
+
+  const pending = await deps.prisma.externalEffect.findFirst({
+    where: {
+      kind: "spawn_bot",
+      status: "intended",
+      idempotencyKey: { not: effectKey },
+      run: { botId: run.botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+    },
+    select: { id: true },
+  });
+  if (pending) return { error: SPAWN_BOT_PENDING_ERROR };
+
+  const cancelledHere = await deps.prisma.externalEffect.findFirst({
+    where: { kind: "spawn_bot", status: "denied", runId: run.id },
+    select: { id: true },
+  });
+  if (cancelledHere) return { ...SPAWN_BOT_CANCELLED_RESULT };
+
+  if (run.trigger !== "user") {
+    const cancelledRecently = await deps.prisma.externalEffect.findFirst({
+      where: {
+        kind: "spawn_bot",
+        status: "denied",
+        updatedAt: { gte: new Date(Date.now() - SPAWN_BOT_CANCEL_LOCK_MS) },
+        run: { botId: run.botId },
+      },
+      select: { id: true },
+    });
+    if (cancelledRecently) return { ...SPAWN_BOT_CANCELLED_RESULT };
+  }
+  return undefined;
+}
+
+/**
+ * Two calls can pass the pre-check together, so after inserting we read back: the oldest
+ * pending request of this bot keeps its card, every other one settles with an error.
+ */
+async function spawnBotRaceLoss(
+  deps: ExecutorDeps,
+  run: { botId: string },
+  effectId: string,
+): Promise<{ error: string } | undefined> {
+  const [first] = await deps.prisma.externalEffect.findMany({
+    where: {
+      kind: "spawn_bot",
+      status: "intended",
+      run: { botId: run.botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: 1,
+    select: { id: true },
+  });
+  if (!first || first.id === effectId) return undefined;
+  const result = { error: SPAWN_BOT_PENDING_ERROR };
+  await completeEffect(deps, effectId, "intended", result);
+  return result;
 }
 
 async function recordEffect(

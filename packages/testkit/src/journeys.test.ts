@@ -40,8 +40,7 @@ describeJourneys("required product journeys", () => {
   const stamp = Date.now();
   const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-journey-"));
 
-  async function sendAndWait(app: App, cookie: string, botId: string, text: string) {
-    const { runId } = await rpc<{ runId: string }>(app, cookie, "threads/send", { botId, text });
+  async function waitForCompletedRun(app: App, cookie: string, botId: string, runId: string) {
     let terminal: { status: string; error: string | null } | null = null;
     await waitForDatabase(async () => {
       terminal = await prisma.run.findUnique({
@@ -60,6 +59,31 @@ describeJourneys("required product journeys", () => {
       ...(await rpc<Snap>(app, cookie, "threads/get", { botId })),
       run: { id: runId, status: terminal.status },
     };
+  }
+
+  async function sendAndWait(app: App, cookie: string, botId: string, text: string) {
+    const { runId } = await rpc<{ runId: string }>(app, cookie, "threads/send", { botId, text });
+    return waitForCompletedRun(app, cookie, botId, runId);
+  }
+
+  /** For a request that pauses on an approval card: answers it, then waits for the run to end. */
+  async function sendApproveAndWait(
+    app: App,
+    cookie: string,
+    botId: string,
+    text: string,
+    askText?: RegExp,
+  ) {
+    const { runId } = await rpc<{ runId: string }>(app, cookie, "threads/send", { botId, text });
+    const waiting = await waitFor(
+      app,
+      cookie,
+      botId,
+      (snap) => snap.run?.id === runId && snap.run.status === "waiting_input",
+    );
+    if (askText) expect(JSON.stringify(waiting.messages)).toMatch(askText);
+    await answerPendingApproval(app, cookie, botId, runId, "allow", waiting);
+    return waitForCompletedRun(app, cookie, botId, runId);
   }
 
   async function sendGroupAndWait(
@@ -1551,7 +1575,13 @@ describeJourneys("required product journeys", () => {
       instructions: "",
       notifyOnFinish: true,
     });
-    await sendAndWait(app, cookie, parent.id, "spawn a bot named Scout to research venues");
+    await sendApproveAndWait(
+      app,
+      cookie,
+      parent.id,
+      "spawn a bot named Scout to research venues",
+      /Create bot “Scout”\?/,
+    );
     const listed = await rpc<Bot[]>(app, cookie, "bots/list");
     const scout = listed.find((bot) => bot.name === "Scout");
     expect(scout).toBeTruthy();
@@ -1565,7 +1595,7 @@ describeJourneys("required product journeys", () => {
     const snap = await rpc<Snap>(app, cookie, "threads/get", { botId: parent.id });
     expect(JSON.stringify(snap.messages)).toMatch(/child_bot|Scout/);
 
-    await sendAndWait(app, cookie, scout!.id, "spawn a bot named Nested");
+    await sendApproveAndWait(app, cookie, scout!.id, "spawn a bot named Nested");
     const afterNested = await rpc<Bot[]>(app, cookie, "bots/list");
     const nested = afterNested.find((bot) => bot.name === "Nested");
     expect(nested).toBeTruthy();

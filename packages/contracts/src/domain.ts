@@ -293,6 +293,9 @@ export const BOT_NAME_MAX_LENGTH = 80;
 export const BOT_TITLE_MAX_LENGTH = 500;
 export const BOT_DESCRIPTION_MAX_LENGTH = 4000;
 export const BOT_INSTRUCTIONS_MAX_LENGTH = 20000;
+/** A bot creating a bot shows every field on one approval card, so the card must stay readable. */
+export const SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH = 3000;
+export const SPAWN_BOT_PROMPT_MAX_LENGTH = 1000;
 
 export const CreateBotInput = z.object({
   name: z.string().trim().min(1).max(BOT_NAME_MAX_LENGTH),

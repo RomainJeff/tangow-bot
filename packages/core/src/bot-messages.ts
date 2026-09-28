@@ -151,7 +151,7 @@ export const BOT_DELEGATION_GUIDANCE = [
 
 /** Offered only on a turn the user opened in the app, where a yes can only come from them. */
 export const BOT_OFFER_DEDICATED_BOT =
-  "When the user keeps bringing you a distinct, recurring kind of work that a dedicated bot would own better, you may offer one with ask_user as a yes/no question naming the role. Offer it once: create the bot only after a yes, give it no first prompt and keep its instructions to that role; if they decline, remember that when you can and do not offer it again.";
+  "When the user keeps bringing you a distinct, recurring kind of work that a dedicated bot would own better, you may propose one once by calling spawn_bot: its approval card is the question, and this is the only case where you call spawn_bot on your own initiative. Give it no first prompt and keep its instructions to that role. If they cancel, remember that when you can and do not propose it again.";
 
 /** True only for a message typed in the app; messaging and automatic runs can carry text written by others. */
 export function isUserOpenedTrigger(trigger: string): boolean {

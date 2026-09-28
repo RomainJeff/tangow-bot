@@ -341,6 +341,13 @@ export type ExternalEffectStore = {
   };
 };
 
+/** A cancelled card is a decision, not a failure: the bot is told once and must not retry. */
+export const SPAWN_BOT_CANCELLED_RESULT = {
+  ok: false,
+  cancelled: true,
+  note: "The user cancelled creating this bot. Do not call spawn_bot for it again unless they ask.",
+} as const;
+
 export function resolveDuplicateEffectGate(
   effect: { status: string; result?: unknown },
   toolName: string,
@@ -349,7 +356,13 @@ export function resolveDuplicateEffectGate(
     return { action: "return", result: effect.result ?? { duplicate: true } };
   }
   if (effect.status === "denied") {
-    return { action: "return", result: { error: "User denied this action." } };
+    return {
+      action: "return",
+      result:
+        toolName === "spawn_bot"
+          ? { ...SPAWN_BOT_CANCELLED_RESULT }
+          : { error: "User denied this action." },
+    };
   }
   if (effect.status === "executing") {
     return { action: "uncertain", toolName };

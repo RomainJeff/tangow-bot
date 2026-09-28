@@ -10,18 +10,13 @@ import {
   View,
   type ViewProps,
 } from "react-native";
+import { askActionLabel } from "../lib/ask-action-label";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 import { NativeSymbol } from "./native-symbol";
 
-type AskAction = { id: string; label: string };
-
-const KNOWN_ASK_ACTION_LABELS: Record<string, string> = {
-  allow: "Allow once",
-  always: "Always allow this tool",
-  deny: "Deny",
-};
+type AskAction = { id: string; label: string; outcome?: "created" | "cancelled" };
 
 /** No design token covers the tertiary capsule's height — the design contract
  * (§3.7) spells it out directly: 40 pt, against the 44 pt primary/secondary. */
@@ -240,11 +235,7 @@ export function AskActions({
     }
   }
 
-  function labelFor(action: AskAction): string {
-    return Object.hasOwn(KNOWN_ASK_ACTION_LABELS, action.id)
-      ? t(KNOWN_ASK_ACTION_LABELS[action.id]!)
-      : action.label;
-  }
+  const labelFor = (action: AskAction) => askActionLabel(action, t);
 
   return (
     <View style={{ gap: 8 }}>

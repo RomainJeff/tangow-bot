@@ -30,6 +30,18 @@ describe("toolRequiresApproval", () => {
     expect(toolRequiresExplicitApproval("archive_bot")).toBe(false);
   });
 
+  it("always asks before a bot creates another bot", () => {
+    expect(toolRequiresApproval("spawn_bot", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("spawn_bot")).toBe(true);
+    expect(
+      unattendedTriggerToolRequiresApproval(
+        { trigger: "user", requireToolApproval: false },
+        "spawn_bot",
+        false,
+      ),
+    ).toBe(false);
+  });
+
   it("does not gate read-only or local work", () => {
     for (const name of [
       "list_files",
@@ -38,7 +50,6 @@ describe("toolRequiresApproval", () => {
       "write_file",
       "shell",
       "remember",
-      "spawn_bot",
       "run_subagent",
     ]) {
       expect(toolRequiresApproval(name, false)).toBe(false);

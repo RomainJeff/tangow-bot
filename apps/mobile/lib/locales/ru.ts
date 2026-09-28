@@ -233,6 +233,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Could not update reaction": "Не удалось обновить реакцию",
   "Couldn't update avatars": "Не удалось обновить аватары",
   Create: "Создать",
+  "Create bot": "Создать бота",
   "Create group": "Создать группу",
   "Create section": "Создать раздел",
   "Create space": "Создать пространство",

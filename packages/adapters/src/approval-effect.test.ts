@@ -285,6 +285,26 @@ describe("resolveDuplicateEffectGate", () => {
     });
   });
 
+  it("keeps the generic denial for every other tool (CA27)", () => {
+    for (const tool of ["destination.write", "archive_bot", "create_space", "delete_bot"]) {
+      expect(resolveDuplicateEffectGate({ status: "denied" }, tool)).toEqual({
+        action: "return",
+        result: { error: "User denied this action." },
+      });
+    }
+  });
+
+  it("turns a cancelled spawn_bot card into a note, not an error (CA6)", () => {
+    expect(resolveDuplicateEffectGate({ status: "denied" }, "spawn_bot")).toEqual({
+      action: "return",
+      result: {
+        ok: false,
+        cancelled: true,
+        note: "The user cancelled creating this bot. Do not call spawn_bot for it again unless they ask.",
+      },
+    });
+  });
+
   it("returns paused for intended effects instead of executing", () => {
     expect(resolveDuplicateEffectGate({ status: "intended" }, "archive_bot")).toEqual({
       action: "paused",

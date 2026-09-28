@@ -1861,7 +1861,7 @@ describe("buildSystemInstructions", () => {
 
   describe("spawn_bot guidance", () => {
     const always =
-      "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it. Never create a bot on your own initiative.";
+      "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it. Never create a bot on your own initiative. It always pauses for the user's approval; never claim the bot exists before the tool succeeds.";
     const bare = {
       botInstructions: parts.botInstructions,
       hasHistoricalContext: false,
@@ -1877,6 +1877,20 @@ describe("buildSystemInstructions", () => {
         expect(instructions.split("Do not run_subagent to demo it.")).toHaveLength(2);
         expect(instructions).toContain("demo it. Never create a bot on your own initiative.");
       }
+    });
+
+    it("says the bot pauses for approval, identically on every turn (CA9)", () => {
+      const spawnLine = (instructions: string) =>
+        instructions.split("\n").find((line) => line.startsWith("spawn_bot creates"));
+      const lines = [parts, bare, { ...bare, userTurn: true }, { ...bare, userTurn: false }].map(
+        (variant) => spawnLine(buildSystemInstructions(variant)),
+      );
+      for (const line of lines) {
+        expect(line?.endsWith("never claim the bot exists before the tool succeeds.")).toBe(true);
+      }
+      expect(new Set(lines).size).toBe(1);
+      expect(BOT_OFFER_DEDICATED_BOT).toContain("its approval card is the question");
+      expect(BOT_OFFER_DEDICATED_BOT).not.toContain("ask_user as a yes/no");
     });
 
     it("offers a dedicated bot only on a user turn", () => {

@@ -231,6 +231,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Could not update your photo": "无法更新你的头像",
   "Couldn't update avatars": "无法更新头像",
   Create: "创建",
+  "Create bot": "创建 Bot",
   "Create group": "创建群组",
   "Create section": "创建分组",
   "Create space": "创建空间",

@@ -6,6 +6,7 @@ import { isApprovalAskBlock, isSecretAskBlock, selectedAskActionLabel } from "@r
 import { Button, FramedBlock, Input } from "@rakazo/ui-web";
 import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { approvalActionLabel } from "../lib/approval-labels";
 
 export type AskBlock = Extract<ThreadMessage["blocks"][number], { kind: "ask" }>;
 
@@ -25,19 +26,6 @@ function formatAnsweredState(
   if (answer === "always") return t`Always allowed`;
   if (answer === "deny") return t`Denied`;
   return t`Answered: ${answer}`;
-}
-
-function approvalActionLabel(
-  id: string,
-  fallback: string,
-  outcome?: "created" | "cancelled",
-): string {
-  if (outcome === "created") return t`Create space`;
-  if (outcome === "cancelled") return t`Cancel`;
-  if (id === "allow") return t`Allow once`;
-  if (id === "always") return t`Always allow this tool`;
-  if (id === "deny") return t`Deny`;
-  return fallback;
 }
 
 function approvalActionVariant(id: string): "capsule" | "capsuleSecondary" | "tertiary" {
@@ -189,11 +177,7 @@ export function AskCard({
               disabled={submitting}
               onClick={() => void submitAnswer(action.id)}
             >
-              {pendingAction === action.id ? (
-                <Trans>Sending…</Trans>
-              ) : (
-                approvalActionLabel(action.id, action.label, action.outcome)
-              )}
+              {pendingAction === action.id ? <Trans>Sending…</Trans> : approvalActionLabel(action)}
             </Button>
           ))}
         </OptionsRow>
@@ -367,7 +351,8 @@ export function AskCard({
       className="mt-1.5"
       data-testid={secretInput ? "secret-ask-card" : undefined}
       header={header ? { ...header, dot: answered === undefined } : undefined}
-      question={<ChatMarkdown>{block.text}</ChatMarkdown>}
+      // An approval question can carry model-written text (a bot's name): never fetch an image for it.
+      question={<ChatMarkdown allowImages={!approval}>{block.text}</ChatMarkdown>}
       consequence={consequence}
       answered={answered}
       actions={actions}

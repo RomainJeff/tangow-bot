@@ -1,19 +1,19 @@
-import { t as translate } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import type { ThreadMessage, ThreadSnapshot } from "@rakazo/contracts";
-import {
-  isApprovalAskBlock,
-  isSecretAskBlock,
-  narrateTool,
-  speechFromBlocks,
-  spokenDecision,
-} from "@rakazo/core";
+import { isApprovalAskBlock, isSecretAskBlock, narrateTool, speechFromBlocks } from "@rakazo/core";
 import { BotAvatar, Button, useElapsed } from "@rakazo/ui-web";
 import { Mic, MicOff, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { approvalActionLabel } from "../lib/approval-labels";
 import { dictation } from "../lib/dictation";
 import { speaker } from "../lib/tts";
-import { type AskBlock, canAnswerAskByVoice } from "../lib/voice-ask";
+import {
+  type AskBlock,
+  callAskActions,
+  canAnswerAskByVoice,
+  isDetailApproval,
+  spokenAskAnswer,
+} from "../lib/voice-ask";
 
 type Phase = "listening" | "thinking" | "speaking";
 type AskAction = NonNullable<AskBlock["actions"]>[number];
@@ -155,8 +155,14 @@ export function CallView({
     setCallPhase("thinking");
     try {
       if (pendingAsk) {
-        const decision = spokenDecision(text);
-        await onAnswer(pendingAsk.message, decision ?? text);
+        const answer = spokenAskAnswer(pendingAsk.block, text);
+        if (answer === null) {
+          // A detailed approval is settled in the thread; only a refusal is taken here.
+          setHeard("");
+          void listen();
+          return;
+        }
+        await onAnswer(pendingAsk.message, answer);
       } else if (current?.run && ["running", "queued", "leased"].includes(current.run.status)) {
         await onFollowUp(text);
       } else {
@@ -169,6 +175,8 @@ export function CallView({
   }
 
   async function chooseAskAction(message: ThreadMessage, action: AskAction) {
+    const block = currentAsk(snapshotRef.current)?.block;
+    if (block && !callAskActions(block).some((offered) => offered.id === action.id)) return;
     dictation.stop("cancel");
     setHeard(action.label);
     setCallPhase("thinking");
@@ -238,7 +246,7 @@ export function CallView({
     if (lastBot && lastBot.id !== spokenMessage.current) {
       const text = speechFromBlocks(lastBot.blocks);
       const ask = lastBot.blocks.find(
-        (block) => block.kind === "ask" && block.status !== "answered",
+        (block): block is AskBlock => block.kind === "ask" && block.status !== "answered",
       );
       const secretAsk = ask && isSecretAskBlock(ask);
       if (text) {
@@ -247,7 +255,7 @@ export function CallView({
         void speaker.speak(
           secretAsk
             ? `${text}. ${secretPromptRef.current}`
-            : ask
+            : ask && !isDetailApproval(ask)
               ? `${text}. ${askPromptRef.current}`
               : text,
           {
@@ -303,7 +311,7 @@ export function CallView({
   const askBlock = pendingAsk?.block;
   const isApproval = Boolean(askBlock && isApprovalAskBlock(askBlock));
   const voiceAnswerable = !askBlock || canAnswerAskByVoice(askBlock);
-  const askActions = askBlock && voiceAnswerable ? (askBlock.actions ?? []) : [];
+  const askActions = askBlock && voiceAnswerable ? callAskActions(askBlock) : [];
 
   return (
     <div
@@ -370,7 +378,7 @@ export function CallView({
                   consequential={isApproval && action.id !== "deny"}
                   onClick={() => void chooseAskAction(askMessage, action)}
                 >
-                  {askActionLabel(action, isApproval)}
+                  {isApproval ? approvalActionLabel(action) : action.label}
                 </Button>
               ))
             ) : (
@@ -408,16 +416,6 @@ export function CallView({
       </div>
     </div>
   );
-}
-
-function askActionLabel(action: AskAction, isApproval: boolean): string {
-  if (!isApproval) return action.label;
-  if (action.outcome === "created") return translate`Create space`;
-  if (action.outcome === "cancelled") return translate`Cancel`;
-  if (action.id === "allow") return translate`Allow once`;
-  if (action.id === "always") return translate`Always allow this tool`;
-  if (action.id === "deny") return translate`Deny`;
-  return action.label;
 }
 
 function pendingSecretAsk(snapshot: ThreadSnapshot | null): boolean {
