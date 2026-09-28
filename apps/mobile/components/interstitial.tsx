@@ -37,7 +37,7 @@ export function Interstitial({
       <Text numberOfLines={1} style={styles.text}>
         {children}
       </Text>
-      <Text accessibilityElementsHidden style={styles.text}>
+      <Text accessibilityElementsHidden style={styles.chevron}>
         {"›"}
       </Text>
     </>
@@ -69,12 +69,61 @@ function createInterstitialStyles() {
       alignSelf: "center",
       flexDirection: "row",
       alignItems: "center",
-      gap: 9,
+      gap: 8,
+      minHeight: 34,
       paddingHorizontal: 4,
       paddingVertical: 2,
     },
     pressed: {
       opacity: 0.6,
+    },
+    text: {
+      flexShrink: 1,
+      color: tokens.mutedForeground,
+      ...nativeTextStyle("meta"),
+    },
+    chevron: {
+      color: tokens.mutedForeground,
+      fontSize: 14,
+    },
+  });
+}
+
+export interface HandoffDividerProps extends Omit<ViewProps, "children"> {
+  children: ReactNode;
+}
+
+/**
+ * A handoff between two bots (design contract §B, "Handoff"): centred label
+ * with a 28×1 `border` hairline on each side, no avatars, no chevron — it is
+ * never tappable, unlike the peer-message `Interstitial` above.
+ */
+export function HandoffDivider({ children, style, ...props }: HandoffDividerProps) {
+  const styles = useThemedStyles(createHandoffDividerStyles);
+  return (
+    <View style={[styles.row, style]} {...props}>
+      <View style={styles.hairline} />
+      <Text numberOfLines={1} style={styles.text}>
+        {children}
+      </Text>
+      <View style={styles.hairline} />
+    </View>
+  );
+}
+
+function createHandoffDividerStyles() {
+  const tokens = mobileTokens();
+  return StyleSheet.create({
+    row: {
+      alignSelf: "center",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    hairline: {
+      width: 28,
+      height: 1,
+      backgroundColor: tokens.border,
     },
     text: {
       flexShrink: 1,

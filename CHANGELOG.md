@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The message field now rests on a thin outline and lifts only while you write, and the Stop button's edge glows in the answering bot's colour while it replies.
 - On web and desktop, the voice call now starts from a phone icon in the conversation header instead of the mic in the message field, which now dictates.
 - While a bot works in a thread, its avatar on the working line (the typing bubble on mobile) now buzzes left and right on web, desktop and mobile, and stays still when reduced motion is on.
+- On mobile, routine runs read as a log: one line per run with its time, status and a tap to open its report and the message it sent; earlier runs of the same routine with nothing between them fold into one line while the latest keeps its own, only a routine's latest run opens on its own when it failed or is subscribed, and a long report or task result fades out and opens whole with a tap. A delegated task's result is a full-width outlined sheet with a document icon instead of a card with a "Completed" badge.
+- On phones the message field now keeps the attach button apart as a larger round button that opens the native photo, camera and file sheet, grows to five lines, shows pending attachments inside it as thumbnails, and closes the keyboard when you swipe the conversation down.
+- On mobile, the thread now confirms every touch: sending clears the field at once and restores it if the send fails, a new bot reply eases in, a held bubble settles with a light tap before the actions sheet opens, a reaction pops when it lands, a decided card's checkmark draws itself in, two bots glance at each other when one messages the other, and swiping a bot's reply reveals a reply shortcut.
 
 #### Fixed
 
@@ -35,6 +38,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Routine and other cards in a conversation fit the screen again on a phone browser instead of running off its right edge, and a bot message's time no longer shows over a card.
 - On web and desktop, a bot's avatar now has a clean edge instead of a thin dark fringe around its body.
 - On a phone browser, a long "working" line such as a web search now ends with an ellipsis instead of stretching the conversation wider than the screen.
+- On mobile, the conversation between two bots scrolls smoothly, and dictating no longer stutters the thread while you speak.
+- On iPhone, dictation listens in the language you write in, even when the phone itself is set to another language, instead of closing or transcribing French as English.
+- On mobile, opening or closing a routine run or a group keeps its line where you tapped it and moves the rest of the thread instead, including a run inside an open group, and each run in a group is named by its day and time instead of repeating the routine's name.
+- On mobile, a conversation with many bot avatars scrolls smoothly again: avatars down the thread rest on a still frame and only move while their bot works or glances, instead of each redrawing on every frame.
+- On mobile, holding a bot's message opens its actions while your finger is still down, and a bubble only presses in when you hold it, not when your thumb brushes it while scrolling.
+- On mobile, a table in a bot's answer or report scrolls sideways in the conversation again with room above and below it, and a tap still opens it whole.
+- On mobile, reopening a conversation no longer replays the entrance of every message in it.
+- On mobile, routine run cards span the conversation again instead of shrinking to their text and running over the next line; they are shorter, open their report with a tap anywhere on the card, keep their status, and drop a time and headline that only repeated what sits right above.
+- On mobile, a table in a bot's answer or report now reads like a phone table: compact rows with columns sized to what they hold, two or three lines per cell and a sideways scroll, and a tap opens it whole with each row as its own record.
+- On mobile, the typing bubble now stays in view above the message field when a bot starts answering, and a sent message and a swipe to reply settle quickly instead of bouncing.
 
 ### 2026-09-27
 

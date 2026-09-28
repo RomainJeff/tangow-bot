@@ -31,7 +31,7 @@ describe("Android mobile platform contract", () => {
     expect(thread).not.toContain("KeyboardStickyView");
     expect(thread).toContain("useSafeAreaInsets");
     expect(thread).toContain("useKeyboardState");
-    expect(thread).toContain("keyboardVisible ? 12 : Math.max(insets.bottom + 12, 24)");
+    expect(thread).toContain("keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20)");
   });
 
   it("requests live-update promotion and exposes its Android settings", () => {
@@ -173,8 +173,10 @@ describe("Android mobile platform contract", () => {
     expect(thread).toContain("<GroupAvatar members={workingBotsForLine} size={sizes.message} />");
     expect(thread).toContain("agents working");
     expect(thread).toMatch(/workingBotsForLine\.length === 1[\s\S]*agents working/);
-    // One WorkingLine, and it is the only thing that moves during a run.
-    expect(thread.match(/<WorkingLine/g)).toHaveLength(1);
+    // One typing bubble (design contract decision D1-b), and it is the only
+    // thing that moves during a run — no elapsed clock any more.
+    expect(thread.match(/<TypingBubble/g)).toHaveLength(1);
+    expect(thread).not.toContain("startedAt=");
     expect(thread).not.toContain("<ShimmerText style={{ color: tokens.mutedForeground");
   });
 
