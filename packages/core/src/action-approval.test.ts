@@ -138,6 +138,39 @@ describe("unattendedTriggerToolRequiresApproval", () => {
   });
 });
 
+describe("approval does not depend on who started the run", () => {
+  const tools = [
+    { name: "destination.write", viaConnector: false },
+    { name: "GMAIL_SEND_EMAIL", viaConnector: true },
+  ];
+
+  it("toolRequiresApproval takes no trigger", () => {
+    for (const { name, viaConnector } of tools) {
+      expect(toolRequiresApproval(name, viaConnector)).toBe(true);
+    }
+  });
+
+  it.each([
+    ["user", false],
+    ["bot_message", false],
+    ["spawn", false],
+    ["follow_up", false],
+    ["routine", false],
+    ["messaging", false],
+    ["webhook", true],
+  ])("%s with tool approval required asks: %s", (trigger, asks) => {
+    for (const { name, viaConnector } of tools) {
+      expect(
+        unattendedTriggerToolRequiresApproval(
+          { trigger, requireToolApproval: true },
+          name,
+          viaConnector,
+        ),
+      ).toBe(asks);
+    }
+  });
+});
+
 describe("isApprovalAskBlock", () => {
   it("detects allow/deny approval cards", () => {
     expect(

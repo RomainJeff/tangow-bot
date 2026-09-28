@@ -45,6 +45,8 @@ import {
   applyJudgeDecision,
   assertTransition,
   avatarIdentitySeed,
+  BOT_DELEGATION_GUIDANCE,
+  BOT_OFFER_DEDICATED_BOT,
   botMessageAllowsSilence,
   botMessageRelaysToUser,
   connectorKindFromToolName,
@@ -59,6 +61,7 @@ import {
   isMessagingChannelRun,
   isOneShotRoutineCrons,
   isTerminal,
+  isUserOpenedTrigger,
   messagingChannelId,
   messagingChannelPrivacyBlock,
   messagingDmSurfaceNote,
@@ -840,6 +843,8 @@ export type SystemInstructionParts = {
   memoryContext?: string;
   scratchpadContext?: string;
   botDirectory?: string;
+  /** The user opened this turn in the app (see isUserOpenedTrigger). */
+  userTurn?: boolean;
 };
 
 /**
@@ -894,9 +899,10 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     parts.agentEnvironmentInstruction,
     "A bot and a subagent are different. Never use both for the same request.",
     "create_space proposes a new privacy boundary inside the current organization. Use it when the user asks to create a space or separate data between teams or projects. It always pauses for explicit user approval; never claim the space exists before the tool succeeds.",
-    "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it.",
+    "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it. Never create a bot on your own initiative.",
     "update_bot updates this bot's own name (chat header / list label), title, and description. When the user asks you to rename yourself or change your title or description, call update_bot — do not claim you changed them without the tool.",
     "run_subagent is a short helper inside this turn only. It is not a bot, has no thread, and does not show in the list. Use it for parallel work you will summarize here.",
+    parts.botDirectory ? BOT_DELEGATION_GUIDANCE : undefined,
     "archive_bot safely archives a bot this bot created, and only that bot. Use it when the user asks to remove that bot or when it is finished and unused. The user can restore it or permanently delete it later. confirm_name must exactly match its name.",
     parts.pluginLine,
     parts.agentSkillsLine,
@@ -906,6 +912,8 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     "Never print API keys, access tokens, or secret values. Prefer tools over claiming you already did the work.",
     "Never narrate your work to the user. Do not announce what you are about to do, which tool you are calling, or how the work is going: no progress updates, no status beats, no play-by-play. Thinking stays private. Use message_user only to talk to the user: to say something to them, splitting your reply into short natural messages like a human conversation, or to ask a question you need answered. Each message_user call is capped at 500 characters and is silently cut off past that, so keep every message short and never put a report or any long-form deliverable in one. Whatever you sent with message_user is already delivered: your final reply must not restate, summarize, or rephrase it. Write the final reply as if the user just read those bubbles. Only what is genuinely new belongs there, and when message_user already covered the whole answer, end the turn with an empty response.",
     CHAT_VOICE_INSTRUCTIONS,
+    // Last in the stable part: it flips between user turns and automatic wakes of the same thread.
+    parts.userTurn ? BOT_OFFER_DEDICATED_BOT : undefined,
     // Fragments below move on their own between turns; everything above is the cacheable prefix.
     parts.memoryContext,
     parts.scratchpadContext,
@@ -3834,6 +3842,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ? redactSecrets(scratchpadContext, runSecrets)
               : undefined,
             botDirectory,
+            userTurn: isUserOpenedTrigger(run.trigger),
           });
           const instructionTokens = estimateTextTokens(instructions);
           const toolSchemaTokens = estimateToolSchemaTokens(tools);
