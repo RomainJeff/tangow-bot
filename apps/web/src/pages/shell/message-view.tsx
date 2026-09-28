@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown } from "@rakazo/chat-ui/web";
+import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type { ThreadMessage } from "@rakazo/contracts";
 import { isNarrationMessage } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
@@ -36,7 +36,7 @@ function UserText({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
   // ponytail: counts newlines, not wrapped lines; a 20-line max-height hides the rest either way.
   const foldable = text.split("\n").length > USER_TEXT_FOLD_LINES;
-  if (!foldable) return text;
+  if (!foldable) return <LinkifiedText text={text} />;
   return (
     <>
       <div
@@ -48,7 +48,7 @@ function UserText({ text }: { text: string }) {
             : "relative max-h-[calc(20*var(--type-body-leading)*var(--type-body-size))] overflow-hidden"
         }
       >
-        {text}
+        <LinkifiedText text={text} />
         {expanded ? null : (
           <div
             aria-hidden

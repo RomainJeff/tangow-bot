@@ -1,6 +1,7 @@
 import type { SandboxProvider } from "@rakazo/adapter-kit";
 import type { Actor } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
+import { conversationRunFilter } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   cancelSupersededQueuedRuns,
@@ -1136,6 +1137,64 @@ describe("sendThreadMessage", () => {
       message: "Answer the pending ask first.",
     });
     expect(tx.steeringMessage.create).not.toHaveBeenCalled();
+  });
+
+  it("never steers a message into a run that only reports through a routine card", async () => {
+    const tx = {
+      thread: { update: vi.fn().mockResolvedValue({ nextMessageSeq: 2, nextEventSeq: 2 }) },
+      message: {
+        create: vi.fn().mockResolvedValue({ id: "msg-1", threadId: "thread-1", seq: 1 }),
+        update: vi.fn(),
+      },
+      run: {
+        findMany: vi
+          .fn()
+          // Every active run, as the ask and conflict checks see them: a routine card run.
+          .mockResolvedValueOnce([{ id: "run-card", taskId: "task-card", status: "running" }])
+          // The conversation runs among them: none.
+          .mockResolvedValueOnce([])
+          // No superseded queued user run to cancel.
+          .mockResolvedValueOnce([]),
+        findUnique: vi.fn().mockResolvedValue({ status: "queued" }),
+        create: vi.fn().mockResolvedValue({ id: "run-1", taskId: "task-1", status: "queued" }),
+      },
+      steeringMessage: { create: vi.fn() },
+      event: { create: vi.fn().mockResolvedValue({ seq: 1 }) },
+      task: {
+        create: vi.fn().mockResolvedValue({ id: "task-1" }),
+        updateMany: vi.fn(),
+      },
+    };
+    const prisma = {
+      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+    const target = {
+      kind: "bot",
+      botId: "bot-1",
+      threadId: "thread-1",
+      bot: { computer: null },
+    } as ThreadTarget;
+
+    await sendThreadMessage(
+      {
+        prisma,
+        events: { notify: vi.fn(async () => undefined) } as never,
+        jobs: { enqueue: vi.fn(async () => undefined) } as never,
+      },
+      { spaceId: "workspace-1", userId: "user-1" } as Actor,
+      target,
+      { text: "hi", clientNonce: "nonce-1" },
+    );
+
+    // The ask/conflict lookup still sees the card run, so it can answer its own ask.
+    expect(tx.run.findMany.mock.calls[0]?.[0]?.where).not.toHaveProperty("NOT");
+    expect(tx.run.findMany).toHaveBeenNthCalledWith(2, {
+      where: { id: { in: ["run-card"] }, ...conversationRunFilter },
+      select: { id: true },
+    });
+    expect(tx.steeringMessage.create).not.toHaveBeenCalled();
+    expect(tx.run.create).toHaveBeenCalled();
   });
 
   it("rejects a new bot message while a run is waiting on a secret ask", async () => {

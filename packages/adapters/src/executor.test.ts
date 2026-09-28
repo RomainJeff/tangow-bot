@@ -672,7 +672,7 @@ describe("createRunExecutor", () => {
     const messages = [{ role: "user", content: "Group request" }];
     expect(
       threadContextForRun(
-        "messaging",
+        false,
         {
           messages,
           summary: "Private test detail",
@@ -707,13 +707,13 @@ describe("createRunExecutor", () => {
       historyCompactedUpToSeq: 4,
     };
 
-    expect(threadContextForRun("routine", threadContext, false)).toEqual({
+    expect(threadContextForRun(true, threadContext, false)).toEqual({
       messages: [],
       summary: null,
       historyCompactedUpToSeq: null,
       includeSemanticRecall: false,
     });
-    expect(threadContextForRun("user", threadContext, false)).toEqual({
+    expect(threadContextForRun(false, threadContext, false)).toEqual({
       ...threadContext,
       includeSemanticRecall: true,
     });

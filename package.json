@@ -33,6 +33,8 @@
     "ship": "bash scripts/ship.sh",
     "ship:test": "bash scripts/ship.test.sh",
     "submit:ios": "pnpm --filter @rakazo/mobile submit:ios",
+    "build:ios:preview": "pnpm --filter @rakazo/mobile build:ios:preview",
+    "release:ios": "pnpm --filter @rakazo/mobile release:ios",
     "compose:up": "docker compose --env-file .env -f infra/compose/docker-compose.yml up --build",
     "compose:down": "docker compose --env-file .env -f infra/compose/docker-compose.yml down -v"
   },

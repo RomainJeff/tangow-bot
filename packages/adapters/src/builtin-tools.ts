@@ -21,7 +21,7 @@ export const DELEGATION_TOOL_NAMES = new Set([
 // `chattyReplies` on additionally trade one long final answer for a run of short
 // bubbles.
 export const CHATTY_MESSAGE_USER_DESCRIPTION =
-  "Send one short chat message to the user immediately, without ending your turn. Each call posts one bubble. Use several short message_user calls instead of one long final answer, and to ask questions. Never narrate your work: no progress updates, no tool logs, no play-by-play. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation, not in other words, not from a new angle. When you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled. Let the number of bubbles follow the content: usually one or two, more only when there are that many separate points. A long deliverable the user asked for goes in your final reply, not in bubbles.";
+  "Send one short chat message to the user immediately, without ending your turn. Each call posts one bubble. Use several short message_user calls instead of one long final answer, and to ask questions. Never narrate your work: no progress updates, no tool logs, no play-by-play. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation, not in other words, not from a new angle. When you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled. Let the number of bubbles follow the content: usually one or two, more only when there are that many separate points. A long deliverable the user asked for goes in your final reply, not in bubbles. Bubbles render Markdown (bold, italics, lists, links, inline code), so format when it helps readability.";
 
 export function withChattyReplies(tools: ConnectorTool[]): ConnectorTool[] {
   return tools.map((tool) =>
@@ -113,6 +113,26 @@ export const builtinAgentTools: ConnectorTool[] = [
         },
       },
       required: ["actions"],
+    },
+  },
+  {
+    // Offered only when the Space has a decision provider (selectBuiltinToolsForRun).
+    name: "browser_run",
+    description:
+      "Complete a multi-step task on the current page (fill a form, set filters, open a result) without reading it at every step. Give the goal with its stop condition, and put every text to type or choose in values: it never types text from the goal, and asks for any value it lacks. It stops before paying, ordering, deleting, sending, or a final submission and returns status, steps, need, and the page's elements; confirm such a click yourself with browser_act by ref.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        goal: { type: "string", description: "What to reach on this page, and when to stop." },
+        values: {
+          type: "object",
+          additionalProperties: { type: "string" },
+          description:
+            'Every text to type or choose, by name, e.g. {"destination": "Japon", "month": "avril 2027"}.',
+        },
+        maxSteps: { type: "number", description: "Step limit, default 25, at most 40." },
+      },
+      required: ["goal"],
     },
   },
   {
@@ -248,7 +268,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "message_user",
     description:
-      "Talk to the user in this chat immediately, without ending your turn. Each call posts one bubble. Only two uses: saying something to the user as part of your reply, split into short natural messages like a human conversation, or asking a question you need answered. Never narrate your work: no announcing what you are about to do, no tool logs, no play-by-play, no status beats. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation, not in other words, not from a new angle; when you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled. HARD LIMIT: each bubble is cut off silently at 500 characters, so keep it short and never put a report or any long-form content in one.",
+      "Talk to the user in this chat immediately, without ending your turn. Each call posts one bubble. Only two uses: saying something to the user as part of your reply, split into short natural messages like a human conversation, or asking a question you need answered. Never narrate your work: no announcing what you are about to do, no tool logs, no play-by-play, no status beats. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation, not in other words, not from a new angle; when you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled. HARD LIMIT: each bubble is cut off silently at 500 characters, so keep it short and never put a report or any long-form content in one. Bubbles render Markdown (bold, italics, lists, links, inline code), so format when it helps readability.",
     inputSchema: {
       type: "object",
       properties: {
@@ -256,7 +276,7 @@ export const builtinAgentTools: ConnectorTool[] = [
           type: "string",
           maxLength: 500,
           description:
-            "Short user-visible update, not the final answer; longer text is silently truncated.",
+            "Short user-visible message in Markdown, not the final answer; longer text is silently truncated.",
         },
       },
       required: ["message"],

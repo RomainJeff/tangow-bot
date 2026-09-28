@@ -1,7 +1,17 @@
 import { useLingui } from "@lingui/react/macro";
 import type { AvatarStyle, Space, SpaceMemoryConfig } from "@rakazo/contracts";
 import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
-import { Brain, CloudDownload, Cpu, Gauge, Monitor, Settings, Volume2, XIcon } from "lucide-react";
+import {
+  Brain,
+  CloudDownload,
+  Cpu,
+  Gauge,
+  Monitor,
+  MousePointerClick,
+  Settings,
+  Volume2,
+  XIcon,
+} from "lucide-react";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { computersAreUnavailable } from "../components/ComputersUnavailableHint";
 import {
@@ -10,6 +20,7 @@ import {
   UpdatesSettingsPanel,
   UsageSettingsPanel,
 } from "./AccountSettingsOverlay";
+import { BrowserSettingsPanel } from "./BrowserSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
@@ -18,6 +29,7 @@ export type SettingsSection =
   | "general"
   | "models"
   | "memory"
+  | "browser"
   | "voice"
   | "usage"
   | "computer"
@@ -69,9 +81,10 @@ export function SettingsOverlay({
   const usageRef = useRef<HTMLDivElement>(null);
   const [section, setSection] = useState<SettingsSection>(initialSection);
   const [memoryBusy, setMemoryBusy] = useState(false);
+  const [browserBusy, setBrowserBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const showComputer = isDeploymentOwner && computersAreUnavailable(sandboxProvider);
-  const panelBusy = memoryBusy || voiceBusy;
+  const panelBusy = memoryBusy || browserBusy || voiceBusy;
 
   useEffect(() => {
     setSection(initialSection);
@@ -87,6 +100,7 @@ export function SettingsOverlay({
     { id: "general", label: t`General`, icon: Settings },
     { id: "models", label: t`Models`, icon: Cpu },
     { id: "memory", label: t`Memory`, icon: Brain },
+    { id: "browser", label: t`Browser`, icon: MousePointerClick },
     { id: "voice", label: t`Voice`, icon: Volume2 },
     { id: "usage", label: t`Usage`, icon: Gauge },
     ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
@@ -193,7 +207,10 @@ export function SettingsOverlay({
 
             <div
               className={`min-h-0 flex-1 ${
-                section === "models" || section === "voice" || section === "memory"
+                section === "models" ||
+                section === "voice" ||
+                section === "memory" ||
+                section === "browser"
                   ? "flex flex-col overflow-hidden"
                   : "rk-scroll overflow-y-auto overscroll-contain px-6 pb-6 pt-5 sm:px-8 sm:pb-8"
               }`}
@@ -231,6 +248,9 @@ export function SettingsOverlay({
                   onConfigChange={onMemoryConfigChange}
                   onBusyChange={setMemoryBusy}
                 />
+              ) : null}
+              {section === "browser" ? (
+                <BrowserSettingsPanel onBusyChange={setBrowserBusy} />
               ) : null}
               {section === "voice" ? (
                 <VoiceSettingsOverlay embedded onClose={requestClose} onBusyChange={setVoiceBusy} />

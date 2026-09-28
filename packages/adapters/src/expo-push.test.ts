@@ -120,6 +120,7 @@ describe("expo push", () => {
         title: "Need you",
         body: "on screen",
         botId: "bot-1",
+        groupId: "group-1",
         threadId: "th-1",
         badge: 2,
       },
@@ -134,14 +135,20 @@ describe("expo push", () => {
       collapseId: string;
       tag: string;
       badge: number;
-      data: { kind: string };
+      data: Record<string, string>;
     };
     expect(body.to).toBe("ExponentPushToken[test]");
     expect(body.title).toBe("Need you");
     expect(body.collapseId).toBe("th-1");
     expect(body.tag).toBe("th-1");
     expect(body.badge).toBe(2);
-    expect(body.data.kind).toBe("takeover");
+    expect(body.data).toMatchObject({
+      kind: "takeover",
+      spaceId: "w",
+      botId: "bot-1",
+      groupId: "group-1",
+      threadId: "th-1",
+    });
   });
 
   it("marks an avatar push mutable so the iOS extension can draw the bot", async () => {

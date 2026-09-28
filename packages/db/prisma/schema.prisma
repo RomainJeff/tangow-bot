@@ -227,6 +227,7 @@ model Space {
   actionAutoReviewPreferences ActionAutoReviewPreference[]
   memoryConfig                SpaceMemoryConfig?
   memoryClassifierConfig      SpaceMemoryClassifierConfig?
+  decisionConfig              SpaceDecisionConfig?
   secrets                     Secret[]
   chatGroups                  ChatGroup[]
   botSecrets BotSecret[]
@@ -615,6 +616,8 @@ model Run {
   sourceMessage        Message?         @relation("RunSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
   routineId            String?
   routine              Routine?         @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  // Inbound webhook runs only: false when the woken routine opted out of approving each action.
+  requireToolApproval  Boolean          @default(true)
   startedAt            DateTime?
   completedAt          DateTime?
   botOutcomeReturnedAt DateTime?
@@ -752,6 +755,8 @@ model Routine {
   webhookEnabled Boolean   @default(false)
   githubEnabled  Boolean   @default(false)
   messageProvider String?
+  // Inbound (webhook, GitHub, message) wakes ask before every action unless the owner opts out.
+  requireToolApproval Boolean @default(true)
   lastRunAt      DateTime?
   nextRunAt      DateTime?
   createdAt      DateTime  @default(now())
@@ -1257,6 +1262,22 @@ model SpaceMemoryClassifierConfig {
   @@map("space_memory_classifier_configs")
 }
 
+/// Optional decision provider for a Space (typed choices over page state).
+model SpaceDecisionConfig {
+  id        String   @id @default(cuid())
+  spaceId   String   @unique
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId    String
+  provider  String
+  settings  Json
+  secretId  String   @unique
+  secret    Secret   @relation(fields: [secretId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("space_decision_configs")
+}
+
 model Secret {
   id                String             @id @default(cuid())
   userId            String
@@ -1269,6 +1290,7 @@ model Secret {
   mcpServers        McpServer[]
   spaceMemoryConfig SpaceMemoryConfig?
   memoryClassifierConfig SpaceMemoryClassifierConfig?
+  spaceDecisionConfig SpaceDecisionConfig?
   agentSecret       AgentSecret?
 
   @@index([userId, spaceId])

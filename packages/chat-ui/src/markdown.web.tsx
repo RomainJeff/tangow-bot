@@ -2,7 +2,13 @@ import { memo, useCallback, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import "./markdown.web.css";
-import { type ChatMarkdownProps, closeUnterminatedFence, sanitizeMarkdownUrl } from "./markdown";
+import {
+  type ChatMarkdownProps,
+  closeUnterminatedFence,
+  linkHref,
+  linkifyText,
+  sanitizeMarkdownUrl,
+} from "./markdown";
 
 function CopyIcon() {
   return (
@@ -105,7 +111,9 @@ export const ChatMarkdown = memo(function ChatMarkdown({
         components={allowImages ? components : componentsNoImages}
         remarkPlugins={[remarkGfm]}
         skipHtml
-        urlTransform={(url) => sanitizeMarkdownUrl(url, true) ?? ""}
+        urlTransform={(url, key) =>
+          (key === "href" ? linkHref(url, true) : sanitizeMarkdownUrl(url, true)) ?? ""
+        }
       >
         {source}
       </ReactMarkdown>
@@ -113,6 +121,25 @@ export const ChatMarkdown = memo(function ChatMarkdown({
     </div>
   );
 });
+
+/** Plain text (what the person typed) with every URL in it made clickable. */
+export function LinkifiedText({ text }: { text: string }) {
+  return linkifyText(text).map((segment, i) =>
+    segment.href ? (
+      <a
+        key={i}
+        className="rk-linkified"
+        href={segment.href}
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        {segment.text}
+      </a>
+    ) : (
+      segment.text
+    ),
+  );
+}
 
 export type { ChatMarkdownProps } from "./markdown";
 export { truncateMarkdownForRender } from "./markdown";

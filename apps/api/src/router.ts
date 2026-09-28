@@ -106,6 +106,7 @@ import {
   CannotDeleteLastSpaceError,
   CannotDeleteSpaceAsNonOwnerError,
   claimEmptySpaceDeletionForMember,
+  conversationRunFilter,
   createExternalConversationRepos,
   createGroupRepos,
   createRepos,
@@ -116,6 +117,7 @@ import {
   findDefaultModelCredential,
   findDefaultVoiceCredential,
   findModelCredential,
+  findSpaceDecisionConfig,
   findSpaceMemoryConfig,
   formatMessagingLinkCode,
   InvalidAnswerError,
@@ -158,6 +160,11 @@ import {
   resolveBusyBotName,
   toComputerStatus,
 } from "./computer-status.js";
+import {
+  disconnectDecisionProvider,
+  persistDecisionProviderConfig,
+  serializeSpaceDecisionConfig,
+} from "./decision-provider-config.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
 import { createMarketplacesService } from "./marketplaces.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
@@ -1593,7 +1600,7 @@ export function createRouter(deps: RouterDeps) {
         const stopping = await deps.prisma.run.findMany({
           where: {
             threadId: target.threadId,
-            trigger: "routine",
+            routineId: { not: null },
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
           select: { id: true },
@@ -1707,6 +1714,7 @@ export function createRouter(deps: RouterDeps) {
               threadId: target.threadId,
               botId,
               status: { in: [...ACTIVE_RUN_STATUSES] },
+              ...conversationRunFilter,
             },
             select: { id: true },
           });
@@ -2614,6 +2622,18 @@ export function createRouter(deps: RouterDeps) {
         disconnectMemoryProvider(deps, context.actor),
       ),
     },
+    decision: {
+      providerConfig: authed.decision.providerConfig.handler(async ({ context }) => {
+        const config = await findSpaceDecisionConfig(deps.prisma, context.actor.spaceId);
+        return config ? serializeSpaceDecisionConfig(config) : null;
+      }),
+      connectProvider: authed.decision.connectProvider.handler(async ({ context, input }) =>
+        persistDecisionProviderConfig(deps, context.actor, input),
+      ),
+      disconnectProvider: authed.decision.disconnectProvider.handler(async ({ context }) =>
+        disconnectDecisionProvider(deps, context.actor),
+      ),
+    },
     routines: {
       list: authed.routines.list.handler(async ({ context, input }) => {
         await repos.getBot(context.actor, input.botId);
@@ -2651,6 +2671,7 @@ export function createRouter(deps: RouterDeps) {
             webhookEnabled: input.webhookEnabled,
             githubEnabled: input.githubEnabled,
             messageProvider: input.messageProvider,
+            requireToolApproval: input.requireToolApproval,
             nextRunAt,
           },
         });
@@ -2755,6 +2776,7 @@ export function createRouter(deps: RouterDeps) {
             webhookEnabled: input.webhookEnabled,
             githubEnabled: input.githubEnabled,
             messageProvider: input.messageProvider,
+            requireToolApproval: input.requireToolApproval,
             nextRunAt,
           },
         });
@@ -5543,6 +5565,7 @@ function mapRoutine(row: {
   webhookEnabled: boolean;
   githubEnabled: boolean;
   messageProvider: string | null;
+  requireToolApproval: boolean;
   lastRunAt: Date | null;
   nextRunAt: Date | null;
   createdAt: Date;
@@ -5559,6 +5582,7 @@ function mapRoutine(row: {
     webhookEnabled: row.webhookEnabled,
     githubEnabled: row.githubEnabled,
     messageProvider: row.messageProvider,
+    requireToolApproval: row.requireToolApproval,
     lastRunAt: row.lastRunAt?.toISOString() ?? null,
     nextRunAt: row.nextRunAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),

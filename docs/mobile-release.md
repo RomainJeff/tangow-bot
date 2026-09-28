@@ -42,6 +42,33 @@ eas submit --platform ios --profile production --latest
 
 From the repository root, `pnpm submit:ios` runs that same submission.
 
+### Local iOS builds
+
+These shortcuts build on your Mac with `eas build --local` (Xcode and
+CocoaPods required) and write the IPA to `apps/mobile/builds/`, which Git
+ignores. Run them from the repository root or from `apps/mobile`.
+
+| Command | Profile | Result |
+| --- | --- | --- |
+| `pnpm build:ios:preview` | `preview` (internal, Ad Hoc) | `builds/rakazo-preview.ipa`, install it with Expo Orbit or `xcrun devicectl` |
+| `pnpm release:ios` | `production` (App Store) | builds `builds/rakazo-production.ipa`, then submits that exact file to TestFlight |
+
+A production IPA is signed with an App Store profile and cannot be installed
+directly on a device; iOS reports "Failed to verify code signature" or
+"Failed to install embedded profile". Use TestFlight for it, or a preview build
+for direct installs.
+
+A preview build only installs on devices listed in its Ad Hoc profile. Register
+each device once before building, then let EAS regenerate the profile when it
+asks:
+
+```sh
+npx eas-cli@latest device:create
+```
+
+The production profile uses `autoIncrement`; check that each local build gets a
+new build number, since TestFlight rejects a reused one.
+
 EAS can prompt for store identity interactively. For automated submission, add
 the required identifiers through a private CI configuration or a short-lived
 local change that is never committed.

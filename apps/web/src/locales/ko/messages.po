@@ -99,7 +99,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr ""
 
 #. placeholder {0}: active.name
-#: src/pages/shell/side-panel.tsx:306
+#: src/pages/shell/side-panel.tsx:308
 msgid "{0}'s screen"
 msgstr "{0}의 화면"
 
@@ -107,7 +107,7 @@ msgstr "{0}의 화면"
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/side-panel.tsx:579
+#: src/pages/shell/side-panel.tsx:583
 msgid "{botName}’s computer"
 msgstr "{botName}의 컴퓨터"
 
@@ -229,7 +229,7 @@ msgstr ""
 
 #: src/pages/KnowledgeSection.tsx:368
 #: src/pages/MemoryLibraryPage.tsx:306
-#: src/pages/RoutineEditor.tsx:302
+#: src/pages/RoutineEditor.tsx:309
 msgid "Active"
 msgstr "활성"
 
@@ -256,15 +256,15 @@ msgstr "먼저 마켓플레이스를 추가하세요."
 msgid "Add a model in Settings to use this."
 msgstr "이 기능을 사용하려면 설정에서 모델을 추가하세요."
 
-#: src/pages/shell/side-panel.tsx:437
+#: src/pages/shell/side-panel.tsx:439
 msgid "Add a run time for this one-shot."
 msgstr "이 일회성 실행의 시간을 추가하세요."
 
-#: src/pages/shell/side-panel.tsx:415
+#: src/pages/shell/side-panel.tsx:417
 msgid "Add a schedule, webhook, GitHub, or message trigger"
 msgstr ""
 
-#: src/pages/RoutineEditor.tsx:521
+#: src/pages/RoutineEditor.tsx:545
 msgid "Add a schedule, webhook, GitHub, or message trigger to run this routine."
 msgstr ""
 
@@ -338,7 +338,7 @@ msgstr "자동 실행에 추가"
 msgid "Add Treg"
 msgstr "Treg 추가"
 
-#: src/pages/RoutineEditor.tsx:457
+#: src/pages/RoutineEditor.tsx:481
 msgid "Add trigger"
 msgstr "트리거 추가"
 
@@ -355,6 +355,7 @@ msgid "Adding…"
 msgstr "추가 중…"
 
 #: src/pages/AccountSettingsOverlay.tsx:193
+#: src/pages/BrowserSettingsPanel.tsx:125
 #: src/pages/McpServersOverlay.tsx:342
 #: src/pages/ModelSettingsOverlay.tsx:565
 #: src/pages/Onboarding.tsx:496
@@ -364,7 +365,7 @@ msgstr "추가 중…"
 msgid "Advanced"
 msgstr "고급 설정"
 
-#: src/pages/RoutineEditor.tsx:682
+#: src/pages/RoutineEditor.tsx:706
 msgid "Advanced..."
 msgstr "고급..."
 
@@ -466,7 +467,9 @@ msgid "Answer in text"
 msgstr ""
 
 #: src/components/AskCard.tsx:20
-#: src/components/AskCard.tsx:533
+#: src/components/AskCard.tsx:527
+#: src/components/AskCard.tsx:530
+#: src/components/AskCard.tsx:544
 msgid "Answered"
 msgstr "응답함"
 
@@ -576,6 +579,10 @@ msgstr "{0} 커넥터 전에 확인"
 msgid "Ask before email actions"
 msgstr "이메일 동작 전에 확인"
 
+#: src/pages/RoutineEditor.tsx:456
+msgid "Ask before every action"
+msgstr "모든 작업 전에 확인"
+
 #: src/components/ApprovalRulesSettings.tsx:12
 msgid "Ask before purchase actions"
 msgstr "결제 동작 전에 확인"
@@ -645,7 +652,7 @@ msgstr ""
 msgid "Automatic shape"
 msgstr "자동 모양"
 
-#: src/pages/RoutineEditor.tsx:596
+#: src/pages/RoutineEditor.tsx:620
 msgid "Available after the routine is saved"
 msgstr "루틴을 저장한 후 사용할 수 있습니다"
 
@@ -653,11 +660,11 @@ msgstr "루틴을 저장한 후 사용할 수 있습니다"
 msgid "Avatars"
 msgstr "아바타"
 
-#: src/components/AskCard.tsx:579
+#: src/components/AskCard.tsx:578
 #: src/pages/MemoryLibraryPage.tsx:62
 #: src/pages/MemoryLibraryPage.tsx:232
 #: src/pages/PluginsOverlay.tsx:554
-#: src/pages/RoutineEditor.tsx:263
+#: src/pages/RoutineEditor.tsx:270
 msgid "Back"
 msgstr "뒤로"
 
@@ -667,6 +674,7 @@ msgstr "뒤로"
 msgid "Back to sign in"
 msgstr "로그인으로 돌아가기"
 
+#: src/pages/BrowserSettingsPanel.tsx:137
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:47
 msgid "Base URL"
 msgstr "서버 주소"
@@ -676,12 +684,12 @@ msgstr "서버 주소"
 msgid "Bearer token"
 msgstr "Bearer 토큰"
 
-#: src/pages/shell/side-panel.tsx:571
+#: src/pages/shell/side-panel.tsx:575
 msgid "Booting live desktop…"
 msgstr "라이브 데스크톱 시작 중…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:627
+#: src/pages/shell/side-panel.tsx:631
 msgid "Booting up {0}’s computer"
 msgstr "{0}의 컴퓨터를 켜는 중"
 
@@ -702,11 +710,11 @@ msgstr "봇"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:744
+#: src/pages/shell/side-panel.tsx:750
 msgid "Bot screen"
 msgstr "Bot 화면"
 
-#: src/pages/shell/side-panel.tsx:269
+#: src/pages/shell/side-panel.tsx:271
 msgid "Bot screen preview"
 msgstr "Bot 화면 미리보기"
 
@@ -737,6 +745,10 @@ msgstr "둘러보기"
 
 #: src/pages/PluginsOverlay.tsx:725
 msgid "Browse MCP servers"
+msgstr ""
+
+#: src/pages/SettingsOverlay.tsx:103
+msgid "Browser"
 msgstr ""
 
 #: src/App.tsx:164
@@ -830,8 +842,8 @@ msgstr "확인 실패"
 msgid "Check for updates"
 msgstr "업데이트 확인"
 
-#: src/pages/shell/side-panel.tsx:453
-#: src/pages/shell/side-panel.tsx:466
+#: src/pages/shell/side-panel.tsx:455
+#: src/pages/shell/side-panel.tsx:469
 msgid "Check in."
 msgstr "확인해 주세요."
 
@@ -900,7 +912,7 @@ msgstr ""
 #: src/pages/MessagingSettingsOverlay.tsx:361
 #: src/pages/PeerMessagesOverlay.tsx:113
 #: src/pages/PeerMessagesOverlay.tsx:116
-#: src/pages/RoutineEditor.tsx:275
+#: src/pages/RoutineEditor.tsx:282
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
 msgstr "닫기"
@@ -909,7 +921,7 @@ msgstr "닫기"
 msgid "Close chart"
 msgstr "차트 닫기"
 
-#: src/pages/shell/side-panel.tsx:723
+#: src/pages/shell/side-panel.tsx:729
 msgid "Close computer"
 msgstr "컴퓨터 닫기"
 
@@ -930,7 +942,7 @@ msgid "Close memory"
 msgstr ""
 
 #: src/pages/MemorySettingsOverlay.tsx:172
-#: src/pages/SettingsOverlay.tsx:104
+#: src/pages/SettingsOverlay.tsx:118
 msgid "Close memory settings"
 msgstr "기억 설정 닫기"
 
@@ -939,7 +951,7 @@ msgid "Close messaging settings"
 msgstr "메시징 설정 닫기"
 
 #: src/pages/ModelSettingsOverlay.tsx:386
-#: src/pages/SettingsOverlay.tsx:102
+#: src/pages/SettingsOverlay.tsx:116
 msgid "Close model settings"
 msgstr "AI 모델 설정 닫기"
 
@@ -947,8 +959,8 @@ msgstr "AI 모델 설정 닫기"
 msgid "Close navigation"
 msgstr "메뉴 닫기"
 
-#: src/pages/shell/side-panel.tsx:185
-#: src/pages/shell/side-panel.tsx:245
+#: src/pages/shell/side-panel.tsx:187
+#: src/pages/shell/side-panel.tsx:247
 msgid "Close panel"
 msgstr "패널 닫기"
 
@@ -960,11 +972,11 @@ msgstr "미리보기 닫기"
 msgid "Close skills"
 msgstr "스킬 닫기"
 
-#: src/pages/SettingsOverlay.tsx:107
+#: src/pages/SettingsOverlay.tsx:121
 msgid "Close user settings"
 msgstr "계정 설정 닫기"
 
-#: src/pages/SettingsOverlay.tsx:106
+#: src/pages/SettingsOverlay.tsx:120
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "음성 설정 닫기"
@@ -987,7 +999,7 @@ msgstr "{0} 접기"
 msgid "Color {0}"
 msgstr "색상 {0}"
 
-#: src/pages/RoutineEditor.tsx:494
+#: src/pages/RoutineEditor.tsx:518
 msgid "Coming soon"
 msgstr "준비 중"
 
@@ -1003,7 +1015,7 @@ msgstr "완료"
 msgid "Completed"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:92
+#: src/pages/SettingsOverlay.tsx:106
 #: src/pages/shell/bot-panel.tsx:64
 #: src/pages/shell/message-view.tsx:486
 msgid "Computer"
@@ -1014,19 +1026,19 @@ msgstr "컴퓨터"
 msgid "Computer & routines"
 msgstr ""
 
-#: src/pages/shell/side-panel.tsx:574
+#: src/pages/shell/side-panel.tsx:578
 msgid "Computer failed to boot"
 msgstr "컴퓨터를 시작하지 못했습니다"
 
-#: src/pages/shell/side-panel.tsx:767
+#: src/pages/shell/side-panel.tsx:773
 msgid "Computer is asleep"
 msgstr "컴퓨터가 절전 상태입니다"
 
-#: src/pages/shell/side-panel.tsx:573
+#: src/pages/shell/side-panel.tsx:577
 msgid "Computer is asleep. Open it to wake."
 msgstr "컴퓨터가 절전 상태입니다. 열어 깨우세요."
 
-#: src/pages/shell/side-panel.tsx:575
+#: src/pages/shell/side-panel.tsx:579
 msgid "Computer is stopped"
 msgstr "컴퓨터가 중지됨"
 
@@ -1060,6 +1072,7 @@ msgstr "비밀번호 확인"
 #: src/components/integrations/IntegrationSetup.tsx:267
 #: src/components/integrations/IntegrationSetup.tsx:291
 #: src/components/integrations/IntegrationSetup.tsx:324
+#: src/pages/BrowserSettingsPanel.tsx:169
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
 #: src/pages/VoiceSettingsOverlay.tsx:269
@@ -1096,6 +1109,7 @@ msgstr "Treg 연결"
 
 #: src/components/integrations/IntegrationSetup.tsx:164
 #: src/components/integrations/IntegrationSetup.tsx:267
+#: src/pages/BrowserSettingsPanel.tsx:91
 #: src/pages/JudgmentConnectionSettings.tsx:148
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:197
@@ -1128,6 +1142,7 @@ msgstr "연결되었습니다. 다음 메시지부터 이 도구를 사용할 �
 
 #: src/components/integrations/IntegrationSetup.tsx:222
 #: src/components/integrations/IntegrationSetup.tsx:361
+#: src/pages/BrowserSettingsPanel.tsx:169
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1233,6 +1248,10 @@ msgstr "연결하지 못했습니다."
 msgid "Could not connect {0}"
 msgstr "{0}에 연결하지 못했습니다."
 
+#: src/pages/BrowserSettingsPanel.tsx:62
+msgid "Could not connect OpenRouter"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:336
 msgid "Could not connect this provider"
 msgstr "AI 서비스에 연결하지 못했습니다."
@@ -1306,6 +1325,10 @@ msgstr "기억 서비스 연결을 해제하지 못했습니다."
 msgid "Could not disconnect OAuth"
 msgstr "OAuth 연결을 해제하지 못했습니다."
 
+#: src/pages/BrowserSettingsPanel.tsx:75
+msgid "Could not disconnect OpenRouter"
+msgstr ""
+
 #: src/pages/VoiceSettingsOverlay.tsx:124
 msgid "Could not disconnect this voice provider"
 msgstr ""
@@ -1353,6 +1376,10 @@ msgstr "확인 규칙을 불러오지 못했습니다."
 
 #: src/pages/IntegrationSetup.tsx:72
 msgid "Could not load bots. Reload to try again."
+msgstr ""
+
+#: src/pages/BrowserSettingsPanel.tsx:33
+msgid "Could not load browser settings"
 msgstr ""
 
 #: src/pages/JudgmentConnectionSettings.tsx:37
@@ -1494,7 +1521,7 @@ msgstr "비밀번호를 재설정할 수 없습니다"
 msgid "Could not revoke connection"
 msgstr "연결을 해제하지 못했습니다."
 
-#: src/pages/shell/side-panel.tsx:520
+#: src/pages/shell/side-panel.tsx:524
 msgid "Could not run routine"
 msgstr "루틴을 실행할 수 없습니다"
 
@@ -1515,7 +1542,7 @@ msgstr "그룹을 저장하지 못했습니다."
 msgid "Could not save model"
 msgstr "AI 모델을 저장하지 못했습니다."
 
-#: src/pages/shell/side-panel.tsx:491
+#: src/pages/shell/side-panel.tsx:495
 msgid "Could not save routine"
 msgstr "자동 실행을 저장하지 못했습니다."
 
@@ -1649,8 +1676,8 @@ msgstr "새 그룹 만들기"
 msgid "Create new Space"
 msgstr "새 스페이스 만들기"
 
-#: src/pages/RoutineEditor.tsx:125
-#: src/pages/RoutineEditor.tsx:126
+#: src/pages/RoutineEditor.tsx:130
+#: src/pages/RoutineEditor.tsx:131
 msgid "Create Routine"
 msgstr "자동 실행 만들기"
 
@@ -1747,7 +1774,7 @@ msgstr "기본 기억 범위"
 #: src/pages/BotContextMenu.tsx:148
 #: src/pages/KnowledgeSection.tsx:544
 #: src/pages/McpServersOverlay.tsx:508
-#: src/pages/RoutineEditor.tsx:328
+#: src/pages/RoutineEditor.tsx:335
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
 #: src/pages/shell/sidebar.tsx:615
@@ -1836,6 +1863,7 @@ msgstr ""
 msgid "Disabled"
 msgstr "비활성"
 
+#: src/pages/BrowserSettingsPanel.tsx:104
 #: src/pages/JudgmentConnectionSettings.tsx:179
 #: src/pages/McpServersOverlay.tsx:493
 #: src/pages/MemorySettingsOverlay.tsx:223
@@ -1843,6 +1871,7 @@ msgstr "비활성"
 msgid "Disconnect"
 msgstr "연결 해제"
 
+#: src/pages/BrowserSettingsPanel.tsx:104
 #: src/pages/MemorySettingsOverlay.tsx:221
 #: src/pages/VoiceSettingsOverlay.tsx:282
 msgid "Disconnecting…"
@@ -1990,13 +2019,13 @@ msgstr "매"
 msgid "every {intervalAmountSelect} {intervalUnitSelect}"
 msgstr "{intervalAmountSelect} {intervalUnitSelect}마다"
 
-#: src/pages/RoutineEditor.tsx:672
+#: src/pages/RoutineEditor.tsx:696
 #: src/pages/RoutineSchedule.tsx:34
 #: src/pages/RoutineSchedule.tsx:163
 msgid "Every day"
 msgstr "매일"
 
-#: src/pages/RoutineEditor.tsx:670
+#: src/pages/RoutineEditor.tsx:694
 #: src/pages/RoutineSchedule.tsx:32
 #: src/pages/RoutineSchedule.tsx:149
 msgid "Every hour"
@@ -2006,12 +2035,12 @@ msgstr "매시간"
 msgid "Every Monday"
 msgstr "매주 월요일"
 
-#: src/pages/RoutineEditor.tsx:678
+#: src/pages/RoutineEditor.tsx:702
 #: src/pages/RoutineSchedule.tsx:40
 msgid "Every month"
 msgstr "매월"
 
-#: src/pages/RoutineEditor.tsx:676
+#: src/pages/RoutineEditor.tsx:700
 #: src/pages/RoutineSchedule.tsx:38
 msgid "Every week"
 msgstr "매주"
@@ -2134,8 +2163,8 @@ msgstr "무료"
 msgid "Fullscreen"
 msgstr "전체 화면"
 
-#: src/pages/SettingsOverlay.tsx:87
-#: src/pages/SettingsOverlay.tsx:98
+#: src/pages/SettingsOverlay.tsx:100
+#: src/pages/SettingsOverlay.tsx:112
 msgid "General"
 msgstr "일반"
 
@@ -2151,9 +2180,9 @@ msgstr ""
 msgid "Getting ready"
 msgstr ""
 
-#: src/pages/RoutineEditor.tsx:106
-#: src/pages/RoutineEditor.tsx:509
-#: src/pages/RoutineEditor.tsx:625
+#: src/pages/RoutineEditor.tsx:111
+#: src/pages/RoutineEditor.tsx:533
+#: src/pages/RoutineEditor.tsx:649
 msgid "Git event"
 msgstr "Git 이벤트"
 
@@ -2166,7 +2195,7 @@ msgid "Global"
 msgstr "전역"
 
 #: src/pages/MessagingSettingsOverlay.tsx:204
-#: src/pages/shell/side-panel.tsx:226
+#: src/pages/shell/side-panel.tsx:228
 #: src/pages/shell/thread-header.tsx:71
 msgid "Group"
 msgstr "그룹"
@@ -2192,7 +2221,7 @@ msgstr "먼저 전화를 끊은 다음 화면에 표시된 코드를 입력하�
 msgid "Hang up, then enter the code on screen."
 msgstr "전화를 끊은 다음 화면에 표시된 코드를 입력하세요."
 
-#: src/pages/RoutineEditor.tsx:649
+#: src/pages/RoutineEditor.tsx:673
 msgid "header"
 msgstr "header"
 
@@ -2256,7 +2285,7 @@ msgstr "이 봇이 어떻게 동작해야 하는지"
 msgid "How to check"
 msgstr "완료 확인 방법"
 
-#: src/pages/shell/side-panel.tsx:797
+#: src/pages/shell/side-panel.tsx:803
 msgid "I’m done"
 msgstr "조작 끝내기"
 
@@ -2313,7 +2342,7 @@ msgstr "설치 중…"
 msgid "Instance API key"
 msgstr "인스턴스 API 키"
 
-#: src/pages/RoutineEditor.tsx:360
+#: src/pages/RoutineEditor.tsx:367
 msgid "Instruction"
 msgstr "실행할 내용"
 
@@ -2334,7 +2363,7 @@ msgstr ""
 msgid "Integrations"
 msgstr "앱·도구 연동"
 
-#: src/pages/RoutineEditor.tsx:680
+#: src/pages/RoutineEditor.tsx:704
 #: src/pages/RoutineSchedule.tsx:42
 msgid "Interval"
 msgstr "간격"
@@ -2380,7 +2409,7 @@ msgstr "방금"
 msgid "Keep memories"
 msgstr "기억은 유지"
 
-#: src/pages/RoutineEditor.tsx:644
+#: src/pages/RoutineEditor.tsx:668
 msgid "key"
 msgstr "key"
 
@@ -2402,11 +2431,15 @@ msgstr ""
 msgid "Leave"
 msgstr "나가기"
 
+#: src/pages/BrowserSettingsPanel.tsx:84
+msgid "Let bots complete multi-step web page tasks faster."
+msgstr ""
+
 #: src/pages/AccountSettingsOverlay.tsx:536
 msgid "Light"
 msgstr "라이트"
 
-#: src/pages/RoutineEditor.tsx:57
+#: src/pages/RoutineEditor.tsx:59
 msgid "Linear issue"
 msgstr "Linear 이슈"
 
@@ -2575,7 +2608,7 @@ msgstr "참여 Bot ({GROUP_MEMBER_MIN}~{GROUP_MEMBER_MAX}개 선택)"
 #: src/pages/KnowledgeSection.tsx:48
 #: src/pages/MemoryLibraryPage.tsx:236
 #: src/pages/MemorySettingsOverlay.tsx:165
-#: src/pages/SettingsOverlay.tsx:89
+#: src/pages/SettingsOverlay.tsx:102
 #: src/pages/shell/sidebar.tsx:705
 #: src/pages/shell/sidebar.tsx:714
 msgid "Memory"
@@ -2621,8 +2654,8 @@ msgstr "{activeName}에게 메시지 보내기"
 msgid "Message composer"
 msgstr "메시지 작성기"
 
-#: src/pages/RoutineEditor.tsx:109
-#: src/pages/RoutineEditor.tsx:554
+#: src/pages/RoutineEditor.tsx:114
+#: src/pages/RoutineEditor.tsx:578
 msgid "Message event"
 msgstr ""
 
@@ -2670,6 +2703,7 @@ msgstr "분"
 msgid "minutes"
 msgstr "분"
 
+#: src/pages/BrowserSettingsPanel.tsx:149
 #: src/pages/JudgmentConnectionSettings.tsx:215
 #: src/pages/ModelSettingsOverlay.tsx:506
 #: src/pages/ModelSettingsOverlay.tsx:616
@@ -2700,7 +2734,7 @@ msgstr "모델이 변경되었습니다."
 
 #: src/pages/LocalSettings.tsx:36
 #: src/pages/ModelSettingsOverlay.tsx:379
-#: src/pages/SettingsOverlay.tsx:88
+#: src/pages/SettingsOverlay.tsx:101
 msgid "Models"
 msgstr "AI 모델"
 
@@ -2741,7 +2775,7 @@ msgstr ""
 #: src/pages/Auth.tsx:134
 #: src/pages/GroupPanel.tsx:133
 #: src/pages/GroupPanel.tsx:243
-#: src/pages/RoutineEditor.tsx:349
+#: src/pages/RoutineEditor.tsx:356
 #: src/pages/shell/bot-panel.tsx:145
 #: src/pages/shell/bot-panel.tsx:432
 #: src/pages/shell/dialogs.tsx:72
@@ -2758,7 +2792,7 @@ msgstr "Bot 이름"
 msgid "Name this group"
 msgstr "그룹 이름"
 
-#: src/pages/RoutineEditor.tsx:353
+#: src/pages/RoutineEditor.tsx:360
 msgid "Name this routine"
 msgstr "이 루틴의 이름을 정하세요"
 
@@ -2770,7 +2804,7 @@ msgstr "입력 필요"
 msgid "Needs takeover"
 msgstr "인수 필요"
 
-#: src/pages/shell/side-panel.tsx:670
+#: src/pages/shell/side-panel.tsx:676
 msgid "Needs you"
 msgstr "확인 필요"
 
@@ -2808,7 +2842,7 @@ msgstr "새 스킬"
 msgid "New space"
 msgstr "새 스페이스"
 
-#: src/components/AskCard.tsx:617
+#: src/components/AskCard.tsx:616
 msgid "Next"
 msgstr ""
 
@@ -2857,7 +2891,7 @@ msgid "No integrations installed yet."
 msgstr "아직 설치된 통합이 없습니다."
 
 #: src/components/AskCard.tsx:173
-#: src/components/AskCard.tsx:552
+#: src/components/AskCard.tsx:553
 msgid "No longer active"
 msgstr "이미 종료된 요청입니다"
 
@@ -2906,7 +2940,7 @@ msgstr ""
 msgid "No results"
 msgstr "검색 결과가 없습니다"
 
-#: src/pages/RoutineEditor.tsx:540
+#: src/pages/RoutineEditor.tsx:564
 msgid "No runs yet"
 msgstr "아직 실행 기록이 없습니다"
 
@@ -2934,7 +2968,7 @@ msgstr ""
 msgid "No tools available."
 msgstr ""
 
-#: src/pages/RoutineEditor.tsx:111
+#: src/pages/RoutineEditor.tsx:116
 msgid "No trigger"
 msgstr "트리거 없음"
 
@@ -2974,7 +3008,7 @@ msgstr ""
 msgid "Notifications on"
 msgstr ""
 
-#: src/pages/RoutineEditor.tsx:323
+#: src/pages/RoutineEditor.tsx:330
 msgid "Notify me on every run"
 msgstr ""
 
@@ -3003,7 +3037,7 @@ msgstr "OAuth 연결 실패"
 msgid "OAuth expired"
 msgstr "OAuth 만료됨"
 
-#: src/pages/RoutineEditor.tsx:341
+#: src/pages/RoutineEditor.tsx:348
 msgid "Off by default: it stays silent. Its trace is still browsable in this thread."
 msgstr ""
 
@@ -3011,7 +3045,7 @@ msgstr ""
 msgid "Off for every agent until you pick some in Installed."
 msgstr "설치됨에서 선택하기 전까지 모든 에이전트에서 꺼져 있습니다."
 
-#: src/pages/RoutineEditor.tsx:463
+#: src/pages/RoutineEditor.tsx:487
 msgid "On a schedule"
 msgstr "일정에 따라"
 
@@ -3029,8 +3063,8 @@ msgid "Only the first 50 skills are shown to the agent."
 msgstr "에이전트에는 처음 50개 스킬만 표시됩니다."
 
 #: src/pages/ScratchpadSection.tsx:159
-#: src/pages/shell/side-panel.tsx:295
-#: src/pages/shell/side-panel.tsx:300
+#: src/pages/shell/side-panel.tsx:297
+#: src/pages/shell/side-panel.tsx:302
 msgid "Open"
 msgstr "열기"
 
@@ -3039,7 +3073,7 @@ msgstr "열기"
 msgid "Open {0}"
 msgstr "{0} 열기"
 
-#: src/pages/shell/side-panel.tsx:261
+#: src/pages/shell/side-panel.tsx:263
 msgid "Open in full window"
 msgstr "전체 창으로 열기"
 
@@ -3073,6 +3107,10 @@ msgstr "채팅 여는 중…"
 msgid "Opening your Space…"
 msgstr "작업공간을 여는 중…"
 
+#: src/pages/BrowserSettingsPanel.tsx:111
+msgid "OpenRouter API key"
+msgstr ""
+
 #: src/pages/ModelSettingsOverlay.tsx:757
 #: src/pages/Onboarding.tsx:636
 msgid "Optional"
@@ -3102,12 +3140,12 @@ msgstr "자연스럽게"
 msgid "Organization API key"
 msgstr "조직 API 키"
 
-#: src/components/AskCard.tsx:525
+#: src/components/AskCard.tsx:520
 msgid "Other"
 msgstr ""
 
 #: src/components/AskCard.tsx:246
-#: src/components/AskCard.tsx:670
+#: src/components/AskCard.tsx:669
 msgid "Other answer"
 msgstr ""
 
@@ -3121,7 +3159,7 @@ msgstr ""
 msgid "Other model…"
 msgstr "다른 모델 직접 입력…"
 
-#: src/components/AskCard.tsx:661
+#: src/components/AskCard.tsx:660
 msgid "Other…"
 msgstr ""
 
@@ -3129,7 +3167,7 @@ msgstr ""
 msgid "Output"
 msgstr "출력"
 
-#: src/pages/RoutineEditor.tsx:59
+#: src/pages/RoutineEditor.tsx:61
 msgid "PagerDuty incident"
 msgstr "PagerDuty 인시던트"
 
@@ -3171,7 +3209,7 @@ msgstr "서버의 OpenAI 호환 주소를 붙여넣으세요. 필요하면 Rakaz
 msgid "Paste your API key"
 msgstr "API 키를 붙여넣으세요"
 
-#: src/pages/RoutineEditor.tsx:103
+#: src/pages/RoutineEditor.tsx:108
 msgid "Paused"
 msgstr "일시 중지됨"
 
@@ -3195,7 +3233,7 @@ msgstr "재생 중…"
 msgid "Plugins"
 msgstr "플러그인"
 
-#: src/pages/RoutineEditor.tsx:639
+#: src/pages/RoutineEditor.tsx:663
 msgid "POST to"
 msgstr "POST 대상"
 
@@ -3348,7 +3386,7 @@ msgstr "화면 새로고침"
 msgid "Refreshing…"
 msgstr "새로고침 중…"
 
-#: src/pages/shell/side-panel.tsx:787
+#: src/pages/shell/side-panel.tsx:793
 msgid "Release"
 msgstr "제어권 돌려주기"
 
@@ -3381,7 +3419,7 @@ msgstr "삭제"
 msgid "Remove {0}"
 msgstr "{0} 삭제"
 
-#: src/pages/RoutineEditor.tsx:630
+#: src/pages/RoutineEditor.tsx:654
 msgid "Remove Git event"
 msgstr ""
 
@@ -3395,11 +3433,11 @@ msgstr "마켓플레이스 {0}과(와) 해당 스킬을 제거할까요?"
 msgid "Remove mention {0}"
 msgstr "{0} 멘션 삭제"
 
-#: src/pages/RoutineEditor.tsx:563
+#: src/pages/RoutineEditor.tsx:587
 msgid "Remove message trigger"
 msgstr ""
 
-#: src/pages/RoutineEditor.tsx:392
+#: src/pages/RoutineEditor.tsx:399
 msgid "Remove schedule"
 msgstr "일정 제거"
 
@@ -3408,7 +3446,7 @@ msgstr "일정 제거"
 msgid "Remove skill {0}"
 msgstr "작업 기술 {0} 삭제"
 
-#: src/pages/RoutineEditor.tsx:630
+#: src/pages/RoutineEditor.tsx:654
 msgid "Remove webhook"
 msgstr "웹훅 제거"
 
@@ -3527,30 +3565,30 @@ msgstr "로봇"
 msgid "Room guidance"
 msgstr ""
 
-#: src/pages/RoutineEditor.tsx:659
+#: src/pages/RoutineEditor.tsx:683
 msgid "Rotate key"
 msgstr "key 교체"
 
-#: src/pages/RoutineEditor.tsx:268
-#: src/pages/shell/side-panel.tsx:452
-#: src/pages/shell/side-panel.tsx:465
+#: src/pages/RoutineEditor.tsx:275
+#: src/pages/shell/side-panel.tsx:454
+#: src/pages/shell/side-panel.tsx:468
 msgid "Routine"
 msgstr "자동 실행"
 
-#: src/pages/RoutineEditor.tsx:119
+#: src/pages/RoutineEditor.tsx:124
 msgid "Routines"
 msgstr "자동 실행"
 
-#: src/pages/RoutineEditor.tsx:439
-#: src/pages/RoutineEditor.tsx:445
+#: src/pages/RoutineEditor.tsx:463
+#: src/pages/RoutineEditor.tsx:469
 msgid "Run at"
 msgstr "실행 시간"
 
-#: src/pages/RoutineEditor.tsx:538
+#: src/pages/RoutineEditor.tsx:562
 msgid "Run history"
 msgstr "실행 기록"
 
-#: src/pages/shell/side-panel.tsx:445
+#: src/pages/shell/side-panel.tsx:447
 msgid "Run time must be in the future."
 msgstr "실행 시간은 미래여야 합니다."
 
@@ -3563,15 +3601,15 @@ msgstr "실행 중"
 msgid "Running"
 msgstr "실행 중"
 
-#: src/pages/RoutineEditor.tsx:175
+#: src/pages/RoutineEditor.tsx:180
 msgid "Running · Stop"
 msgstr "실행 중 · 중지"
 
-#: src/pages/RoutineEditor.tsx:331
+#: src/pages/RoutineEditor.tsx:338
 msgid "Running…"
 msgstr "실행 중…"
 
-#: src/pages/RoutineEditor.tsx:571
+#: src/pages/RoutineEditor.tsx:595
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
@@ -3581,7 +3619,7 @@ msgstr ""
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/KnowledgeSection.tsx:520
 #: src/pages/ModelSettingsOverlay.tsx:800
-#: src/pages/RoutineEditor.tsx:528
+#: src/pages/RoutineEditor.tsx:552
 #: src/pages/shell/bot-panel.tsx:680
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
@@ -3602,7 +3640,7 @@ msgstr "저장했지만 목록을 새로고침하지 못했습니다."
 msgid "Saved."
 msgstr "저장되었습니다."
 
-#: src/pages/RoutineEditor.tsx:602
+#: src/pages/RoutineEditor.tsx:626
 msgid "Saved. Rotate to reveal."
 msgstr "저장되었습니다. key를 교체하면 표시됩니다."
 
@@ -3618,7 +3656,7 @@ msgstr ""
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/ModelSettingsOverlay.tsx:798
-#: src/pages/RoutineEditor.tsx:528
+#: src/pages/RoutineEditor.tsx:552
 #: src/pages/shell/dialogs.tsx:266
 msgid "Saving…"
 msgstr "저장 중…"
@@ -3702,7 +3740,7 @@ msgstr "10분 안에 채팅 앱에서 연결할 회선으로 <0>{linkCode}</0>�
 msgid "Send answer"
 msgstr "답변 보내기"
 
-#: src/components/AskCard.tsx:607
+#: src/components/AskCard.tsx:606
 msgid "Send answers"
 msgstr ""
 
@@ -3719,11 +3757,11 @@ msgstr "재설정 링크 보내기"
 #: src/components/AskCard.tsx:281
 #: src/components/AskCard.tsx:332
 #: src/components/AskCard.tsx:357
-#: src/components/AskCard.tsx:607
+#: src/components/AskCard.tsx:606
 msgid "Sending…"
 msgstr "보내는 중…"
 
-#: src/pages/RoutineEditor.tsx:58
+#: src/pages/RoutineEditor.tsx:60
 msgid "Sentry alert"
 msgstr "Sentry 알림"
 
@@ -3746,10 +3784,10 @@ msgid "Server URL"
 msgstr "서버 URL"
 
 #: src/pages/MessagingSettingsOverlay.tsx:361
-#: src/pages/SettingsOverlay.tsx:98
-#: src/pages/SettingsOverlay.tsx:153
-#: src/pages/shell/side-panel.tsx:180
-#: src/pages/shell/side-panel.tsx:222
+#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:167
+#: src/pages/shell/side-panel.tsx:182
+#: src/pages/shell/side-panel.tsx:224
 #: src/pages/shell/sidebar.tsx:719
 #: src/pages/shell/sidebar.tsx:726
 msgid "Settings"
@@ -3843,9 +3881,9 @@ msgstr "작업 기술 {0}"
 msgid "Skills"
 msgstr "스킬"
 
-#: src/components/AskCard.tsx:593
+#: src/components/AskCard.tsx:592
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:794
+#: src/pages/shell/side-panel.tsx:800
 msgid "Skip"
 msgstr "건너뛰기"
 
@@ -3853,7 +3891,7 @@ msgstr "건너뛰기"
 msgid "Skip or deploy key"
 msgstr "건너뛰거나 배포 키"
 
-#: src/components/AskCard.tsx:527
+#: src/components/AskCard.tsx:521
 msgid "Skipped"
 msgstr ""
 
@@ -3862,14 +3900,14 @@ msgstr ""
 msgid "Skipped {0}"
 msgstr "{0} 건너뜀"
 
-#: src/pages/RoutineEditor.tsx:107
-#: src/pages/RoutineEditor.tsx:481
-#: src/pages/RoutineEditor.tsx:551
+#: src/pages/RoutineEditor.tsx:112
+#: src/pages/RoutineEditor.tsx:505
+#: src/pages/RoutineEditor.tsx:575
 msgid "Slack message"
 msgstr "Slack 메시지"
 
-#: src/pages/RoutineEditor.tsx:474
-#: src/pages/RoutineEditor.tsx:485
+#: src/pages/RoutineEditor.tsx:498
+#: src/pages/RoutineEditor.tsx:509
 msgid "Slack not enabled"
 msgstr ""
 
@@ -3921,8 +3959,8 @@ msgid "Steps"
 msgstr "실행 단계"
 
 #: src/pages/shell/composer.tsx:701
-#: src/pages/shell/side-panel.tsx:685
-#: src/pages/shell/side-panel.tsx:690
+#: src/pages/shell/side-panel.tsx:691
+#: src/pages/shell/side-panel.tsx:696
 msgid "Stop"
 msgstr "중지"
 
@@ -3992,7 +4030,7 @@ msgstr "작업을 가르치는 중입니다. 새 메시지를 보내려면 먼�
 msgid "Team"
 msgstr "팀 공용"
 
-#: src/pages/shell/side-panel.tsx:579
+#: src/pages/shell/side-panel.tsx:583
 msgid "Team Computer"
 msgstr "팀 컴퓨터"
 
@@ -4000,13 +4038,13 @@ msgstr "팀 컴퓨터"
 msgid "Team conversations"
 msgstr ""
 
-#: src/pages/RoutineEditor.tsx:56
-#: src/pages/RoutineEditor.tsx:108
-#: src/pages/RoutineEditor.tsx:553
+#: src/pages/RoutineEditor.tsx:58
+#: src/pages/RoutineEditor.tsx:113
+#: src/pages/RoutineEditor.tsx:577
 msgid "Teams message"
 msgstr "Teams 메시지"
 
-#: src/pages/RoutineEditor.tsx:494
+#: src/pages/RoutineEditor.tsx:518
 msgid "Teams not enabled"
 msgstr ""
 
@@ -4018,7 +4056,7 @@ msgstr "시험 실행"
 msgid "Test and connect"
 msgstr ""
 
-#: src/pages/RoutineEditor.tsx:331
+#: src/pages/RoutineEditor.tsx:338
 msgid "Test run"
 msgstr "테스트 실행"
 
@@ -4046,7 +4084,7 @@ msgstr "선택한 기억 서비스는 현재 빌드에서 사용할 수 없습�
 msgid "Thinking"
 msgstr "생각 깊이"
 
-#: src/pages/shell/side-panel.tsx:548
+#: src/pages/shell/side-panel.tsx:552
 msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
 msgstr "이 Bot은 별도 Linux 화면이 아니라 현재 컴퓨터에서 실행됩니다. 터미널과 파일 작업은 홈 폴더를 사용합니다."
 
@@ -4141,12 +4179,12 @@ msgid "Try again"
 msgstr "다시 시도"
 
 #: src/components/AskCard.tsx:250
-#: src/components/AskCard.tsx:682
+#: src/components/AskCard.tsx:681
 msgid "Type a different answer"
 msgstr ""
 
 #: src/components/AskCard.tsx:303
-#: src/components/AskCard.tsx:682
+#: src/components/AskCard.tsx:681
 msgid "Type your answer"
 msgstr "답변을 입력하세요"
 
@@ -4224,7 +4262,7 @@ msgstr ""
 msgid "Updated"
 msgstr "업데이트됨"
 
-#: src/pages/SettingsOverlay.tsx:93
+#: src/pages/SettingsOverlay.tsx:107
 msgid "Updates"
 msgstr "업데이트"
 
@@ -4243,7 +4281,7 @@ msgid "Updating…"
 msgstr "업데이트 중…"
 
 #: src/pages/AccountSettingsOverlay.tsx:226
-#: src/pages/SettingsOverlay.tsx:91
+#: src/pages/SettingsOverlay.tsx:105
 #: src/pages/shell/sidebar.tsx:731
 #: src/pages/shell/sidebar.tsx:742
 msgid "Usage"
@@ -4283,7 +4321,7 @@ msgstr "확인 후 추가"
 msgid "Verifying…"
 msgstr "확인 중…"
 
-#: src/pages/SettingsOverlay.tsx:90
+#: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:616
 #: src/pages/shell/composer.tsx:673
 #: src/pages/shell/composer.tsx:674
@@ -4307,11 +4345,11 @@ msgstr "API가 다시 작동하기를 기다리는 중…"
 msgid "Waiting…"
 msgstr "기다리는 중…"
 
-#: src/pages/RoutineEditor.tsx:514
+#: src/pages/RoutineEditor.tsx:538
 msgid "Webhook"
 msgstr "웹훅"
 
-#: src/pages/RoutineEditor.tsx:674
+#: src/pages/RoutineEditor.tsx:698
 #: src/pages/RoutineSchedule.tsx:36
 #: src/pages/RoutineSchedule.tsx:155
 msgid "Weekdays"
@@ -4325,7 +4363,7 @@ msgstr "이 Bot의 기억은 어떻게 할까요?"
 msgid "What result will you demonstrate?"
 msgstr "어떤 작업을 직접 보여줄까요?"
 
-#: src/pages/RoutineEditor.tsx:364
+#: src/pages/RoutineEditor.tsx:371
 msgid "What should this routine do each time it runs?"
 msgstr "이 루틴이 실행될 때마다 무엇을 해야 하나요?"
 
@@ -4342,12 +4380,12 @@ msgstr "이 그룹의 용도를 적어주세요"
 msgid "What to return"
 msgstr "완료 후 전달할 결과"
 
-#: src/pages/RoutineEditor.tsx:105
-#: src/pages/RoutineEditor.tsx:625
+#: src/pages/RoutineEditor.tsx:110
+#: src/pages/RoutineEditor.tsx:649
 msgid "When a webhook fires"
 msgstr "웹훅이 실행될 때"
 
-#: src/pages/RoutineEditor.tsx:373
+#: src/pages/RoutineEditor.tsx:380
 msgid "When to run"
 msgstr "실행 시간"
 
@@ -4398,11 +4436,11 @@ msgstr "자동으로 이동하지 않으면 이 탭을 닫아도 됩니다."
 msgid "You can close this window."
 msgstr "이 창을 닫아도 됩니다."
 
-#: src/pages/shell/side-panel.tsx:674
+#: src/pages/shell/side-panel.tsx:680
 msgid "You have control"
 msgstr "직접 조작 중"
 
-#: src/pages/RoutineEditor.tsx:337
+#: src/pages/RoutineEditor.tsx:344
 msgid "You’ll be notified each time it runs, and its card in this thread starts expanded."
 msgstr ""
 

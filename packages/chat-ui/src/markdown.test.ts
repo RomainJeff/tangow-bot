@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   closeUnterminatedFence,
+  linkHref,
+  linkifyText,
   nativeImagePolicy,
   sanitizeMarkdownUrl,
   truncateMarkdownForRender,
@@ -18,6 +20,44 @@ describe("sanitizeMarkdownUrl", () => {
     expect(sanitizeMarkdownUrl("javascript:alert(1)", true)).toBeUndefined();
     expect(sanitizeMarkdownUrl("data:text/html,<script>alert(1)</script>", true)).toBeUndefined();
     expect(sanitizeMarkdownUrl("/docs")).toBeUndefined();
+  });
+});
+
+describe("linkHref", () => {
+  it("upgrades a www. address to https and keeps other scheme-less targets dead", () => {
+    expect(linkHref("www.example.com/docs")).toBe("https://www.example.com/docs");
+    expect(linkHref("README.md")).toBeUndefined();
+    expect(linkHref("setup.py")).toBeUndefined();
+    expect(linkHref("https://example.com")).toBe("https://example.com");
+    expect(linkHref("javascript:alert(1)")).toBeUndefined();
+    expect(linkHref("notes")).toBeUndefined();
+  });
+});
+
+describe("linkifyText", () => {
+  it("links every URL in plain text and leaves the prose around it", () => {
+    expect(linkifyText("See https://example.com/a, and www.example.org.")).toEqual([
+      { text: "See " },
+      { text: "https://example.com/a", href: "https://example.com/a" },
+      { text: ", and " },
+      { text: "www.example.org", href: "https://www.example.org" },
+      { text: "." },
+    ]);
+  });
+
+  it("keeps balanced brackets in the URL and drops the one around it", () => {
+    expect(linkifyText("(https://en.wikipedia.org/wiki/Rust_(language))")).toEqual([
+      { text: "(" },
+      {
+        text: "https://en.wikipedia.org/wiki/Rust_(language)",
+        href: "https://en.wikipedia.org/wiki/Rust_(language)",
+      },
+      { text: ")" },
+    ]);
+  });
+
+  it("returns text without URLs as a single segment", () => {
+    expect(linkifyText("no links here")).toEqual([{ text: "no links here" }]);
   });
 });
 

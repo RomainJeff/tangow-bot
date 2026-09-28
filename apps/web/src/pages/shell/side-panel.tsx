@@ -459,6 +459,7 @@ export function SidePanel({
                           webhookEnabled: routineDraft.webhookEnabled,
                           githubEnabled: routineDraft.githubEnabled,
                           messageProvider: routineDraft.messageProvider,
+                          requireToolApproval: routineDraft.requireToolApproval,
                           ...(runAt ? { runAt } : {}),
                         });
                       } else {
@@ -473,6 +474,7 @@ export function SidePanel({
                           webhookEnabled: routineDraft.webhookEnabled,
                           githubEnabled: routineDraft.githubEnabled,
                           messageProvider: routineDraft.messageProvider,
+                          requireToolApproval: routineDraft.requireToolApproval,
                         });
                       }
                       if (

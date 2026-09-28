@@ -18,7 +18,11 @@ import {
   TEAM_CHAT_STARTUP_SHUTDOWN_MS,
   TEAMCHAT_AGENT_OWNERSHIP_REASON,
 } from "./team-chat-startup.js";
-import { inboundDeliveryClientNonce, messagingWakeIdempotencyKey } from "./webhook-inbound.js";
+import {
+  findInboundRoutineRun,
+  inboundDeliveryClientNonce,
+  messagingWakeIdempotencyKey,
+} from "./webhook-inbound.js";
 
 const DEFAULT_RECONCILE_INTERVAL_MS = 1_000;
 const DEFAULT_AMBIENT_DEBOUNCE_MS = 15_000;
@@ -528,19 +532,15 @@ export class TeamChatBridge {
     for (const message of expired) {
       const threadId = message.externalConversation.thread?.id;
       const woken = threadId
-        ? await this.deps.prisma.message.findUnique({
-            where: {
-              threadId_clientNonce: {
-                threadId,
-                clientNonce: inboundDeliveryClientNonce(
-                  "messaging",
-                  target.id,
-                  messagingWakeIdempotencyKey(this.deps.providerId, message.providerEventId),
-                ),
-              },
-            },
-            select: { id: true },
-          })
+        ? await findInboundRoutineRun(
+            this.deps.prisma,
+            threadId,
+            inboundDeliveryClientNonce(
+              "messaging",
+              target.id,
+              messagingWakeIdempotencyKey(this.deps.providerId, message.providerEventId),
+            ),
+          )
         : null;
       if (woken) {
         await this.deps.prisma.externalMessage.updateMany({
@@ -966,16 +966,7 @@ export class TeamChatBridge {
       message.externalConversation.botId,
       messagingWakeIdempotencyKey(this.deps.providerId, message.providerEventId),
     );
-    const findWake = () =>
-      this.deps.prisma.message.findUnique({
-        where: {
-          threadId_clientNonce: {
-            threadId: thread.id,
-            clientNonce: wakeNonce,
-          },
-        },
-        select: { id: true },
-      });
+    const findWake = () => findInboundRoutineRun(this.deps.prisma, thread.id, wakeNonce);
     const abandonForRoutine = async (status: "received" | "queueing") => {
       await this.deps.prisma.externalMessage.updateMany({
         where: {

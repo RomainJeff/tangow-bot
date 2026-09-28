@@ -402,13 +402,40 @@ EVAL_HELPERS = r"""
     }
     return typeof el.onclick === "function" || el.hasAttribute("tabindex");
   }
+  // A select lists what the model may pick: enabled, shown options by their trimmed label.
+  function selectableOptions(select) {
+    return Array.from(select.options).filter((option) =>
+      !option.disabled && !option.closest("optgroup[disabled]")
+      && window.getComputedStyle(option).display !== "none");
+  }
+  function optionLabel(option) {
+    return option.label.trim().slice(0, 80);
+  }
+  function selectOptions(select) {
+    const labels = selectableOptions(select).map(optionLabel).filter(Boolean);
+    return { options: labels.slice(0, 30), ...(labels.length > 30 ? { optionsTruncated: true } : {}) };
+  }
+  // Hidden and pixel-sized frames (ads, trackers) are not content the model could miss, and
+  // a vague "frames require desktop tools" note pushes models off the page tools entirely.
+  function frameNote() {
+    const count = Array.from(document.querySelectorAll("iframe,frame")).filter((frame) => {
+      if (!visible(frame)) return false;
+      const rect = frame.getBoundingClientRect();
+      return rect.width >= 50 && rect.height >= 50;
+    }).length;
+    if (!count) return "";
+    return `\n${count} embedded frame${count === 1 ? " is" : "s are"} not listed; use the refs above for this page, and desktop tools only for content inside a frame.`;
+  }
+  function isDisabled(el) {
+    return el.matches(":disabled") || el.getAttribute("aria-disabled") === "true";
+  }
   function formatTree(elements) {
     if (!elements.length) return "(no interactive elements)";
     return elements
       .map((el) => {
         const value =
           el.value !== undefined && el.value !== "" ? ` value=${JSON.stringify(el.value)}` : "";
-        return `- ${el.role} "${el.name}" [${el.ref}]${value}`;
+        return `- ${el.role} "${el.name}" [${el.ref}]${value}${el.disabled ? " disabled" : ""}`;
       })
       .join("\n");
   }
@@ -426,8 +453,12 @@ EVAL_HELPERS = r"""
           name: String(nameOf(el)).slice(0, 200),
           value: el.type === "password" ? undefined
             : ["checkbox", "radio"].includes(el.type) ? (el.checked ? "checked" : "unchecked")
+            : el instanceof HTMLSelectElement ? Array.from(el.selectedOptions, optionLabel).join(", ")
             : "value" in el ? String(el.value ?? "").slice(0, 2000) : undefined,
           tag: el.tagName.toLowerCase(),
+          ...(el.type === "password" ? { password: true } : {}),
+          ...(el instanceof HTMLSelectElement ? selectOptions(el) : {}),
+          ...(isDisabled(el) ? { disabled: true } : {}),
         });
         if (elements.length >= 80) break;
       }
@@ -436,13 +467,13 @@ EVAL_HELPERS = r"""
         title: (document.title || "").slice(0, 200),
         elements,
         tree: (document.body?.innerText || "").slice(0, 12000) + "\n" + formatTree(elements)
-          + (document.querySelector("iframe,frame") ? "\nEmbedded frames require desktop tools." : ""),
+          + frameNote(),
       };
     },
     resolve(ref) {
       const el = refMap.get(String(ref));
       if (!el || !el.isConnected || !visible(el)) return null;
-      if (el.matches(":disabled") || el.getAttribute("aria-disabled") === "true") {
+      if (isDisabled(el)) {
         throw new Error("Element is disabled");
       }
       return el;
@@ -463,10 +494,22 @@ EVAL_HELPERS = r"""
         if (el instanceof HTMLInputElement && !["text", "search", "email", "url", "tel", "password", "number"].includes(el.type)) {
           throw new Error("Input type requires desktop tools");
         }
-        const prototype = el instanceof HTMLInputElement ? HTMLInputElement.prototype
-          : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLSelectElement.prototype;
-        Object.getOwnPropertyDescriptor(prototype, "value").set.call(el, String(value));
-        if (el.value !== String(value)) throw new Error("Input did not accept the requested value");
+        if (el instanceof HTMLSelectElement) {
+          // Models name an option by what they read: its label, not its hidden value.
+          const wanted = String(value).trim().toLowerCase();
+          const options = selectableOptions(el);
+          const match = options.find((option) => option.value === String(value))
+            || options.find((option) => optionLabel(option).toLowerCase() === wanted);
+          if (!match) {
+            const labels = options.map((option) => JSON.stringify(optionLabel(option))).slice(0, 20);
+            throw new Error(`No option matches the requested value; options: ${labels.join(", ")}`);
+          }
+          el.value = match.value;
+        } else {
+          const prototype = el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+          Object.getOwnPropertyDescriptor(prototype, "value").set.call(el, String(value));
+          if (el.value !== String(value)) throw new Error("Input did not accept the requested value");
+        }
         el.dispatchEvent(new Event("input", { bubbles: true }));
         el.dispatchEvent(new Event("change", { bubbles: true }));
       } else if (el.isContentEditable) {
@@ -501,12 +544,12 @@ def eval_json(client: CdpClient, session_id: str, expression: str) -> Any:
     )
     if result.get("exceptionDetails"):
         details = result["exceptionDetails"]
-        text = (
-            details.get("text")
-            or (details.get("exception") or {}).get("description")
-            or "evaluate failed"
-        )
-        raise RuntimeError(str(text))
+        # "text" is only "Uncaught"; the thrown message is the first line of the description.
+        description = str((details.get("exception") or {}).get("description") or "")
+        message = description.splitlines()[0] if description else ""
+        if message.startswith("Error: "):
+            message = message[len("Error: ") :]
+        raise RuntimeError(message or str(details.get("text") or "evaluate failed"))
     return (result.get("result") or {}).get("value")
 
 

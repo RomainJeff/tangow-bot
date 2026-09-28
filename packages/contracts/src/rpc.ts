@@ -74,6 +74,7 @@ import {
   ServerUpdateStatusSchema,
   SkillAvailabilitySchema,
   SkillPlaybookSchema,
+  SpaceDecisionConfigSchema,
   SpaceMarketplaceSchema,
   SpaceMemoryConfigSchema,
   SpaceNavigationSchema,
@@ -642,6 +643,19 @@ export const appContract = {
       .output(SpaceMemoryConfigSchema),
     disconnectProvider: oc.output(z.object({ ok: z.literal(true) })),
   },
+  decision: {
+    providerConfig: oc.output(SpaceDecisionConfigSchema.nullable()),
+    connectProvider: oc
+      .input(
+        z.object({
+          provider: z.string().min(1),
+          settings: z.record(z.string(), z.string()),
+          credentials: z.record(z.string(), z.string()),
+        }),
+      )
+      .output(SpaceDecisionConfigSchema),
+    disconnectProvider: oc.output(z.object({ ok: z.literal(true) })),
+  },
   routines: {
     list: oc.input(botId).output(z.array(RoutineSchema)),
     create: oc.input(CreateRoutineInput).output(RoutineSchema),
@@ -665,6 +679,7 @@ export const appContract = {
               .regex(/^[a-z0-9._-]+$/i)
               .nullable()
               .optional(),
+            requireToolApproval: z.boolean().optional(),
             /** ISO datetime to arm a never-run one-shot. */
             runAt: IsoDate.optional(),
           })

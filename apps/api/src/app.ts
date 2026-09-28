@@ -67,6 +67,7 @@ import {
   resolveModelAuth,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
+  SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
   selectConfiguredModel,
   serializeModelSecret,
@@ -376,6 +377,7 @@ export async function createApp(
     });
   const mcpOAuth = new McpOAuthBroker(prisma, secrets, remoteConnectors);
   const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);
+  const decisionProviders = new SpaceDecisionProviderResolver(prisma, secrets);
   const oauthLogins = new PiOAuthLogins();
   const home = new LocalAgentHomeStore(env.dataDir);
   const artifacts = new LocalArtifactStore(env.dataDir);
@@ -535,6 +537,7 @@ export async function createApp(
     memory,
     memoryProviders,
     classifyMemoryForBot: (request) => memoryMethodClassification.classifyForBot(request),
+    decisionProviders,
     home,
     artifacts,
     connector: stack.connector,

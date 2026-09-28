@@ -71,6 +71,10 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
   ).toBeVisible();
   await expect(page.getByText(new RegExp(`/api/v1/bots/${botId}/github$`))).toBeVisible();
   await expect(page.getByText("X-Hub-Signature-256: sha256=…", { exact: true })).toBeVisible();
+  const toolApproval = page.getByRole("switch", { name: "Ask before every action" });
+  await expect(toolApproval).toBeChecked();
+  await toolApproval.click();
+  await expect(toolApproval).not.toBeChecked();
 
   const saved = page.waitForResponse(
     (response) => response.url().includes("/rpc/routines/create") && response.ok(),
@@ -83,6 +87,7 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
     crons: [],
     webhookEnabled: false,
     githubEnabled: true,
+    requireToolApproval: false,
   });
   await captureScreenshot(page, testInfo, "routine-github-event");
 });

@@ -50,3 +50,7 @@ apps/web/src/locales/**/*.js
 apps/web/scripts/msgids.json
 playwright-report-www
 .ship/
+
+# Local EAS build outputs
+apps/mobile/builds/
+*.ipa

@@ -6,6 +6,7 @@ const APPROVAL_EXEMPT_TOOLS = new Set([
   "browser_navigate",
   "browser_snapshot",
   "browser_act",
+  "browser_run",
   "list_files",
   "read_file",
   "write_file",
@@ -113,13 +114,16 @@ export function toolRequiresExplicitApproval(toolName: string): boolean {
   return EXPLICIT_APPROVAL_BUILTIN_TOOLS.has(toolName);
 }
 
-/** External webhook runs may inspect state unattended, but side effects always need the owner. */
+/**
+ * External webhook runs may inspect state unattended, but side effects need the owner unless
+ * the woken routine opted out, in which case the normal approval rules apply.
+ */
 export function unattendedTriggerToolRequiresApproval(
-  trigger: string,
+  run: { trigger: string; requireToolApproval: boolean },
   toolName: string,
   viaConnector: boolean,
 ): boolean {
-  if (trigger !== "webhook") return false;
+  if (run.trigger !== "webhook" || !run.requireToolApproval) return false;
   return viaConnector
     ? connectorToolRequiresApproval(toolName)
     : !UNATTENDED_SAFE_BUILTIN_TOOLS.has(toolName);

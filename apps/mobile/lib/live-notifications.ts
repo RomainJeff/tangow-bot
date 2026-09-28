@@ -65,6 +65,35 @@ export function notificationTargetsThread(
   );
 }
 
+export type NotificationDestination =
+  | { pathname: "/thread"; params: { botId: string; spaceId?: string } }
+  | { pathname: "/group-thread"; params: { groupId: string; spaceId?: string } };
+
+/** Where tapping a pushed bot notification leads: the group it spoke in, else its chat. */
+export function notificationDestination(
+  data: Record<string, unknown> | null | undefined,
+): NotificationDestination | null {
+  const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+  const spaceId = text(data?.spaceId);
+  const space = spaceId ? { spaceId } : {};
+  const groupId = text(data?.groupId);
+  if (groupId) return { pathname: "/group-thread", params: { groupId, ...space } };
+  const botId = text(data?.botId);
+  return botId ? { pathname: "/thread", params: { botId, ...space } } : null;
+}
+
+/** True when the conversation a push leads to is already the screen on top. */
+export function destinationIsOnScreen(
+  destination: NotificationDestination,
+  pathname: string,
+  params: Record<string, string | string[] | undefined>,
+): boolean {
+  if (pathname !== destination.pathname) return false;
+  return "groupId" in destination.params
+    ? params.groupId === destination.params.groupId
+    : params.botId === destination.params.botId && !params.groupId;
+}
+
 export function configureForegroundNotifications(): void {
   if (foregroundHandlerConfigured) return;
   foregroundHandlerConfigured = true;

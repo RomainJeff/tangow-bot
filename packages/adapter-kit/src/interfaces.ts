@@ -32,6 +32,9 @@ import type {
   ConnectorEvent,
   ConnectorTool,
   ControlLeaseRef,
+  DecisionCapabilities,
+  DecisionRequest,
+  DecisionResponse,
   MemoryCapabilities,
   MemoryCommitRequest,
   MemoryExportRequest,
@@ -446,6 +449,17 @@ export interface BrowserProvider {
     request: BrowserActRequest,
     context: AdapterContext,
   ): Promise<BrowserActResult>;
+}
+
+/**
+ * Provider-neutral typed decision over a text state: yes/no, pick-one-of, or a
+ * bounded scale, each with probabilities. Not a vendor and not a text generator:
+ * it cannot invent an option, write a field value, or plan. Core runs with none
+ * configured. `decide` may throw; callers go through `decideWithin`, which never does.
+ */
+export interface DecisionProvider {
+  describe(): AdapterDescriptor<DecisionCapabilities>;
+  decide(request: DecisionRequest, context: AdapterContext): Promise<DecisionResponse>;
 }
 
 /**

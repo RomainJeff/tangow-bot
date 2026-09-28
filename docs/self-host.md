@@ -179,7 +179,9 @@ child commands do not receive them.
 Exporting agent traces is optional and off unless configured. Set both `LANGFUSE_PUBLIC_KEY` and
 `LANGFUSE_SECRET_KEY` to send each run to an OpenTelemetry endpoint as a tree: the run, one
 generation per turn, one span per tool call, with prompts, responses, tool results, token counts and
-cost. `LANGFUSE_BASE_URL` defaults to `https://cloud.langfuse.com` and points a self-hosted instance
+cost. A `browser_run` call nests one generation per decision step under its tool span, carrying the
+redacted request, the answers (or why none was usable), the gate, model, tokens and cost.
+`LANGFUSE_BASE_URL` defaults to `https://cloud.langfuse.com` and points a self-hosted instance
 or any other OTLP/HTTP backend at the same traces; it must be https unless it is loopback.
 `LANGFUSE_ENVIRONMENT` labels the traces (`production`, `staging`). A partial configuration logs a
 one-time warning and stays off.
@@ -250,6 +252,17 @@ model-specific translation. Leave **Supports thinking** off when the server lack
 support. Existing token limits still apply; effort is not a separate reasoning-token budget.
 
 Do not commit `.env`. Never put `COMPOSIO_API_KEY`, OpenRouter keys, or provider tokens in git, logs, or chat.
+
+A Space owner can connect an optional decision provider from **Settings → Browser** on web and
+desktop. Today the only adapter is OpenRouter's Decisions API, which serves TypeSafe's Jev model: an
+OpenRouter API key, and under **Advanced** a base URL for a compatible proxy and a model id (default
+`typesafe/jev-1.13`, pinned rather than the `~typesafe/jev-latest` alias). The key is stored
+encrypted for the Space and is separate from `OPENROUTER_API_KEY` and model connections; no
+environment variable is read. With a connection, bots get `browser_run` and complete multi-step page
+tasks without reading the page at every step (see [computer runtime](computer-runtime.md)); page
+URLs, titles, bounded page text, element names and field values (never passwords) then go to that
+provider. Without one nothing changes. Loopback, private-network, and plain-HTTP base URLs can only
+be saved by the deployment owner.
 
 Optional messaging platforms (iMessage, Slack, WhatsApp, Telegram, Feishu/Lark) mount when their env credentials are set — see `.env.example`. Point a Feishu/Lark bot event subscription at `/api/v1/messaging/webhook/lark` (webhook/HTTP inbound only; do not enable long connection). Groups stay iMessage-only.
 
