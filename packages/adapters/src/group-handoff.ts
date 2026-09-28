@@ -10,6 +10,7 @@ import {
   touchGroupUpdatedAt,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import { resolveRunHop } from "./bot-messages.js";
 import type { ExecutorDeps } from "./executor.js";
 
 export async function handoffToGroupBot(
@@ -20,6 +21,9 @@ export async function handoffToGroupBot(
     threadId: string;
     botId: string;
     userId: string;
+    sourceMessageId?: string | null;
+    routineId?: string | null;
+    trigger?: string;
   },
   groupId: string,
   input: { bot_id?: string; confirm_name?: string; message: string },
@@ -53,7 +57,13 @@ export async function handoffToGroupBot(
           userId: run.userId,
           status: "running",
         },
-        select: { id: true, sourceMessage: { select: { blocks: true } } },
+        select: {
+          id: true,
+          sourceMessageId: true,
+          routineId: true,
+          trigger: true,
+          sourceMessage: { select: { blocks: true } },
+        },
       }),
     ]);
     if (!group || !activeSource) return { error: "source run is no longer active" } as const;
@@ -110,7 +120,7 @@ export async function handoffToGroupBot(
           "do not hand this stage back to its sender; post the result in the shared thread instead",
       } as const;
     }
-    const hop = nextBotMessageHop(sourceHandoff?.hop);
+    const hop = nextBotMessageHop(await resolveRunHop(tx, activeSource));
     if (botMessageHopExhausted(hop)) {
       return {
         error:

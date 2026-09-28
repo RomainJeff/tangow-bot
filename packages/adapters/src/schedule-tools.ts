@@ -1,9 +1,11 @@
 import type { JobPublisher } from "@rakazo/adapter-kit";
 import { routineJobKey, routineWakeupJob } from "@rakazo/adapter-kit";
 import {
+  botMessageHopExhausted,
   cronFromPreset,
   isOneShotRoutineCron,
   isOneShotRoutineCrons,
+  nextBotMessageHop,
   nextCronDate,
   ONCE_ROUTINE_CRON,
 } from "@rakazo/core";
@@ -186,6 +188,8 @@ export async function createScheduleFromTool(
     /** "…and notify me every time" captured in natural language. Defaults to silent (the run
         stays a browsable card in this thread); the routine setup UI remains the point of truth. */
     notify?: boolean;
+    /** The bot-to-bot chain hop of the creating run; a routine created mid-chain carries it on. */
+    currentHop?: number;
     schedule: Record<string, unknown>;
   },
 ) {
@@ -193,6 +197,10 @@ export async function createScheduleFromTool(
   const prompt = input.prompt.trim();
   if (!name) return { error: "name is required." };
   if (!prompt) return { error: "prompt is required." };
+  const inheritedHop = input.currentHop ? nextBotMessageHop(input.currentHop) : null;
+  if (inheritedHop !== null && botMessageHopExhausted(inheritedHop)) {
+    return { error: "bot-to-bot chain limit reached; ask the user to set up this routine" };
+  }
 
   const timezone = String(input.timezone ?? "UTC");
   const resolved = resolveScheduleTiming(input.schedule, timezone);
@@ -211,6 +219,7 @@ export async function createScheduleFromTool(
       notify: input.notify === true,
       active: true,
       nextRunAt: resolved.nextRunAt,
+      inheritedHop,
     },
   });
 

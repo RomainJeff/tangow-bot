@@ -160,7 +160,12 @@ import {
   resolveAutoReviewChecker,
   runAutoReviewJudge,
 } from "./auto-review.js";
-import { loadBotMessageContext, messageBot, returnBotMessageOutcome } from "./bot-messages.js";
+import {
+  loadBotMessageContext,
+  messageBot,
+  resolveRunHop,
+  returnBotMessageOutcome,
+} from "./bot-messages.js";
 import {
   findBotSecret,
   forgetBotSecret,
@@ -2922,6 +2927,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               prompt: String(args.prompt ?? ""),
               timezone: args.timezone ? String(args.timezone) : undefined,
               notify: typeof args.notify === "boolean" ? args.notify : undefined,
+              currentHop: await resolveRunHop(deps.prisma, run),
               schedule: {
                 cron: args.cron,
                 every: args.every,

@@ -11,7 +11,7 @@ import {
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { appendEventInTransaction, createThreadMessageInTransaction } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { currentBotMessageHop } from "./bot-messages.js";
+import { resolveRunHop } from "./bot-messages.js";
 
 export interface AgentConnectionDeps {
   prisma: PrismaClient;
@@ -26,6 +26,8 @@ type ConnectionRun = {
   botId: string;
   userId: string;
   sourceMessageId?: string | null;
+  routineId?: string | null;
+  trigger?: string;
 };
 
 type Result =
@@ -237,9 +239,7 @@ export async function messageConnectedAgent(
     return { ok: false, error: "no agent can be reached at that address" };
   }
 
-  const hop = nextBotMessageHop(
-    await currentBotMessageHop(deps.prisma, run.sourceMessageId ?? null),
-  );
+  const hop = nextBotMessageHop(await resolveRunHop(deps.prisma, run));
   if (botMessageHopExhausted(hop)) {
     return {
       ok: false,
