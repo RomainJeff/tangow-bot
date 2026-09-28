@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CONNECTION_WAIT_MS,
   createDb,
   createPool,
   isTooManyDatabaseConnections,
@@ -22,7 +23,7 @@ describe("createDb", () => {
     pools.push(pool);
 
     expect(pool.options.max).toBe(3);
-    expect(pool.options.connectionTimeoutMillis).toBe(10_000);
+    expect(pool.options.connectionTimeoutMillis).toBe(CONNECTION_WAIT_MS);
     expect(pool.options.idleTimeoutMillis).toBe(0);
     expect(pool.options.application_name).toBe("rakazo-test");
     expect(pool.listenerCount("error")).toBeGreaterThan(0);
@@ -105,7 +106,7 @@ describe("createPool", () => {
     });
     pools.push(pool);
     expect(pool.options.max).toBe(2);
-    expect(pool.options.connectionTimeoutMillis).toBe(10_000);
+    expect(pool.options.connectionTimeoutMillis).toBe(CONNECTION_WAIT_MS);
     expect(pool.options.idleTimeoutMillis).toBe(0);
     expect(pool.options.application_name).toBe("rakazo-pool-test");
     expect(pool.listenerCount("error")).toBeGreaterThan(0);

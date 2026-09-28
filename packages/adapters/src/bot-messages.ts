@@ -131,7 +131,19 @@ export async function messageBot(
       note: `Already sent to ${target.name} in this turn; it was not sent again.`,
     }) as const;
 
-  const wakePrompt = buildBotMessageWakePrompt({ from: sender, text: message, intent });
+  // Mirrors repliesToOwnRequest on the recipient's side: this run was woken by the target's own
+  // request or question, so what it sends back is that answer, not something volunteered.
+  const repliesToRequest =
+    sourceContext?.fromBotId === target.id &&
+    (sourceContext.intent === undefined ||
+      sourceContext.intent === "request" ||
+      sourceContext.intent === "question");
+  const wakePrompt = buildBotMessageWakePrompt({
+    from: sender,
+    text: message,
+    intent,
+    repliesToRequest,
+  });
   const outboundBlock: MessageBlock = {
     kind: "bot_message_sent",
     toBotId: target.id,

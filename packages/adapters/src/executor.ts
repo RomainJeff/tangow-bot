@@ -59,6 +59,7 @@ import {
   isMessagingChannelRun,
   isOneShotRoutineCrons,
   isTerminal,
+  joinTurnText,
   messagingChannelId,
   messagingChannelPrivacyBlock,
   messagingDmSurfaceNote,
@@ -328,11 +329,14 @@ import {
   botMessageOutcomeFromMidTurn,
   buildSteeringMessageText,
   clampUserProgressMessage,
+  createCallOrderQueue,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
   isProgressMessageTruncated,
   isUserProgressClientNonce,
+  publishesHeldNarrationAtEnd,
   repeatsSentUserText,
+  TOOL_FINAL_RESPONSE_FALLBACK,
   userMessageClientNonce,
   userProgressClientNonce,
 } from "./user-progress.js";
@@ -1496,6 +1500,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           peerMessage?.intent,
           peerMessage?.repliesToRequest,
         );
+        // The bot's own scheduled check (not a sub-bot's report routine, which feeds a run card)
+        // often has nothing to say — "stay silent unless there is a real risk". Silence there is
+        // the answer, not a missing reply to chase.
+        const ownRoutineRun = run.trigger === "routine" && bot.parentBotId == null;
         const emptyResponseText = peerMessage
           ? peerMessage.intent === "result" ||
             peerMessage.intent === "status" ||
@@ -1799,6 +1807,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             midTurnProgressCount += 1;
           }
         }
+        // message_user bubbles are published in the order the model wrote the calls.
+        const inBubbleOrder = createCallOrderQueue();
         // Tool calls that land mid-sentence wait here until the narration catches up to a
         // sentence boundary, so the step chips never render in the middle of a clause.
         let pendingToolNames: Array<{ name: string; detail: ToolCallDetail }> = [];
@@ -1857,30 +1867,50 @@ export function createRunExecutor(deps: ExecutorDeps) {
           pendingProgress = "";
           lastProgressAt = Date.now();
         };
-        const publishMidTurnNarration = async () => {
+        // Narration is text the model writes alongside a tool call ("I'll check the calendar…").
+        // It stays on screen live, in the run's transient message, but is no longer promoted to a
+        // durable chat message at each tool call: it is set aside, then dropped once the run
+        // answers, published when the run pauses for the user (the context for what they are
+        // asked), or published at the end when it is all the run said.
+        const heldNarration: string[] = [];
+        let narrationSetAside = false;
+        let deliveredBubbleThisAttempt = false;
+        const setAsideMidTurnNarration = () => {
           const extracted = extractNarrationText(messageSegments, currentTextSegment);
           const narration = clampUserProgressMessage(redactSecrets(extracted.text, runSecrets));
           messageSegments = extracted.remaining;
           currentTextSegment = "";
           if (!narration) return;
+          // Keep hasStreamedText: the live message goes on accumulating deltas.
           assembled = "";
+          narrationSetAside = true;
+          // A routine card run's only user-facing artifact is its run card: its narration is
+          // dropped outright, so the card digest stays the clean final report.
+          if (isRoutineCardRun) return;
+          heldNarration.push(narration);
+        };
+        const publishHeldNarration = async () => {
+          if (heldNarration.length === 0) return;
           hasStreamedText = false;
           pendingProgress = "";
-          // A routine card run's only user-facing artifact is its run card. Drop the
-          // mid-turn narration instead of posting it as a separate bubble in the thread —
-          // the text has already been lifted out of the segments above, so the card digest
-          // stays the clean final report.
-          if (isRoutineCardRun) return;
-          await publishMessage(
-            deps,
-            run,
-            "bot",
-            [{ kind: "text", text: narration }],
-            undefined,
-            userProgressClientNonce(run.id, midTurnProgressCount++),
-          );
-          midTurnUserTexts.push(narration);
-          publishedMidTurnUserMessage = true;
+          for (const narration of heldNarration.splice(0)) {
+            await publishMessage(
+              deps,
+              run,
+              "bot",
+              [{ kind: "text", text: narration }],
+              undefined,
+              userProgressClientNonce(run.id, midTurnProgressCount++),
+            );
+            midTurnUserTexts.push(narration);
+            publishedMidTurnUserMessage = true;
+          }
+        };
+        // Pause points: text still in the segments is narration too (a tool can pause before its
+        // tool event was processed), so set it aside first, then publish everything held.
+        const publishMidTurnNarration = async () => {
+          setAsideMidTurnNarration();
+          await publishHeldNarration();
         };
         const formatObservation = (
           observation: Awaited<ReturnType<SandboxProvider["observe"]>>,
@@ -2313,6 +2343,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               return pauseForApproval();
             }
             await workspaceCheckpoint.flush();
+            // The user is about to be asked something: show the narration that led here.
+            await publishMidTurnNarration();
             const paused = await deps.events.pauseRunForInput({
               spaceId: run.spaceId,
               threadId: run.threadId,
@@ -3350,6 +3382,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               return pauseForSecret();
             }
             await workspaceCheckpoint.flush();
+            // The user is about to be asked something: show the narration that led here.
+            await publishMidTurnNarration();
             const paused = await deps.events.pauseRunForInput({
               spaceId: run.spaceId,
               threadId: run.threadId,
@@ -3536,17 +3570,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const rawMessage = redactSecrets(String(args.message ?? ""), runSecrets);
             const text = clampUserProgressMessage(rawMessage);
             if (!text) return finish({ error: "message is required" });
+            // Narration before a bubble is set aside like any other: the bubble is the answer.
+            await flushProgress();
+            setAsideMidTurnNarration();
             if (repeatsSentUserText(text, midTurnUserTexts)) {
+              deliveredBubbleThisAttempt = true;
               // The user already read this exact message; posting it again is the
-              // "answered twice" bubble. Tell the model, publish nothing.
+              // "answered twice" bubble. Publish nothing, but report it as delivered: the user
+              // has the text, and an error would make the runtime nudge for a final reply that
+              // can only restate it.
               return finish({
-                error:
-                  "You already sent this exact message with message_user; it was not posted again. Do not repeat yourself. If message_user covered everything, end the turn with an empty response.",
+                ok: true,
+                posted: false,
+                note: "You already sent this exact message; it was not posted again. Do not repeat yourself. If message_user covered everything, end the turn with an empty response.",
               });
             }
             const truncated = isProgressMessageTruncated(rawMessage);
-            await flushProgress();
-            await publishMidTurnNarration();
             await publishMessage(
               deps,
               run,
@@ -3559,6 +3598,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             );
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
+            deliveredBubbleThisAttempt = true;
             return finish(
               truncated
                 ? {
@@ -3926,12 +3966,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
               resumeFromCheckpoint: takeoverResume?.checkpoint,
               script,
-              allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun,
+              allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun || ownRoutineRun,
               emptyResponseText,
               executeTool: scripted
                 ? undefined
                 : async (name, args, executionId, _route, trace) => {
-                    const result = await applyTool(name, args, executionId, trace);
+                    const result = await (name === "message_user"
+                      ? inBubbleOrder(() => applyTool(name, args, executionId, trace))
+                      : applyTool(name, args, executionId, trace));
                     recordToolOutput(executionId, result);
                     return result;
                   },
@@ -4013,7 +4055,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             context,
           );
           for await (const event of withRuntimeCleanup(runtimeEvents, runAbortController)) {
-            if (approvalPausePending) return;
+            if (approvalPausePending) {
+              // An approval or secret card went out from inside the tool before this loop caught
+              // up with the text that led to it: publish that narration rather than lose it.
+              await publishMidTurnNarration();
+              return;
+            }
             if (!leaseValid) return;
             const now = Date.now();
             if (now - lastLeaseCheckAt >= 1_000) {
@@ -4041,7 +4088,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
 
             if (event.type === "text") {
-              assembled += event.text;
+              // A turn that resumes after a tool call starts a new segment: keep it
+              // apart from the previous turn's text in the digest and notification.
+              assembled = currentTextSegment
+                ? assembled + event.text
+                : joinTurnText(assembled, event.text);
               currentTextSegment += event.text;
               toolCallStreak = { key: undefined, count: 0 };
               tryFlushPendingTools();
@@ -4107,6 +4158,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   : {}),
               }));
               await workspaceCheckpoint.flush();
+              // The user is about to be asked something: show the narration that led here.
+              await publishMidTurnNarration();
               const paused = await deps.events.pauseRunForInput({
                 spaceId: run.spaceId,
                 threadId: run.threadId,
@@ -4193,10 +4246,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               // Preserve event ordering when the throttle still holds recent narration: the
               // client must see that text before the tool call it describes.
               await flushProgress();
-              // Promote streamed narration into a durable, replyable chat message before
-              // tools continue, so long turns do not look stalled and stay replyable.
+              // Narration stays live on screen and is set aside, not published (see heldNarration).
               if (event.name !== "message_user") {
-                await publishMidTurnNarration();
+                setAsideMidTurnNarration();
               }
               await deps.events.append({
                 spaceId: run.spaceId,
@@ -4371,10 +4423,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               });
             } else if (event.type === "done") {
               if (!assembled && event.text) {
-                if (publishedMidTurnUserMessage) {
-                  // Mid-turn progress already published the streamed narration.
-                  // Post-tool finals are streamed into assembled; do not restore
-                  // cumulative done.text (clamp/redaction make substring stripping brittle).
+                if (publishedMidTurnUserMessage || narrationSetAside) {
+                  // done.text is cumulative and would bring back narration that was published or
+                  // set aside. Post-tool finals are streamed into assembled; do not restore it
+                  // (clamp/redaction make substring stripping brittle).
                 } else {
                   assembled = event.text;
                   currentTextSegment += event.text;
@@ -4383,6 +4435,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
           }
 
+          if (approvalPausePending) await publishMidTurnNarration();
           if (approvalPausePending || !leaseValid) return;
           approvedEffectReplays.assertDrained();
           pendingProgress += progressRedactor.finish();
@@ -4435,6 +4488,25 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // Signal only: the text already streamed to the thread, so a nudge would leave it visible.
             getLogger().warn("agent reply contains a text tool call", { runId, botId: bot.id });
           }
+          // Narration set aside during the run: dropped once the run answered or may stay silent,
+          // published when it is all the run said (the runtime's missing-reply notice aside).
+          const answered =
+            deliveredBubbleThisAttempt ||
+            [assembled, ...messageSegments.map((b) => (b.kind === "text" ? b.text : ""))].some(
+              (segment) => segment.trim() !== "" && segment.trim() !== TOOL_FINAL_RESPONSE_FALLBACK,
+            );
+          if (
+            publishesHeldNarrationAtEnd({
+              answered,
+              handedOff,
+              messagingChannel: messagingChannelRun,
+              mayStaySilent: allowSilentPeerMessage || ownRoutineRun,
+            })
+          ) {
+            // Only what was set aside: the segments now hold the run's own ending, if any.
+            await publishHeldNarration();
+          }
+          heldNarration.length = 0;
           if (!assembled) {
             // Mid-turn progress already posted durable chat messages; skip the empty
             // "…" fallback so we do not add a junk final bubble. Delegated bot_message
@@ -4442,7 +4514,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // only progress was posted, result when a final reply exists).
             messageSegments = completionMessageSegments(messageSegments, {
               allowSilentEmpty:
-                allowSilentPeerMessage || messagingChannelRun || publishedMidTurnUserMessage,
+                allowSilentPeerMessage ||
+                messagingChannelRun ||
+                ownRoutineRun ||
+                publishedMidTurnUserMessage,
               emptyResponseText,
               suppressOutput: handedOff,
               skipEmptyFallback: publishedTerminalSubagent || publishedMidTurnUserMessage,
@@ -4935,7 +5010,7 @@ export function completionNotificationBody(assembled: string, blocks: MessageBlo
   return blocks
     .filter((block): block is Extract<MessageBlock, { kind: "text" }> => block.kind === "text")
     .map((block) => block.text)
-    .join("");
+    .reduce(joinTurnText, "");
 }
 
 /** Background routine work only marks the thread unread when it has something to say. */

@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-28
+
+#### Changed
+
+- What a bot tells you while it works ("I'll check the calendar…") now stays on screen only until it answers, instead of piling up as separate messages that marked the chat unread and reached linked messaging apps; it is kept when the bot stops to ask you something or when it is all the bot said.
+
+#### Fixed
+
+- A bot's report, routine digest and notification no longer glue two sentences together where it paused to use a tool ("famille de 5.Les moteurs"): each part now starts its own paragraph.
+- A scheduled check told to stay quiet when there is nothing to report now stays quiet, instead of ending on "I completed the tool step but could not produce a final response. Please ask me to continue." after looking things up.
+- A bot that runs several searches or page reads at once no longer stops midway with "Transaction API error: Unable to start a transaction in the given time.": a brief rush on the server now waits for a free connection instead of failing the reply.
+- A bot that has answered you in chat bubbles now simply stops, instead of adding a closing line like "Message sent." or "Nothing more to do", or ending on "I completed the tool step but could not produce a final response. Please ask me to continue." after a reply that was already complete.
+- Chat bubbles a bot sends in one go now appear in the order it wrote them, instead of arriving shuffled so that a conclusion could land before its context.
+- A bot no longer posts the same sentence twice when its opening remark and its first chat bubble say the same thing.
+- A report another bot sends on its own, like a scheduled inbox check that found nothing, no longer lands in your chat as a raw "Update from …" message when the bot it reports to decides it needs no reply; an answer to something that bot asked for is still always passed on.
+- Web searches and page reads no longer fail with a bare "fetch failed" when a connection drops once: a brief network hiccup is retried, and an error that remains now names its cause.
+- A bot's reply no longer says it "thought for 24h" after waiting on your answer to one of its questions: the time shown now counts only the work since you answered.
+
 ### 2026-09-27
 
 #### Added

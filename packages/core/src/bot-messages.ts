@@ -45,11 +45,17 @@ export function botMessageContext(blocks: readonly MessageBlock[]): BotMessageCo
   return blocks.find((block): block is BotMessageContext => block.kind === "bot_message_received");
 }
 
+/**
+ * May the woken bot end its turn without a word? Yes for anything a peer sent on its own
+ * initiative — an FYI, or a result/status it volunteers such as a routine's "nothing to report" —
+ * because the bot is the one judging whether the user needs it. An answer to a request or question
+ * this bot sent is never swallowed: when the bot stays silent, the answer is relayed as is.
+ */
 export function botMessageAllowsSilence(
   intent: BotMessageIntent | undefined,
   repliesToRequest = false,
 ): boolean {
-  return intent === "fyi" && !repliesToRequest;
+  return !repliesToRequest && (intent === "fyi" || intent === "result" || intent === "status");
 }
 
 /** True when these blocks are a delivery this bot sent to ask a peer for something. */
@@ -230,6 +236,8 @@ export function buildBotMessageWakePrompt(args: {
   from: BotAddress;
   text: string;
   intent?: BotMessageIntent;
+  /** The message answers a request or question the recipient sent to this sender. */
+  repliesToRequest?: boolean;
 }): string {
   const name = args.from.name.trim() || "bot";
   const id = args.from.id.trim();
@@ -238,7 +246,9 @@ export function buildBotMessageWakePrompt(args: {
   const intent = args.intent ?? "request";
   const relays = intent === "result" || intent === "status";
   const action = relays
-    ? `This is a ${intent} for work you delegated. Relay it to the user now, and include the actual substance — the real names, dates, numbers, and details ${safeName} sent — not just a note that a ${intent} arrived. A reply like "the summary came through" or "it's done" without repeating what it says is not acceptable. Do not stay silent and do not merely acknowledge it.`
+    ? args.repliesToRequest === false
+      ? `This is a ${intent} ${safeName} sent on its own initiative, not an answer to something you asked. If it holds something the user needs, relay it now with the actual substance — the real names, dates, numbers, and details ${safeName} sent. If it holds nothing the user needs, such as a routine check that found nothing to act on, stay silent: no acknowledgement, no summary, no pass-through.`
+      : `This is a ${intent} for work you delegated. Relay it to the user now, and include the actual substance — the real names, dates, numbers, and details ${safeName} sent — not just a note that a ${intent} arrived. A reply like "the summary came through" or "it's done" without repeating what it says is not acceptable. Do not stay silent and do not merely acknowledge it.`
     : intent === "question"
       ? `This is a question about delegated work. Answer it and continue the coordination.`
       : intent === "fyi"

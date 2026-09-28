@@ -13,6 +13,20 @@ import { dispatcherFetch } from "./undici-fetch.js";
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
+const CONNECT_TIMEOUT_MS = 5_000;
+
+/** undici/Node error codes for connect-level failures that are worth one retry
+ * before any response has started arriving. Never includes abort or protocol
+ * errors — those are not transient. */
+const TRANSIENT_FETCH_ERROR_CODES = new Set([
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "ENETUNREACH",
+]);
 
 export type { ResolveHostname } from "./network-address.js";
 
@@ -90,7 +104,11 @@ export async function fetchSafeWebText(
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   const baseFetch = options.fetch ?? dispatcherFetch;
   const dispatcher = new Agent({
-    connect: { lookup: createAddressCheckedLookup(resolve, assertPublicAddresses) },
+    connect: {
+      lookup: createAddressCheckedLookup(resolve, assertPublicAddresses),
+      // Short enough that a retried connect still fits inside the request deadline.
+      timeout: CONNECT_TIMEOUT_MS,
+    },
   });
   // One deadline for the whole redirect chain + body read + cleanup, not per hop.
   const signal = combineSignals(options.signal, AbortSignal.timeout(timeoutMs));
@@ -114,6 +132,8 @@ export async function fetchSafeWebText(
       signal,
       redirectsRemaining: MAX_REDIRECTS,
     });
+  } catch (error) {
+    throw withReadableFetchError(error);
   } finally {
     // Race graceful close against the shared deadline. Do not wait unbounded on close().
     await withAbort(cleanup(), signal).catch(() => undefined);
@@ -147,21 +167,34 @@ async function followRedirects(
     throw abortError(state.signal);
   }
   const validated = await assertSafeWebUrl(rawUrl, state.resolve, state.signal);
-  // Race fetch against the deadline — injected fetch may ignore init.signal.
-  const response = await withAbort(
-    state.baseFetch(validated.href, {
-      method: "GET",
-      redirect: "manual",
-      signal: state.signal,
-      headers: {
-        "user-agent": state.userAgent,
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5",
-        ...state.headers,
-      },
-      dispatcher: state.dispatcher,
-    } as RequestInit & { dispatcher: Agent }),
-    state.signal,
-  );
+  const dispatchFetch = () =>
+    withAbort(
+      // Race fetch against the deadline — injected fetch may ignore init.signal.
+      state.baseFetch(validated.href, {
+        method: "GET",
+        redirect: "manual",
+        signal: state.signal,
+        headers: {
+          "user-agent": state.userAgent,
+          accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5",
+          ...state.headers,
+        },
+        dispatcher: state.dispatcher,
+      } as RequestInit & { dispatcher: Agent }),
+      state.signal,
+    );
+
+  let response: Response;
+  try {
+    response = await dispatchFetch();
+  } catch (error) {
+    // Retry once for a connect-level failure — nothing has arrived yet, so a
+    // retry cannot duplicate any effect. Never retry an aborted signal or a
+    // non-transient error (HTTP status, SSRF rejection, size limit, ...).
+    if (state.signal.aborted || !isTransientFetchError(error)) throw error;
+    response = await dispatchFetch();
+  }
 
   if (response.status >= 300 && response.status < 400) {
     if (state.redirectsRemaining <= 0) {
@@ -237,6 +270,35 @@ function assertPublicAddresses(addresses: ResolvedAddress[]): void {
 
 function abortError(signal: AbortSignal): Error {
   return signal.reason instanceof Error ? signal.reason : new Error("Request timed out");
+}
+
+/** The undici/Node error code carried on `error.cause.code`, if any. Node's
+ * `fetch` wraps connect-level failures as `TypeError: fetch failed` with the
+ * underlying cause (e.g. `ConnectTimeoutError { code: "UND_ERR_CONNECT_TIMEOUT" }`). */
+function causeCode(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const cause = error.cause;
+  if (cause && typeof cause === "object" && "code" in cause) {
+    const code = (cause as { code?: unknown }).code;
+    return typeof code === "string" ? code : undefined;
+  }
+  return undefined;
+}
+
+function isTransientFetchError(error: unknown): boolean {
+  const code = causeCode(error);
+  return code !== undefined && TRANSIENT_FETCH_ERROR_CODES.has(code);
+}
+
+/** Replaces an opaque `TypeError: fetch failed` with a short message naming its
+ * cause code, e.g. "fetch failed (UND_ERR_CONNECT_TIMEOUT)". Leaves every other
+ * error (including one with no recognizable code) untouched. */
+function withReadableFetchError(error: unknown): unknown {
+  if (error instanceof TypeError && error.message === "fetch failed") {
+    const code = causeCode(error);
+    if (code) return new Error(`fetch failed (${code})`, { cause: error });
+  }
+  return error;
 }
 
 /** Race a promise against an AbortSignal so stalled work cannot outlive the deadline. */

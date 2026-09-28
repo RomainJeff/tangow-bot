@@ -39,6 +39,16 @@ describe("bot message silence", () => {
     expect(botMessageAllowsSilence("fyi", true)).toBe(false);
     expect(botMessageAllowsSilence("fyi")).toBe(true);
   });
+
+  it("lets the bot drop a report a peer volunteered, never an answer it asked for", () => {
+    expect(botMessageAllowsSilence("result")).toBe(true);
+    expect(botMessageAllowsSilence("status")).toBe(true);
+    expect(botMessageAllowsSilence("result", true)).toBe(false);
+    expect(botMessageAllowsSilence("status", true)).toBe(false);
+    expect(botMessageAllowsSilence("request")).toBe(false);
+    expect(botMessageAllowsSilence("question")).toBe(false);
+    expect(botMessageAllowsSilence(undefined)).toBe(false);
+  });
 });
 
 describe("hop bounding", () => {
@@ -377,6 +387,29 @@ describe("inbound wake prompt", () => {
     expect(resultPrompt).toContain("Relay it to the user now");
     expect(resultPrompt).toContain("include the actual substance");
     expect(resultPrompt).not.toContain("staying silent is fine");
+  });
+
+  it("lets a volunteered result stay silent when it holds nothing the user needs", () => {
+    const volunteered = buildBotMessageWakePrompt({
+      from: { id: "b_1", name: "Researcher" },
+      text: "Inbox check: nothing to act on.",
+      intent: "result",
+      repliesToRequest: false,
+    });
+    expect(volunteered).toContain("on its own initiative");
+    expect(volunteered).toContain("stay silent");
+    expect(volunteered).not.toContain("Do not stay silent");
+    expect(volunteered).not.toContain("working for another bot here");
+  });
+
+  it("keeps an answer to the recipient's own request mandatory to relay", () => {
+    const answer = buildBotMessageWakePrompt({
+      from: { id: "b_1", name: "Researcher" },
+      text: "The answer is 42.",
+      intent: "result",
+      repliesToRequest: true,
+    });
+    expect(answer).toContain("Do not stay silent");
   });
 
   it("keeps silence available only for an explicit FYI", () => {

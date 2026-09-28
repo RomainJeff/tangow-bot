@@ -1471,6 +1471,19 @@ export async function finalizeRun(
   return { continuationRunId: committed.continuationRunId };
 }
 
+/**
+ * Picks the start time to measure a completed run's duration from: the current attempt's start
+ * when known, falling back to the run's own start. A run can pause and resume (ask_user answers,
+ * takeovers, approvals); using the latest attempt's start excludes time spent waiting on a human.
+ * It also leaves out setup before the attempt row exists and the work of an attempt that crashed.
+ */
+export function runDurationStart(
+  run: { startedAt: Date | null } | null,
+  attempt: { startedAt: Date | null } | null,
+): Date | null {
+  return attempt?.startedAt ?? run?.startedAt ?? null;
+}
+
 /** Stamps one turn-level wall-clock duration on the final tool block. */
 export function completedRunBlocks(
   blocks: MessageBlock[],
@@ -1551,7 +1564,12 @@ async function finalizeRunOnce(
     if (task.count !== 1) throw new Error("Run task was not available to finalize");
 
     if (input.outcome === "completed") {
-      const completedBlocks = completedRunBlocks(input.blocks, writableRun?.startedAt ?? null, now);
+      const attemptTiming = await tx.attempt.findUnique({
+        where: { id: input.attemptId },
+        select: { startedAt: true },
+      });
+      const durationStartedAt = runDurationStart(writableRun ?? null, attemptTiming ?? null);
+      const completedBlocks = completedRunBlocks(input.blocks, durationStartedAt, now);
       if (completedBlocks.length > 0) {
         const message = await createThreadMessageInTransaction(tx, {
           threadId: input.threadId,

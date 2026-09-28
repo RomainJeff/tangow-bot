@@ -98,7 +98,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
           assistantMessageEvent: { type: "text_delta", delta: narration },
         });
         this.emit({ type: "tool_execution_start", toolName: target.name, args });
-        await target.execute("call-1", args);
+        const executed = (await target.execute("call-1", args)) as { details?: unknown };
         this.emit({
           type: "turn_end",
           message: {
@@ -113,7 +113,7 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
               },
             ],
           },
-          toolResults: [{ toolCallId: "call-1", result: { ok: true } }],
+          toolResults: [{ toolCallId: "call-1", result: { ok: true }, details: executed?.details }],
         });
         this.emit({
           type: "turn_end",
@@ -742,6 +742,139 @@ describe("Pi connector tool dispatch", () => {
       type: "done",
       text: "I completed the tool step but could not produce a final response. Please ask me to continue.",
     });
+  });
+
+  it("ends silently when the tool turn closed on a delivered message_user bubble", async () => {
+    fakeAgentState.mode = "silent-continuation";
+    fakeAgentState.invoke = { name: "message_user", args: { message: "Here is the answer." } };
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "bubble-then-silence",
+        prompt: "what is the answer?",
+        instructions: "Answer with message_user bubbles.",
+        history: [],
+        tools: [],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "bubble-then-silence",
+        traceId: "bubble-then-silence",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(fakeAgentState.followUpMessages).toEqual([]);
+    expect(JSON.stringify(events)).not.toContain("could not produce a final response");
+  });
+
+  it("still asks for a final reply when the last message_user bubble was cut off", async () => {
+    fakeAgentState.mode = "silent-continuation";
+    fakeAgentState.invoke = { name: "message_user", args: { message: "x".repeat(600) } };
+    const runtime = new PiAgentRuntime();
+
+    for await (const _event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "cut-bubble",
+        prompt: "write the full report",
+        instructions: "Answer with message_user bubbles.",
+        history: [],
+        tools: [],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true, truncated: true })),
+      },
+      {
+        operationId: "cut-bubble",
+        traceId: "cut-bubble",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      // Exhaust the runtime event stream.
+    }
+
+    expect(fakeAgentState.followUpMessages).toHaveLength(1);
+  });
+
+  it("still asks for a final reply when the last message_user bubble was refused", async () => {
+    fakeAgentState.mode = "silent-continuation";
+    fakeAgentState.emitFinalAfterFollowUp = false;
+    fakeAgentState.invoke = { name: "message_user", args: { message: "Here is the answer." } };
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "refused-bubble",
+        prompt: "what is the answer?",
+        instructions: "Answer with message_user bubbles.",
+        history: [],
+        tools: [],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ error: "message is required" })),
+      },
+      {
+        operationId: "refused-bubble",
+        traceId: "refused-bubble",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(fakeAgentState.followUpMessages).toHaveLength(1);
+    expect(JSON.stringify(events)).toContain("could not produce a final response");
+  });
+
+  it("lets a run allowed to stay silent end quietly after its tools", async () => {
+    fakeAgentState.mode = "silent-continuation";
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "routine-silence",
+        prompt: "check the calendar; if nothing is at risk, say nothing",
+        instructions: "Use the destination tool.",
+        history: [],
+        tools: [destinationTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        allowSilentEmpty: true,
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "routine-silence",
+        traceId: "routine-silence",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(fakeAgentState.followUpMessages).toEqual([]);
+    expect(JSON.stringify(events)).not.toContain("could not produce a final response");
+    // The pre-tool narration is not carried as the run's final text.
+    expect(events.at(-1)).toEqual({ type: "done" });
   });
 
   it("keeps FYI bot-message wakes silent when the model produces nothing", async () => {

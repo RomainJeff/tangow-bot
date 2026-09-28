@@ -63,6 +63,7 @@ import {
 } from "./pi-session.js";
 import { textContentArg } from "./tool-text.js";
 import type { TraceExporter } from "./trace-export.js";
+import { TOOL_FINAL_RESPONSE_FALLBACK } from "./user-progress.js";
 
 /**
  * Normalize the ask_user v2 `questions` argument into validated AskQuestion[] with stable ids.
@@ -136,8 +137,6 @@ const MAX_PARALLEL_SUBAGENTS = 4;
 const MAX_SILENT_TOOL_CONTINUATIONS = 3;
 const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then give the user the final answer.";
-const TOOL_FINAL_RESPONSE_FALLBACK =
-  "I completed the tool step but could not produce a final response. Please ask me to continue.";
 const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -388,6 +387,7 @@ export class PiAgentRuntime implements AgentRuntime {
         let toolActivityShowing = false;
         let silentToolContinuations = 0;
         let toolWorkPendingFinal = false;
+        let endedSilentlyAfterTools = false;
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             await piSession?.appendMessage(event.message);
@@ -436,14 +436,21 @@ export class PiAgentRuntime implements AgentRuntime {
             const hasToolResults = event.toolResults.length > 0;
 
             // Text in a turn that also contains a tool call is narration, not a final
-            // response. Keep the run alive until a later text-only turn answers the user.
+            // response. Keep the run alive until a later text-only turn answers the user,
+            // unless the turn closed on a delivered message_user bubble: the user already
+            // has the answer, and nudging for a final reply only makes the model restate it.
             if (hasToolCalls && hasToolResults && !host.pausePending) {
-              toolWorkPendingFinal = true;
+              toolWorkPendingFinal = !endsOnDeliveredUserMessage(event.message, event.toolResults);
               silentToolContinuations = 0;
             } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
               if (messageText.trim()) {
                 toolWorkPendingFinal = false;
                 silentToolContinuations = 0;
+              } else if (request.allowSilentEmpty) {
+                // A run allowed to say nothing (a routine with nothing to report, an FYI wake)
+                // chose silence after its tools; that is its answer, not a reply to chase.
+                toolWorkPendingFinal = false;
+                endedSilentlyAfterTools = true;
               } else if (
                 !host.pausePending &&
                 silentToolContinuations < MAX_SILENT_TOOL_CONTINUATIONS
@@ -513,6 +520,9 @@ export class PiAgentRuntime implements AgentRuntime {
             queue.push({ type: "text", text: budgetMessage });
             streamed = budgetMessage;
           }
+        } else if (!host.pausePending && endedSilentlyAfterTools) {
+          // Pre-tool narration is not a reply either: finish with no text at all.
+          streamed = "";
         } else if (!host.pausePending && toolWorkPendingFinal) {
           // Discard cumulative pre-tool narration from the terminal payload and make the
           // missing final response visible to the user instead of silently completing.
@@ -1787,6 +1797,25 @@ function assistantText(message: unknown): string {
       )
       .join(""),
   );
+}
+
+/**
+ * True when the turn's last tool call (in the model's order) delivered a message_user bubble in
+ * full. Only the last call is checked, so a step like [remember, message_user] still counts; a cut
+ * bubble does not, since its tool result tells the model to finish the answer in its reply.
+ */
+function endsOnDeliveredUserMessage(
+  message: { role: string; content?: unknown },
+  toolResults: readonly { toolCallId: string; isError?: boolean; details?: unknown }[],
+): boolean {
+  if (message.role !== "assistant" || !Array.isArray(message.content)) return false;
+  const lastCall = (message.content as Array<{ type?: string; id?: string; name?: string }>)
+    .filter((part) => part.type === "toolCall")
+    .at(-1);
+  if (lastCall?.name !== "message_user") return false;
+  const result = toolResults.find((entry) => entry.toolCallId === lastCall.id);
+  const details = result?.details as { ok?: unknown; truncated?: unknown } | undefined;
+  return result?.isError !== true && details?.ok === true && details.truncated !== true;
 }
 
 function sanitizeSensitiveText(message: string) {

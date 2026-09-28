@@ -4,10 +4,12 @@ import { describe, expect, it } from "vitest";
 import {
   botMessageOutcomeFromMidTurn,
   clampUserProgressMessage,
+  createCallOrderQueue,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
   isProgressMessageTruncated,
   isUserProgressClientNonce,
+  publishesHeldNarrationAtEnd,
   repeatsSentUserText,
   USER_PROGRESS_MESSAGE_MAX_LENGTH,
   userMessageClientNonce,
@@ -178,5 +180,61 @@ describe("repeatsSentUserText", () => {
   it("never flags an empty message or an empty history", () => {
     expect(repeatsSentUserText("   ", ["   "])).toBe(false);
     expect(repeatsSentUserText("Done.", [])).toBe(false);
+  });
+});
+
+describe("createCallOrderQueue", () => {
+  it("settles tasks in call order even when later ones would finish first", async () => {
+    const inOrder = createCallOrderQueue();
+    const published: string[] = [];
+    const publish = (text: string, delayMs: number) =>
+      inOrder(async () => {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        published.push(text);
+        return text;
+      });
+
+    const results = await Promise.all([
+      publish("first", 30),
+      publish("second", 0),
+      publish("third", 10),
+    ]);
+
+    expect(published).toEqual(["first", "second", "third"]);
+    expect(results).toEqual(["first", "second", "third"]);
+  });
+
+  it("keeps going after a task fails", async () => {
+    const inOrder = createCallOrderQueue();
+    const failed = inOrder(async () => {
+      throw new Error("boom");
+    });
+    const next = inOrder(async () => "next");
+
+    await expect(failed).rejects.toThrow("boom");
+    await expect(next).resolves.toBe("next");
+  });
+});
+
+describe("publishesHeldNarrationAtEnd", () => {
+  const base = { answered: false, handedOff: false, messagingChannel: false, mayStaySilent: false };
+
+  it("keeps what an unanswered run wrote, so nothing it said is lost", () => {
+    expect(publishesHeldNarrationAtEnd(base)).toBe(true);
+  });
+
+  it("drops it once the run answered or handed its work to another bot", () => {
+    expect(publishesHeldNarrationAtEnd({ ...base, answered: true })).toBe(false);
+    expect(publishesHeldNarrationAtEnd({ ...base, handedOff: true })).toBe(false);
+  });
+
+  it("drops it for a run that may stay silent, except in a messaging app with no live view", () => {
+    expect(publishesHeldNarrationAtEnd({ ...base, mayStaySilent: true })).toBe(false);
+    expect(
+      publishesHeldNarrationAtEnd({ ...base, mayStaySilent: true, messagingChannel: true }),
+    ).toBe(true);
+    expect(publishesHeldNarrationAtEnd({ ...base, messagingChannel: true, answered: true })).toBe(
+      false,
+    );
   });
 });

@@ -3,7 +3,7 @@ import {
   USER_MESSAGE_CLIENT_NONCE_PREFIX,
   USER_PROGRESS_CLIENT_NONCE_PREFIX,
 } from "@rakazo/contracts";
-import { isToolActivityBlock } from "@rakazo/core";
+import { isToolActivityBlock, joinTurnText } from "@rakazo/core";
 
 /** Keep mid-turn progress beats short; prefer a few high-signal updates. */
 export const USER_PROGRESS_MESSAGE_MAX_LENGTH = 500;
@@ -94,7 +94,7 @@ export function extractNarrationText(
     remaining.push(block);
   }
   if (currentText) parts.push(currentText);
-  return { text: parts.join(""), remaining };
+  return { text: parts.reduce(joinTurnText, ""), remaining };
 }
 
 /**
@@ -122,6 +122,43 @@ export function repeatsSentUserText(text: string, alreadySent: readonly string[]
   const normalized = normalizeForRepeatCheck(text);
   if (!normalized) return false;
   return alreadySent.some((sent) => normalizeForRepeatCheck(sent) === normalized);
+}
+
+/**
+ * At the end of a run, should the narration it set aside be published? Only when the run gave no
+ * answer of its own and did not hand its work to another bot. A run allowed to stay silent (its
+ * own routine, an FYI wake) drops it, except in a messaging app: there is no live view there, so
+ * the narration may be the only reply the person gets.
+ */
+export function publishesHeldNarrationAtEnd(run: {
+  answered: boolean;
+  handedOff: boolean;
+  messagingChannel: boolean;
+  mayStaySilent: boolean;
+}): boolean {
+  if (run.answered || run.handedOff) return false;
+  return run.messagingChannel || !run.mayStaySilent;
+}
+
+/**
+ * What the runtime posts when a run did tool work but never wrote a reply. It is a notice, not
+ * something the bot said, so it does not count as the run having answered.
+ */
+export const TOOL_FINAL_RESPONSE_FALLBACK =
+  "I completed the tool step but could not produce a final response. Please ask me to continue.";
+
+/**
+ * Runs each task after the previous one settles, in call order. The runtime executes one step's
+ * tool calls in parallel, so without this several `message_user` calls race their inserts and
+ * the bubbles land in the thread in whatever order the writes finish.
+ */
+export function createCallOrderQueue() {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(task: () => Promise<T>): Promise<T> => {
+    const next = tail.then(task);
+    tail = next.catch(() => undefined);
+    return next;
+  };
 }
 
 /**

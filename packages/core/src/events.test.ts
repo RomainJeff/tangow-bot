@@ -1,3 +1,4 @@
+import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import {
   appendTextSegment,
@@ -9,6 +10,7 @@ import {
   endsSentence,
   humanizeToolName,
   isRunTerminalEvent,
+  joinTurnText,
   projectMessages,
   reduceLiveMessageBlocks,
   runFailureError,
@@ -46,6 +48,24 @@ describe("reduceLiveMessageBlocks", () => {
         payload: { text: "Using browser", activity: true },
       }),
     ).toEqual([{ kind: "progress", text: "Using browser", activity: true }]);
+  });
+
+  it("keeps the narration on screen when the tool's activity line arrives", () => {
+    const say = (blocks: MessageBlock[], payload: Record<string, unknown>) =>
+      reduceLiveMessageBlocks(blocks, { type: "progress", payload });
+    let blocks = say([], { text: "I'll check the calendar.", streaming: true });
+    blocks = say(blocks, { text: "Checking calendar", activity: true });
+    expect(blocks).toEqual([
+      { kind: "text", text: "I'll check the calendar." },
+      { kind: "progress", text: "Checking calendar", activity: true },
+    ]);
+    // Real text clears the status line, then streams after the kept narration.
+    blocks = say(blocks, { text: "", activity: true });
+    blocks = say(blocks, { delta: " Two events tomorrow.", streaming: true });
+    expect(blocks).toEqual([
+      { kind: "text", text: "I'll check the calendar." },
+      { kind: "progress", text: " Two events tomorrow." },
+    ]);
   });
 
   it("replaces punctuated activity text with its tool step", () => {
@@ -775,5 +795,20 @@ describe("applyThreadRewind", () => {
 
   it("keeps the list untouched when the payload has no fromSeq", () => {
     expect(applyThreadRewind(messages, { payload: {} })).toEqual(messages);
+  });
+});
+
+describe("joinTurnText", () => {
+  it("puts a paragraph break between two turns that would otherwise glue", () => {
+    expect(joinTurnText("famille de 5.", "Les moteurs de réservation")).toBe(
+      "famille de 5.\n\nLes moteurs de réservation",
+    );
+  });
+
+  it("keeps whitespace that is already there and passes empty sides through", () => {
+    expect(joinTurnText("Voilà. ", "Ensuite")).toBe("Voilà. Ensuite");
+    expect(joinTurnText("Voilà.", "\nEnsuite")).toBe("Voilà.\nEnsuite");
+    expect(joinTurnText("", "Seul")).toBe("Seul");
+    expect(joinTurnText("Seul", "")).toBe("Seul");
   });
 });

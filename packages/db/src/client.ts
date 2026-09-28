@@ -11,6 +11,8 @@ export interface DbClientOptions {
 }
 
 const DEFAULT_POOL_MAX = 4;
+/** How long a caller waits for a pooled connection, shared by the pool and Prisma transactions. */
+export const CONNECTION_WAIT_MS = 10_000;
 const CONNECT_RETRY_ATTEMPTS = 8;
 
 export function createPool(connectionString: string, options: DbClientOptions = {}): Pool {
@@ -19,7 +21,7 @@ export function createPool(connectionString: string, options: DbClientOptions = 
     max: options.poolMax ?? DEFAULT_POOL_MAX,
     // Fail a checkout instead of queueing forever when Postgres is already at
     // max_connections (53300) or the pool is saturated.
-    connectionTimeoutMillis: 10_000,
+    connectionTimeoutMillis: CONNECTION_WAIT_MS,
     // 0 disables idle eviction. Dropping idle clients and reopening them on the
     // next job burst is how a tight Postgres hits 53300; keep what we already have.
     idleTimeoutMillis: 0,
@@ -43,7 +45,10 @@ export function createDb(
 ): { prisma: PrismaClient; pool: Pool } {
   const pool = createPool(connectionString, options);
   const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter });
+  // Prisma gives up on starting an interactive transaction after 2 s by default, well before the
+  // pool would hand out a connection. A burst of parallel tool calls each appending an event could
+  // fill the pool for a moment and fail the whole run; wait as long as the pool itself does.
+  const prisma = new PrismaClient({ adapter, transactionOptions: { maxWait: CONNECTION_WAIT_MS } });
   return { prisma, pool };
 }
 

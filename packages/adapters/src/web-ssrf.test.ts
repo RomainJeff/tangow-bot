@@ -3,6 +3,13 @@ import { assertSafeWebUrl, fetchSafeWebText, isBlockedHostname } from "./web-ssr
 
 const publicResolver = async () => [{ address: "203.0.113.10", family: 4 as const }];
 
+/** Mimics Node's `fetch` wrapping a connect-level undici failure. */
+function fetchFailed(code: string): TypeError {
+  const cause = new Error(code) as Error & { code: string };
+  cause.code = code;
+  return new TypeError("fetch failed", { cause });
+}
+
 describe("web SSRF policy", () => {
   it.each([
     "http://localhost/x",
@@ -428,6 +435,80 @@ describe("web SSRF policy", () => {
     ).rejects.toThrow();
     expect(destroyCalled).toBe(true);
     expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it("retries once after a transient connect failure, then succeeds", async () => {
+    let calls = 0;
+    const fetchMock: typeof fetch = async () => {
+      calls += 1;
+      if (calls === 1) throw fetchFailed("UND_ERR_CONNECT_TIMEOUT");
+      return new Response("<html><title>Ok</title><body>hello</body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    };
+
+    const result = await fetchSafeWebText("https://example.test/retry", {
+      fetch: fetchMock,
+      resolveHostname: publicResolver,
+    });
+
+    expect(result.body).toContain("hello");
+    expect(calls).toBe(2);
+  });
+
+  it("gives up after one retry and reports the undici cause code", async () => {
+    let calls = 0;
+    const fetchMock: typeof fetch = async () => {
+      calls += 1;
+      throw fetchFailed("UND_ERR_CONNECT_TIMEOUT");
+    };
+
+    await expect(
+      fetchSafeWebText("https://example.test/retry-twice", {
+        fetch: fetchMock,
+        resolveHostname: publicResolver,
+      }),
+    ).rejects.toThrow("fetch failed (UND_ERR_CONNECT_TIMEOUT)");
+    expect(calls).toBe(2);
+  });
+
+  it("does not retry a non-transient fetch failure", async () => {
+    let calls = 0;
+    const fetchMock: typeof fetch = async () => {
+      calls += 1;
+      throw fetchFailed("UND_ERR_HEADERS_TIMEOUT");
+    };
+
+    await expect(
+      fetchSafeWebText("https://example.test/no-retry", {
+        fetch: fetchMock,
+        resolveHostname: publicResolver,
+      }),
+    ).rejects.toThrow("fetch failed (UND_ERR_HEADERS_TIMEOUT)");
+    expect(calls).toBe(1);
+  });
+
+  it("does not retry once the caller's signal has aborted", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const fetchMock: typeof fetch = async () => {
+      calls += 1;
+      // Simulate the caller giving up mid-request (e.g. the user cancelled),
+      // after this attempt's promise already has a rejection handler attached.
+      await Promise.resolve();
+      controller.abort();
+      throw fetchFailed("UND_ERR_CONNECT_TIMEOUT");
+    };
+
+    await expect(
+      fetchSafeWebText("https://example.test/aborted", {
+        fetch: fetchMock,
+        resolveHostname: publicResolver,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow();
+    expect(calls).toBe(1);
   });
 
   it("aborts stalled DNS under the shared deadline", async () => {

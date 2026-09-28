@@ -16,6 +16,7 @@ import {
   pauseRunForTakeover,
   resumeAskWithComposerTextInTransaction,
   rewindThread,
+  runDurationStart,
   sendUserMessage,
   startInboundRoutineRuns,
 } from "./events.js";
@@ -79,6 +80,28 @@ describe("finalizeRun", () => {
       ),
     ).toEqual([blocks[0], blocks[1], { ...blocks[2], durationMs: 103_000 }]);
     expect(completedRunBlocks(blocks, null, new Date())).toBe(blocks);
+  });
+
+  it("measures duration from the current attempt's start, not the run's first start", () => {
+    const blocks = [{ kind: "steps" as const, steps: [{ label: "Run tests", count: 1 }] }];
+    const completedAt = new Date("2026-09-02T12:00:30.000Z");
+    // The run first started a day earlier; it paused on an ask_user question and the current
+    // attempt only picked back up 30s before completion.
+    const run = { startedAt: new Date("2026-09-01T12:00:00.000Z") };
+    const attempt = { startedAt: new Date("2026-09-02T12:00:00.000Z") };
+
+    const durationStartedAt = runDurationStart(run, attempt);
+
+    expect(completedRunBlocks(blocks, durationStartedAt, completedAt)).toEqual([
+      { ...blocks[0], durationMs: 30_000 },
+    ]);
+  });
+
+  it("falls back to the run's start when no attempt timing is available", () => {
+    const run = { startedAt: new Date("2026-09-01T12:00:00.000Z") };
+
+    expect(runDurationStart(run, null)).toEqual(run.startedAt);
+    expect(runDurationStart(null, null)).toBeNull();
   });
 
   it("retries a transaction conflict without duplicating the terminal event or notification", async () => {

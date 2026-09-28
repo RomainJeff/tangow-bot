@@ -224,6 +224,30 @@ export function reduceLiveMessageBlocks(
 ): MessageBlock[] {
   const tail = blocks.at(-1);
   const segments = tail?.kind === "progress" ? blocks.slice(0, -1) : blocks;
+  if (update.type === "progress" && update.payload?.activity === true) {
+    // An activity line ("Checking calendar") is status, not text: it never overwrites the
+    // narration the model wrote before the tool call, which stays on screen for the rest of
+    // the run. An empty activity line clears the status only.
+    let kept = segments;
+    if (tail?.kind === "progress" && tail.activity !== true) {
+      kept = appendTextSegment(kept, tail.text);
+      for (const name of tail.pendingToolNames ?? []) kept = appendToolCallSegment(kept, name);
+    }
+    const activityText = String(update.payload.text ?? "");
+    const pendingToolNames =
+      tail?.kind === "progress" && tail.activity === true ? (tail.pendingToolNames ?? []) : [];
+    return activityText
+      ? [
+          ...kept,
+          {
+            kind: "progress",
+            text: activityText,
+            activity: true as const,
+            ...(pendingToolNames.length > 0 ? { pendingToolNames } : {}),
+          },
+        ]
+      : [...kept];
+  }
   const priorText = liveMessageText(blocks);
   const flushedLength =
     tail?.kind === "progress" ? priorText.length - tail.text.length : priorText.length;
@@ -307,6 +331,17 @@ const SENTENCE_END_RE = /[.!?]["'”’)\]]*\s*$/;
 /** True once `text` ends at a sentence boundary (or is empty) — safe to flush without cutting a clause. */
 export function endsSentence(text: string): boolean {
   return text.trim() === "" || SENTENCE_END_RE.test(text);
+}
+
+/**
+ * Joins the text of two model turns that a tool call separated. Each turn is
+ * written as if it stood alone, so "…famille de 5." then "Les moteurs…" would
+ * glue into "5.Les moteurs"; a paragraph break goes between them unless the
+ * join already has whitespace.
+ */
+export function joinTurnText(left: string, right: string): string {
+  if (!left || !right || /\s$/.test(left) || /^\s/.test(right)) return left + right;
+  return `${left}\n\n${right}`;
 }
 
 export function appendTextSegment(segments: readonly MessageBlock[], text: string): MessageBlock[] {
