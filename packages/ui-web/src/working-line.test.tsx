@@ -19,6 +19,21 @@ describe("WorkingLine", () => {
     expect(html).toContain("w-message");
   });
 
+  it("cuts a long label with an ellipsis instead of widening the page", () => {
+    const html = renderToString(
+      <WorkingLine
+        avatar={<span>avatar</span>}
+        label={`Searching the web: ${"Club Med OR ".repeat(20)}`}
+      />,
+    );
+    // The root must be allowed to shrink inside a flex row, or `truncate` never applies.
+    expect(html).toMatch(/data-slot="working-line"[^>]*class="[^"]*min-w-0[^"]*max-w-full/);
+    expect(html).toMatch(/class="[^"]*min-w-0 truncate[^"]*"/);
+    expect(html).toMatch(
+      /class="shrink-0 [^"]*"[^>]*data-slot="working-line-elapsed"|data-slot="working-line-elapsed"[^>]*class="shrink-0/,
+    );
+  });
+
   it("skips the avatar column entirely when there is no avatar", () => {
     const html = renderToString(<WorkingLine label="Reconnecting" />);
     expect(html).not.toContain("w-message");

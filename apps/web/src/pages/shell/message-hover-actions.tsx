@@ -1,72 +1,56 @@
-import { Trans, useLingui } from "@lingui/react/macro";
+import { useLingui } from "@lingui/react/macro";
 import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
 import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@rakazo/contracts";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  HoverPill,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@rakazo/ui-web";
-import { Copy, MoreHorizontal, Pencil, Reply, Smile, Square, Volume2 } from "lucide-react";
+import { HoverPill, Popover, PopoverContent, PopoverTrigger } from "@rakazo/ui-web";
+import { Copy, Pencil, Reply, Smile, Square, Volume2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { useState } from "react";
-import { copyableMessageText } from "../../lib/message-text";
+import {
+  canEditAndResendMessage,
+  canSpeakMessage,
+  copyMessageToClipboard,
+} from "./message-actions";
+
+const iconClass =
+  "grid size-hover-icon shrink-0 place-items-center rounded-full text-muted-foreground duration-(--duration-hover) ease-quiet rk-press-round hover:bg-accent hover:text-foreground";
 
 export function MessageHoverActions({
   message,
-  revealed,
-  side,
   onReply,
-  onEdit,
   onReact,
   voiceReady,
   speaking,
   onSpeak,
+  time,
 }: {
   message: ThreadMessage;
-  /** Force the pill open on a touch tap, which has no hover to reveal it. */
-  revealed?: boolean;
-  side: "start" | "end";
+  /** The message's time, shown ahead of the actions. */
+  time?: ReactNode;
   onReply: (message: ThreadMessage) => void;
-  onEdit: (message: ThreadMessage) => void;
   onReact: (message: ThreadMessage, reaction: MessageReaction) => Promise<void>;
   voiceReady: boolean;
   speaking: boolean;
   onSpeak: () => void;
 }) {
   const { t } = useLingui();
-  const [moreOpen, setMoreOpen] = useState(false);
   const [reactionsOpen, setReactionsOpen] = useState(false);
 
   // Streaming progress bubbles keep hover free for selection / stop clicks.
   if (message.id.startsWith("progress:")) return null;
 
-  function copyMessage() {
-    const text = copyableMessageText(message);
-    if (!text || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(text).catch(() => undefined);
-  }
-
-  const canSpeak = voiceReady && message.blocks.some((block) => block.kind === "text");
-  const isUser = message.role === "user";
-  // A popover or menu can move focus into a portal outside the row, which
-  // would otherwise let the pill fade under the open surface it anchors. A
-  // touch tap reveals it the same way, since touch has no hover.
-  const pinned = moreOpen || reactionsOpen || revealed === true;
-  // Revealed by a touch tap, the buttons carry 44pt touch targets; on hover
-  // (fine pointer) they stay the compact pill size.
-  const iconClass = `grid ${
-    revealed ? "size-11" : "size-hover-icon"
-  } shrink-0 place-items-center rounded-full text-muted-foreground duration-(--duration-hover) ease-quiet rk-press-round hover:bg-accent hover:text-foreground`;
+  const canSpeak = canSpeakMessage(message, voiceReady);
+  // The reaction popover moves focus into a portal outside the row, which
+  // would otherwise let the pill fade under the open surface it anchors.
+  const pinned = reactionsOpen;
 
   return (
     <HoverPill
       data-testid="message-hover-rail"
       style={pinned ? { opacity: 1, pointerEvents: "auto" } : undefined}
     >
+      {time ? (
+        <span className="ps-2 pe-1 text-time tabular-nums text-muted-foreground">{time}</span>
+      ) : null}
       <div data-testid="message-hover-actions" className="flex items-center gap-0.5">
         <button
           type="button"
@@ -82,7 +66,7 @@ export function MessageHoverActions({
               <Smile size={15} strokeWidth={1.7} />
             </PopoverTrigger>
             <PopoverContent
-              align={side === "end" ? "start" : "end"}
+              align="start"
               className="w-auto flex-row gap-0 rounded-card p-1.5"
               aria-label={t`Reactions`}
             >
@@ -103,7 +87,12 @@ export function MessageHoverActions({
             </PopoverContent>
           </Popover>
         ) : null}
-        <button type="button" aria-label={t`Copy`} onClick={copyMessage} className={iconClass}>
+        <button
+          type="button"
+          aria-label={t`Copy`}
+          onClick={() => copyMessageToClipboard(message)}
+          className={iconClass}
+        >
           <Copy size={14} strokeWidth={1.7} />
         </button>
         {canSpeak ? (
@@ -120,20 +109,50 @@ export function MessageHoverActions({
             )}
           </button>
         ) : null}
-        {isUser ? (
-          <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
-            <DropdownMenuTrigger aria-label={t`More`} className={iconClass}>
-              <MoreHorizontal size={15} strokeWidth={1.7} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align={side === "end" ? "start" : "end"}>
-              <DropdownMenuItem data-testid="message-edit" onClick={() => onEdit(message)}>
-                <Pencil size={15} />
-                <Trans>Edit and resend</Trans>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
       </div>
     </HoverPill>
+  );
+}
+
+/**
+ * Your own message's actions, under its bubble on hover or keyboard focus:
+ * Edit and resend, then Copy. Bare icons, no pill — nothing to reply or react
+ * to on what you said yourself. Floats below the row (`top-full`) so it never
+ * moves the thread; the row's `hover:z-20` keeps it above the next message.
+ */
+export function UserMessageActions({
+  message,
+  onEdit,
+}: {
+  message: ThreadMessage;
+  onEdit: (message: ThreadMessage) => void;
+}) {
+  const { t } = useLingui();
+  if (message.id.startsWith("progress:")) return null;
+  return (
+    <div
+      data-testid="message-user-actions"
+      className="pointer-events-none absolute end-0 top-full z-10 flex items-center gap-0.5 opacity-0 transition-opacity duration-(--duration-hover) ease-quiet group-hover/message:pointer-events-auto group-hover/message:opacity-100 group-has-[:focus-visible]/message:pointer-events-auto group-has-[:focus-visible]/message:opacity-100"
+    >
+      {canEditAndResendMessage(message) ? (
+        <button
+          type="button"
+          data-testid="message-edit"
+          aria-label={t`Edit and resend`}
+          onClick={() => onEdit(message)}
+          className={iconClass}
+        >
+          <Pencil size={14} strokeWidth={1.7} />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        aria-label={t`Copy`}
+        onClick={() => copyMessageToClipboard(message)}
+        className={iconClass}
+      >
+        <Copy size={14} strokeWidth={1.7} />
+      </button>
+    </div>
   );
 }

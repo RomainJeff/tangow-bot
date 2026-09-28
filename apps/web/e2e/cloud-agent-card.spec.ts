@@ -15,9 +15,11 @@ test("renders a compact cloud agent card from an emulator launch", async ({ page
 
   const card = page.getByTestId("cloud-agent-card");
   await expect(card).toBeVisible({ timeout: 60_000 });
-  await expect(card).toContainText(/running|finished|Add a README|launching|Cloud agent/i);
-  await expect(card).toContainText("finished", { timeout: 60_000 });
-  await expect(card).toContainText("Pull request");
+  await expect(card).toContainText(/running|Add a README|launching|Cloud agent/i);
+  // Once finished, the card shows no status word at all (spec A8b) — "Pull
+  // request" appearing (replacing "running"/no meta yet) is the finished signal.
+  await expect(card).toContainText("Pull request", { timeout: 60_000 });
+  await expect(card).not.toContainText(/running|failed|cancelled/i);
   await expect(card.locator("..")).toHaveAttribute(
     "href",
     "https://github.com/example/demo/pull/1",

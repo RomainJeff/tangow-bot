@@ -163,14 +163,16 @@ test("the thread reads as names, prose and asides", async ({ page }, testInfo) =
   const reply = transcript.locator('[data-message-id="quiet-reply"]');
   await expect(reply).toBeVisible({ timeout: 20_000 });
 
-  // A bot speaks as a name and a time above unframed prose.
+  // Mono (single-bot) thread: a bot message carries no per-message name or
+  // avatar any more — the bot's identity lives in the header (D2-a) — but its
+  // prose is now a `muted` bubble, revealing its time on hover instead of a
+  // permanent clock.
   const row = reply.locator('[data-slot="message-row"]');
   await expect(row).toBeVisible();
-  await expect(row.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
-  await expect(row.locator('[data-slot="message-row-time"] time')).toHaveText(/\d/);
+  await expect(row.locator('[data-slot="message-row-author"]')).toHaveCount(0);
   const prose = reply.getByTestId("message-bot-bubble");
-  await expect(prose).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-  await expect(prose).toHaveCSS("border-top-width", "0px");
+  await expect(prose).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(reply.getByTestId("message-hover-time")).toHaveCount(1);
   // Figures line up in a markdown table, and the `---:` column reads from the end.
   const revenue = prose.locator("td").nth(1);
   await expect(revenue).toHaveCSS("font-variant-numeric", "tabular-nums");
@@ -219,9 +221,10 @@ test("the thread reads as names, prose and asides", async ({ page }, testInfo) =
   await expect(handoff.getByTestId("message-hover-time")).toHaveCount(0);
   await expectCentered(handoff.locator('[data-slot="interstitial"]'));
 
-  // A message that says something and adds a note keeps its author row.
+  // A message that says something and adds a note is still a normal row —
+  // mono carries no per-message author any more, but its text is a bubble.
   const note = transcript.locator('[data-message-id="quiet-note"]');
-  await expect(note.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
+  await expect(note.locator('[data-slot="message-row-author"]')).toHaveCount(0);
   await expect(note).toContainText("I stopped there.");
   await expect(note).toContainText("Run stopped by you");
 

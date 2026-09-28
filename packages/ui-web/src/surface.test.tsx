@@ -25,4 +25,18 @@ describe("Surface", () => {
     const html = renderToString(<Surface as="section">table</Surface>);
     expect(html).toContain("<section");
   });
+
+  it("trades the hairline for the outline edge when outlined", () => {
+    const html = renderToString(<Surface variant="outlined">task</Surface>);
+    expect(html).toContain('data-variant="outlined"');
+    expect(html).toContain("border-outline");
+    expect(html).not.toContain("border-border");
+  });
+
+  it("keeps the hairline by default", () => {
+    const html = renderToString(<Surface>card</Surface>);
+    expect(html).toContain('data-variant="default"');
+    expect(html).toContain("border-border");
+    expect(html).not.toContain("border-outline");
+  });
 });

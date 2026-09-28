@@ -181,6 +181,12 @@
 .rk-chat-markdown td {
   padding: 9px 12px;
   text-align: start;
+  /* A floor so a many-column table (e.g. 6 columns in a 390px bubble) genuinely
+     overflows and scrolls sideways (the table's own `overflow-x: auto` above)
+     instead of the browser's table auto-layout shrinking every column down to
+     fit the bubble first — which, combined with `overflow-wrap`, is what was
+     collapsing a column to one letter per line. */
+  min-width: 6.5em;
   /* Not the container's `anywhere`: its break opportunities count toward
      min-content, so columns collapse to 1ch and the table never overflows. */
   overflow-wrap: break-word;
@@ -197,6 +203,37 @@
 .rk-chat-markdown td {
   border-block-start: 1px solid var(--border);
   font-variant-numeric: tabular-nums;
+}
+
+/* Markdown inside a bot bubble (`[data-slot="message-row-bubble"]`, see
+   `message-view.tsx` / `PeerMessagesOverlay.tsx`): no internal element may
+   reuse the bubble's own `muted` fill, since `muted` and `secondary` share a
+   value with it. Code sits on `background` instead, and a table drops its
+   surface fill and runs its hairlines edge to edge of the bubble (negative
+   inline margin cancels the bubble's own 14px padding, then the cells re-add
+   it) so a wide table can scroll horizontally without widening the bubble.
+   Markdown outside a bubble (a subagent `Surface`, `FramedBlock`, an artifact
+   preview) is untouched — this selector never matches there. */
+[data-slot="message-row-bubble"] .rk-chat-markdown code {
+  background: var(--background);
+}
+
+[data-slot="message-row-bubble"] .rk-chat-markdown pre {
+  background: var(--background);
+}
+
+[data-slot="message-row-bubble"] .rk-chat-markdown table {
+  width: calc(100% + 28px);
+  max-width: calc(100% + 28px);
+  margin-inline: -14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+[data-slot="message-row-bubble"] .rk-chat-markdown th,
+[data-slot="message-row-bubble"] .rk-chat-markdown td {
+  padding-inline: 14px;
 }
 
 /* mdast carries a column's markdown alignment as a presentational attribute;

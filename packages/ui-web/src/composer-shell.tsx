@@ -2,65 +2,95 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { forwardRef } from "react";
 import { cn } from "./lib/utils.js";
 
-export type ComposerState = "idle" | "typing" | "dictating" | "speaking" | "working";
+export type ComposerState = "idle" | "typing" | "dictating" | "speaking";
 
 const BAR_DELAYS_MS = [0, 140, 280, 420];
-const DOT_DELAYS_MS = [0, 160, 320];
 
 export interface ComposerShellProps extends Omit<ComponentPropsWithoutRef<"div">, "children"> {
-  /** A mention chip, or the avatar of the bot that is speaking. */
+  /** The attach button — the capsule's leading edge, before any chip. */
+  attach?: ReactNode;
+  /** A mention/skill chip, or the avatar of the bot that is speaking. */
   leading?: ReactNode;
   /** The field itself. */
   children: ReactNode;
-  /** `roundIcon` buttons: attach, dictate, send, stop. */
+  /** `roundIcon` buttons after the field: voice, then send / stop. */
   trailing?: ReactNode;
+  /** Pending attachments, or rewind artifacts — rendered above the input line. */
+  attachments?: ReactNode;
   state?: ComposerState;
+  /**
+   * Dictation mode's own row, under the field: × on the left, the waveform in
+   * the middle (this component's own four bars), then this content on the
+   * right (the ✓ disc, plus Stop when a reply is running). Only drawn while
+   * `state="dictating"`.
+   */
+  dictationCancel?: ReactNode;
+  dictationConfirm?: ReactNode;
 }
 
 /** The capsule at the bottom of the thread — the one elevation of the screen. */
 export const ComposerShell = forwardRef<HTMLDivElement, ComposerShellProps>(function ComposerShell(
-  { leading, children, trailing, state = "idle", className, ...props },
+  {
+    attach,
+    leading,
+    children,
+    trailing,
+    attachments,
+    state = "idle",
+    dictationCancel,
+    dictationConfirm,
+    className,
+    ...props
+  },
   ref,
 ) {
+  const dictating = state === "dictating";
   return (
     <div
       ref={ref}
       data-slot="composer-shell"
       data-state={state}
       className={cn(
-        "flex items-center gap-2.5 rounded-composer bg-surface py-1.75 pe-1.75 shadow-composer transition-[box-shadow,border-color] duration-(--duration-hover) ease-quiet focus-within:ring-1 focus-within:ring-border",
-        leading ? "ps-2.5" : "ps-4",
+        "flex min-h-12 flex-col justify-end gap-1.5 rounded-composer bg-surface p-1.75 motion-safe:transition-shadow motion-safe:duration-(--duration-hover) motion-safe:ease-quiet",
+        dictating
+          ? "shadow-none ring-2 ring-inset ring-foreground"
+          : "shadow-composer-rest focus-within:shadow-composer-focus",
         className,
       )}
       {...props}
     >
-      {leading}
-      {state === "dictating" ? (
-        <span aria-hidden="true" data-slot="composer-dictating" className="flex items-end gap-0.75">
-          {BAR_DELAYS_MS.map((delay) => (
-            <span
-              key={delay}
-              className="rk-bar h-3.5 w-0.75 rounded-full bg-foreground"
-              style={{ animationDelay: `${delay}ms` }}
-            />
-          ))}
-        </span>
+      {attachments ? (
+        <div data-slot="composer-attachments" className="flex flex-wrap gap-2 px-0.5 pt-0.5">
+          {attachments}
+        </div>
       ) : null}
-      {state === "working" ? (
-        <span aria-hidden="true" data-slot="composer-working" className="flex items-center gap-1">
-          {DOT_DELAYS_MS.map((delay) => (
-            <span
-              key={delay}
-              className="rk-dot size-1 rounded-full bg-foreground"
-              style={{ animationDelay: `${delay}ms` }}
-            />
-          ))}
-        </span>
-      ) : null}
-      <div data-slot="composer-shell-field" className="min-w-0 flex-1">
-        {children}
+      <div className="flex items-end gap-2">
+        {attach}
+        {leading}
+        <div data-slot="composer-shell-field" className="min-w-0 flex-1 px-1">
+          {children}
+        </div>
+        {trailing}
       </div>
-      {trailing}
+      {dictating && (dictationCancel || dictationConfirm) ? (
+        <div data-slot="composer-dictation-controls" className="flex items-center gap-2">
+          {dictationCancel}
+          <span
+            aria-hidden="true"
+            data-slot="composer-dictating"
+            className="flex flex-1 items-center justify-center gap-0.75"
+          >
+            {BAR_DELAYS_MS.map((delay) => (
+              <span
+                key={delay}
+                className="rk-bar h-3.5 w-0.75 rounded-full bg-foreground"
+                style={{ animationDelay: `${delay}ms` }}
+              />
+            ))}
+          </span>
+          {dictationConfirm}
+        </div>
+      ) : null}
     </div>
   );
 });

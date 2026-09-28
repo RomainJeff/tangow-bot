@@ -2,8 +2,10 @@ import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
 import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
 import {
-  computeGroupContinuations,
+  computeMessageGroups,
+  foldRoutineRuns,
   isAsideOnlyMessage,
+  isNarrationMessage,
   isToolActivityBlock,
   latestActivityLabel,
   projectMessageReactions,
@@ -13,7 +15,11 @@ import {
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { cn } from "@rakazo/ui-web";
 import { ArrowDown } from "lucide-react";
-import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  RefObject,
+} from "react";
 import {
   Fragment,
   memo,
@@ -29,13 +35,32 @@ import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageTimeLabel } from "../../lib/message-time";
-import { transcriptIsNearEnd, transcriptMovedDown } from "../../lib/transcript-scroll";
-import { MessageHoverActions } from "./message-hover-actions";
+import {
+  initialMaxSeq,
+  isNewArrivalSeq,
+  transcriptIsNearEnd,
+  transcriptMovedDown,
+} from "../../lib/transcript-scroll";
+import { placeHoverPill } from "./hover-pill-placement";
+import { MessageActionsSheet } from "./message-actions-sheet";
+import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
 import { MessageView } from "./message-view";
+
+/** B1: hold this long on a touch bubble to open its action sheet. */
+const LONG_PRESS_MS = 450;
+/** The bubble settles (scale 0.96) this far into the hold, before the sheet opens. */
+const LONG_PRESS_SQUASH_MS = 150;
+/** More than this many px of movement during the hold cancels it — a scroll, not a press. */
+const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+/** A long press starts on the bubble itself, not its controls (a link still starts one — B3). */
+const LONG_PRESS_BUBBLE_SELECTOR = '[data-slot="message-row-bubble"],[data-slot="user-bubble"]';
+const LONG_PRESS_EXCLUDED_SELECTOR =
+  'button,[role="button"],[role="menuitem"],input,textarea,[contenteditable="true"],select';
 
 export const Transcript = memo(function Transcript({
   scrollRef,
   artifactTarget,
+  inGroup,
   messages,
   olderCursor,
   loadingOlder,
@@ -63,6 +88,10 @@ export const Transcript = memo(function Transcript({
 }: {
   scrollRef: RefObject<HTMLDivElement | null>;
   artifactTarget: ArtifactTarget;
+  /** True in a multi-bot (group) thread: messages group by author with a
+   * shared name/avatar. False in a single-bot (mono) thread: no message ever
+   * shows a name or avatar — the bot's identity lives in the header. */
+  inGroup: boolean;
   messages: ThreadMessage[];
   olderCursor: number | null;
   loadingOlder: boolean;
@@ -108,12 +137,12 @@ export const Transcript = memo(function Transcript({
   // prepends older rows: both would otherwise read as ids this instance has
   // never seen. The line is the highest `seq` present at mount — anything
   // beyond it is new; anything at or below it is history, however it got here.
-  const initialMaxSeq = useRef<number | null>(null);
-  if (initialMaxSeq.current === null) {
-    initialMaxSeq.current = messages.reduce((max, message) => Math.max(max, message.seq ?? 0), 0);
+  const maxSeqAtMount = useRef<number | null>(null);
+  if (maxSeqAtMount.current === null) {
+    maxSeqAtMount.current = initialMaxSeq(messages);
   }
   const isNewArrival = useCallback(
-    (message: ThreadMessage) => (message.seq ?? 0) > (initialMaxSeq.current ?? 0),
+    (message: ThreadMessage) => isNewArrivalSeq(message.seq, maxSeqAtMount.current ?? 0),
     [],
   );
   // Markers read the rendered rows: a hidden activity row must not swallow a
@@ -127,18 +156,75 @@ export const Transcript = memo(function Transcript({
       ),
     [messages, showSteps],
   );
-  const groupContinuations = useMemo(
+  // Rule R (packages/core/src/message-grouping.ts, docs/design-system.md §
+  // Grouping): an aside no longer stays transparent to grouping — it breaks
+  // the group and the next message reopens it. Only a message this version
+  // draws nothing for (a legacy `connect`/`reasoning` block) stays
+  // transparent, so it can never break a group either side of it.
+  const messageGroups = useMemo(
     () =>
-      computeGroupContinuations(reactionView.visibleMessages, {
-        // A message stays transparent to grouping when it renders no row of its
-        // own: an aside, or a message this version draws nothing for (a legacy
-        // `connect`/`reasoning` block). Either one must not break a group.
-        isTransparent: (m) =>
-          isAsideOnlyMessage(m.blocks.filter((b) => !isHiddenActivityBlock(b, showSteps))) ||
-          !hasRenderableBlock(m.blocks, showSteps),
+      computeMessageGroups(reactionView.visibleMessages, {
+        isTransparent: (m) => !hasRenderableBlock(m.blocks, showSteps),
       }),
     [reactionView.visibleMessages, showSteps],
   );
+  // Routine runs as log lines: a run keeps the message it then sent, and a
+  // bot's consecutive quiet runs with nothing between them share one line. A
+  // folded run or an absorbed handoff renders nothing (its role is "hidden").
+  const routineRoles = useMemo(
+    () => foldRoutineRuns(reactionView.visibleMessages),
+    [reactionView.visibleMessages],
+  );
+  const isRoutineRow = useCallback(
+    (message: ThreadMessage | undefined) => {
+      if (!message) return false;
+      const role = routineRoles.get(message.id);
+      return role?.kind === "run" || role?.kind === "group";
+    },
+    [routineRoles],
+  );
+  // Time markers down the rendered (non-hidden) rows: between two routine
+  // lines a marker only says the day, when it changes (routine lines carry
+  // their own time already) — everywhere else, the usual day-and-time label.
+  // `previousVisibleRow` is the row rendered just before each one (skipping
+  // anything hidden), used both for that and for the zero gap between two
+  // consecutive routine lines.
+  const { timeMarkers, previousVisibleRow } = useMemo(() => {
+    const markers = new Map<string, string>();
+    const before = new Map<string, ThreadMessage>();
+    let previousRow: ThreadMessage | undefined;
+    let previous: { createdAt?: string; routine: boolean } | undefined;
+    for (const message of reactionView.visibleMessages) {
+      const role = routineRoles.get(message.id);
+      if (role?.kind === "hidden") continue;
+      const routine = role?.kind === "run" || role?.kind === "group";
+      // A group line stands for a fold of earlier runs: its marker is about
+      // when that stretch started (the fold's first run), not this message's
+      // own timestamp (its last, folded run).
+      const at = role?.kind === "group" ? role.runs[0]?.createdAt : message.createdAt;
+      if (at) {
+        const shows =
+          routine && previous?.routine
+            ? new Date(previous.createdAt ?? at).toDateString() !== new Date(at).toDateString()
+            : showsTimeMarker(previous?.createdAt, at);
+        if (shows) {
+          markers.set(
+            message.id,
+            threadTimeMarkerLabel(at, {
+              locale: i18n.locale || "en",
+              today: t`Today`,
+              yesterday: t`Yesterday`,
+              withTime: !routine,
+            }),
+          );
+        }
+      }
+      previous = { createdAt: at ?? previous?.createdAt, routine };
+      if (previousRow) before.set(message.id, previousRow);
+      previousRow = message;
+    }
+    return { timeMarkers: markers, previousVisibleRow: before };
+  }, [reactionView.visibleMessages, routineRoles, t]);
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
   const workingFallback = `${
     workingBotName != null && workingBotName !== ""
@@ -213,50 +299,120 @@ export const Transcript = memo(function Transcript({
     [],
   );
 
-  // Touch has no hover to reveal a message's action pill, so a tap toggles it.
-  // This fires only for a touch pointer; desktop keeps the CSS hover path.
-  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
-  const tapStart = useRef<{ x: number; y: number } | null>(null);
-  const markTapStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    tapStart.current =
-      event.pointerType === "touch" ? { x: event.clientX, y: event.clientY } : null;
+  // B1-B4: a touch long press on a message bubble opens its action sheet —
+  // the pill itself never appears on touch (no hover to reveal it with;
+  // mouse and keyboard keep the existing hover/focus pill, untouched below).
+  const [pressingMessageId, setPressingMessageId] = useState<string | null>(null);
+  const [sheetMessage, setSheetMessage] = useState<ThreadMessage | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const pressStart = useRef<{ id: string; pointerId: number; x: number; y: number } | null>(null);
+  const squashTimer = useRef<number | undefined>(undefined);
+  const openTimer = useRef<number | undefined>(undefined);
+  // Set once the hold opens the sheet, so the click the browser still fires
+  // once the finger lifts (even over a link) is swallowed instead of acting.
+  const suppressClickForId = useRef<string | null>(null);
+
+  const clearPressTimers = useCallback(() => {
+    window.clearTimeout(squashTimer.current);
+    window.clearTimeout(openTimer.current);
+    squashTimer.current = undefined;
+    openTimer.current = undefined;
   }, []);
-  const revealOnTap = useCallback((event: ReactPointerEvent<HTMLDivElement>, messageId: string) => {
-    if (event.pointerType !== "touch") return;
-    // A drag (a scroll gesture also ends in a pointerup on the row) is not a tap.
-    const start = tapStart.current;
-    tapStart.current = null;
-    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) return;
-    const target = event.target as HTMLElement | null;
-    // A tap on a link, a control, the pill or the field belongs to that element.
-    if (
-      target?.closest(
-        'a,button,[role="button"],[role="menuitem"],input,textarea,[contenteditable="true"],[data-slot="hover-pill"]',
-      )
-    )
-      return;
-    // A tap that selected text is a selection, not a reveal.
-    const selection = window.getSelection();
-    if (selection && !selection.isCollapsed) return;
-    setActiveMessageId((current) => (current === messageId ? null : messageId));
-  }, []);
-  // Dismiss the revealed pill on a tap outside its row, or on any scroll.
-  useEffect(() => {
-    if (activeMessageId === null) return;
-    const dismissOutside = (event: Event) => {
+
+  const cancelPress = useCallback(() => {
+    clearPressTimers();
+    pressStart.current = null;
+    setPressingMessageId(null);
+  }, [clearPressTimers]);
+
+  const onBubblePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>, message: ThreadMessage) => {
+      // A second finger never starts, resets or cancels the first one's press.
+      if (pressStart.current && pressStart.current.pointerId !== event.pointerId) {
+        cancelPress();
+        return;
+      }
+      // Each new touch starts fresh: a suppression left over from a previous
+      // long press must never swallow an unrelated, later, genuine tap.
+      suppressClickForId.current = null;
+      if (event.pointerType !== "touch") return;
+      // A message still being written has no actions yet (as on hover).
+      if (message.id.startsWith("progress:")) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest(`[data-message-id="${CSS.escape(activeMessageId)}"]`)) return;
-      setActiveMessageId(null);
-    };
-    const dismiss = () => setActiveMessageId(null);
-    document.addEventListener("pointerdown", dismissOutside, true);
+      if (target?.closest(LONG_PRESS_EXCLUDED_SELECTOR)) return;
+      if (!target?.closest(LONG_PRESS_BUBBLE_SELECTOR)) return;
+      clearPressTimers();
+      pressStart.current = {
+        id: message.id,
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+      };
+      squashTimer.current = window.setTimeout(() => {
+        setPressingMessageId(message.id);
+      }, LONG_PRESS_SQUASH_MS);
+      openTimer.current = window.setTimeout(() => {
+        pressStart.current = null;
+        setPressingMessageId(null);
+        suppressClickForId.current = message.id;
+        setSheetMessage(message);
+        setSheetOpen(true);
+        navigator.vibrate?.(10);
+      }, LONG_PRESS_MS);
+    },
+    [clearPressTimers, cancelPress],
+  );
+
+  const onBubblePointerEnd = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (pressStart.current && pressStart.current.pointerId !== event.pointerId) return;
+      cancelPress();
+    },
+    [cancelPress],
+  );
+
+  const onBubblePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const start = pressStart.current;
+      if (!start || start.pointerId !== event.pointerId) return;
+      if (
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) > LONG_PRESS_MOVE_TOLERANCE_PX
+      ) {
+        cancelPress();
+      }
+    },
+    [cancelPress],
+  );
+
+  // A link's click follows the pointerup that ended the long press that
+  // opened the sheet for it (B3): swallow that one click so it never navigates.
+  const onRowClickCapture = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>, messageId: string) => {
+      if (suppressClickForId.current !== messageId) return;
+      suppressClickForId.current = null;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  useEffect(() => cancelPress, [cancelPress]);
+  // A real scroll gesture, wherever it starts, is never a long press.
+  useEffect(() => {
     const scroller = scrollRef.current;
-    scroller?.addEventListener("scroll", dismiss, { passive: true });
-    return () => {
-      document.removeEventListener("pointerdown", dismissOutside, true);
-      scroller?.removeEventListener("scroll", dismiss);
+    scroller?.addEventListener("scroll", cancelPress, { passive: true });
+    return () => scroller?.removeEventListener("scroll", cancelPress);
+  }, [cancelPress, scrollRef]);
+  // Keyboard focus reveals a row's pill too, so it is placed on focus as on hover.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    const place = (event: FocusEvent) => {
+      const row = (event.target as Element | null)?.closest<HTMLElement>("[data-message-id]");
+      if (row) placeHoverPill(row);
     };
-  }, [activeMessageId, scrollRef]);
+    scroller?.addEventListener("focusin", place);
+    return () => scroller?.removeEventListener("focusin", place);
+  }, [scrollRef]);
 
   return (
     <div className="relative flex min-h-0 flex-1">
@@ -301,7 +457,7 @@ export const Transcript = memo(function Transcript({
         // px-3 / pb-8 keep a card's soft drop shadow (shadow-card reaches ~14px sideways and
         // ~26px down) from being clipped by this scroll container's overflow or hidden under
         // the rk-scroll scrollbar on the right.
-        className="rk-scroll flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto px-3 pt-5 pb-8 md:pt-6"
+        className="rk-scroll flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-3 pt-5 pb-8 md:pt-6"
       >
         {olderCursor != null ? (
           <button
@@ -314,6 +470,10 @@ export const Transcript = memo(function Transcript({
           </button>
         ) : null}
         {reactionView.visibleMessages.map((message, index) => {
+          // Drawn by another line: a folded routine run, or the handoff a run
+          // sent, absorbed into that run's own line. Renders nothing.
+          const routineRole = routineRoles.get(message.id);
+          if (routineRole?.kind === "hidden") return null;
           const chromeBlocks = message.blocks.filter(
             (block) => !isHiddenActivityBlock(block, showSteps),
           );
@@ -325,19 +485,31 @@ export const Transcript = memo(function Transcript({
           const chrome: "row" | "aside" = isAsideOnlyMessage(chromeBlocks) ? "aside" : "row";
           const rewound = rewindFromSeq !== null && (message.seq ?? 0) >= rewindFromSeq;
           const messageReactions = reactionView.reactions.get(message.id);
-          const timeMarker = showsTimeMarker(
-            reactionView.visibleMessages[index - 1]?.createdAt,
-            message.createdAt,
-          )
-            ? threadTimeMarkerLabel(message.createdAt, {
-                locale: i18n.locale || "en",
-                today: t`Today`,
-                yesterday: t`Yesterday`,
-              })
-            : "";
-          const continued = groupContinuations[index] === true;
-          const prev = reactionView.visibleMessages[index - 1];
-          const tightenedUser = message.role === "user" && prev?.role === "user" && !timeMarker;
+          const timeMarker = timeMarkers.get(message.id) ?? "";
+          const group = messageGroups[index]!;
+          const prevMessage = reactionView.visibleMessages[index - 1];
+          const prevChrome: "row" | "aside" | undefined = prevMessage
+            ? isAsideOnlyMessage(
+                prevMessage.blocks.filter((b) => !isHiddenActivityBlock(b, showSteps)),
+              )
+              ? "aside"
+              : "row"
+            : undefined;
+          // 14px between groups (the container's own `gap-3.5`) narrows to 3px
+          // within a group, to 0 between two consecutive asides, and to 0
+          // between two consecutive routine lines (they stack like a log) —
+          // unless a day marker sits between them, which keeps its own air.
+          const routineChain =
+            !timeMarker &&
+            isRoutineRow(message) &&
+            isRoutineRow(previousVisibleRow.get(message.id));
+          const spacingClass = routineChain
+            ? " -mt-3.5"
+            : !group.isFirstOfGroup
+              ? " -mt-2.75"
+              : chrome === "aside" && prevChrome === "aside"
+                ? " -mt-3.5"
+                : "";
           return (
             <Fragment key={message.id}>
               {timeMarker ? (
@@ -351,32 +523,27 @@ export const Transcript = memo(function Transcript({
               <div
                 data-message-id={message.id}
                 data-rewound={rewound ? "true" : undefined}
-                data-active={
-                  chrome === "row" && activeMessageId === message.id ? "true" : undefined
+                data-long-pressing={
+                  chrome === "row" && pressingMessageId === message.id ? "true" : undefined
                 }
-                onPointerDown={chrome === "row" ? markTapStart : undefined}
-                onPointerUp={
-                  chrome === "row" ? (event) => revealOnTap(event, message.id) : undefined
+                onPointerEnter={
+                  chrome === "row" ? (event) => placeHoverPill(event.currentTarget) : undefined
+                }
+                onPointerDown={
+                  chrome === "row" ? (event) => onBubblePointerDown(event, message) : undefined
+                }
+                onPointerMove={chrome === "row" ? onBubblePointerMove : undefined}
+                onPointerUp={chrome === "row" ? onBubblePointerEnd : undefined}
+                onPointerCancel={chrome === "row" ? onBubblePointerEnd : undefined}
+                onClickCapture={
+                  chrome === "row" ? (event) => onRowClickCapture(event, message.id) : undefined
                 }
                 className={`${
                   chrome === "row" ? "group group/message relative hover:z-20" : "relative py-0.5"
-                }${chrome === "row" && activeMessageId === message.id ? " z-20" : ""}${
-                  rewound ? " opacity-40" : ""
-                }${isNewArrival(message) ? " animate-arrive" : ""}${
-                  continued || tightenedUser ? " -mt-5" : ""
-                }`}
+                }${rewound ? " opacity-40" : ""}${
+                  isNewArrival(message) ? " animate-arrive" : ""
+                }${spacingClass}`}
               >
-                {/* A bot row carries its time beside the author; only the user
-                    bubble needs one on hover. */}
-                {chrome === "row" && message.role === "user" ? (
-                  <time
-                    dateTime={message.createdAt}
-                    data-testid="message-hover-time"
-                    className="pointer-events-none absolute top-1 start-0 z-10 text-time tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100 group-has-[[aria-expanded=true]]/message:opacity-100"
-                  >
-                    {messageTimeLabel(message.createdAt, i18n.locale)}
-                  </time>
-                ) : null}
                 <div
                   className={
                     chrome === "row"
@@ -388,8 +555,9 @@ export const Transcript = memo(function Transcript({
                     data-testid={chrome === "row" ? "message-bubble-frame" : undefined}
                     className={
                       chrome === "row"
-                        ? // The pill floats at the row's own top-end corner (absolute, `end-3`),
-                          // so both rows run the full column width. A user row right-aligns its
+                        ? // The pill floats in this frame: beside the bubble when there is
+                          // room (`placeHoverPill`), else at its top-end corner, so both
+                          // rows run the full column width. A user row right-aligns its
                           // bubble with `items-end` and caps it at 78% (`UserBubble`); the old
                           // `w-fit` collapsed to the left once the bubble reached that 78% cap,
                           // because fit-content resolves a percentage-capped child to full width.
@@ -399,13 +567,21 @@ export const Transcript = memo(function Transcript({
                         : undefined
                     }
                   >
-                    {chrome === "row" ? (
+                    {/* The pill is for a bot's message: your own gets Edit and Copy
+                        under it (below), and a routine line opens on a tap. */}
+                    {chrome === "row" && message.role !== "user" && !isRoutineRow(message) ? (
                       <MessageHoverActions
                         message={message}
-                        revealed={activeMessageId === message.id}
-                        side={message.role === "user" ? "start" : "end"}
+                        // No row carries a permanent clock: the time rides in the pill, next
+                        // to the bubble. A card shows its own time.
+                        time={
+                          isNarrationMessage(message) ? (
+                            <time dateTime={message.createdAt} data-testid="message-hover-time">
+                              {messageTimeLabel(message.createdAt, i18n.locale)}
+                            </time>
+                          ) : undefined
+                        }
                         onReply={onReply}
-                        onEdit={onEdit}
                         onReact={onReact}
                         voiceReady={voiceReady}
                         speaking={speakingMessageId === message.id}
@@ -416,7 +592,9 @@ export const Transcript = memo(function Transcript({
                       artifactTarget={artifactTarget}
                       chrome={chrome}
                       message={message}
-                      continued={continued}
+                      inGroup={inGroup}
+                      showAuthor={inGroup && group.isFirstOfGroup}
+                      showAvatar={inGroup && group.isLastOfGroup}
                       canAnswer={message.id === answerableAskMessageId}
                       onOpenBot={onOpenBot}
                       onOpenPeerMessages={onOpenPeerMessages}
@@ -438,6 +616,7 @@ export const Transcript = memo(function Transcript({
                       onRefresh={onRefresh}
                       onBotChanged={onBotChanged}
                       onAddRoutine={onAddRoutine}
+                      routineRole={routineRole}
                     />
                   </div>
                 </div>
@@ -459,6 +638,9 @@ export const Transcript = memo(function Transcript({
                       </span>
                     ))}
                   </div>
+                ) : null}
+                {chrome === "row" && message.role === "user" ? (
+                  <UserMessageActions message={message} onEdit={onEdit} />
                 ) : null}
               </div>
             </Fragment>
@@ -489,6 +671,17 @@ export const Transcript = memo(function Transcript({
       >
         <ArrowDown size={17} strokeWidth={1.8} />
       </button>
+      <MessageActionsSheet
+        message={sheetMessage}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        onReply={onReply}
+        onEdit={onEdit}
+        onReact={onReact}
+        voiceReady={voiceReady}
+        speaking={sheetMessage !== null && speakingMessageId === sheetMessage.id}
+        onSpeak={onSpeak}
+      />
     </div>
   );
 });

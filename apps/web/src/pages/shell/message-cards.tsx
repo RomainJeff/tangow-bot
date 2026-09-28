@@ -1,5 +1,4 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
 import type { MessageBlock } from "@rakazo/contracts";
 import { abortableDelay } from "@rakazo/core";
 import {
@@ -11,14 +10,13 @@ import {
   FramedBlock,
   Surface,
 } from "@rakazo/ui-web";
-import { Bell, Check, ChevronDown, Clock, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SuccessPop } from "../../components/ai/primitives";
 import { type ArtifactTarget, decodeArtifactBase64 } from "../../lib/artifact-open";
 import { chartViewport } from "../../lib/chart-viewport";
 import { connectMcpOauth } from "../../lib/mcp-connect";
 import { rpc } from "../../lib/rpc";
-import { formatRelativeTime } from "../ActivityList";
 
 export function ChoiceCard({
   botId,
@@ -551,127 +549,6 @@ export function ArtifactImage({
           </DialogContent>
         </Dialog>
       ) : null}
-    </div>
-  );
-}
-
-type RoutineRunBlock = Extract<MessageBlock, { kind: "routine_run" }>;
-
-const ROUTINE_STATE_ICON_SIZE = 14;
-
-function RoutineRunStatePill({ state }: { state: RoutineRunBlock["state"] }) {
-  if (state === "queued") {
-    return (
-      <span className="flex items-center gap-1.5 text-label text-muted-foreground">
-        <Clock size={ROUTINE_STATE_ICON_SIZE} strokeWidth={1.8} aria-hidden />
-        <Trans>Queued</Trans>
-      </span>
-    );
-  }
-  if (state === "running") {
-    return (
-      <span className="flex items-center gap-1.5 text-label text-foreground/80">
-        <span
-          aria-hidden
-          className="size-2 rounded-full bg-foreground/70 animate-pulse motion-reduce:animate-none"
-        />
-        <Trans>Running</Trans>
-      </span>
-    );
-  }
-  if (state === "failed") {
-    return (
-      <span className="flex items-center gap-1.5 text-label text-destructive">
-        <X size={ROUTINE_STATE_ICON_SIZE} strokeWidth={2} aria-hidden />
-        <Trans>Failed</Trans>
-      </span>
-    );
-  }
-  if (state === "cancelled") {
-    return (
-      <span className="flex items-center gap-1.5 text-label text-muted-foreground">
-        <Trans>Cancelled</Trans>
-      </span>
-    );
-  }
-  return (
-    <span className="flex items-center gap-1.5 text-label text-success">
-      <Check size={ROUTINE_STATE_ICON_SIZE} strokeWidth={2.2} aria-hidden />
-      <Trans>Completed</Trans>
-    </span>
-  );
-}
-
-/** Background-routine run card: a bot's own thread trace for a routine run, driven by
- * lifecycle state (never by free-form model text). Collapsed by default; expanded when the
- * routine's notify toggle is on (CA2/CA13). The digest renders as sanitised markdown with
- * remote images blocked (CA-R4/CA-R5/CA-R12) — never raw HTML, never live network loads. */
-export function RoutineRunCard({ block }: { block: RoutineRunBlock }) {
-  const { t } = useLingui();
-  const subscribed = block.notify === true;
-  const hasDigest = Boolean(block.digest?.trim());
-  const [expanded, setExpanded] = useState(subscribed);
-  const timestamp = block.endedAt ?? block.startedAt;
-
-  return (
-    <div className="flex justify-start">
-      <Surface data-testid="routine-run-card" className="w-[min(500px,100%)] px-4 py-3.5">
-        <div className="flex flex-wrap items-start gap-x-3 gap-y-1.5">
-          <span
-            className="min-w-0 flex-1 basis-48 text-author font-medium text-foreground"
-            dir="auto"
-          >
-            {block.routineName}
-          </span>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2.5">
-            {subscribed ? (
-              <span
-                role="img"
-                aria-label={t`Notifications on`}
-                className="flex items-center text-muted-foreground"
-              >
-                <Bell size={14} strokeWidth={1.8} aria-hidden />
-              </span>
-            ) : null}
-            <RoutineRunStatePill state={block.state} />
-            {timestamp ? (
-              <span className="text-meta text-muted-foreground">
-                {formatRelativeTime(timestamp)}
-              </span>
-            ) : null}
-            {hasDigest ? (
-              <button
-                type="button"
-                aria-expanded={expanded}
-                aria-label={expanded ? t`Hide details` : t`Show details`}
-                onClick={() => setExpanded((open) => !open)}
-                className="-m-2.5 rounded-full p-3.5 text-muted-foreground hover:bg-accent hover:text-foreground/75"
-              >
-                <ChevronDown
-                  size={16}
-                  strokeWidth={1.8}
-                  className={expanded ? "rotate-180 transition-transform" : "transition-transform"}
-                />
-              </button>
-            ) : null}
-          </div>
-        </div>
-        {block.headline ? (
-          <p className="mt-1.5 truncate text-meta text-muted-foreground" dir="auto">
-            {block.headline}
-          </p>
-        ) : null}
-        {expanded && hasDigest ? (
-          <div
-            className="rk-scroll mt-2.5 max-h-64 overflow-y-auto overflow-x-hidden rounded-row bg-muted px-3 py-2.5"
-            dir="auto"
-          >
-            <ChatMarkdown allowImages={false}>
-              {truncateMarkdownForRender(block.digest ?? "")}
-            </ChatMarkdown>
-          </div>
-        ) : null}
-      </Surface>
     </div>
   );
 }

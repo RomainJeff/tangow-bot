@@ -1,9 +1,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   Dictation,
+  dictationLangFor,
   MAX_TRANSCRIPTION_RESPONSE_BYTES,
   TRANSCRIPTION_RESPONSE_TIMEOUT_MS,
 } from "./dictation.js";
+
+describe("dictationLangFor", () => {
+  it("dictates in French with a locale the recognizer knows, never the browser's region glued on", () => {
+    const french = ["est-ce que ça marche quand je parle", "trouve-moi une raquette"];
+    expect(dictationLangFor(french, "en-US")).toBe("fr-FR");
+    expect(dictationLangFor(french, "en-GB", ["en-GB", "fr-CA"])).toBe("fr-CA");
+    expect(dictationLangFor(french, "en-US", ["en-US", "fr"])).toBe("fr-FR");
+  });
+
+  it("falls back to the browser's own language with no clear signal", () => {
+    expect(dictationLangFor(["ok"], "en-US")).toBe("en-US");
+    expect(dictationLangFor([], "en-US")).toBe("en-US");
+  });
+
+  it("keeps the browser's language as-is when it already matches the recent writing", () => {
+    expect(dictationLangFor(["can you check what is on my calendar for this week"], "en-US")).toBe(
+      "en-US",
+    );
+  });
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -76,6 +97,35 @@ describe("Dictation recorder fallback", () => {
 
     expect(track.stop).toHaveBeenCalledOnce();
     expect(started).not.toHaveBeenCalled();
+    expect(dictation.state.status).toBe("idle");
+  });
+
+  it("cancelling a hold recording once the mic is granted still releases the track (matches origin/main)", async () => {
+    const track = { stop: vi.fn() };
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) },
+      language: "en-US",
+    });
+    vi.stubGlobal(
+      "MediaRecorder",
+      class {
+        state = "inactive";
+        // No `onstop` handler at all — a cancel must not depend on it firing
+        // to release the mic.
+        start() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+        }
+      },
+    );
+
+    const dictation = new Dictation();
+    await dictation.listen({ mode: "hold", transcribe: true, onFinal: () => undefined });
+    dictation.stop("cancel");
+
+    expect(track.stop).toHaveBeenCalledOnce();
     expect(dictation.state.status).toBe("idle");
   });
 
@@ -535,3 +585,613 @@ describe("Dictation web speech", () => {
     expect(dictation.state.status).toBe("listening");
   });
 });
+
+describe("Dictation dictate mode", () => {
+  function fakeRecognitionCtor(instances: FakeRecognition[]) {
+    return class FakeRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "";
+      onresult: ((event: unknown) => void) | null = null;
+      onerror: ((event: { error?: string }) => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+      constructor() {
+        instances.push(this as unknown as FakeRecognition);
+      }
+    };
+  }
+
+  it("separates final from interim text and survives a natural restart (web speech)", async () => {
+    const instances: FakeRecognition[] = [];
+    vi.stubGlobal("window", { SpeechRecognition: fakeRecognitionCtor(instances) });
+    vi.stubGlobal("navigator", { language: "en-US" });
+
+    const dictation = new Dictation();
+    await dictation.listen({ mode: "dictate", onFinal: () => undefined });
+    const rec = instances[0];
+    rec?.onresult?.({
+      results: [
+        { isFinal: true, 0: { transcript: "Hello" } },
+        { isFinal: false, 0: { transcript: "wor" } },
+      ],
+    });
+    expect(dictation.state.transcript).toBe("Hello");
+    expect(dictation.state.interim).toBe("wor");
+
+    // iOS Web Speech naturally ends after ~3s of silence; dictate mode must
+    // restart (same instance, `.start()` called again) rather than exit
+    // (only ✓/×/forced-cancel do). The browser's new session starts its own
+    // `results` list over from empty, same as this fake.
+    rec?.onend?.();
+    expect(rec?.start).toHaveBeenCalledTimes(2);
+    expect(dictation.state.status).toBe("listening");
+    expect(dictation.state.transcript).toBe("Hello");
+    expect(dictation.state.interim).toBe("");
+
+    rec?.onresult?.({ results: [{ isFinal: true, 0: { transcript: "world" } }] });
+    expect(dictation.state.transcript).toBe("Hello world");
+    expect(dictation.state.interim).toBe("");
+  });
+
+  it("does not finish the session when the transcript is non-empty at a natural end", async () => {
+    // Endpoint mode finalizes on a quiet `onend` with text present; dictate
+    // mode must not — only stop() (×/✓/forced-cancel) ends the session.
+    const instances: FakeRecognition[] = [];
+    vi.stubGlobal("window", { SpeechRecognition: fakeRecognitionCtor(instances) });
+    vi.stubGlobal("navigator", { language: "en-US" });
+    const onFinal = vi.fn();
+
+    const dictation = new Dictation();
+    await dictation.listen({ mode: "dictate", onFinal });
+    const rec = instances[0];
+    rec?.onresult?.({ results: [{ isFinal: true, 0: { transcript: "hello" } }] });
+    rec?.onend?.();
+
+    expect(onFinal).not.toHaveBeenCalled();
+    expect(dictation.state.status).toBe("listening");
+  });
+
+  it("keeps listening across chunks and stops cleanly mid-chunk (recorder fallback)", async () => {
+    const tracks: Array<{ stop: () => void }> = [];
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => {
+          const track = { stop: vi.fn() };
+          tracks.push(track);
+          return { getTracks: () => [track] };
+        }),
+      },
+      language: "en-US",
+    });
+    let call = 0;
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      return Response.json({ text: `chunk${call}` });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const recorders: FakeRecorder[] = [];
+    class FakeRecorder {
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      constructor() {
+        recorders.push(this);
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        if (this.state === "inactive") return;
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
+
+    const dictation = new Dictation();
+    // The chunk timer itself isn't under test here (it's a plain `setTimeout`
+    // in `recordChunk`); each iteration below is driven explicitly by calling
+    // `stop()` on the recorder, standing in for that timer firing, so the
+    // loop only ever advances as far as this test lets it — never in a tight,
+    // unbounded microtask loop that could run away before an assertion gets
+    // a chance to end it.
+    const listening = dictation.listen({
+      mode: "dictate",
+      transcribe: true,
+      onFinal: () => undefined,
+    });
+    await vi.waitFor(() => expect(recorders).toHaveLength(1));
+    recorders[0]?.stop();
+    await vi.waitFor(() => expect(dictation.state.transcript).toBe("chunk1"));
+
+    await vi.waitFor(() => expect(recorders).toHaveLength(2));
+    recorders[1]?.stop();
+    await vi.waitFor(() => expect(dictation.state.transcript).toBe("chunk1 chunk2"));
+
+    // Stop mid-chunk (before the third recorder is told to stop): the
+    // in-flight recorder is torn down, its track released, and no further
+    // chunk is transcribed.
+    await vi.waitFor(() => expect(recorders).toHaveLength(3));
+    const callsBeforeStop = fetchMock.mock.calls.length;
+    dictation.stop("cancel");
+    await listening;
+
+    expect(dictation.state.status).toBe("idle");
+    expect(fetchMock.mock.calls.length).toBe(callsBeforeStop);
+    expect(tracks.at(-1)?.stop).toHaveBeenCalled();
+  });
+
+  it("stops recording without transcribing once the caller has stopped listening", async () => {
+    const track = { stop: vi.fn() };
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) },
+      language: "en-US",
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal(
+      "MediaRecorder",
+      class {
+        state = "inactive";
+        start() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+        }
+      },
+    );
+
+    const dictation = new Dictation();
+    const listening = dictation.listen({
+      mode: "dictate",
+      transcribe: true,
+      onFinal: () => undefined,
+    });
+    dictation.stop("cancel");
+    await listening;
+
+    expect(track.stop).toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(dictation.state.status).toBe("idle");
+  });
+
+  it("keeps recording the next chunk while the previous one is still transcribing, and appends in order", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })),
+      },
+      language: "en-US",
+    });
+    let resolveFirst!: (body: { text: string }) => void;
+    let call = 0;
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      if (call === 1) {
+        return new Promise<Response>((resolve) => {
+          resolveFirst = (body) => resolve(Response.json(body));
+        });
+      }
+      return Response.json({ text: "second" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const recorders: FakeRecorder[] = [];
+    class FakeRecorder {
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      constructor() {
+        recorders.push(this);
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        if (this.state === "inactive") return;
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
+
+    const dictation = new Dictation();
+    void dictation.listen({ mode: "dictate", transcribe: true, onFinal: () => undefined });
+    await vi.waitFor(() => expect(recorders).toHaveLength(1));
+    recorders[0]?.stop();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+
+    // The first chunk's request is still pending, yet capture already moved
+    // on to the next chunk instead of waiting on it.
+    await vi.waitFor(() => expect(recorders).toHaveLength(2));
+    expect(recorders[1]?.state).toBe("recording");
+    expect(dictation.state.transcript).toBe("");
+
+    recorders[1]?.stop();
+    // The second chunk's own request only starts once the chain reaches it —
+    // requests are transcribed in order — so nothing has appended yet.
+    expect(dictation.state.transcript).toBe("");
+    resolveFirst({ text: "first" });
+    await vi.waitFor(() => expect(dictation.state.transcript).toBe("first second"));
+  });
+
+  it("✓ waits for the last partial chunk instead of dropping it", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })),
+      },
+      language: "en-US",
+    });
+    let call = 0;
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      return Response.json({ text: `chunk${call}` });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const recorders: FakeRecorder[] = [];
+    class FakeRecorder {
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      constructor() {
+        recorders.push(this);
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        if (this.state === "inactive") return;
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
+
+    const dictation = new Dictation();
+    void dictation.listen({ mode: "dictate", transcribe: true, onFinal: () => undefined });
+    await vi.waitFor(() => expect(recorders).toHaveLength(1));
+    recorders[0]?.stop();
+    await vi.waitFor(() => expect(dictation.state.transcript).toBe("chunk1"));
+    await vi.waitFor(() => expect(recorders).toHaveLength(2));
+
+    // ✓ while the second chunk is still recording (its 4s timer hasn't fired):
+    // finishDictate stops it, transcribes it, and includes it in the result.
+    const finished = dictation.finishDictate();
+    expect(dictation.state.status).toBe("transcribing");
+    const text = await finished;
+
+    expect(text).toBe("chunk1 chunk2");
+    expect(recorders[1]?.state).toBe("inactive");
+    expect(dictation.state.status).toBe("idle");
+  });
+
+  it("× drops everything immediately, including a chunk transcription in flight", async () => {
+    const track = { stop: vi.fn() };
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) },
+      language: "en-US",
+    });
+    let resolveFetch!: (body: { text: string }) => void;
+    const fetchMock = vi.fn(
+      (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(Object.assign(new Error("Aborted"), { name: "AbortError" })),
+          );
+          resolveFetch = (body) => resolve(Response.json(body));
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const recorders: FakeRecorder[] = [];
+    class FakeRecorder {
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      constructor() {
+        recorders.push(this);
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        if (this.state === "inactive") return;
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
+
+    const dictation = new Dictation();
+    void dictation.listen({ mode: "dictate", transcribe: true, onFinal: () => undefined });
+    await vi.waitFor(() => expect(recorders).toHaveLength(1));
+    recorders[0]?.stop();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+
+    dictation.stop("cancel");
+    resolveFetch({ text: "too late" });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(dictation.state.status).toBe("idle");
+    expect(dictation.state.transcript).toBe("");
+    expect(track.stop).toHaveBeenCalled();
+  });
+
+  it("✓ keeps what was already transcribed when the last chunk fails", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })),
+      },
+      language: "en-US",
+    });
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call += 1;
+        return call === 1
+          ? Response.json({ text: "earlier" })
+          : new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
+      }),
+    );
+
+    const recorders: FakeRecorder[] = [];
+    class FakeRecorder {
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      constructor() {
+        recorders.push(this);
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        if (this.state === "inactive") return;
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
+
+    const dictation = new Dictation();
+    void dictation.listen({ mode: "dictate", transcribe: true, onFinal: () => undefined });
+    await vi.waitFor(() => expect(recorders).toHaveLength(1));
+    recorders[0]?.stop();
+    await vi.waitFor(() => expect(dictation.state.transcript).toBe("earlier"));
+    await vi.waitFor(() => expect(recorders).toHaveLength(2));
+
+    await expect(dictation.finishDictate()).resolves.toBe("earlier");
+    expect(dictation.state.status).toBe("idle");
+  });
+
+  it("a failed chunk transcription ends the whole session instead of looping", async () => {
+    const track = { stop: vi.fn() };
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) },
+      language: "en-US",
+    });
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ error: "Server error" }), { status: 502 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const recorders: FakeRecorder[] = [];
+    class FakeRecorder {
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      constructor() {
+        recorders.push(this);
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        if (this.state === "inactive") return;
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
+
+    const dictation = new Dictation();
+    void dictation.listen({ mode: "dictate", transcribe: true, onFinal: () => undefined });
+    await vi.waitFor(() => expect(recorders).toHaveLength(1));
+    recorders[0]?.stop();
+
+    await vi.waitFor(() => expect(dictation.state.status).toBe("idle"));
+    expect(dictation.state.error).toBeTruthy();
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    // The second chunk (started right after the first one's recorder
+    // stopped, before its transcription result was known) gets torn down
+    // too, and no third chunk ever starts.
+    expect(recorders).toHaveLength(2);
+    expect(recorders[1]?.state).toBe("inactive");
+  });
+
+  it("a cancel racing ✓ between the recorder's stop and its stop event doesn't hang finishDictate", async () => {
+    const track = { stop: vi.fn() };
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) },
+      language: "en-US",
+    });
+    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal(
+      "MediaRecorder",
+      class {
+        state = "inactive";
+        onstop: (() => void) | null = null;
+        start() {
+          this.state = "recording";
+        }
+        // Deliberately never calls `onstop` — the real event is
+        // asynchronous, and this is the window a cancel can land in.
+        stop() {
+          this.state = "inactive";
+        }
+      },
+    );
+
+    const dictation = new Dictation();
+    void dictation.listen({ mode: "dictate", transcribe: true, onFinal: () => undefined });
+    await vi.waitFor(() => expect(dictation.state.status).toBe("listening"));
+
+    const finished = dictation.finishDictate();
+    expect(dictation.state.status).toBe("transcribing");
+    dictation.stop("cancel");
+
+    await expect(finished).resolves.toBe("");
+    expect(dictation.state.status).toBe("idle");
+    expect(track.stop).toHaveBeenCalled();
+  });
+});
+
+describe("Dictation desktop engine preference", () => {
+  it("skips Web Speech and goes straight to the provider when preferTranscribe is set", async () => {
+    const started = vi.fn();
+    vi.stubGlobal("window", {
+      SpeechRecognition: class {
+        continuous = false;
+        interimResults = false;
+        lang = "";
+        onresult = null;
+        onerror = null;
+        onend = null;
+        start() {
+          started();
+        }
+        stop() {}
+        abort() {}
+      },
+    });
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })),
+      },
+      language: "en-US",
+    });
+    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal(
+      "MediaRecorder",
+      class {
+        state = "inactive";
+        start() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+        }
+      },
+    );
+
+    const dictation = new Dictation();
+    await dictation.listen({
+      mode: "dictate",
+      transcribe: true,
+      preferTranscribe: true,
+      onFinal: () => undefined,
+    });
+
+    expect(started).not.toHaveBeenCalled();
+    expect(dictation.state.status).toBe("listening");
+  });
+
+  it("falls back to the provider when Web Speech errors with network at start", async () => {
+    const instances: FakeRecognition[] = [];
+    class FakeRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "";
+      onresult: ((event: unknown) => void) | null = null;
+      onerror: ((event: { error?: string }) => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+      constructor() {
+        instances.push(this);
+      }
+    }
+    vi.stubGlobal("window", { SpeechRecognition: FakeRecognition });
+    const getUserMedia = vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] }));
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia },
+      language: "en-US",
+    });
+    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal(
+      "MediaRecorder",
+      class {
+        state = "inactive";
+        start() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+        }
+      },
+    );
+
+    const dictation = new Dictation();
+    void dictation.listen({ mode: "dictate", transcribe: true, onFinal: () => undefined });
+    await vi.waitFor(() => expect(instances).toHaveLength(1));
+    instances[0]?.onerror?.({ error: "network" });
+
+    // Falls through to the recorder fallback instead of failing outright.
+    await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+    expect(dictation.state.status).toBe("listening");
+    expect(dictation.state.error).toBeUndefined();
+  });
+
+  it("does not fall back once real speech has already been recognized", async () => {
+    const instances: FakeRecognition[] = [];
+    class FakeRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = "";
+      onresult: ((event: unknown) => void) | null = null;
+      onerror: ((event: { error?: string }) => void) | null = null;
+      onend: (() => void) | null = null;
+      start = vi.fn();
+      stop = vi.fn();
+      abort = vi.fn();
+      constructor() {
+        instances.push(this);
+      }
+    }
+    vi.stubGlobal("window", { SpeechRecognition: FakeRecognition });
+    vi.stubGlobal("navigator", { language: "en-US" });
+
+    const dictation = new Dictation();
+    await dictation.listen({ mode: "dictate", transcribe: true, onFinal: () => undefined });
+    const rec = instances[0];
+    rec?.onresult?.({ results: [{ isFinal: true, 0: { transcript: "hello" } }] });
+    rec?.onerror?.({ error: "network" });
+
+    expect(dictation.state.status).toBe("idle");
+    expect(dictation.state.error).toBe("Dictation failed: network");
+  });
+});
+
+interface FakeRecognition {
+  start: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
+  abort: ReturnType<typeof vi.fn>;
+  onresult: ((event: unknown) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+}

@@ -1,4 +1,6 @@
+import { ChevronDown } from "lucide-react";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { cn } from "./lib/utils.js";
 import { useElapsed } from "./use-elapsed.js";
 
@@ -11,27 +13,77 @@ export interface WorkingLineProps extends Omit<ComponentPropsWithoutRef<"div">, 
   startedAt?: number;
 }
 
-/** The only thing that moves while a bot works. */
+/**
+ * The only thing that moves while a bot works. A label too long for one line
+ * is cut with an ellipsis; a chevron then opens it whole, and the label itself
+ * is the toggle, so it needs no name of its own.
+ */
 export function WorkingLine({ avatar, label, startedAt, className, ...props }: WorkingLineProps) {
   const elapsed = useElapsed(startedAt);
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const [overflowing, setOverflowing] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    const element = labelRef.current;
+    if (!element || open) return;
+    const measure = () => setOverflowing(element.scrollWidth > element.clientWidth + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [label, open]);
+
+  const text = (
+    <span
+      ref={labelRef}
+      data-slot="working-line-label"
+      className={cn(
+        "min-w-0",
+        open ? "break-words" : "truncate",
+        "text-working text-muted-foreground",
+      )}
+    >
+      {label}
+    </span>
+  );
   return (
     <div
       data-slot="working-line"
       role="status"
-      className={cn("flex items-center gap-3.5", className)}
+      className={cn(
+        "flex min-w-0 max-w-full gap-3.5",
+        open ? "items-start" : "items-center",
+        className,
+      )}
       {...props}
     >
       {avatar ? <span className="rk-buzz w-message shrink-0">{avatar}</span> : null}
-      <span
-        data-slot="working-line-label"
-        className="min-w-0 truncate text-working text-muted-foreground"
-      >
-        {label}
-      </span>
+      {overflowing || open ? (
+        <button
+          type="button"
+          data-slot="working-line-toggle"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="flex min-w-0 items-start gap-1.5 text-start duration-(--duration-hover) ease-quiet hover:text-foreground"
+        >
+          {text}
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              "mt-1 size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-hover) ease-quiet",
+              open && "rotate-180",
+            )}
+          />
+        </button>
+      ) : (
+        text
+      )}
       <span
         aria-hidden="true"
         data-slot="working-line-elapsed"
-        className="font-mono text-mono text-muted-foreground tabular-nums"
+        className="shrink-0 font-mono text-mono text-muted-foreground tabular-nums"
       >
         {elapsed}
       </span>
