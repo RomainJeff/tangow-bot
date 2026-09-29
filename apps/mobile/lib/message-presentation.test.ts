@@ -45,6 +45,19 @@ describe("mobile message presentation", () => {
     ).toBe(false);
   });
 
+  it("keeps a takeover card visible with its steps hidden", () => {
+    const steps = { kind: "steps", steps: [{ label: "Use browser", count: 1 }] } as MessageBlock;
+    const computer = {
+      kind: "computer",
+      state: "Needs you",
+      text: "Sign in to continue",
+    } as MessageBlock;
+
+    expect(hasVisibleMessagePresentation([steps, computer])).toBe(true);
+    expect(visibleMessageBlocks([steps, computer])).toEqual([computer]);
+    expect(visibleMessageBlocks([steps, computer], true)).toEqual([steps, computer]);
+  });
+
   it("keeps steps-only messages visible when the setting is on", () => {
     const steps = [{ kind: "steps", steps: [{ label: "Read file", count: 1 }] }] as MessageBlock[];
 

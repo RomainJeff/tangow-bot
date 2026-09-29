@@ -359,6 +359,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Notification settings": "Настройки уведомлений",
   "Notifications silenced": "Уведомления отключены",
   "notifications silenced": "уведомления отключены",
+  Open: "Открыть",
   "Open computer": "Открыть компьютер",
   "Open computer →": "Открыть компьютер →",
   "OpenAI-compatible server URL": "URL-адрес сервера, совместимого с OpenAI",

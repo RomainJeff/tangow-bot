@@ -32,6 +32,7 @@ import {
   isSecretAskBlock,
   latestActivityLabel,
   latestAnswerableAskMessageId,
+  latestTakeoverMessageId,
   mentionChipKey,
   projectMessageReactions,
   type RoutineGroupRun,
@@ -221,6 +222,7 @@ type MessageChrome = "row" | "aside";
  * gesture only; these keep today's plain long-press wrapper. */
 const CARD_ONLY_BLOCK_KINDS = new Set<string>([
   "ask",
+  "computer",
   "handoff",
   "bot_message_sent",
   "bot_message_received",
@@ -1679,6 +1681,8 @@ function Thread() {
   }
 
   const answerableAskMessageId = latestAnswerableAskMessageId(snap);
+  // Liveness comes from the run, never from the card's own `state`.
+  const takeoverMessageId = latestTakeoverMessageId(snap);
   const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
   const liveMessages = useMemo(() => [...visibleMessages].reverse(), [visibleMessages]);
   liveMessagesRef.current = liveMessages;
@@ -1999,6 +2003,7 @@ function Thread() {
             : undefined
         }
         canAnswer={message.id === answerableAskMessageId}
+        takeoverLive={message.id === takeoverMessageId}
         onAnswer={answerMessage}
         onOpenBot={openBot}
         onPreviewMarkdown={setMarkdownPreview}
@@ -3246,6 +3251,7 @@ const MessageBubble = memo(function MessageBubble({
   members,
   replyPreview,
   canAnswer,
+  takeoverLive,
   onAnswer,
   onOpenBot,
   onPreviewMarkdown,
@@ -3261,6 +3267,8 @@ const MessageBubble = memo(function MessageBubble({
   members?: MobileSnapshot["members"];
   replyPreview?: MobileMessage;
   canAnswer: boolean;
+  /** This message is the takeover card of a run still waiting for the screen. */
+  takeoverLive: boolean;
   onAnswer: (message: MobileMessage, answer: string) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
@@ -3622,6 +3630,57 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
         ))}
+      </View>
+    );
+  }
+  const computerBlock = message.blocks.find(
+    (block): block is Extract<MessageBlock, { kind: "computer" }> => block.kind === "computer",
+  );
+  if (computerBlock) {
+    const steps = showSteps ? stepsBlocks(message.blocks) : [];
+    return (
+      <View style={{ gap: 8, width: "100%" }}>
+        {steps.map((block, index) => (
+          <AgentSteps
+            key={`${message.id}-steps-${index}`}
+            block={block}
+            live={message.id.startsWith("progress:")}
+          />
+        ))}
+        <FramedBlock
+          header={{ who: t("Computer"), dot: takeoverLive }}
+          question={<Text {...actionProps}>{computerBlock.text}</Text>}
+          answered={takeoverLive ? undefined : t("No longer active")}
+          actions={
+            takeoverLive ? (
+              <CapsuleButton
+                kind="primary"
+                height={sizes.mobileStack}
+                label={t("Open")}
+                accessibilityLabel={t("Open computer")}
+                icon={
+                  <NativeSymbol
+                    ios="desktopcomputer"
+                    android="desktop-outline"
+                    size={13}
+                    color={tokens.primaryForeground}
+                  />
+                }
+                accessibilityActions={actionProps.accessibilityActions}
+                onAccessibilityAction={actionProps.onAccessibilityAction}
+                onPress={() =>
+                  router.push({
+                    pathname: "/computer",
+                    params: {
+                      botId: cardBotId,
+                      name: memberName(members, cardBotId) ?? botName ?? t("Bot"),
+                    },
+                  })
+                }
+              />
+            ) : undefined
+          }
+        />
       </View>
     );
   }
