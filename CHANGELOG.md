@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-30
+
+#### Fixed
+
+- A bot no longer ends a task with only its step chips and no answer: it is prompted to reply, and if it still stays silent you get a short notice that it could not finish.
+- After you hand a bot's screen back (I'm done, Skip, or your control times out), the bot now remembers what it had already done and looks at the screen again before carrying on, instead of starting over, assuming the step is finished, or repeating its internal resume instructions to you.
+- A bot now hands you its screen only after its previous step has finished, so its Needs you card matches what the screen shows.
+- When you write to a bot while you hold its screen, it now looks at the screen before answering and leaves it with you until you press I'm done or Skip, instead of misreading your message or closing the screen you were using.
+- When you reopen a bot's screen after its task ends or its computer wakes, the browser is back on the pages it had open instead of a blank new tab.
+- Opening a bot's screen no longer fails now and then with "Bad Gateway" after a pause.
+
 ### 2026-09-28
 
 #### Changed
