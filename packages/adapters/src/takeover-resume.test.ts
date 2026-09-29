@@ -35,6 +35,7 @@ describe("takeoverResumePromptNote", () => {
       const note = takeoverResumePromptNote(outcome, "Enter the code");
       expect(note).toMatch(/observe/i);
       expect(note).toContain("Do not request takeover again");
+      expect(note).toMatch(/never quote, paraphrase or mention it to the user/);
     }
   });
 

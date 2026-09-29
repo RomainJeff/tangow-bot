@@ -37,6 +37,14 @@ function equalStackToken(expected: string, supplied: string | string[] | undefin
   );
 }
 
+// Fronting proxies pool idle upstream connections for longer than Node's 5 s default; a POST that
+// lands on a socket Node just closed comes back as a 502 ("Bad Gateway").
+function keepIdleConnectionsForProxies(server: ViteDevServer | PreviewServer) {
+  if (!server.httpServer) return;
+  server.httpServer.keepAliveTimeout = 125_000;
+  server.httpServer.headersTimeout = 130_000;
+}
+
 function attachDesktopStackProbe(
   server: ViteDevServer | PreviewServer,
   token: string,
@@ -252,6 +260,11 @@ export default defineConfig(({ mode }) => {
         configureServer: (server) => attachDesktopStackProbe(server, desktopStackToken, imageTag),
         configurePreviewServer: (server) =>
           attachDesktopStackProbe(server, desktopStackToken, imageTag),
+      },
+      {
+        name: "rakazo-proxy-friendly-keep-alive",
+        configureServer: keepIdleConnectionsForProxies,
+        configurePreviewServer: keepIdleConnectionsForProxies,
       },
       {
         name: "rakazo-performance-asset-delay",

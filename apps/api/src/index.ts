@@ -18,6 +18,13 @@ try {
     logger.info("api listening", { "http.host": env.apiHost, "http.port": env.port });
   });
 
+  // Fronting proxies pool idle upstream connections for longer than Node's 5 s default; a POST that
+  // lands on a socket Node just closed comes back as a 502 ("Bad Gateway").
+  if ("keepAliveTimeout" in server) {
+    server.keepAliveTimeout = 125_000;
+    server.headersTimeout = 130_000;
+  }
+
   // Long-lived connections (threads.subscribe SSE streams) never end on their
   // own, so server.close() alone waits forever for them. Track sockets and
   // force-close any still open after a short grace period for in-flight

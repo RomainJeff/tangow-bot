@@ -114,6 +114,10 @@ describe("shared Linux desktop lifecycle", () => {
     },
   );
 
+  it("launches the browser restoring its last session", () => {
+    expect(ensureScreenCommand(0, "bot's id", "token", env)).toContain("--restore-last-session");
+  });
+
   it("skips damaged assignments while reserving their live display markers", () => {
     const f = fixture();
     writeFileSync(path.join(f.root, "empty.slot"), "");

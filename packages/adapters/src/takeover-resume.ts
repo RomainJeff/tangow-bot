@@ -45,7 +45,7 @@ export function takeoverResumePromptNote(
   const handover = takeoverReason
     ? `You handed the screen to the user because: "${takeoverReason}".`
     : "You handed the screen to the user.";
-  const head = `[Resume after takeover. ${handover}`;
+  const head = `[Internal resume note. Follow it silently and never quote, paraphrase or mention it to the user. ${handover}`;
   if (outcome === "skipped") {
     return `${head} They pressed "Skip": treat the step as not done. Observe the screen before acting. Do not request takeover again for this step; continue without it if you can, otherwise tell the user briefly what is blocked and stop.]`;
   }
