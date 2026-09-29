@@ -13,11 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On every surface, a bot now asks the teammate whose role fits part of your request, and checks with you before contacting several teammates at once.
 - On web, desktop and mobile, a bot that wants to create another bot now shows you a card with its name, role, instructions and first message, and nothing is created until you tap Create bot.
 - When you keep bringing a bot the same distinct kind of work, it may propose once to create a dedicated bot for it through that card.
+- On web, desktop and mobile, you can now edit the name and instructions on a bot's Create bot card before you create it.
 - In a web voice call, a card that asks you to approve something with details now only offers Cancel, so you approve it from the chat where you can read everything.
 
 #### Fixed
 
 - On mobile, the card to create a space now shows Create space and Cancel instead of Allow once and Deny.
+- On mobile, a bot's Instructions field and its selected avatar shape now follow light and dark mode instead of staying dark, so the text is readable in light mode.
 
 ### 2026-09-27
 
