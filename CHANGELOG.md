@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-09-30
+
+#### Changed
+
+- A bot's Needs you card now has an Open button that opens its screen in one click: on web and desktop instead of going through the computer panel and its preview, and on mobile as a Computer card instead of a plain message.
+
+#### Fixed
+
+- On web and desktop, opening a bot's screen now shows the booting state and then the screen, or the connection error with Retry screen, instead of a blank viewer.
+- On mobile, the message field shrinks back to one line after you send a long message instead of staying tall and empty.
+
 ### 2026-09-28
 
 #### Added
