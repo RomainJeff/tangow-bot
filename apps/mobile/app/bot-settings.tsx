@@ -398,7 +398,7 @@ export default function BotSettingsScreen() {
           multiline
           style={{
             marginTop: 8,
-            backgroundColor: "#1A1A1D",
+            backgroundColor: tokens.muted,
             borderRadius: 11,
             padding: 16,
             color: tokens.foreground,
@@ -424,8 +424,8 @@ export default function BotSettingsScreen() {
                     height: 44,
                     borderRadius: 12,
                     borderWidth: 1,
-                    borderColor: shapeSeed === seed ? "#5A5A62" : tokens.border,
-                    backgroundColor: shapeSeed === seed ? "#1A1A1D" : "transparent",
+                    borderColor: shapeSeed === seed ? tokens.foreground : tokens.border,
+                    backgroundColor: shapeSeed === seed ? tokens.muted : "transparent",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
