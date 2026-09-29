@@ -1,5 +1,5 @@
 import type { MessageBlock } from "@rakazo/contracts";
-import { normalizeSpawnBotArgs, redactSecrets } from "@rakazo/core";
+import { redactSecrets, spawnBotApprovalBlock } from "@rakazo/core";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
@@ -13,7 +13,7 @@ export function buildApprovalAskBlock(
 ): MessageBlock {
   // spawn_bot arguments are redacted before they become the effect request, so the card
   // shows exactly what will be created; a second pass would only inflate short secrets.
-  if (toolName === "spawn_bot") return buildSpawnBotAskBlock(effectId, args);
+  if (toolName === "spawn_bot") return spawnBotApprovalBlock(effectId, args);
   const summary = describeApprovalAction(toolName, args);
   const detail = formatApprovalDetail(toolName, args, options?.reviewReason);
   const safeDetail = detail ? redactSecrets(detail, secrets) : undefined;
@@ -40,42 +40,6 @@ export function buildApprovalAskBlock(
             { id: "always", label: "Always allow this tool" },
             { id: "deny", label: "Deny" },
           ],
-  };
-}
-
-function indent(value: string): string {
-  return value
-    .split("\n")
-    .map((line) => `  ${line}`)
-    .join("\n");
-}
-
-/**
- * Never truncated: the fields are bounded by validateSpawnBotArgs, and the user approves
- * exactly what they can read. Multi-line values are indented under their label so a line
- * forged inside the instructions cannot pass for a label.
- */
-function buildSpawnBotAskBlock(effectId: string, args: Record<string, unknown>): MessageBlock {
-  const normalized = normalizeSpawnBotArgs(args);
-  const fields =
-    "error" in normalized
-      ? { name: "", title: "", instructions: "", prompt: "", computerMode: "" }
-      : normalized;
-  const lines: string[] = [];
-  if (fields.title) lines.push(`Title: ${fields.title}`);
-  if (fields.computerMode === "dedicated") lines.push("Computer: Private");
-  if (fields.instructions) lines.push("Instructions:", indent(fields.instructions));
-  if (fields.prompt) lines.push("First message:", indent(fields.prompt));
-  return {
-    kind: "ask",
-    approvalEffectId: effectId,
-    text: `Create bot “${fields.name || "Untitled"}”?`,
-    detail: lines.length > 0 ? lines.join("\n") : undefined,
-    status: "pending",
-    actions: [
-      { id: "allow", label: "Create bot", outcome: "created" },
-      { id: "deny", label: "Cancel", outcome: "cancelled" },
-    ],
   };
 }
 

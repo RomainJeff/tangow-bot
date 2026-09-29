@@ -150,6 +150,8 @@ import {
 } from "../lib/pick-attachments";
 import { threadRefreshDelayMs } from "../lib/refresh";
 import { closeSheet, openSheet } from "../lib/sheet";
+import type { SpawnBotEdits } from "../lib/spawn-bot-edit";
+import { openSpawnBotEdit, syncSpawnBotEdit } from "../lib/spawn-bot-edit";
 import { shadowsForAppearance } from "../lib/theme";
 import {
   type ThreadScrollAction,
@@ -1394,16 +1396,26 @@ function Thread() {
   }
 
   const answerMessage = useCallback(
-    async (message: MobileMessage, answer: string) => {
+    async (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => {
       const targetBotId = botId;
       const targetGroupId = groupId;
       if ((!targetBotId && !targetGroupId) || !message.runId) return;
-      await rpc("threads/answer", {
-        ...(targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! }),
-        runId: message.runId,
-        messageId: message.id,
-        answer,
-      });
+      try {
+        await rpc("threads/answer", {
+          ...(targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! }),
+          runId: message.runId,
+          messageId: message.id,
+          answer,
+          ...(edits ? { edits } : {}),
+        });
+      } catch (error) {
+        // A refused edit may mean the card was answered meanwhile: reload so the sheet
+        // can close on a card that is no longer answerable.
+        if (edits && isCurrentTarget(targetBotId, targetGroupId)) {
+          await refresh().catch(() => undefined);
+        }
+        throw error;
+      }
       if (isCurrentTarget(targetBotId, targetGroupId)) await refresh();
     },
     [botId, groupId],
@@ -1468,6 +1480,8 @@ function Thread() {
   }
 
   const answerableAskMessageId = latestAnswerableAskMessageId(snap);
+  // The edit sheet lives only while its card can still be answered.
+  useEffect(() => syncSpawnBotEdit(answerableAskMessageId), [answerableAskMessageId]);
   const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
   const liveMessages = useMemo(() => [...visibleMessages].reverse(), [visibleMessages]);
   const messagesById = useMemo(
@@ -2714,7 +2728,7 @@ const MessageBubble = memo(function MessageBubble({
   members?: MobileSnapshot["members"];
   replyPreview?: MobileMessage;
   canAnswer: boolean;
-  onAnswer: (message: MobileMessage, answer: string) => Promise<void>;
+  onAnswer: (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   actionProps: MessageActionProps;
@@ -3097,6 +3111,16 @@ const MessageBubble = memo(function MessageBubble({
                 accessibilityActions={actionProps.accessibilityActions}
                 onAccessibilityAction={actionProps.onAccessibilityAction}
                 onAnswer={(answer) => onAnswer(message, answer)}
+                onEdit={
+                  askBlock.spawnBot && canAnswer
+                    ? () =>
+                        openSpawnBotEdit(router, {
+                          messageId: message.id,
+                          spawnBot: askBlock.spawnBot!,
+                          submit: (edits) => onAnswer(message, "allow", edits),
+                        })
+                    : undefined
+                }
               />
             ) : undefined
           }

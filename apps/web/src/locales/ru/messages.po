@@ -1609,6 +1609,14 @@ msgstr "Создать задачу"
 msgid "Create bot"
 msgstr "Создать бота"
 
+#: src/components/AskCard.tsx:243
+msgid "Edit"
+msgstr "Изменить"
+
+#: src/components/AskCard.tsx:474
+msgid "Create bot?"
+msgstr "Создать бота?"
+
 #: src/components/AskCard.tsx:35
 #: src/pages/CallView.tsx:415
 #: src/pages/shell/dialogs.tsx:91
@@ -2263,7 +2271,7 @@ msgstr "Инструкция"
 
 #: src/pages/shell/bot-panel.tsx:463
 msgid "Instructions"
-msgstr ""
+msgstr "Инструкции"
 
 #: src/pages/PluginsOverlay.tsx:929
 msgid "Integration domain"

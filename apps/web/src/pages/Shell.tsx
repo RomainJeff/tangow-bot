@@ -64,6 +64,7 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import type { SpawnBotCardEdits } from "../components/AskCard";
 import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
 import { readActivityMode, writeActivityMode } from "../lib/activity-mode";
 import type { ArtifactTarget } from "../lib/artifact-open";
@@ -1780,22 +1781,26 @@ export function ShellPage() {
     const botId = activeBotId.current;
     if (botId) void jumpToMessageRef.current({ botId, messageId });
   }, []);
-  const answerMessage = useCallback(async (message: ThreadMessage, text: string) => {
-    const botId = activeBotId.current;
-    const groupId = activeGroupId.current;
-    if (!botId && !groupId) return;
-    await rpc.threads.answer({
-      ...(groupId ? { groupId } : { botId: botId! }),
-      runId: message.runId ?? "",
-      messageId: message.id,
-      answer: text,
-    });
-    if (groupId && activeGroupId.current === groupId) {
-      await refreshGroupThreadRef.current(groupId);
-    } else if (botId && activeBotId.current === botId) {
-      await refreshThreadRef.current(botId);
-    }
-  }, []);
+  const answerMessage = useCallback(
+    async (message: ThreadMessage, text: string, edits?: SpawnBotCardEdits) => {
+      const botId = activeBotId.current;
+      const groupId = activeGroupId.current;
+      if (!botId && !groupId) return;
+      await rpc.threads.answer({
+        ...(groupId ? { groupId } : { botId: botId! }),
+        runId: message.runId ?? "",
+        messageId: message.id,
+        answer: text,
+        ...(edits ? { edits } : {}),
+      });
+      if (groupId && activeGroupId.current === groupId) {
+        await refreshGroupThreadRef.current(groupId);
+      } else if (botId && activeBotId.current === botId) {
+        await refreshThreadRef.current(botId);
+      }
+    },
+    [],
+  );
   const reactToMessage = useCallback(
     async (message: ThreadMessage, reaction: MessageReaction) => {
       const botId = activeBotId.current;

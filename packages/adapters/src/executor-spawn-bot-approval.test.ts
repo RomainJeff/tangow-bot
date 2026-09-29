@@ -1,6 +1,8 @@
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
 import type { ActionApprovalRule } from "@rakazo/core";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
+import type { PrismaClient } from "@rakazo/db";
+import { answerRunInput } from "@rakazo/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult, SPAWN_BOT_CANCELLED_RESULT } from "./approval-effect.js";
 import type * as AutoReviewModule from "./auto-review.js";
@@ -342,6 +344,13 @@ describe("spawn_bot approval in the executor", () => {
           { id: "allow", label: "Create bot", outcome: "created" },
           { id: "deny", label: "Cancel", outcome: "cancelled" },
         ],
+        spawnBot: {
+          name: "Veille",
+          title: "Watches competitors",
+          instructions: "Track our competitors weekly.",
+          prompt: "Start with the top three.",
+          computerMode: "dedicated",
+        },
       });
       expect(called()).toHaveLength(0);
     });
@@ -749,6 +758,161 @@ describe("spawn_bot approval in the executor", () => {
       f.setCalls([{ args: { ...veille, name: "Autre" }, executionId: "call-1" }]);
       await f.run_();
       expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("an edited card is replayed from the stored request", () => {
+    /** The answer transaction of @rakazo/db, run against the rows this test's executor uses. */
+    function answerCard(
+      f: ReturnType<typeof fixture>,
+      edits: { name?: string; instructions?: string } | undefined,
+    ) {
+      const events: Array<{ type: string; payload: unknown }> = [];
+      const tx = {
+        $queryRaw: async () => [],
+        run: {
+          findFirst: async () => ({ botId: "bot-1", userId: "user-1", checkpoint: null }),
+          findUnique: async () => ({ status: "queued", startedAt: null }),
+          updateMany: async () => ({ count: 1 }),
+        },
+        message: {
+          findFirst: async () => ({ id: "message-1", blocks: [f.card()] }),
+          update: async () => ({}),
+        },
+        externalEffect: {
+          findFirst: async ({ where }: { where: Where }) =>
+            f.effects.find((effect) => matches(f.world, effect, where)) ?? null,
+          findUnique: async ({ where }: { where: { idempotencyKey: string } }) =>
+            f.effects.find((effect) => effect.idempotencyKey === where.idempotencyKey) ?? null,
+          updateMany: async ({
+            where,
+            data,
+          }: {
+            where: { id: string; status: string; idempotencyKey: string };
+            data: Partial<Effect>;
+          }) => {
+            const effect = f.effects.find(
+              (candidate) =>
+                candidate.id === where.id &&
+                candidate.status === where.status &&
+                candidate.idempotencyKey === where.idempotencyKey,
+            );
+            if (!effect) return { count: 0 };
+            Object.assign(effect, data);
+            return { count: 1 };
+          },
+          update: async ({ where, data }: { where: { id: string }; data: Partial<Effect> }) => {
+            Object.assign(f.effects.find((effect) => effect.id === where.id)!, data);
+          },
+        },
+        bot: { findMany: async () => f.world.bots.map((name) => ({ name })) },
+        task: { updateMany: async () => ({ count: 1 }) },
+        thread: { update: async () => ({ nextEventSeq: 10 + events.length }) },
+        event: {
+          create: async ({ data }: { data: { type: string; payload: unknown; seq: number } }) => {
+            events.push({ type: data.type, payload: data.payload });
+            return { id: `event-${data.seq}`, threadId: "thread-run-1", seq: data.seq };
+          },
+        },
+      };
+      const prisma = {
+        $transaction: async (callback: (client: typeof tx) => unknown) => callback(tx),
+      } as unknown as PrismaClient;
+      return {
+        events,
+        answered: answerRunInput(prisma, {
+          spaceId: "space-1",
+          threadId: "thread-run-1",
+          runId: "run-1",
+          messageId: "message-1",
+          answeredByUserId: "user-1",
+          answer: "allow",
+          ...(edits ? { edits } : {}),
+        }),
+      };
+    }
+
+    it("CA5 creates one bot with the edited name and instructions and no new card", async () => {
+      const f = fixture();
+      f.setCalls([{ args: veille, executionId: "call-1" }]);
+      await f.run_();
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+
+      const { answered, events } = answerCard(f, {
+        name: "Radar",
+        instructions: "Watch our competitors daily.",
+      });
+      await expect(answered).resolves.toBe(true);
+      expect(events.map((event) => event.type)).toEqual([
+        "effect.edited",
+        "thread.message.updated",
+      ]);
+      expect(events[0]!.payload).toEqual({
+        effectId: f.effects[0]!.id,
+        proposed: veille,
+        approved: { ...veille, name: "Radar", instructions: "Watch our competitors daily." },
+      });
+
+      // The model resumes with the arguments it first proposed.
+      f.setCalls([{ args: veille, executionId: "call-2" }]);
+      await f.run_();
+
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+      expect(f.effects).toHaveLength(1);
+      expect(called()).toHaveLength(1);
+      expect(called()[0]![1]).toMatchObject({
+        name: "Radar",
+        title: "Watches competitors",
+        instructions: "Watch our competitors daily.",
+        prompt: "Start with the top three.",
+        computerMode: "dedicated",
+        spawnKey: f.effects[0]!.id,
+      });
+      expect(f.effects[0]!.status).toBe("completed");
+      expect(f.results.at(-1)).toMatchObject({ ok: true, botId: "child-1", name: "Radar" });
+    });
+
+    it("CA19 keeps the stored key equal to the approval key and replays as a duplicate", async () => {
+      const f = fixture();
+      f.setCalls([{ args: veille, executionId: "call-1" }]);
+      await f.run_();
+      const { answered } = answerCard(f, { name: "Radar" });
+      await answered;
+
+      const effect = f.effects[0]!;
+      expect(effect.idempotencyKey).toBe(
+        approvalEffectKey("run-1", "spawn_bot", effect.request as Record<string, unknown>),
+      );
+      expect(effect.request).toEqual({ ...veille, name: "Radar" });
+      expect(effect.status).toBe("approved");
+
+      f.setCalls([{ args: veille, executionId: "call-2" }]);
+      await f.run_();
+      // Replaying the whole turn again finds the effect by its new key: nothing more happens.
+      f.setCalls([{ args: { ...veille, name: "Radar" }, executionId: "call-3" }]);
+      await f.run_();
+
+      expect(f.effects).toHaveLength(1);
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+      expect(called()).toHaveLength(1);
+      expect(f.results.at(-1)).toMatchObject({ ok: true, botId: "child-1", name: "Radar" });
+    });
+
+    it("CA24 creates the same bot from an answer without edits", async () => {
+      const f = fixture();
+      f.setCalls([{ args: veille, executionId: "call-1" }]);
+      await f.run_();
+      const { answered, events } = answerCard(f, undefined);
+      await answered;
+      expect(events.map((event) => event.type)).toEqual(["thread.message.updated"]);
+
+      f.setCalls([{ args: veille, executionId: "call-2" }]);
+      await f.run_();
+      expect(called()).toHaveLength(1);
+      expect(called()[0]![1]).toMatchObject({
+        name: "Veille",
+        instructions: "Track our competitors weekly.",
+      });
     });
   });
 

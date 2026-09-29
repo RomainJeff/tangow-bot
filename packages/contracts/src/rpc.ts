@@ -339,6 +339,18 @@ export const appContract = {
           runId: Id,
           messageId: Id,
           answer: z.string().min(1),
+          /**
+           * Changes to a Create bot card, only with "allow". The bounds sit above the product
+           * limits so an enormous body is refused before any lock; the limits themselves are
+           * applied by validateSpawnBotArgs.
+           */
+          edits: z
+            .object({
+              name: z.string().max(200).optional(),
+              instructions: z.string().max(4000).optional(),
+            })
+            .strict()
+            .optional(),
         }),
       )
       .output(z.object({ ok: z.literal(true) })),

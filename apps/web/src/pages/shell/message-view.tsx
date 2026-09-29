@@ -18,6 +18,7 @@ import type { ReactNode } from "react";
 import { memo, useState } from "react";
 import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
+import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
 import { CloudAgentCard } from "../../components/CloudAgentCard";
@@ -124,7 +125,7 @@ export const MessageView = memo(function MessageView({
   /** True when this message continues the previous bot message's group, so
    * the shared header (avatar, name, time) is suppressed. */
   continued?: boolean;
-  onAnswer: (message: ThreadMessage, text: string) => Promise<void>;
+  onAnswer: (message: ThreadMessage, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   speakerName?: string;
@@ -465,7 +466,7 @@ export const MessageView = memo(function MessageView({
             key={i}
             block={block}
             canAnswer={canAnswer}
-            onAnswer={(text) => onAnswer(message, text)}
+            onAnswer={(text, edits) => onAnswer(message, text, edits)}
             messageId={message.id}
           />
         );

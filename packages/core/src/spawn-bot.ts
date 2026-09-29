@@ -1,3 +1,4 @@
+import type { MessageBlock } from "@rakazo/contracts";
 import {
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
@@ -26,12 +27,16 @@ const SPAWN_BOT_ARG_KEYS = {
   computerMode: "computer_mode",
 } as const;
 
+/** CRLF is just a newline; any other control character is refused by validation. */
+function normalizeText(value: string): string {
+  return value.replace(/\r\n/g, "\n").trim();
+}
+
 function textArg(raw: Record<string, unknown>, key: string): string | { error: string } {
   const value = raw[key];
   if (value === undefined || value === null) return "";
   if (typeof value !== "string") return { error: `${key} must be a string.` };
-  // CRLF is just a newline; any other control character is refused by validation.
-  return value.replace(/\r\n/g, "\n").trim();
+  return normalizeText(value);
 }
 
 export function normalizeSpawnBotArgs(
@@ -57,6 +62,91 @@ export function spawnBotToolArgs(args: SpawnBotArgs): Record<string, string> {
 }
 
 /**
+ * The fields a person changed on a Create bot card, compared after normalization: only those
+ * fields, or undefined when nothing differs. Web and mobile build `threads/answer` edits with it.
+ */
+export function spawnBotEdits(
+  proposed: { name: string; instructions: string },
+  next: { name: string; instructions: string },
+): { name?: string; instructions?: string } | undefined {
+  const name = normalizeText(next.name);
+  const instructions = normalizeText(next.instructions);
+  const edits = {
+    ...(name !== normalizeText(proposed.name) ? { name } : {}),
+    ...(instructions !== normalizeText(proposed.instructions) ? { instructions } : {}),
+  };
+  return Object.keys(edits).length > 0 ? edits : undefined;
+}
+
+function indent(value: string): string {
+  return value
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+}
+
+type SpawnBotDetailFields = Pick<SpawnBotArgs, "title" | "computerMode" | "prompt">;
+
+function spawnBotDetail(
+  fields: SpawnBotDetailFields & { instructions?: string },
+  withInstructions: boolean,
+): string | undefined {
+  const lines: string[] = [];
+  if (fields.title) lines.push(`Title: ${fields.title}`);
+  if (fields.computerMode === "dedicated") lines.push("Computer: Private");
+  if (withInstructions && fields.instructions)
+    lines.push("Instructions:", indent(fields.instructions));
+  if (fields.prompt) lines.push("First message:", indent(fields.prompt));
+  return lines.length > 0 ? lines.join("\n") : undefined;
+}
+
+/**
+ * What a person cannot change on an editable Create bot card (everything but the name and the
+ * instructions), in the same format as the card's detail. Web and mobile render it under the fields.
+ */
+export function spawnBotReadOnlyDetail(bot: SpawnBotDetailFields): string | undefined {
+  return spawnBotDetail(bot, false);
+}
+
+/**
+ * The Create bot approval card, from the stored request. Never truncated: the fields are bounded
+ * by validateSpawnBotArgs, and the user approves exactly what they can read. Multi-line values
+ * are indented under their label so a line forged inside the instructions cannot pass for one.
+ * The single source for the card the executor shows and the one a reply with edits rewrites.
+ */
+export function spawnBotApprovalBlock(
+  effectId: string,
+  args: Record<string, unknown>,
+): Extract<MessageBlock, { kind: "ask" }> {
+  const normalized = normalizeSpawnBotArgs(args);
+  const fields =
+    "error" in normalized
+      ? { name: "", title: "", instructions: "", prompt: "", computerMode: "" }
+      : normalized;
+  return {
+    kind: "ask",
+    approvalEffectId: effectId,
+    text: `Create bot “${fields.name || "Untitled"}”?`,
+    detail: spawnBotDetail(fields, true),
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Create bot", outcome: "created" },
+      { id: "deny", label: "Cancel", outcome: "cancelled" },
+    ],
+    spawnBot: {
+      name: fields.name,
+      title: fields.title,
+      instructions: fields.instructions,
+      prompt: fields.prompt,
+      computerMode:
+        fields.computerMode === "team" || fields.computerMode === "dedicated"
+          ? fields.computerMode
+          : "",
+    },
+  };
+}
+
+/**
  * Format and joiner controls, variation selectors, tags and line separators hide text from
  * the person reading a card. What stays: the marks that real scripts need (ZWNJ, directional
  * marks, soft hyphen) one at a time, and ZWJ and VS16 only where they build an emoji or a keycap.
@@ -64,7 +154,7 @@ export function spawnBotToolArgs(args: SpawnBotArgs): Record<string, string> {
  */
 const HIDDEN_TEXT = new RegExp(
   [
-    "(?![\\u200C\\u200D\\u200E\\u200F\\u061C\\u00AD\\uFE0F])[\\p{Cf}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029]",
+    "(?![\\u200C\\u200D\\u200E\\u200F\\u061C\\u00AD\\uFE0F])[\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029]",
     // The script marks are needed one at a time; a run of them is a hidden channel.
     "[\\u200C\\u200E\\u200F\\u061C\\u00AD]{2,}",
     "[\\uFE00-\\uFE0E]",
@@ -106,7 +196,10 @@ export function validateBotNameText(
   return undefined;
 }
 
-/** Returns the tool error, or undefined when the request may be shown to the user. */
+/**
+ * Returns the tool error, or undefined when the request may be shown to the user.
+ * Lengths come before the character checks so an oversized value is refused without being scanned.
+ */
 export function validateSpawnBotArgs(
   raw: Record<string, unknown>,
   existingBotNames: readonly string[],
@@ -117,14 +210,20 @@ export function validateSpawnBotArgs(
   if (args.name.length > BOT_NAME_MAX_LENGTH) {
     return `name must be at most ${BOT_NAME_MAX_LENGTH} characters.`;
   }
+  if (args.title.length > BOT_TITLE_MAX_LENGTH) {
+    return `title must be at most ${BOT_TITLE_MAX_LENGTH} characters.`;
+  }
+  if (args.instructions.length > SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH) {
+    return `instructions must be at most ${SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH} characters.`;
+  }
+  if (args.prompt.length > SPAWN_BOT_PROMPT_MAX_LENGTH) {
+    return `prompt must be at most ${SPAWN_BOT_PROMPT_MAX_LENGTH} characters.`;
+  }
   if (LINK_LIKE_NAME.test(args.name)) {
     return "name cannot contain [, ], <, > or a web address (://, www.).";
   }
   const nameError = validateBotNameText(args.name, existingBotNames);
   if (nameError) return nameError;
-  if (args.title.length > BOT_TITLE_MAX_LENGTH) {
-    return `title must be at most ${BOT_TITLE_MAX_LENGTH} characters.`;
-  }
   if (HIDDEN_TEXT.test(args.title) || SINGLE_LINE_CONTROLS.test(args.title)) {
     return "title must be a single line of visible text, without invisible or control characters.";
   }
@@ -133,12 +232,6 @@ export function validateSpawnBotArgs(
   }
   if (HIDDEN_TEXT.test(args.prompt) || MULTI_LINE_CONTROLS.test(args.prompt)) {
     return "prompt must not contain invisible or control characters.";
-  }
-  if (args.instructions.length > SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH) {
-    return `instructions must be at most ${SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH} characters.`;
-  }
-  if (args.prompt.length > SPAWN_BOT_PROMPT_MAX_LENGTH) {
-    return `prompt must be at most ${SPAWN_BOT_PROMPT_MAX_LENGTH} characters.`;
   }
   if (args.computerMode && args.computerMode !== "team" && args.computerMode !== "dedicated") {
     return 'computer_mode must be "team" or "dedicated".';

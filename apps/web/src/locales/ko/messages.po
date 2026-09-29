@@ -1609,6 +1609,14 @@ msgstr "자동 실행 만들기"
 msgid "Create bot"
 msgstr "Bot 만들기"
 
+#: src/components/AskCard.tsx:243
+msgid "Edit"
+msgstr "수정"
+
+#: src/components/AskCard.tsx:474
+msgid "Create bot?"
+msgstr "Bot을 만들까요?"
+
 #: src/components/AskCard.tsx:35
 #: src/pages/CallView.tsx:415
 #: src/pages/shell/dialogs.tsx:91

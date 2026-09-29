@@ -260,6 +260,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Describe what this bot does": "Опишите, что делает этот бот",
   "Don’t have an account?": "Нет аккаунта?",
   Done: "Готово",
+  Edit: "Изменить",
   Disconnect: "Отключить",
   "Disconnecting…": "Отключение…",
   Email: "Электронная почта",
@@ -300,6 +301,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "I’m done": "Готово",
   "If you heard that, voice is ready.": "Если вы это услышали, голос готов.",
   Integrations: "Интеграции",
+  Instructions: "Инструкции",
   "If an account exists for that address, we sent a password reset link.":
     "Если для этого адреса существует учетная запись, мы отправили ссылку для сброса пароля.",
   "Its conversation, files, and routines will be permanently deleted. What should happen to its memories?":

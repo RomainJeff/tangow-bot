@@ -24,6 +24,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
@@ -73,7 +74,7 @@ export const Transcript = memo(function Transcript({
   workingStartedAt?: number;
   onLoadOlder: () => void | Promise<void>;
   onOpenBot: (botId: string) => void;
-  onAnswer: (message: ThreadMessage, text: string) => Promise<void>;
+  onAnswer: (message: ThreadMessage, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   onReply: (message: ThreadMessage) => void;
   onEdit: (message: ThreadMessage) => void;
   rewindFromSeq: number | null;

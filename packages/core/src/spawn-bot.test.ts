@@ -8,6 +8,9 @@ import { describe, expect, it } from "vitest";
 import {
   botNameKey,
   normalizeSpawnBotArgs,
+  spawnBotApprovalBlock,
+  spawnBotEdits,
+  spawnBotReadOnlyDetail,
   spawnBotToolArgs,
   validateSpawnBotArgs,
 } from "./spawn-bot.js";
@@ -185,5 +188,151 @@ describe("names that could pass for a link (CA23)", () => {
   it("accepts an ordinary name with parentheses and punctuation", () => {
     expect(validateSpawnBotArgs({ ...ok, name: "Veille (EU)" }, [])).toBeUndefined();
     expect(validateSpawnBotArgs({ ...ok, name: "R&D_bot *1*" }, [])).toBeUndefined();
+  });
+});
+
+describe("spawnBotEdits (CA11)", () => {
+  const proposed = { name: "Veille", instructions: "Track them." };
+
+  it.each([
+    ["the name only", { name: "Radar", instructions: "Track them." }, { name: "Radar" }],
+    [
+      "the instructions only",
+      { name: "Veille", instructions: "Watch them." },
+      { instructions: "Watch them." },
+    ],
+    [
+      "both",
+      { name: "Radar", instructions: "Watch them." },
+      { name: "Radar", instructions: "Watch them." },
+    ],
+    ["the instructions cleared", { name: "Veille", instructions: "" }, { instructions: "" }],
+    ["a trimmed name", { name: "  Radar ", instructions: "Track them." }, { name: "Radar" }],
+  ])("returns only what changed: %s", (_label, next, expected) => {
+    expect(spawnBotEdits(proposed, next)).toEqual(expected);
+  });
+
+  it.each([
+    ["identical values", { name: "Veille", instructions: "Track them." }],
+    ["edge spaces", { name: "  Veille ", instructions: " Track them.\n" }],
+  ])("returns undefined for %s", (_label, next) => {
+    expect(spawnBotEdits(proposed, next)).toBeUndefined();
+  });
+
+  it("treats CRLF as a newline", () => {
+    expect(
+      spawnBotEdits({ name: "A", instructions: "a\nb" }, { name: "A", instructions: "a\r\nb" }),
+    ).toBeUndefined();
+  });
+});
+
+describe("spawnBotApprovalBlock (CA2)", () => {
+  it("builds the card text, detail and normalized fields from the stored request", () => {
+    const card = spawnBotApprovalBlock("effect-1", {
+      name: " Veille ",
+      title: "Watches competitors",
+      instructions: "Track them.\nWeekly.",
+      prompt: "Start now.",
+      computer_mode: "dedicated",
+    });
+    expect(card).toEqual({
+      kind: "ask",
+      approvalEffectId: "effect-1",
+      text: "Create bot “Veille”?",
+      detail: [
+        "Title: Watches competitors",
+        "Computer: Private",
+        "Instructions:",
+        "  Track them.",
+        "  Weekly.",
+        "First message:",
+        "  Start now.",
+      ].join("\n"),
+      status: "pending",
+      actions: [
+        { id: "allow", label: "Create bot", outcome: "created" },
+        { id: "deny", label: "Cancel", outcome: "cancelled" },
+      ],
+      spawnBot: {
+        name: "Veille",
+        title: "Watches competitors",
+        instructions: "Track them.\nWeekly.",
+        prompt: "Start now.",
+        computerMode: "dedicated",
+      },
+    });
+  });
+
+  it("has no detail when only the name is set", () => {
+    expect(spawnBotApprovalBlock("effect-1", { name: "Veille" }).detail).toBeUndefined();
+  });
+});
+
+describe("hardening for edited values (CA20)", () => {
+  it("refuses an isolated surrogate that jsonb would reject", () => {
+    for (const patch of [
+      { name: "Veille\uD800" },
+      { instructions: "a\uDC00b" },
+      { title: "\uD83D" },
+      { prompt: "\uDE00 x" },
+    ]) {
+      expect(validateSpawnBotArgs({ ...ok, ...patch }, [])).toEqual(expect.any(String));
+    }
+    expect(validateSpawnBotArgs({ ...ok, name: "Veille \u{1F600}" }, [])).toBeUndefined();
+  });
+
+  it("checks lengths before scanning the characters", () => {
+    const huge = "\u200B".repeat(10_000);
+    expect(validateSpawnBotArgs({ ...ok, instructions: huge }, [])).toBe(
+      `instructions must be at most ${SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH} characters.`,
+    );
+    expect(validateSpawnBotArgs({ ...ok, prompt: huge }, [])).toBe(
+      `prompt must be at most ${SPAWN_BOT_PROMPT_MAX_LENGTH} characters.`,
+    );
+    expect(validateSpawnBotArgs({ ...ok, title: huge }, [])).toBe(
+      `title must be at most ${BOT_TITLE_MAX_LENGTH} characters.`,
+    );
+  });
+});
+
+describe("spawnBotReadOnlyDetail", () => {
+  const bot = {
+    title: "Veille concurrentielle",
+    computerMode: "dedicated",
+    prompt: "Start on the assigned work.\nThen report.",
+  };
+
+  it("lists title, private computer and first message, never the instructions", () => {
+    expect(spawnBotReadOnlyDetail(bot)).toBe(
+      "Title: Veille concurrentielle\nComputer: Private\nFirst message:\n  Start on the assigned work.\n  Then report.",
+    );
+  });
+
+  it("omits what the bot does not have", () => {
+    expect(spawnBotReadOnlyDetail({ title: "", computerMode: "team", prompt: "" })).toBeUndefined();
+  });
+
+  it("is the card detail without the instructions", () => {
+    const card = spawnBotApprovalBlock("effect-1", {
+      name: "Veille",
+      instructions: "Track them.",
+      title: bot.title,
+      prompt: bot.prompt,
+      computer_mode: "dedicated",
+    });
+    expect(card.detail).toBe(
+      [
+        "Title: Veille concurrentielle",
+        "Computer: Private",
+        "Instructions:",
+        "  Track them.",
+        "First message:",
+        "  Start on the assigned work.",
+        "  Then report.",
+      ].join("\n"),
+    );
+    expect(card.detail?.replace("Instructions:\n  Track them.\n", "")).toBe(
+      spawnBotReadOnlyDetail(bot),
+    );
   });
 });

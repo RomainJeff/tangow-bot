@@ -258,6 +258,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Describe what this bot does": "描述这个 Bot 的工作",
   "Don’t have an account?": "还没有账户？",
   Done: "完成",
+  Edit: "编辑",
   Disconnect: "断开",
   "Disconnecting…": "正在断开…",
   Email: "邮箱",
@@ -299,6 +300,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "I’m done": "我完成了",
   "If you heard that, voice is ready.": "如果你听到了，说明语音已就绪。",
   Integrations: "集成",
+  Instructions: "指令",
   "If an account exists for that address, we sent a password reset link.":
     "如果该地址已有账户，我们已发送密码重置链接。",
   "Its conversation, files, and routines will be permanently deleted. What should happen to its memories?":

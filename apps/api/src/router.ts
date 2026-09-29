@@ -1705,6 +1705,7 @@ export function createRouter(deps: RouterDeps) {
             messageId: input.messageId,
             answeredByUserId: context.actor.userId,
             answer: input.answer,
+            edits: input.edits,
           })
           .catch((error: unknown) => {
             // The prompt is still pending — the payload is the problem, so don't report it as

@@ -94,6 +94,7 @@ import {
   toolEffectIdempotencyKey,
 } from "@rakazo/core/node/approval-effect-key";
 import {
+  activeBotNames,
   appendEventInTransaction,
   createSpaceForMember,
   createThreadMessageInTransaction,
@@ -3448,7 +3449,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "spawn_bot") {
             // Check again now that the effect is claimed: the name may have been taken while
             // the card waited. finish() settles the effect, so nothing stays half-approved.
-            const invalid = validateSpawnBotArgs(args, await activeBotNames(deps, run));
+            const invalid = validateSpawnBotArgs(args, await activeBotNames(deps.prisma, run));
             const spawnArgs = normalizeSpawnBotArgs(args);
             if (invalid || "error" in spawnArgs) {
               return finish({ error: invalid ?? (spawnArgs as { error: string }).error });
@@ -3514,7 +3515,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               // A rename takes a name as surely as spawn_bot does, and shows no card.
               const nameError = validateBotNameText(
                 nextName,
-                await activeBotNames(deps, run, bot.id),
+                await activeBotNames(deps.prisma, run, bot.id),
               );
               if (nameError) return finish({ error: nameError });
               patch.name = nextName;
@@ -3546,7 +3547,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ) {
               // The promoted name is a name like any other; if it is not allowed, only the title changes.
               const promoted = patch.title.slice(0, BOT_NAME_MAX_LENGTH);
-              if (!validateBotNameText(promoted, await activeBotNames(deps, run, bot.id))) {
+              if (!validateBotNameText(promoted, await activeBotNames(deps.prisma, run, bot.id))) {
                 patch.name = promoted;
               }
             }
@@ -5456,24 +5457,6 @@ function redactBotToolArgs(
   return redacted;
 }
 
-/** Names of the user's active bots in the space, optionally without one bot. */
-async function activeBotNames(
-  deps: ExecutorDeps,
-  run: { spaceId: string; userId: string },
-  exceptBotId?: string,
-): Promise<string[]> {
-  const bots = await deps.prisma.bot.findMany({
-    where: {
-      spaceId: run.spaceId,
-      userId: run.userId,
-      archivedAt: null,
-      ...(exceptBotId ? { id: { not: exceptBotId } } : {}),
-    },
-    select: { name: true },
-  });
-  return bots.map((bot) => bot.name);
-}
-
 const SPAWN_BOT_PENDING_ERROR =
   "Another bot creation from this bot is already waiting for the user's approval. Do not call spawn_bot again until they answer.";
 /** After a Cancel, a bot woken by something other than the user waits this long to ask again. */
@@ -5495,7 +5478,7 @@ async function spawnBotPreflight(
   });
   if (existing) return undefined;
 
-  const invalid = validateSpawnBotArgs(args, await activeBotNames(deps, run));
+  const invalid = validateSpawnBotArgs(args, await activeBotNames(deps.prisma, run));
   if (invalid) return { error: invalid };
 
   const pending = await deps.prisma.externalEffect.findFirst({

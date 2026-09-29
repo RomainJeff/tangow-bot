@@ -2,13 +2,29 @@ import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type { ThreadMessage } from "@rakazo/contracts";
-import { isApprovalAskBlock, isSecretAskBlock, selectedAskActionLabel } from "@rakazo/core";
-import { Button, FramedBlock, Input } from "@rakazo/ui-web";
+import { BOT_NAME_MAX_LENGTH, SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
+import {
+  isApprovalAskBlock,
+  isSecretAskBlock,
+  selectedAskActionLabel,
+  spawnBotEdits,
+  spawnBotReadOnlyDetail,
+} from "@rakazo/core";
+import { Button, FramedBlock, Input, Textarea } from "@rakazo/ui-web";
 import type { ComponentProps, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useId, useState } from "react";
 import { approvalActionLabel } from "../lib/approval-labels";
 
 export type AskBlock = Extract<ThreadMessage["blocks"][number], { kind: "ask" }>;
+export type SpawnBotCardEdits = NonNullable<ReturnType<typeof spawnBotEdits>>;
+
+/** The field a server refusal is about, from its text; both when it cannot be told. */
+function invalidBotFields(error: string | null): { name: boolean; instructions: boolean } {
+  const name = /^(name\b|A bot named)/.test(error ?? "");
+  const instructions = /^instructions\b/.test(error ?? "");
+  const unknown = error !== null && !name && !instructions;
+  return { name: name || unknown, instructions: instructions || unknown };
+}
 
 function formatAnsweredState(
   answer: string | undefined,
@@ -91,11 +107,18 @@ export function AskCard({
 }: {
   block: AskBlock;
   canAnswer: boolean;
-  onAnswer: (text: string) => Promise<void>;
+  onAnswer: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   messageId: string;
 }) {
   const { t } = useLingui();
+  const fieldId = useId();
   const [editing, setEditing] = useState(false);
+  // Keyed by message: a card that changes (another thread, another ask) drops the edit.
+  const [botDraft, setBotDraft] = useState<{
+    messageId: string;
+    name: string;
+    instructions: string;
+  } | null>(null);
   const [answer, setAnswer] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +129,7 @@ export function AskCard({
   const secretInput = isSecretAskBlock(block);
   const secretLabel = secretFieldLabel(block.purpose);
 
-  async function submitAnswer(value: string) {
+  async function submitAnswer(value: string, edits?: SpawnBotCardEdits) {
     if (submitting) return;
     if (secretInput ? value.length === 0 : !value.trim()) return;
     const submitValue = secretInput ? value : value.trim();
@@ -114,7 +137,7 @@ export function AskCard({
     setError(null);
     if (secretInput) setAnswer("");
     try {
-      await onAnswer(submitValue);
+      await (edits ? onAnswer(submitValue, edits) : onAnswer(submitValue));
     } catch (err) {
       setError(
         !secretInput && err instanceof Error ? err.message : t`Could not submit this answer`,
@@ -164,24 +187,113 @@ export function AskCard({
   let children: ReactNode = null;
   let actions: ReactNode = null;
 
+  // Only a pending spawn_bot card that carries its fields can be edited. A card from an older
+  // server has no `spawnBot`: it stays read-only, approve or cancel as is.
+  const spawnBot = approval && answered === undefined ? block.spawnBot : undefined;
+  const draft = botDraft?.messageId === messageId ? botDraft : null;
+  const botEditing = spawnBot !== undefined && draft !== null;
+
   if (answered === undefined) {
     if (approvalActions?.length) {
+      const submitApproval = (id: string) => {
+        if (id === "allow" && spawnBot && draft) {
+          const edits = spawnBotEdits(spawnBot, draft);
+          return void submitAnswer("allow", edits);
+        }
+        return void submitAnswer(id);
+      };
       actions = (
         <OptionsRow>
           {approvalActions.map((action) => (
-            <Button
-              key={action.id}
-              variant={approvalActionVariant(action.id)}
-              size="capsule"
-              consequential={action.id === "allow"}
-              disabled={submitting}
-              onClick={() => void submitAnswer(action.id)}
-            >
-              {pendingAction === action.id ? <Trans>Sending…</Trans> : approvalActionLabel(action)}
-            </Button>
+            <Fragment key={action.id}>
+              <Button
+                variant={approvalActionVariant(action.id)}
+                size="capsule"
+                consequential={action.id === "allow"}
+                disabled={
+                  submitting || (action.id === "allow" && botEditing && !draft?.name.trim())
+                }
+                onClick={() => submitApproval(action.id)}
+              >
+                {pendingAction === action.id ? (
+                  <Trans>Sending…</Trans>
+                ) : (
+                  approvalActionLabel(action)
+                )}
+              </Button>
+              {action.id === "allow" && spawnBot && !botEditing ? (
+                <Button
+                  variant="tertiary"
+                  size="capsule"
+                  disabled={submitting}
+                  onClick={() =>
+                    setBotDraft({
+                      messageId,
+                      name: spawnBot.name,
+                      instructions: spawnBot.instructions,
+                    })
+                  }
+                >
+                  <Trans>Edit</Trans>
+                </Button>
+              ) : null}
+            </Fragment>
           ))}
         </OptionsRow>
       );
+      if (spawnBot && draft) {
+        const readOnly = spawnBotReadOnlyDetail(spawnBot);
+        const invalid = invalidBotFields(error);
+        children = (
+          <div className="flex flex-col gap-2.5">
+            <div>
+              <label
+                htmlFor={`${fieldId}-name`}
+                className="mb-1.5 block text-meta text-muted-foreground"
+              >
+                <Trans>Name</Trans>
+              </label>
+              <Input
+                id={`${fieldId}-name`}
+                autoFocus
+                autoComplete="off"
+                maxLength={BOT_NAME_MAX_LENGTH}
+                disabled={submitting}
+                aria-invalid={invalid.name ? true : undefined}
+                value={draft.name}
+                onChange={(event) => setBotDraft({ ...draft, name: event.target.value })}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`${fieldId}-instructions`}
+                className="mb-1.5 block text-meta text-muted-foreground"
+              >
+                <Trans>Instructions</Trans>
+              </label>
+              <Textarea
+                id={`${fieldId}-instructions`}
+                className="max-h-72 overflow-auto"
+                maxLength={SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH}
+                disabled={submitting}
+                aria-invalid={invalid.instructions ? true : undefined}
+                value={draft.instructions}
+                onChange={(event) => setBotDraft({ ...draft, instructions: event.target.value })}
+              />
+            </div>
+            {readOnly ? (
+              <pre className="max-h-72 overflow-auto rounded-card bg-muted px-3.5 py-3 font-mono text-mono whitespace-pre-wrap break-words text-muted-foreground">
+                {readOnly}
+              </pre>
+            ) : null}
+            {error ? (
+              <p role="alert" className="text-meta text-destructive">
+                {error}
+              </p>
+            ) : null}
+          </div>
+        );
+      }
     } else if (secretInput) {
       children = (
         <AnswerInput
@@ -352,13 +464,21 @@ export function AskCard({
       data-testid={secretInput ? "secret-ask-card" : undefined}
       header={header ? { ...header, dot: answered === undefined } : undefined}
       // An approval question can carry model-written text (a bot's name): never fetch an image for it.
-      question={<ChatMarkdown allowImages={!approval}>{block.text}</ChatMarkdown>}
-      consequence={consequence}
+      question={
+        <ChatMarkdown allowImages={!approval}>
+          {botEditing ? t`Create bot?` : block.text}
+        </ChatMarkdown>
+      }
+      consequence={botEditing ? undefined : consequence}
       answered={answered}
       actions={actions}
     >
       {children}
-      {error ? <p className="text-meta text-destructive">{error}</p> : null}
+      {error && !botEditing ? (
+        <p role="alert" className="text-meta text-destructive">
+          {error}
+        </p>
+      ) : null}
     </FramedBlock>
   );
 }

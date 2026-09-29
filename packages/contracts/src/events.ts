@@ -39,6 +39,8 @@ export const ProductEventType = z.enum([
   "agent.tool.called",
   "agent.tool.completed",
   "effect.reconciled",
+  /** A person changed a proposed effect on its approval card; payload { effectId, proposed, approved }. */
+  "effect.edited",
   "usage.recorded",
   "bot.spawned",
   "bot.updated",
@@ -143,6 +145,16 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     questions: z.array(AskQuestion).optional(),
     /** Structured answers once submitted; drives the frozen summary. */
     answers: AskAnswers.optional(),
+    /** A spawn_bot approval card: the normalized fields, so a client can offer to edit them. */
+    spawnBot: z
+      .object({
+        name: z.string(),
+        title: z.string(),
+        instructions: z.string(),
+        prompt: z.string(),
+        computerMode: z.enum(["", "team", "dedicated"]),
+      })
+      .optional(),
   }),
   z.object({
     kind: z.literal("choice"),

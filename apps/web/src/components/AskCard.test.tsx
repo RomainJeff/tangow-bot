@@ -1,6 +1,11 @@
+// @vitest-environment jsdom
+
 import { selectedAskActionLabel } from "@rakazo/core";
+import { act } from "react";
+import type { Root } from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // vitest doesn't run the lingui macro/babel transform, so these macro imports must be
 // mocked to a plain passthrough (same pattern as KnowledgeSection.test.tsx).
@@ -219,5 +224,209 @@ describe("AskCard approval actions", () => {
 
     const plain = render({ kind: "ask", text: `Is this right? ${image}` });
     expect(plain).toContain("<img");
+  });
+});
+
+describe("AskCard editable Create bot card", () => {
+  const spawnBot: NonNullable<AskBlock["spawnBot"]> = {
+    name: "Veille",
+    title: "Veille concurrentielle",
+    instructions: "Watch competitors.\nCite the source.",
+    prompt: "Start on the assigned work.",
+    computerMode: "dedicated",
+  };
+  const pendingCard = (overrides: Partial<AskBlock> = {}): AskBlock => ({
+    kind: "ask",
+    text: "Create bot “Veille”?",
+    approvalEffectId: "effect-1",
+    detail: "Title: Veille concurrentielle\nInstructions:\n  Watch competitors.",
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Create bot", outcome: "created" },
+      { id: "deny", label: "Cancel", outcome: "cancelled" },
+    ],
+    spawnBot,
+    ...overrides,
+  });
+
+  let container: HTMLElement;
+  let root: Root;
+  const onAnswer = vi.fn<(text: string, edits?: unknown) => Promise<void>>();
+
+  function show(block: AskBlock, options: { canAnswer?: boolean; messageId?: string } = {}) {
+    act(() => {
+      root.render(
+        <AskCard
+          block={block}
+          canAnswer={options.canAnswer ?? true}
+          onAnswer={onAnswer}
+          messageId={options.messageId ?? "msg-1"}
+        />,
+      );
+    });
+  }
+  const labels = () => [...container.querySelectorAll("button")].map((el) => el.textContent);
+  const button = (label: string) => {
+    const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label);
+    if (!found) throw new Error(`Missing button: ${label}`);
+    return found;
+  };
+  const nameInput = () => container.querySelector("input") as HTMLInputElement;
+  const instructionsField = () => container.querySelector("textarea") as HTMLTextAreaElement;
+  function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
+    const proto = el instanceof HTMLInputElement ? HTMLInputElement : HTMLTextAreaElement;
+    const setValue = Object.getOwnPropertyDescriptor(proto.prototype, "value")?.set;
+    act(() => {
+      setValue?.call(el, value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  async function click(el: HTMLElement) {
+    await act(async () => {
+      el.click();
+    });
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    onAnswer.mockReset();
+    onAnswer.mockResolvedValue(undefined);
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("CA10: a pending card keeps its detail and adds Edit between Create bot and Cancel", () => {
+    show(pendingCard());
+    expect(labels()).toEqual(["Create bot", "Edit", "Cancel"]);
+    expect(container.querySelector("pre")?.textContent).toContain("Instructions:");
+    expect(container.querySelector("input")).toBeNull();
+  });
+
+  it("CA10: Edit unfolds prefilled fields and read-only rest, without duplicating instructions", () => {
+    show(pendingCard());
+    act(() => button("Edit").click());
+
+    expect(container.textContent).toContain("Create bot?");
+    expect(container.textContent).not.toContain("Create bot “Veille”?");
+    expect(labels()).toEqual(["Create bot", "Cancel"]);
+    expect(nameInput().value).toBe("Veille");
+    expect(document.activeElement).toBe(nameInput());
+    expect(instructionsField().value).toBe(spawnBot.instructions);
+    expect(instructionsField().className).toContain("max-h-72");
+    const readOnly = container.querySelector("pre")?.textContent ?? "";
+    expect(readOnly).toContain("Title: Veille concurrentielle");
+    expect(readOnly).toContain("Computer: Private");
+    expect(readOnly).toContain("First message:\n  Start on the assigned work.");
+    expect(readOnly).not.toContain("Instructions");
+    expect(readOnly).not.toContain("Watch competitors");
+  });
+
+  it("CA10: Create bot without a change sends no edits", async () => {
+    show(pendingCard());
+    act(() => button("Edit").click());
+    await click(button("Create bot"));
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+    expect(onAnswer.mock.calls[0]).toEqual(["allow"]);
+  });
+
+  it("CA10: Create bot sends only the fields that changed", async () => {
+    show(pendingCard());
+    act(() => button("Edit").click());
+    type(nameInput(), "Veille EU");
+    await click(button("Create bot"));
+    expect(onAnswer.mock.calls[0]).toEqual(["allow", { name: "Veille EU" }]);
+
+    onAnswer.mockClear();
+    type(instructionsField(), "Watch European competitors.");
+    await click(button("Create bot"));
+    expect(onAnswer.mock.calls[0]).toEqual([
+      "allow",
+      { name: "Veille EU", instructions: "Watch European competitors." },
+    ]);
+  });
+
+  it("CA10: an empty name disables Create bot, and Enter in the name does not submit", () => {
+    show(pendingCard());
+    act(() => button("Edit").click());
+    act(() => {
+      nameInput().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(onAnswer).not.toHaveBeenCalled();
+    type(nameInput(), "   ");
+    expect(button("Create bot").disabled).toBe(true);
+  });
+
+  it("CA10: a server error is announced and the fields keep what was typed", async () => {
+    onAnswer.mockRejectedValueOnce(new Error("A bot named Comms already exists."));
+    show(pendingCard());
+    act(() => button("Edit").click());
+    type(nameInput(), "Comms");
+    await click(button("Create bot"));
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toBe("A bot named Comms already exists.");
+    expect(nameInput().value).toBe("Comms");
+    expect(instructionsField().value).toBe(spawnBot.instructions);
+    expect(button("Create bot").disabled).toBe(false);
+  });
+
+  it("CA10: an answered card is read-only, without Edit", () => {
+    show(pendingCard({ status: "answered", answer: "allow" }));
+    expect(labels()).toEqual([]);
+    expect(container.textContent).toContain("Created");
+    expect(container.querySelector("input")).toBeNull();
+  });
+
+  it("CA23: Cancel while editing never sends edits", async () => {
+    show(pendingCard());
+    act(() => button("Edit").click());
+    type(nameInput(), "Veille EU");
+    await click(button("Cancel"));
+    expect(onAnswer.mock.calls).toEqual([["deny"]]);
+  });
+
+  it("CA23: the card becoming answered abandons the edit", () => {
+    show(pendingCard());
+    act(() => button("Edit").click());
+    expect(container.querySelector("input")).not.toBeNull();
+    show(pendingCard({ status: "answered", answer: "allow", spawnBot: { ...spawnBot } }));
+    expect(container.querySelector("input")).toBeNull();
+    expect(container.querySelector("textarea")).toBeNull();
+    expect(labels()).toEqual([]);
+  });
+
+  it("CA23: showing another message abandons the edit", () => {
+    show(pendingCard(), { messageId: "msg-1" });
+    act(() => button("Edit").click());
+    type(nameInput(), "Draft");
+    show(pendingCard(), { messageId: "msg-2" });
+    expect(container.querySelector("input")).toBeNull();
+    expect(labels()).toEqual(["Create bot", "Edit", "Cancel"]);
+  });
+
+  it("CA24: no Edit without spawnBot, when unanswerable, or on another approval", () => {
+    show(pendingCard({ spawnBot: undefined }));
+    expect(labels()).toEqual(["Create bot", "Cancel"]);
+    show(pendingCard(), { canAnswer: false });
+    expect(labels()).toEqual([]);
+    show(
+      pendingCard({
+        spawnBot: undefined,
+        text: "Send the email?",
+        actions: [
+          { id: "allow", label: "Allow once" },
+          { id: "deny", label: "Deny" },
+        ],
+      }),
+    );
+    expect(labels()).toEqual(["Allow once", "Deny"]);
   });
 });
