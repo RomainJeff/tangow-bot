@@ -316,6 +316,7 @@ import {
   type TakeoverResumeCheckpoint,
   takeoverCheckpointOf,
   takeoverContinuePlan,
+  takeoverHeldPromptNote,
   takeoverResumePromptNote,
 } from "./takeover-resume.js";
 import { getActiveTeachingSession, parsePlaybook } from "./teaching-session.js";
@@ -1696,9 +1697,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ));
           }
         }
-        const graphicalToolsAllowed = graphical && acceptsImages && !heldForTakeover;
-        const pageBrowserAllowed =
-          graphical && browser.describe().capabilities.page && !heldForTakeover;
+        // A held run keeps the tools listed: the user may be describing what is on screen, so the
+        // bot can look. Acting is refused where each tool executes.
+        const graphicalToolsAllowed = graphical && acceptsImages;
+        const pageBrowserAllowed = graphical && browser.describe().capabilities.page;
         const builtins = [
           ...selectBuiltinToolsForRun({
             graphicalToolsAllowed,
@@ -2461,9 +2463,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const finish = async (result: unknown) =>
             (await persistEffectResult(result)) ? result : uncertainEffectResult(name);
           if (name === "computer_observe") {
-            if (heldForTakeover) {
-              return { error: DESKTOP_HELD_FOR_TAKEOVER_MESSAGE };
-            }
             if (await getActiveTeachingSession(deps.prisma, run.spaceId, run.botId)) {
               return { error: "Teaching is in progress. Stop teaching before using the computer." };
             }
@@ -2810,7 +2809,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return finish(await webFetchFromTool(web, context, args));
           }
           if (PAGE_BROWSER_TOOL_NAMES.has(name)) {
-            if (heldForTakeover) {
+            if (heldForTakeover && name !== "browser_snapshot") {
               return finish({ error: DESKTOP_HELD_FOR_TAKEOVER_MESSAGE });
             }
             if (await getActiveTeachingSession(deps.prisma, run.spaceId, run.botId)) {
@@ -3801,9 +3800,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           formatCurrentTimeInstruction(),
           replyContext,
           basePrompt,
-          takeoverResume
-            ? takeoverResumePromptNote(takeoverResume.outcome, takeoverReason)
-            : undefined,
+          heldForTakeover
+            ? takeoverHeldPromptNote(takeoverReason)
+            : takeoverResume
+              ? takeoverResumePromptNote(takeoverResume.outcome, takeoverReason)
+              : undefined,
           approvalContinuation,
         ]
           .filter(Boolean)
@@ -3871,7 +3872,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             messagingContext,
             hasHistoricalContext: historicalContext.length > 0,
             computerInstruction,
-            pageBrowserAllowed,
+            pageBrowserAllowed: pageBrowserAllowed && !heldForTakeover,
             browserRunAllowed: tools.some((tool) => tool.name === "browser_run"),
             rememberExposed: tools.some((tool) => tool.name === "remember"),
             workspaceInstruction,
@@ -4578,6 +4579,44 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           const blocks = isRoutineCardRun ? [] : rawBlocks;
           if (!(await renewRunLease(deps, runId, workerId, fence))) return;
+          if (heldForTakeover) {
+            // The user still holds the screen: answer, then keep waiting for I'm done or Skip.
+            if (blocks.length) await publishMessage(deps, run, "bot", blocks);
+            const stampedCheckpoint = async () =>
+              takeoverCheckpointOf(
+                (
+                  await deps.prisma.run.findUnique({
+                    where: { id: runId },
+                    select: { checkpoint: true },
+                  })
+                )?.checkpoint,
+              );
+            let released = await stampedCheckpoint();
+            if (!released) {
+              if (!(await holdComputerExecutionLeaseForTakeover(deps.prisma, computerLease))) {
+                throw new Error("Computer lease expired before takeover");
+              }
+              const paused = await deps.events.pauseRunForTakeover({
+                spaceId: run.spaceId,
+                threadId: thread.id,
+                botId: bot.id,
+                runId,
+                attemptId: attempt.id,
+                leaseOwner: workerId,
+                leaseFence: fence,
+                reason: takeoverReason ?? "",
+                computerId: storedComputer.id,
+              });
+              if (paused) {
+                retainComputerLease = true;
+                return;
+              }
+              // "I'm done" or "Skip" landed after the check above: resume from it.
+              released = await stampedCheckpoint();
+            }
+            if (released) await requeueComputerRun(deps, runId, workerId, fence, released, false);
+            return;
+          }
           const botMessageOutcome =
             run.trigger === "bot_message"
               ? botMessageOutcomeFromMidTurn(text, midTurnUserTexts)

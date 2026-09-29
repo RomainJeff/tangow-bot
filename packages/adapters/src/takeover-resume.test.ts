@@ -3,6 +3,7 @@ import {
   continueRunClaimFence,
   refreshTakeoverContinuePlan,
   takeoverContinuePlan,
+  takeoverHeldPromptNote,
   takeoverResumeFromRelease,
   takeoverResumePromptNote,
 } from "./takeover-resume.js";
@@ -46,10 +47,30 @@ describe("takeoverResumePromptNote", () => {
     expect(takeoverResumePromptNote("done")).not.toContain("because");
   });
 
+  it("sends a finished takeover back to the task, not to the start", () => {
+    const note = takeoverResumePromptNote("done");
+    expect(note).toContain("continue the task from what it shows");
+    expect(note).not.toMatch(/start the task over/);
+  });
+
   it("words each outcome differently", () => {
     expect(takeoverResumePromptNote("done")).toContain("I'm done");
     expect(takeoverResumePromptNote("skipped")).toContain("treat the step as not done");
     expect(takeoverResumePromptNote("expired")).toContain("ask the user whether they finished");
+  });
+});
+
+describe("takeoverHeldPromptNote", () => {
+  it("tells the bot the user wrote from the screen and to look before answering", () => {
+    const note = takeoverHeldPromptNote("Pick the link");
+    expect(note).toContain('because: "Pick the link"');
+    expect(note).toContain("may describe what they see");
+    expect(note).toMatch(/Observe the screen/);
+    expect(note).toMatch(/never quote, paraphrase or mention it to the user/);
+  });
+
+  it("omits the reason clause when none is known", () => {
+    expect(takeoverHeldPromptNote()).not.toContain("because");
   });
 });
 

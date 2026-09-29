@@ -33,6 +33,7 @@ const fakeAgentState = vi.hoisted(() => ({
   promptInputs: [] as string[],
   promptImages: [] as unknown[][],
   toolResult: undefined as unknown,
+  beforeToolCall: undefined as ((context: unknown) => Promise<unknown>) | undefined,
 }));
 
 vi.mock("@earendil-works/pi-agent-core", () => ({
@@ -47,11 +48,13 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
 
     constructor(options: {
       initialState: { tools: typeof fakeAgentState.tools; messages: unknown[] };
+      beforeToolCall?: (context: unknown) => Promise<unknown>;
       prepareNextTurnWithContext?: (input: {
         context: { messages: unknown[] };
       }) => Promise<{ context?: { messages: unknown[] } } | undefined>;
     }) {
       this.tools = options.initialState.tools;
+      fakeAgentState.beforeToolCall = options.beforeToolCall;
       this.prepareNextTurnWithContext = options.prepareNextTurnWithContext;
       fakeAgentState.tools = this.tools;
       fakeAgentState.initialMessages = options.initialState.messages;
@@ -347,7 +350,13 @@ vi.mock("./pi-openai-compatible-provider.js", () => ({
 
 import { decideWithin } from "./decision.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
-import { maxToolCallsPerTurn, PiAgentRuntime, REPLY_NUDGE_PROMPT } from "./pi-runtime.js";
+import {
+  maxToolCallsPerTurn,
+  PiAgentRuntime,
+  REPLY_NUDGE_PROMPT,
+  refuseBatchedTakeover,
+  TAKEOVER_ALONE_MESSAGE,
+} from "./pi-runtime.js";
 import { TOOL_RESULT_TEXT_LIMIT } from "./pi-runtime-limits.js";
 import { TraceExporter } from "./trace-export.js";
 
@@ -399,11 +408,83 @@ describe("Pi connector tool dispatch", () => {
     fakeAgentState.promptInputs = [];
     fakeAgentState.promptImages = [];
     fakeAgentState.toolResult = undefined;
+    fakeAgentState.beforeToolCall = undefined;
     fakeAgentState.invoke = {
       name: "destination_write",
       args: { collection: "notes", title: "Result", body: "Done" },
     };
     delete process.env.MAX_TOOL_CALLS_PER_TURN;
+  });
+
+  describe("request_takeover alone in its turn", () => {
+    const call = (name: string, id: string) => ({
+      type: "toolCall" as const,
+      id,
+      name,
+      arguments: {},
+    });
+    const contextFor = (toolName: string, ...names: string[]) =>
+      ({
+        assistantMessage: { role: "assistant", content: names.map((n, i) => call(n, `c${i}`)) },
+        toolCall: call(toolName, "c0"),
+        args: {},
+        context: { systemPrompt: "", messages: [], tools: [] },
+      }) as unknown as Parameters<typeof refuseBatchedTakeover>[0];
+
+    it("blocks a takeover batched with another tool call", async () => {
+      await expect(
+        refuseBatchedTakeover(
+          contextFor("request_takeover", "browser_navigate", "request_takeover"),
+        ),
+      ).resolves.toEqual({ block: true, reason: TAKEOVER_ALONE_MESSAGE });
+    });
+
+    it("lets a takeover alone in its turn run", async () => {
+      await expect(
+        refuseBatchedTakeover(contextFor("request_takeover", "request_takeover")),
+      ).resolves.toBeUndefined();
+    });
+
+    it("leaves other tools in a batch alone", async () => {
+      await expect(
+        refuseBatchedTakeover(
+          contextFor("browser_navigate", "browser_navigate", "request_takeover"),
+        ),
+      ).resolves.toBeUndefined();
+    });
+
+    it("wires the refusal into the agent", async () => {
+      fakeAgentState.mode = "empty";
+      const runtime = new PiAgentRuntime();
+      for await (const _event of runtime.run(
+        {
+          botId: "b",
+          threadId: "t",
+          runId: "takeover-batch",
+          prompt: "go",
+          instructions: "Use tools.",
+          history: [],
+          tools: [],
+          model: { provider: "test", id: "dispatch-test-model" },
+          executeTool: vi.fn(),
+        },
+        {
+          operationId: "tb",
+          traceId: "tb",
+          spaceId: "w",
+          userId: "u",
+          signal: new AbortController().signal,
+        },
+      )) {
+        // drain
+      }
+      expect(fakeAgentState.beforeToolCall).toBeDefined();
+      await expect(
+        fakeAgentState.beforeToolCall?.(
+          contextFor("request_takeover", "browser_navigate", "request_takeover"),
+        ),
+      ).resolves.toEqual({ block: true, reason: TAKEOVER_ALONE_MESSAGE });
+    });
   });
 
   it("injects durable steering at Pi's next safe turn boundary", async () => {

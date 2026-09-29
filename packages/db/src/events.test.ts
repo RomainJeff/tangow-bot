@@ -580,7 +580,7 @@ describe("pauseRunForTakeover", () => {
 
     expect(tx.run.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ status: "running", leaseFence: 3 }),
+        where: expect.objectContaining({ status: "running", leaseFence: 3, checkpoint: null }),
         data: {
           status: "waiting_takeover",
           leaseOwner: null,

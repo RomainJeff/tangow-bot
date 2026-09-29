@@ -4,6 +4,8 @@ import {
   type AgentMessage,
   type AgentTool,
   type AgentToolResult,
+  type BeforeToolCallContext,
+  type BeforeToolCallResult,
 } from "@earendil-works/pi-agent-core";
 import {
   type Api,
@@ -142,6 +144,17 @@ const SILENT_TOOL_CONTINUATION_PROMPT =
 const MAX_REPLY_NUDGES = 2;
 export const REPLY_NUDGE_PROMPT =
   "The user is still waiting: your turn ended after tool calls with no reply. Write the answer now as your final message, without further tool calls unless one is required. If the work is unfinished, say what is done and what is blocked.";
+export const TAKEOVER_ALONE_MESSAGE =
+  "request_takeover was not run. Call it on its own, after your other tool calls have returned and you have checked that the screen shows what your reason says.";
+/** A pause must see its siblings' results, so request_takeover never runs inside a batch. */
+export async function refuseBatchedTakeover({
+  assistantMessage,
+  toolCall,
+}: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> {
+  if (toolCall.name !== "request_takeover") return undefined;
+  const calls = assistantMessage.content.filter((part) => part.type === "toolCall").length;
+  return calls > 1 ? { block: true, reason: TAKEOVER_ALONE_MESSAGE } : undefined;
+}
 const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -347,6 +360,11 @@ export class PiAgentRuntime implements AgentRuntime {
         agent = new Agent({
           sessionId: conversationSessionId(request.threadId, request.botId),
           steeringMode: "all",
+          beforeToolCall: async (context) => {
+            const refusal = await refuseBatchedTakeover(context);
+            if (refusal) getLogger().info("agent.takeover.batched", { runId: request.runId });
+            return refusal;
+          },
           streamFn: (m, ctx, options) =>
             models.streamSimple(m, ctx, reliableStreamOptions(m, options, request.model.maxTokens)),
           getApiKey: async () => apiKey,
@@ -1361,6 +1379,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   };
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
+    beforeToolCall: refuseBatchedTakeover,
     streamFn: (m, ctx, options) =>
       selectedModel.models.streamSimple(
         m,

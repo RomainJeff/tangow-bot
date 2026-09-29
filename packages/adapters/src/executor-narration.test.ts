@@ -52,6 +52,7 @@ function fixture({
   routineId = null as string | null,
   routineNotify = false,
   checkpoint = null as string | null,
+  status = "queued",
   priorMessages = [] as Array<{ blocks: MessageBlock[]; clientNonce: string | null }>,
   runtimeRun,
 }: {
@@ -60,6 +61,7 @@ function fixture({
   routineId?: string | null;
   routineNotify?: boolean;
   checkpoint?: string | null;
+  status?: string;
   priorMessages?: Array<{ blocks: MessageBlock[]; clientNonce: string | null }>;
   runtimeRun: (request: AgentRunRequest) => AsyncGenerator<AgentRuntimeEvent>;
 }) {
@@ -75,7 +77,7 @@ function fixture({
     taskId: "task-1",
     spaceId: "space-1",
     userId: "user-1",
-    status: "queued",
+    status,
     trigger,
     routineId,
     leaseFence: 0,
@@ -94,7 +96,7 @@ function fixture({
     return true;
   });
 
-  const pauseRunForTakeover = vi.fn(async () => {
+  const pauseRunForTakeover = vi.fn(async (_input: { reason: string }) => {
     run.status = "waiting_takeover";
     return true;
   });
@@ -262,6 +264,7 @@ function fixture({
   );
 
   const notify = vi.fn(async () => undefined);
+  const enqueue = vi.fn(async () => undefined);
   const executor = createRunExecutor({
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
@@ -275,11 +278,13 @@ function fixture({
       pauseRunForInput,
       pauseRunForTakeover,
     },
-    jobs: { enqueue: vi.fn(async () => undefined) },
+    jobs: { enqueue },
     secrets: [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
 
   return {
+    runRow: run,
+    enqueue,
     messages,
     finalizeRun,
     pauseRunForInput,
@@ -537,5 +542,57 @@ describe("transient narration", () => {
 
     expect(prompt).toContain("ask the user whether they finished");
     expect(prompt).not.toContain("because:");
+  });
+
+  const pickTheLink: Array<{ blocks: MessageBlock[]; clientNonce: string | null }> = [
+    {
+      blocks: [{ kind: "computer", state: "Needs you", text: "Pick the link" }],
+      clientNonce: null,
+    },
+  ];
+
+  it("CT3: a message sent while the user holds the screen is answered, then the run keeps waiting", async () => {
+    let prompt = "";
+    const f = fixture({
+      trigger: "user",
+      status: "waiting_takeover",
+      priorMessages: pickTheLink,
+      async *runtimeRun(request) {
+        prompt = request.prompt;
+        yield { type: "text", text: "It shows GTA." };
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(prompt).toContain("wrote their latest message from there");
+    expect(prompt).toContain('because: "Pick the link"');
+    expect(f.finalizeRun).not.toHaveBeenCalled();
+    expect(f.pauseRunForTakeover).toHaveBeenCalledOnce();
+    expect(f.pauseRunForTakeover.mock.calls[0]![0]).toMatchObject({ reason: "Pick the link" });
+    expect(finalText(f.messages.at(-1)!.blocks)).toBe("It shows GTA.");
+    expect(f.runRow.status).toBe("waiting_takeover");
+  });
+
+  it("CT4: an I'm done that lands while the held run answers resumes the task instead of waiting again", async () => {
+    const f: ReturnType<typeof fixture> = fixture({
+      trigger: "user",
+      status: "waiting_takeover",
+      priorMessages: pickTheLink,
+      async *runtimeRun() {
+        yield { type: "text", text: "It shows GTA." };
+        f.runRow.checkpoint = "takeover";
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(f.pauseRunForTakeover).not.toHaveBeenCalled();
+    expect(f.finalizeRun).not.toHaveBeenCalled();
+    expect(f.enqueue).toHaveBeenCalled();
+    expect(f.runRow.status).toBe("queued");
+    expect(f.runRow.checkpoint).toBe("takeover");
   });
 });

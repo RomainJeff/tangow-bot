@@ -1277,6 +1277,8 @@ export async function pauseRunForTakeover(
         status: "running",
         leaseOwner: input.leaseOwner,
         leaseFence: input.leaseFence,
+        // A release stamped after the caller's last look must not be erased.
+        checkpoint: null,
       },
       data: {
         status: "waiting_takeover",
