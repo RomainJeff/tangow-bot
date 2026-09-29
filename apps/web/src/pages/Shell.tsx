@@ -35,6 +35,7 @@ import {
   isActive,
   isRunTerminalEvent,
   latestAnswerableAskMessageId,
+  latestTakeoverMessageId,
   reorderBotTo,
   resolveComposerSendPlan,
   runThreadSubscription,
@@ -1550,6 +1551,7 @@ export function ShellPage() {
   const rewindFromSeq = activeRewindTarget?.seq ?? null;
   const currentRuns = activeThreadRuns(activeSnapshot);
   const answerableAskMessageId = latestAnswerableAskMessageId(activeSnapshot);
+  const takeoverMessageId = latestTakeoverMessageId(activeSnapshot);
   const workingRuns = currentRuns.filter((run) =>
     ["running", "queued", "leased"].includes(run.status),
   );
@@ -1666,6 +1668,9 @@ export function ShellPage() {
   loadOlderMessagesRef.current = loadOlderMessages;
   const jumpToMessageRef = useRef(jumpToMessage);
   jumpToMessageRef.current = jumpToMessage;
+  const openComputerRef = useRef(openComputer);
+  openComputerRef.current = openComputer;
+  const openComputerFromThread = useCallback(() => void openComputerRef.current(), []);
 
   const mentionBotsKey = useMemo(
     () => bots.map((bot) => `${bot.id}:${bot.name}`).join(","),
@@ -2660,6 +2665,8 @@ export function ShellPage() {
                 olderCursor={activeSnapshot?.olderCursor ?? null}
                 loadingOlder={loadingOlder}
                 answerableAskMessageId={answerableAskMessageId}
+                takeoverMessageId={takeoverMessageId}
+                onOpenComputer={openComputerFromThread}
                 running={transcriptRunning}
                 workingBots={workingBots}
                 workingStartedAt={workingStartedAt}

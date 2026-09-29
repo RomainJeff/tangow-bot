@@ -7,6 +7,7 @@ import { isNarrationMessage } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
+  Button,
   Interstitial,
   MessageBubble,
   MessageRow,
@@ -14,7 +15,7 @@ import {
   Surface,
   UserBubble,
 } from "@rakazo/ui-web";
-import { ArrowRight, Check, Clock } from "lucide-react";
+import { ArrowRight, Check, Clock, Maximize2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useState } from "react";
 import { AgentSteps } from "../../components/AgentSteps";
@@ -107,6 +108,7 @@ export const MessageView = memo(function MessageView({
   showAuthor,
   showAvatar,
   onAnswer,
+  onOpenComputer,
   onOpenBot,
   onOpenPeerMessages,
   speakerName,
@@ -139,6 +141,8 @@ export const MessageView = memo(function MessageView({
    * (`isLastOfGroup`). Always false in a mono thread. */
   showAvatar: boolean;
   onAnswer: (message: ThreadMessage, text: string) => Promise<void>;
+  /** Set only on the live "Needs you" card: opens the bot's screen. */
+  onOpenComputer?: () => void;
   onOpenBot: (botId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   speakerName?: string;
@@ -522,6 +526,17 @@ export const MessageView = memo(function MessageView({
             <div className="my-2.5 text-meta text-muted-foreground">
               <ChatMarkdown>{block.text}</ChatMarkdown>
             </div>
+            {onOpenComputer && block.state === "Needs you" ? (
+              <Button
+                variant="capsule"
+                size="capsule"
+                data-testid="takeover-open-computer"
+                onClick={onOpenComputer}
+              >
+                <Maximize2 size={15} strokeWidth={1.9} aria-hidden />
+                <Trans>Open</Trans>
+              </Button>
+            ) : null}
           </Surface>
         );
       }

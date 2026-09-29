@@ -65,6 +65,8 @@ export const Transcript = memo(function Transcript({
   olderCursor,
   loadingOlder,
   answerableAskMessageId,
+  takeoverMessageId,
+  onOpenComputer,
   running,
   workingBots,
   workingStartedAt,
@@ -96,6 +98,9 @@ export const Transcript = memo(function Transcript({
   olderCursor: number | null;
   loadingOlder: boolean;
   answerableAskMessageId: string | null;
+  /** The live "Needs you" card, which opens the bot's screen in one click. */
+  takeoverMessageId?: string | null;
+  onOpenComputer?: () => void;
   running: boolean;
   workingBots: GroupAvatarMember[];
   /** Epoch ms the earliest working run started; undefined ticks from mount. */
@@ -596,6 +601,7 @@ export const Transcript = memo(function Transcript({
                       showAuthor={inGroup && group.isFirstOfGroup}
                       showAvatar={inGroup && group.isLastOfGroup}
                       canAnswer={message.id === answerableAskMessageId}
+                      onOpenComputer={message.id === takeoverMessageId ? onOpenComputer : undefined}
                       onOpenBot={onOpenBot}
                       onOpenPeerMessages={onOpenPeerMessages}
                       onAnswer={onAnswer}

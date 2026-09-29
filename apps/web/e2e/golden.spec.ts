@@ -101,23 +101,18 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
       message: "the second protected-input run must be ready for takeover",
     })
     .toBe("waiting_takeover");
-  // Computer & routines toggles the panel. Re-open when closed so Open can refresh computer status.
-  if ((await sidePanel.getAttribute("data-panel")) === "computer") {
-    await page.getByTestId("open-computer-panel").click();
-  }
-  await page.getByTestId("open-computer-panel").click();
-  await expect(sidePanel).toHaveAttribute("data-panel", "computer");
-  await sidePanel.getByTestId("computer-preview").hover();
-  const openComputer = sidePanel.getByTestId("computer-preview-open");
-  await expect(openComputer).toBeVisible({ timeout: 30_000 });
-  await openComputer.click();
+  // The live Needs you card opens the screen in one click, without the side panel.
+  const openFromCard = page.getByTestId("takeover-open-computer");
+  await expect(openFromCard).toHaveCount(1, { timeout: 30_000 });
+  await captureScreenshot(page, testInfo, "09a-computer-takeover-card");
+  await openFromCard.click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
   await page.getByRole("button", { name: "Skip", exact: true }).last().click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeHidden();
   await expect(page.getByText(/login was skipped/i).last()).toBeVisible({
     timeout: realSandboxTimeout(90_000, 30_000),
   });
-  await captureScreenshot(page, testInfo, "09a-computer-takeover-skipped");
+  await captureScreenshot(page, testInfo, "09b-computer-takeover-skipped");
 
   await page.getByRole("button", { name: "Create Routine" }).click();
   await page.locator("label:has-text('Name') input").fill("Monday briefing");

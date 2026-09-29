@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { latestAnswerableAskMessageId, selectedAskActionLabel } from "./answerable-ask.js";
+import {
+  latestAnswerableAskMessageId,
+  latestTakeoverMessageId,
+  selectedAskActionLabel,
+} from "./answerable-ask.js";
 
 describe("latestAnswerableAskMessageId", () => {
   it("finds a waiting prompt even when a newer group run is active", () => {
@@ -32,6 +36,32 @@ describe("latestAnswerableAskMessageId", () => {
       latestAnswerableAskMessageId({
         run: { id: "run-1", status: "waiting_input" },
         messages: [{ id: "ask-1", runId: "run-1", blocks: [{ kind: "ask", status: "answered" }] }],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("latestTakeoverMessageId", () => {
+  const needsYou = { kind: "computer", state: "Needs you" };
+
+  it("finds the Needs you card of a run waiting for the screen", () => {
+    expect(
+      latestTakeoverMessageId({
+        run: { id: "run-1", status: "waiting_takeover" },
+        messages: [
+          { id: "old", runId: "run-1", blocks: [needsYou] },
+          { id: "narration", runId: "run-1", blocks: [{ kind: "text" }] },
+          { id: "card", runId: "run-1", blocks: [{ kind: "steps" }, needsYou] },
+        ],
+      }),
+    ).toBe("card");
+  });
+
+  it("ignores cards once the run is no longer waiting for the screen", () => {
+    expect(
+      latestTakeoverMessageId({
+        run: { id: "run-1", status: "running" },
+        messages: [{ id: "card", runId: "run-1", blocks: [needsYou] }],
       }),
     ).toBeNull();
   });
