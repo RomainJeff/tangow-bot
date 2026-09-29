@@ -3,7 +3,6 @@ import { spawnBotEdits, spawnBotReadOnlyDetail } from "@rakazo/core";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -123,13 +122,43 @@ export default function EditBotProposal() {
               onPress: close,
             },
           ],
+          // The decision lives in the nav bar, like Save in bot settings: it stays reachable
+          // above the keyboard however far the instructions scroll.
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("Create bot")}
+              disabled={pending || !ready}
+              hitSlop={8}
+              onPress={() => void save()}
+              style={{ paddingVertical: 4, opacity: pending || !ready ? 0.4 : 1 }}
+            >
+              <Text style={styles.createLabel}>{pending ? t("Sending…") : t("Create bot")}</Text>
+            </Pressable>
+          ),
+          unstable_headerRightItems: () => [
+            {
+              type: "button",
+              label: pending ? t("Sending…") : t("Create bot"),
+              variant: "prominent",
+              disabled: pending || !ready,
+              onPress: () => void save(),
+            },
+          ],
         }}
       />
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? undefined : "height"}
         style={styles.screen}
       >
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+        {/* Automatic insets start the form below the sheet's header and keep the caret above
+            the keyboard on iOS. */}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentInsetAdjustmentBehavior="automatic"
+          automaticallyAdjustKeyboardInsets
+          contentContainerStyle={styles.content}
+        >
           <Text style={{ color: tokens.mutedForeground, fontSize: 14 }}>{t("Name")}</Text>
           <TextInput
             accessibilityLabel={t("Name")}
@@ -165,23 +194,6 @@ export default function EditBotProposal() {
               {error}
             </Text>
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("Create bot")}
-            disabled={pending || !ready}
-            onPress={() => void save()}
-            style={({ pressed }) => [
-              styles.button,
-              (pending || !ready) && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            {pending ? (
-              <ActivityIndicator color={mobileTokens().primaryForeground} />
-            ) : (
-              <Text style={styles.buttonLabel}>{t("Create bot")}</Text>
-            )}
-          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -201,15 +213,6 @@ function createStyles() {
     },
     cancelLabel: { color: native.label, fontSize: 17 },
     error: { color: tokens.destructive, fontSize: 14 },
-    button: {
-      minHeight: 48,
-      borderRadius: 12,
-      backgroundColor: tokens.primary,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    buttonLabel: { color: tokens.primaryForeground, fontSize: 16, fontWeight: "600" },
-    disabled: { opacity: 0.45 },
-    pressed: { opacity: 0.7 },
+    createLabel: { color: tokens.primary, fontSize: 16, fontWeight: "600" },
   });
 }
