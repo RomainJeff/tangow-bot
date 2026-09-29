@@ -808,13 +808,15 @@ export function ShellPage() {
     return snap;
   }
 
-  async function refreshComputerScreen(id: string) {
-    if (!computerVisible.current) return null;
+  // `visible` is for a caller about to show the screen, before the next render updates `computerVisible`.
+  async function refreshComputerScreen(id: string, { visible = false } = {}) {
+    const isVisible = () => visible || computerVisible.current;
+    if (!isVisible()) return null;
     const request = ++screenRequest.current;
     return loadComputerScreen({
       load: () => rpc.computer.screenUrl({ botId: id }),
       isCurrent: () =>
-        request === screenRequest.current && activeBotId.current === id && computerVisible.current,
+        request === screenRequest.current && activeBotId.current === id && isVisible(),
       commit: (screen) => {
         setScreenUrl(screen.url);
         setComputerError(screen.error);
@@ -2243,13 +2245,15 @@ export function ShellPage() {
   }) {
     if (!active) return;
     const needsBoot = force || computer?.state !== "running" || !screenUrl;
-    if (overlay && needsBoot) setBooting(true);
+    if (overlay) setBooting(true);
     setComputerError(null);
     setComputerErrorFromScreen(false);
     try {
       if (needsBoot) await rpc.computer.boot({ botId: active.id });
       if (takeControl) await rpc.computer.takeover({ botId: active.id });
       await refreshThread(active.id);
+      // The viewer needs its own fresh screen URL: a URL cached from an earlier view may be revoked.
+      if (overlay) await refreshComputerScreen(active.id, { visible: true });
     } catch (error) {
       setComputerError(error instanceof Error ? error.message : t`Could not take control`);
       setComputerErrorFromScreen(false);
@@ -2375,13 +2379,14 @@ export function ShellPage() {
     if (!active) return;
     const needsTakeover = !userHoldsComputerControl(computer, active.id);
     const blocked = computerTakeoverBlocked(computer, snapshot?.run?.status);
+    // Open first so a failed boot leaves the viewer showing the error and its Retry screen button.
+    setComputerOpen(true);
     try {
       await bootComputer({
         takeControl: needsTakeover && !blocked,
-        overlay: (needsTakeover && !blocked) || computer?.state !== "running",
+        overlay: true,
         force: computer?.state !== "running",
       });
-      setComputerOpen(true);
     } catch {
       // computerError already set in bootComputer
     }

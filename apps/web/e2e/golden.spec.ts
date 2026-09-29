@@ -105,8 +105,11 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   const openFromCard = page.getByTestId("takeover-open-computer");
   await expect(openFromCard).toHaveCount(1, { timeout: 30_000 });
   await captureScreenshot(page, testInfo, "09a-computer-takeover-card");
+  const screenRequested = page.waitForRequest("**/rpc/computer/screenUrl");
   await openFromCard.click();
+  await screenRequested;
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
+  await expect(page.locator('iframe[title="Bot screen"]')).toBeVisible();
   await page.getByRole("button", { name: "Skip", exact: true }).last().click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeHidden();
   await expect(page.getByText(/login was skipped/i).last()).toBeVisible({
