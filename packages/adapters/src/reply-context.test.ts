@@ -261,6 +261,21 @@ describe("own tool turns", () => {
     expect(turn.content).not.toMatch(/\[tool \w+\(/);
   });
 
+  it("replays the steps ahead of a takeover card, then the reason as text", () => {
+    const turn = messageToAgentHistoryTurn(
+      ownTurn([
+        readFile({ id: "toolu_1", input: '{ "path": "notes.md" }', output: "Ship Friday" }),
+        { kind: "computer", state: "Needs you", text: "Enter the 2FA code" },
+      ]),
+      "bot-a",
+    );
+    expect(turn.parts).toHaveLength(2);
+    expect(turn.parts?.[0]?.type).toBe("toolCalls");
+    const last = turn.parts?.[1];
+    expect(last?.type).toBe("text");
+    expect(last?.type === "text" ? last.text : "").toContain("Enter the 2FA code");
+  });
+
   it("keeps old blocks without ids as text only", () => {
     const turn = messageToAgentHistoryTurn(
       ownTurn([readFile({ input: '{ "path": "a" }', output: "x" })]),

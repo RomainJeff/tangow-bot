@@ -8,11 +8,27 @@ import {
   showsRoutineRunCard,
   subagentMarksUnread,
 } from "./executor.js";
+import { TOOL_FINAL_RESPONSE_FALLBACK } from "./user-progress.js";
 
 describe("completionMessageSegments", () => {
   it("keeps visible tool activity without appending a generic completion claim", () => {
     const steps = [{ kind: "steps" as const, steps: [{ label: "Message bot", count: 1 }] }];
     expect(completionMessageSegments(steps)).toEqual(steps);
+  });
+
+  it("adds the missing-reply notice when a user is owed an answer after tool steps", () => {
+    const steps = [{ kind: "steps" as const, steps: [{ label: "Read file", count: 1 }] }];
+    expect(completionMessageSegments(steps, { replyOwed: true })).toEqual([
+      ...steps,
+      { kind: "text", text: TOOL_FINAL_RESPONSE_FALLBACK },
+    ]);
+  });
+
+  it("does not add the notice when a reply is not owed or one already exists", () => {
+    const steps = [{ kind: "steps" as const, steps: [{ label: "Read file", count: 1 }] }];
+    expect(completionMessageSegments(steps, { replyOwed: false })).toEqual(steps);
+    const answered = [...steps, { kind: "text" as const, text: "All done." }];
+    expect(completionMessageSegments(answered, { replyOwed: true })).toEqual(answered);
   });
 
   it("keeps the last-resort fallback for a runtime that produced nothing", () => {

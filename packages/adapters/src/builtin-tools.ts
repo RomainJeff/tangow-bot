@@ -215,7 +215,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "request_takeover",
     description:
-      "Ask the user to take over the computer screen for passwords, 2FA, CAPTCHA, payment, passkeys, or other protected input. Never ask the user to paste protected values in chat.",
+      "Hand the screen to the user for a step only they can do: passwords, 2FA, CAPTCHA, payment, passkeys, or other protected input. Give one short reason addressed to the user; it is shown to them and your turn pauses until they press I'm done or Skip. When you resume, observe the screen before acting or reporting: the step may already be complete. Never ask the user to paste protected values in chat, and never request takeover twice for the same step.",
     inputSchema: {
       type: "object",
       properties: { reason: { type: "string" } },

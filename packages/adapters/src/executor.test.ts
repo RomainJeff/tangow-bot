@@ -12,6 +12,7 @@ import {
   CHAT_VOICE_INSTRUCTIONS,
   createRunExecutor,
   createRunWorkspaceCheckpoint,
+  describeToolPayload,
   loadCurrentTurnImages,
   looksLikeFakeToolCall,
   missingTurnImagesInstruction,
@@ -26,6 +27,29 @@ import {
 } from "./executor.js";
 import { serializeModelSecret } from "./pi-oauth.js";
 import { userSkillsRoot, writeUserSkill } from "./skill-store.js";
+
+describe("describeToolPayload", () => {
+  it("keeps a tool result's text but drops screenshot data from a step output", () => {
+    const shown = describeToolPayload({
+      kind: "agent_tool_result",
+      content: [
+        { type: "text", text: "computer observed" },
+        { type: "image", data: "QUJDREVGRw==", mimeType: "image/png" },
+      ],
+      details: { width: 10 },
+    });
+    expect(shown).toContain("computer observed");
+    expect(shown).toContain("image/png");
+    expect(shown).toContain("[image omitted]");
+    expect(shown).not.toContain("QUJDREVGRw==");
+  });
+
+  it("leaves other payloads alone", () => {
+    expect(describeToolPayload("plain")).toBe("plain");
+    expect(describeToolPayload({ ok: true })).toBe(JSON.stringify({ ok: true }, null, 2));
+    expect(describeToolPayload(undefined)).toBe("");
+  });
+});
 
 describe("tool completion audit", () => {
   it("records result metadata without persisting tool contents", () => {
@@ -1063,6 +1087,36 @@ description: Prepare standup notes
     );
   });
 
+  it("consumes an expired takeover checkpoint when claiming the run", async () => {
+    const updateMany = vi.fn(async () => ({ count: 0 }));
+    const prisma = {
+      run: {
+        findUnique: vi.fn(async () => ({
+          id: "run-1",
+          botId: "bot-1",
+          status: "queued",
+          checkpoint: "takeover-expired",
+          leaseFence: 0,
+        })),
+        updateMany,
+      },
+    } as unknown as PrismaClient;
+    const executor = createRunExecutor({ prisma } as Parameters<typeof createRunExecutor>[0]);
+
+    await executor.continueRun("run-1", "worker-1");
+
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "run-1",
+          status: "queued",
+          checkpoint: "takeover-expired",
+        }),
+        data: expect.objectContaining({ checkpoint: null }),
+      }),
+    );
+  });
+
   it("does not claim a waiting takeover after a concurrent release writes the checkpoint", async () => {
     let row: { status: string; checkpoint: string | null } = {
       status: "waiting_takeover",
@@ -1217,7 +1271,7 @@ description: Prepare standup notes
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          checkpoint: { in: ["takeover", "takeover-skipped"] },
+          checkpoint: { in: ["takeover", "takeover-skipped", "takeover-expired"] },
         }),
         data: expect.objectContaining({ status: "queued" }),
       }),

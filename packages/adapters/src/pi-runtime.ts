@@ -137,6 +137,11 @@ const MAX_PARALLEL_SUBAGENTS = 4;
 const MAX_SILENT_TOOL_CONTINUATIONS = 3;
 const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then give the user the final answer.";
+// When the agent goes idle after tool work with no reply for a user who is waiting, prompt
+// again (bounded) before falling back to a canned notice.
+const MAX_REPLY_NUDGES = 2;
+export const REPLY_NUDGE_PROMPT =
+  "The user is still waiting: your turn ended after tool calls with no reply. Write the answer now as your final message, without further tool calls unless one is required. If the work is unfinished, say what is done and what is blocked.";
 const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -388,7 +393,13 @@ export class PiAgentRuntime implements AgentRuntime {
         let silentToolContinuations = 0;
         let toolWorkPendingFinal = false;
         let endedSilentlyAfterTools = false;
+        // True once a delta of the assistant message being built was forwarded, so message_end
+        // only publishes text that never streamed (a final that arrives without text_delta).
+        let streamedThisMessage = false;
         agent.subscribe(async (event) => {
+          if (event.type === "message_start" && event.message.role === "assistant") {
+            streamedThisMessage = false;
+          }
           if (event.type === "message_end") {
             await piSession?.appendMessage(event.message);
             traceRecorder?.message(event.message);
@@ -424,6 +435,7 @@ export class PiAgentRuntime implements AgentRuntime {
                 queue.push({ type: "progress", text: "", activity: true });
               }
               streamed += delta;
+              streamedThisMessage = true;
               queue.push({ type: "text", text: delta });
             }
           }
@@ -466,10 +478,11 @@ export class PiAgentRuntime implements AgentRuntime {
           }
           if (event.type === "message_end" && event.message.role === "assistant") {
             const text = assistantText(event.message);
-            if (text && !streamed) {
-              streamed = text;
+            if (text && !streamedThisMessage) {
+              streamed += text;
               queue.push({ type: "text", text });
             }
+            streamedThisMessage = false;
             traceRecorder?.assistantMessage(
               event.message,
               "usage" in event.message ? event.message.usage : undefined,
@@ -492,14 +505,26 @@ export class PiAgentRuntime implements AgentRuntime {
           ...(request.currentTurnImages ?? []),
           ...initialSteering.flatMap((item) => item.images ?? []),
         ]);
+        // Tool work happened and nothing answered the user: the agent went idle anyway.
+        const replyOwed = () =>
+          toolWorkPendingFinal &&
+          !request.allowSilentEmpty &&
+          !host.pausePending &&
+          !host.toolCallBudget.exceeded &&
+          !agent.state.errorMessage &&
+          !signal.aborted;
         try {
-          await agent.prompt(initialPrompt, images?.length ? images : undefined);
-        } finally {
           try {
-            await agent.waitForIdle();
+            await agent.prompt(initialPrompt, images?.length ? images : undefined);
           } finally {
-            signal.removeEventListener("abort", onAbort);
+            await agent.waitForIdle();
           }
+          for (let nudge = 0; nudge < MAX_REPLY_NUDGES && replyOwed(); nudge += 1) {
+            await agent.prompt(REPLY_NUDGE_PROMPT);
+            await agent.waitForIdle();
+          }
+        } finally {
+          signal.removeEventListener("abort", onAbort);
         }
 
         // Budget abort stops the agent underneath the model, which leaves

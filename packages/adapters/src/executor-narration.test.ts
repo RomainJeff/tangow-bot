@@ -8,6 +8,7 @@ import { TOOL_FINAL_RESPONSE_FALLBACK } from "./user-progress.js";
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
   acquireComputerExecutionLease: async () => null,
+  holdComputerExecutionLeaseForTakeover: async () => true,
   provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
 }));
 
@@ -50,12 +51,16 @@ function fixture({
   parentBotId = null as string | null,
   routineId = null as string | null,
   routineNotify = false,
+  checkpoint = null as string | null,
+  priorMessages = [] as Array<{ blocks: MessageBlock[]; clientNonce: string | null }>,
   runtimeRun,
 }: {
   trigger?: string;
   parentBotId?: string | null;
   routineId?: string | null;
   routineNotify?: boolean;
+  checkpoint?: string | null;
+  priorMessages?: Array<{ blocks: MessageBlock[]; clientNonce: string | null }>;
   runtimeRun: (request: AgentRunRequest) => AsyncGenerator<AgentRuntimeEvent>;
 }) {
   const messages: StoredMessage[] = [];
@@ -74,6 +79,7 @@ function fixture({
     trigger,
     routineId,
     leaseFence: 0,
+    checkpoint,
   };
 
   const finalizeRun = vi.fn(
@@ -85,6 +91,11 @@ function fixture({
 
   const pauseRunForInput = vi.fn(async () => {
     run.status = "waiting_input";
+    return true;
+  });
+
+  const pauseRunForTakeover = vi.fn(async () => {
+    run.status = "waiting_takeover";
     return true;
   });
 
@@ -196,7 +207,9 @@ function fixture({
       ),
     },
     message: {
-      findMany: vi.fn(async () => []),
+      findMany: vi.fn(async ({ where }: { where?: { runId?: string } } = {}) =>
+        where?.runId ? priorMessages : [],
+      ),
       findUnique: vi.fn(
         async ({
           where,
@@ -260,6 +273,7 @@ function fixture({
       finalizeRun,
       notify,
       pauseRunForInput,
+      pauseRunForTakeover,
     },
     jobs: { enqueue: vi.fn(async () => undefined) },
     secrets: [],
@@ -269,6 +283,7 @@ function fixture({
     messages,
     finalizeRun,
     pauseRunForInput,
+    pauseRunForTakeover,
     messageCreate,
     async run() {
       await executor.continueRun(run.id, "worker-1");
@@ -383,6 +398,23 @@ describe("transient narration", () => {
     expect(finalText(blocks)).not.toContain("done.");
   });
 
+  it("CA9: a user run that only calls tools and ends without any text still finalizes with the missing-reply notice", async () => {
+    const f = fixture({
+      trigger: "user",
+      async *runtimeRun() {
+        yield { type: "tool", name: "check_things", args: {}, executionId: "call-1" };
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(f.finalizeRun).toHaveBeenCalledOnce();
+    const blocks = f.finalizeRun.mock.calls[0]![0].blocks ?? [];
+    expect(blocks.some((block) => block.kind === "steps")).toBe(true);
+    expect(finalText(blocks)).toBe(TOOL_FINAL_RESPONSE_FALLBACK);
+  });
+
   it("CA5: a run not allowed to stay silent that narrates, calls a tool, and gets only the runtime's missing-reply fallback publishes the narration and still posts the fallback", async () => {
     const f = fixture({
       trigger: "user",
@@ -430,5 +462,80 @@ describe("transient narration", () => {
     expect(card).toBeDefined();
     expect(card?.digest ?? "").not.toContain("Looking into it");
     expect(card?.headline ?? "").not.toContain("Looking into it");
+  });
+
+  it("CT0: a takeover publishes the attempt's tool steps with the pause card so a resume can replay them", async () => {
+    const f = fixture({
+      trigger: "user",
+      async *runtimeRun(request) {
+        yield {
+          type: "tool",
+          name: "check_things",
+          args: { page: "login" },
+          executionId: "call-1",
+        };
+        yield {
+          type: "tool",
+          name: "request_takeover",
+          args: { reason: "Enter the code" },
+          executionId: "call-2",
+        };
+        await request.executeTool!("request_takeover", { reason: "Enter the code" }, "call-2");
+        yield { type: "takeover", reason: "Enter the code" };
+      },
+    });
+
+    await f.run();
+
+    expect(f.pauseRunForTakeover).toHaveBeenCalledOnce();
+    expect(f.finalizeRun).not.toHaveBeenCalled();
+    const blocks = f.messages.at(-1)!.blocks;
+    expect(blocks.map((block) => block.kind)).toEqual(["steps", "computer"]);
+    const steps = blocks[0] as Extract<MessageBlock, { kind: "steps" }>;
+    const calls = steps.steps.flatMap((step) => step.calls ?? []);
+    expect(calls.map((call) => call.id)).toEqual(["call-1", "call-2"]);
+    expect(blocks[1]).toEqual({ kind: "computer", state: "Needs you", text: "Enter the code" });
+  });
+
+  it("CT1: a run resumed after takeover quotes why the screen was handed over and asks the bot to observe first", async () => {
+    let prompt = "";
+    const f = fixture({
+      trigger: "user",
+      checkpoint: "takeover",
+      priorMessages: [
+        {
+          blocks: [{ kind: "computer", state: "Needs you", text: "Enter the 2FA code" }],
+          clientNonce: null,
+        },
+      ],
+      async *runtimeRun(request) {
+        prompt = request.prompt;
+        yield { type: "text", text: "Continuing." };
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(prompt).toContain('because: "Enter the 2FA code"');
+    expect(prompt).toContain("observe the screen");
+  });
+
+  it("CT2: an expired takeover resumes with the ask-if-unsure note", async () => {
+    let prompt = "";
+    const f = fixture({
+      trigger: "user",
+      checkpoint: "takeover-expired",
+      async *runtimeRun(request) {
+        prompt = request.prompt;
+        yield { type: "text", text: "Continuing." };
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(prompt).toContain("ask the user whether they finished");
+    expect(prompt).not.toContain("because:");
   });
 });

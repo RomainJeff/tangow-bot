@@ -1389,7 +1389,11 @@ export async function finalizeComputerControlRelease(
     if (cleared.count !== 1) return null;
 
     const checkpoint =
-      input.reason === "skipped" || input.reason === "expired" ? "takeover-skipped" : "takeover";
+      input.reason === "expired"
+        ? "takeover-expired"
+        : input.reason === "skipped"
+          ? "takeover-skipped"
+          : "takeover";
     const resumed = input.runId
       ? await tx.run.updateMany({
           where: {

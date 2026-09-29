@@ -7,12 +7,15 @@ const fakeAgentState = vi.hoisted(() => ({
     | "empty"
     | "two-boundaries"
     | "silent-continuation"
+    | "unstreamed-final"
+    | "idle-without-final"
     | "subagent-limit"
     | "parent-limit"
     | "parent-parallel"
     | "ask-pause"
     | "nested-ask-pause",
   emitFinalAfterFollowUp: true,
+  answerOnNudge: false,
   abortCount: 0,
   tools: [] as Array<{
     name: string;
@@ -86,7 +89,90 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
         return;
       }
 
+      if (fakeAgentState.mode === "idle-without-final") {
+        // Tool work, then idle. Only a reply nudge (a later prompt) can make it answer.
+        if (fakeAgentState.promptInputs.length > 1) {
+          if (fakeAgentState.answerOnNudge) {
+            const text = "Here is what happened.";
+            this.emit({ type: "message_start", message: { role: "assistant", content: [] } });
+            this.emit({
+              type: "message_end",
+              message: { role: "assistant", content: [{ type: "text", text }] },
+            });
+            this.emit({
+              type: "turn_end",
+              message: { role: "assistant", content: [{ type: "text", text }] },
+              toolResults: [],
+            });
+          }
+          return;
+        }
+        const target =
+          this.tools.find((tool) => tool.name === fakeAgentState.invoke.name) ?? this.tools[0];
+        if (!target) throw new Error("expected tool was not exposed");
+        const args =
+          target.prepareArguments?.(fakeAgentState.invoke.args) ?? fakeAgentState.invoke.args;
+        this.emit({ type: "tool_execution_start", toolName: target.name, args });
+        const executed = (await target.execute("call-1", args)) as { details?: unknown };
+        this.emit({
+          type: "turn_end",
+          message: {
+            role: "assistant",
+            content: [{ type: "toolCall", id: "call-1", name: target.name, arguments: args }],
+          },
+          toolResults: [{ toolCallId: "call-1", result: { ok: true }, details: executed?.details }],
+        });
+        this.emit({
+          type: "turn_end",
+          message: { role: "assistant", content: [] },
+          toolResults: [],
+        });
+        return;
+      }
+
+      if (fakeAgentState.mode === "unstreamed-final") {
+        const target =
+          this.tools.find((tool) => tool.name === fakeAgentState.invoke.name) ?? this.tools[0];
+        if (!target) throw new Error("expected tool was not exposed");
+        const args =
+          target.prepareArguments?.(fakeAgentState.invoke.args) ?? fakeAgentState.invoke.args;
+        const narration = "I will check the destination first.";
+        const text = "The final answer.";
+        this.emit({ type: "message_start", message: { role: "assistant", content: [] } });
+        this.emit({
+          type: "message_update",
+          assistantMessageEvent: { type: "text_delta", delta: narration },
+        });
+        this.emit({ type: "tool_execution_start", toolName: target.name, args });
+        const executed = (await target.execute("call-1", args)) as { details?: unknown };
+        this.emit({
+          type: "turn_end",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "text", text: narration },
+              { type: "toolCall", id: "call-1", name: target.name, arguments: args },
+            ],
+          },
+          toolResults: [{ toolCallId: "call-1", result: { ok: true }, details: executed?.details }],
+        });
+        // The final message carries its text only in message_end: no text_delta streamed.
+        this.emit({ type: "message_start", message: { role: "assistant", content: [] } });
+        this.emit({
+          type: "message_end",
+          message: { role: "assistant", content: [{ type: "text", text }] },
+        });
+        this.emit({
+          type: "turn_end",
+          message: { role: "assistant", content: [{ type: "text", text }] },
+          toolResults: [],
+        });
+        return;
+      }
+
       if (fakeAgentState.mode === "silent-continuation") {
+        // A reply nudge is a later prompt: the scripted tool step only runs on the first.
+        if (fakeAgentState.promptInputs.length > 1) return;
         const target =
           this.tools.find((tool) => tool.name === fakeAgentState.invoke.name) ?? this.tools[0];
         if (!target) throw new Error("expected tool was not exposed");
@@ -261,7 +347,7 @@ vi.mock("./pi-openai-compatible-provider.js", () => ({
 
 import { decideWithin } from "./decision.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
-import { maxToolCallsPerTurn, PiAgentRuntime } from "./pi-runtime.js";
+import { maxToolCallsPerTurn, PiAgentRuntime, REPLY_NUDGE_PROMPT } from "./pi-runtime.js";
 import { TOOL_RESULT_TEXT_LIMIT } from "./pi-runtime-limits.js";
 import { TraceExporter } from "./trace-export.js";
 
@@ -308,6 +394,7 @@ describe("Pi connector tool dispatch", () => {
     fakeAgentState.steeredMessages = [];
     fakeAgentState.followUpMessages = [];
     fakeAgentState.emitFinalAfterFollowUp = true;
+    fakeAgentState.answerOnNudge = false;
     fakeAgentState.initialMessages = [];
     fakeAgentState.promptInputs = [];
     fakeAgentState.promptImages = [];
@@ -874,6 +961,147 @@ describe("Pi connector tool dispatch", () => {
     expect(fakeAgentState.followUpMessages).toEqual([]);
     expect(JSON.stringify(events)).not.toContain("could not produce a final response");
     // The pre-tool narration is not carried as the run's final text.
+    expect(events.at(-1)).toEqual({ type: "done" });
+  });
+
+  it("publishes a final answer that arrives without any text delta", async () => {
+    fakeAgentState.mode = "unstreamed-final";
+    const runtime = new PiAgentRuntime();
+    const events: Array<{ type: string; text?: string }> = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "unstreamed-final",
+        prompt: "send the update and report back",
+        instructions: "Use the destination tool, then tell the user what happened.",
+        history: [],
+        tools: [destinationTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "unstreamed-final",
+        traceId: "unstreamed-final",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toContainEqual({ type: "text", text: "The final answer." });
+    const done = events.at(-1);
+    expect(done?.type).toBe("done");
+    expect(done?.text?.endsWith("The final answer.")).toBe(true);
+    expect(fakeAgentState.promptInputs).toHaveLength(1);
+  });
+
+  it("nudges twice for a reply when the agent idles after tools, then falls back", async () => {
+    fakeAgentState.mode = "idle-without-final";
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "idle-without-final",
+        prompt: "send the update and report back",
+        instructions: "Use the destination tool, then tell the user what happened.",
+        history: [],
+        tools: [destinationTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "idle-without-final",
+        traceId: "idle-without-final",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(
+      fakeAgentState.promptInputs.filter((input) => input === REPLY_NUDGE_PROMPT),
+    ).toHaveLength(2);
+    expect(events).toContainEqual({
+      type: "text",
+      text: "I completed the tool step but could not produce a final response. Please ask me to continue.",
+    });
+  });
+
+  it("stops nudging once the reply arrives", async () => {
+    fakeAgentState.mode = "idle-without-final";
+    fakeAgentState.answerOnNudge = true;
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "nudge-answers",
+        prompt: "send the update and report back",
+        instructions: "Use the destination tool, then tell the user what happened.",
+        history: [],
+        tools: [destinationTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "nudge-answers",
+        traceId: "nudge-answers",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(
+      fakeAgentState.promptInputs.filter((input) => input === REPLY_NUDGE_PROMPT),
+    ).toHaveLength(1);
+    expect(events).toContainEqual({ type: "text", text: "Here is what happened." });
+    expect(JSON.stringify(events)).not.toContain("could not produce a final response");
+  });
+
+  it("does not nudge a run allowed to stay silent", async () => {
+    fakeAgentState.mode = "idle-without-final";
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "idle-silent-allowed",
+        prompt: "send the update and report back",
+        instructions: "Use the destination tool, then tell the user what happened.",
+        history: [],
+        tools: [destinationTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        allowSilentEmpty: true,
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "idle-silent-allowed",
+        traceId: "idle-silent-allowed",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(fakeAgentState.promptInputs).not.toContain(REPLY_NUDGE_PROMPT);
     expect(events.at(-1)).toEqual({ type: "done" });
   });
 

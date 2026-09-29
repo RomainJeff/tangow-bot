@@ -4,26 +4,51 @@ import {
   refreshTakeoverContinuePlan,
   takeoverContinuePlan,
   takeoverResumeFromRelease,
+  takeoverResumePromptNote,
 } from "./takeover-resume.js";
 
 describe("takeoverResumeFromRelease", () => {
-  it("tells the bot the login finished after I'm done or a plain release", () => {
+  it("maps I'm done and a plain release to a finished takeover", () => {
     for (const reason of ["done", "released", undefined]) {
-      const resume = takeoverResumeFromRelease(reason);
-      expect(resume.checkpoint).toBe("takeover");
-      expect(resume.promptNote).toMatch(/finished the login/i);
+      expect(takeoverResumeFromRelease(reason)).toEqual({
+        checkpoint: "takeover",
+        outcome: "done",
+      });
     }
   });
 
-  it("tells the bot the login was skipped", () => {
-    const resume = takeoverResumeFromRelease("skipped");
-    expect(resume.checkpoint).toBe("takeover-skipped");
-    expect(resume.promptNote).toMatch(/skipped the login/i);
-    expect(resume.promptNote).not.toMatch(/finished the login/i);
+  it("keeps skipped and expired apart", () => {
+    expect(takeoverResumeFromRelease("skipped")).toEqual({
+      checkpoint: "takeover-skipped",
+      outcome: "skipped",
+    });
+    expect(takeoverResumeFromRelease("expired")).toEqual({
+      checkpoint: "takeover-expired",
+      outcome: "expired",
+    });
+  });
+});
+
+describe("takeoverResumePromptNote", () => {
+  it("always tells the bot to observe and not to request takeover again", () => {
+    for (const outcome of ["done", "skipped", "expired"] as const) {
+      const note = takeoverResumePromptNote(outcome, "Enter the code");
+      expect(note).toMatch(/observe/i);
+      expect(note).toContain("Do not request takeover again");
+    }
   });
 
-  it("treats an expired takeover like a skip", () => {
-    expect(takeoverResumeFromRelease("expired").checkpoint).toBe("takeover-skipped");
+  it("quotes the reason when known and omits the clause otherwise", () => {
+    expect(takeoverResumePromptNote("done", "Enter the code")).toContain(
+      'because: "Enter the code"',
+    );
+    expect(takeoverResumePromptNote("done")).not.toContain("because");
+  });
+
+  it("words each outcome differently", () => {
+    expect(takeoverResumePromptNote("done")).toContain("I'm done");
+    expect(takeoverResumePromptNote("skipped")).toContain("treat the step as not done");
+    expect(takeoverResumePromptNote("expired")).toContain("ask the user whether they finished");
   });
 });
 
@@ -48,6 +73,13 @@ describe("takeoverContinuePlan", () => {
     });
     expect(skipped.heldForTakeover).toBe(false);
     expect(skipped.takeoverResume?.checkpoint).toBe("takeover-skipped");
+
+    const expired = takeoverContinuePlan({
+      status: "queued",
+      checkpoint: "takeover-expired",
+    });
+    expect(expired.resumeHeldLease).toBe(true);
+    expect(expired.takeoverResume?.outcome).toBe("expired");
   });
 
   it("does not treat a normal continue as a takeover resume", () => {

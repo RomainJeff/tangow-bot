@@ -49,6 +49,12 @@ describe("scripted runtime", () => {
     expect(script?.some((t) => t.assistant?.includes("login was skipped"))).toBe(true);
   });
 
+  it("resumes an expired takeover without asking again", () => {
+    const script = inferScript("install the cli and sign in", "takeover-expired");
+    expect(script?.some((t) => t.takeover)).toBe(false);
+    expect(script?.some((t) => t.complete)).toBe(true);
+  });
+
   it("does not infer a takeover checkpoint from ordinary task text", () => {
     const script = inferScript("ask me whether to record 'skipped the login'");
     expect(script?.some((t) => t.assistant?.includes("decision"))).toBe(true);

@@ -261,7 +261,7 @@ describe("finalizeComputerControlRelease", () => {
         botId: "bot-1",
         status: "waiting_takeover",
       },
-      data: { status: "queued", checkpoint: "takeover-skipped" },
+      data: { status: "queued", checkpoint: "takeover-expired" },
     });
     expect(tx.event.create).toHaveBeenCalledWith(
       expect.objectContaining({

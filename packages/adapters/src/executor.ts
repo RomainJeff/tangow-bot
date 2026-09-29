@@ -316,6 +316,7 @@ import {
   type TakeoverResumeCheckpoint,
   takeoverCheckpointOf,
   takeoverContinuePlan,
+  takeoverResumePromptNote,
 } from "./takeover-resume.js";
 import { getActiveTeachingSession, parsePlaybook } from "./teaching-session.js";
 import {
@@ -1785,6 +1786,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let publishedMidTurnUserMessage = false;
         const midTurnUserTexts: string[] = [];
         let midTurnProgressCount = 0;
+        // Why the previous attempt handed the screen over, for the resume note.
+        let takeoverReason: string | undefined;
         {
           const priorProgress = await deps.prisma.message.findMany({
             where: { runId: run.id, role: "bot" },
@@ -1792,8 +1795,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             select: { blocks: true, clientNonce: true },
           });
           for (const message of priorProgress) {
-            if (!isUserProgressClientNonce(message.clientNonce)) continue;
             const blocks = Array.isArray(message.blocks) ? (message.blocks as MessageBlock[]) : [];
+            for (const block of blocks) {
+              if (block.kind === "computer" && block.state === "Needs you" && block.text) {
+                takeoverReason = block.text;
+              }
+            }
+            if (!isUserProgressClientNonce(message.clientNonce)) continue;
             const text = blocks
               .filter(
                 (block): block is Extract<MessageBlock, { kind: "text" }> => block.kind === "text",
@@ -3793,7 +3801,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           formatCurrentTimeInstruction(),
           replyContext,
           basePrompt,
-          takeoverResume?.promptNote,
+          takeoverResume
+            ? takeoverResumePromptNote(takeoverResume.outcome, takeoverReason)
+            : undefined,
           approvalContinuation,
         ]
           .filter(Boolean)
@@ -4214,9 +4224,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 hasStreamedText = false;
                 pendingProgress = "";
               }
+              // The attempt's tool steps live only in memory; publish them with the pause card so
+              // the resumed turn replays them as history instead of starting the task over.
+              flushPendingTools();
+              const priorSteps = messageSegments.filter((block) => block.kind === "steps");
               await publishMessage(deps, run, "bot", [
+                ...redactBlocks(priorSteps, runSecrets),
                 { kind: "computer", state: "Needs you", text: safeReason },
               ]);
+              messageSegments = [];
               await workspaceCheckpoint.flush();
               if (!(await holdComputerExecutionLeaseForTakeover(deps.prisma, computerLease))) {
                 throw new Error("Computer lease expired before takeover");
@@ -4512,6 +4528,25 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // "…" fallback so we do not add a junk final bubble. Delegated bot_message
             // runs still return via botMessageOutcomeFromMidTurn below (status when
             // only progress was posted, result when a final reply exists).
+            // A user who is waiting must not be left with step chips alone.
+            const replyOwed =
+              !answered &&
+              !handedOff &&
+              !publishedTerminalSubagent &&
+              !publishedMidTurnUserMessage &&
+              !(allowSilentPeerMessage || messagingChannelRun || ownRoutineRun);
+            if (
+              replyOwed &&
+              messageSegments.length > 0 &&
+              !messageSegments.some((segment) => segment.kind === "text" && segment.text.trim())
+            ) {
+              getLogger().warn("agent.run.silent", {
+                runId,
+                botId: bot.id,
+                trigger: run.trigger,
+                toolCalls: toolDetails.size,
+              });
+            }
             messageSegments = completionMessageSegments(messageSegments, {
               allowSilentEmpty:
                 allowSilentPeerMessage ||
@@ -4521,6 +4556,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               emptyResponseText,
               suppressOutput: handedOff,
               skipEmptyFallback: publishedTerminalSubagent || publishedMidTurnUserMessage,
+              replyOwed,
             });
           }
           // A routine card run's free closing text is replaced by the run card below (CA1/CA2):
@@ -4981,6 +5017,8 @@ export function completionMessageSegments(
     emptyResponseText?: string;
     suppressOutput?: boolean;
     skipEmptyFallback?: boolean;
+    /** The user is waiting on an answer: tool activity alone must not end the run. */
+    replyOwed?: boolean;
   },
 ): MessageBlock[] {
   if (options?.suppressOutput) return [];
@@ -4992,6 +5030,12 @@ export function completionMessageSegments(
       !segments.some((segment) => segment.kind === "text" && segment.text)
     ) {
       return [...segments, { kind: "text", text: fallback }];
+    }
+    if (
+      options?.replyOwed &&
+      !segments.some((segment) => segment.kind === "text" && segment.text.trim())
+    ) {
+      return [...segments, { kind: "text", text: TOOL_FINAL_RESPONSE_FALLBACK }];
     }
     return segments;
   }
@@ -5183,9 +5227,20 @@ async function requeueComputerRun(
 /** Step details are read by humans in the UI, so keep them small and always stringy. */
 const TOOL_DETAIL_MAX_CHARS = 4000;
 
-function describeToolPayload(value: unknown): string {
+/** Step outputs are replayed as history, so a screenshot's base64 must never ride along. */
+export function describeToolPayload(value: unknown): string {
   if (value === undefined) return "";
-  const text = typeof value === "string" ? value : safeStringifyToolPayload(value);
+  const shown = isAuditableToolResult(value)
+    ? {
+        ...value,
+        content: value.content.map((part) =>
+          part && typeof part === "object" && (part as { type?: unknown }).type === "image"
+            ? { ...part, data: "[image omitted]" }
+            : part,
+        ),
+      }
+    : value;
+  const text = typeof shown === "string" ? shown : safeStringifyToolPayload(shown);
   return text.length > TOOL_DETAIL_MAX_CHARS
     ? `${text.slice(0, TOOL_DETAIL_MAX_CHARS)}\n… truncated`
     : text;

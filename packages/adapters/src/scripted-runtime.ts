@@ -140,6 +140,14 @@ export function inferScript(
       },
     ];
   }
+  if (resumeFromCheckpoint === "takeover-expired") {
+    return [
+      {
+        assistant: "control timed out. checking the screen before continuing.",
+        complete: true,
+      },
+    ];
+  }
   if (resumeFromCheckpoint === "takeover") {
     return [
       {
