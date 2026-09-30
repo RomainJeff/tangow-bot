@@ -1,6 +1,6 @@
 import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
-import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
+import type { MessageReaction, PendingWorkAsk, ThreadMessage } from "@rakazo/contracts";
 import {
   computeGroupContinuations,
   isAsideOnlyMessage,
@@ -25,6 +25,7 @@ import {
   useState,
 } from "react";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
+import { WorkAskCard } from "../../components/WorkAskCard";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
@@ -43,6 +44,9 @@ export const Transcript = memo(function Transcript({
   running,
   workingBots,
   workingStartedAt,
+  pendingWork,
+  workAskError,
+  onAnswerWork,
   onLoadOlder,
   onOpenBot,
   onAnswer,
@@ -71,6 +75,9 @@ export const Transcript = memo(function Transcript({
   workingBots: GroupAvatarMember[];
   /** Epoch ms the earliest working run started; undefined ticks from mount. */
   workingStartedAt?: number;
+  pendingWork?: PendingWorkAsk[];
+  workAskError: { workId: string; message: string } | null;
+  onAnswerWork: (work: PendingWorkAsk, text: string) => Promise<void>;
   onLoadOlder: () => void | Promise<void>;
   onOpenBot: (botId: string) => void;
   onAnswer: (message: ThreadMessage, text: string) => Promise<void>;
@@ -464,6 +471,14 @@ export const Transcript = memo(function Transcript({
             </Fragment>
           );
         })}
+        {(pendingWork ?? []).map((work) => (
+          <WorkAskCard
+            key={`${work.workId}:${work.message.id}`}
+            pendingWork={work}
+            error={workAskError?.workId === work.workId ? workAskError.message : null}
+            onAnswer={(text) => onAnswerWork(work, text)}
+          />
+        ))}
         {running &&
         !messages.some(
           (message) =>

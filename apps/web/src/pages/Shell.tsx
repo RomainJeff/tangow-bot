@@ -11,6 +11,7 @@ import type {
   Group,
   Me,
   MessageReaction,
+  PendingWorkAsk,
   ProductEvent,
   Routine,
   SearchHit,
@@ -240,6 +241,10 @@ export function ShellPage() {
   const [rewindDraft, setRewindDraft] = useState<{ key: string; text: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // Last failed works.answer, keyed by the work whose card shows the failure.
+  const [workAskError, setWorkAskError] = useState<{ workId: string; message: string } | null>(
+    null,
+  );
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState<Panel>(null);
@@ -1145,9 +1150,12 @@ export function ShellPage() {
         if (
           isRunTerminalEvent(event) ||
           event.type === "run.waiting_input" ||
+          event.type === "work.waiting_input" ||
           event.type === "skill.teaching.stopped"
         ) {
           // waiting_input: reconcile ask cards if a stale post-send refresh raced SSE.
+          // work.waiting_input: a delegated work's ask only exists in pendingWork, which
+          // only a snapshot reload supplies.
           void refreshThread(active.id).catch(() => undefined);
         } else if (isComputerStatusEvent(event)) {
           void refreshComputerScreen(active.id).catch(() => undefined);
@@ -1796,6 +1804,33 @@ export function ShellPage() {
       await refreshThreadRef.current(botId);
     }
   }, []);
+  const answerWork = useCallback(
+    async (work: PendingWorkAsk, text: string) => {
+      const botId = activeBotId.current;
+      if (!botId) return;
+      setWorkAskError(null);
+      try {
+        await rpc.works.answer({
+          workId: work.workId,
+          runId: work.runId,
+          messageId: work.message.id,
+          answer: text,
+        });
+      } catch (error) {
+        // Show the failure on the card that owns the provenance; the ask stays pending
+        // until the server actually accepts an answer.
+        if (activeBotId.current === botId) {
+          setWorkAskError({
+            workId: work.workId,
+            message: error instanceof Error ? error.message : t`Could not submit this answer`,
+          });
+        }
+        return;
+      }
+      if (activeBotId.current === botId) await refreshThreadRef.current(botId);
+    },
+    [t],
+  );
   const reactToMessage = useCallback(
     async (message: ThreadMessage, reaction: MessageReaction) => {
       const botId = activeBotId.current;
@@ -2633,6 +2668,9 @@ export function ShellPage() {
                 running={transcriptRunning}
                 workingBots={workingBots}
                 workingStartedAt={workingStartedAt}
+                pendingWork={activeSnapshot?.pendingWork}
+                workAskError={workAskError}
+                onAnswerWork={answerWork}
                 onLoadOlder={loadOlder}
                 onOpenBot={openBot}
                 onAnswer={answerMessage}

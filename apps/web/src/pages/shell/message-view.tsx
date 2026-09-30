@@ -22,11 +22,13 @@ import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
 import { CloudAgentCard } from "../../components/CloudAgentCard";
 import { SkillDraftCard } from "../../components/teach/SkillDraftCard";
+import { WorkReturnCard } from "../../components/WorkReturnCard";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageTimeLabel } from "../../lib/message-time";
 import { messageProviderLabel } from "../../lib/messaging";
+import { parseWorkReturn } from "../../lib/work-return";
 import { FALLBACK_BOT_COLOR } from "./layout";
 
 const USER_TEXT_FOLD_LINES = 20;
@@ -444,6 +446,16 @@ export const MessageView = memo(function MessageView({
         );
       }
       if (block.kind === "card") {
+        const workReturn = parseWorkReturn(block);
+        if (workReturn) {
+          return (
+            <WorkReturnCard
+              key={i}
+              workReturn={workReturn}
+              specialistName={peerBot(workReturn.executorBotId ?? "")?.name ?? t`Specialist`}
+            />
+          );
+        }
         return (
           <div key={i} className="flex justify-start">
             <Surface className="flex flex-col gap-2 px-5 py-4">

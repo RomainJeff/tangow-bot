@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 
 import { providerLabel } from "../lib/messaging";
 import { rpc } from "../lib/rpc";
+import { ExternalConversationHistory } from "./ExternalConversationHistory";
 import { ExternalConversationSettings } from "./ExternalConversationSettings";
 
 export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
@@ -29,6 +30,7 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
   const [connections, setConnections] = useState<MessagingAgentConnection[]>([]);
   const [bots, setBots] = useState<Bot[]>([]);
   const [externalConversations, setExternalConversations] = useState<ExternalConversation[]>([]);
+  const [historyConversationId, setHistoryConversationId] = useState<string | null>(null);
   const [settingsConversationId, setSettingsConversationId] = useState<string | null>(null);
   const [linkBotId, setLinkBotId] = useState("");
   const [linkCode, setLinkCode] = useState<string | null>(null);
@@ -356,11 +358,32 @@ export function MessagingSettingsOverlay({ onClose }: { onClose: () => void }) {
                       <Button
                         variant="secondary"
                         className="rounded-full"
+                        onClick={() =>
+                          setHistoryConversationId(
+                            historyConversationId === conversation.id ? null : conversation.id,
+                          )
+                        }
+                      >
+                        {historyConversationId === conversation.id ? (
+                          <Trans>Close chat</Trans>
+                        ) : (
+                          <Trans>Open chat</Trans>
+                        )}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="rounded-full"
                         onClick={() => setSettingsConversationId(open ? null : conversation.id)}
                       >
                         {open ? <Trans>Close</Trans> : <Trans>Settings</Trans>}
                       </Button>
                     </div>
+                    {historyConversationId === conversation.id ? (
+                      <ExternalConversationHistory
+                        conversation={conversation}
+                        botName={bot?.name ?? "Bot"}
+                      />
+                    ) : null}
                     {open && bot ? (
                       <div className="mt-4 rounded-lg border border-border px-3 py-3">
                         <ExternalConversationSettings

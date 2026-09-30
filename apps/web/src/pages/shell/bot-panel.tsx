@@ -3,9 +3,11 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type {
   Bot,
   ComputerMode,
+  HarnessChoice,
   Me,
   ModelCatalogEntry,
   ModelCredential,
+  NativeHarnessAvailability,
   ThinkingLevel,
   VoiceInfo,
 } from "@rakazo/contracts";
@@ -14,6 +16,7 @@ import {
   BOT_INSTRUCTIONS_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
+  NATIVE_HARNESSES,
   SELECTABLE_BOT_COLORS,
 } from "@rakazo/contracts";
 import { SHAPES } from "@rakazo/core";
@@ -307,6 +310,7 @@ export function BotSettings({
     modelProvider?: string | null;
     modelId?: string | null;
     thinkingLevel?: ThinkingLevel | null;
+    harness?: HarnessChoice;
     shapeSeed?: number | null;
     notifyOnFinish?: boolean;
   }) => Promise<void>;
@@ -333,6 +337,8 @@ export function BotSettings({
     bot.modelProvider && bot.modelId ? modelOptionKey(bot.modelProvider, bot.modelId) : "",
   );
   const [thinkingLevel, setThinkingLevel] = useState(bot.thinkingLevel ?? "");
+  const [harness, setHarness] = useState<HarnessChoice>(bot.harness);
+  const [nativeHarnesses, setNativeHarnesses] = useState<NativeHarnessAvailability | null>(null);
   const [credentials, setCredentials] = useState<ModelCredential[]>([]);
   const [catalog, setCatalog] = useState<ModelCatalogEntry[]>([]);
   const [me, setMe] = useState<Me | null>(null);
@@ -344,6 +350,10 @@ export function BotSettings({
       .voices({})
       .then(setVoices)
       .catch(() => setVoices([]));
+    void rpc.computer
+      .status({ botId: bot.id })
+      .then((status) => setNativeHarnesses(status.nativeHarnesses ?? null))
+      .catch(() => setNativeHarnesses(null));
     void Promise.all([rpc.models.credentials(), rpc.models.list(), rpc.me()])
       .then(([nextCredentials, nextCatalog, nextMe]) => {
         setCredentials(nextCredentials);
@@ -416,7 +426,6 @@ export function BotSettings({
     []
   ).filter((level) => level !== "off");
   const defaultThinkingLevel = effectiveCredential?.thinkingLevel ?? "medium";
-
   return (
     <div data-testid="bot-settings" className="flex min-h-0 flex-1 flex-col">
       <div className="rk-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-1">
@@ -503,6 +512,35 @@ export function BotSettings({
               ›
             </span>
           </summary>
+          <label htmlFor={`${ids}-harness`} className={fieldLabelClass}>
+            <Trans>Harness</Trans>
+            <NativeSelect
+              id={`${ids}-harness`}
+              className="mt-2 w-full"
+              value={harness}
+              onChange={(event) => setHarness(event.target.value as HarnessChoice)}
+            >
+              <NativeSelectOption value="default">{t`Rakazo`}</NativeSelectOption>
+              <NativeSelectOption
+                value="codex-native"
+                disabled={!nativeHarnesses?.["codex-native"]}
+              >
+                {NATIVE_HARNESSES["codex-native"].name}
+              </NativeSelectOption>
+              <NativeSelectOption
+                value="claude-native"
+                disabled={!nativeHarnesses?.["claude-native"]}
+              >
+                {NATIVE_HARNESSES["claude-native"].name}
+              </NativeSelectOption>
+            </NativeSelect>
+          </label>
+          {nativeHarnesses &&
+          !(nativeHarnesses["codex-native"] && nativeHarnesses["claude-native"]) ? (
+            <p className="mt-2 text-meta text-muted-foreground">
+              {t`Codex and Claude need the bot's Docker Computer and a model on their subscription.`}
+            </p>
+          ) : null}
           <ComputerModePicker value={computerMode} onChange={setComputerMode} />
           <Suspense fallback={null}>
             <ScratchpadSection botId={bot.id} />
@@ -663,6 +701,9 @@ export function BotSettings({
               voiceId: voiceId || null,
               modelProvider: selected?.provider ?? null,
               modelId: selected?.modelId ?? null,
+              // Only send the choice when it changed: bots.update records it and
+              // bumps the choice version on every request that carries it.
+              ...(harness !== bot.harness ? { harness } : {}),
               // Only clear thinking when catalog metadata is available; otherwise
               // preserve the stored override if models.list failed or is still loading.
               ...(modelMetaReady

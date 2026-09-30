@@ -254,6 +254,7 @@ export function isThreadSnapshotEvent(event: ProductEvent): boolean {
     event.type === "thread.message.updated" ||
     event.type === "run.started" ||
     event.type === "run.waiting_input" ||
+    event.type === "work.waiting_input" ||
     event.type === "computer.takeover.requested" ||
     isRunTerminalEvent(event)
   );
@@ -310,6 +311,13 @@ export function reduceThreadSnapshot(
       run: prev.groupId && prev.run?.status === "failed" && prev.run.id !== run.id ? prev.run : run,
       activeRuns,
     };
+  }
+  if (event.type === "work.waiting_input") {
+    // A delegated work is waiting on its specialist; the ask itself reaches the thread
+    // through the snapshot's pendingWork on the next threads.get. Never touch this
+    // thread's run or messages — the specialist run is not a run of this thread, and a
+    // waiting run here would block the composer.
+    return { ...prev, cursor: event.seq };
   }
   if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
     const status = event.type === "run.waiting_input" ? "waiting_input" : "waiting_takeover";

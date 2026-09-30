@@ -2,6 +2,7 @@ import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { RunActivityRow } from "@rakazo/contracts";
+import { isNativeHarness, NATIVE_HARNESSES } from "@rakazo/contracts";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
 
@@ -11,6 +12,10 @@ function statusTone(status: RunActivityRow["status"]): string {
   if (status === "completed") return "text-success";
   if (status === "waiting_input" || status === "waiting_takeover") return "text-warning";
   return "text-foreground";
+}
+
+export function harnessLabel(harness: string): string {
+  return isNativeHarness(harness) ? NATIVE_HARNESSES[harness].name : harness;
 }
 
 type ActivityListProps = {
@@ -118,6 +123,13 @@ function ActivityRow({ run, onOpen }: { run: RunActivityRow; onOpen: () => void 
           {run.promptSnippet ? (
             <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
               {run.promptSnippet}
+            </span>
+          ) : null}
+          {run.harness ? (
+            <span className="min-w-0 truncate text-xs text-muted-foreground/80">
+              {run.executionTarget
+                ? `${harnessLabel(run.harness)} · ${run.executionTarget}`
+                : harnessLabel(run.harness)}
             </span>
           ) : null}
           <span className={`ms-auto shrink-0 text-xs ${tone}`}>{label}</span>

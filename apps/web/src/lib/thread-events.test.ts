@@ -428,6 +428,28 @@ describe("thread event reduction", () => {
     expect(started?.run?.trigger).toBe("webhook");
   });
 
+  it("reloads through the snapshot pipeline on work.waiting_input without touching the run", () => {
+    // A delegated specialist's ask lives in the snapshot's pendingWork, which only a
+    // snapshot reload supplies. The coordinator's own run and transcript stay untouched,
+    // so the composer keeps working while the specialist waits.
+    const run = threadRun("run-coordinator");
+    const initial: ThreadSnapshot = { ...snapshot([]), run, activeRuns: [run] };
+    const workEvent = event({
+      type: "work.waiting_input",
+      seq: 9,
+      runId: "run-specialist",
+      payload: { workId: "work-1", runId: "run-specialist" },
+    });
+
+    expect(isThreadSnapshotEvent(workEvent)).toBe(true);
+    const next = reduceThreadSnapshot(initial, workEvent);
+
+    expect(next?.cursor).toBe(9);
+    expect(next?.run).toBe(run);
+    expect(next?.activeRuns).toEqual([run]);
+    expect(next?.messages).toBe(initial.messages);
+  });
+
   it("marks the run as waiting when computer takeover is requested", () => {
     const run = threadRun("run-1");
     const initial: ThreadSnapshot = {

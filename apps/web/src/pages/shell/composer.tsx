@@ -34,7 +34,8 @@ import type { PendingAttachment } from "./layout";
 import { FALLBACK_BOT_COLOR } from "./layout";
 import { previewMessageText } from "./message-view";
 
-const ATTACHMENT_ACCEPT = ATTACHMENT_ALLOWED_MIME_TYPES.join(",");
+// Windows can report zip files as application/x-zip-compressed.
+const ATTACHMENT_ACCEPT = [...ATTACHMENT_ALLOWED_MIME_TYPES, ".zip"].join(",");
 
 export const Composer = memo(function Composer({
   activeName,
