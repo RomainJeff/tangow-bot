@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { appendFile } from "node:fs/promises";
 import type {
   AdapterContext,
   AgentHomeStore,
@@ -27,7 +28,7 @@ import {
   routineWakeupJob,
   runContinueJob,
 } from "@rakazo/adapter-kit";
-import type { MessageBlock, RunStatus } from "@rakazo/contracts";
+import type { MessageBlock, NativeHarnessChoice, RunStatus } from "@rakazo/contracts";
 import {
   ATTACHMENT_MAX_BYTES,
   BOT_DESCRIPTION_MAX_LENGTH,
@@ -36,6 +37,7 @@ import {
   BotSecretName,
   BotSecretSubmission,
   isAttachmentImageMimeType,
+  isNativeHarness,
   OPENAI_COMPATIBLE_PROVIDER_ID,
 } from "@rakazo/contracts";
 import {
@@ -56,12 +58,15 @@ import {
   formatSkillsCatalogInstruction,
   humanizeToolName,
   inferAttachmentMimeType,
+  isAmbientTeamChatRun,
   isMessagingChannelRun,
   isOneShotRoutineCrons,
   isTerminal,
+  isUserOutcomeMessage,
   messagingChannelId,
   messagingChannelPrivacyBlock,
   messagingDmSurfaceNote,
+  NATIVE_MCP_RELAY_URL,
   nextCronDateAcross,
   nextFence,
   planActionGate,
@@ -76,6 +81,7 @@ import {
   toolRequiresApproval,
   toolRequiresExplicitApproval,
   unattendedTriggerToolRequiresApproval,
+  userOutcomeClientNonce,
   userTurnBlocksForRun,
 } from "@rakazo/core";
 import {
@@ -96,11 +102,12 @@ import {
   isTooManyDatabaseConnections,
   loadRunHistoryMessages,
   type McpServer,
-  type Prisma,
+  Prisma,
   type PrismaClient,
   parseComputerMode,
   SpaceLimitError,
   type ThreadEvents,
+  withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { parse as parseShellCommand } from "shell-quote";
@@ -152,6 +159,8 @@ import {
   runAutoReviewJudge,
 } from "./auto-review.js";
 import { loadBotMessageContext, messageBot, returnBotMessageOutcome } from "./bot-messages.js";
+import type { ProfileConnectionThinkingResolver } from "./bot-profiles.js";
+import { listBotProfiles } from "./bot-profiles.js";
 import {
   findBotSecret,
   forgetBotSecret,
@@ -174,10 +183,12 @@ import {
 } from "./browser-tools.js";
 import { agentConnectionTools, builtinAgentTools, withChattyReplies } from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
+import { ClaudeNativeRuntime } from "./claude-native-runtime.js";
 import { type CloudAgentConnection, cloudAgentsEnabled } from "./cloud-agent-factory.js";
 import { executeCloudAgentTool } from "./cloud-agent-service.js";
 import { validCloudAgentArgs } from "./cloud-agent-tools.js";
 import { selectCloudAgentTools } from "./cloud-agent-tools-select.js";
+import { CodexNativeRuntime } from "./codex-native-runtime.js";
 import {
   type ConnectionScope,
   collectLogIds,
@@ -200,6 +211,7 @@ import {
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
   displayBotWorkspacePath,
+  resolveBotReadablePath,
   resolveBotWorkspaceCwd,
   resolveBotWorkspacePath,
   teamBotWorkspaceDirectory,
@@ -209,8 +221,18 @@ import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
 import { sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
+import {
+  createDelegatedTasks,
+  createNativeRightsGuard,
+  RightsExceededError,
+  recordSpecialistFailure,
+  recordSpecialistResult,
+  WorkClosedError,
+  WorkNotAuthorizedError,
+} from "./delegated-tasks.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
+import { manageBotGroup } from "./group-tools.js";
 import type { HistoryWindowMode } from "./history-compaction.js";
 import {
   COMPACTION_BATCH_SIZE,
@@ -243,6 +265,7 @@ import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { selectMemoryTools } from "./memory-tools.js";
 import { catalogContextWindow } from "./model-catalog.js";
 import {
+  DEFAULT_THINKING_LEVEL,
   isCatalogModelChoice,
   selectConfiguredModel,
   validateConnectedModelChoice,
@@ -254,10 +277,15 @@ import {
   modelAcceptsImageInput,
   modelIdSupportsImages,
 } from "./model-vision.js";
+import { nativeMcpToolsForRun } from "./native-mcp-tools.js";
+import { createNativeSessionStore } from "./native-session-store.js";
 import { toOAuthCredential } from "./pi-credentials.js";
 import {
+  MIN_OAUTH_VALIDITY_MS,
   parseModelSecret,
+  refreshProviderOAuth,
   resolveModelAuth,
+  resolveOAuthModelAuth,
   secretValuesToRedact,
   serializeModelSecret,
 } from "./pi-oauth.js";
@@ -270,6 +298,7 @@ import {
   renderPlotSpecToSvg,
   searchChartCatalog,
 } from "./plot-tool.js";
+import type { NativeMcpHttpServer, NativeMcpRun } from "./rakazo-mcp-http.js";
 import type { RemoteTransportDependencies } from "./remote-mcp.js";
 import { loadReplyContext, messageToAgentHistoryTurn } from "./reply-context.js";
 import {
@@ -339,7 +368,9 @@ import {
 import { createWebProvider } from "./web-provider-factory.js";
 import { webFetchFromTool, webSearchFromTool } from "./web-tools.js";
 
-const modelCredentialLocks = new Map<string, Promise<void>>();
+const MODEL_CREDENTIAL_LOCK_WAIT_MS = 5_000;
+const MODEL_CREDENTIAL_TRANSACTION_TIMEOUT_MS = 20_000;
+const MODEL_CREDENTIAL_REFRESH_TIMEOUT_MS = 15_000;
 const READ_ONLY_AGENT_TOOLS = new Set([
   "computer_observe",
   "list_files",
@@ -409,6 +440,10 @@ const SAFE_SHELL_CONTROL_OPS = new Set([
   ">&",
   "<&",
   "&>",
+  // Subshells, `$(…)` bodies and heredoc bodies are tokenized like any other words, so the
+  // grouping operators themselves hide nothing from the checks below.
+  "(",
+  ")",
 ]);
 
 function shellCFlagProgram(words: string[], interpreterIndex: number): string | undefined {
@@ -447,15 +482,34 @@ function preserveShellCommandBoundaries(command: string): string {
   return result;
 }
 
-function tokenizeProtectedShellCommand(command: string): string[] | "dynamic" {
+// Variables assigned inside the command itself (`TMP=$(mktemp)`, `for f in …`) expand to
+// whatever the command computed: they cannot smuggle a caller-provided program name.
+const SHELL_ASSIGNED_NAME =
+  /(?:^|[\s;&|(])(?:export\s+|local\s+|readonly\s+)?([A-Za-z_]\w*)=|\bfor\s+([A-Za-z_]\w*)\s+in\b/g;
+
+// shell-quote reads `$_tmp` as the special parameter `$_` followed by the letters "mp" (it
+// consumes one character), so a leading-underscore variable name is never matched against the
+// assignments above. Rewrite `$_name` to the equivalent `${_name}` form, which it parses whole.
+const UNDERSCORE_VARIABLE = /\$(_\w+)/g;
+
+function tokenizeProtectedShellCommand(
+  command: string,
+): string[] | "dynamic" | "dynamic-expansion" {
   try {
-    // shell-quote treats newlines as whitespace. Preserve command boundaries for
-    // the dot builtin, after folding shell line continuations. Retaining the
-    // newline also preserves comment handling (comments remain fail-closed).
-    const separated = preserveShellCommandBoundaries(command);
+    const assigned = new Set<string>();
+    for (const match of command.matchAll(SHELL_ASSIGNED_NAME)) {
+      assigned.add(match[1] ?? match[2] ?? "");
+    }
     const parsed = parseShellCommand<{ expansion: string }>(
-      separated,
-      (name) => STATIC_SHELL_EXPANSIONS[name] ?? { expansion: name },
+      preserveShellCommandBoundaries(command).replace(
+        UNDERSCORE_VARIABLE,
+        (_match, name: string) => `\${${name}}`,
+      ),
+      // `$(cmd)` reaches the callback with an empty name and its inner words are tokenized
+      // separately, so it needs no placeholder; only unknown `$NAME` stays opaque.
+      (name) =>
+        STATIC_SHELL_EXPANSIONS[name] ??
+        (name === "" || assigned.has(name) ? "" : { expansion: name }),
       { splitUnquoted: true },
     );
     const words: string[] = [];
@@ -496,9 +550,9 @@ function tokenizeProtectedShellCommand(command: string): string[] | "dynamic" {
         continue;
       }
       if ("expansion" in entry) {
-        // Unknown expansions and command substitutions are resolved by bash
-        // after this guard runs, so their eventual value cannot be inspected.
-        return "dynamic";
+        // An unknown `$NAME` is resolved by bash after this guard runs, so its value
+        // cannot be inspected: it may name the very command we refuse.
+        return "dynamic-expansion";
       }
       if ("op" in entry && entry.op === "glob") {
         words.push(entry.pattern.toLowerCase());
@@ -519,9 +573,17 @@ function tokenizeProtectedShellCommand(command: string): string[] | "dynamic" {
   }
 }
 
+// Raw-text fallback for the few shapes the tokenizer cannot split (backticks, `<<<`, parse
+// errors). Refusing every such command used to block ordinary heredocs and `$(mktemp)` behind a
+// misleading lifecycle message. Block only when a protected token appears in the raw text:
+// bash -c `pkill chromium` and `bash <<< "pkill x"` stay refused.
+const PROTECTED_SHELL_TOKEN =
+  /(?:^|[^\w-])(?:kill|pkill|killall|xkill|eval|source|systemctl|service)(?![\w-])|(?:^|[\s;&|(])\.(?=\s)|\.browser-profiles|--user-data-dir|\/tmp\/\.x11-unix|\/tmp\/\.x\d+-lock/i;
+
 export function isProtectedComputerLifecycleCommand(command: string): boolean {
   const words = tokenizeProtectedShellCommand(command);
-  if (words === "dynamic") return true;
+  if (words === "dynamic-expansion") return true;
+  if (words === "dynamic") return PROTECTED_SHELL_TOKEN.test(command);
 
   const commandNames = words.map((word) => word.split("/").at(-1));
   if (commandNames.some((word) => /^(?:kill|pkill|killall|xkill)$/.test(word ?? ""))) {
@@ -567,6 +629,12 @@ export interface ExecutorDeps {
   prisma: PrismaClient;
   events: ThreadEvents;
   runtime: AgentRuntime;
+  /** Native adapters keyed by harness; the technical Pi/scripted runtime stays separate. */
+  nativeRuntimes?: Partial<Record<NativeHarnessChoice, AgentRuntime>>;
+  /** Worker-local MCP entry point; absent preserves the native runtime's tool-free behavior. */
+  nativeMcp?: Pick<NativeMcpHttpServer, "issue" | "arm" | "disarm">;
+  /** How long a completed native session stays parked; the composition root reads it from the environment. */
+  nativeParkTtlMs?: number;
   sandbox: SandboxProvider;
   memory: MemoryStore;
   memoryProviders: MemoryProviderResolver;
@@ -576,6 +644,15 @@ export interface ExecutorDeps {
   connectors?: { managed(id: string): ManagedConnectorProvider | undefined };
   secrets: string[];
   secretStore: EncryptedSecretStore;
+  /** External OAuth boundary. Production uses Pi's provider catalog; tests may provide a controlled provider. */
+  modelOAuth?: {
+    refresh(
+      provider: string,
+      credential: AgentModelOAuthCredential,
+      signal: AbortSignal,
+    ): Promise<AgentModelOAuthCredential>;
+    toAuth(provider: string, credential: AgentModelOAuthCredential): Promise<string>;
+  };
   deploymentModelKey?: string;
   dataDir?: string;
   notifications?: NotificationProvider;
@@ -594,6 +671,21 @@ export interface ExecutorDeps {
   decisionProviders?: DecisionProviderResolver;
   /** Aborted when createApp stop() begins so in-flight continueRun boot waits exit promptly. */
   shutdownSignal?: AbortSignal;
+}
+
+function nativeChoiceForRun(run: {
+  harness: string | null;
+  executionTarget: string | null;
+  choiceVersion: number | null;
+}): { harness: NativeHarnessChoice; targetId: string } | undefined {
+  if (run.harness === null && run.executionTarget === null && run.choiceVersion === null)
+    return undefined;
+  if (run.choiceVersion !== 1 || !run.executionTarget || !isNativeHarness(run.harness)) {
+    const error = new Error("Run native harness choice is invalid");
+    Object.assign(error, { code: "harness_unavailable" });
+    throw error;
+  }
+  return { harness: run.harness, targetId: run.executionTarget };
 }
 
 function isAuditableToolResult(value: unknown): value is {
@@ -894,7 +986,8 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     parts.agentEnvironmentInstruction,
     "A bot and a subagent are different. Never use both for the same request.",
     "create_space proposes a new privacy boundary inside the current organization. Use it when the user asks to create a space or separate data between teams or projects. It always pauses for explicit user approval; never claim the space exists before the tool succeeds.",
-    "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it.",
+    "spawn_bot creates a regular bot with its own chat and memory. Use profile_bot_id to inherit its instructions, fixed model, effort, skills and MCP permissions; instructions is a mission brief added to that profile, not a replacement. Use team computer mode to share the existing Team Computer. Create each requested bot once. If it serves a broader mission, continue that mission through the group and message_bot, then archive an unused temporary specialist. Do not run_subagent to demo a created bot.",
+    "Bot-to-bot delivery is asynchronous. After message_bot, do not sleep, poll, or wait actively for a reply. Continue only work that does not depend on it; if material, record a short pending state, then end this turn. A peer reply starts a new run that resumes the mission. A pending wait is not a completed mission.",
     "update_bot updates this bot's own name (chat header / list label), title, and description. When the user asks you to rename yourself or change your title or description, call update_bot — do not claim you changed them without the tool.",
     "run_subagent is a short helper inside this turn only. It is not a bot, has no thread, and does not show in the list. Use it for parallel work you will summarize here.",
     "archive_bot safely archives a bot this bot created, and only that bot. Use it when the user asks to remove that bot or when it is finished and unused. The user can restore it or permanently delete it later. confirm_name must exactly match its name.",
@@ -963,9 +1056,29 @@ export function createRunExecutor(deps: ExecutorDeps) {
       maxImagesPerPrompt: resolved.maxImagesPerPrompt,
       thinkingLevel: resolved.thinkingLevel ?? null,
       oauth: resolved.oauth
-        ? { credential: resolved.oauth, persist: resolved.persistOAuth }
+        ? {
+            credential: resolved.oauth,
+            persist: resolved.persistOAuth,
+            refresh: resolved.refreshOAuth,
+          }
         : undefined,
     };
+  };
+  const resolveConnectionThinkingLevel: ProfileConnectionThinkingResolver = async ({
+    scope,
+    credential,
+    provider,
+    modelId,
+  }) => {
+    const resolved = await resolveModelKey(
+      deps,
+      scope.userId,
+      scope.spaceId,
+      credential,
+      provider,
+      modelId,
+    );
+    return resolved.thinkingLevel ?? null;
   };
   return {
     resolveConnectedModel,
@@ -990,7 +1103,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           ? findModelCredential(deps.prisma, scope, override!.modelProvider!, override!.modelId)
           : Promise.resolve(null),
         findDefaultModelCredential(deps.prisma, scope),
-        deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
+        deps.prisma.deploymentSettings.findUnique({
+          where: { id: "default" },
+        }),
       ]);
       const selected = selectConfiguredModel({
         bot: override,
@@ -1028,7 +1143,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
         maxImagesPerPrompt: resolved.maxImagesPerPrompt,
         thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? null,
         oauth: resolved.oauth
-          ? { credential: resolved.oauth, persist: resolved.persistOAuth }
+          ? {
+              credential: resolved.oauth,
+              persist: resolved.persistOAuth,
+              refresh: resolved.refreshOAuth,
+            }
           : undefined,
       };
     },
@@ -1036,7 +1155,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
     async wakeRoutine(routineId: string, scheduledFor: string) {
       const scheduledAt = new Date(scheduledFor);
       if (!Number.isFinite(scheduledAt.getTime())) return;
-      const routine = await deps.prisma.routine.findUnique({ where: { id: routineId } });
+      const routine = await deps.prisma.routine.findUnique({
+        where: { id: routineId },
+      });
       if (!routine?.active || routine.nextRunAt?.getTime() !== scheduledAt.getTime()) return;
       if (await deferFutureRoutine(deps.jobs, routineId, scheduledAt)) return;
       const bot = await deps.prisma.bot.findUnique({
@@ -1121,8 +1242,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
       } catch (error) {
         // Restore the claim so wakeup retry / routine reconciliation can fire again.
         await deps.prisma.$transaction(async (tx) => {
-          await tx.run.deleteMany({ where: { id: claimed.id, status: "queued" } });
-          await tx.task.deleteMany({ where: { id: claimed.taskId, status: "queued" } });
+          await tx.run.deleteMany({
+            where: { id: claimed.id, status: "queued" },
+          });
+          await tx.task.deleteMany({
+            where: { id: claimed.taskId, status: "queued" },
+          });
           await tx.routine.updateMany({
             where: {
               id: routine.id,
@@ -1162,7 +1287,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
     },
 
     async continueRun(runId: string, workerId: string) {
-      const run = await deps.prisma.run.findUnique({ where: { id: runId } });
+      const run = await deps.prisma.run.findUnique({
+        where: { id: runId },
+        include: { externalMessage: { select: { kind: true } } },
+      });
       if (!run) return;
       if (isTerminal(run.status as RunStatus)) return;
       let { resumeCheckpoint, heldForTakeover, resumeHeldLease, takeoverResume } =
@@ -1193,7 +1321,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
       });
       if (leased.count !== 1) return;
 
-      const current = await deps.prisma.run.findUniqueOrThrow({ where: { id: runId } });
+      const current = await deps.prisma.run.findUniqueOrThrow({
+        where: { id: runId },
+      });
       if (
         current.status === "queued" ||
         current.status === "leased" ||
@@ -1203,7 +1333,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
         assertTransition(current.status as RunStatus, "running");
       }
       const started = await deps.prisma.run.updateMany({
-        where: { id: runId, status: "leased", leaseOwner: workerId, leaseFence: fence },
+        where: {
+          id: runId,
+          status: "leased",
+          leaseOwner: workerId,
+          leaseFence: fence,
+        },
         data: { status: "running", startedAt: current.startedAt ?? new Date() },
       });
       if (started.count !== 1) return;
@@ -1211,21 +1346,47 @@ export function createRunExecutor(deps: ExecutorDeps) {
         where: { id: run.botId },
         select: { computerId: true, computerSwitching: true },
       });
-      if (!leaseTarget.computerId) throw new Error("Bot has no computer");
-      if (leaseTarget.computerSwitching) {
+      // T04:5: a specialist run (scopedTaskId set) leases and provisions the mission
+      // Computer — the same droit d'usage Computer the guard at :1695-1700 authorizes —
+      // rather than the specialist bot's own computerId. Ordinary runs are unchanged.
+      let missionComputerId: string | null = null;
+      if (run.scopedTaskId) {
+        const scopedTask = await deps.prisma.scopedTask.findUnique({
+          where: { id: run.scopedTaskId },
+          select: { missionComputerId: true },
+        });
+        missionComputerId = scopedTask?.missionComputerId ?? null;
+      }
+      const targetComputerId = missionComputerId ?? leaseTarget.computerId;
+      if (!targetComputerId) throw new Error("Bot has no computer");
+      if (!missionComputerId && leaseTarget.computerSwitching) {
+        await writeJ2RequeueDiagnostic({
+          runId,
+          botId: run.botId,
+          computerId: targetComputerId,
+          branch: "computer_switching",
+          reason: "computer_switching",
+        });
         await requeueComputerRun(deps, runId, workerId, fence, resumeCheckpoint, heldForTakeover);
         return;
       }
       let computerLease: ComputerExecutionLease | null = null;
       try {
         computerLease = await acquireComputerExecutionLease(deps.prisma, {
-          computerId: leaseTarget.computerId,
+          computerId: targetComputerId,
           runId,
           botId: run.botId,
           resumeHeldLease,
         });
       } catch (error) {
         if (!(error instanceof ComputerBusyError)) throw error;
+        await writeJ2RequeueDiagnostic({
+          runId,
+          botId: run.botId,
+          computerId: targetComputerId,
+          branch: "computer_busy",
+          reason: error.reason ?? "unknown",
+        });
         await requeueComputerRun(deps, runId, workerId, fence, resumeCheckpoint, heldForTakeover);
         return;
       }
@@ -1275,6 +1436,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             : undefined;
         const channelId = messagingChannelId(sourceBlocks);
         const messagingChannelRun = isMessagingChannelRun(run.trigger, sourceBlocks);
+        const ambientTeamChatRun = isAmbientTeamChatRun(run.trigger, run.externalMessage);
+        const routineRun = run.trigger === "routine";
         const [
           bot,
           thread,
@@ -1312,7 +1475,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             },
           }),
           findDefaultModelCredential(deps.prisma, run),
-          deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
+          deps.prisma.deploymentSettings.findUnique({
+            where: { id: "default" },
+          }),
           deps.memoryProviders.resolve(run.spaceId),
           deps.prisma.taughtSkill.findMany({
             where: { botId: run.botId, spaceId: run.spaceId, status: "saved" },
@@ -1626,11 +1791,25 @@ export function createRunExecutor(deps: ExecutorDeps) {
         );
         runSecrets.push(...resolved.redact);
         await deps.prisma.run.updateMany({
-          where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
+          where: {
+            id: runId,
+            status: "running",
+            leaseOwner: workerId,
+            leaseFence: fence,
+          },
           data: { modelProvider: runModelProvider, modelId: runModelId },
         });
         if (!bot.computer) throw new Error("Bot has no computer");
-        const storedComputer = bot.computer;
+        // T04:5: a specialist run provisions the mission Computer (droit d'usage), not the
+        // specialist bot's own computer, matching the lease target above and the guard at
+        // :1706-1718. Ordinary runs (no scopedTaskId, or mission Computer === bot's own) are
+        // unchanged.
+        const storedComputer =
+          missionComputerId && missionComputerId !== bot.computer.id
+            ? await deps.prisma.computer.findUniqueOrThrow({
+                where: { id: missionComputerId },
+              })
+            : bot.computer;
         const computerMode = parseComputerMode(storedComputer.scope);
         const computer = await provisionComputer(deps, storedComputer.id, context, "bot");
         screenRelease = { computer, context };
@@ -1642,7 +1821,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
         try {
           currentTurnFiles = deps.artifacts
             ? await materializeCurrentTurnFiles(
-                { prisma: deps.prisma, artifacts: deps.artifacts, sandbox: deps.sandbox },
+                {
+                  prisma: deps.prisma,
+                  artifacts: deps.artifacts,
+                  sandbox: deps.sandbox,
+                },
                 turnBlocks,
                 {
                   context,
@@ -1775,6 +1958,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Rehydrate from this run's prior progress rows so a resume after ask/takeover
         // still knows progress was already published (skip hollow finals; status outcome).
         let publishedMidTurnUserMessage = false;
+        let publishedUserOutcomeText = "";
         const midTurnUserTexts: string[] = [];
         let midTurnProgressCount = 0;
         {
@@ -1794,6 +1978,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               .join("")
               .trim();
             if (!text) continue;
+            if (isUserOutcomeMessage(message)) publishedUserOutcomeText = text;
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
             midTurnProgressCount += 1;
@@ -1831,7 +2016,134 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let approvalPausePending = false;
         let handedOff = false;
         let progressRedactor = createStreamingRedactor(runSecrets);
-        const scripted = deps.runtime.describe().capabilities.scripted;
+        const runtimeChoice = nativeChoiceForRun(run);
+        if (runtimeChoice && runtimeChoice.targetId !== storedComputer.id) {
+          // T04:4 defect 2: a specialist run (scopedTaskId set) is authorized on its
+          // mission Computer — the coordinator's Computer at delegation time, on which the
+          // specialist holds a droit d'usage, not ownership — in addition to its own. Every
+          // other run keeps the original guard unchanged.
+          let onMissionComputer = false;
+          if (run.scopedTaskId) {
+            const scopedTask = await deps.prisma.scopedTask.findUnique({
+              where: { id: run.scopedTaskId },
+              select: { missionComputerId: true },
+            });
+            onMissionComputer = scopedTask?.missionComputerId === runtimeChoice.targetId;
+          }
+          if (!onMissionComputer) {
+            const error = new Error("Run execution target is no longer authorized");
+            Object.assign(error, { code: "harness_unavailable" });
+            throw error;
+          }
+        }
+        const nativeSessionStore =
+          runtimeChoice && "nativeSession" in deps.prisma
+            ? createNativeSessionStore(deps.prisma)
+            : undefined;
+        const nativeToolServer =
+          nativeSessionStore && deps.nativeMcp
+            ? async () => {
+                const server = await deps.nativeMcp!.issue({
+                  botId: bot.id,
+                  threadId: thread.id,
+                  url: NATIVE_MCP_RELAY_URL,
+                });
+                return {
+                  ...server,
+                  arm: async (request: AgentRunRequest) => {
+                    if (!request.executeTool)
+                      throw new Error("native MCP requires a tool executor");
+                    const run: NativeMcpRun = {
+                      runId: request.runId,
+                      // The supervisor identifies the source by Docker inspect().Id.
+                      // Bind to this process placement, not the durable database ID.
+                      computerId: computer.id,
+                      tools: nativeMcpToolsForRun(request.tools),
+                      authorizeRight: createNativeRightsGuard(deps.prisma, (name) => {
+                        const route = connectorRoutes.get(name);
+                        return route?.connectorId === "mcp" && route.resourceId
+                          ? { serverId: route.resourceId, toolName: route.toolName }
+                          : null;
+                      }),
+                      executeTool: (name, args, callId) => request.executeTool!(name, args, callId),
+                    };
+                    await deps.nativeMcp!.arm(server.ticket, run);
+                  },
+                  disarm: () => deps.nativeMcp!.disarm(server.ticket),
+                };
+              }
+            : undefined;
+        const selectedRuntime = runtimeChoice
+          ? (deps.nativeRuntimes?.[runtimeChoice.harness] ??
+            (runtimeChoice.harness === "codex-native"
+              ? new CodexNativeRuntime(
+                  {
+                    sandbox: deps.sandbox,
+                    computer,
+                    cwd: resolveBotWorkspaceCwd(computerMode, bot.id, undefined) ?? "",
+                  },
+                  {
+                    ...(nativeSessionStore
+                      ? {
+                          onParkExpired: ({ ref, processState }) =>
+                            nativeSessionStore.expire({
+                              botId: bot.id,
+                              threadId: thread.id,
+                              ref,
+                              processState,
+                            }),
+                        }
+                      : {}),
+                    ...(nativeToolServer ? { toolServer: nativeToolServer } : {}),
+                    ...(deps.nativeParkTtlMs ? { parkTtlMs: deps.nativeParkTtlMs } : {}),
+                  },
+                )
+              : new ClaudeNativeRuntime(
+                  {
+                    sandbox: deps.sandbox,
+                    computer,
+                    cwd: resolveBotWorkspaceCwd(computerMode, bot.id, undefined) ?? "",
+                  },
+                  nativeToolServer ? { toolServer: nativeToolServer } : {},
+                )))
+          : deps.runtime;
+        if (!selectedRuntime) {
+          const error = new Error(
+            `Requested harness ${runtimeChoice?.harness ?? "unknown"} is unavailable`,
+          );
+          Object.assign(error, { code: "harness_unavailable" });
+          throw error;
+        }
+        const unconfirmed = nativeSessionStore
+          ? await nativeSessionStore.unconfirmed({ botId: bot.id, threadId: thread.id })
+          : null;
+        if (unconfirmed) {
+          const status = await deps.sandbox.reconfirmNativeProcess?.(
+            computer,
+            unconfirmed.processRef,
+            context,
+          );
+          if (status !== "stopped") {
+            const error = new Error("previous_stop_unconfirmed");
+            Object.assign(error, { code: "harness_unavailable" });
+            throw error;
+          }
+          await nativeSessionStore!.confirmStopped({
+            botId: bot.id,
+            threadId: thread.id,
+            ref: unconfirmed.ref,
+          });
+        }
+        const nativeContinuity = nativeSessionStore
+          ? await nativeSessionStore.continuity({
+              botId: bot.id,
+              threadId: thread.id,
+              harness: runtimeChoice!.harness,
+              executionTarget: storedComputer.id,
+              inputId: run.sourceMessageId ?? runId,
+            })
+          : undefined;
+        const scripted = selectedRuntime.describe().capabilities.scripted;
         const script = scripted ? inferScript(task.prompt, takeoverResume?.checkpoint) : undefined;
         const flushProgress = async () => {
           if (scripted || !pendingProgress) return;
@@ -1918,7 +2230,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         ) => {
           context.signal.throwIfAborted();
           if (handedOff) {
-            return { error: "This stage was handed off. End the turn without more tool calls." };
+            return {
+              error: "This stage was handed off. End the turn without more tool calls.",
+            };
           }
           if (PAGE_BROWSER_TOOL_NAMES.has(name) && !pageBrowserAllowed) {
             return { error: "Page browser is unavailable on this computer." };
@@ -1958,7 +2272,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               const resolved = await deps.connector.resolveCall(connectorCall, context);
               if (resolved) {
                 if (BUILTIN_AGENT_TOOL_NAMES.has(resolved.tool.name)) {
-                  return { error: "Connector tool name conflicts with a built-in tool" };
+                  return {
+                    error: "Connector tool name conflicts with a built-in tool",
+                  };
                 }
                 name = resolved.tool.name;
                 args = resolved.call.args;
@@ -2077,7 +2393,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               // Shrink-to-direct: restore approved inner arguments, not the wrapper envelope.
               const innerArgs = catalogApprovalInnerArgs(approvedCatalog);
               if (!innerArgs) {
-                return { error: `Approved catalog request ${name} is missing tool arguments.` };
+                return {
+                  error: `Approved catalog request ${name} is missing tool arguments.`,
+                };
               }
               args = innerArgs;
             } else {
@@ -2116,7 +2434,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             connectedPlugins.map((plugin) => plugin.provider),
           );
           const approvalResolved = requiresMandatoryApproval
-            ? { decision: "ask" as const, source: "default" as const, matchingRules: [] }
+            ? {
+                decision: "ask" as const,
+                source: "default" as const,
+                matchingRules: [],
+              }
             : resolveActionApprovalDetail({
                 toolName: name,
                 connectorKind,
@@ -2205,7 +2527,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 baseUrl: judgeKey.baseUrl,
                 reasoning: judgeKey.reasoning,
                 oauth: judgeKey.oauth
-                  ? { credential: judgeKey.oauth, persist: judgeKey.persistOAuth }
+                  ? {
+                      credential: judgeKey.oauth,
+                      persist: judgeKey.persistOAuth,
+                    }
                   : undefined,
                 prompt: buildAutoReviewPrompt({
                   toolName: name,
@@ -2366,7 +2691,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     effectUpdatedAt,
                   }) === "drop_leftover"
                 ) {
-                  await deps.prisma.secret.delete({ where: { id: replacementSecret.id } });
+                  await deps.prisma.secret.delete({
+                    where: { id: replacementSecret.id },
+                  });
                   return gate.result;
                 }
               } else {
@@ -2425,7 +2752,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               return { error: DESKTOP_HELD_FOR_TAKEOVER_MESSAGE };
             }
             if (await getActiveTeachingSession(deps.prisma, run.spaceId, run.botId)) {
-              return { error: "Teaching is in progress. Stop teaching before using the computer." };
+              return {
+                error: "Teaching is in progress. Stop teaching before using the computer.",
+              };
             }
             return computerScreenToolResult(async () =>
               formatObservation(await deps.sandbox.observe(computer, context)),
@@ -2436,7 +2765,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               return { error: DESKTOP_HELD_FOR_TAKEOVER_MESSAGE };
             }
             if (await getActiveTeachingSession(deps.prisma, run.spaceId, run.botId)) {
-              return { error: "Teaching is in progress. Stop teaching before using the computer." };
+              return {
+                error: "Teaching is in progress. Stop teaching before using the computer.",
+              };
             }
             workspaceCheckpoint.markDirty();
             return computerScreenToolResult(async () => {
@@ -2461,7 +2792,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const requestedPath = String(args.path ?? "");
             const entries = await deps.sandbox.listFiles(
               computer,
-              resolveBotWorkspacePath(computerMode, bot.id, requestedPath),
+              resolveBotReadablePath(computerMode, bot.id, requestedPath),
               context,
             );
             return {
@@ -2474,7 +2805,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "read_file") {
             const filePath = String(args.path ?? "");
-            const storedPath = resolveBotWorkspacePath(computerMode, bot.id, filePath);
+            const storedPath = resolveBotReadablePath(computerMode, bot.id, filePath);
             let bytes: Uint8Array;
             try {
               bytes = await deps.sandbox.readFile(computer, storedPath, context, {
@@ -2565,7 +2896,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               workspaceCheckpoint.markDirty();
               await deps.sandbox.writeFile(
                 computer,
-                { path: resolveBotWorkspacePath(computerMode, bot.id, outPath), content: png },
+                {
+                  path: resolveBotWorkspacePath(computerMode, bot.id, outPath),
+                  content: png,
+                },
                 context,
               );
               let attached = false;
@@ -2617,7 +2951,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "attach_file") {
             const filePath = String(args.path ?? "");
             if (!deps.artifacts) {
-              return finish({ error: "artifact storage unavailable", path: filePath });
+              return finish({
+                error: "artifact storage unavailable",
+                path: filePath,
+              });
             }
             const storedPath = resolveBotWorkspacePath(computerMode, bot.id, filePath);
             let bytes: Uint8Array;
@@ -2626,11 +2963,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 maxBytes: ATTACHMENT_MAX_BYTES,
               });
             } catch {
-              return finish({ error: "file not found or unreadable", path: filePath });
+              return finish({
+                error: "file not found or unreadable",
+                path: filePath,
+              });
             }
             const mimeType = inferAttachmentMimeType(filePath);
             if (!mimeType) {
-              return finish({ error: "unsupported attachment type", path: filePath });
+              return finish({
+                error: "unsupported attachment type",
+                path: filePath,
+              });
             }
             try {
               const attached = await attachWorkspaceFileToThread(
@@ -2647,7 +2990,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 },
               );
               await publishMessage(deps, run, "bot", [attached.block]);
-              return finish({ ok: true, artifactId: attached.artifactId, path: filePath });
+              return finish({
+                ok: true,
+                artifactId: attached.artifactId,
+                path: filePath,
+              });
             } catch (error) {
               return finish({
                 error: error instanceof Error ? error.message : "could not attach file",
@@ -2996,7 +3343,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               });
             }
             if (!deps.secretStore) {
-              return finish({ error: "Secret storage is not available in this deployment." });
+              return finish({
+                error: "Secret storage is not available in this deployment.",
+              });
             }
             const credentialBlob = buildMcpCredentialBlob(parsed);
             let storedCredential: { id: string; ciphertext: string } | null = null;
@@ -3253,7 +3602,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               // Retries without a secret reconcile via connectionReady / settle_attempt.
               return commitConsumedRunSecret({
                 deleteSecret: async () => {
-                  await deps.prisma.secret.delete({ where: { id: storedSecret.id } });
+                  await deps.prisma.secret.delete({
+                    where: { id: storedSecret.id },
+                  });
                 },
                 afterSecretTaken: async () => {
                   let connectionResult: { connected: boolean; error?: string } | undefined;
@@ -3310,7 +3661,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 connectionId,
               );
               if (connectionStatus === "connected") {
-                const connectedResult = { ok: true, submitted: true, connected: true };
+                const connectedResult = {
+                  ok: true,
+                  submitted: true,
+                  connected: true,
+                };
                 if (recordedForAsk.effect.status === "executing") {
                   return (await completeExternalEffect(
                     deps.prisma,
@@ -3405,6 +3760,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
               throw error;
             }
           }
+          if (name === "list_bot_profiles") {
+            return finish(
+              await listBotProfiles(deps.prisma, {
+                userId: run.userId,
+                spaceId: run.spaceId,
+              }),
+            );
+          }
+          if (["list_groups", "create_group", "update_group", "archive_group"].includes(name)) {
+            return finish(await manageBotGroup(deps, run, name, args, executionId));
+          }
           if (name === "spawn_bot") {
             const computerModeArg = args.computer_mode;
             let computerMode: "team" | "dedicated" | undefined;
@@ -3417,21 +3783,25 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
               computerMode = value;
             }
-            const spawned = await spawnBot(deps, {
-              spawnedBy: {
-                id: bot.id,
-                name: bot.name,
-                spaceId: bot.spaceId,
-                userId: run.userId,
+            const spawned = await spawnBot(
+              { ...deps, resolveConnectionThinkingLevel },
+              {
+                spawnedBy: {
+                  id: bot.id,
+                  name: bot.name,
+                  spaceId: bot.spaceId,
+                  userId: run.userId,
+                },
+                runId,
+                spawnKey: executionId,
+                name: String(args.name ?? ""),
+                title: args.title ? String(args.title) : undefined,
+                instructions: args.instructions ? String(args.instructions) : undefined,
+                prompt: args.prompt ? String(args.prompt) : undefined,
+                computerMode,
+                profileBotId: args.profile_bot_id ? String(args.profile_bot_id) : undefined,
               },
-              runId,
-              spawnKey: executionId,
-              name: String(args.name ?? ""),
-              title: args.title ? String(args.title) : undefined,
-              instructions: args.instructions ? String(args.instructions) : undefined,
-              prompt: args.prompt ? String(args.prompt) : undefined,
-              computerMode,
-            });
+            );
             if ("error" in spawned) return finish(spawned);
             if (!(await persistEffectResult(spawned))) return uncertainEffectResult(name);
             try {
@@ -3457,8 +3827,99 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
             return spawned;
           }
+          if (
+            name === "delegate" ||
+            name === "delegate_followup" ||
+            name === "delegate_close" ||
+            name === "delegate_cancel"
+          ) {
+            // Finding 4a: the coordinator is the actor of this turn — its identity comes
+            // from `bot`/`run`, never from tool arguments, so it cannot be forged.
+            // T07:4 correction: the effective MCP rights ceiling is now computed and
+            // enforced entirely inside delegated-tasks.ts/mcp-connector.ts/the native bridge
+            // guard, keyed off `coordinator.id` directly (`computeEffectiveMcpAccess`) — not
+            // through this `actor.rights` field, which carried a boolean-per-server model
+            // that could not represent tool-level `allowAllTools`/`allowedTools` granularity.
+            // `rights` stays `{}` (unused by `applyDelegate`'s ceiling computation).
+            const delegatedTasks = createDelegatedTasks({
+              prisma: deps.prisma,
+              jobs: deps.jobs,
+              deploymentModelKey: deps.deploymentModelKey,
+              resolveConnectionThinkingLevel,
+              coordinatorModel: {
+                modelProvider: runModelProvider,
+                modelId: runModelId,
+                thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? DEFAULT_THINKING_LEVEL,
+              },
+            });
+            const delegationContext = {
+              actor: {
+                userId: run.userId,
+                spaceId: run.spaceId,
+                botId: bot.id,
+                rights: {},
+              },
+              originRunId: runId,
+              requestId: executionId,
+              // `computer` is a provider ref; scoped_tasks has an FK to the database row.
+              missionComputerId: storedComputer.id,
+            };
+            try {
+              if (name === "delegate") {
+                const nativeChoice = nativeChoiceForRun(run) ?? {
+                  harness: "codex-native" as const,
+                  targetId: "default",
+                };
+                const receipt = await delegatedTasks.apply(
+                  {
+                    kind: "delegate",
+                    target: {
+                      kind: "from_profile",
+                      profileBotId: String(args.profile_bot_id ?? ""),
+                      name: String(args.name ?? ""),
+                    },
+                    harness: nativeChoice,
+                    brief: String(args.brief ?? ""),
+                    requestedRights: {},
+                    spawnKey: executionId,
+                  },
+                  delegationContext,
+                );
+                return finish(receipt);
+              }
+              const command =
+                name === "delegate_followup"
+                  ? {
+                      kind: "followup" as const,
+                      workId: String(args.work_id ?? ""),
+                      text: String(args.text ?? ""),
+                    }
+                  : name === "delegate_cancel"
+                    ? {
+                        kind: "cancel" as const,
+                        workId: String(args.work_id ?? ""),
+                        reason: String(args.reason ?? ""),
+                      }
+                    : { kind: "close" as const, workId: String(args.work_id ?? "") };
+              const receipt = await delegatedTasks.apply(command, delegationContext);
+              return finish(receipt);
+            } catch (error) {
+              if (error instanceof RightsExceededError) return finish({ error: error.message });
+              if (error instanceof WorkNotAuthorizedError) {
+                return finish({
+                  error: "Not authorized for this work identity.",
+                });
+              }
+              if (error instanceof WorkClosedError) return finish({ error: error.message });
+              throw error;
+            }
+          }
           if (name === "update_bot") {
-            const patch: { name?: string; title?: string; description?: string } = {};
+            const patch: {
+              name?: string;
+              title?: string;
+              description?: string;
+            } = {};
             if (args.name !== undefined) patch.name = String(args.name);
             if (args.title !== undefined) patch.title = String(args.title);
             if (args.description !== undefined) patch.description = String(args.description);
@@ -3471,7 +3932,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               const nextName = patch.name.trim();
               if (!nextName) return finish({ error: "name cannot be empty." });
               if (nextName.length > BOT_NAME_MAX_LENGTH) {
-                return finish({ error: `name must be at most ${BOT_NAME_MAX_LENGTH} characters.` });
+                return finish({
+                  error: `name must be at most ${BOT_NAME_MAX_LENGTH} characters.`,
+                });
               }
               patch.name = nextName;
             }
@@ -3533,6 +3996,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
           }
           if (name === "message_user") {
+            const userOutcome = args.intent === "result" || args.intent === "decision";
+            if (
+              (args.intent !== undefined && !userOutcome) ||
+              (run.trigger === "bot_message" && !userOutcome)
+            ) {
+              return finish({
+                error:
+                  'Peer work is silent by default. Only a new user-ready final result or a concrete user decision may use message_user, with intent "result" or "decision". Continue internal work otherwise.',
+              });
+            }
+            if (userOutcome && publishedUserOutcomeText) {
+              return finish({
+                ok: true,
+                published: false,
+                reason: "This run already published its outcome. Do not repeat it.",
+              });
+            }
             const rawMessage = redactSecrets(String(args.message ?? ""), runSecrets);
             const text = clampUserProgressMessage(rawMessage);
             if (!text) return finish({ error: "message is required" });
@@ -3545,18 +4025,36 @@ export function createRunExecutor(deps: ExecutorDeps) {
               });
             }
             const truncated = isProgressMessageTruncated(rawMessage);
+            if (userOutcome && truncated) {
+              return finish({
+                error:
+                  run.trigger === "bot_message"
+                    ? "The result or decision summary must fit in 500 characters. Write and attach the complete deliverable first, verify its local opening and attachment receipt, then send one short explicit result with a reference to it. A normal reply stays internal for this peer wake."
+                    : "The result or decision summary must fit in 500 characters. Keep the useful result and its link; put the full detail in the normal reply.",
+              });
+            }
             await flushProgress();
             await publishMidTurnNarration();
-            await publishMessage(
-              deps,
-              run,
-              "bot",
-              [{ kind: "text", text }],
-              undefined,
-              // user-message: (not user-progress:) so a delegated run surfaces this to the
-              // user while its narration stays hidden.
-              userMessageClientNonce(run.id, midTurnProgressCount++),
-            );
+            const published =
+              userOutcome && run.trigger === "bot_message" && args.intent === "result"
+                ? await publishDelegatedMissionOutcome(deps, run, text)
+                : {
+                    ok: true as const,
+                    message: await publishMessage(
+                      deps,
+                      run,
+                      "bot",
+                      [{ kind: "text", text }],
+                      undefined,
+                      // user-message: (not user-progress:) so a delegated run surfaces this to the
+                      // user while its narration stays hidden.
+                      userOutcome
+                        ? userOutcomeClientNonce(run.id)
+                        : userMessageClientNonce(run.id, midTurnProgressCount++),
+                    ),
+                  };
+            if (!published.ok) return finish({ error: published.error });
+            if (userOutcome) publishedUserOutcomeText = text;
             midTurnUserTexts.push(text);
             publishedMidTurnUserMessage = true;
             return finish(
@@ -3575,6 +4073,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               { ...run, sourceMessageId: run.sourceMessageId },
               { id: bot.id, name: bot.name },
               {
+                group_id: args.group_id ? String(args.group_id) : undefined,
                 bot_id: args.bot_id ? String(args.bot_id) : undefined,
                 confirm_name: args.confirm_name ? String(args.confirm_name) : undefined,
                 message: redactSecrets(String(args.message ?? ""), runSecrets),
@@ -3589,7 +4088,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
             );
             if (!sent.ok) return finish({ error: sent.error });
-            return finish({ ok: true, botId: sent.botId, name: sent.name, note: sent.note });
+            return finish({
+              ok: true,
+              botId: sent.botId,
+              name: sent.name,
+              note: sent.note,
+            });
           }
           if (name === "connect_agent") {
             const result = await connectAgent(
@@ -3626,7 +4130,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return finish(result);
           }
           if (name === "handoff_to_bot") {
-            if (!thread.groupId) return finish({ error: "handoff_to_bot is only for group chats" });
+            if (!thread.groupId)
+              return finish({
+                error: "handoff_to_bot is only for group chats",
+              });
             const result = await handoffToGroupBot(deps, run, thread.groupId, {
               bot_id: args.bot_id ? String(args.bot_id) : undefined,
               confirm_name: args.confirm_name ? String(args.confirm_name) : undefined,
@@ -3751,6 +4258,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // every run, so the model still gets the real present moment.
         const prompt = [
           formatCurrentTimeInstruction(),
+          run.trigger === "work_return"
+            ? "A specialist has returned work. Continue the mission autonomously and report back to the user."
+            : undefined,
+          run.trigger === "bot_message"
+            ? 'For this peer wake, when a verified result closes the user\'s direct request, deliver it once with message_user and intent "result"; a normal final reply stays internal. Keep that message under 500 characters. If that is insufficient, first write and attach the complete deliverable in the requested format (Markdown when appropriate). Respect every explicit length constraint for that complete deliverable, including its title and sources when required. Verify its local opening and attachment receipt, then send the short result with a reference and verify that tool call succeeds before finishing. Do not expose peer notes, progress, acknowledgements, or any other internal reply.'
+            : undefined,
+
           replyContext,
           basePrompt,
           takeoverResume?.promptNote,
@@ -3787,7 +4301,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     id: { not: bot.id },
                     thread: { isNot: null },
                   },
-                  select: { id: true, name: true, title: true, description: true },
+                  select: {
+                    id: true,
+                    name: true,
+                    title: true,
+                    description: true,
+                  },
                   orderBy: { createdAt: "asc" },
                   take: BOT_DIRECTORY_LIMIT,
                 })
@@ -3799,6 +4318,41 @@ export function createRunExecutor(deps: ExecutorDeps) {
               })),
             );
 
+        let nativeSessionRef: { bindingId: string; generation: number } | undefined;
+        let nativeSessionParked = false;
+        let nativeProcessState: "running" | "stopped" = "running";
+        let nativeSessionClosed = false;
+        const closeNativeSession = async () => {
+          if (
+            !nativeSessionStore ||
+            !nativeSessionRef ||
+            nativeSessionParked ||
+            nativeSessionClosed
+          )
+            return;
+          const processState = await selectedRuntime.abort(runId).then(
+            () => "stopped" as const,
+            () => "stop_unconfirmed" as const,
+          );
+          await nativeSessionStore
+            .close({
+              botId: bot.id,
+              threadId: thread.id,
+              ref: nativeSessionRef,
+              processState,
+            })
+            .then(
+              async () => {
+                nativeSessionClosed = true;
+                if (processState === "stopped") {
+                  await selectedRuntime
+                    .purgeNativeHome?.(runId)
+                    .catch((error) => getLogger().error("native home purge failed", error));
+                }
+              },
+              (error) => getLogger().error("native session close failed", error),
+            );
+        };
         if (heldForTakeover) {
           const releasedCheckpoint = takeoverCheckpointOf(
             (
@@ -3897,7 +4451,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyMessagesAvailable,
             historyWindowMode,
           });
-          const runtimeEvents = deps.runtime.run(
+          const runtimeEvents = selectedRuntime.run(
             {
               botId: bot.id,
               threadId: thread.id,
@@ -3921,12 +4475,32 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 maxImagesPerPrompt: resolved.maxImagesPerPrompt,
                 thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? null,
                 oauth: resolved.oauth
-                  ? { credential: resolved.oauth, persist: resolved.persistOAuth }
+                  ? {
+                      credential: resolved.oauth,
+                      persist: resolved.persistOAuth,
+                      refresh: resolved.refreshOAuth,
+                    }
                   : undefined,
               },
+              execution: runtimeChoice
+                ? {
+                    choice: runtimeChoice,
+                    authority: {
+                      runId,
+                      attemptId: attempt.id,
+                      fence,
+                      policyRevision: 1,
+                    },
+                    continuity: nativeContinuity ?? { mode: "new" },
+                    computerId: storedComputer.id,
+                    contextRevision: 1,
+                  }
+                : undefined,
               resumeFromCheckpoint: takeoverResume?.checkpoint,
               script,
-              allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun,
+              allowSilentEmpty:
+                allowSilentPeerMessage || messagingChannelRun || ambientTeamChatRun || routineRun,
+              allowSilentEmptyAfterTool: routineRun,
               emptyResponseText,
               executeTool: scripted
                 ? undefined
@@ -4369,7 +4943,89 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   outputTokens: event.outputTokens,
                 },
               });
+            } else if (event.type === "native") {
+              if (nativeSessionStore && event.event.type === "session") {
+                nativeSessionRef = event.event.ref;
+                await nativeSessionStore.record({
+                  botId: bot.id,
+                  threadId: thread.id,
+                  ref: event.event.ref,
+                  nativeRef: event.event.nativeRef,
+                  processRef: event.event.processRef,
+                  harness: runtimeChoice!.harness,
+                  executionTarget: storedComputer.id,
+                  continuity: event.event.continuity,
+                });
+              } else if (event.event.type === "parked") {
+                nativeProcessState = event.event.processState;
+              } else if (nativeSessionStore && event.event.type === "reference") {
+                await nativeSessionStore.recordReference({
+                  botId: bot.id,
+                  threadId: thread.id,
+                  ref: event.event.ref,
+                  nativeRef: event.event.nativeRef,
+                });
+              } else if (
+                nativeSessionStore &&
+                event.event.type === "error" &&
+                event.event.reason === "resume_rollout_missing"
+              ) {
+                await nativeSessionStore.rolloutMissing({
+                  botId: bot.id,
+                  threadId: thread.id,
+                  ref: event.event.ref,
+                });
+                nativeSessionClosed = true;
+              } else if (
+                nativeSessionStore &&
+                event.event.type === "closed" &&
+                !nativeSessionClosed
+              ) {
+                await nativeSessionStore.close({
+                  botId: bot.id,
+                  threadId: thread.id,
+                  ref: event.event.ref,
+                  processState: event.event.processState,
+                });
+                nativeSessionClosed = true;
+                if (event.event.processState === "stopped") {
+                  await selectedRuntime
+                    .purgeNativeHome?.(runId)
+                    .catch((error) => getLogger().error("native home purge failed", error));
+                }
+              } else if (
+                nativeSessionStore &&
+                event.event.type === "closed" &&
+                nativeSessionClosed &&
+                event.event.processState === "stopped"
+              ) {
+                await selectedRuntime
+                  .purgeNativeHome?.(runId)
+                  .catch((error) => getLogger().error("native home purge failed", error));
+              }
             } else if (event.type === "done") {
+              if (nativeSessionStore && nativeSessionRef) {
+                const currentRun = await deps.prisma.run.findUnique({
+                  where: { id: runId },
+                  select: { status: true },
+                });
+                if (currentRun?.status === "cancelled") {
+                  await closeNativeSession();
+                  return;
+                }
+                try {
+                  await nativeSessionStore.park({
+                    botId: bot.id,
+                    threadId: thread.id,
+                    ref: nativeSessionRef,
+                    processState: nativeProcessState,
+                  });
+                  nativeSessionParked = true;
+                } catch (error) {
+                  getLogger().error("native session park failed", error);
+                  await closeNativeSession();
+                }
+              }
               if (!assembled && event.text) {
                 if (publishedMidTurnUserMessage) {
                   // Mid-turn progress already published the streamed narration.
@@ -4442,7 +5098,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // only progress was posted, result when a final reply exists).
             messageSegments = completionMessageSegments(messageSegments, {
               allowSilentEmpty:
-                allowSilentPeerMessage || messagingChannelRun || publishedMidTurnUserMessage,
+                allowSilentPeerMessage ||
+                messagingChannelRun ||
+                ambientTeamChatRun ||
+                routineRun ||
+                publishedMidTurnUserMessage,
               emptyResponseText,
               suppressOutput: handedOff,
               skipEmptyFallback: publishedTerminalSubagent || publishedMidTurnUserMessage,
@@ -4485,6 +5145,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
           });
           if (!completed) return;
+          // Finding 4c: if this run belongs to a delegated specialist, deliver its result
+          // to the coordinator thread. Strictly this one call, right after finalizeRun
+          // succeeded and before notifications/continuations, never touching `status`
+          // (already set above) — no other delegation responsibility is added here.
+          if (run.scopedTaskId) {
+            await recordSpecialistResult(
+              { prisma: deps.prisma, jobs: deps.jobs, events: deps.events },
+              { workId: run.scopedTaskId, runId, text },
+            ).catch((error) => getLogger().error("specialist result delivery", error));
+          }
           await settleRoutineRunCard("completed", text);
           if (completed.continuationRunId) {
             await deps.jobs
@@ -4504,12 +5174,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
               botMessageOutcome.intent,
             ).catch((error) => getLogger().error("bot message result return", error));
           }
+          const notificationText = run.trigger === "bot_message" ? publishedUserOutcomeText : text;
           // A delegated run's result auto-returns to the ordering bot and is hidden from the
           // user's thread unless that bot is top-level (the orchestrator's relay, which does
           // page — CA5/CA6); a routine card run reports via its card and only pages when the
           // user subscribed to that routine (`notify === true`).
           if (
-            text &&
+            notificationText &&
             !completed.continuationRunId &&
             notifiesUserOnRunEnd(run.trigger, {
               isSubBot: bot.parentBotId != null,
@@ -4524,7 +5195,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               {
                 kind: "completion",
                 title: `${bot.name} finished`,
-                body: text.slice(0, 180),
+                body: notificationText.slice(0, 180),
                 botId: bot.id,
                 threadId: thread.id,
               },
@@ -4559,6 +5230,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             getLogger().error("history.compact enqueue failed", error);
           }
         } catch (error) {
+          await closeNativeSession();
           if (!terminalCheckpointComplete) {
             await workspaceCheckpoint.flush().catch(() => undefined);
           }
@@ -4579,6 +5251,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: message,
           });
           if (!failed) return;
+          // Finding 1 (J2): if this failed run belongs to a delegated specialist, deliver a
+          // typed work_return to the coordinator too — otherwise a terminal failure (e.g. an
+          // offline auth refusal) silently vanishes and the coordinator's task stays hung.
+          // Same placement discipline as the success path (finding 4c): right after
+          // finalizeRun succeeded, no other delegation responsibility added here.
+          if (run.scopedTaskId) {
+            await recordSpecialistFailure(
+              { prisma: deps.prisma, jobs: deps.jobs, events: deps.events },
+              { workId: run.scopedTaskId, runId },
+            ).catch((error) => getLogger().error("specialist failure delivery", error));
+          }
           await settleRoutineRunCard("failed", message);
           if (failed.continuationRunId) {
             await deps.jobs
@@ -4619,6 +5302,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               { forceEnabled: isRoutineCardRun && routineForCard?.notify === true },
             );
           }
+        } finally {
+          await closeNativeSession();
         }
       } catch (setupError) {
         const computerBusy = setupError instanceof ComputerBusyError;
@@ -4665,7 +5350,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
             return;
           }
-          throw new Error("Run setup failed; retrying");
+          throw new Error("Run setup failed; retrying", { cause: setupError });
         }
       } finally {
         detachShutdown?.();
@@ -4815,7 +5500,12 @@ async function renewRunLease(
   fence: number,
 ): Promise<boolean> {
   const renewed = await deps.prisma.run.updateMany({
-    where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
+    where: {
+      id: runId,
+      status: "running",
+      leaseOwner: workerId,
+      leaseFence: fence,
+    },
     data: { leaseExpiresAt: new Date(Date.now() + 5 * 60_000) },
   });
   return renewed.count === 1;
@@ -4895,7 +5585,12 @@ export function threadContextForRun<T>(
         includeSemanticRecall: false,
       }
     : messagingChannelRun
-      ? { ...context, summary: null, historyCompactedUpToSeq: null, includeSemanticRecall: false }
+      ? {
+          ...context,
+          summary: null,
+          historyCompactedUpToSeq: null,
+          includeSemanticRecall: false,
+        }
       : { ...context, includeSemanticRecall: true };
 }
 
@@ -4940,6 +5635,7 @@ export function completionNotificationBody(assembled: string, blocks: MessageBlo
 
 /** Background routine work only marks the thread unread when it has something to say. */
 export function completionMarksUnread(trigger: string, text: string, routineCard = false): boolean {
+  if (trigger === "bot_message") return false;
   return (trigger !== "routine" && !routineCard) || Boolean(text);
 }
 
@@ -5038,6 +5734,20 @@ function computerRunRequeueData(
   };
 }
 
+async function writeJ2RequeueDiagnostic(input: {
+  runId: string;
+  botId: string;
+  computerId: string;
+  branch: "computer_switching" | "computer_busy";
+  reason: string;
+}): Promise<void> {
+  if (process.env.RAKAZO_J2_DIAGNOSTICS !== "1") return;
+  const file = process.env.RAKAZO_J2_DIAGNOSTICS_FILE;
+  if (!file) return;
+  const line = JSON.stringify({ at: new Date().toISOString(), ...input });
+  await appendFile(file, `${line}\n`, { encoding: "utf8", mode: 0o600 }).catch(() => undefined);
+}
+
 async function writeComputerRunRequeue(
   deps: ExecutorDeps,
   runId: string,
@@ -5127,7 +5837,10 @@ function safeStringifyToolPayload(value: unknown): string {
 function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[] {
   return blocks.map((block) => {
     if (block.kind === "text") {
-      return { kind: "text" as const, text: redactSecrets(block.text, secrets) };
+      return {
+        kind: "text" as const,
+        text: redactSecrets(block.text, secrets),
+      };
     }
     if (block.kind === "bot_message_sent" || block.kind === "bot_message_received") {
       return { ...block, text: redactSecrets(block.text, secrets) };
@@ -5161,6 +5874,233 @@ function redactBlocks(blocks: MessageBlock[], secrets: string[]): MessageBlock[]
     }
     return block;
   });
+}
+
+type MissionPublication = { ok: true; message: { id: string } } | { ok: false; error: string };
+
+function receivedBotMessage(
+  blocks: unknown,
+): Extract<MessageBlock, { kind: "bot_message_received" }> | undefined {
+  return (Array.isArray(blocks) ? (blocks as MessageBlock[]) : []).find(
+    (block): block is Extract<MessageBlock, { kind: "bot_message_received" }> =>
+      block.kind === "bot_message_received",
+  );
+}
+
+async function delegatedMissionRootRunId(
+  tx: Prisma.TransactionClient,
+  runId: string,
+): Promise<string | undefined> {
+  let currentRunId: string | undefined = runId;
+  const visited = new Set<string>();
+  while (currentRunId && !visited.has(currentRunId) && visited.size < 16) {
+    visited.add(currentRunId);
+    const current: {
+      id: string;
+      trigger: string;
+      sourceMessageId: string | null;
+    } | null = await tx.run.findUnique({
+      where: { id: currentRunId },
+      select: { id: true, trigger: true, sourceMessageId: true },
+    });
+    if (!current) return undefined;
+    if (current.trigger !== "bot_message") return current.id;
+    const source: { replyTo: { runId: string | null } | null } | null = current.sourceMessageId
+      ? await tx.message.findUnique({
+          where: { id: current.sourceMessageId },
+          select: { replyTo: { select: { runId: true } } },
+        })
+      : null;
+    currentRunId = source?.replyTo?.runId ?? undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Concurrent peer replies for one direct run are internal until every requested
+ * contribution has a terminal return. The newest return owns the consolidated
+ * user outcome; the check and its message write share the thread lock.
+ */
+export async function publishDelegatedMissionOutcome(
+  deps: ExecutorDeps,
+  run: {
+    id: string;
+    spaceId: string;
+    threadId: string;
+    botId: string;
+    sourceMessageId?: string | null;
+  },
+  text: string,
+): Promise<MissionPublication> {
+  const committed = await withTransactionRetry(() =>
+    deps.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${run.threadId} FOR UPDATE`;
+      let outcomeNonce = userOutcomeClientNonce(run.id);
+      const persist = () =>
+        persistMessageInTransaction(
+          tx,
+          run,
+          "bot",
+          [{ kind: "text", text }],
+          undefined,
+          outcomeNonce,
+        );
+      const source = run.sourceMessageId
+        ? await tx.message.findUnique({
+            where: { id: run.sourceMessageId },
+            select: {
+              id: true,
+              blocks: true,
+              replyTo: { select: { runId: true, botId: true, threadId: true } },
+            },
+          })
+        : null;
+      const sourceBlock = receivedBotMessage(source?.blocks);
+      const originRunId = source?.replyTo?.runId
+        ? await delegatedMissionRootRunId(tx, source.replyTo.runId)
+        : undefined;
+      if (
+        !source ||
+        !sourceBlock?.fromRunId ||
+        !originRunId ||
+        source.replyTo?.botId !== run.botId ||
+        source.replyTo.threadId !== run.threadId
+      ) {
+        return { allowed: true as const, persisted: await persist() };
+      }
+      const originRun = await tx.run.findUnique({
+        where: { id: originRunId },
+        select: { createdAt: true },
+      });
+      if (!originRun) return { allowed: true as const, persisted: await persist() };
+      const outbound = await tx.message.findMany({
+        where: {
+          threadId: run.threadId,
+          botId: run.botId,
+          createdAt: { gte: originRun.createdAt },
+          blocks: { array_contains: [{ kind: "bot_message_sent" }] },
+        },
+        select: { id: true, runId: true, blocks: true },
+      });
+      const rootByRunId = new Map<string, Promise<string | undefined>>();
+      const rootFor = async (runId: string | null) => {
+        if (!runId) return undefined;
+        let root = rootByRunId.get(runId);
+        if (!root) {
+          root = delegatedMissionRootRunId(tx, runId);
+          rootByRunId.set(runId, root);
+        }
+        return root;
+      };
+      const contributionIds = (
+        await Promise.all(
+          outbound.map(async (message) =>
+            (await rootFor(message.runId)) === originRunId ? message : undefined,
+          ),
+        )
+      )
+        .filter((message): message is NonNullable<typeof message> => Boolean(message))
+        .filter((message) =>
+          (Array.isArray(message.blocks) ? (message.blocks as MessageBlock[]) : []).some(
+            (block) =>
+              block.kind === "bot_message_sent" &&
+              (block.intent === undefined ||
+                block.intent === "request" ||
+                block.intent === "question"),
+          ),
+        )
+        .map((message) => message.id);
+      if (contributionIds.length === 0)
+        return { allowed: true as const, persisted: await persist() };
+      const returns = await tx.message.findMany({
+        where: {
+          threadId: run.threadId,
+          replyToMessageId: { in: contributionIds },
+        },
+        select: { id: true, seq: true, replyToMessageId: true, blocks: true },
+      });
+      const terminalReturns = returns.filter((message) => {
+        const block = receivedBotMessage(message.blocks);
+        return Boolean(block?.fromRunId && (block.intent === "result" || block.terminalOutcome));
+      });
+      const terminalRunIds = [
+        ...new Set(
+          terminalReturns.flatMap((message) => {
+            const fromRunId = receivedBotMessage(message.blocks)?.fromRunId;
+            return fromRunId ? [fromRunId] : [];
+          }),
+        ),
+      ];
+      const terminalRuns = await tx.run.findMany({
+        where: {
+          id: { in: terminalRunIds },
+          status: { in: ["completed", "failed", "cancelled"] },
+        },
+        select: { id: true, status: true },
+      });
+      const failedOrCancelled = new Set(
+        terminalRuns
+          .filter(
+            (terminalRun) => terminalRun.status === "failed" || terminalRun.status === "cancelled",
+          )
+          .map((terminalRun) => terminalRun.id),
+      );
+      const provenReturns = terminalReturns.filter((message) => {
+        const block = receivedBotMessage(message.blocks);
+        if (block?.intent === "result") return true;
+        return Boolean(
+          block?.terminalOutcome && block.fromRunId && failedOrCancelled.has(block.fromRunId),
+        );
+      });
+      const returned = new Set(
+        provenReturns.flatMap((message) =>
+          message.replyToMessageId ? [message.replyToMessageId] : [],
+        ),
+      );
+      if (contributionIds.some((id) => !returned.has(id))) {
+        return {
+          allowed: false as const,
+          error:
+            "Another requested contribution is still pending. Do not publish a partial result; leave this wake internal so the final coordinator can consolidate every terminal return.",
+        };
+      }
+      const latest = provenReturns.reduce(
+        (newest, message) => (!newest || message.seq > newest.seq ? message : newest),
+        undefined as (typeof provenReturns)[number] | undefined,
+      );
+      if (!latest || latest.id !== source.id) {
+        return {
+          allowed: false as const,
+          error:
+            "A newer terminal return now owns this mission's final synthesis. Do not publish here; keep this wake internal and let that coordinator consolidate the contributions.",
+        };
+      }
+      outcomeNonce = userOutcomeClientNonce(`mission:${latest.id}`);
+      const existing = await tx.message.findUnique({
+        where: {
+          threadId_clientNonce: {
+            threadId: run.threadId,
+            clientNonce: outcomeNonce,
+          },
+        },
+        select: { id: true },
+      });
+      if (existing)
+        return {
+          allowed: true as const,
+          replayed: true as const,
+          message: existing,
+        };
+      return { allowed: true as const, persisted: await persist() };
+    }),
+  );
+  if (!committed.allowed) return { ok: false, error: committed.error };
+  if ("replayed" in committed && committed.replayed)
+    return { ok: true, message: committed.message };
+  await deps.events.notify(run.threadId, committed.persisted.eventSeq).catch((error) => {
+    getLogger().error("thread message realtime notification", error);
+  });
+  return { ok: true, message: committed.persisted.message };
 }
 
 async function publishMessage(
@@ -5609,118 +6549,244 @@ async function resolveCredentialModelKey(
   maxImagesPerPrompt?: number;
   oauth?: AgentModelOAuthCredential;
   persistOAuth?: (credential: AgentModelOAuthCredential) => Promise<void>;
+  refreshOAuth?: (
+    credential: AgentModelOAuthCredential,
+    signal: AbortSignal,
+  ) => Promise<AgentModelOAuthCredential>;
   redact: string[];
 }> {
   if (credential) {
-    return withModelCredentialLock(credential.secretId, async () => {
-      const row = await deps.prisma.secret.findFirst({
-        where: { id: credential.secretId, userId, spaceId: null },
-      });
-      if (!row) return { apiKey: deploymentKeyFor(deps, provider), redact: [] };
-      const plaintext = deps.secretStore.load(row.ciphertext, row.id);
-      registerSecrets?.(secretValuesToRedact(parseModelSecret(plaintext)));
-      const persist = async (next: string) => {
-        const stored = await deps.secretStore.put(
-          next,
-          {
-            operationId: "cred",
-            traceId: "cred-refresh",
-            spaceId,
-            userId,
-            signal: new AbortController().signal,
-          },
-          row.id,
-        );
-        await deps.prisma.secret.update({
-          where: { id: row.id },
-          data: { ciphertext: stored.ciphertext },
-        });
-      };
-      const resolved = await resolveModelAuth(plaintext, credential.provider, {
-        persist,
-      });
-      const oauth = resolved.secret.kind === "oauth" ? resolved.secret.credential : undefined;
-      const baseUrl =
-        resolved.secret.kind === "openai_compatible" ? resolved.secret.baseUrl : undefined;
-      const acceptsImages =
-        credential.provider === OPENAI_COMPATIBLE_PROVIDER_ID &&
-        resolved.secret.kind === "openai_compatible" &&
-        (modelIdSupportsImages(resolved.secret.visionModelIds, modelId) ||
-          // Legacy secrets have no per-model list, so keep their existing
-          // capability scoped to the model saved in the space preference.
-          (resolved.secret.visionModelIds === undefined &&
-            credential.supportsImages === true &&
-            credential.defaultModel?.trim() === modelId.trim()));
-      return {
-        apiKey: resolved.apiKey,
-        baseUrl,
-        reasoning:
-          resolved.secret.kind === "openai_compatible" ? resolved.secret.reasoning : undefined,
-        maxTokens:
-          resolved.secret.kind === "openai_compatible" ? resolved.secret.maxTokens : undefined,
-        contextWindow:
-          resolved.secret.kind === "openai_compatible" ? resolved.secret.contextWindow : undefined,
-        thinkingLevel:
-          resolved.secret.kind === "openai_compatible" ? resolved.secret.thinkingLevel : undefined,
-        acceptsImages,
-        maxImagesPerPrompt:
-          resolved.secret.kind === "openai_compatible"
-            ? resolved.secret.maxImagesPerPrompt
-            : undefined,
-        oauth,
-        persistOAuth: oauth
-          ? async (next) => {
-              await withModelCredentialLock(credential.secretId, async () => {
-                const currentRow = await deps.prisma.secret.findFirst({
-                  where: { id: credential.secretId, userId, spaceId: null },
-                });
-                if (!currentRow) return;
-                const current = parseModelSecret(
-                  deps.secretStore.load(currentRow.ciphertext, currentRow.id),
-                );
-                if (current.kind === "oauth") {
-                  const stored = current.credential;
-                  if (stored.expires > next.expires) return;
-                  if (
-                    stored.access === next.access &&
-                    stored.refresh === next.refresh &&
-                    stored.expires === next.expires
-                  ) {
-                    return;
-                  }
-                }
-                await persist(
-                  serializeModelSecret({ kind: "oauth", credential: toOAuthCredential(next) }),
-                );
-              });
-            }
-          : undefined,
-        redact: [...secretValuesToRedact(resolved.secret), resolved.apiKey].filter(
-          (value): value is string => Boolean(value),
-        ),
-      };
+    const row = await deps.prisma.secret.findFirst({
+      where: { id: credential.secretId, userId, spaceId: null },
     });
+    if (!row) return { apiKey: deploymentKeyFor(deps, provider), redact: [] };
+    const plaintext = deps.secretStore.load(row.ciphertext, row.id);
+    const parsed = parseModelSecret(plaintext);
+    const resolved =
+      parsed.kind === "oauth"
+        ? await resolveStoredOAuthCredential(deps, {
+            secretId: row.id,
+            userId,
+            spaceId,
+            provider: credential.provider,
+            expected: parsed.credential,
+          })
+        : await resolveModelAuth(plaintext, credential.provider);
+    registerSecrets?.(secretValuesToRedact(resolved.secret));
+    const oauth = resolved.secret.kind === "oauth" ? resolved.secret.credential : undefined;
+    const baseUrl =
+      resolved.secret.kind === "openai_compatible" ? resolved.secret.baseUrl : undefined;
+    const acceptsImages =
+      credential.provider === OPENAI_COMPATIBLE_PROVIDER_ID &&
+      resolved.secret.kind === "openai_compatible" &&
+      (modelIdSupportsImages(resolved.secret.visionModelIds, modelId) ||
+        // Legacy secrets have no per-model list, so keep their existing
+        // capability scoped to the model saved in the space preference.
+        (resolved.secret.visionModelIds === undefined &&
+          credential.supportsImages === true &&
+          credential.defaultModel?.trim() === modelId.trim()));
+    return {
+      apiKey: resolved.apiKey,
+      baseUrl,
+      reasoning:
+        resolved.secret.kind === "openai_compatible" ? resolved.secret.reasoning : undefined,
+      maxTokens:
+        resolved.secret.kind === "openai_compatible" ? resolved.secret.maxTokens : undefined,
+      contextWindow:
+        resolved.secret.kind === "openai_compatible" ? resolved.secret.contextWindow : undefined,
+      thinkingLevel:
+        resolved.secret.kind === "openai_compatible" ? resolved.secret.thinkingLevel : undefined,
+      acceptsImages,
+      maxImagesPerPrompt:
+        resolved.secret.kind === "openai_compatible"
+          ? resolved.secret.maxImagesPerPrompt
+          : undefined,
+      oauth,
+      persistOAuth: oauth
+        ? async (next) => {
+            await persistStoredOAuthCredential(deps, {
+              secretId: credential.secretId,
+              userId,
+              spaceId,
+              provider: credential.provider,
+              expected: oauth,
+              replacement: toOAuthCredential(next),
+            });
+          }
+        : undefined,
+      refreshOAuth: oauth
+        ? (next, signal) =>
+            refreshStoredOAuthCredential(deps, {
+              secretId: credential.secretId,
+              userId,
+              spaceId,
+              provider: credential.provider,
+              expected: toOAuthCredential(next),
+              signal,
+              force: true,
+            })
+        : undefined,
+      redact: [...secretValuesToRedact(resolved.secret), resolved.apiKey].filter(
+        (value): value is string => Boolean(value),
+      ),
+    };
   }
   return { apiKey: deploymentKeyFor(deps, provider), redact: [] };
 }
 
-async function withModelCredentialLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const previous = modelCredentialLocks.get(key) ?? Promise.resolve();
-  let release!: () => void;
-  const current = previous.then(
-    () =>
-      new Promise<void>((resolve) => {
-        release = resolve;
-      }),
+type StoredOAuthRefreshInput = {
+  secretId: string;
+  userId: string;
+  spaceId: string;
+  provider: string;
+  expected: AgentModelOAuthCredential;
+  force?: boolean;
+  signal?: AbortSignal;
+};
+
+function sameOAuthCredential(
+  left: AgentModelOAuthCredential,
+  right: AgentModelOAuthCredential,
+): boolean {
+  return (
+    left.access === right.access &&
+    left.refresh === right.refresh &&
+    left.expires === right.expires &&
+    left.accountId === right.accountId
   );
-  modelCredentialLocks.set(key, current);
-  await previous;
-  try {
-    return await fn();
-  } finally {
-    release();
-    if (modelCredentialLocks.get(key) === current) modelCredentialLocks.delete(key);
-  }
+}
+
+function credentialRefreshSignal(signal?: AbortSignal): AbortSignal {
+  return AbortSignal.any([
+    signal ?? new AbortController().signal,
+    AbortSignal.timeout(MODEL_CREDENTIAL_REFRESH_TIMEOUT_MS),
+  ]);
+}
+
+async function resolveStoredOAuthCredential(
+  deps: ExecutorDeps,
+  input: Omit<StoredOAuthRefreshInput, "signal">,
+): Promise<Awaited<ReturnType<typeof resolveModelAuth>>> {
+  const credential = await refreshStoredOAuthCredential(deps, {
+    ...input,
+    signal: undefined,
+  });
+  return {
+    secret: { kind: "oauth", credential: toOAuthCredential(credential) },
+    apiKey: deps.modelOAuth
+      ? await deps.modelOAuth.toAuth(input.provider, credential)
+      : await resolveOAuthModelAuth(input.provider, toOAuthCredential(credential)),
+  };
+}
+
+/**
+ * Refresh tokens are single-use for some providers. Keep the PostgreSQL transaction
+ * (and its advisory lock) open through the HTTP call; releasing it before that call
+ * permits two workers to consume the same token. External OAuth cannot be atomic
+ * with this database transaction: a crash after provider rotation and before commit
+ * still requires the user to reconnect.
+ */
+async function refreshStoredOAuthCredential(
+  deps: ExecutorDeps,
+  input: StoredOAuthRefreshInput,
+): Promise<AgentModelOAuthCredential> {
+  const signal = credentialRefreshSignal(input.signal);
+  if (signal.aborted) throw signal.reason;
+  return deps.prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT pg_advisory_xact_lock(hashtextextended(${input.secretId}, 0))::text AS "lock"
+      `);
+      if (signal.aborted) throw signal.reason;
+      const row = await tx.secret.findFirst({
+        where: { id: input.secretId, userId: input.userId, spaceId: null },
+      });
+      if (!row) throw new Error("Model credential no longer exists");
+      const parsed = parseModelSecret(deps.secretStore.load(row.ciphertext, row.id));
+      if (parsed.kind !== "oauth") throw new Error("Model credential is no longer OAuth");
+      const current = parsed.credential;
+      if (current.accountId !== input.expected.accountId) {
+        throw new Error("Model credential account changed; reconnect before running");
+      }
+      if (!sameOAuthCredential(current, input.expected)) return current;
+      if (!input.force && current.expires - Date.now() >= MIN_OAUTH_VALIDITY_MS) return current;
+      const next = deps.modelOAuth
+        ? await deps.modelOAuth.refresh(input.provider, current, signal)
+        : await refreshProviderOAuth(input.provider, current, signal);
+      if (next.accountId !== current.accountId) {
+        throw new Error("OAuth refresh changed the subscription account identity");
+      }
+      if (signal.aborted) throw signal.reason;
+      const stored = await deps.secretStore.put(
+        serializeModelSecret({
+          kind: "oauth",
+          credential: toOAuthCredential(next),
+        }),
+        {
+          operationId: "cred",
+          traceId: "cred-refresh",
+          spaceId: input.spaceId,
+          userId: input.userId,
+          signal,
+        },
+        row.id,
+      );
+      await tx.secret.update({
+        where: { id: row.id },
+        data: { ciphertext: stored.ciphertext },
+      });
+      return next;
+    },
+    {
+      maxWait: MODEL_CREDENTIAL_LOCK_WAIT_MS,
+      timeout: MODEL_CREDENTIAL_TRANSACTION_TIMEOUT_MS,
+    },
+  );
+}
+
+async function persistStoredOAuthCredential(
+  deps: ExecutorDeps,
+  input: StoredOAuthRefreshInput & { replacement: AgentModelOAuthCredential },
+): Promise<void> {
+  await deps.prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT pg_advisory_xact_lock(hashtextextended(${input.secretId}, 0))::text AS "lock"
+      `);
+      const row = await tx.secret.findFirst({
+        where: { id: input.secretId, userId: input.userId, spaceId: null },
+      });
+      if (!row) return;
+      const current = parseModelSecret(deps.secretStore.load(row.ciphertext, row.id));
+      if (current.kind !== "oauth" || !sameOAuthCredential(current.credential, input.expected))
+        return;
+      if (input.replacement.accountId !== current.credential.accountId) {
+        throw new Error("OAuth refresh changed the subscription account identity");
+      }
+      const stored = await deps.secretStore.put(
+        serializeModelSecret({
+          kind: "oauth",
+          credential: toOAuthCredential(input.replacement),
+        }),
+        {
+          operationId: "cred",
+          traceId: "cred-refresh",
+          spaceId: input.spaceId,
+          userId: input.userId,
+          signal: credentialRefreshSignal(input.signal),
+        },
+        row.id,
+      );
+      await tx.secret.update({
+        where: { id: row.id },
+        data: { ciphertext: stored.ciphertext },
+      });
+    },
+    {
+      maxWait: MODEL_CREDENTIAL_LOCK_WAIT_MS,
+      timeout: MODEL_CREDENTIAL_TRANSACTION_TIMEOUT_MS,
+    },
+  );
 }
 
 export function selectRunConnections<

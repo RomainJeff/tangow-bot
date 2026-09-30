@@ -10,6 +10,9 @@ import { OPENAI_COMPATIBLE_PROVIDER_ID } from "./pi-openai-compatible-provider.j
 
 type ModelCredential = Awaited<ReturnType<typeof findDefaultModelCredential>>;
 
+/** Server-side fallback for a selected model whose connection has no thinking preference. */
+export const DEFAULT_THINKING_LEVEL = "medium" satisfies AgentRunRequest["model"]["thinkingLevel"];
+
 export function isCatalogModelChoice(provider: string, modelId: string) {
   return [...listPiCatalog(), scriptedCatalogEntry].some(
     (item) => item.provider === provider && item.id === modelId,

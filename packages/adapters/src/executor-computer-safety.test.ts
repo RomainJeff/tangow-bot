@@ -40,6 +40,31 @@ describe("computer lifecycle command guard", () => {
     expect(isProtectedComputerLifecycleCommand("printf '%s\\n' *.txt && pwd")).toBe(false);
   });
 
+  it("lets heredocs, command substitutions and self-assigned variables through", () => {
+    expect(isProtectedComputerLifecycleCommand("python3 - <<'PY'\nimport pptx\nprint(1)\nPY")).toBe(
+      false,
+    );
+    expect(
+      isProtectedComputerLifecycleCommand('TMP=$(mktemp) && printf ok > "$TMP" && cat "$TMP"'),
+    ).toBe(false);
+    expect(
+      isProtectedComputerLifecycleCommand(
+        "soffice --headless --convert-to pdf --outdir out t.docx",
+      ),
+    ).toBe(false);
+    // shell-quote splits `$_tmp` into `$_` + "mp"; the guard must still see the assignment.
+    expect(
+      isProtectedComputerLifecycleCommand(
+        'set -eu\n_tmp=$(mktemp /tmp/x.XXXXXX)\nprintf ok > "$_tmp"\ncat "$_tmp"\nrm "$_tmp"',
+      ),
+    ).toBe(false);
+    expect(isProtectedComputerLifecycleCommand('echo "$_unknown"')).toBe(true);
+    // The words inside `$(…)` and heredoc bodies are still inspected.
+    expect(isProtectedComputerLifecycleCommand("echo $(pkill chromium)")).toBe(true);
+    expect(isProtectedComputerLifecycleCommand("bash - <<'SH'\npkill chromium\nSH")).toBe(true);
+    expect(isProtectedComputerLifecycleCommand('PID=1; kill "$PID"')).toBe(true);
+  });
+
   it.each([
     "find . -maxdepth 2 -type d -name .git -print",
     "git -C . status --short",

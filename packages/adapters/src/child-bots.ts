@@ -7,7 +7,14 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { routineJobKey, runContinueJob, runJobKey } from "@rakazo/adapter-kit";
-import { type Actor, type Bot, type ComputerMode, GROUP_MEMBER_MIN } from "@rakazo/contracts";
+import type { NativeHarnessChoice } from "@rakazo/contracts";
+import {
+  type Actor,
+  type Bot,
+  type ComputerMode,
+  GROUP_MEMBER_MIN,
+  NATIVE_HARNESSES,
+} from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import {
   cancelRunsInTransaction,
@@ -20,10 +27,56 @@ import {
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import type { ProfileConnectionThinkingResolver, ProfileModelSelection } from "./bot-profiles.js";
+import { applyBotProfile, loadBotProfile } from "./bot-profiles.js";
 import { toComputerRef } from "./computer-support.js";
 import { checkpointAndRecordComputerWorkspace } from "./computer-workspace.js";
+import { resolveDeploymentModel } from "./deployment-model.js";
 import { resolveAgentHomePath } from "./home.js";
 import { removePiBotSessions } from "./pi-session.js";
+
+const TERMINAL_SCOPED_TASK_STATUSES = ["closed", "cancelled"];
+
+async function cancelCoordinatorScopedTasks(
+  tx: Prisma.TransactionClient,
+  coordinatorBotId: string,
+) {
+  const openWork = await tx.scopedTask.findMany({
+    where: {
+      coordinatorBotId,
+      status: { notIn: TERMINAL_SCOPED_TASK_STATUSES },
+    },
+    select: { id: true, missionComputerId: true, executorBotId: true },
+  });
+  const activeRuns = openWork.length
+    ? await tx.run.findMany({
+        where: {
+          scopedTaskId: { in: openWork.map((work) => work.id) },
+          status: { in: [...ACTIVE_RUN_STATUSES] },
+        },
+        select: { id: true, taskId: true },
+      })
+    : [];
+  await tx.scopedTask.updateMany({
+    where: { coordinatorBotId, status: { notIn: TERMINAL_SCOPED_TASK_STATUSES } },
+    data: { status: "cancelled" },
+  });
+  await cancelRunsInTransaction(tx, activeRuns, new Date());
+  for (const work of openWork) {
+    if (!work.missionComputerId) continue;
+    const remaining = await tx.scopedTask.count({
+      where: {
+        missionComputerId: work.missionComputerId,
+        executorBotId: work.executorBotId,
+        status: { notIn: TERMINAL_SCOPED_TASK_STATUSES },
+      },
+    });
+    if (remaining !== 0) continue;
+    await tx.computerUsageGrant.deleteMany({
+      where: { computerId: work.missionComputerId, botId: work.executorBotId },
+    });
+  }
+}
 
 export function confirmSpawnedBotName(confirmName: string, botName: string) {
   if (confirmName !== botName) {
@@ -35,10 +88,22 @@ export function confirmSpawnedBotName(confirmName: string, botName: string) {
   return { ok: true as const };
 }
 
+export function composeChildInstructions(
+  profileInstructions: string,
+  missionInstructions?: string,
+) {
+  const profile = profileInstructions.trim();
+  const mission = (missionInstructions ?? "").trim();
+  return [profile, mission].filter(Boolean).join("\n\n");
+}
+
 export async function spawnBot(
   deps: {
     prisma: PrismaClient;
     jobs: JobPublisher;
+    deploymentModelKey?: string;
+    resolveConnectionThinkingLevel?: ProfileConnectionThinkingResolver;
+    coordinatorModel?: ProfileModelSelection;
   },
   input: {
     spawnedBy: {
@@ -54,6 +119,8 @@ export async function spawnBot(
     instructions?: string;
     prompt?: string;
     computerMode?: ComputerMode;
+    profileBotId?: string;
+    harness?: NativeHarnessChoice;
   },
 ) {
   const name = input.name.trim();
@@ -65,6 +132,26 @@ export async function spawnBot(
     email: "",
     isDeploymentOwner: false,
   };
+  const profileScope = { userId: actor.userId, spaceId: actor.spaceId };
+  const profile = input.profileBotId
+    ? await loadBotProfile(deps.prisma, profileScope, input.profileBotId, {
+        deployment: deps.deploymentModelKey ? resolveDeploymentModel() : null,
+        resolveConnectionThinkingLevel: deps.resolveConnectionThinkingLevel,
+        inheritFrom: { botId: input.spawnedBy.id, model: deps.coordinatorModel },
+      })
+    : undefined;
+  if (
+    profile &&
+    input.harness &&
+    profile.modelProvider !== NATIVE_HARNESSES[input.harness].provider
+  ) {
+    throw new Error(
+      `A ${NATIVE_HARNESSES[input.harness].name} native specialist needs a model on its subscription; the selected model is ${profile.modelProvider} · ${profile.modelId}.`,
+    );
+  }
+  const instructions = profile
+    ? composeChildInstructions(profile.instructions, input.instructions)
+    : (input.instructions ?? "").trim();
   let duplicate = false;
   let created: Pick<Bot, "id" | "name" | "title" | "threadId">;
   try {
@@ -72,11 +159,18 @@ export async function spawnBot(
       name,
       title: (input.title ?? "").trim(),
       description: "",
-      instructions: (input.instructions ?? "").trim(),
-      notifyOnFinish: true,
+      instructions,
+      notifyOnFinish: profile?.notifyOnFinish ?? true,
       parentBotId: input.spawnedBy.id,
       spawnKey: input.spawnKey,
       computerMode: input.computerMode,
+      ...(profile
+        ? {
+            modelProvider: profile.modelProvider,
+            modelId: profile.modelId,
+            thinkingLevel: profile.thinkingLevel,
+          }
+        : {}),
       initialMessage: {
         role: "system",
         blocks: [{ kind: "meta", text: `Created by ${input.spawnedBy.name}` }],
@@ -103,6 +197,8 @@ export async function spawnBot(
       threadId: existing.thread.id,
     };
   }
+
+  if (profile) await applyBotProfile(deps.prisma, profileScope, created.id, profile);
 
   const prompt = (input.prompt ?? "").trim();
   if (prompt) {
@@ -209,6 +305,47 @@ type LifecycleBot = {
   webhookSecretId?: string | null;
 };
 
+/** The transactional part of archival is shared by explicit archival and T08 cleanup. */
+export async function archiveBotInTransaction(
+  tx: Prisma.TransactionClient,
+  input: {
+    bot: LifecycleBot;
+    dedicatedComputerId?: string;
+    activeRuns: Array<{ id: string }>;
+    now: Date;
+  },
+) {
+  const runIds = input.activeRuns.map((run) => run.id);
+  await tx.run.updateMany({
+    where: { id: { in: runIds } },
+    data: { status: "cancelled", completedAt: input.now },
+  });
+  await tx.task.updateMany({
+    where: { runs: { some: { id: { in: runIds } } } },
+    data: { status: "cancelled" },
+  });
+  await tx.routine.updateMany({
+    where: { botId: input.bot.id },
+    data: { active: false, nextRunAt: null },
+  });
+  await cancelCoordinatorScopedTasks(tx, input.bot.id);
+  await expireComputerExecutionLeases(tx, { botId: input.bot.id });
+  await tx.computer.updateMany({
+    where: { OR: [{ controlBotId: input.bot.id }, { executionBotId: input.bot.id }] },
+    data: releasedComputerLease(),
+  });
+  if (input.dedicatedComputerId) {
+    await tx.computer.updateMany({
+      where: { id: input.dedicatedComputerId, state: { not: "running" } },
+      data: { state: "stopped" },
+    });
+  }
+  await tx.bot.update({
+    where: { id: input.bot.id },
+    data: { archivedAt: input.bot.archivedAt ?? input.now, pinned: false },
+  });
+}
+
 export async function archiveSpawnedBot(
   deps: BotLifecycleDeps,
   input: {
@@ -277,37 +414,13 @@ export async function archiveBot(
       select: { id: true },
     }),
   ]);
-  const runIds = activeRuns.map((run) => run.id);
   const now = new Date();
   await deps.prisma.$transaction(async (tx) => {
-    await tx.run.updateMany({
-      where: { id: { in: runIds } },
-      data: { status: "cancelled", completedAt: now },
-    });
-    await tx.task.updateMany({
-      where: { runs: { some: { id: { in: runIds } } } },
-      data: { status: "cancelled" },
-    });
-    await tx.routine.updateMany({
-      where: { botId: bot.id },
-      data: { active: false, nextRunAt: null },
-    });
-    await expireComputerExecutionLeases(tx, { botId: bot.id });
-    await tx.computer.updateMany({
-      where: {
-        OR: [{ controlBotId: bot.id }, { executionBotId: bot.id }],
-      },
-      data: releasedComputerLease(),
-    });
-    if (dedicated) {
-      await tx.computer.updateMany({
-        where: { id: dedicated.id, state: { not: "running" } },
-        data: { state: "stopped" },
-      });
-    }
-    await tx.bot.update({
-      where: { id: bot.id },
-      data: { archivedAt: bot.archivedAt ?? now, pinned: false },
+    await archiveBotInTransaction(tx, {
+      bot,
+      dedicatedComputerId: dedicated?.id,
+      activeRuns,
+      now,
     });
   });
   await Promise.allSettled([

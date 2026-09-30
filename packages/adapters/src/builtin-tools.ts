@@ -10,10 +10,16 @@ import { z } from "zod";
 export const DELEGATION_TOOL_NAMES = new Set([
   "run_subagent",
   "spawn_bot",
+  "list_groups",
+  "create_group",
+  "update_group",
+  "archive_group",
   "archive_bot",
   "delete_bot",
   "handoff_to_bot",
   "message_bot",
+  "delegate_close",
+  "delegate_cancel",
 ]);
 
 // `message_user` is a conversation channel, never a progress channel. Bots with
@@ -271,11 +277,17 @@ export const builtinAgentTools: ConnectorTool[] = [
     inputSchema: {
       type: "object",
       properties: {
+        intent: {
+          type: "string",
+          enum: ["result", "decision"],
+          description:
+            "Required for a bot-to-bot wake: result means a new, verified user-ready final outcome; decision means a concrete choice or input only the user can provide. Never use for progress, non-deliverable work, acknowledgements, or no-action-needed updates. At most one notification per run. Other replies remain internal.",
+        },
         message: {
           type: "string",
           maxLength: 500,
           description:
-            "Short user-visible message in Markdown, not the final answer; longer text is silently truncated.",
+            "Short user-facing message in Markdown. With intent, summarize the final useful result and link to it, or state the precise decision needed. Longer text is truncated.",
         },
       },
       required: ["message"],
@@ -815,12 +827,128 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "list_groups",
+    description: "List your owner's active groups, their objective, participants and thread IDs.",
+    readOnly: true,
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "create_group",
+    description:
+      "Create a mission group. You are included automatically; select up to five other bots. Describe the objective, coordinator and deliverable. Use message_bot with group_id to assign work there.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", minLength: 1, maxLength: 80 },
+        description: { type: "string", minLength: 1, maxLength: 8000 },
+        bot_ids: { type: "array", items: { type: "string" }, maxItems: 6 },
+      },
+      required: ["name", "description", "bot_ids"],
+    },
+  },
+  {
+    name: "update_group",
+    description:
+      "Update a group you belong to: objective, name or complete membership. You stay included. Removing a bot stops its work in that group and preserves its history.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        group_id: { type: "string" },
+        name: { type: "string", minLength: 1, maxLength: 80 },
+        description: { type: "string", maxLength: 8000 },
+        bot_ids: { type: "array", items: { type: "string" }, maxItems: 6 },
+      },
+      required: ["group_id"],
+    },
+  },
+  {
+    name: "archive_group",
+    description:
+      "Close a completed mission group you belong to from your own chat. Stops remaining group contributions and preserves the group history, bots and computer files. Return the result first; confirm_name must match the group name.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        group_id: { type: "string" },
+        confirm_name: { type: "string" },
+      },
+      required: ["group_id", "confirm_name"],
+    },
+  },
+  {
+    name: "list_bot_profiles",
+    description:
+      "Inspect available bot profiles: fixed provider/model/effort, skill assignments and MCP permissions. Use a profile_bot_id when creating an equipped specialist. Global skills remain available; private bot secrets and memory are not copied.",
+    readOnly: true,
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "delegate",
+    description:
+      "Delegate scoped work to a specialist created from a bot profile, and get back a durable work identity (workId). Use delegate_followup on the same workId to send more work to the same specialist once it has replied; do not call delegate again for the same piece of work. This creates a tracked work item, not a regular new peer bot (use spawn_bot for that).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        profile_bot_id: {
+          type: "string",
+          description: "Existing bot profile in this space to spawn the specialist from.",
+        },
+        name: { type: "string", description: "Name for the new specialist bot." },
+        brief: { type: "string", description: "The task briefing given to the specialist." },
+      },
+      required: ["profile_bot_id", "name", "brief"],
+    },
+  },
+  {
+    name: "delegate_followup",
+    description:
+      "Send a follow-up message to a specialist you previously delegated work to (via delegate), on the same work identity. Only the coordinator that created the work item can follow up on it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        work_id: { type: "string", description: "workId returned by a prior delegate call." },
+        text: { type: "string" },
+      },
+      required: ["work_id", "text"],
+    },
+  },
+  {
+    name: "delegate_close",
+    description:
+      "Close delegated work after the specialist result has been consumed and no follow-up is planned. Only the coordinator that created the work can close it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        work_id: { type: "string", description: "workId returned by a prior delegate call." },
+        reason: { type: "string", description: "Optional closure note." },
+      },
+      required: ["work_id"],
+    },
+  },
+  {
+    name: "delegate_cancel",
+    description:
+      "Cancel delegated work and everything it has itself delegated (its whole sub-tree), stopping active runs and revoking their standing. Only the coordinator that created the work can cancel it, and only its own sub-tree — never an ancestor's work, nor another bot's. A peer contacted with message_bot is never part of this and is never cancelled.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        work_id: { type: "string", description: "workId returned by a prior delegate call." },
+        reason: { type: "string", description: "Why this work is being cancelled." },
+      },
+      required: ["work_id", "reason"],
+    },
+  },
+  {
     name: "spawn_bot",
     description:
       "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
     inputSchema: {
       type: "object",
       properties: {
+        profile_bot_id: {
+          type: "string",
+          description:
+            "Existing bot profile in this space. Copy its instructions, fixed model/effort, skill overrides and exact MCP permissions before starting work. Supply the new mission in instructions; it is added to the profile instructions and does not replace them.",
+        },
         name: { type: "string" },
         title: { type: "string" },
         instructions: { type: "string" },
@@ -880,10 +1008,15 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "message_bot",
     description:
-      'Send a useful update, question, or result to another of the user\'s bots. You must call this tool to actually deliver it — writing the message in your own reply text (e.g. "[to Comms] ...") does not send anything and the recipient never sees it. Delivery is async and does not end your turn. Continue independent work; do not poll or send ack-only messages. Later updates only if they add something new.',
+      'Send a useful update, question, or result to another of the user\'s bots. You must call this tool to actually deliver it — writing the message in your own reply text (e.g. "[to Comms] ...") does not send anything and the recipient never sees it. Delivery is async and does not end your turn. Do not sleep, poll, or wait actively: continue independent work only when it does not depend on the reply, record a short pending state if needed, then end this turn; a reply starts a new run. Do not send acknowledgements, check receipts, fragments, or duplicate results. Later updates only if they add something new.',
     inputSchema: {
       type: "object",
       properties: {
+        group_id: {
+          type: "string",
+          description:
+            "Optional mission group where both bots are members; deliver work in its shared thread.",
+        },
         bot_id: { type: "string", description: "Target bot id from your teammate list." },
         confirm_name: {
           type: "string",

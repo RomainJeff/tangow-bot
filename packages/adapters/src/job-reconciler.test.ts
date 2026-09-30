@@ -35,6 +35,7 @@ function fakePrisma(
     run: { findMany: vi.fn(async () => runs) },
     routine: { findMany: vi.fn(async () => routines) },
     computer: { findMany: vi.fn(async () => controls) },
+    scopedTask: { findMany: vi.fn(async () => []) },
     messagingOutbound: { findFirst: vi.fn(async () => null) },
   } as unknown as PrismaClient;
 }
@@ -160,6 +161,29 @@ describe("createJobReconciler", () => {
         orderBy: [{ controlLeaseExpiresAt: "asc" }, { id: "asc" }],
       }),
     );
+  });
+
+  it("does not requeue a peer exchange into a closed scoped task", async () => {
+    const prisma = fakePrisma();
+    const { jobs, enqueue } = publisher();
+
+    await createJobReconciler({ prisma, jobs }).reconcileOnce();
+
+    expect(prisma.run.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              OR: [
+                { scopedTaskId: null },
+                { scopedTask: { is: { status: { notIn: ["closed", "cancelled"] } } } },
+              ],
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(enqueue).not.toHaveBeenCalledWith(expect.objectContaining({ name: "run.continue" }));
   });
 
   it("restores expiry for orphaned user-control leases without a control bot", async () => {
@@ -316,12 +340,11 @@ describe("createJobReconciler", () => {
     expect(runFindMany.mock.calls[2]?.[0]).toMatchObject({
       orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
       where: {
-        AND: [
-          expect.anything(),
+        AND: expect.arrayContaining([
           {
             OR: [{ updatedAt: { gt: at } }, { updatedAt: at, id: { gt: "run-2" } }],
           },
-        ],
+        ]),
       },
     });
     expect(routineFindMany.mock.calls[1]?.[0]).toMatchObject({
@@ -411,7 +434,7 @@ describe("createJobReconciler", () => {
         orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         where: {
           trigger: "bot_message",
-          status: { in: ["completed", "failed"] },
+          status: { in: ["completed", "failed", "cancelled"] },
           botOutcomeReturnedAt: null,
         },
       }),
@@ -578,6 +601,172 @@ describe("createJobReconciler", () => {
       { id: "bot-1", name: "Researcher" },
       "Checking calendars…",
       "status",
+    );
+  });
+  it("ignores historical cancellations without receipt lineage", async () => {
+    vi.mocked(returnBotMessageOutcome).mockClear();
+    const historical = {
+      id: "old-cancelled",
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      botId: "bot-1",
+      userId: "user-1",
+      sourceMessageId: "old-source",
+      status: "cancelled",
+      error: null,
+      sourceMessage: {
+        blocks: [
+          { kind: "bot_message_received", fromBotId: "bot-2", fromBotName: "Two", text: "old" },
+        ],
+      },
+      bot: { name: "Researcher" },
+    };
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const prisma = {
+      run: {
+        findMany: vi.fn(async (args: any) =>
+          args.where?.trigger === "bot_message" ? [historical] : [],
+        ),
+        updateMany,
+      },
+      routine: { findMany: vi.fn(async () => []) },
+      computer: { findMany: vi.fn(async () => []) },
+      messagingOutbound: { findFirst: vi.fn(async () => null) },
+      message: { findMany: vi.fn(async () => []) },
+    } as unknown as PrismaClient;
+    const { jobs } = publisher();
+    const events = { notify: vi.fn() } as unknown as ThreadEvents;
+    await createJobReconciler({ prisma, jobs, events }, { batchSize: 1 }).reconcileOnce();
+    expect(returnBotMessageOutcome).not.toHaveBeenCalled();
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "old-cancelled", status: "cancelled", botOutcomeReturnedAt: null },
+      data: { botOutcomeReturnedAt: expect.any(Date) },
+    });
+  });
+
+  it("returns a cancellation with receipt lineage", async () => {
+    vi.mocked(returnBotMessageOutcome).mockClear();
+    const current = {
+      id: "new-cancelled",
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      botId: "bot-1",
+      userId: "user-1",
+      sourceMessageId: "new-source",
+      status: "cancelled",
+      error: null,
+      sourceMessage: {
+        blocks: [
+          {
+            kind: "bot_message_received",
+            fromBotId: "bot-2",
+            fromBotName: "Two",
+            text: "new",
+            fromRunId: "sender-run",
+          },
+        ],
+      },
+      bot: { name: "Researcher" },
+    };
+    const prisma = {
+      run: {
+        findMany: vi.fn(async (args: any) =>
+          args.where?.trigger === "bot_message" ? [current] : [],
+        ),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+      routine: { findMany: vi.fn(async () => []) },
+      computer: { findMany: vi.fn(async () => []) },
+      messagingOutbound: { findFirst: vi.fn(async () => null) },
+      message: { findMany: vi.fn(async () => []) },
+    } as unknown as PrismaClient;
+    const { jobs } = publisher();
+    const events = { notify: vi.fn() } as unknown as ThreadEvents;
+    vi.mocked(returnBotMessageOutcome).mockResolvedValue(true);
+    await createJobReconciler({ prisma, jobs, events }, { batchSize: 1 }).reconcileOnce();
+    expect(returnBotMessageOutcome).toHaveBeenCalledWith(
+      { prisma, jobs, events },
+      current,
+      { id: "bot-1", name: "Researcher" },
+      "The delegated request was cancelled before it could return a result.",
+      "status",
+    );
+  });
+
+  it("keeps failed outcomes eligible without receipt lineage", async () => {
+    vi.mocked(returnBotMessageOutcome).mockClear();
+    const failed = {
+      id: "failed-run",
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      botId: "bot-1",
+      userId: "user-1",
+      sourceMessageId: "old-source",
+      status: "failed",
+      error: "broken",
+      sourceMessage: { blocks: [] },
+      bot: { name: "Researcher" },
+    };
+    const prisma = {
+      run: {
+        findMany: vi.fn(async (args: any) =>
+          args.where?.trigger === "bot_message" ? [failed] : [],
+        ),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+      routine: { findMany: vi.fn(async () => []) },
+      computer: { findMany: vi.fn(async () => []) },
+      messagingOutbound: { findFirst: vi.fn(async () => null) },
+      message: { findMany: vi.fn(async () => []) },
+    } as unknown as PrismaClient;
+    const { jobs } = publisher();
+    const events = { notify: vi.fn() } as unknown as ThreadEvents;
+    vi.mocked(returnBotMessageOutcome).mockResolvedValue(true);
+    await createJobReconciler({ prisma, jobs, events }, { batchSize: 1 }).reconcileOnce();
+    expect(returnBotMessageOutcome).toHaveBeenCalledWith(
+      { prisma, jobs, events },
+      failed,
+      { id: "bot-1", name: "Researcher" },
+      "Could not complete the delegated request: broken",
+      "status",
+    );
+  });
+
+  it("silently marks a cancellation with no source message", async () => {
+    vi.mocked(returnBotMessageOutcome).mockClear();
+    const cancelled = {
+      id: "missing-source",
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      botId: "bot-1",
+      userId: "user-1",
+      sourceMessageId: null,
+      status: "cancelled",
+      error: null,
+      sourceMessage: null,
+      bot: { name: "Researcher" },
+    };
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const prisma = {
+      run: {
+        findMany: vi.fn(async (args: any) =>
+          args.where?.trigger === "bot_message" ? [cancelled] : [],
+        ),
+        updateMany,
+      },
+      routine: { findMany: vi.fn(async () => []) },
+      computer: { findMany: vi.fn(async () => []) },
+      messagingOutbound: { findFirst: vi.fn(async () => null) },
+      message: { findMany: vi.fn(async () => []) },
+    } as unknown as PrismaClient;
+    const { jobs } = publisher();
+    const events = { notify: vi.fn() } as unknown as ThreadEvents;
+    await createJobReconciler({ prisma, jobs, events }, { batchSize: 1 }).reconcileOnce();
+    expect(returnBotMessageOutcome).not.toHaveBeenCalled();
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "missing-source", status: "cancelled", botOutcomeReturnedAt: null },
+      }),
     );
   });
 });

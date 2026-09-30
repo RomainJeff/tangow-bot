@@ -17,6 +17,9 @@ function fixture(options: {
   messages: { id: string; seq: number; role: string; blocks: { kind: string; text: string }[] }[];
 }) {
   const run = {
+    harness: null,
+    executionTarget: null,
+    choiceVersion: null,
     id: "run-1",
     botId: "bot-1",
     threadId: "thread-1",

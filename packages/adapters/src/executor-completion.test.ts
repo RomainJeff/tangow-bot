@@ -173,6 +173,7 @@ describe("completionMarksUnread", () => {
     expect(completionMarksUnread("routine", "")).toBe(false);
     expect(completionMarksUnread("routine", "Daily report ready")).toBe(true);
     expect(completionMarksUnread("user", "")).toBe(true);
+    expect(completionMarksUnread("bot_message", "No action needed")).toBe(false);
     // An inbound routine wake reports through its card like any background routine.
     expect(completionMarksUnread("webhook", "", true)).toBe(false);
     expect(completionMarksUnread("webhook", "Deploy is green", true)).toBe(true);

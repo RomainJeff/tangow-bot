@@ -383,6 +383,7 @@ describe("secrets model-visibility conformance", () => {
       );
 
       const prisma = {
+        scopedTask: { findFirst: vi.fn().mockResolvedValue(null) },
         botMcpServer: {
           findMany: vi.fn().mockResolvedValue([assignment]),
           findFirst: vi.fn().mockResolvedValue(assignment),

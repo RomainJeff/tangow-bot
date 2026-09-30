@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   archiveBot,
   archiveSpawnedBot,
+  composeChildInstructions,
   confirmSpawnedBotName,
   destroyBot,
   spawnBot,
@@ -35,7 +36,63 @@ function noGroupMemberships() {
   };
 }
 
+function noCoordinatorScopedTasks() {
+  return {
+    scopedTask: {
+      findMany: vi.fn().mockResolvedValue([]),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      count: vi.fn().mockResolvedValue(0),
+    },
+    computerUsageGrant: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+  };
+}
+
 describe("spawned bot creation", () => {
+  it("keeps the existing mission-only behavior without a profile", async () => {
+    const createBot = vi.fn().mockResolvedValue({
+      id: "child-plain",
+      name: "Scout",
+      title: "",
+      threadId: "thread-plain",
+    });
+    const createReposSpy = vi.spyOn(await import("@rakazo/db"), "createRepos").mockReturnValue({
+      createBot,
+    } as unknown as ReturnType<typeof createRepos>);
+
+    await spawnBot(
+      { prisma: {} as PrismaClient, jobs: { enqueue: vi.fn() } as unknown as JobPublisher },
+      {
+        spawnedBy: { id: "parent-1", name: "Chief", spaceId: "workspace-1", userId: "user-1" },
+        runId: "run-plain",
+        spawnKey: "tool-call-plain",
+        name: "Scout",
+        instructions: "  Find accessible hotels.  ",
+      },
+    );
+
+    expect(createBot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        instructions: "Find accessible hotels.",
+        notifyOnFinish: true,
+      }),
+    );
+    createReposSpy.mockRestore();
+  });
+
+  it("adds a mission to complete profile instructions without changing the profile", () => {
+    const profileInstructions = "Act as a patient travel educator.";
+    const mission = "Prepare the family briefing.";
+
+    expect(composeChildInstructions(profileInstructions, mission)).toBe(
+      `${profileInstructions}\n\n${mission}`,
+    );
+    expect(composeChildInstructions(profileInstructions)).toBe(profileInstructions);
+    expect(composeChildInstructions(profileInstructions, mission)).toBe(
+      composeChildInstructions(profileInstructions, mission),
+    );
+  });
+
   it("returns the existing child when a spawn is retried", async () => {
     const findUnique = vi.fn().mockResolvedValue({
       id: "child-1",
@@ -95,7 +152,29 @@ describe("spawned bot creation", () => {
     expect(enqueue).toHaveBeenCalledOnce();
   });
 
-  it("passes computerMode through to createBot", async () => {
+  it("creates an equipped child without passing actor metadata to Prisma", async () => {
+    const profile = {
+      modelProvider: "provider",
+      modelId: "model",
+      thinkingLevel: "low",
+      instructions: "Teach with worked examples.",
+      notifyOnFinish: false,
+      skills: [{ skillKey: "user:handoff", enabled: true }],
+      mcpServers: [{ serverId: "server", allowAllTools: false, allowedTools: ["read"] }],
+    };
+    const findFirst = vi.fn().mockResolvedValue(profile);
+    const upsertSkill = vi.fn();
+    const upsertMcp = vi.fn();
+    const prisma = {
+      bot: { findFirst },
+      $transaction: vi.fn(async (fn) =>
+        fn({
+          bot: { update: vi.fn() },
+          botSkill: { upsert: upsertSkill },
+          botMcpServer: { upsert: upsertMcp },
+        }),
+      ),
+    } as unknown as PrismaClient;
     const createBot = vi.fn().mockResolvedValue({
       id: "child-2",
       name: "Painter",
@@ -108,7 +187,7 @@ describe("spawned bot creation", () => {
 
     const result = await spawnBot(
       {
-        prisma: {} as PrismaClient,
+        prisma,
         jobs: { enqueue: vi.fn() } as unknown as JobPublisher,
       },
       {
@@ -120,8 +199,10 @@ describe("spawned bot creation", () => {
         },
         runId: "run-1",
         spawnKey: "tool-call-2",
+        profileBotId: "profile",
         name: "Painter",
         computerMode: "dedicated",
+        instructions: "Draft the first lesson.",
       },
     );
 
@@ -131,6 +212,11 @@ describe("spawned bot creation", () => {
         name: "Painter",
         computerMode: "dedicated",
         parentBotId: "parent-1",
+        instructions: "Teach with worked examples.\n\nDraft the first lesson.",
+        notifyOnFinish: false,
+        modelProvider: "provider",
+        modelId: "model",
+        thinkingLevel: "low",
       }),
     );
     expect(result).toEqual({
@@ -139,6 +225,310 @@ describe("spawned bot creation", () => {
       name: "Painter",
       title: "",
       threadId: "thread-2",
+    });
+    expect(findFirst.mock.calls[0]?.[0]?.where).toEqual({
+      userId: "user-1",
+      spaceId: "workspace-1",
+      id: "profile",
+      archivedAt: null,
+    });
+    expect(upsertSkill.mock.calls[0]?.[0]?.create).toEqual({
+      userId: "user-1",
+      spaceId: "workspace-1",
+      botId: "child-2",
+      skillKey: "user:handoff",
+      enabled: true,
+    });
+    expect(upsertMcp.mock.calls[0]?.[0]?.create).toEqual({
+      userId: "user-1",
+      spaceId: "workspace-1",
+      botId: "child-2",
+      serverId: "server",
+      allowAllTools: false,
+      allowedTools: ["read"],
+    });
+    createReposSpy.mockRestore();
+  });
+
+  it("copies the inherited Space default onto the specialist", async () => {
+    const createBot = vi.fn().mockResolvedValue({
+      id: "child-inherited",
+      name: "Analyst",
+      title: "",
+      threadId: "thread-inherited",
+    });
+    const createReposSpy = vi.spyOn(await import("@rakazo/db"), "createRepos").mockReturnValue({
+      createBot,
+    } as unknown as ReturnType<typeof createRepos>);
+    const prisma = {
+      bot: {
+        findFirst: vi.fn().mockResolvedValue({
+          modelProvider: null,
+          modelId: null,
+          thinkingLevel: null,
+          instructions: "Review the result.",
+          notifyOnFinish: false,
+          skills: [],
+          mcpServers: [],
+        }),
+      },
+      spaceModelPreference: {
+        findFirst: vi.fn().mockResolvedValue({
+          credential: {
+            id: "credential",
+            userId: "user-1",
+            provider: "openai-codex",
+            label: "ChatGPT",
+            secretId: "secret",
+            createdAt: new Date(0),
+            updatedAt: new Date(0),
+          },
+          isDefault: true,
+          modelId: "gpt-5.6",
+        }),
+      },
+      deploymentSettings: { findUnique: vi.fn().mockResolvedValue(null) },
+      $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
+        fn({
+          bot: { update: vi.fn() },
+          botSkill: { upsert: vi.fn() },
+          botMcpServer: { upsert: vi.fn() },
+        }),
+      ),
+    } as unknown as PrismaClient;
+    const resolveConnectionThinkingLevel = vi.fn().mockResolvedValue("high");
+
+    await spawnBot(
+      {
+        prisma,
+        jobs: { enqueue: vi.fn() } as unknown as JobPublisher,
+        resolveConnectionThinkingLevel,
+      },
+      {
+        spawnedBy: {
+          id: "parent-1",
+          name: "Chief",
+          spaceId: "workspace-1",
+          userId: "user-1",
+        },
+        runId: "run-inherited",
+        spawnKey: "inherited-profile",
+        profileBotId: "profile",
+        name: "Analyst",
+      },
+    );
+
+    expect(createBot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        modelProvider: "openai-codex",
+        modelId: "gpt-5.6",
+        thinkingLevel: "high",
+      }),
+    );
+    expect(resolveConnectionThinkingLevel).toHaveBeenCalledOnce();
+    createReposSpy.mockRestore();
+  });
+
+  it.each([
+    { modelProvider: null, modelId: null, thinkingLevel: null },
+    { modelProvider: null, modelId: null, thinkingLevel: "low" },
+    { modelProvider: "anthropic", modelId: "profile-model", thinkingLevel: null },
+  ])(
+    "inherits only unset profile choices from the current coordinator model: %j",
+    async (overrides) => {
+      const createBot = vi.fn().mockResolvedValue({
+        id: "child-inherited",
+        name: "Analyst",
+        title: "",
+        threadId: "thread-inherited",
+      });
+      const createReposSpy = vi.spyOn(await import("@rakazo/db"), "createRepos").mockReturnValue({
+        createBot,
+      } as unknown as ReturnType<typeof createRepos>);
+      const update = vi.fn();
+      const findFirst = vi.fn().mockResolvedValue({
+        ...overrides,
+        instructions: "Review the result.",
+        notifyOnFinish: false,
+        skills: [],
+        mcpServers: [],
+      });
+      const prisma = {
+        bot: { findFirst },
+        spaceModelPreference: { findFirst: vi.fn().mockResolvedValue(null) },
+        deploymentSettings: { findUnique: vi.fn().mockResolvedValue(null) },
+        $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn({ bot: { update } })),
+      } as unknown as PrismaClient;
+      const deps = {
+        prisma,
+        jobs: { enqueue: vi.fn() } as unknown as JobPublisher,
+        coordinatorModel: {
+          modelProvider: "openai-codex",
+          modelId: "coordinator-model",
+          thinkingLevel: "high",
+        },
+      };
+      try {
+        await spawnBot(deps, {
+          spawnedBy: { id: "parent-1", name: "Chief", spaceId: "workspace-1", userId: "user-1" },
+          runId: "run-inherited",
+          spawnKey: "inherited-profile",
+          profileBotId: "profile",
+          name: "Analyst",
+        });
+        const expected = {
+          modelProvider: overrides.modelProvider ?? "openai-codex",
+          modelId: overrides.modelId ?? "coordinator-model",
+          thinkingLevel: overrides.thinkingLevel ?? "high",
+        };
+        expect(createBot).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining(expected),
+        );
+        expect(update).toHaveBeenCalledWith({
+          where: { id: "child-inherited" },
+          data: { ...expected, notifyOnFinish: false },
+        });
+        expect(findFirst).toHaveBeenCalledOnce();
+      } finally {
+        createReposSpy.mockRestore();
+      }
+    },
+  );
+
+  it("refuses an incompatible Codex native specialist before creating it", async () => {
+    const createBot = vi.fn();
+    const createReposSpy = vi.spyOn(await import("@rakazo/db"), "createRepos").mockReturnValue({
+      createBot,
+    } as unknown as ReturnType<typeof createRepos>);
+    const prisma = {
+      bot: {
+        findFirst: vi.fn().mockResolvedValue({
+          modelProvider: "anthropic",
+          modelId: "claude-sonnet-5",
+          thinkingLevel: "medium",
+          instructions: "Review the result.",
+          notifyOnFinish: false,
+          skills: [],
+          mcpServers: [],
+        }),
+      },
+    } as unknown as PrismaClient;
+
+    await expect(
+      spawnBot(
+        { prisma, jobs: { enqueue: vi.fn() } as unknown as JobPublisher },
+        {
+          spawnedBy: {
+            id: "parent-1",
+            name: "Chief",
+            spaceId: "workspace-1",
+            userId: "user-1",
+          },
+          runId: "run-1",
+          spawnKey: "native-incompatible",
+          profileBotId: "profile",
+          name: "Analyst",
+          harness: "codex-native",
+        },
+      ),
+    ).rejects.toThrow("Codex native specialist needs a model on its subscription");
+    expect(createBot).not.toHaveBeenCalled();
+    createReposSpy.mockRestore();
+  });
+
+  it("refuses an incompatible Claude native specialist before creating it", async () => {
+    const createBot = vi.fn();
+    const createReposSpy = vi.spyOn(await import("@rakazo/db"), "createRepos").mockReturnValue({
+      createBot,
+    } as unknown as ReturnType<typeof createRepos>);
+    const prisma = {
+      bot: {
+        findFirst: vi.fn().mockResolvedValue({
+          modelProvider: "openai-codex",
+          modelId: "gpt-5.6",
+          thinkingLevel: "medium",
+          instructions: "Review the result.",
+          notifyOnFinish: false,
+          skills: [],
+          mcpServers: [],
+        }),
+      },
+    } as unknown as PrismaClient;
+
+    await expect(
+      spawnBot(
+        { prisma, jobs: { enqueue: vi.fn() } as unknown as JobPublisher },
+        {
+          spawnedBy: {
+            id: "parent-1",
+            name: "Chief",
+            spaceId: "workspace-1",
+            userId: "user-1",
+          },
+          runId: "run-1",
+          spawnKey: "claude-native-incompatible",
+          profileBotId: "profile",
+          name: "Analyst",
+          harness: "claude-native",
+        },
+      ),
+    ).rejects.toThrow("Claude native specialist needs a model on its subscription");
+    expect(createBot).not.toHaveBeenCalled();
+    createReposSpy.mockRestore();
+  });
+
+  it("does not append profile instructions again when a profiled spawn is retried", async () => {
+    const profile = {
+      modelProvider: "provider",
+      modelId: "model",
+      thinkingLevel: "low",
+      instructions: "Keep the full profile.",
+      notifyOnFinish: false,
+      skills: [],
+      mcpServers: [],
+    };
+    const update = vi.fn();
+    const createBot = vi.fn().mockRejectedValue(new Error("unique spawn key"));
+    const createReposSpy = vi.spyOn(await import("@rakazo/db"), "createRepos").mockReturnValue({
+      createBot,
+    } as unknown as ReturnType<typeof createRepos>);
+    const prisma = {
+      bot: {
+        findFirst: vi.fn().mockResolvedValue(profile),
+        findUnique: vi.fn().mockResolvedValue({
+          id: "child-1",
+          name: "Scout",
+          title: "",
+          thread: { id: "thread-1" },
+        }),
+      },
+      $transaction: vi.fn(async (callback: (tx: unknown) => Promise<void>) =>
+        callback({
+          bot: { update },
+          botSkill: { upsert: vi.fn() },
+          botMcpServer: { upsert: vi.fn() },
+        }),
+      ),
+    } as unknown as PrismaClient;
+
+    const result = await spawnBot(
+      { prisma, jobs: { enqueue: vi.fn() } as unknown as JobPublisher },
+      {
+        spawnedBy: { id: "parent-1", name: "Chief", spaceId: "workspace-1", userId: "user-1" },
+        runId: "run-retry",
+        spawnKey: "tool-call-retry",
+        name: "Scout",
+        instructions: "Inspect the itinerary.",
+        profileBotId: "profile",
+      },
+    );
+
+    expect(result).toMatchObject({ ok: true, duplicate: true, botId: "child-1" });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "child-1" },
+      data: expect.not.objectContaining({ instructions: expect.anything() }),
     });
     createReposSpy.mockRestore();
   });
@@ -174,6 +564,7 @@ describe("spawned bot archival", () => {
       $transaction: vi.fn(async (callback: (tx: unknown) => Promise<void>) =>
         callback({
           ...noGroupMemberships(),
+          ...noCoordinatorScopedTasks(),
           run: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
           task: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
           routine: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -520,6 +911,62 @@ describe("destroyBot", () => {
 });
 
 describe("archiveBot", () => {
+  it("cancels the archived coordinator's open delegated work and revokes its last grants", async () => {
+    const scopedTaskUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const grantDeleteMany = vi.fn().mockResolvedValue({ count: 1 });
+    const transaction = vi.fn(async (callback: (tx: unknown) => Promise<void>) =>
+      callback({
+        ...noGroupMemberships(),
+        run: {
+          findMany: vi.fn().mockResolvedValue([]),
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        },
+        task: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        routine: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        computerExecutionLease: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        computer: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        scopedTask: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "work-1",
+              missionComputerId: "mission-computer-1",
+              executorBotId: "specialist-1",
+            },
+          ]),
+          updateMany: scopedTaskUpdateMany,
+          count: vi.fn().mockResolvedValue(0),
+        },
+        computerUsageGrant: { deleteMany: grantDeleteMany },
+        bot: { update: vi.fn().mockResolvedValue({}) },
+      }),
+    );
+    const prisma = {
+      computer: { findUnique: vi.fn().mockResolvedValue(null) },
+      run: { findMany: vi.fn().mockResolvedValue([]) },
+      routine: { findMany: vi.fn().mockResolvedValue([]) },
+      $transaction: transaction,
+    } as unknown as PrismaClient;
+
+    await archiveBot(
+      {
+        prisma,
+        sandbox: {} as SandboxProvider,
+        home: {} as AgentHomeStore,
+        jobs: { cancel: vi.fn() } as unknown as JobPublisher,
+      },
+      { id: "bot-1", spaceId: "workspace-1", name: "Coordinator", archivedAt: null },
+      context,
+    );
+
+    expect(scopedTaskUpdateMany).toHaveBeenCalledWith({
+      where: { coordinatorBotId: "bot-1", status: { notIn: ["closed", "cancelled"] } },
+      data: { status: "cancelled" },
+    });
+    expect(grantDeleteMany).toHaveBeenCalledWith({
+      where: { computerId: "mission-computer-1", botId: "specialist-1" },
+    });
+  });
+
   it("stops work and routines while preserving the bot", async () => {
     const updateBot = vi.fn().mockResolvedValue({});
     const disableRoutines = vi.fn().mockResolvedValue({ count: 2 });
@@ -527,6 +974,7 @@ describe("archiveBot", () => {
     const transaction = vi.fn(async (callback: (tx: unknown) => Promise<void>) =>
       callback({
         ...groupCleanup,
+        ...noCoordinatorScopedTasks(),
         run: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
         task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
         routine: { updateMany: disableRoutines },
@@ -581,6 +1029,7 @@ describe("archiveBot", () => {
     const transaction = vi.fn(async (callback: (tx: unknown) => Promise<void>) =>
       callback({
         ...noGroupMemberships(),
+        ...noCoordinatorScopedTasks(),
         run: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
         task: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
         routine: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -646,6 +1095,7 @@ describe("archiveBot", () => {
     const transaction = vi.fn(async (callback: (tx: unknown) => Promise<void>) =>
       callback({
         ...noGroupMemberships(),
+        ...noCoordinatorScopedTasks(),
         run: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
         task: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
         routine: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },

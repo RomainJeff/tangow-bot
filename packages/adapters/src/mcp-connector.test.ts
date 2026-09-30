@@ -24,6 +24,14 @@ const ASSIGNMENT = {
   server: SERVER,
 };
 
+/**
+ * T07:4 correction: every admission path now goes through `computeEffectiveMcpAccess`
+ * (delegated-tasks.ts), which always reads `scopedTask.findFirst` to decide whether the
+ * acting bot is itself a specialist. Every prisma fixture below is an ordinary bot (never
+ * the executor of a scoped task), so this stub is spread into each one.
+ */
+const NOT_A_SPECIALIST = { scopedTask: { findFirst: vi.fn().mockResolvedValue(null) } };
+
 const TEST_NETWORK = {
   // Read the global per call so a fetch stubbed after construction still wins.
   fetch: (input: string | URL | Request, init?: RequestInit) => globalThis.fetch(input, init),
@@ -111,6 +119,7 @@ describe("MCP connector session cache", () => {
     };
     vi.stubGlobal("fetch", mcpFetch(state));
     const prisma = {
+      ...NOT_A_SPECIALIST,
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
         findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
@@ -157,6 +166,7 @@ describe("MCP connector session cache", () => {
       vi.stubGlobal("fetch", mcpFetch(state));
       const connector = new McpConnector(
         {
+          ...NOT_A_SPECIALIST,
           botMcpServer: {
             findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
             findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
@@ -182,7 +192,7 @@ describe("MCP connector session cache", () => {
 
   it("returns no tools when the MCP catalog is empty", async () => {
     const connector = new McpConnector(
-      { botMcpServer: { findMany: vi.fn().mockResolvedValue([]) } } as never,
+      { ...NOT_A_SPECIALIST, botMcpServer: { findMany: vi.fn().mockResolvedValue([]) } } as never,
       {} as never,
     );
     await expect(
@@ -214,6 +224,7 @@ describe("MCP connector session cache", () => {
     };
     vi.stubGlobal("fetch", mcpFetch(state));
     const prisma = {
+      ...NOT_A_SPECIALIST,
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
         findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
@@ -373,6 +384,7 @@ describe("MCP connector session cache", () => {
     };
     vi.stubGlobal("fetch", mcpFetch(state));
     const prisma = {
+      ...NOT_A_SPECIALIST,
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
         findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
@@ -434,7 +446,10 @@ describe("MCP connector session cache", () => {
       );
       const invalidate = vi.spyOn(provider, "invalidateCredentials");
       const connector = new McpConnector(
-        { botMcpServer: { findMany: vi.fn().mockResolvedValue([ASSIGNMENT]) } } as never,
+        {
+          ...NOT_A_SPECIALIST,
+          botMcpServer: { findMany: vi.fn().mockResolvedValue([ASSIGNMENT]) },
+        } as never,
         {} as never,
         {
           network: {
@@ -494,6 +509,7 @@ describe("MCP connector session cache", () => {
     };
     vi.stubGlobal("fetch", mcpFetch(state, "http://localhost:8123/api/mcp"));
     const prisma = {
+      ...NOT_A_SPECIALIST,
       botMcpServer: { findMany: vi.fn().mockResolvedValue([localAssignment]) },
     };
     const connector = new McpConnector(prisma as never, {} as never);
@@ -517,6 +533,7 @@ describe("MCP connector session cache", () => {
     };
     vi.stubGlobal("fetch", mcpFetch(state, "http://localhost:8123/api/mcp"));
     const prisma = {
+      ...NOT_A_SPECIALIST,
       botMcpServer: { findMany: vi.fn().mockResolvedValue([localAssignment]) },
       secret: { findFirst: vi.fn().mockResolvedValue({ id: "secret-1", ciphertext: "encrypted" }) },
     };
@@ -547,6 +564,7 @@ describe("MCP connector session cache", () => {
     const state = { failNext: false, initializations: 0 };
     vi.stubGlobal("fetch", mcpFetch(state));
     const prisma = {
+      ...NOT_A_SPECIALIST,
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
         findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
@@ -589,6 +607,7 @@ describe("MCP connector session cache", () => {
     const state = { failNext: false, initializations: 0 };
     vi.stubGlobal("fetch", mcpFetch(state));
     const prisma = {
+      ...NOT_A_SPECIALIST,
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
         findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
@@ -612,6 +631,142 @@ describe("MCP connector session cache", () => {
     await connector.discoverTools(contextFor("w1", "u1"));
     expect(state.initializations).toBe(3);
 
+    await connector.close();
+  });
+
+  /**
+   * T07:4 correction (Terra review, B3 — the priority finding, on the real admission path):
+   * before this fix, `authorizedTools`/`execute` admitted a tool purely from the acting bot's
+   * own `BotMcpServer` row — a specialist keeping a profile-copied assignment to a server its
+   * coordinator never held could still discover and call it. `bot-1` here is the *specialist*
+   * (`executorBotId`), assigned allow-all on `server-1` (as `applyBotProfile` would copy from
+   * its profile); its coordinator, `bot-coordinator`, has no assignment to `server-1` at all,
+   * so the specialist's persisted ceiling never listed it.
+   */
+  function specialistPrismaFixture(rows: Array<{ botId: string } & Record<string, unknown>>) {
+    return {
+      botMcpServer: {
+        findMany: vi
+          .fn()
+          .mockImplementation(async (args: { where: { botId: string } }) =>
+            rows.filter((row) => row.botId === args.where.botId),
+          ),
+        findFirst: vi
+          .fn()
+          .mockImplementation(
+            async (args: { where: { botId: string; serverId: string } }) =>
+              rows.find(
+                (row) => row.botId === args.where.botId && row.serverId === args.where.serverId,
+              ) ?? null,
+          ),
+      },
+      scopedTask: {
+        findFirst: vi
+          .fn()
+          .mockImplementation(async (args: { where: { executorBotId: string } }) =>
+            args.where.executorBotId === "bot-1"
+              ? { delegationCeiling: {}, coordinatorBotId: "bot-coordinator" }
+              : null,
+          ),
+      },
+    };
+  }
+
+  it("B3: a specialist's own profile-copied MCP assignment is refused at discovery when its coordinator never held that server", async () => {
+    const state = { failNext: false, initializations: 0 };
+    vi.stubGlobal("fetch", mcpFetch(state));
+    const prisma = specialistPrismaFixture([{ ...ASSIGNMENT, botId: "bot-1" }]);
+    const connector = new McpConnector(prisma as never, {} as never, { network: TEST_NETWORK });
+
+    const tools = await connector.discoverTools({
+      spaceId: "w1",
+      userId: "u1",
+      botId: "bot-1",
+      signal: new AbortController().signal,
+    } as never);
+
+    expect(tools).toEqual([]);
+    await connector.close();
+  });
+
+  it("B3: the same escalation is refused at execute — the real call path, not just discovery", async () => {
+    const state = { failNext: false, initializations: 0 };
+    vi.stubGlobal("fetch", mcpFetch(state));
+    const prisma = specialistPrismaFixture([{ ...ASSIGNMENT, botId: "bot-1" }]);
+    const connector = new McpConnector(prisma as never, {} as never, { network: TEST_NETWORK });
+    const context = {
+      spaceId: "w1",
+      userId: "u1",
+      botId: "bot-1",
+      signal: new AbortController().signal,
+    } as never;
+    const call = {
+      tool: "mcp__demo__echo",
+      args: {},
+      route: { connectorId: "mcp", resourceId: "server-1", toolName: "echo" },
+    } as never;
+
+    const events: unknown[] = [];
+    for await (const event of connector.execute(call, context)) events.push(event);
+
+    expect(events).toEqual([{ type: "error", message: "MCP tool is not assigned to this bot" }]);
+    await connector.close();
+  });
+
+  it("root's decision (Q12): a specialist whose coordinator holds a restricted allowedTools list on the same server than its own allow-all assignment gets exactly the coordinator's tool-by-tool intersection", async () => {
+    const state = {
+      failNext: false,
+      initializations: 0,
+      calls: [] as string[],
+      tools: [
+        { name: "search", inputSchema: { type: "object" } },
+        { name: "delete", inputSchema: { type: "object" } },
+      ],
+    };
+    vi.stubGlobal("fetch", mcpFetch(state));
+    const prisma = {
+      botMcpServer: {
+        findMany: vi.fn().mockImplementation(async (args: { where: { botId: string } }) => {
+          if (args.where.botId === "bot-1") return [{ ...ASSIGNMENT, botId: "bot-1" }];
+          if (args.where.botId === "bot-coordinator") {
+            // The coordinator's own *current* assignment is wider than the ceiling
+            // snapshot below — the ceiling, not the coordinator's live grant, is what
+            // constrains here (the coordinator gained "delete" after delegating).
+            return [
+              {
+                ...ASSIGNMENT,
+                botId: "bot-coordinator",
+                allowAllTools: false,
+                allowedTools: ["search", "delete"],
+              },
+            ];
+          }
+          return [];
+        }),
+      },
+      scopedTask: {
+        findFirst: vi.fn().mockImplementation(async (args: { where: { executorBotId: string } }) =>
+          args.where.executorBotId === "bot-1"
+            ? {
+                delegationCeiling: {
+                  "server-1": { allowAllTools: false, allowedTools: ["search"] },
+                },
+                coordinatorBotId: "bot-coordinator",
+              }
+            : null,
+        ),
+      },
+    };
+    const connector = new McpConnector(prisma as never, {} as never, { network: TEST_NETWORK });
+
+    const tools = await connector.discoverTools({
+      spaceId: "w1",
+      userId: "u1",
+      botId: "bot-1",
+      signal: new AbortController().signal,
+    } as never);
+
+    expect(tools.map((tool) => tool.name)).toEqual(["mcp__demo__search"]);
     await connector.close();
   });
 });

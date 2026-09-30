@@ -424,7 +424,13 @@ export class PiAgentRuntime implements AgentRuntime {
                 queue.push({ type: "progress", text: "", activity: true });
               }
               streamed += delta;
-              queue.push({ type: "text", text: delta });
+              // A scheduled routine may decide after a tool call that there is
+              // nothing useful to say. Buffer its tentative narration until the
+              // turn is known to be a text-only final response; channel wakes use
+              // allowSilentEmpty too, but must retain their existing streaming.
+              if (!request.allowSilentEmptyAfterTool) {
+                queue.push({ type: "text", text: delta });
+              }
             }
           }
           if (event.type === "turn_end") {
@@ -440,14 +446,23 @@ export class PiAgentRuntime implements AgentRuntime {
             if (hasToolCalls && hasToolResults && !host.pausePending) {
               toolWorkPendingFinal = true;
               silentToolContinuations = 0;
+              if (request.allowSilentEmptyAfterTool) {
+                // Do not let pre-tool narration become the terminal response of a
+                // routine that finds no result worth posting.
+                streamed = "";
+              }
             } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
               if (messageText.trim()) {
                 toolWorkPendingFinal = false;
                 silentToolContinuations = 0;
               } else if (
                 !host.pausePending &&
+                !request.allowSilentEmptyAfterTool &&
                 silentToolContinuations < MAX_SILENT_TOOL_CONTINUATIONS
               ) {
+                // Direct and channel requests still need a written outcome after a
+                // completed tool. A routine with the dedicated silence permission
+                // has no pending tool work here, so do not coerce it to speak.
                 silentToolContinuations += 1;
                 agent.followUp({
                   role: "user",
@@ -456,10 +471,22 @@ export class PiAgentRuntime implements AgentRuntime {
                 });
               }
             }
+            if (
+              request.allowSilentEmptyAfterTool &&
+              !host.pausePending &&
+              !hasToolCalls &&
+              !hasToolResults &&
+              messageText.trim()
+            ) {
+              // Publish only a text-only result. Text from a tool-bearing turn
+              // was buffered above and is intentionally discarded.
+              streamed = messageText;
+              queue.push({ type: "text", text: messageText });
+            }
           }
           if (event.type === "message_end" && event.message.role === "assistant") {
             const text = assistantText(event.message);
-            if (text && !streamed) {
+            if (text && !streamed && !request.allowSilentEmptyAfterTool) {
               streamed = text;
               queue.push({ type: "text", text });
             }
@@ -513,7 +540,11 @@ export class PiAgentRuntime implements AgentRuntime {
             queue.push({ type: "text", text: budgetMessage });
             streamed = budgetMessage;
           }
-        } else if (!host.pausePending && toolWorkPendingFinal) {
+        } else if (
+          !host.pausePending &&
+          toolWorkPendingFinal &&
+          !request.allowSilentEmptyAfterTool
+        ) {
           // Discard cumulative pre-tool narration from the terminal payload and make the
           // missing final response visible to the user instead of silently completing.
           streamed = TOOL_FINAL_RESPONSE_FALLBACK;
@@ -525,7 +556,7 @@ export class PiAgentRuntime implements AgentRuntime {
           if (fallback.trim()) {
             queue.push({ type: "text", text: fallback });
             streamed = fallback;
-          } else if (toolWorkPendingFinal) {
+          } else if (toolWorkPendingFinal && !request.allowSilentEmptyAfterTool) {
             // A tool-bearing run must never finish with only a progress/narration message.
             streamed = TOOL_FINAL_RESPONSE_FALLBACK;
             queue.push({ type: "text", text: streamed });
@@ -533,6 +564,9 @@ export class PiAgentRuntime implements AgentRuntime {
             streamed = request.emptyResponseText?.trim() || "No response. Try again.";
             queue.push({ type: "text", text: streamed });
           }
+        }
+        if (request.allowSilentEmptyAfterTool && toolActivityShowing) {
+          queue.push({ type: "progress", text: "", activity: true });
         }
         traceOutput = streamed;
         queue.push(streamed.trim() ? { type: "done", text: streamed } : { type: "done" });
@@ -1108,6 +1142,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
           instructions: raw.instructions ? String(raw.instructions) : "",
           prompt: raw.prompt ? String(raw.prompt) : "",
           computer_mode: raw.computer_mode ? String(raw.computer_mode) : "",
+          profile_bot_id: raw.profile_bot_id ? String(raw.profile_bot_id) : "",
         };
       }
       if (tool.name === "create_space") {
@@ -1548,6 +1583,7 @@ function builtinParameters(tool: ConnectorTool) {
       instructions: Type.Optional(Type.String()),
       prompt: Type.Optional(Type.String()),
       computer_mode: Type.Optional(Type.Union([Type.Literal("team"), Type.Literal("dedicated")])),
+      profile_bot_id: Type.Optional(Type.String()),
     });
   }
   if (tool.name === "create_space") {

@@ -220,6 +220,31 @@ describe("composio tool mapping", () => {
     );
   });
 
+  it("preserves Notion schema fields while redacting credential-shaped connector errors", () => {
+    const sanitized = sanitizeComposioError(
+      "Invalid block_id, block_type and append_blocks; ak_fixturetoken ck_fixturetoken sk-or-v1-fixturetoken; Bearer fixture-token",
+    );
+
+    expect(sanitized).toContain("block_id");
+    expect(sanitized).toContain("block_type");
+    expect(sanitized).toContain("append_blocks");
+    expect(sanitized).not.toContain("ak_fixturetoken");
+    expect(sanitized).not.toContain("ck_fixturetoken");
+    expect(sanitized).not.toContain("sk-or-v1-fixturetoken");
+    expect(sanitized).toContain("Bearer [redacted]");
+  });
+
+  it("redacts credential-shaped prefixes even when their body continues with an underscore", () => {
+    const sanitized = sanitizeComposioError(
+      "ak_fixturetoken_suffix ck_fixturetoken_suffix sk-or-v1-fixturetoken_suffix",
+    );
+
+    expect(sanitized).not.toContain("ak_fixturetoken");
+    expect(sanitized).not.toContain("ck_fixturetoken");
+    expect(sanitized).not.toContain("sk-or-v1-fixturetoken");
+    expect(sanitized).toBe("[redacted]_suffix [redacted]_suffix [redacted]_suffix");
+  });
+
   it("paginates until the cursor ends", async () => {
     const pages = [
       { items: ["gmail", "github"], cursor: "page-2" },

@@ -1,4 +1,5 @@
 import type { AgentRunRequest, ConnectorCall, ConnectorTool } from "@rakazo/adapter-kit";
+import type { MessageBlock } from "@rakazo/contracts";
 import type { ActionApprovalRule } from "@rakazo/core";
 import { approvalEffectKey, toolEffectIdempotencyKey } from "@rakazo/core/node/approval-effect-key";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,7 +40,16 @@ function fixture({
   rules = [] as ActionApprovalRule[],
   autoReview = false,
   trigger = "user",
+  sourceBlocks,
   requireToolApproval = true,
+}: {
+  name?: string;
+  catalog?: boolean;
+  rules?: ActionApprovalRule[];
+  autoReview?: boolean;
+  trigger?: string;
+  sourceBlocks?: MessageBlock[];
+  requireToolApproval?: boolean;
 } = {}) {
   const tool: ConnectorTool = {
     name,
@@ -55,6 +65,9 @@ function fixture({
   const effects: Effect[] = [];
   const results: unknown[] = [];
   const run = {
+    harness: null,
+    executionTarget: null,
+    choiceVersion: null,
     id: "run-1",
     botId: "bot-1",
     threadId: "thread-1",
@@ -63,6 +76,7 @@ function fixture({
     userId: "user-1",
     status: "queued",
     trigger,
+    sourceMessageId: sourceBlocks ? "source-message-1" : null,
     requireToolApproval,
     leaseFence: 0,
   };
@@ -132,7 +146,11 @@ function fixture({
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
-    message: { findMany: vi.fn(async () => []) },
+    message: {
+      findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => (sourceBlocks ? { blocks: sourceBlocks } : null)),
+      findFirst: vi.fn(async () => null),
+    },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Read the item" })) },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -199,12 +217,14 @@ function fixture({
     memoryProviders: { resolve: async () => null },
     events: { append: vi.fn(async () => undefined), pauseRunForInput, finalizeRun },
     jobs: { enqueue: vi.fn(async () => undefined) },
+    messaging: { hasIdentity: vi.fn(async () => false) },
     secrets: [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
   return {
     effects,
     results,
     execute,
+    runtimeRun,
     pauseRunForInput,
     setCalls(next: typeof calls) {
       calls = next;
@@ -222,6 +242,41 @@ function fixture({
 describe("connector read-only metadata and approval enforcement", () => {
   beforeEach(() => {
     vi.mocked(runAutoReviewJudge).mockReset();
+  });
+
+  it("marks cron routines, but not direct or channel requests, eligible for an empty tool completion", async () => {
+    const routine = fixture({ trigger: "routine" });
+    await routine.run();
+    expect(routine.runtimeRun).toHaveBeenCalledWith(
+      expect.objectContaining({ allowSilentEmpty: true, allowSilentEmptyAfterTool: true }),
+      expect.anything(),
+    );
+
+    const direct = fixture({ trigger: "user" });
+    await direct.run();
+    expect(direct.runtimeRun).toHaveBeenCalledWith(
+      expect.objectContaining({ allowSilentEmpty: false, allowSilentEmptyAfterTool: false }),
+      expect.anything(),
+    );
+
+    const channelMention = fixture({
+      trigger: "messaging",
+      sourceBlocks: [
+        {
+          kind: "channel_message",
+          provider: "sendblue",
+          channelId: "channel-1",
+          fromAddress: "+15551234567",
+          fromLabel: "Alex",
+          text: "@assistant please check this",
+        },
+      ],
+    });
+    await channelMention.run();
+    expect(channelMention.runtimeRun).toHaveBeenCalledWith(
+      expect.objectContaining({ allowSilentEmpty: true, allowSilentEmptyAfterTool: false }),
+      expect.anything(),
+    );
   });
 
   it.each(["shell", "write_file"])(

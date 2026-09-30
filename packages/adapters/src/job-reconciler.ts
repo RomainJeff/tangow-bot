@@ -1,3 +1,4 @@
+import type { SandboxProvider } from "@rakazo/adapter-kit";
 import {
   type JobPublisher,
   messagingDeliverJob,
@@ -5,11 +6,14 @@ import {
   runContinueJob,
 } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
+import { botMessageContext } from "@rakazo/core";
 import type { Pool, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { PoolClient } from "pg";
 import { returnBotMessageOutcome } from "./bot-messages.js";
 import { scheduleComputerControlExpiry } from "./computer-control.js";
+import { toComputerRef } from "./computer-support.js";
+import { cleanupTerminalWork, TERMINAL_WORK_STATUSES } from "./delegated-tasks.js";
 import { isUserProgressClientNonce } from "./user-progress.js";
 
 const DEFAULT_INTERVAL_MS = 30_000;
@@ -103,6 +107,7 @@ export function createJobReconciler(
     prisma: PrismaClient;
     jobs: JobPublisher;
     events?: ThreadEvents;
+    sandbox?: SandboxProvider;
     leadership?: ReconciliationLeadership;
     reconcileComputerUpdates?: () => Promise<void>;
     reconcileCloudAgents?: () => Promise<void>;
@@ -132,6 +137,8 @@ export function createJobReconciler(
         if (result.status === "rejected")
           getLogger().error("auxiliary reconciliation", result.reason);
       }
+
+      await reconcileTerminalWork(deps, batchSize);
 
       const now = new Date();
       controlScanDeadline ??= new Date(now.getTime() + CONTROL_LOOKAHEAD_MS);
@@ -176,6 +183,13 @@ export function createJobReconciler(
                     status: { in: ["leased", "running"] },
                     leaseExpiresAt: { lte: now },
                   },
+                ],
+              },
+              // Do not revive old queued peer continuations after their work closes.
+              {
+                OR: [
+                  { scopedTaskId: null },
+                  { scopedTask: { is: { status: { notIn: TERMINAL_WORK_STATUSES } } } },
                 ],
               },
               ...(runCursorFilter ? [runCursorFilter] : []),
@@ -245,7 +259,7 @@ export function createJobReconciler(
         const outcomes = await deps.prisma.run.findMany({
           where: {
             trigger: "bot_message",
-            status: { in: ["completed", "failed"] },
+            status: { in: ["completed", "failed", "cancelled"] },
             botOutcomeReturnedAt: null,
           },
           orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
@@ -259,25 +273,46 @@ export function createJobReconciler(
             sourceMessageId: true,
             status: true,
             error: true,
+            sourceMessage: { select: { blocks: true } },
             bot: { select: { name: true } },
           },
         });
         await Promise.all(
           outcomes.map(async (run) => {
+            const cancellationSource = botMessageContext(
+              Array.isArray(run.sourceMessage?.blocks)
+                ? (run.sourceMessage.blocks as MessageBlock[])
+                : [],
+            );
+            if (run.status === "cancelled" && !cancellationSource?.fromRunId) {
+              // Cancellations created before the receipt lineage protocol must
+              // remain silent; mark them handled so a future reconciliation does
+              // not replay historical work.
+              await deps.prisma.run.updateMany({
+                where: { id: run.id, status: "cancelled", botOutcomeReturnedAt: null },
+                data: { botOutcomeReturnedAt: new Date() },
+              });
+              return;
+            }
             const transcript =
-              run.status === "failed"
+              run.status === "failed" || run.status === "cancelled"
                 ? { text: "", progressOnly: false }
                 : await botRunOutcomeText(deps.prisma, run.id);
             const text =
               run.status === "failed"
                 ? `Could not complete the delegated request: ${run.error ?? "unknown error"}`
-                : transcript.text ||
-                  "The delegated bot completed its turn without a written summary.";
+                : run.status === "cancelled"
+                  ? "The delegated request was cancelled before it could return a result."
+                  : transcript.text ||
+                    "The delegated bot completed its turn without a written summary.";
             // Same stable delivery key as the executor path (auto-outcome:<runId>), so a
             // concurrent or earlier return is replayed instead of double-posted. Progress-only
             // transcripts (all mid-turn user-progress messages) return as status.
             const intent =
-              run.status === "failed" || !transcript.text.trim() || transcript.progressOnly
+              run.status === "failed" ||
+              run.status === "cancelled" ||
+              !transcript.text.trim() ||
+              transcript.progressOnly
                 ? "status"
                 : ("result" as const);
             const returned = await returnBotMessageOutcome(
@@ -365,6 +400,89 @@ export function createJobReconciler(
       await deps.leadership?.release();
     },
   };
+}
+
+/**
+ * Retry the second transaction of terminal work cleanup. A native process in
+ * `stop_unconfirmed` remains a hard stop until its provider can prove it ended.
+ */
+async function reconcileTerminalWork(
+  deps: {
+    prisma: PrismaClient;
+    jobs: JobPublisher;
+    sandbox?: SandboxProvider;
+  },
+  batchSize: number,
+) {
+  // Lightweight reconcilers used by callers that do not compose the delegation schema keep
+  // their former behavior; every real PrismaClient exposes this delegate.
+  if (!("scopedTask" in deps.prisma)) return;
+  const terminal = await deps.prisma.scopedTask.findMany({
+    where: {
+      status: { in: TERMINAL_WORK_STATUSES },
+      executorBot: { is: { archivedAt: null } },
+    },
+    orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+    take: batchSize,
+    select: {
+      id: true,
+      coordinatorBotId: true,
+      executorBotId: true,
+      specialistThreadId: true,
+      missionComputerId: true,
+      nativeSession: {
+        select: { processState: true, processRef: true, executionTarget: true },
+      },
+    },
+  });
+
+  for (const work of terminal) {
+    const session = work.nativeSession;
+    if (session?.processState === "stop_unconfirmed") {
+      if (
+        !session.processRef ||
+        !session.executionTarget ||
+        !deps.sandbox?.reconfirmNativeProcess
+      ) {
+        continue;
+      }
+      const computer = await deps.prisma.computer.findUnique({
+        where: { id: session.executionTarget },
+        select: { homeKey: true, kind: true, providerRef: true, spaceId: true, userId: true },
+      });
+      if (!computer?.providerRef) continue;
+      let confirmation: "stopped" | "stop_unconfirmed";
+      try {
+        confirmation = await deps.sandbox.reconfirmNativeProcess(
+          toComputerRef(computer),
+          session.processRef,
+          {
+            operationId: "job.reconcile-terminal-work",
+            traceId: `job.reconcile-terminal-work:${work.id}`,
+            spaceId: computer.spaceId,
+            userId: computer.userId,
+            botId: work.executorBotId,
+            signal: new AbortController().signal,
+          },
+        );
+      } catch (error) {
+        getLogger().error("terminal work native stop reconfirmation", error);
+        continue;
+      }
+      if (confirmation !== "stopped") continue;
+      const confirmed = await deps.prisma.nativeSession.updateMany({
+        where: {
+          botId: work.executorBotId,
+          threadId: work.specialistThreadId,
+          processState: "stop_unconfirmed",
+          processRef: session.processRef,
+        },
+        data: { processState: "stopped" },
+      });
+      if (confirmed.count !== 1) continue;
+    }
+    await cleanupTerminalWork({ prisma: deps.prisma, jobs: deps.jobs }, work);
+  }
 }
 
 /** Prefer the full bot transcript for a run so interim progress is not mistaken for the sole result. */

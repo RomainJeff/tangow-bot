@@ -53,6 +53,9 @@ function fixture(runId = "run-1") {
     updatedAt: Date;
   }> = [];
   const run = {
+    harness: null,
+    executionTarget: null,
+    choiceVersion: null,
     id: runId,
     botId: "bot-1",
     threadId: "thread-1",

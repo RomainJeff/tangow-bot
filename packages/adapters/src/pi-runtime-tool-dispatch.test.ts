@@ -1,3 +1,4 @@
+import type * as PiAgentCore from "@earendil-works/pi-agent-core";
 import type { AdapterContext, ConnectorTool, ToolCallTrace } from "@rakazo/adapter-kit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,6 +8,7 @@ const fakeAgentState = vi.hoisted(() => ({
     | "empty"
     | "two-boundaries"
     | "silent-continuation"
+    | "tool-then-final"
     | "subagent-limit"
     | "parent-limit"
     | "parent-parallel"
@@ -32,7 +34,8 @@ const fakeAgentState = vi.hoisted(() => ({
   toolResult: undefined as unknown,
 }));
 
-vi.mock("@earendil-works/pi-agent-core", () => ({
+vi.mock("@earendil-works/pi-agent-core", async (importOriginal) => ({
+  ...(await importOriginal<typeof PiAgentCore>()),
   Agent: class {
     state = { errorMessage: undefined as string | undefined, messages: [] as unknown[] };
     private readonly tools: typeof fakeAgentState.tools;
@@ -86,7 +89,10 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
         return;
       }
 
-      if (fakeAgentState.mode === "silent-continuation") {
+      if (
+        fakeAgentState.mode === "silent-continuation" ||
+        fakeAgentState.mode === "tool-then-final"
+      ) {
         const target =
           this.tools.find((tool) => tool.name === fakeAgentState.invoke.name) ?? this.tools[0];
         if (!target) throw new Error("expected tool was not exposed");
@@ -115,6 +121,23 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
           },
           toolResults: [{ toolCallId: "call-1", result: { ok: true } }],
         });
+        if (fakeAgentState.mode === "tool-then-final") {
+          const text = "The final answer.";
+          this.emit({
+            type: "message_update",
+            assistantMessageEvent: { type: "text_delta", delta: text },
+          });
+          this.emit({
+            type: "message_end",
+            message: { role: "assistant", content: [{ type: "text", text }] },
+          });
+          this.emit({
+            type: "turn_end",
+            message: { role: "assistant", content: [{ type: "text", text }] },
+            toolResults: [],
+          });
+          return;
+        }
         this.emit({
           type: "turn_end",
           message: { role: "assistant", content: [] },
@@ -740,6 +763,113 @@ describe("Pi connector tool dispatch", () => {
     });
     expect(events.at(-1)).toEqual({
       type: "done",
+      text: "I completed the tool step but could not produce a final response. Please ask me to continue.",
+    });
+  });
+
+  it("allows an explicitly silent routine to end empty after a completed tool step", async () => {
+    fakeAgentState.mode = "silent-continuation";
+    fakeAgentState.emitFinalAfterFollowUp = false;
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "routine-silent-tool-completion",
+        prompt: "Inspect the source and stay silent unless there is a useful result.",
+        instructions: "This is a scheduled routine. Stay silent when there is no useful result.",
+        history: [],
+        tools: [destinationTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        allowSilentEmpty: true,
+        allowSilentEmptyAfterTool: true,
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "routine-silent-tool-completion",
+        traceId: "routine-silent-tool-completion",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "text" }));
+    expect(events.at(-1)).toEqual({ type: "done" });
+    expect(fakeAgentState.followUpMessages).toEqual([]);
+  });
+
+  it("keeps a useful text-only result from a routine after its tool step", async () => {
+    fakeAgentState.mode = "tool-then-final";
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "routine-useful-tool-completion",
+        prompt: "Inspect the source and report only a useful result.",
+        instructions: "This is a scheduled routine.",
+        history: [],
+        tools: [destinationTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        allowSilentEmpty: true,
+        allowSilentEmptyAfterTool: true,
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "routine-useful-tool-completion",
+        traceId: "routine-useful-tool-completion",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toContainEqual({ type: "text", text: "The final answer." });
+    expect(events.at(-1)).toEqual({ type: "done", text: "The final answer." });
+  });
+
+  it("keeps a channel wake's tool completion visible when only generic silence is enabled", async () => {
+    fakeAgentState.mode = "silent-continuation";
+    fakeAgentState.emitFinalAfterFollowUp = false;
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "channel-tool-fallback",
+        prompt: "@assistant, check this and reply with the result.",
+        instructions: "This is a channel request; reply after completing the tool.",
+        history: [],
+        tools: [destinationTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        // Messaging channel wakes already use this generic empty-turn permission.
+        allowSilentEmpty: true,
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "channel-tool-fallback",
+        traceId: "channel-tool-fallback",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toContainEqual({
+      type: "text",
       text: "I completed the tool step but could not produce a final response. Please ask me to continue.",
     });
   });

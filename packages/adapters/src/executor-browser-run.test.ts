@@ -79,6 +79,9 @@ async function runWithDecisionProvider(
   trace?: ToolCallTrace,
 ) {
   const run = {
+    harness: null,
+    executionTarget: null,
+    choiceVersion: null,
     id: "run-1",
     botId: "bot-1",
     threadId: "thread-1",

@@ -9,6 +9,7 @@ import { isLocalMcpHost } from "@rakazo/contracts";
 import type { McpServer, PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
+import { computeEffectiveMcpAccess, isToolAllowedByMcpAccess } from "./delegated-tasks.js";
 import {
   CATALOG_EXECUTE,
   catalogEntries,
@@ -115,6 +116,12 @@ export class McpConnector implements ConnectorProvider {
       },
       include: { server: true },
     });
+    // T07:4 correction (B3): the bot's own assignment is no longer the whole story — a
+    // specialist's admission is that assignment intersected with its delegation ceiling and
+    // its coordinator's effective access, recursively (computeEffectiveMcpAccess is the same
+    // function the native bridge guard and mcp-connector.ts's `execute` below both call: one
+    // source of truth). Computed once per bot, reused across every server/tool discovered.
+    const effective = await computeEffectiveMcpAccess(this.prisma, context.botId);
     const groups = await Promise.all(
       assignments.map(async (assignment): Promise<ConnectorTool[]> => {
         try {
@@ -122,11 +129,7 @@ export class McpConnector implements ConnectorProvider {
           const listed = await session.listTools({ signal: context.signal });
           reportAllowlistDrift(assignment, listed.tools, context);
           return listed.tools
-            .filter(
-              (tool) =>
-                assignment.allowAllTools ||
-                (assignment.allowedTools as unknown[]).includes(tool.name),
-            )
+            .filter((tool) => isToolAllowedByMcpAccess(effective[assignment.serverId], tool.name))
             .map((tool) => ({
               name: `mcp__${assignment.server.slug}__${tool.name}`,
               description: tool.description ?? tool.name,
@@ -188,10 +191,17 @@ export class McpConnector implements ConnectorProvider {
       },
       include: { server: true },
     });
+    // T07:4 correction (B3 — the real admission path Terra's review flagged): this used to
+    // check only `assignment.allowAllTools`/`allowedTools`, so a specialist keeping a
+    // profile-copied assignment to a server its coordinator never held could still call it.
+    // `computeEffectiveMcpAccess` is the single source of truth (also used by discovery above
+    // and by the native bridge guard); this is the declared linearization point for this call
+    // — a call admitted here runs to completion even if a revocation commits while it is
+    // still in flight (see `rakazo-mcp-bridge.ts`'s matching note).
+    const effective = assignment ? await computeEffectiveMcpAccess(this.prisma, context.botId) : {};
     if (
       !assignment ||
-      (!assignment.allowAllTools &&
-        !(assignment.allowedTools as unknown[]).includes(call.route.toolName))
+      !isToolAllowedByMcpAccess(effective[call.route.resourceId], call.route.toolName)
     ) {
       yield { type: "error", message: "MCP tool is not assigned to this bot" };
       return;

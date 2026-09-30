@@ -16,6 +16,7 @@ import {
   looksLikeFakeToolCall,
   missingTurnImagesInstruction,
   notificationAvatar,
+  publishDelegatedMissionOutcome,
   runNotificationsEnabled,
   selectBuiltinToolsForRun,
   settleSteeringAttachmentLoads,
@@ -1767,6 +1768,233 @@ description: Prepare standup notes
       id: "deepseek/deepseek-v4-flash-0731",
       thinkingLevel: "high",
     });
+  });
+});
+
+describe("delegated mission outcomes", () => {
+  function outcomeDeps(
+    sourceId: "return-old" | "return-new",
+    existingOutcome = false,
+    firstIsManualStatus = false,
+    terminalStatus = "completed",
+    firstTerminalOutcome = false,
+  ) {
+    const receipts = [
+      {
+        id: "return-old",
+        seq: 10,
+        replyToMessageId: "request-one",
+        blocks: [
+          {
+            kind: "bot_message_received",
+            fromBotId: "child-one",
+            fromBotName: "One",
+            text: "one",
+            intent: firstIsManualStatus ? "status" : "result",
+            fromRunId: "child-run-one",
+            terminalOutcome: firstTerminalOutcome,
+          },
+        ],
+      },
+      {
+        id: "return-new",
+        seq: 11,
+        replyToMessageId: "request-two",
+        blocks: [
+          {
+            kind: "bot_message_received",
+            fromBotId: "child-two",
+            fromBotName: "Two",
+            text: "two",
+            intent: "result",
+            fromRunId: "child-run-two",
+          },
+        ],
+      },
+    ];
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      message: {
+        findUnique: vi.fn((args: { where: { threadId_clientNonce?: unknown } }) =>
+          Promise.resolve(
+            args.where.threadId_clientNonce
+              ? existingOutcome
+                ? { id: "published" }
+                : null
+              : {
+                  id: sourceId,
+                  blocks: receipts.find((receipt) => receipt.id === sourceId)!.blocks,
+                  replyTo: { runId: "origin-run", botId: "parent", threadId: "thread" },
+                },
+          ),
+        ),
+        findMany: vi.fn((args: { where: { replyToMessageId?: unknown } }) =>
+          Promise.resolve(
+            args.where.replyToMessageId
+              ? receipts
+              : [
+                  {
+                    id: "request-one",
+                    runId: "origin-run",
+                    blocks: [
+                      {
+                        kind: "bot_message_sent",
+                        toBotId: "child-one",
+                        toBotName: "One",
+                        text: "one",
+                        intent: "request",
+                      },
+                    ],
+                  },
+                  {
+                    id: "request-two",
+                    runId: "origin-run",
+                    blocks: [
+                      {
+                        kind: "bot_message_sent",
+                        toBotId: "child-two",
+                        toBotName: "Two",
+                        text: "two",
+                        intent: "request",
+                      },
+                    ],
+                  },
+                ],
+          ),
+        ),
+        create: vi.fn().mockResolvedValue({ id: "published" }),
+      },
+      run: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "child-run-one", status: terminalStatus },
+          { id: "child-run-two", status: terminalStatus },
+        ]),
+        findUnique: vi.fn((args: { where: { id: string } }) =>
+          Promise.resolve(
+            args.where.id === "origin-run"
+              ? { id: "origin-run", trigger: "user", sourceMessageId: null }
+              : { status: "running", startedAt: new Date() },
+          ),
+        ),
+      },
+      thread: { update: vi.fn().mockResolvedValue({ nextMessageSeq: 12 }) },
+      event: { create: vi.fn().mockResolvedValue({ seq: 12 }) },
+    };
+    return {
+      deps: {
+        prisma: {
+          $transaction: vi.fn((operation: (client: typeof tx) => unknown) => operation(tx)),
+        },
+        events: { notify: vi.fn().mockResolvedValue(undefined) },
+      } as any,
+      tx,
+    };
+  }
+
+  it("lets only the newest terminal return publish the consolidated outcome", async () => {
+    const old = outcomeDeps("return-old");
+    await expect(
+      publishDelegatedMissionOutcome(
+        old.deps,
+        {
+          id: "wake-old",
+          spaceId: "space",
+          threadId: "thread",
+          botId: "parent",
+          sourceMessageId: "return-old",
+        },
+        "old summary",
+      ),
+    ).resolves.toMatchObject({ ok: false });
+    expect(old.tx.message.create).not.toHaveBeenCalled();
+
+    const newest = outcomeDeps("return-new");
+    await expect(
+      publishDelegatedMissionOutcome(
+        newest.deps,
+        {
+          id: "wake-new",
+          spaceId: "space",
+          threadId: "thread",
+          botId: "parent",
+          sourceMessageId: "return-new",
+        },
+        "combined summary",
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    expect(newest.tx.message.create).toHaveBeenCalledOnce();
+    expect(newest.tx.$queryRaw).toHaveBeenCalledOnce();
+  });
+
+  it("replays the same terminal receipt without a second write or notification", async () => {
+    const replay = outcomeDeps("return-new", true);
+    await expect(
+      publishDelegatedMissionOutcome(
+        replay.deps,
+        {
+          id: "wake-retry",
+          spaceId: "space",
+          threadId: "thread",
+          botId: "parent",
+          sourceMessageId: "return-new",
+        },
+        "combined summary",
+      ),
+    ).resolves.toEqual({ ok: true, message: { id: "published" } });
+    expect(replay.tx.message.create).not.toHaveBeenCalled();
+    expect(replay.deps.events.notify).not.toHaveBeenCalled();
+  });
+
+  it("does not let a manual status satisfy a pending contribution", async () => {
+    const pending = outcomeDeps("return-new", false, true);
+    await expect(
+      publishDelegatedMissionOutcome(
+        pending.deps,
+        {
+          id: "wake-new",
+          spaceId: "space",
+          threadId: "thread",
+          botId: "parent",
+          sourceMessageId: "return-new",
+        },
+        "combined summary",
+      ),
+    ).resolves.toMatchObject({ ok: false });
+    expect(pending.tx.message.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts an explicit result even while its sender is still running", async () => {
+    const running = outcomeDeps("return-new", false, false, "running");
+    await expect(
+      publishDelegatedMissionOutcome(
+        running.deps,
+        {
+          id: "wake-new",
+          spaceId: "space",
+          threadId: "thread",
+          botId: "parent",
+          sourceMessageId: "return-new",
+        },
+        "combined summary",
+      ),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it.each(["failed", "cancelled"])("accepts an automatic terminal %s status", async (status) => {
+    const terminal = outcomeDeps("return-new", false, true, status, true);
+    await expect(
+      publishDelegatedMissionOutcome(
+        terminal.deps,
+        {
+          id: "wake-new",
+          spaceId: "space",
+          threadId: "thread",
+          botId: "parent",
+          sourceMessageId: "return-new",
+        },
+        "combined summary",
+      ),
+    ).resolves.toMatchObject({ ok: true });
   });
 });
 

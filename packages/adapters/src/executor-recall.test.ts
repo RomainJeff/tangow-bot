@@ -33,6 +33,9 @@ vi.mock("./history-compaction.js", async (importOriginal) => {
 function fixture(options: { taskPrompt?: string } = {}) {
   const taskPrompt = options.taskPrompt ?? "What did Ava decide?";
   const run = {
+    harness: null,
+    executionTarget: null,
+    choiceVersion: null,
     id: "run-1",
     botId: "bot-1",
     threadId: "thread-1",
