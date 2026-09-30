@@ -376,7 +376,20 @@ export class Dictation {
       }
     };
     this.recognition = rec;
-    rec.start();
+    try {
+      rec.start();
+    } catch (error) {
+      // e.g. InvalidStateError or an unsupported `lang`: end the session
+      // visibly instead of leaving it stuck on "listening".
+      rec.onresult = null;
+      rec.onerror = null;
+      rec.onend = null;
+      this.recognition = null;
+      this.set({
+        ...IDLE,
+        error: error instanceof Error ? `Dictation failed: ${error.message}` : "Dictation failed.",
+      });
+    }
   }
 
   private async listenRecorder(
@@ -556,15 +569,15 @@ export class Dictation {
       };
       this.pendingFinish = finish;
       fallback = setTimeout(finish, TRANSCRIPTION_RESPONSE_TIMEOUT_MS);
-      if (media.state === "inactive") {
-        finish();
-        return;
-      }
       const previousOnStop = media.onstop;
       media.onstop = (event) => {
         previousOnStop?.call(media, event);
         finish();
       };
+      // The chunk timer may already have stopped this recorder: its stop
+      // event (which queues the last chunk onto `dictateChain`) is still
+      // pending, so wait for it rather than awaiting the chain without it.
+      if (media.state === "inactive") return;
       try {
         media.stop();
       } catch {
