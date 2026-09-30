@@ -6,7 +6,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import { messagingDeliverJob, runContinueJob } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
-import { botMessageHopExhausted, nextBotMessageHop } from "@rakazo/core";
+import { botMessageHopExhausted, isUserOutcomeMessage, nextBotMessageHop } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { appendEventInTransaction, createThreadMessageInTransaction } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -70,9 +70,15 @@ export async function mirrorMessagingOutbound(
 async function mirrorRun(deps: MessagingDeliveryDeps, runId: string): Promise<void> {
   const run = await deps.prisma.run.findUnique({
     where: { id: runId },
-    include: { sourceMessage: true },
+    include: {
+      sourceMessage: true,
+      thread: { select: { externalConversation: { select: { id: true } } } },
+    },
   });
   if (!run) return;
+  // Team-chat owns delivery to the original conversation, including delegate replies.
+  // Mirroring these runs to the linked DM duplicates replies and crosses contexts.
+  if (run.thread?.externalConversation) return;
 
   if (run.trigger === "messaging") {
     const sourceBlocks = (run.sourceMessage?.blocks ?? []) as MessageBlock[];
@@ -95,14 +101,16 @@ async function mirrorRun(deps: MessagingDeliveryDeps, runId: string): Promise<vo
   });
   if (!identity) return;
 
-  // bot_message runs can carry the bot's user-facing reply after a delegate wake.
-  // extractText only keeps kind:"text", so inter-bot chatter blocks never leak out.
+  // Peer-run finals are internal, even when they contain plain text. Only an
+  // explicitly selected result/decision may notify the linked owner.
 
   const messages = await deps.prisma.message.findMany({
     where: { runId: run.id, role: "bot" },
     orderBy: { seq: "asc" },
   });
-  const rows = messages
+  const publishable =
+    run.trigger === "bot_message" ? messages.filter(isUserOutcomeMessage).slice(0, 1) : messages;
+  const rows = publishable
     .map((message) => ({
       idempotencyKey: `msg:${message.id}`,
       kind: "dm",

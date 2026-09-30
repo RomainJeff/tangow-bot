@@ -23,6 +23,7 @@ export function toTeamChatInbound(event: MessagingInboundMessage): TeamChatInbou
     eventId: event.handle,
     workspaceId: event.workspaceId ?? event.provider,
     kind,
+    ...(event.conversationType ? { conversationType: event.conversationType } : {}),
     conversationKey: event.conversationKey ?? event.threadId,
     conversationId: event.threadId,
     conversationName: event.channelName ?? undefined,

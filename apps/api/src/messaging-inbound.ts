@@ -99,12 +99,12 @@ async function handleDirectEvent(
     if (command && (await applyOwnerCommand(deps, existing, command))) return;
     // A linked sender pasting a fresh code re-points this address at another
     // of their bots (only their own codes apply).
-    if (await tryRedeemLinkCode(deps, event)) return;
+    if (await tryRedeemMessagingLinkCode(deps, event)) return;
   } else {
     // Unlinked senders: a valid link code binds this address to its issuer's
     // account and bot; otherwise the line is silent unless the deployment
     // explicitly runs as an open Poke-style signup line.
-    if (await tryRedeemLinkCode(deps, event)) return;
+    if (await tryRedeemMessagingLinkCode(deps, event)) return;
     if (!deps.openSignup) return;
     // Never provision a full account for a reaction or empty payload.
     if (!text) return;
@@ -182,6 +182,8 @@ export async function wakeMessageRoutines(
      * cannot also deliver for the same provider event.
      */
     externalMessageId?: string;
+    /** Already bounded and labeled as untrusted thread context by the caller. */
+    threadContext?: string;
   },
 ): Promise<boolean> {
   const routines = await deps.prisma.routine.findMany({
@@ -231,6 +233,7 @@ export async function wakeMessageRoutines(
     channelName: event.channelName,
     content: event.content,
     mediaUrl: event.mediaUrl,
+    ...(options?.threadContext ? { threadContext: options.threadContext } : {}),
   });
   await deliverWebhookEvent(
     { events: deps.events, jobs: deps.jobs },
@@ -295,10 +298,11 @@ export async function teamChatSenderCanWakeMessageRoutines(
  * for linked senders it reads as a normal message, for strangers nothing
  * happens (no oracle, no reply spam).
  */
-async function tryRedeemLinkCode(
+export async function tryRedeemMessagingLinkCode(
   deps: MessagingInboundDeps,
   event: MessagingInboundMessage,
 ): Promise<boolean> {
+  if (!event.isDirect || event.senderIsBot) return false;
   const code = normalizeMessagingLinkCode(event.content);
   if (!code) return false;
   const redeemed = await redeemMessagingLinkCode(deps.prisma, {

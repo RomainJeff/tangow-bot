@@ -1,5 +1,9 @@
 import { createMockAdapter, createTestMessage } from "@chat-adapter/tests";
-import type { AdapterContext, MessagingInboundEvent } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  MessagingInboundEvent,
+  MessagingInboundMessage,
+} from "@rakazo/adapter-kit";
 import type { Adapter, ChatInstance } from "chat";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -313,6 +317,27 @@ describe("ChatSdkMessagingSurface outbound", () => {
     expect((adapter.postMessage as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toBe("mock:C1:9");
   });
 
+  it("posts Slack replies as Markdown while preserving other providers' text", async () => {
+    const { surface, adapter } = createSurface({ provider: "slack" }, { name: "slack" });
+    const body = "The deck is ready.\n\n[Review it](https://example.com/deck)";
+    await surface.sendToThread({ threadId: "slack:D1:", body }, context);
+    expect((adapter.postMessage as ReturnType<typeof vi.fn>).mock.calls[0]![1]).toEqual({
+      markdown: body,
+    });
+    const other = createSurface();
+    await other.surface.sendToThread({ threadId: "mock:D1:", body }, context);
+    expect((other.adapter.postMessage as ReturnType<typeof vi.fn>).mock.calls[0]![1]).toBe(body);
+  });
+
+  it("preserves long Slack replies without exceeding the Markdown limit", async () => {
+    const { surface, adapter } = createSurface({ provider: "slack" }, { name: "slack" });
+    await surface.sendToThread({ threadId: "slack:D1:", body: "x".repeat(12_000) }, context);
+    await surface.sendToThread({ threadId: "slack:D1:", body: "x".repeat(12_001) }, context);
+    const calls = (adapter.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0]![1]).toEqual({ markdown: "x".repeat(12_000) });
+    expect(calls[1]![1]).toBe("x".repeat(12_001));
+  });
+
   it("prefers the platform's deterministic direct thread id", async () => {
     const { surface, adapter } = createSurface({
       directThreadId: (address) => `mock:D${address}:pinned`,
@@ -398,5 +423,56 @@ describe("ChatSdkMessagingSurface shape", () => {
 
     await surface.shutdown();
     expect(stopPolling).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("referenced thread context", () => {
+  const event: MessagingInboundMessage = {
+    type: "message",
+    provider: "mock",
+    handle: "m-current",
+    threadId: "mock:C1:root",
+    isDirect: false,
+    from: "U1",
+    fromLabel: "Owner",
+    channelName: null,
+    participants: [],
+    content: "Summarize the parent",
+    mediaUrl: null,
+    replyThreadId: "root",
+  };
+  it("loads parent and earlier replies once, excluding the current instruction and later messages", async () => {
+    const fetchMessages = vi.fn(async () => ({
+      messages: [
+        createTestMessage("root", "The launch is Friday"),
+        createTestMessage("m-reply", "Please include support"),
+        createTestMessage("m-current", event.content),
+        createTestMessage("m-future", "Later message"),
+      ],
+    }));
+    const { surface } = createSurface({}, { fetchMessages });
+    const result = await surface.readThreadContext(event, context);
+    expect(fetchMessages).toHaveBeenCalledExactlyOnceWith(event.threadId, {
+      direction: "forward",
+      limit: 21,
+    });
+    expect(result.messages.map((m) => m.content)).toEqual([
+      "The launch is Friday",
+      "Please include support",
+    ]);
+    expect(result.truncated).toBe(false);
+  });
+  it("caps both the number and length of messages and reports missing context", async () => {
+    const fetchMessages = vi.fn(async () => ({
+      messages: Array.from({ length: 21 }, (_, i) =>
+        createTestMessage(String(i), "x".repeat(3000)),
+      ),
+      nextCursor: "next-page",
+    }));
+    const { surface } = createSurface({}, { fetchMessages });
+    const result = await surface.readThreadContext(event, context);
+    expect(result.messages).toHaveLength(20);
+    expect(result.messages.reduce((n, m) => n + m.content.length, 0)).toBe(16000);
+    expect(result.truncated).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import type { AdapterContext, MessagingSurface } from "@rakazo/adapter-kit";
+import { userOutcomeClientNonce } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -185,6 +186,23 @@ function createDeps(overrides: {
 }
 
 describe("deliverMessagingOutbound", () => {
+  it.each(["messaging", "bot_message"])(
+    "leaves %s team-chat replies to their original conversation",
+    async (trigger) => {
+      const deps = createDeps({
+        run: {
+          ...messagingRun,
+          trigger,
+          thread: { externalConversation: { id: "external-1" } },
+        },
+      });
+      await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
+      expect(deps.rows).toHaveLength(0);
+      expect(deps.sendToThread).not.toHaveBeenCalled();
+      expect(deps.prisma.messagingIdentity.findUnique).not.toHaveBeenCalled();
+    },
+  );
+
   it("mirrors a messaging DM run's bot text to the identity's conversation", async () => {
     const deps = createDeps({});
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
@@ -260,11 +278,46 @@ describe("deliverMessagingOutbound", () => {
     expect(noIdentity.sendToThread).not.toHaveBeenCalled();
   });
 
-  it("mirrors delegated bot_message replies to the linked DM", async () => {
-    const deps = createDeps({ run: { ...messagingRun, trigger: "bot_message" } });
+  it("keeps peer status and unselected final text out of the linked DM", async () => {
+    const deps = createDeps({
+      run: { ...messagingRun, trigger: "bot_message" },
+      messages: [
+        {
+          id: "progress",
+          clientNonce: "user-progress:run-1:0",
+          blocks: [{ kind: "text", text: "Reviewing" }],
+        },
+        {
+          id: "chat",
+          clientNonce: "user-message:run-1:0",
+          blocks: [{ kind: "text", text: "No action needed" }],
+        },
+        { id: "final", blocks: [{ kind: "text", text: "The draft is not deliverable yet" }] },
+      ],
+    });
     await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
+    expect(deps.sendToThread).not.toHaveBeenCalled();
+    expect(deps.rows).toEqual([]);
+  });
+
+  it("delivers only the selected peer outcome once, even when delivery is retried", async () => {
+    const deps = createDeps({
+      run: { ...messagingRun, trigger: "bot_message" },
+      messages: [
+        { id: "progress", blocks: [{ kind: "text", text: "Reviewing" }] },
+        {
+          id: "outcome",
+          clientNonce: userOutcomeClientNonce("run-1"),
+          blocks: [{ kind: "text", text: "Report ready: https://example.com/report" }],
+        },
+        { id: "final", blocks: [{ kind: "text", text: "Report ready again" }] },
+      ],
+    });
+    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
+    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
+    expect(deps.sendToThread).toHaveBeenCalledTimes(1);
     expect(deps.sendToThread).toHaveBeenCalledWith(
-      { threadId: "sendblue:dm-1", body: "Hello from your bot" },
+      { threadId: "sendblue:dm-1", body: "Report ready: https://example.com/report" },
       context,
     );
   });

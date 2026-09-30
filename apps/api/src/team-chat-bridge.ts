@@ -6,9 +6,10 @@ import type {
 } from "@rakazo/adapter-kit";
 import { runContinueJob } from "@rakazo/adapter-kit";
 import { AutomatedSenderPoliciesSchema, type MessageBlock } from "@rakazo/contracts";
-import { BOT_MESSAGE_MAX_HOPS } from "@rakazo/core";
+import { BOT_MESSAGE_MAX_HOPS, USER_OUTCOME_CLIENT_NONCE_PREFIX } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import type { TeamChatSender } from "./team-chat-access.js";
 import type { TeamChatEngagementJudge } from "./team-chat-judge.js";
 import {
   MESSAGE_ROUTING_REARMED_REASON,
@@ -58,6 +59,7 @@ interface TeamChatBridgeDeps {
   providerId: string;
   botId: string;
   judge?: TeamChatEngagementJudge;
+  authorizeSender?: (sender: TeamChatSender) => Promise<boolean>;
   reconcileIntervalMs?: number;
   ambientDebounceMs?: number;
 }
@@ -197,6 +199,10 @@ export class TeamChatBridge {
     await settleWithTimeout(this.reconciling, TEAM_CHAT_STARTUP_SHUTDOWN_MS);
   }
 
+  async canReceive(sender: TeamChatSender): Promise<boolean> {
+    return this.deps.authorizeSender ? this.deps.authorizeSender(sender) : true;
+  }
+
   async receive(
     message: TeamChatInboundMessage,
     options: { queueAgent: false },
@@ -209,8 +215,20 @@ export class TeamChatBridge {
     message: TeamChatInboundMessage,
     options?: { queueAgent?: boolean },
   ): Promise<TeamChatInboundTarget | DeferredTeamChatInboundTarget> {
+    if (!(await this.canReceive(message))) throw new Error("Team chat sender is not authorized");
     const target = this.target;
     if (!target) throw new Error("Team chat bridge is not started");
+    const relayPolicy = message.relayConversationKey
+      ? await this.deps.prisma.externalConversation.findFirst({
+          where: {
+            provider: this.deps.providerId,
+            workspaceId: message.workspaceId,
+            externalKey: message.relayConversationKey,
+            botId: target.id,
+          },
+          select: { teamChatAmbientEnabled: true, teamChatRules: true },
+        })
+      : null;
     const conversation = await this.deps.prisma.externalConversation.upsert({
       where: {
         provider_workspaceId_externalKey: {
@@ -230,6 +248,12 @@ export class TeamChatBridge {
         botId: target.id,
         userId: target.userId,
         thread: { create: { spaceId: target.spaceId, userId: target.userId } },
+        ...(relayPolicy
+          ? {
+              teamChatAmbientEnabled: relayPolicy.teamChatAmbientEnabled,
+              teamChatRules: relayPolicy.teamChatRules,
+            }
+          : {}),
       },
       update: {
         conversationId: message.conversationId,
@@ -261,7 +285,12 @@ export class TeamChatBridge {
         senderId: message.senderId,
         senderName: message.senderName,
         senderIsBot: message.senderIsBot ?? false,
+        relaySenderId: message.relaySenderId,
+        relayConversationKey: message.relayConversationKey,
         content: message.content,
+        batchContext: message.threadContext
+          ? `${teamChatPrompt(this.deps.providerId, message.senderName, message.content)}\n\n${message.threadContext}`
+          : undefined,
         replyThreadId: message.replyThreadId,
         status:
           options?.queueAgent === false
@@ -698,19 +727,19 @@ export class TeamChatBridge {
         await this.markTeamChatMirrored(run.id);
         continue;
       }
-      const response =
-        run.status === "completed"
-          ? await this.deps.prisma.message.findFirst({
-              where: { runId: run.id, role: "bot" },
-              orderBy: { seq: "desc" },
-              select: { blocks: true },
-            })
-          : null;
+      // A peer completion is not itself a user-facing outcome. The explicit
+      // selection shares the same rule as linked DMs and remains in the original thread.
+      const response = await this.deps.prisma.message.findFirst({
+        where: {
+          runId: run.id,
+          role: "bot",
+          clientNonce: { startsWith: USER_OUTCOME_CLIENT_NONCE_PREFIX },
+        },
+        orderBy: { seq: "asc" },
+        select: { blocks: true },
+      });
       const blocks = Array.isArray(response?.blocks) ? (response.blocks as MessageBlock[]) : [];
-      const content =
-        run.status === "failed"
-          ? `${target.name} could not complete the delegated request. Open Rakazo for details.`
-          : teamChatResponseText(blocks, target.name, true);
+      const content = teamChatResponseText(blocks, target.name, true);
       if (content) {
         await this.deps.send({
           conversationId: origin.externalConversation.conversationId,
@@ -943,17 +972,40 @@ export class TeamChatBridge {
     id: string;
     providerEventId: string;
     senderId: string;
+    senderIsBot?: boolean;
+    relaySenderId?: string | null;
+    relayConversationKey?: string | null;
     senderName: string;
     content: string;
     batchContext: string | null;
     engagementReason?: string | null;
     externalConversation: {
+      workspaceId?: string;
+      externalKey?: string;
       spaceId: string;
       botId: string;
       userId: string;
       thread: { id: string } | null;
     };
   }): Promise<void> {
+    const ignoreUnauthorized = async () => {
+      if (
+        await this.canReceive({
+          ...message,
+          relaySenderId: message.relaySenderId ?? undefined,
+          relayConversationKey: message.relayConversationKey ?? undefined,
+          workspaceId: message.externalConversation?.workspaceId,
+          conversationKey: message.externalConversation?.externalKey,
+        })
+      )
+        return false;
+      await this.deps.prisma.externalMessage.updateMany({
+        where: { id: message.id, status: { in: ["received", "queueing"] }, runId: null },
+        data: { status: "ignored", engagementReason: "sender_unlinked", nextAttemptAt: null },
+      });
+      return true;
+    };
+    if (await ignoreUnauthorized()) return;
     const thread = message.externalConversation.thread;
     if (!thread) throw new Error("Team chat conversation has no Rakazo thread");
     // In-flight routine wakes own the row via engagementReason; never start a
@@ -1035,6 +1087,7 @@ export class TeamChatBridge {
       await abandonForRoutine("queueing");
       return;
     }
+    if (await ignoreUnauthorized()) return;
     const prompt =
       message.batchContext ??
       teamChatPrompt(this.deps.providerId, message.senderName, message.content);
@@ -1112,11 +1165,24 @@ export class TeamChatBridge {
     externalConversation: { conversationId: string };
   }): Promise<void> {
     if (!message.runId) throw new Error("Completed team chat message has no run");
-    const response = await this.deps.prisma.message.findFirst({
-      where: { runId: message.runId, role: "bot" },
-      orderBy: { seq: "desc" },
+    // message_user may carry the complete selected result before an empty final
+    // tool/step row. Keep it as the reply instead of inventing a completion status.
+    const selected = await this.deps.prisma.message.findFirst({
+      where: {
+        runId: message.runId,
+        role: "bot",
+        clientNonce: { startsWith: USER_OUTCOME_CLIENT_NONCE_PREFIX },
+      },
+      orderBy: { seq: "asc" },
       select: { blocks: true },
     });
+    const response =
+      selected ??
+      (await this.deps.prisma.message.findFirst({
+        where: { runId: message.runId, role: "bot" },
+        orderBy: { seq: "desc" },
+        select: { blocks: true },
+      }));
     const blocks = Array.isArray(response?.blocks) ? (response.blocks as MessageBlock[]) : [];
     const content = teamChatResponseText(blocks, this.target?.name, message.kind === "ambient");
     if (!content) {

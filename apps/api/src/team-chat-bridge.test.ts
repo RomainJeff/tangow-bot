@@ -1,5 +1,6 @@
 import type { TeamChatInboundMessage, TeamChatSendRequest } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
+import { USER_OUTCOME_CLIENT_NONCE_PREFIX, userOutcomeClientNonce } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -40,6 +41,117 @@ describe("team chat bridge", () => {
     expect(teamChatResponseText(blocks)).toBe("The plan is ready.");
     expect(teamChatResponseText([])).toBe("Bot completed the request without a written reply.");
   });
+
+  it.each([false, true])(
+    "keeps delegated status silent and selected outcomes in their original thread (selected=%s)",
+    async (selected) => {
+      const findFirst = vi.fn(
+        async ({ where }: { where: { clientNonce?: { startsWith: string } } }) => {
+          if (selected && where.clientNonce?.startsWith === USER_OUTCOME_CLIENT_NONCE_PREFIX) {
+            return {
+              clientNonce: userOutcomeClientNonce("peer-run"),
+              blocks: [{ kind: "text", text: "The report is ready." }],
+            };
+          }
+          return null;
+        },
+      );
+      const send = vi.fn(async () => ({ handle: "reply-1" }));
+      const updateMany = vi.fn(async () => ({ count: 1 }));
+      const bridge = new TeamChatBridge({
+        prisma: {
+          run: {
+            findMany: vi.fn(async () => [
+              { id: "peer-run", status: "completed", sourceMessageId: "peer-source" },
+            ]),
+            updateMany,
+          },
+          message: {
+            findFirst,
+            findUnique: vi.fn(async () => ({ replyTo: { runId: "external-run" } })),
+          },
+          externalMessage: {
+            findUnique: vi.fn(async () => ({
+              replyThreadId: "123.456",
+              externalConversation: { conversationId: "slack:C123:" },
+            })),
+          },
+        } as unknown as PrismaClient,
+        events: { sendUserMessage: vi.fn() },
+        jobs: { enqueue: vi.fn() },
+        send,
+        providerId: "slack",
+        botId: "bot-1",
+      });
+      await (
+        bridge as unknown as {
+          deliverDelegatedReplies(target: { id: string; name: string }): Promise<void>;
+        }
+      ).deliverDelegatedReplies({ id: "bot-1", name: "Chief" });
+      if (selected) {
+        expect(send).toHaveBeenCalledWith({
+          conversationId: "slack:C123:",
+          replyThreadId: "123.456",
+          content: "The report is ready.",
+          idempotencyKey: "team-chat-run:peer-run",
+        });
+      } else {
+        expect(send).not.toHaveBeenCalled();
+      }
+      expect(updateMany).toHaveBeenCalledWith({
+        where: { id: "peer-run", teamChatMirroredAt: null },
+        data: { teamChatMirroredAt: expect.any(Date) },
+      });
+    },
+  );
+
+  it.each([false, true])(
+    "preserves a direct external reply, including an explicitly selected result (selected=%s)",
+    async (selected) => {
+      const findFirst = vi.fn(async ({ where }: { where: { clientNonce?: unknown } }) =>
+        where.clientNonce
+          ? selected
+            ? { blocks: [{ kind: "text", text: "Selected final report" }] }
+            : null
+          : { blocks: [{ kind: "text", text: "Requested status answer" }] },
+      );
+      const bridge = new TeamChatBridge({
+        prisma: { message: { findFirst } } as unknown as PrismaClient,
+        events: { sendUserMessage: vi.fn() },
+        jobs: { enqueue: vi.fn() },
+        send: vi.fn(),
+        providerId: "slack",
+        botId: "bot-1",
+      });
+      const sendOnce = vi.fn(async () => undefined);
+      const internal = bridge as unknown as {
+        reserveDelivery(id: string): Promise<boolean>;
+        sendOnce: typeof sendOnce;
+        deliverCompletion(message: {
+          id: string;
+          runId: string;
+          kind: string;
+          replyThreadId: string;
+          externalConversation: { conversationId: string };
+        }): Promise<void>;
+      };
+      internal.reserveDelivery = vi.fn(async () => true);
+      internal.sendOnce = sendOnce;
+      await internal.deliverCompletion({
+        id: "incoming",
+        runId: "external-run",
+        kind: "direct",
+        replyThreadId: "456.789",
+        externalConversation: { conversationId: "slack:D123:" },
+      });
+      expect(sendOnce).toHaveBeenCalledWith("incoming", {
+        conversationId: "slack:D123:",
+        replyThreadId: "456.789",
+        content: selected ? "Selected final report" : "Requested status answer",
+        idempotencyKey: "external-message:incoming",
+      });
+    },
+  );
 
   it("keeps deferred messages outside reconciliation until routine routing resolves them", async () => {
     const upsert = vi.fn(async ({ create }: { create: Record<string, unknown> }) => ({

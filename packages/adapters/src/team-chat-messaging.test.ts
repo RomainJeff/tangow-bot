@@ -1,5 +1,6 @@
 import type { MessagingInboundMessage, MessagingSurface } from "@rakazo/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
+import { enrichSlackTeamRoom } from "./messaging-platforms.js";
 import {
   createMessagingTeamChatSender,
   resolveMessagingThreadId,
@@ -137,4 +138,30 @@ describe("createMessagingTeamChatSender", () => {
       }),
     );
   });
+});
+
+it("pins two root mentions to their own replies despite a newer shared channel target", async () => {
+  const first = {
+    ...baseEvent({ handle: "100.1", threadId: "slack:C1:100.1" }),
+    ...enrichSlackTeamRoom({ type: "app_mention", ts: "100.1", channel: "C1" }, baseEvent()),
+  };
+  const second = {
+    ...baseEvent({ handle: "100.2", threadId: "slack:C1:100.2" }),
+    ...enrichSlackTeamRoom({ type: "app_mention", ts: "100.2", channel: "C1" }, baseEvent()),
+  };
+  const sendToThread = vi.fn(async (_request: { threadId: string }) => ({ handle: "sent" }));
+  const send = createMessagingTeamChatSender({ sendToThread } as unknown as MessagingSurface);
+  await Promise.all(
+    [first, second].map((event) =>
+      send({
+        conversationId: second.threadId,
+        replyThreadId: toTeamChatInbound(event)!.replyThreadId,
+        content: event.handle,
+      }),
+    ),
+  );
+  expect(sendToThread.mock.calls.map(([request]) => request.threadId)).toEqual([
+    "slack:C1:100.1",
+    "slack:C1:100.2",
+  ]);
 });

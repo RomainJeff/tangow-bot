@@ -11,6 +11,7 @@ import type {
   MessagingSendRequest,
   MessagingSendResult,
   MessagingSurface,
+  MessagingThreadContext,
 } from "@rakazo/adapter-kit";
 import type { Adapter, Message, Thread } from "chat";
 import { Chat } from "chat";
@@ -135,9 +136,51 @@ export class ChatSdkMessagingSurface implements MessagingSurface {
     _context: AdapterContext,
   ): Promise<MessagingSendResult> {
     await this.ensureInitialized();
-    const sent = await this.chat.thread(request.threadId).post(request.body);
+    // Slack renders Markdown posts natively; a string leaves formatting visible verbatim.
+    // Preserve long messages via text: Slack markdown_text is limited to 12,000 characters.
+    const content =
+      providerOfThreadId(request.threadId) === "slack" && request.body.length <= 12_000
+        ? { markdown: request.body }
+        : request.body;
+    const sent = await this.chat.thread(request.threadId).post(content);
     const handle = "id" in sent && typeof sent.id === "string" ? sent.id : "";
     return { handle };
+  }
+
+  async readThreadContext(
+    event: MessagingInboundMessage,
+    context: AdapterContext,
+  ): Promise<MessagingThreadContext> {
+    const platform = this.byProvider.get(event.provider);
+    if (!platform) throw new Error("Unknown messaging provider");
+    await this.ensureInitialized();
+    const page = await raceWithSignal(
+      platform.adapter.fetchMessages(event.threadId, { direction: "forward", limit: 21 }),
+      context.signal,
+    );
+    const currentIndex = page.messages.findIndex((message) => message.id === event.handle);
+    const prior = currentIndex < 0 ? page.messages : page.messages.slice(0, currentIndex);
+    let remaining = 16_000;
+    let truncated = Boolean(page.nextCursor) || prior.length > 20;
+    const messages = prior
+      .slice(0, 20)
+      .filter((message) => message.id !== event.handle)
+      .map((message) => {
+        const text = message.text ?? "";
+        const content = text.slice(0, Math.min(2_000, remaining));
+        remaining -= content.length;
+        if (content.length < text.length) truncated = true;
+        return {
+          handle: message.id,
+          senderName: (
+            message.author.fullName ||
+            message.author.userName ||
+            message.author.userId
+          ).slice(0, 100),
+          content,
+        };
+      });
+    return { messages, truncated };
   }
 
   async openDirectThread(

@@ -3,6 +3,7 @@ import {
   createMessagingInboundHandler,
   type MessagingInboundDeps,
   teamChatSenderCanWakeMessageRoutines,
+  tryRedeemMessagingLinkCode,
   wakeMessageRoutines,
 } from "./messaging-inbound.js";
 import { inboundDeliveryClientNonce, messagingWakeIdempotencyKey } from "./webhook-inbound.js";
@@ -437,6 +438,23 @@ describe("createMessagingInboundHandler DM routing", () => {
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
     expect(deps.routineRuns()).toHaveLength(1);
     expect(deps.enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves the referenced parent when a team-chat request wakes a routine", async () => {
+    const deps = createDeps({
+      routines: [{ id: "routine-1", name: "Triage", prompt: "Review the request" }],
+    });
+    await wakeMessageRoutines(
+      deps,
+      { spaceId: "ws-1", userId: "user-1", botId: "bot-1", threadId: "thread-1" },
+      { ...dmEvent, provider: "slack", content: "Review the message above" },
+      { threadContext: "Untrusted thread: the launch moved to Friday" },
+    );
+    expect(deps.routineRuns()).toContainEqual(
+      expect.objectContaining({
+        prompt: expect.stringContaining("the launch moved to Friday"),
+      }),
+    );
   });
 
   it("aligns TeamChat wake nonces to deliveryProvider when inbound provider differs", async () => {
@@ -1302,6 +1320,37 @@ describe("createMessagingInboundHandler linking", () => {
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
     expect(deps.outboundRows).toHaveLength(0);
   });
+
+  it("redeems a Slack DM code before TeamChat routing without running the bot", async () => {
+    const deps = createDeps({ identity: null, linkCode: { ...liveCode } });
+    expect(
+      await tryRedeemMessagingLinkCode(deps, {
+        ...dmEvent,
+        provider: "slack",
+        from: "U-owner",
+        threadId: "slack:D-owner:",
+        content: "abcd-2345",
+      }),
+    ).toBe(true);
+    expect(deps.createdIdentities[0]).toMatchObject({
+      provider: "slack",
+      address: "U-owner",
+      botId: "bot-web",
+    });
+    expect(deps.sendUserMessage).not.toHaveBeenCalled();
+    expect(deps.outboundRows).toHaveLength(1);
+  });
+
+  it.each([{ isDirect: false }, { senderIsBot: true }])(
+    "never redeems codes from channels or bots: %j",
+    async (override) => {
+      const deps = createDeps({ identity: null, linkCode: { ...liveCode } });
+      expect(
+        await tryRedeemMessagingLinkCode(deps, { ...dmEvent, content: "abcd-2345", ...override }),
+      ).toBe(false);
+      expect(deps.createdIdentities).toHaveLength(0);
+    },
+  );
 
   it("links an unknown sender via a valid code and confirms", async () => {
     const deps = createDeps({ identity: null, linkCode: { ...liveCode } });
