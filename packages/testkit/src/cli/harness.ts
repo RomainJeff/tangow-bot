@@ -12,6 +12,7 @@ const integration = process.argv.includes("--integration");
 const e2e = process.argv.includes("--e2e");
 const sandboxArg = process.argv.find((arg) => arg.startsWith("--sandbox="));
 const specArg = process.argv.find((arg) => arg.startsWith("--spec="));
+const suiteArg = process.argv.find((arg) => arg.startsWith("--suite="));
 const grepArg = process.argv.find((arg) => arg.startsWith("--grep="));
 const runtimeArg = process.argv.find((arg) => arg.startsWith("--runtime="));
 const sandboxProvider = sandboxArg?.slice("--sandbox=".length) ?? "fake";
@@ -86,7 +87,7 @@ async function main() {
     });
 
     if (integration) {
-      const suites = [
+      const allSuites = [
         "packages/testkit/src/pi-offline.postgres.test.ts",
         "packages/testkit/src/computer-approval.postgres.test.ts",
         "packages/testkit/src/eval-history.postgres.test.ts",
@@ -106,7 +107,21 @@ async function main() {
         "packages/adapters/src/realtime.postgres.test.ts",
         "packages/adapters/src/job-reconciler.postgres.test.ts",
         "packages/adapters/src/cloud-agent.postgres.test.ts",
+        "packages/adapters/src/computer-lifecycle.postgres.test.ts",
+        "packages/adapters/src/delegated-tasks.postgres.test.ts",
+        "packages/adapters/src/rakazo-mcp-bridge.postgres.test.ts",
+        "packages/adapters/src/native-session-store.postgres.test.ts",
+        "packages/testkit/src/executor.native-choice.postgres.test.ts",
+        "packages/testkit/src/bot-harness-choice.postgres.test.ts",
+        "packages/testkit/src/work-answer.postgres.test.ts",
+        "packages/testkit/src/oauth-refresh-coordination.postgres.test.ts",
+        "apps/api/src/team-chat-n8n-relay.postgres.test.ts",
       ];
+      const suites = suiteArg
+        ? allSuites.filter((suite) => suite === suiteArg.slice("--suite=".length))
+        : allSuites;
+      if (suiteArg && suites.length === 0)
+        throw new Error(`Unknown integration suite: ${suiteArg}`);
       // Each app reconciles all durable work in its database, including intentionally
       // unfinished fixture runs. Clone the pristine migrated schema so one suite
       // cannot execute another suite's backlog or wait for it during shutdown.
@@ -126,29 +141,49 @@ async function main() {
         if (result.exitCode !== 0)
           throw new Error("Isolated integration database operation failed");
       };
+      const failures: Error[] = [];
       for (const [index, suite] of suites.entries()) {
         const database = `integration_${index}`;
         await databaseCommand(`CREATE DATABASE "${database}" TEMPLATE "${template}"`);
         const suiteUrl = new URL(databaseUrl);
         suiteUrl.pathname = `/${database}`;
         try {
-          await runProcess("pnpm", ["exec", "vitest", "run", suite], {
-            ...process.env,
-            DATABASE_URL: suiteUrl.toString(),
-            REALTIME_DATABASE_URL: suiteUrl.toString(),
-            OPENROUTER_API_KEY: "",
-            MODEL_API_KEY: "",
-          });
+          await runProcess(
+            "pnpm",
+            [
+              "exec",
+              "vitest",
+              "run",
+              suite,
+              "--reporter=default",
+              "--reporter=json",
+              `--outputFile=${path.join(reportDir, `suite-${index}.json`)}`,
+            ],
+            {
+              ...process.env,
+              DATABASE_URL: suiteUrl.toString(),
+              REALTIME_DATABASE_URL: suiteUrl.toString(),
+              OPENROUTER_API_KEY: "",
+              MODEL_API_KEY: "",
+            },
+          );
+        } catch (error) {
+          const failure = new Error(`Integration suite failed: ${suite}`, { cause: error });
+          failures.push(failure);
+          console.error(failure);
         } finally {
           await databaseCommand(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);
         }
       }
       await writeSummary(reportDir, {
-        ok: true,
+        ok: failures.length === 0,
         mode,
         sandbox: process.env.SANDBOX_PROVIDER,
         runtime: process.env.AGENT_RUNTIME,
       });
+      if (failures.length > 0) {
+        throw new AggregateError(failures, `${failures.length} integration suites failed`);
+      }
       return;
     }
 

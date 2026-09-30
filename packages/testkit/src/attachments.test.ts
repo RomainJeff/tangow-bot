@@ -92,11 +92,19 @@ describeAttachments("chat attachments", () => {
     });
     expect(fetched.contentBase64).toBe(tinyPng.toString("base64"));
 
-    const badMime = await raw(app, cookie, "artifacts/create", {
+    const zip = await raw(app, cookie, "artifacts/create", {
       botId: bot.id,
-      name: "evil.zip",
+      name: "archive.zip",
       mimeType: "application/zip",
       contentBase64: Buffer.from("zip").toString("base64"),
+    });
+    expect(zip.status).toBeLessThan(400);
+
+    const badMime = await raw(app, cookie, "artifacts/create", {
+      botId: bot.id,
+      name: "unknown.bin",
+      mimeType: "application/octet-stream",
+      contentBase64: Buffer.from("binary").toString("base64"),
     });
     expect(badMime.status).toBeGreaterThanOrEqual(400);
 
