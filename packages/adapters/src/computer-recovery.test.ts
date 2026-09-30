@@ -46,19 +46,33 @@ async function fixture(provider: "fake" | "desktop" = "fake") {
     controlLeaseId: null,
     maintenanceId: null as string | null,
     homeRevision: "saved",
+    bootClaimStamp: null as Date | null,
     updatedAt: new Date("2024-01-01T00:00:00.000Z"),
   };
   // Model the atomic scalar predicates used by claims, including stale references
-  // and the updatedAt claim stamp used for booting reclaim / end-of-boot writes.
+  // and the boot claim stamp used for booting reclaim / end-of-boot writes.
   const computer = {
     findUniqueOrThrow: vi.fn(async () => ({ ...row })),
     updateMany: vi.fn(async ({ where, data }) => {
-      const matches = ["id", "state", "providerRef", "kind", "updatedAt"].every(
+      const matches = ["id", "state", "providerRef", "kind", "updatedAt", "bootClaimStamp"].every(
         (key) => !(key in where) || where[key] === row[key as keyof typeof row],
       );
       if (!matches) return { count: 0 };
       Object.assign(row, { updatedAt: new Date(row.updatedAt.getTime() + 1) }, data);
       return { count: 1 };
+    }),
+    // A caller may join a concurrent reconnect only against the current running
+    // reference and only with a use right; the row's only owner is its home bot.
+    findFirst: vi.fn(async ({ where }) => {
+      const matches = ["id", "state", "providerRef", "kind", "maintenanceId"].every(
+        (key) => !(key in where) || where[key] === row[key as keyof typeof row],
+      );
+      const authorized =
+        !where.OR ||
+        where.OR.some(
+          (right: { bots?: { some: { id: string } } }) => right.bots?.some.id === row.homeKey,
+        );
+      return matches && authorized ? { ...row } : null;
     }),
     update: vi.fn(async ({ data }) =>
       Object.assign(row, { updatedAt: new Date(row.updatedAt.getTime() + 1) }, data),
@@ -309,6 +323,42 @@ describe("computer recovery preserves live work", () => {
     expect(
       new TextDecoder().decode(await deps.sandbox.readFile(updated, "notes.txt", context)),
     ).toBe("checkpoint");
+  });
+
+  it("resets a stale boot despite an unrelated updatedAt write after it was observed", async () => {
+    const { deps, row, computer, first } = await fixture();
+    await deps.sandbox.destroy(first, context);
+    row.state = "booting";
+    row.bootClaimStamp = new Date("2024-01-01T00:00:00.000Z");
+    row.updatedAt = row.bootClaimStamp;
+    const updateMany = computer.updateMany.getMockImplementation()!;
+    let writes = 0;
+    computer.updateMany.mockImplementation(async (args) => {
+      if (writes++ === 0) row.updatedAt = new Date(); // third-party metadata write
+      return updateMany(args);
+    });
+
+    const updated = await replaceComputer(deps, row.id, "reset", context);
+
+    expect(updated.fresh).toBe(true);
+    expect(row.state).toBe("running");
+  });
+
+  it("refuses a fresh boot despite an unrelated updatedAt write after it was observed", async () => {
+    const { deps, row, computer } = await fixture();
+    row.state = "booting";
+    row.bootClaimStamp = new Date();
+    row.updatedAt = new Date("2024-01-01T00:00:00.000Z");
+    const lease = deps.prisma.computerExecutionLease.findFirst as ReturnType<typeof vi.fn>;
+    lease.mockImplementation(async () => {
+      row.updatedAt = new Date(); // third-party metadata write before the replacement claim
+      return null;
+    });
+
+    await expect(replaceComputer(deps, row.id, "reset", context)).rejects.toMatchObject({
+      reason: "boot_fresh_stamp",
+    });
+    expect(computer.updateMany).not.toHaveBeenCalled();
   });
 
   it("preserves the reference when reset teardown fails ambiguously", async () => {

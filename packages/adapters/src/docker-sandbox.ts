@@ -8,6 +8,8 @@ import type {
   ComputerObservation,
   ComputerRef,
   ControlLeaseRef,
+  NativeProcess,
+  NativeProcessRequest,
   PageBrowserCommand,
   PageBrowserResult,
   PortableFile,
@@ -24,6 +26,7 @@ import {
   computerObservation,
   normalizeWorkspacePath,
 } from "./computer-support.js";
+import { writeJ2ProvisioningDiagnostic } from "./j2-provisioning-diagnostics.js";
 import { readBodyCapped, withAbort } from "./web-ssrf.js";
 
 export const MAX_SANDBOX_ERROR_RESPONSE_BYTES = 8 * 1024;
@@ -32,7 +35,7 @@ export const SCREEN_RELEASE_TIMEOUT_MS = 8_000;
 const SANDBOX_ERROR_RESPONSE_TIMEOUT_MS = 1_000;
 const SANDBOX_SUCCESS_RESPONSE_TIMEOUT_MS = 30_000;
 
-async function safeBody(res: Response, signal?: AbortSignal): Promise<string> {
+async function safeBody(res: Response, signal?: AbortSignal, maxChars = 200): Promise<string> {
   const declared = Number(res.headers.get("content-length") ?? 0);
   if (Number.isFinite(declared) && declared > MAX_SANDBOX_ERROR_RESPONSE_BYTES) {
     cancelResponseBody(res);
@@ -43,7 +46,7 @@ async function safeBody(res: Response, signal?: AbortSignal): Promise<string> {
       ? AbortSignal.any([signal, AbortSignal.timeout(SANDBOX_ERROR_RESPONSE_TIMEOUT_MS)])
       : AbortSignal.timeout(SANDBOX_ERROR_RESPONSE_TIMEOUT_MS);
     const bytes = await readBodyCapped(res, MAX_SANDBOX_ERROR_RESPONSE_BYTES, readSignal);
-    return new TextDecoder().decode(bytes).slice(0, 200);
+    return new TextDecoder().decode(bytes).slice(0, maxChars);
   } catch {
     return "";
   }
@@ -91,6 +94,19 @@ function encodedFileResponseLimit(maxBytes: number | undefined): number {
   return Math.ceil(maxBytes / 3) * 4 + 1024;
 }
 
+/** Keep only the documented, read-only skill mount paths absolute over the wire. */
+function sandboxFilePath(value: string): string {
+  if (
+    value === "/skills/user" ||
+    value.startsWith("/skills/user/") ||
+    value === "/skills/marketplaces" ||
+    value.startsWith("/skills/marketplaces/")
+  ) {
+    return value;
+  }
+  return normalizeWorkspacePath(value);
+}
+
 export class DockerSandboxProvider implements SandboxProvider {
   private readonly supervisorToken: string;
 
@@ -117,6 +133,18 @@ export class DockerSandboxProvider implements SandboxProvider {
     };
   }
 
+  async reconfirmNativeProcess(computer: ComputerRef, processRef: string, context: AdapterContext) {
+    const response = await fetch(
+      this.url(`/computers/${computer.id}/native-processes/${processRef}/reconfirm`),
+      { method: "POST", headers: this.headers(context, computer.botId), signal: context.signal },
+    );
+    if (!response.ok)
+      throw Object.assign(new Error("native process unavailable"), { code: "harness_unavailable" });
+    return (
+      await readSandboxJson<{ status: "stopped" | "stop_unconfirmed" }>(response, context.signal)
+    ).status;
+  }
+
   private url(path: string) {
     return `${this.supervisorUrl.replace(/\/$/, "")}${path}`;
   }
@@ -134,9 +162,27 @@ export class DockerSandboxProvider implements SandboxProvider {
   }
 
   async provision(
-    request: { botId: string; homePath: string },
+    request: { botId: string; homePath: string; providerRef?: string },
     context: AdapterContext,
   ): Promise<ComputerRef> {
+    if (request.providerRef) {
+      const existing = await fetch(this.url(`/computers/${request.providerRef}`), {
+        headers: this.headers(context, request.botId),
+        signal: context.signal,
+      });
+      if (existing.ok) {
+        const inspected = await readSandboxJson<{ running?: boolean }>(existing, context.signal);
+        if (inspected.running) {
+          return {
+            id: request.providerRef,
+            botId: request.botId,
+            kind: "docker",
+            providerRef: request.providerRef,
+            fresh: false,
+          };
+        }
+      }
+    }
     const res = await fetch(this.url("/computers"), {
       method: "POST",
       headers: { ...this.headers(context, request.botId), "content-type": "application/json" },
@@ -174,28 +220,196 @@ export class DockerSandboxProvider implements SandboxProvider {
     request: CommandRequest,
     context: AdapterContext,
   ): AsyncIterable<ProcessEvent> {
-    const res = await fetch(this.url(`/computers/${computer.id}/exec`), {
+    const diagnosticStartedAt = Date.now();
+    const diagnose = (
+      step: string,
+      extra: Record<string, string | number | boolean | undefined> = {},
+    ) =>
+      writeJ2ProvisioningDiagnostic({
+        step,
+        computerId: computer.id,
+        botId: computer.botId,
+        ms: Date.now() - diagnosticStartedAt,
+        ...extra,
+      });
+    const timeoutMs = boundedSandboxCommandTimeoutMs(request.timeoutMs);
+    await diagnose("docker_execute.fetch.before", { timeoutMs });
+    let events = 0;
+    let exitReceived = false;
+    try {
+      const res = await fetch(this.url(`/computers/${computer.id}/exec`), {
+        method: "POST",
+        headers: { ...this.headers(context, computer.botId), "content-type": "application/json" },
+        body: JSON.stringify({
+          ...request,
+          cwd: dockerCwd(request.cwd),
+          timeoutMs,
+        }),
+        signal: context.signal,
+      });
+      await diagnose("docker_execute.fetch.after", { status: res.status });
+      if (!res.ok) {
+        events += 1;
+        yield { type: "stderr", data: `exec failed: ${res.status}` };
+        events += 1;
+        exitReceived = true;
+        yield { type: "exit", code: 1 };
+        await diagnose("docker_execute.after", { events, exitReceived });
+        return;
+      }
+      const body = await readSandboxJson<{ stdout: string; stderr: string; code: number }>(
+        res,
+        context.signal,
+      );
+      await diagnose("docker_execute.body.after");
+      if (body.stdout) {
+        events += 1;
+        yield { type: "stdout", data: body.stdout };
+      }
+      if (body.stderr) {
+        events += 1;
+        yield { type: "stderr", data: body.stderr };
+      }
+      events += 1;
+      exitReceived = true;
+      yield { type: "exit", code: body.code };
+      await diagnose("docker_execute.after", { events, exitReceived });
+    } catch (error) {
+      await diagnose("docker_execute.catch", {
+        name: error instanceof Error ? error.name : typeof error,
+        message: error instanceof Error ? error.message : String(error),
+        events,
+        exitReceived,
+      });
+      throw error;
+    }
+  }
+
+  async startNativeProcess(
+    computer: ComputerRef,
+    request: NativeProcessRequest,
+    context: AdapterContext,
+  ): Promise<NativeProcess> {
+    const created = await fetch(this.url(`/computers/${computer.id}/native-processes`), {
       method: "POST",
       headers: { ...this.headers(context, computer.botId), "content-type": "application/json" },
-      body: JSON.stringify({
-        ...request,
-        cwd: dockerCwd(request.cwd),
-        timeoutMs: boundedSandboxCommandTimeoutMs(request.timeoutMs),
-      }),
+      body: JSON.stringify(request),
       signal: context.signal,
     });
-    if (!res.ok) {
-      yield { type: "stderr", data: `exec failed: ${res.status}` };
-      yield { type: "exit", code: 1 };
-      return;
+    if (!created.ok) {
+      let code = "unknown";
+      try {
+        const diagnostic = JSON.parse(
+          await safeBody(created, context.signal, MAX_SANDBOX_ERROR_RESPONSE_BYTES),
+        );
+        if (["schema_rejected", "private_files_failed", "exec_failed"].includes(diagnostic?.code))
+          code = diagnostic.code;
+      } catch {
+        /* Never expose an untrusted error body. */
+      }
+      throw Object.assign(new Error(`native process unavailable (${created.status} ${code})`), {
+        code: "harness_unavailable",
+      });
     }
-    const body = await readSandboxJson<{ stdout: string; stderr: string; code: number }>(
-      res,
-      context.signal,
+    const { id } = await readSandboxJson<{ id: string }>(created, context.signal);
+    let stopped = false;
+    let resolveTerminal!: (
+      value: NativeProcess["wait"] extends () => Promise<infer T> ? T : never,
+    ) => void;
+    const terminal = new Promise<NativeProcess["wait"] extends () => Promise<infer T> ? T : never>(
+      (resolve) => {
+        resolveTerminal = resolve;
+      },
     );
-    if (body.stdout) yield { type: "stdout", data: body.stdout };
-    if (body.stderr) yield { type: "stderr", data: body.stderr };
-    yield { type: "exit", code: body.code };
+    const provider = this;
+    async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
+      const response = await fetch(path, init);
+      if (!response.ok)
+        throw Object.assign(new Error("native process unavailable"), {
+          code: "harness_unavailable",
+        });
+      return response.json() as Promise<T>;
+    }
+    const headers = {
+      ...this.headers(context, computer.botId),
+      "content-type": "application/json",
+    };
+    const privateHome = request.privateHome;
+    const read = async function* () {
+      while (!stopped) {
+        const result = await requestJson<{
+          lines: string[];
+          streamLost?: boolean;
+          terminal: (NativeProcess["wait"] extends () => Promise<infer T> ? T : never) | null;
+        }>(provider.url(`/computers/${computer.id}/native-processes/${id}/read`), {
+          method: "POST",
+          headers,
+          signal: context.signal,
+        });
+        for (const line of result.lines) yield line;
+        if (result.streamLost) {
+          throw Object.assign(new Error("native process stream lost before wrapper exit"), {
+            code: "native_process_stream_lost",
+          });
+        }
+        if (result.terminal) {
+          resolveTerminal(result.terminal);
+          return;
+        }
+      }
+    };
+    return {
+      id,
+      stdout: read(),
+      stderr: (async function* () {})(),
+      write: async (data) => {
+        await requestJson(this.url(`/computers/${computer.id}/native-processes/${id}/write`), {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ data }),
+          signal: context.signal,
+        });
+      },
+      wait: async () => terminal,
+      stop: async () => {
+        if (stopped) return "stopped" as const;
+        stopped = true;
+        const result = await requestJson<{
+          status: "stopped" | "stop_unconfirmed";
+          cleanup?: "removed" | "not_requested" | "failed" | "deferred";
+          terminal?: NativeProcess["wait"] extends () => Promise<infer T> ? T : never;
+        }>(this.url(`/computers/${computer.id}/native-processes/${id}`), {
+          method: "DELETE",
+          headers,
+        });
+        if (result.status === "stop_unconfirmed" || result.cleanup === "failed") {
+          resolveTerminal({
+            code: null,
+            signal: null,
+            exitSource: "unknown",
+            stderr: { present: false },
+          });
+          return "stop_unconfirmed" as const;
+        }
+        if (result.terminal) resolveTerminal(result.terminal);
+        return "stopped" as const;
+      },
+      ...(privateHome
+        ? {
+            purgeHome: async () => {
+              await requestJson<{ cleanup: "removed" }>(
+                provider.url(`/computers/${computer.id}/native-homes`),
+                {
+                  method: "DELETE",
+                  headers,
+                  body: JSON.stringify({ home: privateHome }),
+                  signal: context.signal,
+                },
+              );
+            },
+          }
+        : {}),
+    };
   }
 
   async pageBrowser(
@@ -349,7 +563,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     directory: string,
     context: AdapterContext,
   ): Promise<ComputerFileEntry[]> {
-    const path = normalizeWorkspacePath(directory);
+    const path = sandboxFilePath(directory);
     const res = await fetch(
       this.url(`/computers/${computer.id}/files?path=${encodeURIComponent(path)}&mode=list`),
       { headers: this.headers(context, computer.botId), signal: context.signal },
@@ -364,7 +578,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     context: AdapterContext,
     options?: { maxBytes?: number },
   ) {
-    const path = normalizeWorkspacePath(filePath);
+    const path = sandboxFilePath(filePath);
     const maxBytes = options?.maxBytes;
     const res = await fetch(
       this.url(

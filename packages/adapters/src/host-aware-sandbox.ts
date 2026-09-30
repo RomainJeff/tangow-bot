@@ -6,6 +6,7 @@ import type {
   ComputerInput,
   ComputerRef,
   ControlLeaseRef,
+  NativeProcessRequest,
   PortableFile,
   ProcessEvent,
   SandboxProvider,
@@ -108,6 +109,20 @@ export class HostAwareSandbox implements SandboxProvider {
     context: AdapterContext,
   ): AsyncIterable<ProcessEvent> {
     yield* this.route(computer).execute(computer, request, context);
+  }
+
+  async startNativeProcess(
+    computer: ComputerRef,
+    request: NativeProcessRequest,
+    context: AdapterContext,
+  ) {
+    const provider = this.route(computer);
+    if (!provider.startNativeProcess) {
+      throw Object.assign(new Error("selected Computer provider cannot host native processes"), {
+        code: "harness_unavailable",
+      });
+    }
+    return provider.startNativeProcess(computer, request, context);
   }
 
   connectScreen(computer: ComputerRef, request: ScreenRequest, context: AdapterContext) {

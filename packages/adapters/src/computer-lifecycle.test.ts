@@ -33,6 +33,15 @@ const context = {
   signal: new AbortController().signal,
 } satisfies AdapterContext;
 
+describe("ComputerBusyError", () => {
+  it("keeps its public message while exposing the busy reason", () => {
+    const error = new ComputerBusyError("maintenance");
+
+    expect(error.message).toBe("Computer is busy");
+    expect(error.reason).toBe("maintenance");
+  });
+});
+
 describe("computer provisioning", () => {
   it("stops a provider when archive invalidates its boot claim", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-provision-race-"));
@@ -109,10 +118,13 @@ describe("computer provisioning", () => {
             maintenanceId: null,
             id: "computer-1",
             state: "booting",
-            updatedAt: expect.any(Date),
+            bootClaimStamp: expect.any(Date),
             providerRef: "provider-1",
             kind: "cloud",
-            bots: { some: { id: "bot-1", archivedAt: null } },
+            OR: [
+              { bots: { some: { id: "bot-1", archivedAt: null } } },
+              { usageGrants: { some: { botId: "bot-1" } } },
+            ],
           },
         }),
       );
@@ -126,7 +138,12 @@ describe("computer provisioning", () => {
     // requires no live leases (heldByNobodyElse(null)). Returning count:0 for any expiresAt
     // filter would ignore a missing expiresAt.gt and a missing NOT for the caller's own lease.
     function matchesLiveLeasePredicate(
-      none: { expiresAt?: { gt?: unknown }; NOT?: { runId?: string; fence?: number } } | undefined,
+      none:
+        | {
+            expiresAt?: { gt?: unknown };
+            NOT?: { runId?: string; fence?: number };
+          }
+        | undefined,
       own?: { runId: string; fence: number },
     ) {
       const gt = none?.expiresAt?.gt;
@@ -141,7 +158,10 @@ describe("computer provisioning", () => {
           state?: string;
           updatedAt?: Date;
           executionLeases?: {
-            none?: { expiresAt?: { gt?: unknown }; NOT?: { runId?: string; fence?: number } };
+            none?: {
+              expiresAt?: { gt?: unknown };
+              NOT?: { runId?: string; fence?: number };
+            };
           };
         };
       }) => {
@@ -204,7 +224,10 @@ describe("computer provisioning", () => {
         where: {
           state?: string;
           executionLeases?: {
-            none?: { expiresAt?: { gt?: unknown }; NOT?: { runId?: string; fence?: number } };
+            none?: {
+              expiresAt?: { gt?: unknown };
+              NOT?: { runId?: string; fence?: number };
+            };
           };
         };
       }) => {
@@ -507,10 +530,14 @@ describe("computer provisioning", () => {
         "computer-1",
         context,
       );
-      const claimData = updateMany.mock.calls[0]?.[0]?.data as { updatedAt?: Date };
-      const activationWhere = updateMany.mock.calls[1]?.[0]?.where as { updatedAt?: Date };
+      const claimData = updateMany.mock.calls[0]?.[0]?.data as {
+        updatedAt?: Date;
+      };
+      const activationWhere = updateMany.mock.calls[1]?.[0]?.where as {
+        bootClaimStamp?: Date;
+      };
       expect(claimData.updatedAt).toBeInstanceOf(Date);
-      expect(activationWhere.updatedAt).toEqual(claimData.updatedAt);
+      expect(activationWhere.bootClaimStamp).toEqual(claimData.updatedAt);
       // Stamp must come from the claim write, not a follow-up read that a concurrent reclaim could win.
       expect(findUniqueOrThrow).toHaveBeenCalledTimes(1);
     } finally {
@@ -586,12 +613,14 @@ describe("computer provisioning", () => {
       );
       const claim = updateMany.mock.calls[0]?.[0] as {
         where: { updatedAt?: Date };
-        data: { updatedAt?: Date };
+        data: { updatedAt?: Date; bootClaimStamp?: Date };
       };
-      const activationWhere = updateMany.mock.calls[1]?.[0]?.where as { updatedAt?: Date };
+      const activationWhere = updateMany.mock.calls[1]?.[0]?.where as {
+        bootClaimStamp?: Date;
+      };
       expect(claim.where.updatedAt).toEqual(observed);
       expect(claim.data.updatedAt?.getTime()).toBe(observed.getTime() + 1);
-      expect(activationWhere.updatedAt).toEqual(claim.data.updatedAt);
+      expect(activationWhere.bootClaimStamp).toEqual(claim.data.bootClaimStamp);
       expect(row.state).toBe("running");
     } finally {
       now.mockRestore();
@@ -599,6 +628,101 @@ describe("computer provisioning", () => {
       await rm(dataDir, { recursive: true, force: true });
     }
   });
+
+  it.each([
+    { initialState: "running", authorized: true },
+    { initialState: "booting", authorized: true },
+    { initialState: "running", authorized: false },
+    { initialState: "booting", authorized: false },
+  ])(
+    "joins a concurrent reconnect only with a current use right: %j",
+    async ({ initialState, authorized }) => {
+      const row = {
+        id: "computer-1",
+        homeKey: "bot-1",
+        providerRef: "existing-provider",
+        kind: "cloud",
+        scope: "team",
+        state: "running",
+        controlLeaseId: null,
+        maintenanceId: null,
+        updatedAt: new Date(),
+        bootClaimStamp: null,
+      };
+      const findFirst = vi.fn().mockResolvedValue(authorized ? row : null);
+      const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+      const prisma = {
+        computer: {
+          findUniqueOrThrow: vi
+            .fn()
+            .mockResolvedValue(row)
+            .mockResolvedValueOnce({
+              ...row,
+              state: initialState,
+              bootClaimStamp: initialState === "booting" ? new Date() : null,
+            }),
+          findUnique: vi.fn().mockResolvedValue(null),
+          findFirst,
+          updateMany,
+        },
+      } as unknown as PrismaClient;
+      const provision = vi.fn();
+      const execute = vi.fn(async function* () {
+        yield { type: "exit" as const, code: 0 };
+      });
+      const deps = {
+        prisma,
+        sandbox: { provision, execute } as unknown as SandboxProvider,
+        home: {} as AgentHomeStore,
+        jobs: {} as JobPublisher,
+        events: {} as ThreadEvents,
+      };
+      const reconnectContext = { ...context, botId: "specialist" };
+      const result = provisionComputer(deps, row.id, reconnectContext);
+      if (authorized) {
+        await expect(result).resolves.toMatchObject({ providerRef: row.providerRef, fresh: false });
+      } else {
+        await expect(result).rejects.toBeInstanceOf(ComputerBusyError);
+      }
+      expect(provision).not.toHaveBeenCalled();
+      expect(execute).toHaveBeenCalledTimes(authorized ? 1 : 0);
+      if (authorized) {
+        expect(execute).toHaveBeenCalledWith(
+          expect.objectContaining({ providerRef: row.providerRef }),
+          { argv: ["mkdir", "-p", "shared", "bots/specialist"] },
+          reconnectContext,
+        );
+      }
+      expect(findFirst).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          id: row.id,
+          state: "running",
+          providerRef: row.providerRef,
+          kind: row.kind,
+          maintenanceId: null,
+          OR: [
+            { bots: { some: { id: "specialist", archivedAt: null } } },
+            { usageGrants: { some: { botId: "specialist" } } },
+          ],
+        }),
+      });
+      if (initialState === "running") {
+        expect(updateMany).toHaveBeenCalledOnce();
+        expect(updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              OR: [
+                { bots: { some: { id: "specialist", archivedAt: null } } },
+                { usageGrants: { some: { botId: "specialist" } } },
+              ],
+            }),
+          }),
+        );
+      } else {
+        expect(updateMany).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it("does not reclaim a fresh booting claim without waiting", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-fresh-boot-claim-"));
@@ -850,7 +974,9 @@ describe("computer provisioning", () => {
           context,
         );
         if (rollbackFails) {
-          await expect(result).rejects.toMatchObject({ errors: [failure, rollbackError] });
+          await expect(result).rejects.toMatchObject({
+            errors: [failure, rollbackError],
+          });
         } else {
           await expect(result).rejects.toBe(failure);
         }
@@ -864,9 +990,9 @@ describe("computer provisioning", () => {
             state: "booting",
             providerRef: "provider-1",
             kind: "box",
-            updatedAt: expect.any(Date),
+            bootClaimStamp: expect.any(Date),
           },
-          data: { state: "running" },
+          data: { state: "running", bootClaimStamp: null },
         });
         expect(original).toMatchObject({
           state: "running",
@@ -1006,10 +1132,18 @@ describe("computer provisioning", () => {
             state: "booting",
             providerRef: "provider-1",
             kind: "box",
-            updatedAt: expect.any(Date),
-            bots: { some: { id: "bot-1", archivedAt: null } },
+            bootClaimStamp: expect.any(Date),
+            OR: [
+              { bots: { some: { id: "bot-1", archivedAt: null } } },
+              { usageGrants: { some: { botId: "bot-1" } } },
+            ],
           },
-          data: { state: "running", providerRef: next.providerRef, kind: next.kind },
+          data: {
+            state: "running",
+            bootClaimStamp: null,
+            providerRef: next.providerRef,
+            kind: next.kind,
+          },
         });
         expect(destroy).not.toHaveBeenCalled();
         expect(stop).not.toHaveBeenCalled();
@@ -1202,10 +1336,11 @@ describe("computer provisioning", () => {
           state: "booting",
           providerRef: null,
           kind: "e2b",
-          updatedAt: expect.any(Date),
+          bootClaimStamp: expect.any(Date),
         },
         data: {
           state: "error",
+          bootClaimStamp: null,
           providerRef: "new-provider-1",
           kind: "e2b",
         },
@@ -1409,8 +1544,15 @@ describe("computer execution leases", () => {
           expiresAt = data.expiresAt;
           return { count: 1 };
         });
-        const prisma = { computerExecutionLease: { updateMany } } as unknown as PrismaClient;
-        const lease = { computerId: "computer-1", botId: "bot-1", runId: "run-1", fence: 1 };
+        const prisma = {
+          computerExecutionLease: { updateMany },
+        } as unknown as PrismaClient;
+        const lease = {
+          computerId: "computer-1",
+          botId: "bot-1",
+          runId: "run-1",
+          fence: 1,
+        };
 
         await expect(extend(prisma, lease)).resolves.toBe(true);
         const extendedExpiry = expiresAt;
@@ -1475,7 +1617,10 @@ describe("computer execution leases", () => {
       thread: {
         update: vi
           .fn()
-          .mockResolvedValueOnce({ nextMessageSeq: 0, historyCompactionGeneration: 0 })
+          .mockResolvedValueOnce({
+            nextMessageSeq: 0,
+            historyCompactionGeneration: 0,
+          })
           .mockResolvedValue({ nextEventSeq: 1 }),
       },
       run: {
@@ -1764,7 +1909,11 @@ describe("computer replacement", () => {
     const findUniqueOrThrow = vi
       .fn()
       .mockResolvedValueOnce(computerRecord)
-      .mockResolvedValueOnce({ ...computerRecord, state: "stopped", providerRef: null })
+      .mockResolvedValueOnce({
+        ...computerRecord,
+        state: "stopped",
+        providerRef: null,
+      })
       .mockResolvedValue({
         ...computerRecord,
         state: "stopped",
@@ -1778,7 +1927,9 @@ describe("computer replacement", () => {
     const update = vi.fn().mockResolvedValue({});
     const prisma = {
       computer: { findUniqueOrThrow, updateMany, update },
-      computerExecutionLease: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      computerExecutionLease: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
       run: { findFirst: vi.fn().mockResolvedValue(null) },
     } as unknown as PrismaClient;
 
@@ -2046,7 +2197,9 @@ describe("computer replacement", () => {
       ),
     ).rejects.toBeInstanceOf(ComputerBusyError);
     expect(updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ state: "booting" }) }),
+      expect.objectContaining({
+        where: expect.objectContaining({ state: "booting" }),
+      }),
     );
   });
 
@@ -2333,7 +2486,10 @@ describe("computer replacement", () => {
     expect(updateMany).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        where: expect.objectContaining({ id: "computer-1", controlHolder: "user" }),
+        where: expect.objectContaining({
+          id: "computer-1",
+          controlHolder: "user",
+        }),
         data: expect.objectContaining({ controlHolder: "none" }),
       }),
     );
@@ -2374,7 +2530,9 @@ describe("computer replacement", () => {
           prisma,
           sandbox,
           home: {} as AgentHomeStore,
-          jobs: { enqueue: vi.fn().mockResolvedValue(undefined) } as unknown as JobPublisher,
+          jobs: {
+            enqueue: vi.fn().mockResolvedValue(undefined),
+          } as unknown as JobPublisher,
           events: {} as ThreadEvents,
         },
         "computer-1",

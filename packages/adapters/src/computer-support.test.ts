@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   displayBotWorkspacePath,
+  resolveBotReadablePath,
   resolveBotWorkspaceCwd,
   resolveBotWorkspacePath,
   teamBotWorkspaceDirectory,
@@ -27,6 +28,17 @@ describe("Team Computer bot folders", () => {
     );
     expect(resolveBotWorkspacePath("team", "bot-1", "/root-note.md")).toBe("root-note.md");
     expect(resolveBotWorkspacePath("team", "bot-1", "/shared/brief.md")).toBe("shared/brief.md");
+  });
+
+  it("preserves mounted skill paths for file reads on both Computer modes", () => {
+    for (const scope of ["team", "dedicated"] as const) {
+      expect(resolveBotReadablePath(scope, "bot-1", "/skills/user/example/SKILL.md")).toBe(
+        "/skills/user/example/SKILL.md",
+      );
+    }
+    expect(resolveBotReadablePath("team", "bot-1", "notes/result.txt")).toBe(
+      "bots/bot-1/notes/result.txt",
+    );
   });
 
   it("presents the current bot folder as its home without hiding Team paths", () => {

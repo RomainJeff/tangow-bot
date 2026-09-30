@@ -91,6 +91,23 @@ export function resolveBotWorkspacePath(
   return path.posix.join(teamBotWorkspaceDirectory(botId), normalized);
 }
 
+/** Preserve the read-only skills mounts before Team Computer folder scoping. */
+export function resolveBotReadablePath(
+  scope: ComputerMode,
+  botId: string,
+  requestedPath: string,
+): string {
+  if (
+    requestedPath === "/skills/user" ||
+    requestedPath.startsWith("/skills/user/") ||
+    requestedPath === "/skills/marketplaces" ||
+    requestedPath.startsWith("/skills/marketplaces/")
+  ) {
+    return requestedPath;
+  }
+  return resolveBotWorkspacePath(scope, botId, requestedPath);
+}
+
 export function resolveBotWorkspaceCwd(
   scope: ComputerMode,
   botId: string,

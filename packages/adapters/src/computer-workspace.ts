@@ -13,6 +13,7 @@ import { parseScreenLeaseId } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { normalizeWorkspacePath, teamBotWorkspaceDirectory } from "./computer-support.js";
 import { LocalAgentHomeStore } from "./home.js";
+import { writeJ2ProvisioningDiagnostic } from "./j2-provisioning-diagnostics.js";
 
 export const PORTABLE_TRANSFER_BATCH_BYTES = 8 * 1024 * 1024;
 
@@ -66,16 +67,46 @@ export async function ensureComputerWorkspaceLayout(
   context: AdapterContext,
 ): Promise<void> {
   if (scope !== "team" || !botId) return;
+  const diagnosticStartedAt = Date.now();
+  const diagnose = (
+    step: string,
+    extra: Record<string, string | number | boolean | undefined> = {},
+  ) =>
+    writeJ2ProvisioningDiagnostic({
+      step,
+      computerId: computer.id,
+      botId,
+      ms: Date.now() - diagnosticStartedAt,
+      ...extra,
+    });
   let exitCode: number | undefined;
   let stderr = "";
-  for await (const event of sandbox.execute(
-    computer,
-    { argv: ["mkdir", "-p", "shared", teamBotWorkspaceDirectory(botId)] },
-    context,
-  )) {
-    if (event.type === "stderr") stderr += event.data;
-    if (event.type === "exit") exitCode = event.code;
+  let events = 0;
+  await diagnose("workspace_execute.before", { command: "workspace_layout_mkdir" });
+  try {
+    for await (const event of sandbox.execute(
+      computer,
+      { argv: ["mkdir", "-p", "shared", teamBotWorkspaceDirectory(botId)] },
+      context,
+    )) {
+      events += 1;
+      if (event.type === "stderr") stderr += event.data;
+      if (event.type === "exit") exitCode = event.code;
+    }
+  } catch (error) {
+    await diagnose("workspace_execute.catch", {
+      name: error instanceof Error ? error.name : typeof error,
+      message: error instanceof Error ? error.message : String(error),
+      events,
+    });
+    throw error;
   }
+  await diagnose("workspace_execute.after", {
+    command: "workspace_layout_mkdir",
+    events,
+    exitReceived: exitCode !== undefined,
+    exitCode,
+  });
   if (exitCode !== 0) {
     throw new Error(`Could not prepare Team Computer folders${stderr ? `: ${stderr.trim()}` : ""}`);
   }

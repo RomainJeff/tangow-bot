@@ -7,6 +7,8 @@ import type {
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import {
+  ANTHROPIC_OAUTH_PROVIDER,
+  CHATGPT_OAUTH_PROVIDER,
   MAX_MODEL_CONTEXT_WINDOW,
   MAX_MODEL_MAX_TOKENS,
   type ModelOAuthBegin,
@@ -16,14 +18,18 @@ import {
 } from "@rakazo/contracts";
 import { createManualAnthropicOAuthLogin } from "./pi-anthropic-oauth.js";
 
-export const CHATGPT_OAUTH_PROVIDER = "openai-codex";
+export { ANTHROPIC_OAUTH_PROVIDER, CHATGPT_OAUTH_PROVIDER } from "@rakazo/contracts";
 export const COPILOT_OAUTH_PROVIDER = "github-copilot";
 export const XAI_OAUTH_PROVIDER = "xai";
-export const ANTHROPIC_OAUTH_PROVIDER = "anthropic";
 
 export const SUBSCRIPTION_SIGN_IN_PROVIDERS: Record<
   string,
-  { mode: ModelOAuthSignInMode; loginLabel: string; hint: string; billing: string }
+  {
+    mode: ModelOAuthSignInMode;
+    loginLabel: string;
+    hint: string;
+    billing: string;
+  }
 > = {
   [CHATGPT_OAUTH_PROVIDER]: {
     mode: "device-code",
@@ -53,7 +59,7 @@ export const SUBSCRIPTION_SIGN_IN_PROVIDERS: Record<
   },
 };
 
-const MIN_OAUTH_VALIDITY_MS = 5 * 60 * 1000;
+export const MIN_OAUTH_VALIDITY_MS = 5 * 60 * 1000;
 const SIGN_IN_START_WAIT_MS = 30_000;
 
 export type StoredModelSecret =
@@ -223,6 +229,31 @@ export function loadProviderOAuth(providerId: string): OAuthAuth | undefined {
   return providerCatalog().getProvider(providerId)?.auth.oauth;
 }
 
+export async function refreshProviderOAuth(
+  providerId: string,
+  credential: OAuthCredential,
+  signal: AbortSignal,
+): Promise<OAuthCredential> {
+  const oauth = loadProviderOAuth(providerId);
+  if (!oauth) throw new Error(`No OAuth handler for ${providerId}. Sign in again from onboarding.`);
+  return oauth.refresh(credential, signal);
+}
+
+/** Convert an already-valid OAuth credential without triggering another refresh. */
+export async function resolveOAuthModelAuth(
+  providerId: string,
+  credential: OAuthCredential,
+  oauthOverride?: Pick<OAuthAuth, "toAuth">,
+): Promise<string> {
+  const oauth = oauthOverride ?? loadProviderOAuth(providerId);
+  if (!oauth) throw new Error(`No OAuth handler for ${providerId}. Sign in again from onboarding.`);
+  const auth = await oauth.toAuth(credential);
+  if (!auth.apiKey) {
+    throw new Error("Subscription sign-in did not produce a usable token. Sign in again.");
+  }
+  return auth.apiKey;
+}
+
 let cachedProviderCatalog: ReturnType<typeof builtinModels> | undefined;
 
 function providerCatalog() {
@@ -257,11 +288,10 @@ export async function resolveModelAuth(
     credential = await oauth.refresh(credential, opts?.signal ?? new AbortController().signal);
     await opts?.persist?.(serializeModelSecret({ kind: "oauth", credential }));
   }
-  const auth = await oauth.toAuth(credential);
-  if (!auth.apiKey) {
-    throw new Error("Subscription sign-in did not produce a usable token. Sign in again.");
-  }
-  return { secret: { kind: "oauth", credential }, apiKey: auth.apiKey };
+  return {
+    secret: { kind: "oauth", credential },
+    apiKey: await resolveOAuthModelAuth(provider, credential, oauth),
+  };
 }
 
 export async function resolveModelApiKey(
@@ -396,11 +426,20 @@ export class PiOAuthLogins {
         });
 
       if (input.signal?.aborted) abortFromRequest();
-      else input.signal?.addEventListener("abort", abortFromRequest, { once: true });
+      else
+        input.signal?.addEventListener("abort", abortFromRequest, {
+          once: true,
+        });
       void done.catch(() => undefined);
       this.pending.set(loginId, session);
       this.activeByScope.set(scope, session);
-      return { abort, abortFromRequest, signInStarted: signInStarted.promise, loginId, session };
+      return {
+        abort,
+        abortFromRequest,
+        signInStarted: signInStarted.promise,
+        loginId,
+        session,
+      };
     });
 
     const { abort, abortFromRequest, signInStarted, loginId, session } = prepared;
@@ -454,7 +493,10 @@ export class PiOAuthLogins {
   complete(loginId: string, actor: { userId: string; spaceId: string }): PiOAuthComplete {
     const session = this.pending.get(loginId);
     if (!session || session.userId !== actor.userId || session.spaceId !== actor.spaceId) {
-      return { status: "error", error: "Sign-in session not found. Start sign-in again." };
+      return {
+        status: "error",
+        error: "Sign-in session not found. Start sign-in again.",
+      };
     }
     if (session.error) {
       this.removeSession(session);
@@ -481,7 +523,10 @@ export class PiOAuthLogins {
   ): Promise<PiOAuthFinish<T>> {
     const session = this.pending.get(loginId);
     if (!session || session.userId !== actor.userId || session.spaceId !== actor.spaceId) {
-      return { status: "error", error: "Sign-in session not found. Start sign-in again." };
+      return {
+        status: "error",
+        error: "Sign-in session not found. Start sign-in again.",
+      };
     }
     if (session.state === "finalizing") return { status: "pending" };
     const result = this.complete(loginId, actor);
@@ -493,7 +538,10 @@ export class PiOAuthLogins {
     session.finishing = finishing.promise;
     session.state = "finalizing";
     try {
-      const value = await persist({ ...result, signal: new AbortController().signal });
+      const value = await persist({
+        ...result,
+        signal: new AbortController().signal,
+      });
       session.state = "consumed";
       this.removeSession(session);
       session.abort.abort();

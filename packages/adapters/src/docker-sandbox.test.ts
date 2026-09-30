@@ -23,6 +23,46 @@ describe("Docker sandbox", () => {
     vi.unstubAllGlobals();
   });
 
+  it("describes the Docker provider", () => {
+    expect(
+      new DockerSandboxProvider("http://supervisor.test", "test-token").describe(),
+    ).toMatchObject({ id: "docker", contractVersion: "1" });
+  });
+
+  it("reconnects to a live providerRef without creating a second Computer", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith("/computers/live-1")) return Response.json({ running: true });
+      if (init?.method === "POST") return Response.json({ id: "created-1" });
+      throw new Error("unexpected supervisor request");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    await expect(
+      provider.provision(
+        { botId: "owner", homePath: "/data/homes/owner", providerRef: "live-1" },
+        context,
+      ),
+    ).resolves.toMatchObject({ providerRef: "live-1", fresh: false });
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("creates a replacement only after its providerRef is absent or stopped", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith("/computers/gone-1")) return new Response("gone", { status: 404 });
+      if (init?.method === "POST") return Response.json({ id: "created-2" });
+      throw new Error("unexpected supervisor request");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    await expect(
+      provider.provision(
+        { botId: "owner", homePath: "/data/homes/owner", providerRef: "gone-1" },
+        context,
+      ),
+    ).resolves.toMatchObject({ providerRef: "created-2", fresh: true });
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  });
+
   it("sends the bounded timeout to the supervisor and preserves its honest result", async () => {
     const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
       Response.json({
@@ -63,6 +103,183 @@ describe("Docker sandbox", () => {
     });
   });
 
+  it.each([
+    { status: 400, code: "schema_rejected", expected: "schema_rejected" },
+    { status: 500, code: "private_files_failed", expected: "private_files_failed" },
+    { status: 500, code: "exec_failed", expected: "exec_failed" },
+    { status: 500, code: "private-env-value", expected: "unknown" },
+  ])(
+    "preserves only the safe native startup diagnostic $expected",
+    async ({ status, code, expected }) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          Response.json({ code, error: "private-env-value private-argv-value" }, { status }),
+        ),
+      );
+      const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+      await expect(
+        provider.startNativeProcess(
+          { id: "computer", botId: "bot", kind: "docker", providerRef: "computer" },
+          {
+            argv: ["claude", "private-argv-value"],
+            cwd: ".",
+            env: { FIXTURE_SECRET: "private-env-value" },
+          },
+          context,
+        ),
+      ).rejects.toMatchObject({
+        code: "harness_unavailable",
+        message: `native process unavailable (${status} ${expected})`,
+      });
+    },
+  );
+
+  it("hosts a bidirectional native process on the selected Computer supervisor route", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/native-processes")) return Response.json({ id: "native-1" });
+      if (url.endsWith("/read")) return Response.json({ lines: ['{"id":1}\n'] });
+      if (url.endsWith("/write")) return Response.json({ ok: true });
+      if (init?.method === "DELETE")
+        return Response.json({
+          status: "stopped",
+          terminal: {
+            code: 143,
+            signal: null,
+            exitSource: "wrapper_exit_file",
+            stderr: { present: false },
+          },
+        });
+      throw new Error(`unexpected route ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const native = await provider.startNativeProcess!(
+      { id: "computer", botId: "bot", kind: "docker", providerRef: "computer" },
+      { argv: ["codex", "app-server", "--listen", "stdio://"], cwd: "bots/bot", env: { CI: "1" } },
+      context,
+    );
+    await native.write('{"jsonrpc":"2.0"}\n');
+    expect((await native.stdout[Symbol.asyncIterator]().next()).value).toBe('{"id":1}\n');
+    await expect(native.stop()).resolves.toBe("stopped");
+    await expect(native.wait()).resolves.toMatchObject({
+      code: 143,
+      exitSource: "wrapper_exit_file",
+    });
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "http://supervisor.test/computers/computer/native-processes",
+      "http://supervisor.test/computers/computer/native-processes/native-1/write",
+      "http://supervisor.test/computers/computer/native-processes/native-1/read",
+      "http://supervisor.test/computers/computer/native-processes/native-1",
+    ]);
+  });
+
+  it("ends stdout and reports the real exit code after a native Computer process crashes", async () => {
+    let reads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/native-processes")) return Response.json({ id: "native-crash" });
+        if (url.endsWith("/read"))
+          return Response.json(
+            reads++ === 0
+              ? { lines: ['{"id":1}\n'], terminal: { code: 23, signal: null } }
+              : { lines: [], terminal: { code: 23, signal: null } },
+          );
+        if (init?.method === "DELETE") return Response.json({ status: "stopped" });
+        throw new Error(`unexpected route ${url}`);
+      }),
+    );
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const native = await provider.startNativeProcess!(
+      { id: "computer", botId: "bot", kind: "docker", providerRef: "computer" },
+      { argv: ["fixture"], cwd: "." },
+      context,
+    );
+    const lines: string[] = [];
+    for await (const line of native.stdout) lines.push(line);
+    expect(lines).toEqual(['{"id":1}\n']);
+    await expect(native.wait()).resolves.toEqual({ code: 23, signal: null });
+  });
+
+  it("surfaces a lost native transport as distinct from a process exit", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.endsWith("/native-processes")) return Response.json({ id: "native-lost" });
+        if (url.endsWith("/read"))
+          return Response.json({ lines: [], streamLost: true, terminal: null });
+        throw new Error(`unexpected route ${url}`);
+      }),
+    );
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const native = await provider.startNativeProcess!(
+      { id: "computer", botId: "bot", kind: "docker", providerRef: "computer" },
+      { argv: ["fixture"], cwd: "." },
+      context,
+    );
+
+    await expect(native.stdout[Symbol.asyncIterator]().next()).rejects.toMatchObject({
+      code: "native_process_stream_lost",
+    });
+  });
+
+  it("keeps cleanup failure observable to the native runtime", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/native-processes")) return Response.json({ id: "cleanup" });
+        if (init?.method === "DELETE")
+          return Response.json({ status: "stopped", cleanup: "failed" });
+        throw new Error(`unexpected route ${url}`);
+      }),
+    );
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const native = await provider.startNativeProcess!(
+      { id: "computer", botId: "bot", kind: "docker", providerRef: "computer" },
+      { argv: ["fixture"], cwd: "." },
+      context,
+    );
+    await expect(native.stop()).resolves.toBe("stop_unconfirmed");
+  });
+
+  it("purges only the explicitly declared private home, whatever the runtime env names", async () => {
+    const home = `/tmp/rakazo-tool-bot-${"a".repeat(64)}`;
+    const fetchMock = vi.fn(async (input: string | URL | Request, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/native-processes")) return Response.json({ id: "home" });
+      if (url.endsWith("/native-homes")) return Response.json({ cleanup: "removed" });
+      throw new Error(`unexpected route ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const computer = {
+      id: "computer",
+      botId: "bot",
+      kind: "docker",
+      providerRef: "computer",
+    } as const;
+    const withHome = await provider.startNativeProcess!(
+      computer,
+      { argv: ["fixture"], cwd: ".", privateHome: home, env: { TOOL_HOME: home } },
+      context,
+    );
+    await withHome.purgeHome!();
+    const purge = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/native-homes"));
+    expect(JSON.parse(String(purge?.[1]?.body))).toEqual({ home });
+
+    const envOnly = await provider.startNativeProcess!(
+      computer,
+      { argv: ["fixture"], cwd: ".", env: { CODEX_HOME: home, CLAUDE_CONFIG_DIR: home } },
+      context,
+    );
+    expect(envOnly.purgeHome).toBeUndefined();
+  });
+
   it("rejects a declared oversized success response without buffering it", async () => {
     const cancel = vi.fn();
     vi.stubGlobal(
@@ -94,6 +311,30 @@ describe("Docker sandbox", () => {
     await expect(
       provider.provision({ botId: "bot", homePath: "/tmp/bot" }, context),
     ).rejects.toThrow("Computer limit reached for space (max: 5)");
+  });
+
+  it("preserves absolute skill paths when listing and reading a mounted reference", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request) =>
+      String(_input).includes("mode=read") ? Response.json({ content: "" }) : Response.json([]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const computer = {
+      id: "computer",
+      botId: "bot",
+      kind: "docker" as const,
+      providerRef: "computer",
+    };
+
+    await provider.listFiles(computer, "/skills/user/example/references", context);
+    await provider.readFile(computer, "/skills/user/example/references/reference.md", context);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "path=%2Fskills%2Fuser%2Fexample%2Freferences",
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      "path=%2Fskills%2Fuser%2Fexample%2Freferences%2Freference.md",
+    );
   });
 
   it("stops a streamed file response at the caller-derived encoded limit", async () => {
