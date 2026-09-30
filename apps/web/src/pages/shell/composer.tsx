@@ -129,6 +129,9 @@ export const Composer = memo(function Composer({
   const isDictatingRef = useRef(false);
   isDictatingRef.current = isDictating;
   const [dictateSpeech, setDictateSpeech] = useState({ committed: "", interim: "" });
+  // Why the last dictation session ended on its own (mic denied, engine or
+  // transcription failure), shown in the composer's error banner.
+  const [dictationError, setDictationError] = useState<string | null>(null);
   const dictateSnapshotRef = useRef<{
     draft: string;
     mentions: ComposerMention[];
@@ -218,6 +221,7 @@ export const Composer = memo(function Composer({
         return;
       }
       if (dictateInsertingRef.current) return;
+      if (snapshot.error) setDictationError(snapshot.error);
       exitDictationAsForcedCancel();
     });
     return () => {
@@ -254,6 +258,7 @@ export const Composer = memo(function Composer({
     setMentionQuery(null);
     setMentionHighlightIndex(0);
     setSlashQuery(null);
+    setDictationError(null);
     dictateSnapshotRef.current = { draft, mentions: selectedMentions, skill: selectedSkill };
     setDictateSpeech({ committed: "", interim: "" });
     dictateLastSpeechRef.current = { transcript: "", interim: "" };
@@ -599,19 +604,20 @@ export const Composer = memo(function Composer({
         draggingFiles ? "rounded-card ring-2 ring-inset ring-ring" : ""
       }`}
     >
-      {sendError || runError ? (
+      {sendError || runError || dictationError ? (
         <div
           ref={runErrorRef}
           role="alert"
           data-testid="composer-error"
           className="mb-3 flex items-center gap-2 rounded-card border border-destructive/40 bg-destructive/10 px-4 py-2 text-meta text-destructive"
         >
-          <span className="min-w-0 flex-1">{sendError ?? runError}</span>
+          <span className="min-w-0 flex-1">{sendError ?? runError ?? dictationError}</span>
           <button
             type="button"
             aria-label={t`Dismiss error`}
             data-testid="composer-error-dismiss"
             onClick={() => {
+              setDictationError(null);
               onDismissError();
               window.requestAnimationFrame(() => textareaRef.current?.focus());
             }}

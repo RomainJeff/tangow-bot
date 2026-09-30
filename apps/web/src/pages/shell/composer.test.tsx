@@ -347,6 +347,14 @@ describe("Composer dictation forced-cancel paths", () => {
 
     expect(queryButton(container, "Dictate")).toBeTruthy();
     expect(draftTextarea(container).value).toBe("keep me");
+    expect(container.querySelector('[data-testid="composer-error"]')?.textContent).toBe(
+      "Dictation failed: network",
+    );
+
+    act(() => {
+      button(container, "Dismiss error").click();
+    });
+    expect(container.querySelector('[data-testid="composer-error"]')).toBeNull();
 
     unmount(root, container);
   });
