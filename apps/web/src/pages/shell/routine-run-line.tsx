@@ -272,7 +272,7 @@ export function RoutineRunLine({
               </DialogClose>
             </div>
             <div dir="auto">
-              <ChatMarkdown allowImages={false}>{truncateMarkdownForRender(digest)}</ChatMarkdown>
+              <ChatMarkdown allowImages={false}>{digest}</ChatMarkdown>
             </div>
             {handoff ? (
               <div className="flex justify-center border-t border-border pt-3">
