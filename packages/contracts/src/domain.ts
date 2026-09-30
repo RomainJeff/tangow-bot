@@ -1,5 +1,6 @@
 import * as z from "zod";
 import { ThreadMessageSchema } from "./events.js";
+import { HarnessChoiceSchema, NativeHarnessAvailabilitySchema } from "./harness-choice.js";
 import { AVATAR_SHAPE_COUNT, Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
 
@@ -74,6 +75,8 @@ export const BotSchema = z.object({
   modelProvider: z.string().nullable(),
   modelId: z.string().nullable(),
   thinkingLevel: ThinkingLevelSchema.nullable(),
+  /** The bot's saved harness; a null stored choice reads as the default harness. */
+  harness: HarnessChoiceSchema,
   teamChatAmbientEnabled: z.boolean(),
   teamChatRules: z.string(),
   webhookConfigured: z.boolean(),
@@ -293,6 +296,13 @@ export const BOT_NAME_MAX_LENGTH = 80;
 export const BOT_TITLE_MAX_LENGTH = 500;
 export const BOT_DESCRIPTION_MAX_LENGTH = 4000;
 export const BOT_INSTRUCTIONS_MAX_LENGTH = 20000;
+/**
+ * Ceiling for one chat message's text. Generous enough to paste a document, low enough that a
+ * single message cannot exceed a model's context window and wedge the thread: every later run
+ * replays the history, so an unbounded paste fails every turn with no way back from the UI.
+ * Larger content belongs in an attachment, which is capped and never inlined into the prompt.
+ */
+export const MESSAGE_TEXT_MAX_LENGTH = 100_000;
 
 export const CreateBotInput = z.object({
   name: z.string().trim().min(1).max(BOT_NAME_MAX_LENGTH),
@@ -338,6 +348,8 @@ export const UpdateBotInput = z
     modelProvider: z.string().trim().min(1).max(80).nullable().optional(),
     modelId: z.string().trim().min(1).max(200).nullable().optional(),
     thinkingLevel: ThinkingLevelSchema.nullable().optional(),
+    /** The harness this bot works with on every send, chosen once in its settings. */
+    harness: HarnessChoiceSchema.optional(),
     teamChatAmbientEnabled: z.boolean().optional(),
     teamChatRules: z.string().max(TEAM_CHAT_RULES_MAX_LENGTH).optional(),
   })
@@ -846,6 +858,8 @@ export const ComputerStatusSchema = z.object({
   homeRevision: z.string().nullable(),
   busyBotName: z.string().nullable(),
   canUpdate: z.boolean(),
+  /** Which native harnesses this bot can be set to; only the status query fills it. */
+  nativeHarnesses: NativeHarnessAvailabilitySchema.optional(),
 });
 export type ComputerStatus = z.infer<typeof ComputerStatusSchema>;
 
@@ -913,6 +927,9 @@ export const RunSchema = z.object({
     "webhook",
     "messaging",
     "cloud_agent",
+    "delegate",
+    "delegate_followup",
+    "work_return",
   ]),
   routineId: Id.nullable(),
   modelProvider: z.string().nullable(),
@@ -931,6 +948,23 @@ export const ThreadMessagePageSchema = z.object({
 });
 export type ThreadMessagePage = z.infer<typeof ThreadMessagePageSchema>;
 
+/**
+ * One specialist's unanswered ask, surfaced in its coordinator's thread snapshot. The
+ * provenance (which specialist, which work, delegated by whom) lets the coordinator's
+ * composer area render and settle the ask through `works.answer` without ever reaching the
+ * `work` thread itself.
+ */
+export const PendingWorkAskSchema = z.object({
+  workId: Id,
+  rootWorkId: Id,
+  depth: z.number().int().nonnegative(),
+  coordinator: z.object({ botId: Id, name: z.string() }),
+  specialist: z.object({ botId: Id, name: z.string() }),
+  runId: Id,
+  message: ThreadMessageSchema,
+});
+export type PendingWorkAsk = z.infer<typeof PendingWorkAskSchema>;
+
 export const ThreadSnapshotSchema = z.object({
   threadId: Id,
   cursor: z.number().int().min(-1),
@@ -942,6 +976,7 @@ export const ThreadSnapshotSchema = z.object({
   members: z.array(GroupMemberSchema).optional(),
   run: RunSchema.nullable(),
   activeRuns: z.array(RunSchema).optional(),
+  pendingWork: z.array(PendingWorkAskSchema).optional(),
   computer: ComputerStatusSchema.optional(),
 });
 export type ThreadSnapshot = z.infer<typeof ThreadSnapshotSchema>;

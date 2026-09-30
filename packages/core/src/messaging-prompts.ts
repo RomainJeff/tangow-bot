@@ -42,3 +42,11 @@ export function sanitizeMessagingLabel(value: string): string {
     .trim()
     .slice(0, 64);
 }
+
+/** Only persisted ambient bridge observations may finish without a public reply. */
+export function isAmbientTeamChatRun(
+  trigger: string,
+  externalMessage: { kind: string } | null | undefined,
+): boolean {
+  return trigger === "messaging" && externalMessage?.kind === "ambient";
+}

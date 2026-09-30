@@ -209,6 +209,7 @@ model Space {
   botSecrets BotSecret[]
   externalConversations       ExternalConversation[]
   agentSecrets                AgentSecret[]
+  scopedTasks                 ScopedTask[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -366,6 +367,7 @@ model Bot {
   thread            Thread?
   computerId        String?
   computer          Computer?         @relation(fields: [computerId], references: [id], onDelete: SetNull)
+  computerUsageGrants ComputerUsageGrant[]
   computerSwitching Boolean           @default(false)
   voiceId           String?
   autoSpeak         Boolean           @default(false)
@@ -375,8 +377,14 @@ model Bot {
   thinkingLevel     String?
   webhookSecretId   String?
   teamChatAmbientEnabled Boolean @default(false)
+  // T04:2 finding 6: contract columns, nullable and unused by this lot (T09 harness
+  // choice bookkeeping reads/writes them later).
+  harnessChoice     String?
+  choiceVersion     Int?
   teamChatRules          String  @default("")
   routines          Routine[]
+  scopedTasksAsCoordinator ScopedTask[] @relation("ScopedTaskCoordinator")
+  scopedTasksAsExecutor    ScopedTask[] @relation("ScopedTaskExecutor")
   scratchpadItems   ScratchpadItem[]
   taughtSkills      TaughtSkill[]
   memoryDocuments   MemoryDocument[]
@@ -477,6 +485,10 @@ model Thread {
   group                       ChatGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   externalConversationId      String?    @unique
   externalConversation        ExternalConversation? @relation(fields: [externalConversationId], references: [id], onDelete: Cascade)
+  // T04: direct|group|external|work. kind=work carries scopedTask.specialistThreadId
+  // @unique below and has botId/groupId/externalConversationId all null.
+  kind                        String     @default("direct")
+  scopedTask                  ScopedTask?
   userId                      String
   createdAt                   DateTime   @default(now())
   nextEventSeq                Int        @default(0)
@@ -575,6 +587,18 @@ model Run {
   trigger              String
   modelProvider        String?
   modelId              String?
+  harness              String?
+  executionTarget      String?
+  choiceVersion        Int?
+  // T04: delegation. scopedTaskId is nullable (only set for a specialist's runs).
+  scopedTaskId         String?
+  scopedTask           ScopedTask?      @relation(fields: [scopedTaskId], references: [id], onDelete: SetNull)
+  terminalOutcome      String?
+  terminalReturnDelivery String?
+  // T04:2 finding 6: contract columns, nullable and unused by this lot (T07 cancellation
+  // scheduling reads/writes them later).
+  notBefore            DateTime?
+  delegationCancelledAt DateTime?
   error                String?
   leaseOwner           String?
   leaseFence           Int              @default(0)
@@ -610,7 +634,52 @@ model Run {
   @@index([sourceMessageId])
   @@index([threadId, status, createdAt])
   @@index([routineId])
+  @@index([scopedTaskId])
   @@map("runs")
+}
+
+// T04: durable work identity a coordinator creates when delegating to a specialist
+// created from_profile. Minimal columns for the first green (delegate + inspect):
+// filiation/ceiling/idempotency are kept, backlog fields (cancellation, cleanup) are not.
+model ScopedTask {
+  id                  String    @id @default(cuid())
+  spaceId             String
+  space               Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId              String
+  coordinatorBotId    String
+  coordinatorBot      Bot       @relation("ScopedTaskCoordinator", fields: [coordinatorBotId], references: [id], onDelete: Cascade)
+  coordinatorThreadId String
+  executorBotId       String
+  executorBot         Bot       @relation("ScopedTaskExecutor", fields: [executorBotId], references: [id], onDelete: Cascade)
+  specialistThreadId  String    @unique
+  specialistThread    Thread    @relation(fields: [specialistThreadId], references: [id], onDelete: Cascade)
+  parentScopedTaskId  String?
+  rootScopedTaskId    String
+  depth               Int       @default(0)
+  profileBotId        String
+  brief               String
+  harness             String
+  executionTarget     String
+  choiceVersion       Int
+  // T04:4: the coordinator's own Computer at delegation time (glossary "Computer de
+  // mission"); the specialist gets a droit d'usage on it, never ownership. Nullable/SetNull
+  // so deleting the coordinator's Computer never blocks deleting the scoped task.
+  missionComputerId   String?
+  missionComputer     Computer? @relation("ScopedTaskMissionComputer", fields: [missionComputerId], references: [id], onDelete: SetNull)
+  delegationCeiling   Json
+  spawnKey            String
+  status              String    @default("created")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  runs                Run[]
+  nativeSession       NativeSession?
+  lifecycleEvents     LifecycleEvent[]
+
+  @@unique([spaceId, spawnKey])
+  @@index([coordinatorBotId, status])
+  @@index([parentScopedTaskId])
+  @@index([rootScopedTaskId, status])
+  @@map("scoped_tasks")
 }
 
 model SteeringMessage {
@@ -640,6 +709,11 @@ model Attempt {
   error      String?
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
+  // T04:2 finding 6: contract columns, nullable and unused by this lot (T03 native
+  // continuation/turn-authorization reads/writes them later).
+  nativeGeneration    Int?
+  executionPlanRef    String?
+  turnAuthorizationId String?
 
   @@index([runId])
   @@map("attempts")
@@ -941,13 +1015,29 @@ model Computer {
   screenUrl               String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
+  bootClaimStamp          DateTime?
   bots                    Bot[]
   executionLeases         ComputerExecutionLease[]
   maintenanceId           String?
   updates                 ComputerUpdate[]
+  missionScopedTasks      ScopedTask[]             @relation("ScopedTaskMissionComputer")
+  usageGrants             ComputerUsageGrant[]
 
   @@index([spaceId, scope])
   @@map("computers")
+}
+
+/// A specialist may use a mission Computer without owning it. Ownership remains Bot.computerId.
+model ComputerUsageGrant {
+  computerId String
+  botId      String
+  computer   Computer @relation(fields: [computerId], references: [id], onDelete: Cascade)
+  bot        Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([computerId, botId])
+  @@index([botId])
+  @@map("computer_usage_grants")
 }
 
 model ComputerExecutionLease {
@@ -1332,6 +1422,8 @@ model ExternalMessage {
   senderId               String
   senderName             String
   senderIsBot            Boolean               @default(false)
+  relaySenderId          String?
+  relayConversationKey   String?
   content                String
   replyThreadId          String?
   batchContext           String?
@@ -1379,4 +1471,61 @@ model IntegrationProviderConfig {
   updatedAt  DateTime @updatedAt
 
   @@map("integration_provider_configs")
+}
+
+// T02: current-state binding for a native session (one row per bot+thread).
+// scopedTaskId is nullable; T04 adds the FK to scoped_tasks.id.
+model NativeSession {
+  id                   String    @id @default(cuid())
+  botId                String
+  threadId             String
+  scopedTaskId         String?   @unique
+  scopedTask           ScopedTask? @relation(fields: [scopedTaskId], references: [id], onDelete: SetNull)
+  harness              String?
+  executionTarget      String?
+  choiceVersion        Int?
+  generation           Int       @default(0)
+  nativeRef            String?
+  state                String    @default("absent")
+  activeAttemptId      String?   @unique
+  activeRunId          String?
+  suspendedCallId      String?
+  deliveredCursor      String?
+  ackedCursor          String?
+  appliedCursor        String?
+  contextRevision      Int       @default(0)
+  processState         String    @default("none")
+  processRef           String?
+  confinedResidues     Json?
+  quiescenceCapability String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([botId, threadId])
+  @@map("native_sessions")
+}
+
+// T02: append-only lifecycle journal, never truncated by clear/rewind (I22).
+// scopedTaskId is nullable; T04 adds the FK to scoped_tasks.id.
+model LifecycleEvent {
+  id           String   @id @default(cuid())
+  botId        String
+  threadId     String
+  scopedTaskId String?
+  scopedTask   ScopedTask? @relation(fields: [scopedTaskId], references: [id], onDelete: SetNull)
+  kind         String
+  // T02:2 — set for kind = "mcp_call" only; reserves a replayed callId as a
+  // single operation under the same binding+thread (see migration for the
+  // partial unique index that makes this reservation atomic).
+  callId       String?
+  payload      Json?
+  createdAt    DateTime @default(now())
+
+  @@index([botId, threadId, createdAt])
+  @@index([scopedTaskId])
+  // The migration also adds a partial unique index on (botId, threadId, callId)
+  // where callId is not null, not representable here without a preview feature;
+  // this plain index only documents the lookup shape.
+  @@index([botId, threadId, callId])
+  @@map("lifecycle_events")
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_HISTORY_MESSAGE_MAX_CHARS,
   AttachmentValidationError,
   attachmentsForBot,
   blocksToAgentHistoryText,
@@ -12,7 +13,9 @@ import {
 
 describe("attachment helpers", () => {
   it("rejects unsupported mime types and empty payloads", () => {
-    expect(() => validateAttachmentMimeType("application/zip")).toThrow(AttachmentValidationError);
+    expect(() => validateAttachmentMimeType("application/octet-stream")).toThrow(
+      AttachmentValidationError,
+    );
     expect(() => decodeAttachmentBase64("")).toThrow(AttachmentValidationError);
     expect(() => decodeAttachmentBase64("aGVsbG8=trailing-junk")).toThrow(
       AttachmentValidationError,
@@ -52,7 +55,12 @@ describe("attachment helpers", () => {
     expect(inferAttachmentMimeType("notes.md", "")).toBe("text/markdown");
     expect(inferAttachmentMimeType("notes.markdown", "text/plain")).toBe("text/markdown");
     expect(inferAttachmentMimeType("notes.md", "application/pdf")).toBe("application/pdf");
-    expect(inferAttachmentMimeType("archive.zip", "")).toBeNull();
+    expect(inferAttachmentMimeType("archive.zip", "")).toBe("application/zip");
+    // Windows browsers report zip files with a vendor mime type; the extension wins.
+    expect(inferAttachmentMimeType("archive.zip", "application/x-zip-compressed")).toBe(
+      "application/zip",
+    );
+    expect(inferAttachmentMimeType("archive.7z", "")).toBeNull();
   });
 
   it("scopes current-turn images to user-triggered runs", () => {
@@ -210,5 +218,15 @@ describe("peer message history", () => {
         { kind: "bot_message_sent", toBotId: "b_2", toBotName: "Analyst", text: "chart it" },
       ]),
     ).toBe("[to Analyst] chart it");
+  });
+
+  it("truncates an oversized history message so the thread stays usable", () => {
+    const short = blocksToAgentHistoryText([{ kind: "text", text: "ok" }]);
+    expect(short).toBe("ok");
+    const huge = "x".repeat(AGENT_HISTORY_MESSAGE_MAX_CHARS + 500);
+    const rendered = blocksToAgentHistoryText([{ kind: "text", text: huge }]);
+    expect(rendered.startsWith("x".repeat(AGENT_HISTORY_MESSAGE_MAX_CHARS))).toBe(true);
+    expect(rendered).toContain("[truncated: 500 more characters in this message]");
+    expect(rendered.length).toBeLessThan(huge.length);
   });
 });

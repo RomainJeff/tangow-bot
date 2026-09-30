@@ -15,9 +15,8 @@ import {
   sanitizeJsonValue,
 } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
-import { cancelRunsInTransaction } from "./cancel-runs.js";
+import { stopRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient } from "./client.js";
-import { expireComputerExecutionLeases } from "./computers.js";
 import {
   assertRunCanWriteHistory,
   createThreadMessageInTransaction,
@@ -159,6 +158,9 @@ export interface PauseRunForInput {
 
 const CHOICE_ASK_CHECKPOINT_KIND = "choice_ask_v1";
 
+// Mirrors TERMINAL_WORK_STATUSES in @rakazo/adapters, which depends on this package, so
+// the constant cannot be imported here. Keep the two in step (review owns a shared home).
+const TERMINAL_WORK_STATUSES = ["closed", "cancelled"];
 /**
  * Appended to the prompt that resumes a run after the user answers an ask (from the card or the
  * composer). Without it the model tends to "go back up" the conversation and re-explain or
@@ -354,17 +356,10 @@ async function truncateThreadInTransaction(
   });
   const now = new Date();
   const runIds = activeRuns.map((run) => run.id);
-  await cancelRunsInTransaction(tx, activeRuns, now);
-  // Expire as tombstones so a still-open provider screen claim cannot reset fencing to 1.
-  await expireComputerExecutionLeases(tx, { runId: { in: runIds } });
-  await tx.computer.updateMany({
-    where: { executionRunId: { in: runIds } },
-    data: {
-      executionRunId: null,
-      executionBotId: null,
-      executionLeaseExpiresAt: null,
-    },
-  });
+  // Cancels the runs, then expires their execution lease and clears the Computer's
+  // execution pointer as tombstones, so a still-open provider screen claim cannot
+  // reset fencing to 1 (shared with delegated-work cancellation, cancel-runs.ts).
+  await stopRunsInTransaction(tx, activeRuns, now);
   await tx.message.deleteMany({
     where: { threadId: input.threadId, seq: { gte: input.fromSeq } },
   });
@@ -792,9 +787,19 @@ export async function answerRunInputInTransaction(
         threadId: input.threadId,
         status: "waiting_input",
       },
-      select: { botId: true, userId: true, checkpoint: true },
+      select: { botId: true, userId: true, checkpoint: true, scopedTaskId: true },
     });
     if (!run) return null;
+    // TOCTOU guard: the coordinator's work can be closed or cancelled after the ask was
+    // surfaced and before the answer arrives. Re-read the work in this same transaction —
+    // a terminal work answers nothing, exactly like a prompt that is no longer waiting.
+    if (run.scopedTaskId) {
+      const work = await tx.scopedTask.findUnique({
+        where: { id: run.scopedTaskId },
+        select: { status: true },
+      });
+      if (work && TERMINAL_WORK_STATUSES.includes(work.status)) return null;
+    }
     const message = await tx.message.findFirst({
       where: {
         id: input.messageId,
@@ -1253,11 +1258,39 @@ export async function pauseRunForInput(
       payload: {},
     });
     await tx.event.deleteMany({ where: { runId: input.runId, type: "thread.progress" } });
-    return { threadId: waitingEvent.threadId, seq: waitingEvent.seq };
+    // A delegated run also wakes its coordinator's thread with a work.waiting_input refresh
+    // event — never a run.waiting_input, which would promote the specialist run to the
+    // coordinator's primary run and block its composer.
+    let coordinator: { threadId: string; seq: number } | null = null;
+    const pausedRun = await tx.run.findUnique({
+      where: { id: input.runId },
+      select: { scopedTaskId: true },
+    });
+    if (pausedRun?.scopedTaskId) {
+      const work = await tx.scopedTask.findUnique({
+        where: { id: pausedRun.scopedTaskId },
+        select: { coordinatorThreadId: true },
+      });
+      if (work) {
+        const workEvent = await appendEventInTransaction(tx, {
+          spaceId: input.spaceId,
+          threadId: work.coordinatorThreadId,
+          botId: input.botId,
+          type: "work.waiting_input",
+          runId: input.runId,
+          payload: { workId: pausedRun.scopedTaskId, runId: input.runId },
+        });
+        coordinator = { threadId: workEvent.threadId, seq: workEvent.seq };
+      }
+    }
+    return { threadId: waitingEvent.threadId, seq: waitingEvent.seq, coordinator };
   });
 
   if (!committed) return false;
   await notifyRealtime(realtime, committed.threadId, committed.seq);
+  if (committed.coordinator) {
+    await notifyRealtime(realtime, committed.coordinator.threadId, committed.coordinator.seq);
+  }
   return true;
 }
 

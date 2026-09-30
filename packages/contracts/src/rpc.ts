@@ -39,6 +39,7 @@ import {
   MarketplaceUpdateCheckSchema,
   McpServerConfigInput,
   McpServerSchema,
+  MESSAGE_TEXT_MAX_LENGTH,
   MemoryDocumentSchema,
   MemoryScopeSchema,
   MeSchema,
@@ -81,6 +82,7 @@ import {
   VoiceStatusSchema,
 } from "./domain.js";
 import { ProductEventSchema } from "./events.js";
+import { NativeHarnessChoiceSchema } from "./harness-choice.js";
 import { Id, IsoDate } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
@@ -119,7 +121,7 @@ const structuredMentionTarget = z.discriminatedUnion("kind", [
 
 const threadSendInput = threadTarget
   .safeExtend({
-    text: z.string().optional(),
+    text: z.string().max(MESSAGE_TEXT_MAX_LENGTH).optional(),
     artifactIds: z.array(Id).max(ATTACHMENT_MAX_COUNT).optional(),
     /** Bare bot ids (legacy) or typed mention chips from the composer. */
     mentions: z
@@ -129,6 +131,9 @@ const threadSendInput = threadTarget
     replyToMessageId: Id.optional(),
     replyQuote: z.string().trim().min(1).max(REPLY_QUOTE_MAX_LENGTH).optional(),
     clientNonce: z.string().min(1).max(200).optional(),
+    /** Native execution is selected by a server-authorized Computer id, never a client command. */
+    harness: NativeHarnessChoiceSchema.optional(),
+    executionTarget: Id.optional(),
   })
   .superRefine((input, ctx) => {
     const text = input.text?.trim() ?? "";
@@ -138,6 +143,13 @@ const threadSendInput = threadTarget
         code: "custom",
         message: "Provide text or at least one attachment",
         path: ["text"],
+      });
+    }
+    if (Boolean(input.harness) !== Boolean(input.executionTarget)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Provide harness and executionTarget together",
+        path: ["harness"],
       });
     }
     if (input.replyQuote && !input.replyToMessageId) {
@@ -326,7 +338,7 @@ export const appContract = {
       .output(z.object({ ok: z.literal(true) })),
     stop: oc.input(threadTarget).output(z.object({ ok: z.literal(true) })),
     followUp: oc
-      .input(threadTarget.safeExtend({ text: z.string().min(1) }))
+      .input(threadTarget.safeExtend({ text: z.string().min(1).max(MESSAGE_TEXT_MAX_LENGTH) }))
       .output(z.object({ ok: z.literal(true) })),
     clear: oc.input(threadTarget).output(z.object({ ok: z.literal(true) })),
     /** Drops the target user message and everything after it, before resending an edit. */
@@ -344,6 +356,23 @@ export const appContract = {
       .output(z.object({ ok: z.literal(true) })),
     markRead: oc.input(threadTarget).output(z.object({ ok: z.literal(true) })),
     markUnread: oc.input(threadTarget).output(z.object({ ok: z.literal(true) })),
+  },
+  works: {
+    /**
+     * Answers a specialist's pending ask from the coordinator's own thread. The work thread
+     * itself stays unreachable: the server derives the specialist thread from the scoped
+     * task, so a client-supplied threadId never enters the picture.
+     */
+    answer: oc
+      .input(
+        z.object({
+          workId: Id,
+          runId: Id,
+          messageId: Id,
+          answer: z.string().min(1),
+        }),
+      )
+      .output(z.object({ ok: z.literal(true) })),
   },
   computer: {
     status: oc.input(botId).output(ComputerStatusSchema),
@@ -856,6 +885,17 @@ export const appContract = {
       .output(z.object({ ready: z.boolean(), utterances: z.array(z.string()) })),
   },
   externalConversations: {
+    history: oc
+      .input(
+        z.object({ externalConversationId: Id, before: z.number().int().nonnegative().optional() }),
+      )
+      .output(
+        ThreadMessagePageSchema.extend({
+          sourceUrl: z.string().nullable(),
+          authors: z.record(z.string(), z.string()),
+          latestStatus: z.string().nullable(),
+        }),
+      ),
     updatePolicy: oc
       .input(UpdateExternalConversationPolicyInput)
       .output(ExternalConversationPolicySchema),

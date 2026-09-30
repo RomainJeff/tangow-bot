@@ -1,5 +1,16 @@
 import { type MessageBlock, USER_MESSAGE_CLIENT_NONCE_PREFIX } from "@rakazo/contracts";
 
+/** Explicit final outcome selected by message_user, shared by every delivery surface. */
+export const USER_OUTCOME_CLIENT_NONCE_PREFIX = `${USER_MESSAGE_CLIENT_NONCE_PREFIX}outcome:`;
+
+export function userOutcomeClientNonce(runId: string): string {
+  return `${USER_OUTCOME_CLIENT_NONCE_PREFIX}${runId}`;
+}
+
+export function isUserOutcomeMessage(message: { clientNonce?: string | null }): boolean {
+  return Boolean(message.clientNonce?.startsWith(USER_OUTCOME_CLIENT_NONCE_PREFIX));
+}
+
 type PresentableMessage = {
   runId?: string;
   clientNonce?: string | null;
@@ -28,6 +39,12 @@ export type UserVisibleMessagesOptions = {
 export function isPeerReceiptBlocks(blocks: readonly MessageBlock[]): boolean {
   return blocks.some(
     (block) => block.kind === "bot_message_sent" || block.kind === "bot_message_received",
+  );
+}
+
+function isUserOutcomeArtifactDelivery(blocks: readonly MessageBlock[]): boolean {
+  return (
+    blocks.length > 0 && blocks.every((block) => block.kind === "file" || block.kind === "image")
   );
 }
 
@@ -86,6 +103,18 @@ export function userVisibleMessages<T extends PresentableMessage>(
 ): T[] {
   const peerRunIds = new Set(options.knownPeerRunIds ?? []);
   const includePeerReceipts = options.includePeerReceipts === true;
+  // A peer run may attach its deliverable before it calls message_user with the selected
+  // result. The selected outcome makes that run's file/image blocks an explicit user delivery;
+  // without it they remain internal. This is deliberately independent of list ordering because
+  // sidebar queries load newest messages first.
+  const peerRunIdsWithUserOutcome = new Set(
+    messages
+      .filter(
+        (message) =>
+          !!message.runId && peerRunIds.has(message.runId) && isUserOutcomeMessage(message),
+      )
+      .map((message) => message.runId!),
+  );
 
   return messages.filter((message) => {
     if (isPeerReceiptBlocks(message.blocks)) return includePeerReceipts;
@@ -96,6 +125,10 @@ export function userVisibleMessages<T extends PresentableMessage>(
     if (options.includeDelegatedReplyText === false) {
       return message.blocks.some((block) => block.kind === "ask");
     }
-    return isUserDirectedMessage(message);
+    return (
+      isUserDirectedMessage(message) ||
+      (peerRunIdsWithUserOutcome.has(message.runId!) &&
+        isUserOutcomeArtifactDelivery(message.blocks))
+    );
   });
 }

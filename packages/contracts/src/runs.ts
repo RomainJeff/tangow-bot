@@ -21,9 +21,17 @@ export const RunActivityRowSchema = z.object({
     "webhook",
     "messaging",
     "cloud_agent",
+    "delegate",
+    "delegate_followup",
+    "work_return",
   ]),
   notificationsEnabled: z.boolean(),
   promptSnippet: z.string(),
+  /** The delegated work this run carries, null for runs outside delegation. */
+  workId: Id.nullable(),
+  harness: z.string().nullable(),
+  executionTarget: z.string().nullable(),
+  choiceVersion: z.number().int().nullable(),
   updatedAt: z.string(),
 });
 export type RunActivityRow = z.infer<typeof RunActivityRowSchema>;

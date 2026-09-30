@@ -420,6 +420,92 @@ describe("pauseRunForInput", () => {
     expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 8 }));
   });
 
+  it("posts a work.waiting_input refresh event on the coordinator thread of a delegated run", async () => {
+    const fanout = new TestFanout();
+    const publish = vi.spyOn(fanout, "publish");
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
+      run: {
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({ scopedTaskId: "work-1" }),
+      },
+      scopedTask: {
+        findUnique: vi.fn().mockResolvedValue({ coordinatorThreadId: "thread-coordinator" }),
+      },
+      attempt: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      thread: {
+        update: vi
+          .fn()
+          .mockResolvedValueOnce({ nextMessageSeq: 4 })
+          .mockResolvedValueOnce({ nextEventSeq: 8 })
+          .mockResolvedValueOnce({ nextEventSeq: 9 })
+          .mockResolvedValueOnce({ nextEventSeq: 10 }),
+      },
+      message: { create: vi.fn().mockResolvedValue({ id: "message-1" }) },
+      event: {
+        create: vi.fn(
+          async ({
+            data,
+          }: {
+            data: { seq: number; type: string; threadId: string; payload: unknown };
+          }) => ({
+            ...event(data.seq),
+            type: data.type,
+            threadId: data.threadId,
+            payload: data.payload,
+          }),
+        ),
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+
+    await expect(
+      pauseRunForInput(
+        prisma,
+        {
+          spaceId: "workspace-1",
+          threadId: "thread-1",
+          botId: "bot-specialist",
+          runId: "run-1",
+          attemptId: "attempt-1",
+          leaseOwner: "worker-1",
+          leaseFence: 3,
+          blocks: [{ kind: "ask", text: "Allow this tool?" }],
+        },
+        fanout,
+      ),
+    ).resolves.toBe(true);
+
+    // The coordinator thread learns about the pending ask without receiving a
+    // run.waiting_input (which would promote the specialist run to the coordinator's
+    // primary run and block its composer). The payload carries ids only.
+    expect(tx.event.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          threadId: "thread-coordinator",
+          botId: "bot-specialist",
+          type: "work.waiting_input",
+          runId: "run-1",
+          payload: { workId: "work-1", runId: "run-1" },
+        }),
+      }),
+    );
+    expect(tx.scopedTask.findUnique).toHaveBeenCalledWith({
+      where: { id: "work-1" },
+      select: { coordinatorThreadId: true },
+    });
+    // Both the specialist thread and the coordinator thread are woken.
+    expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 8 }));
+    expect(publish).toHaveBeenCalledWith(
+      "thread:thread-coordinator",
+      JSON.stringify({ cursor: 9 }),
+    );
+  });
+
   it("stores offered choice actions on the run checkpoint for resume", async () => {
     const fanout = new TestFanout();
     const tx = {
@@ -1511,6 +1597,67 @@ describe("answerRunInput", () => {
 
     expect(tx.run.updateMany).not.toHaveBeenCalled();
     expect(tx.actionApprovalRule.upsert).not.toHaveBeenCalled();
+  });
+
+  it("does not answer a delegated run whose scoped task is already terminal", async () => {
+    // TOCTOU: the work can be closed (or cancelled) between the coordinator seeing the
+    // pending ask and the answer arriving. The re-read happens inside the same transaction
+    // as the answer, and a terminal work yields the same outcome as a prompt that is no
+    // longer waiting (a CONFLICT at the API layer) with no mutation at all.
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
+      message: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "message-1",
+          blocks: [
+            {
+              kind: "ask",
+              approvalEffectId: "effect-1",
+              text: "Review before writing",
+              status: "pending",
+              actions: [
+                { id: "allow", label: "Allow once" },
+                { id: "deny", label: "Deny" },
+              ],
+            },
+          ],
+        }),
+        update: vi.fn(),
+      },
+      run: {
+        findFirst: vi.fn().mockResolvedValue({
+          botId: "bot-1",
+          userId: "user-1",
+          scopedTaskId: "work-1",
+        }),
+        updateMany: vi.fn(),
+      },
+      scopedTask: { findUnique: vi.fn().mockResolvedValue({ status: "closed" }) },
+      externalEffect: { findFirst: vi.fn() },
+      task: { updateMany: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+
+    await expect(
+      answerRunInput(prisma, {
+        spaceId: "workspace-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        messageId: "message-1",
+        answeredByUserId: "user-1",
+        answer: "allow",
+      }),
+    ).resolves.toBe(false);
+
+    expect(tx.scopedTask.findUnique).toHaveBeenCalledWith({
+      where: { id: "work-1" },
+      select: { status: true },
+    });
+    expect(tx.run.updateMany).not.toHaveBeenCalled();
+    expect(tx.externalEffect.findFirst).not.toHaveBeenCalled();
+    expect(tx.message.update).not.toHaveBeenCalled();
   });
 
   it("does not queue a run when an approval card has no matching effect", async () => {

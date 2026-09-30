@@ -3,6 +3,7 @@ import {
   BOT_COLORS,
   type Bot,
   type BotSection,
+  isNativeHarness,
   type MessageBlock,
   type SpaceBot,
 } from "@rakazo/contracts";
@@ -56,6 +57,8 @@ function mapBot(
     modelProvider?: string | null;
     modelId?: string | null;
     thinkingLevel?: string | null;
+    harnessChoice?: string | null;
+    choiceVersion?: number | null;
     teamChatAmbientEnabled?: boolean;
     teamChatRules?: string;
     webhookSecretId?: string | null;
@@ -95,6 +98,7 @@ function mapBot(
     modelProvider: bot.modelProvider ?? null,
     modelId: bot.modelId ?? null,
     thinkingLevel: (bot.thinkingLevel as Bot["thinkingLevel"]) ?? null,
+    harness: isNativeHarness(bot.harnessChoice) ? bot.harnessChoice : "default",
     teamChatAmbientEnabled: bot.teamChatAmbientEnabled ?? false,
     teamChatRules: bot.teamChatRules ?? "",
     webhookConfigured: Boolean(bot.webhookSecretId),

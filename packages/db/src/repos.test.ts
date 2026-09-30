@@ -359,6 +359,34 @@ describe("createRepos.listBots", () => {
   });
 });
 
+describe("createRepos.listBots harness", () => {
+  it("reads a stored codex-native harnessChoice as the bot's harness", async () => {
+    const prisma = {
+      bot: {
+        findMany: vi.fn(async () => [
+          { ...baseBot, harnessChoice: "codex-native", choiceVersion: 2 },
+        ]),
+      },
+      run: { findMany: vi.fn(async () => []) },
+    };
+
+    await expect(createRepos(prisma as unknown as PrismaClient).listBots(actor)).resolves.toEqual([
+      expect.objectContaining({ harness: "codex-native" }),
+    ]);
+  });
+
+  it("reads a missing harnessChoice as the default harness", async () => {
+    const prisma = {
+      bot: { findMany: vi.fn(async () => [{ ...baseBot, harnessChoice: null }]) },
+      run: { findMany: vi.fn(async () => []) },
+    };
+
+    await expect(createRepos(prisma as unknown as PrismaClient).listBots(actor)).resolves.toEqual([
+      expect.objectContaining({ harness: "default" }),
+    ]);
+  });
+});
+
 describe("createRepos.listSpaceBotsForSpaces", () => {
   it("loads and maps only the compact cross-space sidebar fields", async () => {
     const findMany = vi.fn(async (_query: { where: unknown; select: Record<string, unknown> }) => [

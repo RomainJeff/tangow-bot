@@ -35,9 +35,28 @@ describe("bot message text", () => {
 });
 
 describe("bot message silence", () => {
-  it("surfaces an FYI when it replies to a delegated request", () => {
-    expect(botMessageAllowsSilence("fyi", true)).toBe(false);
-    expect(botMessageAllowsSilence("fyi")).toBe(true);
+  it.each(["fyi", "status", "result"] as const)(
+    "allows private processing of %s, including replies",
+    (intent) => {
+      expect(botMessageAllowsSilence(intent)).toBe(true);
+      expect(botMessageAllowsSilence(intent, true)).toBe(true);
+    },
+  );
+  it.each(["request", "question", undefined] as const)(
+    "still requires handling of %s",
+    (intent) => {
+      expect(botMessageAllowsSilence(intent)).toBe(false);
+    },
+  );
+  it("does not force a coordinator to relay every peer update", () => {
+    const prompt = buildBotMessageWakePrompt({
+      from: bots[0]!,
+      text: "Stage complete; review pending.",
+      intent: "result",
+    });
+    expect(prompt).toContain("not necessarily completion of the user's whole request");
+    expect(prompt).toContain("end silently");
+    expect(prompt).not.toContain("Relay it to the user now");
   });
 });
 
@@ -368,24 +387,24 @@ describe("inbound wake prompt", () => {
     expect(prompt).toContain("untrusted peer content");
   });
 
-  it("requires a received result to be surfaced to the user", () => {
+  it("reports useful delegated outcomes according to user preferences", () => {
     const resultPrompt = buildBotMessageWakePrompt({
       from: { id: "b_1", name: "Researcher" },
       text: "The answer is 42.",
       intent: "result",
     });
-    expect(resultPrompt).toContain("Relay it to the user now");
-    expect(resultPrompt).toContain("include the actual substance");
-    expect(resultPrompt).not.toContain("staying silent is fine");
+    expect(resultPrompt).toContain("Follow the user's notification preferences");
+    expect(resultPrompt).toContain("explain the useful result and link to details");
+    expect(resultPrompt).toContain("end silently");
   });
 
-  it("keeps silence available only for an explicit FYI", () => {
+  it("keeps FYI processing internal unless the user needs an outcome or decision", () => {
     const fyiPrompt = buildBotMessageWakePrompt({
       from: { id: "b_1", name: "Researcher" },
       text: "No action needed.",
       intent: "fyi",
     });
-    expect(fyiPrompt).toContain("staying silent is fine");
+    expect(fyiPrompt).toContain("end silently");
   });
 
   it("tells a solicited bot to stay out of the user's chat unless it is stuck", () => {

@@ -7,11 +7,12 @@ function message(
   runId: string,
   blocks: ThreadMessage["blocks"],
   clientNonce?: string,
+  seq = 1,
 ): ThreadMessage {
   return {
     id,
     threadId: "thread-1",
-    seq: 1,
+    seq,
     role: "bot",
     blocks,
     runId,
@@ -102,7 +103,303 @@ describe("user-visible messages", () => {
     ).toEqual(["hello", "question"]);
   });
 
-  it("hides a delegated run named by the caller even with no receipt in the page", () => {
+  it("hides a long peer final while keeping the explicit user outcome", () => {
+    const messages = [
+      message("received", "run-peer", [
+        { kind: "bot_message_received", fromBotId: "c", fromBotName: "Coder", text: "Done." },
+      ]),
+      message("internal-final", "run-peer", [{ kind: "text", text: "x".repeat(700) }]),
+      message(
+        "outcome",
+        "run-peer",
+        [{ kind: "text", text: "The requested work is complete: see the attached brief." }],
+        "user-message:outcome:1:z:z",
+      ),
+    ];
+
+    expect(
+      userVisibleMessages(messages, {
+        knownPeerRunIds: ["run-peer", "wake-first", "wake-latest"],
+      }).map((item) => item.id),
+    ).toEqual(["outcome"]);
+  });
+
+  it("keeps file and image deliveries from a delegated run with a user outcome, without its narration", () => {
+    const messages = [
+      message(
+        "received",
+        "run-peer",
+        [
+          {
+            kind: "bot_message_received",
+            fromBotId: "c",
+            fromBotName: "Coder",
+            text: "Deliver it.",
+          },
+        ],
+        undefined,
+        19,
+      ),
+      message(
+        "file",
+        "run-peer",
+        [
+          {
+            kind: "file",
+            artifactId: "artifact-1",
+            mimeType: "application/pdf",
+            name: "specialist-delivery.pdf",
+            size: 123,
+          },
+        ],
+        undefined,
+        20,
+      ),
+      message(
+        "image",
+        "run-peer",
+        [
+          {
+            kind: "image",
+            artifactId: "artifact-2",
+            mimeType: "image/png",
+            name: "specialist-visual.png",
+          },
+        ],
+        undefined,
+        21,
+      ),
+      message(
+        "mixed",
+        "run-peer",
+        [
+          {
+            kind: "file",
+            artifactId: "artifact-mixed",
+            mimeType: "application/pdf",
+            name: "do-not-show-with-narration.pdf",
+            size: 123,
+          },
+          { kind: "text", text: "internal narration" },
+        ],
+        undefined,
+        22,
+      ),
+      message(
+        "narration",
+        "run-peer",
+        [{ kind: "text", text: "internal narration" }],
+        undefined,
+        23,
+      ),
+      message(
+        "outcome",
+        "run-peer",
+        [{ kind: "text", text: "The specialist delivery is ready." }],
+        "user-message:outcome:run-peer",
+        24,
+      ),
+      message("answer", "run-user", [{ kind: "text", text: "Visible answer" }], undefined, 25),
+    ];
+
+    expect(
+      userVisibleMessages(messages, {
+        knownPeerRunIds: ["run-peer", "wake-first", "wake-latest"],
+      }).map((item) => item.id),
+    ).toEqual(["file", "image", "outcome", "answer"]);
+  });
+
+  it("shows attachments only for the wake selected by a mission outcome", () => {
+    const messages = [
+      message(
+        "received-first",
+        "wake-first",
+        [
+          {
+            kind: "bot_message_received",
+            fromBotId: "child",
+            fromBotName: "Child",
+            text: "First.",
+          },
+        ],
+        undefined,
+        30,
+      ),
+      message(
+        "first-file",
+        "wake-first",
+        [
+          {
+            kind: "file",
+            artifactId: "first-artifact",
+            mimeType: "application/pdf",
+            name: "first.pdf",
+            size: 1,
+          },
+        ],
+        undefined,
+        31,
+      ),
+      message(
+        "received-latest",
+        "wake-latest",
+        [
+          {
+            kind: "bot_message_received",
+            fromBotId: "child",
+            fromBotName: "Child",
+            text: "Latest.",
+          },
+        ],
+        undefined,
+        32,
+      ),
+      message(
+        "latest-file",
+        "wake-latest",
+        [
+          {
+            kind: "file",
+            artifactId: "latest-artifact",
+            mimeType: "application/pdf",
+            name: "latest.pdf",
+            size: 1,
+          },
+        ],
+        undefined,
+        33,
+      ),
+      message(
+        "mission-outcome",
+        "wake-latest",
+        [{ kind: "text", text: "The consolidated result is ready." }],
+        "user-message:outcome:mission:return-latest",
+        34,
+      ),
+    ];
+
+    expect(
+      userVisibleMessages(messages, {
+        knownPeerRunIds: ["run-peer", "wake-first", "wake-latest"],
+      }).map((item) => item.id),
+    ).toEqual(["latest-file", "mission-outcome"]);
+  });
+
+  it("hides internal peer files and images when the run has no user outcome", () => {
+    const messages = [
+      message(
+        "received",
+        "run-peer",
+        [
+          {
+            kind: "bot_message_received",
+            fromBotId: "c",
+            fromBotName: "Coder",
+            text: "Investigate.",
+          },
+        ],
+        undefined,
+        19,
+      ),
+      message(
+        "narration",
+        "run-peer",
+        [{ kind: "text", text: "internal narration" }],
+        undefined,
+        20,
+      ),
+      message(
+        "file",
+        "run-peer",
+        [
+          {
+            kind: "file",
+            artifactId: "artifact-internal",
+            mimeType: "application/pdf",
+            name: "working-notes.pdf",
+            size: 123,
+          },
+        ],
+        undefined,
+        21,
+      ),
+      message(
+        "image",
+        "run-peer",
+        [
+          {
+            kind: "image",
+            artifactId: "artifact-internal-image",
+            mimeType: "image/png",
+            name: "working-visual.png",
+          },
+        ],
+        undefined,
+        22,
+      ),
+      message("answer", "run-user", [{ kind: "text", text: "Visible answer" }], undefined, 23),
+    ];
+
+    expect(
+      userVisibleMessages(messages, {
+        knownPeerRunIds: ["run-peer", "wake-first", "wake-latest"],
+      }).map((item) => item.id),
+    ).toEqual(["answer"]);
+  });
+
+  it("keeps sidebar previews silent while known peer runs still reveal an explicit file in chat", () => {
+    const messages = [
+      message(
+        "file",
+        "run-peer",
+        [
+          {
+            kind: "file",
+            artifactId: "artifact-1",
+            mimeType: "application/pdf",
+            name: "specialist-delivery.pdf",
+            size: 123,
+          },
+        ],
+        undefined,
+        20,
+      ),
+      message(
+        "image",
+        "run-peer",
+        [
+          {
+            kind: "image",
+            artifactId: "artifact-2",
+            mimeType: "image/png",
+            name: "specialist-visual.png",
+          },
+        ],
+        undefined,
+        21,
+      ),
+      message(
+        "outcome",
+        "run-peer",
+        [{ kind: "text", text: "The specialist delivery is ready." }],
+        "user-message:outcome:run-peer",
+        22,
+      ),
+      message("answer", "run-user", [{ kind: "text", text: "Visible answer" }], undefined, 23),
+    ];
+
+    expect(
+      userVisibleMessages(messages, { knownPeerRunIds: ["run-peer"] }).map((item) => item.id),
+    ).toEqual(["file", "image", "outcome", "answer"]);
+    expect(
+      userVisibleMessages(messages, {
+        knownPeerRunIds: ["run-peer"],
+        includeDelegatedReplyText: false,
+      }).map((item) => item.id),
+    ).toEqual(["answer"]);
+  });
+
+  it("uses authoritative peer run ids when the receipt is outside the loaded page", () => {
     const messages = [
       message("activity", "run-peer", [
         { kind: "steps", steps: [{ label: "Echoed peer reply", count: 1 }] },

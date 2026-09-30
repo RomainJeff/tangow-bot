@@ -313,6 +313,10 @@ describe("contracts", () => {
         trigger: run.trigger,
         notificationsEnabled: true,
         promptSnippet: "Review the report",
+        harness: null,
+        executionTarget: null,
+        choiceVersion: null,
+        workId: null,
         updatedAt: "2026-08-26T00:00:01.000Z",
       }).success,
     ).toBe(true);

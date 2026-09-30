@@ -253,7 +253,7 @@ export function createGroupRepos(prisma: PrismaClient) {
 
     async createGroup(
       actor: Actor,
-      input: { name: string; description?: string; botIds: string[] },
+      input: { id?: string; name: string; description?: string; botIds: string[] },
     ): Promise<Group> {
       const members = await assertOwnedBots(prisma, actor, input.botIds);
       const created = await prisma.$transaction(async (tx) => {
@@ -263,6 +263,7 @@ export function createGroupRepos(prisma: PrismaClient) {
         });
         const group = await tx.chatGroup.create({
           data: {
+            id: input.id,
             spaceId: actor.spaceId,
             userId: actor.userId,
             name: input.name.trim(),

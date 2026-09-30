@@ -23,6 +23,8 @@ export const ProductEventType = z.enum([
   "run.completed",
   "run.failed",
   "run.cancelled",
+  /** A delegated work's specialist run paused for input; posted on the coordinator thread. */
+  "work.waiting_input",
   "computer.status",
   "computer.takeover.requested",
   "computer.takeover.granted",
@@ -303,6 +305,8 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     toBotName: z.string(),
     text: z.string(),
     intent: BotMessageIntent.optional(),
+    /** Server-derived protocol role; peer traffic never becomes a work return. */
+    purpose: z.enum(["peer_message", "delegation_input", "work_return"]).optional(),
   }),
   z.object({
     /** Delivered into the receiving bot's own chat as the prompt that woke it. */
@@ -311,6 +315,12 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     fromBotName: z.string(),
     text: z.string(),
     intent: BotMessageIntent.optional(),
+    /** Server-derived protocol role; peer traffic never becomes a work return. */
+    purpose: z.enum(["peer_message", "delegation_input", "work_return"]).optional(),
+    /** Run that sent this delivery; permits terminal outcome convergence. */
+    fromRunId: Id.optional(),
+    /** Set only for the runtime's automatic terminal outcome return. */
+    terminalOutcome: z.boolean().optional(),
     /** Sender-thread echo this delivery answers, when applicable. */
     returnToMessageId: Id.optional(),
     /** Links in a bot-started chain; absent when a person started it. */
@@ -350,6 +360,12 @@ export const ProductEventSchema = z.object({
   payload: z.record(z.string(), z.unknown()),
 });
 export type ProductEvent = z.infer<typeof ProductEventSchema>;
+
+/** Payload of `work.waiting_input`: which delegated work paused, and which run awaits the
+ * answer. Ids only — the ask itself stays on the work thread and reaches the coordinator's
+ * web client through the snapshot's pendingWork, never through this event. */
+export const WorkWaitingInputPayloadSchema = z.object({ workId: Id, runId: Id });
+export type WorkWaitingInputPayload = z.infer<typeof WorkWaitingInputPayloadSchema>;
 
 /** clientNonce prefix for mid-turn narration messages the executor publishes on its own
  * initiative. Single source of truth (adapters user-progress imports this). */

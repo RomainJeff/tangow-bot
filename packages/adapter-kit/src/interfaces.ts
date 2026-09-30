@@ -44,9 +44,13 @@ import type {
   MemorySearchResult,
   MemorySnapshot,
   MessagingInboundEvent,
+  MessagingInboundMessage,
   MessagingPlatformDescriptor,
   MessagingSendRequest,
   MessagingSendResult,
+  MessagingThreadContext,
+  NativeProcess,
+  NativeProcessRequest,
   NotificationMessage,
   PageBrowserCommand,
   PageBrowserResult,
@@ -104,6 +108,20 @@ export interface SandboxProvider {
     request: CommandRequest,
     context: AdapterContext,
   ): AsyncIterable<ProcessEvent>;
+  /**
+   * Optional bidirectional process capability. Absence means native harnesses are unavailable
+   * for this provider; callers must reject rather than run on the worker.
+   */
+  startNativeProcess?(
+    computer: ComputerRef,
+    request: NativeProcessRequest,
+    context: AdapterContext,
+  ): Promise<NativeProcess>;
+  reconfirmNativeProcess?(
+    computer: ComputerRef,
+    processRef: string,
+    context: AdapterContext,
+  ): Promise<"stopped" | "stop_unconfirmed">;
   inspectBackgroundWork?(
     computer: ComputerRef,
     markerId: string,
@@ -236,6 +254,8 @@ export interface AgentRuntime {
     context?: Partial<AdapterContext>,
   ): AsyncIterable<AgentRuntimeEvent>;
   abort(runId: string): Promise<void>;
+  /** Best-effort deletion of native state after its durable session was closed or expired. */
+  purgeNativeHome?(runId: string): Promise<void>;
 }
 
 export interface ModelProvider {
@@ -345,6 +365,11 @@ export interface MessagingSurface {
     request: MessagingSendRequest,
     context: AdapterContext,
   ): Promise<MessagingSendResult>;
+  /** Read a bounded thread window only after the caller authorizes the sender. */
+  readThreadContext?(
+    event: MessagingInboundMessage,
+    context: AdapterContext,
+  ): Promise<MessagingThreadContext>;
   /** Resolve (or create) the 1:1 thread for a provider address. */
   openDirectThread(provider: string, address: string, context: AdapterContext): Promise<string>;
   /**

@@ -1,4 +1,9 @@
-import type { AskQuestion, ConnectionCatalogItem, SandboxKind } from "@rakazo/contracts";
+import type {
+  AskQuestion,
+  ConnectionCatalogItem,
+  NativeHarnessChoice,
+  SandboxKind,
+} from "@rakazo/contracts";
 
 export interface AdapterContext {
   operationId: string;
@@ -74,6 +79,46 @@ export type ProcessEvent =
   | { type: "stdout"; data: string }
   | { type: "stderr"; data: string }
   | { type: "exit"; code: number };
+
+/** A long-lived, bidirectional process hosted by the selected Computer provider. */
+export type NativeProcessTerminal = {
+  code: number | null;
+  signal?: string | null;
+  /** How the terminal code was obtained; never inferred from process output. */
+  exitSource?:
+    | "wrapper_exit_file"
+    | "unknown_after_kill"
+    | "unknown_after_missing_wrapper_exit"
+    | "unknown";
+  /** Strictly bounded, classified stderr observation; never contains stderr text. */
+  stderr?: { present: boolean; category?: "authentication" | "network" | "sandbox" | "unknown" };
+};
+
+export interface NativeProcess {
+  /** Opaque supervisor session id, durable only for confirmed-stop recovery. */
+  id?: string;
+  write(data: string): Promise<void>;
+  stdout: AsyncIterable<string>;
+  stderr: AsyncIterable<string>;
+  /** Resolves only after stdout/stderr have drained and the provider knows the terminal outcome. */
+  wait(): Promise<NativeProcessTerminal>;
+  /** Provider performs a bounded TERM then KILL cleanup and reports whether it was confirmed. */
+  stop(): Promise<"stopped" | "stop_unconfirmed">;
+  /** Removes the private native home only after the durable session is terminal. */
+  purgeHome?(): Promise<void>;
+}
+
+export interface NativeProcessRequest {
+  argv: string[];
+  /** A workspace path inside the Computer, never a worker filesystem path. */
+  cwd: string;
+  /** Server-built allowlist only; callers must never forward user or provider secrets. */
+  env?: Record<string, string>;
+  /** Per-process private home the supervisor creates (0700) and purges; the runtime also points its own env at it. */
+  privateHome?: string;
+  /** Private files created by the supervisor below the per-process private home. */
+  files?: Array<{ path: "config.toml" | "mcp-config.json" | "system-prompt.md"; content: string }>;
+}
 
 export interface ScreenRequest {
   view: "stream" | "snapshot";
@@ -373,6 +418,10 @@ export interface AgentRunModel {
   oauth?: {
     credential: AgentModelOAuthCredential;
     persist?: (credential: AgentModelOAuthCredential) => Promise<void>;
+    refresh?: (
+      credential: AgentModelOAuthCredential,
+      signal: AbortSignal,
+    ) => Promise<AgentModelOAuthCredential>;
   };
 }
 
@@ -424,6 +473,12 @@ export interface AgentRunRequest {
    * When set, skip synthetic empty-turn fallbacks.
    */
   allowSilentEmpty?: boolean;
+  /**
+   * A scheduled routine may finish silently after a completed tool step when
+   * it has no useful result. This is intentionally separate from
+   * allowSilentEmpty, which is also used by messaging channel wakes.
+   */
+  allowSilentEmptyAfterTool?: boolean;
   /** Contextual fallback when a non-silent run produces no written response. */
   emptyResponseText?: string;
   executeTool?: (
@@ -438,8 +493,62 @@ export interface AgentRunRequest {
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
+  /** Native harness execution is explicit and never inferred from the model. */
+  execution?: NativeExecution;
 }
 
+export type RuntimeChoice = {
+  harness: "pi" | NativeHarnessChoice;
+  targetId: string;
+};
+
+/** Opaque public binding, never a vendor session identifier. */
+export type NativeRef = { bindingId: string; generation: number };
+
+export type Authority = {
+  runId: string;
+  attemptId: string;
+  fence: number;
+  policyRevision: number;
+};
+
+export type Continuity =
+  /** The durable public binding is assigned before the first native process starts. */
+  | { mode: "new"; ref?: NativeRef }
+  | { mode: "resume"; ref: NativeRef; inputId: string; nativeRef?: string }
+  | {
+      mode: "reconstruct";
+      previous: NativeRef;
+      reason: string;
+      inputId: string;
+      nativeRef?: string;
+      processRef?: string;
+    };
+
+export type NativeExecution = {
+  choice: RuntimeChoice & { harness: NativeHarnessChoice };
+  authority: Authority;
+  continuity: Continuity;
+  computerId: string;
+  contextRevision: number;
+};
+
+export type NativeEvent =
+  | {
+      type: "session";
+      ref: NativeRef;
+      continuity: "new" | "resumed" | "reconstructed";
+      nativeRef?: string;
+      processRef?: string;
+    }
+  | { type: "reference"; ref: NativeRef; nativeRef: string }
+  | { type: "parked"; ref: NativeRef; processState: "stopped" }
+  | { type: "closed"; ref: NativeRef; processState: "stopped" | "stop_unconfirmed" }
+  | {
+      type: "error";
+      ref: NativeRef;
+      reason: "turn_outcome_uncertain" | "resume_rollout_missing";
+    };
 /**
  * Handed to one tool call by a runtime that traces the run, so a model call the
  * tool makes itself is recorded nested under that call.
@@ -486,7 +595,12 @@ export type AgentRuntimeEvent =
       /** Provider-generated tool status rather than assistant-authored narration. */
       activity?: true;
     }
-  | { type: "tool"; name: string; args: Record<string, unknown>; executionId: string }
+  | {
+      type: "tool";
+      name: string;
+      args: Record<string, unknown>;
+      executionId: string;
+    }
   | {
       type: "ask";
       text: string;
@@ -506,6 +620,7 @@ export type AgentRuntimeEvent =
       cacheWriteTokens?: number;
     }
   | { type: "checkpoint"; blob: string }
+  | { type: "native"; event: NativeEvent }
   | {
       type: "subagent";
       agentId: string;
@@ -674,6 +789,8 @@ export interface MessagingInboundMessage {
   workspaceId?: string;
   /** Stable conversation key within the workspace (channel id, DM key, …). */
   conversationKey?: string;
+  /** Provider room shape when it is supplied by the inbound event. */
+  conversationType?: "im" | "channel" | "group" | "mpim";
   /** How this message should engage the team-chat bot. */
   kind?: TeamChatMessageKind;
   /** Provider thread id for in-channel replies (Slack thread_ts); null for channel root. */
@@ -682,6 +799,11 @@ export interface MessagingInboundMessage {
   senderIsBot?: boolean;
   /** Display names for room participants when the platform reports them. */
   participantNames?: string[];
+}
+
+export interface MessagingThreadContext {
+  messages: Array<{ handle: string; senderName: string; content: string }>;
+  truncated: boolean;
 }
 
 /** Provider-neutral inbound team/external room message for TeamChatBridge. */
@@ -699,7 +821,13 @@ export interface TeamChatInboundMessage {
   senderId: string;
   senderName: string;
   senderIsBot?: boolean;
+  /** Authenticated internal relay that observed this message; the sender remains the original author. */
+  relaySenderId?: string;
+  /** Exact source room key used only to authorize an internal relay. */
+  relayConversationKey?: string;
   content: string;
+  /** Bounded, explicitly untrusted context from the referenced thread. */
+  threadContext?: string;
 }
 
 export interface TeamChatSendRequest {

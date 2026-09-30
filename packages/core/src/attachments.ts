@@ -133,13 +133,24 @@ function toolStepsToHistoryText(steps: Extract<MessageBlock, { kind: "steps" }>[
 }
 
 /**
- * Render stored blocks as the text a later turn reads.
- *
- * `botNames` maps a bot id to its display name. Callers that know the roster
- * (a group thread) pass it so a handoff reads as people rather than as two
- * opaque identifiers; everyone else keeps the ids.
+ * Ceiling for one history message once rendered for the model. A thread that already holds an
+ * oversized message (pasted before the send cap, or a run that logged very large tool output)
+ * would otherwise fail every subsequent turn on context length, with no way to recover from the
+ * UI. Truncating on read keeps such a thread usable and keeps compaction itself affordable.
  */
+export const AGENT_HISTORY_MESSAGE_MAX_CHARS = 20_000;
+
 export function blocksToAgentHistoryText(
+  blocks: MessageBlock[],
+  botNames?: ReadonlyMap<string, string>,
+): string {
+  const rendered = renderAgentHistoryBlocks(blocks, botNames);
+  if (rendered.length <= AGENT_HISTORY_MESSAGE_MAX_CHARS) return rendered;
+  const dropped = rendered.length - AGENT_HISTORY_MESSAGE_MAX_CHARS;
+  return `${rendered.slice(0, AGENT_HISTORY_MESSAGE_MAX_CHARS)}\n[truncated: ${dropped} more characters in this message]`;
+}
+
+function renderAgentHistoryBlocks(
   blocks: MessageBlock[],
   botNames?: ReadonlyMap<string, string>,
 ): string {
@@ -186,6 +197,7 @@ const EXTENSION_MIME_TYPES: Record<string, AttachmentMimeType> = {
   ".markdown": "text/markdown",
   ".csv": "text/csv",
   ".json": "application/json",
+  ".zip": "application/zip",
 };
 
 const MIME_TYPE_EXTENSIONS: Record<AttachmentMimeType, string> = {
@@ -198,6 +210,7 @@ const MIME_TYPE_EXTENSIONS: Record<AttachmentMimeType, string> = {
   "text/markdown": ".md",
   "text/csv": ".csv",
   "application/json": ".json",
+  "application/zip": ".zip",
 };
 
 export function inferAttachmentMimeType(
