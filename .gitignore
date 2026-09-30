@@ -32,6 +32,8 @@ apps/mobile/ios
 packages/db/src/generated
 infra/sandboxes/supervisor/dist
 *.log
+.j3d2f-relay.log
+.j3*
 .vercel
 .cache
 artifacts
@@ -54,3 +56,6 @@ playwright-report-www
 # Local EAS build outputs
 apps/mobile/builds/
 *.ipa
+
+# Local orchestration scratch, never published
+meta-harness/

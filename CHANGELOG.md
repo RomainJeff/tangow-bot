@@ -62,12 +62,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **The mobile app now opens on a bot waking up, in the shape and color of your first pinned bot.** It replaces the static blue square on black: a sleepy bot opens its eyes, glances around and smiles while the app loads, then fades into your inbox. With no bot yet, it shows a plain monochrome placeholder instead.
+- **A bot can be set to work with Codex or Claude from its settings.** The Harness selector, Rakazo by default, sends every plain message to that bot through the chosen harness until you change it. Codex and Claude enable only when the bot has a Docker Computer and a connected ChatGPT or Claude Pro/Max subscription and otherwise name what is missing; a send that cannot use the chosen harness is refused rather than run elsewhere.
+- **Native Codex and Claude runs use the bot's Rakazo tools and continue their own session.** They call those tools under the same approvals and permissions, including for delegated specialists, and Claude edits files and runs commands in its Computer without asking. The next message resumes the previous native session, and a failure such as missing credit, sign-in or a tool connection stops the run with a readable explanation; self-hosting needs the [native MCP relay](docs/self-host-native-mcp.md).
 
 ### 2026-09-24
 
 #### Added
 
 - **iPhone notifications now show the bot's own avatar.** When a bot finishes, fails or needs you, the notification carries its shape and colour with the Rakazo icon as a small badge, the way messaging apps show a contact, instead of the bare app icon. It follows the organic avatar style; with the robot style the notification keeps the app icon.
+- **An approval a delegated specialist requests now appears in the coordinator's thread, with its provenance, and can be settled right there.** The thread shows the pending ask, which specialist and delegated by whom, and answering it, including permanent "always allow" rules, never exposes the specialist's own work thread.
+- **Cancelling delegated work now cancels everything it went on to delegate.** A coordinator (or a specialist cancelling its own further delegation) can cancel a whole chain of delegated work in one action; every open descendant stops, its runs end, and its mission Computer access is released — a persistent peer contacted along the way is never affected. Archiving a coordinator also cancels its remaining delegated work.
 
 ### 2026-09-23
 
@@ -80,6 +84,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On iPhone and iPad, the Rakazo icon now shows a badge with the number of unread conversations when a bot finishes or needs you, and the badge drops as you read them; it never appeared before, so a message waiting in a closed app gave no sign on the home screen.
+
+### 2026-09-21
+
+#### Added
+
+- **The activity list shows the harness a run actually chose.** Activity rows display a readable harness label with the execution target; runs that predate harness choice show nothing rather than an invented default.
 
 ### 2026-09-20
 
@@ -187,6 +197,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - A bot no longer posts the same answer twice in a row: a message it already sent is not posted again, whether it repeats it as another message or as its final reply, and it is told to end its turn once its messages have said everything.
+- Bots no longer stay queued forever after a Docker daemon restart: the sandbox supervisor retries the computer image check instead of reusing its first failure.
 
 ### 2026-09-15
 
@@ -195,12 +206,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A conversation no longer goes blank when it holds a message this version cannot display: the part it does not recognise is skipped and the rest of the thread opens normally, on web, desktop and mobile.
 - A bot-to-bot chat now opens on its latest messages instead of the oldest, so the newest exchange is visible without scrolling; the oldest-first order is unchanged.
 - On desktop, a bot-to-bot chat's title no longer sits under the macOS window buttons.
+- Connector error redaction preserves public Notion block schema fields, so valid block updates are not rejected before reaching Notion.
+- Historical cancelled peer runs no longer replay as new coordination work.
+- Agents can read their mounted skill references on dedicated and shared computers.
+- Scheduled routines can finish quietly after checking information when there is nothing useful to report, instead of showing a misleading completion message.
+- Authenticated team-chat observations retain their relay authorization after qualification and no longer publish an empty-response placeholder when the assistant finishes silently.
+- Slack channel observations now enter Rakazo privately and remain silent unless the CEO has a useful contribution or is directly addressed.
 
 ### 2026-09-14
 
 #### Fixed
 
 - A sub-bot's routine no longer streams its live text or activity lines into the thread while it runs — the run card is the only surface, so a routine appears as just its card (running → done) with nothing streaming beside it.
+- CEO team-chat forwards from the explicitly authorized private Slack group retain their quoted source and are answered only in that group; ordinary Slack messages and other group DMs remain unchanged.
 
 ### 2026-09-13
 
@@ -213,16 +231,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **Routine runs leave a visible trace.** A sub-bot's scheduled routine (Alfred's inbox check, Warren's market point, ...) now shows a run card in its own thread — started, running, completed, or failed, timestamped, with a one-line summary and the full result tucked in an expandable detail — instead of a free "done"/"nothing to report" reply. A "notify me every time" toggle in the routine's setup controls whether that run also pages you; off by default, so a routine stays a quiet, browsable trace until you ask to hear from it.
+- **Stored team conversations can be opened from Messaging settings on web and desktop.** Read requests and replies with sender attribution and delivery state, or open the source Slack channel to continue the conversation.
+- **Personal team-chat bots can receive requests from an explicitly configured relay.** Access is restricted to its sender, workspace, target bot and channels; native owner messages continue to work. See [relay setup](docs/team-chat-relays.md).
+- **Bots can assemble mission groups and equipped specialists.** They can create, update and close groups, close delegated work once its result is used, deliver work to a shared group thread, and create specialists from an existing bot's fixed model, effort, skill assignments and MCP permissions. Specialists inherit the coordinator turn's model and thinking level unless their profile sets them, can consult a persistent peer along the way, and return one consolidated result with any file or image deliverable through each coordinator to the original requester as a card showing who completed the work and whether it succeeded; coordinators surface only final results or requests for input.
 
 #### Fixed
 
 - **Claudius's replies about a sub-bot's report now reach you.** When a sub-bot hands a result to Claudius, Claudius's own reply was being silently dropped from your view; it's now a normal, visible, notifying message like any other reply. Sub-bots' own delegated work stays out of your thread, unchanged.
+- Internal bot updates stay silent in linked chats; bots can publish one useful final result or decision while direct external requests keep their replies in the original conversation.
+- Team conversation history shows each original request once, without the internal prompt sent to the bot.
+- Bots receive the current execution date when working with dated documents and memories.
+- Built-in skills can be restricted to selected bots while their content remains read-only.
 
 ### 2026-09-10
 
 #### Fixed
 
 - A sub-bot no longer pings you when it finishes background work: neither a run another bot delegated to it (reported back to that bot) nor its own scheduled routine (which reports to its orchestrator) pushes you a "finished"/"failed" notification. Runs you started, your direct conversations with any bot, a top-level bot's own routine brief, and requests for your input (approvals, answers, takeovers) still page you.
+
+### 2026-09-09
+
+#### Fixed
+
+- Slack bot replies render formatting and links correctly instead of showing raw Markdown.
+- Delegated results return to the originating team-chat conversation instead of the bot’s main chat.
+- Team-chat replies stay in their original conversation without an extra copy in the owner’s linked direct messages.
+- Personal team-chat deployments can restrict requests to the linked bot owner, link their account by DM with TeamChat enabled, and include quoted parent-thread context in Slack requests while keeping concurrent replies in their originating threads.
 
 ### 2026-09-08
 
