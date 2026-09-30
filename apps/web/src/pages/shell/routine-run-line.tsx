@@ -329,6 +329,10 @@ export function RoutineGroupLine({
   const range = routineRange(first.createdAt, last.createdAt, locale);
   const cancelledCount = runs.filter((item) => item.run.state === "cancelled").length;
   const statusLabel = cancelledCount ? t`${cancelledCount} cancelled` : t`Completed`;
+  // Only completed and cancelled runs fold, so any cancelled one makes the
+  // group read as cancelled, drawn like a single cancelled run.
+  const groupState = cancelledCount ? "cancelled" : "completed";
+  const GroupIcon = ROUTINE_STATE_ICON[groupState];
   const runsCount = runs.length;
   const countLabel = t`${runsCount} runs`;
   const handoffs = runs.map(handoffFor);
@@ -361,9 +365,9 @@ export function RoutineGroupLine({
         onClick={() => setOpen((current) => !current)}
         className="flex min-h-11 w-full items-center gap-2.5 rounded-row px-2 -mx-2 text-start duration-(--duration-hover) ease-quiet hover:bg-accent"
       >
-        <CircleCheck
-          className="size-4.5 shrink-0 text-success"
-          fill="currentColor"
+        <GroupIcon
+          className={`size-4.5 shrink-0 ${stateColorClass(groupState)}`}
+          {...(groupState === "completed" ? { fill: "currentColor" } : {})}
           aria-hidden="true"
         />
         <span className="min-w-0 flex-1 text-row-name font-medium text-foreground" dir="auto">

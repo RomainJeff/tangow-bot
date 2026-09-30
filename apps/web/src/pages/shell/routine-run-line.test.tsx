@@ -104,6 +104,7 @@ describe("RoutineGroupLine", () => {
     expect(html).toContain("Surveillance Accor");
     expect(html).toContain("4 runs");
     expect(html).toContain("Completed");
+    expect(html).toContain("text-success");
     expect(html).toContain('aria-expanded="false"');
   });
 
@@ -119,6 +120,9 @@ describe("RoutineGroupLine", () => {
 
     expect(html).toContain("1 cancelled");
     expect(html).not.toContain(">Completed<");
+    // The icon says cancelled too, not a green check beside "1 cancelled".
+    expect(html).not.toContain("text-success");
+    expect(html).toContain("lucide-circle-stop");
   });
 
   it("caps the inline list at GROUP_DIALOG_MAX runs (A8c)", () => {
