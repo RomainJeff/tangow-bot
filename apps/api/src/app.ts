@@ -67,6 +67,7 @@ import {
   toTeamChatInbound,
 } from "@rakazo/adapters";
 import { blockedAuthPaths, createAuth } from "@rakazo/auth";
+import type { NativeHarnessChoice } from "@rakazo/contracts";
 import { signupPolicyFromEnv } from "@rakazo/core";
 import type { Pool, PrismaClient } from "@rakazo/db";
 import {
@@ -89,20 +90,28 @@ import { requestLogging } from "@rakazo/logging/hono";
 import { MarkdownMemoryStore } from "@rakazo/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { mountDelegationHttpRoutes } from "./delegation-inspect.js";
 import type { AppEnv } from "./env.js";
 import { loadEnv } from "./env.js";
 import { mountLocalSettings } from "./local-settings.js";
 import {
   createMessagingInboundHandler,
   teamChatSenderCanWakeMessageRoutines,
+  tryRedeemMessagingLinkCode,
   wakeMessageRoutines,
 } from "./messaging-inbound.js";
 import { mountMessagingWebhookRoutes } from "./messaging-webhook.js";
 import { mountApiRequestBodyLimits } from "./request-body-limit.js";
 import { createRouter } from "./router.js";
 import { mountScreenTarget } from "./screen-proxy.js";
+import {
+  formatTeamChatThreadContext,
+  linkedTeamChatSenderCanInstruct,
+  routeTeamChatInbound,
+} from "./team-chat-access.js";
 import { isDeferredReservationLost, TeamChatBridge } from "./team-chat-bridge.js";
 import { ModelTeamChatEngagementJudge } from "./team-chat-judge.js";
+import { mountTeamChatN8nRelayRoutes } from "./team-chat-n8n-relay.js";
 import {
   PendingTeamChatInbound,
   prefersTeamChatSurface,
@@ -138,6 +147,7 @@ export async function createApp(
     email?: TransactionalEmailProvider;
     remoteConnectors?: RemoteConnectorDependencies;
     logger?: Logger;
+    nativeRuntimes?: Partial<Record<NativeHarnessChoice, AgentRuntime>>;
   } = {},
 ): Promise<AppHandles> {
   const {
@@ -150,6 +160,7 @@ export async function createApp(
     email: emailOverride,
     remoteConnectors,
     logger: loggerOverride,
+    nativeRuntimes: nativeRuntimesOverride,
     ...envOverrides
   } = overrides;
   const env = { ...loadEnv(process.env), ...envOverrides };
@@ -303,6 +314,7 @@ export async function createApp(
   const connector = stack.destination;
   await connector.start();
   integrationSettings.warmDirectories();
+  const nativeRuntimes = nativeRuntimesOverride ?? {};
   // Optional agent trace export. Without configuration this resolves to nothing,
   // so the runtime records no spans and no vendor endpoint is ever contacted.
   const traceExport = createTraceExporterFromEnv(process.env);
@@ -371,6 +383,7 @@ export async function createApp(
   const executor = createRunExecutor({
     prisma,
     runtime,
+    nativeRuntimes,
     sandbox,
     memory,
     memoryProviders,
@@ -431,6 +444,7 @@ export async function createApp(
     ? createJobReconciler({
         prisma,
         jobs,
+        sandbox,
         reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
         reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
       })
@@ -546,6 +560,13 @@ export async function createApp(
     if (actor) enrichLogContext({ "user.id": actor.userId, "space.id": actor.spaceId });
     return actor;
   });
+  mountDelegationHttpRoutes(app, { prisma, jobs }, async (c) => {
+    const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
+    if (!session?.user) return null;
+    return requireMembership(prisma, session.user.id, c.req.header("x-rakazo-space-id")).catch(
+      () => null,
+    );
+  });
   mountWebhookHttpRoutes(app, { prisma, secrets, events, jobs });
   // Shared with stop so a shutdown during retry delays does not restart polling.
   let messagingStopped = false;
@@ -591,9 +612,29 @@ export async function createApp(
       event: Parameters<typeof wakeMessageRoutines>[2],
     ) => {
       const mapped = toTeamChatInbound(event);
-      if (!mapped) {
-        await inbound(event);
-        return;
+      // A blank team message must not fall through to group provisioning.
+      if (!mapped) return;
+      // Deny before reading history, persisting a transcript, or waking any routine.
+      if (!(await bridge.canReceive(mapped))) return;
+      if (
+        event.replyThreadId &&
+        event.replyThreadId !== event.handle &&
+        messaging.readThreadContext
+      ) {
+        const operationId = `messaging.context:${randomUUID()}`;
+        try {
+          const context = await messaging.readThreadContext(event, {
+            operationId,
+            traceId: operationId,
+            spaceId: "",
+            userId: "",
+            signal: AbortSignal.timeout(2_000),
+          });
+          mapped.threadContext = formatTeamChatThreadContext(context);
+        } catch {
+          mapped.threadContext =
+            "Referenced thread could not be read. Ask the sender for the missing context before taking actions that depend on it.";
+        }
       }
       const canWake = await teamChatSenderCanWakeMessageRoutines(inboundDeps, event);
       if (!canWake) {
@@ -615,6 +656,7 @@ export async function createApp(
           // Must match TeamChatBridge ExternalConversation / recovery provider.
           deliveryProvider: bridge.providerId,
           externalMessageId: target.externalMessageId,
+          threadContext: mapped.threadContext,
         });
         try {
           woken = await Promise.race([wakePromise, leaseHeartbeat.lost]);
@@ -704,6 +746,17 @@ export async function createApp(
         send: createMessagingTeamChatSender(messaging),
         providerId: "slack",
         botId: env.teamChatBotId,
+        authorizeSender: env.teamChatRequireLinkedIdentity
+          ? (sender) =>
+              linkedTeamChatSenderCanInstruct(
+                prisma,
+                env.teamChatBotId!,
+                "slack",
+                sender,
+                env.teamChatTrustedRelays,
+                env.teamChatTrustedForwards,
+              )
+          : undefined,
         judge,
       });
       teamChatBridgeInstance = bridge;
@@ -754,27 +807,49 @@ export async function createApp(
         return;
       }
       if (prefersTeamChatSurface(event, env.teamChatBotId)) {
-        const bridge = teamChatBridge;
-        if (bridge) {
-          await handleTeamChatInbound(bridge, event);
-          return;
-        }
-        // Bridge is still starting (or retrying). Do not fall through to the
-        // personal-line inbound path — that bypasses externalMessage ownership
-        // and can wake routines for unlinked TeamChat senders.
-        if (teamChatInitTask) {
-          const pending = pendingTeamChatInbound.enqueue(event);
-          if (!pending) {
-            throw new Error("Team chat inbound buffer is full");
-          }
-          await pending;
-          return;
-        }
-        throw new Error("Team chat bridge is unavailable");
+        await routeTeamChatInbound(event, {
+          redeemLink: (message) => tryRedeemMessagingLinkCode(inboundDeps, message),
+          authorize: (message) =>
+            env.teamChatRequireLinkedIdentity
+              ? linkedTeamChatSenderCanInstruct(
+                  prisma,
+                  env.teamChatBotId!,
+                  event.provider,
+                  message,
+                  env.teamChatTrustedRelays,
+                  env.teamChatTrustedForwards,
+                )
+              : Promise.resolve(true),
+          deliver: async () => {
+            const bridge = teamChatBridge;
+            if (bridge) {
+              await handleTeamChatInbound(bridge, event);
+              return;
+            }
+            // Bridge is still starting (or retrying). Do not fall through to the
+            // personal-line inbound path — that bypasses externalMessage ownership
+            // and can wake routines for unlinked TeamChat senders.
+            if (teamChatInitTask) {
+              const pending = pendingTeamChatInbound.enqueue(event);
+              if (!pending) {
+                throw new Error("Team chat inbound buffer is full");
+              }
+              await pending;
+              return;
+            }
+            throw new Error("Team chat bridge is unavailable");
+          },
+        });
+        return;
       }
       await inbound(event);
     });
     mountMessagingWebhookRoutes(app, { messaging });
+    mountTeamChatN8nRelayRoutes(app, {
+      secret: env.teamChatN8nRelaySecret,
+      bridge: () => teamChatBridge,
+      botUserId: env.teamChatSlackBotUserId,
+    });
     // Start polling-mode adapters (e.g. Telegram with no public webhook URL
     // registered) immediately rather than waiting for the first webhook
     // POST or outbound send to lazily trigger it. This is the process that

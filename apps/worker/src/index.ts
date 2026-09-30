@@ -11,6 +11,8 @@ import {
   createConnectorStack,
   createJobReconciler,
   createMessagingContextLoader,
+  createNativeMcpHttpServer,
+  createNativeSessionHost,
   createPostgresReconciliationLeadership,
   createRunExecutor,
   createRunSandbox,
@@ -33,6 +35,7 @@ import {
   McpOAuthBroker,
   messagingEnvFromProcess,
   messagingPlatformsFromEnv,
+  nativeMcpMountConfig,
   PiAgentRuntime,
   PipedreamConnector,
   PostgresRealtimeFanout,
@@ -71,6 +74,15 @@ async function main() {
     poolMax: parsePositiveInteger(process.env.DB_POOL_MAX, 8),
     applicationName: "rakazo-worker",
   });
+  const nativeMcpConfig = nativeMcpMountConfig(process.env);
+  const nativeMcp = nativeMcpConfig
+    ? createNativeMcpHttpServer({
+        host: createNativeSessionHost(pool),
+        relaySecret: nativeMcpConfig.relaySecret,
+      })
+    : undefined;
+  if (nativeMcp && nativeMcpConfig)
+    await nativeMcp.listen(nativeMcpConfig.port, nativeMcpConfig.host);
   const realtime = new PostgresRealtimeFanout({
     connectionString: process.env.REALTIME_DATABASE_URL ?? databaseUrl,
     publisher: pool,
@@ -80,6 +92,7 @@ async function main() {
     runSecretWriter: createRunSecretWriter(secrets),
   });
   const dataDir = process.env.DATA_DIR ?? "./data";
+  const nativeRuntimes = {};
   // Optional agent trace export. Absent configuration resolves to nothing here,
   // so the runtime records no spans and no vendor endpoint is ever contacted.
   const traceExport = createTraceExporterFromEnv(process.env);
@@ -178,6 +191,9 @@ async function main() {
   const executor = createRunExecutor({
     prisma,
     runtime,
+    nativeRuntimes,
+    nativeMcp,
+    nativeParkTtlMs: parsePositiveInteger(process.env.RAKAZO_NATIVE_PARK_TTL_MS, 15 * 60_000),
     sandbox,
     memory,
     memoryProviders,
@@ -251,6 +267,7 @@ async function main() {
   const reconciler = createJobReconciler({
     prisma,
     jobs,
+    sandbox,
     events,
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
@@ -269,6 +286,7 @@ async function main() {
       await realtime.close();
       await connector.stop();
       await mcp.close();
+      await nativeMcp?.close();
       await prisma.$disconnect().catch(() => undefined);
       await pool.end().catch(() => undefined);
     } finally {

@@ -9,6 +9,8 @@ import {
   resolveScreenProxySecret,
   resolveSupervisorToken,
 } from "@rakazo/core";
+import type { TrustedTeamChatForward, TrustedTeamChatRelay } from "./team-chat-access.js";
+import { parseTrustedTeamChatForwards, parseTrustedTeamChatRelays } from "./team-chat-access.js";
 
 export { resolveCloudAgentProvider, resolveSandboxProvider } from "@rakazo/adapters";
 
@@ -75,6 +77,15 @@ export interface AppEnv {
   messagingOpenSignup: boolean;
   /** Bot that owns team/external chat rooms on the messaging surface. */
   teamChatBotId: string | undefined;
+  /** Restrict the gateway to the exact linked owner identity. */
+  teamChatRequireLinkedIdentity: boolean;
+  teamChatTrustedRelays?: TrustedTeamChatRelay[];
+  /** Exact owner-authorized MPIM forward conversations; empty denies every MPIM. */
+  teamChatTrustedForwards?: TrustedTeamChatForward[];
+  /** Shared HMAC secret for the private n8n team-chat relay. */
+  teamChatN8nRelaySecret: string | undefined;
+  /** Slack user id of the configured team-chat bot; used to verify relay mentions. */
+  teamChatSlackBotUserId: string | undefined;
   /** Optional model override for ambient engagement judging. */
   teamChatJudgeProvider: string | undefined;
   teamChatJudgeModel: string | undefined;
@@ -162,6 +173,11 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     larkDomain: optional(source.LARK_DOMAIN),
     messagingOpenSignup: source.MESSAGING_OPEN_SIGNUP === "true",
     teamChatBotId: optional(source.TEAM_CHAT_BOT_ID) ?? optional(source.SLACK_RAKAZO_BOT_ID),
+    teamChatRequireLinkedIdentity: source.TEAM_CHAT_REQUIRE_LINKED_IDENTITY === "true",
+    teamChatTrustedRelays: parseTrustedTeamChatRelays(source.TEAM_CHAT_TRUSTED_RELAYS),
+    teamChatTrustedForwards: parseTrustedTeamChatForwards(source.TEAM_CHAT_TRUSTED_FORWARDS),
+    teamChatN8nRelaySecret: optional(source.TEAM_CHAT_N8N_RELAY_SECRET),
+    teamChatSlackBotUserId: optional(source.TEAM_CHAT_SLACK_BOT_USER_ID),
     teamChatJudgeProvider: optional(source.TEAM_CHAT_JUDGE_PROVIDER),
     teamChatJudgeModel: optional(source.TEAM_CHAT_JUDGE_MODEL),
     defaultProvider: deploymentModel.provider,

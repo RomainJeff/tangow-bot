@@ -1,11 +1,19 @@
 import { ORPCError } from "@orpc/server";
 import { type JobPublisher, runContinueJob, type SandboxProvider } from "@rakazo/adapter-kit";
-import { cancelComputerRunWork, screenLeaseIdForRun, toComputerRef } from "@rakazo/adapters";
+import {
+  cancelComputerRunWork,
+  screenLeaseIdForRun,
+  TERMINAL_WORK_STATUSES,
+  toComputerRef,
+} from "@rakazo/adapters";
+import type { NativeHarnessChoice, PendingWorkAsk, ThreadMessage } from "@rakazo/contracts";
 import {
   type Actor,
   GROUP_MEMBER_MIN,
   type GroupMember,
+  isNativeHarness,
   type MessageBlock,
+  MessageBlock as MessageBlockSchema,
   type MessageReaction,
   REPLY_QUOTE_MAX_LENGTH,
   type RunStatus,
@@ -61,6 +69,8 @@ export type ThreadTarget =
       memberBotIds: string[];
     };
 
+/** Specialist ask cards are the newest messages of a paused run; a small backscan suffices. */
+const PENDING_ASK_SCAN_LIMIT = 20;
 /**
  * Flatten text for excerpt comparison. The parent blocks hold markdown
  * source while the selection captures rendered text, so structural syntax
@@ -216,6 +226,48 @@ function sendRunClientNonce(
 ): string | undefined {
   if (!clientNonce) return undefined;
   return botId ? `send:${messageId}:${botId}` : `send:${messageId}`;
+}
+
+/**
+ * The only native target accepted at this boundary is the Computer already
+ * attached to the authorized bot. This deliberately does not accept a cwd,
+ * command, provider reference, or any other client-controlled placement data.
+ */
+function resolveNativeChoice(
+  target: Extract<ThreadTarget, { kind: "bot" }>,
+  input: { harness?: NativeHarnessChoice; executionTarget?: string },
+  choiceVersion = 1,
+) {
+  if (!input.harness && !input.executionTarget) return undefined;
+  if (!input.harness || !input.executionTarget) {
+    throw new ORPCError("BAD_REQUEST", { message: "Native harness choice is incomplete." });
+  }
+  if (!isNativeHarness(input.harness)) {
+    throw new ORPCError("BAD_REQUEST", { message: "Requested harness is unavailable." });
+  }
+  if (!target.bot.computer || target.bot.computer.id !== input.executionTarget) {
+    throw new ORPCError("BAD_REQUEST", { message: "Execution target is not authorized." });
+  }
+  return { harness: input.harness, executionTarget: input.executionTarget, choiceVersion };
+}
+
+/**
+ * The bot's saved harness choice applies to sends that carry no explicit client
+ * choice. It goes through the same authorization boundary as an explicit choice —
+ * the Computer attached to the bot — and carries the choice's own version.
+ */
+function resolveStoredNativeChoice(
+  target: Extract<ThreadTarget, { kind: "bot" }>,
+  harness: NativeHarnessChoice,
+) {
+  return resolveNativeChoice(
+    target,
+    {
+      harness,
+      executionTarget: target.bot.computer?.id,
+    },
+    target.bot.choiceVersion ?? 1,
+  );
 }
 
 async function enqueueRunsNeedingContinue(
@@ -446,7 +498,7 @@ export async function threadSnapshot(
       }),
       deps.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR SHARE`;
-        const [messagePage, last, waitingRun, busyOrFailed] = await Promise.all([
+        const [messagePage, last, waitingRun, busyOrFailed, pendingWorkRuns] = await Promise.all([
           loadMessagePage(tx, target.threadId, undefined, THREAD_MESSAGE_PAGE_SIZE),
           tx.event.findFirst({
             where: { threadId: target.threadId },
@@ -477,6 +529,35 @@ export async function threadSnapshot(
             // The id tiebreak keeps ordering deterministic under equal
             // timestamps, matching the supersession probe below.
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          }),
+          // Delegated work this bot coordinates: a specialist parked on an ask shows up
+          // here so the coordinator's thread can surface and settle it (works.answer).
+          // The coordinator's own run/activeRuns fields are untouched by it.
+          tx.run.findMany({
+            where: {
+              status: "waiting_input",
+              scopedTask: {
+                coordinatorThreadId: target.threadId,
+                coordinatorBotId: target.botId,
+                spaceId: target.bot.spaceId,
+                userId: target.bot.userId,
+                status: { notIn: TERMINAL_WORK_STATUSES },
+              },
+            },
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            include: {
+              scopedTask: {
+                select: {
+                  id: true,
+                  rootScopedTaskId: true,
+                  depth: true,
+                  coordinatorBotId: true,
+                  executorBotId: true,
+                  coordinatorBot: { select: { id: true, name: true } },
+                  executorBot: { select: { id: true, name: true } },
+                },
+              },
+            },
           }),
         ]);
         const run = waitingRun ?? busyOrFailed;
@@ -519,7 +600,8 @@ export async function threadSnapshot(
                 orderBy: { seq: "asc" },
               })
             : [];
-        return { messagePage, last, run: currentRun, liveEvents };
+        const pendingWork = await loadPendingWorkAsks(tx, pendingWorkRuns);
+        return { messagePage, last, run: currentRun, liveEvents, pendingWork };
       }),
     ]);
     return {
@@ -529,6 +611,7 @@ export async function threadSnapshot(
       messages: messagesWithLiveEvents(core.messagePage.messages, core.liveEvents),
       olderCursor: core.messagePage.olderCursor,
       run: core.run ? mapRun(core.run) : null,
+      ...(core.pendingWork.length ? { pendingWork: core.pendingWork } : {}),
       computer: toComputerStatus(target.botId, target.bot.computer, busyBotName),
     };
   }
@@ -640,6 +723,89 @@ function pickLatestTerminalRun<T extends { id: string; createdAt: Date; complete
   });
 }
 
+/**
+ * For each specialist run parked on `waiting_input`, take its newest message that still
+ * carries an unanswered ask. A run whose ask cards are all settled is skipped: the run row
+ * can lag its answer behind the snapshot's consistent commit only transiently.
+ */
+async function loadPendingWorkAsks(
+  tx: Prisma.TransactionClient,
+  runs: Array<{
+    id: string;
+    threadId: string;
+    scopedTask: {
+      id: string;
+      rootScopedTaskId: string;
+      depth: number;
+      coordinatorBotId: string;
+      executorBotId: string;
+      coordinatorBot: { id: string; name: string };
+      executorBot: { id: string; name: string };
+    } | null;
+  }>,
+): Promise<PendingWorkAsk[]> {
+  const asks: PendingWorkAsk[] = [];
+  for (const run of runs) {
+    if (!run.scopedTask) continue;
+    const messages = await tx.message.findMany({
+      where: { threadId: run.threadId, runId: run.id, role: "bot" },
+      orderBy: { seq: "desc" },
+      take: PENDING_ASK_SCAN_LIMIT,
+    });
+    const askRow = messages.find((message) => hasPendingAskBlock(message.blocks));
+    if (!askRow) continue;
+    asks.push({
+      workId: run.scopedTask.id,
+      rootWorkId: run.scopedTask.rootScopedTaskId,
+      depth: run.scopedTask.depth,
+      coordinator: {
+        botId: run.scopedTask.coordinatorBotId,
+        name: run.scopedTask.coordinatorBot.name,
+      },
+      specialist: {
+        botId: run.scopedTask.executorBotId,
+        name: run.scopedTask.executorBot.name,
+      },
+      runId: run.id,
+      message: toAskThreadMessage(askRow),
+    });
+  }
+  return asks;
+}
+
+function hasPendingAskBlock(blocks: Prisma.JsonValue): boolean {
+  const parsed = MessageBlockSchema.array().safeParse(blocks);
+  if (!parsed.success) return false;
+  return parsed.data.some((block) => block.kind === "ask" && block.status !== "answered");
+}
+
+/** Same projection as the message pages; kept local to stay in this file's scope. */
+function toAskThreadMessage(row: {
+  id: string;
+  threadId: string;
+  seq: number;
+  role: string;
+  blocks: Prisma.JsonValue;
+  botId: string | null;
+  replyToMessageId: string | null;
+  runId: string | null;
+  clientNonce: string | null;
+  createdAt: Date;
+}): ThreadMessage {
+  return {
+    id: row.id,
+    threadId: row.threadId,
+    seq: row.seq,
+    role: row.role as ThreadMessage["role"],
+    blocks: row.blocks as ThreadMessage["blocks"],
+    botId: row.botId ?? undefined,
+    replyToMessageId: row.replyToMessageId ?? undefined,
+    runId: row.runId ?? undefined,
+    clientNonce: row.clientNonce ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 function messagesWithLiveEvents(
   persisted: ThreadSnapshot["messages"],
   liveEvents: Parameters<typeof projectMessages>[0],
@@ -709,6 +875,8 @@ export async function sendThreadMessage(
     replyToMessageId?: string;
     replyQuote?: string;
     clientNonce?: string;
+    harness?: NativeHarnessChoice;
+    executionTarget?: string;
   },
 ) {
   const existing = await replayExistingSend(deps, target.threadId, input.clientNonce);
@@ -743,6 +911,12 @@ export async function sendThreadMessage(
       }
 
       if (target.kind === "bot") {
+        const storedHarness = target.bot.harnessChoice;
+        const nativeChoice =
+          resolveNativeChoice(target, input) ??
+          (isNativeHarness(storedHarness)
+            ? resolveStoredNativeChoice(target, storedHarness)
+            : undefined);
         const mentionTargets = splitMentionTargets(input.mentions);
         const { blocks: attachmentBlocks, artifacts } = await resolveSendAttachments(
           { prisma: tx },
@@ -869,6 +1043,7 @@ export async function sendThreadMessage(
             trigger: "user",
             clientNonce: sendRunClientNonce(input.clientNonce, message.id),
             sourceMessageId: message.id,
+            ...(nativeChoice ?? {}),
           },
         });
         await tx.message.update({ where: { id: message.id }, data: { runId: run.id } });
@@ -896,6 +1071,11 @@ export async function sendThreadMessage(
       }
 
       const members = await lockAndLoadGroupMembers(tx, actor, target);
+      if (input.harness || input.executionTarget) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: "Choose a native harness in an individual bot thread.",
+        });
+      }
       const memberBotIds = members.map((member) => member.botId);
       const mentionTargets = splitMentionTargets(input.mentions);
       const targetBotIds = resolveGroupTargetBotIds({

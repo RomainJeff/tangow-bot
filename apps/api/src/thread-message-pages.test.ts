@@ -63,6 +63,239 @@ describe("thread message pages", () => {
     expect(page.messages.map((message) => message.id)).toEqual(["message-hello", "message-ask"]);
   });
 
+  it("surfaces only explicit peer file and image deliveries in a normal page", async () => {
+    const rows = [
+      {
+        id: "message-outcome",
+        threadId: "thread-1",
+        seq: 24,
+        role: "bot",
+        blocks: [{ kind: "text", text: "The specialist delivery is ready." }],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: "user-message:outcome:run-peer",
+        createdAt: new Date("2026-08-16T00:00:24.000Z"),
+      },
+      {
+        id: "message-mixed",
+        threadId: "thread-1",
+        seq: 23,
+        role: "bot",
+        blocks: [
+          {
+            kind: "file",
+            artifactId: "artifact-mixed",
+            mimeType: "application/pdf",
+            name: "working-notes.pdf",
+            size: 123,
+          },
+          { kind: "text", text: "internal narration" },
+        ],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: null,
+        createdAt: new Date("2026-08-16T00:00:23.000Z"),
+      },
+      {
+        id: "message-narration",
+        threadId: "thread-1",
+        seq: 22,
+        role: "bot",
+        blocks: [{ kind: "text", text: "internal narration" }],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: "user-progress:run-peer:0:z:z",
+        createdAt: new Date("2026-08-16T00:00:22.000Z"),
+      },
+      {
+        id: "message-image",
+        threadId: "thread-1",
+        seq: 21,
+        role: "bot",
+        blocks: [
+          {
+            kind: "image",
+            artifactId: "artifact-image",
+            mimeType: "image/png",
+            name: "specialist-visual.png",
+          },
+        ],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: null,
+        createdAt: new Date("2026-08-16T00:00:21.000Z"),
+      },
+      {
+        id: "message-file",
+        threadId: "thread-1",
+        seq: 20,
+        role: "bot",
+        blocks: [
+          {
+            kind: "file",
+            artifactId: "artifact-file",
+            mimeType: "application/pdf",
+            name: "specialist-delivery.pdf",
+            size: 123,
+          },
+        ],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: null,
+        createdAt: new Date("2026-08-16T00:00:20.000Z"),
+      },
+    ];
+    const prisma = {
+      message: { findMany: vi.fn(async () => rows) },
+      run: {
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "coordinator" }, sourceMessage: null },
+        ]),
+      },
+    } as unknown as PrismaClient;
+
+    const page = await loadMessagePage(prisma, "thread-1", undefined, 5);
+
+    expect(page.messages.map((message) => message.id)).toEqual([
+      "message-file",
+      "message-image",
+      "message-outcome",
+    ]);
+  });
+
+  it("surfaces explicit peer deliveries in an around page", async () => {
+    const rows = [
+      {
+        id: "message-file",
+        threadId: "thread-1",
+        seq: 20,
+        role: "bot",
+        blocks: [
+          {
+            kind: "file",
+            artifactId: "artifact-file",
+            mimeType: "application/pdf",
+            name: "specialist-delivery.pdf",
+            size: 123,
+          },
+        ],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: null,
+        createdAt: new Date("2026-08-16T00:00:20.000Z"),
+      },
+      {
+        id: "message-image",
+        threadId: "thread-1",
+        seq: 21,
+        role: "bot",
+        blocks: [
+          {
+            kind: "image",
+            artifactId: "artifact-image",
+            mimeType: "image/png",
+            name: "specialist-visual.png",
+          },
+        ],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: null,
+        createdAt: new Date("2026-08-16T00:00:21.000Z"),
+      },
+      {
+        id: "message-outcome",
+        threadId: "thread-1",
+        seq: 22,
+        role: "bot",
+        blocks: [{ kind: "text", text: "The specialist delivery is ready." }],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: "user-message:outcome:run-peer",
+        createdAt: new Date("2026-08-16T00:00:22.000Z"),
+      },
+    ];
+    const prisma = {
+      message: { findMany: vi.fn(async () => rows), count: vi.fn(async () => 0) },
+      run: {
+        findMany: vi.fn(async () => [
+          { id: "run-peer", bot: { parentBotId: "coordinator" }, sourceMessage: null },
+        ]),
+      },
+    } as unknown as PrismaClient;
+
+    const page = await loadMessagePage(prisma, "thread-1", undefined, 4, { seq: 21 });
+
+    expect(page.messages.map((message) => message.id)).toEqual([
+      "message-file",
+      "message-image",
+      "message-outcome",
+    ]);
+  });
+
+  it("uses known peer runs to keep an explicit delivery without a receipt in the page", async () => {
+    const rows = [
+      {
+        id: "message-outcome",
+        threadId: "thread-1",
+        seq: 21,
+        role: "bot",
+        blocks: [{ kind: "text", text: "The specialist delivery is ready." }],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: "user-message:outcome:run-peer",
+        createdAt: new Date("2026-08-16T00:00:21.000Z"),
+      },
+      {
+        id: "message-file",
+        threadId: "thread-1",
+        seq: 20,
+        role: "bot",
+        blocks: [
+          {
+            kind: "file",
+            artifactId: "artifact-file",
+            mimeType: "application/pdf",
+            name: "specialist-delivery.pdf",
+            size: 123,
+          },
+        ],
+        botId: "bot-1",
+        replyToMessageId: null,
+        runId: "run-peer",
+        clientNonce: null,
+        createdAt: new Date("2026-08-16T00:00:20.000Z"),
+      },
+    ];
+    const findPeerRuns = vi.fn(async () => [
+      { id: "run-peer", bot: { parentBotId: "coordinator" }, sourceMessage: null },
+    ]);
+    const prisma = {
+      message: { findMany: vi.fn(async () => rows) },
+      run: { findMany: findPeerRuns },
+    } as unknown as PrismaClient;
+
+    const page = await loadMessagePage(prisma, "thread-1", undefined, 2);
+
+    expect(page.messages.map((message) => message.id)).toEqual(["message-file", "message-outcome"]);
+    expect(findPeerRuns).toHaveBeenCalledWith({
+      where: { id: { in: ["run-peer"] }, trigger: "bot_message" },
+      select: {
+        id: true,
+        bot: { select: { parentBotId: true } },
+        sourceMessage: { select: { blocks: true, replyTo: { select: { blocks: true } } } },
+      },
+    });
+  });
+
   it("caches peer-run classification for live events", async () => {
     const findMany = vi.fn(async () => [
       { id: "run-peer", bot: { parentBotId: "claudius-1" }, sourceMessage: null },
@@ -127,35 +360,114 @@ describe("thread message pages", () => {
     await expect(isPeerRun(prisma, "run-answer", new Map())).resolves.toBe(true);
   });
 
-  it("forwards peer waiting, ask, and text events on an open thread", () => {
-    expect(shouldForwardPeerThreadEvent({ type: "run.waiting_input", payload: {} })).toBe(true);
-    expect(shouldForwardPeerThreadEvent({ type: "computer.takeover.requested", payload: {} })).toBe(
-      true,
+  it("forwards selected peer output but holds artifacts for the terminal refresh", async () => {
+    const findUnique = vi.fn(async ({ where }: { where: { id: string } }) =>
+      where.id === "message-outcome"
+        ? { clientNonce: "user-message:outcome:run-peer" }
+        : { clientNonce: "user-progress:run-peer:0:z:z" },
     );
-    expect(
-      shouldForwardPeerThreadEvent({
+    const prisma = { message: { findUnique } } as unknown as PrismaClient;
+
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, { type: "run.waiting_input", payload: {} }),
+    ).resolves.toBe(true);
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, { type: "computer.takeover.requested", payload: {} }),
+    ).resolves.toBe(true);
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, {
         type: "thread.message.created",
         payload: { blocks: [{ kind: "ask", text: "Pick one" }] },
       }),
-    ).toBe(true);
-    expect(
-      shouldForwardPeerThreadEvent({
+    ).resolves.toBe(true);
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, {
         type: "thread.message.created",
-        payload: { blocks: [{ kind: "text", text: "peer body" }] },
+        payload: {
+          messageId: "message-outcome",
+          blocks: [{ kind: "text", text: "The specialist delivery is ready." }],
+        },
       }),
-    ).toBe(true);
-    expect(
-      shouldForwardPeerThreadEvent({
+    ).resolves.toBe(true);
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, {
+        type: "thread.message.created",
+        payload: {
+          messageId: "message-narration",
+          blocks: [{ kind: "text", text: "internal narration" }],
+        },
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, {
         type: "thread.progress",
         payload: {},
       }),
-    ).toBe(false);
+    ).resolves.toBe(false);
+    // A peer artifact is held until the selected result and terminal event refresh the page;
+    // forwarding it alone would reveal an internal file before its user-directed outcome.
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, {
+        type: "thread.message.created",
+        payload: {
+          blocks: [
+            {
+              kind: "file",
+              artifactId: "artifact-file",
+              mimeType: "application/pdf",
+              name: "specialist-delivery.pdf",
+              size: 123,
+            },
+          ],
+        },
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, {
+        type: "thread.message.created",
+        payload: {
+          blocks: [
+            {
+              kind: "image",
+              artifactId: "artifact-image",
+              mimeType: "image/png",
+              name: "specialist-visual.png",
+            },
+          ],
+        },
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, {
+        type: "thread.message.created",
+        payload: {
+          messageId: "message-outcome",
+          blocks: [
+            {
+              kind: "file",
+              artifactId: "artifact-mixed",
+              mimeType: "application/pdf",
+              name: "working-notes.pdf",
+              size: 123,
+            },
+            { kind: "text", text: "internal narration" },
+          ],
+        },
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, { type: "run.completed", payload: {} }),
+    ).resolves.toBe(true);
+    expect(findUnique).toHaveBeenCalledTimes(2);
   });
 
-  it("forwards a peer run's start and terminals so the working indicator lives and clears", () => {
-    expect(shouldForwardPeerThreadEvent({ type: "run.started", payload: {} })).toBe(true);
+  it("forwards a peer run's start and terminals so the working indicator lives and clears", async () => {
+    const prisma = {} as PrismaClient;
+    await expect(
+      shouldForwardPeerThreadEvent(prisma, { type: "run.started", payload: {} }),
+    ).resolves.toBe(true);
     for (const type of ["run.completed", "run.failed", "run.cancelled"]) {
-      expect(shouldForwardPeerThreadEvent({ type, payload: {} })).toBe(true);
+      await expect(shouldForwardPeerThreadEvent(prisma, { type, payload: {} })).resolves.toBe(true);
     }
   });
 

@@ -88,6 +88,29 @@ describe("agent skills service (filesystem)", () => {
 
   const service = () => createAgentSkillsService(prisma as unknown as PrismaClient, dataDir);
 
+  it("restricts builtin access while keeping its content read-only", async () => {
+    const skills = service();
+    const entry = await skills.setAccess(actor, {
+      skillId: "builtin:Interrogate",
+      availability: "selected",
+      bots: [{ botId: "bot-1", enabled: true }],
+    });
+    expect(entry).toMatchObject({
+      readOnly: true,
+      availability: "selected",
+      visibleBotIds: ["bot-1"],
+    });
+    expect((await skills.list(actor, { botId: "bot-2" })).map((skill) => skill.id)).not.toContain(
+      "builtin:Interrogate",
+    );
+    await expect(
+      skills.update(actor, { skillId: "builtin:Interrogate", name: "Changed" }),
+    ).rejects.toBeInstanceOf(IsolationError);
+    await expect(
+      skills.setAccess(actor, { skillId: "builtin:missing", availability: "all" }),
+    ).rejects.toBeInstanceOf(IsolationError);
+  });
+
   it("creates, lists, renames (cascading access rows) and removes a skill", async () => {
     const skills = service();
     const created = await skills.create(actor, {

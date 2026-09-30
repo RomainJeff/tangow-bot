@@ -1,6 +1,7 @@
 import type { MessageBlock, ThreadMessage, ThreadMessagePage } from "@rakazo/contracts";
-import { isPeerReceiptBlocks, isUserDirectedMessage } from "@rakazo/core";
-import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@rakazo/db";
+import { isPeerReceiptBlocks, isUserDirectedMessage, userVisibleMessages } from "@rakazo/core";
+import type { Prisma, PrismaClient } from "@rakazo/db";
+import { hiddenPeerRunIds } from "@rakazo/db";
 
 type MessageDb = PrismaClient | Prisma.TransactionClient;
 
@@ -99,20 +100,18 @@ async function withoutPeerRunMessages<
   const runIds = [...new Set(rows.flatMap((row) => (row.runId ? [row.runId] : [])))];
   if (runIds.length === 0) return rows;
   const peerRunIds = await hiddenPeerRunIds(prisma, runIds);
-  return rows.filter((row) => {
-    if (!row.runId || !peerRunIds.has(row.runId)) return true;
-    const blocks = row.blocks as MessageBlock[];
-    // Keep compact sent/received receipts; clients render them as chips.
-    if (
-      blocks.some(
-        (block) => block.kind === "bot_message_sent" || block.kind === "bot_message_received",
-      )
-    ) {
-      return true;
-    }
-    // Keep what a delegated bot addressed to the user (message_user / ask_user); drop the rest.
-    return isUserDirectedMessage({ clientNonce: row.clientNonce, blocks });
-  });
+  const visibleRows = new Set(
+    userVisibleMessages(
+      rows.map((row) => ({
+        row,
+        runId: row.runId ?? undefined,
+        clientNonce: row.clientNonce ?? undefined,
+        blocks: row.blocks as MessageBlock[],
+      })),
+      { knownPeerRunIds: peerRunIds, includePeerReceipts: true },
+    ).map((item) => item.row),
+  );
+  return rows.filter((row) => visibleRows.has(row));
 }
 
 export async function isPeerRun(
@@ -131,11 +130,14 @@ export async function isPeerRun(
   return peerRun;
 }
 
-/** Peer-run SSE events that must still reach an open thread (starts, terminals, waits, receipts, asks, text). */
-export function shouldForwardPeerThreadEvent(event: {
-  type: string;
-  payload: { blocks?: unknown };
-}): boolean {
+/** Peer-run SSE events that must still reach an open thread (terminals, waits, receipts, selected output). */
+export async function shouldForwardPeerThreadEvent(
+  prisma: MessageDb,
+  event: {
+    type: string;
+    payload: { messageId?: unknown; blocks?: unknown };
+  },
+): Promise<boolean> {
   if (
     // The start drives the working indicator, and the terminals below clear it again. Without
     // the pair an open chat sits inert for the whole run and only catches up on reload.
@@ -151,20 +153,19 @@ export function shouldForwardPeerThreadEvent(event: {
   if (event.type !== "thread.message.created" && event.type !== "thread.message.updated") {
     return false;
   }
-  const blocks = event.payload.blocks;
-  return (
-    Array.isArray(blocks) &&
-    blocks.some(
-      (block) =>
-        !!block &&
-        typeof block === "object" &&
-        "kind" in block &&
-        (block.kind === "bot_message_received" ||
-          block.kind === "bot_message_sent" ||
-          block.kind === "ask" ||
-          block.kind === "text"),
-    )
-  );
+  if (!Array.isArray(event.payload.blocks)) return false;
+  const blocks = event.payload.blocks as MessageBlock[];
+  // Artifact rows may precede the selected result. Do not stream them alone; the terminal
+  // event refreshes the page through the same C13 filter after the result is durable.
+  if (blocks.some((block) => block.kind === "file" || block.kind === "image")) return false;
+  if (isPeerReceiptBlocks(blocks) || blocks.some((block) => block.kind === "ask")) return true;
+  const messageId = event.payload.messageId;
+  if (typeof messageId !== "string") return false;
+  const message = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: { clientNonce: true },
+  });
+  return isUserDirectedMessage({ clientNonce: message?.clientNonce, blocks });
 }
 
 function toThreadMessage(row: {

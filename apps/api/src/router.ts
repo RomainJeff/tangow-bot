@@ -68,6 +68,7 @@ import {
   replaceComputer,
   resolveAutoReviewChecker,
   resolveBotWorkspacePath,
+  resolveDeploymentModel,
   sanitizeComposioError,
   sanitizeConnectorError,
   savePushToken,
@@ -75,6 +76,7 @@ import {
   scheduleComputerSleep,
   screenLeaseIdForRun,
   scriptedCatalogEntry,
+  selectConfiguredModel,
   serializeModelSecret,
   takeoverLeaseMs,
   toComputerRef,
@@ -82,10 +84,21 @@ import {
   verifyMcpInstall,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
-import type { Actor, ComputerStatus, McpServer, Me, SpaceNavigation } from "@rakazo/contracts";
+import type {
+  Actor,
+  ComputerStatus,
+  HarnessChoice,
+  McpServer,
+  Me,
+  NativeHarnessAvailability,
+  NativeHarnessChoice,
+  SpaceNavigation,
+} from "@rakazo/contracts";
 import {
   appContract,
   IntegrationProviderIdSchema,
+  isNativeHarness,
+  NATIVE_HARNESSES,
   OPENAI_COMPATIBLE_PROVIDER_ID,
 } from "@rakazo/contracts";
 import {
@@ -155,6 +168,7 @@ import {
   persistDecisionProviderConfig,
   serializeSpaceDecisionConfig,
 } from "./decision-provider-config.js";
+import { externalConversationHistory } from "./external-conversation-history.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
 import { createMarketplacesService } from "./marketplaces.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
@@ -210,6 +224,7 @@ import {
   toVoiceStatus,
   voiceContext,
 } from "./voice.js";
+import { answerDelegatedWork } from "./work-answer.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
 const THREAD_MESSAGE_PAGE_SIZE = 100;
@@ -519,6 +534,65 @@ function mapSpaceLifecycleError(error: unknown): unknown {
     return new ORPCError("CONFLICT", { message: error.message });
   }
   return error;
+}
+
+/**
+ * Native runtimes need the bot's own Computer and their matching effective model
+ * connection. This is the single verdict behind both the save-time refusal and
+ * the availability the settings panel shows. The Docker placement itself is only
+ * known once the Computer is provisioned, so the runtime enforces it at run time.
+ */
+function nativeHarnessRefusal(
+  harness: NativeHarnessChoice,
+  computer: unknown,
+  effectiveProvider: string | null | undefined,
+): "computer" | "model" | null {
+  if (!computer) return "computer";
+  if (effectiveProvider !== NATIVE_HARNESSES[harness].provider) return "model";
+  return null;
+}
+
+/** A stored choice that cannot be honored is refused at save time — a send must never meet the refusal as a surprise. */
+function assertNativeChoice(
+  harness: HarnessChoice,
+  computer: unknown,
+  effectiveProvider: string | null | undefined,
+) {
+  if (!isNativeHarness(harness)) return;
+  const refusal = nativeHarnessRefusal(harness, computer, effectiveProvider);
+  if (!refusal) return;
+  const { name } = NATIVE_HARNESSES[harness];
+  throw new ORPCError("BAD_REQUEST", {
+    message:
+      refusal === "computer"
+        ? `Attach a Computer to this bot before choosing ${name}`
+        : `Choosing ${name} requires the bot's effective model to use its connected subscription`,
+  });
+}
+
+/** Same effective-model resolution the run path uses, scoped to the provider. */
+async function effectiveBotModelProvider(
+  deps: RouterDeps,
+  actor: Actor,
+  bot: { modelProvider: string | null; modelId: string | null; thinkingLevel: string | null },
+): Promise<string | null> {
+  const hasOverride = Boolean(bot.modelProvider && bot.modelId);
+  const [overrideCredential, defaultCredential, settings] = await Promise.all([
+    hasOverride && bot.modelProvider && bot.modelId
+      ? findModelCredential(deps.prisma, actor, bot.modelProvider, bot.modelId)
+      : null,
+    findDefaultModelCredential(deps.prisma, actor),
+    deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
+  ]);
+  return (
+    selectConfiguredModel({
+      bot,
+      overrideCredential,
+      defaultCredential,
+      settings,
+      deployment: deps.env.deploymentModelKey ? resolveDeploymentModel() : null,
+    }).provider ?? null
+  );
 }
 
 export function createRouter(deps: RouterDeps) {
@@ -1136,6 +1210,17 @@ export function createRouter(deps: RouterDeps) {
             }
           }
         }
+        if (input.harness !== undefined) {
+          const provider =
+            input.modelProvider !== undefined ? input.modelProvider : existing.modelProvider;
+          const modelId = input.modelId !== undefined ? input.modelId : existing.modelId;
+          const effectiveProvider = await effectiveBotModelProvider(deps, context.actor, {
+            modelProvider: provider,
+            modelId,
+            thinkingLevel: existing.thinkingLevel,
+          });
+          assertNativeChoice(input.harness, existing.computer, effectiveProvider);
+        }
         if (!existing.thread) throw new IsolationError();
         await commitBotUpdate({
           prisma: deps.prisma,
@@ -1162,6 +1247,12 @@ export function createRouter(deps: RouterDeps) {
               ? { modelProvider: input.modelProvider, modelId: input.modelId ?? null }
               : {}),
             ...(input.thinkingLevel !== undefined ? { thinkingLevel } : {}),
+            ...(input.harness !== undefined
+              ? {
+                  harnessChoice: input.harness === "default" ? null : input.harness,
+                  choiceVersion: (existing.choiceVersion ?? 0) + 1,
+                }
+              : {}),
             ...(input.teamChatAmbientEnabled !== undefined
               ? { teamChatAmbientEnabled: input.teamChatAmbientEnabled }
               : {}),
@@ -1486,7 +1577,7 @@ export function createRouter(deps: RouterDeps) {
           context.signal,
         )) {
           if (await isPeerRun(deps.prisma, event.runId, peerRunCache)) {
-            if (!shouldForwardPeerThreadEvent(event)) continue;
+            if (!(await shouldForwardPeerThreadEvent(deps.prisma, event))) continue;
           }
           yield event;
         }
@@ -1498,6 +1589,14 @@ export function createRouter(deps: RouterDeps) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         if (target.kind === "bot") {
           await assertTeachingSendAllowed(deps.prisma, context.actor.spaceId, target.botId);
+          const harness = input.harness ?? target.bot.harnessChoice;
+          if (isNativeHarness(harness)) {
+            assertNativeChoice(
+              harness,
+              target.bot.computer,
+              await effectiveBotModelProvider(deps, context.actor, target.bot),
+            );
+          }
         }
         return sendThreadMessage(deps, context.actor, target, input);
       }),
@@ -1736,10 +1835,16 @@ export function createRouter(deps: RouterDeps) {
         return { ok: true as const };
       }),
     },
-    computer: {
-      status: authed.computer.status.handler(async ({ context, input }) =>
-        computerStatus(deps, context.actor, input.botId),
+    works: {
+      answer: authed.works.answer.handler(async ({ context, input }) =>
+        answerDelegatedWork(deps, context.actor, input),
       ),
+    },
+    computer: {
+      status: authed.computer.status.handler(async ({ context, input }) => ({
+        ...(await computerStatus(deps, context.actor, input.botId)),
+        nativeHarnesses: await nativeHarnessAvailability(deps, context.actor, input.botId),
+      })),
       boot: authed.computer.boot.handler(async ({ context, input }) => {
         const bot = await repos.getBot(context.actor, input.botId);
         if (!bot.computer) throw new IsolationError();
@@ -4472,6 +4577,9 @@ export function createRouter(deps: RouterDeps) {
       },
     },
     externalConversations: {
+      history: authed.externalConversations.history.handler(({ context, input }) =>
+        externalConversationHistory(deps.prisma, context.actor, input),
+      ),
       updatePolicy: authed.externalConversations.updatePolicy.handler(
         async ({ context, input }) => {
           const { externalConversationId, ...policy } = input;
@@ -5049,6 +5157,19 @@ async function modelSetup(deps: RouterDeps, actor: Actor) {
     credential,
     settings,
     needsModel: deps.env.agentRuntime !== "scripted" && !credential && !hasDeployment,
+  };
+}
+
+async function nativeHarnessAvailability(
+  deps: RouterDeps,
+  actor: Actor,
+  botId: string,
+): Promise<NativeHarnessAvailability> {
+  const bot = await createRepos(deps.prisma).getBot(actor, botId);
+  const effectiveProvider = await effectiveBotModelProvider(deps, actor, bot);
+  return {
+    "codex-native": !nativeHarnessRefusal("codex-native", bot.computer, effectiveProvider),
+    "claude-native": !nativeHarnessRefusal("claude-native", bot.computer, effectiveProvider),
   };
 }
 
