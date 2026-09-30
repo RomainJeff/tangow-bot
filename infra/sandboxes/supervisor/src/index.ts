@@ -3,15 +3,18 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
+import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import {
   boundedSandboxCommandTimeoutMs,
+  NATIVE_MCP_RELAY_PORT,
+  nativeMcpRelayHeaders,
   readBoundedJsonResponse,
   resolveSupervisorToken,
 } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
-import { SERVICE_NAMES } from "@rakazo/logging";
+import { getLogger, SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
 import { requestLogging } from "@rakazo/logging/hono";
 import Docker from "dockerode";
@@ -34,6 +37,7 @@ import {
   homeVolumeMatches,
   hostComputerUser,
   legacyNetworkOwnedSolelyBy,
+  NATIVE_MCP_NETWORK_ALIAS,
   publishedLoopbackControlHostPort,
   resolveComputerControlEndpoint,
   resolveScreenNetworkMode,
@@ -48,6 +52,11 @@ import {
 } from "./computer-spec.js";
 import { assertComputerHomeWritable } from "./home-ownership.js";
 import {
+  MAX_NATIVE_PROCESS_WRITE_BYTES,
+  nativeProcessSchema,
+  nativeProcessWriteSchema,
+} from "./native-process-schema.js";
+import {
   assertRequestIdentity,
   attemptComputerControl,
   browserProfilePathForScreen,
@@ -56,7 +65,9 @@ import {
   computerActionSchema,
   computerControlTimeoutMs,
   containerActionSteps,
+  DockerMultiplexDecoder,
   demuxDockerStream,
+  displayReadableFilePath,
   ensureScreenCommand,
   hasComputerIdentity,
   hasValidBearerToken,
@@ -66,6 +77,8 @@ import {
   normalizeWorkspaceRelative,
   parseObservation,
   preferComputerControl,
+  readableFileRoot,
+  readableFileTarget,
   releaseAssignedScreen,
   resetManagedScreensCommand,
   type ScreenAssignment,
@@ -99,12 +112,71 @@ const teamScreenLimit = resolveTeamScreenLimit();
 // IPs, so computer control must use a published loopback port instead.
 const controlViaLoopback = process.env.SANDBOX_CONTROL_VIA_LOOPBACK === "true";
 const computerScreens = new Map<string, Map<string, ScreenAssignment>>();
+type NativeTerminal = {
+  code: number | null;
+  signal: null;
+  exitSource:
+    | "wrapper_exit_file"
+    | "unknown_after_kill"
+    | "unknown_after_missing_wrapper_exit"
+    | "unknown";
+  stderr: { present: boolean; category?: NativeStderrCategory };
+};
+type NativeStderrCategory = "authentication" | "network" | "sandbox" | "unknown";
+type NativeSession = {
+  computerId: string;
+  container: Docker.Container;
+  stream: Duplex;
+  pidFile: string;
+  exitFile: string;
+  privateHome?: string;
+  lines: string[];
+  remainder: string;
+  terminal?: NativeTerminal;
+  streamLost?: boolean;
+  exited: Promise<NativeTerminal>;
+  killEscalated: boolean;
+  stderrPresent: boolean;
+  stderrTail: string;
+};
+
+function nativeSessionCommandOptions(session: NativeSession, timeoutMs: number) {
+  return {
+    timeoutMs,
+    ...(session.privateHome ? { user: COMPUTER_USER } : {}),
+  };
+}
+
+function observeNativeStderr(session: NativeSession, chunks: Buffer[]) {
+  const text = Buffer.concat(chunks).toString("utf8");
+  if (!text) return;
+  session.stderrPresent = true;
+  session.stderrTail = `${session.stderrTail}${text}`.slice(-8_192);
+}
+
+function nativeStderrFact(session: NativeSession) {
+  if (!session.stderrPresent) return { present: false };
+  const text = session.stderrTail;
+  session.stderrTail = "";
+  if (/auth(?:entication|orization)?|login|token/i.test(text))
+    return { present: true, category: "authentication" as const };
+  if (/network|connection|dns|timed? out/i.test(text))
+    return { present: true, category: "network" as const };
+  if (/bubblewrap|sandbox/i.test(text)) return { present: true, category: "sandbox" as const };
+  return { present: true, category: "unknown" as const };
+}
+const nativeSessions = new Map<string, NativeSession>();
 
 export const MAX_SUPERVISOR_REQUEST_BYTES = 1024 * 1024;
 export const MAX_SUPERVISOR_FILE_REQUEST_BYTES = 16 * 1024 * 1024 + 64 * 1024;
+export const MAX_NATIVE_MCP_REQUEST_BYTES = 1024 * 1024;
 
 /** Keep normal control requests small while allowing the existing 16 MiB file payload. */
 export function supervisorRequestBodyLimit(method: string, pathname: string): number {
+  // JSON can encode one decoded byte as six ASCII bytes (\\u0000), plus {"data":""}.
+  // Only this route gets encoding headroom; the decoded payload stays capped at 1 MiB.
+  if (method === "POST" && /^\/computers\/[^/]+\/native-processes\/[^/]+\/write\/?$/.test(pathname))
+    return 6 * MAX_NATIVE_PROCESS_WRITE_BYTES + 11;
   return method === "POST" && /^\/computers\/[^/]+\/files\/?$/.test(pathname)
     ? MAX_SUPERVISOR_FILE_REQUEST_BYTES
     : MAX_SUPERVISOR_REQUEST_BYTES;
@@ -116,6 +188,83 @@ const limitSupervisorRequestBody: MiddlewareHandler = async (c, next) => {
     onError: (context) => context.json({ error: "Request body is too large." }, 413),
   })(c, next);
 };
+
+function nativeMcpRelayConfig(env: NodeJS.ProcessEnv = process.env) {
+  const upstream = env.RAKAZO_NATIVE_MCP_UPSTREAM?.trim();
+  const relaySecret = env.RAKAZO_NATIVE_MCP_RELAY_SECRET;
+  if (!upstream || !relaySecret) return undefined;
+  try {
+    const url = new URL(upstream);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    return { upstream: url, relaySecret };
+  } catch {
+    return undefined;
+  }
+}
+
+function nativeMcpNetworkEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.SANDBOX_SCREEN_NETWORK === "internal" || env.SANDBOX_SCREEN_NETWORK === "isolated";
+}
+
+function nativeMcpSocketIp(context: { env?: unknown }) {
+  const incoming = context.env as
+    | { incoming?: { socket?: { remoteAddress?: string } } }
+    | undefined;
+  const address = incoming?.incoming?.socket?.remoteAddress;
+  if (!address) return undefined;
+  return address.startsWith("::ffff:") ? address.slice("::ffff:".length) : address;
+}
+
+function matchingNativeMcpIp(address: string | undefined, sourceIp: string) {
+  if (!address) return false;
+  return (address.startsWith("::ffff:") ? address.slice("::ffff:".length) : address) === sourceIp;
+}
+
+async function nativeMcpSourceComputer(sourceIp: string) {
+  const containers = await docker.listContainers({
+    all: true,
+    filters: { status: ["running"] },
+  });
+  for (const candidate of containers) {
+    const info = await docker
+      .getContainer(candidate.Id)
+      .inspect()
+      .catch(() => undefined);
+    if (!info?.State.Running) continue;
+    const labels = info?.Config.Labels ?? {};
+    if (labels["rakazo.managed"] !== "true" || !labels["rakazo.botId"]) continue;
+    const addresses = Object.values(info?.NetworkSettings?.Networks ?? {}).map(
+      (network) => network.IPAddress,
+    );
+    if (addresses.some((address) => matchingNativeMcpIp(address, sourceIp))) return info!.Id;
+  }
+  return undefined;
+}
+
+const HOP_BY_HOP_HEADERS = new Set([
+  "connection",
+  "content-length",
+  "host",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+
+function nativeMcpUpstreamHeaders(request: Request, relaySecret: string, sourceComputer: string) {
+  const headers = new Headers();
+  for (const [name, value] of request.headers) {
+    const normalized = name.toLowerCase();
+    if (normalized.startsWith("x-rakazo-") || HOP_BY_HOP_HEADERS.has(normalized)) continue;
+    headers.set(name, value);
+  }
+  headers.set(nativeMcpRelayHeaders.relaySecret, relaySecret);
+  headers.set(nativeMcpRelayHeaders.sourceComputer, sourceComputer);
+  return headers;
+}
 
 const app = new Hono();
 
@@ -149,6 +298,43 @@ app.use("/computers/*", async (c, next) => {
 });
 app.use("/computers", limitSupervisorRequestBody);
 app.use("/computers/*", limitSupervisorRequestBody);
+app.use(
+  "/native-mcp",
+  bodyLimit({
+    maxSize: MAX_NATIVE_MCP_REQUEST_BYTES,
+    onError: (context) => context.json({ error: "Request body is too large." }, 413),
+  }),
+);
+
+app.on(["GET", "DELETE"], "/native-mcp", (c) => {
+  c.header("Allow", "POST");
+  return c.json({ error: "method not allowed" }, 405);
+});
+
+app.post("/native-mcp", async (c) => {
+  const config = nativeMcpRelayConfig();
+  if (!config || !nativeMcpNetworkEnabled()) {
+    return c.json({ error: "not found" }, 404);
+  }
+  const sourceIp = nativeMcpSocketIp(c);
+  if (!sourceIp) return c.json({ error: "forbidden" }, 403);
+  const sourceComputer = await nativeMcpSourceComputer(sourceIp).catch(() => undefined);
+  if (!sourceComputer) return c.json({ error: "forbidden" }, 403);
+  try {
+    const response = await fetch(config.upstream, {
+      method: "POST",
+      headers: nativeMcpUpstreamHeaders(c.req.raw, config.relaySecret, sourceComputer),
+      body: await c.req.raw.arrayBuffer(),
+      redirect: "error",
+      signal: AbortSignal.timeout(120_000),
+    });
+    const headers = new Headers(response.headers);
+    for (const header of HOP_BY_HOP_HEADERS) headers.delete(header);
+    return new Response(response.body, { status: response.status, headers });
+  } catch {
+    return c.json({ error: "upstream unavailable" }, 502);
+  }
+});
 
 const PathSegment = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 
@@ -217,6 +403,7 @@ app.post("/computers", async (c) => {
           (!storage.homeVolume || homeVolumeMatches(info.HostConfig.Mounts, storage.homeVolume))
         ) {
           if (!info.State.Running) await existing.start();
+          await attachComposeScreenPeers(info.HostConfig.NetworkMode);
           return c.json({
             id: existing.id,
             image: COMPUTER_IMAGE,
@@ -277,6 +464,7 @@ app.post("/computers", async (c) => {
             }),
           );
           await container.start();
+          await attachComposeScreenPeers(networkMode);
         } catch (error) {
           // Never force removal: a lost start response may hide a running computer.
           // Docker also refuses network removal while any endpoint is attached.
@@ -360,6 +548,409 @@ app.post("/computers/:id/exec", async (c) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return c.json({ stdout: "", stderr: message, code: 1 }, 200);
+  }
+});
+
+function privateNativeHome(home: string | undefined, botId: string | undefined) {
+  if (!home) return undefined;
+  const match = /^\/tmp\/rakazo-[a-z]+-([A-Za-z0-9_-]{1,128})-([a-f0-9]{64})$/.exec(home);
+  if (!match || match[1] !== botId) throw new Error("invalid private native home");
+  return home;
+}
+
+async function writePrivateNativeFiles(
+  container: Docker.Container,
+  home: string,
+  files: NonNullable<z.infer<typeof nativeProcessSchema>["files"]>,
+) {
+  for (const file of files) {
+    const exec = await container.exec({
+      Cmd: [
+        "sh",
+        "-c",
+        'umask 077; mkdir -p -m 700 "$1"; chmod 700 "$1"; cat > "$2"; chmod 600 "$2"',
+        "sh",
+        home,
+        `${home}/${file.path}`,
+      ],
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: false,
+      User: COMPUTER_USER,
+      WorkingDir: "/home/rakazo",
+      Env: ["HOME=/home/rakazo"],
+    });
+    const stream = (await exec.start({ hijack: true, stdin: true })) as unknown as Duplex;
+    await new Promise<void>((resolve, reject) => {
+      stream.once("end", resolve);
+      stream.once("error", reject);
+      stream.end(file.content);
+    });
+    if ((await exec.inspect()).ExitCode !== 0)
+      throw new Error("private native file could not be written");
+  }
+}
+
+app.post("/computers/:id/native-processes", async (c) => {
+  const parsed = nativeProcessSchema.safeParse(await c.req.json().catch(() => undefined));
+  if (!parsed.success) {
+    const diagnostic = {
+      code: "schema_rejected",
+      paths: parsed.error.issues.map((issue) =>
+        issue.path.map((part, index) => (issue.path[0] === "env" && index > 0 ? "*" : part)),
+      ),
+    };
+    getLogger().error("native process start failed", diagnostic);
+    return c.json({ error: "native process could not be started", ...diagnostic }, 400);
+  }
+  const body = parsed.data;
+  let code = "exec_failed";
+  try {
+    const { container } = await managedContainer(
+      c.req.param("id"),
+      c.req.header("x-rakazo-bot-id"),
+      c.req.header("x-rakazo-space-id"),
+    );
+    const id = randomUUID();
+    code = "private_files_failed";
+    const privateHome = privateNativeHome(body.privateHome, c.req.header("x-rakazo-bot-id"));
+    const pidFile = `/home/rakazo/.rakazo-native-${id}.pid`;
+    const exitFile = `/home/rakazo/.rakazo-native-${id}.exit`;
+    if (body.files && !privateHome) throw new Error("private native files require a private home");
+    if (body.files && privateHome)
+      await writePrivateNativeFiles(container, privateHome, body.files);
+    code = "exec_failed";
+    const exec = await container.exec({
+      Cmd: [
+        "setsid",
+        "-w",
+        "sh",
+        "-c",
+        'umask 077; echo "$$" > "$1"; exit_file="$2"; shift 2; test -z "$1" || { mkdir -p -m 700 "$1"; chmod 700 "$1"; }; shift; record_exit() { status="$1"; printf "%s" "$status" > "$exit_file"; exit "$status"; }; exec 3<&0; "$@" <&3 3<&- & child=$!; trap \'kill -TERM "$child" 2>/dev/null; wait "$child"; record_exit "$?"\' TERM INT; wait "$child"; record_exit "$?"',
+        "sh",
+        pidFile,
+        exitFile,
+        privateHome ?? "",
+        ...body.argv,
+      ],
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: false,
+      ...(privateHome ? { User: COMPUTER_USER } : {}),
+      WorkingDir: workspaceTarget(normalizeWorkspaceRelative(body.cwd)),
+      Env: [
+        "HOME=/home/rakazo",
+        "PATH=/home/rakazo/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        ...Object.entries(body.env ?? {}).map(([key, value]) => `${key}=${value}`),
+      ],
+    });
+    const stream = (await exec.start({ hijack: true, stdin: true })) as unknown as Duplex;
+    // `resolveExit` is held by the stream callbacks: normal stream end has a wrapper
+    // exit record, while a lost stream stays pending for DELETE to verify.
+    let resolveExit!: (value: NativeTerminal) => void;
+    const exited = new Promise<NativeTerminal>((resolve) => {
+      resolveExit = resolve;
+    });
+    const session: NativeSession = {
+      computerId: c.req.param("id"),
+      container,
+      stream,
+      pidFile,
+      exitFile,
+      privateHome,
+      lines: [],
+      remainder: "",
+      exited,
+      killEscalated: false,
+      stderrPresent: false,
+      stderrTail: "",
+    };
+    const decoder = new DockerMultiplexDecoder();
+    stream.on("data", (chunk: Buffer) => {
+      const output = decoder.push(chunk);
+      observeNativeStderr(session, output.stderr);
+      const parts = (session.remainder + Buffer.concat(output.stdout).toString("utf8")).split("\n");
+      session.remainder = parts.pop() ?? "";
+      session.lines.push(...parts.map((line) => `${line}\n`));
+    });
+    stream.once("end", async () => {
+      const exit = await runContainerCommand(
+        container,
+        ["sh", "-c", 'test -f "$1" && cat "$1"', "sh", session.exitFile],
+        nativeSessionCommandOptions(session, 1_000),
+      ).catch(() => ({ stdout: "", stderr: "", code: 1 }));
+      const recordedExit = /^\d+$/.test(exit.stdout.trim()) ? Number(exit.stdout.trim()) : null;
+      if (session.remainder) session.lines.push(`${session.remainder}\n`);
+      const exitSource =
+        recordedExit !== null
+          ? "wrapper_exit_file"
+          : session.killEscalated
+            ? "unknown_after_kill"
+            : "unknown_after_missing_wrapper_exit";
+      const wrapper =
+        recordedExit === null && session.killEscalated
+          ? await runContainerCommand(
+              container,
+              [
+                "sh",
+                "-c",
+                'if test -s "$1" && kill -0 "$(cat "$1")" 2>/dev/null; then printf present; else printf missing; fi',
+                "sh",
+                session.pidFile,
+              ],
+              nativeSessionCommandOptions(session, 1_000),
+            ).catch(() => ({ stdout: "present", stderr: "", code: 1 }))
+          : undefined;
+      const wrapperGone = wrapper !== undefined && wrapper.stdout.trim() !== "present";
+      if (recordedExit === null && (!session.killEscalated || !wrapperGone)) {
+        // A hijacked docker exec stream can close before its wrapper observes
+        // stdin EOF and writes its status. This is transport loss, not proof
+        // that the native process has ended.
+        session.streamLost = true;
+        return;
+      }
+      session.terminal = {
+        code: recordedExit,
+        signal: null,
+        exitSource,
+        stderr: nativeStderrFact(session),
+      };
+      resolveExit(session.terminal);
+    });
+    stream.once("error", () => {
+      session.streamLost = true;
+    });
+    nativeSessions.set(id, session);
+    return c.json({ id });
+  } catch {
+    getLogger().error("native process start failed", { code });
+    return c.json({ error: "native process could not be started", code }, 500);
+  }
+});
+
+app.post("/computers/:id/native-processes/:sessionId/write", async (c) => {
+  const parsed = nativeProcessWriteSchema.safeParse(await c.req.json().catch(() => undefined));
+  if (!parsed.success)
+    return c.json({ error: "invalid native process write", code: "schema_rejected" }, 400);
+  const body = parsed.data;
+  await managedContainer(
+    c.req.param("id"),
+    c.req.header("x-rakazo-bot-id"),
+    c.req.header("x-rakazo-space-id"),
+  );
+  const session = nativeSessions.get(c.req.param("sessionId"));
+  if (!session || session.computerId !== c.req.param("id"))
+    return c.json({ error: "native process not found" }, 404);
+  await new Promise<void>((resolve, reject) =>
+    session.stream.write(body.data, (error) => (error ? reject(error) : resolve())),
+  );
+  return c.json({ ok: true });
+});
+
+app.post("/computers/:id/native-processes/:sessionId/read", async (c) => {
+  await managedContainer(
+    c.req.param("id"),
+    c.req.header("x-rakazo-bot-id"),
+    c.req.header("x-rakazo-space-id"),
+  );
+  const session = nativeSessions.get(c.req.param("sessionId"));
+  if (!session || session.computerId !== c.req.param("id"))
+    return c.json({ error: "native process not found" }, 404);
+  const deadline = Date.now() + 1_000;
+  while (session.lines.length === 0 && Date.now() < deadline)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  return c.json({
+    lines: session.lines.splice(0, 128),
+    ...(session.streamLost ? { streamLost: true } : {}),
+    terminal: session.terminal ?? null,
+  });
+});
+
+app.post("/computers/:id/native-processes/:sessionId/reconfirm", async (c) => {
+  await managedContainer(
+    c.req.param("id"),
+    c.req.header("x-rakazo-bot-id"),
+    c.req.header("x-rakazo-space-id"),
+  );
+  const session = nativeSessions.get(c.req.param("sessionId"));
+  if (!session || session.computerId !== c.req.param("id"))
+    return c.json({ status: "stop_unconfirmed" });
+  const exit = await runContainerCommand(
+    session.container,
+    ["sh", "-c", 'test -f "$1" && cat "$1"', "sh", session.exitFile],
+    nativeSessionCommandOptions(session, 1_000),
+  ).catch(() => ({ stdout: "", stderr: "", code: 1 }));
+  const recordedExit = /^\d+$/.test(exit.stdout.trim());
+  const group = recordedExit
+    ? "empty"
+    : await runContainerCommand(
+        session.container,
+        [
+          "sh",
+          "-c",
+          'if test -s "$1" && kill -0 -$(cat "$1") 2>/dev/null; then printf present; else printf empty; fi',
+          "sh",
+          session.pidFile,
+        ],
+        nativeSessionCommandOptions(session, 1_000),
+      )
+        .then((result) => result.stdout.trim())
+        .catch(() => "present");
+  if (!recordedExit && group !== "empty") return c.json({ status: "stop_unconfirmed" });
+  session.terminal ??= {
+    code: recordedExit ? Number(exit.stdout.trim()) : null,
+    signal: null,
+    exitSource: recordedExit ? "wrapper_exit_file" : "unknown_after_kill",
+    stderr: nativeStderrFact(session),
+  };
+  return c.json({ status: "stopped", terminal: session.terminal });
+});
+
+app.delete("/computers/:id/native-processes/:sessionId", async (c) => {
+  await managedContainer(
+    c.req.param("id"),
+    c.req.header("x-rakazo-bot-id"),
+    c.req.header("x-rakazo-space-id"),
+  );
+  const sessionId = c.req.param("sessionId");
+  const session = nativeSessions.get(sessionId);
+  if (!session || session.computerId !== c.req.param("id")) return c.json({ status: "stopped" });
+  await runContainerCommand(
+    session.container,
+    [
+      "sh",
+      "-c",
+      'test -s "$1" && kill -TERM -$(cat "$1") 2>/dev/null || true',
+      "sh",
+      session.pidFile,
+    ],
+    nativeSessionCommandOptions(session, 1_000),
+  );
+  const waitForExit = () =>
+    Promise.race([
+      session.exited.then((outcome) => ({ kind: "exited" as const, outcome })),
+      new Promise<{ kind: "timeout" }>((resolve) =>
+        setTimeout(() => resolve({ kind: "timeout" }), 2_000),
+      ),
+    ]);
+  const confirmLostStreamExit = async () => {
+    const exit = await runContainerCommand(
+      session.container,
+      ["sh", "-c", 'test -f "$1" && cat "$1"', "sh", session.exitFile],
+      nativeSessionCommandOptions(session, 1_000),
+    ).catch(() => ({ stdout: "", stderr: "", code: 1 }));
+    const recordedExit = /^\d+$/.test(exit.stdout.trim()) ? Number(exit.stdout.trim()) : null;
+    const _wrapper = await runContainerCommand(
+      session.container,
+      [
+        "sh",
+        "-c",
+        'if test -s "$1" && kill -0 "$(cat "$1")" 2>/dev/null; then printf present; else printf missing; fi',
+        "sh",
+        session.pidFile,
+      ],
+      nativeSessionCommandOptions(session, 1_000),
+    ).catch(() => ({ stdout: "present", stderr: "", code: 1 }));
+    const group =
+      recordedExit === null && session.killEscalated
+        ? await runContainerCommand(
+            session.container,
+            [
+              "sh",
+              "-c",
+              'if test -s "$1" && kill -0 -$(cat "$1") 2>/dev/null; then printf present; else printf empty; fi',
+              "sh",
+              session.pidFile,
+            ],
+            nativeSessionCommandOptions(session, 1_000),
+          ).catch(() => ({ stdout: "present", stderr: "", code: 1 }))
+        : undefined;
+    // SIGKILL cannot write .exit. Accept that missing record only after the
+    // bounded in-container process-group probe proves every member is gone.
+    if (recordedExit === null && group?.stdout.trim() !== "empty") return null;
+    session.terminal = {
+      code: recordedExit,
+      signal: null,
+      exitSource: recordedExit !== null ? "wrapper_exit_file" : "unknown_after_kill",
+      stderr: nativeStderrFact(session),
+    };
+    return session.terminal;
+  };
+  let stopped = session.streamLost ? ({ kind: "timeout" } as const) : await waitForExit();
+  if (stopped.kind === "timeout") {
+    session.killEscalated = true;
+    await runContainerCommand(
+      session.container,
+      [
+        "sh",
+        "-c",
+        'test -s "$1" && kill -KILL -$(cat "$1") 2>/dev/null || true',
+        "sh",
+        session.pidFile,
+      ],
+      nativeSessionCommandOptions(session, 1_000),
+    );
+    stopped = session.streamLost ? ({ kind: "timeout" } as const) : await waitForExit();
+  }
+  // A KILL can end the wrapper without closing Docker's hijacked stream.
+  // Read the exit file in either stream state before declaring uncertainty.
+  if (stopped.kind === "timeout") {
+    const outcome = await confirmLostStreamExit();
+    if (outcome) stopped = { kind: "exited", outcome };
+  }
+  if (stopped.kind === "timeout") {
+    // Keep both handle and home: the process may still own state needed for a
+    // later confirmed stop. Deleting either would destroy recovery evidence.
+    return c.json({ status: "stop_unconfirmed", cleanup: "deferred" });
+  }
+  session.stream.end();
+  session.stream.destroy();
+  let cleanup = session.privateHome ? "preserved" : "not_requested";
+  if (session.privateHome) {
+    const privateState = await runContainerCommand(
+      session.container,
+      [
+        "sh",
+        "-c",
+        'find "$1" -mindepth 1 -maxdepth 1 \\( -name config.toml -o -name mcp-config.json -o -name system-prompt.md -o -name auth.json -o -name auth.json.lock -o -name credentials.json -o -name credentials.json.lock -o -name .credentials.json -o -name .credentials.json.lock -o -name .claude.json -o -name auth -o -name credentials \\) -exec rm -rf -- {} +',
+        "sh",
+        session.privateHome,
+      ],
+      nativeSessionCommandOptions(session, 1_000),
+    );
+    if (privateState.code !== 0) cleanup = "failed";
+  }
+  const controls = await runContainerCommand(
+    session.container,
+    ["sh", "-c", 'rm -f -- "$1" "$2"', "sh", session.pidFile, session.exitFile],
+    nativeSessionCommandOptions(session, 1_000),
+  );
+  if (controls.code !== 0) cleanup = "failed";
+  if (cleanup !== "failed") nativeSessions.delete(sessionId);
+  return c.json({ status: "stopped", cleanup, terminal: stopped.outcome });
+});
+
+app.delete("/computers/:id/native-homes", async (c) => {
+  const body = z.object({ home: z.string().max(512) }).parse(await c.req.json());
+  try {
+    const { container } = await managedContainer(
+      c.req.param("id"),
+      c.req.header("x-rakazo-bot-id"),
+      c.req.header("x-rakazo-space-id"),
+    );
+    const home = privateNativeHome(body.home, c.req.header("x-rakazo-bot-id"));
+    if (!home) throw new Error("private native home is required");
+    const removed = await runContainerCommand(
+      container,
+      ["sh", "-c", 'test -d "$1" && rm -rf -- "$1"', "sh", home],
+      { timeoutMs: 1_000, user: COMPUTER_USER },
+    );
+    if (removed.code !== 0) throw new Error("private native home could not be removed");
+    return c.json({ cleanup: "removed" });
+  } catch {
+    return c.json({ error: "native home cleanup unavailable" }, 500);
   }
 });
 
@@ -529,8 +1120,10 @@ app.get("/computers/:id/files", async (c) => {
       c.req.header("x-rakazo-bot-id"),
       c.req.header("x-rakazo-space-id"),
     );
-    const relative = normalizeWorkspaceRelative(c.req.query("path") ?? "");
-    const target = workspaceTarget(relative);
+    const requestedPath = c.req.query("path") ?? "";
+    const relative = normalizeWorkspaceRelative(requestedPath);
+    const target = readableFileTarget(requestedPath);
+    const mountedRoot = readableFileRoot(requestedPath);
     if (c.req.query("mode") === "read") {
       const maxBytesRaw = c.req.query("maxBytes");
       const maxBytes = maxBytesRaw === undefined ? undefined : Number(maxBytesRaw);
@@ -538,8 +1131,9 @@ app.get("/computers/:id/files", async (c) => {
         return c.json({ error: "invalid maxBytes" }, 400);
       }
       const script = [
-        "import base64, sys",
-        "target, limit = sys.argv[1], int(sys.argv[2])",
+        "import base64, os, sys",
+        "target, limit, root = sys.argv[1], int(sys.argv[2]), sys.argv[3]",
+        "if root and os.path.commonpath([os.path.realpath(target), os.path.realpath(root)]) != os.path.realpath(root): sys.exit(43)",
         "with open(target, 'rb') as source:",
         "  content = source.read() if limit < 0 else source.read(limit + 1)",
         "if limit >= 0 and len(content) > limit: sys.exit(42)",
@@ -551,6 +1145,7 @@ app.get("/computers/:id/files", async (c) => {
         script,
         target,
         String(maxBytes ?? -1),
+        mountedRoot ?? "",
       ]);
       if (result.code === 42) {
         return c.json({ error: `computer file exceeds ${maxBytes} bytes` }, 413);
@@ -560,7 +1155,8 @@ app.get("/computers/:id/files", async (c) => {
     }
     const script = [
       "import json, os, stat, sys",
-      "root, rel = sys.argv[1], sys.argv[2]",
+      "root, rel, allowed_root = sys.argv[1], sys.argv[2], sys.argv[3]",
+      "if allowed_root and os.path.commonpath([os.path.realpath(root), os.path.realpath(allowed_root)]) != os.path.realpath(allowed_root): sys.exit(43)",
       "out = []",
       "for item in os.scandir(root):",
       "  if item.is_symlink(): continue",
@@ -575,9 +1171,16 @@ app.get("/computers/:id/files", async (c) => {
       script,
       target,
       relative,
+      mountedRoot ?? "",
     ]);
     if (result.code !== 0) return c.json({ error: result.stderr || "directory not found" }, 404);
-    return c.json(JSON.parse(result.stdout));
+    const entries = JSON.parse(result.stdout) as Array<{ path: string }>;
+    return c.json(
+      entries.map((entry) => ({
+        ...entry,
+        path: displayReadableFilePath(requestedPath, entry.path),
+      })),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return c.json({ error: message }, 400);
@@ -819,7 +1422,7 @@ function startSupervisor() {
   // and pass its healthcheck, then fail the first POST /computers with a 500 that reads like a
   // Docker problem. Failing here names the variable while the deployment is still coming up.
   computerResourceLimits();
-  const port = Number(process.env.SUPERVISOR_PORT ?? 7091);
+  const port = Number(process.env.SUPERVISOR_PORT ?? NATIVE_MCP_RELAY_PORT);
   const hostname = process.env.SUPERVISOR_HOST ?? "127.0.0.1";
   const server = serve({ fetch: app.fetch, hostname, port }, () => {
     logger.info("supervisor listening", { "http.host": hostname, "http.port": port });
@@ -892,6 +1495,10 @@ async function ensureComputerImage() {
       });
       await docker.getImage(COMPUTER_IMAGE).inspect();
     })();
+    // A transient Docker failure (daemon restart) must not poison every later request.
+    imageReady.catch(() => {
+      imageReady = undefined;
+    });
   }
   await imageReady;
 }
@@ -1216,7 +1823,22 @@ function computerNetworkName(botId: string, info: Docker.ContainerInspectInfo | 
   return computerNetworkNameFor(botId);
 }
 
-async function connectComposeScreenPeers(networkName: string, info: Docker.ContainerInspectInfo) {
+// Isolated screens give each computer its own network. The supervisor (and web) used to join it
+// only when a screen was published, so computer_act / launch_app on a freshly created or resumed
+// computer failed with "fetch failed" until someone opened its screen. Join as soon as it runs.
+async function attachComposeScreenPeers(networkName: string | null | undefined) {
+  if (screenNetworkMode !== "isolated" || !networkName) return;
+  const runtime = supervisorInfo ?? (await inspectSupervisorContainer());
+  if (!runtime) return;
+  // A failed attach must not fail the boot: the computer still runs, and the next screen publish
+  // retries the same attach; until then control calls surface "fetch failed" as before.
+  await connectComposeScreenPeers(networkName, runtime).catch(() => undefined);
+}
+
+export async function connectComposeScreenPeers(
+  networkName: string,
+  info: Docker.ContainerInspectInfo,
+) {
   const peerIds = new Set([info.Id]);
   const project = info.Config.Labels?.["com.docker.compose.project"];
   if (project) {
@@ -1232,13 +1854,28 @@ async function connectComposeScreenPeers(networkName: string, info: Docker.Conta
   const networkInfo = await network.inspect();
   const connectedIds = new Set(Object.keys(networkInfo.Containers ?? {}));
   await Promise.all(
-    [...peerIds]
-      .filter((containerId) => !connectedIds.has(containerId))
-      .map((containerId) =>
-        network.connect({ Container: containerId }).catch((error) => {
+    [...peerIds].map(async (containerId) => {
+      let aliases = [NATIVE_MCP_NETWORK_ALIAS];
+      if (connectedIds.has(containerId)) {
+        if (containerId !== info.Id) return;
+        // The cached supervisor inspection predates network attachment. Read the
+        // live endpoint: network.inspect().Containers does not expose DNS aliases.
+        const current = await docker.getContainer(containerId).inspect();
+        const existing =
+          current.NetworkSettings.Networks[networkInfo.Name ?? networkName]?.Aliases ?? [];
+        if (existing.includes(NATIVE_MCP_NETWORK_ALIAS)) return;
+        aliases = [...existing, NATIVE_MCP_NETWORK_ALIAS];
+        await network.disconnect({ Container: containerId });
+      }
+      await network
+        .connect({
+          Container: containerId,
+          ...(containerId === info.Id ? { EndpointConfig: { Aliases: aliases } } : {}),
+        })
+        .catch((error) => {
           if (!/already exists|already connected/i.test(String(error))) throw error;
-        }),
-      ),
+        });
+    }),
   );
 }
 
@@ -1321,7 +1958,13 @@ async function inspectSupervisorContainer() {
 async function runContainerCommand(
   container: Docker.Container,
   argv: string[],
-  options: { workingDir?: string; env?: string[]; timeoutMs?: number; signal?: AbortSignal } = {},
+  options: {
+    workingDir?: string;
+    env?: string[];
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    user?: string;
+  } = {},
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   options.signal?.throwIfAborted();
   const timeoutMs = options.timeoutMs;
@@ -1337,6 +1980,7 @@ async function runContainerCommand(
     AttachStdout: true,
     AttachStderr: true,
     ...(options.signal ? { AttachStdin: true } : {}),
+    ...(options.user ? { User: options.user } : {}),
     WorkingDir: options.workingDir ?? "/home/rakazo",
     Env: options.env ?? ["DISPLAY=:1", "HOME=/home/rakazo"],
   });

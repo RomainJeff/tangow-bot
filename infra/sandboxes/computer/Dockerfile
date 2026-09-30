@@ -44,8 +44,44 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && printf '%s\n' '#!/bin/sh' 'exec xsetroot -solid "#111113" "$@"' > /usr/bin/fbsetbg \
   && chmod +x /usr/bin/fbsetbg \
   && ln -sfn /bin/true /usr/bin/xmessage
+# --- horahow: office toolchain (same mechanics as the coding-harness document skills) ---
+# LibreOffice headless for conversion/rendering (docx/xlsx/pptx -> pdf, pdf -> images via
+# poppler), pandoc for markdown <-> docx, Python libs for structured generation, Node libs
+# (docx, pptxgenjs) for the JS-based generators, metric-compatible fonts for Office fidelity.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-impress \
+    libreoffice-draw \
+    pandoc \
+    python3-pip \
+    python3-venv \
+    unzip \
+    zip \
+    nodejs \
+    npm \
+    fonts-crosextra-carlito \
+    fonts-crosextra-caladea \
+    fonts-noto-core \
+  && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --no-cache-dir --break-system-packages \
+    python-docx python-pptx openpyxl xlsxwriter reportlab pypdf pdfplumber pymupdf \
+    markdown Pillow xxhash \
+  && npm install -g --no-audit --no-fund docx pptxgenjs \
+  && npm cache clean --force \
+  && install -d -m 755 /usr/local/share/rakazo
+ENV NODE_PATH=/usr/local/lib/node_modules
+# The directory is created above with an explicit mode: COPY would otherwise inherit a
+# restrictive host umask and leave it unreadable to USER 1000 (see comment further up).
+COPY --chmod=644 OFFICE-TOOLS.md /usr/local/share/rakazo/OFFICE-TOOLS.md
+# --- end horahow office toolchain ---
 ENV DISPLAY=:1
 ENV HOME=/home/rakazo
+RUN npm install --global --no-audit --no-fund --cache /tmp/rakazo-npm-cache \
+    @openai/codex@0.154.0 \
+    @anthropic-ai/claude-code@2.1.282 \
+  && npm cache clean --force \
+  && rm -rf /tmp/rakazo-npm-cache
 WORKDIR /home/rakazo
 # --chmod normalizes modes: a restrictive host umask (e.g. 077 on hardened hosts) would
 # otherwise leave these files unreadable to USER 1000 at runtime.

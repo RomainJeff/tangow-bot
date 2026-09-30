@@ -389,6 +389,42 @@ export function workspaceTarget(relative: string) {
   return relative ? path.posix.join("/home/rakazo", relative) : "/home/rakazo";
 }
 
+/** The real-path containment root for a permitted mounted skill tree. */
+export function readableFileRoot(requestedPath: string): string | undefined {
+  if (requestedPath === "/skills/user" || requestedPath.startsWith("/skills/user/")) {
+    return "/skills/user";
+  }
+  if (
+    requestedPath === "/skills/marketplaces" ||
+    requestedPath.startsWith("/skills/marketplaces/")
+  ) {
+    return "/skills/marketplaces";
+  }
+  return undefined;
+}
+
+/** File reads may inspect the two skills trees explicitly mounted read-only by the supervisor. */
+export function readableFileTarget(requestedPath: string) {
+  const relative = normalizeWorkspaceRelative(requestedPath);
+  const root = readableFileRoot(requestedPath);
+  if (root === "/skills/user") {
+    return relative === "skills/user"
+      ? root
+      : path.posix.join(root, relative.slice("skills/user/".length));
+  }
+  if (root === "/skills/marketplaces") {
+    return relative === "skills/marketplaces"
+      ? root
+      : path.posix.join(root, relative.slice("skills/marketplaces/".length));
+  }
+  return workspaceTarget(relative);
+}
+
+/** Preserve an absolute mounted path so a list entry can be read without reconstruction. */
+export function displayReadableFilePath(requestedPath: string, storedPath: string) {
+  return readableFileRoot(requestedPath) ? `/${storedPath}` : storedPath;
+}
+
 export function sandboxTimeoutCommand(argv: string[], timeoutMs: number, completionMarker: string) {
   return [
     "timeout",
@@ -473,4 +509,28 @@ export function demuxDockerStream(buffer: Buffer): { stdout: string; stderr: str
     stdout: Buffer.concat(stdout).toString("utf8"),
     stderr: Buffer.concat(stderr).toString("utf8"),
   };
+}
+
+/** Incremental decoder for Docker's non-TTY exec framing. */
+export class DockerMultiplexDecoder {
+  private remainder = Buffer.alloc(0);
+
+  push(chunk: Buffer): { stdout: Buffer[]; stderr: Buffer[] } {
+    const input = Buffer.concat([this.remainder, chunk]);
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let offset = 0;
+    while (input.length - offset >= 8) {
+      if (input[offset] !== 1 && input[offset] !== 2) throw new Error("invalid Docker exec frame");
+      if (input[offset + 1] || input[offset + 2] || input[offset + 3])
+        throw new Error("invalid Docker exec frame");
+      const size = input.readUInt32BE(offset + 4);
+      if (input.length - offset < 8 + size) break;
+      const payload = input.subarray(offset + 8, offset + 8 + size);
+      (input[offset] === 2 ? stderr : stdout).push(payload);
+      offset += 8 + size;
+    }
+    this.remainder = input.subarray(offset);
+    return { stdout, stderr };
+  }
 }

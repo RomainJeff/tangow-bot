@@ -10,6 +10,7 @@ export const COMPUTER_USER = `${COMPUTER_UID}:${COMPUTER_GID}`;
 
 export { screenPorts };
 export const COMPUTER_CONTROL_PORT = 7070;
+export { NATIVE_MCP_NETWORK_ALIAS } from "@rakazo/core";
 export const SCREEN_HOST = process.env.SANDBOX_SCREEN_HOST ?? "127.0.0.1";
 export type ScreenNetworkMode = "published" | "internal" | "isolated";
 
@@ -255,6 +256,13 @@ export function containerCreateOptions(input: ComputerCreateInput) {
       "rakazo.managed": "true",
       "rakazo.botId": input.botId,
       "rakazo.spaceId": input.spaceId,
+      ...(process.env.RAKAZO_T01_OWNER_LABEL
+        ? {
+            "rakazo.t01.scope": "isolated",
+            "rakazo.t01.runner": "live-subscription",
+            "rakazo.t01.owner": process.env.RAKAZO_T01_OWNER_LABEL,
+          }
+        : {}),
     },
     ExposedPorts: ports.ExposedPorts,
     HostConfig: {

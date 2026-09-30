@@ -23,7 +23,9 @@ import {
   containerActionStep,
   containerActionSteps,
   DOCKER_BROWSER_ALIASES,
+  DockerMultiplexDecoder,
   demuxDockerStream,
+  displayReadableFilePath,
   ensureScreenCommand,
   hasComputerIdentity,
   hasValidBearerToken,
@@ -33,6 +35,8 @@ import {
   normalizeWorkspaceRelative,
   parseObservation,
   preferComputerControl,
+  readableFileRoot,
+  readableFileTarget,
   releaseAssignedScreen,
   resetManagedScreensCommand,
   type ScreenAssignment,
@@ -274,6 +278,23 @@ describe("sandbox supervisor input containment", () => {
     expect(() => normalizeWorkspaceRelative("../outside")).toThrow(/escapes/);
     expect(() => normalizeWorkspaceRelative("notes/./result.txt")).toThrow(/escapes/);
     expect(() => normalizeWorkspaceRelative("notes/../outside")).toThrow(/escapes/);
+  });
+
+  it("maps only absolute mounted skill paths for file reads and returns reusable entries", () => {
+    expect(readableFileTarget("/skills/user/example/SKILL.md")).toBe(
+      "/skills/user/example/SKILL.md",
+    );
+    expect(readableFileTarget("/skills/marketplaces/acme/plugins/p/skills/s/SKILL.md")).toBe(
+      "/skills/marketplaces/acme/plugins/p/skills/s/SKILL.md",
+    );
+    expect(readableFileTarget("skills/user/example/SKILL.md")).toBe(
+      "/home/rakazo/skills/user/example/SKILL.md",
+    );
+    expect(displayReadableFilePath("/skills/user/example", "skills/user/example/SKILL.md")).toBe(
+      "/skills/user/example/SKILL.md",
+    );
+    expect(readableFileRoot("/skills/user/example/SKILL.md")).toBe("/skills/user");
+    expect(() => readableFileTarget("/skills/user/../outside")).toThrow(/escapes/);
   });
 
   it("requires both bot and workspace identities to match", () => {
@@ -810,6 +831,68 @@ describe("docker exec stream demux", () => {
       stdout: "aGVsbG8=\n",
       stderr: "python: DeprecationWarning\n",
     });
+  });
+
+  it("incrementally decodes fragmented and coalesced native frames", () => {
+    const decoder = new DockerMultiplexDecoder();
+    const stream = Buffer.concat([
+      frame(1, '{"id":1}\n'),
+      frame(2, "warning\n"),
+      frame(1, '{"id":2}\n'),
+    ]);
+    const first = decoder.push(stream.subarray(0, 11));
+    expect(first).toEqual({ stdout: [], stderr: [] });
+    const second = decoder.push(stream.subarray(11));
+    expect(Buffer.concat(second.stdout).toString()).toBe('{"id":1}\n{"id":2}\n');
+    expect(Buffer.concat(second.stderr).toString()).toBe("warning\n");
+  });
+
+  it("reconstructs the app-server JSON-RPC transcript byte-for-byte at every TCP fragmentation point, never emitting a NUL", () => {
+    // Regression characterization for the T01 S2 Docker investigation. It covers
+    // only DockerMultiplexDecoder and the index.ts accumulation loop; it does not
+    // establish a global cause for a byte seen elsewhere in the runtime.
+    const lines = [
+      JSON.stringify({ jsonrpc: "2.0", id: 1, result: {} }),
+      JSON.stringify({ jsonrpc: "2.0", id: 2, result: { thread: { id: "t01-native-thread" } } }),
+      JSON.stringify({ jsonrpc: "2.0", id: 3, result: { turn: { id: "t01-native-turn" } } }),
+      JSON.stringify({
+        jsonrpc: "2.0",
+        method: "item/agentMessage/delta",
+        params: { delta: "synthetic native result" },
+      }),
+      JSON.stringify({
+        jsonrpc: "2.0",
+        method: "turn/completed",
+        params: { turn: { status: "completed" } },
+      }),
+    ];
+    const fullText = lines.map((line) => `${line}\n`).join("");
+    const wire = frame(1, fullText);
+
+    const reconstruct = (chunkSizes: number[]) => {
+      const decoder = new DockerMultiplexDecoder();
+      let remainder = "";
+      const collected: string[] = [];
+      let offset = 0;
+      for (const size of chunkSizes) {
+        const chunk = wire.subarray(offset, offset + size);
+        offset += size;
+        if (chunk.length === 0) continue;
+        const output = decoder.push(chunk);
+        const parts = (remainder + Buffer.concat(output.stdout).toString("utf8")).split("\n");
+        remainder = parts.pop() ?? "";
+        collected.push(...parts.map((line) => `${line}\n`));
+      }
+      return collected.join("");
+    };
+
+    expect(reconstruct([wire.length])).toBe(fullText);
+    expect(reconstruct(Array.from({ length: wire.length }, () => 1)).includes(" ")).toBe(false);
+    for (let cut = 1; cut < wire.length; cut++) {
+      const out = reconstruct([cut, wire.length - cut]);
+      expect(out).toBe(fullText);
+      expect(out.includes(" ")).toBe(false);
+    }
   });
 
   it("treats a raw tty stream as stdout", () => {
