@@ -165,11 +165,14 @@ export function repairMarkdownTables(markdown: string): string {
     const previous = lines[i - 1] ?? "";
     const next = lines[i + 1] ?? "";
     const cells = inFence ? 0 : pipeCells(line);
+    // `next` heading its own real table (a separator right under it) means
+    // this line is prose with pipes above that table, not a header.
     const startsTable =
       cells >= 2 &&
       pipeCells(previous) === 0 &&
       pipeCells(next) === cells &&
-      !SEPARATOR_ROW.test(next);
+      !SEPARATOR_ROW.test(next) &&
+      !SEPARATOR_ROW.test(lines[i + 2] ?? "");
     if (startsTable) {
       if (previous.trim() !== "") out.push("");
       out.push(line, `|${" --- |".repeat(cells)}`);
