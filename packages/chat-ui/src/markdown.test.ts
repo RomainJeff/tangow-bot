@@ -152,9 +152,7 @@ describe("repairMarkdownTables", () => {
   it("ignores pipes inside inline code and escaped pipes", () => {
     const code = "Run `ls | wc -l`\nthen `cat a | sort`";
     expect(repairMarkdownTables(code)).toBe(code);
-    expect(repairMarkdownTables("a \\| b | c\nd | e")).toBe(
-      "a \\| b | c\n| --- | --- |\nd | e",
-    );
+    expect(repairMarkdownTables("a \\| b | c\nd | e")).toBe("a \\| b | c\n| --- | --- |\nd | e");
     const escapedMismatch = "a \\| b | c\nd | e | f";
     expect(repairMarkdownTables(escapedMismatch)).toBe(escapedMismatch);
   });
