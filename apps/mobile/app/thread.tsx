@@ -1456,6 +1456,9 @@ function Thread() {
     };
     clearOriginComposer();
     let rewindApplied = false;
+    // Once the server has the message (or the routine runs), a later failure
+    // (a refresh) must not put it back in the composer to be sent twice.
+    let delivered = false;
 
     setSending(true);
     setError(null);
@@ -1472,6 +1475,7 @@ function Thread() {
         );
       }
       if (!plan.shouldSend) {
+        delivered = true;
         dropDelayedSetup();
         if (reroutedToGroup && groupTarget) {
           router.push({
@@ -1529,6 +1533,7 @@ function Thread() {
               replyToMessageId: composerSnapshot.replyTarget?.id,
             },
       );
+      delivered = true;
       dropDelayedSetup();
       void loadSessionToken()
         .then((token) => resumeLiveNotifications(currentApiBase(), token, selectedSpaceId() ?? ""))
@@ -1549,17 +1554,23 @@ function Thread() {
     } catch (err) {
       // 7a: restore the snapshot — an already-applied rewind stays applied,
       // and a rewind that never reached the server comes back so the person
-      // doesn't lose their edit target on a retry.
-      setDraft(composerSnapshot.draft);
-      setSelectedMentions(composerSnapshot.selectedMentions);
-      setSelectedSkill(composerSnapshot.selectedSkill);
-      if (composerSnapshot.pendingAttachments.length) {
-        setPendingAttachments((current) => [...current, ...composerSnapshot.pendingAttachments]);
-      }
-      setReplyTarget(composerSnapshot.replyTarget);
-      if (!rewindApplied) {
-        setRewindTarget(composerSnapshot.rewindTarget);
-        setRewindArtifactIds(composerSnapshot.rewindArtifactIds);
+      // doesn't lose their edit target on a retry. Attachments carry their
+      // own thread key; the rest is the screen's single composer, so it only
+      // comes back if the person is still on the thread they sent from.
+      if (!delivered) {
+        if (composerSnapshot.pendingAttachments.length) {
+          setPendingAttachments((current) => [...current, ...composerSnapshot.pendingAttachments]);
+        }
+        if (isCurrentTarget(initialBotTarget, initialGroupTarget)) {
+          setDraft(composerSnapshot.draft);
+          setSelectedMentions(composerSnapshot.selectedMentions);
+          setSelectedSkill(composerSnapshot.selectedSkill);
+          setReplyTarget(composerSnapshot.replyTarget);
+          if (!rewindApplied) {
+            setRewindTarget(composerSnapshot.rewindTarget);
+            setRewindArtifactIds(composerSnapshot.rewindArtifactIds);
+          }
+        }
       }
       if (reroutedToGroup && groupTarget) {
         setError(err instanceof Error ? err.message : t("Failed to send message"));
