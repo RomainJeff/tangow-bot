@@ -497,6 +497,10 @@ function Thread() {
   // Until when a row the person opened is being held in place: the
   // follow-latest scroll stays out of its way meanwhile.
   const holdingRowUntil = useRef(0);
+  // A content change that landed during the hold, replayed once it ends.
+  const heldContentChange = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const contentChanged = useRef(() => {});
+  useEffect(() => () => clearTimeout(heldContentChange.current), []);
   // A row the person opens keeps the row just above it (the next index: the
   // list is inverted) in place instead of the latest message, so its header
   // stays put. The anchor stays set afterwards: switching it back moved the
@@ -1775,6 +1779,18 @@ function Thread() {
     });
   }
 
+  contentChanged.current = () => {
+    const blocked = Boolean(
+      jumpScrollTarget.current ||
+        (pinnedAroundRef.current &&
+          ((pinnedAroundRef.current.botId && pinnedAroundRef.current.botId === botId) ||
+            (pinnedAroundRef.current.groupId && pinnedAroundRef.current.groupId === groupId))) ||
+        expandedHistoryThread.current === snap?.threadId,
+    );
+    performScroll(scrollBehavior.current.onContentChanged(blocked, latestMessageId));
+    setThreadScrollState(scrollBehavior.current.state());
+  };
+
   function updateUserScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     listOffset.current = event.nativeEvent.contentOffset.y;
     // Inverted FlatList: contentOffset.y is distance from the latest messages.
@@ -2339,19 +2355,15 @@ function Thread() {
                     loadingOlderContent.current = false;
                     return;
                   }
-                  // A row the person just opened is holding its place.
-                  if (Date.now() < holdingRowUntil.current) return;
-                  const blocked = Boolean(
-                    jumpScrollTarget.current ||
-                      (pinnedAroundRef.current &&
-                        ((pinnedAroundRef.current.botId &&
-                          pinnedAroundRef.current.botId === botId) ||
-                          (pinnedAroundRef.current.groupId &&
-                            pinnedAroundRef.current.groupId === groupId))) ||
-                      expandedHistoryThread.current === snap?.threadId,
-                  );
-                  performScroll(scrollBehavior.current.onContentChanged(blocked, latestMessageId));
-                  setThreadScrollState(scrollBehavior.current.state());
+                  // A row the person just opened is holding its place: replay
+                  // the change once the hold ends, so it isn't lost.
+                  const held = holdingRowUntil.current - Date.now();
+                  clearTimeout(heldContentChange.current);
+                  if (held > 0) {
+                    heldContentChange.current = setTimeout(() => contentChanged.current(), held);
+                    return;
+                  }
+                  contentChanged.current();
                 }}
                 ListFooterComponent={loadEarlierControl}
                 ListHeaderComponent={workingFooter}
