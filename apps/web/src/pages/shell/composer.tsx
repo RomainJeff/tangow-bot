@@ -185,7 +185,9 @@ export const Composer = memo(function Composer({
     dictateSnapshotRef.current = null;
     if (snapshot) {
       const last = dictateLastSpeechRef.current;
-      const dictated = keepDictated ? [last.transcript, last.interim].filter(Boolean).join(" ") : "";
+      const dictated = keepDictated
+        ? [last.transcript, last.interim].filter(Boolean).join(" ")
+        : "";
       setDraft([snapshot.draft, dictated].filter(Boolean).join(" "));
       setSelectedMentions(snapshot.mentions);
       setSelectedSkill(snapshot.skill);
@@ -321,6 +323,8 @@ export const Composer = memo(function Composer({
       dictateFinishCancelledRef.current = false;
       return;
     }
+    // Partial text (a chunk failed or timed out) is kept, with the error shown.
+    if (dictation.state.error) setDictationError(dictation.state.error);
     setIsDictating(false);
     dictateSnapshotRef.current = null;
     setDictateSpeech({ committed: "", interim: "" });

@@ -337,6 +337,31 @@ describe("Composer dictation forced-cancel paths", () => {
     unmount(root, container);
   });
 
+  it("✓ with a partial transcription keeps the text and shows the error", async () => {
+    dictationMock.finishDictate.mockImplementationOnce(async () => {
+      dictationMock.emit({
+        status: "idle",
+        transcript: "",
+        error: "Transcription request timed out.",
+      });
+      return "partial";
+    });
+    const { container, root } = mount();
+    act(() => {
+      button(container, "Dictate").click();
+    });
+    await act(async () => {
+      button(container, "Insert dictation").click();
+    });
+
+    expect(draftTextarea(container).value).toBe("partial");
+    expect(container.querySelector('[data-testid="composer-error"]')?.textContent).toContain(
+      "Transcription request timed out.",
+    );
+
+    unmount(root, container);
+  });
+
   it("an engine error keeps the dictated text and shows the error", () => {
     const { container, root } = mount();
     act(() => {
