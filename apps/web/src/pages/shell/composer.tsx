@@ -146,9 +146,12 @@ export const Composer = memo(function Composer({
   // in-flight chunk transcription before it knows the final text; this
   // tracks that brief window so the UI can show it and × can still cut in.
   const [dictateFinishing, setDictateFinishing] = useState(false);
-  const dictateFinishingRef = useRef(false);
-  dictateFinishingRef.current = dictateFinishing;
   const dictateFinishCancelledRef = useRef(false);
+  // Set only by ×: every other way dictation ends (an engine error, a call
+  // cutting it off) keeps what was dictated rather than restoring the
+  // pre-dictation draft.
+  const dictateUserCancelRef = useRef(false);
+  const [dictationError, setDictationError] = useState<string | null>(null);
   const speechAvailable = useMemo(() => webSpeechAvailable(), []);
   const dictationAvailable = speechAvailable || Boolean(dictationTranscribe);
   // Electron's Chromium reports Web Speech as available but it usually has no
@@ -175,13 +178,15 @@ export const Composer = memo(function Composer({
     textareaRef.current?.focus();
   }, [rewindDraftKey, rewindDraftText]);
 
-  function exitDictationAsForcedCancel() {
+  function exitDictation(keepDictated: boolean) {
     setIsDictating(false);
     const snapshot = dictateSnapshotRef.current;
     const wasActive = snapshot !== null;
     dictateSnapshotRef.current = null;
     if (snapshot) {
-      setDraft(snapshot.draft);
+      const last = dictateLastSpeechRef.current;
+      const dictated = keepDictated ? [last.transcript, last.interim].filter(Boolean).join(" ") : "";
+      setDraft([snapshot.draft, dictated].filter(Boolean).join(" "));
       setSelectedMentions(snapshot.mentions);
       setSelectedSkill(snapshot.skill);
     }
@@ -197,7 +202,9 @@ export const Composer = memo(function Composer({
   // The single place dictation actually exits: subscribing (not calling
   // stop() reactively) means × (below), a forced cancel, and the shared
   // `dictation` instance being cut off from elsewhere (starting the call)
-  // all funnel through the same restore. `insertDictation` is the one path
+  // all funnel through here: × restores the pre-dictation draft, anything
+  // else keeps the dictated text and surfaces the engine's error, if any.
+  // `insertDictation` is the one path
   // that already made its own exit and sets `dictateInsertingRef` first so
   // this effect leaves its result alone.
   useEffect(() => {
@@ -217,8 +224,9 @@ export const Composer = memo(function Composer({
         setDictateSpeech({ committed: transcript, interim });
         return;
       }
-      if (dictateInsertingRef.current) return;
-      exitDictationAsForcedCancel();
+      if (dictateInsertingRef.current || !dictateSnapshotRef.current) return;
+      if (snapshot.error) setDictationError(snapshot.error);
+      exitDictation(!dictateUserCancelRef.current);
     });
     return () => {
       unsubscribe();
@@ -229,23 +237,24 @@ export const Composer = memo(function Composer({
 
   useEffect(() => {
     if (!isDictating) return;
-    function forceCancelIfHidden() {
-      // A ✓ already in flight (waiting on the last chunk's transcription) is
-      // a bounded wait, not idle listening — don't cut it off.
-      if (dictateFinishingRef.current) return;
-      if (document.hidden) dictation.stop("cancel");
+    // Auto-stops end dictation like ✓ (keeping what was said, including the
+    // recorder's pending chunk), never like ×. A ✓ already in flight is a
+    // bounded wait, not idle listening — leave it alone.
+    function stopIfHidden() {
+      if (dictateInsertingRef.current) return;
+      if (document.hidden) void insertDictation();
     }
     const interval = setInterval(() => {
-      if (dictateFinishingRef.current) return;
+      if (dictateInsertingRef.current) return;
       const now = Date.now();
       const silentTooLong = now - dictateActivityRef.current > 60_000;
       const sessionTooLong = now - dictateStartedRef.current > 5 * 60_000;
-      if (silentTooLong || sessionTooLong) dictation.stop("cancel");
+      if (silentTooLong || sessionTooLong) void insertDictation();
     }, 2_000);
-    document.addEventListener("visibilitychange", forceCancelIfHidden);
+    document.addEventListener("visibilitychange", stopIfHidden);
     return () => {
       clearInterval(interval);
-      document.removeEventListener("visibilitychange", forceCancelIfHidden);
+      document.removeEventListener("visibilitychange", stopIfHidden);
     };
   }, [isDictating]);
 
@@ -259,6 +268,8 @@ export const Composer = memo(function Composer({
     dictateLastSpeechRef.current = { transcript: "", interim: "" };
     dictateActivityRef.current = Date.now();
     dictateStartedRef.current = Date.now();
+    dictateUserCancelRef.current = false;
+    setDictationError(null);
     setIsDictating(true);
     window.requestAnimationFrame(() => dictationPreviewRef.current?.focus());
     void dictation.listen({
@@ -281,14 +292,15 @@ export const Composer = memo(function Composer({
       // whatever text finishes transcribing afterwards.
       dictateFinishCancelledRef.current = true;
       dictation.stop("cancel");
-      exitDictationAsForcedCancel();
+      exitDictation(false);
       return;
     }
+    dictateUserCancelRef.current = true;
     dictation.stop("cancel");
   }
 
   async function insertDictation() {
-    if (!isDictating || dictateFinishing) return;
+    if (!isDictating || dictateInsertingRef.current) return;
     const snapshot = dictateSnapshotRef.current;
     setDictateFinishing(true);
     dictateInsertingRef.current = true;
@@ -599,19 +611,20 @@ export const Composer = memo(function Composer({
         draggingFiles ? "rounded-card ring-2 ring-inset ring-ring" : ""
       }`}
     >
-      {sendError || runError ? (
+      {sendError || runError || dictationError ? (
         <div
           ref={runErrorRef}
           role="alert"
           data-testid="composer-error"
           className="mb-3 flex items-center gap-2 rounded-card border border-destructive/40 bg-destructive/10 px-4 py-2 text-meta text-destructive"
         >
-          <span className="min-w-0 flex-1">{sendError ?? runError}</span>
+          <span className="min-w-0 flex-1">{sendError ?? runError ?? dictationError}</span>
           <button
             type="button"
             aria-label={t`Dismiss error`}
             data-testid="composer-error-dismiss"
             onClick={() => {
+              setDictationError(null);
               onDismissError();
               window.requestAnimationFrame(() => textareaRef.current?.focus());
             }}
