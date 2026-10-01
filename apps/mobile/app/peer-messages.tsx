@@ -106,7 +106,9 @@ export default function PeerMessages() {
   );
   const peer = conversation?.peerBotName ?? peerBotName ?? t("Bot");
   const own = botName ?? t("Bot");
-  const ownShapeSeed = botShapeSeed ? Number(botShapeSeed) : undefined;
+  const parsedShapeSeed = Number(botShapeSeed);
+  const ownShapeSeed =
+    botShapeSeed && Number.isFinite(parsedShapeSeed) ? parsedShapeSeed : undefined;
   const otherShapeSeed = peerShapeSeed ? Number(peerShapeSeed) : undefined;
 
   const peerMessages = conversation?.messages ?? [];
