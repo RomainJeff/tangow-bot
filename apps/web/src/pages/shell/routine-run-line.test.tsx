@@ -8,7 +8,11 @@ import { describe, expect, it, vi } from "vitest";
 function identityTag(strings: TemplateStringsArray, ...values: unknown[]): string {
   return strings.reduce((acc, part, index) => `${acc}${part}${values[index] ?? ""}`, "");
 }
-vi.mock("@lingui/core/macro", () => ({ t: identityTag }));
+vi.mock("@lingui/core/macro", () => ({
+  t: identityTag,
+  plural: (count: number, forms: { one: string; other: string }) =>
+    (count === 1 ? forms.one : forms.other).replace("#", String(count)),
+}));
 vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({ t: identityTag }),
   Trans: ({ children }: { children?: unknown }) => children,

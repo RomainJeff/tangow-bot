@@ -1,4 +1,5 @@
 import { i18n } from "@lingui/core";
+import { plural } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
 import type { MessageBlock } from "@rakazo/contracts";
@@ -328,9 +329,10 @@ export function RoutineGroupLine({
   const spansDays = !sameLocalDay(first.createdAt, last.createdAt);
   const range = routineRange(first.createdAt, last.createdAt, locale);
   const cancelledCount = runs.filter((item) => item.run.state === "cancelled").length;
-  const statusLabel = cancelledCount ? t`${cancelledCount} cancelled` : t`Completed`;
-  const runsCount = runs.length;
-  const countLabel = t`${runsCount} runs`;
+  const statusLabel = cancelledCount
+    ? plural(cancelledCount, { one: "# cancelled", other: "# cancelled" })
+    : t`Completed`;
+  const countLabel = plural(runs.length, { one: "# run", other: "# runs" });
   const handoffs = runs.map(handoffFor);
   const receiptBotIds = new Set(runs.map((item) => item.sentTo?.toBotId).filter(Boolean));
   const receipt = receiptBotIds.size === 1 ? handoffs.find(Boolean)?.receipt : null;

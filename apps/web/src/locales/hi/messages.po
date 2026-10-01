@@ -26,6 +26,11 @@ msgstr "(खाली)"
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# मॉडल} other {# मॉडल}}"
 
+#. placeholder {0}: runs.length
+#: src/pages/shell/routine-run-line.tsx:335
+msgid "{0, plural, one {# run} other {# runs}}"
+msgstr ""
+
 #. placeholder {0}: file.name
 #: src/pages/Shell.tsx:1841
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
@@ -111,8 +116,8 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "{botName} का कंप्यूटर"
 
-#: src/pages/shell/routine-run-line.tsx:331
-msgid "{cancelledCount} cancelled"
+#: src/pages/shell/routine-run-line.tsx:333
+msgid "{cancelledCount, plural, one {# cancelled} other {# cancelled}}"
 msgstr ""
 
 #: src/pages/ActivityList.tsx:140
@@ -151,10 +156,6 @@ msgstr "{name} रोक दिया गया"
 msgid "{remaining} left · bot is watching, not acting"
 msgstr "{remaining} शेष · बॉट देख रहा है, कार्रवाई नहीं कर रहा"
 
-#: src/pages/shell/routine-run-line.tsx:333
-msgid "{runsCount} runs"
-msgstr ""
-
 #: src/components/ArtifactFileCard.tsx:220
 msgid "{size} B"
 msgstr "{size} B"
@@ -163,7 +164,7 @@ msgstr "{size} B"
 msgid "{stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
-#: src/components/TaskCard.tsx:86
+#: src/components/TaskCard.tsx:89
 msgid "{title} · Opens in full"
 msgstr ""
 
@@ -175,12 +176,12 @@ msgstr "{title}, {label}"
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:231
+#: src/pages/shell/transcript.tsx:232
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} काम कर रहा है"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:683
+#: src/pages/shell/composer.tsx:700
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -601,7 +602,7 @@ msgstr "{0} बजे"
 msgid "at {timeSelect}"
 msgstr "{timeSelect} बजे"
 
-#: src/pages/shell/composer.tsx:790
+#: src/pages/shell/composer.tsx:807
 msgid "Attach file"
 msgstr "फ़ाइल संलग्न करें"
 
@@ -720,7 +721,7 @@ msgstr "जोड़ने के लिए बॉट"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "बॉट डिफ़ॉल्ट रूप से बिना पूछे कार्रवाई करते हैं। अपवाद तभी जोड़ें जब आप किसी प्रकार की कार्रवाई की पहले समीक्षा करना चाहते हों।"
 
-#: src/pages/shell/transcript.tsx:232
+#: src/pages/shell/transcript.tsx:233
 msgid "Bots are working"
 msgstr "बॉट काम कर रहे हैं"
 
@@ -763,11 +764,11 @@ msgstr "सर्वर तक नहीं पहुंचा जा सका�
 msgid "Cancel"
 msgstr "रद्द करें"
 
-#: src/pages/shell/composer.tsx:904
+#: src/pages/shell/composer.tsx:921
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:651
+#: src/pages/shell/composer.tsx:668
 msgid "Cancel edit"
 msgstr "संपादन रद्द करें"
 
@@ -779,14 +780,13 @@ msgstr "नया बॉट रद्द करें"
 msgid "Cancel new group"
 msgstr "नया समूह रद्द करें"
 
-#: src/pages/shell/composer.tsx:632
+#: src/pages/shell/composer.tsx:649
 msgid "Cancel reply"
 msgstr "उत्तर रद्द करें"
 
 #: src/components/AskCard.tsx:23
-#: src/components/TaskCard.tsx:49
 #: src/pages/ActivityList.tsx:162
-#: src/pages/shell/routine-run-line.tsx:160
+#: src/pages/shell/routine-run-line.tsx:161
 msgid "Cancelled"
 msgstr "रद्द किया गया"
 
@@ -818,7 +818,7 @@ msgstr "चैट ऐप्स"
 msgid "Chat apps, group channels, and agent connections."
 msgstr "चैट ऐप्स, ग्रुप चैनल और एजेंट कनेक्शन।"
 
-#: src/pages/shell/composer.tsx:1067
+#: src/pages/shell/composer.tsx:1084
 msgid "Chat Settings"
 msgstr "चैट सेटिंग्स"
 
@@ -893,7 +893,7 @@ msgstr ""
 msgid "Client secret"
 msgstr ""
 
-#: src/components/TaskCard.tsx:153
+#: src/components/TaskCard.tsx:163
 #: src/pages/KnowledgeSection.tsx:670
 #: src/pages/KnowledgeSection.tsx:820
 #: src/pages/MessagingSettingsOverlay.tsx:361
@@ -951,7 +951,7 @@ msgstr "पैनल बंद करें"
 msgid "Close preview"
 msgstr "प्रीव्यू बंद करें"
 
-#: src/pages/shell/routine-run-line.tsx:268
+#: src/pages/shell/routine-run-line.tsx:269
 msgid "Close report"
 msgstr ""
 
@@ -998,8 +998,8 @@ msgstr "कमांड"
 msgid "Complete"
 msgstr "पूर्ण"
 
-#: src/pages/shell/routine-run-line.tsx:157
-#: src/pages/shell/routine-run-line.tsx:331
+#: src/pages/shell/routine-run-line.tsx:158
+#: src/pages/shell/routine-run-line.tsx:334
 msgid "Completed"
 msgstr ""
 
@@ -1791,11 +1791,11 @@ msgstr ""
 msgid "Desktop update"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:860
+#: src/pages/shell/composer.tsx:877
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:942
+#: src/pages/shell/composer.tsx:959
 msgid "Dictating"
 msgstr ""
 
@@ -1827,7 +1827,7 @@ msgstr "डिस्कनेक्ट हो रहा है…"
 msgid "Dismiss"
 msgstr "बंद करें"
 
-#: src/pages/shell/composer.tsx:612
+#: src/pages/shell/composer.tsx:628
 msgid "Dismiss error"
 msgstr "त्रुटि बंद करें"
 
@@ -1918,7 +1918,7 @@ msgid "Edit Profile"
 msgstr "प्रोफ़ाइल संपादित करें"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:647
+#: src/pages/shell/composer.tsx:664
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "{rewindTime} का संदेश संपादित किया जा रहा है · उसके बाद के {0} संदेश हटा दिए जाएँगे"
 
@@ -2022,9 +2022,8 @@ msgstr ""
 msgid "Extra high"
 msgstr "अतिरिक्त उच्च"
 
-#: src/components/TaskCard.tsx:49
 #: src/pages/ActivityList.tsx:160
-#: src/pages/shell/routine-run-line.tsx:159
+#: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
 msgstr "विफल"
 
@@ -2247,7 +2246,7 @@ msgstr "इनपुट"
 msgid "Inputs"
 msgstr "इनपुट"
 
-#: src/pages/shell/composer.tsx:918
+#: src/pages/shell/composer.tsx:935
 msgid "Insert dictation"
 msgstr ""
 
@@ -2319,7 +2318,7 @@ msgstr "पृथक"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "इसकी बातचीत, फ़ाइलें और रूटीन स्थायी रूप से डिलीट कर दिए जाएंगे। इसके बनाए बॉट आपकी सूची में बने रहेंगे।"
 
-#: src/pages/shell/transcript.tsx:664
+#: src/pages/shell/transcript.tsx:665
 msgid "Jump to latest"
 msgstr "नवीनतम संदेश पर जाएँ"
 
@@ -2381,7 +2380,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:469
+#: src/pages/shell/transcript.tsx:470
 msgid "Load earlier messages"
 msgstr "पुराने संदेश लोड करें"
 
@@ -2422,7 +2421,7 @@ msgstr "आवाज़ प्रोवाइडर्स लोड हो र�
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/transcript.tsx:469
+#: src/pages/shell/transcript.tsx:470
 msgid "Loading…"
 msgstr "लोड हो रहा है…"
 
@@ -2541,7 +2540,7 @@ msgstr "मेमोरी"
 msgid "Memory scope"
 msgstr "मेमोरी स्कोप"
 
-#: src/pages/shell/composer.tsx:669
+#: src/pages/shell/composer.tsx:686
 msgid "Mentions"
 msgstr "उल्लेख"
 
@@ -2549,8 +2548,8 @@ msgstr "उल्लेख"
 msgid "Mentions only"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:951
-#: src/pages/shell/composer.tsx:1045
+#: src/pages/shell/composer.tsx:968
+#: src/pages/shell/composer.tsx:1062
 #: src/pages/shell/message-view.tsx:98
 msgid "Message"
 msgstr ""
@@ -2560,9 +2559,9 @@ msgstr ""
 msgid "Message"
 msgstr "संदेश"
 
-#: src/pages/shell/composer.tsx:951
-#: src/pages/shell/composer.tsx:1041
-#: src/pages/shell/composer.tsx:1045
+#: src/pages/shell/composer.tsx:968
+#: src/pages/shell/composer.tsx:1058
+#: src/pages/shell/composer.tsx:1062
 msgid "Message {activeName}"
 msgstr "{activeName} को संदेश भेजें"
 
@@ -2570,7 +2569,7 @@ msgstr "{activeName} को संदेश भेजें"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:592
+#: src/pages/shell/composer.tsx:608
 msgid "Message composer"
 msgstr "संदेश रचयिता"
 
@@ -2583,7 +2582,7 @@ msgstr ""
 msgid "Message from {peer}"
 msgstr "{peer} का संदेश"
 
-#: src/pages/shell/composer.tsx:1042
+#: src/pages/shell/composer.tsx:1059
 msgid "Message…"
 msgstr "संदेश…"
 
@@ -2921,8 +2920,8 @@ msgstr "अभी तक कुछ याद नहीं किया गया
 msgid "Notifications"
 msgstr ""
 
-#: src/pages/shell/routine-run-line.tsx:169
-#: src/pages/shell/routine-run-line.tsx:203
+#: src/pages/shell/routine-run-line.tsx:170
+#: src/pages/shell/routine-run-line.tsx:204
 msgid "Notifications on"
 msgstr ""
 
@@ -3183,7 +3182,7 @@ msgid "Pull request"
 msgstr "पुल अनुरोध"
 
 #: src/pages/ActivityList.tsx:148
-#: src/pages/shell/routine-run-line.tsx:153
+#: src/pages/shell/routine-run-line.tsx:154
 msgid "Queued"
 msgstr "कतार में"
 
@@ -3312,8 +3311,8 @@ msgstr "हटाएं"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:759
-#: src/pages/shell/composer.tsx:769
+#: src/pages/shell/composer.tsx:776
+#: src/pages/shell/composer.tsx:786
 msgid "Remove {0}"
 msgstr "{0} हटाएं"
 
@@ -3327,7 +3326,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "मार्केटप्लेस {0} और उसकी स्किल्स हटाएँ?"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:835
+#: src/pages/shell/composer.tsx:852
 msgid "Remove mention {0}"
 msgstr "उल्लेख {0} हटाएं"
 
@@ -3340,7 +3339,7 @@ msgid "Remove schedule"
 msgstr "शेड्यूल हटाएँ"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:813
+#: src/pages/shell/composer.tsx:830
 msgid "Remove skill {0}"
 msgstr "स्किल {0} हटाएं"
 
@@ -3392,12 +3391,12 @@ msgstr "उत्तर दें"
 msgid "Reply in several short messages"
 msgstr "कई छोटे संदेशों में उत्तर दें"
 
-#: src/pages/shell/composer.tsx:629
+#: src/pages/shell/composer.tsx:646
 msgid "Replying to {replyName}"
 msgstr "{replyName} को उत्तर दे रहे हैं"
 
 #. placeholder {0}: block.routineName
-#: src/pages/shell/routine-run-line.tsx:240
+#: src/pages/shell/routine-run-line.tsx:241
 msgid "Report, {0} · Opens in full"
 msgstr ""
 
@@ -3501,9 +3500,8 @@ msgstr "रन इतिहास"
 msgid "Run time must be in the future."
 msgstr "चलने का समय भविष्य में होना चाहिए।"
 
-#: src/components/TaskCard.tsx:49
 #: src/pages/ActivityList.tsx:152
-#: src/pages/shell/routine-run-line.tsx:155
+#: src/pages/shell/routine-run-line.tsx:156
 msgid "Running"
 msgstr "चल रहा है"
 
@@ -3629,7 +3627,7 @@ msgstr "{0} चुनें"
 msgid "Select a bot"
 msgstr "एक बॉट चुनें"
 
-#: src/pages/shell/composer.tsx:872
+#: src/pages/shell/composer.tsx:889
 msgid "Send"
 msgstr "भेजें"
 
@@ -3695,11 +3693,11 @@ msgstr "सर्वर URL"
 msgid "Settings"
 msgstr "सेटिंग्स"
 
-#: src/pages/shell/composer.tsx:1069
+#: src/pages/shell/composer.tsx:1086
 msgid "Settings: General"
 msgstr "सेटिंग्स: सामान्य"
 
-#: src/pages/shell/composer.tsx:1071
+#: src/pages/shell/composer.tsx:1088
 msgid "Settings: Usage"
 msgstr "सेटिंग्स: उपयोग"
 
@@ -3771,7 +3769,7 @@ msgid "Sign up"
 msgstr "साइन अप करें"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:716
+#: src/pages/shell/composer.tsx:733
 msgid "Skill {0}"
 msgstr "स्किल {0}"
 
@@ -3860,8 +3858,8 @@ msgstr "शुरू हो रहा है…"
 msgid "Steps"
 msgstr "चरण"
 
-#: src/pages/shell/composer.tsx:888
-#: src/pages/shell/composer.tsx:929
+#: src/pages/shell/composer.tsx:905
+#: src/pages/shell/composer.tsx:946
 #: src/pages/shell/side-panel.tsx:691
 #: src/pages/shell/side-panel.tsx:696
 msgid "Stop"
@@ -4051,7 +4049,7 @@ msgid "To:"
 msgstr "प्रति:"
 
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/routine-run-line.tsx:395
+#: src/pages/shell/routine-run-line.tsx:397
 #: src/pages/shell/transcript.tsx:215
 msgid "Today"
 msgstr "आज"
@@ -4293,7 +4291,7 @@ msgid "Workspace root"
 msgstr "वर्कस्पेस रूट"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/routine-run-line.tsx:396
+#: src/pages/shell/routine-run-line.tsx:398
 #: src/pages/shell/transcript.tsx:216
 msgid "Yesterday"
 msgstr "कल"

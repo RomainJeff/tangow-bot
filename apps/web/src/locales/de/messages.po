@@ -26,6 +26,11 @@ msgstr "(leer)"
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# Modell} other {# Modelle}}"
 
+#. placeholder {0}: runs.length
+#: src/pages/shell/routine-run-line.tsx:335
+msgid "{0, plural, one {# run} other {# runs}}"
+msgstr ""
+
 #. placeholder {0}: file.name
 #: src/pages/Shell.tsx:1841
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
@@ -111,8 +116,8 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "Computer von {botName}"
 
-#: src/pages/shell/routine-run-line.tsx:331
-msgid "{cancelledCount} cancelled"
+#: src/pages/shell/routine-run-line.tsx:333
+msgid "{cancelledCount, plural, one {# cancelled} other {# cancelled}}"
 msgstr ""
 
 #: src/pages/ActivityList.tsx:140
@@ -151,10 +156,6 @@ msgstr "{name} wurde gestoppt"
 msgid "{remaining} left · bot is watching, not acting"
 msgstr "Noch {remaining} · Bot beobachtet nur"
 
-#: src/pages/shell/routine-run-line.tsx:333
-msgid "{runsCount} runs"
-msgstr ""
-
 #: src/components/ArtifactFileCard.tsx:220
 msgid "{size} B"
 msgstr "{size} B"
@@ -163,7 +164,7 @@ msgstr "{size} B"
 msgid "{stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
-#: src/components/TaskCard.tsx:86
+#: src/components/TaskCard.tsx:89
 msgid "{title} · Opens in full"
 msgstr ""
 
@@ -175,12 +176,12 @@ msgstr "{title}, {label}"
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:231
+#: src/pages/shell/transcript.tsx:232
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} arbeitet"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:683
+#: src/pages/shell/composer.tsx:700
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -601,7 +602,7 @@ msgstr "um {0}"
 msgid "at {timeSelect}"
 msgstr "um {timeSelect}"
 
-#: src/pages/shell/composer.tsx:790
+#: src/pages/shell/composer.tsx:807
 msgid "Attach file"
 msgstr "Datei anhängen"
 
@@ -720,7 +721,7 @@ msgstr "Zu verknüpfender Bot"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bots handeln standardmäßig ohne Nachfrage. Füge nur dann eine Ausnahme hinzu, wenn du eine Aktionsart zuerst prüfen möchtest."
 
-#: src/pages/shell/transcript.tsx:232
+#: src/pages/shell/transcript.tsx:233
 msgid "Bots are working"
 msgstr "Bots arbeiten"
 
@@ -763,11 +764,11 @@ msgstr "Server nicht erreichbar."
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: src/pages/shell/composer.tsx:904
+#: src/pages/shell/composer.tsx:921
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:651
+#: src/pages/shell/composer.tsx:668
 msgid "Cancel edit"
 msgstr "Bearbeitung abbrechen"
 
@@ -779,14 +780,13 @@ msgstr "Neuen Bot abbrechen"
 msgid "Cancel new group"
 msgstr "Neue Gruppe abbrechen"
 
-#: src/pages/shell/composer.tsx:632
+#: src/pages/shell/composer.tsx:649
 msgid "Cancel reply"
 msgstr "Antwort abbrechen"
 
 #: src/components/AskCard.tsx:23
-#: src/components/TaskCard.tsx:49
 #: src/pages/ActivityList.tsx:162
-#: src/pages/shell/routine-run-line.tsx:160
+#: src/pages/shell/routine-run-line.tsx:161
 msgid "Cancelled"
 msgstr "Abgebrochen"
 
@@ -818,7 +818,7 @@ msgstr "Chat-Apps"
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Chat-Apps, Gruppenkanäle und Agent-Verbindungen."
 
-#: src/pages/shell/composer.tsx:1067
+#: src/pages/shell/composer.tsx:1084
 msgid "Chat Settings"
 msgstr "Chat-Einstellungen"
 
@@ -893,7 +893,7 @@ msgstr ""
 msgid "Client secret"
 msgstr ""
 
-#: src/components/TaskCard.tsx:153
+#: src/components/TaskCard.tsx:163
 #: src/pages/KnowledgeSection.tsx:670
 #: src/pages/KnowledgeSection.tsx:820
 #: src/pages/MessagingSettingsOverlay.tsx:361
@@ -951,7 +951,7 @@ msgstr "Panel schließen"
 msgid "Close preview"
 msgstr "Vorschau schließen"
 
-#: src/pages/shell/routine-run-line.tsx:268
+#: src/pages/shell/routine-run-line.tsx:269
 msgid "Close report"
 msgstr ""
 
@@ -998,8 +998,8 @@ msgstr "Befehl"
 msgid "Complete"
 msgstr "Abschließen"
 
-#: src/pages/shell/routine-run-line.tsx:157
-#: src/pages/shell/routine-run-line.tsx:331
+#: src/pages/shell/routine-run-line.tsx:158
+#: src/pages/shell/routine-run-line.tsx:334
 msgid "Completed"
 msgstr ""
 
@@ -1791,11 +1791,11 @@ msgstr ""
 msgid "Desktop update"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:860
+#: src/pages/shell/composer.tsx:877
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:942
+#: src/pages/shell/composer.tsx:959
 msgid "Dictating"
 msgstr ""
 
@@ -1827,7 +1827,7 @@ msgstr "Verbindung wird getrennt…"
 msgid "Dismiss"
 msgstr "Ausblenden"
 
-#: src/pages/shell/composer.tsx:612
+#: src/pages/shell/composer.tsx:628
 msgid "Dismiss error"
 msgstr "Fehler ausblenden"
 
@@ -1918,7 +1918,7 @@ msgid "Edit Profile"
 msgstr "Profil bearbeiten"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:647
+#: src/pages/shell/composer.tsx:664
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "Nachricht von {rewindTime} wird bearbeitet · {0} nachfolgende Nachrichten werden entfernt"
 
@@ -2022,9 +2022,8 @@ msgstr ""
 msgid "Extra high"
 msgstr "Sehr hoch"
 
-#: src/components/TaskCard.tsx:49
 #: src/pages/ActivityList.tsx:160
-#: src/pages/shell/routine-run-line.tsx:159
+#: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
 msgstr "Fehlgeschlagen"
 
@@ -2247,7 +2246,7 @@ msgstr "Eingabe"
 msgid "Inputs"
 msgstr "Eingaben"
 
-#: src/pages/shell/composer.tsx:918
+#: src/pages/shell/composer.tsx:935
 msgid "Insert dictation"
 msgstr ""
 
@@ -2319,7 +2318,7 @@ msgstr "Isoliert"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Seine Unterhaltung, Dateien und Routinen werden dauerhaft gelöscht. Von ihm erstellte Bots bleiben in deiner Liste."
 
-#: src/pages/shell/transcript.tsx:664
+#: src/pages/shell/transcript.tsx:665
 msgid "Jump to latest"
 msgstr "Zur neuesten Nachricht springen"
 
@@ -2381,7 +2380,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:469
+#: src/pages/shell/transcript.tsx:470
 msgid "Load earlier messages"
 msgstr "Frühere Nachrichten laden"
 
@@ -2422,7 +2421,7 @@ msgstr "Stimmanbieter werden geladen…"
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/transcript.tsx:469
+#: src/pages/shell/transcript.tsx:470
 msgid "Loading…"
 msgstr "Wird geladen…"
 
@@ -2541,7 +2540,7 @@ msgstr "Erinnerungen"
 msgid "Memory scope"
 msgstr "Erinnerungsbereich"
 
-#: src/pages/shell/composer.tsx:669
+#: src/pages/shell/composer.tsx:686
 msgid "Mentions"
 msgstr "Erwähnungen"
 
@@ -2549,8 +2548,8 @@ msgstr "Erwähnungen"
 msgid "Mentions only"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:951
-#: src/pages/shell/composer.tsx:1045
+#: src/pages/shell/composer.tsx:968
+#: src/pages/shell/composer.tsx:1062
 #: src/pages/shell/message-view.tsx:98
 msgid "Message"
 msgstr ""
@@ -2560,9 +2559,9 @@ msgstr ""
 msgid "Message"
 msgstr "Nachricht"
 
-#: src/pages/shell/composer.tsx:951
-#: src/pages/shell/composer.tsx:1041
-#: src/pages/shell/composer.tsx:1045
+#: src/pages/shell/composer.tsx:968
+#: src/pages/shell/composer.tsx:1058
+#: src/pages/shell/composer.tsx:1062
 msgid "Message {activeName}"
 msgstr "Nachricht an {activeName}"
 
@@ -2570,7 +2569,7 @@ msgstr "Nachricht an {activeName}"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:592
+#: src/pages/shell/composer.tsx:608
 msgid "Message composer"
 msgstr "Nachrichteneditor"
 
@@ -2583,7 +2582,7 @@ msgstr ""
 msgid "Message from {peer}"
 msgstr "Nachricht von {peer}"
 
-#: src/pages/shell/composer.tsx:1042
+#: src/pages/shell/composer.tsx:1059
 msgid "Message…"
 msgstr "Nachricht…"
 
@@ -2921,8 +2920,8 @@ msgstr "Noch nichts gemerkt"
 msgid "Notifications"
 msgstr ""
 
-#: src/pages/shell/routine-run-line.tsx:169
-#: src/pages/shell/routine-run-line.tsx:203
+#: src/pages/shell/routine-run-line.tsx:170
+#: src/pages/shell/routine-run-line.tsx:204
 msgid "Notifications on"
 msgstr ""
 
@@ -3183,7 +3182,7 @@ msgid "Pull request"
 msgstr "Pull Request"
 
 #: src/pages/ActivityList.tsx:148
-#: src/pages/shell/routine-run-line.tsx:153
+#: src/pages/shell/routine-run-line.tsx:154
 msgid "Queued"
 msgstr "In Warteschlange"
 
@@ -3312,8 +3311,8 @@ msgstr "Entfernen"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:759
-#: src/pages/shell/composer.tsx:769
+#: src/pages/shell/composer.tsx:776
+#: src/pages/shell/composer.tsx:786
 msgid "Remove {0}"
 msgstr "{0} entfernen"
 
@@ -3327,7 +3326,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "Marktplatz {0} und seine Skills entfernen?"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:835
+#: src/pages/shell/composer.tsx:852
 msgid "Remove mention {0}"
 msgstr "Erwähnung von {0} entfernen"
 
@@ -3340,7 +3339,7 @@ msgid "Remove schedule"
 msgstr "Zeitplan entfernen"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:813
+#: src/pages/shell/composer.tsx:830
 msgid "Remove skill {0}"
 msgstr "Skill {0} entfernen"
 
@@ -3392,12 +3391,12 @@ msgstr "Antworten"
 msgid "Reply in several short messages"
 msgstr "In mehreren kurzen Nachrichten antworten"
 
-#: src/pages/shell/composer.tsx:629
+#: src/pages/shell/composer.tsx:646
 msgid "Replying to {replyName}"
 msgstr "Antwort an {replyName}"
 
 #. placeholder {0}: block.routineName
-#: src/pages/shell/routine-run-line.tsx:240
+#: src/pages/shell/routine-run-line.tsx:241
 msgid "Report, {0} · Opens in full"
 msgstr ""
 
@@ -3501,9 +3500,8 @@ msgstr "Laufverlauf"
 msgid "Run time must be in the future."
 msgstr "Der Ausführungszeitpunkt muss in der Zukunft liegen."
 
-#: src/components/TaskCard.tsx:49
 #: src/pages/ActivityList.tsx:152
-#: src/pages/shell/routine-run-line.tsx:155
+#: src/pages/shell/routine-run-line.tsx:156
 msgid "Running"
 msgstr "Läuft"
 
@@ -3629,7 +3627,7 @@ msgstr "{0} auswählen"
 msgid "Select a bot"
 msgstr "Bot auswählen"
 
-#: src/pages/shell/composer.tsx:872
+#: src/pages/shell/composer.tsx:889
 msgid "Send"
 msgstr "Senden"
 
@@ -3695,11 +3693,11 @@ msgstr "Server-URL"
 msgid "Settings"
 msgstr "Einstellungen"
 
-#: src/pages/shell/composer.tsx:1069
+#: src/pages/shell/composer.tsx:1086
 msgid "Settings: General"
 msgstr "Einstellungen: Allgemein"
 
-#: src/pages/shell/composer.tsx:1071
+#: src/pages/shell/composer.tsx:1088
 msgid "Settings: Usage"
 msgstr "Einstellungen: Nutzung"
 
@@ -3771,7 +3769,7 @@ msgid "Sign up"
 msgstr "Registrieren"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:716
+#: src/pages/shell/composer.tsx:733
 msgid "Skill {0}"
 msgstr "Skill {0}"
 
@@ -3860,8 +3858,8 @@ msgstr "Wird gestartet…"
 msgid "Steps"
 msgstr "Schritte"
 
-#: src/pages/shell/composer.tsx:888
-#: src/pages/shell/composer.tsx:929
+#: src/pages/shell/composer.tsx:905
+#: src/pages/shell/composer.tsx:946
 #: src/pages/shell/side-panel.tsx:691
 #: src/pages/shell/side-panel.tsx:696
 msgid "Stop"
@@ -4051,7 +4049,7 @@ msgid "To:"
 msgstr "An:"
 
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/routine-run-line.tsx:395
+#: src/pages/shell/routine-run-line.tsx:397
 #: src/pages/shell/transcript.tsx:215
 msgid "Today"
 msgstr "Heute"
@@ -4293,7 +4291,7 @@ msgid "Workspace root"
 msgstr "Arbeitsbereich-Stammverzeichnis"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/routine-run-line.tsx:396
+#: src/pages/shell/routine-run-line.tsx:398
 #: src/pages/shell/transcript.tsx:216
 msgid "Yesterday"
 msgstr "Gestern"
