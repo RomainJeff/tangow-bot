@@ -273,7 +273,7 @@ export function RoutineRunLine({
               </DialogClose>
             </div>
             <div dir="auto">
-              <ChatMarkdown allowImages={false}>{truncateMarkdownForRender(digest)}</ChatMarkdown>
+              <ChatMarkdown allowImages={false}>{digest}</ChatMarkdown>
             </div>
             {handoff ? (
               <div className="flex justify-center border-t border-border pt-3">
@@ -333,6 +333,10 @@ export function RoutineGroupLine({
     ? plural(cancelledCount, { one: "# cancelled", other: "# cancelled" })
     : t`Completed`;
   const countLabel = plural(runs.length, { one: "# run", other: "# runs" });
+  // Only completed and cancelled runs fold, so any cancelled one makes the
+  // group read as cancelled, drawn like a single cancelled run.
+  const groupState = cancelledCount ? "cancelled" : "completed";
+  const GroupIcon = ROUTINE_STATE_ICON[groupState];
   const handoffs = runs.map(handoffFor);
   const receiptBotIds = new Set(runs.map((item) => item.sentTo?.toBotId).filter(Boolean));
   const receipt = receiptBotIds.size === 1 ? handoffs.find(Boolean)?.receipt : null;
@@ -363,9 +367,9 @@ export function RoutineGroupLine({
         onClick={() => setOpen((current) => !current)}
         className="flex min-h-11 w-full items-center gap-2.5 rounded-row px-2 -mx-2 text-start duration-(--duration-hover) ease-quiet hover:bg-accent"
       >
-        <CircleCheck
-          className="size-4.5 shrink-0 text-success"
-          fill="currentColor"
+        <GroupIcon
+          className={`size-4.5 shrink-0 ${stateColorClass(groupState)}`}
+          {...(groupState === "completed" ? { fill: "currentColor" } : {})}
           aria-hidden="true"
         />
         <span className="min-w-0 flex-1 text-row-name font-medium text-foreground" dir="auto">

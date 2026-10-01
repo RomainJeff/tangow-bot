@@ -84,7 +84,9 @@
   --spacing-composer-remove: var(--size-composer-remove);
 
   --ease-quiet: var(--motion-ease);
-  --animate-arrive: rk-arrive var(--duration-arrive) var(--motion-ease) both;
+  /* `backwards`, not `both`: a held end transform would leave every arrived row
+     its own stacking context, trapping its floating actions under the next row. */
+  --animate-arrive: rk-arrive var(--duration-arrive) var(--motion-ease) backwards;
   /* The send arrow pivoting in with the first character. */
   --animate-pivot: rk-pivot var(--duration-pivot) var(--motion-ease) both;
 

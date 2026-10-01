@@ -173,6 +173,11 @@ describe("repairMarkdownTables", () => {
     expect(repairMarkdownTables(longer)).toBe(longer);
   });
 
+  it("leaves prose with pipes alone when a real table starts right under it", () => {
+    const markdown = "Options: A | B\n| x | y |\n|---|---|\n| 1 | 2 |";
+    expect(repairMarkdownTables(markdown)).toBe(markdown);
+  });
+
   it("lets hasMarkdownTable see a repaired table", () => {
     expect(hasMarkdownTable("A | B\n1 | 2")).toBe(true);
   });

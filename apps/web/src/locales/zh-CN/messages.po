@@ -176,12 +176,12 @@ msgstr "{title}，{label}"
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:232
+#: src/pages/shell/transcript.tsx:231
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} 正在工作"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:700
+#: src/pages/shell/composer.tsx:702
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -602,7 +602,7 @@ msgstr "{0}"
 msgid "at {timeSelect}"
 msgstr "{timeSelect}"
 
-#: src/pages/shell/composer.tsx:807
+#: src/pages/shell/composer.tsx:809
 msgid "Attach file"
 msgstr "附加文件"
 
@@ -721,7 +721,7 @@ msgstr "要关联的 Bot"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "默认情况下 Bot 会直接执行。只有当你想先审核某类操作时，才添加例外。"
 
-#: src/pages/shell/transcript.tsx:233
+#: src/pages/shell/transcript.tsx:232
 msgid "Bots are working"
 msgstr "Bot 正在工作"
 
@@ -764,11 +764,11 @@ msgstr "无法连接服务器。"
 msgid "Cancel"
 msgstr "取消"
 
-#: src/pages/shell/composer.tsx:921
+#: src/pages/shell/composer.tsx:923
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:668
+#: src/pages/shell/composer.tsx:670
 msgid "Cancel edit"
 msgstr "取消编辑"
 
@@ -780,7 +780,7 @@ msgstr "取消新建 Bot"
 msgid "Cancel new group"
 msgstr "取消新建群组"
 
-#: src/pages/shell/composer.tsx:649
+#: src/pages/shell/composer.tsx:651
 msgid "Cancel reply"
 msgstr "取消回复"
 
@@ -818,7 +818,7 @@ msgstr "聊天应用"
 msgid "Chat apps, group channels, and agent connections."
 msgstr "聊天应用、群组频道和 Agent 连接。"
 
-#: src/pages/shell/composer.tsx:1084
+#: src/pages/shell/composer.tsx:1086
 msgid "Chat Settings"
 msgstr "聊天设置"
 
@@ -1791,11 +1791,11 @@ msgstr ""
 msgid "Desktop update"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:877
+#: src/pages/shell/composer.tsx:879
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:959
+#: src/pages/shell/composer.tsx:961
 msgid "Dictating"
 msgstr ""
 
@@ -1827,7 +1827,7 @@ msgstr "正在断开…"
 msgid "Dismiss"
 msgstr "关闭"
 
-#: src/pages/shell/composer.tsx:628
+#: src/pages/shell/composer.tsx:630
 msgid "Dismiss error"
 msgstr "关闭错误"
 
@@ -1918,7 +1918,7 @@ msgid "Edit Profile"
 msgstr "编辑资料"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:664
+#: src/pages/shell/composer.tsx:666
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "正在编辑 {rewindTime} 的消息 · 其后的 {0} 条消息将被移除"
 
@@ -2246,7 +2246,7 @@ msgstr "输入"
 msgid "Inputs"
 msgstr "输入"
 
-#: src/pages/shell/composer.tsx:935
+#: src/pages/shell/composer.tsx:937
 msgid "Insert dictation"
 msgstr ""
 
@@ -2318,7 +2318,7 @@ msgstr "隔离"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "它的对话、文件和例行任务将被永久删除。它创建的 Bot 仍留在列表中。"
 
-#: src/pages/shell/transcript.tsx:665
+#: src/pages/shell/transcript.tsx:662
 msgid "Jump to latest"
 msgstr "跳到最新"
 
@@ -2380,7 +2380,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:470
+#: src/pages/shell/transcript.tsx:469
 msgid "Load earlier messages"
 msgstr "加载更早的消息"
 
@@ -2421,7 +2421,7 @@ msgstr "正在加载语音提供方…"
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/transcript.tsx:470
+#: src/pages/shell/transcript.tsx:469
 msgid "Loading…"
 msgstr "加载中…"
 
@@ -2540,7 +2540,7 @@ msgstr "记忆"
 msgid "Memory scope"
 msgstr "记忆范围"
 
-#: src/pages/shell/composer.tsx:686
+#: src/pages/shell/composer.tsx:688
 msgid "Mentions"
 msgstr "提及"
 
@@ -2548,8 +2548,8 @@ msgstr "提及"
 msgid "Mentions only"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:968
-#: src/pages/shell/composer.tsx:1062
+#: src/pages/shell/composer.tsx:970
+#: src/pages/shell/composer.tsx:1064
 #: src/pages/shell/message-view.tsx:98
 msgid "Message"
 msgstr ""
@@ -2559,9 +2559,9 @@ msgstr ""
 msgid "Message"
 msgstr "消息"
 
-#: src/pages/shell/composer.tsx:968
-#: src/pages/shell/composer.tsx:1058
-#: src/pages/shell/composer.tsx:1062
+#: src/pages/shell/composer.tsx:970
+#: src/pages/shell/composer.tsx:1060
+#: src/pages/shell/composer.tsx:1064
 msgid "Message {activeName}"
 msgstr "给 {activeName} 发消息"
 
@@ -2569,7 +2569,7 @@ msgstr "给 {activeName} 发消息"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:608
+#: src/pages/shell/composer.tsx:610
 msgid "Message composer"
 msgstr "消息输入框"
 
@@ -2582,7 +2582,7 @@ msgstr ""
 msgid "Message from {peer}"
 msgstr "来自 {peer} 的消息"
 
-#: src/pages/shell/composer.tsx:1059
+#: src/pages/shell/composer.tsx:1061
 msgid "Message…"
 msgstr "消息…"
 
@@ -3311,8 +3311,8 @@ msgstr "移除"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:776
-#: src/pages/shell/composer.tsx:786
+#: src/pages/shell/composer.tsx:778
+#: src/pages/shell/composer.tsx:788
 msgid "Remove {0}"
 msgstr "移除 {0}"
 
@@ -3326,7 +3326,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "移除市场 {0} 及其技能？"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:852
+#: src/pages/shell/composer.tsx:854
 msgid "Remove mention {0}"
 msgstr "移除提及 {0}"
 
@@ -3339,7 +3339,7 @@ msgid "Remove schedule"
 msgstr "移除计划"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:830
+#: src/pages/shell/composer.tsx:832
 msgid "Remove skill {0}"
 msgstr "移除技能 {0}"
 
@@ -3391,7 +3391,7 @@ msgstr "回复"
 msgid "Reply in several short messages"
 msgstr "分成多条简短消息回复"
 
-#: src/pages/shell/composer.tsx:646
+#: src/pages/shell/composer.tsx:648
 msgid "Replying to {replyName}"
 msgstr "正在回复 {replyName}"
 
@@ -3627,7 +3627,7 @@ msgstr "选择 {0}"
 msgid "Select a bot"
 msgstr "选择 Bot"
 
-#: src/pages/shell/composer.tsx:889
+#: src/pages/shell/composer.tsx:891
 msgid "Send"
 msgstr "发送"
 
@@ -3693,11 +3693,11 @@ msgstr "服务器 URL"
 msgid "Settings"
 msgstr "设置"
 
-#: src/pages/shell/composer.tsx:1086
+#: src/pages/shell/composer.tsx:1088
 msgid "Settings: General"
 msgstr "设置：通用"
 
-#: src/pages/shell/composer.tsx:1088
+#: src/pages/shell/composer.tsx:1090
 msgid "Settings: Usage"
 msgstr "设置：用量"
 
@@ -3769,7 +3769,7 @@ msgid "Sign up"
 msgstr "注册"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:733
+#: src/pages/shell/composer.tsx:735
 msgid "Skill {0}"
 msgstr "技能 {0}"
 
@@ -3858,8 +3858,8 @@ msgstr "正在开始…"
 msgid "Steps"
 msgstr "步骤"
 
-#: src/pages/shell/composer.tsx:905
-#: src/pages/shell/composer.tsx:946
+#: src/pages/shell/composer.tsx:907
+#: src/pages/shell/composer.tsx:948
 #: src/pages/shell/side-panel.tsx:691
 #: src/pages/shell/side-panel.tsx:696
 msgid "Stop"
@@ -4049,8 +4049,8 @@ msgid "To:"
 msgstr "至:"
 
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/routine-run-line.tsx:397
-#: src/pages/shell/transcript.tsx:215
+#: src/pages/shell/routine-run-line.tsx:401
+#: src/pages/shell/transcript.tsx:214
 msgid "Today"
 msgstr "今天"
 
@@ -4291,8 +4291,8 @@ msgid "Workspace root"
 msgstr "工作区根目录"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/routine-run-line.tsx:398
-#: src/pages/shell/transcript.tsx:216
+#: src/pages/shell/routine-run-line.tsx:402
+#: src/pages/shell/transcript.tsx:215
 msgid "Yesterday"
 msgstr "昨天"
 

@@ -384,6 +384,11 @@ describe("Composer dictation forced-cancel paths", () => {
       "Dictation failed: network",
     );
 
+    act(() => {
+      button(container, "Dismiss error").click();
+    });
+    expect(container.querySelector('[data-testid="composer-error"]')).toBeNull();
+
     unmount(root, container);
   });
 

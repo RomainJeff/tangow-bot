@@ -31,7 +31,11 @@ const MAX_VALUES = 12;
 const MAX_VALUE_KEY_CHARS = 40;
 const MAX_VALUE_CHARS = 500;
 const RUN_BUDGET_MS = 120_000;
-const STEP_DECISION_TIMEOUT_MS = 1_500;
+/**
+ * Decisions usually answer in 250-600 ms, but a call now and then stalls about 4 s. At 1.5 s
+ * that stall failed the first step and the whole browser_run fell back to browser_act.
+ */
+const STEP_DECISION_TIMEOUT_MS = 5_000;
 const MAX_PAGE_TEXT_CHARS = 4_000;
 const MAX_STATE_VALUE_CHARS = 120;
 const MAX_STATE_NAME_CHARS = 120;

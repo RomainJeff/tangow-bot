@@ -176,12 +176,12 @@ msgstr "{title}, {label}"
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:232
+#: src/pages/shell/transcript.tsx:231
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} çalışıyor"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:700
+#: src/pages/shell/composer.tsx:702
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -602,7 +602,7 @@ msgstr "saat {0}"
 msgid "at {timeSelect}"
 msgstr "saat {timeSelect}"
 
-#: src/pages/shell/composer.tsx:807
+#: src/pages/shell/composer.tsx:809
 msgid "Attach file"
 msgstr "Dosya ekle"
 
@@ -721,7 +721,7 @@ msgstr "Bağlanacak bot"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Botlar varsayılan olarak sormadan hareket eder. Yalnızca belirli bir işlem türünü önce incelemek istediğinde istisna ekle."
 
-#: src/pages/shell/transcript.tsx:233
+#: src/pages/shell/transcript.tsx:232
 msgid "Bots are working"
 msgstr "Botlar çalışıyor"
 
@@ -764,11 +764,11 @@ msgstr "Sunucuya ulaşılamıyor."
 msgid "Cancel"
 msgstr "İptal"
 
-#: src/pages/shell/composer.tsx:921
+#: src/pages/shell/composer.tsx:923
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:668
+#: src/pages/shell/composer.tsx:670
 msgid "Cancel edit"
 msgstr "Düzenlemeyi iptal et"
 
@@ -780,7 +780,7 @@ msgstr "Yeni botu iptal et"
 msgid "Cancel new group"
 msgstr "Yeni grubu iptal et"
 
-#: src/pages/shell/composer.tsx:649
+#: src/pages/shell/composer.tsx:651
 msgid "Cancel reply"
 msgstr "Yanıtı iptal et"
 
@@ -818,7 +818,7 @@ msgstr "Sohbet uygulamaları"
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Sohbet uygulamaları, grup kanalları ve ajan bağlantıları."
 
-#: src/pages/shell/composer.tsx:1084
+#: src/pages/shell/composer.tsx:1086
 msgid "Chat Settings"
 msgstr "Sohbet Ayarları"
 
@@ -1791,11 +1791,11 @@ msgstr ""
 msgid "Desktop update"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:877
+#: src/pages/shell/composer.tsx:879
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:959
+#: src/pages/shell/composer.tsx:961
 msgid "Dictating"
 msgstr ""
 
@@ -1827,7 +1827,7 @@ msgstr "Bağlantı kesiliyor…"
 msgid "Dismiss"
 msgstr "Kapat"
 
-#: src/pages/shell/composer.tsx:628
+#: src/pages/shell/composer.tsx:630
 msgid "Dismiss error"
 msgstr "Hatayı kapat"
 
@@ -1918,7 +1918,7 @@ msgid "Edit Profile"
 msgstr "Profili Düzenle"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:664
+#: src/pages/shell/composer.tsx:666
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "{rewindTime} tarihli mesaj düzenleniyor · sonraki {0} mesaj kaldırılacak"
 
@@ -2246,7 +2246,7 @@ msgstr "Girdi"
 msgid "Inputs"
 msgstr "Girdiler"
 
-#: src/pages/shell/composer.tsx:935
+#: src/pages/shell/composer.tsx:937
 msgid "Insert dictation"
 msgstr ""
 
@@ -2318,7 +2318,7 @@ msgstr "Yalıtılmış"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Sohbeti, dosyaları ve rutinleri kalıcı olarak silinecek. Oluşturduğu botlar listende kalır."
 
-#: src/pages/shell/transcript.tsx:665
+#: src/pages/shell/transcript.tsx:662
 msgid "Jump to latest"
 msgstr "En son mesaja git"
 
@@ -2380,7 +2380,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:470
+#: src/pages/shell/transcript.tsx:469
 msgid "Load earlier messages"
 msgstr "Önceki mesajları yükle"
 
@@ -2421,7 +2421,7 @@ msgstr "Ses sağlayıcıları yükleniyor…"
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/transcript.tsx:470
+#: src/pages/shell/transcript.tsx:469
 msgid "Loading…"
 msgstr "Yükleniyor…"
 
@@ -2540,7 +2540,7 @@ msgstr "Hafıza"
 msgid "Memory scope"
 msgstr "Hafıza kapsamı"
 
-#: src/pages/shell/composer.tsx:686
+#: src/pages/shell/composer.tsx:688
 msgid "Mentions"
 msgstr "Bahsetmeler"
 
@@ -2548,8 +2548,8 @@ msgstr "Bahsetmeler"
 msgid "Mentions only"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:968
-#: src/pages/shell/composer.tsx:1062
+#: src/pages/shell/composer.tsx:970
+#: src/pages/shell/composer.tsx:1064
 #: src/pages/shell/message-view.tsx:98
 msgid "Message"
 msgstr ""
@@ -2559,9 +2559,9 @@ msgstr ""
 msgid "Message"
 msgstr "Mesaj"
 
-#: src/pages/shell/composer.tsx:968
-#: src/pages/shell/composer.tsx:1058
-#: src/pages/shell/composer.tsx:1062
+#: src/pages/shell/composer.tsx:970
+#: src/pages/shell/composer.tsx:1060
+#: src/pages/shell/composer.tsx:1064
 msgid "Message {activeName}"
 msgstr "{activeName} sohbetine yaz"
 
@@ -2569,7 +2569,7 @@ msgstr "{activeName} sohbetine yaz"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:608
+#: src/pages/shell/composer.tsx:610
 msgid "Message composer"
 msgstr "Mesaj düzenleyici"
 
@@ -2582,7 +2582,7 @@ msgstr ""
 msgid "Message from {peer}"
 msgstr "{peer} botundan mesaj"
 
-#: src/pages/shell/composer.tsx:1059
+#: src/pages/shell/composer.tsx:1061
 msgid "Message…"
 msgstr "Mesaj…"
 
@@ -3311,8 +3311,8 @@ msgstr "Kaldır"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:776
-#: src/pages/shell/composer.tsx:786
+#: src/pages/shell/composer.tsx:778
+#: src/pages/shell/composer.tsx:788
 msgid "Remove {0}"
 msgstr "{0} kaldır"
 
@@ -3326,7 +3326,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "{0} pazar yeri ve yetenekleri kaldırılsın mı?"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:852
+#: src/pages/shell/composer.tsx:854
 msgid "Remove mention {0}"
 msgstr "{0} bahsini kaldır"
 
@@ -3339,7 +3339,7 @@ msgid "Remove schedule"
 msgstr "Zamanlamayı kaldır"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:830
+#: src/pages/shell/composer.tsx:832
 msgid "Remove skill {0}"
 msgstr "{0} becerisini kaldır"
 
@@ -3391,7 +3391,7 @@ msgstr "Yanıtla"
 msgid "Reply in several short messages"
 msgstr "Birkaç kısa mesajla yanıtla"
 
-#: src/pages/shell/composer.tsx:646
+#: src/pages/shell/composer.tsx:648
 msgid "Replying to {replyName}"
 msgstr "{replyName} yanıtlanıyor"
 
@@ -3627,7 +3627,7 @@ msgstr "{0} öğesini seç"
 msgid "Select a bot"
 msgstr "Bir bot seç"
 
-#: src/pages/shell/composer.tsx:889
+#: src/pages/shell/composer.tsx:891
 msgid "Send"
 msgstr "Gönder"
 
@@ -3693,11 +3693,11 @@ msgstr "Sunucu URL'si"
 msgid "Settings"
 msgstr "Ayarlar"
 
-#: src/pages/shell/composer.tsx:1086
+#: src/pages/shell/composer.tsx:1088
 msgid "Settings: General"
 msgstr "Ayarlar: Genel"
 
-#: src/pages/shell/composer.tsx:1088
+#: src/pages/shell/composer.tsx:1090
 msgid "Settings: Usage"
 msgstr "Ayarlar: Kullanım"
 
@@ -3769,7 +3769,7 @@ msgid "Sign up"
 msgstr "Kaydol"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:733
+#: src/pages/shell/composer.tsx:735
 msgid "Skill {0}"
 msgstr "Beceri: {0}"
 
@@ -3858,8 +3858,8 @@ msgstr "Başlatılıyor…"
 msgid "Steps"
 msgstr "Adımlar"
 
-#: src/pages/shell/composer.tsx:905
-#: src/pages/shell/composer.tsx:946
+#: src/pages/shell/composer.tsx:907
+#: src/pages/shell/composer.tsx:948
 #: src/pages/shell/side-panel.tsx:691
 #: src/pages/shell/side-panel.tsx:696
 msgid "Stop"
@@ -4049,8 +4049,8 @@ msgid "To:"
 msgstr "Kime:"
 
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/routine-run-line.tsx:397
-#: src/pages/shell/transcript.tsx:215
+#: src/pages/shell/routine-run-line.tsx:401
+#: src/pages/shell/transcript.tsx:214
 msgid "Today"
 msgstr "Bugün"
 
@@ -4291,8 +4291,8 @@ msgid "Workspace root"
 msgstr "Çalışma alanı kökü"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/routine-run-line.tsx:398
-#: src/pages/shell/transcript.tsx:216
+#: src/pages/shell/routine-run-line.tsx:402
+#: src/pages/shell/transcript.tsx:215
 msgid "Yesterday"
 msgstr "Dün"
 

@@ -176,12 +176,12 @@ msgstr "{title}, {label}"
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:232
+#: src/pages/shell/transcript.tsx:231
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} está trabalhando"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:700
+#: src/pages/shell/composer.tsx:702
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -602,7 +602,7 @@ msgstr "em {0}"
 msgid "at {timeSelect}"
 msgstr "em {timeSelect}"
 
-#: src/pages/shell/composer.tsx:807
+#: src/pages/shell/composer.tsx:809
 msgid "Attach file"
 msgstr "Escolher arquivo"
 
@@ -721,7 +721,7 @@ msgstr "Bot a vincular"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Os bots agem sem perguntar por padrão. Adicione uma exceção apenas quando quiser analisar um tipo de ação primeiro."
 
-#: src/pages/shell/transcript.tsx:233
+#: src/pages/shell/transcript.tsx:232
 msgid "Bots are working"
 msgstr "Bots estão trabalhando"
 
@@ -764,11 +764,11 @@ msgstr "Não é possível acessar o servidor."
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: src/pages/shell/composer.tsx:921
+#: src/pages/shell/composer.tsx:923
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:668
+#: src/pages/shell/composer.tsx:670
 msgid "Cancel edit"
 msgstr "Cancelar edição"
 
@@ -780,7 +780,7 @@ msgstr "Cancelar novo bot"
 msgid "Cancel new group"
 msgstr "Cancelar novo grupo"
 
-#: src/pages/shell/composer.tsx:649
+#: src/pages/shell/composer.tsx:651
 msgid "Cancel reply"
 msgstr "cancelar resposta"
 
@@ -818,7 +818,7 @@ msgstr "Apps de chat"
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Apps de chat, canais de grupo e conexões de agentes."
 
-#: src/pages/shell/composer.tsx:1084
+#: src/pages/shell/composer.tsx:1086
 msgid "Chat Settings"
 msgstr "Configurações do chat"
 
@@ -1791,11 +1791,11 @@ msgstr ""
 msgid "Desktop update"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:877
+#: src/pages/shell/composer.tsx:879
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:959
+#: src/pages/shell/composer.tsx:961
 msgid "Dictating"
 msgstr ""
 
@@ -1827,7 +1827,7 @@ msgstr "Desconectando…"
 msgid "Dismiss"
 msgstr "Dispensar"
 
-#: src/pages/shell/composer.tsx:628
+#: src/pages/shell/composer.tsx:630
 msgid "Dismiss error"
 msgstr "Dispensar o erro"
 
@@ -1918,7 +1918,7 @@ msgid "Edit Profile"
 msgstr "Editar Perfil"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:664
+#: src/pages/shell/composer.tsx:666
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "Editando a mensagem de {rewindTime} · as {0} mensagens seguintes serão removidas"
 
@@ -2246,7 +2246,7 @@ msgstr "Entrada"
 msgid "Inputs"
 msgstr "Entradas"
 
-#: src/pages/shell/composer.tsx:935
+#: src/pages/shell/composer.tsx:937
 msgid "Insert dictation"
 msgstr ""
 
@@ -2318,7 +2318,7 @@ msgstr "Isolado"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Suas conversas, arquivos e rotinas serão excluídos permanentemente. Os bots criados ficam na sua lista."
 
-#: src/pages/shell/transcript.tsx:665
+#: src/pages/shell/transcript.tsx:662
 msgid "Jump to latest"
 msgstr "Ir para a mensagem mais recente"
 
@@ -2380,7 +2380,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:470
+#: src/pages/shell/transcript.tsx:469
 msgid "Load earlier messages"
 msgstr "Carregar mensagens anteriores..."
 
@@ -2421,7 +2421,7 @@ msgstr "Carregando provedores de voz..."
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/transcript.tsx:470
+#: src/pages/shell/transcript.tsx:469
 msgid "Loading…"
 msgstr "Carregando..."
 
@@ -2540,7 +2540,7 @@ msgstr "Memória"
 msgid "Memory scope"
 msgstr "Escopo de memória"
 
-#: src/pages/shell/composer.tsx:686
+#: src/pages/shell/composer.tsx:688
 msgid "Mentions"
 msgstr "Menções"
 
@@ -2548,8 +2548,8 @@ msgstr "Menções"
 msgid "Mentions only"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:968
-#: src/pages/shell/composer.tsx:1062
+#: src/pages/shell/composer.tsx:970
+#: src/pages/shell/composer.tsx:1064
 #: src/pages/shell/message-view.tsx:98
 msgid "Message"
 msgstr ""
@@ -2559,9 +2559,9 @@ msgstr ""
 msgid "Message"
 msgstr "Mensagem"
 
-#: src/pages/shell/composer.tsx:968
-#: src/pages/shell/composer.tsx:1058
-#: src/pages/shell/composer.tsx:1062
+#: src/pages/shell/composer.tsx:970
+#: src/pages/shell/composer.tsx:1060
+#: src/pages/shell/composer.tsx:1064
 msgid "Message {activeName}"
 msgstr "Mensagem {activeName}"
 
@@ -2569,7 +2569,7 @@ msgstr "Mensagem {activeName}"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:608
+#: src/pages/shell/composer.tsx:610
 msgid "Message composer"
 msgstr "Editor de mensagens"
 
@@ -2582,7 +2582,7 @@ msgstr ""
 msgid "Message from {peer}"
 msgstr "Mensagem de {peer}"
 
-#: src/pages/shell/composer.tsx:1059
+#: src/pages/shell/composer.tsx:1061
 msgid "Message…"
 msgstr "Mensagem…"
 
@@ -3311,8 +3311,8 @@ msgstr "Remover"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:776
-#: src/pages/shell/composer.tsx:786
+#: src/pages/shell/composer.tsx:778
+#: src/pages/shell/composer.tsx:788
 msgid "Remove {0}"
 msgstr "Remover {0}"
 
@@ -3326,7 +3326,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "Remover o marketplace {0} e suas skills?"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:852
+#: src/pages/shell/composer.tsx:854
 msgid "Remove mention {0}"
 msgstr "Remover menção {0}"
 
@@ -3339,7 +3339,7 @@ msgid "Remove schedule"
 msgstr "Remover o agendamento"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:830
+#: src/pages/shell/composer.tsx:832
 msgid "Remove skill {0}"
 msgstr "Remover habilidade {0}"
 
@@ -3391,7 +3391,7 @@ msgstr "Responder"
 msgid "Reply in several short messages"
 msgstr "Responder em várias mensagens curtas"
 
-#: src/pages/shell/composer.tsx:646
+#: src/pages/shell/composer.tsx:648
 msgid "Replying to {replyName}"
 msgstr "Respondendo a {replyName}"
 
@@ -3627,7 +3627,7 @@ msgstr "Selecionar {0}"
 msgid "Select a bot"
 msgstr "Selecione um bot"
 
-#: src/pages/shell/composer.tsx:889
+#: src/pages/shell/composer.tsx:891
 msgid "Send"
 msgstr "Enviar"
 
@@ -3693,11 +3693,11 @@ msgstr "URL do servidor"
 msgid "Settings"
 msgstr "Configurações"
 
-#: src/pages/shell/composer.tsx:1086
+#: src/pages/shell/composer.tsx:1088
 msgid "Settings: General"
 msgstr "Opções > Geral"
 
-#: src/pages/shell/composer.tsx:1088
+#: src/pages/shell/composer.tsx:1090
 msgid "Settings: Usage"
 msgstr "Configurações: Uso"
 
@@ -3769,7 +3769,7 @@ msgid "Sign up"
 msgstr "Cadastre-se"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:733
+#: src/pages/shell/composer.tsx:735
 msgid "Skill {0}"
 msgstr "Habilidade {0}"
 
@@ -3858,8 +3858,8 @@ msgstr "Iniciando…"
 msgid "Steps"
 msgstr "Passos"
 
-#: src/pages/shell/composer.tsx:905
-#: src/pages/shell/composer.tsx:946
+#: src/pages/shell/composer.tsx:907
+#: src/pages/shell/composer.tsx:948
 #: src/pages/shell/side-panel.tsx:691
 #: src/pages/shell/side-panel.tsx:696
 msgid "Stop"
@@ -4049,8 +4049,8 @@ msgid "To:"
 msgstr "Para:"
 
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/routine-run-line.tsx:397
-#: src/pages/shell/transcript.tsx:215
+#: src/pages/shell/routine-run-line.tsx:401
+#: src/pages/shell/transcript.tsx:214
 msgid "Today"
 msgstr "Hoje"
 
@@ -4291,8 +4291,8 @@ msgid "Workspace root"
 msgstr "Raiz do espaço de trabalho"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/routine-run-line.tsx:398
-#: src/pages/shell/transcript.tsx:216
+#: src/pages/shell/routine-run-line.tsx:402
+#: src/pages/shell/transcript.tsx:215
 msgid "Yesterday"
 msgstr "Ontem"
 

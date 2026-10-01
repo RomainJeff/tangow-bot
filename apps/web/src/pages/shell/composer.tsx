@@ -129,6 +129,9 @@ export const Composer = memo(function Composer({
   const isDictatingRef = useRef(false);
   isDictatingRef.current = isDictating;
   const [dictateSpeech, setDictateSpeech] = useState({ committed: "", interim: "" });
+  // Why the last dictation session ended on its own (mic denied, engine or
+  // transcription failure), shown in the composer's error banner.
+  const [dictationError, setDictationError] = useState<string | null>(null);
   const dictateSnapshotRef = useRef<{
     draft: string;
     mentions: ComposerMention[];
@@ -151,7 +154,6 @@ export const Composer = memo(function Composer({
   // cutting it off) keeps what was dictated rather than restoring the
   // pre-dictation draft.
   const dictateUserCancelRef = useRef(false);
-  const [dictationError, setDictationError] = useState<string | null>(null);
   const speechAvailable = useMemo(() => webSpeechAvailable(), []);
   const dictationAvailable = speechAvailable || Boolean(dictationTranscribe);
   // Electron's Chromium reports Web Speech as available but it usually has no
@@ -265,13 +267,13 @@ export const Composer = memo(function Composer({
     setMentionQuery(null);
     setMentionHighlightIndex(0);
     setSlashQuery(null);
+    setDictationError(null);
     dictateSnapshotRef.current = { draft, mentions: selectedMentions, skill: selectedSkill };
     setDictateSpeech({ committed: "", interim: "" });
     dictateLastSpeechRef.current = { transcript: "", interim: "" };
     dictateActivityRef.current = Date.now();
     dictateStartedRef.current = Date.now();
     dictateUserCancelRef.current = false;
-    setDictationError(null);
     setIsDictating(true);
     window.requestAnimationFrame(() => dictationPreviewRef.current?.focus());
     void dictation.listen({
