@@ -137,12 +137,22 @@ export function closeUnterminatedFence(markdown: string): string {
   return openFence ? `${markdown}\n${openFence.marker.repeat(openFence.length)}` : markdown;
 }
 
-const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})/;
+const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+/** A blockquote or list item: a separator inserted there would land outside
+ * the container, so those lines are never repaired. */
+const CONTAINER_PREFIX = /^ {0,3}(>|[-*+][ \t]|\d{1,9}[.)][ \t])/;
 const SEPARATOR_ROW = /^[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/;
 
-/** The cells of a pipe row, or 0 when the line is not one (fewer than two cells). */
+/** The cells of a pipe row, or 0 when the line is not one (fewer than two
+ * cells). Pipes inside inline code and escaped `\|` don't count. */
 function pipeCells(line: string): number {
-  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  if (CONTAINER_PREFIX.test(line)) return 0;
+  const trimmed = line
+    .replace(/(`+).+?\1/g, "")
+    .replace(/\\\|/g, "")
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "");
   if (!trimmed.includes("|")) return 0;
   return trimmed.split("|").length;
 }
@@ -158,10 +168,24 @@ export function repairMarkdownTables(markdown: string): string {
   if (!markdown.includes("|")) return markdown;
   const lines = markdown.split("\n");
   const out: string[] = [];
-  let inFence = false;
+  let fence: string | undefined;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
-    if (FENCE_LINE.test(line)) inFence = !inFence;
+    const fenceMatch = line.match(FENCE_LINE);
+    if (fenceMatch?.[1]) {
+      const marker = fenceMatch[1];
+      if (!fence) fence = marker;
+      else if (
+        marker[0] === fence[0] &&
+        marker.length >= fence.length &&
+        (fenceMatch[2] ?? "").trim() === ""
+      ) {
+        fence = undefined;
+      }
+      out.push(line);
+      continue;
+    }
+    const inFence = fence !== undefined;
     const previous = lines[i - 1] ?? "";
     const next = lines[i + 1] ?? "";
     const cells = inFence ? 0 : pipeCells(line);
