@@ -10,7 +10,7 @@ export function UserBubble({ className, ...props }: UserBubbleProps) {
       data-slot="user-bubble"
       className={cn(
         // 39/50 is 78% — a fraction rather than an arbitrary width.
-        "max-w-39/50 self-end whitespace-pre-wrap rounded-bubble bg-chat-user px-4.25 py-2.75 text-body text-chat-user-foreground",
+        "max-w-39/50 self-end whitespace-pre-wrap rounded-bubble bg-chat-user px-3.75 py-2.5 text-body text-chat-user-foreground",
         className,
       )}
       {...props}

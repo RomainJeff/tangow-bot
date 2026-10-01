@@ -1,5 +1,7 @@
+export { ActionSheet, type ActionSheetProps } from "./action-sheet.js";
 export { type AvatarStyle, AvatarStyleProvider, useAvatarStyle } from "./avatar-style.js";
 export { BotAvatar, Wordmark } from "./bot-avatar.js";
+export { ClippedPreview, type ClippedPreviewProps } from "./clipped-preview.js";
 export * from "./components/ui/alert-dialog.js";
 export * from "./components/ui/badge.js";
 export * from "./components/ui/button.js";
@@ -25,6 +27,10 @@ export * from "./components/ui/tabs.js";
 export * from "./components/ui/textarea.js";
 export * from "./components/ui/toggle.js";
 export * from "./components/ui/tooltip.js";
+export {
+  ComposerAttachment,
+  type ComposerAttachmentProps,
+} from "./composer-attachment.js";
 export { ComposerShell, type ComposerShellProps, type ComposerState } from "./composer-shell.js";
 export { formatElapsed, formatShortDuration } from "./format-elapsed.js";
 export {
@@ -38,6 +44,8 @@ export { Interstitial, type InterstitialProps } from "./interstitial.js";
 export { usePrefersReducedMotion } from "./lib/reduced-motion.js";
 export { cn } from "./lib/utils.js";
 export {
+  MessageBubble,
+  type MessageBubbleProps,
   MessageRow,
   type MessageRowMeta,
   type MessageRowProps,
@@ -55,6 +63,7 @@ export {
   StackedAvatars,
   type StackedAvatarsProps,
 } from "./stacked-avatars.js";
+export { StopContour, type StopContourProps } from "./stop-contour.js";
 export { Surface, type SurfaceProps, type SurfaceRadius } from "./surface.js";
 export { useElapsed } from "./use-elapsed.js";
 export { UserBubble, type UserBubbleProps } from "./user-bubble.js";

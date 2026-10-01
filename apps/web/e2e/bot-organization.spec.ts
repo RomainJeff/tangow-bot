@@ -185,7 +185,7 @@ test("chat composer controls are vertically centered", async ({ page }) => {
   await page.getByRole("combobox", { name: "Message Chief" }).fill("hi");
 
   const centers = await page.getByTestId("composer-bar").evaluate((composer) =>
-    ["Attach file", "Message Chief", "Voice", "Send"].map((label) => {
+    ["Attach file", "Message Chief", "Dictate", "Send"].map((label) => {
       const element = composer.querySelector<HTMLElement>(`[aria-label="${label}"]`);
       if (!element) throw new Error(`Missing composer control: ${label}`);
       const box = element.getBoundingClientRect();

@@ -45,13 +45,17 @@ export function FramedBlock({
     <div
       data-slot="framed-block"
       data-answered={answered ? "true" : undefined}
-      className={cn("overflow-hidden rounded-block bg-surface shadow-card", className)}
+      className={cn(
+        "overflow-hidden rounded-block bg-surface",
+        answered ? "shadow-settled" : "shadow-card",
+        className,
+      )}
       {...props}
     >
       {header ? (
         <div
           data-slot="framed-block-header"
-          className="flex items-center gap-2 px-4 pt-3.25 text-block-header text-muted-foreground"
+          className="flex items-center gap-2 px-3.5 pt-3 text-block-header text-muted-foreground"
         >
           {header.dot ? (
             <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-foreground" />
@@ -61,14 +65,14 @@ export function FramedBlock({
       ) : null}
       <div
         data-slot="framed-block-question"
-        className={cn("px-4 text-question text-foreground", header ? "pt-2" : "pt-3.25")}
+        className={cn("px-3.5 text-question text-foreground", header ? "pt-2" : "pt-3")}
       >
         {question}
       </div>
       {consequence ? (
         <div
           data-slot="framed-block-consequence"
-          className="px-4 pt-1.5 text-meta text-muted-foreground"
+          className="px-3.5 pt-1.5 text-meta text-muted-foreground"
         >
           {consequence}
         </div>
@@ -76,19 +80,19 @@ export function FramedBlock({
       {answered ? (
         <div
           data-slot="framed-block-answered"
-          className="p-4 pt-3.5 text-meta text-muted-foreground"
+          className="px-3.5 py-3 text-meta text-muted-foreground"
         >
           {answered}
         </div>
       ) : (
         <>
           {children ? (
-            <div data-slot="framed-block-body" className="px-4 pt-3">
+            <div data-slot="framed-block-body" className="px-3.5 pt-3">
               {children}
             </div>
           ) : null}
           {actions ? (
-            <div data-slot="framed-block-actions" className="flex flex-wrap gap-2 p-4 pt-3.5">
+            <div data-slot="framed-block-actions" className="flex flex-wrap gap-2 p-3.5">
               {actions}
             </div>
           ) : null}

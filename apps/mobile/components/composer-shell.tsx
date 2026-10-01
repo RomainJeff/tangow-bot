@@ -123,7 +123,7 @@ function Pulse({
 
 function createComposerShellStyles() {
   const tokens = mobileTokens();
-  const shadow = shadowsForAppearance(resolveMobileAppearance()).composer;
+  const shadow = shadowsForAppearance(resolveMobileAppearance()).composerFocus;
   return StyleSheet.create({
     root: {
       flexDirection: "row",

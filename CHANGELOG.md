@@ -12,6 +12,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - With a Jev browser connection, a bot's multi-step page task no longer gives up on its first step when a decision is a few seconds slow, so it keeps using Jev instead of clicking step by step.
 
+### 2026-09-28
+
+#### Added
+
+- **Long-pressing a message on web and desktop touch screens now opens an action sheet with quick reactions and its actions.** Hold a bubble for a moment to react, reply, copy, listen or edit and resend, sliding up from the bottom; a plain tap no longer reveals anything, and mouse and keyboard keep the existing hover pill.
+- **Dictate into the message field on phone, web and desktop.** Tap the mic and your words appear in the field as you speak; ✓ keeps them for you to review and send, × puts the field back as it was. On iPhone the speech is recognised on the device, so the audio never leaves it.
+
+#### Changed
+
+- On web and desktop, routine runs now read as the same log as mobile: one line per run with its time, status and a tap to open its report and the message it sent; earlier runs of the same routine with nothing between them fold into one line while the latest keeps its own, only a routine's latest run opens on its own when it failed or is subscribed, and a long report or task result fades out and opens whole in a dialog with a tap. A delegated task's result (a subagent or a cloud agent) is now a full-width outlined card with a document icon instead of a card with a coloured "completed" badge.
+- Conversations now read like a messaging app on web, desktop and mobile: each bot message sits in its own grey bubble and yours in a dark one, a bot alone no longer repeats its avatar and name on every reply because the header carries them, a group names each speaker once above their messages with their avatar underneath, answered questions settle flat into the thread, and a conversation between two bots keeps both of them on the same side.
+- On web and desktop the message field is now a single capsule that starts with the attach button, grows taller before it scrolls, and shows pending attachments inside it as thumbnails.
+- The message field now rests on a thin outline and lifts only while you write, and the Stop button's edge glows in the answering bot's colour while it replies.
+- On web and desktop, the voice call now starts from a phone icon in the conversation header instead of the mic in the message field, which now dictates.
+- While a bot works in a thread, its avatar on the working line (the typing bubble on mobile) now buzzes left and right on web, desktop and mobile, and stays still when reduced motion is on.
+
+#### Fixed
+
+- On web and desktop, a bot message's hover actions and time now appear right next to its bubble instead of at the far edge of the thread, your own messages show only discreet Edit and resend and Copy icons under the bubble, and routine lines no longer carry hover actions that covered their time and stayed on screen after you opened them.
+- A table a bot writes without its `|---|` separator line now shows as a table instead of a run of pipes, in routine reports and messages on web, desktop and mobile.
+- On a phone's browser, a dialog holding a wide table (a routine report, a task result) no longer runs off the screen: the table scrolls sideways inside it.
+- On web, dictation no longer closes as soon as it opens when you write in another language than your browser's: it now asks for a locale the speech engine knows.
+- A failed or still-running routine run no longer gets folded together with completed runs on either side of it, which used to move it out of place in the thread on mobile, web and desktop.
+- What a bot is doing while it works ("Searching the web: …") is no longer cut off for good: on web and desktop a chevron opens the whole line, and on mobile it slides sideways under your finger.
+- On web, a wide table in a bot's message now scrolls sideways instead of shrinking each column down to one letter per line.
+- On web, dictation now listens in the language you write in, instead of only your browser's own language.
+- Routine and other cards in a conversation fit the screen again on a phone browser instead of running off its right edge, and a bot message's time no longer shows over a card.
+- On web and desktop, a bot's avatar now has a clean edge instead of a thin dark fringe around its body.
+- On a phone browser, a long "working" line such as a web search now ends with an ellipsis instead of stretching the conversation wider than the screen.
+
 ### 2026-09-27
 
 #### Added
@@ -35,7 +65,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- While a bot works in a thread, its avatar next to the working line now buzzes left and right on web, desktop and mobile, and stays still when reduced motion is on.
 - A routine woken by a webhook, Git event or message now shows up in the bot's thread on web, desktop and mobile as its own collapsible run card, one per routine, instead of posting its instructions and the raw payload as a message from you; like other background routines, it only notifies you when "Notify me on every run" is on.
 
 #### Fixed

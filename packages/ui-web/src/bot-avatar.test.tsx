@@ -51,18 +51,22 @@ describe("BotAvatar", () => {
 
     expect(html).toContain("rakazo-organic-avatar");
     expect(html).toContain('data-working="true"');
-    expect(html).toContain("<mask");
+    expect(html).toContain("<clipPath");
     expect(html).not.toContain("rakazo-bot-avatar-visor");
   });
 
-  it("punches two eye holes into an idle body", () => {
+  it("paints two eyes over an idle body", () => {
     const html = renderToString(<BotAvatar color="#00C46A" identity="maya" variant="organic" />);
+    const body = html.match(/<clipPath[^>]*><path d="([^"]+)"/)?.[1];
+    const eyes = html.match(/<g clip-path="url\([^"]+\)" fill="#101014">(.*?)<\/g>/)?.[1];
 
     expect(html).toContain('data-working="false"');
-    expect(html.match(/fill="#000"/g)).toHaveLength(2);
+    expect(eyes?.match(/<path /g)).toHaveLength(2);
     expect(html).toContain('fill="#00C46A"');
-    // A mid-luminance hue keeps ink eyes and no body outline.
-    expect(html).toContain('fill="#101014"');
+    // A mid-luminance hue keeps ink eyes and no body outline. The ink is only on the
+    // eyes: a backing under the whole body bleeds through its edge as a dark fringe.
+    expect(html).toContain(`<path d="${body}" fill="#00C46A"`);
+    expect(html).not.toContain(`<path d="${body}" fill="#101014"`);
     expect(html).not.toContain('stroke="#17181A"');
   });
 
@@ -85,7 +89,7 @@ describe("BotAvatar", () => {
   });
 
   it("renders the picked shape seed, wrapping around the bloub shape catalogue", () => {
-    const body = (html: string) => html.match(/<mask[^>]*><path d="([^"]+)"/)?.[1];
+    const body = (html: string) => html.match(/<clipPath[^>]*><path d="([^"]+)"/)?.[1];
     const render = (shapeSeed?: number) =>
       renderToString(
         <BotAvatar color="#D9508A" identity="maya" shapeSeed={shapeSeed} variant="organic" />,

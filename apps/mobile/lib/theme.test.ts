@@ -19,6 +19,13 @@ describe("mobile elevation", () => {
   it("uses the web's box-shadow tokens as they are, one set per appearance", () => {
     expect(shadowsForAppearance("light")).toBe(lightShadows);
     expect(shadowsForAppearance("dark")).toBe(darkShadows);
-    expect(Object.keys(lightShadows).sort()).toEqual(["card", "composer", "floating", "row"]);
+    expect(Object.keys(lightShadows).sort()).toEqual([
+      "card",
+      "composerFocus",
+      "composerRest",
+      "floating",
+      "row",
+      "settled",
+    ]);
   });
 });
