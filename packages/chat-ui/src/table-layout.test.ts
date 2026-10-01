@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { TableNode } from "./table-layout.js";
-import { TABLE_COLUMN_MAX, TABLE_COLUMN_MIN, tableColumnWidths } from "./table-layout.js";
+import {
+  firstColumnNumbersRows,
+  TABLE_COLUMN_MAX,
+  TABLE_COLUMN_MIN,
+  tableColumnWidths,
+} from "./table-layout.js";
 
 function text(content: string): TableNode {
   return { type: "text", content };
@@ -61,5 +66,15 @@ describe("tableColumnWidths with a larger system text size", () => {
     const [large] = tableColumnWidths(node, undefined, 1.5);
 
     expect(large).toBeGreaterThan(regular ?? 0);
+  });
+});
+
+describe("firstColumnNumbersRows", () => {
+  it("is true for a numbering first column with a second cell to title the record", () => {
+    expect(firstColumnNumbersRows([row("td", "1", "Paris"), row("td", "2.", "Lyon")])).toBe(true);
+  });
+
+  it("is false for a single-column table of numbers, which has nothing else to title it", () => {
+    expect(firstColumnNumbersRows([row("td", "1"), row("td", "2")])).toBe(false);
   });
 });

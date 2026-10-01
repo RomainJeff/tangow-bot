@@ -16,9 +16,12 @@ import Animated, {
 export const ShimmerText = memo(function ShimmerText({
   children,
   style,
+  numberOfLines = 1,
 }: {
   children: React.ReactNode;
   style?: StyleProp<TextStyle>;
+  /** 0 lets the text run its full length (inside a sideways scroll). */
+  numberOfLines?: number;
 }) {
   const progress = useSharedValue(1);
   const reducedMotion = useReducedMotion();
@@ -41,7 +44,7 @@ export const ShimmerText = memo(function ShimmerText({
   const sweep = useAnimatedStyle(() => ({ opacity: 0.45 + progress.value * 0.55 }));
 
   return (
-    <Animated.Text numberOfLines={1} style={[style, sweep]}>
+    <Animated.Text numberOfLines={numberOfLines} style={[style, sweep]}>
       {children}
     </Animated.Text>
   );

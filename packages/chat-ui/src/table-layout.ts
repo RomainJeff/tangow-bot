@@ -34,6 +34,18 @@ export function tableRows(node: TableNode): TableNode[] {
 }
 
 /**
+ * Whether a first column only numbers the rows ("1", "2."), so each record is
+ * titled by its second cell instead. A row with no second cell has nothing
+ * else to title it, so its number stays the title.
+ */
+export function firstColumnNumbersRows(rows: readonly TableNode[]): boolean {
+  return rows.every((row) => {
+    const cells = (row.children ?? []).filter((cell) => cell.type === "th" || cell.type === "td");
+    return cells.length >= 2 && /^\s*\d{1,3}\.?\s*$/.test(plainText(cells[0] ?? { type: "td" }));
+  });
+}
+
+/**
  * One width in points per column, from the longest cell of that column.
  * `fontScale` is the system text size (Dynamic Type), so columns grow with it.
  */

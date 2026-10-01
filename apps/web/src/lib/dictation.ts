@@ -103,9 +103,8 @@ export class Dictation {
   private chunks: Blob[] = [];
   private token = 0;
   private silenceTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Every in-flight transcription request, so `stop("cancel")` can abort all
-   * of them at once — the recorder fallback's continuous chunk loop can have
-   * more than one request in flight at a time. */
+  /** Every in-flight transcription request, so `stop("cancel")` can abort
+   * them at once. */
   private activeAborts = new Set<AbortController>();
   private audioContext: AudioContext | null = null;
   private vadTimer: ReturnType<typeof setInterval> | undefined;
@@ -123,9 +122,8 @@ export class Dictation {
    * keeps a cancel from ever leaving the mic captured. */
   private stream: MediaStream | null = null;
   private dictateChunkTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Recorder fallback only: chains each chunk's transcription so results are
-   * appended in order even though the requests themselves can settle out of
-   * order (a later chunk's request finishing before an earlier one's). */
+  /** Recorder fallback only: chains each chunk's transcription, one request
+   * at a time, so results are appended in recording order. */
   private dictateChain: Promise<void> = Promise.resolve();
   /** Recorder fallback only: set while ✓ is waiting on the last chunk — stops
    * the loop from starting another chunk once the current one ends. */
@@ -448,8 +446,8 @@ export class Dictation {
    * `getUserMedia` call covers the whole session (`this.stream`); at each
    * chunk boundary a fresh `MediaRecorder` starts on that same stream
    * *before* the finished chunk's transcription is awaited, so nothing
-   * spoken while a request is in flight is lost. Requests can settle out of
-   * order, but `dictateChain` appends each chunk's text in recording order.
+   * spoken while a request is in flight is lost. `dictateChain` transcribes
+   * the chunks one at a time, in recording order.
    * No interim tail in this path — a chunk's text only appears once its
    * request returns. A chunk that fails to transcribe (5xx, 429, 401, a
    * timeout, a network error) ends the whole session instead of silently
@@ -535,7 +533,9 @@ export class Dictation {
    * Speech there is nothing to wait for — the text is already live in
    * `snapshot`. The wait below never hangs: a `stop()` landing before the
    * recorder's own stop event (× racing ✓) resolves it directly through
-   * `pendingFinish`, and a timeout covers any other stall.
+   * `pendingFinish`, and a timeout covers any other stall. When a chunk
+   * failed or the wait timed out, the text kept so far is returned and the
+   * snapshot is left with the error, so the caller can say it's partial.
    */
   async finishDictate(): Promise<string> {
     const mine = this.token;
@@ -584,12 +584,20 @@ export class Dictation {
         finish();
       }
     });
-    await Promise.race([
-      this.dictateChain,
-      new Promise<void>((resolve) => setTimeout(resolve, TRANSCRIPTION_RESPONSE_TIMEOUT_MS)),
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = await Promise.race([
+      this.dictateChain.then(() => false),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(true), TRANSCRIPTION_RESPONSE_TIMEOUT_MS);
+      }),
     ]);
+    clearTimeout(timer);
     const text = this.dictateCommitted.trim();
-    if (this.token === mine) this.stop("submit");
+    if (this.token !== mine) return text;
+    // A failed chunk already set its error (and left the snapshot idle).
+    const error = timedOut ? "Transcription request timed out." : this.snapshot.error;
+    this.stop("submit");
+    if (error) this.set({ ...IDLE, error });
     return text;
   }
 

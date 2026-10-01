@@ -218,7 +218,8 @@ export const Transcript = memo(function Transcript({
           );
         }
       }
-      previous = { createdAt: at ?? previous?.createdAt, routine };
+      // The next row is measured from the group's last run, like on mobile.
+      previous = { createdAt: message.createdAt ?? previous?.createdAt, routine };
       if (previousRow) before.set(message.id, previousRow);
       previousRow = message;
     }

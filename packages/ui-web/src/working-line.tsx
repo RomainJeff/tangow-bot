@@ -1,6 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { cn } from "./lib/utils.js";
 import { useElapsed } from "./use-elapsed.js";
 
@@ -20,12 +20,13 @@ export interface WorkingLineProps extends Omit<ComponentPropsWithoutRef<"div">, 
  */
 export function WorkingLine({ avatar, label, startedAt, className, ...props }: WorkingLineProps) {
   const elapsed = useElapsed(startedAt);
-  const labelRef = useRef<HTMLSpanElement>(null);
+  // A state ref: the label remounts when it moves into the toggle button,
+  // and the measure must follow the new node.
+  const [element, setElement] = useState<HTMLSpanElement | null>(null);
   const [overflowing, setOverflowing] = useState(false);
   const [open, setOpen] = useState(false);
 
   useLayoutEffect(() => {
-    const element = labelRef.current;
     if (!element || open) return;
     const measure = () => setOverflowing(element.scrollWidth > element.clientWidth + 1);
     measure();
@@ -33,11 +34,11 @@ export function WorkingLine({ avatar, label, startedAt, className, ...props }: W
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [label, open]);
+  }, [element, label, open]);
 
   const text = (
     <span
-      ref={labelRef}
+      ref={setElement}
       data-slot="working-line-label"
       className={cn(
         "min-w-0",

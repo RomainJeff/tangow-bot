@@ -1,6 +1,6 @@
 import { Maximize2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { cn } from "./lib/utils.js";
 
 /** One line of the 23 px body — the same rule of thumb as the mobile `ClippedPreview`. */
@@ -50,10 +50,11 @@ export function ClippedPreview({
   ariaLabel,
   children,
 }: ClippedPreviewProps) {
-  const content = useRef<HTMLDivElement>(null);
+  // A state ref, not `useRef`: capping swaps the wrapper, which remounts the
+  // content node, and the measure must follow the new one.
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
   const [measured, setMeasured] = useState<boolean | null>(null);
   useLayoutEffect(() => {
-    const element = content.current;
     if (!element) return;
     const limit = (maxLines + 3) * LINE_HEIGHT_PX;
     const measure = () => setMeasured(element.scrollHeight > limit);
@@ -62,12 +63,12 @@ export function ClippedPreview({
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [maxLines]);
+  }, [element, maxLines]);
   const capped = measured ?? text.split("\n").length > maxLines + 3;
   if (!capped) {
     return (
       <div data-slot="clipped-preview" data-capped="false">
-        <div ref={content}>{children}</div>
+        <div ref={setElement}>{children}</div>
       </div>
     );
   }
@@ -97,7 +98,7 @@ export function ClippedPreview({
         className="relative overflow-hidden"
         style={style}
       >
-        <div ref={content} aria-hidden="true">
+        <div ref={setElement} aria-hidden="true">
           {children}
         </div>
         {fade}
@@ -115,7 +116,9 @@ export function ClippedPreview({
       className="relative block w-full overflow-hidden text-start"
       style={style}
     >
-      <div aria-hidden="true">{children}</div>
+      <div ref={setElement} aria-hidden="true">
+        {children}
+      </div>
       {fade}
       {badge}
     </button>

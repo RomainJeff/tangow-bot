@@ -1,75 +1,75 @@
 import { sizes } from "@rakazo/ui-tokens";
 import type { ReactNode } from "react";
 import type { ViewProps } from "react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { mobileTokens } from "../lib/appearance";
 import { useThemedStyles } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 
-export interface MessageRowMeta {
-  /** The proof line, already translated ("Sent to #ops", "2 sources"). */
-  label: ReactNode;
-  onPress?: () => void;
-}
-
 export interface MessageRowProps extends Omit<ViewProps, "children"> {
-  avatar: ReactNode;
-  author: ReactNode;
-  time?: ReactNode;
+  /** A working `BotAvatar` at `sizes.message` (26). Ignored in `mono`. */
+  avatar?: ReactNode;
+  /** The bot's name, 13/500. Ignored in `mono`. */
+  author?: ReactNode;
+  /** Group head (design contract § Grouping, `isFirstOfGroup`): show `author`
+   * above the row. Ignored in `mono`, which never shows a name. */
+  showAuthor?: boolean;
+  /** Group foot (`isLastOfGroup`): show `avatar` at the bottom of the row. The
+   * avatar column stays reserved even when this is false, so the rest of the
+   * group's rows line up under it. Ignored in `mono`, which has no column. */
+  showAvatar?: boolean;
+  /**
+   * Mono-bot grammar (design contract §3b): no avatar column, no author, ever
+   * — the bot's identity lives in the header instead. Multi (default: false)
+   * reserves the avatar column and shows `author`/`avatar` per the flags
+   * above.
+   */
+  mono?: boolean;
   children: ReactNode;
-  meta?: MessageRowMeta;
   /** Anchored beside the row — mobile has no hover, so this is for a caller
    * that wants a persistent trailing element (rare; usually omitted). */
   trailing?: ReactNode;
 }
 
 /**
- * A bot message: avatar, name, time, prose. No fill, no border — the thread
- * frames nothing except a decision. Mirrors
- * `packages/ui-web/src/message-row.tsx`; mobile's avatar is 26 (`sizes.message`)
- * with an 11 px gap per design contract §3.7, vs the web gap of 14. A string
- * child gets the `body` token; a node child (markdown, a card) lands in a
- * plain `View` and brings its own typography.
+ * The scaffold around a bot row's content: the avatar/name grammar (mono vs
+ * multi), never the visual bubble itself — a narration message's bubble lives
+ * in `MessageText`, a card (`FramedBlock`, `Surface`, an attachment) brings
+ * its own. This lets a card sit in the same grouped row as narration without
+ * picking up a bubble fill. Mirrors `packages/ui-web/src/message-row.tsx`.
  */
 export function MessageRow({
   avatar,
   author,
-  time,
+  showAuthor = false,
+  showAvatar = false,
+  mono = false,
   children,
-  meta,
   trailing,
   style,
   ...props
 }: MessageRowProps) {
   const styles = useThemedStyles(createMessageRowStyles);
+
+  if (mono) {
+    return (
+      <View style={[styles.rootMono, style]} {...props}>
+        <View style={styles.contentMono}>{children}</View>
+        {trailing}
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.root, style]} {...props}>
-      <View style={styles.avatar}>{avatar}</View>
+      <View style={styles.avatarColumn}>{showAvatar ? avatar : null}</View>
       <View style={styles.content}>
-        <View style={styles.head}>
-          <Text style={styles.author}>{author}</Text>
-          {time ? <Text style={styles.time}>{time}</Text> : null}
-        </View>
-        {typeof children === "string" || typeof children === "number" ? (
-          <Text style={styles.body}>{children}</Text>
-        ) : (
-          // React Native has no style inheritance through a `View`, so prose
-          // arrives as a string and anything richer (markdown, a card, a
-          // reasoning disclosure) brings its own typography.
-          <View>{children}</View>
-        )}
-        {meta ? (
-          <Pressable
-            accessibilityRole={meta.onPress ? "button" : undefined}
-            onPress={meta.onPress}
-            style={styles.meta}
-          >
-            <Text style={styles.metaText}>{meta.label}</Text>
-            <Text accessibilityElementsHidden style={styles.metaText}>
-              {"›"}
-            </Text>
-          </Pressable>
+        {showAuthor ? (
+          <Text numberOfLines={1} style={styles.author}>
+            {author}
+          </Text>
         ) : null}
+        {children}
       </View>
       {trailing}
     </View>
@@ -81,9 +81,13 @@ function createMessageRowStyles() {
   return StyleSheet.create({
     root: {
       flexDirection: "row",
-      gap: 11,
+      alignItems: "flex-end",
+      gap: 8,
     },
-    avatar: {
+    rootMono: {
+      flexDirection: "row",
+    },
+    avatarColumn: {
       width: sizes.message,
       flexShrink: 0,
     },
@@ -91,35 +95,15 @@ function createMessageRowStyles() {
       flex: 1,
       minWidth: 0,
     },
-    head: {
-      flexDirection: "row",
-      alignItems: "baseline",
-      gap: 7,
-      marginBottom: 3,
+    contentMono: {
+      flex: 1,
+      minWidth: 0,
     },
     author: {
+      paddingStart: 12,
+      marginBottom: 1,
       color: tokens.foreground,
       ...nativeTextStyle("author"),
-    },
-    time: {
-      color: tokens.mutedForeground,
-      ...nativeTextStyle("time"),
-    },
-    body: {
-      color: tokens.foreground,
-      // Design contract §1.2: mobile message prose is 16/1.5 vs the shared 16.5/1.58.
-      ...nativeTextStyle("body", { size: 16, leading: 1.5 }),
-    },
-    meta: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      marginTop: 7,
-      alignSelf: "flex-start",
-    },
-    metaText: {
-      color: tokens.mutedForeground,
-      ...nativeTextStyle("meta"),
     },
   });
 }

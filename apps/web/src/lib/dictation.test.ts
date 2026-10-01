@@ -1048,6 +1048,56 @@ describe("Dictation dictate mode", () => {
 
     await expect(dictation.finishDictate()).resolves.toBe("earlier");
     expect(dictation.state.status).toBe("idle");
+    // Partial text, so the error stays for the composer to show.
+    expect(dictation.state.error).toBe("Too many requests");
+  });
+
+  it("✓ in the gap after the chunk timer stopped the recorder still transcribes that chunk", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })),
+      },
+      language: "en-US",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ text: "pending chunk" })),
+    );
+
+    const recorders: FakeRecorder[] = [];
+    class FakeRecorder {
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      constructor() {
+        recorders.push(this);
+      }
+      start() {
+        this.state = "recording";
+      }
+      // Like a real recorder: inactive at once, the stop event comes later.
+      stop() {
+        this.state = "inactive";
+      }
+      fireStop() {
+        this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) });
+        this.onstop?.();
+      }
+    }
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
+
+    const dictation = new Dictation();
+    void dictation.listen({ mode: "dictate", transcribe: true, onFinal: () => undefined });
+    await vi.waitFor(() => expect(recorders).toHaveLength(1));
+    recorders[0]?.stop();
+
+    const finished = dictation.finishDictate();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    recorders[0]?.fireStop();
+
+    await expect(finished).resolves.toBe("pending chunk");
+    expect(recorders).toHaveLength(1);
+    expect(dictation.state.error).toBeUndefined();
   });
 
   it("a failed chunk transcription ends the whole session instead of looping", async () => {
