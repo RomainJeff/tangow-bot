@@ -68,4 +68,18 @@ describe("TaskCard", () => {
     expect(html).toContain('data-capped="true"');
     expect(html).toContain("bg-linear-to-t");
   });
+
+  it("names the status in the card's label and keeps result links out of its button", () => {
+    const html = renderToStaticMarkup(
+      <TaskCard
+        title="Status check"
+        state="failed"
+        meta="Check the calendar"
+        body="See [the doc](https://example.com)"
+      />,
+    );
+
+    expect(html).toContain('aria-label="Status check, Failed, Check the calendar"');
+    expect(html).not.toMatch(/<button[^>]*>(?:(?!<\/button>).)*<a /s);
+  });
 });
