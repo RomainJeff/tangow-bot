@@ -786,6 +786,7 @@ msgid "cancelled"
 msgstr "abgebrochen"
 
 #: src/components/AskCard.tsx:23
+#: src/components/WorkReturnCard.tsx:8
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -1864,6 +1865,7 @@ msgstr "Docker begrenzt für mehr Sicherheit den Zugriff auf deinen Computer. We
 msgid "Don’t have an account?"
 msgstr "Du hast noch kein Konto?"
 
+#: src/components/WorkReturnCard.tsx:5
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "Fertig"
@@ -2028,6 +2030,7 @@ msgstr "Sehr hoch"
 msgid "failed"
 msgstr "fehlgeschlagen"
 
+#: src/components/WorkReturnCard.tsx:6
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2884,6 +2887,10 @@ msgstr "Keine Anbieter gefunden."
 #: src/components/integrations/IntegrationSetup.tsx:273
 msgid "No remote MCP servers found"
 msgstr ""
+
+#: src/components/WorkReturnCard.tsx:10
+msgid "No result"
+msgstr "Kein Ergebnis"
 
 #: src/pages/PluginsOverlay.tsx:952
 #: src/pages/SpaceSearch.tsx:23

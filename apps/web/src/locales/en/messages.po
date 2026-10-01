@@ -786,6 +786,7 @@ msgid "cancelled"
 msgstr "cancelled"
 
 #: src/components/AskCard.tsx:23
+#: src/components/WorkReturnCard.tsx:8
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -1864,6 +1865,7 @@ msgstr "Docker limits access to your computer for added security. Using {hostLab
 msgid "Don’t have an account?"
 msgstr "Don’t have an account?"
 
+#: src/components/WorkReturnCard.tsx:5
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "Done"
@@ -2028,6 +2030,7 @@ msgstr "Extra high"
 msgid "failed"
 msgstr "failed"
 
+#: src/components/WorkReturnCard.tsx:6
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2884,6 +2887,10 @@ msgstr "No providers found."
 #: src/components/integrations/IntegrationSetup.tsx:273
 msgid "No remote MCP servers found"
 msgstr "No remote MCP servers found"
+
+#: src/components/WorkReturnCard.tsx:10
+msgid "No result"
+msgstr "No result"
 
 #: src/pages/PluginsOverlay.tsx:952
 #: src/pages/SpaceSearch.tsx:23

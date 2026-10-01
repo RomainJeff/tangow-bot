@@ -786,6 +786,7 @@ msgid "cancelled"
 msgstr "已取消"
 
 #: src/components/AskCard.tsx:23
+#: src/components/WorkReturnCard.tsx:8
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -1864,6 +1865,7 @@ msgstr "Docker 限制对你电脑的访问，以提高安全性。使用{hostLab
 msgid "Don’t have an account?"
 msgstr "还没有账户？"
 
+#: src/components/WorkReturnCard.tsx:5
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "完成"
@@ -2028,6 +2030,7 @@ msgstr "极高"
 msgid "failed"
 msgstr "失败"
 
+#: src/components/WorkReturnCard.tsx:6
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2884,6 +2887,10 @@ msgstr "未找到提供方。"
 #: src/components/integrations/IntegrationSetup.tsx:273
 msgid "No remote MCP servers found"
 msgstr ""
+
+#: src/components/WorkReturnCard.tsx:10
+msgid "No result"
+msgstr "无结果"
 
 #: src/pages/PluginsOverlay.tsx:952
 #: src/pages/SpaceSearch.tsx:23

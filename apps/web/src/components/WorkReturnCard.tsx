@@ -1,4 +1,15 @@
+import { t } from "@lingui/core/macro";
 import type { WorkReturn } from "../lib/work-return";
+
+function outcomeMark(outcome: WorkReturn["outcome"]) {
+  if (outcome === "result") return { glyph: "✓", tone: "text-success", label: t`Done` };
+  if (outcome === "failed") return { glyph: "✕", tone: "text-destructive", label: t`Failed` };
+  if (outcome === "cancelled")
+    return { glyph: "⊘", tone: "text-muted-foreground", label: t`Cancelled` };
+  if (outcome === "no_result")
+    return { glyph: "–", tone: "text-muted-foreground", label: t`No result` };
+  return null;
+}
 
 /**
  * The specialist's work_return card: who produced the result and how the run
@@ -13,6 +24,7 @@ export function WorkReturnCard({
   workReturn: WorkReturn;
   specialistName: string;
 }) {
+  const mark = outcomeMark(workReturn.outcome);
   return (
     <div className="flex justify-start">
       <div
@@ -20,9 +32,13 @@ export function WorkReturnCard({
         data-testid="work-return-card"
       >
         <div className="flex items-baseline gap-2.5 text-working" data-testid="work-return-outcome">
-          {workReturn.outcome === "result" ? <span className="text-success">✓</span> : null}
-          {workReturn.outcome === "failed" ? <span className="text-destructive">✕</span> : null}
+          {mark ? (
+            <span className={mark.tone} aria-hidden>
+              {mark.glyph}
+            </span>
+          ) : null}
           <span className="font-semibold text-foreground">{specialistName}</span>
+          {mark ? <span className="text-muted-foreground">{mark.label}</span> : null}
         </div>
       </div>
     </div>

@@ -15,6 +15,7 @@ import {
   createNativeRightsGuard,
   isMcpToolAdmitted,
   RightsExceededError,
+  recordSpecialistCancellation,
   recordSpecialistFailure,
   recordSpecialistResult,
   WorkClosedError,
@@ -1990,6 +1991,61 @@ describe("recordSpecialistFailure", () => {
       { k: "wake", v: "queued" },
     ]);
   });
+});
+
+type SpecialistDeps = Parameters<typeof recordSpecialistResult>[0];
+
+describe("specialist terminal outcomes beyond result and failure", () => {
+  const openWork = {
+    id: "work-1",
+    spaceId,
+    userId,
+    spawnKey: "spawn-1",
+    coordinatorBotId,
+    coordinatorThreadId,
+    executorBotId: "bot-specialist",
+    specialistThreadId: "thread-specialist",
+    parentScopedTaskId: null,
+    rootScopedTaskId: "work-1",
+    depth: 0,
+    status: "dispatched",
+  };
+
+  it.each([
+    {
+      name: "a finish with no written result",
+      outcome: "no_result",
+      deliver: (deps: SpecialistDeps) =>
+        recordSpecialistResult(deps, { workId: "work-1", runId: "run-specialist-1", text: "  \n" }),
+    },
+    {
+      name: "a cancelled specialist run",
+      outcome: "cancelled",
+      deliver: (deps: SpecialistDeps) =>
+        recordSpecialistCancellation(deps, { workId: "work-1", runId: "run-specialist-1" }),
+    },
+  ])(
+    "returns $name as its own outcome, with no text, and still wakes the coordinator",
+    async ({ outcome, deliver }) => {
+      const harness = makeDeps({ existingScopedTask: openWork });
+
+      await deliver({ prisma: harness.prisma, jobs: harness.jobs, events: harness.events });
+
+      const created = harness.tx.message.create.mock.calls[0]![0];
+      const cardBlock = created.data.blocks.find(
+        (block: { kind: string }) => block.kind === "card",
+      );
+      expect(cardBlock.lines).toEqual(
+        expect.arrayContaining([
+          { k: "outcome", v: outcome },
+          { k: "wake", v: "queued" },
+        ]),
+      );
+      expect(created.data.blocks.some((block: { kind: string }) => block.kind === "text")).toBe(
+        false,
+      );
+    },
+  );
 });
 
 describe("T07:6 (B4, root decision): fail-closed reading of scoped_tasks.delegationCeiling", () => {

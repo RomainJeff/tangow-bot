@@ -1,7 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { WorkReturn } from "../lib/work-return";
 import { WorkReturnCard } from "./WorkReturnCard";
+
+// The node test run has no Lingui vite transform; substitute the runtime tag with a plain
+// interpolation. The guarantee under test is which label each outcome shows.
+vi.mock("@lingui/core/macro", () => ({
+  t: (strings: TemplateStringsArray) => strings.join(""),
+}));
 
 function render(outcome: WorkReturn["outcome"]) {
   return renderToStaticMarkup(
@@ -38,6 +44,26 @@ describe("WorkReturnCard", () => {
     expect(html).toContain("✓");
     expect(html).toContain("text-success");
     expect(html).not.toContain("text-destructive");
+  });
+
+  it.each(["cancelled", "no_result"] as const)(
+    "marks a %s return with a neutral glyph, neither a success nor a failure",
+    (outcome) => {
+      const html = render(outcome);
+      expect(html).toContain("text-muted-foreground");
+      expect(html).not.toContain("✓");
+      expect(html).not.toContain("text-success");
+      expect(html).not.toContain("text-destructive");
+    },
+  );
+
+  it.each([
+    ["result", "Done"],
+    ["failed", "Failed"],
+    ["cancelled", "Cancelled"],
+    ["no_result", "No result"],
+  ] as const)("names a %s return with its short label", (outcome, label) => {
+    expect(render(outcome)).toContain(`>${label}<`);
   });
 
   it("marks an unknown return without any outcome check", () => {

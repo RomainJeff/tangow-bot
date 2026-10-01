@@ -15,8 +15,7 @@ import { scheduleComputerControlExpiry } from "./computer-control.js";
 import { toComputerRef } from "./computer-support.js";
 import {
   cleanupTerminalWork,
-  recordSpecialistFailure,
-  recordSpecialistResult,
+  deliverSpecialistRunEnd,
   TERMINAL_WORK_STATUSES,
 } from "./delegated-tasks.js";
 import { isUserProgressClientNonce } from "./user-progress.js";
@@ -492,36 +491,49 @@ async function reconcileTerminalWork(
 }
 
 /**
- * Deliver the return of a specialist Run that finished while its worker died before
- * `recordSpecialistReturn`. Delivery is idempotent per Run, so a return the worker did
- * deliver, or one a second reconciliation sees again, is never posted twice.
+ * Deliver the return of a specialist Run that ended while its worker died before
+ * delivering it, and of one cancelled on its own while its work stays open. A work already
+ * cancelled gets none: what its Runs produced afterwards is a late trace, never a return;
+ * a closed work still takes the return as a passive receipt. Delivery is idempotent per
+ * Run, so a return the worker did deliver, or one a second reconciliation sees again, is
+ * never posted twice.
  */
 async function reconcileSpecialistReturns(
   deps: { prisma: PrismaClient; jobs: JobPublisher; events?: ThreadEvents },
   batchSize: number,
 ) {
   const { events } = deps;
-  if (!events || !("scopedTask" in deps.prisma)) return;
+  if (!events) return;
   const undelivered = await deps.prisma.run.findMany({
     where: {
       scopedTaskId: { not: null },
-      status: { in: ["completed", "failed"] },
       terminalReturnDelivery: null,
+      OR: [
+        {
+          status: { in: ["completed", "failed"] },
+          scopedTask: { is: { status: { not: "cancelled" } } },
+        },
+        {
+          status: "cancelled",
+          scopedTask: { is: { status: { notIn: TERMINAL_WORK_STATUSES } } },
+        },
+      ],
     },
     orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
     take: batchSize,
     select: { id: true, status: true, scopedTaskId: true },
   });
   for (const run of undelivered) {
-    const delivery = { prisma: deps.prisma, jobs: deps.jobs, events };
-    const input = { workId: run.scopedTaskId!, runId: run.id };
     try {
-      if (run.status === "failed") await recordSpecialistFailure(delivery, input);
-      else
-        await recordSpecialistResult(delivery, {
-          ...input,
-          text: (await botRunOutcomeText(deps.prisma, run.id)).text,
-        });
+      await deliverSpecialistRunEnd(
+        { prisma: deps.prisma, jobs: deps.jobs, events },
+        {
+          workId: run.scopedTaskId!,
+          runId: run.id,
+          status: run.status as "completed" | "failed" | "cancelled",
+          text: await finalRunText(deps.prisma, run.id),
+        },
+      );
     } catch (error) {
       getLogger().error("specialist return reconciliation", error);
       // Rotate a Run that cannot be delivered so it does not starve the batch.
@@ -531,6 +543,12 @@ async function reconcileSpecialistReturns(
       });
     }
   }
+}
+
+/** The Run's final reply as the executor would have delivered it: progress messages are not part of it. */
+async function finalRunText(prisma: PrismaClient, runId: string): Promise<string> {
+  const outcome = await botRunOutcomeText(prisma, runId);
+  return outcome.progressOnly ? "" : outcome.text;
 }
 
 /** Prefer the full bot transcript for a run so interim progress is not mistaken for the sole result. */

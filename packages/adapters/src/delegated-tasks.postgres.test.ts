@@ -814,6 +814,71 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     );
   });
 
+  it("reconciles a specialist run cancelled alone as a cancelled return, but stays silent once the work is cancelled", async () => {
+    const s = await setup();
+    const tasks = createDelegatedTasks(s.deps);
+    const delegate = (name: string) =>
+      tasks.apply(
+        {
+          kind: "delegate",
+          target: { kind: "from_profile", profileBotId: s.profile.id, name },
+          harness: { harness: "codex-native", targetId: "target-1" },
+          brief: "Get stopped",
+          requestedRights: {},
+          spawnKey: `stopped-${name}-${randomUUID()}`,
+        },
+        s.context,
+      );
+    const stopped = await delegate("Stopped alone");
+    const cancelledWork = await delegate("Cancelled with work");
+    const lateAfterCancel = await delegate("Finished after cancel");
+    const finishedThenClosed = await delegate("Finished then closed");
+    await prisma.run.update({ where: { id: stopped.runId! }, data: { status: "cancelled" } });
+    await tasks.apply(
+      { kind: "cancel", workId: cancelledWork.workId, reason: "No longer needed" },
+      s.context,
+    );
+    await tasks.apply(
+      { kind: "cancel", workId: lateAfterCancel.workId, reason: "No longer needed" },
+      s.context,
+    );
+    // The specialist still finished after its work was cancelled: a late trace, not a return.
+    await prisma.run.update({
+      where: { id: lateAfterCancel.runId! },
+      data: { status: "completed" },
+    });
+    await prisma.run.update({
+      where: { id: finishedThenClosed.runId! },
+      data: { status: "completed" },
+    });
+    await tasks.apply({ kind: "close", workId: finishedThenClosed.workId }, s.context);
+
+    await createJobReconciler({
+      prisma,
+      jobs: s.deps.jobs,
+      events: s.deps.events as never,
+    }).reconcileOnce();
+
+    const cards = await prisma.message.findMany({
+      where: { threadId: s.coordinatorThread.id, role: "bot" },
+    });
+    const returned = cards.map((card) => {
+      const lines = (card.blocks as Array<{ lines?: Array<{ k: string; v: string }> }>)[0]!.lines!;
+      return {
+        workId: lines.find((line) => line.k === "workId")?.v,
+        outcome: lines.find((line) => line.k === "outcome")?.v,
+      };
+    });
+    expect(returned).toHaveLength(2);
+    expect(returned).toEqual(
+      expect.arrayContaining([
+        { workId: stopped.workId, outcome: "cancelled" },
+        // A closed work keeps receiving returns, as a passive receipt.
+        { workId: finishedThenClosed.workId, outcome: "no_result" },
+      ]),
+    );
+  });
+
   it("reconciles a confirmed native stop before terminal cleanup", async () => {
     const s = await setup();
     const tasks = createDelegatedTasks(s.deps);

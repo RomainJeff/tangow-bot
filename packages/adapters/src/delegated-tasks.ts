@@ -12,8 +12,9 @@ import type {
   ScopedWorkId,
   TaskTreeNode,
   TaskTreePage,
+  WorkReturnOutcome,
 } from "@rakazo/contracts";
-import { RUN_CHOICE_VERSION } from "@rakazo/contracts";
+import { isWorkReturnOutcome, RUN_CHOICE_VERSION } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
@@ -79,7 +80,7 @@ const WORK_RETURN_PROMPT_TEXT_MAX = 8_000;
 
 type WorkReturnPromptEntry = {
   specialistName: string;
-  outcome: "result" | "failed";
+  outcome: WorkReturnOutcome;
   text: string;
 };
 
@@ -113,6 +114,7 @@ function workReturnPromptEntry(blocks: unknown): WorkReturnPromptEntry | undefin
   if (!card || typeof card !== "object" || !("lines" in card)) return undefined;
   const outcome = cardLineValue(card.lines, "outcome");
   const specialistName = cardLineValue(card.lines, "executorBotName");
+  // A cancelled or empty return carries its outcome only, with no text block.
   const textBlock = blocks.find(
     (block) =>
       typeof block === "object" &&
@@ -122,16 +124,8 @@ function workReturnPromptEntry(blocks: unknown): WorkReturnPromptEntry | undefin
       "text" in block &&
       typeof block.text === "string",
   );
-  if (
-    (outcome !== "result" && outcome !== "failed") ||
-    !specialistName ||
-    !textBlock ||
-    typeof textBlock !== "object" ||
-    !("text" in textBlock) ||
-    typeof textBlock.text !== "string"
-  )
-    return undefined;
-  return { specialistName, outcome, text: textBlock.text };
+  if (!isWorkReturnOutcome(outcome) || !specialistName) return undefined;
+  return { specialistName, outcome, text: textBlock?.text ?? "" };
 }
 
 function workReturnWakePrompt(entries: WorkReturnPromptEntry[]): string {
@@ -139,9 +133,11 @@ function workReturnWakePrompt(entries: WorkReturnPromptEntry[]): string {
   const returns = entries.map((entry, index) => {
     // A specialist can quote a delimiter-looking string. Make it visibly inert before
     // placing it between this wake's nonce-bound delimiters.
+    const heading = `Specialist ${index + 1}: ${entry.specialistName}; outcome: ${entry.outcome}.`;
+    if (!entry.text) return heading;
     const boundedText = entry.text.slice(0, WORK_RETURN_PROMPT_TEXT_MAX).replaceAll("<<", "‹‹");
     return [
-      `Specialist ${index + 1}: ${entry.specialistName}; outcome: ${entry.outcome}.`,
+      heading,
       `<<UNTRUSTED SPECIALIST OUTPUT ${nonce}>>`,
       boundedText,
       `<<END ${nonce}>>`,
@@ -1120,7 +1116,7 @@ async function inspectWork(
  */
 async function recordSpecialistReturn(
   deps: SpecialistDeliveryDeps,
-  input: { workId: ScopedWorkId; runId: string; outcome: "result" | "failed"; text: string },
+  input: { workId: ScopedWorkId; runId: string; outcome: WorkReturnOutcome; text?: string },
 ) {
   const committed = await deps.prisma.$transaction(async (tx) => {
     // Run is mapped to `runs` (packages/db/prisma/schema.prisma). Lock it before
@@ -1139,6 +1135,10 @@ async function recordSpecialistReturn(
       where: { id: scopedTask.coordinatorBotId },
       select: { archivedAt: true, thread: { select: { id: true } } },
     });
+    // A cancelled Run of a work that is already closed or cancelled tells nobody: the stop
+    // that ended the work already did.
+    if (input.outcome === "cancelled" && TERMINAL_WORK_STATUSES.includes(lockedWork?.status ?? ""))
+      return null;
     const lastUserRun = await tx.run.findFirst({
       where: {
         botId: scopedTask.coordinatorBotId,
@@ -1195,23 +1195,26 @@ async function recordSpecialistReturn(
           { k: "wake", v: wakeStatus },
         ],
       },
-      { kind: "text" as const, text: input.text },
+      // Cancelled and empty returns store their outcome alone; the card names it.
+      ...(input.text ? [{ kind: "text" as const, text: input.text }] : []),
     ];
     // Messages in a bot thread belong to its owner (bot-messages routing relies on it);
     // the specialist is identified by the card's executorBotId line, not by botId.
+    // A cancelled Run's history is closed to new rows, so its return card stays unowned.
+    const historyRunId = input.outcome === "cancelled" ? undefined : input.runId;
     const message = await createThreadMessageInTransaction(tx, {
       threadId: scopedTask.coordinatorThreadId,
       role: "bot",
       blocks,
       botId: scopedTask.coordinatorBotId,
-      runId: input.runId,
+      runId: historyRunId,
     });
     const event = await appendEventInTransaction(tx, {
       spaceId: scopedTask.spaceId,
       threadId: scopedTask.coordinatorThreadId,
       botId: scopedTask.coordinatorBotId,
       type: "thread.message.created",
-      runId: input.runId,
+      runId: historyRunId,
       payload: { messageId: message.id, role: "bot", blocks },
     });
     if (!wakeAllowed)
@@ -1245,7 +1248,7 @@ async function recordSpecialistReturn(
       {
         specialistName: specialist?.name ?? "Specialist",
         outcome: input.outcome,
-        text: input.text,
+        text: input.text ?? "",
       },
     ]);
     // One queued wake accumulates every return delivered while it waits. A second queued
@@ -1324,6 +1327,15 @@ export async function recordSpecialistResult(
   deps: SpecialistDeliveryDeps,
   input: { workId: ScopedWorkId; runId: string; text: string },
 ) {
+  // A finish that wrote nothing is its own outcome, never an empty "result".
+  if (!input.text.trim()) {
+    await recordSpecialistReturn(deps, {
+      workId: input.workId,
+      runId: input.runId,
+      outcome: "no_result",
+    });
+    return;
+  }
   await recordSpecialistReturn(deps, { ...input, outcome: "result" });
 }
 
@@ -1345,4 +1357,35 @@ export async function recordSpecialistFailure(
     text: "The specialist run failed to complete.",
   });
   // A failure is not a closure either: the coordinator can still complete/follow up.
+}
+
+/**
+ * Records that a specialist Run was cancelled while its work stays open, so the coordinator
+ * can synthesize without it. The return carries the outcome alone.
+ */
+export async function recordSpecialistCancellation(
+  deps: SpecialistDeliveryDeps,
+  input: { workId: ScopedWorkId; runId: string },
+) {
+  await recordSpecialistReturn(deps, { ...input, outcome: "cancelled" });
+}
+
+/**
+ * The one mapping from a specialist Run's final status to the return its coordinator gets,
+ * for the executor that sees the Run end and the reconciler that catches up on one it
+ * missed. `text` is the Run's final reply, never its progress messages.
+ */
+export async function deliverSpecialistRunEnd(
+  deps: SpecialistDeliveryDeps,
+  input: {
+    workId: ScopedWorkId;
+    runId: string;
+    status: "completed" | "failed" | "cancelled";
+    text?: string;
+  },
+) {
+  const { status, text, ...run } = input;
+  if (status === "failed") await recordSpecialistFailure(deps, run);
+  else if (status === "cancelled") await recordSpecialistCancellation(deps, run);
+  else await recordSpecialistResult(deps, { ...run, text: text ?? "" });
 }

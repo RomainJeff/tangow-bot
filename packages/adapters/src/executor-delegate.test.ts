@@ -28,21 +28,15 @@ vi.mock("./delegated-tasks.js", async (importOriginal) => {
   return {
     ...actual,
     createDelegatedTasks: vi.fn(),
-    recordSpecialistResult: vi.fn(async () => undefined),
-    recordSpecialistFailure: vi.fn(async () => undefined),
+    deliverSpecialistRunEnd: vi.fn(async () => undefined),
   };
 });
 
-import {
-  createDelegatedTasks,
-  recordSpecialistFailure,
-  recordSpecialistResult,
-} from "./delegated-tasks.js";
+import { createDelegatedTasks, deliverSpecialistRunEnd } from "./delegated-tasks.js";
 import { createRunExecutor } from "./executor.js";
 
 const mockCreateDelegatedTasks = vi.mocked(createDelegatedTasks);
-const mockRecordSpecialistResult = vi.mocked(recordSpecialistResult);
-const mockRecordSpecialistFailure = vi.mocked(recordSpecialistFailure);
+const mockDeliverSpecialistRunEnd = vi.mocked(deliverSpecialistRunEnd);
 
 /**
  * Executor-level seam fixture (Terra J2 review findings 1+2): a fake `runtime.run` drives
@@ -236,8 +230,7 @@ function fixture(
 
 describe("executor seam — delegate dispatch and specialist completion (Terra J2 findings 1+2)", () => {
   beforeEach(() => {
-    mockRecordSpecialistResult.mockClear();
-    mockRecordSpecialistFailure.mockClear();
+    mockDeliverSpecialistRunEnd.mockClear();
   });
 
   it("dispatches the delegate tool with the turn's own bot as the non-forgeable actor", async () => {
@@ -328,30 +321,31 @@ describe("executor seam — delegate dispatch and specialist completion (Terra J
   });
 
   it("delivers the specialist's successful result to the coordinator (mutant: removing the call must fail this test)", async () => {
-    mockRecordSpecialistResult.mockClear();
     const f = fixture({ scopedTaskId: "work-1", outcome: "completed" });
     await f.run();
 
-    expect(mockRecordSpecialistResult).toHaveBeenCalledTimes(1);
-    expect(mockRecordSpecialistResult).toHaveBeenCalledWith(
+    expect(mockDeliverSpecialistRunEnd).toHaveBeenCalledTimes(1);
+    expect(mockDeliverSpecialistRunEnd).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ workId: "work-1", runId: "run-1", text: expect.any(String) }),
+      expect.objectContaining({
+        workId: "work-1",
+        runId: "run-1",
+        status: "completed",
+        text: expect.any(String),
+      }),
     );
-    expect(mockRecordSpecialistFailure).not.toHaveBeenCalled();
   });
 
   it("delivers a work_return on a failed specialist run instead of silently dropping it", async () => {
-    mockRecordSpecialistFailure.mockClear();
     const f = fixture({ scopedTaskId: "work-1", outcome: "failed" });
     await f.run();
 
     expect(f.finalizeRun).toHaveBeenCalledWith(expect.objectContaining({ outcome: "failed" }));
-    expect(mockRecordSpecialistFailure).toHaveBeenCalledTimes(1);
-    expect(mockRecordSpecialistFailure).toHaveBeenCalledWith(
+    expect(mockDeliverSpecialistRunEnd).toHaveBeenCalledTimes(1);
+    expect(mockDeliverSpecialistRunEnd).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ workId: "work-1", runId: "run-1" }),
+      expect.objectContaining({ workId: "work-1", runId: "run-1", status: "failed" }),
     );
-    expect(mockRecordSpecialistResult).not.toHaveBeenCalled();
   });
 
   it("returns an open specialist's peer-awakened turn as a work_return", async () => {
@@ -371,22 +365,23 @@ describe("executor seam — delegate dispatch and specialist completion (Terra J
     });
     await f.run();
 
-    expect(mockRecordSpecialistResult).toHaveBeenCalledTimes(1);
-    expect(mockRecordSpecialistResult).toHaveBeenCalledWith(
+    expect(mockDeliverSpecialistRunEnd).toHaveBeenCalledTimes(1);
+    expect(mockDeliverSpecialistRunEnd).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ workId: "work-1", runId: "run-1", text: expect.any(String) }),
+      expect.objectContaining({
+        workId: "work-1",
+        runId: "run-1",
+        status: "completed",
+        text: expect.any(String),
+      }),
     );
-    expect(mockRecordSpecialistFailure).not.toHaveBeenCalled();
   });
 
   it("does not touch delegation on an ordinary (non-specialist) run", async () => {
-    mockRecordSpecialistResult.mockClear();
-    mockRecordSpecialistFailure.mockClear();
     const f = fixture({ outcome: "completed" });
     await f.run();
 
-    expect(mockRecordSpecialistResult).not.toHaveBeenCalled();
-    expect(mockRecordSpecialistFailure).not.toHaveBeenCalled();
+    expect(mockDeliverSpecialistRunEnd).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,7 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { WorkReturnOutcome as KnownOutcome, MessageBlock } from "@rakazo/contracts";
+import { isWorkReturnOutcome } from "@rakazo/contracts";
 
-export type WorkReturnOutcome = "result" | "failed" | "unknown";
+export type WorkReturnOutcome = KnownOutcome | "unknown";
 
 export type WorkReturn = {
   workId: string | null;
@@ -21,6 +22,6 @@ export function parseWorkReturn(block: MessageBlock): WorkReturn | null {
   return {
     workId: value("workId"),
     executorBotId: value("executorBotId"),
-    outcome: outcome === "result" || outcome === "failed" ? outcome : "unknown",
+    outcome: isWorkReturnOutcome(outcome) ? outcome : "unknown",
   };
 }

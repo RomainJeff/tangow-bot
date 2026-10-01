@@ -400,7 +400,7 @@ describe("createJobReconciler", () => {
     };
     let terminalScan = 0;
     const runFindMany = vi.fn(async (args: { where?: Record<string, unknown> } = {}) => {
-      if (args.where?.messagingMirroredAt === null) return [];
+      if (args.where?.messagingMirroredAt === null || args.where?.scopedTaskId) return [];
       if (args.where?.trigger === "bot_message") {
         terminalScan += 1;
         return terminalScan === 2 ? [] : [terminalRun];
@@ -428,8 +428,7 @@ describe("createJobReconciler", () => {
     await reconciler.reconcileOnce();
     await reconciler.reconcileOnce();
 
-    expect(runFindMany).toHaveBeenNthCalledWith(
-      3,
+    expect(runFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         where: {

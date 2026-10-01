@@ -72,6 +72,14 @@ export type Receipt = {
   replayed: boolean;
 };
 
+/** How a specialist Run ended, as the coordinator and the work_return card read it. */
+export const WORK_RETURN_OUTCOMES = ["result", "failed", "cancelled", "no_result"] as const;
+export type WorkReturnOutcome = (typeof WORK_RETURN_OUTCOMES)[number];
+
+export function isWorkReturnOutcome(value: unknown): value is WorkReturnOutcome {
+  return WORK_RETURN_OUTCOMES.some((outcome) => outcome === value);
+}
+
 export type TaskTreeNode = {
   workId: ScopedWorkId;
   coordinator: { botId: string; threadId: string };

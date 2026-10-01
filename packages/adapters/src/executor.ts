@@ -226,9 +226,8 @@ import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import {
   createDelegatedTasks,
   createNativeRightsGuard,
+  deliverSpecialistRunEnd,
   RightsExceededError,
-  recordSpecialistFailure,
-  recordSpecialistResult,
   WorkClosedError,
   WorkNotAuthorizedError,
 } from "./delegated-tasks.js";
@@ -5171,9 +5170,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // succeeded and before notifications/continuations, never touching `status`
           // (already set above) — no other delegation responsibility is added here.
           if (run.scopedTaskId) {
-            await recordSpecialistResult(
+            await deliverSpecialistRunEnd(
               { prisma: deps.prisma, jobs: deps.jobs, events: deps.events },
-              { workId: run.scopedTaskId, runId, text },
+              { workId: run.scopedTaskId, runId, status: "completed", text },
             ).catch((error) => getLogger().error("specialist result delivery", error));
           }
           await settleRoutineRunCard("completed", text);
@@ -5278,9 +5277,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // Same placement discipline as the success path (finding 4c): right after
           // finalizeRun succeeded, no other delegation responsibility added here.
           if (run.scopedTaskId) {
-            await recordSpecialistFailure(
+            await deliverSpecialistRunEnd(
               { prisma: deps.prisma, jobs: deps.jobs, events: deps.events },
-              { workId: run.scopedTaskId, runId },
+              { workId: run.scopedTaskId, runId, status: "failed" },
             ).catch((error) => getLogger().error("specialist failure delivery", error));
           }
           await settleRoutineRunCard("failed", message);
@@ -5325,6 +5324,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
         } finally {
           await closeNativeSession();
+          // A specialist Run stopped from outside is returned to its coordinator as soon as
+          // this attempt sees it; the work's own cancellation tells nobody twice.
+          if (run.scopedTaskId) {
+            await deps.prisma.run
+              .findUnique({ where: { id: runId }, select: { status: true } })
+              .then((ended) =>
+                ended?.status === "cancelled"
+                  ? deliverSpecialistRunEnd(
+                      { prisma: deps.prisma, jobs: deps.jobs, events: deps.events },
+                      { workId: run.scopedTaskId!, runId, status: "cancelled" },
+                    )
+                  : undefined,
+              )
+              .catch((error) => getLogger().error("specialist cancellation delivery", error));
+          }
         }
       } catch (setupError) {
         const computerBusy = setupError instanceof ComputerBusyError;

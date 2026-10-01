@@ -33,6 +33,14 @@ describe("parseWorkReturn", () => {
     });
   });
 
+  it.each(["cancelled", "no_result"] as const)("reads a %s specialist return", (outcome) => {
+    expect(parseWorkReturn(card(workReturnLines({ k: "outcome", v: outcome })))).toEqual({
+      workId: "work-1",
+      executorBotId: "bot-specialist",
+      outcome,
+    });
+  });
+
   it("reads a legacy return without an outcome line as unknown, never as a success", () => {
     expect(parseWorkReturn(card(workReturnLines(null)))).toEqual({
       workId: "work-1",

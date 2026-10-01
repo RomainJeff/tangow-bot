@@ -786,6 +786,7 @@ msgid "cancelled"
 msgstr "취소됨"
 
 #: src/components/AskCard.tsx:23
+#: src/components/WorkReturnCard.tsx:8
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -1864,6 +1865,7 @@ msgstr "Docker는 보안을 위해 컴퓨터 접근을 제한합니다. {hostLab
 msgid "Don’t have an account?"
 msgstr "계정이 없나요?"
 
+#: src/components/WorkReturnCard.tsx:5
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "완료"
@@ -2028,6 +2030,7 @@ msgstr "매우 높음"
 msgid "failed"
 msgstr "실패"
 
+#: src/components/WorkReturnCard.tsx:6
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2884,6 +2887,10 @@ msgstr "검색된 AI 서비스가 없습니다."
 #: src/components/integrations/IntegrationSetup.tsx:273
 msgid "No remote MCP servers found"
 msgstr ""
+
+#: src/components/WorkReturnCard.tsx:10
+msgid "No result"
+msgstr "결과 없음"
 
 #: src/pages/PluginsOverlay.tsx:952
 #: src/pages/SpaceSearch.tsx:23
