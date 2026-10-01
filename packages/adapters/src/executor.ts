@@ -4969,6 +4969,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 await nativeSessionStore.record({
                   botId: bot.id,
                   threadId: thread.id,
+                  scopedTaskId: run.scopedTaskId,
                   ref: event.event.ref,
                   nativeRef: event.event.nativeRef,
                   processRef: event.event.processRef,

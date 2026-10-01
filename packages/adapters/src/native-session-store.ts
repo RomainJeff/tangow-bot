@@ -22,6 +22,8 @@ export type NativeSessionStore = {
   record(input: {
     botId: string;
     threadId: string;
+    /** The scoped task whose specialist thread this session serves, when the Run has one. */
+    scopedTaskId?: string | null;
     ref: NativeRef;
     nativeRef?: string;
     processRef?: string;
@@ -121,6 +123,16 @@ export function createNativeSessionStore(prisma: PrismaClient): NativeSessionSto
       return { mode: "new", ref: { bindingId: input.threadId, generation: row.generation + 1 } };
     },
     async record(input) {
+      const attached = {
+        nativeRef: input.nativeRef,
+        processRef: input.processRef,
+        harness: input.harness,
+        executionTarget: input.executionTarget,
+        state: "attached",
+        processState: "running",
+        // The reconciler reaches a terminal task's session through this link.
+        ...(input.scopedTaskId ? { scopedTaskId: input.scopedTaskId } : {}),
+      };
       if (input.continuity === "new") {
         if (input.ref.generation === 0) {
           await prisma.nativeSession.upsert({
@@ -129,24 +141,12 @@ export function createNativeSessionStore(prisma: PrismaClient): NativeSessionSto
               botId: input.botId,
               threadId: input.threadId,
               generation: 0,
-              nativeRef: input.nativeRef,
-              processRef: input.processRef,
-              harness: input.harness,
-              executionTarget: input.executionTarget,
-              state: "attached",
-              processState: "running",
+              ...attached,
             },
             // `ensureBinding` may have inserted generation zero before the runtime
             // reports its first session event.  Preserve that binding while filling
             // the durable runtime state instead of leaving its defaults in place.
-            update: {
-              nativeRef: input.nativeRef,
-              processRef: input.processRef,
-              harness: input.harness,
-              executionTarget: input.executionTarget,
-              state: "attached",
-              processState: "running",
-            },
+            update: attached,
           });
         } else {
           const changed = await prisma.nativeSession.updateMany({
@@ -155,15 +155,7 @@ export function createNativeSessionStore(prisma: PrismaClient): NativeSessionSto
               threadId: input.threadId,
               generation: input.ref.generation - 1,
             },
-            data: {
-              generation: input.ref.generation,
-              nativeRef: input.nativeRef,
-              processRef: input.processRef,
-              harness: input.harness,
-              executionTarget: input.executionTarget,
-              state: "attached",
-              processState: "running",
-            },
+            data: { generation: input.ref.generation, ...attached },
           });
           if (changed.count !== 1) throw new Error("native session generation is stale");
         }
@@ -174,15 +166,7 @@ export function createNativeSessionStore(prisma: PrismaClient): NativeSessionSto
         input.continuity === "reconstructed" ? input.ref.generation - 1 : input.ref.generation;
       const changed = await prisma.nativeSession.updateMany({
         where: { botId: input.botId, threadId: input.threadId, generation: previous },
-        data: {
-          generation: input.ref.generation,
-          nativeRef: input.nativeRef,
-          processRef: input.processRef,
-          harness: input.harness,
-          executionTarget: input.executionTarget,
-          state: "attached",
-          processState: "running",
-        },
+        data: { generation: input.ref.generation, ...attached },
       });
       if (changed.count !== 1) throw new Error("native session generation is stale");
       await event(

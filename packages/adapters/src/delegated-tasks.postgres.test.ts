@@ -13,6 +13,7 @@ import {
 } from "./delegated-tasks.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { createJobReconciler } from "./job-reconciler.js";
+import { createNativeSessionStore } from "./native-session-store.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -134,6 +135,28 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       context,
       enqueue,
     };
+  }
+
+  /** A specialist's native turn as the executor records it, then a stop nothing confirmed. */
+  async function seedUnconfirmedNativeStop(
+    receipt: { workId: string; botId: string; threadId: string },
+    executionTarget: string,
+    processRef: string,
+  ) {
+    const store = createNativeSessionStore(prisma);
+    const ref = { bindingId: receipt.threadId, generation: 0 };
+    await store.record({
+      botId: receipt.botId,
+      threadId: receipt.threadId,
+      scopedTaskId: receipt.workId,
+      ref,
+      nativeRef: "t08-native-thread",
+      processRef,
+      harness: "codex-native",
+      executionTarget,
+      continuity: "new",
+    });
+    await store.stopUnconfirmed({ botId: receipt.botId, threadId: receipt.threadId, ref });
   }
 
   it("creates an inspectable work identity, replays idempotently, then runs scenario 2", async () => {
@@ -821,18 +844,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       data: { computerId: providerComputer.id },
     });
     await prisma.scopedTask.update({ where: { id: receipt.workId }, data: { status: "closed" } });
-    await prisma.nativeSession.create({
-      data: {
-        botId: receipt.botId,
-        threadId: receipt.threadId,
-        scopedTaskId: receipt.workId,
-        harness: "codex-native",
-        executionTarget: providerComputer.id,
-        state: "closed",
-        processState: "stop_unconfirmed",
-        processRef: "t08-reconfirmable-process",
-      },
-    });
+    await seedUnconfirmedNativeStop(receipt, providerComputer.id, "t08-reconfirmable-process");
     const sandbox = new FakeSandboxProvider() as FakeSandboxProvider &
       Pick<SandboxProvider, "reconfirmNativeProcess">;
     const reconfirm = vi.fn(async () => "stopped" as const);
@@ -886,18 +898,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       where: { id: receipt.workId },
       data: { status: "cancelled" },
     });
-    await prisma.nativeSession.create({
-      data: {
-        botId: receipt.botId,
-        threadId: receipt.threadId,
-        scopedTaskId: receipt.workId,
-        harness: "codex-native",
-        executionTarget: providerComputer.id,
-        state: "closed",
-        processState: "stop_unconfirmed",
-        processRef: "t08-still-running-process",
-      },
-    });
+    await seedUnconfirmedNativeStop(receipt, providerComputer.id, "t08-still-running-process");
     const sandbox = new FakeSandboxProvider() as FakeSandboxProvider &
       Pick<SandboxProvider, "reconfirmNativeProcess">;
     const reconfirm = vi.fn(async () => "stop_unconfirmed" as const);
