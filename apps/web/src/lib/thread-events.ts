@@ -255,6 +255,7 @@ export function isThreadSnapshotEvent(event: ProductEvent): boolean {
     event.type === "run.started" ||
     event.type === "run.waiting_input" ||
     event.type === "work.waiting_input" ||
+    event.type === "work.input_answered" ||
     event.type === "computer.takeover.requested" ||
     isRunTerminalEvent(event)
   );
@@ -318,6 +319,14 @@ export function reduceThreadSnapshot(
     // thread's run or messages — the specialist run is not a run of this thread, and a
     // waiting run here would block the composer.
     return { ...prev, cursor: event.seq };
+  }
+  if (event.type === "work.input_answered") {
+    // Another view settled a delegated ask: its card has nothing left to answer here.
+    return {
+      ...prev,
+      cursor: event.seq,
+      pendingWork: prev.pendingWork?.filter((ask) => ask.runId !== event.runId),
+    };
   }
   if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {
     const status = event.type === "run.waiting_input" ? "waiting_input" : "waiting_takeover";

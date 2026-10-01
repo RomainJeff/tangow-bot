@@ -70,7 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **iPhone notifications now show the bot's own avatar.** When a bot finishes, fails or needs you, the notification carries its shape and colour with the Rakazo icon as a small badge, the way messaging apps show a contact, instead of the bare app icon. It follows the organic avatar style; with the robot style the notification keeps the app icon.
-- **An approval a delegated specialist requests now appears in the coordinator's thread, with its provenance, and can be settled right there.** The thread shows the pending ask, which specialist and delegated by whom, and answering it, including permanent "always allow" rules, never exposes the specialist's own work thread.
+- **An approval a delegated specialist requests now appears in the coordinator's thread, with its provenance, and can be settled right there.** The thread shows the pending ask, which specialist and delegated by whom, and answering it, including permanent "always allow" rules, never exposes the specialist's own work thread. Once an ask is settled, or cancelled with its work, its card disappears from every open view of that thread.
 - **Cancelling delegated work now cancels everything it went on to delegate.** A coordinator (or a specialist cancelling its own further delegation) can cancel a whole chain of delegated work in one action; every open descendant stops, its runs end, and its mission Computer access is released — a persistent peer contacted along the way is never affected. Archiving a coordinator also cancels its remaining delegated work.
 
 ### 2026-09-23

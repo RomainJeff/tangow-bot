@@ -762,6 +762,9 @@ export async function answerRunInput(
   );
   if (!committed) return false;
   await notifyRealtime(realtime, committed.threadId, committed.seq);
+  if (committed.coordinator) {
+    await notifyRealtime(realtime, committed.coordinator.threadId, committed.coordinator.seq);
+  }
   return true;
 }
 
@@ -775,7 +778,12 @@ export async function answerRunInputInTransaction(
   tx: Prisma.TransactionClient,
   input: AnswerRunInput,
   runSecretWriter?: RunSecretWriter,
-): Promise<{ threadId: string; seq: number } | null> {
+): Promise<{
+  threadId: string;
+  seq: number;
+  /** The coordinator-thread event settling a delegated ask, when the run belongs to a work. */
+  coordinator?: { threadId: string; seq: number };
+} | null> {
   {
     // Thread row first, then run rows — the same order as clearThread and finalizeRun, so a
     // concurrent clear cannot deadlock against this transaction.
@@ -793,13 +801,35 @@ export async function answerRunInputInTransaction(
     // TOCTOU guard: the coordinator's work can be closed or cancelled after the ask was
     // surfaced and before the answer arrives. Re-read the work in this same transaction —
     // a terminal work answers nothing, exactly like a prompt that is no longer waiting.
+    let coordinatorThreadId: string | null = null;
     if (run.scopedTaskId) {
       const work = await tx.scopedTask.findUnique({
         where: { id: run.scopedTaskId },
-        select: { status: true },
+        select: { status: true, coordinatorThreadId: true },
       });
       if (work && TERMINAL_WORK_STATUSES.includes(work.status)) return null;
+      coordinatorThreadId = work?.coordinatorThreadId ?? null;
     }
+    // The coordinator thread shows a delegated ask as a card; settling it there lets every
+    // other open view drop the card, as the specialist-thread update alone never reaches it.
+    const settleOnCoordinatorThread = async (updated: { threadId: string; seq: number }) => {
+      if (!run.scopedTaskId || !coordinatorThreadId) {
+        return { threadId: updated.threadId, seq: updated.seq };
+      }
+      const answered = await appendEventInTransaction(tx, {
+        spaceId: input.spaceId,
+        threadId: coordinatorThreadId,
+        botId: run.botId,
+        type: "work.input_answered",
+        runId: input.runId,
+        payload: { workId: run.scopedTaskId, runId: input.runId },
+      });
+      return {
+        threadId: updated.threadId,
+        seq: updated.seq,
+        coordinator: { threadId: answered.threadId, seq: answered.seq },
+      };
+    };
     const message = await tx.message.findFirst({
       where: {
         id: input.messageId,
@@ -909,7 +939,7 @@ export async function answerRunInputInTransaction(
         runId: input.runId,
         payload: { messageId: message.id, role: "bot", blocks: answeredBlocks },
       });
-      return { threadId: updated.threadId, seq: updated.seq };
+      return settleOnCoordinatorThread(updated);
     }
 
     const approvalAsk = isApprovalAskBlock(pendingAsk);
@@ -1046,7 +1076,7 @@ export async function answerRunInputInTransaction(
       runId: input.runId,
       payload: { messageId: message.id, role: "bot", blocks },
     });
-    return { threadId: updated.threadId, seq: updated.seq };
+    return settleOnCoordinatorThread(updated);
   }
 }
 

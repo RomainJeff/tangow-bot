@@ -25,6 +25,8 @@ export const ProductEventType = z.enum([
   "run.cancelled",
   /** A delegated work's specialist run paused for input; posted on the coordinator thread. */
   "work.waiting_input",
+  /** A delegated work's ask was answered; posted on the coordinator thread. */
+  "work.input_answered",
   "computer.status",
   "computer.takeover.requested",
   "computer.takeover.granted",

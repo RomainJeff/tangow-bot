@@ -450,6 +450,35 @@ describe("thread event reduction", () => {
     expect(next?.messages).toBe(initial.messages);
   });
 
+  it("drops a delegated ask's card when the coordinator thread learns it was answered", () => {
+    // The answer may come from another tab: only this event reaches the coordinator thread.
+    const pendingAsk = (runId: string) => ({
+      workId: `work-${runId}`,
+      rootWorkId: `work-${runId}`,
+      depth: 0,
+      coordinator: { botId: "bot-coordinator", name: "Coordinator" },
+      specialist: { botId: "bot-specialist", name: "Specialist" },
+      runId,
+      message: message(`ask-${runId}`, [{ kind: "ask", text: "Which city?" }], 3),
+    });
+    const initial: ThreadSnapshot = {
+      ...snapshot([]),
+      pendingWork: [pendingAsk("run-answered"), pendingAsk("run-other")],
+    };
+    const answered = event({
+      type: "work.input_answered",
+      seq: 12,
+      runId: "run-answered",
+      payload: { workId: "work-run-answered", runId: "run-answered" },
+    });
+
+    expect(isThreadSnapshotEvent(answered)).toBe(true);
+    const next = reduceThreadSnapshot(initial, answered);
+
+    expect(next?.cursor).toBe(12);
+    expect(next?.pendingWork?.map((ask) => ask.runId)).toEqual(["run-other"]);
+  });
+
   it("marks the run as waiting when computer takeover is requested", () => {
     const run = threadRun("run-1");
     const initial: ThreadSnapshot = {

@@ -69,6 +69,8 @@ export class RightsExceededError extends Error {
 type Deps = {
   prisma: PrismaClient;
   jobs: JobPublisher;
+  /** Tells open views of a coordinator thread what changed; absent, nothing is announced. */
+  events?: Pick<ThreadEvents, "notify">;
   deploymentModelKey?: string;
   resolveConnectionThinkingLevel?: ProfileConnectionThinkingResolver;
   coordinatorModel?: ProfileModelSelection;
@@ -1020,7 +1022,7 @@ type WalkedScopedTask = CancellableScopedTask & { status: string };
  * commit order.
  */
 async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<void> {
-  await deps.prisma.$transaction(async (tx) => {
+  const settledAsks = await deps.prisma.$transaction(async (tx) => {
     const cancelledAt = new Date();
     // Claim the root under `read committed`, guarded by status so this never overwrites
     // a concurrent close/cancel: a concurrent cancel/close of the same row makes this
@@ -1029,7 +1031,7 @@ async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<
       where: { id: root.id, status: { notIn: TERMINAL_WORK_STATUSES } },
       data: { status: "cancelled" },
     });
-    if (claimedRoot.count === 0) return;
+    if (claimedRoot.count === 0) return [];
 
     const cancelled: CancellableScopedTask[] = [root];
     await walkDescendants(tx, root.id, async (children) => {
@@ -1064,7 +1066,15 @@ async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<
         scopedTaskId: { in: cancelled.map((task) => task.id) },
         status: { in: [...ACTIVE_RUN_STATUSES] },
       },
-      select: { id: true, taskId: true },
+      select: {
+        id: true,
+        taskId: true,
+        status: true,
+        spaceId: true,
+        botId: true,
+        scopedTaskId: true,
+        scopedTask: { select: { coordinatorThreadId: true } },
+      },
     });
     // Review n° 1 finding B2: shares the exact stop path a user-initiated thread stop
     // uses (packages/db/src/events.ts) — cancels the Runs, then expires their Computer
@@ -1072,6 +1082,21 @@ async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<
     // run's next heartbeat tick (executor.ts, renewComputerExecutionLease) fails to
     // renew and aborts the runtime instead of running on unsupervised.
     await stopRunsInTransaction(tx, activeRuns, cancelledAt);
+    // A cancelled Run can no longer be answered: its card in the coordinator's open views
+    // is settled the way an answered one is.
+    const settled: Array<{ threadId: string; seq: number }> = [];
+    for (const run of activeRuns) {
+      if (run.status !== "waiting_input" || !run.scopedTask) continue;
+      const event = await appendEventInTransaction(tx, {
+        spaceId: run.spaceId,
+        threadId: run.scopedTask.coordinatorThreadId,
+        botId: run.botId,
+        type: "work.input_answered",
+        runId: run.id,
+        payload: { workId: run.scopedTaskId, runId: run.id },
+      });
+      settled.push({ threadId: event.threadId, seq: event.seq });
+    }
 
     for (const task of cancelled) {
       await revokeMissionComputerUseIfLastWork(tx, task);
@@ -1096,7 +1121,11 @@ async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<
         data: { state: "closed", processState: "stop_unconfirmed" },
       });
     }
+    return settled;
   });
+  for (const { threadId, seq } of settledAsks) {
+    await deps.events?.notify(threadId, seq).catch(() => undefined);
+  }
 }
 
 async function inspectWork(

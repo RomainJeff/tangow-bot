@@ -895,6 +895,97 @@ describe("answerRunInput", () => {
     expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 9 }));
   });
 
+  it("tells the coordinator thread that a delegated ask was answered so other tabs drop its card", async () => {
+    const fanout = new TestFanout();
+    const publish = vi.spyOn(fanout, "publish");
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-specialist" }]),
+      message: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "message-1",
+          blocks: [
+            {
+              kind: "ask",
+              text: "Which city?",
+              status: "pending",
+              actions: [{ id: "choice-1", label: "Berlin" }],
+            },
+          ],
+        }),
+        update: vi.fn().mockResolvedValue({ id: "message-1" }),
+      },
+      run: {
+        findFirst: vi.fn().mockResolvedValue({ botId: "bot-specialist", scopedTaskId: "work-1" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({
+          status: "queued",
+          createdAt: new Date("2026-08-16T12:00:00.000Z"),
+          threadId: "thread-specialist",
+        }),
+      },
+      scopedTask: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValue({ status: "dispatched", coordinatorThreadId: "thread-coordinator" }),
+      },
+      task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      thread: {
+        update: vi
+          .fn()
+          .mockResolvedValueOnce({ nextEventSeq: 10 })
+          .mockResolvedValueOnce({ nextEventSeq: 20 }),
+      },
+      event: {
+        create: vi.fn(
+          async ({
+            data,
+          }: {
+            data: { seq: number; type: string; threadId: string; payload: unknown };
+          }) => ({
+            ...event(data.seq),
+            type: data.type,
+            threadId: data.threadId,
+            payload: data.payload,
+          }),
+        ),
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+
+    await expect(
+      answerRunInput(
+        prisma,
+        {
+          spaceId: "workspace-1",
+          threadId: "thread-specialist",
+          runId: "run-1",
+          messageId: "message-1",
+          answeredByUserId: "user-1",
+          answer: "choice-1",
+        },
+        fanout,
+      ),
+    ).resolves.toBe(true);
+
+    expect(tx.event.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          threadId: "thread-coordinator",
+          type: "work.input_answered",
+          runId: "run-1",
+          payload: { workId: "work-1", runId: "run-1" },
+        }),
+      }),
+    );
+    expect(publish).toHaveBeenCalledWith(
+      "thread:thread-coordinator",
+      JSON.stringify({ cursor: 19 }),
+    );
+  });
+
   it("resumes with the offered choice label when the persisted label was redacted", async () => {
     const fanout = new TestFanout();
     const secret = "sk-live-choice-secret";
@@ -1651,10 +1742,6 @@ describe("answerRunInput", () => {
       }),
     ).resolves.toBe(false);
 
-    expect(tx.scopedTask.findUnique).toHaveBeenCalledWith({
-      where: { id: "work-1" },
-      select: { status: true },
-    });
     expect(tx.run.updateMany).not.toHaveBeenCalled();
     expect(tx.externalEffect.findFirst).not.toHaveBeenCalled();
     expect(tx.message.update).not.toHaveBeenCalled();

@@ -3864,6 +3864,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const delegatedTasks = createDelegatedTasks({
               prisma: deps.prisma,
               jobs: deps.jobs,
+              events: deps.events,
               deploymentModelKey: deps.deploymentModelKey,
               resolveConnectionThinkingLevel,
               coordinatorModel: {
