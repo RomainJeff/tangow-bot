@@ -5,8 +5,9 @@
  * English in France still reports English to someone who writes and speaks
  * French). Shared by mobile's native dictation and the web's Web Speech
  * dictation, both of which prefer this over the raw device/browser locale.
- * Counts common short words of a few languages; `undefined` when too little
- * text or no clear winner.
+ * Counts common short words of a few languages (no single letters: `a`, `e`,
+ * `o`, `i`, `y` are words in several of them and swamp short English or
+ * Spanish text); `undefined` when too little text or no clear winner.
  */
 const COMMON_WORDS: Record<string, readonly string[]> = {
   fr: [
@@ -54,7 +55,6 @@ const COMMON_WORDS: Record<string, readonly string[]> = {
     "what",
     "can",
     "do",
-    "i",
     "my",
     "on",
     "in",
@@ -68,7 +68,6 @@ const COMMON_WORDS: Record<string, readonly string[]> = {
     "las",
     "de",
     "que",
-    "y",
     "es",
     "en",
     "un",
@@ -109,7 +108,6 @@ const COMMON_WORDS: Record<string, readonly string[]> = {
     "la",
     "di",
     "che",
-    "e",
     "è",
     "un",
     "una",
@@ -125,12 +123,9 @@ const COMMON_WORDS: Record<string, readonly string[]> = {
     "del",
   ],
   pt: [
-    "o",
-    "a",
     "os",
     "de",
     "que",
-    "e",
     "é",
     "um",
     "uma",
