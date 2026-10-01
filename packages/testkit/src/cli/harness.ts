@@ -110,6 +110,7 @@ async function main() {
         "packages/adapters/src/computer-lifecycle.postgres.test.ts",
         "packages/adapters/src/delegated-tasks.postgres.test.ts",
         "packages/adapters/src/rakazo-mcp-bridge.postgres.test.ts",
+        "packages/adapters/src/rights-admission.postgres.test.ts",
         "packages/adapters/src/native-session-store.postgres.test.ts",
         "packages/testkit/src/executor.native-choice.postgres.test.ts",
         "packages/testkit/src/bot-harness-choice.postgres.test.ts",
