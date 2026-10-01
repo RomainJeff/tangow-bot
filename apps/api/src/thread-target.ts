@@ -15,6 +15,7 @@ import {
   type MessageBlock,
   MessageBlock as MessageBlockSchema,
   type MessageReaction,
+  nativeRunChoice,
   REPLY_QUOTE_MAX_LENGTH,
   type RunStatus,
   type ThreadSnapshot,
@@ -236,7 +237,6 @@ function sendRunClientNonce(
 function resolveNativeChoice(
   target: Extract<ThreadTarget, { kind: "bot" }>,
   input: { harness?: NativeHarnessChoice; executionTarget?: string },
-  choiceVersion = 1,
 ) {
   if (!input.harness && !input.executionTarget) return undefined;
   if (!input.harness || !input.executionTarget) {
@@ -248,26 +248,20 @@ function resolveNativeChoice(
   if (!target.bot.computer || target.bot.computer.id !== input.executionTarget) {
     throw new ORPCError("BAD_REQUEST", { message: "Execution target is not authorized." });
   }
-  return { harness: input.harness, executionTarget: input.executionTarget, choiceVersion };
+  return nativeRunChoice(input.harness, input.executionTarget);
 }
 
 /**
  * The bot's saved harness choice applies to sends that carry no explicit client
- * choice. It goes through the same authorization boundary as an explicit choice —
- * the Computer attached to the bot — and carries the choice's own version.
+ * choice. It resolves through the shared native-choice rule on the Computer attached to
+ * the bot, which a bot with a native choice must have.
  */
-function resolveStoredNativeChoice(
-  target: Extract<ThreadTarget, { kind: "bot" }>,
-  harness: NativeHarnessChoice,
-) {
-  return resolveNativeChoice(
-    target,
-    {
-      harness,
-      executionTarget: target.bot.computer?.id,
-    },
-    target.bot.choiceVersion ?? 1,
-  );
+function resolveStoredNativeChoice(target: Extract<ThreadTarget, { kind: "bot" }>) {
+  const choice = nativeRunChoice(target.bot.harnessChoice, target.bot.computer?.id);
+  if (!choice && isNativeHarness(target.bot.harnessChoice)) {
+    throw new ORPCError("BAD_REQUEST", { message: "Native harness choice is incomplete." });
+  }
+  return choice;
 }
 
 async function enqueueRunsNeedingContinue(
@@ -911,12 +905,8 @@ export async function sendThreadMessage(
       }
 
       if (target.kind === "bot") {
-        const storedHarness = target.bot.harnessChoice;
         const nativeChoice =
-          resolveNativeChoice(target, input) ??
-          (isNativeHarness(storedHarness)
-            ? resolveStoredNativeChoice(target, storedHarness)
-            : undefined);
+          resolveNativeChoice(target, input) ?? resolveStoredNativeChoice(target);
         const mentionTargets = splitMentionTargets(input.mentions);
         const { blocks: attachmentBlocks, artifacts } = await resolveSendAttachments(
           { prisma: tx },

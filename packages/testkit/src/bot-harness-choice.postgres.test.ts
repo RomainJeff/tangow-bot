@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator } from "@rakazo/adapters";
+import { RUN_CHOICE_VERSION } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 
 const available = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
@@ -143,6 +144,21 @@ describe.skipIf(!available)("bot harness choice", () => {
       const clearedBot = await handles.prisma.bot.findUniqueOrThrow({ where: { id: bot.id } });
       expect(clearedBot.harnessChoice).toBeNull();
       expect(clearedBot.choiceVersion).toBe(2);
+
+      // Each change bumps the bot's counter; the Run still records the choice format, so a
+      // send after the third change creates its Run.
+      await rpc("bots/update", { botId: bot.id, harness: "codex-native" });
+      await handles.prisma.run.updateMany({
+        where: { botId: bot.id, status: { in: ["queued", "leased", "running"] } },
+        data: { status: "completed" },
+      });
+      const resaved = await rpc<{ runId: string }>("threads/send", {
+        botId: bot.id,
+        text: "After three changes",
+      });
+      await expect(
+        handles.prisma.run.findUniqueOrThrow({ where: { id: resaved.runId } }),
+      ).resolves.toMatchObject({ harness: "codex-native", choiceVersion: RUN_CHOICE_VERSION });
     } finally {
       await handles.stop();
       await rm(dataDir, { recursive: true, force: true });

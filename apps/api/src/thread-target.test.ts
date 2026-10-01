@@ -1,5 +1,6 @@
 import type { SandboxProvider } from "@rakazo/adapter-kit";
 import type { Actor } from "@rakazo/contracts";
+import { RUN_CHOICE_VERSION } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { conversationRunFilter } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
@@ -2583,7 +2584,7 @@ describe("sendThreadMessage bot harness choice", () => {
         status: "queued",
         harness: "codex-native",
         executionTarget: "computer-1",
-        choiceVersion: 2,
+        choiceVersion: RUN_CHOICE_VERSION,
       }),
     });
   });
@@ -2602,7 +2603,7 @@ describe("sendThreadMessage bot harness choice", () => {
       data: expect.objectContaining({
         harness: "codex-native",
         executionTarget: "computer-1",
-        choiceVersion: 1,
+        choiceVersion: RUN_CHOICE_VERSION,
       }),
     });
   });
