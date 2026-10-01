@@ -13,7 +13,12 @@ import type { PoolClient } from "pg";
 import { returnBotMessageOutcome } from "./bot-messages.js";
 import { scheduleComputerControlExpiry } from "./computer-control.js";
 import { toComputerRef } from "./computer-support.js";
-import { cleanupTerminalWork, TERMINAL_WORK_STATUSES } from "./delegated-tasks.js";
+import {
+  cleanupTerminalWork,
+  recordSpecialistFailure,
+  recordSpecialistResult,
+  TERMINAL_WORK_STATUSES,
+} from "./delegated-tasks.js";
 import { isUserProgressClientNonce } from "./user-progress.js";
 
 const DEFAULT_INTERVAL_MS = 30_000;
@@ -139,6 +144,7 @@ export function createJobReconciler(
       }
 
       await reconcileTerminalWork(deps, batchSize);
+      await reconcileSpecialistReturns(deps, batchSize);
 
       const now = new Date();
       controlScanDeadline ??= new Date(now.getTime() + CONTROL_LOOKAHEAD_MS);
@@ -482,6 +488,48 @@ async function reconcileTerminalWork(
       if (confirmed.count !== 1) continue;
     }
     await cleanupTerminalWork({ prisma: deps.prisma, jobs: deps.jobs }, work);
+  }
+}
+
+/**
+ * Deliver the return of a specialist Run that finished while its worker died before
+ * `recordSpecialistReturn`. Delivery is idempotent per Run, so a return the worker did
+ * deliver, or one a second reconciliation sees again, is never posted twice.
+ */
+async function reconcileSpecialistReturns(
+  deps: { prisma: PrismaClient; jobs: JobPublisher; events?: ThreadEvents },
+  batchSize: number,
+) {
+  const { events } = deps;
+  if (!events || !("scopedTask" in deps.prisma)) return;
+  const undelivered = await deps.prisma.run.findMany({
+    where: {
+      scopedTaskId: { not: null },
+      status: { in: ["completed", "failed"] },
+      terminalReturnDelivery: null,
+    },
+    orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+    take: batchSize,
+    select: { id: true, status: true, scopedTaskId: true },
+  });
+  for (const run of undelivered) {
+    const delivery = { prisma: deps.prisma, jobs: deps.jobs, events };
+    const input = { workId: run.scopedTaskId!, runId: run.id };
+    try {
+      if (run.status === "failed") await recordSpecialistFailure(delivery, input);
+      else
+        await recordSpecialistResult(delivery, {
+          ...input,
+          text: (await botRunOutcomeText(deps.prisma, run.id)).text,
+        });
+    } catch (error) {
+      getLogger().error("specialist return reconciliation", error);
+      // Rotate a Run that cannot be delivered so it does not starve the batch.
+      await deps.prisma.run.updateMany({
+        where: { id: run.id, terminalReturnDelivery: null },
+        data: { updatedAt: new Date() },
+      });
+    }
   }
 }
 

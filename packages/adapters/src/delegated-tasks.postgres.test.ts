@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { JobPublisher, SandboxProvider } from "@rakazo/adapter-kit";
 import type { AuthorizedActor, CommandContext } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
-import { createDb } from "@rakazo/db";
+import { createDb, createThreadMessageInTransaction } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { messageBot } from "./bot-messages.js";
 import {
@@ -737,6 +737,58 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     await expect(
       prisma.computer.findUnique({ where: { id: s.missionComputer.id } }),
     ).resolves.not.toBeNull();
+  });
+
+  it("reconciles a finished specialist's return that the worker never delivered, once", async () => {
+    const s = await setup();
+    const tasks = createDelegatedTasks(s.deps);
+    const receipt = await tasks.apply(
+      {
+        kind: "delegate",
+        target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
+        harness: { harness: "codex-native", targetId: "target-1" },
+        brief: "Return after the worker died",
+        requestedRights: {},
+        spawnKey: `lost-return-${randomUUID()}`,
+      },
+      s.context,
+    );
+    // The worker finalized the specialist Run, then died before recordSpecialistResult.
+    await prisma.$transaction((tx) =>
+      createThreadMessageInTransaction(tx, {
+        threadId: receipt.threadId,
+        role: "bot",
+        blocks: [{ kind: "text", text: "The audit found three issues." }],
+        botId: receipt.botId,
+        runId: receipt.runId!,
+      }),
+    );
+    await prisma.run.update({ where: { id: receipt.runId! }, data: { status: "completed" } });
+    const reconciler = createJobReconciler({
+      prisma,
+      jobs: s.deps.jobs,
+      events: s.deps.events as never,
+    });
+
+    await reconciler.reconcileOnce();
+    await reconciler.reconcileOnce();
+
+    const returns = await prisma.message.findMany({
+      where: { threadId: s.coordinatorThread.id, role: "bot" },
+    });
+    expect(returns).toHaveLength(1);
+    expect(returns[0]!.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "card",
+          lines: expect.arrayContaining([
+            { k: "workId", v: receipt.workId },
+            { k: "outcome", v: "result" },
+          ]),
+        }),
+        { kind: "text", text: "The audit found three issues." },
+      ]),
+    );
   });
 
   it("reconciles a confirmed native stop before terminal cleanup", async () => {
