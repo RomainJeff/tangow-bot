@@ -13,7 +13,13 @@ import {
 } from "react-native";
 import { linkHref } from "./markdown";
 import type { TableNode } from "./table-layout";
-import { plainText, TABLE_CELL_PADDING_X, tableColumnWidths, tableRows } from "./table-layout";
+import {
+  firstColumnNumbersRows,
+  plainText,
+  TABLE_CELL_PADDING_X,
+  tableColumnWidths,
+  tableRows,
+} from "./table-layout";
 
 /** A markdown AST node as the table views read it. */
 export interface GridNode extends TableNode {
@@ -220,9 +226,7 @@ export function TableRecords({ table, palette }: { table: GridNode; palette: Col
   const records = rows.filter((row) => row !== headerRow);
   // A first column that only numbers the rows ("#", "1", "2") titles nothing on
   // its own: the record is then titled "1. <second column>".
-  const numbered = records.every((row) =>
-    /^\s*\d{1,3}\.?\s*$/.test(plainText(cellsOf(row)[0] ?? { type: "td" })),
-  );
+  const numbered = firstColumnNumbersRows(records);
   const skip = numbered ? 2 : 1;
   return (
     <View>
