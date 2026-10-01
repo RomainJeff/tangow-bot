@@ -22,6 +22,7 @@ import {
   LocalAgentHomeStore,
 } from "@rakazo/adapters";
 import type { AuthorizedActor, CommandContext, ThreadSnapshot } from "@rakazo/contracts";
+import { RUN_CHOICE_VERSION } from "@rakazo/contracts";
 import { createDb, createThreadEvents } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { listSpaceRuns } from "../../../apps/api/src/runs.ts";
@@ -307,8 +308,9 @@ async function configureNativeFixture(
 async function startNativeHarness(
   runtime: AgentRuntime | undefined,
   label: string,
-  sandbox?: FakeSandboxProvider,
+  options: { sandbox?: FakeSandboxProvider; claudeRuntime?: AgentRuntime } = {},
 ) {
+  const { sandbox, claudeRuntime } = options;
   const model = await startModelEmulator({ apiKey: "test-key", steps: [] });
   const dataDir = await mkdtemp(path.join(tmpdir(), `rakazo-native-${label}-`));
   const { createApp } = await import("../../../apps/api/src/app.ts");
@@ -324,7 +326,14 @@ async function startNativeHarness(
     signupsEnabled: "true",
     composio: new ComposioEmulator(),
     encryptionKey: "native-test-encryption-key",
-    ...(runtime ? { nativeRuntimes: { "codex-native": runtime } } : {}),
+    ...(runtime || claudeRuntime
+      ? {
+          nativeRuntimes: {
+            ...(runtime ? { "codex-native": runtime } : {}),
+            ...(claudeRuntime ? { "claude-native": claudeRuntime } : {}),
+          },
+        }
+      : {}),
     ...(sandbox ? { sandbox } : {}),
   });
   const signup = await handles.app.request("/api/auth/sign-up/email", {
@@ -532,7 +541,7 @@ describe.skipIf(!available)("native runtime choice", () => {
         }
       }
       const sandbox = new NativeSandbox();
-      const h = await startNativeHarness(undefined, `placement-${harnessName}`, sandbox);
+      const h = await startNativeHarness(undefined, `placement-${harnessName}`, { sandbox });
       const db = rights ? createDb(process.env.DATABASE_URL!) : undefined;
       const mcp = db
         ? createNativeMcpHttpServer({
@@ -990,6 +999,65 @@ describe.skipIf(!available)("native runtime choice", () => {
     }
   }, 30_000);
 
+  it("serves a peer request on the recipient's saved harness, not the runtime default", async () => {
+    const claude = new ParkedClaude();
+    const h = await startNativeHarness(new SessionThenDone(), "peer-request-choice", {
+      claudeRuntime: claude,
+    });
+    try {
+      const me = await h.rpc<{ userId: string; spaceId: string }>("me", {});
+      const recipient = await h.handles.prisma.bot.create({
+        data: {
+          spaceId: me.spaceId,
+          userId: me.userId,
+          name: "Claude recipient",
+          color: "test-color",
+          computerId: h.computer.id,
+          harnessChoice: "claude-native",
+          choiceVersion: 1,
+        },
+      });
+      const recipientThread = await h.handles.prisma.thread.create({
+        data: { spaceId: me.spaceId, userId: me.userId, botId: recipient.id },
+      });
+      const sender = await h.send("ask the Claude bot");
+      await h.handles.prisma.run.update({
+        where: { id: sender.runId },
+        data: { status: "running" },
+      });
+      const senderRun = await h.handles.prisma.run.findUniqueOrThrow({
+        where: { id: sender.runId },
+      });
+      await messageBot(
+        {
+          prisma: h.handles.prisma,
+          jobs: h.handles.jobs,
+          events: { notify: vi.fn().mockResolvedValue(undefined) },
+        } as unknown as Parameters<typeof messageBot>[0],
+        senderRun,
+        { id: h.bot.id, name: h.bot.id },
+        { bot_id: recipient.id, message: "Please check the total.", intent: "question" },
+      );
+      const request = await h.handles.prisma.run.findFirstOrThrow({
+        where: { botId: recipient.id, threadId: recipientThread.id, trigger: "bot_message" },
+      });
+
+      await h.handles.executor.continueRun(request.id, "peer-request-choice-worker");
+
+      expect(claude.continuities).toHaveLength(1);
+      await expect(
+        h.handles.prisma.run.findUniqueOrThrow({ where: { id: request.id } }),
+      ).resolves.toMatchObject({
+        harness: "claude-native",
+        executionTarget: h.computer.id,
+        choiceVersion: RUN_CHOICE_VERSION,
+        status: "completed",
+      });
+    } finally {
+      await stopNativeHarness(h);
+    }
+  }, 30_000);
+
   it("closes the native session when the user stops an active native turn", async () => {
     let release!: () => void;
     const waiting = new Promise<void>((resolve) => {
@@ -1068,7 +1136,7 @@ describe.skipIf(!available)("native runtime choice", () => {
     const sandbox = new FakeSandboxProvider();
     const reconfirm = vi.fn(async () => "stopped" as const);
     sandbox.reconfirmNativeProcess = reconfirm;
-    const harness = await startNativeHarness(runtime, "reconfirm-stopped", sandbox);
+    const harness = await startNativeHarness(runtime, "reconfirm-stopped", { sandbox });
     try {
       const { receipt, run } = await seedUnconfirmedNativeSession(harness, "supervisor-session");
       observeStopped = async () => {
@@ -1114,7 +1182,7 @@ describe.skipIf(!available)("native runtime choice", () => {
     const sandbox = new FakeSandboxProvider();
     const reconfirm = vi.fn(async () => "stop_unconfirmed" as const);
     sandbox.reconfirmNativeProcess = reconfirm;
-    const harness = await startNativeHarness(runtime, "reconfirm-unproven", sandbox);
+    const harness = await startNativeHarness(runtime, "reconfirm-unproven", { sandbox });
     try {
       const { receipt, run } = await seedUnconfirmedNativeSession(
         harness,
@@ -1155,7 +1223,7 @@ describe.skipIf(!available)("native runtime choice", () => {
     const sandbox = new FakeSandboxProvider();
     const reconfirm = vi.fn(async () => "stopped" as const);
     sandbox.reconfirmNativeProcess = reconfirm;
-    const harness = await startNativeHarness(runtime, "reconfirm-missing-ref", sandbox);
+    const harness = await startNativeHarness(runtime, "reconfirm-missing-ref", { sandbox });
     try {
       const { receipt, run } = await seedUnconfirmedNativeSession(harness);
       await expect(

@@ -471,6 +471,48 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     ).resolves.toBe(1);
   });
 
+  it("wakes a specialist coordinator on its own task and engine, not its descendant's", async () => {
+    const s = await setup();
+    const tasks = createDelegatedTasks(s.deps);
+    const root = await tasks.apply(
+      {
+        kind: "delegate",
+        target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
+        harness: { harness: "codex-native", targetId: "target-1" },
+        brief: "Prepare the summary",
+        requestedRights: {},
+        spawnKey: `wake-root-${randomUUID()}`,
+      },
+      s.context,
+    );
+    const { receipt: child } = await delegateChild(s, root, `wake-child-${randomUUID()}`);
+    await prisma.scopedTask.update({
+      where: { id: child.workId },
+      data: { harness: "claude-native" },
+    });
+
+    await recordSpecialistResult(s.deps, {
+      workId: child.workId,
+      runId: child.runId!,
+      text: "The section is done.",
+    });
+
+    await expect(
+      prisma.run.findFirstOrThrow({ where: { botId: root.botId, trigger: "work_return" } }),
+    ).resolves.toMatchObject({ scopedTaskId: root.workId, harness: "codex-native" });
+    // A persistent coordinator's wake carries no choice: the executor resolves its own.
+    await recordSpecialistResult(s.deps, {
+      workId: root.workId,
+      runId: root.runId!,
+      text: "The summary is done.",
+    });
+    await expect(
+      prisma.run.findFirstOrThrow({
+        where: { botId: s.coordinator.id, trigger: "work_return" },
+      }),
+    ).resolves.toMatchObject({ scopedTaskId: null, harness: null });
+  });
+
   it("groups delivered returns into one wake prompt as untrusted specialist output", async () => {
     const s = await setup();
     const tasks = createDelegatedTasks(s.deps);

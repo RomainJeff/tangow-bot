@@ -38,7 +38,9 @@ import {
   BotSecretSubmission,
   isAttachmentImageMimeType,
   isNativeHarness,
+  nativeRunChoice,
   OPENAI_COMPATIBLE_PROVIDER_ID,
+  RUN_CHOICE_VERSION,
 } from "@rakazo/contracts";
 import {
   type ActionApprovalRule,
@@ -680,7 +682,11 @@ function nativeChoiceForRun(run: {
 }): { harness: NativeHarnessChoice; targetId: string } | undefined {
   if (run.harness === null && run.executionTarget === null && run.choiceVersion === null)
     return undefined;
-  if (run.choiceVersion !== 1 || !run.executionTarget || !isNativeHarness(run.harness)) {
+  if (
+    run.choiceVersion !== RUN_CHOICE_VERSION ||
+    !run.executionTarget ||
+    !isNativeHarness(run.harness)
+  ) {
     const error = new Error("Run native harness choice is invalid");
     Object.assign(error, { code: "harness_unavailable" });
     throw error;
@@ -1344,7 +1350,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       if (started.count !== 1) return;
       const leaseTarget = await deps.prisma.bot.findUniqueOrThrow({
         where: { id: run.botId },
-        select: { computerId: true, computerSwitching: true },
+        select: { computerId: true, computerSwitching: true, harnessChoice: true },
       });
       // T04:5: a specialist run (scopedTaskId set) leases and provisions the mission
       // Computer — the same droit d'usage Computer the guard at :1695-1700 authorizes —
@@ -1358,6 +1364,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
         missionComputerId = scopedTask?.missionComputerId ?? null;
       }
       const targetComputerId = missionComputerId ?? leaseTarget.computerId;
+      // A Run no sender chose a harness for (a peer request, a routine, a group handoff)
+      // takes the bot's saved native choice once, here, on the Computer it runs on; a choice
+      // already on the Run wins and a resumed Run keeps what it recorded.
+      if (run.harness === null && run.executionTarget === null && run.choiceVersion === null) {
+        const choice = nativeRunChoice(leaseTarget.harnessChoice, targetComputerId);
+        if (choice) {
+          const recorded = await deps.prisma.run.updateMany({
+            where: { id: runId, harness: null, leaseOwner: workerId, leaseFence: fence },
+            data: choice,
+          });
+          if (recorded.count !== 1) return;
+          Object.assign(run, choice);
+        }
+      }
       if (!targetComputerId) throw new Error("Bot has no computer");
       if (!missionComputerId && leaseTarget.computerSwitching) {
         await writeJ2RequeueDiagnostic({

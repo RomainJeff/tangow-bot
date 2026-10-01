@@ -13,6 +13,7 @@ import type {
   TaskTreeNode,
   TaskTreePage,
 } from "@rakazo/contracts";
+import { RUN_CHOICE_VERSION } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
@@ -656,7 +657,7 @@ async function applyDelegate(
           // Direct callers that have no execution context retain the coordinator ownership
           // Computer as a compatibility fallback.
           missionComputerId: context.missionComputerId ?? coordinator.computerId,
-          choiceVersion: 1,
+          choiceVersion: RUN_CHOICE_VERSION,
           delegationCeiling,
           spawnKey: command.spawnKey,
           status: "dispatched",
@@ -693,7 +694,7 @@ async function applyDelegate(
           harness: effectiveHarness,
           executionTarget:
             context.missionComputerId ?? coordinator.computerId ?? command.harness.targetId,
-          choiceVersion: 1,
+          choiceVersion: RUN_CHOICE_VERSION,
           scopedTaskId: scopedTask.id,
         },
       });
@@ -1277,6 +1278,12 @@ async function recordSpecialistReturn(
         status: "queued",
       },
     });
+    // The wake runs on the coordinator's own engine, not the descendant's. A specialist
+    // coordinator is woken on its own task and that task's choice; a persistent bot's saved
+    // choice is resolved once by the executor.
+    const coordinatorWork = scopedTask.parentScopedTaskId
+      ? await tx.scopedTask.findUnique({ where: { id: scopedTask.parentScopedTaskId } })
+      : null;
     const wake = await tx.run.create({
       data: {
         spaceId: scopedTask.spaceId,
@@ -1286,9 +1293,14 @@ async function recordSpecialistReturn(
         userId: scopedTask.userId,
         status: "queued",
         trigger: "work_return",
-        harness: scopedTask.harness,
-        executionTarget: scopedTask.missionComputerId ?? scopedTask.executionTarget,
-        choiceVersion: scopedTask.choiceVersion,
+        ...(coordinatorWork
+          ? {
+              scopedTaskId: coordinatorWork.id,
+              harness: coordinatorWork.harness,
+              executionTarget: coordinatorWork.missionComputerId ?? coordinatorWork.executionTarget,
+              choiceVersion: coordinatorWork.choiceVersion,
+            }
+          : {}),
         sourceMessageId: message.id,
       },
       select: { id: true },
