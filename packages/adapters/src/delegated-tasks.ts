@@ -44,6 +44,13 @@ export class WorkClosedError extends Error {
   }
 }
 
+/** Closing a scoped task is refused while a descendant is open; it never cancels one. */
+export class WorkHasOpenDescendantsError extends Error {
+  constructor(workId: ScopedWorkId) {
+    super(`Scoped task ${workId} has open descendant tasks; close or cancel them first`);
+  }
+}
+
 /**
  * T07:6 (B5): a requested MCP ceiling that exceeds the coordinator's own effective access —
  * refused outright, never silently truncated down to what the coordinator holds.
@@ -826,6 +833,15 @@ async function closeWork(
     await cancelWorkTree(deps, scopedTask);
   } else {
     await deps.prisma.$transaction(async (tx) => {
+      // Serialise with a descendant spawn, which locks this row to read its status.
+      const [locked] = await tx.$queryRaw<Array<{ status?: string }>>`
+        SELECT status FROM scoped_tasks WHERE id = ${scopedTask.id} FOR UPDATE`;
+      if (
+        !TERMINAL_WORK_STATUSES.includes(locked?.status ?? "") &&
+        (await hasOpenDescendant(tx, scopedTask.id))
+      ) {
+        throw new WorkHasOpenDescendantsError(scopedTask.id);
+      }
       // A repeated close is a cleanup retry, not a second lifecycle decision. The guarded
       // update makes the append-only event part of exactly one terminal transition.
       const claimed = await tx.scopedTask.updateMany({
@@ -859,6 +875,40 @@ async function closeWork(
     state: status === "closed" ? "closed" : "cancelling",
     replayed: false,
   };
+}
+
+/**
+ * Visits the descendants of a task level by level. It walks *every* child, closed or not:
+ * a closed node is still a link to its own descendants. The visitor returns true to stop.
+ */
+async function walkDescendants(
+  tx: Prisma.TransactionClient,
+  workId: ScopedWorkId,
+  visitLevel: (children: WalkedScopedTask[]) => Promise<boolean>,
+): Promise<boolean> {
+  let frontier = [workId];
+  while (frontier.length > 0) {
+    const children: WalkedScopedTask[] = await tx.scopedTask.findMany({
+      where: { parentScopedTaskId: { in: frontier } },
+      select: {
+        id: true,
+        missionComputerId: true,
+        executorBotId: true,
+        specialistThreadId: true,
+        status: true,
+      },
+    });
+    if (children.length === 0) return false;
+    if (await visitLevel(children)) return true;
+    frontier = children.map((child) => child.id);
+  }
+  return false;
+}
+
+function hasOpenDescendant(tx: Prisma.TransactionClient, workId: ScopedWorkId) {
+  return walkDescendants(tx, workId, async (children) =>
+    children.some((child) => !TERMINAL_WORK_STATUSES.includes(child.status)),
+  );
 }
 
 export async function cleanupTerminalWork(
@@ -982,21 +1032,7 @@ async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<
     if (claimedRoot.count === 0) return;
 
     const cancelled: CancellableScopedTask[] = [root];
-    let frontier: string[] = [root.id];
-    while (frontier.length > 0) {
-      // Walk *all* children, terminal or not — a closed/cancelled node is still a link
-      // to its own descendants (B1).
-      const children: WalkedScopedTask[] = await tx.scopedTask.findMany({
-        where: { parentScopedTaskId: { in: frontier } },
-        select: {
-          id: true,
-          missionComputerId: true,
-          executorBotId: true,
-          specialistThreadId: true,
-          status: true,
-        },
-      });
-      if (children.length === 0) break;
+    await walkDescendants(tx, root.id, async (children) => {
       const candidateIds = children
         .filter((child) => !TERMINAL_WORK_STATUSES.includes(child.status))
         .map((child) => child.id);
@@ -1018,11 +1054,8 @@ async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<
         });
         cancelled.push(...claimed);
       }
-      // Keep descending through every child that was read, claimed or not, terminal or
-      // not, so a grandchild under an already-closed (or just-now-concurrently-closed)
-      // intermediary is still reached.
-      frontier = children.map((child) => child.id);
-    }
+      return false;
+    });
 
     // Active Runs of the cancelled subtree — never a peer's Run, which has no
     // scopedTaskId and therefore never matches this `in` filter (I26/I27).

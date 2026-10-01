@@ -229,6 +229,7 @@ import {
   deliverSpecialistRunEnd,
   RightsExceededError,
   WorkClosedError,
+  WorkHasOpenDescendantsError,
   WorkNotAuthorizedError,
 } from "./delegated-tasks.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
@@ -3929,7 +3930,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   error: "Not authorized for this work identity.",
                 });
               }
-              if (error instanceof WorkClosedError) return finish({ error: error.message });
+              if (error instanceof WorkClosedError || error instanceof WorkHasOpenDescendantsError)
+                return finish({ error: error.message });
               throw error;
             }
           }

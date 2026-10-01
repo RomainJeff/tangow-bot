@@ -10,6 +10,7 @@ import {
   recordSpecialistFailure,
   recordSpecialistResult,
   WorkClosedError,
+  WorkHasOpenDescendantsError,
 } from "./delegated-tasks.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { createJobReconciler } from "./job-reconciler.js";
@@ -879,6 +880,44 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     );
   });
 
+  it("refuses to close a work while a descendant is open, then closes it once the descendant is closed", async () => {
+    const s = await setup();
+    const tasks = createDelegatedTasks(s.deps);
+    const root = await tasks.apply(
+      {
+        kind: "delegate",
+        target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
+        harness: { harness: "codex-native", targetId: "target-1" },
+        brief: "Prepare the summary",
+        requestedRights: {},
+        spawnKey: `close-parent-${randomUUID()}`,
+      },
+      s.context,
+    );
+    const { receipt: child, context: childContext } = await delegateChild(
+      s,
+      root,
+      `close-child-${randomUUID()}`,
+    );
+
+    await expect(tasks.apply({ kind: "close", workId: root.workId }, s.context)).rejects.toThrow(
+      WorkHasOpenDescendantsError,
+    );
+    await expect(
+      prisma.scopedTask.findUniqueOrThrow({ where: { id: child.workId } }),
+    ).resolves.toMatchObject({ status: "dispatched" });
+    await expect(
+      prisma.scopedTask.findUniqueOrThrow({ where: { id: root.workId } }),
+    ).resolves.toMatchObject({ status: "dispatched" });
+
+    await tasks.apply({ kind: "close", workId: child.workId }, childContext);
+    await tasks.apply({ kind: "close", workId: root.workId }, s.context);
+
+    await expect(
+      prisma.scopedTask.findUniqueOrThrow({ where: { id: root.workId } }),
+    ).resolves.toMatchObject({ status: "closed" });
+  });
+
   it("reconciles a confirmed native stop before terminal cleanup", async () => {
     const s = await setup();
     const tasks = createDelegatedTasks(s.deps);
@@ -1407,7 +1446,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       },
       s.context,
     );
-    const { receipt: childReceipt, context: childContext } = await delegateChild(
+    const { receipt: childReceipt } = await delegateChild(
       s,
       rootReceipt,
       `t07-review-closed-link-child-${randomUUID()}`,
@@ -1418,7 +1457,12 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       `t07-review-closed-link-grandchild-${randomUUID()}`,
     );
 
-    await tasks.apply({ kind: "close", workId: childReceipt.workId }, childContext);
+    // Closing with an open descendant is now refused; a link closed before that rule still
+    // has to be crossed.
+    await prisma.scopedTask.update({
+      where: { id: childReceipt.workId },
+      data: { status: "closed" },
+    });
     await tasks.apply(
       { kind: "cancel", workId: rootReceipt.workId, reason: "No longer needed" },
       s.context,
