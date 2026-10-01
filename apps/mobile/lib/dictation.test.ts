@@ -144,17 +144,20 @@ describe("dictation", () => {
     expect(onText).toHaveBeenNthCalledWith(3, "hello there friend", false);
   });
 
-  it("stopDictation lets a trailing final result land before the session ends", async () => {
+  it("stopDictation ends the session at once: no late result, and a re-tap starts afresh", async () => {
     const { startDictation, stopDictation } = await import("./dictation");
     const onText = vi.fn();
     const onEnd = vi.fn();
     await startDictation({ onText, onEnd });
     stopDictation();
     expect(stop).toHaveBeenCalledOnce();
-    // The engine's trailing final result still arrives before `end`.
+    // The engine's trailing final result arrives after the caller left.
     emit("result", { isFinal: true, results: [{ transcript: "done" }] });
+    expect(onText).not.toHaveBeenCalled();
+    // Re-tapping the mic before the engine's own `end` still starts.
+    await startDictation({ onText: vi.fn(), onEnd: vi.fn() });
+    expect(start).toHaveBeenCalledTimes(2);
     emit("end");
-    expect(onText).toHaveBeenCalledWith("done", true);
     // A requested stop is not reported through onEnd — the caller already knows.
     expect(onEnd).not.toHaveBeenCalled();
   });

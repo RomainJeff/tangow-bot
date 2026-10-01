@@ -329,18 +329,26 @@ export async function startDictation(callbacks: DictationCallbacks): Promise<voi
   totalCapTimer = setTimeout(() => requestAbort("caps"), TOTAL_CAP_MS);
   armSilenceTimer();
 
+  // A caller-requested stop/abort ends the session right away rather than on
+  // the engine's later `end`: the caller has already left its dictation UI,
+  // so a trailing result has nowhere to go, and a mic re-tap in that window
+  // must be able to start a fresh session instead of being a silent no-op.
   session = {
     requestStop: () => {
-      if (finished || pendingReason) return;
-      pendingReason = "requested";
-      ExpoSpeechRecognitionModule.stop();
+      if (finished) return;
+      finish("requested");
+      if (!pendingReason) ExpoSpeechRecognitionModule.stop();
     },
-    requestAbort: () => requestAbort("requested"),
+    requestAbort: () => {
+      if (finished) return;
+      finish("requested");
+      if (!pendingReason) ExpoSpeechRecognitionModule.abort();
+    },
   };
   startEngine();
 }
 
-/** Stops gracefully, so a last in-flight result can still land (Insert). If
+/** Stops the engine gracefully and ends the session at once (Insert). If
  * the engine hasn't started yet (still awaiting permission), cancels that
  * pending start instead — there's nothing to gracefully finish. No-op once
  * neither is true. */
