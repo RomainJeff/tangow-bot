@@ -1,6 +1,7 @@
-import type { WorkReturn } from "../lib/work-return";
+import type { WorkReturn } from "@rakazo/core";
+import { workReturnState } from "@rakazo/core";
 import { TaskTreeDisclosure } from "./work-tree/context";
-import { outcomeMark } from "./work-tree/outcome-mark";
+import { stateMark } from "./work-tree/state-mark";
 
 /**
  * The specialist's work_return card: who produced the result and how the run
@@ -18,7 +19,8 @@ export function WorkReturnCard({
   /** Names this card for the task tree it can unfold; without one the card has no link. */
   cardKey?: string;
 }) {
-  const mark = outcomeMark(workReturn.outcome);
+  const state = workReturnState(workReturn.outcome);
+  const mark = state ? stateMark(state) : null;
   return (
     <div className="flex flex-col items-start">
       <div

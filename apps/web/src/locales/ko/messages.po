@@ -117,11 +117,11 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "{botName}의 컴퓨터"
 
-#: src/components/work-tree/context.tsx:47
+#: src/components/work-tree/context.tsx:45
 msgid "{count, plural, one {{count} task} other {{count} tasks}}"
 msgstr "{count, plural, other {작업 {count}개}}"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:144
+#: src/components/work-tree/WorkTreeProvider.tsx:137
 msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
 msgstr "{count, plural, other {열려 있는 하위 작업 {count}개도 함께 취소됩니다.}}"
 
@@ -237,7 +237,7 @@ msgstr "작업 실행 전 확인"
 msgid "Actions for {0}"
 msgstr "{0} 작업 메뉴"
 
-#: src/components/work-tree/TaskTree.tsx:205
+#: src/components/work-tree/TaskTree.tsx:134
 msgid "Actions for {name}"
 msgstr "{name}의 작업 메뉴"
 
@@ -443,7 +443,7 @@ msgstr "확인 없이 결제 동작 허용"
 msgid "Allow writing"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:158
+#: src/components/work-tree/TaskTree.tsx:101
 msgid "allowed by {name}"
 msgstr "{name}님이 허용함"
 
@@ -468,7 +468,7 @@ msgstr "이 도구 항상 허용"
 msgid "Always allowed"
 msgstr "항상 허용됨"
 
-#: src/components/work-tree/TaskTree.tsx:157
+#: src/components/work-tree/TaskTree.tsx:100
 msgid "always allowed by {name}"
 msgstr "{name}님이 항상 허용함"
 
@@ -785,7 +785,7 @@ msgstr "서버에 연결할 수 없습니다."
 msgid "Cancel"
 msgstr "취소"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:141
+#: src/components/work-tree/WorkTreeProvider.tsx:134
 msgid "Cancel {name}?"
 msgstr "{name}을(를) 취소할까요?"
 
@@ -805,7 +805,7 @@ msgstr "새 그룹 만들기 취소"
 msgid "Cancel reply"
 msgstr "답장 취소"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:155
+#: src/components/work-tree/WorkTreeProvider.tsx:148
 msgid "Cancel task"
 msgstr "작업 취소"
 
@@ -814,7 +814,7 @@ msgid "cancelled"
 msgstr "취소됨"
 
 #: src/components/AskCard.tsx:23
-#: src/components/WorkReturnCard.tsx:8
+#: src/components/work-tree/state-mark.ts:33
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -897,7 +897,7 @@ msgstr "새 비밀번호 선택"
 msgid "Choose which connected model Rakazo uses."
 msgstr "Rakazo에서 기본으로 사용할 연결된 모델을 선택하세요."
 
-#: src/components/work-tree/TaskTree.tsx:77
+#: src/components/work-tree/TaskTree.tsx:56
 msgid "chosen explicitly"
 msgstr "직접 선택됨"
 
@@ -1001,7 +1001,7 @@ msgstr "계정 설정 닫기"
 msgid "Close voice settings"
 msgstr "음성 설정 닫기"
 
-#: src/components/work-tree/TaskTree.tsx:45
+#: src/components/work-tree/state-mark.ts:37
 msgid "Closed"
 msgstr "닫힘"
 
@@ -1743,7 +1743,7 @@ msgstr "거절"
 msgid "Default"
 msgstr "기본값"
 
-#: src/components/work-tree/TaskTree.tsx:80
+#: src/components/work-tree/TaskTree.tsx:62
 msgid "default"
 msgstr "기본값"
 
@@ -1815,7 +1815,7 @@ msgstr ""
 msgid "Denied"
 msgstr "거부됨"
 
-#: src/components/work-tree/TaskTree.tsx:155
+#: src/components/work-tree/TaskTree.tsx:98
 msgid "denied by {name}"
 msgstr "{name}님이 거부함"
 
@@ -1909,7 +1909,7 @@ msgstr "Docker는 보안을 위해 컴퓨터 접근을 제한합니다. {hostLab
 msgid "Don’t have an account?"
 msgstr "계정이 없나요?"
 
-#: src/components/WorkReturnCard.tsx:5
+#: src/components/work-tree/state-mark.ts:29
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "완료"
@@ -2074,7 +2074,7 @@ msgstr "매우 높음"
 msgid "failed"
 msgstr "실패"
 
-#: src/components/WorkReturnCard.tsx:6
+#: src/components/work-tree/state-mark.ts:31
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2403,7 +2403,7 @@ msgstr "답장한 메시지로 이동"
 msgid "just now"
 msgstr "방금"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:153
+#: src/components/work-tree/WorkTreeProvider.tsx:146
 msgid "Keep"
 msgstr "유지"
 
@@ -2461,7 +2461,7 @@ msgstr ""
 msgid "Listening…"
 msgstr "듣는 중…"
 
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Load earlier messages"
 msgstr "이전 메시지 불러오기"
 
@@ -2499,10 +2499,11 @@ msgid "Loading voice providers…"
 msgstr "음성 서비스를 불러오는 중…"
 
 #: src/App.tsx:65
+#: src/components/work-tree/WorkThreadDialog.tsx:99
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:122
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Loading…"
 msgstr "불러오는 중…"
 
@@ -2940,7 +2941,7 @@ msgstr "검색된 AI 서비스가 없습니다."
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/components/WorkReturnCard.tsx:10
+#: src/components/work-tree/state-mark.ts:35
 msgid "No result"
 msgstr "결과 없음"
 
@@ -3234,7 +3235,7 @@ msgstr "일시 중지됨"
 msgid "Personal credential"
 msgstr "내 인증 정보"
 
-#: src/components/work-tree/TaskTree.tsx:79
+#: src/components/work-tree/TaskTree.tsx:60
 msgid "picked automatically"
 msgstr "자동 선택됨"
 
@@ -3565,7 +3566,7 @@ msgstr "마지막으로 저장된 작업 공간을 복원합니다. 컴퓨터에
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:104
+#: src/components/work-tree/TaskTree.tsx:83
 msgid "Result"
 msgstr "결과"
 
@@ -3817,7 +3818,7 @@ msgstr "서버 이름"
 msgid "Server URL"
 msgstr "서버 URL"
 
-#: src/components/work-tree/TaskTree.tsx:78
+#: src/components/work-tree/TaskTree.tsx:58
 msgid "set by its profile"
 msgstr "프로필에서 지정됨"
 
@@ -4371,7 +4372,7 @@ msgstr "확인 후 추가"
 msgid "Verifying…"
 msgstr "확인 중…"
 
-#: src/components/work-tree/TaskTree.tsx:220
+#: src/components/work-tree/TaskTree.tsx:149
 msgid "View thread"
 msgstr "채팅 보기"
 

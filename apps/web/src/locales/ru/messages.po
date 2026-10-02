@@ -117,11 +117,11 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "Компьютер {botName}"
 
-#: src/components/work-tree/context.tsx:47
+#: src/components/work-tree/context.tsx:45
 msgid "{count, plural, one {{count} task} other {{count} tasks}}"
 msgstr "{count, plural, one {{count} задача} few {{count} задачи} many {{count} задач} other {{count} задачи}}"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:144
+#: src/components/work-tree/WorkTreeProvider.tsx:137
 msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
 msgstr "{count, plural, one {Её открытая подзадача тоже будет отменена.} few {Её {count} открытые подзадачи тоже будут отменены.} many {Её {count} открытых подзадач тоже будут отменены.} other {Её {count} открытой подзадачи тоже будут отменены.}}"
 
@@ -237,7 +237,7 @@ msgstr "Подтверждения действий"
 msgid "Actions for {0}"
 msgstr "Действия для {0}"
 
-#: src/components/work-tree/TaskTree.tsx:205
+#: src/components/work-tree/TaskTree.tsx:134
 msgid "Actions for {name}"
 msgstr "Действия: {name}"
 
@@ -443,7 +443,7 @@ msgstr "Разрешить действия по покупке без запр�
 msgid "Allow writing"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:158
+#: src/components/work-tree/TaskTree.tsx:101
 msgid "allowed by {name}"
 msgstr "разрешено: {name}"
 
@@ -468,7 +468,7 @@ msgstr "Всегда разрешать этот инструмент"
 msgid "Always allowed"
 msgstr "Всегда разрешено"
 
-#: src/components/work-tree/TaskTree.tsx:157
+#: src/components/work-tree/TaskTree.tsx:100
 msgid "always allowed by {name}"
 msgstr "всегда разрешено: {name}"
 
@@ -785,7 +785,7 @@ msgstr "Не удаётся связаться с сервером."
 msgid "Cancel"
 msgstr "Отмена"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:141
+#: src/components/work-tree/WorkTreeProvider.tsx:134
 msgid "Cancel {name}?"
 msgstr "Отменить {name}?"
 
@@ -805,7 +805,7 @@ msgstr "Отменить создание группы"
 msgid "Cancel reply"
 msgstr "Отменить ответ"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:155
+#: src/components/work-tree/WorkTreeProvider.tsx:148
 msgid "Cancel task"
 msgstr "Отменить задачу"
 
@@ -814,7 +814,7 @@ msgid "cancelled"
 msgstr "отменен"
 
 #: src/components/AskCard.tsx:23
-#: src/components/WorkReturnCard.tsx:8
+#: src/components/work-tree/state-mark.ts:33
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -897,7 +897,7 @@ msgstr "Выберите новый пароль"
 msgid "Choose which connected model Rakazo uses."
 msgstr "Выберите, какую подключенную модель использует Rakazo."
 
-#: src/components/work-tree/TaskTree.tsx:77
+#: src/components/work-tree/TaskTree.tsx:56
 msgid "chosen explicitly"
 msgstr "выбран явно"
 
@@ -1001,7 +1001,7 @@ msgstr "Закрыть настройки пользователя"
 msgid "Close voice settings"
 msgstr "Закрыть настройки голоса"
 
-#: src/components/work-tree/TaskTree.tsx:45
+#: src/components/work-tree/state-mark.ts:37
 msgid "Closed"
 msgstr "Закрыто"
 
@@ -1743,7 +1743,7 @@ msgstr "Отклонить"
 msgid "Default"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:80
+#: src/components/work-tree/TaskTree.tsx:62
 msgid "default"
 msgstr "по умолчанию"
 
@@ -1815,7 +1815,7 @@ msgstr ""
 msgid "Denied"
 msgstr "Отклонено"
 
-#: src/components/work-tree/TaskTree.tsx:155
+#: src/components/work-tree/TaskTree.tsx:98
 msgid "denied by {name}"
 msgstr "отклонено: {name}"
 
@@ -1909,7 +1909,7 @@ msgstr "Docker ограничивает доступ к вашему компь�
 msgid "Don’t have an account?"
 msgstr "У вас нет учетной записи?"
 
-#: src/components/WorkReturnCard.tsx:5
+#: src/components/work-tree/state-mark.ts:29
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "Готово"
@@ -2074,7 +2074,7 @@ msgstr "Очень высокий"
 msgid "failed"
 msgstr "неуспешный"
 
-#: src/components/WorkReturnCard.tsx:6
+#: src/components/work-tree/state-mark.ts:31
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2403,7 +2403,7 @@ msgstr "Перейти к ответному сообщению"
 msgid "just now"
 msgstr "только что"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:153
+#: src/components/work-tree/WorkTreeProvider.tsx:146
 msgid "Keep"
 msgstr "Оставить"
 
@@ -2461,7 +2461,7 @@ msgstr "Прослушивание"
 msgid "Listening…"
 msgstr "Слушаю…"
 
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Load earlier messages"
 msgstr "Загрузить более ранние сообщения"
 
@@ -2499,10 +2499,11 @@ msgid "Loading voice providers…"
 msgstr "Загрузка поставщиков голосовой связи…"
 
 #: src/App.tsx:65
+#: src/components/work-tree/WorkThreadDialog.tsx:99
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:122
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Loading…"
 msgstr "Загрузка…"
 
@@ -2940,7 +2941,7 @@ msgstr "Поставщики не найдены."
 msgid "No remote MCP servers found"
 msgstr "Удаленные MCP-серверы не найдены"
 
-#: src/components/WorkReturnCard.tsx:10
+#: src/components/work-tree/state-mark.ts:35
 msgid "No result"
 msgstr "Нет результата"
 
@@ -3234,7 +3235,7 @@ msgstr "Приостановлено"
 msgid "Personal credential"
 msgstr "Личные учётные данные"
 
-#: src/components/work-tree/TaskTree.tsx:79
+#: src/components/work-tree/TaskTree.tsx:60
 msgid "picked automatically"
 msgstr "выбран автоматически"
 
@@ -3565,7 +3566,7 @@ msgstr "Восстановите последнее сохраненное ра�
 msgid "Restoring your workspace"
 msgstr "Восстановление вашего рабочего пространства"
 
-#: src/components/work-tree/TaskTree.tsx:104
+#: src/components/work-tree/TaskTree.tsx:83
 msgid "Result"
 msgstr "Результат"
 
@@ -3817,7 +3818,7 @@ msgstr "Имя сервера"
 msgid "Server URL"
 msgstr "URL-адрес сервера"
 
-#: src/components/work-tree/TaskTree.tsx:78
+#: src/components/work-tree/TaskTree.tsx:58
 msgid "set by its profile"
 msgstr "задан профилем"
 
@@ -4371,7 +4372,7 @@ msgstr "Проверить и добавить"
 msgid "Verifying…"
 msgstr "Проверка…"
 
-#: src/components/work-tree/TaskTree.tsx:220
+#: src/components/work-tree/TaskTree.tsx:149
 msgid "View thread"
 msgstr "Открыть чат"
 

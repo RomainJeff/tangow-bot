@@ -2,7 +2,8 @@ import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type { TaskApproval, TaskTreeNode } from "@rakazo/contracts";
-import { isNativeHarness, NATIVE_HARNESSES } from "@rakazo/contracts";
+import type { TaskHarnessReason, TaskLineState } from "@rakazo/core";
+import { canCancelTask, canCloseTask, taskEngineLine, taskLineState } from "@rakazo/core";
 import {
   Button,
   cn,
@@ -13,14 +14,7 @@ import {
 } from "@rakazo/ui-web";
 import { ChevronRight, Ellipsis } from "lucide-react";
 import { useState } from "react";
-import type { TaskLineState } from "../../lib/task-tree";
-import {
-  canCancelTask,
-  canCloseTask,
-  taskHarnessReason,
-  taskLineState,
-} from "../../lib/task-tree";
-import { outcomeMark } from "./outcome-mark";
+import { stateMark } from "./state-mark";
 
 export type TaskTreeActions = {
   onCancel: (node: TaskTreeNode) => void;
@@ -34,14 +28,6 @@ type TaskTreeProps = TaskTreeActions & {
   deciderName?: string;
   errorFor: (workId: string) => string | null;
 };
-
-function stateMark(state: TaskLineState): { glyph: string | null; tone: string; label: string } {
-  if (state === "running") return { glyph: null, tone: "", label: t`Running` };
-  if (state === "waiting") return { glyph: null, tone: "", label: t`Needs your call` };
-  if (state === "closed") return { glyph: "✓", tone: "text-muted-foreground", label: t`Closed` };
-  const mark = outcomeMark(state === "done" ? "result" : state);
-  return mark ?? { glyph: null, tone: "", label: "" };
-}
 
 function StateMark({ state }: { state: TaskLineState }) {
   const { glyph, tone } = stateMark(state);
@@ -64,25 +50,22 @@ function StateMark({ state }: { state: TaskLineState }) {
   );
 }
 
-function engineName(harness: TaskTreeNode["harness"]): string {
-  return isNativeHarness(harness) ? NATIVE_HARNESSES[harness].name : t`Rakazo`;
-}
-
-function choiceReason(node: TaskTreeNode): string | null {
-  const reason = taskHarnessReason(node);
-  if (reason === "explicit") return t`chosen explicitly`;
-  if (reason === "profile") return t`set by its profile`;
-  if (reason === "automatic") return t`picked automatically`;
-  if (reason === "default") return t`default`;
-  return null;
+function choiceReason(reason: TaskHarnessReason): string {
+  switch (reason) {
+    case "explicit":
+      return t`chosen explicitly`;
+    case "profile":
+      return t`set by its profile`;
+    case "automatic":
+      return t`picked automatically`;
+    case "default":
+      return t`default`;
+  }
 }
 
 function EngineLine({ node }: { node: TaskTreeNode }) {
-  const reason = choiceReason(node);
   return (
-    <span className="text-meta text-muted-foreground">
-      {reason ? `${engineName(node.harness)} · ${reason}` : engineName(node.harness)}
-    </span>
+    <span className="text-meta text-muted-foreground">{taskEngineLine(node, choiceReason)}</span>
   );
 }
 

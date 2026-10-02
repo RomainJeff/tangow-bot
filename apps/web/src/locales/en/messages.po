@@ -117,11 +117,11 @@ msgstr "{botName} is speaking"
 msgid "{botName}’s computer"
 msgstr "{botName}’s computer"
 
-#: src/components/work-tree/context.tsx:47
+#: src/components/work-tree/context.tsx:45
 msgid "{count, plural, one {{count} task} other {{count} tasks}}"
 msgstr "{count, plural, one {{count} task} other {{count} tasks}}"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:144
+#: src/components/work-tree/WorkTreeProvider.tsx:137
 msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
 msgstr "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
 
@@ -237,7 +237,7 @@ msgstr "Action confirmations"
 msgid "Actions for {0}"
 msgstr "Actions for {0}"
 
-#: src/components/work-tree/TaskTree.tsx:205
+#: src/components/work-tree/TaskTree.tsx:134
 msgid "Actions for {name}"
 msgstr "Actions for {name}"
 
@@ -443,7 +443,7 @@ msgstr "Allow purchase actions without asking"
 msgid "Allow writing"
 msgstr "Allow writing"
 
-#: src/components/work-tree/TaskTree.tsx:158
+#: src/components/work-tree/TaskTree.tsx:101
 msgid "allowed by {name}"
 msgstr "allowed by {name}"
 
@@ -468,7 +468,7 @@ msgstr "Always allow this tool"
 msgid "Always allowed"
 msgstr "Always allowed"
 
-#: src/components/work-tree/TaskTree.tsx:157
+#: src/components/work-tree/TaskTree.tsx:100
 msgid "always allowed by {name}"
 msgstr "always allowed by {name}"
 
@@ -785,7 +785,7 @@ msgstr "Can't reach the server."
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:141
+#: src/components/work-tree/WorkTreeProvider.tsx:134
 msgid "Cancel {name}?"
 msgstr "Cancel {name}?"
 
@@ -805,7 +805,7 @@ msgstr "Cancel new group"
 msgid "Cancel reply"
 msgstr "Cancel reply"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:155
+#: src/components/work-tree/WorkTreeProvider.tsx:148
 msgid "Cancel task"
 msgstr "Cancel task"
 
@@ -814,7 +814,7 @@ msgid "cancelled"
 msgstr "cancelled"
 
 #: src/components/AskCard.tsx:23
-#: src/components/WorkReturnCard.tsx:8
+#: src/components/work-tree/state-mark.ts:33
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -897,7 +897,7 @@ msgstr "Choose a new password"
 msgid "Choose which connected model Rakazo uses."
 msgstr "Choose which connected model Rakazo uses."
 
-#: src/components/work-tree/TaskTree.tsx:77
+#: src/components/work-tree/TaskTree.tsx:56
 msgid "chosen explicitly"
 msgstr "chosen explicitly"
 
@@ -1001,7 +1001,7 @@ msgstr "Close user settings"
 msgid "Close voice settings"
 msgstr "Close voice settings"
 
-#: src/components/work-tree/TaskTree.tsx:45
+#: src/components/work-tree/state-mark.ts:37
 msgid "Closed"
 msgstr "Closed"
 
@@ -1743,7 +1743,7 @@ msgstr "Decline"
 msgid "Default"
 msgstr "Default"
 
-#: src/components/work-tree/TaskTree.tsx:80
+#: src/components/work-tree/TaskTree.tsx:62
 msgid "default"
 msgstr "default"
 
@@ -1815,7 +1815,7 @@ msgstr "Delivery failed"
 msgid "Denied"
 msgstr "Denied"
 
-#: src/components/work-tree/TaskTree.tsx:155
+#: src/components/work-tree/TaskTree.tsx:98
 msgid "denied by {name}"
 msgstr "denied by {name}"
 
@@ -1909,7 +1909,7 @@ msgstr "Docker limits access to your computer for added security. Using {hostLab
 msgid "Don’t have an account?"
 msgstr "Don’t have an account?"
 
-#: src/components/WorkReturnCard.tsx:5
+#: src/components/work-tree/state-mark.ts:29
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "Done"
@@ -2074,7 +2074,7 @@ msgstr "Extra high"
 msgid "failed"
 msgstr "failed"
 
-#: src/components/WorkReturnCard.tsx:6
+#: src/components/work-tree/state-mark.ts:31
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2403,7 +2403,7 @@ msgstr "Jump to replied message"
 msgid "just now"
 msgstr "just now"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:153
+#: src/components/work-tree/WorkTreeProvider.tsx:146
 msgid "Keep"
 msgstr "Keep"
 
@@ -2461,7 +2461,7 @@ msgstr "Listening"
 msgid "Listening…"
 msgstr "Listening…"
 
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Load earlier messages"
 msgstr "Load earlier messages"
 
@@ -2499,10 +2499,11 @@ msgid "Loading voice providers…"
 msgstr "Loading voice providers…"
 
 #: src/App.tsx:65
+#: src/components/work-tree/WorkThreadDialog.tsx:99
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:122
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Loading…"
 msgstr "Loading…"
 
@@ -2940,7 +2941,7 @@ msgstr "No providers found."
 msgid "No remote MCP servers found"
 msgstr "No remote MCP servers found"
 
-#: src/components/WorkReturnCard.tsx:10
+#: src/components/work-tree/state-mark.ts:35
 msgid "No result"
 msgstr "No result"
 
@@ -3234,7 +3235,7 @@ msgstr "Paused"
 msgid "Personal credential"
 msgstr "Personal credential"
 
-#: src/components/work-tree/TaskTree.tsx:79
+#: src/components/work-tree/TaskTree.tsx:60
 msgid "picked automatically"
 msgstr "picked automatically"
 
@@ -3565,7 +3566,7 @@ msgstr "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgid "Restoring your workspace"
 msgstr "Restoring your workspace"
 
-#: src/components/work-tree/TaskTree.tsx:104
+#: src/components/work-tree/TaskTree.tsx:83
 msgid "Result"
 msgstr "Result"
 
@@ -3817,7 +3818,7 @@ msgstr "Server name"
 msgid "Server URL"
 msgstr "Server URL"
 
-#: src/components/work-tree/TaskTree.tsx:78
+#: src/components/work-tree/TaskTree.tsx:58
 msgid "set by its profile"
 msgstr "set by its profile"
 
@@ -4371,7 +4372,7 @@ msgstr "Verify and add"
 msgid "Verifying…"
 msgstr "Verifying…"
 
-#: src/components/work-tree/TaskTree.tsx:220
+#: src/components/work-tree/TaskTree.tsx:149
 msgid "View thread"
 msgstr "View thread"
 

@@ -1,6 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { Plural, useLingui } from "@lingui/react/macro";
 import type { TaskTreeNode } from "@rakazo/contracts";
+import { openDescendantCount } from "@rakazo/core";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,7 +15,6 @@ import {
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { rpc } from "../../lib/rpc";
-import { openDescendantCount } from "../../lib/task-tree";
 import { findTask } from "../../lib/work-tree";
 import type { WorkTreeValue } from "./context";
 import { WorkTreeContext } from "./context";

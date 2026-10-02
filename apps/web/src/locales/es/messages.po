@@ -117,11 +117,11 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "Computadora de {botName}"
 
-#: src/components/work-tree/context.tsx:47
+#: src/components/work-tree/context.tsx:45
 msgid "{count, plural, one {{count} task} other {{count} tasks}}"
 msgstr "{count, plural, one {{count} tarea} other {{count} tareas}}"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:144
+#: src/components/work-tree/WorkTreeProvider.tsx:137
 msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
 msgstr "{count, plural, one {Su subtarea abierta también se cancelará.} other {Sus {count} subtareas abiertas también se cancelarán.}}"
 
@@ -237,7 +237,7 @@ msgstr "Confirmaciones de acción"
 msgid "Actions for {0}"
 msgstr "Acciones para {0}"
 
-#: src/components/work-tree/TaskTree.tsx:205
+#: src/components/work-tree/TaskTree.tsx:134
 msgid "Actions for {name}"
 msgstr "Acciones de {name}"
 
@@ -443,7 +443,7 @@ msgstr "Permitir acciones de compra sin preguntar"
 msgid "Allow writing"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:158
+#: src/components/work-tree/TaskTree.tsx:101
 msgid "allowed by {name}"
 msgstr "permitido por {name}"
 
@@ -468,7 +468,7 @@ msgstr "Permitir siempre esta herramienta"
 msgid "Always allowed"
 msgstr "Siempre permitido"
 
-#: src/components/work-tree/TaskTree.tsx:157
+#: src/components/work-tree/TaskTree.tsx:100
 msgid "always allowed by {name}"
 msgstr "siempre permitido por {name}"
 
@@ -785,7 +785,7 @@ msgstr "No se puede alcanzar el servidor."
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:141
+#: src/components/work-tree/WorkTreeProvider.tsx:134
 msgid "Cancel {name}?"
 msgstr "¿Cancelar {name}?"
 
@@ -805,7 +805,7 @@ msgstr "Cancelar nuevo grupo"
 msgid "Cancel reply"
 msgstr "Cancelar respuesta"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:155
+#: src/components/work-tree/WorkTreeProvider.tsx:148
 msgid "Cancel task"
 msgstr "Cancelar tarea"
 
@@ -814,7 +814,7 @@ msgid "cancelled"
 msgstr "cancelado"
 
 #: src/components/AskCard.tsx:23
-#: src/components/WorkReturnCard.tsx:8
+#: src/components/work-tree/state-mark.ts:33
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -897,7 +897,7 @@ msgstr "Elige una contraseña nueva"
 msgid "Choose which connected model Rakazo uses."
 msgstr "Elige qué modelo conectado usa Rakazo."
 
-#: src/components/work-tree/TaskTree.tsx:77
+#: src/components/work-tree/TaskTree.tsx:56
 msgid "chosen explicitly"
 msgstr "elegido explícitamente"
 
@@ -1001,7 +1001,7 @@ msgstr "Cerrar configuración de usuario"
 msgid "Close voice settings"
 msgstr "Cerrar configuración de voz"
 
-#: src/components/work-tree/TaskTree.tsx:45
+#: src/components/work-tree/state-mark.ts:37
 msgid "Closed"
 msgstr "Cerrado"
 
@@ -1743,7 +1743,7 @@ msgstr "Rechazar"
 msgid "Default"
 msgstr "Predeterminado"
 
-#: src/components/work-tree/TaskTree.tsx:80
+#: src/components/work-tree/TaskTree.tsx:62
 msgid "default"
 msgstr "predeterminado"
 
@@ -1815,7 +1815,7 @@ msgstr ""
 msgid "Denied"
 msgstr "Denegado"
 
-#: src/components/work-tree/TaskTree.tsx:155
+#: src/components/work-tree/TaskTree.tsx:98
 msgid "denied by {name}"
 msgstr "denegado por {name}"
 
@@ -1909,7 +1909,7 @@ msgstr "Docker limita el acceso a tu computadora para mayor seguridad. Usar {hos
 msgid "Don’t have an account?"
 msgstr "¿No tienes una cuenta?"
 
-#: src/components/WorkReturnCard.tsx:5
+#: src/components/work-tree/state-mark.ts:29
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "Listo"
@@ -2074,7 +2074,7 @@ msgstr "Extra alto"
 msgid "failed"
 msgstr "fallido"
 
-#: src/components/WorkReturnCard.tsx:6
+#: src/components/work-tree/state-mark.ts:31
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2403,7 +2403,7 @@ msgstr "Ir al mensaje respondido"
 msgid "just now"
 msgstr "ahora mismo"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:153
+#: src/components/work-tree/WorkTreeProvider.tsx:146
 msgid "Keep"
 msgstr "Conservar"
 
@@ -2461,7 +2461,7 @@ msgstr ""
 msgid "Listening…"
 msgstr "Escuchando…"
 
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Load earlier messages"
 msgstr "Cargar mensajes anteriores"
 
@@ -2499,10 +2499,11 @@ msgid "Loading voice providers…"
 msgstr "Cargando proveedores de voz…"
 
 #: src/App.tsx:65
+#: src/components/work-tree/WorkThreadDialog.tsx:99
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:122
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Loading…"
 msgstr "Cargando…"
 
@@ -2940,7 +2941,7 @@ msgstr "No se encontraron proveedores."
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/components/WorkReturnCard.tsx:10
+#: src/components/work-tree/state-mark.ts:35
 msgid "No result"
 msgstr "Sin resultado"
 
@@ -3234,7 +3235,7 @@ msgstr "En pausa"
 msgid "Personal credential"
 msgstr "Credencial personal"
 
-#: src/components/work-tree/TaskTree.tsx:79
+#: src/components/work-tree/TaskTree.tsx:60
 msgid "picked automatically"
 msgstr "elegido automáticamente"
 
@@ -3565,7 +3566,7 @@ msgstr "Restaura el último espacio de trabajo guardado. Se pierde el trabajo si
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:104
+#: src/components/work-tree/TaskTree.tsx:83
 msgid "Result"
 msgstr "Resultado"
 
@@ -3817,7 +3818,7 @@ msgstr "Nombre del servidor"
 msgid "Server URL"
 msgstr "URL del servidor"
 
-#: src/components/work-tree/TaskTree.tsx:78
+#: src/components/work-tree/TaskTree.tsx:58
 msgid "set by its profile"
 msgstr "definido por su perfil"
 
@@ -4371,7 +4372,7 @@ msgstr "Verificar y agregar"
 msgid "Verifying…"
 msgstr "Verificando…"
 
-#: src/components/work-tree/TaskTree.tsx:220
+#: src/components/work-tree/TaskTree.tsx:149
 msgid "View thread"
 msgstr "Ver chat"
 

@@ -117,11 +117,11 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "{botName} adlı botun bilgisayarı"
 
-#: src/components/work-tree/context.tsx:47
+#: src/components/work-tree/context.tsx:45
 msgid "{count, plural, one {{count} task} other {{count} tasks}}"
 msgstr "{count, plural, one {{count} görev} other {{count} görev}}"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:144
+#: src/components/work-tree/WorkTreeProvider.tsx:137
 msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
 msgstr "{count, plural, one {Açık alt görevi de iptal edilecek.} other {Açık {count} alt görevi de iptal edilecek.}}"
 
@@ -237,7 +237,7 @@ msgstr "İşlem onayları"
 msgid "Actions for {0}"
 msgstr "{0} için işlemler"
 
-#: src/components/work-tree/TaskTree.tsx:205
+#: src/components/work-tree/TaskTree.tsx:134
 msgid "Actions for {name}"
 msgstr "{name} için işlemler"
 
@@ -443,7 +443,7 @@ msgstr "Satın alma işlemlerine sormadan izin ver"
 msgid "Allow writing"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:158
+#: src/components/work-tree/TaskTree.tsx:101
 msgid "allowed by {name}"
 msgstr "{name} tarafından izin verildi"
 
@@ -468,7 +468,7 @@ msgstr "Bu araca her zaman izin ver"
 msgid "Always allowed"
 msgstr "Her zaman izinli"
 
-#: src/components/work-tree/TaskTree.tsx:157
+#: src/components/work-tree/TaskTree.tsx:100
 msgid "always allowed by {name}"
 msgstr "{name} tarafından her zaman izin verildi"
 
@@ -785,7 +785,7 @@ msgstr "Sunucuya ulaşılamıyor."
 msgid "Cancel"
 msgstr "İptal"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:141
+#: src/components/work-tree/WorkTreeProvider.tsx:134
 msgid "Cancel {name}?"
 msgstr "{name} iptal edilsin mi?"
 
@@ -805,7 +805,7 @@ msgstr "Yeni grubu iptal et"
 msgid "Cancel reply"
 msgstr "Yanıtı iptal et"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:155
+#: src/components/work-tree/WorkTreeProvider.tsx:148
 msgid "Cancel task"
 msgstr "Görevi iptal et"
 
@@ -814,7 +814,7 @@ msgid "cancelled"
 msgstr "iptal edildi"
 
 #: src/components/AskCard.tsx:23
-#: src/components/WorkReturnCard.tsx:8
+#: src/components/work-tree/state-mark.ts:33
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -897,7 +897,7 @@ msgstr "Yeni bir parola seçin"
 msgid "Choose which connected model Rakazo uses."
 msgstr "Rakazo'nun hangi bağlı modeli kullanacağını seç."
 
-#: src/components/work-tree/TaskTree.tsx:77
+#: src/components/work-tree/TaskTree.tsx:56
 msgid "chosen explicitly"
 msgstr "açıkça seçildi"
 
@@ -1001,7 +1001,7 @@ msgstr "Kullanıcı ayarlarını kapat"
 msgid "Close voice settings"
 msgstr "Ses ayarlarını kapat"
 
-#: src/components/work-tree/TaskTree.tsx:45
+#: src/components/work-tree/state-mark.ts:37
 msgid "Closed"
 msgstr "Kapatıldı"
 
@@ -1743,7 +1743,7 @@ msgstr "Reddet"
 msgid "Default"
 msgstr "Varsayılan"
 
-#: src/components/work-tree/TaskTree.tsx:80
+#: src/components/work-tree/TaskTree.tsx:62
 msgid "default"
 msgstr "varsayılan"
 
@@ -1815,7 +1815,7 @@ msgstr ""
 msgid "Denied"
 msgstr "Reddedildi"
 
-#: src/components/work-tree/TaskTree.tsx:155
+#: src/components/work-tree/TaskTree.tsx:98
 msgid "denied by {name}"
 msgstr "{name} tarafından reddedildi"
 
@@ -1909,7 +1909,7 @@ msgstr "Docker, ek güvenlik için bilgisayarına erişimi sınırlar. {hostLabe
 msgid "Don’t have an account?"
 msgstr "Hesabın yok mu?"
 
-#: src/components/WorkReturnCard.tsx:5
+#: src/components/work-tree/state-mark.ts:29
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "Bitti"
@@ -2074,7 +2074,7 @@ msgstr "Çok yüksek"
 msgid "failed"
 msgstr "başarısız"
 
-#: src/components/WorkReturnCard.tsx:6
+#: src/components/work-tree/state-mark.ts:31
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2403,7 +2403,7 @@ msgstr "Yanıtlanan mesaja git"
 msgid "just now"
 msgstr "az önce"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:153
+#: src/components/work-tree/WorkTreeProvider.tsx:146
 msgid "Keep"
 msgstr "Koru"
 
@@ -2461,7 +2461,7 @@ msgstr ""
 msgid "Listening…"
 msgstr "Dinliyor…"
 
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Load earlier messages"
 msgstr "Önceki mesajları yükle"
 
@@ -2499,10 +2499,11 @@ msgid "Loading voice providers…"
 msgstr "Ses sağlayıcıları yükleniyor…"
 
 #: src/App.tsx:65
+#: src/components/work-tree/WorkThreadDialog.tsx:99
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:122
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Loading…"
 msgstr "Yükleniyor…"
 
@@ -2940,7 +2941,7 @@ msgstr "Sağlayıcı bulunamadı."
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/components/WorkReturnCard.tsx:10
+#: src/components/work-tree/state-mark.ts:35
 msgid "No result"
 msgstr "Sonuç yok"
 
@@ -3234,7 +3235,7 @@ msgstr "Duraklatıldı"
 msgid "Personal credential"
 msgstr "Kişisel kimlik bilgisi"
 
-#: src/components/work-tree/TaskTree.tsx:79
+#: src/components/work-tree/TaskTree.tsx:60
 msgid "picked automatically"
 msgstr "otomatik seçildi"
 
@@ -3565,7 +3566,7 @@ msgstr "Son kaydedilen çalışma alanını geri yükler. Bilgisayardaki kaydedi
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:104
+#: src/components/work-tree/TaskTree.tsx:83
 msgid "Result"
 msgstr "Sonuç"
 
@@ -3817,7 +3818,7 @@ msgstr "Sunucu adı"
 msgid "Server URL"
 msgstr "Sunucu URL'si"
 
-#: src/components/work-tree/TaskTree.tsx:78
+#: src/components/work-tree/TaskTree.tsx:58
 msgid "set by its profile"
 msgstr "profili tarafından belirlendi"
 
@@ -4371,7 +4372,7 @@ msgstr "Doğrula ve ekle"
 msgid "Verifying…"
 msgstr "Doğrulanıyor…"
 
-#: src/components/work-tree/TaskTree.tsx:220
+#: src/components/work-tree/TaskTree.tsx:149
 msgid "View thread"
 msgstr "Sohbeti görüntüle"
 

@@ -117,11 +117,11 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "{botName} 的电脑"
 
-#: src/components/work-tree/context.tsx:47
+#: src/components/work-tree/context.tsx:45
 msgid "{count, plural, one {{count} task} other {{count} tasks}}"
 msgstr "{count, plural, other {{count} 项任务}}"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:144
+#: src/components/work-tree/WorkTreeProvider.tsx:137
 msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
 msgstr "{count, plural, other {其 {count} 项未完成的子任务也会被取消。}}"
 
@@ -237,7 +237,7 @@ msgstr "操作确认"
 msgid "Actions for {0}"
 msgstr "{0} 的操作"
 
-#: src/components/work-tree/TaskTree.tsx:205
+#: src/components/work-tree/TaskTree.tsx:134
 msgid "Actions for {name}"
 msgstr "{name} 的操作"
 
@@ -443,7 +443,7 @@ msgstr "允许购买操作，无需询问"
 msgid "Allow writing"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:158
+#: src/components/work-tree/TaskTree.tsx:101
 msgid "allowed by {name}"
 msgstr "{name} 已允许"
 
@@ -468,7 +468,7 @@ msgstr "始终允许此工具"
 msgid "Always allowed"
 msgstr "始终允许"
 
-#: src/components/work-tree/TaskTree.tsx:157
+#: src/components/work-tree/TaskTree.tsx:100
 msgid "always allowed by {name}"
 msgstr "{name} 已始终允许"
 
@@ -785,7 +785,7 @@ msgstr "无法连接服务器。"
 msgid "Cancel"
 msgstr "取消"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:141
+#: src/components/work-tree/WorkTreeProvider.tsx:134
 msgid "Cancel {name}?"
 msgstr "取消 {name}？"
 
@@ -805,7 +805,7 @@ msgstr "取消新建群组"
 msgid "Cancel reply"
 msgstr "取消回复"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:155
+#: src/components/work-tree/WorkTreeProvider.tsx:148
 msgid "Cancel task"
 msgstr "取消任务"
 
@@ -814,7 +814,7 @@ msgid "cancelled"
 msgstr "已取消"
 
 #: src/components/AskCard.tsx:23
-#: src/components/WorkReturnCard.tsx:8
+#: src/components/work-tree/state-mark.ts:33
 #: src/pages/ActivityList.tsx:180
 #: src/pages/shell/message-cards.tsx:593
 msgid "Cancelled"
@@ -897,7 +897,7 @@ msgstr "设置新密码"
 msgid "Choose which connected model Rakazo uses."
 msgstr "选择 Rakazo 使用的已连接模型。"
 
-#: src/components/work-tree/TaskTree.tsx:77
+#: src/components/work-tree/TaskTree.tsx:56
 msgid "chosen explicitly"
 msgstr "明确指定"
 
@@ -1001,7 +1001,7 @@ msgstr "关闭用户设置"
 msgid "Close voice settings"
 msgstr "关闭语音设置"
 
-#: src/components/work-tree/TaskTree.tsx:45
+#: src/components/work-tree/state-mark.ts:37
 msgid "Closed"
 msgstr "已关闭"
 
@@ -1743,7 +1743,7 @@ msgstr "拒绝"
 msgid "Default"
 msgstr "默认"
 
-#: src/components/work-tree/TaskTree.tsx:80
+#: src/components/work-tree/TaskTree.tsx:62
 msgid "default"
 msgstr "默认"
 
@@ -1815,7 +1815,7 @@ msgstr ""
 msgid "Denied"
 msgstr "已拒绝"
 
-#: src/components/work-tree/TaskTree.tsx:155
+#: src/components/work-tree/TaskTree.tsx:98
 msgid "denied by {name}"
 msgstr "{name} 已拒绝"
 
@@ -1909,7 +1909,7 @@ msgstr "Docker 限制对你电脑的访问，以提高安全性。使用{hostLab
 msgid "Don’t have an account?"
 msgstr "还没有账户？"
 
-#: src/components/WorkReturnCard.tsx:5
+#: src/components/work-tree/state-mark.ts:29
 #: src/pages/ActivityList.tsx:176
 msgid "Done"
 msgstr "完成"
@@ -2074,7 +2074,7 @@ msgstr "极高"
 msgid "failed"
 msgstr "失败"
 
-#: src/components/WorkReturnCard.tsx:6
+#: src/components/work-tree/state-mark.ts:31
 #: src/pages/ActivityList.tsx:178
 #: src/pages/shell/message-cards.tsx:586
 msgid "Failed"
@@ -2403,7 +2403,7 @@ msgstr "跳到被回复的消息"
 msgid "just now"
 msgstr "刚刚"
 
-#: src/components/work-tree/WorkTreeProvider.tsx:153
+#: src/components/work-tree/WorkTreeProvider.tsx:146
 msgid "Keep"
 msgstr "保留"
 
@@ -2461,7 +2461,7 @@ msgstr ""
 msgid "Listening…"
 msgstr "正在听…"
 
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Load earlier messages"
 msgstr "加载更早的消息"
 
@@ -2499,10 +2499,11 @@ msgid "Loading voice providers…"
 msgstr "正在加载语音提供方…"
 
 #: src/App.tsx:65
+#: src/components/work-tree/WorkThreadDialog.tsx:99
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:122
-#: src/pages/shell/transcript.tsx:320
+#: src/pages/shell/message-frame.tsx:67
 msgid "Loading…"
 msgstr "加载中…"
 
@@ -2940,7 +2941,7 @@ msgstr "未找到提供方。"
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/components/WorkReturnCard.tsx:10
+#: src/components/work-tree/state-mark.ts:35
 msgid "No result"
 msgstr "无结果"
 
@@ -3234,7 +3235,7 @@ msgstr "已暂停"
 msgid "Personal credential"
 msgstr "个人凭据"
 
-#: src/components/work-tree/TaskTree.tsx:79
+#: src/components/work-tree/TaskTree.tsx:60
 msgid "picked automatically"
 msgstr "自动选择"
 
@@ -3565,7 +3566,7 @@ msgstr "还原上次保存的工作区。电脑上未保存的工作会丢失。
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/components/work-tree/TaskTree.tsx:104
+#: src/components/work-tree/TaskTree.tsx:83
 msgid "Result"
 msgstr "结果"
 
@@ -3817,7 +3818,7 @@ msgstr "服务器名称"
 msgid "Server URL"
 msgstr "服务器 URL"
 
-#: src/components/work-tree/TaskTree.tsx:78
+#: src/components/work-tree/TaskTree.tsx:58
 msgid "set by its profile"
 msgstr "由其配置文件设定"
 
@@ -4371,7 +4372,7 @@ msgstr "校验并添加"
 msgid "Verifying…"
 msgstr "正在校验…"
 
-#: src/components/work-tree/TaskTree.tsx:220
+#: src/components/work-tree/TaskTree.tsx:149
 msgid "View thread"
 msgstr "查看对话"
 

@@ -1,9 +1,9 @@
 import { Plural } from "@lingui/react/macro";
 import type { TaskTreeNode } from "@rakazo/contracts";
+import { taskCount } from "@rakazo/core";
 import { cn } from "@rakazo/ui-web";
 import { ChevronRight } from "lucide-react";
 import { createContext, useContext, useEffect, useRef } from "react";
-import { taskCount } from "../../lib/task-tree";
 import { TaskTree } from "./TaskTree";
 
 export type WorkTreeValue = {

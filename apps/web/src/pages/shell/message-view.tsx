@@ -3,7 +3,7 @@ import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
-import { isNarrationMessage } from "@rakazo/core";
+import { isNarrationMessage, parseWorkReturn } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
@@ -29,7 +29,6 @@ import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageTimeLabel } from "../../lib/message-time";
 import { messageProviderLabel } from "../../lib/messaging";
-import { parseWorkReturn } from "../../lib/work-return";
 import { FALLBACK_BOT_COLOR } from "./layout";
 
 const USER_TEXT_FOLD_LINES = 20;

@@ -1,5 +1,5 @@
 import type { PendingWorkAsk, TaskTreeNode, ThreadMessage } from "@rakazo/contracts";
-import { parseWorkReturn } from "./work-return";
+import { parseWorkReturn } from "@rakazo/core";
 
 export function findTask(nodes: readonly TaskTreeNode[], workId: string): TaskTreeNode | null {
   for (const node of nodes) {

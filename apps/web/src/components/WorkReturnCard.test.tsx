@@ -1,6 +1,6 @@
+import type { WorkReturn } from "@rakazo/core";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { WorkReturn } from "../lib/work-return";
 import { WorkReturnCard } from "./WorkReturnCard";
 
 // The node test run has no Lingui vite transform; substitute the runtime tag with a plain
