@@ -1,5 +1,6 @@
 vi.mock("./ai-consent", () => ({ promptAiConsent: vi.fn() }));
 
+import type { PendingWorkAsk } from "@rakazo/contracts";
 import * as SecureStore from "expo-secure-store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promptAiConsent } from "./ai-consent";
@@ -1579,6 +1580,34 @@ describe("mobile thread refresh targeting", () => {
 });
 
 describe("mobile thread event reduction", () => {
+  const workAsk = (runId: string) =>
+    ({
+      workId: `work-${runId}`,
+      rootWorkId: `work-${runId}`,
+      depth: 0,
+      coordinator: { botId: "bot-coordinator", name: "Planner" },
+      specialist: { botId: "bot-specialist", name: "Scout" },
+      runId,
+      message: { id: `ask-${runId}`, role: "bot", blocks: [{ kind: "ask", text: "Publish?" }] },
+    }) as PendingWorkAsk;
+
+  it("leaves the thread alone when a delegated work starts waiting", () => {
+    const initial = { ...snapshot(), pendingWork: [workAsk("run-1")] };
+    const next = applyMobileThreadEvent(initial, { type: "work.waiting_input", seq: 9 });
+    expect(next).toEqual({ ...initial, cursor: 9 });
+  });
+
+  it("drops a delegated ask once another view answered it", () => {
+    const initial = { ...snapshot(), pendingWork: [workAsk("run-1"), workAsk("run-2")] };
+    const next = applyMobileThreadEvent(initial, {
+      type: "work.input_answered",
+      runId: "run-1",
+      seq: 10,
+    });
+    expect(next?.pendingWork).toEqual([workAsk("run-2")]);
+    expect(next?.cursor).toBe(10);
+  });
+
   it("appends an emoji reply with its exact target", () => {
     const initial = snapshot([mobileMessage("message-1", [{ kind: "text", text: "Done" }])]);
 

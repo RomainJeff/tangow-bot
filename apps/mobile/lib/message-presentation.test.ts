@@ -1,4 +1,5 @@
 import type { MessageBlock } from "@rakazo/contracts";
+import { isAsideOnlyMessage, userVisibleMessages } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,
@@ -103,5 +104,15 @@ describe("mobile message presentation", () => {
         { kind: "text", text: "Done." },
       ]),
     ).toEqual([{ kind: "content", blocks: [{ kind: "text", text: "Done." }] }]);
+  });
+
+  it("draws the session-rebuilt line as a quiet aside the thread keeps", () => {
+    const rebuilt: MessageBlock = { kind: "session_rebuilt" };
+    const message = { id: "m1", role: "system" as const, blocks: [rebuilt] };
+
+    expect(visibleMessageBlocks([rebuilt])).toEqual([rebuilt]);
+    expect(hasVisibleMessagePresentation([rebuilt])).toBe(true);
+    expect(isAsideOnlyMessage([rebuilt])).toBe(true);
+    expect(userVisibleMessages([message], { includePeerReceipts: true })).toEqual([message]);
   });
 });

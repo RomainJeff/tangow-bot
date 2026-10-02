@@ -4,6 +4,7 @@ import type {
   Connection,
   ConnectionCatalogItem,
   MessageBlock,
+  PendingWorkAsk,
   Routine,
 } from "@rakazo/contracts";
 import {
@@ -24,6 +25,7 @@ import {
   latestActivityLabel,
   latestAnswerableAskMessageId,
   mentionChipKey,
+  parseWorkReturn,
   projectMessageReactions,
   resolveComposerSendPlan,
   SLASH_ACTIONS,
@@ -97,6 +99,7 @@ import { ShimmerText } from "../components/shimmer-text";
 import { StackedAvatars } from "../components/stacked-avatars";
 import { Surface } from "../components/surface";
 import { UserBubble } from "../components/user-bubble";
+import { WorkReturnCard } from "../components/work-return-card";
 import { WorkingLine } from "../components/working-line";
 import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import {
@@ -158,6 +161,7 @@ import {
 } from "../lib/thread-scroll";
 import { nativeTextStyle } from "../lib/typography";
 import { speakText } from "../lib/voice";
+import { answerableWorkAsks } from "../lib/work-cards";
 
 type PendingAttachment = PickedAttachment & { threadKey: string };
 type AskAction = NonNullable<Extract<MessageBlock, { kind: "ask" }>["actions"]>[number];
@@ -1057,6 +1061,8 @@ function Thread() {
                 event.type === "thread.cleared" ||
                 event.type === "thread.rewound" ||
                 event.type === "run.waiting_input" ||
+                event.type === "work.waiting_input" ||
+                event.type === "work.input_answered" ||
                 event.type === "computer.takeover.requested" ||
                 isRunTerminalEvent(event)
               ) {
@@ -1066,6 +1072,10 @@ function Thread() {
                   historyEpoch.current += 1;
                 }
                 setSnap((prev) => applyMobileThreadEvent(prev, event));
+              }
+              // A delegated ask only exists in the snapshot's pendingWork, so load it.
+              if (event.type === "work.waiting_input") {
+                void refresh().catch(() => undefined);
               }
               if (event.type === "bot.updated") {
                 void refreshMentionBots();
@@ -1402,6 +1412,21 @@ function Thread() {
         ...(targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! }),
         runId: message.runId,
         messageId: message.id,
+        answer,
+      });
+      if (isCurrentTarget(targetBotId, targetGroupId)) await refresh();
+    },
+    [botId, groupId],
+  );
+
+  const answerWork = useCallback(
+    async (work: PendingWorkAsk, answer: string) => {
+      const targetBotId = botId;
+      const targetGroupId = groupId;
+      await rpc("works/answer", {
+        workId: work.workId,
+        runId: work.runId,
+        messageId: work.message.id,
         answer,
       });
       if (isCurrentTarget(targetBotId, targetGroupId)) await refresh();
@@ -1815,7 +1840,7 @@ function Thread() {
   // mounted, so reopening a thread does not restart it at zero.
   const workingStartedAt = earliestRunStartMs(workingRuns);
   // The one thing that keeps moving during a run; everything else is still.
-  const workingFooter = workingBotsForLine.length ? (
+  const workingLine = workingBotsForLine.length ? (
     <View style={{ marginTop: MESSAGE_GAP }}>
       <WorkingLine
         avatar={<GroupAvatar members={workingBotsForLine} size={sizes.message} />}
@@ -1824,6 +1849,37 @@ function Thread() {
       />
     </View>
   ) : null;
+  // A delegated specialist's ask is answered here, in its coordinator's thread.
+  const workAskCards = answerableWorkAsks(snap?.pendingWork).map((work) => (
+    <View key={work.runId} style={{ marginTop: MESSAGE_GAP, gap: 6 }}>
+      <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("label") }}>
+        {t("{specialist} · delegated by {coordinator}", {
+          specialist: work.specialist.name,
+          coordinator: work.coordinator.name,
+        })}
+      </Text>
+      <MessageBubble
+        botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+        groupId={groupId}
+        message={work.message}
+        botName={displayName}
+        bots={mentionBots}
+        members={snap?.members}
+        canAnswer
+        onAnswer={(_message, answer) => answerWork(work, answer)}
+        onOpenBot={openBot}
+        onPreviewMarkdown={setMarkdownPreview}
+        actionProps={{}}
+      />
+    </View>
+  ));
+  const workAsksAndWorkingLine =
+    workAskCards.length || workingLine ? (
+      <>
+        {workAskCards}
+        {workingLine}
+      </>
+    ) : null;
 
   const loadEarlierControl =
     snap?.olderCursor != null ? (
@@ -1871,7 +1927,7 @@ function Thread() {
                 previousCreatedAt: visibleMessages[index - 1]?.createdAt,
               }),
             )}
-            {workingFooter}
+            {workAsksAndWorkingLine}
           </ScrollView>
         ) : (
           <FlatList
@@ -1913,7 +1969,7 @@ function Thread() {
               setThreadScrollState(scrollBehavior.current.state());
             }}
             ListFooterComponent={loadEarlierControl}
-            ListHeaderComponent={workingFooter}
+            ListHeaderComponent={workAsksAndWorkingLine}
             renderItem={({ item, index }) =>
               renderMessageRow(item, { previousCreatedAt: liveMessages[index + 1]?.createdAt })
             }
@@ -3267,8 +3323,19 @@ const MessageBubble = memo(function MessageBubble({
   const steps = showSteps ? stepsBlocks(message.blocks) : [];
   const live = message.id.startsWith("progress:");
   const firstContent = segments.findIndex((segment) => segment.kind === "content");
+  const workReturn = message.blocks.map(parseWorkReturn).find((card) => card !== null);
   return (
     <View style={{ gap: 8, width: "100%" }}>
+      {workReturn ? (
+        <WorkReturnCard
+          workReturn={workReturn}
+          specialistName={
+            workReturn.executorBotName ??
+            bots.find((candidate) => candidate.id === workReturn.executorBotId)?.name ??
+            t("Specialist")
+          }
+        />
+      ) : null}
       {steps.map((block, index) => (
         <AgentSteps key={`${message.id}-steps-${index}`} block={block} live={live} />
       ))}

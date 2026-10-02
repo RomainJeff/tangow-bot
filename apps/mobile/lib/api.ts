@@ -7,6 +7,7 @@ import type {
   MessageBlock,
   ModelCatalogEntry,
   ModelCredential,
+  PendingWorkAsk,
   Space,
   SpaceNavigation,
 } from "@rakazo/contracts";
@@ -844,6 +845,8 @@ export type MobileSnapshot = {
   olderCursor: number | null;
   run: MobileRun | null;
   activeRuns?: MobileRun[];
+  /** Asks a delegated specialist is waiting on, answered from this coordinator thread. */
+  pendingWork?: PendingWorkAsk[];
   members?: MobileGroup["members"];
   computer?: {
     state: string;
@@ -1068,6 +1071,19 @@ export function applyMobileThreadEvent(
       messages: applyThreadRewind(prev.messages, event),
       run: null,
       activeRuns: [],
+    };
+  }
+  if (event.type === "work.waiting_input") {
+    // The specialist's run is not a run of this thread, so nothing here changes: its ask only
+    // reaches the thread through the snapshot's pendingWork, which the caller reloads.
+    return { ...prev, cursor: event.seq ?? prev.cursor };
+  }
+  if (event.type === "work.input_answered") {
+    // Another view settled a delegated ask: its card has nothing left to answer here.
+    return {
+      ...prev,
+      cursor: event.seq ?? prev.cursor,
+      pendingWork: prev.pendingWork?.filter((ask) => ask.runId !== event.runId),
     };
   }
   if (event.type === "run.waiting_input" || event.type === "computer.takeover.requested") {

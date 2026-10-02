@@ -717,4 +717,8 @@ export const RU_MESSAGES: Record<string, string> = {
   Harness: "Harness",
   "Codex and Claude need the bot's Docker Computer and a model on their subscription.":
     "Для Codex и Claude нужны Docker Computer бота и модель из их подписки.",
+  "No result": "Нет результата",
+  Specialist: "Специалист",
+  Closed: "Закрыто",
+  "{specialist} · delegated by {coordinator}": "{specialist} · делегировано {coordinator}",
 };

@@ -700,4 +700,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   Harness: "Harness",
   "Codex and Claude need the bot's Docker Computer and a model on their subscription.":
     "Codex 和 Claude 需要机器人的 Docker Computer 以及其订阅下的模型。",
+  "No result": "无结果",
+  Specialist: "专家",
+  Closed: "已关闭",
+  "{specialist} · delegated by {coordinator}": "{specialist} · 由 {coordinator} 委派",
 };
