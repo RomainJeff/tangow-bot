@@ -596,6 +596,54 @@ describe("spawned bot archival", () => {
   });
 });
 
+describe("spawned bot archival rights", () => {
+  const bots = [
+    { id: "coordinator", parentBotId: null, name: "Coordinator" },
+    { id: "specialist-1", parentBotId: "coordinator", name: "Researcher" },
+    { id: "specialist-2", parentBotId: "coordinator", name: "Writer" },
+    { id: "helper-1", parentBotId: "specialist-1", name: "Helper" },
+  ].map((bot) => ({ ...bot, spaceId: "workspace-1", userId: "user-1", archivedAt: null }));
+  // A directory of bots that answers the way the database does: only rows matching the filter.
+  const archive = async (spawnedByBotId: string, botId: string) => {
+    const transaction = vi.fn();
+    const prisma = {
+      bot: {
+        findMany: vi.fn(async ({ where }: { where: { parentBotId: string } }) =>
+          bots.filter((bot) => bot.parentBotId === where.parentBotId),
+        ),
+      },
+      $transaction: transaction,
+    } as unknown as PrismaClient;
+    const result = await archiveSpawnedBot(
+      {
+        prisma,
+        sandbox: {} as SandboxProvider,
+        home: {} as AgentHomeStore,
+        jobs: { cancel: vi.fn() } as unknown as JobPublisher,
+      },
+      {
+        spawnedByBotId,
+        userId: "user-1",
+        spaceId: "workspace-1",
+        confirmName: bots.find((bot) => bot.id === botId)!.name,
+        botId,
+      },
+      context,
+    );
+    return { result, archived: transaction.mock.calls.length > 0 };
+  };
+
+  it("refuses a specialist archiving or deleting a sibling or its coordinator", async () => {
+    for (const target of ["specialist-2", "coordinator"]) {
+      const { result, archived } = await archive("specialist-1", target);
+      expect(result).toEqual({
+        error: "That bot was not created by this bot. Refusing to archive.",
+      });
+      expect(archived).toBe(false);
+    }
+  });
+});
+
 describe("destroyBot", () => {
   it("moves bot memories into shared memory before the cascading delete", async () => {
     const createDeletion = vi.fn().mockResolvedValue({});
