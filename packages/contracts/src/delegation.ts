@@ -1,8 +1,15 @@
+import * as z from "zod";
 import type {
   HarnessChoice,
   SpecialistHarnessFallbackCause,
   SpecialistHarnessSource,
 } from "./harness-choice.js";
+import {
+  HarnessChoiceSchema,
+  SPECIALIST_HARNESS_FALLBACK_CAUSES,
+  SPECIALIST_HARNESS_SOURCES,
+} from "./harness-choice.js";
+import { Id } from "./ids.js";
 
 // T04: public delegation contract (PA-CONTRAT-CONVERGENCE.md §6, symbols fixed before T01).
 // WorkTarget deliberately has one variant only: ADR-0001/ADR-0002 reserve scoped_tasks
@@ -51,7 +58,12 @@ export type DelegationCommand =
     }
   | { kind: "followup"; workId: ScopedWorkId; text: string }
   | { kind: "cancel"; workId: ScopedWorkId; reason: string }
-  | { kind: "close"; workId: ScopedWorkId };
+  | {
+      kind: "close";
+      workId: ScopedWorkId;
+      /** The user, not the coordinator bot, decided the closure; the durable event says so. */
+      decidedBy?: "user";
+    };
 
 export type AuthorizedActor = {
   userId: string;
@@ -85,10 +97,27 @@ export function isWorkReturnOutcome(value: unknown): value is WorkReturnOutcome 
   return WORK_RETURN_OUTCOMES.some((outcome) => outcome === value);
 }
 
+/** What a specialist's approval card asked and how it stands; only the owner ever decides one. */
+export const TASK_APPROVAL_STATUSES = ["pending", "allowed", "always_allowed", "denied"] as const;
+export type TaskApprovalStatus = (typeof TASK_APPROVAL_STATUSES)[number];
+export type TaskApproval = {
+  effectId: string;
+  /** The card's own wording of the action. */
+  summary: string;
+  status: TaskApprovalStatus;
+  /** Who settled it; null while it is pending. */
+  decidedBy: "user" | null;
+};
+
+/**
+ * One scoped task as its coordinator sees it, with the tasks its specialist delegated in turn.
+ * The single shape of both `inspect` and a coordinator thread's task tree.
+ */
 export type TaskTreeNode = {
   workId: ScopedWorkId;
   coordinator: { botId: string; threadId: string };
-  executor: { botId: string; threadId: string };
+  /** The specialist and its own thread, which the owner may open read-only. */
+  executor: { botId: string; threadId: string; name: string };
   /** The specialist's harness; `default` is Rakazo's own. */
   harness: HarnessChoice;
   /** The Computer a native harness runs in; null on Rakazo's own harness. */
@@ -104,10 +133,50 @@ export type TaskTreeNode = {
   rootScopedTaskId: string;
   depth: number;
   delegationCeiling: McpAccessCeiling;
-  /** The durable delivery projection; the text itself remains in the coordinator thread. */
-  result: { runId: string; outcome: string } | null;
+  /** The latest delivered return: how it ended and its text, which is null when it had none. */
+  result: { runId: string; outcome: WorkReturnOutcome; text: string | null } | null;
+  approvals: TaskApproval[];
+  children: TaskTreeNode[];
 };
 
+export const TaskTreeNodeSchema: z.ZodType<TaskTreeNode> = z.lazy(() =>
+  z.object({
+    workId: Id,
+    coordinator: z.object({ botId: Id, threadId: Id }),
+    executor: z.object({ botId: Id, threadId: Id, name: z.string() }),
+    harness: HarnessChoiceSchema,
+    executionTarget: z.string().nullable(),
+    harnessSource: z.enum(SPECIALIST_HARNESS_SOURCES).nullable(),
+    harnessFallbackCause: z.enum(SPECIALIST_HARNESS_FALLBACK_CAUSES).nullable(),
+    missionComputerId: z.string().nullable(),
+    status: z.string(),
+    parentScopedTaskId: z.string().nullable(),
+    rootScopedTaskId: z.string(),
+    depth: z.number().int(),
+    delegationCeiling: z.record(
+      z.string(),
+      z.object({ allowAllTools: z.boolean(), allowedTools: z.array(z.string()) }),
+    ),
+    result: z
+      .object({
+        runId: Id,
+        outcome: z.enum(WORK_RETURN_OUTCOMES),
+        text: z.string().nullable(),
+      })
+      .nullable(),
+    approvals: z.array(
+      z.object({
+        effectId: Id,
+        summary: z.string(),
+        status: z.enum(TASK_APPROVAL_STATUSES),
+        decidedBy: z.literal("user").nullable(),
+      }),
+    ),
+    children: z.array(TaskTreeNodeSchema),
+  }),
+);
+
+/** The task `inspect` was asked about, with everything it delegated; `nodes` lists them all, root first. */
 export type TaskTreePage = { root: TaskTreeNode; nodes: TaskTreeNode[] };
 
 export interface DelegatedTasks {

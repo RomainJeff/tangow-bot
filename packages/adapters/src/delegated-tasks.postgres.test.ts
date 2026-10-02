@@ -139,6 +139,13 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     };
   }
 
+  /** The specialist's Runs have ended, so its task is finished work that can be closed. */
+  const finishRuns = (workId: string) =>
+    prisma.run.updateMany({
+      where: { scopedTaskId: workId, status: { in: ["queued", "leased", "running"] } },
+      data: { status: "completed" },
+    });
+
   /** A specialist's native turn as the executor records it, then a stop nothing confirmed. */
   async function seedUnconfirmedNativeStop(
     receipt: { workId: string; botId: string; threadId: string },
@@ -279,6 +286,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
 
     // A returned result remains follow-upable (and therefore keeps the grant). Explicitly
     // closing the work is the non-reopenable terminal transition that revokes it.
+    await finishRuns(receipt.workId);
     await tasks.apply({ kind: "close", workId: receipt.workId }, s.context);
     await expect(
       prisma.computerUsageGrant.findUnique({
@@ -467,6 +475,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       }),
     ).resolves.toBe(1);
 
+    await finishRuns(receipt.workId);
     await tasks.apply({ kind: "close", workId: receipt.workId }, s.context);
     const originalRun = await prisma.run.findUniqueOrThrow({
       where: { id: receipt.runId! },
@@ -705,6 +714,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       },
     });
 
+    await finishRuns(receipt.workId);
     await tasks.apply({ kind: "close", workId: receipt.workId }, s.context);
     await tasks.apply({ kind: "close", workId: receipt.workId }, s.context);
 
@@ -722,7 +732,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     await expect(
       prisma.run.findUniqueOrThrow({ where: { id: receipt.runId! } }),
     ).resolves.toMatchObject({
-      status: "cancelled",
+      status: "completed",
     });
     await expect(prisma.computer.findUnique({ where: { id: dedicated.id } })).resolves.toBeNull();
     await expect(
@@ -752,6 +762,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       data: { computerId: s.missionComputer.id },
     });
 
+    await finishRuns(receipt.workId);
     await tasks.apply({ kind: "close", workId: receipt.workId }, s.context);
 
     await expect(
@@ -911,7 +922,9 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       prisma.scopedTask.findUniqueOrThrow({ where: { id: root.workId } }),
     ).resolves.toMatchObject({ status: "dispatched" });
 
+    await finishRuns(child.workId);
     await tasks.apply({ kind: "close", workId: child.workId }, childContext);
+    await finishRuns(root.workId);
     await tasks.apply({ kind: "close", workId: root.workId }, s.context);
 
     await expect(

@@ -2,6 +2,7 @@ import { eventIterator, oc } from "@orpc/contract";
 import * as z from "zod";
 import { AiConsentQuerySchema, AiConsentStatusSchema } from "./ai-consent.js";
 import { ATTACHMENT_MAX_BASE64_LENGTH, ATTACHMENT_MAX_COUNT } from "./attachments.js";
+import { TaskTreeNodeSchema } from "./delegation.js";
 import {
   ActionApprovalRuleSchema,
   ActionAutoReviewSettingsSchema,
@@ -375,6 +376,16 @@ export const appContract = {
         }),
       )
       .output(z.object({ ok: z.literal(true) })),
+    /** The scoped tasks a coordinator's thread delegated, with what each specialist delegated in turn. */
+    tree: oc.input(z.object({ threadId: Id })).output(z.array(TaskTreeNodeSchema)),
+    /** A specialist's own thread, read-only, for the owner of its task. */
+    thread: oc
+      .input(z.object({ workId: Id, before: z.number().int().nonnegative().optional() }))
+      .output(ThreadMessagePageSchema),
+    /** Stops a task and everything it delegated; the task itself stays readable. */
+    cancel: oc.input(z.object({ workId: Id })).output(z.object({ ok: z.literal(true) })),
+    /** Ends a finished task that has no open descendant, which lets its specialist be cleaned up. */
+    close: oc.input(z.object({ workId: Id })).output(z.object({ ok: z.literal(true) })),
   },
   computer: {
     status: oc.input(botId).output(ComputerStatusSchema),

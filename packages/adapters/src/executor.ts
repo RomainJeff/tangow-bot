@@ -232,6 +232,7 @@ import {
   WorkClosedError,
   WorkHasOpenDescendantsError,
   WorkNotAuthorizedError,
+  WorkStillWorkingError,
 } from "./delegated-tasks.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
@@ -3948,6 +3949,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (
                 error instanceof WorkClosedError ||
                 error instanceof WorkHasOpenDescendantsError ||
+                error instanceof WorkStillWorkingError ||
                 error instanceof DelegationLimitError ||
                 error instanceof SpecialistHarnessUnavailableError ||
                 error instanceof UnknownSpecialistHarnessError

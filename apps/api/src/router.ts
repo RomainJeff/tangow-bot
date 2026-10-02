@@ -228,6 +228,7 @@ import {
   voiceContext,
 } from "./voice.js";
 import { answerDelegatedWork } from "./work-answer.js";
+import { cancelWork, closeWork, workThread, workTree } from "./work-tree.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
 const THREAD_MESSAGE_PAGE_SIZE = 100;
@@ -1833,6 +1834,18 @@ export function createRouter(deps: RouterDeps) {
     works: {
       answer: authed.works.answer.handler(async ({ context, input }) =>
         answerDelegatedWork(deps, context.actor, input),
+      ),
+      tree: authed.works.tree.handler(async ({ context, input }) =>
+        workTree(deps, context.actor, input.threadId),
+      ),
+      thread: authed.works.thread.handler(async ({ context, input }) =>
+        workThread(deps, context.actor, input),
+      ),
+      cancel: authed.works.cancel.handler(async ({ context, input }) =>
+        cancelWork(deps, context.actor, input.workId),
+      ),
+      close: authed.works.close.handler(async ({ context, input }) =>
+        closeWork(deps, context.actor, input.workId),
       ),
     },
     computer: {

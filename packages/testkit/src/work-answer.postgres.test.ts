@@ -3,8 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { JobPublisher } from "@rakazo/adapters";
-import { createDelegatedTasks } from "@rakazo/adapters";
-import type { AuthorizedActor, CommandContext } from "@rakazo/contracts";
+import { createDelegatedTasks, recordSpecialistResult } from "@rakazo/adapters";
+import type { AuthorizedActor, CommandContext, TaskTreeNode } from "@rakazo/contracts";
 import { answerRunInput, pauseRunForInput } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
@@ -205,7 +205,8 @@ describe.skipIf(!databaseAvailable)("delegated work answer from the coordinator 
     });
     expect(second.status).toBe(409);
 
-    // Closing the work removes the pending entry and refuses further answers.
+    // Closing the finished work removes the pending entry and refuses further answers.
+    await prisma.run.update({ where: { id: receipt.runId! }, data: { status: "completed" } });
     await delegatedTasks.apply({ kind: "close", workId: receipt.workId }, context);
     const closedSnapshot = await rpc<{ pendingWork?: unknown[] }>(
       handles.app,
@@ -260,6 +261,165 @@ describe.skipIf(!databaseAvailable)("delegated work answer from the coordinator 
     await expect(
       prisma.externalEffect.findUniqueOrThrow({ where: { id: effectId } }),
     ).resolves.toMatchObject({ status: "intended" });
+  }, 45_000);
+
+  /** The specialist delegates further, as it would from its own Run on the work thread. */
+  async function delegateFromSpecialist(
+    fixture: Awaited<ReturnType<typeof delegatedAsk>>,
+    spawnKey: string,
+  ) {
+    const { storedCoordinator, profile, receipt, delegatedTasks } = fixture;
+    return delegatedTasks.apply(
+      {
+        kind: "delegate",
+        target: { kind: "from_profile", profileBotId: profile.id, name: "Helper" },
+        harness: "default",
+        brief: "Check one figure.",
+        requestedRights: {},
+        spawnKey,
+      },
+      {
+        actor: {
+          userId: storedCoordinator.userId,
+          spaceId: storedCoordinator.spaceId,
+          botId: receipt.botId,
+          rights: {},
+        },
+        originRunId: receipt.runId!,
+        requestId: randomUUID(),
+      },
+    );
+  }
+
+  it("shows the coordinator thread's task tree with its approvals and result, and closes a finished task only without an open descendant", async () => {
+    const prisma = handles.prisma;
+    const fixture = await delegatedAsk(prisma);
+    const { ownerCookie, coordinatorThread, storedCoordinator, effectId, receipt } = fixture;
+    const child = await delegateFromSpecialist(fixture, `tree-child-${randomUUID()}`);
+    const treeOf = () =>
+      rpc<TaskTreeNode[]>(handles.app, ownerCookie, "works/tree", {
+        threadId: coordinatorThread.id,
+      });
+
+    // The specialist waits on an approval, and one level below it a helper was delegated.
+    const [first] = await treeOf();
+    expect(first).toMatchObject({
+      workId: receipt.workId,
+      executor: { botId: receipt.botId, threadId: receipt.threadId, name: "Specialist" },
+      harness: "codex-native",
+      harnessSource: "explicit",
+      result: null,
+      approvals: [
+        { effectId, summary: "Review before computer_act", status: "pending", decidedBy: null },
+      ],
+      children: [
+        {
+          workId: child.workId,
+          executor: { botId: child.botId, name: "Helper" },
+          harness: "default",
+          harnessSource: "explicit",
+          approvals: [],
+          children: [],
+        },
+      ],
+    });
+
+    // Its owner can read the specialist's thread, whatever the specialist asked there.
+    const thread = await rpc<{ messages: Array<{ id: string; blocks: Array<{ kind: string }> }> }>(
+      handles.app,
+      ownerCookie,
+      "works/thread",
+      { workId: receipt.workId },
+    );
+    const askMessage = thread.messages.find((message) =>
+      message.blocks.some((block) => block.kind === "ask"),
+    );
+    expect(askMessage).toBeDefined();
+
+    // Deciding the approval is recorded with who decided what.
+    await rpc(handles.app, ownerCookie, "works/answer", {
+      workId: receipt.workId,
+      runId: receipt.runId,
+      messageId: askMessage!.id,
+      answer: "deny",
+    });
+    expect((await treeOf())[0]?.approvals).toEqual([
+      { effectId, summary: "Review before computer_act", status: "denied", decidedBy: "user" },
+    ]);
+
+    // A task whose run is going is cancelled, not closed.
+    expect(
+      (await raw(handles.app, ownerCookie, "works/close", { workId: receipt.workId })).status,
+    ).toBe(409);
+
+    // Once its run returned, an open descendant still refuses the closure.
+    await prisma.run.update({ where: { id: receipt.runId! }, data: { status: "completed" } });
+    await recordSpecialistResult(
+      {
+        prisma,
+        jobs: { enqueue: vi.fn() } as unknown as JobPublisher,
+        events: { notify: vi.fn().mockResolvedValue(undefined) },
+      },
+      { workId: receipt.workId, runId: receipt.runId!, text: "The figures add up." },
+    );
+    expect((await treeOf())[0]?.result).toEqual({
+      runId: receipt.runId,
+      outcome: "result",
+      text: "The figures add up.",
+    });
+    const blocked = await raw(handles.app, ownerCookie, "works/close", { workId: receipt.workId });
+    expect(blocked.status).toBe(409);
+    await expect(
+      prisma.scopedTask.findUniqueOrThrow({ where: { id: receipt.workId } }),
+    ).resolves.toMatchObject({ status: expect.not.stringMatching(/^(closed|cancelled)$/) });
+
+    // Cancelling the descendant frees the closure, which the user, not the bot, decided.
+    await rpc(handles.app, ownerCookie, "works/cancel", { workId: child.workId });
+    await rpc(handles.app, ownerCookie, "works/close", { workId: receipt.workId });
+    expect((await treeOf())[0]).toMatchObject({
+      status: "closed",
+      result: { outcome: "result" },
+      children: [{ status: "cancelled" }],
+    });
+    await expect(
+      prisma.lifecycleEvent.findFirstOrThrow({
+        where: { scopedTaskId: receipt.workId, kind: "work_closed" },
+      }),
+    ).resolves.toMatchObject({
+      payload: { closedBy: { kind: "user", userId: storedCoordinator.userId } },
+    });
+  }, 45_000);
+
+  it("cancels a task with everything it delegated for its owner only, who alone sees its tree and thread", async () => {
+    const prisma = handles.prisma;
+    const fixture = await delegatedAsk(prisma);
+    const { ownerCookie, coordinatorThread, receipt } = fixture;
+    const child = await delegateFromSpecialist(fixture, `cancel-child-${randomUUID()}`);
+
+    // Another user sees nothing of this tree or of the specialist's thread, and cannot touch it.
+    const strangerCookie = await signup(handles.app, "stranger");
+    await expect(
+      rpc(handles.app, strangerCookie, "works/tree", { threadId: coordinatorThread.id }),
+    ).resolves.toEqual([]);
+    for (const [procedure, input] of [
+      ["works/thread", { workId: receipt.workId }],
+      ["works/cancel", { workId: receipt.workId }],
+      ["works/close", { workId: receipt.workId }],
+    ] as const) {
+      expect(
+        (await raw(handles.app, strangerCookie, procedure, input)).status,
+      ).toBeGreaterThanOrEqual(400);
+    }
+    await expect(
+      prisma.scopedTask.findUniqueOrThrow({ where: { id: receipt.workId } }),
+    ).resolves.toMatchObject({ status: expect.not.stringMatching(/^(closed|cancelled)$/) });
+
+    await rpc(handles.app, ownerCookie, "works/cancel", { workId: receipt.workId });
+    const statuses = await prisma.scopedTask.findMany({
+      where: { id: { in: [receipt.workId, child.workId] } },
+      select: { status: true },
+    });
+    expect(statuses).toEqual([{ status: "cancelled" }, { status: "cancelled" }]);
   }, 45_000);
 
   it("refuses a delegated secret ask from the coordinator thread without any mutation", async () => {
@@ -419,6 +579,7 @@ async function delegatedAsk(
     coordinator,
     storedCoordinator,
     coordinatorThread,
+    profile,
     receipt,
     effectId,
     delegatedTasks,

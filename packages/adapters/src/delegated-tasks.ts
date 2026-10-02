@@ -15,6 +15,7 @@ import type {
   NativeHarnessChoice,
   Receipt,
   ScopedWorkId,
+  TaskApproval,
   TaskTreeNode,
   TaskTreePage,
   WorkReturnOutcome,
@@ -22,6 +23,7 @@ import type {
 import {
   isNativeHarness,
   isWorkReturnOutcome,
+  MessageBlock as MessageBlockSchema,
   RUN_CHOICE_VERSION,
   storedSpecialistHarness,
 } from "@rakazo/contracts";
@@ -61,6 +63,13 @@ export class WorkClosedError extends Error {
 export class WorkHasOpenDescendantsError extends Error {
   constructor(workId: ScopedWorkId) {
     super(`Scoped task ${workId} has open descendant tasks; close or cancel them first`);
+  }
+}
+
+/** A closure refused because the task is still working; cancelling it is the way to end it. */
+export class WorkStillWorkingError extends Error {
+  constructor(workId: ScopedWorkId) {
+    super(`Delegated work ${workId} is still working. Cancel it instead of closing it.`);
   }
 }
 
@@ -988,11 +997,15 @@ async function closeWork(
       // Serialise with a descendant spawn, which locks this row to read its status.
       const [locked] = await tx.$queryRaw<Array<{ status?: string }>>`
         SELECT status FROM scoped_tasks WHERE id = ${scopedTask.id} FOR UPDATE`;
-      if (
-        !TERMINAL_WORK_STATUSES.includes(locked?.status ?? "") &&
-        (await hasOpenDescendant(tx, scopedTask.id))
-      ) {
-        throw new WorkHasOpenDescendantsError(scopedTask.id);
+      if (!TERMINAL_WORK_STATUSES.includes(locked?.status ?? "")) {
+        if (await hasOpenDescendant(tx, scopedTask.id)) {
+          throw new WorkHasOpenDescendantsError(scopedTask.id);
+        }
+        // Closing ends finished work; a task with a Run still going is cancelled instead.
+        const working = await tx.run.count({
+          where: { scopedTaskId: scopedTask.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
+        });
+        if (working > 0) throw new WorkStillWorkingError(scopedTask.id);
       }
       // A repeated close is a cleanup retry, not a second lifecycle decision. The guarded
       // update makes the append-only event part of exactly one terminal transition.
@@ -1010,7 +1023,12 @@ async function closeWork(
           threadId: scopedTask.specialistThreadId,
           scopedTaskId: scopedTask.id,
           kind: "work_closed",
-          payload: { closedBy: context.actor.botId },
+          payload: {
+            closedBy:
+              command.kind === "close" && command.decidedBy === "user"
+                ? { kind: "user", userId: context.actor.userId }
+                : { kind: "bot", botId: context.actor.botId },
+          },
         },
       });
       await revokeMissionComputerUseIfLastWork(tx, scopedTask);
@@ -1226,14 +1244,9 @@ async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<
         scopedTask: { select: { coordinatorThreadId: true } },
       },
     });
-    // Review n° 1 finding B2: shares the exact stop path a user-initiated thread stop
-    // uses (packages/db/src/events.ts) — cancels the Runs, then expires their Computer
-    // execution lease and clears the Computer's execution pointer, so a live native
-    // run's next heartbeat tick (executor.ts, renewComputerExecutionLease) fails to
-    // renew and aborts the runtime instead of running on unsupervised.
-    await stopRunsInTransaction(tx, activeRuns, cancelledAt);
     // A cancelled Run can no longer be answered: its card in the coordinator's open views
-    // is settled the way an answered one is.
+    // is settled the way an answered one is. The event names the run, and a cancelled run
+    // may not write history, so it is recorded before the runs are stopped.
     const settled: Array<{ threadId: string; seq: number }> = [];
     for (const run of activeRuns) {
       if (run.status !== "waiting_input" || !run.scopedTask) continue;
@@ -1248,6 +1261,12 @@ async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<
       settled.push({ threadId: event.threadId, seq: event.seq });
     }
 
+    // Review n° 1 finding B2: shares the exact stop path a user-initiated thread stop
+    // uses (packages/db/src/events.ts) — cancels the Runs, then expires their Computer
+    // execution lease and clears the Computer's execution pointer, so a live native
+    // run's next heartbeat tick (executor.ts, renewComputerExecutionLease) fails to
+    // renew and aborts the runtime instead of running on unsupervised.
+    await stopRunsInTransaction(tx, activeRuns, cancelledAt);
     for (const task of cancelled) {
       await revokeMissionComputerUseIfLastWork(tx, task);
       // B2 (c): a parked native session with no active Run for this cancelled task must
@@ -1291,31 +1310,159 @@ async function inspectWork(
   if (scopedTask.coordinatorBotId !== actor.botId && scopedTask.executorBotId !== actor.botId) {
     throw new WorkNotAuthorizedError(workId);
   }
+  const [root] = await readTaskTree(deps.prisma, [scopedTask]);
+  const nodes: TaskTreeNode[] = [];
+  for (let level = [root!]; level.length > 0; level = level.flatMap((node) => node.children))
+    nodes.push(...level);
+  return { root: root!, nodes };
+}
 
-  const result = await deps.prisma.run.findFirst({
-    where: { scopedTaskId: scopedTask.id, terminalReturnDelivery: "delivered" },
-    orderBy: { updatedAt: "desc" },
-    select: { id: true, terminalOutcome: true },
+type ScopedTaskRow = NonNullable<Awaited<ReturnType<PrismaClient["scopedTask"]["findUnique"]>>>;
+
+/** A result's text is shown whole in a tree but never unbounded. */
+const TASK_RESULT_TEXT_MAX = 20_000;
+
+/**
+ * The tree under the given tasks, which the caller has already authorized: each task as its
+ * coordinator sees it with what its specialist delegated in turn, a level of tasks per read.
+ * The one reader behind both `inspect` and a coordinator thread's task tree.
+ */
+export async function readTaskTree(
+  prisma: PrismaClient,
+  roots: ScopedTaskRow[],
+): Promise<TaskTreeNode[]> {
+  const levels = [roots];
+  while (levels.at(-1)!.length > 0) {
+    levels.push(
+      await prisma.scopedTask.findMany({
+        where: { parentScopedTaskId: { in: levels.at(-1)!.map((task) => task.id) } },
+        orderBy: { createdAt: "asc" },
+      }),
+    );
+  }
+  const tasks = levels.flat();
+  if (tasks.length === 0) return [];
+  const [bots, deliveredRuns, askMessages] = await Promise.all([
+    prisma.bot.findMany({
+      where: { id: { in: tasks.map((task) => task.executorBotId) } },
+      select: { id: true, name: true },
+    }),
+    prisma.run.findMany({
+      where: {
+        scopedTaskId: { in: tasks.map((task) => task.id) },
+        terminalReturnDelivery: "delivered",
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, scopedTaskId: true, terminalOutcome: true },
+    }),
+    prisma.message.findMany({
+      where: {
+        threadId: { in: tasks.map((task) => task.specialistThreadId) },
+        role: "bot",
+        blocks: { array_contains: [{ kind: "ask" }] },
+      },
+      orderBy: { seq: "asc" },
+      select: { threadId: true, runId: true, blocks: true },
+    }),
+  ]);
+  const names = new Map(bots.map((bot) => [bot.id, bot.name]));
+  const latestRun = new Map<string, (typeof deliveredRuns)[number]>();
+  for (const run of deliveredRuns) {
+    if (run.scopedTaskId && !latestRun.has(run.scopedTaskId)) latestRun.set(run.scopedTaskId, run);
+  }
+  const returnMessages = await prisma.message.findMany({
+    where: {
+      runId: { in: [...latestRun.values()].map((run) => run.id) },
+      threadId: { in: tasks.map((task) => task.coordinatorThreadId) },
+      role: "bot",
+    },
+    select: { runId: true, blocks: true },
   });
-
-  const harness = storedSpecialistHarness(scopedTask);
-  const node: TaskTreeNode = {
-    workId: scopedTask.id,
-    coordinator: { botId: scopedTask.coordinatorBotId, threadId: scopedTask.coordinatorThreadId },
-    executor: { botId: scopedTask.executorBotId, threadId: scopedTask.specialistThreadId },
-    harness: harness.harness,
-    executionTarget: scopedTask.executionTarget,
-    harnessSource: harness.source,
-    harnessFallbackCause: harness.fallbackCause,
-    missionComputerId: scopedTask.missionComputerId,
-    status: scopedTask.status,
-    parentScopedTaskId: scopedTask.parentScopedTaskId,
-    rootScopedTaskId: scopedTask.rootScopedTaskId,
-    depth: scopedTask.depth,
-    delegationCeiling: sanitizeMcpAccessCeiling(scopedTask.delegationCeiling),
-    result: result?.terminalOutcome ? { runId: result.id, outcome: result.terminalOutcome } : null,
+  const returnTexts = new Map(
+    returnMessages.flatMap((message) => {
+      const entry = workReturnPromptEntry(message.blocks);
+      return message.runId && entry?.text ? [[message.runId, entry.text] as const] : [];
+    }),
+  );
+  const asks = askMessages.flatMap((message) =>
+    (MessageBlockSchema.array().safeParse(message.blocks).data ?? []).flatMap((block) =>
+      block.kind === "ask" && block.approvalEffectId
+        ? [{ threadId: message.threadId, runId: message.runId, ask: block }]
+        : [],
+    ),
+  );
+  const waitingRuns = new Set(
+    (
+      await prisma.run.findMany({
+        where: {
+          id: { in: asks.flatMap(({ runId }) => (runId ? [runId] : [])) },
+          status: "waiting_input",
+        },
+        select: { id: true },
+      })
+    ).map((run) => run.id),
+  );
+  const approvalsOf = (task: ScopedTaskRow): TaskApproval[] =>
+    asks.flatMap(({ threadId, runId, ask }): TaskApproval[] => {
+      if (threadId !== task.specialistThreadId) return [];
+      const base = { effectId: ask.approvalEffectId!, summary: ask.text };
+      if (ask.status === "answered")
+        return [
+          {
+            ...base,
+            status:
+              ask.answer === "allow"
+                ? "allowed"
+                : ask.answer === "always"
+                  ? "always_allowed"
+                  : "denied",
+            decidedBy: "user",
+          },
+        ];
+      // An ask whose Run is no longer waiting was settled by a stop, not by a decision.
+      return runId && waitingRuns.has(runId)
+        ? [{ ...base, status: "pending", decidedBy: null }]
+        : [];
+    });
+  const childrenOf = new Map<string, ScopedTaskRow[]>();
+  for (const task of tasks.slice(roots.length)) {
+    const siblings = childrenOf.get(task.parentScopedTaskId ?? "") ?? [];
+    childrenOf.set(task.parentScopedTaskId ?? "", [...siblings, task]);
+  }
+  const node = (task: ScopedTaskRow): TaskTreeNode => {
+    const harness = storedSpecialistHarness(task);
+    const run = latestRun.get(task.id);
+    return {
+      workId: task.id,
+      coordinator: { botId: task.coordinatorBotId, threadId: task.coordinatorThreadId },
+      executor: {
+        botId: task.executorBotId,
+        threadId: task.specialistThreadId,
+        name: names.get(task.executorBotId) ?? "",
+      },
+      harness: harness.harness,
+      executionTarget: task.executionTarget,
+      harnessSource: harness.source,
+      harnessFallbackCause: harness.fallbackCause,
+      missionComputerId: task.missionComputerId,
+      status: task.status,
+      parentScopedTaskId: task.parentScopedTaskId,
+      rootScopedTaskId: task.rootScopedTaskId,
+      depth: task.depth,
+      delegationCeiling: sanitizeMcpAccessCeiling(task.delegationCeiling),
+      result:
+        run && isWorkReturnOutcome(run.terminalOutcome)
+          ? {
+              runId: run.id,
+              outcome: run.terminalOutcome,
+              text: returnTexts.get(run.id)?.slice(0, TASK_RESULT_TEXT_MAX) ?? null,
+            }
+          : null,
+      approvals: approvalsOf(task),
+      children: (childrenOf.get(task.id) ?? []).map(node),
+    };
   };
-  return { root: node, nodes: [node] };
+  return roots.map(node);
 }
 
 /**

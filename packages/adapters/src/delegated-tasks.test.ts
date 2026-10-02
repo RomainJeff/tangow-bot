@@ -20,6 +20,7 @@ import {
   recordSpecialistFailure,
   recordSpecialistResult,
   WorkClosedError,
+  WorkStillWorkingError,
 } from "./delegated-tasks.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
 
@@ -211,23 +212,29 @@ function makeDeps(
       },
     );
 
-  // Applies a count's where clause to the seeded tasks, whatever fields it names: plain fields
-  // match by equality (absent equals null), `notIn` excludes, and `runs.some` asks for a seeded
+  // Applies a where clause to the seeded tasks, whatever fields it names: plain fields match by
+  // equality (absent equals null), `in` and `notIn` select, and `runs.some` asks for a seeded
   // Run of the task in one of the listed statuses.
-  const countScopedTasks = async (args: { where: Record<string, unknown> }) =>
+  const matchingScopedTasks = (where: Record<string, unknown>) =>
     [...scopedTaskRows.values()].filter((row) =>
-      Object.entries(args.where).every(([field, condition]) => {
+      Object.entries(where).every(([field, condition]) => {
         if (field === "runs") {
           const wanted = (condition as { some: { status: { in: string[] } } }).some.status.in;
           return [...runsById.values()].some(
             (run) => run.scopedTaskId === row.id && wanted.includes(run.status as string),
           );
         }
+        if (condition !== null && typeof condition === "object" && "in" in condition)
+          return (condition.in as unknown[]).includes(row[field] ?? null);
         if (condition !== null && typeof condition === "object" && "notIn" in condition)
           return !(condition.notIn as unknown[]).includes(row[field]);
         return (row[field] ?? null) === condition;
       }),
-    ).length;
+    );
+  const countScopedTasks = async (args: { where: Record<string, unknown> }) =>
+    matchingScopedTasks(args.where).length;
+  const findManyScopedTasks = async (args: { where: Record<string, unknown> }) =>
+    matchingScopedTasks(args.where).map((row) => ({ ...row }));
 
   const tx = {
     thread: { create: threadCreate, update: threadUpdate },
@@ -335,6 +342,7 @@ function makeDeps(
         return row;
       }),
       count: vi.fn().mockImplementation(countScopedTasks),
+      findMany: vi.fn().mockImplementation(findManyScopedTasks),
       findFirst: vi
         .fn()
         .mockImplementation(
@@ -375,6 +383,11 @@ function makeDeps(
       }),
     },
     bot: {
+      findMany: vi
+        .fn()
+        .mockImplementation(async (args: { where: { id: { in: string[] } } }) =>
+          args.where.id.in.map((id) => ({ id, name: "Specialist" })),
+        ),
       findFirst: vi.fn().mockResolvedValue({
         harnessChoice:
           options.profileHarnessChoice === "default"
@@ -397,7 +410,9 @@ function makeDeps(
         harness: options.originRunHarness ?? null,
       }),
       findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
     },
+    message: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: vi.fn(async (fn: (client: unknown) => unknown) => fn(tx)),
   } as unknown as PrismaClient;
 
@@ -498,7 +513,11 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
       botId: coordinatorBotId,
       threadId: coordinatorThreadId,
     });
-    expect(tree.root.executor).toEqual({ botId: "bot-specialist", threadId: "thread-specialist" });
+    expect(tree.root.executor).toEqual({
+      botId: "bot-specialist",
+      threadId: "thread-specialist",
+      name: "Specialist",
+    });
     expect(tree.root.harness).toBe("claude-native");
     expect(tree.root.executionTarget).toBe("computer-serving-run-1");
     expect(tree.root.harnessSource).toBe("explicit");
@@ -1268,12 +1287,14 @@ describe("DelegatedTasks.apply — close retention and cleanup (T08)", () => {
     const tasks = createDelegatedTasks({ prisma: harness.prisma, jobs: harness.jobs });
 
     await tasks.apply({ kind: "close", workId: "work-close" }, context);
-    const resultLookup = (
+    const deliveredRuns = (
       harness.prisma as unknown as {
-        run: { findFirst: ReturnType<typeof vi.fn> };
+        run: { findMany: ReturnType<typeof vi.fn> };
       }
-    ).run.findFirst;
-    resultLookup.mockResolvedValue({ id: "run-result", terminalOutcome: "result" });
+    ).run.findMany;
+    deliveredRuns.mockResolvedValue([
+      { id: "run-result", scopedTaskId: "work-close", terminalOutcome: "result" },
+    ]);
     await expect(tasks.inspect("work-close", actor)).resolves.toMatchObject({
       root: { status: "closed", result: { runId: "run-result", outcome: "result" } },
     });
@@ -1295,6 +1316,42 @@ describe("DelegatedTasks.apply — close retention and cleanup (T08)", () => {
     expect(harness.tx.computer.updateMany).not.toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ id: "computer-mission-shared" }),
+      }),
+    );
+  });
+
+  it("records who closed a task, and refuses to close one that is still working", async () => {
+    const workingTask = {
+      id: "work-close",
+      spaceId,
+      userId,
+      coordinatorBotId,
+      coordinatorThreadId,
+      executorBotId: "bot-specialist",
+      specialistThreadId: "thread-specialist",
+      missionComputerId: "computer-mission-shared",
+      rootScopedTaskId: "work-close",
+      parentScopedTaskId: null,
+      depth: 0,
+      status: "recontactable",
+      spawnKey: "spawn-close",
+      delegationCeiling: {},
+    };
+    const harness = makeDeps({ existingScopedTask: workingTask });
+    const tasks = createDelegatedTasks({ prisma: harness.prisma, jobs: harness.jobs });
+    harness.tx.run.count.mockResolvedValueOnce(1);
+    await expect(
+      tasks.apply({ kind: "close", workId: "work-close", decidedBy: "user" }, context),
+    ).rejects.toBeInstanceOf(WorkStillWorkingError);
+    expect(harness.tx.scopedTask.updateMany).not.toHaveBeenCalled();
+
+    await tasks.apply({ kind: "close", workId: "work-close", decidedBy: "user" }, context);
+    expect(harness.tx.lifecycleEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: "work_closed",
+          payload: { closedBy: { kind: "user", userId } },
+        }),
       }),
     );
   });
