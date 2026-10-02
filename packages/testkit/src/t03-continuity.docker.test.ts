@@ -124,7 +124,6 @@ function nativeRequest(runId: string, continuity: Continuity): AgentRunRequest {
       authority: { runId, attemptId: `${runId}-attempt`, fence: 1, policyRevision: 1 },
       continuity,
       computerId: "t03-computer",
-      contextRevision: 0,
     },
   };
 }

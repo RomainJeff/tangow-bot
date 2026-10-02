@@ -4537,7 +4537,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     },
                     continuity: nativeContinuity ?? { mode: "new" },
                     computerId: storedComputer.id,
-                    contextRevision: 1,
                   }
                 : undefined,
               resumeFromCheckpoint: takeoverResume?.checkpoint,

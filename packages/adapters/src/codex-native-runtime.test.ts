@@ -53,7 +53,6 @@ const request = (runId: string): AgentRunRequest => ({
     authority: { runId, attemptId: "attempt", fence: 1, policyRevision: 1 },
     continuity: { mode: "new" as const },
     computerId: "computer",
-    contextRevision: 0,
   },
 });
 

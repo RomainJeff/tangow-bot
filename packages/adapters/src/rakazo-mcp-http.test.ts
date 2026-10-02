@@ -183,7 +183,6 @@ describe("native MCP Streamable HTTP", () => {
         authority: { runId: "first", attemptId: "first", fence: 1, policyRevision: 1 },
         continuity: { mode: "new", ref: { bindingId: "rearm-binding", generation: 0 } },
         computerId: "computer-1",
-        contextRevision: 0,
       },
     };
     const context: AdapterContext = {
@@ -299,7 +298,6 @@ describe("native MCP Streamable HTTP", () => {
           authority: { runId: "config", attemptId: "attempt", fence: 1, policyRevision: 1 },
           continuity: { mode: "new" },
           computerId: "computer",
-          contextRevision: 0,
         },
       };
       const context: AdapterContext = {

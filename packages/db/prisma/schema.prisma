@@ -380,8 +380,7 @@ model Bot {
   thinkingLevel     String?
   webhookSecretId   String?
   teamChatAmbientEnabled Boolean @default(false)
-  // T04:2 finding 6: contract columns, nullable and unused by this lot (T09 harness
-  // choice bookkeeping reads/writes them later).
+  // The harness this bot is served on; null is Rakazo's own. choiceVersion counts the changes.
   harnessChoice     String?
   choiceVersion     Int?
   teamChatRules          String  @default("")
@@ -598,10 +597,6 @@ model Run {
   scopedTask           ScopedTask?      @relation(fields: [scopedTaskId], references: [id], onDelete: SetNull)
   terminalOutcome      String?
   terminalReturnDelivery String?
-  // T04:2 finding 6: contract columns, nullable and unused by this lot (T07 cancellation
-  // scheduling reads/writes them later).
-  notBefore            DateTime?
-  delegationCancelledAt DateTime?
   error                String?
   leaseOwner           String?
   leaseFence           Int              @default(0)
@@ -716,11 +711,6 @@ model Attempt {
   error      String?
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
-  // T04:2 finding 6: contract columns, nullable and unused by this lot (T03 native
-  // continuation/turn-authorization reads/writes them later).
-  nativeGeneration    Int?
-  executionPlanRef    String?
-  turnAuthorizationId String?
 
   @@index([runId])
   @@map("attempts")
@@ -1496,15 +1486,8 @@ model NativeSession {
   state                String    @default("absent")
   activeAttemptId      String?   @unique
   activeRunId          String?
-  suspendedCallId      String?
-  deliveredCursor      String?
-  ackedCursor          String?
-  appliedCursor        String?
-  contextRevision      Int       @default(0)
   processState         String    @default("none")
   processRef           String?
-  confinedResidues     Json?
-  quiescenceCapability String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 

@@ -530,7 +530,6 @@ export type NativeExecution = {
   authority: Authority;
   continuity: Continuity;
   computerId: string;
-  contextRevision: number;
 };
 
 export type NativeEvent =

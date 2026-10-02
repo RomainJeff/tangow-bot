@@ -61,7 +61,6 @@ function request(
       authority: { runId, attemptId: "attempt", fence: 1, policyRevision: 1 },
       continuity,
       computerId: "computer",
-      contextRevision: 0,
     },
   };
 }
