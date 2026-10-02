@@ -160,12 +160,22 @@ describePostgres("native session store durable generation fence (T03)", () => {
       db.prisma.nativeSession.findUniqueOrThrow({
         where: { botId_threadId: { botId, threadId } },
       }),
-    ).resolves.toMatchObject({ state: "expired", processState: "stopped" });
+    ).resolves.toMatchObject({ state: "expired", processState: "stopped", nativeRef: null });
     await expect(
       db.prisma.lifecycleEvent.findFirstOrThrow({
         where: { botId, threadId, kind: "resume_rollout_missing" },
       }),
     ).resolves.toBeDefined();
+    // The dead reference is gone, so the next run opens a new session instead of retrying it.
+    await expect(
+      store.continuity({
+        botId,
+        threadId,
+        harness: "codex-native",
+        executionTarget: "computer-test",
+        inputId: "input-next",
+      }),
+    ).resolves.toEqual({ mode: "new", ref: { bindingId: threadId, generation: 1 } });
   });
 
   it("advances an existing unreferenced generation instead of parking with a stale ref", async () => {

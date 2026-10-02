@@ -871,6 +871,49 @@ describe("ClaudeNativeRuntime", () => {
     expect(events.at(-1)).toEqual({ type: "done" });
   });
 
+  it("feeds the Rakazo thread history to a new native session and never to a resumed one", async () => {
+    const history: AgentRunRequest["history"] = [
+      { role: "user", content: "the launch code word is mimosa" },
+      { role: "assistant", content: "Noted, the code word is mimosa." },
+    ];
+    const sessionId = "77777777-7777-7777-7777-777777777777";
+    const sentPrompt = async (continuity: Parameters<typeof request>[1]) => {
+      const write = vi.fn<NativeProcess["write"]>(async () => undefined);
+      const process = fakeProcess(
+        [
+          `{"type":"system","subtype":"init","session_id":"${sessionId}"}`,
+          '{"type":"result","subtype":"success"}',
+        ],
+        write,
+      );
+      const runtime = new ClaudeNativeRuntime({
+        sandbox: { startNativeProcess: async () => process } as unknown as SandboxProvider,
+        computer,
+        cwd: ".",
+      });
+      for await (const _event of runtime.run(
+        { ...request("history", continuity), history },
+        context,
+      ))
+        undefined;
+      return (JSON.parse(write.mock.calls[0]![0]) as { message: { content: string } }).message
+        .content;
+    };
+
+    const fresh = await sentPrompt({ mode: "new" });
+    expect(fresh).toContain("the launch code word is mimosa");
+    expect(fresh).toContain("Noted, the code word is mimosa.");
+    expect(fresh).toContain("hello");
+    expect(
+      await sentPrompt({
+        mode: "resume",
+        ref: { bindingId: "thread", generation: 0 },
+        inputId: "input-1",
+        nativeRef: sessionId,
+      }),
+    ).toBe("hello");
+  });
+
   it("publishes session_id only as a native reference, never in text events or public errors", async () => {
     const sessionId = "66666666-6666-6666-6666-666666666666";
     const process = fakeProcess([

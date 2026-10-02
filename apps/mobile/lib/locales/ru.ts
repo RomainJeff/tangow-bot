@@ -22,6 +22,8 @@ export const RU_MESSAGES: Record<string, string> = {
   Max: "Макс",
   Medium: "Средний",
   Minimal: "Минимальный",
+  "New session — resumed from the conversation history.":
+    "Новая сессия — продолжение по истории разговора.",
   "Open web app": "Открыть веб-приложение",
   "Project ID": "ID проекта",
   Reconnecting: "Повторное подключение",

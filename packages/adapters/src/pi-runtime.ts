@@ -818,8 +818,8 @@ function stableToolNameHash(name: string): string {
   return (hash >>> 0).toString(36);
 }
 
-const ASSISTANT_TURN_OPEN = "<assistant_turn>";
-const ASSISTANT_TURN_CLOSE = "</assistant_turn>";
+export const ASSISTANT_TURN_OPEN = "<assistant_turn>";
+export const ASSISTANT_TURN_CLOSE = "</assistant_turn>";
 
 /**
  * Stored text can contain anything, including our own turn delimiter, so a user
@@ -827,7 +827,7 @@ const ASSISTANT_TURN_CLOSE = "</assistant_turn>";
  * tell from a real assistant turn. Escape it the way prompt data is escaped
  * elsewhere; only the wrapper below emits the literal tag.
  */
-function sealAssistantTurnMarkers(content: string): string {
+export function sealAssistantTurnMarkers(content: string): string {
   return content
     .replaceAll(ASSISTANT_TURN_OPEN, "&lt;assistant_turn&gt;")
     .replaceAll(ASSISTANT_TURN_CLOSE, "&lt;/assistant_turn&gt;");
@@ -898,6 +898,23 @@ function noUsage(): Usage {
 const REPLAYED_HISTORY_MODEL = "rakazo-replayed-history";
 const NO_TOOL_OUTPUT = "(no output recorded)";
 
+/** The turn the runtime is about to answer is sent as the prompt, so history must not repeat it. */
+export function withoutCurrentPrompt(
+  history: AgentRunRequest["history"],
+  prompt: string,
+  sourceMessageId?: string | null,
+): AgentRunRequest["history"] {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const message = history[index];
+    if (
+      message?.role === "user" &&
+      (sourceMessageId ? message.id === sourceMessageId : message.content === prompt)
+    )
+      return history.filter((_, position) => position !== index);
+  }
+  return history;
+}
+
 /**
  * Rehydrate a thread into the messages this runtime sends.
  *
@@ -919,21 +936,7 @@ export function toHistory(
   model: Pick<Model<Api>, "api" | "provider" | "id">,
   sourceMessageId?: string | null,
 ): AgentMessage[] {
-  let duplicatePromptIndex = -1;
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const message = history[index];
-    if (
-      message?.role === "user" &&
-      (sourceMessageId ? message.id === sourceMessageId : message.content === prompt)
-    ) {
-      duplicatePromptIndex = index;
-      break;
-    }
-  }
-  const prior =
-    duplicatePromptIndex < 0
-      ? history
-      : history.filter((_, index) => index !== duplicatePromptIndex);
+  const prior = withoutCurrentPrompt(history, prompt, sourceMessageId);
   const usedToolCallIds = new Set<string>();
   // Ids must be unique across the whole request: pi-ai maps results to calls by id.
   const uniqueToolCallId = (id: string) => {

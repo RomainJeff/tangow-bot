@@ -55,6 +55,7 @@ const ASIDE_BLOCK_KINDS = new Set<MessageBlock["kind"]>([
   "bot_message_received",
   "channel_message",
   "meta",
+  "session_rebuilt",
 ]);
 
 /**

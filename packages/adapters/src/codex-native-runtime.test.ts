@@ -559,6 +559,54 @@ describe("CodexNativeRuntime", () => {
     });
   });
 
+  it("feeds the Rakazo thread history to a new native session and never to a resumed one", async () => {
+    const writes: string[] = [];
+    const process: NativeProcess = {
+      id: "supervisor-history-session",
+      write: async (data) => {
+        writes.push(data);
+      },
+      stdout: (async function* () {
+        yield '{"id":1,"result":{}}\n';
+        yield '{"id":2,"result":{}}\n';
+        yield '{"id":3,"result":{"thread":{"id":"native-thread"}}}\n';
+        yield '{"id":4,"result":{}}\n';
+        yield '{"method":"turn/completed","params":{"turn":{"status":"completed"}}}\n';
+        yield '{"id":5,"result":{}}\n';
+        yield '{"method":"turn/completed","params":{"turn":{"status":"completed"}}}\n';
+      })(),
+      stderr: (async function* () {})(),
+      wait: async () => ({ code: 0 }),
+      stop: async () => "stopped",
+    };
+    const runtime = new CodexNativeRuntime({
+      sandbox: { startNativeProcess: async () => process } as unknown as SandboxProvider,
+      computer,
+      cwd: ".",
+    });
+    const history: AgentRunRequest["history"] = [
+      { role: "user", content: "the launch code word is mimosa" },
+      { role: "assistant", content: "Noted, the code word is mimosa." },
+    ];
+    for await (const _event of runtime.run({ ...request("history-first"), history }, context))
+      undefined;
+    const turnText = (line: string) =>
+      (JSON.parse(line) as { params: { input: Array<{ text: string }> } }).params.input[0]!.text;
+    const newTurn = turnText(writes.find((line) => line.includes('"turn/start"'))!);
+    expect(newTurn).toContain("the launch code word is mimosa");
+    expect(newTurn).toContain("Noted, the code word is mimosa.");
+    expect(newTurn).toContain("hello");
+
+    const resumed = { ...request("history-second"), history };
+    resumed.execution!.continuity = {
+      mode: "resume",
+      ref: { bindingId: "history-first", generation: 0 },
+      inputId: "complement-1",
+    };
+    for await (const _event of runtime.run(resumed, context)) undefined;
+    expect(turnText(writes.at(-1)!)).toBe("hello");
+  });
+
   it("clears a stopped parked session only through the test-only registry seam", async () => {
     const stopped = vi.fn(async () => "stopped" as const);
     const writes: string[] = [];

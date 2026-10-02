@@ -4979,6 +4979,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   executionTarget: storedComputer.id,
                   continuity: event.event.continuity,
                 });
+                // A new session after the first starts from the thread history, and the thread
+                // says so once. A session resumed by its native reference lost nothing, and
+                // the very first session of a thread has nothing to resume from.
+                if (event.event.continuity === "new" && event.event.ref.generation > 0)
+                  await publishMessage(deps, run, "system", [{ kind: "session_rebuilt" }]);
               } else if (event.event.type === "parked") {
                 nativeProcessState = event.event.processState;
               } else if (nativeSessionStore && event.event.type === "reference") {

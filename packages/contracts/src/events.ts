@@ -180,6 +180,8 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     text: z.string(),
   }),
   z.object({ kind: z.literal("meta"), text: z.string() }),
+  /** A native session was replaced and resumed from the thread history; carries no text. */
+  z.object({ kind: z.literal("session_rebuilt") }),
   // Legacy: reasoning is no longer produced or rendered, but threads persisted while it
   // was still stream them, and output validation rejects the whole page without it.
   z.object({ kind: z.literal("reasoning"), text: z.string() }),

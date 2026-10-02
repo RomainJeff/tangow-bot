@@ -21,6 +21,7 @@ import { ArtifactFileCard } from "../../components/ArtifactFileCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
 import { CloudAgentCard } from "../../components/CloudAgentCard";
+import { SessionRebuiltLine } from "../../components/SessionRebuiltLine";
 import { SkillDraftCard } from "../../components/teach/SkillDraftCard";
 import { WorkReturnCard } from "../../components/WorkReturnCard";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
@@ -280,6 +281,7 @@ export const MessageView = memo(function MessageView({
           </div>
         );
       }
+      if (block.kind === "session_rebuilt") return <SessionRebuiltLine key={i} />;
       if (block.kind === "progress") {
         return (
           <div key={i} data-testid="message-bot-bubble" dir="auto">

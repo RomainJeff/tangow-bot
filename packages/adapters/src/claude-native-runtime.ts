@@ -14,6 +14,7 @@ import { redactSecrets } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { HarnessUnavailableError } from "./computer-native-runtime.js";
 import { sanitizeConnectorError } from "./connector-safety.js";
+import { promptWithThreadHistory } from "./native-history.js";
 import type { NativeToolServer } from "./rakazo-mcp-server.js";
 
 type ClaudeStreamEvent = {
@@ -222,7 +223,11 @@ export class ClaudeNativeRuntime implements AgentRuntime {
       await nativeProcess.write(
         `${JSON.stringify({
           type: "user",
-          message: { role: "user", content: request.prompt },
+          // A session resumed by reference already holds the conversation.
+          message: {
+            role: "user",
+            content: expectedSessionId ? request.prompt : promptWithThreadHistory(request),
+          },
         })}\n`,
       );
 

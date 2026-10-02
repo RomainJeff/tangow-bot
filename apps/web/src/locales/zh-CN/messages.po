@@ -2779,6 +2779,10 @@ msgstr "新密码"
 msgid "New section"
 msgstr "新建分组"
 
+#: src/components/SessionRebuiltLine.tsx:10
+msgid "New session — resumed from the conversation history."
+msgstr "新会话——根据对话历史继续。"
+
 #: src/pages/KnowledgeSection.tsx:466
 msgid "New skill"
 msgstr "新建技能"

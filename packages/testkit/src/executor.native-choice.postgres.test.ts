@@ -1428,7 +1428,7 @@ describe.skipIf(!available)("native runtime choice", () => {
     }
   }, 30_000);
 
-  it("reconstructs a lost parked process through the durable thread binding", async () => {
+  it("resumes a lost parked process by its native reference without a rebuilt line, and says so once when the reference is gone", async () => {
     const model = await startModelEmulator({ apiKey: "test-key", steps: [] });
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-native-continuity-"));
     const runtime = new ParkedCodex();
@@ -1529,6 +1529,21 @@ describe.skipIf(!available)("native runtime choice", () => {
           where: { botId_threadId: { botId: bot.id, threadId } },
         }),
       ).toMatchObject({ state: "parked", generation: 1 });
+      // Resuming by the native reference lost nothing, so the thread says nothing.
+      const rebuiltLines = () =>
+        handles.prisma.message.findMany({
+          where: { threadId, role: "system" },
+          select: { blocks: true },
+        });
+      await expect(rebuiltLines()).resolves.toEqual([]);
+      // Once the reference is gone, the next session starts from the history and says so once.
+      await handles.prisma.nativeSession.update({
+        where: { botId_threadId: { botId: bot.id, threadId } },
+        data: { state: "expired", nativeRef: null },
+      });
+      const third = await send("third");
+      await handles.executor.continueRun(third.runId, "native-choice-worker");
+      await expect(rebuiltLines()).resolves.toEqual([{ blocks: [{ kind: "session_rebuilt" }] }]);
     } finally {
       await handles.stop();
       await model.close();

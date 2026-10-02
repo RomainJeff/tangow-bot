@@ -2779,6 +2779,10 @@ msgstr "새 비밀번호"
 msgid "New section"
 msgstr "새 섹션"
 
+#: src/components/SessionRebuiltLine.tsx:10
+msgid "New session — resumed from the conversation history."
+msgstr "새 세션 — 대화 기록에서 이어서 시작했습니다."
+
 #: src/pages/KnowledgeSection.tsx:466
 msgid "New skill"
 msgstr "새 스킬"

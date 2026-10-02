@@ -2870,6 +2870,13 @@ const MessageBubble = memo(function MessageBubble({
   if (metaNote) {
     return <Interstitial avatars={null}>{metaNote.text}</Interstitial>;
   }
+  if (message.blocks.some((block) => block.kind === "session_rebuilt")) {
+    return (
+      <Interstitial avatars={null}>
+        {t("New session — resumed from the conversation history.")}
+      </Interstitial>
+    );
+  }
   const routineRun = message.blocks.find(
     (block): block is Extract<MessageBlock, { kind: "routine_run" }> =>
       block.kind === "routine_run",

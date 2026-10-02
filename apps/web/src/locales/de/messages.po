@@ -2779,6 +2779,10 @@ msgstr "Neues Passwort"
 msgid "New section"
 msgstr "Neuer Abschnitt"
 
+#: src/components/SessionRebuiltLine.tsx:10
+msgid "New session — resumed from the conversation history."
+msgstr "Neue Sitzung — aus dem Gesprächsverlauf fortgesetzt."
+
 #: src/pages/KnowledgeSection.tsx:466
 msgid "New skill"
 msgstr "Neuer Skill"

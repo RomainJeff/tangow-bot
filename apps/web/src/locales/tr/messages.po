@@ -2779,6 +2779,10 @@ msgstr "Yeni parola"
 msgid "New section"
 msgstr "Yeni bölüm"
 
+#: src/components/SessionRebuiltLine.tsx:10
+msgid "New session — resumed from the conversation history."
+msgstr "Yeni oturum — konuşma geçmişinden devam edildi."
+
 #: src/pages/KnowledgeSection.tsx:466
 msgid "New skill"
 msgstr "Yeni beceri"

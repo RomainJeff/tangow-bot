@@ -189,9 +189,11 @@ export function createNativeSessionStore(prisma: PrismaClient): NativeSessionSto
       await transition(input, { state: "expired", processState: input.processState }, "expire");
     },
     async rolloutMissing(input) {
+      // The reference points at a session that no longer exists; keeping it would make the next
+      // run retry the same resume instead of opening a new session from the thread history.
       await transition(
         input,
-        { state: "expired", processState: "stopped" },
+        { state: "expired", processState: "stopped", nativeRef: null },
         "resume_rollout_missing",
       );
     },

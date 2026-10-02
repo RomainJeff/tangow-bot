@@ -9,6 +9,7 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { getLogger } from "@rakazo/logging";
+import { promptWithThreadHistory } from "./native-history.js";
 import type { NativeToolServer } from "./rakazo-mcp-server.js";
 export class HarnessUnavailableError extends Error {
   readonly code = "harness_unavailable";
@@ -404,6 +405,8 @@ export class CodexNativeRuntime implements AgentRuntime {
         }
       };
       let turnRequestId: number;
+      // Only a thread started here lacks the conversation; a resumed one already holds it.
+      let turnPrompt = request.prompt;
       if (!threadId) {
         await send(1, "initialize", {
           clientInfo: { name: "rakazo", version: "0.1.0" },
@@ -458,13 +461,15 @@ export class CodexNativeRuntime implements AgentRuntime {
             ? (thread.result!.thread as { id: string }).id
             : undefined;
         if (!threadId) throw new Error("codex thread/start response missing native thread id");
+        if (!(effectiveContinuity.mode === "reconstruct" && effectiveContinuity.nativeRef))
+          turnPrompt = promptWithThreadHistory(request);
         turnRequestId = 4;
       } else {
         turnRequestId = 5;
       }
       await send(turnRequestId, "turn/start", {
         threadId,
-        input: [{ type: "text", text: request.prompt }],
+        input: [{ type: "text", text: turnPrompt }],
         model: request.model.id,
         ...(request.model.thinkingLevel && request.model.thinkingLevel !== "off"
           ? { effort: request.model.thinkingLevel }
