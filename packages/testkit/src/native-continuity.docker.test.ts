@@ -14,10 +14,9 @@ import type {
 } from "@rakazo/adapter-kit";
 import { CodexNativeRuntime, DockerSandboxProvider } from "@rakazo/adapters";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { sandboxCommandOutput } from "./cli/t01-live-subscription.ts";
 
-const enabled = process.env.RUN_T03_DOCKER === "1";
-const codexAuthEnabled = enabled && process.env.RUN_T03_CODEX_AUTH === "1";
+const enabled = process.env.RUN_NATIVE_CONTINUITY_DOCKER === "1";
+const codexAuthEnabled = enabled && process.env.RUN_NATIVE_CONTINUITY_CODEX_AUTH === "1";
 
 async function command(
   sandbox: DockerSandboxProvider,
@@ -40,6 +39,37 @@ function stdout(events: Awaited<ReturnType<typeof command>>): string {
     .filter((event) => event.type === "stdout")
     .map((event) => event.data)
     .join("");
+}
+
+/** Runs a command under its own deadline, whatever state the caller's signal is in. */
+async function commandOutput(
+  sandbox: DockerSandboxProvider,
+  computer: ComputerRef,
+  argv: string[],
+  context: AdapterContext,
+  timeoutMs = 10_000,
+): Promise<{ code: number; stdout: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new Error("Computer command timed out.")),
+    timeoutMs,
+  );
+  try {
+    let output = "";
+    let code: number | undefined;
+    for await (const event of sandbox.execute(
+      computer,
+      { argv, cwd: "", timeoutMs },
+      { ...context, signal: controller.signal },
+    )) {
+      if (event.type === "stdout") output += event.data;
+      if (event.type === "exit") code = event.code;
+    }
+    if (code === undefined) throw new Error("Computer command did not exit");
+    return { code, stdout: output };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function redactNativeError(value: unknown): string {
@@ -97,10 +127,10 @@ async function waitForFile(
 
 function nativeRequest(runId: string, continuity: Continuity): AgentRunRequest {
   return {
-    botId: "t03-runtime",
-    threadId: "t03-thread",
+    botId: "continuity-runtime",
+    threadId: "continuity-thread",
     runId,
-    prompt: "T03 Docker continuity probe",
+    prompt: "Docker continuity probe",
     instructions: "",
     history: [],
     tools: [],
@@ -112,18 +142,18 @@ function nativeRequest(runId: string, continuity: Continuity): AgentRunRequest {
       oauth: {
         credential: {
           type: "oauth",
-          access: "t03-not-a-real-access-token",
-          refresh: "t03-not-a-real-refresh-token",
+          access: "continuity-not-a-real-access-token",
+          refresh: "continuity-not-a-real-refresh-token",
           expires: 0,
-          accountId: "t03-no-auth",
+          accountId: "continuity-no-auth",
         },
       },
     },
     execution: {
-      choice: { harness: "codex-native", targetId: "t03-computer" },
+      choice: { harness: "codex-native", targetId: "continuity-computer" },
       authority: { runId, attemptId: `${runId}-attempt`, fence: 1, policyRevision: 1 },
       continuity,
-      computerId: "t03-computer",
+      computerId: "continuity-computer",
     },
   };
 }
@@ -136,24 +166,24 @@ type Campaign = {
   computer: ComputerRef;
 };
 
-describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
+describe.skipIf(!enabled).sequential("native continuity on real Docker", () => {
   let campaign: Campaign | undefined;
 
   beforeAll(async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-t03-continuity-"));
-    const token = `t03-${randomUUID()}`;
+    const root = await mkdtemp(path.join(tmpdir(), "rakazo-continuity-"));
+    const token = `continuity-${randomUUID()}`;
     const context: AdapterContext = {
-      operationId: "t03-docker",
-      traceId: "t03-docker",
-      spaceId: "t03-space",
-      userId: "t03-user",
-      botId: "t03-runtime",
+      operationId: "continuity-docker",
+      traceId: "continuity-docker",
+      spaceId: "continuity-space",
+      userId: "continuity-user",
+      botId: "continuity-runtime",
       signal: AbortSignal.timeout(90_000),
     };
     let supervisor: ReturnType<typeof serve> | undefined;
     try {
       process.env.DATA_DIR = path.join(root, "data");
-      process.env.RAKAZO_COMPUTER_IMAGE = "rakazo-t01-terra/computer-codex-0.154.0:local";
+      process.env.RAKAZO_COMPUTER_IMAGE = "rakazo/computer-codex-0.154.0:local";
       process.env.SANDBOX_SUPERVISOR_TOKEN = token;
       process.env.SANDBOX_PROVIDER = "docker";
       const { supervisorApp } = await import("../../../infra/sandboxes/supervisor/src/index.ts");
@@ -169,7 +199,11 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
         { botId: context.botId!, homePath: path.join(root, "data", "homes", context.botId!) },
         context,
       );
-      await sandbox.writeFile(computer, { path: "t03/.keep", content: new Uint8Array() }, context);
+      await sandbox.writeFile(
+        computer,
+        { path: "continuity/.keep", content: new Uint8Array() },
+        context,
+      );
       campaign = { root, context, supervisor, sandbox, computer };
     } catch (error) {
       await new Promise<void>((resolve) => supervisor?.close(() => resolve()) ?? resolve());
@@ -194,13 +228,18 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
         argv: [
           "sh",
           "-c",
-          'pgid=$(ps -o pgid= -p $$ | tr -d " "); printf %s "$pgid" > t03-stubborn.pgid; trap "" TERM; while :; do sleep 1; done',
+          'pgid=$(ps -o pgid= -p $$ | tr -d " "); printf %s "$pgid" > continuity-stubborn.pgid; trap "" TERM; while :; do sleep 1; done',
         ],
-        cwd: "t03",
+        cwd: "continuity",
       },
       context,
     );
-    const pgid = await waitForFile(sandbox, computer, context, "t03/t03-stubborn.pgid");
+    const pgid = await waitForFile(
+      sandbox,
+      computer,
+      context,
+      "continuity/continuity-stubborn.pgid",
+    );
     const killedStatus = await stubborn.stop();
     const killedTerminal = await stubborn.wait();
     expect(killedStatus).toBe("stopped");
@@ -225,13 +264,18 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
         argv: [
           "sh",
           "-c",
-          'pgid=$(ps -o pgid= -p $$ | tr -d " "); printf %s "$pgid" > t03-reconfirm.pgid; trap "" TERM; while :; do sleep 1; done',
+          'pgid=$(ps -o pgid= -p $$ | tr -d " "); printf %s "$pgid" > continuity-reconfirm.pgid; trap "" TERM; while :; do sleep 1; done',
         ],
-        cwd: "t03",
+        cwd: "continuity",
       },
       context,
     );
-    const reconfirmPgid = await waitForFile(sandbox, computer, context, "t03/t03-reconfirm.pgid");
+    const reconfirmPgid = await waitForFile(
+      sandbox,
+      computer,
+      context,
+      "continuity/continuity-reconfirm.pgid",
+    );
     const manualKill = await command(sandbox, computer, context, [
       "sh",
       "-c",
@@ -253,18 +297,18 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
     });
   }, 30_000);
 
-  it("runs the J2 PID probe after its original turn deadline has expired", async () => {
+  it("runs the parked process probe after its original turn deadline has expired", async () => {
     const { sandbox, computer, context } = campaign!;
     const native = await sandbox.startNativeProcess!(
       computer,
-      { argv: ["sh", "-c", "while :; do sleep 1; done"], cwd: "t03" },
+      { argv: ["sh", "-c", "while :; do sleep 1; done"], cwd: "continuity" },
       context,
     );
     const expiredContext = { ...context, signal: AbortSignal.timeout(1) };
     await new Promise((resolve) => setTimeout(resolve, 10));
     try {
       await expect(
-        sandboxCommandOutput(
+        commandOutput(
           sandbox,
           computer,
           [
@@ -283,9 +327,9 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
   it("proves whether a fresh app-server can start and resume without login", async () => {
     const { sandbox, computer, context } = campaign!;
     const homeA =
-      "/tmp/rakazo-codex-t03-runtime-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+      "/tmp/rakazo-codex-continuity-runtime-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const homeB =
-      "/tmp/rakazo-codex-t03-runtime-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+      "/tmp/rakazo-codex-continuity-runtime-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const start = (home: string) =>
       sandbox.startNativeProcess!(
         computer,
@@ -293,9 +337,9 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
           argv: [
             "sh",
             "-c",
-            "pwd > .t03-native-cwd; id -u > .t03-native-uid; exec codex app-server --listen stdio://",
+            "pwd > .continuity-native-cwd; id -u > .continuity-native-uid; exec codex app-server --listen stdio://",
           ],
-          cwd: "t03",
+          cwd: "continuity",
           privateHome: home,
           env: { CI: "1", OPENAI_API_KEY: "", CODEX_HOME: home },
         },
@@ -305,18 +349,18 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
     try {
       const firstLines = first.stdout[Symbol.asyncIterator]();
       const initialized = await nativeRpc(first, firstLines, 1, "initialize", {
-        clientInfo: { name: "rakazo-t03", version: "test" },
+        clientInfo: { name: "rakazo-continuity", version: "test" },
         capabilities: { experimentalApi: true },
       });
       expect(initialized.error).toBeUndefined();
       await expect(
         sandbox
-          .readFile(computer, "t03/.t03-native-cwd", context)
+          .readFile(computer, "continuity/.continuity-native-cwd", context)
           .then((data) => new TextDecoder().decode(data)),
-      ).resolves.toBe("/home/rakazo/t03\n");
+      ).resolves.toBe("/home/rakazo/continuity\n");
       await expect(
         sandbox
-          .readFile(computer, "t03/.t03-native-uid", context)
+          .readFile(computer, "continuity/.continuity-native-uid", context)
           .then((data) => new TextDecoder().decode(data)),
       ).resolves.toBe("1000\n");
       await first.write(
@@ -324,7 +368,7 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
       );
       const created = await nativeRpc(first, firstLines, 2, "thread/start", {});
       if (created.error) {
-        console.info(`T03_NO_AUTH_THREAD_START=${redactNativeError(created.error.message)}`);
+        console.info(`CONTINUITY_NO_AUTH_THREAD_START=${redactNativeError(created.error.message)}`);
         expect(String(created.error.message)).toMatch(/auth|login|sign.?in|account/i);
         return;
       }
@@ -341,7 +385,7 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
           ])
         ).at(-1),
       ).toEqual({ type: "exit", code: 0 });
-      console.info("T03_HOME_MODE=700");
+      console.info("CONTINUITY_HOME_MODE=700");
       await expect(first.stop()).resolves.toBe("stopped");
       const resumed = await start(homeA);
       try {
@@ -349,7 +393,7 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
         expect(
           (
             await nativeRpc(resumed, resumedLines, 1, "initialize", {
-              clientInfo: { name: "rakazo-t03", version: "test" },
+              clientInfo: { name: "rakazo-continuity", version: "test" },
               capabilities: { experimentalApi: true },
             })
           ).error,
@@ -359,7 +403,9 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
         );
         const noRollout = await nativeRpc(resumed, resumedLines, 2, "thread/resume", { threadId });
         expect(noRollout.error).toMatchObject({ code: -32600 });
-        console.info(`T03_NO_AUTH_SAME_HOME_RESUME=${redactNativeError(noRollout.error?.message)}`);
+        console.info(
+          `CONTINUITY_NO_AUTH_SAME_HOME_RESUME=${redactNativeError(noRollout.error?.message)}`,
+        );
       } finally {
         await resumed.stop().catch(() => undefined);
       }
@@ -369,7 +415,7 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
         expect(
           (
             await nativeRpc(fresh, freshLines, 1, "initialize", {
-              clientInfo: { name: "rakazo-t03", version: "test" },
+              clientInfo: { name: "rakazo-continuity", version: "test" },
               capabilities: { experimentalApi: true },
             })
           ).error,
@@ -379,7 +425,7 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
         );
         const rejected = await nativeRpc(fresh, freshLines, 2, "thread/resume", { threadId });
         expect(rejected.error).toMatchObject({ code: -32600 });
-        console.info(`T03_FRESH_HOME_RESUME=${redactNativeError(rejected.error?.message)}`);
+        console.info(`CONTINUITY_FRESH_HOME_RESUME=${redactNativeError(rejected.error?.message)}`);
       } finally {
         await fresh.stop().catch(() => undefined);
       }
@@ -389,7 +435,7 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
   }, 60_000);
 
   it.skipIf(!codexAuthEnabled)(
-    "reconstructs through thread/resume with an authenticated Codex image (requires RUN_T03_CODEX_AUTH=1)",
+    "reconstructs through thread/resume with an authenticated Codex image (requires RUN_NATIVE_CONTINUITY_CODEX_AUTH=1)",
     async () => {
       const { sandbox, computer, context } = campaign!;
       let started: NativeProcess | undefined;
@@ -408,13 +454,17 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
           },
         };
       };
-      const runtime = new CodexNativeRuntime({ sandbox: runtimeSandbox, computer, cwd: "t03" });
+      const runtime = new CodexNativeRuntime({
+        sandbox: runtimeSandbox,
+        computer,
+        cwd: "continuity",
+      });
       const firstEvents: AgentRuntimeEvent[] = [];
       try {
         for await (const event of runtime.run(
-          nativeRequest("t03-runtime-first", {
+          nativeRequest("continuity-runtime-first", {
             mode: "new",
-            ref: { bindingId: "t03-runtime", generation: 0 },
+            ref: { bindingId: "continuity-runtime", generation: 0 },
           }),
           context,
         ))
@@ -447,15 +497,15 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
         const reconstructedRuntime = new CodexNativeRuntime({
           sandbox: runtimeSandbox,
           computer,
-          cwd: "t03",
+          cwd: "continuity",
         });
         const reconstructed: AgentRuntimeEvent[] = [];
         for await (const event of reconstructedRuntime.run(
-          nativeRequest("t03-runtime-reconstruct", {
+          nativeRequest("continuity-runtime-reconstruct", {
             mode: "reconstruct",
-            previous: { bindingId: "t03-runtime", generation: 0 },
+            previous: { bindingId: "continuity-runtime", generation: 0 },
             reason: "test_worker_lost",
-            inputId: "t03-reconstruct",
+            inputId: "continuity-reconstruct",
             nativeRef,
           }),
           context,
@@ -470,9 +520,9 @@ describe.skipIf(!enabled).sequential("T03 real Docker continuity", () => {
         expect(nativeWrites[1]?.map((write) => JSON.parse(write).method)).toContain(
           "thread/resume",
         );
-        await reconstructedRuntime.abort("t03-runtime-reconstruct");
+        await reconstructedRuntime.abort("continuity-runtime-reconstruct");
       } finally {
-        await runtime.abort("t03-runtime-first").catch(() => undefined);
+        await runtime.abort("continuity-runtime-first").catch(() => undefined);
       }
     },
     90_000,

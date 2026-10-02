@@ -19,7 +19,7 @@ function codexNativeHome() {
   return { privateHome: home, env: { CI: "1", OPENAI_API_KEY: "", CODEX_HOME: home } };
 }
 
-const enabled = process.env.RUN_T01_DOCKER === "1";
+const enabled = process.env.RUN_NATIVE_CHOICE_DOCKER === "1";
 const origin = "http://127.0.0.1:5173";
 const fixture = `
 const fs = require("node:fs");
@@ -36,30 +36,30 @@ process.stdin.on("data", (chunk) => {
     const message = JSON.parse(line);
     if (message.method === "initialize") reply(message.id, {});
     if (message.method === "account/login/start") reply(message.id, { type: "chatgptAuthTokens" });
-    if (message.method === "thread/start") reply(message.id, { thread: { id: "t01-native-thread" } });
+    if (message.method === "thread/start") reply(message.id, { thread: { id: "native-thread" } });
     if (message.method === "turn/start") {
-      reply(message.id, { turn: { id: "t01-native-turn" } });
+      reply(message.id, { turn: { id: "native-turn" } });
       const text = message.params.input[0].text;
       fs.writeFileSync(process.env.CODEX_HOME + "/credential-cache", "synthetic");
-      fs.writeFileSync("t01-native-home.txt", process.env.CODEX_HOME + "\\n" + fs.statSync(process.env.CODEX_HOME).mode.toString(8).slice(-3));
-      if (text === "T01 crash") {
-        fs.writeFileSync("t01-native-crash-marker.txt", "exit-23");
+      fs.writeFileSync("native-home.txt", process.env.CODEX_HOME + "\\n" + fs.statSync(process.env.CODEX_HOME).mode.toString(8).slice(-3));
+      if (text === "Native crash") {
+        fs.writeFileSync("native-crash-marker.txt", "exit-23");
         process.exit(23);
       }
-      if (text === "T01 stdin probe") {
-        fs.writeFileSync("t01-native-stdin-start.txt", "started");
+      if (text === "Native stdin probe") {
+        fs.writeFileSync("native-stdin-start.txt", "started");
         setTimeout(() => {
-          fs.writeFileSync("t01-native-stdin.txt", stdinEnded ? "closed" : "open");
+          fs.writeFileSync("native-stdin.txt", stdinEnded ? "closed" : "open");
           process.stdout.write(JSON.stringify({ jsonrpc: "2.0", method: "turn/completed", params: { turn: { status: "completed" } } }) + "\\n");
         }, 150);
         continue;
       }
-      if (text === "T01 liveness probe") {
-        fs.writeFileSync("t01-native-liveness.txt", "started");
+      if (text === "Native liveness probe") {
+        fs.writeFileSync("native-liveness.txt", "started");
         setTimeout(() => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", method: "turn/completed", params: { turn: { status: "completed" } } }) + "\\n"), 6_000);
         continue;
       }
-      if (text === "T01 immediate notifications") {
+      if (text === "Native immediate notifications") {
         for (const message of [
           { method: "turn/started", params: {} },
           { method: "item/agentMessage/delta", params: { delta: "synthetic final result" } },
@@ -67,12 +67,12 @@ process.stdin.on("data", (chunk) => {
         ]) fs.writeSync(1, JSON.stringify({ jsonrpc: "2.0", ...message }) + "\\n");
         process.exit(0);
       }
-      if (text === "T01 unterminated completion") {
+      if (text === "Native unterminated completion") {
         fs.writeSync(1, JSON.stringify({ jsonrpc: "2.0", method: "turn/started", params: {} }) + "\\n");
         fs.writeSync(1, JSON.stringify({ jsonrpc: "2.0", method: "turn/completed", params: { turn: { status: "completed" } } }));
         process.exit(0);
       }
-      fs.writeFileSync("t01-native-marker.txt", "marker-from-computer");
+      fs.writeFileSync("native-marker.txt", "marker-from-computer");
       process.stdout.write(JSON.stringify({ jsonrpc: "2.0", method: "item/agentMessage/delta", params: { delta: "synthetic native result" } }) + "\\n");
       process.stdout.write(JSON.stringify({ jsonrpc: "2.0", method: "turn/completed", params: { turn: { status: "completed" } } }) + "\\n");
     }
@@ -125,16 +125,16 @@ async function installFixture(
   expect(events.at(-1)).toEqual({ type: "exit", code: 0 });
 }
 
-describe.skipIf(!enabled)("T01 real Docker native harness", () => {
+describe.skipIf(!enabled)("native harness choice on real Docker", () => {
   it("runs the selected codex-native fixture inside its authorized Computer and exposes completion or crash", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-t01-docker-"));
+    const root = await mkdtemp(path.join(tmpdir(), "rakazo-native-choice-docker-"));
     const dataDir = path.join(root, "data");
-    const token = `t01-${randomUUID()}`;
+    const token = `native-choice-${randomUUID()}`;
     const postgres = await new PostgreSqlContainer("postgres:16-alpine")
-      .withLabels({ "rakazo.t01": "native-choice" })
+      .withLabels({ "rakazo.test": "native-choice" })
       .start();
     const model = await startModelEmulator({
-      apiKey: "t01-test-key",
+      apiKey: "native-choice-test-key",
       steps: [],
     });
     let supervisor: ReturnType<typeof serve> | undefined;
@@ -145,7 +145,7 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
     let context: AdapterContext | undefined;
     try {
       process.env.DATA_DIR = dataDir;
-      process.env.RAKAZO_COMPUTER_IMAGE = "rakazo-t01-terra/computer:local";
+      process.env.RAKAZO_COMPUTER_IMAGE = "rakazo/computer:local";
       process.env.SANDBOX_SUPERVISOR_TOKEN = token;
       process.env.SANDBOX_PROVIDER = "docker";
       const { supervisorApp } = await import("../../../infra/sandboxes/supervisor/src/index.ts");
@@ -185,15 +185,15 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
         wakeupDriver: "memory",
         signupsEnabled: "true",
         composio: new ComposioEmulator(),
-        encryptionKey: "t01-native-choice-encryption-key",
+        encryptionKey: "native-choice-encryption-key",
       });
       const signup = await handles.app.request("/api/auth/sign-up/email", {
         method: "POST",
         headers: { "content-type": "application/json", origin },
         body: JSON.stringify({
-          email: `t01-${randomUUID()}@rakazo.test`,
+          email: `native-choice-${randomUUID()}@rakazo.test`,
           password: "password12",
-          name: "T01 Docker",
+          name: "Native choice Docker",
         }),
       });
       const cookie = sessionCookieHeader(signup);
@@ -213,7 +213,7 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
       };
       const actor = await rpc<{ userId: string; spaceId: string }>("me", {});
       const bot = await rpc<{ id: string }>("bots/create", {
-        name: "T01",
+        name: "Native choice",
         title: "",
         description: "",
         instructions: "",
@@ -221,7 +221,7 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
       });
       const secretId = randomUUID();
       const credentialId = randomUUID();
-      const store = new EncryptedSecretStore("t01-native-choice-encryption-key");
+      const store = new EncryptedSecretStore("native-choice-encryption-key");
       const encrypted = await store.put(
         JSON.stringify({
           type: "oauth",
@@ -276,8 +276,8 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
       });
       expect(storedBot.computer).toMatchObject({ kind: "docker" });
       context = {
-        operationId: "t01-fixture",
-        traceId: "t01-fixture",
+        operationId: "native-choice-fixture",
+        traceId: "native-choice-fixture",
         spaceId: storedBot.spaceId,
         userId: storedBot.userId,
         botId: storedBot.id,
@@ -324,14 +324,14 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
         {
           id: 4,
           method: "turn/start",
-          params: { input: [{ type: "text", text: "T01 crash" }] },
+          params: { input: [{ type: "text", text: "Native crash" }] },
         },
       ])
         await eofProcess.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
       await drainEof;
       await expect(
         sandbox
-          .readFile(computer, `bots/${storedBot.id}/t01-native-crash-marker.txt`, context)
+          .readFile(computer, `bots/${storedBot.id}/native-crash-marker.txt`, context)
           .then((content) => new TextDecoder().decode(content)),
       ).resolves.toBe("exit-23");
       expect(eofLines).toHaveLength(4);
@@ -368,18 +368,18 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
         {
           id: 4,
           method: "turn/start",
-          params: { input: [{ type: "text", text: "T01 stdin probe" }] },
+          params: { input: [{ type: "text", text: "Native stdin probe" }] },
         },
       ])
         await stdinProbe.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
       const probeCompleted = await completedProbe;
       const probeExit = probeCompleted ? undefined : await stdinProbe.wait();
       const probeStarted = await sandbox
-        .readFile(computer, `bots/${storedBot.id}/t01-native-stdin-start.txt`, context)
+        .readFile(computer, `bots/${storedBot.id}/native-stdin-start.txt`, context)
         .then((content) => new TextDecoder().decode(content))
         .catch(() => "missing");
       const stdinState = await sandbox
-        .readFile(computer, `bots/${storedBot.id}/t01-native-stdin.txt`, context)
+        .readFile(computer, `bots/${storedBot.id}/native-stdin.txt`, context)
         .then((content) => new TextDecoder().decode(content))
         .catch(() => "missing");
       expect({ probeCompleted, probeExit, probeStarted, stdinState }).toEqual({
@@ -409,7 +409,7 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
         {
           id: 4,
           method: "turn/start",
-          params: { input: [{ type: "text", text: "T01 liveness probe" }] },
+          params: { input: [{ type: "text", text: "Native liveness probe" }] },
         },
       ])
         await livenessProbe.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
@@ -450,7 +450,7 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
           id: 4,
           method: "turn/start",
           params: {
-            input: [{ type: "text", text: "T01 immediate notifications" }],
+            input: [{ type: "text", text: "Native immediate notifications" }],
           },
         },
       ])
@@ -500,7 +500,7 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
           id: 4,
           method: "turn/start",
           params: {
-            input: [{ type: "text", text: "T01 unterminated completion" }],
+            input: [{ type: "text", text: "Native unterminated completion" }],
           },
         },
       ])
@@ -515,7 +515,7 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
       await expect(unterminatedCompletion.stop()).resolves.toBe("stopped");
       for await (const _event of sandbox.execute(
         computer,
-        { argv: ["sh", "-c", "touch /tmp/t01-unrelated"], cwd: "." },
+        { argv: ["sh", "-c", "touch /tmp/native-choice-unrelated"], cwd: "." },
         context,
       ))
         undefined;
@@ -526,9 +526,9 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
           harness: "codex-native",
           executionTarget: storedBot.computer!.id,
         });
-      const completed = await send("T01 complete");
+      const completed = await send("Native complete");
       await handles.executor
-        .continueRun(completed.runId, "t01-docker-complete")
+        .continueRun(completed.runId, "native-choice-docker-complete")
         .catch(async (error) => {
           const run = await handles!.prisma.run.findUniqueOrThrow({
             where: { id: completed.runId },
@@ -546,28 +546,32 @@ describe.skipIf(!enabled)("T01 real Docker native harness", () => {
       }
       await expect(
         handles.sandbox
-          .readFile(computer, `bots/${bot.id}/t01-native-marker.txt`, context)
+          .readFile(computer, `bots/${bot.id}/native-marker.txt`, context)
           .then((content) => new TextDecoder().decode(content)),
       ).resolves.toBe("marker-from-computer");
       const home = new TextDecoder()
-        .decode(
-          await handles.sandbox.readFile(computer, `bots/${bot.id}/t01-native-home.txt`, context),
-        )
+        .decode(await handles.sandbox.readFile(computer, `bots/${bot.id}/native-home.txt`, context))
         .split("\n");
       expect(home[1]).toBe("700");
       const verifyPurged = [];
       for await (const event of sandbox.execute(
         computer,
         {
-          argv: ["sh", "-c", 'test ! -e "$1" && test -e /tmp/t01-unrelated', "sh", home[0]!],
+          argv: [
+            "sh",
+            "-c",
+            'test ! -e "$1" && test -e /tmp/native-choice-unrelated',
+            "sh",
+            home[0]!,
+          ],
           cwd: ".",
         },
         context,
       ))
         verifyPurged.push(event);
       expect(verifyPurged.at(-1)).toEqual({ type: "exit", code: 0 });
-      const crashed = await send("T01 crash");
-      await handles.executor.continueRun(crashed.runId, "t01-docker-crash");
+      const crashed = await send("Native crash");
+      await handles.executor.continueRun(crashed.runId, "native-choice-docker-crash");
       await expect(waitForTerminal(handles.prisma, actor, crashed.runId)).resolves.toMatchObject({
         status: "failed",
       });

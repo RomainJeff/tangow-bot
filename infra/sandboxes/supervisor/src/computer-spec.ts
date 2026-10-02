@@ -256,13 +256,6 @@ export function containerCreateOptions(input: ComputerCreateInput) {
       "rakazo.managed": "true",
       "rakazo.botId": input.botId,
       "rakazo.spaceId": input.spaceId,
-      ...(process.env.RAKAZO_T01_OWNER_LABEL
-        ? {
-            "rakazo.t01.scope": "isolated",
-            "rakazo.t01.runner": "live-subscription",
-            "rakazo.t01.owner": process.env.RAKAZO_T01_OWNER_LABEL,
-          }
-        : {}),
     },
     ExposedPorts: ports.ExposedPorts,
     HostConfig: {

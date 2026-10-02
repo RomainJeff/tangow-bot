@@ -6,8 +6,8 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
-import { nativeProcessSchema } from "../../../../infra/sandboxes/supervisor/src/native-process-schema.js";
-import { ClaudeNativeRuntime } from "../../../adapters/src/claude-native-runtime.js";
+import { nativeProcessSchema } from "../../../infra/sandboxes/supervisor/src/native-process-schema.js";
+import { ClaudeNativeRuntime } from "../../adapters/src/claude-native-runtime.js";
 
 const context: AdapterContext = {
   operationId: "test",

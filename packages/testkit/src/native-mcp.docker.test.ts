@@ -7,7 +7,7 @@ import type { AdapterContext, ComputerRef } from "@rakazo/adapter-kit";
 import { DockerSandboxProvider } from "@rakazo/adapters";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// Exact opt-in command (NOT RUN by J3-B):
+// Opt-in command:
 // RUN_NATIVE_MCP_DOCKER=1 pnpm exec vitest run packages/testkit/src/native-mcp.docker.test.ts
 const enabled = process.env.RUN_NATIVE_MCP_DOCKER === "1";
 type DockerContainer = {

@@ -112,28 +112,6 @@ describe("graphical computer spec", () => {
     expect(options.HostConfig.NetworkMode).toBe("rakazo_default");
   });
 
-  it("labels a T01 replay Computer with the full reap ownership contract", () => {
-    const previous = process.env.RAKAZO_T01_OWNER_LABEL;
-    process.env.RAKAZO_T01_OWNER_LABEL = "t01-owner";
-    try {
-      const options = containerCreateOptions({
-        name: "rakazo-t01",
-        image: COMPUTER_IMAGE,
-        botId: "bot",
-        spaceId: "space",
-        homePath: "/var/rakazo/homes/bot",
-      });
-      expect(options.Labels).toMatchObject({
-        "rakazo.t01.scope": "isolated",
-        "rakazo.t01.runner": "live-subscription",
-        "rakazo.t01.owner": "t01-owner",
-      });
-    } finally {
-      if (previous === undefined) delete process.env.RAKAZO_T01_OWNER_LABEL;
-      else process.env.RAKAZO_T01_OWNER_LABEL = previous;
-    }
-  });
-
   it("appends read-only skills binds after the home bind", () => {
     const options = containerCreateOptions({
       name: "rakazo-bot-abc",
