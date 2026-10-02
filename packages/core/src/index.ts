@@ -19,6 +19,7 @@ export * from "./cron.js";
 export * from "./events.js";
 export * from "./featured-connectors.js";
 export * from "./group-mentions.js";
+export * from "./harness-name.js";
 export * from "./http-response.js";
 export * from "./launch-choreography.js";
 export * from "./mcp.js";

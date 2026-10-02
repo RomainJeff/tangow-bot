@@ -1,3 +1,4 @@
+import type { HarnessChoice, NativeHarnessAvailability } from "@rakazo/contracts";
 import {
   BOT_COLORS,
   BOT_DESCRIPTION_MAX_LENGTH,
@@ -9,10 +10,11 @@ import {
   SELECTABLE_BOT_COLORS,
   type ThinkingLevel,
 } from "@rakazo/contracts";
-import { SHAPES } from "@rakazo/core";
+import { harnessName, SHAPES } from "@rakazo/core";
+import { radii } from "@rakazo/ui-tokens";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAvatarStyle } from "../components/avatar-style";
 import { BotAvatar } from "../components/bot-avatar";
 import { ComputerModePicker } from "../components/computer-mode-picker";
@@ -23,13 +25,18 @@ import {
   type MobileModelCredential,
   rpc,
 } from "../lib/api";
+import { mobileTokens } from "../lib/appearance";
+import { harnessOptions, showsHarnessHint } from "../lib/harness";
 import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
-import { useMobileTokens, useResolvedAppearance } from "../lib/native";
+import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../lib/native";
+import { nativeTextStyle } from "../lib/typography";
 
 type BotSettingsRecord = MobileBot & {
   description?: string;
   instructions?: string;
+  /** Absent on a server that predates native harnesses: Rakazo's own. */
+  harness?: HarnessChoice;
 };
 
 type ModelOption = {
@@ -46,6 +53,7 @@ type PickerChoice = {
 
 export default function BotSettingsScreen() {
   const tokens = useMobileTokens();
+  const styles = useThemedStyles(createHarnessStyles);
   const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const router = useRouter();
@@ -61,6 +69,8 @@ export default function BotSettingsScreen() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [modelKey, setModelKey] = useState("");
   const [thinkingLevel, setThinkingLevel] = useState("");
+  const [harness, setHarness] = useState<HarnessChoice>("default");
+  const [nativeHarnesses, setNativeHarnesses] = useState<NativeHarnessAvailability | null>(null);
   const [credentials, setCredentials] = useState<MobileModelCredential[]>([]);
   const [catalog, setCatalog] = useState<MobileModel[]>([]);
   const [me, setMe] = useState<MobileMe | null>(null);
@@ -88,8 +98,13 @@ export default function BotSettingsScreen() {
             : "",
         );
         setThinkingLevel(next.thinkingLevel ?? "");
+        setHarness(next.harness ?? "default");
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("Could not load bot")));
+    // The server alone knows which native harnesses this bot's Computer can run.
+    void rpc<{ nativeHarnesses?: NativeHarnessAvailability }>("computer/status", { botId })
+      .then((status) => setNativeHarnesses(status.nativeHarnesses ?? null))
+      .catch(() => setNativeHarnesses(null));
   }, [botId]);
 
   useEffect(() => {
@@ -233,6 +248,20 @@ export default function BotSettingsScreen() {
     });
   }
 
+  function openHarnessPicker() {
+    presentMessageActionSheet({
+      title: t("Harness"),
+      actions: harnessOptions(nativeHarnesses).map((option) => ({
+        text: option.name,
+        disabled: !option.available,
+        onPress: () => setHarness(option.choice),
+      })),
+      colorScheme,
+      cancel: t("Cancel"),
+      more: t("More"),
+    });
+  }
+
   async function save() {
     if (!botId || !bot || pending) return;
     setPending(true);
@@ -251,6 +280,7 @@ export default function BotSettingsScreen() {
         modelProvider?: string | null;
         modelId?: string | null;
         thinkingLevel?: ThinkingLevel | null;
+        harness?: HarnessChoice;
       } = { botId };
       if (shapeSeed !== (bot.shapeSeed ?? null)) input.shapeSeed = shapeSeed;
       if (profile.name !== bot.name) input.name = profile.name;
@@ -278,8 +308,21 @@ export default function BotSettingsScreen() {
         await rpc("bots/setComputer", { botId, mode: computerMode });
       }
       // Use key presence so clearing title/description to "" still persists.
+      // Only a changed choice is sent: the server records each one it receives.
+      if (harness !== (bot.harness ?? "default")) input.harness = harness;
       if (Object.keys(input).length > 1) {
-        await rpc("bots/update", input);
+        try {
+          await rpc("bots/update", input);
+        } catch (err) {
+          if (input.harness === undefined) throw err;
+          // The server refused the harness, so the saved choice stands and the rest can be retried.
+          setHarness(bot.harness ?? "default");
+          Alert.alert(
+            t("Could not save bot"),
+            err instanceof Error ? err.message : t("Please try again."),
+          );
+          return;
+        }
       }
       router.back();
     } catch (err) {
@@ -494,10 +537,26 @@ export default function BotSettingsScreen() {
         </Pressable>
         {advancedOpen ? (
           <View>
+            <Text style={styles.pickerLabel}>{t("Harness")}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("Harness")}
+              onPress={openHarnessPicker}
+              style={styles.picker}
+            >
+              <Text style={styles.pickerValue}>{harnessName(harness)}</Text>
+            </Pressable>
+            {showsHarnessHint(nativeHarnesses) ? (
+              <Text style={styles.hint}>
+                {t(
+                  "Codex and Claude need the bot's Docker Computer and a model on their subscription.",
+                )}
+              </Text>
+            ) : null}
             <Text
               style={{
                 color: tokens.mutedForeground,
-                marginTop: 8,
+                marginTop: 16,
                 marginBottom: 8,
                 fontSize: 14,
               }}
@@ -558,6 +617,27 @@ export default function BotSettingsScreen() {
       </ScrollView>
     </>
   );
+}
+
+function createHarnessStyles() {
+  const tokens = mobileTokens();
+  return StyleSheet.create({
+    pickerLabel: {
+      marginVertical: 8,
+      color: tokens.mutedForeground,
+      ...nativeTextStyle("rowName"),
+    },
+    picker: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: tokens.border,
+      backgroundColor: tokens.muted,
+      borderRadius: radii.row,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+    },
+    pickerValue: { color: tokens.foreground },
+    hint: { marginTop: 8, color: tokens.mutedForeground, ...nativeTextStyle("meta") },
+  });
 }
 
 function modelOptionKey(provider: string, modelId: string) {

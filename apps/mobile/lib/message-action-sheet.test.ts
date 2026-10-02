@@ -58,4 +58,41 @@ describe("native message action sheet", () => {
     secondPage?.[1]?.onPress?.();
     expect(actions.every((action) => action.onPress.mock.calls.length === 1)).toBe(true);
   });
+
+  it("greys a disabled iOS action and marks a destructive one", () => {
+    Platform.OS = "ios";
+    presentMessageActionSheet({
+      actions: [
+        { text: "Rakazo", onPress: vi.fn() },
+        { text: "Codex", onPress: vi.fn(), disabled: true },
+        { text: "Remove", onPress: vi.fn(), destructive: true },
+      ],
+      cancel: "Cancel",
+      more: "More",
+      colorScheme: "dark",
+    });
+    const [options] = vi.mocked(ActionSheetIOS.showActionSheetWithOptions).mock.calls[0]!;
+    expect(options.disabledButtonIndices).toEqual([1]);
+    expect(options.destructiveButtonIndex).toEqual([2]);
+  });
+
+  it("leaves a disabled action out of the Android alert and keeps destructive styling", () => {
+    Platform.OS = "android";
+    presentMessageActionSheet({
+      actions: [
+        { text: "Rakazo", onPress: vi.fn() },
+        { text: "Codex", onPress: vi.fn(), disabled: true },
+        { text: "Remove", onPress: vi.fn(), destructive: true },
+      ],
+      cancel: "Cancel",
+      more: "More",
+      colorScheme: "dark",
+    });
+    const [, , page] = vi.mocked(Alert.alert).mock.calls[0]!;
+    expect(page?.map((button) => [button.text, button.style])).toEqual([
+      ["Rakazo", undefined],
+      ["Remove", "destructive"],
+      ["Cancel", "cancel"],
+    ]);
+  });
 });

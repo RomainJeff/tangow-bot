@@ -697,4 +697,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
     "开启后每次运行都会通知并展开卡片；关闭则仅在此对话中保留静默记录。",
   "Could not update routine": "无法更新例行任务",
+  Harness: "Harness",
+  "Codex and Claude need the bot's Docker Computer and a model on their subscription.":
+    "Codex 和 Claude 需要机器人的 Docker Computer 以及其订阅下的模型。",
 };
