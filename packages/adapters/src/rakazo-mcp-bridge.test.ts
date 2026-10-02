@@ -5,7 +5,7 @@ import type { McpBridgeDeps } from "./rakazo-mcp-bridge.js";
 import { callAuthorizedTool } from "./rakazo-mcp-bridge.js";
 
 /**
- * T07:4 point 3 — offline unit tests for the native specialist tool-call admission seam
+ * Offline unit tests for the native specialist tool-call admission seam
  * added to `callAuthorizedTool` (`McpBridgeDeps.authorizeRight`). The Postgres-backed
  * ticket/generation guarantees of `NativeSessionHost` are covered elsewhere
  * (`rakazo-mcp-bridge.postgres.test.ts`); here the host is a deterministic in-memory fake,
@@ -74,7 +74,7 @@ async function setUp(catalog: ReadonlySet<string>) {
   return { host, botId, threadId, ticket, callTool, catalog };
 }
 
-describe("callAuthorizedTool — T07:4 point 3 (native specialist admission beyond the closed catalog)", () => {
+describe("callAuthorizedTool — native specialist admission beyond the closed catalog", () => {
   it("passes each authorized tool name to the shared callback", async () => {
     const { host, ticket, catalog } = await setUp(new Set(["search_docs", "write_note"]));
     const callTool = vi.fn(async (name: string, args: Record<string, unknown>) => ({ name, args }));
@@ -158,8 +158,8 @@ describe("callAuthorizedTool — T07:4 point 3 (native specialist admission beyo
     });
     expect(first.ok).toBe(true);
 
-    // Simulates a revocation that happened between the two calls (Q12 "révocation
-    // concurrente"), even though `catalog` — fixed at construction — never changes.
+    // Simulates a revocation that happened between the two calls (a concurrent
+    // revocation), even though `catalog` — fixed at construction — never changes.
     allowed = false;
     const second = await callAuthorizedTool(deps, {
       ticket,
@@ -171,7 +171,7 @@ describe("callAuthorizedTool — T07:4 point 3 (native specialist admission beyo
     expect(authorizeRight).toHaveBeenCalledTimes(2);
   });
 
-  it("omitting authorizeRight preserves pre-T07:4 behavior: anything in the closed catalog is admitted", async () => {
+  it("omitting authorizeRight admits anything in the closed catalog is admitted", async () => {
     const { host, ticket, callTool, catalog } = await setUp(new Set(["search_docs"]));
     const deps: McpBridgeDeps = { host, callTool, catalog };
 

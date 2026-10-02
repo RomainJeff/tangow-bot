@@ -487,7 +487,7 @@ model Thread {
   group                       ChatGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   externalConversationId      String?    @unique
   externalConversation        ExternalConversation? @relation(fields: [externalConversationId], references: [id], onDelete: Cascade)
-  // T04: direct|group|external|work. kind=work carries scopedTask.specialistThreadId
+  // direct|group|external|work. kind=work carries scopedTask.specialistThreadId
   // @unique below and has botId/groupId/externalConversationId all null.
   kind                        String     @default("direct")
   scopedTask                  ScopedTask?
@@ -592,7 +592,7 @@ model Run {
   harness              String?
   executionTarget      String?
   choiceVersion        Int?
-  // T04: delegation. scopedTaskId is nullable (only set for a specialist's runs).
+  // Delegation: scopedTaskId is only set for a specialist's runs.
   scopedTaskId         String?
   scopedTask           ScopedTask?      @relation(fields: [scopedTaskId], references: [id], onDelete: SetNull)
   terminalOutcome      String?
@@ -636,9 +636,8 @@ model Run {
   @@map("runs")
 }
 
-// T04: durable work identity a coordinator creates when delegating to a specialist
-// created from_profile. Minimal columns for the first green (delegate + inspect):
-// filiation/ceiling/idempotency are kept, backlog fields (cancellation, cleanup) are not.
+// Durable work identity a coordinator creates when delegating to a specialist created
+// from_profile: filiation, delegation ceiling and idempotency key.
 model ScopedTask {
   id                  String    @id @default(cuid())
   spaceId             String
@@ -663,8 +662,8 @@ model ScopedTask {
   // How the harness was chosen: explicit | profile | judgment | fallback; and a fallback's cause.
   harnessSource        String?
   harnessFallbackCause String?
-  // T04:4: the coordinator's own Computer at delegation time (glossary "Computer de
-  // mission"); the specialist gets a droit d'usage on it, never ownership. Nullable/SetNull
+  // The coordinator's own Computer at delegation time (the mission Computer); the
+  // specialist gets a right of use on it, never ownership. Nullable/SetNull
   // so deleting the coordinator's Computer never blocks deleting the scoped task.
   missionComputerId   String?
   missionComputer     Computer? @relation("ScopedTaskMissionComputer", fields: [missionComputerId], references: [id], onDelete: SetNull)
@@ -1470,8 +1469,8 @@ model IntegrationProviderConfig {
   @@map("integration_provider_configs")
 }
 
-// T02: current-state binding for a native session (one row per bot+thread).
-// scopedTaskId is nullable; T04 adds the FK to scoped_tasks.id.
+// Current-state binding for a native session (one row per bot+thread).
+// scopedTaskId is set when the session serves a delegated specialist.
 model NativeSession {
   id                   String    @id @default(cuid())
   botId                String
@@ -1495,8 +1494,8 @@ model NativeSession {
   @@map("native_sessions")
 }
 
-// T02: append-only lifecycle journal, never truncated by clear/rewind (I22).
-// scopedTaskId is nullable; T04 adds the FK to scoped_tasks.id.
+// Append-only lifecycle journal, never truncated by clear/rewind.
+// scopedTaskId is set for events of a delegated specialist.
 model LifecycleEvent {
   id           String   @id @default(cuid())
   botId        String
@@ -1504,7 +1503,7 @@ model LifecycleEvent {
   scopedTaskId String?
   scopedTask   ScopedTask? @relation(fields: [scopedTaskId], references: [id], onDelete: SetNull)
   kind         String
-  // T02:2 — set for kind = "mcp_call" only; reserves a replayed callId as a
+  // Set for kind = "mcp_call" only; reserves a replayed callId as a
   // single operation under the same binding+thread (see migration for the
   // partial unique index that makes this reservation atomic).
   callId       String?

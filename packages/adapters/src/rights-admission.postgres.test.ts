@@ -4,13 +4,12 @@ import { createDb } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { computeEffectiveMcpAccess, isMcpToolAdmitted } from "./delegated-tasks.js";
 
-// NOT RUN in this sandbox (no Docker/Postgres). Terra runs this at review with:
+// Needs Postgres; run it with:
 //   VERIFY_DATABASE=1 DATABASE_URL=<test db> pnpm exec vitest run packages/adapters/src/rights-admission.postgres.test.ts
 const describePostgres =
   process.env.VERIFY_DATABASE && process.env.DATABASE_URL ? describe.sequential : describe.skip;
 
 /**
- * T07:4 correction (Terra review — B2/B3, plus the concurrency finding on the axe standards):
  * `computeEffectiveMcpAccess`/`isMcpToolAdmitted` must observe a `BotMcpServer` row deleted
  * (or its `McpServer` disabled) *after* a `scoped_tasks.delegationCeiling` was persisted, on
  * the very next call, without any change to the immutable ceiling itself. This is the same
@@ -18,13 +17,11 @@ const describePostgres =
  * here it runs against a real transaction/read path (no fake `findMany`/`findFirst`
  * implementation to get subtly wrong).
  *
- * Naming correction: the two tests below are honestly labelled "sequential" — `before`, then
+ * The first two tests below are honestly labelled "sequential" — `before`, then
  * the mutation, then `after`, in program order — they prove the mechanism re-reads live state,
  * not that a real race between an in-flight admission and a concurrent revocation is safe.
  *
- * T07:6 correction (root decision, on Terra's concurrency finding): the third test —
- * previously labelled "genuinely concurrent" — is renamed honestly to "concurrent
- * connections, no forced interference". Two independent Postgres connections issue an
+ * The third test is labelled "concurrent connections, no forced interference". Two independent Postgres connections issue an
  * admission check and a revocation via `Promise.all` with no artificial delay, but nothing
  * forces the two operations to actually interleave inside Postgres: the read and the delete
  * touch different rows (`scoped_tasks`/`BotMcpServer`) with no shared lock between them, so
@@ -37,13 +34,12 @@ const describePostgres =
  * A real race — forcing the two operations to actually contend for the same row at the same
  * instant (e.g. a `SELECT ... FOR UPDATE` on the `BotMcpServer` row held by one connection
  * while the other's admission read is provably blocked on it, released only on an explicit
- * signal) — is left to the backlog, not attempted here: this narrow delivery's budget does
- * not cover building and validating that harness. Admission is still the declared
+ * signal) — is not attempted here. Admission is still the declared
  * linearization point (documented in `rakazo-mcp-bridge.ts` and `mcp-connector.ts`): a call
  * admitted before a revocation commits is allowed to complete. Proving the narrower window
  * (revocation while a callback is already in flight after admission) would additionally need
  * a lock or lease held across the callback's entire execution, which no seam here holds
- * today — also backlog, not silently assumed.
+ * today.
  */
 describePostgres("computeEffectiveMcpAccess / isMcpToolAdmitted (PostgreSQL contract)", () => {
   let prisma: PrismaClient;
@@ -75,13 +71,13 @@ describePostgres("computeEffectiveMcpAccess / isMcpToolAdmitted (PostgreSQL cont
     const id = randomUUID();
     orgIds.push(id);
     await prisma.user.create({
-      data: { id, name: "T07:4 test", email: `${id}@example.test`, emailVerified: true },
+      data: { id, name: "Rights admission test", email: `${id}@example.test`, emailVerified: true },
     });
     await prisma.organization.create({
-      data: { id, name: "T07:4 test", slug: id, createdAt: new Date() },
+      data: { id, name: "Rights admission test", slug: id, createdAt: new Date() },
     });
     await prisma.space.create({
-      data: { id, organizationId: id, name: "T07:4 test", isDefault: true },
+      data: { id, organizationId: id, name: "Rights admission test", isDefault: true },
     });
     await prisma.member.create({
       data: { id, organizationId: id, userId: id, role: "owner", createdAt: new Date() },

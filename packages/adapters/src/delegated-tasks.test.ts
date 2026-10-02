@@ -38,14 +38,14 @@ function makeDeps(
     seedScopedTasks?: Array<Record<string, unknown>>;
     /** Active Run rows, keyed by scopedTaskId, for cascade-cancel tests. */
     activeRuns?: Array<{ id: string; taskId: string; scopedTaskId: string; status: string }>;
-    /** native_sessions rows for cascade-cancel tests (B2c). */
+    /** native_sessions rows for cascade-cancel tests. */
     nativeSessions?: Array<{
       botId: string;
       threadId: string;
       state: string;
       processState: string;
     }>;
-    /** T07:4: BotMcpServer assignments backing computeEffectiveMcpAccess/isMcpToolAdmitted. */
+    /** BotMcpServer assignments backing computeEffectiveMcpAccess/isMcpToolAdmitted. */
     botMcpServers?: Array<{
       botId: string;
       serverId: string;
@@ -312,7 +312,7 @@ function makeDeps(
 
   const enqueue = vi.fn().mockResolvedValue(undefined);
   const events = { notify: vi.fn().mockResolvedValue(undefined) };
-  // T07:4: mutable so a test can simulate a concurrent revocation between two admission
+  // Mutable so a test can simulate a concurrent revocation between two admission
   // calls (push/splice this array directly between two `computeEffectiveActorRights` calls).
   const botMcpServerRows = (options.botMcpServers ?? []).map((row) => ({ ...row }));
   const prisma = {
@@ -524,7 +524,7 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
     expect(tree.root.harnessFallbackCause).toBeNull();
     expect(tree.root.parentScopedTaskId).toBeNull();
     expect(tree.root.rootScopedTaskId).toBe("work-1");
-    // T07:4 correction: the ceiling is now a tool-granular snapshot of the coordinator's
+    // The ceiling is a tool-granular snapshot of the coordinator's
     // own effective MCP access at delegation time (allowAllTools/allowedTools per server),
     // never a single boolean per server, and never driven by requestedRights.
     expect(tree.root.delegationCeiling).toEqual({
@@ -573,7 +573,7 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
     expect(harness.enqueue).not.toHaveBeenCalled();
   });
 
-  it("T07:4 point 2 (non-regression): persists a non-empty, tool-granular ceiling even with the exact requestedRights: {} shape executor.ts sends today", async () => {
+  it("persists a non-empty, tool-granular ceiling even with the exact requestedRights: {} shape executor.ts sends today", async () => {
     const harness = makeDeps({
       botMcpServers: [
         {
@@ -608,7 +608,7 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
     });
   });
 
-  it("T07:6 (B5): an explicit requestedRights narrows the ceiling below the coordinator's full effective access", async () => {
+  it("an explicit requestedRights narrows the ceiling below the coordinator's full effective access", async () => {
     const harness = makeDeps({
       botMcpServers: [{ botId: coordinatorBotId, serverId: "server-a" }],
     });
@@ -636,7 +636,7 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
     expect(tree.root.delegationCeiling).toEqual(requestedRights);
   });
 
-  it("T07:6 (B5): a requestedRights that exceeds the coordinator's effective access is refused outright, discriminated from a generic error", async () => {
+  it("a requestedRights that exceeds the coordinator's effective access is refused outright, discriminated from a generic error", async () => {
     vi.restoreAllMocks();
     const harness = makeDeps({
       botMcpServers: [
@@ -669,7 +669,7 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
     expect(harness.enqueue).not.toHaveBeenCalled();
   });
 
-  it("T07:6 (B5): requesting a tool absent from the coordinator's own list is refused", async () => {
+  it("requesting a tool absent from the coordinator's own list is refused", async () => {
     vi.restoreAllMocks();
     const harness = makeDeps({
       botMcpServers: [
@@ -699,7 +699,7 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
     expect(spawnSpy).not.toHaveBeenCalled();
   });
 
-  it("T07:6 (B5): requesting a server the coordinator has no access to at all is refused", async () => {
+  it("requesting a server the coordinator has no access to at all is refused", async () => {
     vi.restoreAllMocks();
     const harness = makeDeps();
     const spawnSpy = vi.spyOn(await import("./child-bots.js"), "spawnBot");
@@ -739,7 +739,7 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
   });
 });
 
-describe("DelegatedTasks.apply — parent linkage (T07 task 1: minimal tree)", () => {
+describe("DelegatedTasks.apply — parent linkage", () => {
   it("links a specialist's further delegation to its own scoped task, one depth deeper", async () => {
     const harness = makeDeps({
       seedScopedTasks: [
@@ -892,7 +892,7 @@ describe("DelegatedTasks.apply — parent linkage (T07 task 1: minimal tree)", (
     },
   );
 
-  it("refuses (scenario 2a) to create a child under a parent that is already cancelled", async () => {
+  it("refuses to create a child under a parent that is already cancelled", async () => {
     vi.restoreAllMocks();
     const harness = makeDeps({
       seedScopedTasks: [
@@ -1331,7 +1331,7 @@ describe("DelegatedTasks.apply — delegation limits", () => {
   });
 });
 
-describe("DelegatedTasks.apply — close retention and cleanup (T08)", () => {
+describe("DelegatedTasks.apply — close retention and cleanup", () => {
   it("closes visibly, retains the result projection and lifecycle event, and preserves the mission Computer", async () => {
     const harness = makeDeps({
       existingScopedTask: {
@@ -1486,7 +1486,7 @@ describe("DelegatedTasks.apply — close retention and cleanup (T08)", () => {
   });
 });
 
-describe("DelegatedTasks.apply — cancel cascades the sub-tree, never a peer (T07 rouge1/vert1)", () => {
+describe("DelegatedTasks.apply — cancel cascades the sub-tree, never a peer", () => {
   it("cancels an active descendant, its Run and its grant, leaving a lateral peer intact", async () => {
     const rootTask = {
       id: "work-root",
@@ -1557,7 +1557,7 @@ describe("DelegatedTasks.apply — cancel cascades the sub-tree, never a peer (T
       botId: "bot-root-specialist",
     });
     expect(childTree.root.status).toBe("cancelled");
-    // The lateral peer, under a different root, is never touched (I26/I27).
+    // The lateral peer, under a different root, is never touched.
     const peerTree = await tasks.inspect("work-peer", {
       ...actor,
       botId: "bot-other-coordinator",
@@ -1612,7 +1612,7 @@ describe("DelegatedTasks.apply — cancel cascades the sub-tree, never a peer (T
     expect(harness.tx.run.updateMany).not.toHaveBeenCalled();
   });
 
-  it("REVIEW T07 B1 (offline mirror): a closed intermediary is still a link to its active descendant", async () => {
+  it("a closed intermediary is still a link to its active descendant", async () => {
     const rootTask = {
       id: "work-b1-root",
       spaceId,
@@ -1697,7 +1697,7 @@ describe("DelegatedTasks.apply — cancel cascades the sub-tree, never a peer (T
     );
   });
 
-  it("B2 (a): cascading cancellation expires the Computer execution lease and clears its execution pointer for each cancelled Run", async () => {
+  it("cascading cancellation expires the Computer execution lease and clears its execution pointer for each cancelled Run", async () => {
     const harness = makeDeps({
       existingScopedTask: {
         id: "work-b2a",
@@ -1737,7 +1737,7 @@ describe("DelegatedTasks.apply — cancel cascades the sub-tree, never a peer (T
     );
   });
 
-  it("B2 (c): closes a parked native session with no active Run for the cancelled task, so it can never report itself resumable", async () => {
+  it("closes a parked native session with no active Run for the cancelled task, so it can never report itself resumable", async () => {
     const harness = makeDeps({
       existingScopedTask: {
         id: "work-b2c",
@@ -1779,7 +1779,7 @@ describe("DelegatedTasks.apply — cancel cascades the sub-tree, never a peer (T
     });
   });
 
-  it("T07:3 residual of B1: a child closed concurrently between the read and the guarded write is never touched, but its active sub-tree still is", async () => {
+  it("a child closed concurrently between the read and the guarded write is never touched, but its active sub-tree still is", async () => {
     const rootTask = {
       id: "work-t073-root",
       spaceId,
@@ -1913,7 +1913,7 @@ describe("DelegatedTasks.apply — cancel cascades the sub-tree, never a peer (T
   });
 });
 
-describe("DelegatedTasks.apply — scenario 2: result then complément", () => {
+describe("DelegatedTasks.apply — result then complément", () => {
   it("queues one coordinator work_return run after delivering a specialist result", async () => {
     const harness = makeDeps({
       existingScopedTask: {
@@ -2533,8 +2533,8 @@ describe("specialist terminal outcomes beyond result and failure", () => {
   );
 });
 
-describe("T07:6 (B4, root decision): fail-closed reading of scoped_tasks.delegationCeiling", () => {
-  it("a legacy/incompatible format (T07:4's first-loop boolean-per-server shape) yields no MCP access, never full access", async () => {
+describe("fail-closed reading of scoped_tasks.delegationCeiling", () => {
+  it("a legacy/incompatible format (a boolean per server) yields no MCP access, never full access", async () => {
     const harness = makeDeps({
       seedScopedTasks: [
         {
@@ -2545,8 +2545,8 @@ describe("T07:6 (B4, root decision): fail-closed reading of scoped_tasks.delegat
           executorBotId: "bot-specialist-legacy",
           spawnKey: "spawn-legacy-format",
           status: "dispatched",
-          // The exact shape the unmerged T07:4 first loop produced (`{ "mcp:<id>": true }`) —
-          // never deployed, no migration, but this must still fail closed if it were ever seen.
+          // A boolean per server (`{ "mcp:<id>": true }`) is not the current format, and must
+          // fail closed if it were ever seen.
           delegationCeiling: { "mcp:server-a": true },
         },
       ],
@@ -2630,7 +2630,7 @@ describe("T07:6 (B4, root decision): fail-closed reading of scoped_tasks.delegat
   });
 });
 
-describe("computeEffectiveMcpAccess / isMcpToolAdmitted (T07:4 correction — Q12 tool-granular ceiling, B1/B2/B3)", () => {
+describe("computeEffectiveMcpAccess / isMcpToolAdmitted (tool-granular ceiling)", () => {
   it("an ordinary bot's effective access is exactly its own current, enabled MCP connector assignment (allowAllTools)", async () => {
     const harness = makeDeps({
       botMcpServers: [
@@ -2675,7 +2675,7 @@ describe("computeEffectiveMcpAccess / isMcpToolAdmitted (T07:4 correction — Q1
     ).toBe(false);
   });
 
-  it("root's decision (Q12): a specialist's effective access on a server is the tool-by-tool intersection of its own assignment and its coordinator's effective access — allowAllTools never widens beyond the other side", async () => {
+  it("a specialist's effective access on a server is the tool-by-tool intersection of its own assignment and its coordinator's effective access — allowAllTools never widens beyond the other side", async () => {
     const harness = makeDeps({
       seedScopedTasks: [
         {
@@ -2708,7 +2708,7 @@ describe("computeEffectiveMcpAccess / isMcpToolAdmitted (T07:4 correction — Q1
     });
   });
 
-  it("B3 (priority finding): a tool the specialist's own assignment allows but the coordinator's effective access does not is refused", async () => {
+  it("a tool the specialist's own assignment allows but the coordinator's effective access does not is refused", async () => {
     const harness = makeDeps({
       seedScopedTasks: [
         {
@@ -2726,8 +2726,8 @@ describe("computeEffectiveMcpAccess / isMcpToolAdmitted (T07:4 correction — Q1
       ],
       botMcpServers: [
         // The specialist's own (profile-copied) assignment is allow-all, wider than what its
-        // coordinator ever had — this is exactly the escalation path Terra's review found live
-        // in mcp-connector.ts before this correction.
+        // coordinator ever had — an escalation path through mcp-connector.ts if only the
+        // specialist's own assignment were checked.
         { botId: "bot-specialist-b3", serverId: "server-a", allowAllTools: true },
         {
           botId: "bot-coord-b3",
@@ -2753,7 +2753,7 @@ describe("computeEffectiveMcpAccess / isMcpToolAdmitted (T07:4 correction — Q1
     ).toBe(false);
   });
 
-  it("B2 (transitive revocation): A → B → C — a right revoked at the root disappears for the grandchild on its very next admission, without touching B's own ceiling", async () => {
+  it("transitive revocation: A → B → C — a right revoked at the root disappears for the grandchild on its very next admission, without touching B's own ceiling", async () => {
     const harness = makeDeps({
       seedScopedTasks: [
         {
@@ -2908,7 +2908,7 @@ describe("computeEffectiveMcpAccess / isMcpToolAdmitted (T07:4 correction — Q1
   });
 });
 
-describe("createNativeRightsGuard (T07:4 point 3 — native specialist tool admission, B1 declared NOT RUN in production)", () => {
+describe("createNativeRightsGuard (native specialist tool admission)", () => {
   it("admits a tool call whose route is currently effective, and refuses one that is not, recomputing on every call via the same source of truth as mcp-connector.ts", async () => {
     const harness = makeDeps({
       seedScopedTasks: [

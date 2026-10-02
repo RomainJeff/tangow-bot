@@ -13,7 +13,7 @@ import { parseScreenLeaseId } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { normalizeWorkspacePath, teamBotWorkspaceDirectory } from "./computer-support.js";
 import { LocalAgentHomeStore } from "./home.js";
-import { writeJ2ProvisioningDiagnostic } from "./j2-provisioning-diagnostics.js";
+import { writeProvisioningDiagnostic } from "./provisioning-diagnostics.js";
 
 export const PORTABLE_TRANSFER_BATCH_BYTES = 8 * 1024 * 1024;
 
@@ -72,7 +72,7 @@ export async function ensureComputerWorkspaceLayout(
     step: string,
     extra: Record<string, string | number | boolean | undefined> = {},
   ) =>
-    writeJ2ProvisioningDiagnostic({
+    writeProvisioningDiagnostic({
       step,
       computerId: computer.id,
       botId,

@@ -26,7 +26,7 @@ import {
   computerObservation,
   normalizeWorkspacePath,
 } from "./computer-support.js";
-import { writeJ2ProvisioningDiagnostic } from "./j2-provisioning-diagnostics.js";
+import { writeProvisioningDiagnostic } from "./provisioning-diagnostics.js";
 import { readBodyCapped, withAbort } from "./web-ssrf.js";
 
 export const MAX_SANDBOX_ERROR_RESPONSE_BYTES = 8 * 1024;
@@ -225,7 +225,7 @@ export class DockerSandboxProvider implements SandboxProvider {
       step: string,
       extra: Record<string, string | number | boolean | undefined> = {},
     ) =>
-      writeJ2ProvisioningDiagnostic({
+      writeProvisioningDiagnostic({
         step,
         computerId: computer.id,
         botId: computer.botId,

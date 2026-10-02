@@ -9,7 +9,7 @@ const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
   process.env.VERIFY_DATABASE && databaseUrl ? describe.sequential : describe.skip;
 
-describePostgres("native session store durable generation fence (T03)", () => {
+describePostgres("native session store durable generation fence", () => {
   let store: NativeSessionStore;
   let db: ReturnType<typeof createDb>;
 

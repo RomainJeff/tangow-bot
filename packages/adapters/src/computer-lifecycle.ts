@@ -26,8 +26,8 @@ import {
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
-import { writeJ2ProvisioningDiagnostic } from "./j2-provisioning-diagnostics.js";
 import { marketplacesRoot } from "./marketplace-store.js";
+import { writeProvisioningDiagnostic } from "./provisioning-diagnostics.js";
 import { userSkillsRoot } from "./skill-store.js";
 
 type ComputerUpdateProgress = (
@@ -175,7 +175,7 @@ async function diagnoseProvisionCasMismatch(
     startedAt: number;
   },
 ): Promise<void> {
-  if (process.env.RAKAZO_J2_DIAGNOSTICS !== "1") return;
+  if (process.env.RAKAZO_PROVISIONING_DIAGNOSTICS !== "1") return;
   const actual = await prisma.computer
     .findUnique({
       where: { id: input.computerId },
@@ -214,7 +214,7 @@ async function diagnoseProvisionCasMismatch(
     ...(actual.maintenanceId !== input.expected.maintenanceId ? ["maintenanceId"] : []),
     ...(!hasUseRight ? ["bots∪usageGrants"] : []),
   ];
-  await writeJ2ProvisioningDiagnostic({
+  await writeProvisioningDiagnostic({
     step: input.step,
     computerId: input.computerId,
     callerBotId: input.callerBotId,
@@ -306,7 +306,7 @@ export async function provisionComputer(
     step: string,
     extra: Record<string, string | number | boolean | undefined> = {},
   ) =>
-    writeJ2ProvisioningDiagnostic({
+    writeProvisioningDiagnostic({
       step,
       computerId,
       botId: context.botId,
@@ -398,7 +398,7 @@ export async function provisionComputer(
       ...claimWhere,
       maintenanceId: existing.maintenanceId ?? null,
       // A Computer remains owned by its bots. A specialist may additionally be granted
-      // use of its coordinator's mission Computer (T04:6), without changing ownership.
+      // use of its coordinator's mission Computer, without changing ownership.
       ...computerUseRight(context.botId),
     },
     data: { state: "booting", updatedAt: claimStamp, bootClaimStamp: claimStamp },
@@ -646,7 +646,7 @@ async function waitForComputerReady(
     step: string,
     extra: Record<string, string | number | boolean | undefined> = {},
   ) =>
-    writeJ2ProvisioningDiagnostic({
+    writeProvisioningDiagnostic({
       step,
       computerId,
       botId: context.botId,

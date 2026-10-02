@@ -261,14 +261,14 @@ describe.skipIf(!enabled)("native harness choice on real Docker", () => {
           spaceId: actor.spaceId,
           userId: actor.userId,
           credentialId,
-          modelId: "gpt-5.6-terra",
+          modelId: "gpt-5.6-test",
           isDefault: true,
         },
       });
       await rpc("bots/update", {
         botId: bot.id,
         modelProvider: "openai-codex",
-        modelId: "gpt-5.6-terra",
+        modelId: "gpt-5.6-test",
       });
       const storedBot = await handles.prisma.bot.findUniqueOrThrow({
         where: { id: bot.id },

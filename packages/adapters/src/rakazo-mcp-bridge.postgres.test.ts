@@ -22,7 +22,7 @@ async function issueArmed(host: NativeSessionHost, botId: string, threadId: stri
   return issued;
 }
 
-describePostgres("MCP authorized tool call, correlated to a binding generation (T02)", () => {
+describePostgres("MCP authorized tool call, correlated to a binding generation", () => {
   let pool: Pool;
   let host: NativeSessionHost;
 

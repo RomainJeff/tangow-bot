@@ -21,7 +21,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// NOT RUN in this sandbox (no Docker/Postgres). Terra runs this at review with:
+// Needs Postgres; run it with:
 //   VERIFY_DATABASE=1 DATABASE_URL=<test db> pnpm exec vitest run packages/adapters/src/delegated-tasks.postgres.test.ts
 const describePostgres =
   process.env.VERIFY_DATABASE && process.env.DATABASE_URL ? describe.sequential : describe.skip;
@@ -50,13 +50,13 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     const id = randomUUID();
     orgIds.push(id);
     await prisma.user.create({
-      data: { id, name: "T04 test", email: `${id}@example.test`, emailVerified: true },
+      data: { id, name: "Delegation test", email: `${id}@example.test`, emailVerified: true },
     });
     await prisma.organization.create({
-      data: { id, name: "T04 test", slug: id, createdAt: new Date() },
+      data: { id, name: "Delegation test", slug: id, createdAt: new Date() },
     });
     await prisma.space.create({
-      data: { id, organizationId: id, name: "T04 test", isDefault: true },
+      data: { id, organizationId: id, name: "Delegation test", isDefault: true },
     });
     await prisma.member.create({
       data: { id, organizationId: id, userId: id, role: "owner", createdAt: new Date() },
@@ -65,8 +65,8 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       data: {
         spaceId: id,
         userId: id,
-        scopeKey: `t04-mission-scope-${id}`,
-        homeKey: `t04-mission-home-${id}`,
+        scopeKey: `delegation-mission-scope-${id}`,
+        homeKey: `delegation-mission-home-${id}`,
         kind: "fake",
       },
     });
@@ -159,7 +159,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       threadId: receipt.threadId,
       scopedTaskId: receipt.workId,
       ref,
-      nativeRef: "t08-native-thread",
+      nativeRef: "delegation-native-thread",
       processRef,
       harness: "codex-native",
       executionTarget,
@@ -168,12 +168,12 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     await store.stopUnconfirmed({ botId: receipt.botId, threadId: receipt.threadId, ref });
   }
 
-  it("creates an inspectable work identity, replays idempotently, then runs scenario 2", async () => {
+  it("creates an inspectable work identity, replays idempotently, then runs a followup", async () => {
     const s = await setup();
     const tasks = createDelegatedTasks(s.deps);
     const spawnKey = `spawn-${randomUUID()}`;
 
-    // T07:6 (B5): the coordinator holds a real, wider MCP assignment; the delegate call
+    // The coordinator holds a real, wider MCP assignment; the delegate call
     // explicitly requests a narrower subset of it. The persisted ceiling must equal the
     // request (request ∩ coordinator's effective access, and the request is a strict
     // subset here so the intersection is just the request), never the coordinator's full
@@ -257,7 +257,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     });
     expect(specialistCountAfter).toBe(specialistCountBefore);
 
-    // Scenario 2: a result does not close the task; a complément runs the same
+    // A result does not close the task; a complément runs the same
     // specialist and delivers a second return to the coordinator thread.
     await recordSpecialistResult(s.deps, {
       workId: receipt.workId,
@@ -687,7 +687,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         harness: "codex-native",
         brief: "Clean up after this work",
         requestedRights: {},
-        spawnKey: `t08-close-${randomUUID()}`,
+        spawnKey: `delegation-close-${randomUUID()}`,
       },
       s.context,
     );
@@ -696,8 +696,8 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         spaceId: s.id,
         userId: s.id,
         scope: "dedicated",
-        scopeKey: `t08-dedicated-scope-${randomUUID()}`,
-        homeKey: `t08-dedicated-home-${randomUUID()}`,
+        scopeKey: `delegation-dedicated-scope-${randomUUID()}`,
+        homeKey: `delegation-dedicated-home-${randomUUID()}`,
         kind: "fake",
       },
     });
@@ -707,7 +707,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         spaceId: s.id,
         userId: s.id,
         botId: receipt.botId,
-        name: "T08 routine",
+        name: "Cleanup routine",
         prompt: "Never run",
         crons: ["0 * * * *"],
         active: true,
@@ -797,7 +797,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         harness: "codex-native",
         brief: "Use the shared mission Computer",
         requestedRights: {},
-        spawnKey: `t08-placement-${randomUUID()}`,
+        spawnKey: `delegation-placement-${randomUUID()}`,
       },
       s.context,
     );
@@ -986,7 +986,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         harness: "codex-native",
         brief: "Recover terminal cleanup",
         requestedRights: {},
-        spawnKey: `t08-reconcile-${randomUUID()}`,
+        spawnKey: `delegation-reconcile-${randomUUID()}`,
       },
       s.context,
     );
@@ -995,8 +995,8 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         spaceId: s.id,
         userId: s.id,
         scope: "dedicated",
-        scopeKey: `t08-reconcile-scope-${randomUUID()}`,
-        homeKey: `t08-reconcile-home-${randomUUID()}`,
+        scopeKey: `delegation-reconcile-scope-${randomUUID()}`,
+        homeKey: `delegation-reconcile-home-${randomUUID()}`,
         kind: "fake",
         providerRef: `fake-provider-${randomUUID()}`,
       },
@@ -1006,7 +1006,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       data: { computerId: providerComputer.id },
     });
     await prisma.scopedTask.update({ where: { id: receipt.workId }, data: { status: "closed" } });
-    await seedUnconfirmedNativeStop(receipt, providerComputer.id, "t08-reconfirmable-process");
+    await seedUnconfirmedNativeStop(receipt, providerComputer.id, "cleanup-reconfirmable-process");
     const sandbox = new FakeSandboxProvider() as FakeSandboxProvider &
       Pick<SandboxProvider, "reconfirmNativeProcess">;
     const reconfirm = vi.fn(async () => "stopped" as const);
@@ -1037,7 +1037,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         harness: "codex-native",
         brief: "Do not clean without proof",
         requestedRights: {},
-        spawnKey: `t08-unconfirmed-${randomUUID()}`,
+        spawnKey: `delegation-unconfirmed-${randomUUID()}`,
       },
       s.context,
     );
@@ -1046,8 +1046,8 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         spaceId: s.id,
         userId: s.id,
         scope: "dedicated",
-        scopeKey: `t08-unconfirmed-scope-${randomUUID()}`,
-        homeKey: `t08-unconfirmed-home-${randomUUID()}`,
+        scopeKey: `delegation-unconfirmed-scope-${randomUUID()}`,
+        homeKey: `delegation-unconfirmed-home-${randomUUID()}`,
         kind: "fake",
         providerRef: `fake-provider-${randomUUID()}`,
       },
@@ -1060,7 +1060,11 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       where: { id: receipt.workId },
       data: { status: "cancelled" },
     });
-    await seedUnconfirmedNativeStop(receipt, providerComputer.id, "t08-still-running-process");
+    await seedUnconfirmedNativeStop(
+      receipt,
+      providerComputer.id,
+      "delegation-still-running-process",
+    );
     const sandbox = new FakeSandboxProvider() as FakeSandboxProvider &
       Pick<SandboxProvider, "reconfirmNativeProcess">;
     const reconfirm = vi.fn(async () => "stop_unconfirmed" as const);
@@ -1093,7 +1097,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     });
   });
 
-  it("finding 7: two concurrent delegate calls on the same spawnKey never create two specialists", async () => {
+  it("two concurrent delegate calls on the same spawnKey never create two specialists", async () => {
     const s = await setup();
     const spawnKey = `spawn-concurrent-${randomUUID()}`;
     // A second real connection so the two calls race for the same DB unique constraints
@@ -1409,7 +1413,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
   });
 
   /**
-   * T07: a specialist that itself holds an open scoped task (`root`) delegates further;
+   * A specialist that itself holds an open scoped task (`root`) delegates further;
    * the child's parent/root/depth come only from `Run.scopedTaskId` of the calling run,
    * never a workId argument. Returns both the parent receipt and the child's own
    * coordinator context, so a caller can keep delegating one level deeper.
@@ -1445,7 +1449,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     return { receipt, actor, context };
   }
 
-  it("T07 task 1: wires a specialist's further delegation one depth deeper", async () => {
+  it("wires a specialist's further delegation one depth deeper", async () => {
     const s = await setup();
     const tasks = createDelegatedTasks(s.deps);
     const rootReceipt = await tasks.apply(
@@ -1455,7 +1459,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         harness: "codex-native",
         brief: "Prepare the summary",
         requestedRights: {},
-        spawnKey: `t07-root-${randomUUID()}`,
+        spawnKey: `delegation-root-${randomUUID()}`,
       },
       s.context,
     );
@@ -1463,7 +1467,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     const { receipt: childReceipt, actor: childActor } = await delegateChild(
       s,
       rootReceipt,
-      `t07-child-${randomUUID()}`,
+      `delegation-child-${randomUUID()}`,
     );
 
     const childTree = await tasks.inspect(childReceipt.workId, childActor);
@@ -1471,14 +1475,14 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     expect(childTree.root.rootScopedTaskId).toBe(rootReceipt.workId);
     expect(childTree.root.depth).toBe(1);
 
-    // An ordinary coordinator's own delegation, unaffected by this lot (non-regression).
+    // An ordinary coordinator's own delegation, unaffected by the delegation tree.
     const rootTree = await tasks.inspect(rootReceipt.workId, s.actor);
     expect(rootTree.root.parentScopedTaskId).toBeNull();
     expect(rootTree.root.depth).toBe(0);
   });
 
   it(
-    "T07 rouge1/vert1 + scenario 2 (b: child created, then root cancelled): cascades to the " +
+    "a child created, then its root cancelled: cascades to the " +
       "descendant and its Run, revokes its grant, leaves a lateral peer intact",
     async () => {
       const s = await setup();
@@ -1490,7 +1494,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
           harness: "codex-native",
           brief: "Prepare the summary",
           requestedRights: {},
-          spawnKey: `t07-cascade-root-${randomUUID()}`,
+          spawnKey: `delegation-cascade-root-${randomUUID()}`,
         },
         s.context,
       );
@@ -1502,7 +1506,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
           harness: "codex-native",
           brief: "Unrelated work",
           requestedRights: {},
-          spawnKey: `t07-cascade-peer-${randomUUID()}`,
+          spawnKey: `delegation-cascade-peer-${randomUUID()}`,
         },
         s.context,
       );
@@ -1511,7 +1515,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       const { receipt: childReceipt, actor: childActor } = await delegateChild(
         s,
         rootReceipt,
-        `t07-cascade-child-${randomUUID()}`,
+        `delegation-cascade-child-${randomUUID()}`,
       );
 
       await tasks.apply(
@@ -1557,9 +1561,9 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     },
   );
 
-  // REVIEW T07: an already-closed intermediary is still a structural link in the tree.
+  // An already-closed intermediary is still a structural link in the tree.
   // This intentionally exposes whether cancellation reaches its active descendant.
-  it("REVIEW T07: cancellation crosses a closed intermediary to its active descendant", async () => {
+  it("cancellation crosses a closed intermediary to its active descendant", async () => {
     const s = await setup();
     const tasks = createDelegatedTasks(s.deps);
     const rootReceipt = await tasks.apply(
@@ -1569,19 +1573,19 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         harness: "codex-native",
         brief: "Prepare the summary",
         requestedRights: {},
-        spawnKey: `t07-review-closed-link-root-${randomUUID()}`,
+        spawnKey: `delegation-closed-link-root-${randomUUID()}`,
       },
       s.context,
     );
     const { receipt: childReceipt } = await delegateChild(
       s,
       rootReceipt,
-      `t07-review-closed-link-child-${randomUUID()}`,
+      `delegation-closed-link-child-${randomUUID()}`,
     );
     const { receipt: grandchildReceipt, actor: grandchildActor } = await delegateChild(
       s,
       childReceipt,
-      `t07-review-closed-link-grandchild-${randomUUID()}`,
+      `delegation-closed-link-grandchild-${randomUUID()}`,
     );
 
     // Closing with an open descendant is now refused; a link closed before that rule still
@@ -1606,7 +1610,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
   });
 
   it(
-    "T07 scenario 2 (a: root cancelled and fully committed, then a child spawn is attempted): " +
+    "a root cancelled and fully committed, then a child spawn is attempted: " +
       "refused, no orphan active work",
     async () => {
       const s = await setup();
@@ -1618,7 +1622,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
           harness: "codex-native",
           brief: "Prepare the summary",
           requestedRights: {},
-          spawnKey: `t07-refuse-root-${randomUUID()}`,
+          spawnKey: `delegation-refuse-root-${randomUUID()}`,
         },
         s.context,
       );
@@ -1628,7 +1632,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         s.context,
       );
 
-      const spawnKey = `t07-refuse-child-${randomUUID()}`;
+      const spawnKey = `delegation-refuse-child-${randomUUID()}`;
       await expect(delegateChild(s, rootReceipt, spawnKey)).rejects.toBeInstanceOf(WorkClosedError);
 
       // No scoped_tasks row and no orphan active specialist bot for the refused attempt.
@@ -1644,7 +1648,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
   );
 
   it(
-    "T07 scenario 2 race: a real concurrent spawn and cancel on the same parent never leave " +
+    "a real concurrent spawn and cancel on the same parent never leave " +
       "an active child under a cancelled root, whichever one commits first",
     async () => {
       const s = await setup();
@@ -1656,7 +1660,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
           harness: "codex-native",
           brief: "Prepare the summary",
           requestedRights: {},
-          spawnKey: `t07-race-root-${randomUUID()}`,
+          spawnKey: `delegation-race-root-${randomUUID()}`,
         },
         s.context,
       );
@@ -1665,7 +1669,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       // FOR UPDATE` on the *same* scoped_tasks row must be a genuine Postgres lock wait,
       // not in-process serialization on a single client.
       const db2 = createDb(process.env.DATABASE_URL!);
-      const spawnKey = `t07-race-child-${randomUUID()}`;
+      const spawnKey = `delegation-race-child-${randomUUID()}`;
       const childActor: AuthorizedActor = {
         userId: s.id,
         spaceId: s.id,
@@ -1738,7 +1742,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
   );
 
   it(
-    "T07:3 residual of B1: a close committing between the cascade's read and its guarded " +
+    "a close committing between the cascade's read and its guarded " +
       "write is never stomped, its active sub-tree is still reached and cancelled",
     async () => {
       const s = await setup();
@@ -1750,17 +1754,17 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
           harness: "codex-native",
           brief: "Prepare the summary",
           requestedRights: {},
-          spawnKey: `t073-root-${randomUUID()}`,
+          spawnKey: `delegation-root-${randomUUID()}`,
         },
         s.context,
       );
       const { receipt: childReceipt, actor: childAsCoordinatorActor } = await delegateChild(
         s,
         rootReceipt,
-        `t073-child-${randomUUID()}`,
+        `delegation-child-${randomUUID()}`,
       );
       const { receipt: grandchildReceipt, actor: grandchildAsCoordinatorActor } =
-        await delegateChild(s, childReceipt, `t073-grandchild-${randomUUID()}`);
+        await delegateChild(s, childReceipt, `delegation-grandchild-${randomUUID()}`);
 
       // A second real connection: it holds the row lock on the child's scoped_tasks
       // row for as long as we need to prove the cascade's own guarded write actually

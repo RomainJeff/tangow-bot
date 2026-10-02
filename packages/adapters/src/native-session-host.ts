@@ -2,13 +2,13 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 
 /**
- * T02 binding state: one row per bot+thread in `native_sessions` (PA §3.3).
+ * Binding state: one row per bot+thread in `native_sessions`.
  * The transport (session host) resolves identity and issues an opaque ticket
  * bound to the current attempt/generation via `issueTicket`; the MCP bridge
  * never receives botId/threadId/generation from the caller's own arguments,
- * only the ticket (CONTEXT.md "Autorisation de tour"). `reserveCall` verifies
+ * only the ticket. `reserveCall` verifies
  * the ticket and reserves the callId atomically against a concurrent
- * invalidation, recording the reservation in `lifecycle_events` (PA §3.4).
+ * invalidation, recording the reservation in `lifecycle_events`.
  */
 export interface NativeSessionHost {
   ensureBinding(botId: string, threadId: string): Promise<{ generation: number }>;
@@ -19,7 +19,7 @@ export interface NativeSessionHost {
   /** Parks a ticket without revoking it; calls are stale until a later arm. */
   disarmTicket?(ticket: string): Promise<void>;
   /**
-   * Retires a ticket at the end of a normal attempt (T01's `close()`),
+   * Retires a ticket at the end of a normal attempt (the endpoint's `close()`),
    * atomically clearing `activeAttemptId` only if it still equals `ticket`.
    * Never advances the generation: the generation carries "attempt N is
    * refused because N+1 replaced it", not routine cleanup of a process that

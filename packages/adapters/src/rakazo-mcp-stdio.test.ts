@@ -49,7 +49,7 @@ describe("rakazo-mcp-stdio entry point (real spawned process)", () => {
     const stderrChunks: Buffer[] = [];
     transport.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
-    const client = new Client({ name: "t02-refuse-test-client", version: "0.0.0" });
+    const client = new Client({ name: "refuse-test-client", version: "0.0.0" });
     await expect(client.connect(transport)).rejects.toBeTruthy();
 
     const stderrText = Buffer.concat(stderrChunks).toString("utf8");
@@ -73,7 +73,7 @@ describe("rakazo-mcp-stdio entry point (real spawned process)", () => {
       },
     });
 
-    const client = new Client({ name: "t02-stdio-test-client", version: "0.0.0" });
+    const client = new Client({ name: "stdio-test-client", version: "0.0.0" });
     await client.connect(transport);
     try {
       const result = await client.callTool({

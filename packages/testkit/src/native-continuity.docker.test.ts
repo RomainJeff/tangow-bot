@@ -136,7 +136,7 @@ function nativeRequest(runId: string, continuity: Continuity): AgentRunRequest {
     tools: [],
     model: {
       provider: "openai-codex",
-      id: "gpt-5.6-terra",
+      id: "gpt-5.6-test",
       // This is intentionally not a credential. The real image must either
       // reject it without OAuth or complete the real app-server exchange.
       oauth: {
@@ -158,7 +158,7 @@ function nativeRequest(runId: string, continuity: Continuity): AgentRunRequest {
   };
 }
 
-type Campaign = {
+type Stack = {
   root: string;
   context: AdapterContext;
   supervisor: ReturnType<typeof serve>;
@@ -167,7 +167,7 @@ type Campaign = {
 };
 
 describe.skipIf(!enabled).sequential("native continuity on real Docker", () => {
-  let campaign: Campaign | undefined;
+  let stack: Stack | undefined;
 
   beforeAll(async () => {
     const root = await mkdtemp(path.join(tmpdir(), "rakazo-continuity-"));
@@ -204,7 +204,7 @@ describe.skipIf(!enabled).sequential("native continuity on real Docker", () => {
         { path: "continuity/.keep", content: new Uint8Array() },
         context,
       );
-      campaign = { root, context, supervisor, sandbox, computer };
+      stack = { root, context, supervisor, sandbox, computer };
     } catch (error) {
       await new Promise<void>((resolve) => supervisor?.close(() => resolve()) ?? resolve());
       await rm(root, { recursive: true, force: true }).catch(() => undefined);
@@ -213,15 +213,15 @@ describe.skipIf(!enabled).sequential("native continuity on real Docker", () => {
   }, 30_000);
 
   afterAll(async () => {
-    if (!campaign) return;
-    const active = campaign;
+    if (!stack) return;
+    const active = stack;
     await active.sandbox.destroy(active.computer, active.context).catch(() => undefined);
     await new Promise<void>((resolve) => active.supervisor.close(() => resolve()));
     await rm(active.root, { recursive: true, force: true }).catch(() => undefined);
   });
 
   it("stops a real TERM-resistant process, proves its group empty, and reconfirms another KILLed session", async () => {
-    const { sandbox, computer, context } = campaign!;
+    const { sandbox, computer, context } = stack!;
     const stubborn = await sandbox.startNativeProcess!(
       computer,
       {
@@ -298,7 +298,7 @@ describe.skipIf(!enabled).sequential("native continuity on real Docker", () => {
   }, 30_000);
 
   it("runs the parked process probe after its original turn deadline has expired", async () => {
-    const { sandbox, computer, context } = campaign!;
+    const { sandbox, computer, context } = stack!;
     const native = await sandbox.startNativeProcess!(
       computer,
       { argv: ["sh", "-c", "while :; do sleep 1; done"], cwd: "continuity" },
@@ -325,7 +325,7 @@ describe.skipIf(!enabled).sequential("native continuity on real Docker", () => {
   }, 30_000);
 
   it("proves whether a fresh app-server can start and resume without login", async () => {
-    const { sandbox, computer, context } = campaign!;
+    const { sandbox, computer, context } = stack!;
     const homeA =
       "/tmp/rakazo-codex-continuity-runtime-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const homeB =
@@ -437,7 +437,7 @@ describe.skipIf(!enabled).sequential("native continuity on real Docker", () => {
   it.skipIf(!codexAuthEnabled)(
     "reconstructs through thread/resume with an authenticated Codex image (requires RUN_NATIVE_CONTINUITY_CODEX_AUTH=1)",
     async () => {
-      const { sandbox, computer, context } = campaign!;
+      const { sandbox, computer, context } = stack!;
       let started: NativeProcess | undefined;
       const nativeWrites: string[][] = [];
       const runtimeSandbox = Object.create(sandbox) as DockerSandboxProvider;

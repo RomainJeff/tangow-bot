@@ -80,8 +80,8 @@ export class WorkStillWorkingError extends Error {
 export class DelegationLimitError extends Error {}
 
 /**
- * T07:6 (B5): a requested MCP ceiling that exceeds the coordinator's own effective access —
- * refused outright, never silently truncated down to what the coordinator holds.
+ * A requested MCP ceiling that exceeds the coordinator's own effective access — refused
+ * outright, never silently truncated down to what the coordinator holds.
  */
 export class RightsExceededError extends Error {
   constructor(
@@ -275,19 +275,12 @@ async function revokeMissionComputerUseIfLastWork(
 }
 
 /**
- * T07:4 correction (Terra review, B3 — the priority finding): the previous loop reduced a
- * connector assignment to one boolean per server, losing `allowAllTools`/`allowedTools`
- * granularity, and never touched the one production path that actually admits an MCP tool
- * call (`mcp-connector.ts`'s `execute`/`authorizedTools`, which checks only the bot's own
- * `BotMcpServer` row — a profile-copied assignment the coordinator never held was a live
- * escalation). This is the single source of truth both `mcp-connector.ts` and the native
- * bridge guard now call.
- *
- * Root's decision on the combination rule (Q12, "jamais plus que le coordinateur"): on a
- * given MCP server, the tools available to a specialist are the tool-by-tool intersection
- * of its own assignment (usually copied from its profile by `applyBotProfile`) and its
- * coordinator's *effective* access — `allowAllTools` on either side never widens beyond
- * what the other side actually grants.
+ * Combination rule, never more than the coordinator: on a given MCP server, the tools
+ * available to a specialist are the tool-by-tool intersection of its own assignment (usually
+ * copied from its profile by `applyBotProfile`) and its coordinator's *effective* access —
+ * `allowAllTools` on either side never widens beyond what the other side actually grants.
+ * Both `mcp-connector.ts` and the native bridge guard admit a call through this rule, so a
+ * profile-copied assignment the coordinator never held cannot be used.
  */
 function intersectServerAccess(
   a: McpServerAccess | undefined,
@@ -337,8 +330,7 @@ async function computeOwnMcpAccess(prisma: PrismaClient, botId: string): Promise
 }
 
 /**
- * T07:4 correction (B2 — transitive revocation): a specialist's effective MCP access, per
- * server, is its own current assignment ∩ its persisted `delegationCeiling` (the snapshot of
+ * A specialist's effective MCP access, per server, is its own current assignment ∩ its persisted `delegationCeiling` (the snapshot of
  * its coordinator's effective access acquired at delegation time, immutable) ∩ its
  * coordinator's effective access **recomputed right now, recursively** — not the
  * coordinator's raw current assignment. Recursing through the *effective* access (not
@@ -354,14 +346,11 @@ async function computeOwnMcpAccess(prisma: PrismaClient, botId: string): Promise
  * intersect: its effective access is simply its own current assignment.
  */
 /**
- * T07:6 (B4, root decision): `scoped_tasks.delegationCeiling` is a `Json` column, and this
- * codebase's history already produced one incompatible shape on an unmerged branch (T07:4's
- * first loop, `{ "mcp:<serverId>": true }`, superseded before it ever reached integration —
- * no migration exists, nothing is deployed with it). Reading it is nonetheless defensive:
- * absent, empty, or a value that does not parse as `McpAccessCeiling` for a given server
- * yields **no access** for that server, never full access — a malformed or unrecognized
- * ceiling must never be read as "no restriction". Each server entry is validated
- * independently, so one corrupt entry never invalidates the others.
+ * `scoped_tasks.delegationCeiling` is a `Json` column, so reading it is defensive: absent,
+ * empty, or a value that does not parse as `McpAccessCeiling` for a given server yields
+ * **no access** for that server, never full access — a malformed or unrecognized ceiling
+ * must never be read as "no restriction". Each server entry is validated independently, so
+ * one corrupt entry never invalidates the others.
  */
 function sanitizeMcpAccessCeiling(value: unknown): McpAccessCeiling {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -424,10 +413,10 @@ export async function computeEffectiveMcpAccess(
  * once persisted — it only ever caps *growth*; revocation is handled independently by
  * `computeEffectiveMcpAccess` re-reading the coordinator's access live on every admission.
  *
- * T07:6 (B5, root decision): `requested` is a *narrowing* request, in the same
- * `McpAccessCeiling` shape, never a way to widen the ceiling beyond the coordinator's
- * effective access. Empty (`{}`, the only shape `executor.ts` sends today): the ceiling is
- * the coordinator's full effective access, unchanged from before this correction. Non-empty:
+ * `requested` is a *narrowing* request, in the same `McpAccessCeiling` shape, never a way
+ * to widen the ceiling beyond the coordinator's effective access. Empty (`{}`, the only shape
+ * `executor.ts` sends today): the ceiling is the coordinator's full effective access.
+ * Non-empty:
  * each requested server is checked against the coordinator's effective access for that same
  * server — `allowAllTools` requested but not held, or a requested tool absent from the
  * coordinator's own list (whether the coordinator itself is `allowAllTools` or a concrete
@@ -470,7 +459,7 @@ async function computeDelegationCeiling(
 }
 
 /**
- * T07:4 correction (B3): the single admission function called both by `mcp-connector.ts`
+ * The single admission function called both by `mcp-connector.ts`
  * (the real, already-composed path for a Pi/in-process bot) and by the native MCP bridge
  * guard (`createNativeRightsGuard` below) — one source of truth for "is this bot currently
  * allowed to call this tool on this server", never two divergent boundaries.
@@ -519,8 +508,7 @@ function assertActorIsCoordinator(
 }
 
 /**
- * DelegatedTasks.apply/inspect (PA-CONTRAT-CONVERGENCE.md §6, seam S4).
- * `delegate` only ever targets `WorkTarget.kind === "from_profile"` (ADR-0001/ADR-0002);
+ * DelegatedTasks.apply/inspect. `delegate` only ever targets `WorkTarget.kind === "from_profile"`;
  * a delegation to an existing persistent bot stays a PeerMessage (bot-messages.ts).
  */
 export function createDelegatedTasks(deps: Deps) {
@@ -571,7 +559,7 @@ async function applyDelegate(
     where: { spaceId_spawnKey: { spaceId: context.actor.spaceId, spawnKey: command.spawnKey } },
   });
   if (existing) {
-    // Finding 3: a replayed spawnKey only ever hands the receipt back to the same coordinator.
+    // A replayed spawnKey only ever hands the receipt back to the same coordinator.
     assertActorIsCoordinator(context, existing, existing.id);
     return {
       workId: existing.id,
@@ -595,12 +583,12 @@ async function applyDelegate(
   });
   if (!coordinator.thread) throw new Error("Coordinator bot is missing its thread");
   const coordinatorThreadId = coordinator.thread.id;
-  // Finding 3: the actor must own the coordinator bot it is delegating from.
+  // The actor must own the coordinator bot it is delegating from.
   if (coordinator.userId !== context.actor.userId) {
     throw new WorkNotAuthorizedError(command.spawnKey);
   }
 
-  // T07:6 (B5): the ceiling acquired at delegation is the coordinator's own effective MCP
+  // The ceiling acquired at delegation is the coordinator's own effective MCP
   // access (recursive — see computeDelegationCeiling above), narrowed by `requestedRights`
   // when it is non-empty; refuses outright (RightsExceededError) rather than truncating a
   // request that exceeds what the coordinator actually holds.
@@ -610,10 +598,10 @@ async function applyDelegate(
     command.requestedRights,
   );
 
-  // Task 1 (T07): the parent of this new task is whichever scoped task the calling *run*
-  // itself belongs to (`Run.scopedTaskId`) — never a workId supplied by the model. An
-  // ordinary coordinator's run has no scopedTaskId and its child stays at the root
-  // (depth 0, parentScopedTaskId null), unchanged from before this lot. This is a cheap
+  // The parent of this new task is whichever scoped task the calling *run* itself belongs
+  // to (`Run.scopedTaskId`) — never a workId supplied by the model. An ordinary
+  // coordinator's run has no scopedTaskId and its child stays at the root (depth 0,
+  // parentScopedTaskId null). This is a cheap
   // pre-check to avoid spawning a specialist bot for a delegate call whose parent is
   // already terminal in the common (non-racy) case; the authoritative check happens
   // under a row lock inside the transaction below.
@@ -727,7 +715,7 @@ async function applyDelegate(
     throw new Error(error);
   }
 
-  // Finding 7: dedup read, spawnBot and scoped_tasks insert are not one unit, so two
+  // The dedup read, spawnBot and the scoped_tasks insert are not one unit, so two
   // concurrent callers can both pass the dedup check above. spawnBot itself is already
   // idempotent per spawnKey (Bot.spaceId_spawnKey is unique; the loser gets `duplicate: true`
   // back with the winner's botId/threadId), so no orphan specialist bot is created either
@@ -742,7 +730,7 @@ async function applyDelegate(
   };
   try {
     created = await deps.prisma.$transaction(async (tx) => {
-      // Task 1 (T07) / Scenario 2 (a): re-check the parent under a row lock, inside the
+      // Re-check the parent under a row lock, inside the
       // same transaction that inserts the child. A concurrent `cancel` that commits its
       // own row lock on this same parent row will make this `SELECT ... FOR UPDATE` block
       // until that cancellation transaction commits, then observe the cancelled status —
@@ -806,11 +794,10 @@ async function applyDelegate(
           ...runChoice,
           harnessSource: chosen.source,
           harnessFallbackCause: chosen.fallbackCause ?? null,
-          // T04:4 defect 2: the mission Computer is the coordinator's own Computer at
-          // delegation time (glossary "Computer de mission"), never a caller-supplied
-          // target — the specialist's run below is pinned to this value so its
-          // execution target always matches what executor.ts's guard authorizes.
-          // The Computer of the coordinator's current execution is the mission Computer.
+          // The mission Computer is never a caller-supplied target: the specialist's run
+          // below is pinned to this value so its execution target always matches what
+          // executor.ts's guard authorizes. The Computer of the coordinator's current
+          // execution is the mission Computer.
           // Direct callers that have no execution context retain the coordinator ownership
           // Computer as a compatibility fallback.
           missionComputerId,
@@ -819,7 +806,7 @@ async function applyDelegate(
           status: "dispatched",
         },
       });
-      // T04:6: keep specialist ownership intact while granting it use of the mission
+      // Keep specialist ownership intact while granting it use of the mission
       // Computer for this task. Cleanup may remove this grant later; it must not delete
       // or detach the coordinator's Computer.
       await grantMissionComputerUse(tx, {
@@ -990,7 +977,7 @@ async function applyFollowup(
   const scopedTask = await deps.prisma.scopedTask.findUniqueOrThrow({
     where: { id: command.workId },
   });
-  // Finding 3: followup is only accepted from the coordinator of this exact workId
+  // A followup is only accepted from the coordinator of this exact workId
   // (same bot, same space, same user); a stranger's followup has no effect.
   assertActorIsCoordinator(context, scopedTask, scopedTask.id);
   if (isTerminalWorkStatus(scopedTask.status)) {
@@ -1065,7 +1052,7 @@ async function closeWork(
   const scopedTask = await deps.prisma.scopedTask.findUniqueOrThrow({
     where: { id: command.workId },
   });
-  // Task 3: the actor must be *this* task's own coordinator — an ancestor, a stranger's
+  // The actor must be *this* task's own coordinator — an ancestor, a stranger's
   // tree, or a sibling can never be reached this way. A specialist that delegated further
   // is the coordinator of its own children, so it can only ever cancel its own subtree,
   // never an ancestor's (whose coordinatorBotId is a different bot) nor a peer's.
@@ -1096,7 +1083,7 @@ async function closeWork(
       if (claimed.count !== 1) return null;
       // Lifecycle metadata is deliberately separate from Thread/Event history: clear and
       // rewind may remove conversation content, but never the coordinator's decision to
-      // close this scoped work (ADR-0004, I22).
+      // close this scoped work.
       await tx.lifecycleEvent.create({
         data: {
           botId: scopedTask.executorBotId,
@@ -1117,7 +1104,7 @@ async function closeWork(
     if (closed) await deps.events?.notify(closed.threadId, closed.seq).catch(() => undefined);
   }
   // This is intentionally reachable from the real close admission path, rather than a
-  // best-effort orphan sweep. Cancellation retains T07's return path; its stop state is
+  // best-effort orphan sweep. Cancellation retains its own return path; its stop state is
   // `stop_unconfirmed` and a reconciler may only clean it after a later confirmation.
   if (status === "closed") await cleanupTerminalWork(deps, scopedTask);
   return {
@@ -1178,7 +1165,7 @@ export async function cleanupTerminalWork(
       where: { botId: scopedTask.executorBotId, threadId: scopedTask.specialistThreadId },
       select: { processState: true },
     });
-    // T03's `stop_unconfirmed` is explicitly not evidence that a native process ended.
+    // `stop_unconfirmed` is explicitly not evidence that a native process ended.
     if (session?.processState === "stop_unconfirmed") return;
 
     const remainingWork = await tx.scopedTask.count({
@@ -1244,14 +1231,12 @@ type CancellableScopedTask = {
 type WalkedScopedTask = CancellableScopedTask & { status: string };
 
 /**
- * Rouge 1 / vert 1 (T07): explicit cancellation of a task with an active descendant
- * cancels that descendant too, in the public projection (`inspect`), without ever
- * touching a peer contacted through `messageBot` — that peer's Run has no
- * `scopedTaskId` and is never reached by this walk (I26/I27, PA-CONTRAT-CONVERGENCE §4).
- * Persistence and propagation happen in one transaction, walked by
- * `parentScopedTaskId` (contract T07 §Travail point 2).
+ * Explicit cancellation of a task with an active descendant cancels that descendant too,
+ * in the public projection (`inspect`), without ever touching a peer contacted through
+ * `messageBot` — that peer's Run has no `scopedTaskId` and is never reached by this walk.
+ * Persistence and propagation happen in one transaction, walked by `parentScopedTaskId`.
  *
- * Review n° 1 finding B1: the walk itself must not stop at an already-closed/cancelled
+ * The walk itself must not stop at an already-closed/cancelled
  * intermediary — that node is a structural link to its own descendants, which may still
  * be active. So this walks *every* child by `parentScopedTaskId` regardless of status.
  * The traversal (`frontier`) always continues through every child read, terminal or
@@ -1261,10 +1246,9 @@ type WalkedScopedTask = CancellableScopedTask & { status: string };
  * what the preceding plain read observed. A child closed concurrently, between that
  * read and this guarded write, is excluded from the returned rows by the guard itself —
  * so its Runs/grant/native session are never touched, and its own descendants are still
- * reached because the traversal does not depend on this list (residual finding, review
- * n° 1 correction).
+ * reached because the traversal does not depend on this list.
  *
- * Scenario 2 (a): a concurrent `applyDelegate` for a child of one of these rows takes
+ * A concurrent `applyDelegate` for a child of one of these rows takes
  * its own `SELECT ... FOR UPDATE` on the exact same row this function is about to
  * `updateMany` — whichever transaction commits first wins the row lock, and the other
  * blocks until it releases, then observes the now-committed status. So no active child
@@ -1292,7 +1276,7 @@ async function cancelWorkTree(
         .filter((child) => !isTerminalWorkStatus(child.status))
         .map((child) => child.id);
       if (candidateIds.length > 0) {
-        // Residual of B1 (review n° 1 correction): the guard's *count* must decide
+        // The guard's *count* must decide
         // which rows are actually claimed, not the plain read above — a child closed
         // concurrently, between that read and this write, is excluded here by its own
         // status no longer matching, so `claimed` never includes it and its Runs/
@@ -1313,7 +1297,7 @@ async function cancelWorkTree(
     });
 
     // Active Runs of the cancelled subtree — never a peer's Run, which has no
-    // scopedTaskId and therefore never matches this `in` filter (I26/I27).
+    // scopedTaskId and therefore never matches this `in` filter.
     const activeRuns = await tx.run.findMany({
       where: {
         scopedTaskId: { in: cancelled.map((task) => task.id) },
@@ -1346,7 +1330,7 @@ async function cancelWorkTree(
       settled.push({ threadId: event.threadId, seq: event.seq });
     }
 
-    // Review n° 1 finding B2: shares the exact stop path a user-initiated thread stop
+    // Shares the exact stop path a user-initiated thread stop
     // uses (packages/db/src/events.ts) — cancels the Runs, then expires their Computer
     // execution lease and clears the Computer's execution pointer, so a live native
     // run's next heartbeat tick (executor.ts, renewComputerExecutionLease) fails to
@@ -1354,18 +1338,18 @@ async function cancelWorkTree(
     await stopRunsInTransaction(tx, activeRuns, cancelledAt);
     for (const task of cancelled) {
       await revokeMissionComputerUseIfLastWork(tx, task);
-      // B2 (c): a parked native session with no active Run for this cancelled task must
+      // A parked native session with no active Run for this cancelled task must
       // never again report itself resumable. `continuity()` only ever returns `resume`
       // for `state === "parked" && processState === "running"`
       // (native-session-store.ts); moving it out of "parked" (here, "closed") makes
       // that impossible, whether or not a Run was still active above. This does not
       // itself confirm the underlying process stopped — `processState` is left at
-      // "stop_unconfirmed", the same vocabulary T03 uses for an unconfirmed stop — so a
+      // "stop_unconfirmed", the vocabulary for an unconfirmed stop — so a
       // worker-memory park timer (computer-native-runtime.ts, `parkTtlMs`, default 15
       // minutes, clamped to [1s, 60min], `RAKAZO_NATIVE_PARK_TTL_MS` read by the worker) still reaps the
       // actual process independently, at the latest by that bound. No code path can
       // ever create a new Run for this task again either way: `applyFollowup` refuses a
-      // terminal task, and `messageBot` never re-opens one (T06).
+      // terminal task, and `messageBot` never re-opens one.
       await tx.nativeSession.updateMany({
         where: {
           botId: task.executorBotId,
@@ -1563,9 +1547,9 @@ export async function readTaskTree(
 
 /**
  * Records the specialist's terminal result on its Run and delivers it as a `work_return`
- * card (finding 8: purpose + work references, so T09 can tell it apart from an ordinary
- * bot message) to the coordinator thread. Called by executor.ts at Run completion
- * (finding 4c), right after finalizeRun has already set the Run's terminal status — this
+ * card (purpose + work references, so it can be told apart from an ordinary bot message)
+ * to the coordinator thread. Called by executor.ts at Run completion, right after
+ * finalizeRun has already set the Run's terminal status — this
  * function only ever touches the delegation-specific columns/message, never `status`.
  * Idempotent: a Run whose terminalReturnDelivery is already "delivered" is a no-op, so a
  * retried completion notification never posts a second work_return.
@@ -1807,8 +1791,7 @@ export async function recordSpecialistResult(
 
 /**
  * Records a specialist run's *failed* terminal outcome and delivers a `work_return` to the
- * coordinator (Terra J2 review finding 1: today nothing is delivered on failure, so an
- * offline auth refusal silently vanishes). Mirrors `recordSpecialistResult`'s shape and
+ * coordinator (so an offline auth refusal does not silently vanish). Mirrors `recordSpecialistResult`'s shape and
  * idempotency, but the message text is always the same fixed sentence — never the model's
  * own output or a raw error string — so it can never leak model content or a secret.
  * Called by executor.ts right after `finalizeRun` sets the Run's terminal `failed` status.

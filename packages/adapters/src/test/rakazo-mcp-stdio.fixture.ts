@@ -11,7 +11,7 @@ import { readTicketFromEnvironment, runNativeToolServerStdio } from "../rakazo-m
  * wires a fixture `NativeSessionHost`/callback instead of the
  * Postgres-backed one (which belongs to the composed runtime, out of
  * scope here). The production entry point (`rakazo-mcp-stdio.ts`) never
- * offers this fixture mode itself — B5: a binary a native runtime can
+ * offers this fixture mode itself: a binary a native runtime can
  * actually spawn must refuse to start without real composition, not fall
  * back to a fixture behind an environment flag. It observes effects
  * through a resource external to the process — an append-only log file

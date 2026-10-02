@@ -13,7 +13,7 @@ import { sessionCookieHeader } from "./index.js";
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
 type AppHandles = Awaited<ReturnType<typeof createApp>>;
 
-// NOT RUN in this sandbox (no Docker/Postgres). Terra runs this at verification with:
+// Needs Postgres; run it with:
 //   VERIFY_DATABASE=1 DATABASE_URL=<test db> pnpm exec vitest run packages/testkit/src/work-answer.postgres.test.ts
 // or through the integration harness, which registers this suite explicitly.
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
@@ -486,7 +486,7 @@ async function delegatedAsk(
       userId: storedCoordinator.userId,
       name: "Specialist profile",
       color: "test-color",
-      // T04:R1 rejects incompatible native models before spawn. This fixture tests
+      // Spawning rejects incompatible native models. This fixture tests
       // answering asks, not model admission, and requests Codex below.
       modelProvider: "openai-codex",
       modelId: "gpt-5.6",
@@ -534,7 +534,7 @@ async function delegatedAsk(
       harness: "codex-native",
       brief: "Do the delegated thing.",
       requestedRights: {},
-      spawnKey: `t09-work-answer-${randomUUID()}`,
+      spawnKey: `work-answer-${randomUUID()}`,
     },
     context,
   );
@@ -554,7 +554,7 @@ async function delegatedAsk(
       spaceId: storedCoordinator.spaceId,
       runId: receipt.runId!,
       kind: variant === "secret" ? "request_secret" : "computer_act",
-      idempotencyKey: `t09-work-answer-${randomUUID()}`,
+      idempotencyKey: `work-answer-${randomUUID()}`,
       status: "intended",
       request:
         variant === "secret"

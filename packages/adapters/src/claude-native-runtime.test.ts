@@ -945,8 +945,8 @@ describe("ClaudeNativeRuntime", () => {
   });
 
   it("rejects a synthetic CLI-observed unauthenticated turn instead of emitting done (result.subtype success with is_error/terminal_reason api_error)", async () => {
-    // Fixture: synthetic — reproduces the sequence Terra observed on real
-    // `claude` 2.1.278 without auth (review T05-REVIEW2-TERRA-2026-09-21.md, 2026-09-21):
+    // Fixture: synthetic — reproduces the sequence observed on real
+    // `claude` 2.1.278 without auth:
     // system/init with apiKeySource "none", an assistant turn saying "Not logged in" with
     // `error:"authentication_failed"` at the top level of the assistant event (not
     // `message.error`, which does not match the real capture), then a result with
@@ -1070,7 +1070,7 @@ describe("ClaudeNativeRuntime", () => {
   });
 
   it("rejects when assistant.error is set even though the final result reports subtype success with no is_error", async () => {
-    // Fixture: synthetic — isolates finding 2: a top-level `error` on the assistant
+    // Fixture: synthetic — a top-level `error` on the assistant
     // event must drive the failure decision and the reason, even when `result` alone
     // would look like a clean success.
     const sessionId = "99999999-9999-9999-9999-999999999999";

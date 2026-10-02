@@ -11,9 +11,9 @@ import {
 } from "./harness-choice.js";
 import { Id } from "./ids.js";
 
-// T04: public delegation contract (PA-CONTRAT-CONVERGENCE.md §6, symbols fixed before T01).
-// WorkTarget deliberately has one variant only: ADR-0001/ADR-0002 reserve scoped_tasks
-// for the from_profile specialist; delegating to an existing_bot stays a PeerMessage.
+// Public delegation contract.
+// WorkTarget deliberately has one variant only: scoped_tasks are reserved for the
+// from_profile specialist; delegating to an existing bot stays a PeerMessage.
 
 export type ScopedWorkId = string; // = scoped_tasks.id ; never Bot.id nor Task.id
 
@@ -22,8 +22,7 @@ export type WorkTarget = { kind: "from_profile"; profileBotId: string; name: str
 export type RightsSubset = Record<string, boolean>;
 
 /**
- * T07:4 correction (Terra review B3): the real, currently-existing per-bot permission
- * surface is an MCP connector assignment, and it is granular per tool
+ * The per-bot permission surface is an MCP connector assignment, and it is granular per tool
  * (`BotMcpServer.allowAllTools`/`allowedTools`), not a single boolean per server — a
  * boolean-per-server `RightsSubset` cannot represent "this server, but only these tools".
  * `delegationCeiling` is keyed by `serverId`.
@@ -44,9 +43,8 @@ export type DelegationCommand =
       harness?: HarnessChoice;
       brief: string;
       /**
-       * T07:6 (B5, root decision): a request for a ceiling *narrower* than the coordinator's
-       * own effective MCP access, never a way to widen it. Empty (`{}`, still the only shape
-       * `executor.ts` sends today): the ceiling becomes the coordinator's full effective
+       * A request for a ceiling *narrower* than the coordinator's own effective MCP access,
+       * never a way to widen it. Empty (`{}`, the only shape `executor.ts` sends today): the ceiling becomes the coordinator's full effective
        * access. Non-empty: the ceiling becomes `requestedRights ∩ coordinator's effective
        * access`, per server, tool by tool — and a request that exceeds what the coordinator
        * actually holds (a server it doesn't have, `allowAllTools` it doesn't have, or a tool
@@ -136,7 +134,7 @@ export type TaskTreeNode = {
   harnessSource: SpecialistHarnessSource | null;
   /** Why the deterministic fallback decided, when it did. */
   harnessFallbackCause: SpecialistHarnessFallbackCause | null;
-  /** T04:4: the coordinator's Computer at delegation time ("Computer de mission"). */
+  /** The coordinator's Computer at delegation time (the mission Computer). */
   missionComputerId: string | null;
   status: string;
   /** Whether the specialist has a Run that has not ended, including one parked on an answer. */

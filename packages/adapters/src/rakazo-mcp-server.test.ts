@@ -76,12 +76,12 @@ function fakeHost(): NativeSessionHost {
 
 async function connectedClient(server: ReturnType<typeof createRakazoMcpServer>) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "t02-test-client", version: "0.0.0" });
+  const client = new Client({ name: "test-client", version: "0.0.0" });
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
   return client;
 }
 
-describe("Rakazo internal MCP server (T02 S3)", () => {
+describe("Rakazo internal MCP server", () => {
   it("separates a reconnected MCP session in the same run while retaining retransmission identity", () => {
     const retransmission = deriveCallId("ticket", "run-1", "mcp-session-1", 42);
     expect(deriveCallId("ticket", "run-1", "mcp-session-1", 42)).toBe(retransmission);
@@ -404,7 +404,7 @@ describe("Rakazo internal MCP server (T02 S3)", () => {
   });
 });
 
-describe("createNativeToolServer (T01 composition seam)", () => {
+describe("createNativeToolServer (composition seam)", () => {
   it("issues a ticket via the session host and describes a stdio endpoint that injects it through the environment, never a tool argument", async () => {
     const host = fakeHost();
     const botId = `bot-${randomUUID()}`;

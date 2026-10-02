@@ -1359,9 +1359,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         where: { id: run.botId },
         select: { computerId: true, computerSwitching: true, harnessChoice: true },
       });
-      // T04:5: a specialist run (scopedTaskId set) leases and provisions the mission
-      // Computer — the same droit d'usage Computer the guard at :1695-1700 authorizes —
-      // rather than the specialist bot's own computerId. Ordinary runs are unchanged.
+      // A specialist run (scopedTaskId set) leases and provisions the mission Computer —
+      // the same right-of-use Computer the native-harness guard below authorizes — rather
+      // than the specialist bot's own computerId. Ordinary runs are unchanged.
       let missionComputerId: string | null = null;
       if (run.scopedTaskId) {
         const scopedTask = await deps.prisma.scopedTask.findUnique({
@@ -1387,7 +1387,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       }
       if (!targetComputerId) throw new Error("Bot has no computer");
       if (!missionComputerId && leaseTarget.computerSwitching) {
-        await writeJ2RequeueDiagnostic({
+        await writeRequeueDiagnostic({
           runId,
           botId: run.botId,
           computerId: targetComputerId,
@@ -1407,7 +1407,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         });
       } catch (error) {
         if (!(error instanceof ComputerBusyError)) throw error;
-        await writeJ2RequeueDiagnostic({
+        await writeRequeueDiagnostic({
           runId,
           botId: run.botId,
           computerId: targetComputerId,
@@ -1827,10 +1827,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           data: { modelProvider: runModelProvider, modelId: runModelId },
         });
         if (!bot.computer) throw new Error("Bot has no computer");
-        // T04:5: a specialist run provisions the mission Computer (droit d'usage), not the
-        // specialist bot's own computer, matching the lease target above and the guard at
-        // :1706-1718. Ordinary runs (no scopedTaskId, or mission Computer === bot's own) are
-        // unchanged.
+        // A specialist run provisions the mission Computer (right of use), not the
+        // specialist bot's own computer, matching the lease target above and the
+        // native-harness guard below. Ordinary runs (no scopedTaskId, or mission Computer
+        // === bot's own) are unchanged.
         const storedComputer =
           missionComputerId && missionComputerId !== bot.computer.id
             ? await deps.prisma.computer.findUniqueOrThrow({
@@ -2045,10 +2045,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let progressRedactor = createStreamingRedactor(runSecrets);
         const runtimeChoice = nativeChoiceForRun(run);
         if (runtimeChoice && runtimeChoice.targetId !== storedComputer.id) {
-          // T04:4 defect 2: a specialist run (scopedTaskId set) is authorized on its
-          // mission Computer — the coordinator's Computer at delegation time, on which the
-          // specialist holds a droit d'usage, not ownership — in addition to its own. Every
-          // other run keeps the original guard unchanged.
+          // A specialist run (scopedTaskId set) is authorized on its mission Computer — the
+          // coordinator's Computer at delegation time, on which the specialist holds a right
+          // of use, not ownership — in addition to its own. Every other run keeps the
+          // original guard unchanged.
           let onMissionComputer = false;
           if (run.scopedTaskId) {
             const scopedTask = await deps.prisma.scopedTask.findUnique({
@@ -3860,14 +3860,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             name === "delegate_close" ||
             name === "delegate_cancel"
           ) {
-            // Finding 4a: the coordinator is the actor of this turn — its identity comes
-            // from `bot`/`run`, never from tool arguments, so it cannot be forged.
-            // T07:4 correction: the effective MCP rights ceiling is now computed and
-            // enforced entirely inside delegated-tasks.ts/mcp-connector.ts/the native bridge
-            // guard, keyed off `coordinator.id` directly (`computeEffectiveMcpAccess`) — not
-            // through this `actor.rights` field, which carried a boolean-per-server model
-            // that could not represent tool-level `allowAllTools`/`allowedTools` granularity.
-            // `rights` stays `{}` (unused by `applyDelegate`'s ceiling computation).
+            // The coordinator is the actor of this turn — its identity comes from
+            // `bot`/`run`, never from tool arguments, so it cannot be forged.
+            // The effective MCP rights ceiling is computed and enforced entirely inside
+            // delegated-tasks.ts/mcp-connector.ts/the native bridge guard, keyed off
+            // `coordinator.id` directly (`computeEffectiveMcpAccess`) — not through this
+            // `actor.rights` field, which cannot represent tool-level
+            // `allowAllTools`/`allowedTools` granularity. `rights` stays `{}` (unused by
+            // `applyDelegate`'s ceiling computation).
             const delegatedTasks = createDelegatedTasks({
               prisma: deps.prisma,
               jobs: deps.jobs,
@@ -5194,7 +5194,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
           });
           if (!completed) return;
-          // Finding 4c: if this run belongs to a delegated specialist, deliver its result
+          // If this run belongs to a delegated specialist, deliver its result
           // to the coordinator thread. Strictly this one call, right after finalizeRun
           // succeeded and before notifications/continuations, never touching `status`
           // (already set above) — no other delegation responsibility is added here.
@@ -5300,10 +5300,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error: message,
           });
           if (!failed) return;
-          // Finding 1 (J2): if this failed run belongs to a delegated specialist, deliver a
+          // If this failed run belongs to a delegated specialist, deliver a
           // typed work_return to the coordinator too — otherwise a terminal failure (e.g. an
           // offline auth refusal) silently vanishes and the coordinator's task stays hung.
-          // Same placement discipline as the success path (finding 4c): right after
+          // Same placement discipline as the success path: right after
           // finalizeRun succeeded, no other delegation responsibility added here.
           if (run.scopedTaskId) {
             await deliverSpecialistRunEnd(
@@ -5798,15 +5798,15 @@ function computerRunRequeueData(
   };
 }
 
-async function writeJ2RequeueDiagnostic(input: {
+async function writeRequeueDiagnostic(input: {
   runId: string;
   botId: string;
   computerId: string;
   branch: "computer_switching" | "computer_busy";
   reason: string;
 }): Promise<void> {
-  if (process.env.RAKAZO_J2_DIAGNOSTICS !== "1") return;
-  const file = process.env.RAKAZO_J2_DIAGNOSTICS_FILE;
+  if (process.env.RAKAZO_PROVISIONING_DIAGNOSTICS !== "1") return;
+  const file = process.env.RAKAZO_PROVISIONING_DIAGNOSTICS_FILE;
   if (!file) return;
   const line = JSON.stringify({ at: new Date().toISOString(), ...input });
   await appendFile(file, `${line}\n`, { encoding: "utf8", mode: 0o600 }).catch(() => undefined);

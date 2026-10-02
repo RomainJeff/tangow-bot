@@ -304,7 +304,7 @@ type LifecycleBot = {
   webhookSecretId?: string | null;
 };
 
-/** The transactional part of archival is shared by explicit archival and T08 cleanup. */
+/** The transactional part of archival is shared by explicit archival and the cleanup of finished delegated work. */
 export async function archiveBotInTransaction(
   tx: Prisma.TransactionClient,
   input: {

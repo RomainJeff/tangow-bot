@@ -1023,7 +1023,7 @@ describe("CodexNativeRuntime", () => {
       ...request("subscription"),
       model: {
         provider: "openai-codex",
-        id: "gpt-5.6-terra",
+        id: "gpt-5.6-test",
         thinkingLevel: "medium" as const,
         oauth: {
           credential: {
@@ -1080,7 +1080,7 @@ describe("CodexNativeRuntime", () => {
       params: {
         threadId: "thread",
         input: [{ type: "text", text: "hello" }],
-        model: "gpt-5.6-terra",
+        model: "gpt-5.6-test",
         effort: "medium",
       },
     });

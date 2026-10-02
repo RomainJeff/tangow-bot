@@ -116,7 +116,7 @@ export class McpConnector implements ConnectorProvider {
       },
       include: { server: true },
     });
-    // T07:4 correction (B3): the bot's own assignment is no longer the whole story — a
+    // The bot's own assignment is not the whole story — a
     // specialist's admission is that assignment intersected with its delegation ceiling and
     // its coordinator's effective access, recursively (computeEffectiveMcpAccess is the same
     // function the native bridge guard and mcp-connector.ts's `execute` below both call: one
@@ -191,9 +191,8 @@ export class McpConnector implements ConnectorProvider {
       },
       include: { server: true },
     });
-    // T07:4 correction (B3 — the real admission path Terra's review flagged): this used to
-    // check only `assignment.allowAllTools`/`allowedTools`, so a specialist keeping a
-    // profile-copied assignment to a server its coordinator never held could still call it.
+    // Checking only `assignment.allowAllTools`/`allowedTools` would let a specialist keep a
+    // profile-copied assignment to a server its coordinator never held and still call it.
     // `computeEffectiveMcpAccess` is the single source of truth (also used by discovery above
     // and by the native bridge guard); this is the declared linearization point for this call
     // — a call admitted here runs to completion even if a revocation commits while it is

@@ -5,11 +5,9 @@ import type { PrismaClient } from "@rakazo/db";
 import type { Context, Hono } from "hono";
 
 /**
- * Finding 4b: minimal read surface for the delegation demo (T09 consumes this for the
- * task-tree UI). Follows the same mount(app, deps, authenticate) shape as
- * mountVoiceHttpRoutes (voice.ts) rather than the orpc contract in
- * packages/contracts/src/rpc.ts, to stay inside this lot's file boundary (apps/api/src
- * only) — extending the orpc contract is left as a besoin transmis.
+ * Minimal read surface for the delegation task tree. Follows the same
+ * mount(app, deps, authenticate) shape as mountVoiceHttpRoutes (voice.ts) rather than the
+ * orpc contract in packages/contracts/src/rpc.ts.
  */
 export function mountDelegationHttpRoutes(
   app: Hono,

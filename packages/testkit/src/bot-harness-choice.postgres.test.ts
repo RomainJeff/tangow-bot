@@ -10,7 +10,7 @@ const available = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DAT
 const origin = "http://127.0.0.1:5173";
 
 /**
- * H2 of T09:5 — a bot whose settings save the codex-native harness gets every
+ * A bot whose settings save the codex-native harness gets every
  * plain send executed with that harness, with the choice's own version on the
  * Run. Explicit client choices keep their current behavior.
  */

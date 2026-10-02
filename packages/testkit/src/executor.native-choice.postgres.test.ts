@@ -894,7 +894,7 @@ describe.skipIf(!available)("native runtime choice", () => {
           target: { kind: "from_profile", profileBotId: harness.bot.id, name: "Analyst" },
           harness: "codex-native",
           brief: "Prepare the summary",
-          // T07:6: requestedRights is an McpAccessCeiling narrowing request now (an old
+          // requestedRights is an McpAccessCeiling narrowing request (a
           // boolean shape here is interpreted as a demand for an MCP server literally named
           // "canReadFiles" and refused, since the coordinator holds no MCP access at all in
           // this fixture). This scenario is about native runtime choice and peer-return

@@ -618,7 +618,7 @@ export class CodexNativeRuntime implements AgentRuntime {
 export { CodexNativeRuntime as ComputerCodexNativeRuntime };
 
 /**
- * Not re-exported from the adapters package: the T03 testkit alone uses this
+ * Not re-exported from the adapters package: only tests use this
  * NODE_ENV=test seam to simulate a worker that lost its local parked registry.
  */
 export async function stopAndClearParkedCodexRuntimeForTest(input: {

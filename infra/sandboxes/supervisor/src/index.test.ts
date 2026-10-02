@@ -848,13 +848,13 @@ describe("docker exec stream demux", () => {
   });
 
   it("reconstructs the app-server JSON-RPC transcript byte-for-byte at every TCP fragmentation point, never emitting a NUL", () => {
-    // Regression characterization for the T01 S2 Docker investigation. It covers
+    // Regression characterization for a Docker stream investigation. It covers
     // only DockerMultiplexDecoder and the index.ts accumulation loop; it does not
     // establish a global cause for a byte seen elsewhere in the runtime.
     const lines = [
       JSON.stringify({ jsonrpc: "2.0", id: 1, result: {} }),
-      JSON.stringify({ jsonrpc: "2.0", id: 2, result: { thread: { id: "t01-native-thread" } } }),
-      JSON.stringify({ jsonrpc: "2.0", id: 3, result: { turn: { id: "t01-native-turn" } } }),
+      JSON.stringify({ jsonrpc: "2.0", id: 2, result: { thread: { id: "native-thread" } } }),
+      JSON.stringify({ jsonrpc: "2.0", id: 3, result: { turn: { id: "native-turn" } } }),
       JSON.stringify({
         jsonrpc: "2.0",
         method: "item/agentMessage/delta",

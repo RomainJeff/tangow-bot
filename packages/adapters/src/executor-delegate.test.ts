@@ -43,7 +43,7 @@ const mockCreateDelegatedTasks = vi.mocked(createDelegatedTasks);
 const mockDeliverSpecialistRunEnd = vi.mocked(deliverSpecialistRunEnd);
 
 /**
- * Executor-level seam fixture (Terra J2 review findings 1+2): a fake `runtime.run` drives
+ * Executor-level seam fixture: a fake `runtime.run` drives
  * `continueRun` end to end with prisma fully substituted — no Postgres, same pattern as
  * `executor-readonly-approval.test.ts` — so the tool-dispatch and completion insertion
  * points are exercised through the real `continueRun`, not through a helper called in
@@ -243,7 +243,7 @@ function fixture(
   };
 }
 
-describe("executor seam — delegate dispatch and specialist completion (Terra J2 findings 1+2)", () => {
+describe("executor seam — delegate dispatch and specialist completion", () => {
   beforeEach(() => {
     mockDeliverSpecialistRunEnd.mockClear();
   });
@@ -274,9 +274,9 @@ describe("executor seam — delegate dispatch and specialist completion (Terra J
     const [command, context] = apply.mock.calls[0]!;
     expect((command as { kind: string }).kind).toBe("delegate");
     // Actor identity comes from the run/bot of this turn, never from tool args — not forgeable.
-    // T07:4 correction: `rights` stays `{}` — the effective MCP ceiling is no longer carried
-    // through this field at all (a boolean-per-server model could not express tool-level
-    // allowAllTools/allowedTools granularity). `applyDelegate` now computes the ceiling itself,
+    // `rights` stays `{}` — the effective MCP ceiling is not carried through this field at
+    // all (a boolean per server could not express tool-level
+    // allowAllTools/allowedTools granularity). `applyDelegate` computes the ceiling itself,
     // straight from `coordinator.id`, via `computeEffectiveMcpAccess` (delegated-tasks.ts).
     expect((context as { actor: unknown }).actor).toEqual({
       userId: "user-1",
@@ -359,7 +359,7 @@ describe("executor seam — delegate dispatch and specialist completion (Terra J
     );
   });
 
-  it("dispatches delegate_cancel as the coordinator, with the turn's own bot as the non-forgeable actor (T07 task 3)", async () => {
+  it("dispatches delegate_cancel as the coordinator, with the turn's own bot as the non-forgeable actor", async () => {
     const apply = vi.fn(async (_command: unknown, _context: unknown) => ({
       workId: "work-1",
       botId: "bot-specialist",
@@ -533,7 +533,7 @@ describe("executor native MCP placement contract", () => {
   });
 });
 
-describe("executor seam — T04:4 defect 1: codex-native goes through deps.nativeRuntimes", () => {
+describe("executor seam — codex-native goes through deps.nativeRuntimes", () => {
   it("routes a codex-native run through an injected fixture runtime instead of the real CodexNativeRuntime", async () => {
     mockCreateDelegatedTasks.mockReturnValue({ apply: vi.fn(), inspect: vi.fn() } as never);
     const fixtureRun = vi.fn(async function* () {
@@ -593,7 +593,7 @@ describe("executor seam — T04:4 defect 1: codex-native goes through deps.nativ
   });
 });
 
-describe("executor seam — T04:4 defect 2: specialist run authorized on its mission Computer", () => {
+describe("executor seam — specialist run authorized on its mission Computer", () => {
   beforeEach(() => {
     mockAcquireComputerExecutionLease.mockClear();
   });
@@ -619,7 +619,7 @@ describe("executor seam — T04:4 defect 2: specialist run authorized on its mis
     expect(fixtureRun).toHaveBeenCalledTimes(1);
   });
 
-  it("leases and provisions the scoped task's mission Computer, not the specialist bot's own Computer (T04:5)", async () => {
+  it("leases and provisions the scoped task's mission Computer, not the specialist bot's own Computer", async () => {
     mockCreateDelegatedTasks.mockReturnValue({ apply: vi.fn(), inspect: vi.fn() } as never);
     const fixtureRun = vi.fn(async function* () {
       yield { type: "done" as const, text: "On mission Computer." };
@@ -643,7 +643,7 @@ describe("executor seam — T04:4 defect 2: specialist run authorized on its mis
     );
   });
 
-  it("still leases the bot's own Computer for an ordinary run (non-regression, T04:5)", async () => {
+  it("still leases the bot's own Computer for an ordinary run", async () => {
     mockCreateDelegatedTasks.mockReturnValue({ apply: vi.fn(), inspect: vi.fn() } as never);
     const f = fixture({ outcome: "completed" });
     await f.run();

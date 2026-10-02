@@ -25,7 +25,7 @@ const ASSIGNMENT = {
 };
 
 /**
- * T07:4 correction: every admission path now goes through `computeEffectiveMcpAccess`
+ * Every admission path goes through `computeEffectiveMcpAccess`
  * (delegated-tasks.ts), which always reads `scopedTask.findFirst` to decide whether the
  * acting bot is itself a specialist. Every prisma fixture below is an ordinary bot (never
  * the executor of a scoped task), so this stub is spread into each one.
@@ -635,10 +635,9 @@ describe("MCP connector session cache", () => {
   });
 
   /**
-   * T07:4 correction (Terra review, B3 — the priority finding, on the real admission path):
-   * before this fix, `authorizedTools`/`execute` admitted a tool purely from the acting bot's
-   * own `BotMcpServer` row — a specialist keeping a profile-copied assignment to a server its
-   * coordinator never held could still discover and call it. `bot-1` here is the *specialist*
+   * On the real admission path, admitting a tool purely from the acting bot's own
+   * `BotMcpServer` row would let a specialist that keeps a profile-copied assignment to a
+   * server its coordinator never held discover and call it. `bot-1` here is the *specialist*
    * (`executorBotId`), assigned allow-all on `server-1` (as `applyBotProfile` would copy from
    * its profile); its coordinator, `bot-coordinator`, has no assignment to `server-1` at all,
    * so the specialist's persisted ceiling never listed it.
@@ -672,7 +671,7 @@ describe("MCP connector session cache", () => {
     };
   }
 
-  it("B3: a specialist's own profile-copied MCP assignment is refused at discovery when its coordinator never held that server", async () => {
+  it("a specialist's own profile-copied MCP assignment is refused at discovery when its coordinator never held that server", async () => {
     const state = { failNext: false, initializations: 0 };
     vi.stubGlobal("fetch", mcpFetch(state));
     const prisma = specialistPrismaFixture([{ ...ASSIGNMENT, botId: "bot-1" }]);
@@ -689,7 +688,7 @@ describe("MCP connector session cache", () => {
     await connector.close();
   });
 
-  it("B3: the same escalation is refused at execute — the real call path, not just discovery", async () => {
+  it("the same escalation is refused at execute — the real call path, not just discovery", async () => {
     const state = { failNext: false, initializations: 0 };
     vi.stubGlobal("fetch", mcpFetch(state));
     const prisma = specialistPrismaFixture([{ ...ASSIGNMENT, botId: "bot-1" }]);
@@ -713,7 +712,7 @@ describe("MCP connector session cache", () => {
     await connector.close();
   });
 
-  it("root's decision (Q12): a specialist whose coordinator holds a restricted allowedTools list on the same server than its own allow-all assignment gets exactly the coordinator's tool-by-tool intersection", async () => {
+  it("a specialist whose coordinator holds a restricted allowedTools list on the same server than its own allow-all assignment gets exactly the coordinator's tool-by-tool intersection", async () => {
     const state = {
       failNext: false,
       initializations: 0,

@@ -28,8 +28,7 @@ async function main(): Promise<void> {
   // Reading the ticket (and refusing without it) is the only thing this
   // entry point does on its own. Real production wiring (Postgres-backed
   // NativeSessionHost, the real callback) is composed by the native
-  // runtime, not by this entry point in this loop — see the receipt's
-  // "besoin transmis au coordinateur". This binary never falls back to a
+  // runtime, not by this entry point. This binary never falls back to a
   // fixture: a test that needs one spawns its own launcher
   // (`test/rakazo-mcp-stdio.fixture.ts`), which reuses
   // `runNativeToolServerStdio` below but supplies fixture deps itself.

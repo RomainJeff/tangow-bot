@@ -36,7 +36,7 @@ const docker = new Docker({ socketPath: process.env.DOCKER_SOCKET ?? "/var/run/d
 const supervisorImage = process.env.RAKAZO_NATIVE_MCP_SUPERVISOR_IMAGE;
 const computerImage = process.env.RAKAZO_NATIVE_MCP_COMPUTER_IMAGE;
 
-type Campaign = {
+type Stack = {
   root: string;
   context: AdapterContext;
   supervisor: DockerContainer;
@@ -91,7 +91,7 @@ function networkAddress(
 }
 
 describe.skipIf(!enabled).sequential("isolated Docker native MCP relay", () => {
-  let campaign: Campaign | undefined;
+  let stack: Stack | undefined;
 
   beforeAll(async () => {
     const runtimeImage = supervisorImage;
@@ -174,7 +174,7 @@ describe.skipIf(!enabled).sequential("isolated Docker native MCP relay", () => {
       await docker
         .getNetwork(networkName)
         .connect({ Container: upstream.id, EndpointConfig: { Aliases: ["native-mcp-upstream"] } });
-      campaign = { root, context, supervisor, upstream, sandbox, computer, otherComputer };
+      stack = { root, context, supervisor, upstream, sandbox, computer, otherComputer };
     } catch (error) {
       if (sandbox && computer) await sandbox.destroy(computer, context).catch(() => undefined);
       if (sandbox && otherComputer)
@@ -189,8 +189,8 @@ describe.skipIf(!enabled).sequential("isolated Docker native MCP relay", () => {
   }, 90_000);
 
   afterAll(async () => {
-    if (!campaign) return;
-    const { sandbox, computer, otherComputer, context, upstream, supervisor, root } = campaign;
+    if (!stack) return;
+    const { sandbox, computer, otherComputer, context, upstream, supervisor, root } = stack;
     await sandbox.destroy(computer, context).catch(() => undefined);
     await sandbox
       .destroy(otherComputer, { ...context, botId: "native-mcp-other-bot" })
@@ -201,7 +201,7 @@ describe.skipIf(!enabled).sequential("isolated Docker native MCP relay", () => {
   });
 
   it("relays initialize, tools/list and tools/call from one Computer with its resolved identity", async () => {
-    const { sandbox, computer, context, root } = campaign!;
+    const { sandbox, computer, context, root } = stack!;
     for (const method of ["initialize", "tools/list", "tools/call"]) {
       const result = await command(
         sandbox,
@@ -217,7 +217,7 @@ describe.skipIf(!enabled).sequential("isolated Docker native MCP relay", () => {
   }, 60_000);
 
   it("rejects missing bearer and source impersonation while isolating Computer IPs", async () => {
-    const { sandbox, computer, otherComputer, context, root } = campaign!;
+    const { sandbox, computer, otherComputer, context, root } = stack!;
     const noBearer = await command(
       sandbox,
       computer,
