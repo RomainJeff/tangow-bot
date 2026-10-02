@@ -31,6 +31,7 @@ import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageTimeLabel } from "../../lib/message-time";
 import { transcriptIsNearEnd, transcriptMovedDown } from "../../lib/transcript-scroll";
+import { LoadEarlierButton, MessageFrame, messageChrome } from "./message-frame";
 import { MessageHoverActions } from "./message-hover-actions";
 import { MessageView } from "./message-view";
 
@@ -311,25 +312,13 @@ export const Transcript = memo(function Transcript({
         className="rk-scroll flex min-h-0 flex-1 flex-col gap-7 overflow-y-auto px-3 pt-5 pb-8 md:pt-6"
       >
         {olderCursor != null ? (
-          <button
-            type="button"
-            disabled={loadingOlder}
-            onClick={() => void loadOlder()}
-            className="self-center rounded-row px-3 py-1.5 text-meta text-muted-foreground hover:bg-muted hover:text-foreground/75 disabled:opacity-50"
-          >
-            {loadingOlder ? t`Loading…` : t`Load earlier messages`}
-          </button>
+          <LoadEarlierButton loading={loadingOlder} onClick={() => void loadOlder()} />
         ) : null}
         {reactionView.visibleMessages.map((message, index) => {
-          const chromeBlocks = message.blocks.filter(
-            (block) => !isHiddenActivityBlock(block, showSteps),
-          );
-          // An aside is a note between messages: it gets no row chrome — no hover
-          // actions, no clock, no reactions, no width cap. A bot's question or
-          // approval is a normal row now — its FramedBlock card is just the row's
-          // body. Aside is decided by the blocks alone (a peer receipt is stored
-          // with role "user" but is still an aside).
-          const chrome: "row" | "aside" = isAsideOnlyMessage(chromeBlocks) ? "aside" : "row";
+          // An aside gets no row chrome — no hover actions, no clock, no reactions, no
+          // width cap. A bot's question or approval is a normal row: its FramedBlock card
+          // is just the row's body.
+          const chrome = messageChrome(message, showSteps);
           const rewound = rewindFromSeq !== null && (message.seq ?? 0) >= rewindFromSeq;
           const messageReactions = reactionView.reactions.get(message.id);
           const timeMarker = showsTimeMarker(
@@ -384,70 +373,48 @@ export const Transcript = memo(function Transcript({
                     {messageTimeLabel(message.createdAt, i18n.locale)}
                   </time>
                 ) : null}
-                <div
-                  className={
-                    chrome === "row"
-                      ? `relative flex ${message.role === "user" ? "justify-end" : "justify-start"}`
-                      : undefined
-                  }
-                >
-                  <div
-                    data-testid={chrome === "row" ? "message-bubble-frame" : undefined}
-                    className={
-                      chrome === "row"
-                        ? // The pill floats at the row's own top-end corner (absolute, `end-3`),
-                          // so both rows run the full column width. A user row right-aligns its
-                          // bubble with `items-end` and caps it at 78% (`UserBubble`); the old
-                          // `w-fit` collapsed to the left once the bubble reached that 78% cap,
-                          // because fit-content resolves a percentage-capped child to full width.
-                          `relative min-w-0 w-full ${
-                            message.role === "user" ? "flex flex-col items-end" : ""
-                          }`
+                <MessageFrame message={message} chrome={chrome}>
+                  {chrome === "row" ? (
+                    <MessageHoverActions
+                      message={message}
+                      revealed={activeMessageId === message.id}
+                      side={message.role === "user" ? "start" : "end"}
+                      onReply={onReply}
+                      onEdit={onEdit}
+                      onReact={onReact}
+                      voiceReady={voiceReady}
+                      speaking={speakingMessageId === message.id}
+                      onSpeak={() => onSpeak(message)}
+                    />
+                  ) : null}
+                  <MessageView
+                    artifactTarget={artifactTarget}
+                    chrome={chrome}
+                    message={message}
+                    continued={continued}
+                    canAnswer={message.id === answerableAskMessageId}
+                    onOpenBot={onOpenBot}
+                    onOpenPeerMessages={onOpenPeerMessages}
+                    onAnswer={onAnswer}
+                    speakerName={
+                      chrome !== "row" || message.role !== "bot"
+                        ? undefined
+                        : memberName?.(message.botId)
+                    }
+                    memberName={memberName}
+                    peerBot={peerBot}
+                    replyPreview={
+                      message.replyToMessageId
+                        ? messageById.get(message.replyToMessageId)
                         : undefined
                     }
-                  >
-                    {chrome === "row" ? (
-                      <MessageHoverActions
-                        message={message}
-                        revealed={activeMessageId === message.id}
-                        side={message.role === "user" ? "start" : "end"}
-                        onReply={onReply}
-                        onEdit={onEdit}
-                        onReact={onReact}
-                        voiceReady={voiceReady}
-                        speaking={speakingMessageId === message.id}
-                        onSpeak={() => onSpeak(message)}
-                      />
-                    ) : null}
-                    <MessageView
-                      artifactTarget={artifactTarget}
-                      chrome={chrome}
-                      message={message}
-                      continued={continued}
-                      canAnswer={message.id === answerableAskMessageId}
-                      onOpenBot={onOpenBot}
-                      onOpenPeerMessages={onOpenPeerMessages}
-                      onAnswer={onAnswer}
-                      speakerName={
-                        chrome !== "row" || message.role !== "bot"
-                          ? undefined
-                          : memberName?.(message.botId)
-                      }
-                      memberName={memberName}
-                      peerBot={peerBot}
-                      replyPreview={
-                        message.replyToMessageId
-                          ? messageById.get(message.replyToMessageId)
-                          : undefined
-                      }
-                      replyToMessageId={message.replyToMessageId}
-                      onJumpToMessage={onJumpToMessage}
-                      onRefresh={onRefresh}
-                      onBotChanged={onBotChanged}
-                      onAddRoutine={onAddRoutine}
-                    />
-                  </div>
-                </div>
+                    replyToMessageId={message.replyToMessageId}
+                    onJumpToMessage={onJumpToMessage}
+                    onRefresh={onRefresh}
+                    onBotChanged={onBotChanged}
+                    onAddRoutine={onAddRoutine}
+                  />
+                </MessageFrame>
                 {chrome === "row" && messageReactions ? (
                   <div
                     data-testid="message-reactions"

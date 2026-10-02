@@ -2,7 +2,7 @@ import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
-import type { ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
 import { isNarrationMessage } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
@@ -79,6 +79,26 @@ import {
   RoutineRunCard,
 } from "./message-cards";
 
+/**
+ * The one line a card that takes an action leaves behind when a message is only read: nothing
+ * can be answered, connected, approved or saved from it. Null for a block that has no such card.
+ */
+function passiveCardText(block: MessageBlock): string | null {
+  switch (block.kind) {
+    case "choice":
+      return block.question;
+    case "ask":
+      // An answered ask shows its answer; one still waiting is shown as the question it asks.
+      return block.status === "answered" ? null : block.text;
+    case "app_connect":
+    case "mcp_approval":
+    case "skill_draft":
+      return block.name;
+    default:
+      return null;
+  }
+}
+
 export function previewMessageText(message: ThreadMessage): string {
   const text = message.blocks
     .map((block) =>
@@ -103,6 +123,7 @@ export const MessageView = memo(function MessageView({
   artifactTarget,
   chrome,
   canAnswer,
+  readOnly = false,
   message,
   continued,
   onAnswer,
@@ -123,6 +144,8 @@ export const MessageView = memo(function MessageView({
    * visible blocks it renders, so this view never re-derives it. */
   chrome: "row" | "aside";
   canAnswer: boolean;
+  /** Draws the message to be read only: its action cards become the line they carry. */
+  readOnly?: boolean;
   message: ThreadMessage;
   /** True when this message continues the previous bot message's group, so
    * the shared header (avatar, name, time) is suppressed. */
@@ -218,6 +241,14 @@ export const MessageView = memo(function MessageView({
   const rendered = message.blocks
     .map((block, i) => {
       if (isHiddenActivityBlock(block, showSteps)) return null;
+      const passiveText = readOnly ? passiveCardText(block) : null;
+      if (passiveText !== null) {
+        return (
+          <p key={i} className="text-meta text-muted-foreground" dir="auto">
+            {passiveText}
+          </p>
+        );
+      }
       if (block.kind === "steps") return <AgentSteps key={i} block={block} live={isLive} />;
       if (block.kind === "handoff") {
         const from = memberName?.(block.fromBotId) ?? t`bot`;
@@ -327,7 +358,7 @@ export const MessageView = memo(function MessageView({
           <Surface key={i} className="w-[min(340px,90%)] overflow-hidden">
             <button
               type="button"
-              disabled={removed}
+              disabled={removed || readOnly}
               onClick={() => onOpenBot(block.botId)}
               className="block w-full px-4.5 py-4 text-start disabled:opacity-60"
             >
