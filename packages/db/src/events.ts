@@ -2,6 +2,7 @@ import type { RealtimeFanout } from "@rakazo/adapter-kit";
 import {
   type AskQuestion,
   type BotSecretDestination,
+  isTerminalWorkStatus,
   type MessageBlock,
   type ProductEvent,
   parseKnownMessageBlocks,
@@ -158,9 +159,6 @@ export interface PauseRunForInput {
 
 const CHOICE_ASK_CHECKPOINT_KIND = "choice_ask_v1";
 
-// Mirrors TERMINAL_WORK_STATUSES in @rakazo/adapters, which depends on this package, so
-// the constant cannot be imported here. Keep the two in step (review owns a shared home).
-const TERMINAL_WORK_STATUSES = ["closed", "cancelled"];
 /**
  * Appended to the prompt that resumes a run after the user answers an ask (from the card or the
  * composer). Without it the model tends to "go back up" the conversation and re-explain or
@@ -807,7 +805,7 @@ export async function answerRunInputInTransaction(
         where: { id: run.scopedTaskId },
         select: { status: true, coordinatorThreadId: true },
       });
-      if (work && TERMINAL_WORK_STATUSES.includes(work.status)) return null;
+      if (work && isTerminalWorkStatus(work.status)) return null;
       coordinatorThreadId = work?.coordinatorThreadId ?? null;
     }
     // The coordinator thread shows a delegated ask as a card; settling it there lets every

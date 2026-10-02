@@ -83,6 +83,22 @@ describe("mobile i18n", () => {
     }
   });
 
+  it("agrees a counted message with its number in Russian, and keeps one form in Chinese", async () => {
+    const { resetI18nForTests, tPlural } = await import("./i18n");
+    const tasks = { one: "{count} task", other: "{count} tasks" };
+    resetI18nForTests("ru");
+    expect([1, 2, 5, 21].map((count) => tPlural(count, tasks))).toEqual([
+      "1 задача",
+      "2 задачи",
+      "5 задач",
+      "21 задача",
+    ]);
+    resetI18nForTests("zh-CN");
+    expect(tPlural(3, tasks)).toBe("3 个任务");
+    resetI18nForTests("en");
+    expect([1, 3].map((count) => tPlural(count, tasks))).toEqual(["1 task", "3 tasks"]);
+  });
+
   it("translates every mobile chrome t() id in both non-English catalogs", async () => {
     const { ZH_MESSAGES } = await import("./locales/zh");
     const { RU_MESSAGES } = await import("./locales/ru");

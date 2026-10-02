@@ -1,11 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { type JobPublisher, runContinueJob, type SandboxProvider } from "@rakazo/adapter-kit";
-import {
-  cancelComputerRunWork,
-  screenLeaseIdForRun,
-  TERMINAL_WORK_STATUSES,
-  toComputerRef,
-} from "@rakazo/adapters";
+import { cancelComputerRunWork, screenLeaseIdForRun, toComputerRef } from "@rakazo/adapters";
 import type { NativeHarnessChoice, PendingWorkAsk, ThreadMessage } from "@rakazo/contracts";
 import {
   type Actor,
@@ -19,6 +14,7 @@ import {
   REPLY_QUOTE_MAX_LENGTH,
   type RunStatus,
   type ThreadSnapshot,
+  WORK_TERMINAL_STATUSES,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -535,7 +531,7 @@ export async function threadSnapshot(
                 coordinatorBotId: target.botId,
                 spaceId: target.bot.spaceId,
                 userId: target.bot.userId,
-                status: { notIn: TERMINAL_WORK_STATUSES },
+                status: { notIn: [...WORK_TERMINAL_STATUSES] },
               },
             },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],

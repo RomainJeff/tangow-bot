@@ -4,7 +4,6 @@ import type {
   Connection,
   ConnectionCatalogItem,
   MessageBlock,
-  PendingWorkAsk,
   Routine,
 } from "@rakazo/contracts";
 import {
@@ -100,6 +99,7 @@ import { StackedAvatars } from "../components/stacked-avatars";
 import { Surface } from "../components/surface";
 import { UserBubble } from "../components/user-bubble";
 import { WorkReturnCard } from "../components/work-return-card";
+import { useWorkTree, WorkTreeAnchor, WorkTreeProvider } from "../components/work-task-tree";
 import { WorkingLine } from "../components/working-line";
 import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import {
@@ -153,6 +153,7 @@ import {
 } from "../lib/pick-attachments";
 import { threadRefreshDelayMs } from "../lib/refresh";
 import { closeSheet, openSheet } from "../lib/sheet";
+import { eventTouchesTaskTree } from "../lib/task-tree-view";
 import { shadowsForAppearance } from "../lib/theme";
 import {
   type ThreadScrollAction,
@@ -419,6 +420,15 @@ function Thread() {
     [snap?.messages, showSteps],
   );
   const visibleMessages = reactionView.visibleMessages;
+  const answerableWork = answerableWorkAsks(snap?.pendingWork);
+  const workTree = useWorkTree({
+    threadId: snap?.threadId,
+    // A tree unfolds under a delegated card: a pending ask or a specialist's return.
+    enabled:
+      answerableWork.length > 0 ||
+      visibleMessages.some((message) => message.blocks.some((block) => parseWorkReturn(block))),
+    refresh,
+  });
   const latestMessageId = visibleMessages.at(-1)?.id ?? null;
   const rewindRemovedCount = rewindTarget
     ? visibleMessages.filter((message) => (message.seq ?? 0) > (rewindTarget.seq ?? 0)).length
@@ -1077,6 +1087,7 @@ function Thread() {
               if (event.type === "work.waiting_input") {
                 void refresh().catch(() => undefined);
               }
+              if (eventTouchesTaskTree(event)) workTree.reload();
               if (event.type === "bot.updated") {
                 void refreshMentionBots();
               }
@@ -1412,21 +1423,6 @@ function Thread() {
         ...(targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! }),
         runId: message.runId,
         messageId: message.id,
-        answer,
-      });
-      if (isCurrentTarget(targetBotId, targetGroupId)) await refresh();
-    },
-    [botId, groupId],
-  );
-
-  const answerWork = useCallback(
-    async (work: PendingWorkAsk, answer: string) => {
-      const targetBotId = botId;
-      const targetGroupId = groupId;
-      await rpc("works/answer", {
-        workId: work.workId,
-        runId: work.runId,
-        messageId: work.message.id,
         answer,
       });
       if (isCurrentTarget(targetBotId, targetGroupId)) await refresh();
@@ -1850,7 +1846,7 @@ function Thread() {
     </View>
   ) : null;
   // A delegated specialist's ask is answered here, in its coordinator's thread.
-  const workAskCards = answerableWorkAsks(snap?.pendingWork).map((work) => (
+  const workAskCards = answerableWork.map((work) => (
     <View key={work.runId} style={{ marginTop: MESSAGE_GAP, gap: 6 }}>
       <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("label") }}>
         {t("{specialist} · delegated by {coordinator}", {
@@ -1866,11 +1862,12 @@ function Thread() {
         bots={mentionBots}
         members={snap?.members}
         canAnswer
-        onAnswer={(_message, answer) => answerWork(work, answer)}
+        onAnswer={(_message, answer) => workTree.api.answer(work, answer)}
         onOpenBot={openBot}
         onPreviewMarkdown={setMarkdownPreview}
         actionProps={{}}
       />
+      <WorkTreeAnchor anchor={`ask:${work.runId}`} />
     </View>
   ));
   const workAsksAndWorkingLine =
@@ -1898,7 +1895,7 @@ function Thread() {
       </Pressable>
     ) : null;
 
-  return (
+  const screen = (
     <KeyboardAvoidingView
       behavior="height"
       keyboardVerticalOffset={headerHeight}
@@ -2510,6 +2507,7 @@ function Thread() {
       ) : null}
     </KeyboardAvoidingView>
   );
+  return <WorkTreeProvider api={workTree.api}>{screen}</WorkTreeProvider>;
 }
 
 function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
@@ -3336,6 +3334,7 @@ const MessageBubble = memo(function MessageBubble({
           }
         />
       ) : null}
+      {workReturn ? <WorkTreeAnchor anchor={message.id} /> : null}
       {steps.map((block, index) => (
         <AgentSteps key={`${message.id}-steps-${index}`} block={block} live={live} />
       ))}

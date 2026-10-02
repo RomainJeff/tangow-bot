@@ -1,9 +1,8 @@
 import { ORPCError } from "@orpc/server";
 import type { JobPublisher } from "@rakazo/adapter-kit";
 import { runContinueJob } from "@rakazo/adapter-kit";
-import { TERMINAL_WORK_STATUSES } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
-import { MessageBlock as MessageBlockSchema } from "@rakazo/contracts";
+import { MessageBlock as MessageBlockSchema, WORK_TERMINAL_STATUSES } from "@rakazo/contracts";
 import { isSecretAskBlock } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { InvalidAnswerError, IsolationError } from "@rakazo/db";
@@ -31,7 +30,7 @@ export async function answerDelegatedWork(
       id: input.workId,
       spaceId: actor.spaceId,
       userId: actor.userId,
-      status: { notIn: TERMINAL_WORK_STATUSES },
+      status: { notIn: [...WORK_TERMINAL_STATUSES] },
     },
     select: { id: true, specialistThreadId: true },
   });

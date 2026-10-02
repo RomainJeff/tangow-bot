@@ -44,6 +44,7 @@ export * from "./self-update.js";
 export * from "./signup-policy.js";
 export * from "./skill-access.js";
 export * from "./speech-text.js";
+export * from "./task-tree.js";
 export * from "./teach-playbook.js";
 export * from "./teach-recording.js";
 export * from "./text-direction.js";

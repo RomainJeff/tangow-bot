@@ -6,6 +6,7 @@ import {
   runContinueJob,
 } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
+import { WORK_TERMINAL_STATUSES } from "@rakazo/contracts";
 import { botMessageContext } from "@rakazo/core";
 import type { Pool, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -13,11 +14,7 @@ import type { PoolClient } from "pg";
 import { returnBotMessageOutcome } from "./bot-messages.js";
 import { scheduleComputerControlExpiry } from "./computer-control.js";
 import { toComputerRef } from "./computer-support.js";
-import {
-  cleanupTerminalWork,
-  deliverSpecialistRunEnd,
-  TERMINAL_WORK_STATUSES,
-} from "./delegated-tasks.js";
+import { cleanupTerminalWork, deliverSpecialistRunEnd } from "./delegated-tasks.js";
 import { isUserProgressClientNonce } from "./user-progress.js";
 
 const DEFAULT_INTERVAL_MS = 30_000;
@@ -194,7 +191,7 @@ export function createJobReconciler(
               {
                 OR: [
                   { scopedTaskId: null },
-                  { scopedTask: { is: { status: { notIn: TERMINAL_WORK_STATUSES } } } },
+                  { scopedTask: { is: { status: { notIn: [...WORK_TERMINAL_STATUSES] } } } },
                 ],
               },
               ...(runCursorFilter ? [runCursorFilter] : []),
@@ -424,7 +421,7 @@ async function reconcileTerminalWork(
   if (!("scopedTask" in deps.prisma)) return;
   const terminal = await deps.prisma.scopedTask.findMany({
     where: {
-      status: { in: TERMINAL_WORK_STATUSES },
+      status: { in: [...WORK_TERMINAL_STATUSES] },
       executorBot: { is: { archivedAt: null } },
     },
     orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
@@ -515,7 +512,7 @@ async function reconcileSpecialistReturns(
         },
         {
           status: "cancelled",
-          scopedTask: { is: { status: { notIn: TERMINAL_WORK_STATUSES } } },
+          scopedTask: { is: { status: { notIn: [...WORK_TERMINAL_STATUSES] } } },
         },
       ],
     },

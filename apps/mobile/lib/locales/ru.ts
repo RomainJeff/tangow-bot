@@ -1,3 +1,5 @@
+import type { PluralForms } from "./plural";
+
 export const RU_MESSAGES: Record<string, string> = {
   "Update your server to use AI data sharing in this mobile version.":
     "Обновите сервер, чтобы использовать обмен данными с ИИ в этой версии мобильного приложения.",
@@ -721,4 +723,32 @@ export const RU_MESSAGES: Record<string, string> = {
   Specialist: "Специалист",
   Closed: "Закрыто",
   "{specialist} · delegated by {coordinator}": "{specialist} · делегировано {coordinator}",
+  "chosen explicitly": "выбрано явно",
+  "set by its profile": "задано профилем",
+  "picked automatically": "выбрано автоматически",
+  default: "по умолчанию",
+  "Cancel {name}?": "Отменить {name}?",
+  "allowed by {name}": "разрешено: {name}",
+  "always allowed by {name}": "всегда разрешено: {name}",
+  "denied by {name}": "запрещено: {name}",
+  Keep: "Оставить",
+  "Cancel task": "Отменить задачу",
+  "View thread": "Показать диалог",
+  Result: "Результат",
+  "Actions for {name}": "Действия: {name}",
+};
+
+export const RU_PLURALS: Record<string, PluralForms> = {
+  "{count} tasks": {
+    one: "{count} задача",
+    few: "{count} задачи",
+    many: "{count} задач",
+    other: "{count} задачи",
+  },
+  "Its {count} open subtasks will be cancelled too.": {
+    one: "Его {count} открытая подзадача тоже будет отменена.",
+    few: "Его {count} открытые подзадачи тоже будут отменены.",
+    many: "Его {count} открытых подзадач тоже будут отменены.",
+    other: "Его {count} открытой подзадачи тоже будут отменены.",
+  },
 };

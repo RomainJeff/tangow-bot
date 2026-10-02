@@ -1,3 +1,5 @@
+import type { PluralForms } from "./plural";
+
 export const ZH_MESSAGES: Record<string, string> = {
   "Update your server to use AI data sharing in this mobile version.":
     "请更新服务器，以便在此移动版本中使用 AI 数据共享功能。",
@@ -704,4 +706,25 @@ export const ZH_MESSAGES: Record<string, string> = {
   Specialist: "专家",
   Closed: "已关闭",
   "{specialist} · delegated by {coordinator}": "{specialist} · 由 {coordinator} 委派",
+  "chosen explicitly": "明确选择",
+  "set by its profile": "由其配置设定",
+  "picked automatically": "自动选择",
+  default: "默认",
+  "Cancel {name}?": "要取消 {name} 吗？",
+  "allowed by {name}": "{name} 已允许",
+  "always allowed by {name}": "{name} 已始终允许",
+  "denied by {name}": "{name} 已拒绝",
+  Keep: "保留",
+  "Cancel task": "取消任务",
+  "View thread": "查看对话",
+  Result: "结果",
+  "Actions for {name}": "{name} 的操作",
+};
+
+/** Chinese does not agree with a count: its one form serves every number. */
+export const ZH_PLURALS: Record<string, PluralForms> = {
+  "{count} tasks": { other: "{count} 个任务" },
+  "Its {count} open subtasks will be cancelled too.": {
+    other: "其 {count} 个进行中的子任务也将被取消。",
+  },
 };

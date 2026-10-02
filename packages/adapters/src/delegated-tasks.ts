@@ -22,10 +22,12 @@ import type {
 } from "@rakazo/contracts";
 import {
   isNativeHarness,
+  isTerminalWorkStatus,
   isWorkReturnOutcome,
   MessageBlock as MessageBlockSchema,
   RUN_CHOICE_VERSION,
   storedSpecialistHarness,
+  WORK_TERMINAL_STATUSES,
 } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
@@ -148,7 +150,6 @@ async function appendWorkTreeChanged(
   return { threadId: event.threadId, seq: event.seq };
 }
 
-export const TERMINAL_WORK_STATUSES = ["closed", "cancelled"];
 /** Delegation limits of a deployment that has not set its own. */
 export const DEFAULT_DELEGATION_MAX_DEPTH = 3;
 export const DEFAULT_DELEGATION_MAX_ACTIVE_SPECIALISTS = 5;
@@ -260,7 +261,7 @@ async function revokeMissionComputerUseIfLastWork(
     where: {
       missionComputerId: scopedTask.missionComputerId,
       executorBotId: scopedTask.executorBotId,
-      status: { notIn: TERMINAL_WORK_STATUSES },
+      status: { notIn: [...WORK_TERMINAL_STATUSES] },
     },
   });
   if (remaining !== 0) return;
@@ -394,7 +395,7 @@ export async function computeEffectiveMcpAccess(
 
   const own = await computeOwnMcpAccess(prisma, botId);
   const scopedTask = await prisma.scopedTask.findFirst({
-    where: { executorBotId: botId, status: { notIn: TERMINAL_WORK_STATUSES } },
+    where: { executorBotId: botId, status: { notIn: [...WORK_TERMINAL_STATUSES] } },
     select: { delegationCeiling: true, coordinatorBotId: true },
   });
   if (!scopedTask) return own;
@@ -541,7 +542,7 @@ export function createDelegatedTasks(deps: Deps) {
                 where: { id: originRun.scopedTaskId },
                 select: { status: true },
               });
-              if (!parent || TERMINAL_WORK_STATUSES.includes(parent.status)) {
+              if (!parent || isTerminalWorkStatus(parent.status)) {
                 throw new WorkClosedError(originRun.scopedTaskId);
               }
             }
@@ -625,7 +626,7 @@ async function applyDelegate(
     const parentPrecheck = await deps.prisma.scopedTask.findUnique({
       where: { id: parentScopedTaskId },
     });
-    if (!parentPrecheck || TERMINAL_WORK_STATUSES.includes(parentPrecheck.status)) {
+    if (!parentPrecheck || isTerminalWorkStatus(parentPrecheck.status)) {
       throw new WorkClosedError(parentScopedTaskId);
     }
     // depth 0 is the coordinator's own specialist, so the new task sits at level depth + 2.
@@ -754,7 +755,7 @@ async function applyDelegate(
           Array<{ id: string; rootScopedTaskId: string; depth: number; status: string }>
         >`SELECT id, "rootScopedTaskId", depth, status FROM scoped_tasks WHERE id = ${parentScopedTaskId} FOR UPDATE`;
         const row = locked[0];
-        if (!row || TERMINAL_WORK_STATUSES.includes(row.status)) {
+        if (!row || isTerminalWorkStatus(row.status)) {
           throw new WorkClosedError(parentScopedTaskId);
         }
         parent = { id: row.id, rootScopedTaskId: row.rootScopedTaskId, depth: row.depth };
@@ -868,9 +869,9 @@ async function applyDelegate(
     };
   }
 
-  await deps.events?.notify(created.treeChanged.threadId, created.treeChanged.seq).catch(
-    () => undefined,
-  );
+  await deps.events
+    ?.notify(created.treeChanged.threadId, created.treeChanged.seq)
+    .catch(() => undefined);
   await deps.jobs.enqueue(runContinueJob(created.runId));
 
   return {
@@ -960,7 +961,7 @@ async function applyFollowup(
   // Finding 3: followup is only accepted from the coordinator of this exact workId
   // (same bot, same space, same user); a stranger's followup has no effect.
   assertActorIsCoordinator(context, scopedTask, scopedTask.id);
-  if (TERMINAL_WORK_STATUSES.includes(scopedTask.status)) {
+  if (isTerminalWorkStatus(scopedTask.status)) {
     throw new WorkClosedError(scopedTask.id);
   }
 
@@ -968,7 +969,7 @@ async function applyFollowup(
     // Claim the still-open work inside this transaction. A concurrent close that committed
     // after the first read makes this update affect zero rows, before any grant or Run write.
     const claimed = await tx.scopedTask.updateMany({
-      where: { id: scopedTask.id, status: { notIn: TERMINAL_WORK_STATUSES } },
+      where: { id: scopedTask.id, status: { notIn: [...WORK_TERMINAL_STATUSES] } },
       data: { updatedAt: new Date() },
     });
     if (claimed.count !== 1) throw new WorkClosedError(scopedTask.id);
@@ -1008,9 +1009,9 @@ async function applyFollowup(
     return { run, treeChanged: await appendWorkTreeChanged(tx, scopedTask) };
   });
 
-  await deps.events?.notify(created.treeChanged.threadId, created.treeChanged.seq).catch(
-    () => undefined,
-  );
+  await deps.events
+    ?.notify(created.treeChanged.threadId, created.treeChanged.seq)
+    .catch(() => undefined);
   await deps.jobs.enqueue(runContinueJob(created.run.id));
 
   return {
@@ -1044,7 +1045,7 @@ async function closeWork(
       // Serialise with a descendant spawn, which locks this row to read its status.
       const [locked] = await tx.$queryRaw<Array<{ status?: string }>>`
         SELECT status FROM scoped_tasks WHERE id = ${scopedTask.id} FOR UPDATE`;
-      if (!TERMINAL_WORK_STATUSES.includes(locked?.status ?? "")) {
+      if (!isTerminalWorkStatus(locked?.status ?? "")) {
         if (await hasOpenDescendant(tx, scopedTask.id)) {
           throw new WorkHasOpenDescendantsError(scopedTask.id);
         }
@@ -1057,7 +1058,7 @@ async function closeWork(
       // A repeated close is a cleanup retry, not a second lifecycle decision. The guarded
       // update makes the append-only event part of exactly one terminal transition.
       const claimed = await tx.scopedTask.updateMany({
-        where: { id: scopedTask.id, status: { notIn: TERMINAL_WORK_STATUSES } },
+        where: { id: scopedTask.id, status: { notIn: [...WORK_TERMINAL_STATUSES] } },
         data: { status },
       });
       if (claimed.count !== 1) return null;
@@ -1126,7 +1127,7 @@ async function walkDescendants(
 
 function hasOpenDescendant(tx: Prisma.TransactionClient, workId: ScopedWorkId) {
   return walkDescendants(tx, workId, async (children) =>
-    children.some((child) => !TERMINAL_WORK_STATUSES.includes(child.status)),
+    children.some((child) => !isTerminalWorkStatus(child.status)),
   );
 }
 
@@ -1151,7 +1152,7 @@ export async function cleanupTerminalWork(
     const remainingWork = await tx.scopedTask.count({
       where: {
         executorBotId: scopedTask.executorBotId,
-        status: { notIn: TERMINAL_WORK_STATUSES },
+        status: { notIn: [...WORK_TERMINAL_STATUSES] },
       },
     });
     if (remainingWork !== 0) return;
@@ -1224,7 +1225,7 @@ type WalkedScopedTask = CancellableScopedTask & { status: string };
  * The traversal (`frontier`) always continues through every child read, terminal or
  * not — but the list of rows this function later touches (Runs stopped, grant revoked,
  * native session closed) is built *only* from the ids `updateManyAndReturn` actually
- * claimed under its own `status: { notIn: TERMINAL_WORK_STATUSES }` guard, never from
+ * claimed under its own `status: { notIn: WORK_TERMINAL_STATUSES }` guard, never from
  * what the preceding plain read observed. A child closed concurrently, between that
  * read and this guarded write, is excluded from the returned rows by the guard itself —
  * so its Runs/grant/native session are never touched, and its own descendants are still
@@ -1248,7 +1249,7 @@ async function cancelWorkTree(
     // a concurrent close/cancel: a concurrent cancel/close of the same row makes this
     // affect zero rows, and the whole cascade below is skipped (idempotent).
     const claimedRoot = await tx.scopedTask.updateMany({
-      where: { id: root.id, status: { notIn: TERMINAL_WORK_STATUSES } },
+      where: { id: root.id, status: { notIn: [...WORK_TERMINAL_STATUSES] } },
       data: { status: "cancelled" },
     });
     if (claimedRoot.count === 0) return [];
@@ -1256,7 +1257,7 @@ async function cancelWorkTree(
     const cancelled: CancellableScopedTask[] = [root];
     await walkDescendants(tx, root.id, async (children) => {
       const candidateIds = children
-        .filter((child) => !TERMINAL_WORK_STATUSES.includes(child.status))
+        .filter((child) => !isTerminalWorkStatus(child.status))
         .map((child) => child.id);
       if (candidateIds.length > 0) {
         // Residual of B1 (review n° 1 correction): the guard's *count* must decide
@@ -1265,7 +1266,7 @@ async function cancelWorkTree(
         // status no longer matching, so `claimed` never includes it and its Runs/
         // grant/native session are left untouched below.
         const claimed: CancellableScopedTask[] = await tx.scopedTask.updateManyAndReturn({
-          where: { id: { in: candidateIds }, status: { notIn: TERMINAL_WORK_STATUSES } },
+          where: { id: { in: candidateIds }, status: { notIn: [...WORK_TERMINAL_STATUSES] } },
           data: { status: "cancelled" },
           select: {
             id: true,
@@ -1560,7 +1561,7 @@ async function recordSpecialistReturn(
     });
     // A cancelled Run of a work that is already closed or cancelled tells nobody: the stop
     // that ended the work already did.
-    if (input.outcome === "cancelled" && TERMINAL_WORK_STATUSES.includes(lockedWork?.status ?? ""))
+    if (input.outcome === "cancelled" && isTerminalWorkStatus(lockedWork?.status ?? ""))
       return null;
     const lastUserRun = await tx.run.findFirst({
       where: {
@@ -1582,14 +1583,14 @@ async function recordSpecialistReturn(
     const wakeChainExhausted = workReturnWakes >= WORK_RETURN_MAX_WAKES;
     const wakeAllowed =
       lockedWork?.status !== undefined &&
-      !TERMINAL_WORK_STATUSES.includes(lockedWork.status) &&
+      !isTerminalWorkStatus(lockedWork.status) &&
       coordinator?.archivedAt === null &&
       coordinator.thread?.id === scopedTask.coordinatorThreadId &&
       (scopedTask.depth ?? 0) < WORK_RETURN_MAX_HOPS &&
       !wakeChainExhausted;
     const wakeStatus = wakeAllowed
       ? "queued"
-      : TERMINAL_WORK_STATUSES.includes(lockedWork?.status ?? "")
+      : isTerminalWorkStatus(lockedWork?.status ?? "")
         ? "skipped_terminal_work"
         : (scopedTask.depth ?? 0) >= WORK_RETURN_MAX_HOPS || wakeChainExhausted
           ? "skipped_chain_limit"

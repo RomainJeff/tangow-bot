@@ -1,5 +1,6 @@
 import { runContinueJob } from "@rakazo/adapter-kit";
 import type { BotMessageIntent, MessageBlock } from "@rakazo/contracts";
+import { isTerminalWorkStatus, WORK_TERMINAL_STATUSES } from "@rakazo/contracts";
 import {
   BOT_MESSAGE_MAX_LENGTH,
   botMessageContext,
@@ -18,7 +19,6 @@ import {
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { TERMINAL_WORK_STATUSES } from "./delegated-tasks.js";
 import type { ExecutorDeps } from "./executor.js";
 
 /**
@@ -146,7 +146,7 @@ export async function messageBot(
       title: true,
       thread: { select: { id: true } },
       scopedTasksAsExecutor: {
-        where: { status: { notIn: TERMINAL_WORK_STATUSES } },
+        where: { status: { notIn: [...WORK_TERMINAL_STATUSES] } },
         select: { id: true, specialistThreadId: true },
       },
     },
@@ -346,9 +346,7 @@ export async function messageBot(
               FOR UPDATE
             `
           : [];
-        const passiveReceipt = Boolean(
-          targetWork && TERMINAL_WORK_STATUSES.includes(targetWork.status),
-        );
+        const passiveReceipt = Boolean(targetWork && isTerminalWorkStatus(targetWork.status));
 
         // Echo into the sender's chat in the same transaction so a failed notify
         // cannot leave one side delivered and the other blank.

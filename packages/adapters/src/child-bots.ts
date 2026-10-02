@@ -14,6 +14,7 @@ import {
   type ComputerMode,
   GROUP_MEMBER_MIN,
   NATIVE_HARNESSES,
+  WORK_TERMINAL_STATUSES,
 } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import {
@@ -35,8 +36,6 @@ import { resolveDeploymentModel } from "./deployment-model.js";
 import { resolveAgentHomePath } from "./home.js";
 import { removePiBotSessions } from "./pi-session.js";
 
-const TERMINAL_SCOPED_TASK_STATUSES = ["closed", "cancelled"];
-
 async function cancelCoordinatorScopedTasks(
   tx: Prisma.TransactionClient,
   coordinatorBotId: string,
@@ -44,7 +43,7 @@ async function cancelCoordinatorScopedTasks(
   const openWork = await tx.scopedTask.findMany({
     where: {
       coordinatorBotId,
-      status: { notIn: TERMINAL_SCOPED_TASK_STATUSES },
+      status: { notIn: [...WORK_TERMINAL_STATUSES] },
     },
     select: { id: true, missionComputerId: true, executorBotId: true },
   });
@@ -58,7 +57,7 @@ async function cancelCoordinatorScopedTasks(
       })
     : [];
   await tx.scopedTask.updateMany({
-    where: { coordinatorBotId, status: { notIn: TERMINAL_SCOPED_TASK_STATUSES } },
+    where: { coordinatorBotId, status: { notIn: [...WORK_TERMINAL_STATUSES] } },
     data: { status: "cancelled" },
   });
   await cancelRunsInTransaction(tx, activeRuns, new Date());
@@ -68,7 +67,7 @@ async function cancelCoordinatorScopedTasks(
       where: {
         missionComputerId: work.missionComputerId,
         executorBotId: work.executorBotId,
-        status: { notIn: TERMINAL_SCOPED_TASK_STATUSES },
+        status: { notIn: [...WORK_TERMINAL_STATUSES] },
       },
     });
     if (remaining !== 0) continue;

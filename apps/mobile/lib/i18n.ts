@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
-import { RU_MESSAGES } from "./locales/ru";
-import { ZH_MESSAGES } from "./locales/zh";
+import type { PluralForms } from "./locales/plural";
+import { RU_MESSAGES, RU_PLURALS } from "./locales/ru";
+import { ZH_MESSAGES, ZH_PLURALS } from "./locales/zh";
 import {
   htmlLangForLocale,
   resolveUiLocale,
@@ -11,6 +12,11 @@ import {
 const catalogs: Partial<Record<UiLocale, Record<string, string>>> = {
   "zh-CN": ZH_MESSAGES,
   ru: RU_MESSAGES,
+};
+
+const pluralCatalogs: Partial<Record<UiLocale, Record<string, PluralForms>>> = {
+  "zh-CN": ZH_PLURALS,
+  ru: RU_PLURALS,
 };
 
 let activeLocale: UiLocale = "en";
@@ -41,6 +47,28 @@ export function t(message: string, values?: Record<string, string | number>): st
   return template.replace(/\{([A-Za-z0-9_]+)\}/g, (match, key: string) =>
     Object.hasOwn(values, key) ? String(values[key]) : match,
   );
+}
+
+function pluralCategory(count: number): Intl.LDMLPluralRule {
+  try {
+    return new Intl.PluralRules(activeLocale).select(count);
+  } catch {
+    // A host without Intl.PluralRules agrees like English.
+    return count === 1 ? "one" : "other";
+  }
+}
+
+/**
+ * A message that agrees with `count`, which `{count}` interpolates. The English source gives the
+ * singular and the plural; another locale's catalog gives the form of each plural category its
+ * language has (Russian: one, few, many), keyed by the English plural.
+ */
+export function tPlural(count: number, source: { one: string; other: string }): string {
+  const category = pluralCategory(count);
+  const forms = pluralCatalogs[activeLocale]?.[source.other];
+  const template =
+    forms?.[category] ?? forms?.other ?? (category === "one" ? source.one : source.other);
+  return template.replace(/\{count\}/g, String(count));
 }
 
 export function useI18n(): { locale: UiLocale; t: typeof t } {

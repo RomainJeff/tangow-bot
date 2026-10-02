@@ -89,6 +89,16 @@ export type Receipt = {
   replayed: boolean;
 };
 
+/**
+ * The scoped task statuses that end it: a closed or cancelled task takes no more work, answers
+ * and decisions. The single list every surface and the server read; any other status is open.
+ */
+export const WORK_TERMINAL_STATUSES = ["closed", "cancelled"] as const;
+
+export function isTerminalWorkStatus(status: string): boolean {
+  return WORK_TERMINAL_STATUSES.some((terminal) => terminal === status);
+}
+
 /** How a specialist Run ended, as the coordinator and the work_return card read it. */
 export const WORK_RETURN_OUTCOMES = ["result", "failed", "cancelled", "no_result"] as const;
 export type WorkReturnOutcome = (typeof WORK_RETURN_OUTCOMES)[number];
