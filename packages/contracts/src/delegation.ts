@@ -129,6 +129,8 @@ export type TaskTreeNode = {
   /** T04:4: the coordinator's Computer at delegation time ("Computer de mission"). */
   missionComputerId: string | null;
   status: string;
+  /** Whether the specialist has a Run that has not ended, including one parked on an answer. */
+  working: boolean;
   parentScopedTaskId: string | null;
   rootScopedTaskId: string;
   depth: number;
@@ -150,6 +152,7 @@ export const TaskTreeNodeSchema: z.ZodType<TaskTreeNode> = z.lazy(() =>
     harnessFallbackCause: z.enum(SPECIALIST_HARNESS_FALLBACK_CAUSES).nullable(),
     missionComputerId: z.string().nullable(),
     status: z.string(),
+    working: z.boolean(),
     parentScopedTaskId: z.string().nullable(),
     rootScopedTaskId: z.string(),
     depth: z.number().int(),

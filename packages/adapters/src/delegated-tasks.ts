@@ -113,6 +113,41 @@ type SpecialistDeliveryDeps = Pick<Deps, "prisma" | "jobs"> & {
   events: Pick<ThreadEvents, "notify">;
 };
 
+type WorkTreeTask = {
+  id: string;
+  spaceId: string;
+  rootScopedTaskId: string;
+  coordinatorBotId: string;
+  coordinatorThreadId: string;
+};
+
+/**
+ * Records, in the transaction that changes a task, that the tree it belongs to changed. A tree
+ * is shown by the thread of its root's coordinator, however deep the task sits in it, so the
+ * event goes there; the views that show it read the tree again.
+ */
+async function appendWorkTreeChanged(
+  tx: Prisma.TransactionClient,
+  task: WorkTreeTask,
+): Promise<{ threadId: string; seq: number }> {
+  const root =
+    task.rootScopedTaskId && task.rootScopedTaskId !== task.id
+      ? await tx.scopedTask.findUniqueOrThrow({
+          where: { id: task.rootScopedTaskId },
+          select: { coordinatorBotId: true, coordinatorThreadId: true },
+        })
+      : null;
+  const shown = root ?? task;
+  const event = await appendEventInTransaction(tx, {
+    spaceId: task.spaceId,
+    threadId: shown.coordinatorThreadId,
+    botId: shown.coordinatorBotId,
+    type: "work.tree_changed",
+    payload: { workId: task.id },
+  });
+  return { threadId: event.threadId, seq: event.seq };
+}
+
 export const TERMINAL_WORK_STATUSES = ["closed", "cancelled"];
 /** Delegation limits of a deployment that has not set its own. */
 export const DEFAULT_DELEGATION_MAX_DEPTH = 3;
@@ -697,7 +732,12 @@ async function applyDelegate(
   // way. The remaining race is the scoped_tasks insert: on a spawnKey unique-conflict there,
   // we do not retry the write — we re-read the row the winner committed and return its
   // receipt, exactly like the pre-existing replay path above.
-  let created: { workId: string; runId: string; workThreadId: string };
+  let created: {
+    workId: string;
+    runId: string;
+    workThreadId: string;
+    treeChanged: { threadId: string; seq: number };
+  };
   try {
     created = await deps.prisma.$transaction(async (tx) => {
       // Task 1 (T07) / Scenario 2 (a): re-check the parent under a row lock, inside the
@@ -809,7 +849,8 @@ async function applyDelegate(
           scopedTaskId: scopedTask.id,
         },
       });
-      return { workId: scopedTask.id, runId: run.id, workThreadId: workThread.id };
+      const treeChanged = await appendWorkTreeChanged(tx, scopedTask);
+      return { workId: scopedTask.id, runId: run.id, workThreadId: workThread.id, treeChanged };
     });
   } catch (error) {
     if (!isUniqueConstraintError(error, "spaceId_spawnKey")) throw error;
@@ -827,6 +868,9 @@ async function applyDelegate(
     };
   }
 
+  await deps.events?.notify(created.treeChanged.threadId, created.treeChanged.seq).catch(
+    () => undefined,
+  );
   await deps.jobs.enqueue(runContinueJob(created.runId));
 
   return {
@@ -961,16 +1005,19 @@ async function applyFollowup(
         scopedTaskId: scopedTask.id,
       },
     });
-    return run;
+    return { run, treeChanged: await appendWorkTreeChanged(tx, scopedTask) };
   });
 
-  await deps.jobs.enqueue(runContinueJob(created.id));
+  await deps.events?.notify(created.treeChanged.threadId, created.treeChanged.seq).catch(
+    () => undefined,
+  );
+  await deps.jobs.enqueue(runContinueJob(created.run.id));
 
   return {
     workId: scopedTask.id,
     botId: scopedTask.executorBotId,
     threadId: scopedTask.specialistThreadId,
-    runId: created.id,
+    runId: created.run.id,
     state: "queued",
     replayed: false,
   };
@@ -993,7 +1040,7 @@ async function closeWork(
   if (status === "cancelled") {
     await cancelWorkTree(deps, scopedTask);
   } else {
-    await deps.prisma.$transaction(async (tx) => {
+    const closed = await deps.prisma.$transaction(async (tx) => {
       // Serialise with a descendant spawn, which locks this row to read its status.
       const [locked] = await tx.$queryRaw<Array<{ status?: string }>>`
         SELECT status FROM scoped_tasks WHERE id = ${scopedTask.id} FOR UPDATE`;
@@ -1013,7 +1060,7 @@ async function closeWork(
         where: { id: scopedTask.id, status: { notIn: TERMINAL_WORK_STATUSES } },
         data: { status },
       });
-      if (claimed.count !== 1) return;
+      if (claimed.count !== 1) return null;
       // Lifecycle metadata is deliberately separate from Thread/Event history: clear and
       // rewind may remove conversation content, but never the coordinator's decision to
       // close this scoped work (ADR-0004, I22).
@@ -1032,7 +1079,9 @@ async function closeWork(
         },
       });
       await revokeMissionComputerUseIfLastWork(tx, scopedTask);
+      return appendWorkTreeChanged(tx, scopedTask);
     });
+    if (closed) await deps.events?.notify(closed.threadId, closed.seq).catch(() => undefined);
   }
   // This is intentionally reachable from the real close admission path, rather than a
   // best-effort orphan sweep. Cancellation retains T07's return path; its stop state is
@@ -1189,7 +1238,10 @@ type WalkedScopedTask = CancellableScopedTask & { status: string };
  * can ever be created under a root this function has already cancelled, in either
  * commit order.
  */
-async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<void> {
+async function cancelWorkTree(
+  deps: Deps,
+  root: CancellableScopedTask & WorkTreeTask,
+): Promise<void> {
   const settledAsks = await deps.prisma.$transaction(async (tx) => {
     const cancelledAt = new Date();
     // Claim the root under `read committed`, guarded by status so this never overwrites
@@ -1290,6 +1342,7 @@ async function cancelWorkTree(deps: Deps, root: CancellableScopedTask): Promise<
         data: { state: "closed", processState: "stop_unconfirmed" },
       });
     }
+    settled.push(await appendWorkTreeChanged(tx, root));
     return settled;
   });
   for (const { threadId, seq } of settledAsks) {
@@ -1342,7 +1395,7 @@ export async function readTaskTree(
   }
   const tasks = levels.flat();
   if (tasks.length === 0) return [];
-  const [bots, deliveredRuns, askMessages] = await Promise.all([
+  const [bots, deliveredRuns, activeRuns, askMessages] = await Promise.all([
     prisma.bot.findMany({
       where: { id: { in: tasks.map((task) => task.executorBotId) } },
       select: { id: true, name: true },
@@ -1355,6 +1408,14 @@ export async function readTaskTree(
       orderBy: { updatedAt: "desc" },
       select: { id: true, scopedTaskId: true, terminalOutcome: true },
     }),
+    prisma.run.findMany({
+      where: {
+        scopedTaskId: { in: tasks.map((task) => task.id) },
+        status: { in: [...ACTIVE_RUN_STATUSES] },
+      },
+      distinct: ["scopedTaskId"],
+      select: { scopedTaskId: true },
+    }),
     prisma.message.findMany({
       where: {
         threadId: { in: tasks.map((task) => task.specialistThreadId) },
@@ -1366,6 +1427,7 @@ export async function readTaskTree(
     }),
   ]);
   const names = new Map(bots.map((bot) => [bot.id, bot.name]));
+  const working = new Set(activeRuns.map((run) => run.scopedTaskId));
   const latestRun = new Map<string, (typeof deliveredRuns)[number]>();
   for (const run of deliveredRuns) {
     if (run.scopedTaskId && !latestRun.has(run.scopedTaskId)) latestRun.set(run.scopedTaskId, run);
@@ -1446,6 +1508,7 @@ export async function readTaskTree(
       harnessFallbackCause: harness.fallbackCause,
       missionComputerId: task.missionComputerId,
       status: task.status,
+      working: working.has(task.id),
       parentScopedTaskId: task.parentScopedTaskId,
       rootScopedTaskId: task.rootScopedTaskId,
       depth: task.depth,
@@ -1577,9 +1640,12 @@ async function recordSpecialistReturn(
       runId: historyRunId,
       payload: { messageId: message.id, role: "bot", blocks },
     });
+    // The return changes the task's line in the tree as well as the thread's messages.
+    const treeChanged = await appendWorkTreeChanged(tx, scopedTask);
     if (!wakeAllowed)
       return {
         eventSeq: event.seq,
+        treeChanged,
         coordinatorThreadId: scopedTask.coordinatorThreadId,
         wakeRunId: null,
       };
@@ -1626,6 +1692,7 @@ async function recordSpecialistReturn(
       await tx.task.update({ where: { id: queuedWake.taskId }, data: { prompt } });
       return {
         eventSeq: event.seq,
+        treeChanged,
         coordinatorThreadId: scopedTask.coordinatorThreadId,
         wakeRunId: null,
       };
@@ -1668,14 +1735,22 @@ async function recordSpecialistReturn(
     });
     return {
       eventSeq: event.seq,
+      treeChanged,
       coordinatorThreadId: scopedTask.coordinatorThreadId,
       wakeRunId: wake.id,
     };
   });
   if (committed) {
-    await deps.events
-      .notify(committed.coordinatorThreadId, committed.eventSeq)
-      .catch(() => undefined);
+    // One notification per thread, for the later event: the tree's thread is the task's own
+    // coordinator thread unless the task is nested.
+    const announced = new Map([[committed.coordinatorThreadId, committed.eventSeq]]);
+    announced.set(
+      committed.treeChanged.threadId,
+      Math.max(announced.get(committed.treeChanged.threadId) ?? 0, committed.treeChanged.seq),
+    );
+    for (const [threadId, seq] of announced) {
+      await deps.events.notify(threadId, seq).catch(() => undefined);
+    }
     if (committed.wakeRunId) await deps.jobs.enqueue(runContinueJob(committed.wakeRunId));
   }
   // A result is not a closure: the scoped task stays open for a possible complément.

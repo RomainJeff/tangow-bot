@@ -27,6 +27,8 @@ export const ProductEventType = z.enum([
   "work.waiting_input",
   /** A delegated work's ask was answered; posted on the coordinator thread. */
   "work.input_answered",
+  /** A delegated task was created, closed, cancelled or returned; posted on the coordinator thread that shows its tree. */
+  "work.tree_changed",
   "computer.status",
   "computer.takeover.requested",
   "computer.takeover.granted",
@@ -370,6 +372,10 @@ export type ProductEvent = z.infer<typeof ProductEventSchema>;
  * web client through the snapshot's pendingWork, never through this event. */
 export const WorkWaitingInputPayloadSchema = z.object({ workId: Id, runId: Id });
 export type WorkWaitingInputPayload = z.infer<typeof WorkWaitingInputPayloadSchema>;
+
+/** Payload of `work.tree_changed`: the task that changed. The tree itself is read again. */
+export const WorkTreeChangedPayloadSchema = z.object({ workId: Id });
+export type WorkTreeChangedPayload = z.infer<typeof WorkTreeChangedPayloadSchema>;
 
 /** clientNonce prefix for mid-turn narration messages the executor publishes on its own
  * initiative. Single source of truth (adapters user-progress imports this). */

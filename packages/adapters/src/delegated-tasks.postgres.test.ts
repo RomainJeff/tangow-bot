@@ -314,6 +314,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     );
 
     const input = { workId: receipt.workId, runId: receipt.runId!, text: "Completed." };
+    const announcedBefore = s.deps.events.notify.mock.calls.length;
     await recordSpecialistResult(s.deps, input);
     await recordSpecialistResult(s.deps, input);
 
@@ -356,7 +357,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         },
       }),
     ).resolves.toMatchObject({ botId: coordinatorBotId });
-    expect(s.deps.events.notify).toHaveBeenCalledTimes(1);
+    expect(s.deps.events.notify).toHaveBeenCalledTimes(announcedBefore + 1);
   });
 
   it("serializes two concurrent deliveries of the same specialist result", async () => {
@@ -741,6 +742,49 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     await expect(
       prisma.lifecycleEvent.count({ where: { scopedTaskId: receipt.workId, kind: "work_closed" } }),
     ).resolves.toBe(1);
+  });
+
+  it("tells the coordinator thread each time its task tree changes", async () => {
+    const s = await setup();
+    const tasks = createDelegatedTasks(s.deps);
+    const delegate = (name: string) =>
+      tasks.apply(
+        {
+          kind: "delegate",
+          target: { kind: "from_profile", profileBotId: s.profile.id, name },
+          harness: "codex-native",
+          brief: "Change the tree",
+          requestedRights: {},
+          spawnKey: `tree-changed-${name}-${randomUUID()}`,
+        },
+        s.context,
+      );
+    const finished = await delegate("Finished");
+    await finishRuns(finished.workId);
+    await tasks.apply({ kind: "close", workId: finished.workId }, s.context);
+    // A repeated close is not a second change.
+    await tasks.apply({ kind: "close", workId: finished.workId }, s.context);
+    const stopped = await delegate("Stopped");
+    await tasks.apply(
+      { kind: "cancel", workId: stopped.workId, reason: "No longer needed" },
+      s.context,
+    );
+
+    const events = await prisma.event.findMany({
+      where: { threadId: s.coordinatorThread.id, type: "work.tree_changed" },
+      orderBy: { seq: "asc" },
+    });
+    // Each task: once created, once closed or cancelled.
+    expect(events.map((event) => event.payload)).toEqual([
+      { workId: finished.workId },
+      { workId: finished.workId },
+      { workId: stopped.workId },
+      { workId: stopped.workId },
+    ]);
+    expect(s.deps.events.notify).toHaveBeenLastCalledWith(
+      s.coordinatorThread.id,
+      events.at(-1)!.seq,
+    );
   });
 
   it("preserves a mission Computer when it is the specialist placement", async () => {

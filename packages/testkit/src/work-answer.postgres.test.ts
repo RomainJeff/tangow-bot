@@ -308,6 +308,7 @@ describe.skipIf(!databaseAvailable)("delegated work answer from the coordinator 
       executor: { botId: receipt.botId, threadId: receipt.threadId, name: "Specialist" },
       harness: "codex-native",
       harnessSource: "explicit",
+      working: true,
       result: null,
       approvals: [
         { effectId, summary: "Review before computer_act", status: "pending", decidedBy: null },
@@ -362,10 +363,9 @@ describe.skipIf(!databaseAvailable)("delegated work answer from the coordinator 
       },
       { workId: receipt.workId, runId: receipt.runId!, text: "The figures add up." },
     );
-    expect((await treeOf())[0]?.result).toEqual({
-      runId: receipt.runId,
-      outcome: "result",
-      text: "The figures add up.",
+    expect((await treeOf())[0]).toMatchObject({
+      working: false,
+      result: { runId: receipt.runId, outcome: "result", text: "The figures add up." },
     });
     const blocked = await raw(handles.app, ownerCookie, "works/close", { workId: receipt.workId });
     expect(blocked.status).toBe(409);
