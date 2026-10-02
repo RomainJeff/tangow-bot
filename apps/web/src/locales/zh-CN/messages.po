@@ -117,6 +117,14 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "{botName} 的电脑"
 
+#: src/components/work-tree/context.tsx:47
+msgid "{count, plural, one {{count} task} other {{count} tasks}}"
+msgstr "{count, plural, other {{count} 项任务}}"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:144
+msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
+msgstr "{count, plural, other {其 {count} 项未完成的子任务也会被取消。}}"
+
 #: src/pages/ActivityList.tsx:158
 msgid "{days}d ago"
 msgstr "{days} 天前"
@@ -228,6 +236,10 @@ msgstr "操作确认"
 #: src/pages/shell/sidebar.tsx:405
 msgid "Actions for {0}"
 msgstr "{0} 的操作"
+
+#: src/components/work-tree/TaskTree.tsx:205
+msgid "Actions for {name}"
+msgstr "{name} 的操作"
 
 #: src/pages/Shell.tsx:2936
 msgid "Actions for space"
@@ -431,6 +443,10 @@ msgstr "允许购买操作，无需询问"
 msgid "Allow writing"
 msgstr ""
 
+#: src/components/work-tree/TaskTree.tsx:158
+msgid "allowed by {name}"
+msgstr "{name} 已允许"
+
 #: src/components/AskCard.tsx:24
 msgid "Allowed once"
 msgstr "已允许一次"
@@ -451,6 +467,10 @@ msgstr "始终允许此工具"
 #: src/components/AskCard.tsx:25
 msgid "Always allowed"
 msgstr "始终允许"
+
+#: src/components/work-tree/TaskTree.tsx:157
+msgid "always allowed by {name}"
+msgstr "{name} 已始终允许"
 
 #: src/components/AskCard.tsx:299
 msgid "Answer"
@@ -765,6 +785,10 @@ msgstr "无法连接服务器。"
 msgid "Cancel"
 msgstr "取消"
 
+#: src/components/work-tree/WorkTreeProvider.tsx:141
+msgid "Cancel {name}?"
+msgstr "取消 {name}？"
+
 #: src/pages/shell/composer.tsx:443
 msgid "Cancel edit"
 msgstr "取消编辑"
@@ -780,6 +804,10 @@ msgstr "取消新建群组"
 #: src/pages/shell/composer.tsx:424
 msgid "Cancel reply"
 msgstr "取消回复"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:155
+msgid "Cancel task"
+msgstr "取消任务"
 
 #: src/components/CloudAgentCard.tsx:35
 msgid "cancelled"
@@ -868,6 +896,10 @@ msgstr "设置新密码"
 #: src/pages/ModelSettingsOverlay.tsx:361
 msgid "Choose which connected model Rakazo uses."
 msgstr "选择 Rakazo 使用的已连接模型。"
+
+#: src/components/work-tree/TaskTree.tsx:77
+msgid "chosen explicitly"
+msgstr "明确指定"
 
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clear"
@@ -968,6 +1000,10 @@ msgstr "关闭用户设置"
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "关闭语音设置"
+
+#: src/components/work-tree/TaskTree.tsx:45
+msgid "Closed"
+msgstr "已关闭"
 
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Cloud"
@@ -1707,6 +1743,10 @@ msgstr "拒绝"
 msgid "Default"
 msgstr "默认"
 
+#: src/components/work-tree/TaskTree.tsx:80
+msgid "default"
+msgstr "默认"
+
 #. placeholder {0}: thinkingLevelLabel(defaultThinkingLevel)
 #: src/pages/shell/bot-panel.tsx:612
 msgid "Default ({0})"
@@ -1774,6 +1814,10 @@ msgstr ""
 #: src/components/AskCard.tsx:26
 msgid "Denied"
 msgstr "已拒绝"
+
+#: src/components/work-tree/TaskTree.tsx:155
+msgid "denied by {name}"
+msgstr "{name} 已拒绝"
 
 #: src/components/AskCard.tsx:39
 #: src/pages/CallView.tsx:419
@@ -2358,6 +2402,10 @@ msgstr "跳到被回复的消息"
 #: src/pages/ActivityList.tsx:152
 msgid "just now"
 msgstr "刚刚"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:153
+msgid "Keep"
+msgstr "保留"
 
 #: src/pages/shell/dialogs.tsx:368
 msgid "Keep memories"
@@ -3186,6 +3234,10 @@ msgstr "已暂停"
 msgid "Personal credential"
 msgstr "个人凭据"
 
+#: src/components/work-tree/TaskTree.tsx:79
+msgid "picked automatically"
+msgstr "自动选择"
+
 #: src/pages/BotContextMenu.tsx:91
 msgid "Pin"
 msgstr "置顶"
@@ -3513,6 +3565,10 @@ msgstr "还原上次保存的工作区。电脑上未保存的工作会丢失。
 msgid "Restoring your workspace"
 msgstr ""
 
+#: src/components/work-tree/TaskTree.tsx:104
+msgid "Result"
+msgstr "结果"
+
 #: src/App.tsx:171
 #: src/pages/PeerMessagesOverlay.tsx:133
 msgid "Retry now"
@@ -3760,6 +3816,10 @@ msgstr "服务器名称"
 #: src/pages/Onboarding.tsx:411
 msgid "Server URL"
 msgstr "服务器 URL"
+
+#: src/components/work-tree/TaskTree.tsx:78
+msgid "set by its profile"
+msgstr "由其配置文件设定"
 
 #: src/pages/MessagingSettingsOverlay.tsx:378
 #: src/pages/SettingsOverlay.tsx:110
@@ -4310,6 +4370,10 @@ msgstr "校验并添加"
 #: src/pages/PluginsOverlay.tsx:1156
 msgid "Verifying…"
 msgstr "正在校验…"
+
+#: src/components/work-tree/TaskTree.tsx:220
+msgid "View thread"
+msgstr "查看对话"
 
 #: src/pages/SettingsOverlay.tsx:102
 #: src/pages/shell/bot-panel.tsx:673

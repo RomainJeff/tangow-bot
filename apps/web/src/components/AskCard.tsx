@@ -27,7 +27,7 @@ function formatAnsweredState(
   return t`Answered: ${answer}`;
 }
 
-function approvalActionLabel(
+export function approvalActionLabel(
   id: string,
   fallback: string,
   outcome?: "created" | "cancelled",
@@ -40,7 +40,7 @@ function approvalActionLabel(
   return fallback;
 }
 
-function approvalActionVariant(id: string): "capsule" | "capsuleSecondary" | "tertiary" {
+export function approvalActionVariant(id: string): "capsule" | "capsuleSecondary" | "tertiary" {
   if (id === "allow") return "capsule";
   if (id === "always") return "capsuleSecondary";
   return "tertiary";

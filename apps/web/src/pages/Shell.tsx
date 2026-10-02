@@ -245,6 +245,8 @@ export function ShellPage() {
   const [workAskError, setWorkAskError] = useState<{ workId: string; message: string } | null>(
     null,
   );
+  // How many times the server said the thread's task tree changed; the tree is read again.
+  const [workTreeChanges, setWorkTreeChanges] = useState(0);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState<Panel>(null);
@@ -1128,6 +1130,7 @@ export function ShellPage() {
           pinnedAroundRef.current = null;
           historyEpoch.current += 1;
         }
+        if (event.type === "work.tree_changed") setWorkTreeChanges((count) => count + 1);
         if (event.type === "bot.archived") {
           void refreshBots(true).catch(() => undefined);
         } else if (
@@ -2671,6 +2674,9 @@ export function ShellPage() {
                 pendingWork={activeSnapshot?.pendingWork}
                 workAskError={workAskError}
                 onAnswerWork={answerWork}
+                threadId={activeSnapshot?.threadId}
+                deciderName={bootstrapMe?.name}
+                workTreeChanges={workTreeChanges}
                 onLoadOlder={loadOlder}
                 onOpenBot={openBot}
                 onAnswer={answerMessage}

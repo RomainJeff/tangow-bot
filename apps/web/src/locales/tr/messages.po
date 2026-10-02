@@ -117,6 +117,14 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "{botName} adlı botun bilgisayarı"
 
+#: src/components/work-tree/context.tsx:47
+msgid "{count, plural, one {{count} task} other {{count} tasks}}"
+msgstr "{count, plural, one {{count} görev} other {{count} görev}}"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:144
+msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
+msgstr "{count, plural, one {Açık alt görevi de iptal edilecek.} other {Açık {count} alt görevi de iptal edilecek.}}"
+
 #: src/pages/ActivityList.tsx:158
 msgid "{days}d ago"
 msgstr "{days} g önce"
@@ -228,6 +236,10 @@ msgstr "İşlem onayları"
 #: src/pages/shell/sidebar.tsx:405
 msgid "Actions for {0}"
 msgstr "{0} için işlemler"
+
+#: src/components/work-tree/TaskTree.tsx:205
+msgid "Actions for {name}"
+msgstr "{name} için işlemler"
 
 #: src/pages/Shell.tsx:2936
 msgid "Actions for space"
@@ -431,6 +443,10 @@ msgstr "Satın alma işlemlerine sormadan izin ver"
 msgid "Allow writing"
 msgstr ""
 
+#: src/components/work-tree/TaskTree.tsx:158
+msgid "allowed by {name}"
+msgstr "{name} tarafından izin verildi"
+
 #: src/components/AskCard.tsx:24
 msgid "Allowed once"
 msgstr "Bir kez izin verildi"
@@ -451,6 +467,10 @@ msgstr "Bu araca her zaman izin ver"
 #: src/components/AskCard.tsx:25
 msgid "Always allowed"
 msgstr "Her zaman izinli"
+
+#: src/components/work-tree/TaskTree.tsx:157
+msgid "always allowed by {name}"
+msgstr "{name} tarafından her zaman izin verildi"
 
 #: src/components/AskCard.tsx:299
 msgid "Answer"
@@ -765,6 +785,10 @@ msgstr "Sunucuya ulaşılamıyor."
 msgid "Cancel"
 msgstr "İptal"
 
+#: src/components/work-tree/WorkTreeProvider.tsx:141
+msgid "Cancel {name}?"
+msgstr "{name} iptal edilsin mi?"
+
 #: src/pages/shell/composer.tsx:443
 msgid "Cancel edit"
 msgstr "Düzenlemeyi iptal et"
@@ -780,6 +804,10 @@ msgstr "Yeni grubu iptal et"
 #: src/pages/shell/composer.tsx:424
 msgid "Cancel reply"
 msgstr "Yanıtı iptal et"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:155
+msgid "Cancel task"
+msgstr "Görevi iptal et"
 
 #: src/components/CloudAgentCard.tsx:35
 msgid "cancelled"
@@ -868,6 +896,10 @@ msgstr "Yeni bir parola seçin"
 #: src/pages/ModelSettingsOverlay.tsx:361
 msgid "Choose which connected model Rakazo uses."
 msgstr "Rakazo'nun hangi bağlı modeli kullanacağını seç."
+
+#: src/components/work-tree/TaskTree.tsx:77
+msgid "chosen explicitly"
+msgstr "açıkça seçildi"
 
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clear"
@@ -968,6 +1000,10 @@ msgstr "Kullanıcı ayarlarını kapat"
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "Ses ayarlarını kapat"
+
+#: src/components/work-tree/TaskTree.tsx:45
+msgid "Closed"
+msgstr "Kapatıldı"
 
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Cloud"
@@ -1707,6 +1743,10 @@ msgstr "Reddet"
 msgid "Default"
 msgstr "Varsayılan"
 
+#: src/components/work-tree/TaskTree.tsx:80
+msgid "default"
+msgstr "varsayılan"
+
 #. placeholder {0}: thinkingLevelLabel(defaultThinkingLevel)
 #: src/pages/shell/bot-panel.tsx:612
 msgid "Default ({0})"
@@ -1774,6 +1814,10 @@ msgstr ""
 #: src/components/AskCard.tsx:26
 msgid "Denied"
 msgstr "Reddedildi"
+
+#: src/components/work-tree/TaskTree.tsx:155
+msgid "denied by {name}"
+msgstr "{name} tarafından reddedildi"
 
 #: src/components/AskCard.tsx:39
 #: src/pages/CallView.tsx:419
@@ -2358,6 +2402,10 @@ msgstr "Yanıtlanan mesaja git"
 #: src/pages/ActivityList.tsx:152
 msgid "just now"
 msgstr "az önce"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:153
+msgid "Keep"
+msgstr "Koru"
 
 #: src/pages/shell/dialogs.tsx:368
 msgid "Keep memories"
@@ -3186,6 +3234,10 @@ msgstr "Duraklatıldı"
 msgid "Personal credential"
 msgstr "Kişisel kimlik bilgisi"
 
+#: src/components/work-tree/TaskTree.tsx:79
+msgid "picked automatically"
+msgstr "otomatik seçildi"
+
 #: src/pages/BotContextMenu.tsx:91
 msgid "Pin"
 msgstr "Sabitle"
@@ -3513,6 +3565,10 @@ msgstr "Son kaydedilen çalışma alanını geri yükler. Bilgisayardaki kaydedi
 msgid "Restoring your workspace"
 msgstr ""
 
+#: src/components/work-tree/TaskTree.tsx:104
+msgid "Result"
+msgstr "Sonuç"
+
 #: src/App.tsx:171
 #: src/pages/PeerMessagesOverlay.tsx:133
 msgid "Retry now"
@@ -3760,6 +3816,10 @@ msgstr "Sunucu adı"
 #: src/pages/Onboarding.tsx:411
 msgid "Server URL"
 msgstr "Sunucu URL'si"
+
+#: src/components/work-tree/TaskTree.tsx:78
+msgid "set by its profile"
+msgstr "profili tarafından belirlendi"
 
 #: src/pages/MessagingSettingsOverlay.tsx:378
 #: src/pages/SettingsOverlay.tsx:110
@@ -4310,6 +4370,10 @@ msgstr "Doğrula ve ekle"
 #: src/pages/PluginsOverlay.tsx:1156
 msgid "Verifying…"
 msgstr "Doğrulanıyor…"
+
+#: src/components/work-tree/TaskTree.tsx:220
+msgid "View thread"
+msgstr "Sohbeti görüntüle"
 
 #: src/pages/SettingsOverlay.tsx:102
 #: src/pages/shell/bot-panel.tsx:673

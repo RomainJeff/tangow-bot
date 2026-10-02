@@ -1,15 +1,6 @@
-import { t } from "@lingui/core/macro";
 import type { WorkReturn } from "../lib/work-return";
-
-function outcomeMark(outcome: WorkReturn["outcome"]) {
-  if (outcome === "result") return { glyph: "✓", tone: "text-success", label: t`Done` };
-  if (outcome === "failed") return { glyph: "✕", tone: "text-destructive", label: t`Failed` };
-  if (outcome === "cancelled")
-    return { glyph: "⊘", tone: "text-muted-foreground", label: t`Cancelled` };
-  if (outcome === "no_result")
-    return { glyph: "–", tone: "text-muted-foreground", label: t`No result` };
-  return null;
-}
+import { TaskTreeDisclosure } from "./work-tree/context";
+import { outcomeMark } from "./work-tree/outcome-mark";
 
 /**
  * The specialist's work_return card: who produced the result and how the run
@@ -20,13 +11,16 @@ function outcomeMark(outcome: WorkReturn["outcome"]) {
 export function WorkReturnCard({
   workReturn,
   specialistName,
+  cardKey,
 }: {
   workReturn: WorkReturn;
   specialistName: string;
+  /** Names this card for the task tree it can unfold; without one the card has no link. */
+  cardKey?: string;
 }) {
   const mark = outcomeMark(workReturn.outcome);
   return (
-    <div className="flex justify-start">
+    <div className="flex flex-col items-start">
       <div
         className="flex flex-col gap-2 rounded-block bg-muted px-5 py-4"
         data-testid="work-return-card"
@@ -41,6 +35,7 @@ export function WorkReturnCard({
           {mark ? <span className="text-muted-foreground">{mark.label}</span> : null}
         </div>
       </div>
+      {cardKey ? <TaskTreeDisclosure cardKey={cardKey} /> : null}
     </div>
   );
 }

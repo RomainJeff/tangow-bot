@@ -8,6 +8,12 @@ import { WorkReturnCard } from "./WorkReturnCard";
 vi.mock("@lingui/core/macro", () => ({
   t: (strings: TemplateStringsArray) => strings.join(""),
 }));
+// The card can unfold a task tree, whose module loads the react macro too.
+vi.mock("@lingui/react/macro", () => ({
+  Plural: () => null,
+  Trans: ({ children }: { children?: unknown }) => children,
+  useLingui: () => ({ t: (strings: TemplateStringsArray) => strings.join("") }),
+}));
 
 function render(outcome: WorkReturn["outcome"]) {
   return renderToStaticMarkup(
@@ -19,6 +25,17 @@ function render(outcome: WorkReturn["outcome"]) {
 }
 
 describe("WorkReturnCard", () => {
+  it("offers no task link outside a thread that holds its tasks", () => {
+    const html = renderToStaticMarkup(
+      <WorkReturnCard
+        workReturn={{ workId: "work-1", executorBotId: "bot-specialist", outcome: "result" }}
+        specialistName="Researcher"
+        cardKey="return:message-1:0"
+      />,
+    );
+    expect(html).not.toContain("task-tree-disclosure");
+  });
+
   it("shows the specialist without internal work-return identifiers", () => {
     const html = render("result");
     expect(html).toContain("Researcher");

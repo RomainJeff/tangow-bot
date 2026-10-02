@@ -2,6 +2,7 @@ import { t } from "@lingui/core/macro";
 import type { PendingWorkAsk } from "@rakazo/contracts";
 import type { AskBlock } from "./AskCard";
 import { AskCard } from "./AskCard";
+import { TaskTreeDisclosure } from "./work-tree/context";
 
 /**
  * A specialist's pending ask rendered in its coordinator's thread. The provenance line
@@ -28,6 +29,7 @@ export function WorkAskCard({
       </div>
       <AskCard block={askBlock} canAnswer onAnswer={onAnswer} messageId={pendingWork.message.id} />
       {error ? <p className="text-meta text-destructive">{error}</p> : null}
+      <TaskTreeDisclosure cardKey={`ask:${pendingWork.workId}:${pendingWork.message.id}`} />
     </div>
   );
 }

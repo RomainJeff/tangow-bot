@@ -485,6 +485,7 @@ export const MessageView = memo(function MessageView({
             <WorkReturnCard
               key={i}
               workReturn={workReturn}
+              cardKey={readOnly ? undefined : `return:${message.id}:${i}`}
               specialistName={peerBot(workReturn.executorBotId ?? "")?.name ?? t`Specialist`}
             />
           );

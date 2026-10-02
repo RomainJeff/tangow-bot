@@ -26,46 +26,18 @@ import {
 } from "react";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
 import { WorkAskCard } from "../../components/WorkAskCard";
+import { WorkTreeProvider } from "../../components/work-tree/WorkTreeProvider";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageTimeLabel } from "../../lib/message-time";
 import { transcriptIsNearEnd, transcriptMovedDown } from "../../lib/transcript-scroll";
+import { workActivityKey } from "../../lib/work-tree";
 import { LoadEarlierButton, MessageFrame, messageChrome } from "./message-frame";
 import { MessageHoverActions } from "./message-hover-actions";
 import { MessageView } from "./message-view";
 
-export const Transcript = memo(function Transcript({
-  scrollRef,
-  artifactTarget,
-  messages,
-  olderCursor,
-  loadingOlder,
-  answerableAskMessageId,
-  running,
-  workingBots,
-  workingStartedAt,
-  pendingWork,
-  workAskError,
-  onAnswerWork,
-  onLoadOlder,
-  onOpenBot,
-  onAnswer,
-  onReply,
-  onEdit,
-  rewindFromSeq,
-  onReact,
-  onJumpToMessage,
-  onOpenPeerMessages,
-  memberName,
-  peerBot,
-  onRefresh,
-  onBotChanged,
-  onAddRoutine,
-  voiceReady,
-  speakingMessageId,
-  onSpeak,
-}: {
+type TranscriptViewProps = {
   scrollRef: RefObject<HTMLDivElement | null>;
   artifactTarget: ArtifactTarget;
   messages: ThreadMessage[];
@@ -98,7 +70,39 @@ export const Transcript = memo(function Transcript({
   voiceReady: boolean;
   speakingMessageId: string | null;
   onSpeak: (message: ThreadMessage) => void;
-}) {
+};
+
+const TranscriptView = memo(function TranscriptView({
+  scrollRef,
+  artifactTarget,
+  messages,
+  olderCursor,
+  loadingOlder,
+  answerableAskMessageId,
+  running,
+  workingBots,
+  workingStartedAt,
+  pendingWork,
+  workAskError,
+  onAnswerWork,
+  onLoadOlder,
+  onOpenBot,
+  onAnswer,
+  onReply,
+  onEdit,
+  rewindFromSeq,
+  onReact,
+  onJumpToMessage,
+  onOpenPeerMessages,
+  memberName,
+  peerBot,
+  onRefresh,
+  onBotChanged,
+  onAddRoutine,
+  voiceReady,
+  speakingMessageId,
+  onSpeak,
+}: TranscriptViewProps) {
   const { t } = useLingui();
   const showSteps = useDisplayAgentSteps();
   const [atEnd, setAtEnd] = useState(true);
@@ -472,5 +476,36 @@ export const Transcript = memo(function Transcript({
         <ArrowDown size={17} strokeWidth={1.8} />
       </button>
     </div>
+  );
+});
+
+type TranscriptProps = TranscriptViewProps & {
+  /** The thread the transcript shows, whose delegated tasks its work cards unfold. */
+  threadId?: string;
+  /** Who settles the thread's approvals, named in its task tree. */
+  deciderName?: string;
+  /** Counts the server's `work.tree_changed` events on this thread. */
+  workTreeChanges: number;
+};
+
+/**
+ * A thread's messages inside the task tree of its delegated work. Mounted once per thread, so
+ * no tree or open card outlives the thread that has it.
+ */
+export const Transcript = memo(function Transcript({
+  threadId,
+  deciderName,
+  workTreeChanges,
+  ...view
+}: TranscriptProps) {
+  return (
+    <WorkTreeProvider
+      threadId={threadId}
+      activityKey={workActivityKey(view.messages, view.pendingWork)}
+      changes={workTreeChanges}
+      deciderName={deciderName}
+    >
+      <TranscriptView {...view} />
+    </WorkTreeProvider>
   );
 });

@@ -117,6 +117,14 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "Компьютер {botName}"
 
+#: src/components/work-tree/context.tsx:47
+msgid "{count, plural, one {{count} task} other {{count} tasks}}"
+msgstr "{count, plural, one {{count} задача} few {{count} задачи} many {{count} задач} other {{count} задачи}}"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:144
+msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
+msgstr "{count, plural, one {Её открытая подзадача тоже будет отменена.} few {Её {count} открытые подзадачи тоже будут отменены.} many {Её {count} открытых подзадач тоже будут отменены.} other {Её {count} открытой подзадачи тоже будут отменены.}}"
+
 #: src/pages/ActivityList.tsx:158
 msgid "{days}d ago"
 msgstr "{days} дн. назад"
@@ -228,6 +236,10 @@ msgstr "Подтверждения действий"
 #: src/pages/shell/sidebar.tsx:405
 msgid "Actions for {0}"
 msgstr "Действия для {0}"
+
+#: src/components/work-tree/TaskTree.tsx:205
+msgid "Actions for {name}"
+msgstr "Действия: {name}"
 
 #: src/pages/Shell.tsx:2936
 msgid "Actions for space"
@@ -431,6 +443,10 @@ msgstr "Разрешить действия по покупке без запр�
 msgid "Allow writing"
 msgstr ""
 
+#: src/components/work-tree/TaskTree.tsx:158
+msgid "allowed by {name}"
+msgstr "разрешено: {name}"
+
 #: src/components/AskCard.tsx:24
 msgid "Allowed once"
 msgstr "Разрешено один раз"
@@ -451,6 +467,10 @@ msgstr "Всегда разрешать этот инструмент"
 #: src/components/AskCard.tsx:25
 msgid "Always allowed"
 msgstr "Всегда разрешено"
+
+#: src/components/work-tree/TaskTree.tsx:157
+msgid "always allowed by {name}"
+msgstr "всегда разрешено: {name}"
 
 #: src/components/AskCard.tsx:299
 msgid "Answer"
@@ -765,6 +785,10 @@ msgstr "Не удаётся связаться с сервером."
 msgid "Cancel"
 msgstr "Отмена"
 
+#: src/components/work-tree/WorkTreeProvider.tsx:141
+msgid "Cancel {name}?"
+msgstr "Отменить {name}?"
+
 #: src/pages/shell/composer.tsx:443
 msgid "Cancel edit"
 msgstr ""
@@ -780,6 +804,10 @@ msgstr "Отменить создание группы"
 #: src/pages/shell/composer.tsx:424
 msgid "Cancel reply"
 msgstr "Отменить ответ"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:155
+msgid "Cancel task"
+msgstr "Отменить задачу"
 
 #: src/components/CloudAgentCard.tsx:35
 msgid "cancelled"
@@ -868,6 +896,10 @@ msgstr "Выберите новый пароль"
 #: src/pages/ModelSettingsOverlay.tsx:361
 msgid "Choose which connected model Rakazo uses."
 msgstr "Выберите, какую подключенную модель использует Rakazo."
+
+#: src/components/work-tree/TaskTree.tsx:77
+msgid "chosen explicitly"
+msgstr "выбран явно"
 
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clear"
@@ -968,6 +1000,10 @@ msgstr "Закрыть настройки пользователя"
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "Закрыть настройки голоса"
+
+#: src/components/work-tree/TaskTree.tsx:45
+msgid "Closed"
+msgstr "Закрыто"
 
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Cloud"
@@ -1707,6 +1743,10 @@ msgstr "Отклонить"
 msgid "Default"
 msgstr ""
 
+#: src/components/work-tree/TaskTree.tsx:80
+msgid "default"
+msgstr "по умолчанию"
+
 #. placeholder {0}: thinkingLevelLabel(defaultThinkingLevel)
 #: src/pages/shell/bot-panel.tsx:612
 msgid "Default ({0})"
@@ -1774,6 +1814,10 @@ msgstr ""
 #: src/components/AskCard.tsx:26
 msgid "Denied"
 msgstr "Отклонено"
+
+#: src/components/work-tree/TaskTree.tsx:155
+msgid "denied by {name}"
+msgstr "отклонено: {name}"
 
 #: src/components/AskCard.tsx:39
 #: src/pages/CallView.tsx:419
@@ -2358,6 +2402,10 @@ msgstr "Перейти к ответному сообщению"
 #: src/pages/ActivityList.tsx:152
 msgid "just now"
 msgstr "только что"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:153
+msgid "Keep"
+msgstr "Оставить"
 
 #: src/pages/shell/dialogs.tsx:368
 msgid "Keep memories"
@@ -3186,6 +3234,10 @@ msgstr "Приостановлено"
 msgid "Personal credential"
 msgstr "Личные учётные данные"
 
+#: src/components/work-tree/TaskTree.tsx:79
+msgid "picked automatically"
+msgstr "выбран автоматически"
+
 #: src/pages/BotContextMenu.tsx:91
 msgid "Pin"
 msgstr "Закрепить"
@@ -3513,6 +3565,10 @@ msgstr "Восстановите последнее сохраненное ра�
 msgid "Restoring your workspace"
 msgstr "Восстановление вашего рабочего пространства"
 
+#: src/components/work-tree/TaskTree.tsx:104
+msgid "Result"
+msgstr "Результат"
+
 #: src/App.tsx:171
 #: src/pages/PeerMessagesOverlay.tsx:133
 msgid "Retry now"
@@ -3760,6 +3816,10 @@ msgstr "Имя сервера"
 #: src/pages/Onboarding.tsx:411
 msgid "Server URL"
 msgstr "URL-адрес сервера"
+
+#: src/components/work-tree/TaskTree.tsx:78
+msgid "set by its profile"
+msgstr "задан профилем"
 
 #: src/pages/MessagingSettingsOverlay.tsx:378
 #: src/pages/SettingsOverlay.tsx:110
@@ -4310,6 +4370,10 @@ msgstr "Проверить и добавить"
 #: src/pages/PluginsOverlay.tsx:1156
 msgid "Verifying…"
 msgstr "Проверка…"
+
+#: src/components/work-tree/TaskTree.tsx:220
+msgid "View thread"
+msgstr "Открыть чат"
 
 #: src/pages/SettingsOverlay.tsx:102
 #: src/pages/shell/bot-panel.tsx:673

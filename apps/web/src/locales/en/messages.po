@@ -117,6 +117,14 @@ msgstr "{botName} is speaking"
 msgid "{botName}’s computer"
 msgstr "{botName}’s computer"
 
+#: src/components/work-tree/context.tsx:47
+msgid "{count, plural, one {{count} task} other {{count} tasks}}"
+msgstr "{count, plural, one {{count} task} other {{count} tasks}}"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:144
+msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
+msgstr "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
+
 #: src/pages/ActivityList.tsx:158
 msgid "{days}d ago"
 msgstr "{days}d ago"
@@ -228,6 +236,10 @@ msgstr "Action confirmations"
 #: src/pages/shell/sidebar.tsx:405
 msgid "Actions for {0}"
 msgstr "Actions for {0}"
+
+#: src/components/work-tree/TaskTree.tsx:205
+msgid "Actions for {name}"
+msgstr "Actions for {name}"
 
 #: src/pages/Shell.tsx:2936
 msgid "Actions for space"
@@ -431,6 +443,10 @@ msgstr "Allow purchase actions without asking"
 msgid "Allow writing"
 msgstr "Allow writing"
 
+#: src/components/work-tree/TaskTree.tsx:158
+msgid "allowed by {name}"
+msgstr "allowed by {name}"
+
 #: src/components/AskCard.tsx:24
 msgid "Allowed once"
 msgstr "Allowed once"
@@ -451,6 +467,10 @@ msgstr "Always allow this tool"
 #: src/components/AskCard.tsx:25
 msgid "Always allowed"
 msgstr "Always allowed"
+
+#: src/components/work-tree/TaskTree.tsx:157
+msgid "always allowed by {name}"
+msgstr "always allowed by {name}"
 
 #: src/components/AskCard.tsx:299
 msgid "Answer"
@@ -765,6 +785,10 @@ msgstr "Can't reach the server."
 msgid "Cancel"
 msgstr "Cancel"
 
+#: src/components/work-tree/WorkTreeProvider.tsx:141
+msgid "Cancel {name}?"
+msgstr "Cancel {name}?"
+
 #: src/pages/shell/composer.tsx:443
 msgid "Cancel edit"
 msgstr "Cancel edit"
@@ -780,6 +804,10 @@ msgstr "Cancel new group"
 #: src/pages/shell/composer.tsx:424
 msgid "Cancel reply"
 msgstr "Cancel reply"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:155
+msgid "Cancel task"
+msgstr "Cancel task"
 
 #: src/components/CloudAgentCard.tsx:35
 msgid "cancelled"
@@ -868,6 +896,10 @@ msgstr "Choose a new password"
 #: src/pages/ModelSettingsOverlay.tsx:361
 msgid "Choose which connected model Rakazo uses."
 msgstr "Choose which connected model Rakazo uses."
+
+#: src/components/work-tree/TaskTree.tsx:77
+msgid "chosen explicitly"
+msgstr "chosen explicitly"
 
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clear"
@@ -968,6 +1000,10 @@ msgstr "Close user settings"
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "Close voice settings"
+
+#: src/components/work-tree/TaskTree.tsx:45
+msgid "Closed"
+msgstr "Closed"
 
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Cloud"
@@ -1707,6 +1743,10 @@ msgstr "Decline"
 msgid "Default"
 msgstr "Default"
 
+#: src/components/work-tree/TaskTree.tsx:80
+msgid "default"
+msgstr "default"
+
 #. placeholder {0}: thinkingLevelLabel(defaultThinkingLevel)
 #: src/pages/shell/bot-panel.tsx:612
 msgid "Default ({0})"
@@ -1774,6 +1814,10 @@ msgstr "Delivery failed"
 #: src/components/AskCard.tsx:26
 msgid "Denied"
 msgstr "Denied"
+
+#: src/components/work-tree/TaskTree.tsx:155
+msgid "denied by {name}"
+msgstr "denied by {name}"
 
 #: src/components/AskCard.tsx:39
 #: src/pages/CallView.tsx:419
@@ -2358,6 +2402,10 @@ msgstr "Jump to replied message"
 #: src/pages/ActivityList.tsx:152
 msgid "just now"
 msgstr "just now"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:153
+msgid "Keep"
+msgstr "Keep"
 
 #: src/pages/shell/dialogs.tsx:368
 msgid "Keep memories"
@@ -3186,6 +3234,10 @@ msgstr "Paused"
 msgid "Personal credential"
 msgstr "Personal credential"
 
+#: src/components/work-tree/TaskTree.tsx:79
+msgid "picked automatically"
+msgstr "picked automatically"
+
 #: src/pages/BotContextMenu.tsx:91
 msgid "Pin"
 msgstr "Pin"
@@ -3513,6 +3565,10 @@ msgstr "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgid "Restoring your workspace"
 msgstr "Restoring your workspace"
 
+#: src/components/work-tree/TaskTree.tsx:104
+msgid "Result"
+msgstr "Result"
+
 #: src/App.tsx:171
 #: src/pages/PeerMessagesOverlay.tsx:133
 msgid "Retry now"
@@ -3760,6 +3816,10 @@ msgstr "Server name"
 #: src/pages/Onboarding.tsx:411
 msgid "Server URL"
 msgstr "Server URL"
+
+#: src/components/work-tree/TaskTree.tsx:78
+msgid "set by its profile"
+msgstr "set by its profile"
 
 #: src/pages/MessagingSettingsOverlay.tsx:378
 #: src/pages/SettingsOverlay.tsx:110
@@ -4310,6 +4370,10 @@ msgstr "Verify and add"
 #: src/pages/PluginsOverlay.tsx:1156
 msgid "Verifying…"
 msgstr "Verifying…"
+
+#: src/components/work-tree/TaskTree.tsx:220
+msgid "View thread"
+msgstr "View thread"
 
 #: src/pages/SettingsOverlay.tsx:102
 #: src/pages/shell/bot-panel.tsx:673

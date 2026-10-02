@@ -117,6 +117,14 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "{botName} का कंप्यूटर"
 
+#: src/components/work-tree/context.tsx:47
+msgid "{count, plural, one {{count} task} other {{count} tasks}}"
+msgstr "{count, plural, one {{count} कार्य} other {{count} कार्य}}"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:144
+msgid "{count, plural, one {Its open subtask will be cancelled too.} other {Its {count} open subtasks will be cancelled too.}}"
+msgstr "{count, plural, one {इसका खुला उप-कार्य भी रद्द कर दिया जाएगा.} other {इसके {count} खुले उप-कार्य भी रद्द कर दिए जाएँगे.}}"
+
 #: src/pages/ActivityList.tsx:158
 msgid "{days}d ago"
 msgstr "{days} दिन पहले"
@@ -228,6 +236,10 @@ msgstr "कार्रवाई की पुष्टि"
 #: src/pages/shell/sidebar.tsx:405
 msgid "Actions for {0}"
 msgstr "{0} के लिए कार्रवाइयां"
+
+#: src/components/work-tree/TaskTree.tsx:205
+msgid "Actions for {name}"
+msgstr "{name} की कार्रवाइयाँ"
 
 #: src/pages/Shell.tsx:2936
 msgid "Actions for space"
@@ -431,6 +443,10 @@ msgstr "खरीद कार्रवाइयों को बिना प�
 msgid "Allow writing"
 msgstr ""
 
+#: src/components/work-tree/TaskTree.tsx:158
+msgid "allowed by {name}"
+msgstr "{name} द्वारा अनुमत"
+
 #: src/components/AskCard.tsx:24
 msgid "Allowed once"
 msgstr "एक बार अनुमति दी गई"
@@ -451,6 +467,10 @@ msgstr "इस टूल को हमेशा अनुमति दें"
 #: src/components/AskCard.tsx:25
 msgid "Always allowed"
 msgstr "हमेशा अनुमत"
+
+#: src/components/work-tree/TaskTree.tsx:157
+msgid "always allowed by {name}"
+msgstr "{name} द्वारा हमेशा के लिए अनुमत"
 
 #: src/components/AskCard.tsx:299
 msgid "Answer"
@@ -765,6 +785,10 @@ msgstr "सर्वर तक नहीं पहुंचा जा सका�
 msgid "Cancel"
 msgstr "रद्द करें"
 
+#: src/components/work-tree/WorkTreeProvider.tsx:141
+msgid "Cancel {name}?"
+msgstr "{name} रद्द करें?"
+
 #: src/pages/shell/composer.tsx:443
 msgid "Cancel edit"
 msgstr "संपादन रद्द करें"
@@ -780,6 +804,10 @@ msgstr "नया समूह रद्द करें"
 #: src/pages/shell/composer.tsx:424
 msgid "Cancel reply"
 msgstr "उत्तर रद्द करें"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:155
+msgid "Cancel task"
+msgstr "कार्य रद्द करें"
 
 #: src/components/CloudAgentCard.tsx:35
 msgid "cancelled"
@@ -868,6 +896,10 @@ msgstr "नया पासवर्ड चुनें"
 #: src/pages/ModelSettingsOverlay.tsx:361
 msgid "Choose which connected model Rakazo uses."
 msgstr "चुनें कि Rakazo किस कनेक्टेड मॉडल का उपयोग करे।"
+
+#: src/components/work-tree/TaskTree.tsx:77
+msgid "chosen explicitly"
+msgstr "स्पष्ट रूप से चुना गया"
 
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clear"
@@ -968,6 +1000,10 @@ msgstr "उपयोगकर्ता सेटिंग्स बंद कर
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "आवाज़ सेटिंग्स बंद करें"
+
+#: src/components/work-tree/TaskTree.tsx:45
+msgid "Closed"
+msgstr "बंद"
 
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Cloud"
@@ -1707,6 +1743,10 @@ msgstr "अस्वीकार करें"
 msgid "Default"
 msgstr "डिफ़ॉल्ट"
 
+#: src/components/work-tree/TaskTree.tsx:80
+msgid "default"
+msgstr "डिफ़ॉल्ट"
+
 #. placeholder {0}: thinkingLevelLabel(defaultThinkingLevel)
 #: src/pages/shell/bot-panel.tsx:612
 msgid "Default ({0})"
@@ -1774,6 +1814,10 @@ msgstr ""
 #: src/components/AskCard.tsx:26
 msgid "Denied"
 msgstr "अस्वीकृत"
+
+#: src/components/work-tree/TaskTree.tsx:155
+msgid "denied by {name}"
+msgstr "{name} द्वारा अस्वीकृत"
 
 #: src/components/AskCard.tsx:39
 #: src/pages/CallView.tsx:419
@@ -2358,6 +2402,10 @@ msgstr "जिस संदेश का उत्तर दिया गया 
 #: src/pages/ActivityList.tsx:152
 msgid "just now"
 msgstr "अभी-अभी"
+
+#: src/components/work-tree/WorkTreeProvider.tsx:153
+msgid "Keep"
+msgstr "रखें"
 
 #: src/pages/shell/dialogs.tsx:368
 msgid "Keep memories"
@@ -3186,6 +3234,10 @@ msgstr "रोका गया"
 msgid "Personal credential"
 msgstr "व्यक्तिगत क्रेडेंशियल"
 
+#: src/components/work-tree/TaskTree.tsx:79
+msgid "picked automatically"
+msgstr "अपने आप चुना गया"
+
 #: src/pages/BotContextMenu.tsx:91
 msgid "Pin"
 msgstr "पिन करें"
@@ -3513,6 +3565,10 @@ msgstr "अंतिम सहेजे गए वर्कस्पेस क�
 msgid "Restoring your workspace"
 msgstr ""
 
+#: src/components/work-tree/TaskTree.tsx:104
+msgid "Result"
+msgstr "परिणाम"
+
 #: src/App.tsx:171
 #: src/pages/PeerMessagesOverlay.tsx:133
 msgid "Retry now"
@@ -3760,6 +3816,10 @@ msgstr "सर्वर का नाम"
 #: src/pages/Onboarding.tsx:411
 msgid "Server URL"
 msgstr "सर्वर URL"
+
+#: src/components/work-tree/TaskTree.tsx:78
+msgid "set by its profile"
+msgstr "इसकी प्रोफ़ाइल द्वारा तय"
 
 #: src/pages/MessagingSettingsOverlay.tsx:378
 #: src/pages/SettingsOverlay.tsx:110
@@ -4310,6 +4370,10 @@ msgstr "पुष्टि करके जोड़ें"
 #: src/pages/PluginsOverlay.tsx:1156
 msgid "Verifying…"
 msgstr "पुष्टि की जा रही है…"
+
+#: src/components/work-tree/TaskTree.tsx:220
+msgid "View thread"
+msgstr "चैट देखें"
 
 #: src/pages/SettingsOverlay.tsx:102
 #: src/pages/shell/bot-panel.tsx:673
