@@ -371,7 +371,7 @@ async function delegatedAsk(
     {
       kind: "delegate",
       target: { kind: "from_profile", profileBotId: profile.id, name: "Specialist" },
-      harness: { harness: "codex-native", targetId: "native-fixture-target" },
+      harness: "codex-native",
       brief: "Do the delegated thing.",
       requestedRights: {},
       spawnKey: `t09-work-answer-${randomUUID()}`,

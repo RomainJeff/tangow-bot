@@ -2,6 +2,7 @@ import type { ConnectorTool } from "@rakazo/adapter-kit";
 import {
   BotSecretDestination,
   BotSecretName,
+  HARNESS_MODEL_NAMES,
   SecretAskPurpose,
   SecretHttpRequest,
 } from "@rakazo/contracts";
@@ -894,6 +895,12 @@ export const builtinAgentTools: ConnectorTool[] = [
         },
         name: { type: "string", description: "Name for the new specialist bot." },
         brief: { type: "string", description: "The task briefing given to the specialist." },
+        harness: {
+          type: "string",
+          enum: Object.keys(HARNESS_MODEL_NAMES),
+          description:
+            "Optional. The harness the specialist runs on: rakazo (Rakazo's own agent), or codex / claude (a coding agent working in the mission's Computer). Leave it out to let the profile, the available harnesses and your own harness decide.",
+        },
       },
       required: ["profile_bot_id", "name", "brief"],
     },

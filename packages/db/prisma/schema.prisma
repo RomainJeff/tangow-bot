@@ -661,9 +661,13 @@ model ScopedTask {
   depth               Int       @default(0)
   profileBotId        String
   brief               String
-  harness             String
-  executionTarget     String
-  choiceVersion       Int
+  // Null on all three means Rakazo's own harness, exactly as on a Run.
+  harness             String?
+  executionTarget     String?
+  choiceVersion       Int?
+  // How the harness was chosen: explicit | profile | judgment | fallback; and a fallback's cause.
+  harnessSource        String?
+  harnessFallbackCause String?
   // T04:4: the coordinator's own Computer at delegation time (glossary "Computer de
   // mission"); the specialist gets a droit d'usage on it, never ownership. Nullable/SetNull
   // so deleting the coordinator's Computer never blocks deleting the scoped task.

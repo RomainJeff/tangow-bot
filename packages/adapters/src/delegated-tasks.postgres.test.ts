@@ -197,7 +197,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Summarize the quarterly report",
         requestedRights,
         spawnKey,
@@ -236,7 +236,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Summarize the quarterly report",
         requestedRights,
         spawnKey,
@@ -297,7 +297,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Return this result once.",
         requestedRights: {},
         spawnKey: `realtime-return-${randomUUID()}`,
@@ -358,7 +358,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Deliver this result concurrently.",
         requestedRights: {},
         spawnKey: `concurrent-return-${randomUUID()}`,
@@ -448,7 +448,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Return a failure once.",
         requestedRights: {},
         spawnKey: `failed-return-${randomUUID()}`,
@@ -503,7 +503,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Prepare the summary",
         requestedRights: {},
         spawnKey: `wake-root-${randomUUID()}`,
@@ -545,7 +545,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Return twice.",
         requestedRights: {},
         spawnKey: `grouped-return-${randomUUID()}`,
@@ -622,7 +622,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: inherited.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Summarize the quarterly report",
         requestedRights: {},
         spawnKey: `inherited-${randomUUID()}`,
@@ -654,14 +654,14 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: incompatible.id, name: "Analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
+          harness: "codex-native",
           brief: "Summarize the quarterly report",
           requestedRights: {},
           spawnKey: `incompatible-${randomUUID()}`,
         },
         s.context,
       ),
-    ).rejects.toThrow("Codex native specialist needs a model on its subscription");
+    ).rejects.toThrow("Codex is not available for this specialist");
     await expect(prisma.bot.count({ where: { parentBotId: s.coordinator.id } })).resolves.toBe(
       before,
     );
@@ -674,7 +674,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Clean up after this work",
         requestedRights: {},
         spawnKey: `t08-close-${randomUUID()}`,
@@ -740,7 +740,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Use the shared mission Computer",
         requestedRights: {},
         spawnKey: `t08-placement-${randomUUID()}`,
@@ -771,7 +771,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Return after the worker died",
         requestedRights: {},
         spawnKey: `lost-return-${randomUUID()}`,
@@ -824,7 +824,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: s.profile.id, name },
-          harness: { harness: "codex-native", targetId: "target-1" },
+          harness: "codex-native",
           brief: "Get stopped",
           requestedRights: {},
           spawnKey: `stopped-${name}-${randomUUID()}`,
@@ -888,7 +888,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Prepare the summary",
         requestedRights: {},
         spawnKey: `close-parent-${randomUUID()}`,
@@ -926,7 +926,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Recover terminal cleanup",
         requestedRights: {},
         spawnKey: `t08-reconcile-${randomUUID()}`,
@@ -977,7 +977,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Do not clean without proof",
         requestedRights: {},
         spawnKey: `t08-unconfirmed-${randomUUID()}`,
@@ -1048,7 +1048,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     const command = {
       kind: "delegate" as const,
       target: { kind: "from_profile" as const, profileBotId: s.profile.id, name: "Analyst" },
-      harness: { harness: "codex-native" as const, targetId: "target-1" },
+      harness: "codex-native" as const,
       brief: "Summarize the quarterly report",
       requestedRights: {},
       spawnKey,
@@ -1107,7 +1107,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     const delegate = (spawnKey: string) => ({
       kind: "delegate" as const,
       target: { kind: "from_profile" as const, profileBotId: s.profile.id, name: "Analyst" },
-      harness: { harness: "codex-native" as const, targetId: "target-1" },
+      harness: "codex-native" as const,
       brief: "Summarize the quarterly report",
       requestedRights: {},
       spawnKey,
@@ -1144,7 +1144,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Prepare the summary",
         requestedRights: {},
         spawnKey: `peer-${randomUUID()}`,
@@ -1249,7 +1249,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Prepare the summary",
         requestedRights: {},
         spawnKey: `cancelled-peer-${randomUUID()}`,
@@ -1364,7 +1364,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Sub-analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Dig into one section",
         requestedRights: {},
         spawnKey,
@@ -1381,7 +1381,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Prepare the summary",
         requestedRights: {},
         spawnKey: `t07-root-${randomUUID()}`,
@@ -1416,7 +1416,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
+          harness: "codex-native",
           brief: "Prepare the summary",
           requestedRights: {},
           spawnKey: `t07-cascade-root-${randomUUID()}`,
@@ -1428,7 +1428,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: s.profile.id, name: "Peer analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
+          harness: "codex-native",
           brief: "Unrelated work",
           requestedRights: {},
           spawnKey: `t07-cascade-peer-${randomUUID()}`,
@@ -1495,7 +1495,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "codex-native",
         brief: "Prepare the summary",
         requestedRights: {},
         spawnKey: `t07-review-closed-link-root-${randomUUID()}`,
@@ -1544,7 +1544,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
+          harness: "codex-native",
           brief: "Prepare the summary",
           requestedRights: {},
           spawnKey: `t07-refuse-root-${randomUUID()}`,
@@ -1582,7 +1582,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
+          harness: "codex-native",
           brief: "Prepare the summary",
           requestedRights: {},
           spawnKey: `t07-race-root-${randomUUID()}`,
@@ -1614,7 +1614,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
               {
                 kind: "delegate",
                 target: { kind: "from_profile", profileBotId: s.profile.id, name: "Sub-analyst" },
-                harness: { harness: "codex-native", targetId: "target-1" },
+                harness: "codex-native",
                 brief: "Dig into one section",
                 requestedRights: {},
                 spawnKey,
@@ -1670,7 +1670,7 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: s.profile.id, name: "Analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
+          harness: "codex-native",
           brief: "Prepare the summary",
           requestedRights: {},
           spawnKey: `t073-root-${randomUUID()}`,

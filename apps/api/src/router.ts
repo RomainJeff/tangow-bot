@@ -60,6 +60,7 @@ import {
   McpOAuthBroker,
   mapScratchpadItem,
   modelCredentialDto,
+  nativeHarnessRefusal,
   planLiveConnectionSync,
   prepareApiInstall,
   prepareGraphqlInstall,
@@ -536,22 +537,6 @@ function mapSpaceLifecycleError(error: unknown): unknown {
     return new ORPCError("CONFLICT", { message: error.message });
   }
   return error;
-}
-
-/**
- * Native runtimes need the bot's own Computer and their matching effective model
- * connection. This is the single verdict behind both the save-time refusal and
- * the availability the settings panel shows. The Docker placement itself is only
- * known once the Computer is provisioned, so the runtime enforces it at run time.
- */
-function nativeHarnessRefusal(
-  harness: NativeHarnessChoice,
-  computer: unknown,
-  effectiveProvider: string | null | undefined,
-): "computer" | "model" | null {
-  if (!computer) return "computer";
-  if (effectiveProvider !== NATIVE_HARNESSES[harness].provider) return "model";
-  return null;
 }
 
 /** A stored choice that cannot be honored is refused at save time — a send must never meet the refusal as a surprise. */

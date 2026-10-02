@@ -54,3 +54,58 @@ export const NATIVE_HARNESSES: Record<NativeHarnessChoice, { name: string; provi
 /** Whether each native harness can be chosen for a bot, as the backend would accept it. */
 export const NativeHarnessAvailabilitySchema = z.record(NativeHarnessChoiceSchema, z.boolean());
 export type NativeHarnessAvailability = z.infer<typeof NativeHarnessAvailabilitySchema>;
+
+/**
+ * The names a model uses for a harness, neutral of any product wording: the stored choice
+ * `default` is Rakazo's own harness.
+ */
+export const HARNESS_MODEL_NAMES = {
+  rakazo: "default",
+  codex: "codex-native",
+  claude: "claude-native",
+} as const satisfies Record<string, HarnessChoice>;
+export type HarnessModelName = keyof typeof HARNESS_MODEL_NAMES;
+
+export function harnessModelName(harness: HarnessChoice): HarnessModelName {
+  const entry = Object.entries(HARNESS_MODEL_NAMES).find(([, choice]) => choice === harness);
+  return entry![0] as HarnessModelName;
+}
+
+/** How a delegation came by its specialist's harness, so a task tree can say why. */
+export const SPECIALIST_HARNESS_SOURCES = ["explicit", "profile", "judgment", "fallback"] as const;
+export type SpecialistHarnessSource = (typeof SPECIALIST_HARNESS_SOURCES)[number];
+
+/** Why the deterministic fallback decided: no judgment was possible or it gave no usable answer. */
+export const SPECIALIST_HARNESS_FALLBACK_CAUSES = [
+  "no_provider",
+  "single_harness",
+  "timeout",
+  "aborted",
+  "error",
+  "invalid_answer",
+] as const;
+export type SpecialistHarnessFallbackCause = (typeof SPECIALIST_HARNESS_FALLBACK_CAUSES)[number];
+
+const member = <T extends string>(list: readonly T[], value: unknown): T | null =>
+  list.find((item) => item === value) ?? null;
+
+/**
+ * A scoped task's harness as its stored columns record it. Rakazo's own harness carries no
+ * choice, and a task created before the choice was recorded has no source. The one reading
+ * behind every view of a task's harness.
+ */
+export function storedSpecialistHarness(task: {
+  harness: string | null;
+  harnessSource: string | null;
+  harnessFallbackCause: string | null;
+}): {
+  harness: HarnessChoice;
+  source: SpecialistHarnessSource | null;
+  fallbackCause: SpecialistHarnessFallbackCause | null;
+} {
+  return {
+    harness: isNativeHarness(task.harness) ? task.harness : "default",
+    source: member(SPECIALIST_HARNESS_SOURCES, task.harnessSource),
+    fallbackCause: member(SPECIALIST_HARNESS_FALLBACK_CAUSES, task.harnessFallbackCause),
+  };
+}

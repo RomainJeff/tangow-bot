@@ -340,6 +340,11 @@ import {
   skillUpdateFromTool,
 } from "./skill-tools.js";
 import {
+  requestedSpecialistHarness,
+  SpecialistHarnessUnavailableError,
+  UnknownSpecialistHarnessError,
+} from "./specialist-harness.js";
+import {
   continueRunClaimFence,
   DESKTOP_HELD_FOR_TAKEOVER_MESSAGE,
   refreshTakeoverContinuePlan,
@@ -3873,6 +3878,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 modelId: runModelId,
                 thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? DEFAULT_THINKING_LEVEL,
               },
+              redact: (text: string) => redactSecrets(text, runSecrets),
+              harnessJudgment:
+                name === "delegate"
+                  ? {
+                      provider:
+                        (await deps.decisionProviders?.resolve(run.spaceId).catch(() => null)) ??
+                        undefined,
+                      context,
+                      trace,
+                    }
+                  : undefined,
             });
             const delegationContext = {
               actor: {
@@ -3888,10 +3904,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             };
             try {
               if (name === "delegate") {
-                const nativeChoice = nativeChoiceForRun(run) ?? {
-                  harness: "codex-native" as const,
-                  targetId: "default",
-                };
+                const harness = requestedSpecialistHarness(args.harness);
                 const receipt = await delegatedTasks.apply(
                   {
                     kind: "delegate",
@@ -3900,7 +3913,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       profileBotId: String(args.profile_bot_id ?? ""),
                       name: String(args.name ?? ""),
                     },
-                    harness: nativeChoice,
+                    ...(harness ? { harness } : {}),
                     brief: String(args.brief ?? ""),
                     requestedRights: {},
                     spawnKey: executionId,
@@ -3935,7 +3948,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (
                 error instanceof WorkClosedError ||
                 error instanceof WorkHasOpenDescendantsError ||
-                error instanceof DelegationLimitError
+                error instanceof DelegationLimitError ||
+                error instanceof SpecialistHarnessUnavailableError ||
+                error instanceof UnknownSpecialistHarnessError
               )
                 return finish({ error: error.message });
               throw error;

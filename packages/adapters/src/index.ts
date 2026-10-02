@@ -84,6 +84,7 @@ export * from "./messaging-team-chat-emulator.js";
 export * from "./model-connect.js";
 export * from "./model-selection.js";
 export * from "./model-vision.js";
+export * from "./native-harness-availability.js";
 export * from "./native-mcp-worker-config.js";
 export * from "./native-session-host.js";
 export * from "./none-sandbox.js";

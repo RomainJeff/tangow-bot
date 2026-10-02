@@ -59,6 +59,7 @@ function fixture(
     missionComputerId,
     nativeRuntimes,
     sourceBlocks,
+    delegateArgs,
   }: {
     scopedTaskId?: string;
     outcome:
@@ -73,6 +74,8 @@ function fixture(
     missionComputerId?: string | null;
     nativeRuntimes?: Record<string, { describe: () => unknown; run: unknown }>;
     sourceBlocks?: unknown[];
+    /** Extra arguments the model passes to its delegate call. */
+    delegateArgs?: Record<string, unknown>;
   } = { outcome: "delegate_dispatch" },
 ) {
   const run = {
@@ -178,7 +181,12 @@ function fixture(
     if (outcome === "delegate_dispatch") {
       delegateResult = await request.executeTool!(
         "delegate",
-        { profile_bot_id: "profile-1", name: "Analyst", brief: "Summarize the report" },
+        {
+          profile_bot_id: "profile-1",
+          name: "Analyst",
+          brief: "Summarize the report",
+          ...delegateArgs,
+        },
         "call-1",
       );
       yield { type: "done" as const, text: "Delegated." };
@@ -281,6 +289,38 @@ describe("executor seam — delegate dispatch and specialist completion (Terra J
     // The delegate tool exposes no rights parameter today, so requestedRights is always {}
     // — accepted on the wire for compatibility, but no longer consulted by applyDelegate.
     expect((command as { requestedRights: unknown }).requestedRights).toEqual({});
+    // No harness was asked for: none is invented here, the delegation decides.
+    expect(command).not.toHaveProperty("harness");
+  });
+
+  it("passes the harness the model asked for under its neutral name", async () => {
+    const apply = vi.fn(async (_command: unknown, _context: unknown) => ({
+      workId: "work-1",
+      botId: "bot-specialist",
+      replayed: false,
+      threadId: "thread-specialist",
+    }));
+    mockCreateDelegatedTasks.mockReturnValue({ apply, inspect: vi.fn() } as never);
+
+    const f = fixture({ outcome: "delegate_dispatch", delegateArgs: { harness: "claude" } });
+    await f.run();
+
+    expect(apply).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "delegate", harness: "claude-native" }),
+      expect.anything(),
+    );
+  });
+
+  it("refuses a harness name it does not know instead of ignoring it", async () => {
+    const apply = vi.fn();
+    mockCreateDelegatedTasks.mockReturnValue({ apply, inspect: vi.fn() } as never);
+
+    // `toString` is inherited by every object, so a membership test on the names would accept it.
+    const f = fixture({ outcome: "delegate_dispatch", delegateArgs: { harness: "toString" } });
+    await f.run();
+
+    expect(apply).not.toHaveBeenCalled();
+    expect(f.delegateResult()).toEqual({ error: expect.stringContaining("Unknown harness") });
   });
 
   it("hands a refused delegation back to the model as an explicit error, not a failed run", async () => {

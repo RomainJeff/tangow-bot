@@ -645,7 +645,7 @@ describe.skipIf(!available)("native runtime choice", () => {
             {
               kind: "delegate",
               target: { kind: "from_profile", profileBotId: profile.id, name: "Specialist" },
-              harness: { harness: "claude-native", targetId: h.computer.id },
+              harness: "claude-native",
               brief: "search only",
               spawnKey: randomUUID(),
               requestedRights: { [serverId]: { allowAllTools: false, allowedTools: ["search"] } },
@@ -892,7 +892,7 @@ describe.skipIf(!available)("native runtime choice", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: harness.bot.id, name: "Analyst" },
-          harness: { harness: "codex-native", targetId: harness.computer.id },
+          harness: "codex-native",
           brief: "Prepare the summary",
           // T07:6: requestedRights is an McpAccessCeiling narrowing request now (an old
           // boolean shape here is interpreted as a demand for an MCP server literally named
@@ -996,6 +996,50 @@ describe.skipIf(!available)("native runtime choice", () => {
       );
     } finally {
       await stopNativeHarness(harness);
+    }
+  }, 30_000);
+
+  it("serves a specialist that runs on Rakazo's own harness through the default runtime", async () => {
+    const codex = new ParkedCodex();
+    const h = await startNativeHarness(codex, "specialist-on-rakazo");
+    try {
+      const me = await h.rpc<{ userId: string; spaceId: string }>("me", {});
+      const parent = await h.send("delegate the summary");
+      const work = await createDelegatedTasks({
+        prisma: h.handles.prisma,
+        jobs: h.handles.jobs,
+      }).apply(
+        {
+          kind: "delegate",
+          target: { kind: "from_profile", profileBotId: h.bot.id, name: "Analyst" },
+          harness: "default",
+          brief: "Prepare the summary",
+          requestedRights: {},
+          spawnKey: randomUUID(),
+        },
+        {
+          actor: { ...me, botId: h.bot.id, rights: {} },
+          originRunId: parent.runId,
+          requestId: randomUUID(),
+        },
+      );
+
+      await h.handles.executor.continueRun(work.runId!, "specialist-on-rakazo-worker");
+
+      await expect(
+        h.handles.prisma.run.findUniqueOrThrow({ where: { id: work.runId! } }),
+      ).resolves.toMatchObject({
+        status: "completed",
+        harness: null,
+        executionTarget: null,
+        choiceVersion: null,
+      });
+      await expect(
+        h.handles.prisma.scopedTask.findUniqueOrThrow({ where: { id: work.workId } }),
+      ).resolves.toMatchObject({ harness: null, executionTarget: null, harnessSource: "explicit" });
+      expect(codex.starts).toBe(0);
+    } finally {
+      await stopNativeHarness(h);
     }
   }, 30_000);
 

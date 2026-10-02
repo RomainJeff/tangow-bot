@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { JobPublisher } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  DecisionProvider,
+  JobPublisher,
+  ToolCallTrace,
+} from "@rakazo/adapter-kit";
 import { runContinueJob } from "@rakazo/adapter-kit";
 import type {
   AuthorizedActor,
@@ -14,7 +19,12 @@ import type {
   TaskTreePage,
   WorkReturnOutcome,
 } from "@rakazo/contracts";
-import { isWorkReturnOutcome, RUN_CHOICE_VERSION } from "@rakazo/contracts";
+import {
+  isNativeHarness,
+  isWorkReturnOutcome,
+  RUN_CHOICE_VERSION,
+  storedSpecialistHarness,
+} from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
@@ -24,7 +34,10 @@ import {
   stopRunsInTransaction,
 } from "@rakazo/db";
 import type { ProfileConnectionThinkingResolver, ProfileModelSelection } from "./bot-profiles.js";
+import { loadBotProfile } from "./bot-profiles.js";
 import { archiveBotInTransaction, spawnBot } from "./child-bots.js";
+import { resolveDeploymentModel } from "./deployment-model.js";
+import { chooseSpecialistHarness } from "./specialist-harness.js";
 
 export class WorkNotFoundError extends Error {
   constructor(workId: ScopedWorkId) {
@@ -77,6 +90,14 @@ type Deps = {
   deploymentModelKey?: string;
   resolveConnectionThinkingLevel?: ProfileConnectionThinkingResolver;
   coordinatorModel?: ProfileModelSelection;
+  /** Removes run secrets from text sent to a decision provider; absent, text goes as is. */
+  redact?: (text: string) => string;
+  /** The judgment that may pick a specialist's harness; absent, the deterministic fallback decides. */
+  harnessJudgment?: {
+    provider: DecisionProvider | undefined;
+    context: AdapterContext;
+    trace?: ToolCallTrace;
+  };
 };
 
 type SpecialistDeliveryDeps = Pick<Deps, "prisma" | "jobs"> & {
@@ -500,22 +521,6 @@ async function applyDelegate(
   command: Extract<DelegationCommand, { kind: "delegate" }>,
   context: CommandContext,
 ): Promise<Receipt> {
-  const profileHarness =
-    command.harness.targetId === "default"
-      ? await deps.prisma.bot.findFirst({
-          where: {
-            id: command.target.profileBotId,
-            spaceId: context.actor.spaceId,
-            userId: context.actor.userId,
-            archivedAt: null,
-          },
-          select: { harnessChoice: true },
-        })
-      : null;
-  const effectiveHarness =
-    command.harness.targetId === "default" && profileHarness?.harnessChoice === "claude-native"
-      ? "claude-native"
-      : command.harness.harness;
   const existing = await deps.prisma.scopedTask.findUnique({
     where: { spaceId_spawnKey: { spaceId: context.actor.spaceId, spawnKey: command.spawnKey } },
   });
@@ -543,6 +548,7 @@ async function applyDelegate(
     },
   });
   if (!coordinator.thread) throw new Error("Coordinator bot is missing its thread");
+  const coordinatorThreadId = coordinator.thread.id;
   // Finding 3: the actor must own the coordinator bot it is delegating from.
   if (coordinator.userId !== context.actor.userId) {
     throw new WorkNotAuthorizedError(command.spawnKey);
@@ -567,7 +573,7 @@ async function applyDelegate(
   // under a row lock inside the transaction below.
   const originRun = await deps.prisma.run.findUnique({
     where: { id: context.originRunId },
-    select: { scopedTaskId: true },
+    select: { scopedTaskId: true, harness: true },
   });
   const parentScopedTaskId = originRun?.scopedTaskId ?? null;
   const limits = await readDelegationLimits(deps.prisma);
@@ -591,10 +597,71 @@ async function applyDelegate(
   // a lock, so parallel delegations cannot overshoot the limit.
   await assertWithinActiveSpecialistLimit(
     deps.prisma,
-    coordinator.thread.id,
+    coordinatorThreadId,
     parentScopedTaskId,
     limits.maxActiveSpecialists,
   );
+
+  // The Computer of mission is the one serving the coordinator's turn; a native harness can only
+  // run there, and the specialist's Run is pinned to it.
+  const missionComputerId = context.missionComputerId ?? coordinator.computerId;
+  const profile = await deps.prisma.bot.findFirst({
+    where: {
+      id: command.target.profileBotId,
+      spaceId: context.actor.spaceId,
+      userId: context.actor.userId,
+      archivedAt: null,
+    },
+    select: {
+      harnessChoice: true,
+      choiceVersion: true,
+      name: true,
+      title: true,
+      description: true,
+    },
+  });
+  const chosen = await chooseSpecialistHarness({
+    explicit: command.harness,
+    // A profile that was never set leaves the choice open; one set to Rakazo is a choice too.
+    profileChoice:
+      profile?.choiceVersion == null
+        ? null
+        : isNativeHarness(profile.harnessChoice)
+          ? profile.harnessChoice
+          : "default",
+    coordinatorHarness: isNativeHarness(originRun?.harness) ? originRun.harness : null,
+    missionComputerId,
+    modelProvider: () =>
+      loadBotProfile(
+        deps.prisma,
+        { userId: context.actor.userId, spaceId: context.actor.spaceId },
+        command.target.profileBotId,
+        {
+          deployment: deps.deploymentModelKey ? resolveDeploymentModel() : null,
+          resolveConnectionThinkingLevel: deps.resolveConnectionThinkingLevel,
+          inheritFrom: { botId: coordinator.id, model: deps.coordinatorModel },
+        },
+      ).then(
+        (loaded) => loaded.modelProvider,
+        () => null,
+      ),
+    brief: command.brief,
+    profile: {
+      name: profile?.name,
+      description: [profile?.title, profile?.description].filter(Boolean).join(" — "),
+    },
+    redact: deps.redact ?? ((text) => text),
+    judgment: deps.harnessJudgment,
+  });
+  const nativeHarness = isNativeHarness(chosen.harness) ? chosen.harness : undefined;
+  // Rakazo's own harness carries no choice at all, exactly as on an ordinary Run.
+  const runChoice = nativeHarness
+    ? {
+        harness: nativeHarness,
+        executionTarget: missionComputerId,
+        choiceVersion: RUN_CHOICE_VERSION,
+      }
+    : { harness: null, executionTarget: null, choiceVersion: null };
 
   const spawned = await spawnBot(deps, {
     spawnedBy: {
@@ -607,7 +674,7 @@ async function applyDelegate(
     spawnKey: command.spawnKey,
     name: command.target.name,
     profileBotId: command.target.profileBotId,
-    harness: effectiveHarness,
+    harness: nativeHarness,
   });
   if (!("ok" in spawned) || !spawned.ok) {
     const error = "error" in spawned ? spawned.error : "Could not create specialist bot";
@@ -645,11 +712,11 @@ async function applyDelegate(
       } else {
         // A first-level coordinator has no parent row to serialise on, so its thread is the
         // lock; without it two parallel delegations could both count below the limit.
-        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${coordinator.thread.id} FOR NO KEY UPDATE`;
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${coordinatorThreadId} FOR NO KEY UPDATE`;
       }
       await assertWithinActiveSpecialistLimit(
         tx,
-        coordinator.thread.id,
+        coordinatorThreadId,
         parentScopedTaskId,
         limits.maxActiveSpecialists,
       );
@@ -677,7 +744,7 @@ async function applyDelegate(
           spaceId: coordinator.spaceId,
           userId: coordinator.userId,
           coordinatorBotId: coordinator.id,
-          coordinatorThreadId: coordinator.thread!.id,
+          coordinatorThreadId: coordinatorThreadId,
           executorBotId: spawned.botId,
           specialistThreadId: workThread.id,
           parentScopedTaskId: parent?.id ?? null,
@@ -685,17 +752,17 @@ async function applyDelegate(
           depth: parent ? parent.depth + 1 : 0,
           profileBotId: command.target.profileBotId,
           brief: command.brief,
-          harness: effectiveHarness,
-          executionTarget: command.harness.targetId,
+          ...runChoice,
+          harnessSource: chosen.source,
+          harnessFallbackCause: chosen.fallbackCause ?? null,
           // T04:4 defect 2: the mission Computer is the coordinator's own Computer at
-          // delegation time (glossary "Computer de mission"), never the caller-supplied
-          // harness.targetId — the specialist's run below is pinned to this value so its
+          // delegation time (glossary "Computer de mission"), never a caller-supplied
+          // target — the specialist's run below is pinned to this value so its
           // execution target always matches what executor.ts's guard authorizes.
           // The Computer of the coordinator's current execution is the mission Computer.
           // Direct callers that have no execution context retain the coordinator ownership
           // Computer as a compatibility fallback.
-          missionComputerId: context.missionComputerId ?? coordinator.computerId,
-          choiceVersion: RUN_CHOICE_VERSION,
+          missionComputerId,
           delegationCeiling,
           spawnKey: command.spawnKey,
           status: "dispatched",
@@ -705,7 +772,7 @@ async function applyDelegate(
       // Computer for this task. Cleanup may remove this grant later; it must not delete
       // or detach the coordinator's Computer.
       await grantMissionComputerUse(tx, {
-        missionComputerId: context.missionComputerId ?? coordinator.computerId,
+        missionComputerId,
         executorBotId: spawned.botId,
       });
       if (!parent) {
@@ -729,10 +796,7 @@ async function applyDelegate(
           userId: coordinator.userId,
           status: "queued",
           trigger: "delegate",
-          harness: effectiveHarness,
-          executionTarget:
-            context.missionComputerId ?? coordinator.computerId ?? command.harness.targetId,
-          choiceVersion: RUN_CHOICE_VERSION,
+          ...runChoice,
           scopedTaskId: scopedTask.id,
         },
       });
@@ -806,6 +870,21 @@ async function assertWithinActiveSpecialistLimit(
   }
 }
 
+/** The Run choice a scoped task's harness implies: all null on Rakazo's own harness. */
+function runChoiceOfTask(task: {
+  harness: string | null;
+  executionTarget: string | null;
+  missionComputerId: string | null;
+  choiceVersion: number | null;
+}) {
+  if (!task.harness) return { harness: null, executionTarget: null, choiceVersion: null };
+  return {
+    harness: task.harness,
+    executionTarget: task.missionComputerId ?? task.executionTarget,
+    choiceVersion: task.choiceVersion,
+  };
+}
+
 /** Matches Prisma's P2002 unique-constraint violation for the given index/field name. */
 function isUniqueConstraintError(error: unknown, target: string): boolean {
   return (
@@ -869,9 +948,7 @@ async function applyFollowup(
         userId: scopedTask.userId,
         status: "queued",
         trigger: "delegate_followup",
-        harness: scopedTask.harness,
-        executionTarget: scopedTask.executionTarget,
-        choiceVersion: scopedTask.choiceVersion,
+        ...runChoiceOfTask(scopedTask),
         scopedTaskId: scopedTask.id,
       },
     });
@@ -1221,14 +1298,15 @@ async function inspectWork(
     select: { id: true, terminalOutcome: true },
   });
 
+  const harness = storedSpecialistHarness(scopedTask);
   const node: TaskTreeNode = {
     workId: scopedTask.id,
     coordinator: { botId: scopedTask.coordinatorBotId, threadId: scopedTask.coordinatorThreadId },
     executor: { botId: scopedTask.executorBotId, threadId: scopedTask.specialistThreadId },
-    harness: {
-      harness: scopedTask.harness as NativeHarnessChoice,
-      targetId: scopedTask.executionTarget,
-    },
+    harness: harness.harness,
+    executionTarget: scopedTask.executionTarget,
+    harnessSource: harness.source,
+    harnessFallbackCause: harness.fallbackCause,
     missionComputerId: scopedTask.missionComputerId,
     status: scopedTask.status,
     parentScopedTaskId: scopedTask.parentScopedTaskId,
@@ -1416,7 +1494,7 @@ async function recordSpecialistReturn(
         status: "queued",
       },
     });
-    // The wake runs on the coordinator's own engine, not the descendant's. A specialist
+    // The wake runs on the coordinator's own harness, not the descendant's. A specialist
     // coordinator is woken on its own task and that task's choice; a persistent bot's saved
     // choice is resolved once by the executor.
     const coordinatorWork = scopedTask.parentScopedTaskId
@@ -1434,9 +1512,7 @@ async function recordSpecialistReturn(
         ...(coordinatorWork
           ? {
               scopedTaskId: coordinatorWork.id,
-              harness: coordinatorWork.harness,
-              executionTarget: coordinatorWork.missionComputerId ?? coordinatorWork.executionTarget,
-              choiceVersion: coordinatorWork.choiceVersion,
+              ...runChoiceOfTask(coordinatorWork),
             }
           : {}),
         sourceMessageId: message.id,

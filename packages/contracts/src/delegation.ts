@@ -1,4 +1,8 @@
-import type { NativeHarnessChoice } from "./harness-choice.js";
+import type {
+  HarnessChoice,
+  SpecialistHarnessFallbackCause,
+  SpecialistHarnessSource,
+} from "./harness-choice.js";
 
 // T04: public delegation contract (PA-CONTRAT-CONVERGENCE.md §6, symbols fixed before T01).
 // WorkTarget deliberately has one variant only: ADR-0001/ADR-0002 reserve scoped_tasks
@@ -7,11 +11,6 @@ import type { NativeHarnessChoice } from "./harness-choice.js";
 export type ScopedWorkId = string; // = scoped_tasks.id ; never Bot.id nor Task.id
 
 export type WorkTarget = { kind: "from_profile"; profileBotId: string; name: string };
-
-export type RuntimeChoiceRef = {
-  harness: NativeHarnessChoice;
-  targetId: string;
-};
 
 export type RightsSubset = Record<string, boolean>;
 
@@ -29,7 +28,13 @@ export type DelegationCommand =
   | {
       kind: "delegate";
       target: WorkTarget;
-      harness: RuntimeChoiceRef;
+      /**
+       * The harness the coordinator asks for; `default` is Rakazo's own. Absent, the profile's
+       * choice when it was ever set, then a judgment among the available harnesses, then the
+       * coordinator's own harness decide. Always the task's Computer of mission, never a
+       * caller-named target.
+       */
+      harness?: HarnessChoice;
       brief: string;
       /**
        * T07:6 (B5, root decision): a request for a ceiling *narrower* than the coordinator's
@@ -84,7 +89,14 @@ export type TaskTreeNode = {
   workId: ScopedWorkId;
   coordinator: { botId: string; threadId: string };
   executor: { botId: string; threadId: string };
-  harness: RuntimeChoiceRef;
+  /** The specialist's harness; `default` is Rakazo's own. */
+  harness: HarnessChoice;
+  /** The Computer a native harness runs in; null on Rakazo's own harness. */
+  executionTarget: string | null;
+  /** How that harness was chosen; null on a task created before the choice was recorded. */
+  harnessSource: SpecialistHarnessSource | null;
+  /** Why the deterministic fallback decided, when it did. */
+  harnessFallbackCause: SpecialistHarnessFallbackCause | null;
   /** T04:4: the coordinator's Computer at delegation time ("Computer de mission"). */
   missionComputerId: string | null;
   status: string;

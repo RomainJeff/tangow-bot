@@ -1,5 +1,6 @@
 import type { JobPublisher } from "@rakazo/adapter-kit";
 import type { AuthorizedActor, CommandContext } from "@rakazo/contracts";
+import { NATIVE_HARNESSES } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { createThreadMessageInTransaction, RunHistoryWriteError } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
@@ -20,6 +21,7 @@ import {
   recordSpecialistResult,
   WorkClosedError,
 } from "./delegated-tasks.js";
+import { FakeDecisionProvider } from "./fake-decision.js";
 
 const spaceId = "workspace-1";
 const userId = "user-1";
@@ -50,7 +52,10 @@ function makeDeps(
       allowAllTools?: boolean;
       allowedTools?: string[];
     }>;
-    profileHarnessChoice?: "claude-native" | "codex-native" | null;
+    /** The profile's harness once it was set (`default` is Rakazo's own); absent, never set. */
+    profileHarnessChoice?: "claude-native" | "codex-native" | "default" | null;
+    /** The harness the coordinator's own Run was served on; absent means Rakazo's default. */
+    originRunHarness?: "claude-native" | "codex-native" | null;
     /** The deployment's delegation limits; absent, the built-in defaults apply. */
     deploymentSettings?: { delegationMaxDepth?: number; delegationMaxActiveSpecialists?: number };
   } = {},
@@ -370,7 +375,13 @@ function makeDeps(
       }),
     },
     bot: {
-      findFirst: vi.fn().mockResolvedValue({ harnessChoice: options.profileHarnessChoice ?? null }),
+      findFirst: vi.fn().mockResolvedValue({
+        harnessChoice:
+          options.profileHarnessChoice === "default"
+            ? null
+            : (options.profileHarnessChoice ?? null),
+        choiceVersion: options.profileHarnessChoice ? 1 : null,
+      }),
       findFirstOrThrow: vi.fn().mockResolvedValue({
         id: coordinatorBotId,
         name: "Coordinator",
@@ -381,13 +392,10 @@ function makeDeps(
       }),
     },
     run: {
-      findUnique: vi
-        .fn()
-        .mockResolvedValue(
-          options.originRunScopedTaskId !== undefined
-            ? { scopedTaskId: options.originRunScopedTaskId }
-            : { scopedTaskId: null },
-        ),
+      findUnique: vi.fn().mockResolvedValue({
+        scopedTaskId: options.originRunScopedTaskId ?? null,
+        harness: options.originRunHarness ?? null,
+      }),
       findFirst: vi.fn().mockResolvedValue(null),
     },
     $transaction: vi.fn(async (fn: (client: unknown) => unknown) => fn(tx)),
@@ -412,8 +420,14 @@ const actor: AuthorizedActor = {
 };
 const context: CommandContext = { actor, originRunId: "run-origin-1", requestId: "req-1" };
 
+const anthropicModel = {
+  modelProvider: "anthropic",
+  modelId: "claude-sonnet",
+  thinkingLevel: "medium",
+};
+
 describe("DelegatedTasks.apply — delegate from profile", () => {
-  it("uses a Claude profile harness when the coordinator run has no native choice", async () => {
+  it("serves the specialist on the profile's own native harness when the coordinator chose none", async () => {
     const harness = makeDeps({ profileHarnessChoice: "claude-native" });
     vi.spyOn(await import("./child-bots.js"), "spawnBot").mockResolvedValue({
       ok: true,
@@ -423,11 +437,14 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
       threadId: "thread-specialist",
     });
 
-    await createDelegatedTasks({ prisma: harness.prisma, jobs: harness.jobs }).apply(
+    await createDelegatedTasks({
+      prisma: harness.prisma,
+      jobs: harness.jobs,
+      coordinatorModel: anthropicModel,
+    }).apply(
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: "profile-1", name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "default" },
         brief: "Use the profile harness.",
         requestedRights: {},
         spawnKey: "profile-harness-1",
@@ -454,12 +471,16 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
       threadId: "thread-specialist",
     });
 
-    const tasks = createDelegatedTasks({ prisma: harness.prisma, jobs: harness.jobs });
+    const tasks = createDelegatedTasks({
+      prisma: harness.prisma,
+      jobs: harness.jobs,
+      coordinatorModel: anthropicModel,
+    });
     const receipt = await tasks.apply(
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: "profile-1", name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
+        harness: "claude-native",
         brief: "Summarize the quarterly report",
         requestedRights: {},
         spawnKey: "spawn-1",
@@ -478,7 +499,10 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
       threadId: coordinatorThreadId,
     });
     expect(tree.root.executor).toEqual({ botId: "bot-specialist", threadId: "thread-specialist" });
-    expect(tree.root.harness).toEqual({ harness: "codex-native", targetId: "target-1" });
+    expect(tree.root.harness).toBe("claude-native");
+    expect(tree.root.executionTarget).toBe("computer-serving-run-1");
+    expect(tree.root.harnessSource).toBe("explicit");
+    expect(tree.root.harnessFallbackCause).toBeNull();
     expect(tree.root.parentScopedTaskId).toBeNull();
     expect(tree.root.rootScopedTaskId).toBe("work-1");
     // T07:4 correction: the ceiling is now a tool-granular snapshot of the coordinator's
@@ -516,7 +540,6 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: "profile-1", name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
         brief: "Summarize the quarterly report",
         requestedRights: {},
         spawnKey: "spawn-dup",
@@ -554,7 +577,6 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: "profile-1", name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
         brief: "Summarize the quarterly report",
         requestedRights: {},
         spawnKey: "spawn-nonempty-ceiling",
@@ -584,7 +606,6 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: "profile-1", name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
         brief: "Summarize the quarterly report",
         requestedRights,
         spawnKey: "spawn-narrowed-ceiling",
@@ -616,7 +637,6 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: "profile-1", name: "Analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
           brief: "Escalate",
           // The coordinator only holds "search"; requesting allowAllTools must be refused,
           // never silently truncated down to "search".
@@ -650,7 +670,6 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: "profile-1", name: "Analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
           brief: "Escalate",
           requestedRights: { "server-a": { allowAllTools: false, allowedTools: ["delete"] } },
           spawnKey: "spawn-escalate-tool",
@@ -672,7 +691,6 @@ describe("DelegatedTasks.apply — delegate from profile", () => {
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: "profile-1", name: "Analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
           brief: "Escalate",
           requestedRights: { "server-never-held": { allowAllTools: true, allowedTools: [] } },
           spawnKey: "spawn-escalate-server",
@@ -739,7 +757,6 @@ describe("DelegatedTasks.apply — parent linkage (T07 task 1: minimal tree)", (
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: "profile-2", name: "Sub-analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
         brief: "Dig into one section",
         requestedRights: {},
         spawnKey: "spawn-child",
@@ -773,7 +790,6 @@ describe("DelegatedTasks.apply — parent linkage (T07 task 1: minimal tree)", (
       {
         kind: "delegate",
         target: { kind: "from_profile", profileBotId: "profile-1", name: "Analyst" },
-        harness: { harness: "codex-native", targetId: "target-1" },
         brief: "Summarize the quarterly report",
         requestedRights: {},
         spawnKey: "spawn-ordinary",
@@ -840,7 +856,6 @@ describe("DelegatedTasks.apply — parent linkage (T07 task 1: minimal tree)", (
             {
               kind: "delegate",
               target: { kind: "from_profile", profileBotId: "profile-2", name: "Child" },
-              harness: { harness: "codex-native", targetId: "target-1" },
               brief: "Subtask",
               requestedRights: {},
               spawnKey: "cancelled-child",
@@ -894,7 +909,6 @@ describe("DelegatedTasks.apply — parent linkage (T07 task 1: minimal tree)", (
         {
           kind: "delegate",
           target: { kind: "from_profile", profileBotId: "profile-2", name: "Sub-analyst" },
-          harness: { harness: "codex-native", targetId: "target-1" },
           brief: "Dig into one section",
           requestedRights: {},
           spawnKey: "spawn-under-cancelled",
@@ -908,11 +922,212 @@ describe("DelegatedTasks.apply — parent linkage (T07 task 1: minimal tree)", (
   });
 });
 
+describe("DelegatedTasks.apply — specialist harness", () => {
+  const brief = "Refactor the parser module and run its tests";
+  const command = (
+    spawnKey: string,
+    extra: { harness?: "default" | "claude-native" | "codex-native" } = {},
+  ) => ({
+    kind: "delegate" as const,
+    target: { kind: "from_profile" as const, profileBotId: "profile-1", name: "Analyst" },
+    brief,
+    requestedRights: {},
+    spawnKey,
+    ...extra,
+  });
+  const adapterContext = {
+    operationId: "op-1",
+    traceId: "trace-1",
+    spaceId,
+    userId,
+    botId: coordinatorBotId,
+    signal: new AbortController().signal,
+  };
+  const answer = (choice: string, probabilities: Record<string, number>) => ({
+    answers: { harness: { type: "choice" as const, choice, confidence: 0.9, probabilities } },
+  });
+  async function setup(
+    options: Parameters<typeof makeDeps>[0] & {
+      provider?: FakeDecisionProvider;
+      model?: typeof anthropicModel;
+    } = {},
+  ) {
+    vi.restoreAllMocks();
+    await import("./child-bots.js").then((module) =>
+      vi.spyOn(module, "spawnBot").mockResolvedValue({
+        ok: true,
+        botId: "bot-specialist",
+        name: "Analyst",
+        title: "",
+        threadId: "thread-specialist",
+      }),
+    );
+    const harness = makeDeps(options);
+    const tasks = createDelegatedTasks({
+      prisma: harness.prisma,
+      jobs: harness.jobs,
+      coordinatorModel: options.model ?? anthropicModel,
+      redact: (text) => text.replaceAll("hunter2", "[redacted]"),
+      ...(options.provider
+        ? { harnessJudgment: { provider: options.provider, context: adapterContext } }
+        : {}),
+    });
+    return { harness, tasks };
+  }
+  const recorded = (harness: ReturnType<typeof makeDeps>) =>
+    harness.tx.scopedTask.create.mock.calls[0]![0].data;
+
+  it("keeps the coordinator's explicit harness over any judgment", async () => {
+    const provider = new FakeDecisionProvider({
+      script: [answer("rakazo", { rakazo: 0.95, claude: 0.05 })],
+    });
+    const { harness, tasks } = await setup({ provider });
+
+    await tasks.apply(command("explicit-1", { harness: "claude-native" }), context);
+
+    expect(provider.calls).toHaveLength(0);
+    expect(recorded(harness)).toMatchObject({
+      harness: "claude-native",
+      // The mission Computer, never the caller's wording.
+      executionTarget: "computer-coordinator-1",
+      harnessSource: "explicit",
+    });
+    expect(harness.tx.run.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          harness: "claude-native",
+          executionTarget: "computer-coordinator-1",
+        }),
+      }),
+    );
+  });
+
+  it("keeps a profile set to Rakazo's own harness over any judgment", async () => {
+    const provider = new FakeDecisionProvider({
+      script: [answer("claude", { rakazo: 0.1, claude: 0.9 })],
+    });
+    const { harness, tasks } = await setup({
+      provider,
+      profileHarnessChoice: "default",
+      originRunHarness: "claude-native",
+    });
+
+    await tasks.apply(command("profile-rakazo"), context);
+
+    expect(provider.calls).toHaveLength(0);
+    expect(recorded(harness)).toMatchObject({ harness: null, harnessSource: "profile" });
+  });
+
+  it("asks one judgment among the available harnesses only, and records why the winner won", async () => {
+    const provider = new FakeDecisionProvider({
+      script: [answer("claude", { rakazo: 0.2, claude: 0.8 })],
+    });
+    const { harness, tasks } = await setup({ provider });
+
+    await tasks.apply({ ...command("judged-1"), brief: `${brief} with password hunter2` }, context);
+
+    expect(provider.calls).toHaveLength(1);
+    const request = provider.calls[0]!;
+    const question = request.questions.harness;
+    // Codex is not offered: the model on hand belongs to another subscription.
+    expect(question?.type === "choice" && Object.keys(question.options).sort()).toEqual([
+      "claude",
+      "rakazo",
+    ]);
+    expect(JSON.stringify(request.state)).toContain("Refactor the parser module");
+    expect(JSON.stringify(request.state)).not.toContain("hunter2");
+    expect(recorded(harness)).toMatchObject({
+      harness: "claude-native",
+      harnessSource: "judgment",
+    });
+  });
+
+  it("runs on Rakazo's default harness when the judgment picks it", async () => {
+    const provider = new FakeDecisionProvider({
+      script: [answer("rakazo", { rakazo: 0.9, claude: 0.1 })],
+    });
+    const { harness, tasks } = await setup({ provider });
+
+    await tasks.apply(command("judged-rakazo"), context);
+
+    expect(recorded(harness)).toMatchObject({
+      harness: null,
+      executionTarget: null,
+      choiceVersion: null,
+      harnessSource: "judgment",
+    });
+    expect(harness.tx.run.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          harness: null,
+          executionTarget: null,
+          choiceVersion: null,
+        }),
+      }),
+    );
+  });
+
+  it("falls back to the coordinator's own harness and records that no provider was configured", async () => {
+    const { harness, tasks } = await setup({ originRunHarness: "claude-native" });
+
+    await tasks.apply(command("fallback-none"), context);
+
+    expect(recorded(harness)).toMatchObject({
+      harness: "claude-native",
+      harnessSource: "fallback",
+      harnessFallbackCause: "no_provider",
+    });
+  });
+
+  it("falls back and records the cause when the judgment fails", async () => {
+    const provider = new FakeDecisionProvider();
+    provider.decideError = new Error("provider offline");
+    const { harness, tasks } = await setup({ provider });
+
+    await tasks.apply(command("fallback-error"), context);
+
+    // The coordinator ran on Rakazo, so the specialist does too.
+    expect(provider.calls).toHaveLength(1);
+    expect(recorded(harness)).toMatchObject({
+      harness: null,
+      harnessSource: "fallback",
+      harnessFallbackCause: "error",
+    });
+  });
+
+  it("does not ask a judgment when only one harness is available", async () => {
+    const provider = new FakeDecisionProvider();
+    const { harness, tasks } = await setup({
+      provider,
+      model: { modelProvider: "openai", modelId: "gpt-x", thinkingLevel: "medium" },
+    });
+
+    await tasks.apply(command("single-harness"), context);
+
+    expect(provider.calls).toHaveLength(0);
+    expect(recorded(harness)).toMatchObject({
+      harness: null,
+      harnessSource: "fallback",
+      harnessFallbackCause: "single_harness",
+    });
+  });
+
+  it("refuses an explicit harness the specialist cannot run, before any specialist exists", async () => {
+    const { harness, tasks } = await setup();
+    const spawn = (await import("./child-bots.js")).spawnBot;
+
+    await expect(
+      tasks.apply(command("explicit-unavailable", { harness: "codex-native" }), context),
+    ).rejects.toThrow(/Codex/);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(harness.tx.scopedTask.create).not.toHaveBeenCalled();
+  });
+});
+
 describe("DelegatedTasks.apply — delegation limits", () => {
   const delegate = (spawnKey: string) => ({
     kind: "delegate" as const,
     target: { kind: "from_profile" as const, profileBotId: "profile-1", name: "Analyst" },
-    harness: { harness: "codex-native" as const, targetId: "default" },
     brief: "Look into one section",
     requestedRights: {},
     spawnKey,
@@ -2724,11 +2939,18 @@ describe("delegation, approval and return with an independent effect counter", (
         return {};
       },
     );
-    const tasks = createDelegatedTasks({ prisma: harness.prisma, jobs: harness.jobs });
+    const tasks = createDelegatedTasks({
+      prisma: harness.prisma,
+      jobs: harness.jobs,
+      coordinatorModel: {
+        modelProvider: NATIVE_HARNESSES[harnessChoice].provider,
+        modelId: "model-1",
+        thinkingLevel: "medium",
+      },
+    });
     const command = {
       kind: "delegate" as const,
       target: { kind: "from_profile" as const, profileBotId: "profile-1", name: "Analyst" },
-      harness: { harness: harnessChoice, targetId: "target-1" },
       brief: "Write the quarterly summary to the destination.",
       requestedRights: {},
       spawnKey: "compose-1",
