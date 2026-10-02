@@ -51,6 +51,9 @@ export class WorkHasOpenDescendantsError extends Error {
   }
 }
 
+/** A delegation refused because the deployment's depth or active-specialist limit is reached. */
+export class DelegationLimitError extends Error {}
+
 /**
  * T07:6 (B5): a requested MCP ceiling that exceeds the coordinator's own effective access —
  * refused outright, never silently truncated down to what the coordinator holds.
@@ -81,6 +84,9 @@ type SpecialistDeliveryDeps = Pick<Deps, "prisma" | "jobs"> & {
 };
 
 export const TERMINAL_WORK_STATUSES = ["closed", "cancelled"];
+/** Delegation limits of a deployment that has not set its own. */
+export const DEFAULT_DELEGATION_MAX_DEPTH = 3;
+export const DEFAULT_DELEGATION_MAX_ACTIVE_SPECIALISTS = 5;
 /** A work-return chain may resume coordination, but never indefinitely. */
 export const WORK_RETURN_MAX_HOPS = 6;
 /** A coordinator may be woken six times after one user-triggered turn. */
@@ -564,6 +570,7 @@ async function applyDelegate(
     select: { scopedTaskId: true },
   });
   const parentScopedTaskId = originRun?.scopedTaskId ?? null;
+  const limits = await readDelegationLimits(deps.prisma);
   if (parentScopedTaskId) {
     const parentPrecheck = await deps.prisma.scopedTask.findUnique({
       where: { id: parentScopedTaskId },
@@ -571,7 +578,23 @@ async function applyDelegate(
     if (!parentPrecheck || TERMINAL_WORK_STATUSES.includes(parentPrecheck.status)) {
       throw new WorkClosedError(parentScopedTaskId);
     }
+    // depth 0 is the coordinator's own specialist, so the new task sits at level depth + 2.
+    if (parentPrecheck.depth + 2 > limits.maxDepth) {
+      throw new DelegationLimitError(
+        `Delegation refused: delegated work is limited to ${limits.maxDepth} ${
+          limits.maxDepth === 1 ? "level" : "levels"
+        } deep on this deployment, and this task is already at that depth. Do the work yourself or return what you have.`,
+      );
+    }
   }
+  // Cheap pre-check, before a specialist bot exists; the transaction below counts again under
+  // a lock, so parallel delegations cannot overshoot the limit.
+  await assertWithinActiveSpecialistLimit(
+    deps.prisma,
+    coordinator.thread.id,
+    parentScopedTaskId,
+    limits.maxActiveSpecialists,
+  );
 
   const spawned = await spawnBot(deps, {
     spawnedBy: {
@@ -619,7 +642,17 @@ async function applyDelegate(
           throw new WorkClosedError(parentScopedTaskId);
         }
         parent = { id: row.id, rootScopedTaskId: row.rootScopedTaskId, depth: row.depth };
+      } else {
+        // A first-level coordinator has no parent row to serialise on, so its thread is the
+        // lock; without it two parallel delegations could both count below the limit.
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${coordinator.thread.id} FOR NO KEY UPDATE`;
       }
+      await assertWithinActiveSpecialistLimit(
+        tx,
+        coordinator.thread.id,
+        parentScopedTaskId,
+        limits.maxActiveSpecialists,
+      );
 
       const workThread = await tx.thread.create({
         data: {
@@ -731,6 +764,46 @@ async function applyDelegate(
     state: "queued",
     replayed: false,
   };
+}
+
+async function readDelegationLimits(prisma: PrismaClient) {
+  const settings = await prisma.deploymentSettings.findUnique({
+    where: { id: "default" },
+    select: { delegationMaxDepth: true, delegationMaxActiveSpecialists: true },
+  });
+  return {
+    maxDepth: settings?.delegationMaxDepth ?? DEFAULT_DELEGATION_MAX_DEPTH,
+    maxActiveSpecialists:
+      settings?.delegationMaxActiveSpecialists ?? DEFAULT_DELEGATION_MAX_ACTIVE_SPECIALISTS,
+  };
+}
+
+/**
+ * The specialists a task has open are its children that are working: one with an active Run.
+ * A specialist that finished and waits for closure, and a closed or cancelled one, free their
+ * slot. Counted per coordinator thread for a first-level coordinator, and per parent task for a
+ * specialist that delegates further.
+ */
+async function assertWithinActiveSpecialistLimit(
+  client: Pick<PrismaClient, "scopedTask">,
+  coordinatorThreadId: string,
+  parentScopedTaskId: string | null,
+  maxActiveSpecialists: number,
+) {
+  const active = await client.scopedTask.count({
+    where: {
+      coordinatorThreadId,
+      parentScopedTaskId,
+      runs: { some: { status: { in: [...ACTIVE_RUN_STATUSES] } } },
+    },
+  });
+  if (active >= maxActiveSpecialists) {
+    throw new DelegationLimitError(
+      `Delegation refused: this task already has ${active} active ${
+        active === 1 ? "specialist" : "specialists"
+      }, the limit on this deployment. Wait for one to finish before delegating again.`,
+    );
+  }
 }
 
 /** Matches Prisma's P2002 unique-constraint violation for the given index/field name. */

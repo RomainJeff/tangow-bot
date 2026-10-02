@@ -51,6 +51,8 @@ function makeDeps(
       allowedTools?: string[];
     }>;
     profileHarnessChoice?: "claude-native" | "codex-native" | null;
+    /** The deployment's delegation limits; absent, the built-in defaults apply. */
+    deploymentSettings?: { delegationMaxDepth?: number; delegationMaxActiveSpecialists?: number };
   } = {},
 ) {
   const scopedTaskRows = new Map<string, Record<string, unknown>>();
@@ -204,6 +206,24 @@ function makeDeps(
       },
     );
 
+  // Applies a count's where clause to the seeded tasks, whatever fields it names: plain fields
+  // match by equality (absent equals null), `notIn` excludes, and `runs.some` asks for a seeded
+  // Run of the task in one of the listed statuses.
+  const countScopedTasks = async (args: { where: Record<string, unknown> }) =>
+    [...scopedTaskRows.values()].filter((row) =>
+      Object.entries(args.where).every(([field, condition]) => {
+        if (field === "runs") {
+          const wanted = (condition as { some: { status: { in: string[] } } }).some.status.in;
+          return [...runsById.values()].some(
+            (run) => run.scopedTaskId === row.id && wanted.includes(run.status as string),
+          );
+        }
+        if (condition !== null && typeof condition === "object" && "notIn" in condition)
+          return !(condition.notIn as unknown[]).includes(row[field]);
+        return (row[field] ?? null) === condition;
+      }),
+    ).length;
+
   const tx = {
     thread: { create: threadCreate, update: threadUpdate },
     task: {
@@ -222,15 +242,7 @@ function makeDeps(
       updateMany: scopedTaskUpdateMany,
       updateManyAndReturn: scopedTaskUpdateManyAndReturn,
       findMany: scopedTaskFindMany,
-      count: vi.fn().mockImplementation(async (args: { where: Record<string, unknown> }) => {
-        const terminal = new Set((args.where.status as { notIn: string[] }).notIn);
-        return [...scopedTaskRows.values()].filter(
-          (row) =>
-            row.missionComputerId === args.where.missionComputerId &&
-            row.executorBotId === args.where.executorBotId &&
-            !terminal.has(row.status as string),
-        ).length;
-      }),
+      count: vi.fn().mockImplementation(countScopedTasks),
     },
     computerUsageGrant: {
       upsert: vi.fn().mockResolvedValue({}),
@@ -317,6 +329,7 @@ function makeDeps(
         if (!row) throw new Error("not found");
         return row;
       }),
+      count: vi.fn().mockImplementation(countScopedTasks),
       findFirst: vi
         .fn()
         .mockImplementation(
@@ -333,6 +346,17 @@ function makeDeps(
             };
           },
         ),
+    },
+    deploymentSettings: {
+      findUnique: vi.fn().mockResolvedValue(
+        options.deploymentSettings
+          ? {
+              delegationMaxDepth: null,
+              delegationMaxActiveSpecialists: null,
+              ...options.deploymentSettings,
+            }
+          : null,
+      ),
     },
     botMcpServer: {
       findMany: vi.fn().mockImplementation(async (args: { where: { botId: string } }) => {
@@ -881,6 +905,128 @@ describe("DelegatedTasks.apply — parent linkage (T07 task 1: minimal tree)", (
     // The cheap pre-check refuses before ever spawning a specialist bot.
     expect(spawnSpy).not.toHaveBeenCalled();
     expect(harness.tx.scopedTask.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("DelegatedTasks.apply — delegation limits", () => {
+  const delegate = (spawnKey: string) => ({
+    kind: "delegate" as const,
+    target: { kind: "from_profile" as const, profileBotId: "profile-1", name: "Analyst" },
+    harness: { harness: "codex-native" as const, targetId: "default" },
+    brief: "Look into one section",
+    requestedRights: {},
+    spawnKey,
+  });
+  const openTask = (id: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    spaceId,
+    userId,
+    spawnKey: `spawn-${id}`,
+    coordinatorBotId,
+    coordinatorThreadId,
+    executorBotId: `bot-${id}`,
+    specialistThreadId: `thread-${id}`,
+    parentScopedTaskId: null,
+    rootScopedTaskId: id,
+    depth: 0,
+    missionComputerId: "computer-coordinator-1",
+    status: "dispatched",
+    ...overrides,
+  });
+  const spawnedSpecialist = async () =>
+    vi.spyOn(await import("./child-bots.js"), "spawnBot").mockResolvedValue({
+      ok: true,
+      botId: "bot-new-specialist",
+      name: "Analyst",
+      title: "",
+      threadId: "thread-new-specialist",
+    });
+
+  it("refuses a delegation more than three levels deep by default, before any specialist exists", async () => {
+    vi.restoreAllMocks();
+    const harness = makeDeps({
+      seedScopedTasks: [openTask("work-level-3", { depth: 2 })],
+      originRunScopedTaskId: "work-level-3",
+    });
+    const spawn = await spawnedSpecialist();
+
+    await expect(
+      createDelegatedTasks({ prisma: harness.prisma, jobs: harness.jobs }).apply(
+        delegate("spawn-too-deep"),
+        context,
+      ),
+    ).rejects.toThrow(/3 levels deep/);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(harness.tx.scopedTask.create).not.toHaveBeenCalled();
+  });
+
+  const withRun = (id: string, status: string, overrides: Record<string, unknown> = {}) => ({
+    task: openTask(id, overrides),
+    run: { id: `run-${id}`, taskId: `task-${id}`, scopedTaskId: id, status },
+  });
+
+  it("refuses a sixth working specialist in one thread, and does not count the ones that finished", async () => {
+    vi.restoreAllMocks();
+    await spawnedSpecialist();
+    const working = ["a", "b", "c", "d"].map((id) => withRun(`work-${id}`, "running"));
+    // Waiting for closure, closed, and working for another thread: none holds a slot here.
+    const notCounted = [
+      { task: openTask("work-finished"), run: null },
+      withRun("work-done", "completed", { status: "closed" }),
+      withRun("work-elsewhere", "running", { coordinatorThreadId: "thread-other" }),
+    ];
+    const roomy = makeDeps({
+      seedScopedTasks: [...working, ...notCounted].map(({ task }) => task),
+      activeRuns: [...working, ...notCounted].flatMap(({ run }) => (run ? [run] : [])),
+    });
+    await expect(
+      createDelegatedTasks({ prisma: roomy.prisma, jobs: roomy.jobs }).apply(
+        delegate("spawn-fifth"),
+        context,
+      ),
+    ).resolves.toMatchObject({ replayed: false });
+
+    const full = [...working, withRun("work-e", "waiting_input")];
+    const crowded = makeDeps({
+      seedScopedTasks: full.map(({ task }) => task),
+      activeRuns: full.map(({ run }) => run),
+    });
+    await expect(
+      createDelegatedTasks({ prisma: crowded.prisma, jobs: crowded.jobs }).apply(
+        delegate("spawn-sixth"),
+        context,
+      ),
+    ).rejects.toThrow(/5 active specialists/);
+  });
+
+  it("takes both limits from the deployment settings", async () => {
+    vi.restoreAllMocks();
+    await spawnedSpecialist();
+    const settings = { delegationMaxActiveSpecialists: 1, delegationMaxDepth: 1 };
+    const nested = makeDeps({
+      deploymentSettings: settings,
+      seedScopedTasks: [openTask("work-level-1")],
+      originRunScopedTaskId: "work-level-1",
+    });
+    await expect(
+      createDelegatedTasks({ prisma: nested.prisma, jobs: nested.jobs }).apply(
+        delegate("spawn-second-level"),
+        context,
+      ),
+    ).rejects.toThrow(/1 level deep/);
+
+    const only = withRun("work-only", "running");
+    const crowded = makeDeps({
+      deploymentSettings: settings,
+      seedScopedTasks: [only.task],
+      activeRuns: [only.run],
+    });
+    await expect(
+      createDelegatedTasks({ prisma: crowded.prisma, jobs: crowded.jobs }).apply(
+        delegate("spawn-second-specialist"),
+        context,
+      ),
+    ).rejects.toThrow(/1 active specialist\b/);
   });
 });
 

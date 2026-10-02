@@ -1190,6 +1190,10 @@ export const DeploymentSettingsSchema = z.object({
   computerHost: z.enum(["docker", "this-mac"]).nullable(),
   canChooseHostComputer: z.boolean(),
   sandboxProvider: z.string(),
+  /** Deepest chain of specialists delegating to specialists. */
+  delegationMaxDepth: z.number().int(),
+  /** Specialists one task may have working at once. */
+  delegationMaxActiveSpecialists: z.number().int(),
 });
 
 export const ServerUpdateSourceSchema = z.object({

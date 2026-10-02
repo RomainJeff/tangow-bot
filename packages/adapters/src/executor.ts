@@ -226,6 +226,7 @@ import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import {
   createDelegatedTasks,
   createNativeRightsGuard,
+  DelegationLimitError,
   deliverSpecialistRunEnd,
   RightsExceededError,
   WorkClosedError,
@@ -3931,7 +3932,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   error: "Not authorized for this work identity.",
                 });
               }
-              if (error instanceof WorkClosedError || error instanceof WorkHasOpenDescendantsError)
+              if (
+                error instanceof WorkClosedError ||
+                error instanceof WorkHasOpenDescendantsError ||
+                error instanceof DelegationLimitError
+              )
                 return finish({ error: error.message });
               throw error;
             }

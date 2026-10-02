@@ -196,6 +196,8 @@ export const appContract = {
           signupsEnabled: z.boolean().optional(),
           signupAllowlist: z.array(z.string()).optional(),
           computerHost: z.enum(["docker", "this-mac"]).nullable().optional(),
+          delegationMaxDepth: z.number().int().min(1).max(10).optional(),
+          delegationMaxActiveSpecialists: z.number().int().min(1).max(50).optional(),
         }),
       )
       .output(DeploymentSettingsSchema),

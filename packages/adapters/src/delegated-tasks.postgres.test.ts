@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { messageBot } from "./bot-messages.js";
 import {
   createDelegatedTasks,
+  DelegationLimitError,
   recordSpecialistFailure,
   recordSpecialistResult,
   WorkClosedError,
@@ -1076,6 +1077,61 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       });
       expect(workThreads).toBe(1);
     } finally {
+      await db2.prisma.$disconnect();
+      await db2.pool.end();
+    }
+  });
+
+  it("lets only one of two parallel delegations take the last specialist slot", async () => {
+    const s = await setup();
+    await prisma.deploymentSettings.upsert({
+      where: { id: "default" },
+      create: { id: "default", delegationMaxActiveSpecialists: 1 },
+      update: { delegationMaxActiveSpecialists: 1 },
+    });
+    const db2 = createDb(process.env.DATABASE_URL!);
+    // Both delegations read the count, then pause before writing: without a lock they would
+    // each see a free slot.
+    const pausingAfterCount = (client: PrismaClient) =>
+      client.$extends({
+        query: {
+          scopedTask: {
+            async count({ args, query }) {
+              const count = await query(args);
+              await sleep(300);
+              return count;
+            },
+          },
+        },
+      }) as unknown as PrismaClient;
+    const delegate = (spawnKey: string) => ({
+      kind: "delegate" as const,
+      target: { kind: "from_profile" as const, profileBotId: s.profile.id, name: "Analyst" },
+      harness: { harness: "codex-native" as const, targetId: "target-1" },
+      brief: "Summarize the quarterly report",
+      requestedRights: {},
+      spawnKey,
+    });
+    try {
+      const outcomes = await Promise.allSettled([
+        createDelegatedTasks({ ...s.deps, prisma: pausingAfterCount(prisma) }).apply(
+          delegate(`spawn-slot-a-${randomUUID()}`),
+          s.context,
+        ),
+        createDelegatedTasks({ prisma: pausingAfterCount(db2.prisma), jobs: s.deps.jobs }).apply(
+          delegate(`spawn-slot-b-${randomUUID()}`),
+          s.context,
+        ),
+      ]);
+      expect(outcomes.map((outcome) => outcome.status).sort()).toEqual(["fulfilled", "rejected"]);
+      const refused = outcomes.find((outcome) => outcome.status === "rejected");
+      expect((refused as PromiseRejectedResult).reason).toBeInstanceOf(DelegationLimitError);
+      await expect(prisma.scopedTask.count({ where: { spaceId: s.id } })).resolves.toBe(1);
+    } finally {
+      await prisma.deploymentSettings.update({
+        where: { id: "default" },
+        data: { delegationMaxActiveSpecialists: null },
+      });
       await db2.prisma.$disconnect();
       await db2.pool.end();
     }

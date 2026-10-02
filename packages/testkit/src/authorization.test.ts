@@ -1360,6 +1360,19 @@ describeWithDatabase("API authorization and resource isolation", () => {
       await handles.prisma.deploymentSettings.findUniqueOrThrow({ where: { id: "default" } }),
     ).toMatchObject({ signupsEnabled: true, signupAllowlist: "" });
 
+    // The delegation limits start at their defaults and only the deployment owner moves them.
+    expect(await rpc(app, owner, "deployment/get")).toMatchObject({
+      delegationMaxDepth: 3,
+      delegationMaxActiveSpecialists: 5,
+    });
+    expect(
+      await rpc(app, owner, "deployment/update", { delegationMaxActiveSpecialists: 2 }),
+    ).toMatchObject({ delegationMaxDepth: 3, delegationMaxActiveSpecialists: 2 });
+    await handles.prisma.deploymentSettings.update({
+      where: { id: "default" },
+      data: { delegationMaxActiveSpecialists: null },
+    });
+
     try {
       await rpc(app, owner, "deployment/update", { signupsEnabled: false });
       const closedSignup = await app.request("/api/auth/sign-up/email", {

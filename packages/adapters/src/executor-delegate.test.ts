@@ -32,7 +32,11 @@ vi.mock("./delegated-tasks.js", async (importOriginal) => {
   };
 });
 
-import { createDelegatedTasks, deliverSpecialistRunEnd } from "./delegated-tasks.js";
+import {
+  createDelegatedTasks,
+  DelegationLimitError,
+  deliverSpecialistRunEnd,
+} from "./delegated-tasks.js";
 import { createRunExecutor } from "./executor.js";
 
 const mockCreateDelegatedTasks = vi.mocked(createDelegatedTasks);
@@ -166,12 +170,13 @@ function fixture(
       findUnique: vi.fn(async () => null),
       create: vi.fn(async () => ({ id: "effect-1" })),
       update: vi.fn(async () => undefined),
-      updateMany: vi.fn(async () => ({ count: 0 })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
     },
   };
+  let delegateResult: unknown;
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
     if (outcome === "delegate_dispatch") {
-      await request.executeTool!(
+      delegateResult = await request.executeTool!(
         "delegate",
         { profile_bot_id: "profile-1", name: "Analyst", brief: "Summarize the report" },
         "call-1",
@@ -221,6 +226,8 @@ function fixture(
     deps,
     finalizeRun,
     runtimeRun,
+    /** What the model received back from its delegate call. */
+    delegateResult: () => delegateResult,
     async run() {
       run.status = "queued";
       await executor.continueRun(run.id, "worker-1");
@@ -274,6 +281,20 @@ describe("executor seam — delegate dispatch and specialist completion (Terra J
     // The delegate tool exposes no rights parameter today, so requestedRights is always {}
     // — accepted on the wire for compatibility, but no longer consulted by applyDelegate.
     expect((command as { requestedRights: unknown }).requestedRights).toEqual({});
+  });
+
+  it("hands a refused delegation back to the model as an explicit error, not a failed run", async () => {
+    const refusal = "Delegation refused: this task already has 5 active specialists.";
+    const apply = vi.fn(async () => {
+      throw new DelegationLimitError(refusal);
+    });
+    mockCreateDelegatedTasks.mockReturnValue({ apply, inspect: vi.fn() } as never);
+
+    const f = fixture({ outcome: "delegate_dispatch" });
+    await f.run();
+
+    expect(f.delegateResult()).toEqual({ error: refusal });
+    expect(f.finalizeRun).toHaveBeenCalledWith(expect.objectContaining({ outcome: "completed" }));
   });
 
   it("dispatches delegate_close as the coordinator and returns its closure receipt", async () => {

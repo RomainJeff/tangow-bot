@@ -42,6 +42,8 @@ import {
   computerSupportsUpdate,
   computerUpdateView,
   createVoiceProvider,
+  DEFAULT_DELEGATION_MAX_ACTIVE_SPECIALISTS,
+  DEFAULT_DELEGATION_MAX_DEPTH,
   deletePushToken,
   deploymentAutoReviewDefault,
   destroyBot,
@@ -854,6 +856,8 @@ export function createRouter(deps: RouterDeps) {
             signupAllowlist: (input.signupAllowlist ?? []).join(","),
             signupPolicyInitialized: true,
             computerHost: input.computerHost ?? undefined,
+            delegationMaxDepth: input.delegationMaxDepth,
+            delegationMaxActiveSpecialists: input.delegationMaxActiveSpecialists,
           },
           update: {
             ...(input.signupsEnabled === undefined ? {} : { signupsEnabled: input.signupsEnabled }),
@@ -862,6 +866,12 @@ export function createRouter(deps: RouterDeps) {
               ? {}
               : { signupPolicyInitialized: true }),
             ...(input.computerHost === undefined ? {} : { computerHost: input.computerHost }),
+            ...(input.delegationMaxDepth === undefined
+              ? {}
+              : { delegationMaxDepth: input.delegationMaxDepth }),
+            ...(input.delegationMaxActiveSpecialists === undefined
+              ? {}
+              : { delegationMaxActiveSpecialists: input.delegationMaxActiveSpecialists }),
           },
         });
         return deploymentDto(deps.prisma, deps.env.sandboxProvider);
@@ -5350,6 +5360,9 @@ async function deploymentDto(prisma: PrismaClient, sandboxProvider: string) {
     computerHost: computerHostFor(settings?.computerHost, sandboxProvider),
     canChooseHostComputer: sandboxProvider === "docker",
     sandboxProvider,
+    delegationMaxDepth: settings?.delegationMaxDepth ?? DEFAULT_DELEGATION_MAX_DEPTH,
+    delegationMaxActiveSpecialists:
+      settings?.delegationMaxActiveSpecialists ?? DEFAULT_DELEGATION_MAX_ACTIVE_SPECIALISTS,
   };
 }
 
