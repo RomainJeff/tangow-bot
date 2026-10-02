@@ -49,6 +49,25 @@ describe("inferScript message_bot", () => {
   });
 });
 
+describe("inferScript delegate", () => {
+  it("delegates the text after the colon to a specialist named for the role it addresses", () => {
+    expect(
+      inferScript("delegate to a researcher: write this to the destination crm as a note"),
+    ).toEqual([
+      {
+        assistant: "delegating that to a researcher.",
+        toolCalls: [
+          {
+            name: "delegate",
+            args: { name: "Researcher", brief: "write this to the destination crm as a note" },
+          },
+        ],
+        complete: true,
+      },
+    ]);
+  });
+});
+
 describe("inferScript request_secret", () => {
   it("opens a masked api key card via request_secret", () => {
     expect(inferScript("show a secret card for a masked api key")).toEqual([
@@ -105,5 +124,26 @@ describe("ScriptedAgentRuntime executionIds", () => {
       )
       .map((event) => event.executionId);
     expect(toolIds).toEqual(["run-1:message_agent:0", "run-1:message_agent:1"]);
+  });
+
+  it("starts a scripted delegation's specialist from the bot that runs the script", async () => {
+    const runtime = new ScriptedAgentRuntime();
+    const tools: Array<Record<string, unknown>> = [];
+    for await (const event of runtime.run({
+      botId: "bot-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      prompt: "delegate to a researcher: find suppliers",
+      instructions: "",
+      history: [],
+      tools: [],
+      model: { provider: "scripted", id: "scripted" },
+      script: inferScript("delegate to a researcher: find suppliers"),
+    })) {
+      if (event.type === "tool") tools.push(event.args);
+    }
+    expect(tools).toEqual([
+      { profile_bot_id: "bot-1", name: "Researcher", brief: "find suppliers" },
+    ]);
   });
 });

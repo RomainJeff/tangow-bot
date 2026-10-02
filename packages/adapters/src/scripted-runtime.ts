@@ -89,7 +89,11 @@ export class ScriptedAgentRuntime implements AgentRuntime {
           yield {
             type: "tool",
             name: call.name,
-            args: call.args,
+            // A scripted delegation starts its specialist from the bot that runs the script.
+            args:
+              call.name === "delegate"
+                ? { profile_bot_id: request.botId, ...call.args }
+                : call.args,
             executionId,
           };
         }
@@ -167,6 +171,24 @@ export function inferScript(
               message,
               intent: "request",
             },
+          },
+        ],
+        complete: true,
+      },
+    ];
+  }
+  // Also before the content branches: the brief is the specialist's own prompt, which then
+  // runs its own script. The word after "to a" names the specialist.
+  const delegation = /^delegate to an? ([a-z][a-z0-9_-]{0,39}):\s*([\s\S]+)$/i.exec(prompt.trim());
+  if (delegation) {
+    const [, role = "", brief = ""] = delegation;
+    return [
+      {
+        assistant: `delegating that to a ${role.toLowerCase()}.`,
+        toolCalls: [
+          {
+            name: "delegate",
+            args: { name: role.charAt(0).toUpperCase() + role.slice(1).toLowerCase(), brief },
           },
         ],
         complete: true,
