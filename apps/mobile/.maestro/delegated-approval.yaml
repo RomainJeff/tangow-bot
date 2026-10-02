@@ -1,0 +1,45 @@
+appId: com.rakazo.app
+name: Rakazo mobile delegated approval
+---
+# Needs an account whose coordinator bot (RAKAZO_E2E_COORDINATOR_NAME) delegated a task to a
+# specialist that is now waiting on one approval. The flow opens that thread, shows the task
+# tree under the specialist's approval card, allows the approval from its card, then reads who
+# settled it in the tree under the specialist's return.
+- launchApp:
+    clearState: true
+
+- assertVisible: "Sign in to Rakazo"
+- tapOn: "Email"
+- inputText: ${RAKAZO_E2E_EMAIL}
+- tapOn: "Password"
+- inputText: ${RAKAZO_E2E_PASSWORD}
+- tapOn: "Sign in to Rakazo"
+- tapOn: "Sign in"
+
+- extendedWaitUntil:
+    visible: ${RAKAZO_E2E_COORDINATOR_NAME}
+    timeout: 30000
+- tapOn: ${RAKAZO_E2E_COORDINATOR_NAME}
+
+# The specialist's ask shows under its provenance, answerable from this thread.
+- extendedWaitUntil:
+    visible: ".* · delegated by .*"
+    timeout: 30000
+- assertVisible: "Needs your call"
+
+# The link under the card unfolds the tree: "1 task", "2 tasks"...
+- tapOn: "\\d+ tasks?"
+- assertVisible: "Running|Needs your call"
+
+# The tree shows the approval without settling it; the card holds the only "Allow once".
+- tapOn: "Allow once"
+
+# The specialist returns, and the tree under its return says who allowed the approval.
+- extendedWaitUntil:
+    visible: "No result|Done"
+    timeout: 30000
+- tapOn: "\\d+ tasks?"
+- extendedWaitUntil:
+    visible: ".* · allowed by .*|.* · Allowed once"
+    timeout: 30000
+- assertNotVisible: "Allow once"
