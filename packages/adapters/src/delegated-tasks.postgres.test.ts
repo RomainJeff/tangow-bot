@@ -1184,6 +1184,20 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
       const refused = outcomes.find((outcome) => outcome.status === "rejected");
       expect((refused as PromiseRejectedResult).reason).toBeInstanceOf(DelegationLimitError);
       await expect(prisma.scopedTask.count({ where: { spaceId: s.id } })).resolves.toBe(1);
+      // The refused delegation leaves no specialist bot without a mission.
+      const missions = await prisma.scopedTask.findMany({
+        where: { spaceId: s.id },
+        select: { executorBotId: true },
+      });
+      const specialists = await prisma.bot.findMany({
+        where: { parentBotId: s.coordinator.id },
+        select: { id: true, archivedAt: true },
+      });
+      const idle = specialists.filter(
+        (bot) => !missions.some((mission) => mission.executorBotId === bot.id),
+      );
+      expect(idle.every((bot) => bot.archivedAt !== null)).toBe(true);
+      expect(specialists.filter((bot) => bot.archivedAt === null)).toHaveLength(1);
     } finally {
       await prisma.deploymentSettings.update({
         where: { id: "default" },
@@ -1699,6 +1713,12 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
               where: { spaceId_spawnKey: { spaceId: s.id, spawnKey } },
             }),
           ).resolves.toBeNull();
+          // ... and the specialist bot it had already created does not outlive the refusal.
+          const childBots = await prisma.bot.findMany({
+            where: { parentBotId: rootReceipt.botId },
+            select: { archivedAt: true },
+          });
+          expect(childBots.every((bot) => bot.archivedAt !== null)).toBe(true);
         } else {
           // Commit order (b): the spawn's row lock won and its child committed first;
           // the cancel's cascade, walking `parentScopedTaskId` after that commit, still

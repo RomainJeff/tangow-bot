@@ -37,6 +37,7 @@ import {
   RunHistoryWriteError,
   stopRunsInTransaction,
 } from "@rakazo/db";
+import { getLogger } from "@rakazo/logging";
 import type { ProfileConnectionThinkingResolver, ProfileModelSelection } from "./bot-profiles.js";
 import { loadBotProfile } from "./bot-profiles.js";
 import { archiveBotInTransaction, spawnBot } from "./child-bots.js";
@@ -854,7 +855,19 @@ async function applyDelegate(
       return { workId: scopedTask.id, runId: run.id, workThreadId: workThread.id, treeChanged };
     });
   } catch (error) {
-    if (!isUniqueConstraintError(error, "spaceId_spawnKey")) throw error;
+    if (!isUniqueConstraintError(error, "spaceId_spawnKey")) {
+      // The refusal (parent closed meanwhile, limit reached by a concurrent delegation)
+      // leaves the specialist bot created above without a mission: archive it right away.
+      // A replayed spawnKey handed back a bot another caller owns, which is not ours to archive.
+      if (!("duplicate" in spawned && spawned.duplicate)) {
+        await archiveUnusedSpecialist(deps.prisma, {
+          id: spawned.botId,
+          name: spawned.name,
+          spaceId: coordinator.spaceId,
+        });
+      }
+      throw error;
+    }
     const winner = await deps.prisma.scopedTask.findUnique({
       where: { spaceId_spawnKey: { spaceId: context.actor.spaceId, spawnKey: command.spawnKey } },
     });
@@ -882,6 +895,25 @@ async function applyDelegate(
     state: "queued",
     replayed: false,
   };
+}
+
+/** Archives a specialist bot that never got a scoped task; a failure here never masks the refusal. */
+async function archiveUnusedSpecialist(
+  prisma: PrismaClient,
+  bot: { id: string; name: string; spaceId: string },
+) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      if ((await tx.scopedTask.count({ where: { executorBotId: bot.id } })) !== 0) return;
+      await archiveBotInTransaction(tx, {
+        bot: { ...bot, archivedAt: null },
+        activeRuns: [],
+        now: new Date(),
+      });
+    });
+  } catch (error) {
+    getLogger().error("archive unused specialist", error);
+  }
 }
 
 async function readDelegationLimits(prisma: PrismaClient) {

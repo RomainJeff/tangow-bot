@@ -939,6 +939,73 @@ describe("DelegatedTasks.apply — parent linkage (T07 task 1: minimal tree)", (
     expect(spawnSpy).not.toHaveBeenCalled();
     expect(harness.tx.scopedTask.create).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { replay: false, archived: true },
+    { replay: true, archived: false },
+  ])(
+    "archives the specialist bot when the parent closes after it was created, unless it is a replay: %j",
+    async ({ replay, archived }) => {
+      vi.restoreAllMocks();
+      const harness = makeDeps({
+        seedScopedTasks: [
+          {
+            id: "work-parent-closing",
+            spaceId,
+            userId,
+            spawnKey: "spawn-parent-closing",
+            coordinatorBotId: "bot-grandcoordinator",
+            coordinatorThreadId: "thread-grandcoordinator",
+            executorBotId: coordinatorBotId,
+            specialistThreadId: coordinatorThreadId,
+            parentScopedTaskId: null,
+            rootScopedTaskId: "work-parent-closing",
+            depth: 0,
+            missionComputerId: "computer-coordinator-1",
+            status: "dispatched",
+          },
+        ],
+        originRunScopedTaskId: "work-parent-closing",
+      });
+      // The parent passes the cheap pre-check, then a concurrent cancel commits while the
+      // specialist bot is being created, so the locked check inside the transaction refuses.
+      vi.spyOn(await import("./child-bots.js"), "spawnBot").mockImplementation(async () => {
+        for (const row of harness.scopedTaskRows.values()) row.status = "cancelled";
+        return {
+          ok: true as const,
+          ...(replay ? { duplicate: true as const } : {}),
+          botId: "bot-refused",
+          name: "Sub-analyst",
+          title: "",
+          threadId: "thread-refused",
+        };
+      });
+
+      await expect(
+        createDelegatedTasks({ prisma: harness.prisma, jobs: harness.jobs }).apply(
+          {
+            kind: "delegate",
+            target: { kind: "from_profile", profileBotId: "profile-2", name: "Sub-analyst" },
+            brief: "Dig into one section",
+            requestedRights: {},
+            spawnKey: "spawn-refused",
+          },
+          context,
+        ),
+      ).rejects.toBeInstanceOf(WorkClosedError);
+
+      expect(harness.tx.scopedTask.create).not.toHaveBeenCalled();
+      expect(harness.enqueue).not.toHaveBeenCalled();
+      if (archived) {
+        expect(harness.tx.bot.update).toHaveBeenCalledWith({
+          where: { id: "bot-refused" },
+          data: { archivedAt: expect.any(Date), pinned: false },
+        });
+      } else {
+        expect(harness.tx.bot.update).not.toHaveBeenCalled();
+      }
+    },
+  );
 });
 
 describe("DelegatedTasks.apply — specialist harness", () => {
