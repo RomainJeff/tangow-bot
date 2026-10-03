@@ -51,6 +51,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && ln -sfn /bin/true /usr/bin/xmessage
 ENV DISPLAY=:1
 ENV HOME=/home/rakazo
+# LibreOffice profile outside the workspace so it never lands in checkpoints.
+ENV UserInstallation=file:///tmp/libreoffice-profile
 WORKDIR /home/rakazo
 # --chmod normalizes modes: a restrictive host umask (e.g. 077 on hardened hosts) would
 # otherwise leave these files unreadable to USER 1000 at runtime.

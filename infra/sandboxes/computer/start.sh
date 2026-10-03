@@ -62,7 +62,8 @@ register_browser_handler x-scheme-handler/https
 register_browser_handler text/html
 register_handler() {
   local desktop="$1" mime="$2"
-  if ! xdg-mime default "$desktop" "$mime" >/dev/null 2>&1 \
+  if [[ ! -f "/usr/share/applications/$desktop" ]] \
+    || ! xdg-mime default "$desktop" "$mime" >/dev/null 2>&1 \
     || [[ "$(xdg-mime query default "$mime" 2>/dev/null || true)" != "$desktop" ]]; then
     echo "failed to register $desktop for $mime" >&2
     exit 1
