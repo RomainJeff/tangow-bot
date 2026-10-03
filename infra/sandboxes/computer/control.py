@@ -6,6 +6,7 @@ import ctypes
 import hmac
 import json
 import os
+import posixpath
 import re
 import subprocess
 import threading
@@ -18,10 +19,14 @@ MAX_ARGV = 32
 MAX_ARG_LEN = 16_384
 KNOWN_LAUNCH = frozenset(
     {
+        "libreoffice",
+        "pcmanfm",
         "rakazo-browser",
         "xterm",
     }
 )
+WORKSPACE = "/home/rakazo"
+WORKSPACE_PATH_APPS = {"libreoffice", "pcmanfm"}
 CONTROL_TIMEOUT_SEC = 10
 LAUNCH_SPAWN_POLL_SEC = 0.2
 NATIVE_CAPTURES = {}
@@ -179,7 +184,18 @@ def allowed_control_argv(argv, display):
         return len(argv) == index + 2
     if "/" in command or command not in KNOWN_LAUNCH:
         return False
+    # A leading dash would reach the app as an option (e.g. libreoffice --accept=...).
+    if len(argv) == index + 2 and argv[-1].startswith("-"):
+        return False
+    # Office/file manager only take workspace paths: no macro:, vnd.sun.star.*, or remote URLs.
+    if command in WORKSPACE_PATH_APPS and len(argv) == index + 2 and not workspace_path(argv[-1]):
+        return False
     return len(argv) in (index + 1, index + 2)
+
+
+def workspace_path(value):
+    """Absolute, normalized path inside /home/rakazo."""
+    return posixpath.normpath(value) == value and (value == WORKSPACE or value.startswith(WORKSPACE + "/"))
 
 
 def is_long_lived_control(argv):

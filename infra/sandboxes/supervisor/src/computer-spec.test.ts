@@ -185,6 +185,13 @@ describe("graphical computer spec", () => {
     expect(start).toMatch(/failed to register rakazo-browser/);
     expect(start).toMatch(/failed to set default web browser/);
     expect(start).toMatch(/xdg-settings set default-web-browser rakazo-browser\.desktop/);
+    expect(start).toMatch(/register_handler pcmanfm\.desktop inode\/directory/);
+    expect(start).toMatch(/register_handler libreoffice-writer\.desktop/);
+    expect(start).toMatch(/register_handler libreoffice-calc\.desktop/);
+    expect(start).toMatch(/register_handler libreoffice-impress\.desktop/);
+    expect(start).toMatch(/-f "\/usr\/share\/applications\/\$desktop"/);
+    expect(start).toMatch(/failed to register \$desktop/);
+    expect(dockerfile).toMatch(/UserInstallation=file:\/\/\/tmp\//);
     expect(start).not.toMatch(/xdg-mime default rakazo-browser\.desktop .*\|\| true/);
     expect(start).toMatch(/x11vnc .* -viewonly /);
     expect(browser).toMatch(/\.browser-profiles\/chromium/);
@@ -575,6 +582,18 @@ describe("graphical computer spec", () => {
           "assert allow(['env', 'DISPLAY=:1', 'rakazo-browser'], ':1')",
           "assert allow(['env', 'DISPLAY=:2', 'rakazo-browser', 'https://example.com'], ':2')",
           "assert allow(['env', 'DISPLAY=:1', 'xterm'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'pcmanfm', '/home/rakazo'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazo/report.docx'], ':1')",
+          "assert long_lived(['env', 'DISPLAY=:1', 'libreoffice'])",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '--accept=socket,port=2002;urp;'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'macro:///Standard.Module1.Main'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'vnd.sun.star.script:Lib.Mod.Main?language=Basic&location=application'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'https://example.com/x.docx'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'file:///etc/passwd'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/etc/passwd'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazo/../../etc/passwd'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazoevil/x.docx'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'pcmanfm', '/etc'], ':1')",
           "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser'])",
           "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser', 'https://example.com'])",
           "assert long_lived(['env', 'DISPLAY=:1', 'xterm'])",

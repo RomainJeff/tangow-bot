@@ -883,6 +883,7 @@ async function ensureComputerImage() {
             "fluxbox.init",
             "fluxbox.apps",
             "fluxbox.menu",
+            "libreoffice.xcd",
           ],
         },
         { t: COMPUTER_IMAGE },
