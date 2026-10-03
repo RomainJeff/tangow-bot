@@ -37,6 +37,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     dbus-x11 \
     xdg-utils \
+    libfile-mimeinfo-perl \
+    pcmanfm \
+    libreoffice-writer \
+    libreoffice-calc \
+    libreoffice-impress \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 1000 rakazo \
   && useradd --uid 1000 --gid rakazo --create-home --shell /bin/bash rakazo \
@@ -58,6 +63,7 @@ COPY --chmod=644 rakazo-browser.desktop /usr/share/applications/rakazo-browser.d
 COPY --chmod=644 fluxbox.init /etc/rakazo/fluxbox/init
 COPY --chmod=644 fluxbox.apps /etc/rakazo/fluxbox/apps
 COPY --chmod=644 fluxbox.menu /etc/rakazo/fluxbox/menu
+COPY --chmod=644 libreoffice.xcd /usr/lib/libreoffice/share/registry/rakazo.xcd
 COPY --chmod=644 embed.html /usr/share/novnc/embed.html
 COPY --chmod=644 clipboard-bridge.js /usr/share/novnc/clipboard-bridge.js
 COPY --chmod=644 mobile-keyboard.js /usr/share/novnc/mobile-keyboard.js

@@ -18,6 +18,8 @@ MAX_ARGV = 32
 MAX_ARG_LEN = 16_384
 KNOWN_LAUNCH = frozenset(
     {
+        "libreoffice",
+        "pcmanfm",
         "rakazo-browser",
         "xterm",
     }
@@ -178,6 +180,9 @@ def allowed_control_argv(argv, display):
     if command == "xdg-open":
         return len(argv) == index + 2
     if "/" in command or command not in KNOWN_LAUNCH:
+        return False
+    # A leading dash would reach the app as an option (e.g. libreoffice --accept=...).
+    if len(argv) == index + 2 and argv[-1].startswith("-"):
         return False
     return len(argv) in (index + 1, index + 2)
 

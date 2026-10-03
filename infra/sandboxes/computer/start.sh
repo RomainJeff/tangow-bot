@@ -60,6 +60,30 @@ register_browser_handler() {
 register_browser_handler x-scheme-handler/http
 register_browser_handler x-scheme-handler/https
 register_browser_handler text/html
+register_handler() {
+  local desktop="$1" mime="$2"
+  if ! xdg-mime default "$desktop" "$mime" >/dev/null 2>&1 \
+    || [[ "$(xdg-mime query default "$mime" 2>/dev/null || true)" != "$desktop" ]]; then
+    echo "failed to register $desktop for $mime" >&2
+    exit 1
+  fi
+}
+register_handler pcmanfm.desktop inode/directory
+for mime in \
+  application/vnd.openxmlformats-officedocument.wordprocessingml.document \
+  application/msword application/vnd.oasis.opendocument.text application/rtf text/rtf; do
+  register_handler libreoffice-writer.desktop "$mime"
+done
+for mime in \
+  application/vnd.openxmlformats-officedocument.spreadsheetml.sheet \
+  application/vnd.ms-excel application/vnd.oasis.opendocument.spreadsheet text/csv; do
+  register_handler libreoffice-calc.desktop "$mime"
+done
+for mime in \
+  application/vnd.openxmlformats-officedocument.presentationml.presentation \
+  application/vnd.ms-powerpoint application/vnd.oasis.opendocument.presentation; do
+  register_handler libreoffice-impress.desktop "$mime"
+done
 if ! xdg-settings set default-web-browser rakazo-browser.desktop >/dev/null 2>&1 \
   || [[ "$(xdg-settings get default-web-browser 2>/dev/null || true)" != "rakazo-browser.desktop" ]]; then
   echo "failed to set default web browser to rakazo-browser" >&2
