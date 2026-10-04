@@ -20,7 +20,10 @@ export type BuiltinSkill = { name: string; description: string; content: string 
 
 // ponytail: no cache, add one if readdir shows in profiles.
 export async function loadBuiltinSkills(root = BUILTIN_SKILLS_ROOT): Promise<BuiltinSkill[]> {
-  const entries = await readdir(root).catch(() => [] as string[]);
+  const entries = await readdir(root).catch((error: unknown) => {
+    getLogger().warn(`[skills] builtin skills unavailable at ${root}: ${String(error)}`);
+    return [] as string[];
+  });
   const skills: BuiltinSkill[] = [];
   for (const entry of entries) {
     const file = path.join(root, entry, "SKILL.md");
