@@ -174,10 +174,6 @@ import {
 } from "./browser-tools.js";
 import { agentConnectionTools, builtinAgentTools, withChattyReplies } from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
-import { type CloudAgentConnection, cloudAgentsEnabled } from "./cloud-agent-factory.js";
-import { executeCloudAgentTool } from "./cloud-agent-service.js";
-import { validCloudAgentArgs } from "./cloud-agent-tools.js";
-import { selectCloudAgentTools } from "./cloud-agent-tools-select.js";
 import {
   type ConnectionScope,
   collectLogIds,
@@ -355,7 +351,6 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "web_fetch",
   "browser_snapshot",
   "list_secrets",
-  "cloud_agent_status",
 ]);
 const MAX_MODEL_FILE_BYTES = 250_000;
 const TURN_ATTACHMENT_UNAVAILABLE =
@@ -589,8 +584,6 @@ export interface ExecutorDeps {
   /** Page browser (DOM refs) on the bot computer. Defaults to the sandbox live browser when supported. */
   browser?: BrowserProvider;
   secretHttp?: RemoteTransportDependencies;
-  /** Remote cloud coding agents. Null/omit means tools stay uninjected. */
-  cloudAgent?: CloudAgentConnection | null;
   /** Per-Space decision provider. Omit or resolve null and browser_run stays hidden. */
   decisionProviders?: DecisionProviderResolver;
   /** Aborted when createApp stop() begins so in-flight continueRun boot waits exit promptly. */
@@ -921,7 +914,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
   const skillDeps = { prisma: deps.prisma, dataDir: deps.dataDir ?? "./data" };
   const browser = deps.browser ?? createBrowserProvider(undefined, { sandbox: deps.sandbox });
-  const cloudAgent = deps.cloudAgent;
   const resolveConnectedModel = async (
     scope: { userId: string; spaceId: string },
     provider: string,
@@ -1703,7 +1695,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             trigger: run.trigger,
             semanticMemoryEnabled,
             chattyReplies: bot.chattyReplies,
-            cloudAgentEnabled: cloudAgentsEnabled(cloudAgent, run.spaceId),
             messagingChannelRun,
             browserRunAllowed: Boolean(decisionProvider),
           }),
@@ -1952,11 +1943,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (approvedReplay.args) connectorCall.args = approvedReplay.args;
           let catalogRemapped = false;
           let resolvedToolSchema: Record<string, unknown> | undefined;
-          if (name.startsWith("cloud_agent_") && !validCloudAgentArgs(name, args)) {
-            return {
-              error: "Invalid cloud agent arguments. Raw environment variables are not supported.",
-            };
-          }
           let effectRequest: unknown = args;
           if (connectorCall.route && deps.connector?.resolveCall) {
             try {
@@ -2824,17 +2810,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }, finish);
           }
 
-          if (name.startsWith("cloud_agent_")) {
-            return finish(
-              await executeCloudAgentTool(
-                { ...deps, cloudAgent },
-                { ...context, operationId: effectKey, botId: bot.id },
-                run,
-                name,
-                args,
-              ),
-            );
-          }
           if (name === "scratchpad_list") {
             return listScratchpadItemsFromTool(deps, {
               spaceId: run.spaceId,
@@ -4839,26 +4814,22 @@ export function selectBuiltinToolsForRun(options: {
   trigger: string;
   semanticMemoryEnabled: boolean;
   chattyReplies?: boolean;
-  cloudAgentEnabled?: boolean;
   messagingChannelRun: boolean;
   /** A decision provider is resolved for this run, so browser_run is offered with the page tools. */
   browserRunAllowed?: boolean;
 }) {
-  const selected = selectCloudAgentTools(
-    selectMemoryTools(
-      filterBuiltinToolsForRun(
-        filterBuiltinToolsForThread(
-          filterPageBrowserTools(
-            filterImageReturningComputerTools(builtinAgentTools, options.graphicalToolsAllowed),
-            options.pageBrowserAllowed ?? options.graphicalToolsAllowed,
-          ),
-          options.groupId,
+  const selected = selectMemoryTools(
+    filterBuiltinToolsForRun(
+      filterBuiltinToolsForThread(
+        filterPageBrowserTools(
+          filterImageReturningComputerTools(builtinAgentTools, options.graphicalToolsAllowed),
+          options.pageBrowserAllowed ?? options.graphicalToolsAllowed,
         ),
-        options.trigger,
+        options.groupId,
       ),
-      options.semanticMemoryEnabled,
+      options.trigger,
     ),
-    Boolean(options.cloudAgentEnabled),
+    options.semanticMemoryEnabled,
   ).filter(
     (tool) =>
       (tool.name !== "browser_run" || Boolean(options.browserRunAllowed)) &&
@@ -5292,8 +5263,8 @@ async function publishRoutineRunCard(
 /**
  * Mutates the routine-run card in place (background-work-visibility CA2/CA12), the same "load
  * the message, replace the block, append thread.message.updated" mechanism used for `ask`
- * answers and `cloud_agent` status flips. `next` returns the replacement block, or null to
- * leave the card (and the thread) untouched.
+ * answers. `next` returns the replacement block, or null to leave the card (and the thread)
+ * untouched.
  */
 async function updateRoutineRunCard(
   deps: Pick<ExecutorDeps, "prisma" | "events">,

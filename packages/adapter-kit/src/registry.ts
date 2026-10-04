@@ -35,5 +35,4 @@ export const slots = {
   voice: "voice",
   web: "web",
   browser: "browser",
-  cloudAgent: "cloud-agent",
 } as const;

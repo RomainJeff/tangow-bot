@@ -270,8 +270,8 @@ Props: `radius?: "card" | "block"` (default `card`), `as?`. Renders
 Do: tables, code blocks, agent cards. Don't: add `shadow-card` to make it stand
 out — that shadow belongs to `FramedBlock`.
 
-Used by: markdown tables, code blocks, cloud-agent and secret-ask cards;
-outlined for a delegated task's result (subagent, cloud agent).
+Used by: markdown tables, code blocks, secret-ask cards;
+outlined for a delegated task's result (subagent).
 
 ### Task card
 
@@ -285,10 +285,7 @@ failed and cancelled show the routine run's symbol and word under the title.
 Web and desktop share this exactly: `apps/web/src/components/TaskCard.tsx`
 exports `TaskCardSurface` (the visual card alone, `lucide-react`'s `FileText`
 glyph) and `TaskCard` (the whole card as a button that opens a `ui-web`
-`Dialog` with the brief and result). `CloudAgentCard` uses `TaskCardSurface`
-directly, wrapped in its own link instead — it always opens its pull request
-or URL in a new tab rather than a dialog, but keeps the same container, glyph
-and status rule (nothing once `finished`).
+`Dialog` with the brief and result).
 
 ### Routine run line
 

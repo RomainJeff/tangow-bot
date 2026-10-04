@@ -21,7 +21,6 @@ import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
-import { CloudAgentCard } from "../../components/CloudAgentCard";
 import { TaskCard } from "../../components/TaskCard";
 import { SkillDraftCard } from "../../components/teach/SkillDraftCard";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
@@ -494,7 +493,6 @@ export const MessageView = memo(function MessageView({
           />
         );
       }
-      if (block.kind === "cloud_agent") return <CloudAgentCard key={i} block={block} />;
       if (block.kind === "skill_draft") {
         return (
           <div key={i} className="flex justify-start">

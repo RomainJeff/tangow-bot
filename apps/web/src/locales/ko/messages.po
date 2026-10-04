@@ -124,7 +124,7 @@ msgstr ""
 msgid "{days}d ago"
 msgstr "{days}일 전"
 
-#: src/pages/shell/message-view.tsx:256
+#: src/pages/shell/message-view.tsx:255
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -164,7 +164,7 @@ msgstr "{size} B"
 msgid "{stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
-#: src/components/TaskCard.tsx:89
+#: src/components/TaskCard.tsx:88
 msgid "{title} · Opens in full"
 msgstr ""
 
@@ -536,7 +536,7 @@ msgstr "이 서버를 승인하면 Bot이 제공되는 도구를 사용할 수 �
 msgid "Archive"
 msgstr "보관"
 
-#: src/pages/shell/message-view.tsx:346
+#: src/pages/shell/message-view.tsx:345
 msgid "archived"
 msgstr "보관됨"
 
@@ -544,7 +544,7 @@ msgstr "보관됨"
 msgid "Archived"
 msgstr "보관됨"
 
-#: src/pages/shell/message-view.tsx:357
+#: src/pages/shell/message-view.tsx:356
 msgid "Archived. Chat, memory, and files kept."
 msgstr "보관되었습니다. 대화, 기억, 파일은 유지됩니다."
 
@@ -606,7 +606,7 @@ msgstr "{timeSelect}에"
 msgid "Attach file"
 msgstr "파일 첨부"
 
-#: src/pages/shell/message-view.tsx:96
+#: src/pages/shell/message-view.tsx:95
 msgid "Attachment"
 msgstr "첨부 파일"
 
@@ -683,15 +683,15 @@ msgstr "라이브 데스크톱 시작 중…"
 msgid "Booting up {0}’s computer"
 msgstr "{0}의 컴퓨터를 켜는 중"
 
+#: src/pages/shell/message-view.tsx:243
 #: src/pages/shell/message-view.tsx:244
-#: src/pages/shell/message-view.tsx:245
-#: src/pages/shell/message-view.tsx:350
+#: src/pages/shell/message-view.tsx:349
 msgid "bot"
 msgstr "Bot"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1614
-#: src/pages/shell/message-view.tsx:203
+#: src/pages/shell/message-view.tsx:202
 msgid "Bot"
 msgstr "봇"
 
@@ -893,7 +893,7 @@ msgstr ""
 msgid "Client secret"
 msgstr ""
 
-#: src/components/TaskCard.tsx:163
+#: src/components/TaskCard.tsx:162
 #: src/pages/KnowledgeSection.tsx:670
 #: src/pages/KnowledgeSection.tsx:820
 #: src/pages/MessagingSettingsOverlay.tsx:361
@@ -1005,7 +1005,7 @@ msgstr ""
 
 #: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:64
-#: src/pages/shell/message-view.tsx:510
+#: src/pages/shell/message-view.tsx:508
 msgid "Computer"
 msgstr "컴퓨터"
 
@@ -1749,7 +1749,7 @@ msgstr "기억도 함께 삭제"
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:348
+#: src/pages/shell/message-view.tsx:347
 msgid "deleted"
 msgstr "삭제됨"
 
@@ -1900,7 +1900,7 @@ msgstr "작업 기술 초안"
 msgid "Duplicate"
 msgstr "복제"
 
-#: src/pages/shell/message-view.tsx:178
+#: src/pages/shell/message-view.tsx:177
 msgid "Earlier message"
 msgstr "이전 메시지"
 
@@ -2322,7 +2322,7 @@ msgstr "대화, 파일, 자동 실행이 영구 삭제됩니다. 이 Bot이 만�
 msgid "Jump to latest"
 msgstr "최신 메시지로 이동"
 
-#: src/pages/shell/message-view.tsx:173
+#: src/pages/shell/message-view.tsx:172
 msgid "Jump to replied message"
 msgstr "답장한 메시지로 이동"
 
@@ -2550,7 +2550,7 @@ msgstr ""
 
 #: src/pages/shell/composer.tsx:970
 #: src/pages/shell/composer.tsx:1064
-#: src/pages/shell/message-view.tsx:98
+#: src/pages/shell/message-view.tsx:97
 msgid "Message"
 msgstr ""
 
@@ -2578,7 +2578,7 @@ msgstr "메시지 작성기"
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Message from {peer}"
 msgstr "{peer}의 메시지"
 
@@ -2587,11 +2587,11 @@ msgid "Message…"
 msgstr "메시지를 입력하세요"
 
 #. placeholder {0}: sent.toBotName
-#: src/pages/shell/message-view.tsx:372
+#: src/pages/shell/message-view.tsx:371
 msgid "Messaged {0}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Messaged {peer}"
 msgstr "{peer}에게 메시지 보냄"
 
@@ -3007,7 +3007,7 @@ msgstr "진행 중인 작업"
 msgid "OpenAI-compatible server URL"
 msgstr "OpenAI 호환 서버 주소"
 
-#: src/pages/shell/message-view.tsx:359
+#: src/pages/shell/message-view.tsx:358
 msgid "Opened its thread."
 msgstr "대화가 만들어졌습니다."
 
@@ -3177,10 +3177,6 @@ msgstr "서비스"
 msgid "Providers"
 msgstr "서비스"
 
-#: src/components/CloudAgentCard.tsx:34
-msgid "Pull request"
-msgstr "풀 리퀘스트"
-
 #: src/pages/ActivityList.tsx:148
 #: src/pages/shell/routine-run-line.tsx:154
 msgid "Queued"
@@ -3347,7 +3343,7 @@ msgstr "작업 기술 {0} 삭제"
 msgid "Remove webhook"
 msgstr "웹훅 제거"
 
-#: src/pages/shell/message-view.tsx:358
+#: src/pages/shell/message-view.tsx:357
 msgid "Removed with chat, computer, and memory."
 msgstr "대화, 컴퓨터, 기억과 함께 삭제되었습니다."
 
@@ -3734,12 +3730,12 @@ msgstr "이전 / 이후 표시"
 msgid "Show bots"
 msgstr "봇 표시"
 
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show less"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx:873
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show more"
 msgstr "더 보기"
 
@@ -3888,7 +3884,7 @@ msgstr "암호화해 저장"
 msgid "Stored securely. Never shown here."
 msgstr "안전하게 저장됩니다. 이 화면에 표시되지 않습니다."
 
-#: src/pages/shell/message-view.tsx:318
+#: src/pages/shell/message-view.tsx:317
 msgid "subagent"
 msgstr "보조 에이전트"
 

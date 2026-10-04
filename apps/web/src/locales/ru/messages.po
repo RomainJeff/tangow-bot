@@ -124,7 +124,7 @@ msgstr ""
 msgid "{days}d ago"
 msgstr "{days} дн. назад"
 
-#: src/pages/shell/message-view.tsx:256
+#: src/pages/shell/message-view.tsx:255
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -164,7 +164,7 @@ msgstr "{size} Б"
 msgid "{stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
-#: src/components/TaskCard.tsx:89
+#: src/components/TaskCard.tsx:88
 msgid "{title} · Opens in full"
 msgstr ""
 
@@ -536,7 +536,7 @@ msgstr "Одобрите этот сервер, чтобы ваш агент м�
 msgid "Archive"
 msgstr "Архивировать"
 
-#: src/pages/shell/message-view.tsx:346
+#: src/pages/shell/message-view.tsx:345
 msgid "archived"
 msgstr "в архиве"
 
@@ -544,7 +544,7 @@ msgstr "в архиве"
 msgid "Archived"
 msgstr "В архиве"
 
-#: src/pages/shell/message-view.tsx:357
+#: src/pages/shell/message-view.tsx:356
 msgid "Archived. Chat, memory, and files kept."
 msgstr "В архиве. Чат, память и файлы сохраняются."
 
@@ -606,7 +606,7 @@ msgstr "в {timeSelect}"
 msgid "Attach file"
 msgstr "Прикрепить файл"
 
-#: src/pages/shell/message-view.tsx:96
+#: src/pages/shell/message-view.tsx:95
 msgid "Attachment"
 msgstr "Вложение"
 
@@ -683,15 +683,15 @@ msgstr "Загрузка рабочего стола…"
 msgid "Booting up {0}’s computer"
 msgstr "Загрузка компьютера {0}"
 
+#: src/pages/shell/message-view.tsx:243
 #: src/pages/shell/message-view.tsx:244
-#: src/pages/shell/message-view.tsx:245
-#: src/pages/shell/message-view.tsx:350
+#: src/pages/shell/message-view.tsx:349
 msgid "bot"
 msgstr "бот"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1614
-#: src/pages/shell/message-view.tsx:203
+#: src/pages/shell/message-view.tsx:202
 msgid "Bot"
 msgstr "Бот"
 
@@ -893,7 +893,7 @@ msgstr "ID клиента"
 msgid "Client secret"
 msgstr "Секрет клиента"
 
-#: src/components/TaskCard.tsx:163
+#: src/components/TaskCard.tsx:162
 #: src/pages/KnowledgeSection.tsx:670
 #: src/pages/KnowledgeSection.tsx:820
 #: src/pages/MessagingSettingsOverlay.tsx:361
@@ -1005,7 +1005,7 @@ msgstr ""
 
 #: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:64
-#: src/pages/shell/message-view.tsx:510
+#: src/pages/shell/message-view.tsx:508
 msgid "Computer"
 msgstr "Компьютер"
 
@@ -1749,7 +1749,7 @@ msgstr "Удалите воспоминания тоже"
 msgid "Delete space"
 msgstr "Удалить пространство"
 
-#: src/pages/shell/message-view.tsx:348
+#: src/pages/shell/message-view.tsx:347
 msgid "deleted"
 msgstr "удалено"
 
@@ -1900,7 +1900,7 @@ msgstr "Черновик навыка"
 msgid "Duplicate"
 msgstr "Дублировать"
 
-#: src/pages/shell/message-view.tsx:178
+#: src/pages/shell/message-view.tsx:177
 msgid "Earlier message"
 msgstr "Предыдущее сообщение"
 
@@ -2322,7 +2322,7 @@ msgstr "Его диалог, файлы и задачи будут безвоз�
 msgid "Jump to latest"
 msgstr "Перейти к последнему"
 
-#: src/pages/shell/message-view.tsx:173
+#: src/pages/shell/message-view.tsx:172
 msgid "Jump to replied message"
 msgstr "Перейти к ответному сообщению"
 
@@ -2550,7 +2550,7 @@ msgstr "Только упоминания"
 
 #: src/pages/shell/composer.tsx:970
 #: src/pages/shell/composer.tsx:1064
-#: src/pages/shell/message-view.tsx:98
+#: src/pages/shell/message-view.tsx:97
 msgid "Message"
 msgstr "Сообщение"
 
@@ -2578,7 +2578,7 @@ msgstr "Поле сообщения"
 msgid "Message event"
 msgstr "Событие сообщения"
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Message from {peer}"
 msgstr "Сообщение от {peer}"
 
@@ -2587,11 +2587,11 @@ msgid "Message…"
 msgstr "Сообщение…"
 
 #. placeholder {0}: sent.toBotName
-#: src/pages/shell/message-view.tsx:372
+#: src/pages/shell/message-view.tsx:371
 msgid "Messaged {0}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Messaged {peer}"
 msgstr "Отправлено сообщение {peer}"
 
@@ -3007,7 +3007,7 @@ msgstr "Открытые задачи"
 msgid "OpenAI-compatible server URL"
 msgstr "URL-адрес сервера, совместимого с OpenAI"
 
-#: src/pages/shell/message-view.tsx:359
+#: src/pages/shell/message-view.tsx:358
 msgid "Opened its thread."
 msgstr "Диалог открыт."
 
@@ -3177,10 +3177,6 @@ msgstr "Поставщик"
 msgid "Providers"
 msgstr "Провайдеры"
 
-#: src/components/CloudAgentCard.tsx:34
-msgid "Pull request"
-msgstr "Запрос на слияние"
-
 #: src/pages/ActivityList.tsx:148
 #: src/pages/shell/routine-run-line.tsx:154
 msgid "Queued"
@@ -3347,7 +3343,7 @@ msgstr "Удалить навык {0}"
 msgid "Remove webhook"
 msgstr "Удалить вебхук"
 
-#: src/pages/shell/message-view.tsx:358
+#: src/pages/shell/message-view.tsx:357
 msgid "Removed with chat, computer, and memory."
 msgstr "Удалено вместе с чатом, компьютером и памятью."
 
@@ -3734,12 +3730,12 @@ msgstr ""
 msgid "Show bots"
 msgstr "Показать ботов"
 
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show less"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx:873
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show more"
 msgstr "Показать ещё"
 
@@ -3888,7 +3884,7 @@ msgstr "Хранится в зашифрованном виде"
 msgid "Stored securely. Never shown here."
 msgstr "Хранится безопасно. Здесь не отображается."
 
-#: src/pages/shell/message-view.tsx:318
+#: src/pages/shell/message-view.tsx:317
 msgid "subagent"
 msgstr "субагент"
 

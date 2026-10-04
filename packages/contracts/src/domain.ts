@@ -912,7 +912,6 @@ export const RunSchema = z.object({
     "bot_message",
     "webhook",
     "messaging",
-    "cloud_agent",
   ]),
   routineId: Id.nullable(),
   modelProvider: z.string().nullable(),
