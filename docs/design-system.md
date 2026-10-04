@@ -271,7 +271,7 @@ Do: tables, code blocks, agent cards. Don't: add `shadow-card` to make it stand
 out — that shadow belongs to `FramedBlock`.
 
 Used by: markdown tables, code blocks, secret-ask cards;
-outlined for a delegated task's result (subagent, cloud agent).
+outlined for a delegated task's result (subagent).
 
 ### Task card
 

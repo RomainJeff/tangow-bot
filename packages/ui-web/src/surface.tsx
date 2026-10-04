@@ -8,8 +8,8 @@ export interface SurfaceProps extends ComponentPropsWithoutRef<"div"> {
   /** `card` (14) for a plain card, `block` (18) to match a framed block. */
   radius?: SurfaceRadius;
   /** `outlined` trades the `border` hairline for a 1 pt `outline` edge — the
-   * thread's only outlined card, for a delegated task's result (subagent,
-   * cloud agent). Default unchanged. */
+   * thread's only outlined card, for a delegated task's result (subagent).
+   * Default unchanged. */
   variant?: SurfaceVariant;
   as?: "div" | "section" | "article" | "aside" | "figure";
 }

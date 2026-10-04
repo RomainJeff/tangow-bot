@@ -5263,8 +5263,8 @@ async function publishRoutineRunCard(
 /**
  * Mutates the routine-run card in place (background-work-visibility CA2/CA12), the same "load
  * the message, replace the block, append thread.message.updated" mechanism used for `ask`
- * answers. `next` returns the replacement block, or null to
- * leave the card (and the thread) untouched.
+ * answers. `next` returns the replacement block, or null to leave the card (and the thread)
+ * untouched.
  */
 async function updateRoutineRunCard(
   deps: Pick<ExecutorDeps, "prisma" | "events">,

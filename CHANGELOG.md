@@ -21,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Removed
 
-- **Cloud coding agents (Cursor).** The optional Cursor cloud agents integration and its cards in threads are gone; bots now do coding work with OpenCode on their own computer. The `CLOUD_AGENT_PROVIDER`, `CLOUD_AGENT_SPACE_ID` and `CURSOR_API_KEY` settings are no longer read and can be removed from your environment.
+- **Cloud coding agents (Cursor).** The optional Cursor cloud agents integration and its cards in threads are gone; bots now do coding work with OpenCode on their own computer. The `CLOUD_AGENT_PROVIDER`, `CLOUD_AGENT_SPACE_ID` and `CURSOR_API_KEY` settings are no longer read and can be removed from your environment. Upgrading deletes the stored cloud agent records; cancel any agents still running in Cursor before you upgrade.
 
 #### Fixed
 
