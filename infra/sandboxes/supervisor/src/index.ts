@@ -607,11 +607,14 @@ app.post("/computers/:id/native-processes", async (c) => {
   const body = parsed.data;
   let code = "exec_failed";
   try {
-    const { container } = await managedContainer(
+    const { container, info } = await managedContainer(
       c.req.param("id"),
       c.req.header("x-rakazo-bot-id"),
       c.req.header("x-rakazo-space-id"),
     );
+    // A recreated supervisor is no longer on a running Computer's network, so the harness
+    // could not resolve its native MCP alias. Rejoin before the harness starts its client.
+    await attachComposeScreenPeers(info.HostConfig?.NetworkMode);
     const id = randomUUID();
     code = "private_files_failed";
     const privateHome = privateNativeHome(body.privateHome, c.req.header("x-rakazo-bot-id"));

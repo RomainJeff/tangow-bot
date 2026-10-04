@@ -1,6 +1,7 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
+import { resolveSupervisorToken } from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const docker = vi.hoisted(() => ({
@@ -218,5 +219,56 @@ describe("native MCP relay", () => {
       Container: "supervisor-1",
       EndpointConfig: { Aliases: ["rakazo-mcp"] },
     });
+  });
+
+  it("rejoins a running Computer's network before starting a native process", async () => {
+    // The supervisor was recreated by a redeploy; the Computer kept running on its own network.
+    vi.stubEnv("HOSTNAME", "supervisor-host");
+    const order: string[] = [];
+    const connect = vi.fn(async () => {
+      order.push("connect");
+    });
+    docker.getNetwork.mockReturnValue({
+      inspect: vi.fn().mockResolvedValue({ Containers: { computer: {} } }),
+      connect,
+    });
+    docker.getContainer.mockImplementation((id: string) =>
+      id === "supervisor-host"
+        ? { inspect: vi.fn().mockResolvedValue({ Id: "supervisor-1", Config: { Labels: {} } }) }
+        : {
+            inspect: vi.fn().mockResolvedValue({
+              Config: {
+                Labels: {
+                  "rakazo.managed": "true",
+                  "rakazo.botId": "bot",
+                  "rakazo.spaceId": "space",
+                },
+              },
+              HostConfig: { NetworkMode: "computer-network" },
+            }),
+            exec: vi.fn(async () => {
+              order.push("exec");
+              throw new Error("stop after the network step");
+            }),
+          },
+    );
+    const { supervisorApp } = await import("./index.js");
+
+    await supervisorApp.request("/computers/computer/native-processes", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
+        "content-type": "application/json",
+        "x-rakazo-bot-id": "bot",
+        "x-rakazo-space-id": "space",
+      },
+      body: JSON.stringify({ argv: ["codex", "app-server"], cwd: "project" }),
+    });
+
+    expect(connect).toHaveBeenCalledWith({
+      Container: "supervisor-1",
+      EndpointConfig: { Aliases: ["rakazo-mcp"] },
+    });
+    expect(order[0]).toBe("connect");
   });
 });
