@@ -47,6 +47,7 @@ import {
   xdotoolCommand,
 } from "./computer-spec.js";
 import { assertComputerHomeWritable } from "./home-ownership.js";
+import { syncManagedSkills } from "./managed-skills.js";
 import {
   assertRequestIdentity,
   attemptComputerControl,
@@ -162,6 +163,7 @@ export function skillsBindsFor(
   return [
     `${translate(path.join(dataDir, "skills", "user", spaceId, userId))}:/skills/user:ro`,
     `${translate(path.join(dataDir, "skills", "marketplaces", spaceId))}:/skills/marketplaces:ro`,
+    `${translate(path.join(dataDir, "managed-skills"))}:/managed-skills:ro`,
   ];
 }
 
@@ -812,8 +814,10 @@ app.delete("/computers/:id", async (c) => {
   }
 });
 
-function startSupervisor() {
+async function startSupervisor() {
   const logger = createRootLogger(SERVICE_NAMES.supervisor);
+  // Repo skills are published to DATA_DIR so computers see them via the /managed-skills bind.
+  await syncManagedSkills(repositoryRoot, dataDir, logger);
   // Resolve the ceilings before binding the port. They are otherwise parsed inside
   // containerCreateOptions, so a malformed RAKAZO_COMPUTER_* value would let the supervisor start
   // and pass its healthcheck, then fail the first POST /computers with a 500 that reads like a
@@ -848,7 +852,7 @@ function closeListeningServer(server: {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  startSupervisor();
+  void startSupervisor();
 }
 
 async function ensureComputerImage() {

@@ -588,6 +588,54 @@ describe("space computer limit enforcement", () => {
     expect(mocks.docker.createContainer).not.toHaveBeenCalled();
   });
 
+  it("replaces an existing container that predates the /managed-skills bind", async () => {
+    const { container } = setupContainerFixture();
+
+    const { skillsBindsFor } = await import("./index.js");
+    const existing = {
+      id: "existing-no-managed",
+      inspect: vi.fn().mockResolvedValue({
+        Image: "image",
+        Config: {
+          User: hostComputerUser(process.getuid?.(), process.getgid?.()),
+          Labels: {
+            "rakazo.managed": "true",
+            "rakazo.botId": "bot-existing",
+            "rakazo.spaceId": "space-1",
+          },
+        },
+        State: { Running: true },
+        HostConfig: {
+          NetworkMode: computerNetworkNameFor("bot-existing"),
+          PortBindings: {},
+          Mounts: [],
+          Binds: skillsBindsFor(process.env.DATA_DIR!, "space-1", "user", (p) => p).filter(
+            (bind) => !bind.includes("/managed-skills"),
+          ),
+        },
+      }),
+      start: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
+
+    mocks.docker.getContainer.mockImplementation((id: string) =>
+      id === existing.id ? existing : container,
+    );
+    mocks.docker.listContainers.mockImplementation(
+      async (opts?: { filters?: { label?: string[] } }) => {
+        const labels = opts?.filters?.label ?? [];
+        return labels.some((l: string) => l === "rakazo.botId=bot-existing")
+          ? [{ Id: existing.id, Labels: existing.inspect.mock.results[0]?.value?.Config?.Labels }]
+          : [];
+      },
+    );
+
+    const response = await provisionBot("bot-existing", "space-1");
+    expect(response.status).toBe(200);
+    expect(existing.remove).toHaveBeenCalledWith({ force: true });
+    expect(mocks.docker.createContainer).toHaveBeenCalledOnce();
+  });
+
   it("counts legacy workspaceId COMPUTER_IMAGE containers toward the limit", async () => {
     setupContainerFixture();
     vi.stubEnv("SANDBOX_MAX_COMPUTERS_PER_SPACE", "1");
