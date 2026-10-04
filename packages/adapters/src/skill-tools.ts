@@ -11,7 +11,7 @@ import {
   userSkillKey,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
-import { BUILTIN_AGENT_SKILLS } from "./builtin-skills.js";
+import { loadBuiltinSkills } from "./builtin-skills.js";
 import { listMarketplaceSkills, marketplacesRoot } from "./marketplace-store.js";
 import {
   isExists,
@@ -43,8 +43,8 @@ type SkillOwner = {
 
 export type SkillToolDeps = { prisma: PrismaClient; dataDir: string };
 
-function builtinRecords(): Array<SkillRecord & { id: string }> {
-  return BUILTIN_AGENT_SKILLS.map((skill) => ({
+async function builtinRecords(): Promise<Array<SkillRecord & { id: string }>> {
+  return (await loadBuiltinSkills()).map((skill) => ({
     id: `builtin:${skill.name}`,
     name: skill.name,
     description: skill.description,
@@ -89,13 +89,14 @@ export async function listAgentSkillRecords(
   deps: SkillToolDeps,
   owner: SkillOwner,
 ): Promise<Array<SkillRecord & { id: string }>> {
-  const [userSkills, marketplaceSkills] = await Promise.all([
+  const [builtins, userSkills, marketplaceSkills] = await Promise.all([
+    builtinRecords(),
     listUserSkills(userSkillsRoot(deps.dataDir, owner)),
     listMarketplaceSkills(marketplacesRoot(deps.dataDir, owner.spaceId)),
   ]);
   // Builtins join the catalog before filtering: a user skill shadows a same-named builtin,
   // and per-bot availability applies to builtins too.
-  const records = mergeBuiltinSkills(builtinRecords(), [...userSkills, ...marketplaceSkills]);
+  const records = mergeBuiltinSkills(builtins, [...userSkills, ...marketplaceSkills]);
   return owner.botId ? await onlyVisibleTo(deps.prisma, owner, owner.botId, records) : records;
 }
 

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildSkillMd, formatSkillsCatalogInstruction, parseSkillMd } from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BUILTIN_AGENT_SKILLS } from "./builtin-skills.js";
+import { loadBuiltinSkills } from "./builtin-skills.js";
 import { marketplacesRoot } from "./marketplace-store.js";
 import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 import {
@@ -207,8 +207,9 @@ describe("skill tools", () => {
   });
 
   it("ships builtin skills as valid, readable, read-only SKILL.md records", async () => {
-    expect(BUILTIN_AGENT_SKILLS.map((skill) => skill.name)).toContain("Interrogate");
-    for (const skill of BUILTIN_AGENT_SKILLS) {
+    const builtins = await loadBuiltinSkills();
+    expect(builtins.map((skill) => skill.name)).toContain("Interrogate");
+    for (const skill of builtins) {
       const parsed = parseSkillMd(skill.content);
       expect(parsed).toMatchObject({ name: skill.name, description: skill.description });
       // / picker truncates at 72; keep descriptions short so "review only" stays visible.
@@ -245,6 +246,20 @@ describe("skill tools", () => {
     expect(await skillDeleteFromTool(deps, owner, { name: "Interrogate" })).toEqual({
       error: "Builtin and plugin skills are read-only.",
     });
+  });
+
+  it("ignores a broken or misplaced builtin SKILL.md without breaking the catalog", async () => {
+    const root = path.join(dataDir, "agent-skills");
+    const write = (dir: string, content: string) =>
+      mkdir(path.join(root, dir), { recursive: true }).then(() =>
+        writeFile(path.join(root, dir, "SKILL.md"), content),
+      );
+    await write("good", buildSkillMd({ name: "Good", description: "ok", body: "steps" }));
+    await write("broken", "no frontmatter");
+    await write("Wrong-Dir", buildSkillMd({ name: "Wrong Dir", description: "ok", body: "" }));
+    await mkdir(path.join(root, "empty"));
+    expect((await loadBuiltinSkills(root)).map((skill) => skill.name)).toEqual(["Good"]);
+    expect(await loadBuiltinSkills(path.join(root, "missing"))).toEqual([]);
   });
 
   it.each(["interrogate", " Interrogate "])("preserves a saved skill named %j", async (name) => {
