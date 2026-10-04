@@ -302,6 +302,7 @@ import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import {
   listAgentSkillRecords,
+  sandboxSkillDir,
   skillCreateFromTool,
   skillDeleteFromTool,
   skillReadFromTool,
@@ -1080,7 +1081,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
         userId: routine.userId,
         botId: routine.botId,
       });
-      const routinePrompt = expandSkillReferencesInPrompt(routine.prompt, skillRecords);
+      const routinePrompt = expandSkillReferencesInPrompt(
+        routine.prompt,
+        skillRecords,
+        sandboxSkillDir,
+      );
       const claimed = await deps.prisma.$transaction(async (tx) => {
         const updated = await tx.routine.updateMany({
           where: { id: routine.id, active: true, nextRunAt: scheduledAt },
@@ -3722,7 +3727,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const agentSkillsCatalog = formatSkillsCatalogInstruction(agentSkills);
         // ponytail: only docker mounts these; harmless hint elsewhere.
         const agentSkillsLine = agentSkillsCatalog
-          ? `${agentSkillsCatalog}\nSkill files are mounted read-only in the sandbox: builtin skills under /managed-skills/agent/<slug>/, your skills under /skills/user/<skill-dir>/ and marketplace skills under /skills/marketplaces/<marketplace>/plugins/<plugin>/skills/<slug>/ (each SKILL.md, plus any scripts/, references/).`
+          ? `${agentSkillsCatalog}\nSkill files (scripts/, references/) are mounted read-only in the sandbox; skill_read returns the skill's folder as dir.`
           : undefined;
         const missingImagesInstruction = missingTurnImagesInstruction(
           turnBlocks,
@@ -3731,6 +3736,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const taskPrompt = expandSkillReferencesInPrompt(
           [task.prompt, attachedFilesPrompt, missingImagesInstruction].filter(Boolean).join("\n\n"),
           agentSkills,
+          sandboxSkillDir,
         );
         const invokedSkill = savedSkills.find((skill) =>
           promptInvokesSkill(taskPrompt, skill.name || skill.goal),

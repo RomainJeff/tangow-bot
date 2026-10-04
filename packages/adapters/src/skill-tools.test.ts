@@ -1,9 +1,14 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildSkillMd, formatSkillsCatalogInstruction, parseSkillMd } from "@rakazo/core";
+import {
+  buildSkillMd,
+  formatSkillsCatalogInstruction,
+  parseSkillMd,
+  SANDBOX_SKILL_MOUNTS,
+} from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadBuiltinSkills } from "./builtin-skills.js";
+import { BUILTIN_SKILLS_ROOT, loadBuiltinSkills } from "./builtin-skills.js";
 import { marketplacesRoot } from "./marketplace-store.js";
 import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 import {
@@ -473,6 +478,37 @@ describe("skill tools", () => {
     expect(await prisma.skillSetting.findMany()).toEqual([]);
     expect(await prisma.botSkill.findMany()).toEqual([]);
     expect(await listUserSkills(userSkillsRoot(dataDir, owner))).toEqual([]);
+  });
+
+  it("returns each skill's folder as the computer mounts it", async () => {
+    const mkt = path.join(marketplacesRoot(dataDir, owner.spaceId), "acme", "plugins", "writer");
+    await mkdir(path.join(mkt, "skills", "blog"), { recursive: true });
+    await writeFile(
+      path.join(mkt, "skills", "blog", "SKILL.md"),
+      buildSkillMd({ name: "Blog", description: "Write posts", body: "" }),
+    );
+    await seed("Daily standup", "d");
+    // Same data dir → mount table as the supervisor's skillsBindsFor.
+    const mounts: Array<[string, string]> = [
+      [SANDBOX_SKILL_MOUNTS.user, userSkillsRoot(dataDir, owner)],
+      [SANDBOX_SKILL_MOUNTS.marketplaces, marketplacesRoot(dataDir, owner.spaceId)],
+      [`${SANDBOX_SKILL_MOUNTS.managed}/agent`, BUILTIN_SKILLS_ROOT],
+    ];
+    const onHost = (dir: string) => {
+      const [mount, source] = mounts.find(([m]) => dir.startsWith(`${m}/`)) ?? [];
+      if (!mount || !source) throw new Error(`${dir} is outside every mount`);
+      return path.join(source, dir.slice(mount.length));
+    };
+
+    for (const [input, dir] of [
+      [{ name: "Daily standup" }, "/skills/user/daily%20standup"],
+      [{ skillId: "mkt:acme/writer/blog" }, "/skills/marketplaces/acme/plugins/writer/skills/blog"],
+      [{ name: "Interrogate" }, "/managed-skills/agent/interrogate"],
+    ] as const) {
+      const read = await skillReadFromTool(deps, owner, input);
+      expect(read.dir).toBe(dir);
+      await expect(stat(path.join(onHost(dir), "SKILL.md"))).resolves.toBeTruthy();
+    }
   });
 
   it("exposes marketplace skills as read-only plugin skills hidden until a bot enables them", async () => {

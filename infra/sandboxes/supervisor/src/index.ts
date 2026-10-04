@@ -9,6 +9,7 @@ import {
   boundedSandboxCommandTimeoutMs,
   readBoundedJsonResponse,
   resolveSupervisorToken,
+  SANDBOX_SKILL_MOUNTS,
 } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { SERVICE_NAMES } from "@rakazo/logging";
@@ -161,9 +162,9 @@ export function skillsBindsFor(
   translate: (p: string) => string,
 ): string[] {
   return [
-    `${translate(path.join(dataDir, "skills", "user", spaceId, userId))}:/skills/user:ro`,
-    `${translate(path.join(dataDir, "skills", "marketplaces", spaceId))}:/skills/marketplaces:ro`,
-    `${translate(path.join(dataDir, "managed-skills"))}:/managed-skills:ro`,
+    `${translate(path.join(dataDir, "skills", "user", spaceId, userId))}:${SANDBOX_SKILL_MOUNTS.user}:ro`,
+    `${translate(path.join(dataDir, "skills", "marketplaces", spaceId))}:${SANDBOX_SKILL_MOUNTS.marketplaces}:ro`,
+    `${translate(path.join(dataDir, "managed-skills"))}:${SANDBOX_SKILL_MOUNTS.managed}:ro`,
   ];
 }
 

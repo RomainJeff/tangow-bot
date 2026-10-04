@@ -7,6 +7,7 @@ import {
   isSkillVisible,
   mergeBuiltinSkills,
   parseSkillMd,
+  SANDBOX_SKILL_MOUNTS,
   type SkillRecord,
   userSkillKey,
 } from "@rakazo/core";
@@ -18,6 +19,7 @@ import {
   listUserSkills,
   removeUserSkill,
   renameUserSkill,
+  skillDirName,
   userSkillsRoot,
   writeUserSkill,
 } from "./skill-store.js";
@@ -52,6 +54,19 @@ async function builtinRecords(): Promise<Array<SkillRecord & { id: string }>> {
     source: "builtin" as const,
     readOnly: true,
   }));
+}
+
+/** The skill's folder inside the computer, derived from its id the way the mounts lay it out. */
+export function sandboxSkillDir(skill: { id: string; name: string }): string {
+  if (isMarketplaceSkillKey(skill.id)) {
+    const [marketplace, plugin, slug] = skill.id.slice("mkt:".length).split("/");
+    if (!marketplace || !plugin || !slug) throw new Error(`Malformed skill id ${skill.id}`);
+    return `${SANDBOX_SKILL_MOUNTS.marketplaces}/${marketplace}/plugins/${plugin}/skills/${slug}`;
+  }
+  if (skill.id.startsWith("builtin:")) {
+    return `${SANDBOX_SKILL_MOUNTS.managed}/agent/${skillDirName(skill.name)}`;
+  }
+  return `${SANDBOX_SKILL_MOUNTS.user}/${skillDirName(skill.name)}`;
 }
 
 function readOnlyError(skill: {
@@ -148,6 +163,7 @@ export async function skillReadFromTool(
     source: skill.source,
     readOnly: skill.readOnly,
     content: skill.content,
+    dir: sandboxSkillDir(skill),
   };
 }
 
