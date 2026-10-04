@@ -57,15 +57,20 @@ describe("computer lifecycle command guard", () => {
     expect(isProtectedComputerLifecycleCommand(command)).toBe(false);
   });
 
-  // Exact command templates from skills/agent/delegate-to-opencode/SKILL.md with placeholders filled.
+  // Exact command templates from skills/agent/delegate-to-opencode/ with placeholders filled.
   it.each([
-    "command -v opencode && opencode auth list",
-    "git -C /home/rakazo/repo status --short --branch",
     "pwd",
-    `nohup bash -c 'opencode run "Do the task in the attached file." -f /home/rakazo/opencode-abc.md; touch /tmp/opencode-abc.done' > /tmp/opencode-abc.log 2>&1 &`,
-    "sleep 30; test -e /tmp/opencode-abc.done && echo finished || echo running; tail -n 40 /tmp/opencode-abc.log",
-    "git -C /home/rakazo/repo status --short && git -C /home/rakazo/repo diff",
-    "rm -f /home/rakazo/opencode-abc.md /tmp/opencode-abc.done",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc doctor",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc login openai",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc start --repo /home/rakazo/repo --brief /home/rakazo/brief-pdf.md --effort high",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc status 1004-154433",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc result 1004-154433-review",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc send 1004-154433 /home/rakazo/followup.md --push",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc review 1004-154433",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc stop 1004-154433",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc clean 1004-154433",
+    "cat /managed-skills/agent/delegate-to-opencode/references/brief.md",
+    "git clone https://github.com/acme/site /home/rakazo/site",
   ])("allows the delegate-to-opencode skill commands: %s", (command) => {
     expect(isProtectedComputerLifecycleCommand(command)).toBe(false);
   });
