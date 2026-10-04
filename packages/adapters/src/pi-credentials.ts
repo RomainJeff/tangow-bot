@@ -1,10 +1,13 @@
 import type {
+  AssistantMessageEventStream,
   AuthOperationOptions,
   Credential,
   CredentialInfo,
   CredentialStore,
+  Models,
   OAuthCredential,
 } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import type { AgentModelOAuthCredential } from "@rakazo/adapter-kit";
 
 export function toOAuthCredential(value: AgentModelOAuthCredential): OAuthCredential {
@@ -24,8 +27,29 @@ export class PiRuntimeCredentialStore implements CredentialStore {
     private readonly providerId: string,
     credential?: Credential,
     private readonly persistOAuth?: (credential: OAuthCredential) => Promise<void>,
+    private readonly reloadOAuth?: (
+      rejected: OAuthCredential,
+      signal: AbortSignal,
+    ) => Promise<AgentModelOAuthCredential>,
   ) {
     this.credential = credential;
+  }
+
+  /**
+   * Swap a credential the provider rejected for the stored one, which the serialized refresh
+   * rotates only when no other run already has. False when there is nothing to reload.
+   */
+  reload(rejected: Credential, signal: AbortSignal): Promise<boolean> {
+    const reloadOAuth = this.reloadOAuth;
+    if (!reloadOAuth || rejected.type !== "oauth") return Promise.resolve(false);
+    const operation = this.chain.then(async () => {
+      // A concurrent call already replaced it; that one is the stored credential.
+      if (this.credential !== rejected) return true;
+      this.credential = toOAuthCredential(await reloadOAuth(rejected, signal));
+      return true;
+    });
+    this.chain = operation.catch(() => undefined);
+    return operation;
   }
 
   async read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
@@ -72,4 +96,52 @@ export class PiRuntimeCredentialStore implements CredentialStore {
     this.chain = operation.catch(() => undefined);
     return operation;
   }
+}
+
+const AUTH_FAILURE =
+  /^401\b|authentication_error|token (?:has been |is )?(?:revoked|expired|invalidated)/i;
+
+/**
+ * Another run can rotate a subscription token between two model calls, which revokes the one
+ * this run holds. A call refused for authentication before any output reloads the stored
+ * credential and runs once more; a second refusal surfaces as it is.
+ */
+export function retryRejectedOAuth(
+  models: Models,
+  store: PiRuntimeCredentialStore,
+  providerId: string,
+): Models {
+  const streamSimple = models.streamSimple.bind(models);
+  models.streamSimple = (model, context, options) => {
+    const outer = createAssistantMessageEventStream();
+    void (async () => {
+      const used = await store.read(providerId);
+      const first = streamSimple(model, context, options);
+      let started = false;
+      for await (const event of first) {
+        if (
+          !started &&
+          used &&
+          event.type === "error" &&
+          event.reason === "error" &&
+          AUTH_FAILURE.test(event.error.errorMessage ?? "") &&
+          (await store
+            .reload(used, options?.signal ?? new AbortController().signal)
+            .catch(() => false))
+        ) {
+          return forward(outer, streamSimple(model, context, options));
+        }
+        started = true;
+        outer.push(event);
+      }
+      outer.end(await first.result());
+    })();
+    return outer;
+  };
+  return models;
+}
+
+async function forward(target: AssistantMessageEventStream, source: AssistantMessageEventStream) {
+  for await (const event of source) target.push(event);
+  target.end(await source.result());
 }

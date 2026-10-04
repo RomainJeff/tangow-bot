@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-04
+
+#### Fixed
+
+- A bot running on your Claude or ChatGPT subscription no longer stops with a revoked-token error when another run renewed the sign-in at the same moment; it continues with the renewed sign-in.
+
 ### 2026-09-30
 
 #### Fixed

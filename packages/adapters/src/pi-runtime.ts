@@ -39,7 +39,11 @@ import {
   normalizeOpenAiToolParameters,
   openAiToolParametersNeedNormalization,
 } from "./openai-tool-parameters.js";
-import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
+import {
+  PiRuntimeCredentialStore,
+  retryRejectedOAuth,
+  toOAuthCredential,
+} from "./pi-credentials.js";
 import { registerLocalProvider } from "./pi-local-provider.js";
 import {
   OPENAI_COMPATIBLE_PROVIDER_ID,
@@ -677,17 +681,17 @@ export function modelsForRequest(
 ): Models {
   const oauth = request.model.oauth;
   if (oauth) {
-    const persist = oauth.persist;
-    return registerOpenAiCompatibleCatalog(
-      registerLocalProvider(
-        builtinModels({
-          credentials: new PiRuntimeCredentialStore(
-            provider,
-            toOAuthCredential(oauth.credential),
-            persist ? (next) => persist(next) : undefined,
-          ),
-        }),
-      ),
+    const { persist, refresh } = oauth;
+    const credentials = new PiRuntimeCredentialStore(
+      provider,
+      toOAuthCredential(oauth.credential),
+      persist ? (next) => persist(next) : undefined,
+      refresh ? (rejected, signal) => refresh(rejected, signal) : undefined,
+    );
+    return retryRejectedOAuth(
+      registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels({ credentials }))),
+      credentials,
+      provider,
     );
   }
   if (
