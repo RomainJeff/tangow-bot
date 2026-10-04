@@ -170,7 +170,7 @@ describe("graphical computer spec", () => {
     const start = readFileSync(path.join(root, "start.sh"), "utf8");
     const browser = readFileSync(path.join(root, "rakazo-browser"), "utf8");
     const desktop = readFileSync(path.join(root, "rakazo-browser.desktop"), "utf8");
-    expect(dockerfile).toMatch(/chromium/);
+    expect(dockerfile).toMatch(/google-chrome-stable/);
     expect(dockerfile).toMatch(/rakazo-browser\.desktop/);
     expect(dockerfile).toMatch(/control.py/);
     expect(dockerfile).toMatch(/USER 1000:1000/);
@@ -194,8 +194,8 @@ describe("graphical computer spec", () => {
     expect(dockerfile).toMatch(/UserInstallation=file:\/\/\/tmp\//);
     expect(start).not.toMatch(/xdg-mime default rakazo-browser\.desktop .*\|\| true/);
     expect(start).toMatch(/x11vnc .* -viewonly /);
-    expect(browser).toMatch(/\.browser-profiles\/chromium/);
-    expect(browser).toMatch(/chromium-screen-\$DISPLAY_NUM/);
+    expect(browser).toMatch(/\.browser-profiles\/chrome"/);
+    expect(browser).toMatch(/chrome-screen-\$DISPLAY_NUM/);
     expect(browser).toMatch(/USER_DATA_DIR_SET/);
     expect(browser).toMatch(/RAKAZO_BROWSER_PROFILE/);
     expect(desktop).toMatch(/Exec=\/usr\/local\/bin\/rakazo-browser %U/);
@@ -241,10 +241,10 @@ describe("graphical computer spec", () => {
       const bin = path.join(temp, "bin");
       const capture = path.join(temp, "args");
       const home = path.join(temp, "home");
-      const chromium = path.join(bin, "chromium");
+      const chrome = path.join(bin, "google-chrome-stable");
       mkdirSync(bin);
-      writeFileSync(chromium, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
-      chmodSync(chromium, 0o755);
+      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
+      chmodSync(chrome, 0o755);
 
       const run = (display: string, args: string[] = []) => {
         const result = spawnSync("sh", [path.join(root, "rakazo-browser"), ...args], {
@@ -262,22 +262,20 @@ describe("graphical computer spec", () => {
       };
 
       try {
-        expect(run(":1")).toContain(`--user-data-dir=${home}/.browser-profiles/chromium`);
+        expect(run(":1")).toContain(`--user-data-dir=${home}/.browser-profiles/chrome`);
         expect(run(":1").some((arg) => arg.startsWith("--remote-debugging-port="))).toBe(true);
-        expect(run(":2")).toContain(`--user-data-dir=${home}/.browser-profiles/chromium-screen-2`);
+        expect(run(":2")).toContain(`--user-data-dir=${home}/.browser-profiles/chrome-screen-2`);
         expect(run(":2")).toContain("--remote-debugging-port=9223");
         for (const display of [8, 9]) {
           const args = run(`:0${display}.0`);
           expect(args).toContain(`--remote-debugging-port=${9221 + display}`);
           expect(args).toContain(
-            `--user-data-dir=${home}/.browser-profiles/chromium-screen-${display}`,
+            `--user-data-dir=${home}/.browser-profiles/chrome-screen-${display}`,
           );
         }
         const explicit = run(":3", [`--user-data-dir=${home}/custom-profile`]);
         expect(explicit).toContain(`--user-data-dir=${home}/custom-profile`);
-        expect(explicit).not.toContain(
-          `--user-data-dir=${home}/.browser-profiles/chromium-screen-3`,
-        );
+        expect(explicit).not.toContain(`--user-data-dir=${home}/.browser-profiles/chrome-screen-3`);
       } finally {
         rmSync(temp, { recursive: true, force: true });
       }
@@ -291,13 +289,13 @@ describe("graphical computer spec", () => {
       const temp = mkdtempSync(path.join(tmpdir(), "rakazo-browser-crash-"));
       const bin = path.join(temp, "bin");
       const home = path.join(temp, "home");
-      const chromium = path.join(bin, "chromium");
+      const chrome = path.join(bin, "google-chrome-stable");
       const capture = path.join(temp, "args");
       mkdirSync(bin);
-      writeFileSync(chromium, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
-      chmodSync(chromium, 0o755);
+      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
+      chmodSync(chrome, 0o755);
 
-      const profile = path.join(home, ".browser-profiles/chromium");
+      const profile = path.join(home, ".browser-profiles/chrome");
       const prefsDir = path.join(profile, "Default");
       mkdirSync(prefsDir, { recursive: true });
       const prefsPath = path.join(prefsDir, "Preferences");
