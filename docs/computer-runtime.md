@@ -63,7 +63,7 @@ Box stop archives the machine and resume reconnects the same opaque box id. Each
 
 ## Developer tooling
 
-The Docker computer image ships `git`, GitHub CLI (`gh`), Node.js LTS with npm and Corepack (`pnpm`, `yarn`), `build-essential`, Python with `pip` and `venv`, `ripgrep` and `fd`. Bots run without root, so further tools go into the workspace: `npm install -g` and `pip install` land in `~/.local`, which persists with the home.
+The Docker computer image ships `git`, GitHub CLI (`gh`), Node.js LTS with npm and Corepack (`pnpm`, `yarn`), `build-essential`, Python with `pip` and `venv`, `ripgrep` and `fd`. The desktop terminal is Xfce Terminal with zsh as the login shell; its defaults live in `/etc/rakazo/zshrc`, which the seeded `~/.zshrc` sources, so edits to `~/.zshrc` persist. Shell tool commands still run under `bash -c`. Bots run without root, so further tools go into the workspace: `npm install -g` and `pip install` land in `~/.local`, which persists with the home.
 
 To let a bot use GitHub, store a token as the `GH_TOKEN` agent secret. It reaches every shell command, `gh` reads it, and git uses `gh` as its credential helper for `https://github.com`, so `git clone` and `git push` over HTTPS work without per-repository setup. On a Team Computer every bot in the workspace shares that token; prefer a fine-grained token scoped to the repositories the bots need. E2B, Daytona and Box use their provider's default image and do not include this tooling yet.
 

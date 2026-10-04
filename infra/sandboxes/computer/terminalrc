@@ -1,0 +1,15 @@
+[Configuration]
+ColorForeground=#E8E8EA
+ColorBackground=#111113
+ColorCursor=#E8E8EA
+ColorBold=#E8E8EA
+ColorBoldUseDefault=TRUE
+FontName=DejaVu Sans Mono 11
+MiscDefaultGeometry=100x30
+MiscMenubarDefault=FALSE
+MiscToolbarDefault=FALSE
+MiscConfirmClose=FALSE
+MiscCursorBlinks=FALSE
+ScrollingLines=10000
+TitleInitial=Terminal
+TitleMode=TERMINAL_TITLE_REPLACE

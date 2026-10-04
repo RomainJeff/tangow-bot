@@ -10,6 +10,6 @@
 [app] (class=Firefox)
   [Maximized] {yes}
 [end]
-[app] (class=XTerm)
+[app] (class=Xfce4-terminal)
   [Maximized] {no}
 [end]

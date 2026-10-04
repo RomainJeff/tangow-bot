@@ -2,5 +2,5 @@
   [exec] (Browser) {rakazo-browser}
   [exec] (Files) {pcmanfm /home/rakazo}
   [exec] (Office) {libreoffice}
-  [exec] (Terminal) {xterm -bg #111113 -fg #E8E8EA -cr #E8E8EA -title Terminal}
+  [exec] (Terminal) {rakazo-terminal}
 [end]

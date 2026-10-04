@@ -47,7 +47,7 @@ describe.each([undefined, profile])(
       { kind: "open" as const, path: "https://example.com" },
       { kind: "launch" as const, application: "chromium", uri: "https://example.com" },
       { kind: "launch" as const, application: "chromium" },
-      { kind: "launch" as const, application: "xterm" },
+      { kind: "launch" as const, application: "rakazo-terminal" },
     ])("accepts generated $kind argv and identifies a long-lived process", (action) => {
       const step = containerActionStep(action, display, browserProfile);
       if (!("argv" in step)) throw new Error("expected command");
@@ -79,7 +79,7 @@ describe("controller argv restrictions", () => {
       `RAKAZO_BROWSER_PROFILE=${profile.toUpperCase()}`,
       "rakazo-browser",
     ],
-    ["env", `DISPLAY=${display}`, `RAKAZO_BROWSER_PROFILE=${profile}`, "xterm"],
+    ["env", `DISPLAY=${display}`, `RAKAZO_BROWSER_PROFILE=${profile}`, "rakazo-terminal"],
     [
       "env",
       `DISPLAY=${display}`,

@@ -22,11 +22,13 @@ KNOWN_LAUNCH = frozenset(
         "libreoffice",
         "pcmanfm",
         "rakazo-browser",
-        "xterm",
+        "rakazo-terminal",
     }
 )
 WORKSPACE = "/home/rakazo"
 WORKSPACE_PATH_APPS = {"libreoffice", "pcmanfm"}
+# A terminal argument is a command to run, so the launcher takes none.
+NO_ARGUMENT_APPS = {"rakazo-terminal"}
 CONTROL_TIMEOUT_SEC = 10
 LAUNCH_SPAWN_POLL_SEC = 0.2
 NATIVE_CAPTURES = {}
@@ -190,6 +192,8 @@ def allowed_control_argv(argv, display):
     # Office/file manager only take workspace paths: no macro:, vnd.sun.star.*, or remote URLs.
     if command in WORKSPACE_PATH_APPS and len(argv) == index + 2 and not workspace_path(argv[-1]):
         return False
+    if command in NO_ARGUMENT_APPS:
+        return len(argv) == index + 1
     return len(argv) in (index + 1, index + 2)
 
 

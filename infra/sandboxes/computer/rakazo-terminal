@@ -1,0 +1,6 @@
+#!/bin/sh
+# One terminal process per launch: xfce4-terminal's shared D-Bus instance would open
+# windows on whichever display started it first, not the one this launch targets.
+export SHELL=/bin/zsh
+cd "$HOME" 2>/dev/null || true
+exec xfce4-terminal --disable-server

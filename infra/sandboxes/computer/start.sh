@@ -8,6 +8,9 @@ export PATH="$AGENT_HOME/.local/bin:/usr/local/bin:$PATH"
 export NPM_CONFIG_PREFIX="$AGENT_HOME/.local"
 export PIP_USER=1
 cd "$AGENT_HOME"
+# The home is a mount, so the image cannot ship ~/.zshrc. Seed one that loads the image defaults;
+# it also keeps zsh from opening its first-run wizard. An existing ~/.zshrc is left as is.
+[[ -e "$AGENT_HOME/.zshrc" ]] || printf '%s\n' 'source /etc/rakazo/zshrc' >"$AGENT_HOME/.zshrc"
 
 if [[ -n "${RAKAZO_COMPUTER_CONTROL_TOKEN:-}" ]]; then
   /usr/local/bin/rakazo-computer-control >/tmp/rakazo/control.log 2>&1 &

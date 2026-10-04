@@ -18,7 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
     x11vnc \
     fluxbox \
-    xterm \
+    xfce4-terminal \
+    zsh \
+    zsh-autosuggestions \
+    zsh-syntax-highlighting \
     xdotool \
     x11-utils \
     x11-xserver-utils \
@@ -44,7 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-impress \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 1000 rakazo \
-  && useradd --uid 1000 --gid rakazo --create-home --shell /bin/bash rakazo \
+  && useradd --uid 1000 --gid rakazo --create-home --shell /bin/zsh rakazo \
   && mkdir -p /etc/rakazo/fluxbox \
   && printf '%s\n' '#!/bin/sh' 'exec xsetroot -solid "#111113" "$@"' > /usr/bin/fbsetbg \
   && chmod +x /usr/bin/fbsetbg \
@@ -107,6 +110,9 @@ COPY --chmod=755 control.py /usr/local/bin/rakazo-computer-control
 COPY --from=capture-builder /build/librakazo-xcapture.so /usr/local/lib/librakazo-xcapture.so
 COPY --chmod=755 rakazo-browser /usr/local/bin/rakazo-browser
 COPY --chmod=755 rakazo-page-browser /usr/local/bin/rakazo-page-browser
+COPY --chmod=755 rakazo-terminal /usr/local/bin/rakazo-terminal
+COPY --chmod=644 terminalrc /etc/xdg/xfce4/terminal/terminalrc
+COPY --chmod=644 zshrc /etc/rakazo/zshrc
 COPY --chmod=644 rakazo-browser.desktop /usr/share/applications/rakazo-browser.desktop
 COPY --chmod=644 fluxbox.init /etc/rakazo/fluxbox/init
 COPY --chmod=644 fluxbox.apps /etc/rakazo/fluxbox/apps
@@ -118,6 +124,7 @@ COPY --chmod=644 mobile-keyboard.js /usr/share/novnc/mobile-keyboard.js
 # Strip CR so shebangs work even if the build context came from a CRLF checkout.
 RUN ldconfig \
   && sed -i 's/\r$//' /usr/local/bin/rakazo-computer /usr/local/bin/rakazo-computer-control /usr/local/bin/rakazo-browser /usr/local/bin/rakazo-page-browser \
+    /usr/local/bin/rakazo-terminal /etc/rakazo/zshrc /etc/xdg/xfce4/terminal/terminalrc \
     /etc/rakazo/fluxbox/init /etc/rakazo/fluxbox/apps /etc/rakazo/fluxbox/menu
 EXPOSE 7070 6080 6081 6082 6083 6084 6085 6086 6087 6088 6089 6090 6091 6092 6093 6094 6095
 USER 1000:1000

@@ -199,6 +199,14 @@ describe("graphical computer spec", () => {
     expect(browser).toMatch(/USER_DATA_DIR_SET/);
     expect(browser).toMatch(/RAKAZO_BROWSER_PROFILE/);
     expect(desktop).toMatch(/Exec=\/usr\/local\/bin\/rakazo-browser %U/);
+    const terminal = readFileSync(path.join(root, "rakazo-terminal"), "utf8");
+    const menu = readFileSync(path.join(root, "fluxbox.menu"), "utf8");
+    expect(dockerfile).toMatch(/xfce4-terminal/);
+    expect(dockerfile).not.toMatch(/^\s+xterm \\$/m);
+    expect(dockerfile).toMatch(/--shell \/bin\/zsh rakazo/);
+    expect(terminal).toMatch(/exec xfce4-terminal --disable-server$/m);
+    expect(menu).toMatch(/\(Terminal\) \{rakazo-terminal\}/);
+    expect(start).toMatch(/source \/etc\/rakazo\/zshrc/);
     expect(dockerfile).toMatch(/rakazo-page-browser/);
     expect(browser).toMatch(/remote-debugging-port/);
     expect(desktop).toMatch(/x-scheme-handler\/http/);
@@ -600,7 +608,10 @@ describe("graphical computer spec", () => {
           "assert allow(['env', 'DISPLAY=:2', 'xdg-open', 'https://example.com'], ':2')",
           "assert allow(['env', 'DISPLAY=:1', 'rakazo-browser'], ':1')",
           "assert allow(['env', 'DISPLAY=:2', 'rakazo-browser', 'https://example.com'], ':2')",
-          "assert allow(['env', 'DISPLAY=:1', 'xterm'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'rakazo-terminal'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'rakazo-terminal', 'id'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'rakazo-terminal', '-x'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'xterm'], ':1')",
           "assert allow(['env', 'DISPLAY=:1', 'pcmanfm', '/home/rakazo'], ':1')",
           "assert allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazo/report.docx'], ':1')",
           "assert long_lived(['env', 'DISPLAY=:1', 'libreoffice'])",
@@ -615,7 +626,7 @@ describe("graphical computer spec", () => {
           "assert not allow(['env', 'DISPLAY=:1', 'pcmanfm', '/etc'], ':1')",
           "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser'])",
           "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser', 'https://example.com'])",
-          "assert long_lived(['env', 'DISPLAY=:1', 'xterm'])",
+          "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-terminal'])",
           "assert long_lived(['env', 'DISPLAY=:1', 'xdg-open', 'https://example.com'])",
           "assert not long_lived(['env', 'DISPLAY=:1', 'xdotool', 'key', '--clearmodifiers', 'a'])",
           "assert not allow(['env', 'DISPLAY=:1', 'chromium', 'https://example.com'], ':1')",
