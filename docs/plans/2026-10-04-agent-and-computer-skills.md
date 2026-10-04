@@ -69,6 +69,8 @@ Règle pour ranger une nouvelle skill : si elle guide **le bot** (comment parler
   
 - `skill-tools.ts:46` `builtinRecords()` consomme le loader. Rien d'autre ne change : merge, shadow, visibilité déjà en place.
   
+- Injection : chaque skill `agent` arrive dans le catalogue du prompt (`executor.ts:3722`) avec son `name` et sa `description` issus du frontmatter, comme les skills user et marketplace. Pi choisit sur cette base et charge le corps avec `skill_read`. Le dossier `/managed-skills/agent` ne sert qu'à exécuter ou lire `scripts/` et `references/` via `shell`.
+  
 - Test : un `SKILL.md` invalide dans le dossier est ignoré avec un warning, sans casser le catalogue.
   
 ### PR 2 — Skills `agent` et `computer` montées dans le computer
