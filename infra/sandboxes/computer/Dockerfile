@@ -124,6 +124,7 @@ COPY --chmod=644 zshrc /etc/zsh/zshrc
 COPY --chmod=644 rakazo-browser.desktop /usr/share/applications/rakazo-browser.desktop
 COPY --chmod=644 rakazo-terminal.desktop /usr/share/applications/rakazo-terminal.desktop
 COPY --chmod=644 rakazo-files.desktop /usr/share/applications/rakazo-files.desktop
+COPY --chmod=644 plank-settings /etc/rakazo/plank/dock1/settings
 COPY --chmod=644 rakazo-browser.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-browser.dockitem
 COPY --chmod=644 rakazo-files.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-files.dockitem
 COPY --chmod=644 rakazo-terminal.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-terminal.dockitem

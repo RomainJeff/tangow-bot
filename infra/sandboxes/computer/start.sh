@@ -48,14 +48,8 @@ cat > /tmp/fluxbox-home/.fluxbox/startup <<'EOF'
 #!/bin/sh
 xsetroot -solid "#111113"
 mkdir -p "$HOME/.config/plank/dock1/launchers"
+cp /etc/rakazo/plank/dock1/settings "$HOME/.config/plank/dock1/settings"
 cp /etc/rakazo/plank/dock1/launchers/*.dockitem "$HOME/.config/plank/dock1/launchers/"
-dconf write /net/launchpad/plank/docks/dock1/hide-mode 0
-dconf write /net/launchpad/plank/docks/dock1/icon-size 48
-dconf write /net/launchpad/plank/docks/dock1/dock-items "['rakazo-browser.dockitem', 'rakazo-files.dockitem', 'rakazo-terminal.dockitem']"
-dconf write /net/launchpad/plank/docks/dock1/lock-items true
-dconf write /net/launchpad/plank/docks/dock1/zoom-enabled true
-dconf write /net/launchpad/plank/docks/dock1/zoom-percent 150
-dconf write /net/launchpad/plank/docks/dock1/theme "'Default'"
 plank &
 exec fluxbox -rc /tmp/fluxbox-home/.fluxbox/init
 EOF
