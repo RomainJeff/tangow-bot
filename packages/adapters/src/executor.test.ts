@@ -2075,6 +2075,21 @@ describe("buildSystemInstructions", () => {
     expect(buildSystemInstructions({ ...parts, rememberExposed: false })).not.toContain("remember");
   });
 
+  it("makes delegate the way to hand work to a specialist only when the tool is offered", () => {
+    const offered = buildSystemInstructions({ ...parts, delegateExposed: true });
+    expect(offered).toContain("To hand scoped work to a specialist and get its result back");
+    expect(offered).toContain("delegate_followup");
+    expect(offered).toContain("delegate_close once its result is consumed");
+    expect(offered).toContain(
+      "Use spawn_bot only for a lasting peer bot the user explicitly asks for.",
+    );
+    expect(offered).not.toContain("temporary specialist");
+
+    const absent = buildSystemInstructions({ ...parts, delegateExposed: false });
+    expect(absent).not.toMatch(/\bdelegate/);
+    expect(absent).toContain("spawn_bot creates a regular bot");
+  });
+
   it("puts the chat voice right after the narration rule, inside the cacheable prefix", () => {
     const instructions = buildSystemInstructions(parts);
     const voice = instructions.indexOf(CHAT_VOICE_INSTRUCTIONS);

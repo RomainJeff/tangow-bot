@@ -937,6 +937,8 @@ export type SystemInstructionParts = {
   browserRunAllowed?: boolean;
   /** The `remember` tool is dropped for messaging runs and when a semantic provider is on. */
   rememberExposed?: boolean;
+  /** The `delegate` tool is offered to this run. */
+  delegateExposed?: boolean;
   workspaceInstruction: string;
   agentEnvironmentInstruction?: string;
   pluginLine?: string;
@@ -999,7 +1001,10 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     parts.agentEnvironmentInstruction,
     "A bot and a subagent are different. Never use both for the same request.",
     "create_space proposes a new privacy boundary inside the current organization. Use it when the user asks to create a space or separate data between teams or projects. It always pauses for explicit user approval; never claim the space exists before the tool succeeds.",
-    "spawn_bot creates a regular bot with its own chat and memory. Use profile_bot_id to inherit its instructions, fixed model, effort, skills and MCP permissions; instructions is a mission brief added to that profile, not a replacement. Use team computer mode to share the existing Team Computer. Create each requested bot once. If it serves a broader mission, continue that mission through the group and message_bot, then archive an unused temporary specialist. Do not run_subagent to demo a created bot.",
+    parts.delegateExposed
+      ? "To hand scoped work to a specialist and get its result back, including any mission run with a bot profile, call delegate with the profile_bot_id and a brief. Send more on the same work with delegate_followup, and close it with delegate_close once its result is consumed. Use spawn_bot only for a lasting peer bot the user explicitly asks for."
+      : undefined,
+    `spawn_bot creates a regular bot with its own chat and memory. Use profile_bot_id to inherit its instructions, fixed model, effort, skills and MCP permissions; instructions is a mission brief added to that profile, not a replacement. Use team computer mode to share the existing Team Computer. Create each requested bot once. ${parts.delegateExposed ? "" : "If it serves a broader mission, continue that mission through the group and message_bot, then archive an unused temporary specialist. "}Do not run_subagent to demo a created bot.`,
     "Bot-to-bot delivery is asynchronous. After message_bot, do not sleep, poll, or wait actively for a reply. Continue only work that does not depend on it; if material, record a short pending state, then end this turn. A peer reply starts a new run that resumes the mission. A pending wait is not a completed mission.",
     "update_bot updates this bot's own name (chat header / list label), title, and description. When the user asks you to rename yourself or change your title or description, call update_bot — do not claim you changed them without the tool.",
     "run_subagent is a short helper inside this turn only. It is not a bot, has no thread, and does not show in the list. Use it for parallel work you will summarize here.",
@@ -4422,6 +4427,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             pageBrowserAllowed,
             browserRunAllowed: tools.some((tool) => tool.name === "browser_run"),
             rememberExposed: tools.some((tool) => tool.name === "remember"),
+            delegateExposed: tools.some((tool) => tool.name === "delegate"),
             workspaceInstruction,
             agentEnvironmentInstruction,
             pluginLine,

@@ -878,14 +878,14 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "list_bot_profiles",
     description:
-      "Inspect available bot profiles: fixed provider/model/effort, skill assignments and MCP permissions. Use a profile_bot_id when creating an equipped specialist. Global skills remain available; private bot secrets and memory are not copied.",
+      "Inspect available bot profiles: fixed provider/model/effort, skill assignments and MCP permissions. Pass a profile_bot_id to delegate to hand work to an equipped specialist. Global skills remain available; private bot secrets and memory are not copied.",
     readOnly: true,
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "delegate",
     description:
-      "Delegate scoped work to a specialist created from a bot profile, and get back a durable work identity (workId). Use delegate_followup on the same workId to send more work to the same specialist once it has replied; do not call delegate again for the same piece of work. This creates a tracked work item, not a regular new peer bot (use spawn_bot for that).",
+      "Hand scoped work to a specialist created from a bot profile and get its result back, with a durable work identity (workId). Use delegate_followup on the same workId to send more work to the same specialist once it has replied; do not call delegate again for the same piece of work. This creates a tracked work item, not a regular new peer bot (use spawn_bot for that).",
     inputSchema: {
       type: "object",
       properties: {
@@ -947,7 +947,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "spawn_bot",
     description:
-      "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
+      "Create a full, regular bot — the same kind the user creates from the + button. It gets its own thread, computer, and memory, and appears as a peer in the bot list. Use it only for a lasting peer bot the user explicitly asks for; to hand scoped work to a specialist, use delegate. Do not also call run_subagent. Creating the bot is the whole action. Only set prompt if the user asked that new bot to start work immediately.",
     inputSchema: {
       type: "object",
       properties: {
