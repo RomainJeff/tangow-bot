@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
+- **OpenCode on bot computers.** Docker computers ship [OpenCode](https://opencode.ai) so a bot can delegate multi-file coding work in a cloned repository (new builtin skill `delegate-to-opencode`) and review the result. Sign in once with `opencode auth login` in the computer's terminal; the credentials stay in the computer's home and are left out of backups. Repository-versioned skills under `skills/` are mounted read-only at `/managed-skills` and the `computer` family is wired into OpenCode. See [developer tooling](docs/computer-runtime.md#developer-tooling).
 - **Bot computers come ready for development.** Docker computers now include git, GitHub CLI, Node.js with npm, pnpm and yarn, build tools, Python with pip and venv, and ripgrep; store a `GH_TOKEN` agent secret and bots can clone, push and open pull requests. See [developer tooling](docs/computer-runtime.md#developer-tooling).
 
 #### Changed
