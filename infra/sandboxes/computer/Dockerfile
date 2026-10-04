@@ -113,6 +113,7 @@ COPY --chmod=755 rakazo-page-browser /usr/local/bin/rakazo-page-browser
 COPY --chmod=755 rakazo-terminal /usr/local/bin/rakazo-terminal
 COPY --chmod=644 terminalrc /etc/xdg/xfce4/terminal/terminalrc
 COPY --chmod=644 zshrc /etc/rakazo/zshrc
+COPY --chmod=644 zshrc /etc/zsh/zshrc
 COPY --chmod=644 rakazo-browser.desktop /usr/share/applications/rakazo-browser.desktop
 COPY --chmod=644 fluxbox.init /etc/rakazo/fluxbox/init
 COPY --chmod=644 fluxbox.apps /etc/rakazo/fluxbox/apps
