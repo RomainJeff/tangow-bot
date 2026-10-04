@@ -61,6 +61,12 @@ The Box adapter uses ASCII's official TypeScript SDK for lifecycle, command, and
 
 Box stop archives the machine and resume reconnects the same opaque box id. Each bot’s Chrome profile lives under the portable workspace and is included in checkpoint/export. The Box emulator uses the same multi-screen contract as the other managed-provider emulators.
 
+## Developer tooling
+
+The Docker computer image ships `git`, GitHub CLI (`gh`), Node.js LTS with npm and Corepack (`pnpm`, `yarn`), `build-essential`, Python with `pip` and `venv`, `ripgrep` and `fd`. Bots run without root, so further tools go into the workspace: `npm install -g` and `pip install` land in `~/.local`, which persists with the home.
+
+To let a bot use GitHub, store a token as the `GH_TOKEN` agent secret. It reaches every shell command, `gh` reads it, and git uses `gh` as its credential helper for `https://github.com`, so `git clone` and `git push` over HTTPS work without per-repository setup. On a Team Computer every bot in the workspace shares that token; prefer a fine-grained token scoped to the repositories the bots need. E2B, Daytona and Box use their provider's default image and do not include this tooling yet.
+
 ## Persistence
 
 The portable computer workspace is the durable boundary. E2B uses `/home/user/rakazo-home`; Docker and local providers expose the equivalent home. Browser profiles are rooted under `.browser-profiles` in that workspace on E2B. Rakazo checkpoints transferred workspaces into `AgentHomeStore` at run completion or failure, before explicit stop, and before idle suspension. Docker mounts the Rakazo-owned home directly and only advances its revision marker at those boundaries. New or replacement machines import the latest stored workspace before use.

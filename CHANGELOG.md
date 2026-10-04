@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-04
 
+#### Added
+
+- **Bot computers come ready for development.** Docker computers now include git, GitHub CLI, Node.js with npm, pnpm and yarn, build tools, Python with pip and venv, and ripgrep; store a `GH_TOKEN` agent secret and bots can clone, push and open pull requests. See [developer tooling](docs/computer-runtime.md#developer-tooling).
+
 #### Changed
 
 - Bot computers on Docker can now use up to 8 GB of memory and 4 CPUs by default instead of 2 GB and 2 CPUs, so builds, tests and heavier pages run without hitting the ceiling.

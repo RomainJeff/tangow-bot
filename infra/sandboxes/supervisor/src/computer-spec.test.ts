@@ -206,6 +206,25 @@ describe("graphical computer spec", () => {
     expect(start).not.toMatch(/windowsize 1280 800/);
   });
 
+  it("ships developer tooling with a verified Node and gh as git's GitHub credential helper", () => {
+    const root = path.resolve(import.meta.dirname, "../../computer");
+    const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
+    for (const pkg of ["git", "gh", "build-essential", "python3-venv", "ripgrep"]) {
+      expect(dockerfile).toMatch(new RegExp(`^\\s+${pkg} \\\\$`, "m"));
+    }
+    expect(dockerfile).toMatch(/signed-by=\/usr\/share\/keyrings\/githubcli-archive-keyring\.gpg/);
+    expect(dockerfile).toMatch(/sha256sum -c -/);
+    expect(dockerfile).toMatch(/NODE_SHA256_AMD64=[0-9a-f]{64}/);
+    expect(dockerfile).toMatch(/NODE_SHA256_ARM64=[0-9a-f]{64}/);
+    expect(dockerfile).toMatch(
+      /credential\.https:\/\/github\.com\.helper '!\/usr\/bin\/gh auth git-credential'/,
+    );
+    // Tooling installs as root before the image drops to the unprivileged user.
+    expect(dockerfile.indexOf("gh auth git-credential")).toBeLessThan(
+      dockerfile.indexOf("USER 1000:1000"),
+    );
+  });
+
   it.skipIf(process.platform === "win32")(
     "selects a display-specific browser profile and preserves explicit profiles",
     () => {
