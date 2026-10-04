@@ -64,6 +64,7 @@ describe("computer lifecycle command guard", () => {
     "bash /managed-skills/agent/delegate-to-opencode/scripts/oc login openai",
     "bash /managed-skills/agent/delegate-to-opencode/scripts/oc start --repo /home/rakazo/repo --brief /home/rakazo/brief-pdf.md --effort high",
     "bash /managed-skills/agent/delegate-to-opencode/scripts/oc status 1004-154433",
+    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc status 1004-154433 --detail",
     "bash /managed-skills/agent/delegate-to-opencode/scripts/oc result 1004-154433-review",
     "bash /managed-skills/agent/delegate-to-opencode/scripts/oc send 1004-154433 /home/rakazo/followup.md --push",
     "bash /managed-skills/agent/delegate-to-opencode/scripts/oc review 1004-154433",

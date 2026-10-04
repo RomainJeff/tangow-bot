@@ -17,6 +17,7 @@ You are not the developer here: you write the brief, you judge whether the resul
    - `running`: create a new reminder 10 to 20 minutes later and end the turn without messaging the user.
    - `done`: read `<dir>/references/review.md` and follow it.
    - `failed`, `stalled` or `stopped`: read `<dir>/references/troubleshooting.md`.
+6. **When the user asks how a job is going.** `bash <dir>/scripts/oc status <id> --detail`. After the usual status line it prints the run totals (`steps`, `tools`, `failed_tools`, `tokens_in`, `tokens_out`, `cost`), `## Todo` (OpenCode's own task list, each item `[pending]`, `[in_progress]` or `[completed]`), `## Recent` (its last ten actions and messages, `(failed)` on a failed tool) and `## Errors` when it wrote any. Answer from the todo list in plain words ("it has finished the form and is running the checks"); also use it to understand a `stalled` or `failed` job.
 
 Other commands: `oc status` (all jobs), `oc result <id>` (report, commits, change summary), `oc send <id> <file> [--push]` (follow-up in the same OpenCode session), `oc review <id>` (independent read-only review), `oc stop <id>`, `oc clean <id>` (removes the working copy, keeps the branch), `oc login openai|copilot` (sign-in by code).
 

@@ -50,6 +50,27 @@ last_activity() {
   tail -n 1 "$1/log" 2>/dev/null | jq -r '[.type, (.part.tool // empty)] | join(" ")' 2>/dev/null || true
 }
 
+# Run detail for `oc status ID --detail`: totals, OpenCode's latest todo list, the last steps.
+detail() {
+  jq -rs '
+    def short: tostring | gsub("\\s+"; " ") | .[0:120];
+    [.[] | select(.type == "tool_use") | .part] as $tools
+    | [.[] | select(.type == "step_finish") | .part] as $steps
+    | "steps=\($steps | length) tools=\($tools | length) failed_tools=\([$tools[] | select(.state.status == "error")] | length) tokens_in=\([$steps[].tokens.input // 0] | add // 0) tokens_out=\([$steps[].tokens.output // 0] | add // 0) cost=\([$steps[].cost // 0] | add // 0)",
+      ([$tools[] | select(.tool == "todowrite") | .state.input.todos] | last // empty
+        | "## Todo", (.[] | "[\(.status)] \(.content | short)")),
+      "## Recent",
+      ([.[] | select((.type == "tool_use" and .part.tool != "todowrite") or .type == "text" or .type == "error")] | .[-10:][]
+        | if .type == "tool_use" then "\(.part.tool)\(if .part.state.status == "error" then " (failed)" else "" end): \(.part.state.title // .part.state.input.description // .part.state.input.filePath // .part.state.input.command // "" | short)"
+          elif .type == "text" then "text: \(.part.text | short)"
+          else "error: \(.error.data.message // .error.name // .error | short)" end)
+  ' "$1/log" 2>/dev/null || true
+  if [[ -s "$1/stderr" ]]; then
+    echo "## Errors"
+    tail -n 5 "$1/stderr"
+  fi
+}
+
 last_text() {
   jq -rs '[.[] | select(.type == "text") | .part.text] | last // empty' "$1/log" 2>/dev/null || true
 }
@@ -206,7 +227,10 @@ cmd_start() {
 }
 
 cmd_status() {
-  local ids=("$@") d id
+  local ids=() d id detailed=0
+  for id in "$@"; do
+    if [[ "$id" == --detail ]]; then detailed=1; else ids+=("$id"); fi
+  done
   if ((${#ids[@]} == 0)); then
     for d in "$JOBS"/*/; do ids+=("$(basename "$d")"); done
   fi
@@ -214,6 +238,7 @@ cmd_status() {
   for id in "${ids[@]}"; do
     d=$(job_dir "$id")
     echo "id=$id state=$(state "$d") minutes=$((($(date +%s) - $(meta "$d" started)) / 60)) last=\"$(last_activity "$d")\""
+    ((!detailed)) || detail "$d"
   done
 }
 

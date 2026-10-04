@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Always start with `bash <dir>/scripts/oc result <id>`: the report, or OpenCode's last message, usually says what went wrong. On `failed` it also shows the last error lines.
+Always start with `bash <dir>/scripts/oc result <id>`: the report, or OpenCode's last message, usually says what went wrong. On `failed` it also shows the last error lines; `oc status <id> --detail` adds the failed tool calls and errors from the run.
 
 ## `failed`
 
@@ -11,7 +11,7 @@ Always start with `bash <dir>/scripts/oc result <id>`: the report, or OpenCode's
 
 ## `stalled`
 
-No progress for over 10 minutes; it may be a long test run, or stuck. Check once more on the next reminder. Still stalled after 30 minutes, or running over 2 hours in total: tell the user, then `oc stop <id>` and `oc result <id>` to see what was done; the work so far stays on the branch. Restart with a smaller brief if needed.
+No progress for over 10 minutes; it may be a long test run, or stuck. `oc status <id> --detail` shows its last action and where it is in its todo list. Check once more on the next reminder. Still stalled after 30 minutes, or running over 2 hours in total: tell the user, then `oc stop <id>` and `oc result <id>` to see what was done; the work so far stays on the branch. Restart with a smaller brief if needed.
 
 ## `stopped`
 
