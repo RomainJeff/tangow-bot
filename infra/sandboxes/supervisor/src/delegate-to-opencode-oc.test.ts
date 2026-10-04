@@ -21,10 +21,13 @@ dir=""; prev=""
 for a in "$@"; do [ "$prev" = --dir ] && dir=$a; prev=$a; done
 prompt="\${@: -1}"
 echo '{"type":"step_start","sessionID":"ses_fake"}'
+echo '{"type":"tool_use","part":{"tool":"todowrite","state":{"status":"completed","input":{"todos":[{"content":"Write the footer","status":"in_progress"}]}}}}'
+echo '{"type":"tool_use","part":{"tool":"bash","state":{"status":"error","title":"Run the tests","input":{}}}}'
 case "$prompt" in *SLOW*) sleep 60 ;; esac
 case "$prompt" in *FAIL*) echo "boom" >&2; exit 1 ;; esac
 git -C "$dir" commit -q --allow-empty -m "fake change"
 echo '{"type":"text","sessionID":"ses_fake","part":{"text":"all done"}}'
+echo '{"type":"step_finish","part":{"cost":0.25,"tokens":{"input":1000,"output":200}}}'
 `;
 
 describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () => {
@@ -100,6 +103,13 @@ describe.skipIf(missingTools.length > 0)("delegate-to-opencode oc script", () =>
     expect(result).toContain(`branch=oc/${id}`);
     expect(result).toContain("all done");
     expect(result).toContain("fake change");
+    const detail = oc("status", id, "--detail");
+    expect(detail).toContain(
+      "steps=1 tools=2 failed_tools=1 tokens_in=1000 tokens_out=200 cost=0.25",
+    );
+    expect(detail).toContain("[in_progress] Write the footer");
+    expect(detail).toContain("bash (failed): Run the tests");
+    expect(detail).toContain("text: all done");
     expect(await readFile(path.join(root, "oc-jobs", id, "prompt.md"), "utf8")).toContain(
       "Do not push",
     );
