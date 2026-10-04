@@ -228,6 +228,34 @@ class MissingRolloutAfterComputerLoss implements AgentRuntime {
   }
 }
 
+/** A worker restart lost the parked process; its reconstruction dies before any session. */
+class ReconstructionFailsBeforeSession implements AgentRuntime {
+  describe() {
+    return {
+      id: "codex-native",
+      contractVersion: "1",
+      adapterVersion: "test",
+      capabilities: { streaming: true, compaction: false, tools: false, scripted: false },
+    };
+  }
+
+  async *run(request: AgentRunRequest): AsyncIterable<AgentRuntimeEvent> {
+    const continuity = request.execution!.continuity;
+    if (continuity.mode !== "resume") throw new Error("expected a parked session to resume");
+    yield {
+      type: "native",
+      event: {
+        type: "closed",
+        ref: { bindingId: continuity.ref.bindingId, generation: continuity.ref.generation + 1 },
+        processState: "stopped",
+      },
+    };
+    throw new Error("codex app-server ended before response (exit code 1)");
+  }
+
+  async abort() {}
+}
+
 class SessionThenDone implements AgentRuntime {
   readonly aborts: string[] = [];
 
@@ -1430,6 +1458,52 @@ describe.skipIf(!available)("native runtime choice", () => {
       await handles.stop();
       await model.close();
       await rm(dataDir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it("fails with the runtime's own error when a reconstruction dies before its session", async () => {
+    const harness = await startNativeHarness(
+      new ReconstructionFailsBeforeSession(),
+      "reconstruction-failure",
+    );
+    try {
+      const receipt = await harness.send("resume after a worker restart");
+      const run = await harness.handles.prisma.run.findUniqueOrThrow({
+        where: { id: receipt.runId },
+      });
+      await harness.handles.prisma.nativeSession.create({
+        data: {
+          botId: harness.bot.id,
+          threadId: run.threadId,
+          generation: 0,
+          nativeRef: "surviving-native-thread",
+          harness: "codex-native",
+          executionTarget: harness.computer.id,
+          state: "parked",
+          processState: "running",
+        },
+      });
+
+      await harness.handles.executor.continueRun(receipt.runId, "native-reconstruction-worker");
+
+      await expect(
+        harness.handles.prisma.run.findUniqueOrThrow({ where: { id: receipt.runId } }),
+      ).resolves.toMatchObject({
+        status: "failed",
+        error: "codex app-server ended before response (exit code 1)",
+      });
+      // The stored session is untouched, so the next turn reconstructs it again.
+      await expect(
+        harness.handles.prisma.nativeSession.findUniqueOrThrow({
+          where: { botId_threadId: { botId: harness.bot.id, threadId: run.threadId } },
+        }),
+      ).resolves.toMatchObject({
+        generation: 0,
+        nativeRef: "surviving-native-thread",
+        state: "parked",
+      });
+    } finally {
+      await stopNativeHarness(harness);
     }
   }, 30_000);
 

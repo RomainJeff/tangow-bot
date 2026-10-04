@@ -5025,32 +5025,33 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   ref: event.event.ref,
                 });
                 nativeSessionClosed = true;
-              } else if (
-                nativeSessionStore &&
-                event.event.type === "closed" &&
-                !nativeSessionClosed
-              ) {
-                await nativeSessionStore.close({
-                  botId: bot.id,
-                  threadId: thread.id,
-                  ref: event.event.ref,
-                  processState: event.event.processState,
-                });
-                nativeSessionClosed = true;
-                if (event.event.processState === "stopped") {
+              } else if (nativeSessionStore && event.event.type === "closed") {
+                // Only a session this run recorded is closed here. A runtime that fails before
+                // its session event reports a generation the store never saw; the stored
+                // session stays reconstructable and the runtime's own error stays the run's.
+                const { ref, processState } = event.event;
+                const recorded =
+                  nativeSessionRef?.bindingId === ref.bindingId &&
+                  nativeSessionRef.generation === ref.generation;
+                if (recorded && !nativeSessionClosed) {
+                  await nativeSessionStore
+                    .close({ botId: bot.id, threadId: thread.id, ref, processState })
+                    .then(
+                      () => {
+                        nativeSessionClosed = true;
+                      },
+                      (error) => getLogger().error("native session close failed", error),
+                    );
+                } else if (!recorded && processState !== "stopped") {
+                  getLogger().error("native process stop unconfirmed before its session", {
+                    runId,
+                  });
+                }
+                if (nativeSessionClosed && processState === "stopped") {
                   await selectedRuntime
                     .purgeNativeHome?.(runId)
                     .catch((error) => getLogger().error("native home purge failed", error));
                 }
-              } else if (
-                nativeSessionStore &&
-                event.event.type === "closed" &&
-                nativeSessionClosed &&
-                event.event.processState === "stopped"
-              ) {
-                await selectedRuntime
-                  .purgeNativeHome?.(runId)
-                  .catch((error) => getLogger().error("native home purge failed", error));
               }
             } else if (event.type === "done") {
               if (nativeSessionStore && nativeSessionRef) {
@@ -5287,6 +5288,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             error instanceof Error ? error.message : String(error),
             runSecrets,
           );
+          getLogger().error("agent.run.failed", { runId, botId: bot.id, error: message });
           const failed = await deps.events.finalizeRun({
             spaceId: run.spaceId,
             threadId: thread.id,

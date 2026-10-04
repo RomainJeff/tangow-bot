@@ -4,6 +4,7 @@ import type {
   NativeProcess,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
+import { getLogger } from "@rakazo/logging";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 
@@ -551,6 +552,69 @@ describe("executor seam — codex-native goes through deps.nativeRuntimes", () =
     await f.run();
 
     expect(fixtureRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a native runtime's own error when it fails before recording its session", async () => {
+    mockCreateDelegatedTasks.mockReturnValue({ apply: vi.fn(), inspect: vi.fn() } as never);
+    const primary = "codex app-server ended before response (exit code 1)";
+    // A reconstruction fails after thread/resume and reports the generation it never recorded.
+    const fixtureRun = vi.fn(async function* () {
+      yield {
+        type: "native" as const,
+        event: {
+          type: "closed" as const,
+          ref: { bindingId: "thread-1", generation: 1 },
+          processState: "stopped" as const,
+        },
+      };
+      throw new Error(primary);
+    });
+    const purgeNativeHome = vi.fn(async () => undefined);
+    const f = fixture({
+      outcome: "completed",
+      harness: "codex-native",
+      executionTarget: "computer-1",
+      choiceVersion: 1,
+      nativeRuntimes: {
+        "codex-native": {
+          describe: () => ({ capabilities: { scripted: false } }),
+          run: fixtureRun,
+          abort: async () => undefined,
+          purgeNativeHome,
+        } as never,
+      },
+    });
+    // The stored row holds generation 0, so a fenced transition of generation 1 matches nothing.
+    const updateMany = vi.fn(async () => ({ count: 0 }));
+    Object.assign(f.deps.prisma, {
+      nativeSession: {
+        findUnique: async () => ({
+          generation: 0,
+          nativeRef: "stored-thread",
+          processRef: null,
+          state: "parked",
+          processState: "running",
+          harness: "codex-native",
+          executionTarget: "computer-1",
+        }),
+        updateMany,
+      },
+      lifecycleEvent: { create: async () => ({}) },
+    });
+    const log = vi.spyOn(getLogger(), "error").mockImplementation(() => undefined);
+
+    await f.run();
+
+    expect(f.finalizeRun).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "failed", error: primary }),
+    );
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(purgeNativeHome).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(
+      "agent.run.failed",
+      expect.objectContaining({ runId: "run-1", error: primary }),
+    );
+    log.mockRestore();
   });
 
   it("still constructs the real CodexNativeRuntime when no fixture is injected (non-regression)", async () => {
