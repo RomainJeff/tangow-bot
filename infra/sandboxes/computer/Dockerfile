@@ -49,6 +49,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && groupadd --gid 1000 rakazo \
   && useradd --uid 1000 --gid rakazo --create-home --shell /bin/zsh rakazo \
   && mkdir -p /etc/rakazo/fluxbox /etc/xdg/xfce4/terminal \
+  && rm -f /etc/zsh/newuser.zshrc.recommended \
   && printf '%s\n' '#!/bin/sh' 'exec xsetroot -solid "#111113" "$@"' > /usr/bin/fbsetbg \
   && chmod +x /usr/bin/fbsetbg \
   && ln -sfn /bin/true /usr/bin/xmessage
