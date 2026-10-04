@@ -14,6 +14,7 @@ const STATE_GLYPHS: Record<TaskLineState, StateGlyph> = {
   // Still working: a ring. Waiting on an answer: the same dot, filled.
   running: { ios: "circle", android: "ellipse-outline" },
   waiting: { ios: "circle.fill", android: "ellipse" },
+  needs_input: { ios: "circle.fill", android: "ellipse" },
   done: { ios: "checkmark", android: "checkmark" },
   failed: { ios: "xmark", android: "close" },
   cancelled: { ios: "slash.circle", android: "ban-outline" },
@@ -39,13 +40,15 @@ export function workStateColor(state: TaskLineState, tokens: ColorTokens): strin
   }
 }
 
-/** A state in words; waiting reuses the approval card's own "needs your call". */
+/** A state in words, reusing the approval card's "needs your call" and Activity's "needs input". */
 export function workStateLabel(state: TaskLineState): string {
   switch (state) {
     case "running":
       return t("Running");
     case "waiting":
       return t("Needs your call");
+    case "needs_input":
+      return t("Needs input");
     case "done":
       return t("Done");
     case "failed":

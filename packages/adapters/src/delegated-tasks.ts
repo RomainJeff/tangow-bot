@@ -1470,8 +1470,7 @@ export async function readTaskTree(
         scopedTaskId: { in: tasks.map((task) => task.id) },
         status: { in: [...ACTIVE_RUN_STATUSES] },
       },
-      distinct: ["scopedTaskId"],
-      select: { scopedTaskId: true },
+      select: { scopedTaskId: true, status: true },
     }),
     prisma.message.findMany({
       where: {
@@ -1485,6 +1484,9 @@ export async function readTaskTree(
   ]);
   const names = new Map(bots.map((bot) => [bot.id, bot.name]));
   const working = new Set(activeRuns.map((run) => run.scopedTaskId));
+  const waitingInput = new Set(
+    activeRuns.filter((run) => run.status === "waiting_input").map((run) => run.scopedTaskId),
+  );
   const latestRun = new Map<string, (typeof deliveredRuns)[number]>();
   for (const run of deliveredRuns) {
     if (run.scopedTaskId && !latestRun.has(run.scopedTaskId)) latestRun.set(run.scopedTaskId, run);
@@ -1566,6 +1568,7 @@ export async function readTaskTree(
       missionComputerId: task.missionComputerId,
       status: task.status,
       working: working.has(task.id),
+      waitingInput: waitingInput.has(task.id),
       parentScopedTaskId: task.parentScopedTaskId,
       rootScopedTaskId: task.rootScopedTaskId,
       depth: task.depth,

@@ -14,14 +14,16 @@ export function hasPendingApproval(node: Pick<TaskTreeNode, "approvals">): boole
 }
 
 /**
- * A task with a Run still going is working, or waiting when that Run is parked on an approval,
- * even after an earlier return; only without one does its latest return tell how it stands.
+ * A task with a Run still going is working, waiting when that Run is parked on an approval, or
+ * needs input when it is parked on a question, even after an earlier return; only without one
+ * does its latest return tell how it stands.
  */
 export function taskLineState(node: TaskTreeNode): TaskLineState {
   if (node.status === "closed") return "closed";
   if (node.status === "cancelled") return "cancelled";
   if (node.result && !node.working) return workReturnState(node.result.outcome);
-  return hasPendingApproval(node) ? "waiting" : "running";
+  if (hasPendingApproval(node)) return "waiting";
+  return node.waitingInput ? "needs_input" : "running";
 }
 
 /** Every task a task delegated, however deep. */

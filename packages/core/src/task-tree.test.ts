@@ -25,6 +25,7 @@ function node(overrides: Partial<TaskTreeNode> & { workId: string }): TaskTreeNo
     missionComputerId: null,
     status: "active",
     working: false,
+    waitingInput: false,
     parentScopedTaskId: null,
     rootScopedTaskId: overrides.workId,
     depth: 0,
@@ -68,6 +69,16 @@ describe("task line state", () => {
         node({ workId: "a", result: finished, working: true, approvals: [pendingApproval] }),
       ),
     ).toBe("waiting");
+  });
+
+  it("reads a task whose Run is parked on a question as needing input, an approval first", () => {
+    const asking = { working: true, waitingInput: true };
+    expect(taskLineState(node({ workId: "a", ...asking }))).toBe("needs_input");
+    expect(taskLineState(node({ workId: "a", result: finished, ...asking }))).toBe("needs_input");
+    expect(taskLineState(node({ workId: "a", ...asking, approvals: [pendingApproval] }))).toBe(
+      "waiting",
+    );
+    expect(canCloseTask(node({ workId: "a", result: finished, ...asking }))).toBe(false);
   });
 
   it("lets the server's terminal status win over a delivered outcome", () => {

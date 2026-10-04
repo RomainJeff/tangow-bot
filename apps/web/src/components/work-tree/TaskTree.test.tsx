@@ -91,6 +91,12 @@ describe("TaskTree", () => {
     expect(html).not.toContain("Deny");
   });
 
+  it("shows a specialist waiting on a question as needing input", () => {
+    const html = render([node("Writer", { working: true, waitingInput: true })]);
+    expect(html).toContain("Needs input");
+    expect(html).not.toContain("Running");
+  });
+
   it("states who settled an approval", () => {
     const allowed = render([node("Writer", { approvals: [approval("allowed")] })], {
       deciderName: "Ada",

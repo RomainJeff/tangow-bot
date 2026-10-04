@@ -13,6 +13,7 @@ export function taskNode(workId: string, overrides: Partial<TaskTreeNode> = {}):
     missionComputerId: null,
     status: "dispatched",
     working: false,
+    waitingInput: false,
     parentScopedTaskId: null,
     rootScopedTaskId: workId,
     depth: 0,

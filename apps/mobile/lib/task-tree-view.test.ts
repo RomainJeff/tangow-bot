@@ -22,6 +22,7 @@ function node(overrides: Partial<TaskTreeNode> = {}): TaskTreeNode {
     missionComputerId: null,
     status: "active",
     working: false,
+    waitingInput: false,
     parentScopedTaskId: null,
     rootScopedTaskId: "work-1",
     depth: 0,

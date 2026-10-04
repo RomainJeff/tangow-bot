@@ -139,6 +139,8 @@ export type TaskTreeNode = {
   status: string;
   /** Whether the specialist has a Run that has not ended, including one parked on an answer. */
   working: boolean;
+  /** Whether that Run is parked on an answer: a question or an approval. */
+  waitingInput: boolean;
   parentScopedTaskId: string | null;
   rootScopedTaskId: string;
   depth: number;
@@ -161,6 +163,7 @@ export const TaskTreeNodeSchema: z.ZodType<TaskTreeNode> = z.lazy(() =>
     missionComputerId: z.string().nullable(),
     status: z.string(),
     working: z.boolean(),
+    waitingInput: z.boolean(),
     parentScopedTaskId: z.string().nullable(),
     rootScopedTaskId: z.string(),
     depth: z.number().int(),

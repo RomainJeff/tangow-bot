@@ -2372,6 +2372,41 @@ describe("DelegatedTasks.apply — result then complément", () => {
     expect(harness.scopedTaskRows.get(`${spaceId}:spawn-1`)?.status).toBe("closed");
   });
 
+  it("tells a task whose specialist waits on an answer from one that is running", async () => {
+    const harness = makeDeps({
+      seedScopedTasks: ["work-asking", "work-running"].map((id) => ({
+        id,
+        spaceId,
+        userId,
+        coordinatorBotId,
+        coordinatorThreadId,
+        executorBotId: `bot-${id}`,
+        specialistThreadId: `thread-${id}`,
+        rootScopedTaskId: id,
+        parentScopedTaskId: null,
+        depth: 0,
+        status: "dispatched",
+      })),
+    });
+    const activeRuns = [
+      { scopedTaskId: "work-asking", status: "waiting_input" },
+      { scopedTaskId: "work-running", status: "running" },
+    ];
+    (
+      harness.prisma as unknown as { run: { findMany: ReturnType<typeof vi.fn> } }
+    ).run.findMany.mockImplementation(async (args: { where: { status?: { in: string[] } } }) =>
+      args.where.status?.in ? activeRuns : [],
+    );
+    const tasks = createDelegatedTasks({ prisma: harness.prisma, jobs: harness.jobs });
+
+    await expect(tasks.inspect("work-asking", actor)).resolves.toMatchObject({
+      root: { working: true, waitingInput: true },
+    });
+    await expect(tasks.inspect("work-running", actor)).resolves.toMatchObject({
+      root: { working: true, waitingInput: false },
+    });
+  });
+
   it("rejects a follow-up that closes after its initial read, without restoring the grant", async () => {
     const harness = makeDeps({
       existingScopedTask: {

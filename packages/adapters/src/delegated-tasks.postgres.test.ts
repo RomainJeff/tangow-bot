@@ -323,6 +323,9 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
         runId: receipt.runId!,
       }),
     );
+    await expect(tasks.inspect(receipt.workId, s.actor)).resolves.toMatchObject({
+      root: { working: true, waitingInput: true },
+    });
 
     const followup = await tasks.apply(
       { kind: "followup", workId: receipt.workId, text: "The sales team." },
@@ -334,6 +337,9 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     await expect(
       prisma.run.findMany({ where: { scopedTaskId: receipt.workId }, select: { status: true } }),
     ).resolves.toEqual([{ status: "queued" }]);
+    await expect(tasks.inspect(receipt.workId, s.actor)).resolves.toMatchObject({
+      root: { working: true, waitingInput: false },
+    });
 
     await recordSpecialistResult(s.deps, {
       workId: receipt.workId,

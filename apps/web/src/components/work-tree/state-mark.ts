@@ -6,6 +6,7 @@ const GLYPHS: Record<TaskLineState, string | null> = {
   // Still working, or waiting for an answer: drawn as a dot, not a glyph.
   running: null,
   waiting: null,
+  needs_input: null,
   done: "✓",
   failed: "✕",
   cancelled: "⊘",
@@ -25,6 +26,8 @@ function stateLabel(state: TaskLineState): string {
       return t`Running`;
     case "waiting":
       return t`Needs your call`;
+    case "needs_input":
+      return t`Needs input`;
     case "done":
       return t`Done`;
     case "failed":

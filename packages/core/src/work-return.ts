@@ -10,6 +10,7 @@ export type WorkReturnOutcome = KnownOutcome | "unknown";
 export type TaskLineState =
   | "running"
   | "waiting"
+  | "needs_input"
   | "done"
   | "failed"
   | "cancelled"
@@ -45,6 +46,7 @@ export function taskStateTone(state: TaskLineState): TaskStateTone | null {
       return "muted";
     case "running":
     case "waiting":
+    case "needs_input":
       return null;
   }
 }

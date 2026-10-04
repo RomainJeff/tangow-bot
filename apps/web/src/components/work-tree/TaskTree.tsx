@@ -44,7 +44,7 @@ function StateMark({ state }: { state: TaskLineState }) {
       aria-hidden
       className={cn(
         "size-1.5 shrink-0 rounded-full",
-        state === "waiting" ? "bg-foreground" : "border border-foreground",
+        state === "running" ? "border border-foreground" : "bg-foreground",
       )}
     />
   );
