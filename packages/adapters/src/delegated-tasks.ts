@@ -12,7 +12,6 @@ import type {
   DelegationCommand,
   McpAccessCeiling,
   McpServerAccess,
-  NativeHarnessChoice,
   Receipt,
   ScopedWorkId,
   TaskApproval,
