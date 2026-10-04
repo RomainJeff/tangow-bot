@@ -105,6 +105,10 @@ RUN set -eu \
   && git config --system credential.https://github.com.helper '!/usr/bin/gh auth git-credential' \
   && git config --system init.defaultBranch main \
   && node --version && npm --version && git --version && gh --version
+# OpenCode, the coding agent bots delegate repository work to. Installed under /usr/local so it
+# survives the persistent home; start.sh links /managed-skills/computer into its skills directory.
+ARG OPENCODE_VERSION=1.18.34
+RUN npm install -g "opencode-ai@${OPENCODE_VERSION}" && npm cache clean --force && opencode --version
 ENV DISPLAY=:1
 ENV HOME=/home/rakazo
 # LibreOffice profile outside the workspace so it never lands in checkpoints.
