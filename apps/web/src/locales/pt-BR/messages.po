@@ -124,7 +124,7 @@ msgstr ""
 msgid "{days}d ago"
 msgstr "{days}d atrás"
 
-#: src/pages/shell/message-view.tsx:256
+#: src/pages/shell/message-view.tsx:255
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -164,7 +164,7 @@ msgstr "{size} B"
 msgid "{stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
-#: src/components/TaskCard.tsx:89
+#: src/components/TaskCard.tsx:88
 msgid "{title} · Opens in full"
 msgstr ""
 
@@ -536,7 +536,7 @@ msgstr "Aprove este servidor para permitir que seu agente use suas ferramentas."
 msgid "Archive"
 msgstr "Arquivar"
 
-#: src/pages/shell/message-view.tsx:346
+#: src/pages/shell/message-view.tsx:345
 msgid "archived"
 msgstr "arquivado"
 
@@ -544,7 +544,7 @@ msgstr "arquivado"
 msgid "Archived"
 msgstr "Arquivado"
 
-#: src/pages/shell/message-view.tsx:357
+#: src/pages/shell/message-view.tsx:356
 msgid "Archived. Chat, memory, and files kept."
 msgstr "Arquivado. Chat, memória e arquivos mantidos."
 
@@ -606,7 +606,7 @@ msgstr "em {timeSelect}"
 msgid "Attach file"
 msgstr "Escolher arquivo"
 
-#: src/pages/shell/message-view.tsx:96
+#: src/pages/shell/message-view.tsx:95
 msgid "Attachment"
 msgstr "Anexo"
 
@@ -683,15 +683,15 @@ msgstr "Iniciando a área de trabalho ao vivo..."
 msgid "Booting up {0}’s computer"
 msgstr "Inicializando o computador do {0}"
 
+#: src/pages/shell/message-view.tsx:243
 #: src/pages/shell/message-view.tsx:244
-#: src/pages/shell/message-view.tsx:245
-#: src/pages/shell/message-view.tsx:350
+#: src/pages/shell/message-view.tsx:349
 msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1614
-#: src/pages/shell/message-view.tsx:203
+#: src/pages/shell/message-view.tsx:202
 msgid "Bot"
 msgstr "Bot"
 
@@ -893,7 +893,7 @@ msgstr ""
 msgid "Client secret"
 msgstr ""
 
-#: src/components/TaskCard.tsx:163
+#: src/components/TaskCard.tsx:162
 #: src/pages/KnowledgeSection.tsx:670
 #: src/pages/KnowledgeSection.tsx:820
 #: src/pages/MessagingSettingsOverlay.tsx:361
@@ -1005,7 +1005,7 @@ msgstr ""
 
 #: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:64
-#: src/pages/shell/message-view.tsx:510
+#: src/pages/shell/message-view.tsx:508
 msgid "Computer"
 msgstr "Computador"
 
@@ -1749,7 +1749,7 @@ msgstr "Excluir memórias também"
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:348
+#: src/pages/shell/message-view.tsx:347
 msgid "deleted"
 msgstr "excluído"
 
@@ -1900,7 +1900,7 @@ msgstr "Habilidade de rascunho"
 msgid "Duplicate"
 msgstr "Duplicar"
 
-#: src/pages/shell/message-view.tsx:178
+#: src/pages/shell/message-view.tsx:177
 msgid "Earlier message"
 msgstr "Mensagem anterior"
 
@@ -2322,7 +2322,7 @@ msgstr "Suas conversas, arquivos e rotinas serão excluídos permanentemente. Os
 msgid "Jump to latest"
 msgstr "Ir para a mensagem mais recente"
 
-#: src/pages/shell/message-view.tsx:173
+#: src/pages/shell/message-view.tsx:172
 msgid "Jump to replied message"
 msgstr "Ir para a mensagem respondida"
 
@@ -2550,7 +2550,7 @@ msgstr ""
 
 #: src/pages/shell/composer.tsx:970
 #: src/pages/shell/composer.tsx:1064
-#: src/pages/shell/message-view.tsx:98
+#: src/pages/shell/message-view.tsx:97
 msgid "Message"
 msgstr ""
 
@@ -2578,7 +2578,7 @@ msgstr "Editor de mensagens"
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Message from {peer}"
 msgstr "Mensagem de {peer}"
 
@@ -2587,11 +2587,11 @@ msgid "Message…"
 msgstr "Mensagem…"
 
 #. placeholder {0}: sent.toBotName
-#: src/pages/shell/message-view.tsx:372
+#: src/pages/shell/message-view.tsx:371
 msgid "Messaged {0}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Messaged {peer}"
 msgstr "Enviou mensagem para {peer}"
 
@@ -3007,7 +3007,7 @@ msgstr "Trabalho aberto"
 msgid "OpenAI-compatible server URL"
 msgstr "URL do servidor compatível com OpenAI"
 
-#: src/pages/shell/message-view.tsx:359
+#: src/pages/shell/message-view.tsx:358
 msgid "Opened its thread."
 msgstr "Abriu a conversa."
 
@@ -3177,10 +3177,6 @@ msgstr "Provedor"
 msgid "Providers"
 msgstr "Provedores"
 
-#: src/components/CloudAgentCard.tsx:34
-msgid "Pull request"
-msgstr "Solicitação de pull"
-
 #: src/pages/ActivityList.tsx:148
 #: src/pages/shell/routine-run-line.tsx:154
 msgid "Queued"
@@ -3347,7 +3343,7 @@ msgstr "Remover habilidade {0}"
 msgid "Remove webhook"
 msgstr "Remover o webhook"
 
-#: src/pages/shell/message-view.tsx:358
+#: src/pages/shell/message-view.tsx:357
 msgid "Removed with chat, computer, and memory."
 msgstr "Removido com chat, computador e memória."
 
@@ -3734,12 +3730,12 @@ msgstr "Mostrar antes / depois"
 msgid "Show bots"
 msgstr "Mostrar bots"
 
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show less"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx:873
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show more"
 msgstr "Mostrar mais"
 
@@ -3888,7 +3884,7 @@ msgstr "Armazenado criptografado"
 msgid "Stored securely. Never shown here."
 msgstr "Armazenado com segurança. Nunca mostrado aqui."
 
-#: src/pages/shell/message-view.tsx:318
+#: src/pages/shell/message-view.tsx:317
 msgid "subagent"
 msgstr "subagente"
 

@@ -23,7 +23,6 @@ import {
   attachmentsForThread,
   buildComposerMentionOptions,
   type ComposerMention,
-  cloudAgentHttpsUrl,
   computeMessageGroups,
   foldRoutineRuns,
   isApprovalAskBlock,
@@ -70,7 +69,6 @@ import {
   AppState,
   FlatList,
   findNodeHandle,
-  Linking,
   Modal,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -229,7 +227,6 @@ const CARD_ONLY_BLOCK_KINDS = new Set<string>([
   "routine_run",
   "subagent",
   "child_bot",
-  "cloud_agent",
   "image",
   "file",
 ]);
@@ -1189,7 +1186,6 @@ function Thread() {
                 event.type === "thread.message.created" ||
                 event.type === "thread.message.updated" ||
                 event.type === "thread.subagent" ||
-                event.type === "thread.cloud_agent" ||
                 event.type === "thread.cleared" ||
                 event.type === "thread.rewound" ||
                 event.type === "run.waiting_input" ||
@@ -3479,8 +3475,7 @@ const MessageBubble = memo(function MessageBubble({
     return <RoutineRunLine item={item} handoff={handoffFor(item)} actionProps={actionProps} />;
   }
   const special = message.blocks.find(
-    (block) =>
-      block.kind === "subagent" || block.kind === "child_bot" || block.kind === "cloud_agent",
+    (block) => block.kind === "subagent" || block.kind === "child_bot",
   );
   if (special?.kind === "subagent") {
     const running = special.status === "running";
@@ -3495,44 +3490,6 @@ const MessageBubble = memo(function MessageBubble({
         streaming={running}
         actionProps={actionProps}
       />
-    );
-  }
-  if (special?.kind === "cloud_agent") {
-    const title = special.title || t("Cloud agent");
-    const statusLabel =
-      special.status === "running"
-        ? t("running")
-        : special.status === "finished"
-          ? t("finished")
-          : special.status === "cancelled"
-            ? t("cancelled")
-            : t("failed");
-    const prHref = cloudAgentHttpsUrl(special.prUrl);
-    const href = prHref ?? cloudAgentHttpsUrl(special.url);
-    return (
-      <View testID="cloud-agent-card" accessibilityLabel={`${title}: ${statusLabel}`}>
-        <TaskCard
-          title={title}
-          accessibilityRole={href ? "link" : "text"}
-          onPress={
-            href
-              ? () => {
-                  Linking.openURL(href).catch(() => undefined);
-                }
-              : undefined
-          }
-          state={
-            special.status === "running"
-              ? "running"
-              : special.status === "finished"
-                ? "done"
-                : special.status === "cancelled"
-                  ? "cancelled"
-                  : "failed"
-          }
-          meta={prHref ? t("Pull request") : special.branch}
-        />
-      </View>
     );
   }
   if (special?.kind === "child_bot") {

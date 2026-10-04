@@ -124,7 +124,7 @@ msgstr ""
 msgid "{days}d ago"
 msgstr "{days} दिन पहले"
 
-#: src/pages/shell/message-view.tsx:256
+#: src/pages/shell/message-view.tsx:255
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -164,7 +164,7 @@ msgstr "{size} B"
 msgid "{stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
-#: src/components/TaskCard.tsx:89
+#: src/components/TaskCard.tsx:88
 msgid "{title} · Opens in full"
 msgstr ""
 
@@ -536,7 +536,7 @@ msgstr "अपने एजेंट को इसके टूल उपयो�
 msgid "Archive"
 msgstr "आर्काइव करें"
 
-#: src/pages/shell/message-view.tsx:346
+#: src/pages/shell/message-view.tsx:345
 msgid "archived"
 msgstr "आर्काइव किया गया"
 
@@ -544,7 +544,7 @@ msgstr "आर्काइव किया गया"
 msgid "Archived"
 msgstr "आर्काइव किया गया"
 
-#: src/pages/shell/message-view.tsx:357
+#: src/pages/shell/message-view.tsx:356
 msgid "Archived. Chat, memory, and files kept."
 msgstr "आर्काइव किया गया। चैट, मेमोरी और फ़ाइलें सुरक्षित रखी गईं।"
 
@@ -606,7 +606,7 @@ msgstr "{timeSelect} बजे"
 msgid "Attach file"
 msgstr "फ़ाइल संलग्न करें"
 
-#: src/pages/shell/message-view.tsx:96
+#: src/pages/shell/message-view.tsx:95
 msgid "Attachment"
 msgstr "अटैचमेंट"
 
@@ -683,15 +683,15 @@ msgstr "लाइव डेस्कटॉप शुरू हो रहा ह�
 msgid "Booting up {0}’s computer"
 msgstr "{0} का कंप्यूटर शुरू हो रहा है"
 
+#: src/pages/shell/message-view.tsx:243
 #: src/pages/shell/message-view.tsx:244
-#: src/pages/shell/message-view.tsx:245
-#: src/pages/shell/message-view.tsx:350
+#: src/pages/shell/message-view.tsx:349
 msgid "bot"
 msgstr "बॉट"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1614
-#: src/pages/shell/message-view.tsx:203
+#: src/pages/shell/message-view.tsx:202
 msgid "Bot"
 msgstr "बॉट"
 
@@ -893,7 +893,7 @@ msgstr ""
 msgid "Client secret"
 msgstr ""
 
-#: src/components/TaskCard.tsx:163
+#: src/components/TaskCard.tsx:162
 #: src/pages/KnowledgeSection.tsx:670
 #: src/pages/KnowledgeSection.tsx:820
 #: src/pages/MessagingSettingsOverlay.tsx:361
@@ -1005,7 +1005,7 @@ msgstr ""
 
 #: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:64
-#: src/pages/shell/message-view.tsx:510
+#: src/pages/shell/message-view.tsx:508
 msgid "Computer"
 msgstr "कंप्यूटर"
 
@@ -1749,7 +1749,7 @@ msgstr "मेमोरी भी डिलीट करें"
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:348
+#: src/pages/shell/message-view.tsx:347
 msgid "deleted"
 msgstr "डिलीट किया गया"
 
@@ -1900,7 +1900,7 @@ msgstr "ड्राफ़्ट स्किल"
 msgid "Duplicate"
 msgstr "डुप्लिकेट"
 
-#: src/pages/shell/message-view.tsx:178
+#: src/pages/shell/message-view.tsx:177
 msgid "Earlier message"
 msgstr "पुराना संदेश"
 
@@ -2322,7 +2322,7 @@ msgstr "इसकी बातचीत, फ़ाइलें और रूट�
 msgid "Jump to latest"
 msgstr "नवीनतम संदेश पर जाएँ"
 
-#: src/pages/shell/message-view.tsx:173
+#: src/pages/shell/message-view.tsx:172
 msgid "Jump to replied message"
 msgstr "जिस संदेश का उत्तर दिया गया उस पर जाएं"
 
@@ -2550,7 +2550,7 @@ msgstr ""
 
 #: src/pages/shell/composer.tsx:970
 #: src/pages/shell/composer.tsx:1064
-#: src/pages/shell/message-view.tsx:98
+#: src/pages/shell/message-view.tsx:97
 msgid "Message"
 msgstr ""
 
@@ -2578,7 +2578,7 @@ msgstr "संदेश रचयिता"
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Message from {peer}"
 msgstr "{peer} का संदेश"
 
@@ -2587,11 +2587,11 @@ msgid "Message…"
 msgstr "संदेश…"
 
 #. placeholder {0}: sent.toBotName
-#: src/pages/shell/message-view.tsx:372
+#: src/pages/shell/message-view.tsx:371
 msgid "Messaged {0}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Messaged {peer}"
 msgstr "{peer} को संदेश भेजा"
 
@@ -3007,7 +3007,7 @@ msgstr "खुला कार्य"
 msgid "OpenAI-compatible server URL"
 msgstr "OpenAI-संगत सर्वर URL"
 
-#: src/pages/shell/message-view.tsx:359
+#: src/pages/shell/message-view.tsx:358
 msgid "Opened its thread."
 msgstr "इसका थ्रेड खोला।"
 
@@ -3177,10 +3177,6 @@ msgstr "प्रोवाइडर"
 msgid "Providers"
 msgstr "प्रोवाइडर्स"
 
-#: src/components/CloudAgentCard.tsx:34
-msgid "Pull request"
-msgstr "पुल अनुरोध"
-
 #: src/pages/ActivityList.tsx:148
 #: src/pages/shell/routine-run-line.tsx:154
 msgid "Queued"
@@ -3347,7 +3343,7 @@ msgstr "स्किल {0} हटाएं"
 msgid "Remove webhook"
 msgstr "वेबहुक हटाएँ"
 
-#: src/pages/shell/message-view.tsx:358
+#: src/pages/shell/message-view.tsx:357
 msgid "Removed with chat, computer, and memory."
 msgstr "चैट, कंप्यूटर और मेमोरी सहित हटाया गया।"
 
@@ -3734,12 +3730,12 @@ msgstr "पहले / बाद दिखाएँ"
 msgid "Show bots"
 msgstr "बॉट दिखाएँ"
 
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show less"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx:873
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show more"
 msgstr "और दिखाएँ"
 
@@ -3888,7 +3884,7 @@ msgstr "एन्क्रिप्टेड रूप में संग्र
 msgid "Stored securely. Never shown here."
 msgstr "सुरक्षित रूप से संग्रहीत। यहां कभी नहीं दिखाया जाता।"
 
-#: src/pages/shell/message-view.tsx:318
+#: src/pages/shell/message-view.tsx:317
 msgid "subagent"
 msgstr "सबएजेंट"
 

@@ -7,7 +7,6 @@ loadRootEnv();
 import {
   ChatSdkMessagingSurface,
   createBackgroundJobHandlers,
-  createCloudAgentConnection,
   createConnectorStack,
   createJobReconciler,
   createMessagingContextLoader,
@@ -37,7 +36,6 @@ import {
   PipedreamConnector,
   PostgresRealtimeFanout,
   pipedreamConfigFromEnv,
-  reconcileCloudAgents,
   reconcileComputerUpdates,
   resolveDeploymentModel,
   resolvePiSessionRoot,
@@ -174,7 +172,6 @@ async function main() {
       concurrency: parsePositiveInteger(process.env.GRAPHILE_WORKER_CONCURRENCY, 4),
     });
   // One provider instance so emulator launches and polls share the same Map.
-  const cloudAgent = createCloudAgentConnection();
   const executor = createRunExecutor({
     prisma,
     runtime,
@@ -197,11 +194,7 @@ async function main() {
         signal: AbortSignal.timeout(15_000),
       });
     },
-    secrets: [
-      deploymentModelKey ?? "",
-      process.env.COMPOSIO_API_KEY ?? "",
-      process.env.CURSOR_API_KEY ?? "",
-    ].filter(Boolean),
+    secrets: [deploymentModelKey ?? "", process.env.COMPOSIO_API_KEY ?? ""].filter(Boolean),
     secretStore: secrets,
     deploymentModelKey,
     dataDir,
@@ -210,7 +203,6 @@ async function main() {
     events,
     messaging: messaging ? createMessagingContextLoader(prisma) : undefined,
     web: createWebProvider(),
-    cloudAgent,
   });
 
   const jobHandlers = createBackgroundJobHandlers({
@@ -227,7 +219,6 @@ async function main() {
     memoryProviders,
     deploymentModelKey,
     messaging,
-    cloudAgent,
   });
   // graphile-worker run() connects through the shared pool. createPool already
   // retries connect() on 53300 a finite number of times. Keep retrying start
@@ -253,7 +244,6 @@ async function main() {
     jobs,
     events,
     leadership: createPostgresReconciliationLeadership(pool),
-    reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
   });
   reconciler.start();

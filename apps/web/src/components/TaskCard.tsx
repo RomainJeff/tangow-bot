@@ -25,8 +25,7 @@ function taskStatusLabel(state: TaskCardState, t: ReturnType<typeof useLingui>["
  * task's result on `Surface variant="outlined"`, full column width — a
  * document glyph, the title, a status line (nothing for a finished task),
  * the brief in `meta` on two lines, a `border` hairline, then the result cut
- * to five lines. Used both by `TaskCard` (which makes the whole thing a
- * button) and by `CloudAgentCard` (which wraps it in its own link instead).
+ * to five lines. Used by `TaskCard`, which makes the whole thing a button.
  */
 export function TaskCardSurface({
   title,

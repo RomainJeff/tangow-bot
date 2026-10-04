@@ -18,7 +18,6 @@ import {
   runJobKey,
 } from "@rakazo/adapter-kit";
 import type {
-  CloudAgentConnection,
   ComposioProvider,
   ComputerExecutionLease,
   ConnectorRegistry,
@@ -465,7 +464,6 @@ function mcpAssignmentDto(row: {
 }
 
 export interface RouterDeps {
-  cloudAgent?: CloudAgentConnection | null;
   prisma: PrismaClient;
   events: ThreadEvents;
   auth: Auth;
