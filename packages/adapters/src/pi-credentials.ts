@@ -115,7 +115,8 @@ export function retryRejectedOAuth(
   models.streamSimple = (model, context, options) => {
     const outer = createAssistantMessageEventStream();
     void (async () => {
-      const used = await store.read(providerId);
+      // An aborted read must not leave the outer stream unterminated; the call then runs once.
+      const used = await store.read(providerId).catch(() => undefined);
       const first = streamSimple(model, context, options);
       let started = false;
       for await (const event of first) {
