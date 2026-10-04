@@ -717,6 +717,63 @@ describe("ClaudeNativeRuntime", () => {
     });
   });
 
+  // Rotating a subscription token revokes the previous one, killing concurrent runs on it.
+  it.each([
+    { when: "valid for hours", validFor: 6 * 60 * 60 * 1000, refreshes: 0, token: "stored-access" },
+    { when: "about to expire", validFor: 10 * 60 * 1000, refreshes: 1, token: "renewed-access" },
+  ])(
+    "refreshes the stored subscription token $refreshes time(s) when it is $when",
+    async ({ validFor, refreshes, token }) => {
+      const process = fakeProcess([
+        '{"type":"system","subtype":"init","session_id":"reuse"}',
+        '{"type":"result","subtype":"success"}',
+      ]);
+      const startNativeProcess = vi.fn<NonNullable<SandboxProvider["startNativeProcess"]>>(
+        async () => process,
+      );
+      const refresh = vi.fn(async () => ({
+        type: "oauth" as const,
+        access: "renewed-access",
+        refresh: "renewed-refresh",
+        expires: Date.now() + 8 * 60 * 60 * 1000,
+      }));
+      const runtime = new ClaudeNativeRuntime({
+        sandbox: { startNativeProcess } as unknown as SandboxProvider,
+        computer,
+        cwd: ".",
+      });
+
+      for await (const _event of runtime.run(
+        request(
+          "reuse",
+          { mode: "new" },
+          {
+            model: {
+              provider: "anthropic",
+              id: "claude-sonnet",
+              oauth: {
+                credential: {
+                  type: "oauth",
+                  access: "stored-access",
+                  refresh: "stored-refresh",
+                  expires: Date.now() + validFor,
+                },
+                refresh,
+              },
+            },
+          },
+        ),
+        context,
+      ))
+        undefined;
+
+      expect(refresh).toHaveBeenCalledTimes(refreshes);
+      expect(startNativeProcess.mock.calls[0]![1].env).toMatchObject({
+        CLAUDE_CODE_OAUTH_TOKEN: token,
+      });
+    },
+  );
+
   it("resumes a session from the durable native reference and confirms it from the CLI's own init event", async () => {
     const ref: NativeRef = { bindingId: "rakazo-binding-42", generation: 3 };
     const externalSessionId = "11111111-1111-1111-1111-111111111111";

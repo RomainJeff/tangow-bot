@@ -33,6 +33,10 @@ type ClaudeStreamEvent = {
   };
 };
 
+// The CLI gets a fixed token and cannot refresh it mid-turn, so a turn needs far more than
+// the 5-minute Pi margin; an hour covers long agentic turns and still reuses most of a token's life.
+const NATIVE_TURN_MIN_OAUTH_VALIDITY_MS = 60 * 60 * 1000;
+
 function unavailable(message: string): Error {
   return Object.assign(new Error(message), { code: "harness_unavailable" });
 }
@@ -190,10 +194,12 @@ export class ClaudeNativeRuntime implements AgentRuntime {
       if (mcpConfig) files.push({ path: "mcp-config.json", content: mcpConfig });
       if (request.instructions)
         files.push({ path: "system-prompt.md", content: request.instructions });
-      const credential = await request.model.oauth.refresh(
-        request.model.oauth.credential,
-        context.signal,
-      );
+      const stored = request.model.oauth.credential;
+      // Rotating revokes the previous token for every concurrent run on the subscription.
+      const credential =
+        stored.expires - Date.now() >= NATIVE_TURN_MIN_OAUTH_VALIDITY_MS
+          ? stored
+          : await request.model.oauth.refresh(stored, context.signal);
       if (!credential.access) {
         throw unavailable("claude-native OAuth refresh returned no access credential");
       }
