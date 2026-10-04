@@ -44,12 +44,11 @@ mkdir -p /tmp/fluxbox-home/.fluxbox
 cp /etc/rakazo/fluxbox/init /tmp/fluxbox-home/.fluxbox/init
 cp /etc/rakazo/fluxbox/apps /tmp/fluxbox-home/.fluxbox/apps 2>/dev/null || true
 cp /etc/rakazo/fluxbox/menu /tmp/fluxbox-home/.fluxbox/menu 2>/dev/null || true
-mkdir -p /tmp/fluxbox-home/.config
-cp /etc/rakazo/tint2rc /tmp/fluxbox-home/.config/tint2rc
+cp -r /etc/rakazo/plank /tmp/fluxbox-home/.config/plank
 cat > /tmp/fluxbox-home/.fluxbox/startup <<'EOF'
 #!/bin/sh
 xsetroot -solid "#111113"
-tint2 -c /tmp/fluxbox-home/.config/tint2rc &
+plank &
 exec fluxbox -rc /tmp/fluxbox-home/.fluxbox/init
 EOF
 chmod +x /tmp/fluxbox-home/.fluxbox/startup

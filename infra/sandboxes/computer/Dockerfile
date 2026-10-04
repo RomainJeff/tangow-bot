@@ -45,11 +45,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
     libreoffice-calc \
     libreoffice-impress \
-    tint2 \
+    plank \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 1000 rakazo \
   && useradd --uid 1000 --gid rakazo --create-home --shell /bin/zsh rakazo \
-  && mkdir -p /etc/rakazo/fluxbox /etc/xdg/xfce4/terminal \
+  && mkdir -p /etc/rakazo/fluxbox /etc/rakazo/plank/dock1/launchers /etc/xdg/xfce4/terminal \
   && rm -f /etc/zsh/newuser.zshrc.recommended \
   && printf '%s\n' '#!/bin/sh' 'exec xsetroot -solid "#111113" "$@"' > /usr/bin/fbsetbg \
   && chmod +x /usr/bin/fbsetbg \
@@ -119,7 +119,10 @@ COPY --chmod=644 zshrc /etc/zsh/zshrc
 COPY --chmod=644 rakazo-browser.desktop /usr/share/applications/rakazo-browser.desktop
 COPY --chmod=644 rakazo-terminal.desktop /usr/share/applications/rakazo-terminal.desktop
 COPY --chmod=644 rakazo-files.desktop /usr/share/applications/rakazo-files.desktop
-COPY --chmod=644 tint2rc /etc/rakazo/tint2rc
+COPY --chmod=644 plank-settings /etc/rakazo/plank/dock1/settings
+COPY --chmod=644 rakazo-browser.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-browser.dockitem
+COPY --chmod=644 rakazo-files.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-files.dockitem
+COPY --chmod=644 rakazo-terminal.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-terminal.dockitem
 COPY --chmod=644 fluxbox.init /etc/rakazo/fluxbox/init
 COPY --chmod=644 fluxbox.apps /etc/rakazo/fluxbox/apps
 COPY --chmod=644 fluxbox.menu /etc/rakazo/fluxbox/menu
@@ -131,8 +134,7 @@ COPY --chmod=644 mobile-keyboard.js /usr/share/novnc/mobile-keyboard.js
 RUN ldconfig \
   && sed -i 's/\r$//' /usr/local/bin/rakazo-computer /usr/local/bin/rakazo-computer-control /usr/local/bin/rakazo-browser /usr/local/bin/rakazo-page-browser \
     /usr/local/bin/rakazo-terminal /etc/rakazo/zshrc /etc/xdg/xfce4/terminal/terminalrc \
-    /etc/rakazo/fluxbox/init /etc/rakazo/fluxbox/apps /etc/rakazo/fluxbox/menu \
-    /etc/rakazo/tint2rc
+    /etc/rakazo/fluxbox/init /etc/rakazo/fluxbox/apps /etc/rakazo/fluxbox/menu
 EXPOSE 7070 6080 6081 6082 6083 6084 6085 6086 6087 6088 6089 6090 6091 6092 6093 6094 6095
 USER 1000:1000
 CMD ["/usr/local/bin/rakazo-computer"]
