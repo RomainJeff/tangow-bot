@@ -1,6 +1,6 @@
 ---
 name: delegate-to-opencode
-description: Have OpenCode write code in the background, then review and explain it.
+description: Hands coding work in a repository to OpenCode on the computer as background jobs (up to three in parallel), follows up on its own, gets the result reviewed and explains it in plain words. Use when the user asks to build, fix, change or plan code in a repository, or asks about a running OpenCode job; not for questions answered by reading a file or two.
 ---
 
 Use this when the user wants code written, fixed or changed in a repository on the computer. OpenCode does the whole job (explore, code, test, preview) in the background while you stay free to talk. Do not use it for questions you can answer by reading a file or two.

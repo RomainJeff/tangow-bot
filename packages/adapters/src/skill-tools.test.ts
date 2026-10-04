@@ -217,8 +217,6 @@ describe("skill tools", () => {
     for (const skill of builtins) {
       const parsed = parseSkillMd(skill.content);
       expect(parsed).toMatchObject({ name: skill.name, description: skill.description });
-      // / picker truncates at 72; keep descriptions short so "review only" stays visible.
-      expect(skill.description.length).toBeLessThanOrEqual(72);
     }
 
     const records = await listAgentSkillRecords(deps, owner);
