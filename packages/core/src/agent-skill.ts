@@ -134,8 +134,15 @@ export function formatSkillsCatalogInstruction(entries: SkillCatalogEntry[]): st
   ].join("\n");
 }
 
-export function formatForcedSkillPrompt(name: string, content: string, rest?: string): string {
+export function formatForcedSkillPrompt(
+  name: string,
+  content: string,
+  rest?: string,
+  dir?: string,
+): string {
+  // Files after the body keep a re-expansion idempotent: `rest` still starts with the content.
   const parts = [`Use skill: ${name}`, "", content.trim()];
+  if (dir) parts.push("", `Files: ${dir}`);
   const trailing = rest?.trim();
   if (trailing) parts.push("", trailing);
   return parts.join("\n");
@@ -237,9 +244,10 @@ function restAlreadyIncludesSkillContent(rest: string, content: string): boolean
 }
 
 /** Expand forced `/Name` or routine `@Name` mentions into full skill bodies for the task prompt. */
-export function expandSkillReferencesInPrompt(
+export function expandSkillReferencesInPrompt<T extends SkillRecord>(
   prompt: string,
-  skills: readonly SkillRecord[],
+  skills: readonly T[],
+  dirFor?: (skill: T) => string,
 ): string {
   const forced = extractForcedSkillName(prompt);
   if (forced) {
@@ -249,7 +257,7 @@ export function expandSkillReferencesInPrompt(
       if (restAlreadyIncludesSkillContent(forced.rest, skill.content)) {
         return prompt.trimStart();
       }
-      return formatForcedSkillPrompt(skill.name, skill.content, forced.rest);
+      return formatForcedSkillPrompt(skill.name, skill.content, forced.rest, dirFor?.(skill));
     }
   }
 
@@ -264,7 +272,7 @@ export function expandSkillReferencesInPrompt(
   for (const mention of mentions) {
     const skill = findSkillByName(skills, mention);
     if (!skill) continue;
-    blocks.push(formatForcedSkillPrompt(skill.name, skill.content));
+    blocks.push(formatForcedSkillPrompt(skill.name, skill.content, undefined, dirFor?.(skill)));
     // Strip the @mention token so the agent is not confused by a dangling pointer.
     remaining = remaining.replace(
       new RegExp(`(^|[\\s(,])@${escapeRegExp(mention)}(?=[\\s,.)]|$)`, "gi"),

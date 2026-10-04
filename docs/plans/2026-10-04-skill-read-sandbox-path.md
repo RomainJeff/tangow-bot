@@ -32,9 +32,9 @@ Le catalogue du prompt ne donne que `- Nom: description` (`packages/core/src/age
 
 4. **La phrase d'indication du prompt raccourcit.** Elle devient : `Skill files (scripts/, references/) are mounted read-only in the sandbox; skill_read returns the skill's folder as dir.` Les trois gabarits de chemin disparaissent. Une ligne de moins par tour pour chaque bot.
 
-5. **Les skills développés dans le prompt portent aussi leur dossier.** `formatForcedSkillPrompt` et le bloc `@Name` ajoutent une ligne `Files: <dir>` sous `Use skill: <name>`. `expandSkillReferencesInPrompt` reste dans `@rakazo/core` et reçoit le résolveur en paramètre optionnel (`dirFor?: (skill) => string`) pour ne pas tirer `skillDirName` des adapters dans core ; sans résolveur, comportement actuel.
+5. **Les skills développés dans le prompt portent aussi leur dossier.** `formatForcedSkillPrompt` et le bloc `@Name` ajoutent une ligne `Files: <dir>` après le corps du skill. `expandSkillReferencesInPrompt` reste dans `@rakazo/core` et reçoit le résolveur en paramètre optionnel (`dirFor?: (skill) => string`) pour ne pas tirer `skillDirName` des adapters dans core ; sans résolveur, comportement actuel.
    
-   L'idempotence (`restAlreadyIncludesSkillContent`) ne change pas : la ligne `Files:` est hors du contenu comparé.
+   L'idempotence (`restAlreadyIncludesSkillContent`) ne change pas : placée après le corps, la ligne `Files:` laisse `rest` commencer par le contenu du skill lors d'une seconde expansion.
 
 6. **Le chemin est renvoyé même quand le computer n'a pas les montages** (E2B, Daytona, Box). C'est déjà ce que promet la phrase d'indication aujourd'hui ; la rendre conditionnelle au provider est hors scope (voir section 5).
 
@@ -49,6 +49,7 @@ Le catalogue du prompt ne donne que `- Nom: description` (`packages/core/src/age
 - `packages/adapters/src/executor.ts` :
   - `:3725` : nouvelle phrase (décision 4).
   - `:1083` et `:3731` : passer `sandboxSkillDir` à `expandSkillReferencesInPrompt`.
+- `apps/api/src/router.ts:2620` (test d'une routine depuis l'UI) : idem.
 - `packages/adapters/src/builtin-tools.ts:709`, description du tool `skill_read` : mentionner `dir` en quelques mots.
 - `packages/core/src/agent-skill.ts` : paramètre `dirFor` dans `expandSkillReferencesInPrompt` et `formatForcedSkillPrompt`.
 
@@ -75,4 +76,4 @@ Rien côté web, mobile ou desktop : le champ n'est consommé que par Pi.
 * * *
 ## 6. CHANGELOG
 
-`#### Fixed` : « Bots now find the scripts and reference files of your skills and marketplace skills on their computer without searching for them. »
+`#### Fixed` : « Bots go straight to the scripts and reference files of your own and marketplace skills on their computer instead of searching for them. »

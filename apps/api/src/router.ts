@@ -68,6 +68,7 @@ import {
   replaceComputer,
   resolveAutoReviewChecker,
   resolveBotWorkspacePath,
+  sandboxSkillDir,
   sanitizeComposioError,
   sanitizeConnectorError,
   savePushToken,
@@ -2617,7 +2618,7 @@ export function createRouter(deps: RouterDeps) {
           if (existing) return { runId: existing.id };
         }
         const skillRecords = await agentSkills.listWithContent(context.actor, routine.botId);
-        const prompt = expandSkillReferencesInPrompt(routine.prompt, skillRecords);
+        const prompt = expandSkillReferencesInPrompt(routine.prompt, skillRecords, sandboxSkillDir);
         let run: { id: string };
         try {
           // Task + run must commit together so a nonce collision cannot leave an orphan queued Task.
