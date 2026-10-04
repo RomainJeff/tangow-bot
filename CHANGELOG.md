@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- Bots hand coding work to OpenCode as background jobs and stay free to chat: several jobs run in parallel, each on its own branch, and the bot comes back on its own when one finishes, has it reviewed and explains the result in plain words. Signing OpenCode in now works with a link and a code from your phone (ChatGPT or GitHub Copilot) instead of typing in the computer's terminal, and nothing is pushed unless you ask for a pull request.
 - The computer's terminal is now Xfce Terminal running zsh, with completion, shared history, suggestions and the git branch in the prompt, instead of xterm with bash.
 - Bot computers on Docker can now use up to 8 GB of memory and 4 CPUs by default instead of 2 GB and 2 CPUs, so builds, tests and heavier pages run without hitting the ceiling.
 
