@@ -1,0 +1,75 @@
+# Panel
+panel_items = L T C
+panel_size = 100% 36
+panel_margin = 0 0
+panel_padding = 4 0 4
+panel_position = bottom center horizontal
+panel_background_id = 1
+panel_layer = top
+panel_monitor = all
+wm_menu = 1
+
+# Backgrounds
+# id 1: panel
+rounded = 0
+border_width = 0
+border_sides = T
+background_color = #1a1a1e 100
+border_color = #333338 60
+
+# id 2: active task
+rounded = 4
+border_width = 1
+background_color = #333338 80
+border_color = #555558 60
+
+# id 3: launcher icon hover
+rounded = 4
+border_width = 0
+background_color = #333338 80
+border_color = #000000 0
+
+# Taskbar
+taskbar_mode = single_desktop
+taskbar_padding = 2 0 4
+taskbar_background_id = 0
+taskbar_active_background_id = 0
+taskbar_hide_if_empty = 0
+
+# Task
+task_text = 1
+task_icon = 1
+task_centered = 1
+task_maximum_size = 180 32
+task_padding = 6 2 6
+task_font = sans 10
+task_font_color = #c8c8cc 80
+task_active_font_color = #ffffff 100
+task_background_id = 0
+task_active_background_id = 2
+task_icon_size = 20
+
+# Launcher
+launcher_padding = 4 0 4
+launcher_background_id = 0
+launcher_icon_size = 24
+launcher_icon_theme = hicolor
+launcher_tooltip = 1
+launcher_icon_background_id = 3
+launcher_item_app = /usr/share/applications/rakazo-browser.desktop
+launcher_item_app = /usr/share/applications/rakazo-files.desktop
+launcher_item_app = /usr/share/applications/rakazo-terminal.desktop
+
+# Clock
+time1_format = %H:%M
+time1_font = sans bold 10
+clock_font_color = #c8c8cc 90
+clock_padding = 8 0
+clock_background_id = 0
+
+# Tooltip
+tooltip_show_timeout = 0.5
+tooltip_padding = 4 4
+tooltip_background_id = 1
+tooltip_font = sans 10
+tooltip_font_color = #c8c8cc 90
