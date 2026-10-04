@@ -625,7 +625,16 @@ describe("space computer limit enforcement", () => {
       async (opts?: { filters?: { label?: string[] } }) => {
         const labels = opts?.filters?.label ?? [];
         return labels.some((l: string) => l === "rakazo.botId=bot-existing")
-          ? [{ Id: existing.id, Labels: existing.inspect.mock.results[0]?.value?.Config?.Labels }]
+          ? [
+              {
+                Id: existing.id,
+                Labels: {
+                  "rakazo.managed": "true",
+                  "rakazo.botId": "bot-existing",
+                  "rakazo.spaceId": "space-1",
+                },
+              },
+            ]
           : [];
       },
     );
