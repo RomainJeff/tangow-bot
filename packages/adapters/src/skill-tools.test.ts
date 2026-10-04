@@ -203,7 +203,7 @@ describe("skill tools", () => {
       update: {},
     });
     const records = await listAgentSkillRecords(deps, { ...owner, botId: "bot-1" });
-    expect(records.map((r) => r.name)).toEqual(["Interrogate"]);
+    expect(records.map((r) => r.name)).toEqual(["delegate-to-opencode", "Interrogate"]);
   });
 
   it("ships builtin skills as valid, readable, read-only SKILL.md records", async () => {
@@ -357,11 +357,21 @@ describe("skill tools", () => {
 
     // Builtins default to "all", so every bot sees them alongside its own visible skills.
     const forA = await listAgentSkillRecords(deps, { ...scope, botId: "botA" });
-    expect(forA.map((s) => s.name)).toEqual(["Interrogate", "Everyone", "Only bot A"]);
+    expect(forA.map((s) => s.name)).toEqual([
+      "delegate-to-opencode",
+      "Interrogate",
+      "Everyone",
+      "Only bot A",
+    ]);
     const forB = await listAgentSkillRecords(deps, { ...scope, botId: "botB" });
-    expect(forB.map((s) => s.name)).toEqual(["Interrogate", "Everyone", "Not for A"]);
+    expect(forB.map((s) => s.name)).toEqual([
+      "delegate-to-opencode",
+      "Interrogate",
+      "Everyone",
+      "Not for A",
+    ]);
     const all = await listAgentSkillRecords(deps, scope);
-    expect(all).toHaveLength(4);
+    expect(all).toHaveLength(5);
     // skill_read follows the same visibility.
     expect(
       await skillReadFromTool(deps, { ...scope, botId: "botB" }, { name: "Only bot A" }),
@@ -451,10 +461,10 @@ describe("skill tools", () => {
     // The exclusion semantics survive the rename: only botA sees it.
     expect(
       (await listAgentSkillRecords(deps, { ...owner, botId: "botA" })).map((s) => s.name),
-    ).toEqual(["Interrogate", "New"]);
+    ).toEqual(["delegate-to-opencode", "Interrogate", "New"]);
     expect(
       (await listAgentSkillRecords(deps, { ...owner, botId: "botB" })).map((s) => s.name),
-    ).toEqual(["Interrogate"]);
+    ).toEqual(["delegate-to-opencode", "Interrogate"]);
 
     expect(await skillDeleteFromTool(deps, owner, { name: "New" })).toEqual({
       ok: true,
