@@ -420,19 +420,15 @@ export class CodexNativeRuntime implements AgentRuntime {
           chatgptAccountId: request.model.oauth.credential.accountId,
         });
         await next(2, "account/login/start");
-        await send(
-          3,
-          effectiveContinuity.mode === "reconstruct" && effectiveContinuity.nativeRef
-            ? "thread/resume"
-            : "thread/start",
-          effectiveContinuity.mode === "reconstruct" && effectiveContinuity.nativeRef
-            ? { threadId: effectiveContinuity.nativeRef }
-            : {},
-        );
-        const threadMethod =
-          effectiveContinuity.mode === "reconstruct" && effectiveContinuity.nativeRef
-            ? "thread/resume"
-            : "thread/start";
+        const resumeThreadId =
+          effectiveContinuity.mode === "reconstruct" ? effectiveContinuity.nativeRef : undefined;
+        const threadMethod = resumeThreadId ? "thread/resume" : "thread/start";
+        // Bot instructions extend, never replace, Codex's base instructions. A
+        // reconstructed thread receives them again so the current ones apply.
+        await send(3, threadMethod, {
+          ...(resumeThreadId ? { threadId: resumeThreadId } : {}),
+          ...(request.instructions ? { developerInstructions: request.instructions } : {}),
+        });
         let thread: Rpc;
         try {
           thread = await next(3, threadMethod);
@@ -461,8 +457,7 @@ export class CodexNativeRuntime implements AgentRuntime {
             ? (thread.result!.thread as { id: string }).id
             : undefined;
         if (!threadId) throw new Error("codex thread/start response missing native thread id");
-        if (!(effectiveContinuity.mode === "reconstruct" && effectiveContinuity.nativeRef))
-          turnPrompt = promptWithThreadHistory(request);
+        if (!resumeThreadId) turnPrompt = promptWithThreadHistory(request);
         turnRequestId = 4;
       } else {
         turnRequestId = 5;

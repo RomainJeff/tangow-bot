@@ -1086,6 +1086,50 @@ describe("CodexNativeRuntime", () => {
     });
   });
 
+  it.each([
+    { mode: "new", method: "thread/start", params: {} },
+    { mode: "reconstruct", method: "thread/resume", params: { threadId: "stored-thread" } },
+  ])("gives the bot instructions to Codex on $method", async ({ mode, method, params }) => {
+    const writes: string[] = [];
+    const process: NativeProcess = {
+      write: async (data) => {
+        writes.push(data);
+      },
+      stdout: (async function* () {
+        yield '{"id":1,"result":{}}\n';
+        yield '{"id":2,"result":{}}\n';
+        yield '{"id":3,"result":{"thread":{"id":"stored-thread"}}}\n';
+        yield '{"id":4,"result":{}}\n';
+        yield '{"method":"turn/completed","params":{"turn":{"status":"completed"}}}\n';
+      })(),
+      stderr: (async function* () {})(),
+      wait: async () => ({ code: 0 }),
+      stop: async () => "stopped",
+    };
+    const runtime = new CodexNativeRuntime({
+      sandbox: { startNativeProcess: async () => process } as unknown as SandboxProvider,
+      computer,
+      cwd: ".",
+    });
+    const instructed = { ...request(`instructions-${mode}`), instructions: "Use remember." };
+    if (mode === "reconstruct")
+      instructed.execution!.continuity = {
+        mode: "reconstruct",
+        previous: { bindingId: "instructions-binding", generation: 0 },
+        reason: "parked_process_missing",
+        inputId: "next",
+        nativeRef: "stored-thread",
+      };
+    for await (const _event of runtime.run(instructed, context)) undefined;
+    const thread = writes.map((write) => JSON.parse(write)).find((rpc) => rpc.id === 3);
+    expect(thread).toMatchObject({
+      method,
+      params: { ...params, developerInstructions: "Use remember." },
+    });
+    expect(thread.params).not.toHaveProperty("baseInstructions");
+    await runtime.abort(`instructions-${mode}`);
+  });
+
   it("uses the private Computer workspace root instead of rejecting its empty relative cwd", async () => {
     const process: NativeProcess = {
       write: async () => undefined,
