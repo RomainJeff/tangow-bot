@@ -345,15 +345,18 @@ export function BotSettings({
   const [modelMetaReady, setModelMetaReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Availability follows the saved model and Computer, so it is re-read after every save.
+  const loadNativeHarnesses = () =>
+    rpc.computer
+      .status({ botId: bot.id })
+      .then((status) => setNativeHarnesses(status.nativeHarnesses ?? null))
+      .catch(() => setNativeHarnesses(null));
   useEffect(() => {
     void rpc.voice
       .voices({})
       .then(setVoices)
       .catch(() => setVoices([]));
-    void rpc.computer
-      .status({ botId: bot.id })
-      .then((status) => setNativeHarnesses(status.nativeHarnesses ?? null))
-      .catch(() => setNativeHarnesses(null));
+    void loadNativeHarnesses();
     void Promise.all([rpc.models.credentials(), rpc.models.list(), rpc.me()])
       .then(([nextCredentials, nextCatalog, nextMe]) => {
         setCredentials(nextCredentials);
@@ -714,6 +717,7 @@ export function BotSettings({
                   }
                 : {}),
             })
+              .then(loadNativeHarnesses)
               .catch((err) => setError(err instanceof Error ? err.message : t`Could not save`))
               .finally(() => setSaving(false));
           }}
