@@ -35,7 +35,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
     procps \
     bash \
-    chromium \
     fonts-liberation \
     fonts-dejavu-core \
     dbus-x11 \
@@ -46,6 +45,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-calc \
     libreoffice-impress \
     plank \
+    dconf-cli \
+    gnupg \
+  && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+  && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
+    > /etc/apt/sources.list.d/google-chrome.list \
+  && apt-get update && apt-get install -y --no-install-recommends google-chrome-stable \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 1000 rakazo \
   && useradd --uid 1000 --gid rakazo --create-home --shell /bin/zsh rakazo \
@@ -119,7 +124,6 @@ COPY --chmod=644 zshrc /etc/zsh/zshrc
 COPY --chmod=644 rakazo-browser.desktop /usr/share/applications/rakazo-browser.desktop
 COPY --chmod=644 rakazo-terminal.desktop /usr/share/applications/rakazo-terminal.desktop
 COPY --chmod=644 rakazo-files.desktop /usr/share/applications/rakazo-files.desktop
-COPY --chmod=644 plank-settings /etc/rakazo/plank/dock1/settings
 COPY --chmod=644 rakazo-browser.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-browser.dockitem
 COPY --chmod=644 rakazo-files.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-files.dockitem
 COPY --chmod=644 rakazo-terminal.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-terminal.dockitem
