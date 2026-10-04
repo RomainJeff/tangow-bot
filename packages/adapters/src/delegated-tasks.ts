@@ -35,6 +35,7 @@ import {
   appendEventInTransaction,
   createThreadMessageInTransaction,
   RunHistoryWriteError,
+  resumeAskWithComposerTextInTransaction,
   stopRunsInTransaction,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -1002,6 +1003,36 @@ async function applyFollowup(
       blocks: [{ kind: "text", text: command.text }],
       runId: context.originRunId,
     });
+    // A specialist parked on a question takes the follow-up as its answer, exactly as the
+    // composer would: a second Run beside it would leave the question waiting forever, and
+    // the task with it, since a waiting Run still counts as work going.
+    const waiting = await tx.run.findFirst({
+      where: { scopedTaskId: scopedTask.id, status: "waiting_input" },
+      select: { id: true },
+    });
+    const resumed = waiting
+      ? await resumeAskWithComposerTextInTransaction(tx, {
+          spaceId: scopedTask.spaceId,
+          threadId: scopedTask.specialistThreadId,
+          runId: waiting.id,
+          text: command.text,
+        })
+      : null;
+    if (resumed?.resolvable) {
+      await appendEventInTransaction(tx, {
+        spaceId: scopedTask.spaceId,
+        threadId: scopedTask.coordinatorThreadId,
+        botId: scopedTask.executorBotId,
+        type: "work.input_answered",
+        runId: resumed.runId,
+        payload: { workId: scopedTask.id, runId: resumed.runId },
+      });
+      return {
+        runId: resumed.runId,
+        specialistSeq: resumed.eventSeq,
+        treeChanged: await appendWorkTreeChanged(tx, scopedTask),
+      };
+    }
     const task = await tx.task.create({
       data: {
         spaceId: scopedTask.spaceId,
@@ -1025,19 +1056,28 @@ async function applyFollowup(
         scopedTaskId: scopedTask.id,
       },
     });
-    return { run, treeChanged: await appendWorkTreeChanged(tx, scopedTask) };
+    return {
+      runId: run.id,
+      specialistSeq: null,
+      treeChanged: await appendWorkTreeChanged(tx, scopedTask),
+    };
   });
 
+  if (created.specialistSeq !== null) {
+    await deps.events
+      ?.notify(scopedTask.specialistThreadId, created.specialistSeq)
+      .catch(() => undefined);
+  }
   await deps.events
     ?.notify(created.treeChanged.threadId, created.treeChanged.seq)
     .catch(() => undefined);
-  await deps.jobs.enqueue(runContinueJob(created.run.id));
+  await deps.jobs.enqueue(runContinueJob(created.runId));
 
   return {
     workId: scopedTask.id,
     botId: scopedTask.executorBotId,
     threadId: scopedTask.specialistThreadId,
-    runId: created.run.id,
+    runId: created.runId,
     state: "queued",
     replayed: false,
   };

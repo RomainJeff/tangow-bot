@@ -298,6 +298,55 @@ describePostgres("DelegatedTasks.apply/inspect (PostgreSQL contract)", () => {
     ).rejects.toThrow(/closed/);
   });
 
+  it("answers a specialist's question with the follow-up, so the task closes once it returns", async () => {
+    const s = await setup();
+    const tasks = createDelegatedTasks(s.deps);
+    const receipt = await tasks.apply(
+      {
+        kind: "delegate",
+        target: { kind: "from_profile", profileBotId: s.profile.id, name: "Writer" },
+        harness: "codex-native",
+        brief: "Write the brief",
+        requestedRights: {},
+        spawnKey: `question-${randomUUID()}`,
+      },
+      s.context,
+    );
+    // The specialist's first Run ends by asking a question.
+    await prisma.run.update({ where: { id: receipt.runId! }, data: { status: "waiting_input" } });
+    await prisma.$transaction((tx) =>
+      createThreadMessageInTransaction(tx, {
+        threadId: receipt.threadId,
+        role: "bot",
+        blocks: [{ kind: "ask", text: "Which audience is the brief for?", status: "pending" }],
+        botId: receipt.botId,
+        runId: receipt.runId!,
+      }),
+    );
+
+    const followup = await tasks.apply(
+      { kind: "followup", workId: receipt.workId, text: "The sales team." },
+      s.context,
+    );
+
+    // The waiting Run takes the answer; no second Run starts beside it.
+    expect(followup.runId).toBe(receipt.runId);
+    await expect(
+      prisma.run.findMany({ where: { scopedTaskId: receipt.workId }, select: { status: true } }),
+    ).resolves.toEqual([{ status: "queued" }]);
+
+    await recordSpecialistResult(s.deps, {
+      workId: receipt.workId,
+      runId: receipt.runId!,
+      text: "The brief.",
+    });
+    await finishRuns(receipt.workId);
+    await tasks.apply({ kind: "close", workId: receipt.workId }, s.context);
+    await expect(tasks.inspect(receipt.workId, s.actor)).resolves.toMatchObject({
+      root: { status: "closed", working: false },
+    });
+  });
+
   it("delivers one coordinator message and one realtime event when a result is retried", async () => {
     const s = await setup();
     const tasks = createDelegatedTasks(s.deps);

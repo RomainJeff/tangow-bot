@@ -1,4 +1,5 @@
 import type { JobPublisher } from "@rakazo/adapter-kit";
+import { runContinueJob } from "@rakazo/adapter-kit";
 import type { AuthorizedActor, CommandContext } from "@rakazo/contracts";
 import { NATIVE_HARNESSES } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
@@ -170,8 +171,9 @@ function makeDeps(
   const runUpdateMany = vi
     .fn()
     .mockImplementation(
-      async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => {
-        const rows = args.where.id.in
+      async (args: { where: { id: string | { in: string[] } }; data: Record<string, unknown> }) => {
+        const ids = typeof args.where.id === "string" ? [args.where.id] : args.where.id.in;
+        const rows = ids
           .map((id) => runsById.get(id))
           .filter((row): row is Record<string, unknown> => Boolean(row));
         for (const row of rows) Object.assign(row, args.data);
@@ -201,11 +203,11 @@ function makeDeps(
   const txRunFindMany = vi
     .fn()
     .mockImplementation(
-      async (args: { where: { scopedTaskId: { in: string[] }; status: { in: string[] } } }) => {
+      async (args: { where: { scopedTaskId?: { in: string[] }; status: { in: string[] } } }) => {
         return [...runsById.values()]
           .filter(
             (row) =>
-              args.where.scopedTaskId.in.includes(row.scopedTaskId as string) &&
+              (args.where.scopedTaskId?.in.includes(row.scopedTaskId as string) ?? true) &&
               args.where.status.in.includes(row.status as string),
           )
           .map((row) => ({ id: row.id, taskId: row.taskId }));
@@ -423,6 +425,7 @@ function makeDeps(
     tx,
     enqueue,
     scopedTaskRows,
+    runsById,
     botMcpServerRows,
   };
 }
@@ -2287,6 +2290,86 @@ describe("DelegatedTasks.apply — result then complément", () => {
         botId: "bot-specialist",
       },
     });
+  });
+
+  it("answers a specialist's pending question with the follow-up, so the task closes once it returns", async () => {
+    const harness = makeDeps({
+      existingScopedTask: {
+        id: "work-1",
+        spaceId,
+        userId,
+        spawnKey: "spawn-1",
+        coordinatorBotId,
+        coordinatorThreadId,
+        executorBotId: "bot-specialist",
+        specialistThreadId: "thread-specialist",
+        missionComputerId: null,
+        status: "dispatched",
+      },
+      activeRuns: [
+        { id: "run-asked", taskId: "task-asked", scopedTaskId: "work-1", status: "waiting_input" },
+      ],
+    });
+    const run = (id: string) => harness.runsById.get(id);
+    harness.tx.run.findFirst.mockImplementation(
+      async (args: { where: { id?: string; scopedTaskId?: string; status: string } }) => {
+        const found = [...harness.runsById.values()].find(
+          (row) =>
+            (args.where.id ?? row.id) === row.id &&
+            (args.where.scopedTaskId ?? row.scopedTaskId) === row.scopedTaskId &&
+            row.status === args.where.status,
+        );
+        return found ? { ...found, botId: "bot-specialist" } : null;
+      },
+    );
+    harness.tx.run.count.mockImplementation(
+      async (args: { where: { scopedTaskId: string; status: { in: string[] } } }) =>
+        [...harness.runsById.values()].filter(
+          (row) =>
+            row.scopedTaskId === args.where.scopedTaskId &&
+            args.where.status.in.includes(row.status as string),
+        ).length,
+    );
+    harness.tx.task.updateMany.mockResolvedValue({ count: 1 });
+    const askBlock = { kind: "ask", text: "Which audience is the brief for?", status: "pending" };
+    const message = Object.assign(harness.tx.message, {
+      findFirst: vi.fn().mockResolvedValue({ id: "message-ask", blocks: [askBlock] }),
+      update: vi.fn().mockResolvedValue({}),
+    });
+    const tasks = createDelegatedTasks({
+      prisma: harness.prisma,
+      jobs: harness.jobs,
+      events: harness.events,
+    });
+
+    const receipt = await tasks.apply(
+      { kind: "followup", workId: "work-1", text: "The sales team." },
+      context,
+    );
+
+    // The waiting Run takes the answer; no second Run starts beside it.
+    expect(receipt.runId).toBe("run-asked");
+    expect(harness.tx.run.create).not.toHaveBeenCalled();
+    expect(run("run-asked")?.status).toBe("queued");
+    expect(message.update).toHaveBeenCalledWith({
+      where: { id: "message-ask" },
+      data: { blocks: [{ ...askBlock, status: "answered" }] },
+    });
+    expect(harness.tx.event.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          threadId: coordinatorThreadId,
+          type: "work.input_answered",
+          runId: "run-asked",
+        }),
+      }),
+    );
+    expect(harness.enqueue).toHaveBeenCalledWith(runContinueJob("run-asked"));
+
+    // The specialist delivers its brief: nothing is left going, so the task closes.
+    Object.assign(run("run-asked")!, { status: "completed" });
+    await tasks.apply({ kind: "close", workId: "work-1" }, context);
+    expect(harness.scopedTaskRows.get(`${spaceId}:spawn-1`)?.status).toBe("closed");
   });
 
   it("rejects a follow-up that closes after its initial read, without restoring the grant", async () => {
