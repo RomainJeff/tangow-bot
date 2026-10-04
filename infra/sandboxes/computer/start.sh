@@ -44,10 +44,12 @@ mkdir -p /tmp/fluxbox-home/.fluxbox
 cp /etc/rakazo/fluxbox/init /tmp/fluxbox-home/.fluxbox/init
 cp /etc/rakazo/fluxbox/apps /tmp/fluxbox-home/.fluxbox/apps 2>/dev/null || true
 cp /etc/rakazo/fluxbox/menu /tmp/fluxbox-home/.fluxbox/menu 2>/dev/null || true
-cp -r /etc/rakazo/plank /tmp/fluxbox-home/.config/plank
 cat > /tmp/fluxbox-home/.fluxbox/startup <<'EOF'
 #!/bin/sh
 xsetroot -solid "#111113"
+mkdir -p "$HOME/.config/plank/dock1/launchers"
+cp /etc/rakazo/plank/dock1/settings "$HOME/.config/plank/dock1/settings"
+cp /etc/rakazo/plank/dock1/launchers/*.dockitem "$HOME/.config/plank/dock1/launchers/"
 plank &
 exec fluxbox -rc /tmp/fluxbox-home/.fluxbox/init
 EOF
