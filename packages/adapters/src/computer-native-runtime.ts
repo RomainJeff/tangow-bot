@@ -9,10 +9,83 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { getLogger } from "@rakazo/logging";
+import { sanitizeConnectorError } from "./connector-safety.js";
 import { promptWithThreadHistory } from "./native-history.js";
+import { describeToolActivity } from "./pi-runtime.js";
 import type { NativeToolServer } from "./rakazo-mcp-server.js";
 export class HarnessUnavailableError extends Error {
   readonly code = "harness_unavailable";
+}
+
+/** A harness's own action, named as the Rakazo tool it matches. */
+export type NativeAction = { name: string; input: Record<string, unknown> };
+
+const NATIVE_ACTION_DETAIL_LIMIT = 200;
+
+/**
+ * Shows a native action like a Rakazo tool call: the live activity line and the step. Only its
+ * short string inputs leave the harness, redacted and truncated; never its output.
+ */
+export function nativeActionEvents(
+  action: NativeAction,
+  executionId: string,
+  secrets: string[],
+): AgentRuntimeEvent[] {
+  const args: Record<string, string> = {};
+  for (const [key, value] of Object.entries(action.input)) {
+    if (typeof value !== "string" || !value) continue;
+    const safe = sanitizeConnectorError(value, secrets).replaceAll(/\s+/g, " ").trim();
+    args[key] =
+      safe.length > NATIVE_ACTION_DETAIL_LIMIT
+        ? `${safe.slice(0, NATIVE_ACTION_DETAIL_LIMIT)}…`
+        : safe;
+  }
+  return [
+    { type: "progress", text: describeToolActivity(action.name, args), activity: true },
+    { type: "tool", name: action.name, args, executionId },
+  ];
+}
+
+/** Text after a native action replaces its activity line instead of appending to it. */
+export const nativeActionCleared: AgentRuntimeEvent = {
+  type: "progress",
+  text: "",
+  activity: true,
+};
+
+/** A bounded harness tool name; anything else never becomes public. */
+export const NATIVE_TOOL_NAME = /^[A-Za-z0-9_.:-]{1,128}$/;
+
+/** Codex app-server items (v2 `ThreadItem`) that are actions of the harness itself. */
+function codexAction(item: Record<string, unknown> | undefined): NativeAction | undefined {
+  if (item?.type === "commandExecution") return { name: "shell", input: { command: item.command } };
+  if (item?.type === "fileChange" && Array.isArray(item.changes))
+    return {
+      name: "write_file",
+      input: {
+        path: item.changes
+          .map((change) => (change as { path?: unknown } | null)?.path)
+          .filter((path) => typeof path === "string")
+          .join(", "),
+      },
+    };
+  if (item?.type === "webSearch") return { name: "web_search", input: { query: item.query } };
+  if (
+    item?.type === "mcpToolCall" &&
+    typeof item.server === "string" &&
+    typeof item.tool === "string" &&
+    NATIVE_TOOL_NAME.test(item.server) &&
+    NATIVE_TOOL_NAME.test(item.tool)
+  )
+    return {
+      // A Rakazo tool reads as it does under Rakazo's own harness.
+      name: item.server === "rakazo" ? item.tool : `mcp__${item.server}__${item.tool}`,
+      input:
+        item.arguments && typeof item.arguments === "object"
+          ? (item.arguments as Record<string, unknown>)
+          : {},
+    };
+  return undefined;
 }
 
 class NativeMcpUnavailableError extends HarnessUnavailableError {}
@@ -290,6 +363,14 @@ export class CodexNativeRuntime implements AgentRuntime {
     const toolServer =
       parked?.toolServer ??
       (this.options.toolServer ? await this.options.toolServer(request) : undefined);
+    const secrets = [
+      request.model.oauth.credential.access,
+      request.model.oauth.credential.refresh,
+      toolServer?.ticket ?? "",
+      ...(request.secrets ?? []),
+    ];
+    let actions = 0;
+    let actionShowing = false;
     let process: NativeProcess | undefined = parked?.process;
     let lines: AsyncIterator<string> | undefined = parked?.lines;
     let threadId: string | undefined = parked?.threadId;
@@ -387,6 +468,7 @@ export class CodexNativeRuntime implements AgentRuntime {
         if (nextCredential.accountId !== request.model.oauth!.credential.accountId) {
           throw new Error("codex OAuth refresh changed the ChatGPT account identity");
         }
+        secrets.push(nextCredential.access, nextCredential.refresh);
         await nativeProcess.write(
           `${JSON.stringify({ jsonrpc: "2.0", id, result: { accessToken: nextCredential.access, chatgptAccountId: nextCredential.accountId } })}\n`,
         );
@@ -540,7 +622,17 @@ export class CodexNativeRuntime implements AgentRuntime {
           typeof message.params?.delta === "string"
         ) {
           requireMcpReady();
+          if (actionShowing) yield nativeActionCleared;
+          actionShowing = false;
           yield { type: "text", text: message.params.delta };
+        }
+        const action =
+          message.method === "item/started"
+            ? codexAction(message.params?.item as Record<string, unknown> | undefined)
+            : undefined;
+        if (action) {
+          yield* nativeActionEvents(action, `${request.runId}:native-${++actions}`, secrets);
+          actionShowing = true;
         }
         if (message.method === "turn/completed") {
           completedTurn = true;

@@ -153,6 +153,78 @@ describe("ClaudeNativeRuntime", () => {
     },
   );
 
+  it("shows Claude's own tool calls as redacted steps and never their results", async () => {
+    const process = fakeProcess([
+      JSON.stringify({ type: "system", subtype: "init", session_id: "private-session" }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "text", text: "Checking." },
+            {
+              type: "tool_use",
+              id: "private-call",
+              name: "Bash",
+              input: { command: "TOKEN=initial-access ./sync.sh", description: "Sync" },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "user",
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "private-call", content: "private tool output" },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "private-call-2",
+              name: "mcp__rakazo__remember",
+              input: { content: "notes" },
+            },
+            { type: "text", text: "Done." },
+          ],
+        },
+      }),
+      JSON.stringify({ type: "result", subtype: "success" }),
+    ]);
+    const runtime = new ClaudeNativeRuntime({
+      sandbox: { startNativeProcess: async () => process } as unknown as SandboxProvider,
+      computer,
+      cwd: ".",
+    });
+    const events = [];
+    for await (const event of runtime.run(request("actions", { mode: "new" }), context))
+      if (event.type !== "native") events.push(event);
+
+    expect(events).toEqual([
+      { type: "text", text: "Checking." },
+      { type: "progress", text: "Running: TOKEN=[redacted] ./sync.sh", activity: true },
+      {
+        type: "tool",
+        name: "shell",
+        args: { command: "TOKEN=[redacted] ./sync.sh" },
+        executionId: "actions:native-1",
+      },
+      { type: "progress", text: "Saving a note to memory", activity: true },
+      {
+        type: "tool",
+        name: "remember",
+        args: { content: "notes" },
+        executionId: "actions:native-2",
+      },
+      { type: "progress", text: "", activity: true },
+      { type: "text", text: "Done." },
+      { type: "done" },
+    ]);
+  });
+
   it("confirms process exit before completing a resumable parked turn", async () => {
     let stopped = false;
     const process = fakeProcess([

@@ -842,6 +842,69 @@ describe("CodexNativeRuntime", () => {
     await runtime.abort("lost-computer");
   });
 
+  it("shows Codex's own command as a redacted shell step and never its output", async () => {
+    const command = JSON.stringify({
+      type: "commandExecution",
+      id: "item-1",
+      command: "curl -H 'Authorization: Bearer live-bearer' https://example.test/?key=run-secret",
+      cwd: "/workspace",
+      commandActions: [],
+      status: "inProgress",
+    });
+    const completed = JSON.stringify({
+      type: "commandExecution",
+      id: "item-1",
+      command: "curl https://example.test",
+      cwd: "/workspace",
+      commandActions: [],
+      status: "completed",
+      aggregatedOutput: "private command output",
+      exitCode: 0,
+    });
+    const process: NativeProcess = {
+      write: async () => undefined,
+      stdout: (async function* () {
+        yield '{"id":1,"result":{}}\n';
+        yield '{"id":2,"result":{}}\n';
+        yield '{"id":3,"result":{"thread":{"id":"native-thread"}}}\n';
+        yield '{"id":4,"result":{}}\n';
+        yield `{"method":"item/started","params":{"threadId":"native-thread","turnId":"turn","item":${command}}}\n`;
+        yield `{"method":"item/completed","params":{"threadId":"native-thread","turnId":"turn","item":${completed}}}\n`;
+        yield '{"method":"item/agentMessage/delta","params":{"delta":"Done."}}\n';
+        yield '{"method":"turn/completed","params":{"turn":{"status":"completed"}}}\n';
+      })(),
+      stderr: (async function* () {})(),
+      wait: async () => ({ code: 0 }),
+      stop: async () => "stopped",
+    };
+    const runtime = new CodexNativeRuntime({
+      sandbox: { startNativeProcess: async () => process } as unknown as SandboxProvider,
+      computer,
+      cwd: ".",
+    });
+    const events: AgentRuntimeEvent[] = [];
+    for await (const event of runtime.run(
+      { ...request("native-action"), secrets: ["run-secret"] },
+      context,
+    ))
+      events.push(event);
+
+    const safe = "curl -H 'Authorization: Bearer [redacted] https://example.test/?key=[redacted]";
+    expect(events.filter((event) => event.type !== "native")).toEqual([
+      { type: "progress", text: `Running: ${safe}`, activity: true },
+      {
+        type: "tool",
+        name: "shell",
+        args: { command: safe },
+        executionId: "native-action:native-1",
+      },
+      { type: "progress", text: "", activity: true },
+      { type: "text", text: "Done." },
+      { type: "done" },
+    ]);
+    await runtime.abort("native-action");
+  });
+
   it("refuses to resume a parked session from a different Computer placement", async () => {
     const process: NativeProcess = {
       write: async () => undefined,

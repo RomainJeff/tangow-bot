@@ -12,7 +12,13 @@ import type {
 import { ANTHROPIC_OAUTH_PROVIDER } from "@rakazo/contracts";
 import { redactSecrets } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
-import { HarnessUnavailableError } from "./computer-native-runtime.js";
+import type { NativeAction } from "./computer-native-runtime.js";
+import {
+  HarnessUnavailableError,
+  NATIVE_TOOL_NAME,
+  nativeActionCleared,
+  nativeActionEvents,
+} from "./computer-native-runtime.js";
 import { sanitizeConnectorError } from "./connector-safety.js";
 import { promptWithThreadHistory } from "./native-history.js";
 import type { NativeToolServer } from "./rakazo-mcp-server.js";
@@ -28,10 +34,27 @@ type ClaudeStreamEvent = {
   result?: string;
   permission_denials?: Array<{ tool_name?: string }>;
   message?: {
-    content?: Array<{ type?: string; text?: string }>;
+    content?: Array<{ type?: string; text?: string; name?: string; input?: unknown }>;
     error?: string;
   };
 };
+
+/** Claude Code's own `tool_use` block, named as the Rakazo tool it matches. */
+function claudeAction(block: { name?: string; input?: unknown }): NativeAction | undefined {
+  if (typeof block.name !== "string" || !NATIVE_TOOL_NAME.test(block.name)) return;
+  const input =
+    block.input && typeof block.input === "object" ? (block.input as Record<string, unknown>) : {};
+  if (block.name === "Bash") return { name: "shell", input: { command: input.command } };
+  if (block.name === "Read") return { name: "read_file", input: { path: input.file_path } };
+  if (["Write", "Edit", "MultiEdit", "NotebookEdit"].includes(block.name))
+    return { name: "write_file", input: { path: input.file_path ?? input.notebook_path } };
+  if (block.name === "WebSearch") return { name: "web_search", input: { query: input.query } };
+  if (block.name === "WebFetch") return { name: "web_fetch", input: { url: input.url } };
+  // A Rakazo tool reads as it does under Rakazo's own harness.
+  const rakazo = block.name.match(/^mcp__rakazo__(.+)$/);
+  if (rakazo) return { name: rakazo[1]!, input };
+  return { name: block.name, input: {} };
+}
 
 // The CLI gets a fixed token and cannot refresh it mid-turn, so a turn needs far more than
 // the 5-minute Pi margin; an hour covers long agentic turns and still reuses most of a token's life.
@@ -203,6 +226,18 @@ export class ClaudeNativeRuntime implements AgentRuntime {
       if (!credential.access) {
         throw unavailable("claude-native OAuth refresh returned no access credential");
       }
+      const secrets = () => [
+        confirmedSessionId ?? "",
+        expectedSessionId ?? "",
+        credential.access,
+        credential.refresh,
+        request.model.oauth!.credential.access,
+        request.model.oauth!.credential.refresh,
+        toolServer?.ticket ?? "",
+        ...(request.secrets ?? []),
+      ];
+      let actions = 0;
+      let actionShowing = false;
       if (toolServer?.arm) {
         // An arm failure may have partially granted authority; always revoke it.
         toolServerArmed = true;
@@ -314,7 +349,14 @@ export class ClaudeNativeRuntime implements AgentRuntime {
           }
           for (const block of message.message?.content ?? []) {
             if (block.type === "text" && typeof block.text === "string") {
+              if (actionShowing) yield nativeActionCleared;
+              actionShowing = false;
               yield { type: "text", text: redactSession(block.text) };
+            }
+            const action = block.type === "tool_use" ? claudeAction(block) : undefined;
+            if (action) {
+              yield* nativeActionEvents(action, `${request.runId}:native-${++actions}`, secrets());
+              actionShowing = true;
             }
           }
           continue;
@@ -326,19 +368,10 @@ export class ClaudeNativeRuntime implements AgentRuntime {
               // Only a bounded tool name may leave this envelope, never tool_input
               // or tool_use_id. Malformed names must not turn into public arguments.
               const name =
-                typeof denial?.tool_name === "string" &&
-                /^[A-Za-z0-9_.:-]{1,128}$/.test(denial.tool_name)
+                typeof denial?.tool_name === "string" && NATIVE_TOOL_NAME.test(denial.tool_name)
                   ? denial.tool_name
                   : "un outil";
-              const tool = sanitizeConnectorError(name, [
-                confirmedSessionId ?? "",
-                expectedSessionId ?? "",
-                credential.access,
-                credential.refresh,
-                request.model.oauth.credential.access,
-                request.model.oauth.credential.refresh,
-                toolServer?.ticket ?? "",
-              ]);
+              const tool = sanitizeConnectorError(name, secrets());
               getLogger().warn("claude-native permission denied", { tool });
               yield { type: "text", text: `Claude a demandé ${tool}, refusé par la politique.\n` };
             }
@@ -363,15 +396,7 @@ export class ClaudeNativeRuntime implements AgentRuntime {
               (typeof message.result === "string" ? message.result.trim() : "");
             const safeMessage = sanitizeConnectorError(
               `claude turn failed: ${reason}${detail ? `: ${detail}` : ""}`,
-              [
-                confirmedSessionId ?? "",
-                expectedSessionId ?? "",
-                credential.access,
-                credential.refresh,
-                request.model.oauth.credential.access,
-                request.model.oauth.credential.refresh,
-                toolServer?.ticket ?? "",
-              ],
+              secrets(),
             ).slice(0, 300);
             throw new Error(safeMessage);
           }
