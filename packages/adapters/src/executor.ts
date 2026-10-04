@@ -5006,6 +5006,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   executionTarget: storedComputer.id,
                   continuity: event.event.continuity,
                 });
+                // A lost rollout closed the previous generation; this one is open until it ends.
+                nativeSessionClosed = false;
                 // A new session after the first starts from the thread history, and the thread
                 // says so once. A session resumed by its native reference lost nothing, and
                 // the very first session of a thread has nothing to resume from.

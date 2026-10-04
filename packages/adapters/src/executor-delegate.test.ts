@@ -617,6 +617,105 @@ describe("executor seam — codex-native goes through deps.nativeRuntimes", () =
     log.mockRestore();
   });
 
+  it.each([
+    ["completes", "parked"],
+    ["fails", "closed"],
+  ] as const)(
+    "records a lost rollout, then the rebuilt session, when the turn %s",
+    async (ending, endState) => {
+      mockCreateDelegatedTasks.mockReturnValue({ apply: vi.fn(), inspect: vi.fn() } as never);
+      const rebuilt = { bindingId: "thread-1", generation: 1 };
+      // The stored reference points at a rollout the native home no longer holds.
+      const fixtureRun = vi.fn(async function* () {
+        yield {
+          type: "native" as const,
+          event: {
+            type: "error" as const,
+            ref: { bindingId: "thread-1", generation: 0 },
+            reason: "resume_rollout_missing" as const,
+          },
+        };
+        yield {
+          type: "native" as const,
+          event: { type: "session" as const, ref: rebuilt, continuity: "new" as const },
+        };
+        yield {
+          type: "native" as const,
+          event: { type: "reference" as const, ref: rebuilt, nativeRef: "fresh-thread" },
+        };
+        if (ending === "fails") throw new Error("codex turn failed");
+        yield { type: "done" as const, text: "Back on track." };
+      });
+      const f = fixture({
+        outcome: "completed",
+        harness: "codex-native",
+        executionTarget: "computer-1",
+        choiceVersion: 1,
+        nativeRuntimes: {
+          "codex-native": {
+            describe: () => ({ capabilities: { scripted: false } }),
+            run: fixtureRun,
+            abort: async () => undefined,
+            purgeNativeHome: async () => undefined,
+          } as never,
+        },
+      });
+      // A fenced row: a transition only applies to the generation it names.
+      const row: Record<string, unknown> = {
+        generation: 0,
+        nativeRef: "lost-thread",
+        processRef: null,
+        state: "expired",
+        processState: "stopped",
+        harness: "codex-native",
+        executionTarget: "computer-1",
+      };
+      const transitions: Array<Record<string, unknown>> = [];
+      const messages: unknown[] = [];
+      Object.assign(f.deps.prisma, {
+        nativeSession: {
+          findUnique: async () => ({ ...row }),
+          updateMany: async ({
+            where,
+            data,
+          }: {
+            where: { generation: number };
+            data: Record<string, unknown>;
+          }) => {
+            if (where.generation !== row.generation) return { count: 0 };
+            transitions.push({ from: where.generation, ...data });
+            Object.assign(row, data);
+            return { count: 1 };
+          },
+        },
+        lifecycleEvent: { create: async () => ({}) },
+        $transaction: async (work: (tx: unknown) => Promise<unknown>) =>
+          work({
+            thread: { update: async () => ({ nextMessageSeq: 1, nextEventSeq: 1 }) },
+            run: { findUnique: async () => ({ status: "running", startedAt: null }) },
+            message: {
+              create: async ({ data }: { data: { blocks: unknown } }) => {
+                messages.push(data.blocks);
+                return { id: "message-1", ...data };
+              },
+            },
+            event: { create: async () => ({ seq: 1 }) },
+          }),
+      });
+      Object.assign(f.deps.events, { notify: async () => undefined });
+
+      await f.run();
+
+      expect(transitions).toEqual([
+        expect.objectContaining({ from: 0, state: "expired", nativeRef: null }),
+        expect.objectContaining({ from: 0, generation: 1, state: "attached" }),
+        { from: 1, nativeRef: "fresh-thread" },
+        expect.objectContaining({ from: 1, state: endState }),
+      ]);
+      expect(messages).toContainEqual([{ kind: "session_rebuilt" }]);
+    },
+  );
+
   it("still constructs the real CodexNativeRuntime when no fixture is injected (non-regression)", async () => {
     mockCreateDelegatedTasks.mockReturnValue({ apply: vi.fn(), inspect: vi.fn() } as never);
     const f = fixture({

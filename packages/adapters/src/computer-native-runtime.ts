@@ -43,8 +43,12 @@ type ParkedSession = {
   threadId: string;
   toolServer?: NativeToolServer;
   expiry?: ReturnType<typeof setTimeout>;
-  /** Stops the parked process and reports it through the park-expiry callback. */
-  expire?: (options: { purgeHome: boolean }) => Promise<void>;
+  /**
+   * Stops the parked process and reports it through the park-expiry callback. The native
+   * home is kept so the next turn resumes the thread from its rollout; it is purged once
+   * the durable session is closed.
+   */
+  expire?: () => Promise<void>;
 };
 
 type NativeParkExpiry = (input: {
@@ -143,17 +147,12 @@ export class CodexNativeRuntime implements AgentRuntime {
 
   /**
    * Graceful worker shutdown: every parked process is stopped and recorded as an
-   * expired park, within a bounded time. Native homes are kept so the next turn
-   * reconstructs the session from its stored native reference.
+   * expired park, within a bounded time.
    */
   static async expireParkedSessions(timeoutMs = 5_000): Promise<void> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
-      Promise.allSettled(
-        [...CodexNativeRuntime.parked.values()].map((entry) =>
-          entry.expire?.({ purgeHome: false }),
-        ),
-      ),
+      Promise.allSettled([...CodexNativeRuntime.parked.values()].map((entry) => entry.expire?.())),
       new Promise((resolve) => {
         timer = setTimeout(resolve, timeoutMs);
       }),
@@ -429,6 +428,7 @@ export class CodexNativeRuntime implements AgentRuntime {
       let turnRequestId: number;
       // Only a thread started here lacks the conversation; a resumed one already holds it.
       let turnPrompt = request.prompt;
+      let rebuiltFromHistory = false;
       if (!threadId) {
         await send(1, "initialize", {
           clientInfo: { name: "rakazo", version: "0.1.0" },
@@ -447,40 +447,47 @@ export class CodexNativeRuntime implements AgentRuntime {
         const threadMethod = resumeThreadId ? "thread/resume" : "thread/start";
         // Bot instructions extend, never replace, Codex's base instructions. A
         // reconstructed thread receives them again so the current ones apply.
+        const instructions = request.instructions
+          ? { developerInstructions: request.instructions }
+          : {};
         await send(3, threadMethod, {
           ...(resumeThreadId ? { threadId: resumeThreadId } : {}),
-          ...(request.instructions ? { developerInstructions: request.instructions } : {}),
+          ...instructions,
         });
         let thread: Rpc;
+        turnRequestId = 4;
         try {
           thread = await next(3, threadMethod);
         } catch (error) {
           if (
-            effectiveContinuity.mode === "reconstruct" &&
-            error instanceof NativeRpcError &&
-            error.method === "thread/resume" &&
-            error.rpcCode === -32600 &&
-            /^no rollout found\b/i.test(error.message)
-          ) {
-            yield {
-              type: "native",
-              event: {
-                type: "error",
-                ref: effectiveContinuity.previous,
-                reason: "resume_rollout_missing",
-              },
-            };
-            throw unavailable("codex_native_rollout_missing");
-          }
-          throw error;
+            effectiveContinuity.mode !== "reconstruct" ||
+            !(error instanceof NativeRpcError) ||
+            error.method !== "thread/resume" ||
+            error.rpcCode !== -32600 ||
+            !/^no rollout found\b/i.test(error.message)
+          )
+            throw error;
+          // The home lost this thread (expired park, recreated Computer). The old generation
+          // is recorded as lost and this turn continues on a new thread built from the history.
+          yield {
+            type: "native",
+            event: {
+              type: "error",
+              ref: effectiveContinuity.previous,
+              reason: "resume_rollout_missing",
+            },
+          };
+          rebuiltFromHistory = true;
+          await send(4, "thread/start", instructions);
+          thread = await next(4, "thread/start");
+          turnRequestId = 5;
         }
         threadId =
           typeof (thread.result?.thread as { id?: unknown } | undefined)?.id === "string"
             ? (thread.result!.thread as { id: string }).id
             : undefined;
         if (!threadId) throw new Error("codex thread/start response missing native thread id");
-        if (!resumeThreadId) turnPrompt = promptWithThreadHistory(request);
-        turnRequestId = 4;
+        if (!resumeThreadId || rebuiltFromHistory) turnPrompt = promptWithThreadHistory(request);
       } else {
         turnRequestId = 5;
       }
@@ -500,10 +507,11 @@ export class CodexNativeRuntime implements AgentRuntime {
           type: "session",
           ref: binding,
           ...(nativeProcess.id ? { processRef: nativeProcess.id } : {}),
+          // A thread rebuilt from the history is a new session for the store and the thread.
           continuity:
             effectiveContinuity.mode === "resume"
               ? "resumed"
-              : effectiveContinuity.mode === "reconstruct"
+              : effectiveContinuity.mode === "reconstruct" && !rebuiltFromHistory
                 ? "reconstructed"
                 : "new",
         },
@@ -569,7 +577,7 @@ export class CodexNativeRuntime implements AgentRuntime {
         bindingKey,
       );
       const entry = CodexNativeRuntime.parked.get(bindingKey)!;
-      entry.expire = async ({ purgeHome }) => {
+      entry.expire = async () => {
         // Claim the entry first so a resume never reuses a process being stopped.
         if (CodexNativeRuntime.parked.get(bindingKey) !== entry) return;
         clearTimeout(entry.expiry);
@@ -579,16 +587,12 @@ export class CodexNativeRuntime implements AgentRuntime {
         await entry.toolServer?.close().catch(() => undefined);
         try {
           await this.options.onParkExpired?.({ ref: binding, processState: status });
-          if (purgeHome && status === "stopped") await nativeProcess.purgeHome?.();
         } catch {
           // A stale durable generation must not become an unhandled timer rejection.
           getLogger().error("codex-native park expiry persistence failed");
         }
       };
-      entry.expiry = setTimeout(
-        () => void entry.expire?.({ purgeHome: true }),
-        parkTtlMs(this.options.parkTtlMs),
-      );
+      entry.expiry = setTimeout(() => void entry.expire?.(), parkTtlMs(this.options.parkTtlMs));
       entry.expiry.unref?.();
       parkedAtBoundary = true;
     } catch (error) {

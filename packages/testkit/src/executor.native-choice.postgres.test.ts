@@ -1507,7 +1507,7 @@ describe.skipIf(!available)("native runtime choice", () => {
     }
   }, 30_000);
 
-  it("expires and signals a missing rollout after Computer loss instead of starting a new thread", async () => {
+  it("expires and signals a missing rollout after Computer loss when the rebuilt thread fails", async () => {
     const runtime = new MissingRolloutAfterComputerLoss();
     const harness = await startNativeHarness(runtime, "missing-rollout");
     try {

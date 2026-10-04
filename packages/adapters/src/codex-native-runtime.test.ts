@@ -314,10 +314,12 @@ describe("CodexNativeRuntime", () => {
     vi.useRealTimers();
   });
 
-  it("expires a parked process with an injected TTL and reconstructs the next turn", async () => {
+  it("expires a parked process with an injected TTL, keeps its home, and reconstructs the next turn", async () => {
     vi.useFakeTimers();
     const stopped = vi.fn(async () => "stopped" as const);
+    const purgeHome = vi.fn(async () => undefined);
     const first: NativeProcess = {
+      purgeHome,
       write: async () => undefined,
       stdout: (async function* () {
         yield '{"id":1,"result":{}}\n';
@@ -361,6 +363,8 @@ describe("CodexNativeRuntime", () => {
       ref: { bindingId: "ttl-first", generation: 0 },
       processState: "stopped",
     });
+    // The rollout stays so the next turn can resume the native thread.
+    expect(purgeHome).not.toHaveBeenCalled();
     const resumed = request("ttl-second");
     resumed.execution!.continuity = {
       mode: "resume",
@@ -765,13 +769,20 @@ describe("CodexNativeRuntime", () => {
     expect(homes[1]).toBe(homes[0]);
   });
 
-  it("signals an unavailable rollout when reconstruction follows Computer loss", async () => {
+  it("continues the turn on a new thread built from the history when the rollout is gone", async () => {
+    const writes: string[] = [];
     const process: NativeProcess = {
-      write: async () => undefined,
+      write: async (data) => {
+        writes.push(data);
+      },
       stdout: (async function* () {
         yield '{"id":1,"result":{}}\n';
         yield '{"id":2,"result":{}}\n';
         yield '{"id":3,"error":{"code":-32600,"message":"no rollout found"}}\n';
+        yield '{"id":4,"result":{"thread":{"id":"fresh-thread"}}}\n';
+        yield '{"id":5,"result":{}}\n';
+        yield '{"method":"item/agentMessage/delta","params":{"delta":"mimosa"}}\n';
+        yield '{"method":"turn/completed","params":{"turn":{"status":"completed"}}}\n';
       })(),
       stderr: (async function* () {})(),
       wait: async () => ({ code: 0 }),
@@ -784,7 +795,13 @@ describe("CodexNativeRuntime", () => {
       computer,
       cwd: ".",
     });
-    const reconstructed = request("lost-computer");
+    const reconstructed = {
+      ...request("lost-computer"),
+      history: [
+        { role: "user" as const, content: "the launch code word is mimosa" },
+        { role: "assistant" as const, content: "Noted." },
+      ],
+    };
     reconstructed.execution!.continuity = {
       mode: "reconstruct",
       previous: { bindingId: "lost-binding", generation: 0 },
@@ -793,22 +810,36 @@ describe("CodexNativeRuntime", () => {
       nativeRef: "lost-native-thread",
     };
     const events: AgentRuntimeEvent[] = [];
-    await expect(
-      (async () => {
-        for await (const event of runtime.run(reconstructed, context)) events.push(event);
-      })(),
-    ).rejects.toMatchObject({
-      code: "harness_unavailable",
-      message: "codex_native_rollout_missing",
-    });
-    expect(events).toContainEqual({
-      type: "native",
-      event: {
-        type: "error",
-        ref: { bindingId: "lost-binding", generation: 0 },
-        reason: "resume_rollout_missing",
+    for await (const event of runtime.run(reconstructed, context)) events.push(event);
+
+    const rebuilt = { bindingId: "lost-binding", generation: 1 };
+    expect(events.filter((event) => event.type !== "text")).toEqual([
+      {
+        type: "native",
+        event: {
+          type: "error",
+          ref: { bindingId: "lost-binding", generation: 0 },
+          reason: "resume_rollout_missing",
+        },
       },
+      { type: "native", event: { type: "session", ref: rebuilt, continuity: "new" } },
+      { type: "native", event: { type: "reference", ref: rebuilt, nativeRef: "fresh-thread" } },
+      { type: "done" },
+    ]);
+    const sent = writes.map(
+      (line) =>
+        JSON.parse(line) as { id?: number; method: string; params: Record<string, unknown> },
+    );
+    expect(sent.find((message) => message.id === 4)).toMatchObject({
+      method: "thread/start",
+      params: {},
     });
+    const turn = sent.find((message) => message.method === "turn/start")!;
+    expect(turn).toMatchObject({ id: 5, params: { threadId: "fresh-thread" } });
+    const prompt = (turn.params.input as Array<{ text: string }>)[0]!.text;
+    expect(prompt).toContain("the launch code word is mimosa");
+    expect(prompt).toContain("hello");
+    await runtime.abort("lost-computer");
   });
 
   it("refuses to resume a parked session from a different Computer placement", async () => {
