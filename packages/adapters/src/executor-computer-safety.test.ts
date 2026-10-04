@@ -57,6 +57,19 @@ describe("computer lifecycle command guard", () => {
     expect(isProtectedComputerLifecycleCommand(command)).toBe(false);
   });
 
+  // Exact command templates from skills/agent/delegate-to-opencode/SKILL.md with placeholders filled.
+  it.each([
+    "command -v opencode && opencode auth list",
+    "git -C /home/rakazo/repo status --short --branch",
+    "pwd",
+    `nohup bash -c 'opencode run "Do the task in the attached file." -f /home/rakazo/opencode-abc.md; touch /tmp/opencode-abc.done' > /tmp/opencode-abc.log 2>&1 &`,
+    "sleep 30; test -e /tmp/opencode-abc.done && echo finished || echo running; tail -n 40 /tmp/opencode-abc.log",
+    "git -C /home/rakazo/repo status --short && git -C /home/rakazo/repo diff",
+    "rm -f /home/rakazo/opencode-abc.md /tmp/opencode-abc.done",
+  ])("allows the delegate-to-opencode skill commands: %s", (command) => {
+    expect(isProtectedComputerLifecycleCommand(command)).toBe(false);
+  });
+
   it.each([
     ". /tmp/script.sh",
     "pwd; . /tmp/script.sh",

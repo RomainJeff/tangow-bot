@@ -11,6 +11,12 @@ cd "$AGENT_HOME"
 # The home is a mount, so the image cannot ship ~/.zshrc. Seed one that loads the image defaults;
 # it also keeps zsh from opening its first-run wizard. An existing ~/.zshrc is left as is.
 [[ -e "$AGENT_HOME/.zshrc" ]] || printf '%s\n' 'source /etc/rakazo/zshrc' >"$AGENT_HOME/.zshrc"
+# OpenCode reads global skills from ~/.config/opencode/skills/**/SKILL.md and follows symlinks
+# (Glob.scan symlink: true), so one link to the read-only mount is enough. A user may replace it
+# with a directory of their own; an existing entry is left as is.
+mkdir -p "$AGENT_HOME/.config/opencode"
+[[ -e "$AGENT_HOME/.config/opencode/skills" || -L "$AGENT_HOME/.config/opencode/skills" ]] \
+  || ln -s /managed-skills/computer "$AGENT_HOME/.config/opencode/skills"
 
 if [[ -n "${RAKAZO_COMPUTER_CONTROL_TOKEN:-}" ]]; then
   /usr/local/bin/rakazo-computer-control >/tmp/rakazo/control.log 2>&1 &

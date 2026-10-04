@@ -3722,7 +3722,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const agentSkillsCatalog = formatSkillsCatalogInstruction(agentSkills);
         // ponytail: only docker mounts these; harmless hint elsewhere.
         const agentSkillsLine = agentSkillsCatalog
-          ? `${agentSkillsCatalog}\nSkill files are mounted read-only in the sandbox: your skills under /skills/user/<skill-dir>/ and marketplace skills under /skills/marketplaces/<marketplace>/plugins/<plugin>/skills/<slug>/ (each SKILL.md, plus any scripts/, references/).`
+          ? `${agentSkillsCatalog}\nSkill files are mounted read-only in the sandbox: builtin skills under /managed-skills/agent/<slug>/, your skills under /skills/user/<skill-dir>/ and marketplace skills under /skills/marketplaces/<marketplace>/plugins/<plugin>/skills/<slug>/ (each SKILL.md, plus any scripts/, references/).`
           : undefined;
         const missingImagesInstruction = missingTurnImagesInstruction(
           turnBlocks,

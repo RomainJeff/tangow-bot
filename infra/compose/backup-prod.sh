@@ -42,7 +42,9 @@ appdata="$(docker inspect "${api}" \
 # which is expected on a live system and still yields a usable archive; only a
 # fatal error (2) fails the backup.
 rc=0
-tar -czf "${SNAPSHOT_DIR}/appdata.tgz" --numeric-owner -C "${appdata}" . || rc=$?
+# OpenCode's auth.json (model credentials typed by the user) stays out of backups.
+tar -czf "${SNAPSHOT_DIR}/appdata.tgz" --numeric-owner -C "${appdata}" \
+  --exclude='./homes/*/.local/share/opencode' . || rc=$?
 if [[ "${rc}" -gt 1 ]]; then
   echo "appdata archive failed with tar exit ${rc}" >&2
   exit "${rc}"
