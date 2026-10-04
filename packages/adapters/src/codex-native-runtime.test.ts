@@ -378,6 +378,81 @@ describe("CodexNativeRuntime", () => {
     vi.useRealTimers();
   });
 
+  it("stops parked sessions at worker shutdown through the park-expiry path and keeps their homes", async () => {
+    const parkedProcess = (stop: NativeProcess["stop"]) => {
+      const purgeHome = vi.fn(async () => undefined);
+      const process: NativeProcess = {
+        write: async () => undefined,
+        stdout: (async function* () {
+          yield '{"id":1,"result":{}}\n';
+          yield '{"id":2,"result":{}}\n';
+          yield '{"id":3,"result":{"thread":{"id":"native-thread"}}}\n';
+          yield '{"id":4,"result":{}}\n';
+          yield '{"method":"turn/completed","params":{"turn":{"status":"completed"}}}\n';
+        })(),
+        stderr: (async function* () {})(),
+        wait: async () => ({ code: 0 }),
+        stop,
+        purgeHome,
+      };
+      return { process, purgeHome };
+    };
+    const stopped = vi.fn(async () => "stopped" as const);
+    const answering = parkedProcess(stopped);
+    // A Computer that never answers the stop must not hold the worker's shutdown.
+    const hanging = parkedProcess(() => new Promise<never>(() => undefined));
+    const expired = vi.fn(async () => undefined);
+    const runtime = new CodexNativeRuntime(
+      {
+        sandbox: {
+          startNativeProcess: vi
+            .fn()
+            .mockResolvedValueOnce(answering.process)
+            .mockResolvedValueOnce(hanging.process),
+        } as unknown as SandboxProvider,
+        computer,
+        cwd: ".",
+      },
+      { onParkExpired: expired },
+    );
+    for (const bindingId of ["shutdown-answering", "shutdown-hanging"]) {
+      const parked = request(bindingId);
+      parked.execution!.continuity = { mode: "new", ref: { bindingId, generation: 0 } };
+      for await (const _event of runtime.run(parked, context)) undefined;
+    }
+
+    await CodexNativeRuntime.expireParkedSessions(50);
+
+    expect(stopped).toHaveBeenCalledOnce();
+    expect(expired).toHaveBeenCalledExactlyOnceWith({
+      ref: { bindingId: "shutdown-answering", generation: 0 },
+      processState: "stopped",
+    });
+    expect(answering.purgeHome).not.toHaveBeenCalled();
+    // The parked registry no longer holds the session: the next turn reconstructs it.
+    const next = request("shutdown-next");
+    next.execution!.continuity = {
+      mode: "resume",
+      ref: { bindingId: "shutdown-answering", generation: 0 },
+      inputId: "next",
+    };
+    const events: AgentRuntimeEvent[] = [];
+    const third = parkedProcess(async () => "stopped");
+    const restarted = new CodexNativeRuntime({
+      sandbox: { startNativeProcess: async () => third.process } as unknown as SandboxProvider,
+      computer,
+      cwd: ".",
+    });
+    for await (const event of restarted.run(next, context)) events.push(event);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "native",
+        event: expect.objectContaining({ type: "session", continuity: "reconstructed" }),
+      }),
+    );
+    await restarted.abort("shutdown-next");
+  });
+
   it("does not expire a resumed turn with its previous parking TTL and rearms it when parked again", async () => {
     vi.useFakeTimers();
     let releaseResumedTurn!: () => void;

@@ -43,6 +43,8 @@ type ParkedSession = {
   threadId: string;
   toolServer?: NativeToolServer;
   expiry?: ReturnType<typeof setTimeout>;
+  /** Stops the parked process and reports it through the park-expiry callback. */
+  expire?: (options: { purgeHome: boolean }) => Promise<void>;
 };
 
 type NativeParkExpiry = (input: {
@@ -137,6 +139,26 @@ export class CodexNativeRuntime implements AgentRuntime {
         scripted: false,
       },
     };
+  }
+
+  /**
+   * Graceful worker shutdown: every parked process is stopped and recorded as an
+   * expired park, within a bounded time. Native homes are kept so the next turn
+   * reconstructs the session from its stored native reference.
+   */
+  static async expireParkedSessions(timeoutMs = 5_000): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      Promise.allSettled(
+        [...CodexNativeRuntime.parked.values()].map((entry) =>
+          entry.expire?.({ purgeHome: false }),
+        ),
+      ),
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+    clearTimeout(timer);
   }
 
   /**
@@ -547,20 +569,26 @@ export class CodexNativeRuntime implements AgentRuntime {
         bindingKey,
       );
       const entry = CodexNativeRuntime.parked.get(bindingKey)!;
-      entry.expiry = setTimeout(async () => {
-        const status = await nativeProcess.stop().catch(() => "stop_unconfirmed" as const);
+      entry.expire = async ({ purgeHome }) => {
+        // Claim the entry first so a resume never reuses a process being stopped.
         if (CodexNativeRuntime.parked.get(bindingKey) !== entry) return;
+        clearTimeout(entry.expiry);
         CodexNativeRuntime.parked.delete(bindingKey);
         CodexNativeRuntime.parkedBindingByRun.delete(`${this.placementKey()}:${request.runId}`);
+        const status = await nativeProcess.stop().catch(() => "stop_unconfirmed" as const);
         await entry.toolServer?.close().catch(() => undefined);
         try {
           await this.options.onParkExpired?.({ ref: binding, processState: status });
-          if (status === "stopped") await nativeProcess.purgeHome?.();
+          if (purgeHome && status === "stopped") await nativeProcess.purgeHome?.();
         } catch {
           // A stale durable generation must not become an unhandled timer rejection.
           getLogger().error("codex-native park expiry persistence failed");
         }
-      }, parkTtlMs(this.options.parkTtlMs));
+      };
+      entry.expiry = setTimeout(
+        () => void entry.expire?.({ purgeHome: true }),
+        parkTtlMs(this.options.parkTtlMs),
+      );
       entry.expiry.unref?.();
       parkedAtBoundary = true;
     } catch (error) {

@@ -6,6 +6,7 @@ loadRootEnv();
 
 import {
   ChatSdkMessagingSurface,
+  CodexNativeRuntime,
   createBackgroundJobHandlers,
   createCloudAgentConnection,
   createConnectorStack,
@@ -282,6 +283,8 @@ async function main() {
     try {
       await reconciler.stop();
       await jobHost.stop();
+      // Parked native processes would outlive this worker in their Computers.
+      await CodexNativeRuntime.expireParkedSessions();
       await jobs.close();
       await realtime.close();
       await connector.stop();
