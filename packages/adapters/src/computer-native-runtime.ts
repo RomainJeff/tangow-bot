@@ -527,14 +527,18 @@ export class CodexNativeRuntime implements AgentRuntime {
         const resumeThreadId =
           effectiveContinuity.mode === "reconstruct" ? effectiveContinuity.nativeRef : undefined;
         const threadMethod = resumeThreadId ? "thread/resume" : "thread/start";
-        // Bot instructions extend, never replace, Codex's base instructions. A
-        // reconstructed thread receives them again so the current ones apply.
-        const instructions = request.instructions
-          ? { developerInstructions: request.instructions }
-          : {};
+        // The bot's Computer is the isolation boundary, as for Claude's dontAsk mode: Codex
+        // must not ask approvals Rakazo cannot answer, nor stack its own sandbox on top.
+        // Bot instructions extend, never replace, Codex's base instructions; a reconstructed
+        // thread receives them again so the current ones apply.
+        const threadSettings = {
+          approvalPolicy: "never",
+          sandbox: "danger-full-access",
+          ...(request.instructions ? { developerInstructions: request.instructions } : {}),
+        };
         await send(3, threadMethod, {
           ...(resumeThreadId ? { threadId: resumeThreadId } : {}),
-          ...instructions,
+          ...threadSettings,
         });
         let thread: Rpc;
         turnRequestId = 4;
@@ -560,7 +564,7 @@ export class CodexNativeRuntime implements AgentRuntime {
             },
           };
           rebuiltFromHistory = true;
-          await send(4, "thread/start", instructions);
+          await send(4, "thread/start", threadSettings);
           thread = await next(4, "thread/start");
           turnRequestId = 5;
         }
