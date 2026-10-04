@@ -109,6 +109,8 @@ RUN set -eu \
 # survives the persistent home; start.sh links /managed-skills/computer into its skills directory.
 ARG OPENCODE_VERSION=1.18.34
 RUN npm install -g "opencode-ai@${OPENCODE_VERSION}" && npm cache clean --force && opencode --version
+# Keep the pinned version: the self-updater would otherwise install a newer binary into the persistent home.
+ENV OPENCODE_DISABLE_AUTOUPDATE=1
 ENV DISPLAY=:1
 ENV HOME=/home/rakazo
 # LibreOffice profile outside the workspace so it never lands in checkpoints.
