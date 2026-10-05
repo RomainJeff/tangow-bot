@@ -440,7 +440,10 @@ export class PiAgentRuntime implements AgentRuntime {
             // unless the turn closed on a delivered message_user bubble: the user already
             // has the answer, and nudging for a final reply only makes the model restate it.
             if (hasToolCalls && hasToolResults && !host.pausePending) {
-              toolWorkPendingFinal = !endsOnDeliveredUserMessage(event.message, event.toolResults);
+              toolWorkPendingFinal = !closesOnDeliveredUserMessage(
+                event.message,
+                event.toolResults,
+              );
               silentToolContinuations = 0;
             } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
               if (messageText.trim()) {
@@ -1799,20 +1802,37 @@ function assistantText(message: unknown): string {
   );
 }
 
+/** Tools whose result holds nothing the user still needs to hear about. */
+const SIDE_EFFECT_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  "remember",
+  "save_memory",
+  "forget_memory",
+]);
+
 /**
- * True when the turn's last tool call (in the model's order) delivered a message_user bubble in
- * full. Only the last call is checked, so a step like [remember, message_user] still counts; a cut
- * bubble does not, since its tool result tells the model to finish the answer in its reply.
+ * True when the turn's only reportable work is a message_user bubble that was delivered in full:
+ * its last tool call is that bubble, and every other call is a side-effect-only tool such as
+ * `remember`. A step like [web_search, message_user("Checking now…")] does not count, since the
+ * search result is still unreported. A cut bubble does not either, since its tool result tells the
+ * model to finish the answer in its reply.
  */
-function endsOnDeliveredUserMessage(
+function closesOnDeliveredUserMessage(
   message: { role: string; content?: unknown },
   toolResults: readonly { toolCallId: string; isError?: boolean; details?: unknown }[],
 ): boolean {
   if (message.role !== "assistant" || !Array.isArray(message.content)) return false;
-  const lastCall = (message.content as Array<{ type?: string; id?: string; name?: string }>)
-    .filter((part) => part.type === "toolCall")
-    .at(-1);
+  const calls = (message.content as Array<{ type?: string; id?: string; name?: string }>).filter(
+    (part) => part.type === "toolCall",
+  );
+  const lastCall = calls.at(-1);
   if (lastCall?.name !== "message_user") return false;
+  if (
+    !calls.every(
+      (call) => call.name === "message_user" || SIDE_EFFECT_ONLY_TOOLS.has(call.name ?? ""),
+    )
+  ) {
+    return false;
+  }
   const result = toolResults.find((entry) => entry.toolCallId === lastCall.id);
   const details = result?.details as { ok?: unknown; truncated?: unknown } | undefined;
   return result?.isError !== true && details?.ok === true && details.truncated !== true;

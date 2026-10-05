@@ -7,6 +7,7 @@ const fakeAgentState = vi.hoisted(() => ({
     | "empty"
     | "two-boundaries"
     | "silent-continuation"
+    | "scripted-turns"
     | "subagent-limit"
     | "parent-limit"
     | "parent-parallel"
@@ -23,6 +24,11 @@ const fakeAgentState = vi.hoisted(() => ({
     name: "destination_write",
     args: { collection: "notes", title: "Result", body: "Done" } as Record<string, unknown>,
   },
+  /** Turns the "scripted-turns" mode plays, then an empty turn. Tool calls are not executed. */
+  turns: [] as Array<{
+    text?: string;
+    calls: Array<{ name: string; details?: Record<string, unknown> }>;
+  }>,
   preparedMessages: [] as unknown[],
   steeredMessages: [] as unknown[],
   followUpMessages: [] as unknown[],
@@ -83,6 +89,51 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
           args,
         });
         fakeAgentState.toolResult = await target.execute("call-1", args);
+        return;
+      }
+
+      if (fakeAgentState.mode === "scripted-turns") {
+        let callCount = 0;
+        for (const turn of fakeAgentState.turns) {
+          if (turn.text) {
+            this.emit({
+              type: "message_update",
+              assistantMessageEvent: { type: "text_delta", delta: turn.text },
+            });
+          }
+          const calls = turn.calls.map((call) => ({
+            ...call,
+            id: `call-${++callCount}`,
+          }));
+          for (const call of calls) {
+            this.emit({ type: "tool_execution_start", toolName: call.name, args: {} });
+          }
+          this.emit({
+            type: "turn_end",
+            message: {
+              role: "assistant",
+              content: [
+                ...(turn.text ? [{ type: "text", text: turn.text }] : []),
+                ...calls.map((call) => ({
+                  type: "toolCall",
+                  id: call.id,
+                  name: call.name,
+                  arguments: {},
+                })),
+              ],
+            },
+            toolResults: calls.map((call) => ({
+              toolCallId: call.id,
+              result: { ok: true },
+              details: call.details ?? { ok: true },
+            })),
+          });
+        }
+        this.emit({
+          type: "turn_end",
+          message: { role: "assistant", content: [] },
+          toolResults: [],
+        });
         return;
       }
 
@@ -307,6 +358,7 @@ describe("Pi connector tool dispatch", () => {
     fakeAgentState.preparedMessages = [];
     fakeAgentState.steeredMessages = [];
     fakeAgentState.followUpMessages = [];
+    fakeAgentState.turns = [];
     fakeAgentState.emitFinalAfterFollowUp = true;
     fakeAgentState.initialMessages = [];
     fakeAgentState.promptInputs = [];
@@ -765,6 +817,72 @@ describe("Pi connector tool dispatch", () => {
       {
         operationId: "bubble-then-silence",
         traceId: "bubble-then-silence",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(fakeAgentState.followUpMessages).toEqual([]);
+    expect(JSON.stringify(events)).not.toContain("could not produce a final response");
+  });
+
+  it("still asks for a final reply when the bubble turn also ran tools with results to report", async () => {
+    fakeAgentState.mode = "scripted-turns";
+    fakeAgentState.turns = [{ calls: [{ name: "web_search" }, { name: "message_user" }] }];
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "search-then-bubble",
+        prompt: "look it up",
+        instructions: "Search, then answer.",
+        history: [],
+        tools: [],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "search-then-bubble",
+        traceId: "search-then-bubble",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(fakeAgentState.followUpMessages).toHaveLength(1);
+    expect(JSON.stringify(events)).toContain("could not produce a final response");
+  });
+
+  it("ends quietly when the bubble turn only added memory writes", async () => {
+    fakeAgentState.mode = "scripted-turns";
+    fakeAgentState.turns = [{ calls: [{ name: "remember" }, { name: "message_user" }] }];
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "remember-then-bubble",
+        prompt: "note this and confirm",
+        instructions: "Remember, then answer.",
+        history: [],
+        tools: [],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "remember-then-bubble",
+        traceId: "remember-then-bubble",
         spaceId: "w",
         userId: "u",
         signal: new AbortController().signal,
