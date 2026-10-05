@@ -8,6 +8,13 @@ export interface FramedBlockHeader {
   dot?: boolean;
 }
 
+export type FramedBlockActionsAlign = "end" | "start";
+
+const ACTIONS_ALIGN_CLASS: Record<FramedBlockActionsAlign, string> = {
+  end: "justify-end",
+  start: "justify-start",
+};
+
 export interface FramedBlockProps extends Omit<ComponentPropsWithoutRef<"div">, "children"> {
   /** Omitted when the row above already names who is asking (a bot row's
    * author line) — the question then opens the card with no header line. */
@@ -17,8 +24,14 @@ export interface FramedBlockProps extends Omit<ComponentPropsWithoutRef<"div">, 
   consequence?: ReactNode;
   /** Controls between the question and the actions (options, a text field). */
   children?: ReactNode;
-  /** Capsules. */
+  /** Capsules, ordered dismiss, secondary, primary: the primary is always last. */
   actions?: ReactNode;
+  /**
+   * Where the actions sit. `end` (default) is a decision to validate: the group
+   * hugs the right edge, primary rightmost. `start` is a list of answers to
+   * read, which stays on the left.
+   */
+  actionsAlign?: FramedBlockActionsAlign;
   /**
    * The answer that was given. Once set the block is settled: the controls and
    * the actions are gone and only this line remains, so nothing looks pressable
@@ -37,6 +50,7 @@ export function FramedBlock({
   consequence,
   children,
   actions,
+  actionsAlign = "end",
   answered,
   className,
   ...props
@@ -92,7 +106,11 @@ export function FramedBlock({
             </div>
           ) : null}
           {actions ? (
-            <div data-slot="framed-block-actions" className="flex flex-wrap gap-2 p-3.5">
+            <div
+              data-slot="framed-block-actions"
+              data-align={actionsAlign}
+              className={cn("flex flex-wrap gap-2 p-3.5", ACTIONS_ALIGN_CLASS[actionsAlign])}
+            >
               {actions}
             </div>
           ) : null}

@@ -46,6 +46,29 @@ test("the design-system kitchen sink renders every primitive light and dark", as
   await expect(answered.locator('[data-slot="framed-block-body"]')).toHaveCount(0);
   await expect(answered.locator("button")).toHaveCount(0);
 
+  // A decision hugs the right edge, dismiss then secondary then primary; a list
+  // of answers stays on the left.
+  const decision = page.locator('[data-slot="framed-block-actions"][data-align="end"]').first();
+  const decisionButtons = await decision.locator("button").evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      return { text: node.textContent, left: box.left, right: box.right };
+    }),
+  );
+  expect(decisionButtons.map((button) => button.text)).toEqual([
+    "Deny",
+    "Always allow this tool",
+    "Allow once",
+  ]);
+  const decisionBox = (await decision.boundingBox())!;
+  expect(decisionButtons[2]!.right).toBeCloseTo(decisionBox.x + decisionBox.width - 14, 0);
+  expect(decisionButtons[0]!.left).toBeGreaterThan(decisionBox.x + decisionBox.width / 3);
+
+  const answers = page.locator('[data-slot="framed-block-actions"][data-align="start"]').first();
+  const answersBox = (await answers.boundingBox())!;
+  const otherAnswer = (await answers.locator("button").boundingBox())!;
+  expect(otherAnswer.x).toBeCloseTo(answersBox.x + 14, 0);
+
   // A named stack is readable; an unnamed one is decoration.
   await expect(page.locator('[data-slot="stacked-avatars"][role="img"]').first()).toHaveAttribute(
     "aria-label",
