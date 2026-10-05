@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Links you share now show a preview card.** When you send a link, or a bot shares one with you, the page's title, site and picture (or the site's icon) appear under the message on web, desktop and iOS, and you can remove a preview before or after sending. Your Rakazo server reads the page, or the phone or desktop app that shares the link does when a site blocks servers; nobody's device fetches anything when reading a conversation.
 
+#### Changed
+
+- Bots change part of a file in place instead of rewriting it whole, so edits are faster and no longer undo changes made to the rest of the file since the bot read it, and they read long text files page by page instead of failing past 250 KB.
+
 ### 2026-10-04
 
 #### Added
