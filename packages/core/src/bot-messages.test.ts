@@ -12,6 +12,7 @@ import {
   clampBotMessage,
   formatBotRosterLines,
   nextBotMessageHop,
+  openRequestTo,
   renderBotDirectory,
   renderGroupMembersContext,
   resolveBotAddress,
@@ -511,5 +512,46 @@ describe("botMessageRunRelaysToUser", () => {
   it("treats a run with no peer delivery as nothing to relay", () => {
     expect(botMessageRunRelaysToUser({ blocks: [{ kind: "text", text: "hello" }] })).toBe(false);
     expect(botMessageRelaysToUser(undefined)).toBe(false);
+  });
+});
+
+describe("openRequestTo", () => {
+  const sent = (id: string, intent: "request" | "question" | "fyi" = "request") => ({
+    id,
+    blocks: [
+      {
+        kind: "bot_message_sent" as const,
+        toBotId: "b_2",
+        toBotName: "Analyst",
+        text: "x",
+        intent,
+      },
+    ],
+  });
+  const received = (id: string, intent: "result" | "status", replyToMessageId: string) => ({
+    id,
+    replyToMessageId,
+    blocks: [
+      {
+        kind: "bot_message_received" as const,
+        fromBotId: "b_2",
+        fromBotName: "Analyst",
+        text: "x",
+        intent,
+      },
+    ],
+  });
+
+  it("finds the latest request the peer has not answered with a result", () => {
+    expect(openRequestTo([sent("m3"), sent("m1")], "b_2")).toBe("m3");
+    expect(openRequestTo([received("m4", "result", "m3"), sent("m3"), sent("m1")], "b_2")).toBe(
+      "m1",
+    );
+  });
+
+  it("keeps a request open through a status and ignores FYIs and other peers", () => {
+    expect(openRequestTo([received("m2", "status", "m1"), sent("m1")], "b_2")).toBe("m1");
+    expect(openRequestTo([sent("m1", "fyi")], "b_2")).toBeUndefined();
+    expect(openRequestTo([sent("m1")], "b_9")).toBeUndefined();
   });
 });
