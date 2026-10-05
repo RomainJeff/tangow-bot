@@ -127,12 +127,18 @@ describe("catalogModelLabel", () => {
     ["gemini-flash-latest", "Gemini Flash Latest", "Gemini Flash (auto-updates)"],
     ["foo-latest", "foo-latest", "foo (auto-updates)"],
     ["foo/latest", "foo/latest", "foo (auto-updates)"],
+    [
+      "accounts/fireworks/routers/qwen-max-latest",
+      "Qwen Max Latest (Qwen3.8 Max)",
+      "Qwen Max (auto-updates)",
+    ],
     // Pinned: `-preview` is its own model and a dated id is already a snapshot, so promise nothing.
     ["foo", "Foo Latest", "Foo"],
     ["claude-opus-4-5-20251101", "Claude Opus 4.5 (latest)", "Claude Opus 4.5"],
     // Untouched: no marker, no name, or nothing left once the marker goes.
     ["claude-opus-5", "Claude Opus 5", "Claude Opus 5"],
     ["some-model", undefined, "some-model"],
+    ["qwen3-8-max", "Qwen3.8 Max (preview)", "Qwen3.8 Max (preview)"],
     ["latest", "latest", "latest"],
   ])("labels %s / %s as %s", (id, name, expected) => {
     expect(catalogModelLabel(id, name, providerModelIds)).toBe(expected);

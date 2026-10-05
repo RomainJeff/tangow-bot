@@ -98,6 +98,8 @@ function buildPiCatalog(): PiCatalogEntry[] {
 
 /** Trailing upstream "latest" marker: "Claude Opus 4.5 (latest)", "Gemini Flash Latest", "foo-latest". */
 const LATEST_MARKER = /[\s(/-]*\blatest\b\s*\)?\s*$/i;
+/** The model an alias currently resolves to, after its marker: "Qwen Max Latest (Qwen3.8 Max)". */
+const RESOLVED_SUFFIX = /(\blatest\b\s*\)?)\s*\([^()]*\)\s*$/i;
 
 /**
  * Upstream marks auto-updating alias ids with a trailing "latest". That is an alias marker, not a
@@ -110,8 +112,9 @@ export function catalogModelLabel(
   name?: string,
   providerModelIds: readonly string[] = [],
 ): string {
-  const label = name || id;
-  if (!LATEST_MARKER.test(label)) return label;
+  // The resolved model goes stale as soon as the alias moves, so drop it with the marker.
+  const label = (name || id).replace(RESOLVED_SUFFIX, "$1");
+  if (!LATEST_MARKER.test(label)) return name || id;
   const base = label.replace(LATEST_MARKER, "").trim();
   if (!base) return label;
   return isAliasModelId(id, providerModelIds) ? `${base} (auto-updates)` : base;
