@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import { appendFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
@@ -160,7 +161,12 @@ export class PiJsonlSessionRecorder implements PiSessionRecorder {
   async start(input: PiSessionStart): Promise<PiSessionHandle> {
     const sessionsRoot = piSessionBotRoot(this.sessionsRoot, input.userId, input.botId);
     await mkdir(sessionsRoot, { recursive: true });
-    const file = path.join(sessionsRoot, `${sessionScopeSegment(input.runId, "runId")}.jsonl`);
+    // One file per start: a resumed run (pause, lost lease) restarts with the same runId.
+    const startedAt = new Date().toISOString().replace(/[:.]/g, "-");
+    const file = path.join(
+      sessionsRoot,
+      `${startedAt}_${sessionScopeSegment(input.runId, "runId")}_${randomUUID()}.jsonl`,
+    );
     try {
       await prunePiSessionFiles(sessionsRoot);
     } catch (error) {

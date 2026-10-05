@@ -108,6 +108,39 @@ describe("Pi JSONL sessions", () => {
     }
   });
 
+  it("writes each start of the same run to its own file", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rakazo-pi-session-"));
+    try {
+      const recorder = new PiJsonlSessionRecorder(path.join(root, "sessions"), root);
+      const start = {
+        runId: "run-1",
+        threadId: "thread-1",
+        botId: "bot-1",
+        userId: "user-1",
+        provider: "openai-compatible",
+        model: "qwen-test",
+        thinkingLevel: "medium",
+        systemPrompt: "Be concise.",
+        initialMessages: [],
+      };
+      await recorder.start(start);
+      await recorder.start(start);
+
+      const botRoot = piSessionBotRoot(path.join(root, "sessions"), "user-1", "bot-1");
+      const files = await readdir(botRoot);
+      expect(files).toHaveLength(2);
+      for (const file of files) {
+        const kinds = (await readFile(path.join(botRoot, file), "utf8"))
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line).kind);
+        expect(kinds.filter((kind) => kind === "session")).toHaveLength(1);
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("keeps sessions scoped and bounded by the retention policy", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "rakazo-pi-retention-"));
     try {
