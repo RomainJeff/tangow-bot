@@ -36,6 +36,20 @@ describe("link_preview block", () => {
     expect(MessageBlock.safeParse({ ...base, format: "compact", title: "T" }).success).toBe(true);
   });
 
+  it("accepts a site icon marker on a compact card only, and stays valid without it", () => {
+    const base = { kind: "link_preview", url: "https://a.tld/x", title: "T" };
+    const icon = { ...image, fit: "contain" };
+    expect(MessageBlock.parse({ ...base, format: "compact", image: icon })).toMatchObject({
+      image: { fit: "contain" },
+    });
+    expect(MessageBlock.safeParse({ ...base, format: "compact", image }).success).toBe(true);
+    expect(MessageBlock.safeParse({ ...base, format: "large", image: icon }).success).toBe(false);
+    expect(
+      MessageBlock.safeParse({ ...base, format: "compact", image: { ...image, fit: "cover" } })
+        .success,
+    ).toBe(false);
+  });
+
   it("needs a url and a format unless it is a removal marker", () => {
     expect(
       MessageBlock.safeParse({ kind: "link_preview", format: "compact", title: "T" }).success,
@@ -200,6 +214,22 @@ describe("link preview rpc contracts", () => {
         format: "compact",
         thumbnail: `data:image/webp;base64,${"A".repeat(70_000)}`,
       }).success,
+    ).toBe(false);
+  });
+
+  it("marks an icon thumbnail as contain, and nothing else", () => {
+    const thumbnail = "data:image/webp;base64,AAAA";
+    expect(
+      LinkPreviewDraftSchema.parse({
+        format: "compact",
+        title: "T",
+        thumbnail,
+        thumbnailFit: "contain",
+      }),
+    ).toMatchObject({ thumbnailFit: "contain" });
+    expect(
+      LinkPreviewDraftSchema.safeParse({ format: "compact", thumbnail, thumbnailFit: "cover" })
+        .success,
     ).toBe(false);
   });
 });

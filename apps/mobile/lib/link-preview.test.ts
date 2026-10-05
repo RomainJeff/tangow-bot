@@ -3,8 +3,10 @@ import { sizes } from "@rakazo/ui-tokens";
 import { describe, expect, it } from "vitest";
 import {
   cardReplacesBubble,
+  composerThumbnailFit,
   linkCardWidth,
   linkPreviewCardOf,
+  linkPreviewImageFit,
   linkPreviewImageHeight,
   linkPreviewLabel,
   openableLinkPreviewUrl,
@@ -177,5 +179,29 @@ describe("linkPreviewImageHeight", () => {
 
   it("has no image height for compact, which draws a fixed thumbnail", () => {
     expect(linkPreviewImageHeight(cardOf([compact])!, 300)).toBeUndefined();
+  });
+});
+
+describe("linkPreviewImageFit", () => {
+  const icon = unchecked({ ...compact, image: { ...image, fit: "contain" } });
+
+  it("draws a site icon whole, with an inset", () => {
+    expect(linkPreviewImageFit(cardOf([icon])!)).toEqual({
+      resizeMode: "contain",
+      inset: sizes.linkIconInset,
+    });
+    expect(composerThumbnailFit("contain")).toEqual({
+      resizeMode: "contain",
+      inset: sizes.linkIconInset,
+    });
+  });
+
+  it("crops every other picture, and an icon marker on another format", () => {
+    const thumbnail = unchecked({ ...compact, image });
+    expect(linkPreviewImageFit(cardOf([thumbnail])!)).toEqual({ resizeMode: "cover", inset: 0 });
+    expect(linkPreviewImageFit(cardOf([large])!)).toEqual({ resizeMode: "cover", inset: 0 });
+    const largeIcon = unchecked({ ...large, image: { ...image, fit: "contain" } });
+    expect(linkPreviewImageFit(cardOf([largeIcon])!)).toEqual({ resizeMode: "cover", inset: 0 });
+    expect(composerThumbnailFit(undefined)).toEqual({ resizeMode: "cover", inset: 0 });
   });
 });

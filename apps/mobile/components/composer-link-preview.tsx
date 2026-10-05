@@ -4,6 +4,7 @@ import { radii, sizes } from "@rakazo/ui-tokens";
 import { memo } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { t } from "../lib/i18n";
+import { composerThumbnailFit } from "../lib/link-preview";
 import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 import { NativeSymbol } from "./native-symbol";
@@ -31,6 +32,8 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
   const tokens = useMobileTokens();
   const loading = view.status === "loading";
   const thumbnail = view.status === "ready" ? view.thumbnail : undefined;
+  // A site icon is drawn whole inside the tile; every other thumbnail fills and crops.
+  const fit = composerThumbnailFit(view.status === "ready" ? view.thumbnailFit : undefined);
   // While the page is read the host is all there is to say, and the one thing that moves.
   const site = view.status === "ready" ? view.site : previewSiteLabel(view.url);
   return (
@@ -61,11 +64,22 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
             }}
           />
         ) : thumbnail ? (
-          <Image
-            source={{ uri: thumbnail }}
+          <View
             accessibilityElementsHidden
-            style={{ width: THUMB, height: THUMB, borderRadius: radii.chip }}
-          />
+            style={{
+              width: THUMB,
+              height: THUMB,
+              borderRadius: radii.chip,
+              overflow: "hidden",
+              backgroundColor: tokens.secondary,
+            }}
+          >
+            <Image
+              source={{ uri: thumbnail }}
+              resizeMode={fit.resizeMode}
+              style={{ flex: 1, margin: fit.inset }}
+            />
+          </View>
         ) : (
           <View style={{ width: 4 }} />
         )}

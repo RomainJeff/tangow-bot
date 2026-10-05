@@ -30,10 +30,18 @@ export function isPreviewableUrl(value: string): boolean {
 
 const PreviewUrl = z.string().refine(isPreviewableUrl, "Expected a public http(s) URL");
 
+/**
+ * How a client fits a preview image in its frame. Absent means it fills the frame, cropped at the
+ * center. `contain` marks a site icon: shown whole, centered, with a small inset. Optional, so a
+ * block stored before it existed stays valid and an older client simply crops.
+ */
+export const LINK_PREVIEW_IMAGE_FIT = "contain";
+
 const LinkPreviewImage = z.object({
   artifactId: Id,
   width: z.number().int().positive(),
   height: z.number().int().positive(),
+  fit: z.literal(LINK_PREVIEW_IMAGE_FIT).optional(),
 });
 
 /**
@@ -65,6 +73,9 @@ export const LinkPreviewBlock = z
     if (!block.url) issue("url", "A preview needs a url");
     if (!block.format) return issue("format", "A preview needs a format");
     if (block.format !== "compact" && !block.image) issue("image", "This format needs an image");
+    if (block.image?.fit && block.format !== "compact") {
+      issue("image", "Only a compact preview carries a site icon");
+    }
     if (block.format !== "photo" && !block.title) issue("title", "This format needs a title");
   });
 export type LinkPreviewBlock = z.infer<typeof LinkPreviewBlock>;
@@ -91,5 +102,7 @@ export const LinkPreviewDraftSchema = z.object({
     .max(LINK_PREVIEW_THUMBNAIL_MAX_LENGTH)
     .refine((value) => value.startsWith(LINK_PREVIEW_THUMBNAIL_PREFIX), "Expected a WebP data URL")
     .optional(),
+  /** `contain` when the thumbnail is a site icon: drawn whole, not cropped. */
+  thumbnailFit: z.literal(LINK_PREVIEW_IMAGE_FIT).optional(),
 });
 export type LinkPreviewDraft = z.infer<typeof LinkPreviewDraftSchema>;

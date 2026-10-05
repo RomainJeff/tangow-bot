@@ -170,7 +170,8 @@ thumbnail / file-tile height), `composerAttachmentTile 200` (max width of a
 file tile before its name truncates), `composerRemove 22` (the × disc).
 Link preview card: `linkLargeImageRatio` 1.91 (the large format's picture, width over
 height) and `linkCard 360` (its width on web, capped by the column),
-`linkThumb 56` (the compact format's thumbnail), `linkPhotoMax 320` (the photo
+`linkThumb 56` (the compact format's thumbnail), `linkIconInset 8` (the space around
+a site icon inside that thumbnail, web and iOS), `linkPhotoMax 320` (the photo
 format's maximum height).
 
 The sizes a primitive needs as a class are mapped into Tailwind's spacing
@@ -179,7 +180,7 @@ namespace in `packages/ui-web/src/styles.css` — `--spacing-hover-icon`,
 `--spacing-mobile-stack`, `--spacing-call-button`, `--spacing-message`,
 `--spacing-composer-attachment-thumb`, `--spacing-composer-attachment-tile`,
 `--spacing-composer-remove`, `--spacing-link-card`, `--spacing-link-thumb`,
-`--spacing-link-photo-max` — so `size-composer-icon`, `h-capsule` and
+`--spacing-link-icon-inset`, `--spacing-link-photo-max` — so `size-composer-icon`, `h-capsule` and
 `w-message` resolve to the token instead of an arbitrary value. The rest are
 spent through a `size` prop.
 
@@ -286,10 +287,15 @@ the bubble (or alone, in the bubble's place, when the message is only its link),
 it downloaded: `large` (picture at `linkLargeImageRatio`, 1.91:1, from `@rakazo/ui-tokens` on both surfaces, then title and site), `compact`
 (56 px thumbnail when there is a picture, title, site) and `photo` (the picture
 alone in a `rounded-bubble` frame capped at `linkPhotoMax`, the site under it).
+When the page has no usable picture, a compact card takes the site's icon as its
+thumbnail (the server marks the image `fit: "contain"`; an icon is never a `large`
+card): the icon is drawn whole and centered in the same 56 px `bg-secondary` tile,
+inset by `p-link-icon-inset` (the `linkIconInset` token, 8 pt on iOS), never cropped. Pictures that are not icons keep
+filling the tile and crop at the center.
 
 Props: `href`, `site` (the host of `href`, derived by `previewSiteLabel`, never cut
 from the end), `title?` (plain text, from `sanitizePreviewTitle`), `format`,
-`image?` (a node filling its frame), `imageRatio?` (a photo's width over height),
+`image?` (a node filling its frame; `LinkPreviewPicture` draws it, `fit="contain"` for an icon), `imageRatio?` (a photo's width over height),
 `onOpen?`. Anatomy: an `<a target="_blank" rel="noreferrer noopener">` named
 "title, site" (a photo: the site) around a `Surface` of `w-link-card max-w-full`;
 title `text-row-name` at weight 500 on two lines, `dir="auto"` inside a `<bdi>`;

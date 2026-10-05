@@ -245,7 +245,11 @@ export const MessageView = memo(function MessageView({
           imageRatio={image ? image.width / image.height : undefined}
           image={
             image ? (
-              <LinkPreviewImage target={artifactTarget} artifactId={image.artifactId} />
+              <LinkPreviewImage
+                target={artifactTarget}
+                artifactId={image.artifactId}
+                fit={image.fit}
+              />
             ) : undefined
           }
         />

@@ -22,6 +22,7 @@ import {
   ComposerAttachment,
   ComposerLinkPreview,
   ComposerShell,
+  LinkPreviewPicture,
   StopContour,
 } from "@rakazo/ui-web";
 import { ArrowUp, Box, Check, Clock, Mic, Pencil, Plus, Puzzle, Settings, X } from "lucide-react";
@@ -850,10 +851,9 @@ export const Composer = memo(function Composer({
                   title={linkPreviewView.status === "ready" ? linkPreviewView.title : undefined}
                   image={
                     linkPreviewView.status === "ready" && linkPreviewView.thumbnail ? (
-                      <img
+                      <LinkPreviewPicture
                         src={linkPreviewView.thumbnail}
-                        alt=""
-                        className="absolute inset-0 size-full object-cover"
+                        fit={linkPreviewView.thumbnailFit}
                       />
                     ) : undefined
                   }

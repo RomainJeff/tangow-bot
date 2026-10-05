@@ -2,6 +2,7 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { blocksToAgentHistoryText } from "./attachments.js";
 import {
+  extractSeenUrls,
   firstEligibleLink,
   hasSecretParam,
   isLinkOnlyMessage,
@@ -299,5 +300,56 @@ describe("messageHostsLinkPreview", () => {
 
   it("ignores values that are not blocks", () => {
     expect(messageHostsLinkPreview({ role: "bot", blocks: [null, 3, "x", {}] })).toBe(true);
+  });
+});
+
+describe("extractSeenUrls", () => {
+  it("takes the url of search hits and the links of fetched text, normalized and deduplicated", () => {
+    const urls = extractSeenUrls({
+      results: [
+        { title: "A", url: "https://A.test/x#frag", snippet: "see https://b.test/y." },
+        { title: "B", url: "https://a.test/x", snippet: "" },
+      ],
+    });
+    expect(urls).toEqual(["https://a.test/x", "https://b.test/y"]);
+  });
+
+  it("reads page text and snapshot trees as plain text (code included) and the link in markdown", () => {
+    const urls = extractSeenUrls({
+      text: "Home [Shop](https://s.test/shop_(new)) and\n```\nhttps://c.test/code\n```",
+      tree: "- link 'Docs' https://d.test/docs\n- link x",
+      elements: [{ ref: "e1", name: "https://e.test/p", role: "link" }],
+    });
+    expect(urls).toEqual([
+      "https://s.test/shop_(new)",
+      "https://c.test/code",
+      "https://d.test/docs",
+      "https://e.test/p",
+    ]);
+  });
+
+  it("never reads a sentence as one link", () => {
+    expect(extractSeenUrls("https://one.test/a https://two.test/b")).toEqual([
+      "https://one.test/a",
+      "https://two.test/b",
+    ]);
+  });
+
+  it("ignores keys, other schemes, credentials and links over 2048 characters", () => {
+    const urls = extractSeenUrls({
+      "https://key.test/": 1,
+      a: "ftp://f.test/x javascript:alert(1) https://u:p@c.test/x",
+      b: `https://long.test/${"a".repeat(2100)}`,
+    });
+    expect(urls).toEqual([]);
+  });
+
+  it("is bounded on deep or huge values", () => {
+    let deep: unknown = "https://deep.test/x";
+    for (let i = 0; i < 20; i += 1) deep = { next: deep };
+    expect(extractSeenUrls(deep)).toEqual([]);
+    expect(
+      extractSeenUrls(Array.from({ length: 30_000 }, (_, i) => `https://h.test/${i}`)),
+    ).toHaveLength(20_000);
   });
 });

@@ -7,13 +7,18 @@ const CHARSET_SNIFF_BYTES = 4096;
 export interface LinkPreviewHead {
   title?: string;
   imageUrl?: string;
+  /** The best site icon the head declares (see `pickIconUrl`), for a page with no usable image. */
+  iconUrl?: string;
 }
+
+/** An icon smaller than this (declared `sizes`) is a favicon, too small for a 56 pt thumbnail. */
+const MIN_ICON_SIZE = 64;
 
 /**
  * Title and image of an HTML head. Nothing runs and nothing loads: JSDOM is used as a parser
  * only (no `runScripts`, no `resources`), so scripts, images, frames, stylesheets and
  * `<meta http-equiv=refresh>` stay inert. `og:url` and `og:site_name` are never read.
- * `url` is the final URL of the page, the base for a relative image.
+ * `url` is the final URL of the page, the base for a relative image or icon.
  */
 export function parseLinkPreviewHead(
   bytes: Uint8Array,
@@ -32,7 +37,12 @@ export function parseLinkPreviewHead(
       const imageUrl = [metaContent(doc, "og:image"), metaContent(doc, "twitter:image")]
         .map((raw) => resolveImage(raw, base))
         .find((resolved) => resolved !== undefined);
-      return { ...(title ? { title } : {}), ...(imageUrl ? { imageUrl } : {}) };
+      const iconUrl = pickIconUrl(doc, base);
+      return {
+        ...(title ? { title } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(iconUrl ? { iconUrl } : {}),
+      };
     } finally {
       dom.window.close();
     }
@@ -70,6 +80,72 @@ function baseUrl(doc: Document, pageUrl: string): string {
   } catch {
     return pageUrl;
   }
+}
+
+type IconCandidate = { href: string; size: number; order: number };
+
+/**
+ * The site icon to fall back on, resolved like `og:image`: the largest `apple-touch-icon`
+ * (`sizes` absent counts as unknown, the smallest), else the largest `rel~="icon"` that declares
+ * 64 px or more and is a png, webp or jpeg (by `type`, or by extension when there is none). Never
+ * an SVG (`mask-icon` included), never an ICO, and never a guessed `/favicon.ico`: only what the
+ * page itself names.
+ */
+function pickIconUrl(doc: Document, base: string): string | undefined {
+  const touch: IconCandidate[] = [];
+  const plain: IconCandidate[] = [];
+  let order = 0;
+  for (const link of doc.querySelectorAll("link[href]")) {
+    order += 1;
+    const rel = (link.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
+    const isTouch =
+      rel.includes("apple-touch-icon") || rel.includes("apple-touch-icon-precomposed");
+    if (!isTouch && !rel.includes("icon")) continue;
+    const href = resolveImage(link.getAttribute("href")?.trim(), base);
+    if (!href || isVectorOrIco(href, link.getAttribute("type"))) continue;
+    const size = declaredSize(link.getAttribute("sizes"));
+    if (isTouch) {
+      touch.push({ href, size, order });
+    } else if (size >= MIN_ICON_SIZE && isRasterIcon(href, link.getAttribute("type"))) {
+      plain.push({ href, size, order });
+    }
+  }
+  const best = (list: IconCandidate[]) =>
+    [...list].sort((a, b) => b.size - a.size || a.order - b.order)[0]?.href;
+  return best(touch) ?? best(plain);
+}
+
+/** The largest side a `sizes` attribute declares (`180x180`, `16x16 32x32`); 0 when none or `any`. */
+function declaredSize(sizes: string | null): number {
+  let largest = 0;
+  for (const match of (sizes ?? "").toLowerCase().matchAll(/(\d+)x(\d+)/g)) {
+    largest = Math.max(largest, Math.min(Number(match[1]), Number(match[2])));
+  }
+  return largest;
+}
+
+function pathExtension(href: string): string {
+  try {
+    return /\.([a-z0-9]+)$/i.exec(new URL(href).pathname)?.[1]?.toLowerCase() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function isVectorOrIco(href: string, type: string | null): boolean {
+  const mime = (type ?? "").trim().toLowerCase();
+  // `image/x-icon` and `image/vnd.microsoft.icon` both contain "ico".
+  return (
+    mime.includes("svg") ||
+    mime.includes("ico") ||
+    ["svg", "svgz", "ico", "cur"].includes(pathExtension(href))
+  );
+}
+
+function isRasterIcon(href: string, type: string | null): boolean {
+  const mime = (type ?? "").trim().toLowerCase();
+  if (mime) return ["image/png", "image/webp", "image/jpeg", "image/jpg"].includes(mime);
+  return ["png", "webp", "jpg", "jpeg"].includes(pathExtension(href));
 }
 
 function resolveImage(raw: string | undefined, base: string): string | undefined {

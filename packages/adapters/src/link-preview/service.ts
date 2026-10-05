@@ -30,7 +30,7 @@ export interface ResolvedLinkPreview {
   format: "large" | "photo" | "compact";
   title?: string;
   /** The WebP bytes live in the artifact store under `key` (the cache's copy). */
-  image?: { key: string; width: number; height: number; bytes: number };
+  image?: { key: string; width: number; height: number; bytes: number; fit?: "contain" };
 }
 
 export interface LinkPreviewScope {
@@ -79,6 +79,7 @@ export async function resolveLinkPreview(
   scope: LinkPreviewScope,
   url: string,
   signal?: AbortSignal,
+  deadlineAt?: number,
 ): Promise<ResolvedLinkPreview | null> {
   try {
     if (!isPreviewableUrl(url) || hasSecretParam(url)) return null;
@@ -103,6 +104,7 @@ export async function resolveLinkPreview(
     const result = await read(url, {
       ...deps.readDeps,
       ...(signal ? { signal } : {}),
+      ...(deadlineAt === undefined ? {} : { deadlineAt }),
       // Host and reason only: the link can carry a token.
       log: (event) => getLogger().info("link preview read failed", event),
     });
@@ -129,6 +131,7 @@ export async function resolveLinkPreview(
         width: result.image.width,
         height: result.image.height,
         bytes: result.image.bytes.byteLength,
+        ...(result.imageFit ? { fit: result.imageFit } : {}),
       };
     }
     const entry: Extract<CachedLinkPreview, { status: "ok" }> = {

@@ -24,6 +24,36 @@ export interface LinkPreviewCardProps
   onOpen?: () => void;
 }
 
+/**
+ * A preview picture that fills its frame (`absolute inset-0`). By default it is cropped at the
+ * center (`object-cover`); a site icon (`fit="contain"`) is shown whole, centered, with the
+ * `linkIconInset` token around it, so the icon is never cut and breathes inside the thumbnail's `secondary` tile.
+ */
+export function LinkPreviewPicture({
+  src,
+  fit,
+  className,
+}: {
+  src: string;
+  fit?: "contain";
+  className?: string;
+}) {
+  const whole = fit === "contain";
+  return (
+    <div
+      data-slot="link-preview-picture"
+      data-fit={whole ? "contain" : "cover"}
+      className={cn("absolute inset-0", whole && "p-link-icon-inset", className)}
+    >
+      <img
+        src={src}
+        alt=""
+        className={cn("size-full", whole ? "object-contain" : "object-cover")}
+      />
+    </div>
+  );
+}
+
 function isHttpUrl(value: string): boolean {
   try {
     const { protocol } = new URL(value);

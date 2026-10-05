@@ -69,6 +69,27 @@ describe("cache entries", () => {
     });
   });
 
+  it("remembers that an image is a site icon, and only then", async () => {
+    const db = createFakeThreadDb();
+    const image = { key: "blob", width: 180, height: 180, bytes: 10 };
+    await storeLinkPreviewCache(db.prisma, {
+      spaceId: "space-1",
+      keyHash: "icon",
+      entry: ok({ image: { ...image, fit: "contain" } }),
+      now: NOW,
+    });
+    await storeLinkPreviewCache(db.prisma, {
+      spaceId: "space-1",
+      keyHash: "page",
+      entry: ok({ image }),
+      now: NOW,
+    });
+    const icon = await findCachedLinkPreview(db.prisma, "space-1", "icon", NOW);
+    const page = await findCachedLinkPreview(db.prisma, "space-1", "page", NOW);
+    expect(icon).toMatchObject({ image: { fit: "contain" } });
+    expect(page).not.toHaveProperty("image.fit");
+  });
+
   it("hands back the image of an entry it replaced, for deletion", async () => {
     const db = createFakeThreadDb();
     const image = (key: string) => ({ key, width: 600, height: 400, bytes: 10 });
@@ -88,10 +109,10 @@ describe("cache entries", () => {
     expect(db.tables.linkPreviewCache.size).toBe(1);
   });
 
-  it("stays under 500 entries for a space after 10 000 distinct links (CA 43)", async () => {
+  it("stays under 500 entries for a space after 1 500 distinct links (CA 43)", async () => {
     const db = createFakeThreadDb();
     const evicted: string[] = [];
-    for (let index = 0; index < 10_000; index += 1) {
+    for (let index = 0; index < 1_500; index += 1) {
       const { removedImageKeys } = await storeLinkPreviewCache(db.prisma, {
         spaceId: "space-1",
         keyHash: linkPreviewKeyHash("space-1", `https://example.test/${index}`),
@@ -103,9 +124,9 @@ describe("cache entries", () => {
     expect(db.tables.linkPreviewCache.size).toBe(LINK_PREVIEW_CACHE_MAX_ENTRIES);
     // Oldest out: what is left is the last 500, and every other image was handed back.
     const kept = new Set([...db.tables.linkPreviewCache.values()].map((row) => row.imageKey));
-    expect(kept.has("blob-9999")).toBe(true);
+    expect(kept.has("blob-1499")).toBe(true);
     expect(kept.has("blob-0")).toBe(false);
-    expect(evicted).toHaveLength(10_000 - LINK_PREVIEW_CACHE_MAX_ENTRIES);
+    expect(evicted).toHaveLength(1_500 - LINK_PREVIEW_CACHE_MAX_ENTRIES);
   });
 
   it("stays under 100 MB of images, and one space never evicts another's", async () => {

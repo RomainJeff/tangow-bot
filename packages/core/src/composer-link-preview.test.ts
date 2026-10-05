@@ -128,6 +128,25 @@ describe("createComposerLinkPreview", () => {
     });
   });
 
+  it("keeps the icon marker of a thumbnail, and only with a thumbnail", async () => {
+    const icon = setup(async () => ({
+      format: "compact",
+      title: "Site",
+      thumbnail: THUMB,
+      thumbnailFit: "contain",
+    }));
+    icon.controller.update("https://a.tld/page", "paste");
+    await wait(800);
+    await flush();
+    expect(icon.controller.getView()).toMatchObject({ thumbnail: THUMB, thumbnailFit: "contain" });
+
+    const bare = setup(async () => ({ format: "compact", title: "Site", thumbnailFit: "contain" }));
+    bare.controller.update("https://a.tld/page", "paste");
+    await wait(800);
+    await flush();
+    expect(bare.controller.getView()).not.toHaveProperty("thumbnailFit");
+  });
+
   it("drops the pending read when the link changes or goes away", async () => {
     const { controller, spy } = setup();
     controller.update("https://a.tld/1 ");

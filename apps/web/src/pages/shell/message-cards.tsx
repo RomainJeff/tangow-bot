@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogTitle,
   FramedBlock,
+  LinkPreviewPicture,
   Surface,
 } from "@rakazo/ui-web";
 import { ImageIcon, X } from "lucide-react";
@@ -524,9 +525,12 @@ function useArtifactImageSrc(target: ArtifactTarget, artifactId: string) {
 export function LinkPreviewImage({
   target,
   artifactId,
+  fit,
 }: {
   target: ArtifactTarget;
   artifactId: string;
+  /** `contain` for a site icon: drawn whole inside the frame. */
+  fit?: "contain";
 }) {
   const { container, src, failed } = useArtifactImageSrc(target, artifactId);
   return (
@@ -535,7 +539,7 @@ export function LinkPreviewImage({
       className={`absolute inset-0 overflow-hidden ${failed ? "grid place-items-center" : ""}`}
     >
       {src ? (
-        <img src={src} alt="" className="size-full object-cover" />
+        <LinkPreviewPicture src={src} fit={fit} />
       ) : failed ? (
         <ImageIcon className="size-5 text-muted-foreground" strokeWidth={1.7} aria-hidden />
       ) : null}

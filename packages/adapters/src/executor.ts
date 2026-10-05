@@ -230,7 +230,12 @@ import {
   CATALOG_EXECUTE,
   uniquifyInstalledToolName,
 } from "./lazy-tool-catalog.js";
-import { OPENED_URLS_PER_RUN, openedUrlFromCompletion } from "./link-preview/opened-urls.js";
+import {
+  OPENED_URLS_PER_RUN,
+  openedUrlFromCompletion,
+  SEEN_URLS_PER_RUN,
+  seenUrlHashesFromCompletion,
+} from "./link-preview/opened-urls.js";
 import {
   buildMcpCredentialBlob,
   needsOAuthProbe,
@@ -625,6 +630,7 @@ export function toolCompletionFromResult(
 export function toolCompletionAuditPayload(
   completion: AgentToolCompletion,
   secrets: string[] = [],
+  runId?: string,
 ): Record<string, unknown> {
   const durationMs = Number.isFinite(completion.durationMs)
     ? Math.max(0, Math.round(completion.durationMs))
@@ -642,6 +648,12 @@ export function toolCompletionAuditPayload(
   // secret changes under redaction is dropped, so it can never match a link in a message.
   const openedUrl = openedUrlFromCompletion(completion);
   if (openedUrl && redactSecrets(openedUrl, secrets) === openedUrl) payload.openedUrl = openedUrl;
+  // And the links a public web tool showed the bot, as SHA-256 hashes salted with the run id: a
+  // link can be matched against, never read back.
+  const seenUrlHashes = runId
+    ? seenUrlHashesFromCompletion(completion, runId, secrets).slice(0, SEEN_URLS_PER_RUN)
+    : [];
+  if (seenUrlHashes.length > 0) payload.seenUrlHashes = seenUrlHashes;
   if (!isAuditableToolResult(completion.result)) return payload;
 
   payload.contentTypes = completion.result.content.flatMap((part) => {
@@ -669,15 +681,30 @@ export function toolCompletionAuditPayload(
   return payload;
 }
 
+/** The seen-link hashes already recorded for a run, which together never pass the per-run cap. */
+export type SeenUrlBudget = { hashes: Set<string> };
+
 export async function appendToolCompletionAudit(
   deps: { events: Pick<ThreadEvents, "append"> },
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   completion: AgentToolCompletion,
   secrets: string[] = [],
   openedUrlBudget?: { remaining: number },
+  seenUrlBudget?: SeenUrlBudget,
 ): Promise<void> {
   try {
-    const payload = toolCompletionAuditPayload(completion, secrets);
+    const payload = toolCompletionAuditPayload(completion, secrets, target.runId);
+    if (Array.isArray(payload.seenUrlHashes) && seenUrlBudget) {
+      // First come, first served: a large page read early can use the whole per-run cap and leave
+      // later search hits without a card. Accepted for now (a card is only a convenience); a
+      // per-call share would be the fix if it shows up.
+      const fresh = (payload.seenUrlHashes as string[])
+        .filter((hash) => !seenUrlBudget.hashes.has(hash))
+        .slice(0, Math.max(0, SEEN_URLS_PER_RUN - seenUrlBudget.hashes.size));
+      for (const hash of fresh) seenUrlBudget.hashes.add(hash);
+      if (fresh.length > 0) payload.seenUrlHashes = fresh;
+      else delete payload.seenUrlHashes;
+    }
     if (payload.openedUrl !== undefined && openedUrlBudget) {
       if (openedUrlBudget.remaining > 0) openedUrlBudget.remaining -= 1;
       else delete payload.openedUrl;
@@ -1276,6 +1303,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       const runSecrets = [...deps.secrets];
       // At most this many opened URLs are recorded per run (the link preview rule reads them).
       const openedUrlBudget = { remaining: OPENED_URLS_PER_RUN };
+      const seenUrlBudget: SeenUrlBudget = { hashes: new Set() };
       // The audit of a finished tool call is written without anyone waiting for it (the runtime
       // fires it and moves on). The link preview job reads those events, so the run waits for
       // the ones still in flight before it queues the job.
@@ -3954,6 +3982,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   completion,
                   runSecrets,
                   openedUrlBudget,
+                  seenUrlBudget,
                 );
                 pendingToolAudits.add(audit);
                 void audit.finally(() => pendingToolAudits.delete(audit));
@@ -4286,6 +4315,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     ),
                     runSecrets,
                     openedUrlBudget,
+                    seenUrlBudget,
                   );
                   if (isToolPauseResult(result)) return;
                 } catch (error) {

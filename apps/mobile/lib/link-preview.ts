@@ -96,3 +96,24 @@ export function linkPreviewImageHeight(card: LinkPreviewCard, width: number): nu
   }
   return undefined;
 }
+
+/**
+ * How an image sits in its frame: cropped at the center by default, or, for a site icon (a compact
+ * card's image marked `contain`), shown whole and centered with a small inset. Anything else
+ * marked `contain` is cropped: an icon never belongs to another format.
+ */
+export function linkPreviewImageFit(card: Pick<LinkPreviewCard, "format" | "image">): {
+  resizeMode: "cover" | "contain";
+  inset: number;
+} {
+  return card.format === "compact" && card.image?.fit === "contain"
+    ? { resizeMode: "contain", inset: sizes.linkIconInset }
+    : { resizeMode: "cover", inset: 0 };
+}
+
+/** The same rule for the composer's thumbnail, which carries only the marker. */
+export function composerThumbnailFit(thumbnailFit: "contain" | undefined) {
+  return thumbnailFit === "contain"
+    ? { resizeMode: "contain" as const, inset: sizes.linkIconInset }
+    : { resizeMode: "cover" as const, inset: 0 };
+}

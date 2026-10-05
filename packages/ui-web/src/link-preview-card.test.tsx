@@ -1,6 +1,6 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { LinkPreviewCard } from "./link-preview-card.js";
+import { LinkPreviewCard, LinkPreviewPicture } from "./link-preview-card.js";
 
 const PICTURE = <div data-testid="picture" />;
 
@@ -153,5 +153,24 @@ describe("LinkPreviewCard", () => {
     expect(html).not.toMatch(/<img/);
     expect(html).not.toMatch(/background-image/);
     expect(html).not.toMatch(/src="https?:/);
+  });
+});
+
+describe("LinkPreviewPicture", () => {
+  it("fills its frame and crops by default", () => {
+    const html = renderToString(<LinkPreviewPicture src="blob:a" />);
+    expect(html).toContain('data-fit="cover"');
+    expect(html).toContain("absolute inset-0");
+    expect(html).toContain("object-cover");
+    expect(html).not.toContain("object-contain");
+    expect(html).not.toContain("p-link-icon-inset");
+  });
+
+  it("shows a site icon whole and centered, inset in its frame, never cropped", () => {
+    const html = renderToString(<LinkPreviewPicture src="blob:a" fit="contain" />);
+    expect(html).toContain('data-fit="contain"');
+    expect(html).toContain("object-contain");
+    expect(html).toContain("p-link-icon-inset");
+    expect(html).not.toContain("object-cover");
   });
 });

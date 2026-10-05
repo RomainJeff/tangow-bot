@@ -1,3 +1,4 @@
+import { LINK_PREVIEW_IMAGE_FIT } from "@rakazo/contracts";
 import { isTransientReason, LinkPreviewError, type LinkPreviewFailureReason } from "./errors.js";
 import { parseLinkPreviewHead } from "./head-parser.js";
 import { type EncodedPreviewImage, encodePreviewImage, type ImageEncodeOptions } from "./image.js";
@@ -14,6 +15,8 @@ export type LinkPreviewFormat = "large" | "photo" | "compact";
 
 const LARGE_MIN_WIDTH = 600;
 const LARGE_MIN_RATIO = 1.3;
+/** The icon is only worth a request when this much of the job's budget is left to read it. */
+export const LINK_PREVIEW_ICON_MIN_BUDGET_MS = 3_000;
 
 /** The card format, decided from what was really downloaded and never from what the page declares. */
 export function decideLinkPreviewFormat(input: {
@@ -31,7 +34,14 @@ export function decideLinkPreviewFormat(input: {
 }
 
 export type LinkPreviewReadResult =
-  | { ok: true; format: LinkPreviewFormat; title?: string; image?: EncodedPreviewImage }
+  | {
+      ok: true;
+      format: LinkPreviewFormat;
+      title?: string;
+      image?: EncodedPreviewImage;
+      /** `contain` when the image is the site's icon, which clients draw whole, never cropped. */
+      imageFit?: typeof LINK_PREVIEW_IMAGE_FIT;
+    }
   | { ok: false; reason: LinkPreviewFailureReason; transient: boolean };
 
 export interface LinkPreviewReadDeps
@@ -40,6 +50,8 @@ export interface LinkPreviewReadDeps
   fetchResource?: LinkPreviewResourceFetcher;
   pageTimeoutMs?: number;
   imageTimeoutMs?: number;
+  /** When the job's budget ends (epoch ms). Without it the icon fallback is always tried. */
+  deadlineAt?: number;
   encode?: ImageEncodeOptions;
   /** Receives the host of the link and a reason, never the full URL. */
   log?: (event: {
@@ -59,6 +71,11 @@ export async function readLinkPreview(
   deps: LinkPreviewReadDeps = {},
 ): Promise<LinkPreviewReadResult> {
   const host = hostOf(url);
+  const cutShort = (reason: "aborted" | "timeout"): LinkPreviewReadResult => ({
+    ok: false,
+    reason,
+    transient: true,
+  });
   const fail = (stage: "page" | "image", error: unknown): LinkPreviewReadResult => {
     const reason = error instanceof LinkPreviewError ? error.reason : "network";
     if (host) deps.log?.({ host, stage, reason });
@@ -90,17 +107,39 @@ export async function readLinkPreview(
 
     const head = parseLinkPreviewHead(page.bytes, { contentType: page.contentType, url: page.url });
     if (!head.title) return fail("page", new LinkPreviewError("no_title"));
-    const image = head.imageUrl ? await readPageImage(head.imageUrl, deps, fail) : undefined;
-    const format = decideLinkPreviewFormat({ kind: "html", title: head.title, image });
+    const pageImage = head.imageUrl ? await readImage(head.imageUrl, deps, fail) : undefined;
+    if (head.imageUrl && !pageImage && deps.signal?.aborted) return cutShort("aborted");
+    // No usable page image: the site's icon stands in. It never makes a large card, and only the
+    // icon the page itself names is tried (no guessed /favicon.ico).
+    let icon: EncodedPreviewImage | undefined;
+    if (!pageImage && head.iconUrl) {
+      if (!hasBudgetForIcon(deps)) return cutShort("timeout");
+      icon = await readImage(head.iconUrl, deps, fail);
+      if (!icon && deps.signal?.aborted) return cutShort("aborted");
+    }
+    const format = decideLinkPreviewFormat({ kind: "html", title: head.title, image: pageImage });
     if (!format) return fail("page", new LinkPreviewError("no_title"));
-    return { ok: true, format, title: head.title, ...(image ? { image } : {}) };
+    const image = pageImage ?? icon;
+    return {
+      ok: true,
+      format,
+      title: head.title,
+      ...(image ? { image } : {}),
+      ...(icon ? { imageFit: LINK_PREVIEW_IMAGE_FIT } : {}),
+    };
   } catch (error) {
     return fail("page", error);
   }
 }
 
-/** A page image that cannot be had leaves a compact card without thumbnail, not a failure. */
-async function readPageImage(
+function hasBudgetForIcon(deps: LinkPreviewReadDeps): boolean {
+  return (
+    deps.deadlineAt === undefined || deps.deadlineAt - Date.now() >= LINK_PREVIEW_ICON_MIN_BUDGET_MS
+  );
+}
+
+/** An image that cannot be had leaves a compact card without thumbnail, not a failure. */
+async function readImage(
   imageUrl: string,
   deps: LinkPreviewReadDeps,
   fail: (stage: "image", error: unknown) => unknown,

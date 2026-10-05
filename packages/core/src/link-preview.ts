@@ -132,3 +132,43 @@ export function sanitizePreviewTitle(title: string): string {
   const lastUnit = cut.charCodeAt(cut.length - 1);
   return (lastUnit >= 0xd800 && lastUnit <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd();
 }
+
+const SEEN_WALK_MAX_DEPTH = 8;
+const SEEN_WALK_MAX_STRINGS = 20_000;
+
+/**
+ * The http(s) links a web tool's raw result shows, normalized and deduplicated, in order: a search
+ * hit's `url`, and every link in the page text. It reads values
+ * only (never keys), takes a value that is itself a link whole, and reads the rest as plain text
+ * (code included). The caller decides which tools' results may be passed in, and may refuse a
+ * link with `accept`, which sees it as written in the text, before normalization.
+ */
+export function extractSeenUrls(
+  output: unknown,
+  accept: (raw: string, normalized: string) => boolean = () => true,
+): string[] {
+  const seen = new Set<string>();
+  let strings = 0;
+  const add = (candidate: string) => {
+    if (!isPreviewableUrl(candidate)) return;
+    const normalized = normalizePreviewUrl(candidate);
+    if (normalized && isPreviewableUrl(normalized) && accept(candidate, normalized)) {
+      seen.add(normalized);
+    }
+  };
+  const visit = (value: unknown, depth: number) => {
+    if (strings >= SEEN_WALK_MAX_STRINGS || depth > SEEN_WALK_MAX_DEPTH) return;
+    if (typeof value === "string") {
+      strings += 1;
+      const whole = value.trim();
+      if (!/\s/.test(whole)) add(whole);
+      for (const link of extractLinksFromText(value, { includeCode: true })) add(link);
+    } else if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+    } else if (value && typeof value === "object") {
+      for (const item of Object.values(value)) visit(item, depth + 1);
+    }
+  };
+  visit(output, 0);
+  return [...seen];
+}

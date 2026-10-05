@@ -993,6 +993,8 @@ model LinkPreviewCache {
   imageWidth  Int?
   imageHeight Int?
   imageBytes  Int      @default(0)
+  /// "contain" when the image is the site's icon (drawn whole); null otherwise.
+  imageFit    String?
   createdAt   DateTime @default(now())
   expiresAt   DateTime
 

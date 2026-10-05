@@ -219,3 +219,92 @@ describe("inert parsing", () => {
     expect(parse(new Uint8Array([0, 255, 254, 1, 2, 3]))).toEqual({});
   });
 });
+
+describe("site icon", () => {
+  const icon = (links: string, base = "") => parse(`<head><title>T</title>${base}${links}</head>`);
+
+  it("prefers the largest apple-touch-icon, resolved against the page", () => {
+    const head = icon(
+      `<link rel="apple-touch-icon" sizes="120x120" href="/a120.png">
+       <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/a180.png">
+       <link rel="icon" sizes="512x512" type="image/png" href="/i512.png">`,
+    );
+    expect(head.iconUrl).toBe("https://example.test/a180.png");
+  });
+
+  it("takes an apple-touch-icon without sizes, and the first of equal ones", () => {
+    expect(icon(`<link rel="apple-touch-icon" href="touch.png">`).iconUrl).toBe(
+      "https://example.test/articles/touch.png",
+    );
+    expect(
+      icon(
+        `<link rel="apple-touch-icon" href="/one.png"><link rel="apple-touch-icon" href="/two.png">`,
+      ).iconUrl,
+    ).toBe("https://example.test/one.png");
+  });
+
+  it("falls back to the largest rel=icon of 64 px or more in png, webp or jpeg", () => {
+    expect(
+      icon(
+        `<link rel="icon" sizes="32x32" type="image/png" href="/i32.png">
+         <link rel="shortcut icon" sizes="64x64" type="image/png" href="/i64.png">
+         <link rel="icon" sizes="192x192" href="/i192.webp">`,
+      ).iconUrl,
+    ).toBe("https://example.test/i192.webp");
+  });
+
+  it("refuses rel=icon without a declared size of 64 or more, or of another type", () => {
+    for (const link of [
+      `<link rel="icon" href="/i.png">`,
+      `<link rel="icon" sizes="32x32" href="/i.png">`,
+      `<link rel="icon" sizes="any" href="/i.png">`,
+      `<link rel="icon" sizes="128x128" type="image/gif" href="/i.gif">`,
+      `<link rel="icon" sizes="128x128" href="/i.gif">`,
+      `<link rel="icon" sizes="128x128" href="/i">`,
+    ]) {
+      expect(icon(link).iconUrl, link).toBeUndefined();
+    }
+  });
+
+  it("never takes an SVG, a mask-icon, an ICO, or a guessed favicon", () => {
+    for (const link of [
+      `<link rel="icon" sizes="any" type="image/svg+xml" href="/i.svg">`,
+      `<link rel="icon" sizes="128x128" href="/i.svg">`,
+      `<link rel="apple-touch-icon" sizes="180x180" href="/a.svg">`,
+      `<link rel="apple-touch-icon" type="image/svg+xml" href="/a.png">`,
+      `<link rel="mask-icon" href="/mask.svg" color="#000">`,
+      `<link rel="mask-icon" sizes="128x128" href="/mask.png">`,
+      `<link rel="icon" sizes="256x256" type="image/x-icon" href="/favicon.ico">`,
+      `<link rel="icon" sizes="256x256" href="/favicon.ico">`,
+    ]) {
+      expect(icon(link).iconUrl, link).toBeUndefined();
+    }
+    expect(icon("").iconUrl).toBeUndefined();
+  });
+
+  it("skips an SVG apple-touch-icon and keeps a raster one", () => {
+    expect(
+      icon(
+        `<link rel="apple-touch-icon" sizes="512x512" href="/a.svg"><link rel="apple-touch-icon" sizes="180x180" href="/a.png">`,
+      ).iconUrl,
+    ).toBe("https://example.test/a.png");
+  });
+
+  it("resolves against <base href> and refuses non-http(s) or credentialed hrefs", () => {
+    expect(
+      icon(
+        `<link rel="apple-touch-icon" href="a.png">`,
+        `<base href="https://cdn.example.test/x/">`,
+      ).iconUrl,
+    ).toBe("https://cdn.example.test/x/a.png");
+    expect(
+      icon(`<link rel="apple-touch-icon" href="data:image/png;base64,AAAA">`).iconUrl,
+    ).toBeUndefined();
+    expect(
+      icon(`<link rel="apple-touch-icon" href="javascript:alert(1)">`).iconUrl,
+    ).toBeUndefined();
+    expect(
+      icon(`<link rel="apple-touch-icon" href="https://u:p@c.test/a.png">`).iconUrl,
+    ).toBeUndefined();
+  });
+});

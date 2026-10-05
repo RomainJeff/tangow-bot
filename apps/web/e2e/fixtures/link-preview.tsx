@@ -55,6 +55,16 @@ const MESSAGES: ThreadMessage[] = [
       title: "Principles of Calm Technology",
     },
   ]),
+  message("icon", "bot", [
+    { kind: "text", text: "The front page: https://www.example.fr/" },
+    {
+      kind: "link_preview",
+      url: "https://www.example.fr/",
+      format: "compact",
+      title: "Example, tech news and tests",
+      image: { artifactId: "art-1", width: 180, height: 180, fit: "contain" },
+    },
+  ]),
   message("photo", "user", [
     { kind: "text", text: "https://images.example.com/p.jpg" },
     {

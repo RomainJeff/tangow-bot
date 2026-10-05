@@ -108,6 +108,7 @@ export async function previewLinkForComposer(
       format: preview.format,
       ...(preview.format !== "photo" && preview.title ? { title: preview.title } : {}),
       ...(thumbnail ? { thumbnail } : {}),
+      ...(thumbnail && preview.image?.fit ? { thumbnailFit: preview.image.fit } : {}),
     };
   } finally {
     release();

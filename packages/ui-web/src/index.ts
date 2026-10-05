@@ -49,6 +49,7 @@ export {
   LinkPreviewCard,
   type LinkPreviewCardProps,
   type LinkPreviewFormat,
+  LinkPreviewPicture,
 } from "./link-preview-card.js";
 export {
   MessageBubble,

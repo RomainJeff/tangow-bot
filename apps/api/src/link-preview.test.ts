@@ -166,6 +166,30 @@ describe("links.preview: what it answers", () => {
     expect(artifacts.put).not.toHaveBeenCalled();
   });
 
+  it("marks the thumbnail of a site icon, so clients draw it whole", async () => {
+    const { deps } = composer({
+      cached: {
+        ...fresh,
+        format: "compact",
+        title: "Home",
+        imageKey: "blob-1",
+        imageWidth: 180,
+        imageHeight: 180,
+        imageBytes: TINY_WEBP.length,
+        imageFit: "contain",
+      },
+      bytes: TINY_WEBP,
+    });
+    const draft = await previewLinkForComposer(
+      deps,
+      actor,
+      { threadId: "thread-1", url: URL_TO_PREVIEW },
+      new AbortController().signal,
+    );
+    expect(draft).toMatchObject({ format: "compact", thumbnailFit: "contain" });
+    expect(draft?.thumbnail).toBeDefined();
+  });
+
   it("gives a photo no title", async () => {
     const { deps } = composer({
       cached: {

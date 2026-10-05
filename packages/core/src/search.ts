@@ -88,10 +88,14 @@ function markdownDestination(text: string, start: number): string {
 /**
  * Every http(s) link in the text, in order and deduplicated: bare URLs and the destination of
  * markdown links, never inside fenced or inline code. Parentheses stay balanced
- * (`…/Foo_(bar)`), apostrophes are kept, and trailing sentence punctuation is dropped.
+ * (`…/Foo_(bar)`), apostrophes are kept, and trailing sentence punctuation is dropped. With
+ * `includeCode`, code is read like any other text (for page text, where backticks mean nothing).
  */
-export function extractLinksFromText(text: string): string[] {
-  const masked = maskCode(text);
+export function extractLinksFromText(
+  text: string,
+  options: { includeCode?: boolean } = {},
+): string[] {
+  const masked = options.includeCode ? text : maskCode(text);
   const token = new RegExp(LINK_TOKEN_SOURCE, "gi");
   const links: string[] = [];
   for (let match = token.exec(masked); match; match = token.exec(masked)) {

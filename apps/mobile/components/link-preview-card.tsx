@@ -15,6 +15,7 @@ import {
 import { type MobileArtifactTarget, mobileArtifactImageUri } from "../lib/artifact-open";
 import {
   linkCardWidth,
+  linkPreviewImageFit,
   linkPreviewImageHeight,
   linkPreviewLabel,
   openableLinkPreviewUrl,
@@ -96,6 +97,8 @@ export function LinkPreviewCard({
   const image = useCardImage(target, card.image?.artifactId);
   const site = previewSiteLabel(card.url);
   const imageHeight = linkPreviewImageHeight(card, width);
+  // A site icon is drawn whole inside its thumbnail; every other picture fills and crops.
+  const fit = linkPreviewImageFit(card);
 
   const frame = (height: number | undefined, extra: object = {}) => ({
     width: "100%" as const,
@@ -114,9 +117,15 @@ export function LinkPreviewCard({
       {image.uri && !image.failed ? (
         <Image
           source={{ uri: image.uri }}
-          resizeMode="cover"
+          resizeMode={fit.resizeMode}
           onError={image.fail}
-          style={StyleSheet.absoluteFill}
+          style={{
+            position: "absolute",
+            top: fit.inset,
+            bottom: fit.inset,
+            left: fit.inset,
+            right: fit.inset,
+          }}
         />
       ) : image.failed ? (
         <NativeSymbol

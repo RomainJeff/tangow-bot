@@ -307,6 +307,8 @@ export const sizes = {
   linkCard: 360,
   /** The square thumbnail of a compact link preview. */
   linkThumb: 56,
+  /** Space kept around a site icon inside its link preview thumbnail (web and iOS). */
+  linkIconInset: 8,
   /** Max height of a link preview shown as a photo. */
   linkPhotoMax: 320,
 } as const satisfies Record<string, number>;

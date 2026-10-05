@@ -1,5 +1,6 @@
 import type { LinkPreviewDraft } from "@rakazo/contracts";
 import {
+  LINK_PREVIEW_IMAGE_FIT,
   LINK_PREVIEW_THUMBNAIL_MAX_LENGTH,
   LINK_PREVIEW_THUMBNAIL_PREFIX,
 } from "@rakazo/contracts";
@@ -78,7 +79,15 @@ export function acceptPreviewThumbnail(value: string | undefined): string | unde
 export type ComposerLinkPreviewView =
   | { status: "idle" }
   | { status: "loading"; url: string }
-  | { status: "ready"; url: string; site: string; title?: string; thumbnail?: string };
+  | {
+      status: "ready";
+      url: string;
+      site: string;
+      title?: string;
+      thumbnail?: string;
+      /** `contain` when the thumbnail is a site icon: drawn whole, not cropped. */
+      thumbnailFit?: typeof LINK_PREVIEW_IMAGE_FIT;
+    };
 
 const IDLE: ComposerLinkPreviewView = { status: "idle" };
 
@@ -155,6 +164,9 @@ export function createComposerLinkPreview(
                   site: previewSiteLabel(url),
                   ...(title ? { title } : {}),
                   ...(thumbnail ? { thumbnail } : {}),
+                  ...(thumbnail && draft?.thumbnailFit === LINK_PREVIEW_IMAGE_FIT
+                    ? { thumbnailFit: LINK_PREVIEW_IMAGE_FIT }
+                    : {}),
                 }
               : IDLE,
           );

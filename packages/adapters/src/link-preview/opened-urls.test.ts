@@ -1,8 +1,17 @@
+import { createHash } from "node:crypto";
 import type { AgentToolCompletion } from "@rakazo/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
 import { appendToolCompletionAudit, toolCompletionAuditPayload } from "../executor.js";
-import { OPENED_URLS_PER_RUN, openedUrlFromCompletion, readOpenedUrls } from "./opened-urls.js";
+import {
+  OPENED_URLS_PER_RUN,
+  openedUrlFromCompletion,
+  readRunLinkSources,
+  SEEN_URLS_PER_RUN,
+  seenUrlHash,
+  seenUrlHashesFromCompletion,
+} from "./opened-urls.js";
 
+const RUN = "run-1";
 const fetched = { text: "page", url: "https://final.test/after-redirect" };
 const completion = (overrides: Record<string, unknown> = {}) =>
   ({
@@ -107,7 +116,7 @@ describe("reading them back", () => {
       { payload: { openedUrl: "https://a.test/3" } },
     ]);
 
-    const urls = await readOpenedUrls({ event: { findMany } } as never, "run-1");
+    const { opened: urls } = await readRunLinkSources({ event: { findMany } } as never, "run-1");
 
     expect(urls).toEqual(["https://a.test/1", "https://a.test/3"]);
     expect(findMany).toHaveBeenCalledWith(
@@ -119,8 +128,225 @@ describe("reading them back", () => {
     const rows = Array.from({ length: 80 }, (_, index) => ({
       payload: { openedUrl: `https://a.test/${index}` },
     }));
-    const urls = await readOpenedUrls({ event: { findMany: async () => rows } } as never, "run-1");
+    const { opened: urls } = await readRunLinkSources(
+      { event: { findMany: async () => rows } } as never,
+      "run-1",
+    );
     expect(urls).toHaveLength(50);
     expect(urls.at(-1)).toBe("https://a.test/49");
+  });
+});
+
+describe("links a public web tool showed the bot (CA 58-60)", () => {
+  const search = {
+    name: "web_search",
+    args: { query: "frandroid" },
+    result: {
+      content: [{ type: "text", text: "..." }],
+      details: {
+        results: [
+          { title: "A", url: "https://hit.test/a#x", snippet: "also https://snip.test/s." },
+          { title: "B", url: "https://hit.test/b", snippet: "" },
+        ],
+      },
+    },
+  };
+
+  it("hashes the hits of a web_search, normalized", () => {
+    expect(seenUrlHashesFromCompletion(completion(search), RUN)).toEqual(
+      ["https://hit.test/a", "https://snip.test/s", "https://hit.test/b"].map((url) =>
+        seenUrlHash(RUN, url),
+      ),
+    );
+  });
+
+  it("reads the links of a fetched page, including its final URL", () => {
+    const text = "Home https://page.test/one and [two](https://page.test/two)";
+    expect(
+      seenUrlHashesFromCompletion(
+        completion({
+          result: { content: [], details: { url: "https://final.test/z", text } },
+        }),
+        RUN,
+      ),
+    ).toEqual(
+      ["https://final.test/z", "https://page.test/one", "https://page.test/two"].map((url) =>
+        seenUrlHash(RUN, url),
+      ),
+    );
+  });
+
+  describe("never from the logged-in browser (M1)", () => {
+    const snapshot = {
+      url: "https://a.test/x",
+      location: { href: "https://evil.tld/c?d=private" },
+      tree: "textbox value=https://evil.tld/c?d=private\nlink https://svc.tld/confirm/AbC123",
+      elements: [
+        { ref: "e1", role: "textbox", name: "Search", value: "https://evil.tld/c?d=private" },
+        { ref: "e2", role: "link", name: "Confirm", value: "https://svc.tld/confirm/AbC123" },
+      ],
+    };
+
+    it.each(["browser_snapshot", "browser_navigate"])("records nothing from %s", (name) => {
+      const done = completion({
+        name,
+        args: { url: "https://a.test/x" },
+        result: { content: [], details: snapshot },
+      });
+      expect(seenUrlHashesFromCompletion(done, RUN)).toEqual([]);
+      expect(toolCompletionAuditPayload(done, [], RUN)).not.toHaveProperty("seenUrlHashes");
+    });
+
+    it("still records the URL a browser_navigate was asked to open, as before", () => {
+      const payload = toolCompletionAuditPayload(
+        completion({
+          name: "browser_navigate",
+          args: { url: "https://a.test/x" },
+          result: { content: [], details: snapshot },
+        }),
+        [],
+        RUN,
+      );
+      expect(payload.openedUrl).toBe("https://a.test/x");
+    });
+  });
+
+  it.each([
+    ["an MCP tool", { name: "mcp__mail__read" }],
+    ["an email tool", { name: "email_read" }],
+    ["a Notion tool", { name: "notion_page" }],
+    ["memory", { name: "recall_memory" }],
+    ["a shell command", { name: "shell" }],
+    ["a computer observation", { name: "computer_observe" }],
+    ["a file read", { name: "read_file" }],
+    ["browser_act", { name: "browser_act" }],
+    ["a subagent's call", { nested: true }],
+    ["a call that threw", { error: new Error("blocked") }],
+    ["a paused call", { paused: true }],
+    ["a result that carries an error", { result: { content: [], details: { error: "403" } } }],
+  ])("records nothing from %s", (_name, overrides) => {
+    expect(seenUrlHashesFromCompletion(completion({ ...search, ...overrides }), RUN)).toEqual([]);
+  });
+
+  it("drops a link that redaction would change, or that names a secret", () => {
+    const hashes = seenUrlHashesFromCompletion(
+      completion({
+        ...search,
+        result: {
+          content: [],
+          details: {
+            text: "https://ok.test/a https://k.test/x?k=hunter2-secret https://s.test/?token=abc",
+          },
+        },
+      }),
+      RUN,
+      ["hunter2-secret"],
+    );
+    expect(hashes).toEqual([seenUrlHash(RUN, "https://ok.test/a")]);
+  });
+
+  it("checks redaction on the link as written, before normalization (M5)", () => {
+    // The URL parser would write "é" as %C3%A9, hiding the secret from a check on that form.
+    const hashes = seenUrlHashesFromCompletion(
+      completion({
+        ...search,
+        result: {
+          content: [],
+          details: { text: "https://k.test/caf\u00e9-secret https://ok.test/a" },
+        },
+      }),
+      RUN,
+      ["caf\u00e9-secret"],
+    );
+    expect(hashes).toEqual([seenUrlHash(RUN, "https://ok.test/a")]);
+  });
+
+  it("salts every hash with the run id (M4)", () => {
+    const url = "https://hit.test/a";
+    expect(seenUrlHash("run-1", url)).toMatch(/^[0-9a-f]{64}$/);
+    expect(seenUrlHash("run-1", url)).toBe(seenUrlHash("run-1", `${url}#frag`));
+    expect(seenUrlHash("run-1", url)).not.toBe(seenUrlHash("run-2", url));
+    expect(seenUrlHash("run-1", url)).toBe(
+      createHash("sha256").update(`run-1\n${url}`).digest("hex"),
+    );
+  });
+
+  it("stores hashes only, never a seen URL in clear, and keeps openedUrl as it was", () => {
+    const payload = toolCompletionAuditPayload(
+      completion({
+        args: { url: "https://a.test/x" },
+        result: {
+          content: [],
+          details: { text: "https://private-looking.test/path?x=1 https://other.test/a" },
+        },
+      }),
+      [],
+      RUN,
+    );
+    expect(payload.openedUrl).toBe("https://a.test/x");
+    expect(payload.seenUrlHashes).toEqual(
+      ["https://private-looking.test/path?x=1", "https://other.test/a"].map((url) =>
+        seenUrlHash(RUN, url),
+      ),
+    );
+    const json = JSON.stringify(payload);
+    expect(json).not.toContain("private-looking");
+    expect(json).not.toContain("other.test");
+    expect(payload.seenUrlHashes).toSatisfy((hashes: string[]) =>
+      hashes.every((hash) => /^[0-9a-f]{64}$/.test(hash)),
+    );
+  });
+
+  it("writes no field when nothing was seen", () => {
+    expect(
+      toolCompletionAuditPayload(completion({ result: { content: [], details: {} } }), [], RUN),
+    ).not.toHaveProperty("seenUrlHashes");
+  });
+
+  it("keeps at most 300 distinct hashes per run, across calls", async () => {
+    const append = vi.fn().mockResolvedValue(undefined);
+    const openedBudget = { remaining: OPENED_URLS_PER_RUN };
+    const seenBudget = { hashes: new Set<string>() };
+    for (let call = 0; call < 4; call += 1) {
+      await appendToolCompletionAudit(
+        { events: { append } },
+        { spaceId: "s", threadId: "t", botId: "b", runId: "r" },
+        completion({
+          name: "web_search",
+          args: { query: "q" },
+          result: {
+            content: [],
+            details: {
+              results: Array.from({ length: 100 }, (_, index) => ({
+                url: `https://hit.test/${call * 90 + index}`,
+              })),
+            },
+          },
+        }),
+        [],
+        openedBudget,
+        seenBudget,
+      );
+    }
+    const recorded = append.mock.calls.flatMap(
+      ([event]) => (event.payload.seenUrlHashes ?? []) as string[],
+    );
+    expect(recorded).toHaveLength(SEEN_URLS_PER_RUN);
+    expect(new Set(recorded).size).toBe(SEEN_URLS_PER_RUN);
+  });
+
+  it("reads them back by exact run id, valid hashes only", async () => {
+    const valid = seenUrlHash(RUN, "https://hit.test/a")!;
+    const findMany = vi.fn(async () => [
+      { payload: { seenUrlHashes: [valid, "nope", 1] } },
+      { payload: { seenUrlHashes: "x" } },
+      { payload: { openedUrl: "https://a.test/1" } },
+    ]);
+    const sources = await readRunLinkSources({ event: { findMany } } as never, "run-1");
+    expect([...sources.seenHashes]).toEqual([valid]);
+    expect(sources.opened).toEqual(["https://a.test/1"]);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { runId: "run-1", type: "agent.tool.completed" } }),
+    );
   });
 });

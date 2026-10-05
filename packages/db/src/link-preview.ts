@@ -29,7 +29,7 @@ export type CachedLinkPreview =
       status: "ok";
       format: "large" | "photo" | "compact";
       title?: string;
-      image?: { key: string; width: number; height: number; bytes: number };
+      image?: { key: string; width: number; height: number; bytes: number; fit?: "contain" };
     }
   | { status: "failed" };
 
@@ -41,6 +41,7 @@ type CacheRow = {
   imageWidth: number | null;
   imageHeight: number | null;
   imageBytes: number;
+  imageFit: string | null;
 };
 
 function toCached(row: CacheRow): CachedLinkPreview | null {
@@ -58,6 +59,7 @@ function toCached(row: CacheRow): CachedLinkPreview | null {
             width: row.imageWidth,
             height: row.imageHeight,
             bytes: row.imageBytes,
+            ...(row.imageFit === "contain" ? { fit: "contain" as const } : {}),
           },
         }
       : {}),
@@ -99,6 +101,7 @@ export async function storeLinkPreviewCache(
           imageWidth: null,
           imageHeight: null,
           imageBytes: 0,
+          imageFit: null,
         }
       : {
           status: "ok",
@@ -108,6 +111,7 @@ export async function storeLinkPreviewCache(
           imageWidth: entry.image?.width ?? null,
           imageHeight: entry.image?.height ?? null,
           imageBytes: entry.image?.bytes ?? 0,
+          imageFit: entry.image?.fit ?? null,
         };
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const removedImageKeys: string[] = [];

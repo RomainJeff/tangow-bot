@@ -21,7 +21,7 @@ test("link previews render in three formats and never contact the linked site", 
   await page.goto("/e2e/fixtures/link-preview.html");
 
   const cards = page.locator('[data-slot="link-preview-card"]');
-  await expect(cards).toHaveCount(4);
+  await expect(cards).toHaveCount(5);
   await expect(page.locator('[data-format="large"]')).toHaveAttribute(
     "aria-label",
     "The city that removed its traffic lights, example.com",
@@ -47,6 +47,23 @@ test("link previews render in three formats and never contact the linked site", 
     ),
   ).toBe(false);
   expect(requested.filter((url) => /example\.(com|org|net)/.test(url))).toEqual([]);
+
+  // A site icon is drawn whole and centered inside the 56 px thumbnail, never cropped; a page
+  // picture still fills and crops.
+  const icon = page.locator('[data-message-id="icon"] [data-slot="link-preview-picture"]');
+  await expect(icon).toHaveAttribute("data-fit", "contain");
+  await expect(icon.locator("img")).toHaveCSS("object-fit", "contain");
+  const thumb = await icon
+    .locator("xpath=ancestor::div[contains(@class,'size-link-thumb')]")
+    .boundingBox();
+  const glyph = await icon.locator("img").boundingBox();
+  expect(thumb!.width).toBe(56);
+  expect(glyph!.width).toBeGreaterThan(0);
+  expect(glyph!.width).toBeLessThan(thumb!.width);
+  expect(glyph!.x - thumb!.x).toBeCloseTo(thumb!.x + thumb!.width - (glyph!.x + glyph!.width), 0);
+  const cover = page.locator('[data-message-id="compact"] [data-slot="link-preview-picture"]');
+  await expect(cover).toHaveAttribute("data-fit", "cover");
+  await expect(cover.locator("img")).toHaveCSS("object-fit", "cover");
 
   // A link-only message has no bubble: the card carries the message's actions.
   const linkOnly = page.locator('[data-message-id="link-only"]');

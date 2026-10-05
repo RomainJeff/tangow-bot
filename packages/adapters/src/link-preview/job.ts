@@ -18,7 +18,7 @@ import {
   type ThreadEvents,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { readOpenedUrls } from "./opened-urls.js";
+import { readRunLinkSources, seenUrlHash } from "./opened-urls.js";
 import {
   type LinkPreviewServiceDeps,
   previewStoreContext,
@@ -29,6 +29,12 @@ import {
 
 /** The whole job, from the first read to the last write. */
 export const LINK_PREVIEW_JOB_TIMEOUT_MS = 20_000;
+
+/** What is left of the job: its abort signal and the instant it fires (epoch ms). */
+interface JobBudget {
+  signal: AbortSignal;
+  deadlineAt: number;
+}
 
 export interface LinkPreviewJobDeps extends Omit<LinkPreviewServiceDeps, "prisma" | "artifacts"> {
   prisma: PrismaClient;
@@ -81,10 +87,14 @@ export async function runLinkPreviewJob(
   deps: LinkPreviewJobDeps,
   payload: BackgroundJobPayloads["link.preview"],
 ): Promise<void> {
-  const signal = AbortSignal.timeout(deps.timeoutMs ?? LINK_PREVIEW_JOB_TIMEOUT_MS);
+  const timeoutMs = deps.timeoutMs ?? LINK_PREVIEW_JOB_TIMEOUT_MS;
+  const budget: JobBudget = {
+    signal: AbortSignal.timeout(timeoutMs),
+    deadlineAt: Date.now() + timeoutMs,
+  };
   try {
-    if ("messageId" in payload) await previewHumanMessage(deps, payload.messageId, signal);
-    else await previewRunMessages(deps, payload.runId, signal);
+    if ("messageId" in payload) await previewHumanMessage(deps, payload.messageId, budget);
+    else await previewRunMessages(deps, payload.runId, budget);
   } catch (error) {
     // The error name only: the failing call may have carried a link.
     getLogger().warn("link preview job failed", {
@@ -96,7 +106,7 @@ export async function runLinkPreviewJob(
 async function previewHumanMessage(
   deps: LinkPreviewJobDeps,
   messageId: string,
-  signal: AbortSignal,
+  budget: JobBudget,
 ): Promise<void> {
   const message = await deps.prisma.message.findUnique({
     where: { id: messageId },
@@ -113,13 +123,13 @@ async function previewHumanMessage(
   // A message an external channel brought in is not one the person sent from the app.
   if (message?.role !== "user" || message.externalTranscriptFor) return;
   const link = linkPreviewCandidate(message);
-  if (link) await attachPreview(deps, message.thread, message.id, link, signal);
+  if (link) await attachPreview(deps, message.thread, message.id, link, budget);
 }
 
 async function previewRunMessages(
   deps: LinkPreviewJobDeps,
   runId: string,
-  signal: AbortSignal,
+  budget: JobBudget,
 ): Promise<void> {
   const run = await deps.prisma.run.findUnique({
     where: { id: runId },
@@ -133,25 +143,37 @@ async function previewRunMessages(
   });
   // Only a run that ended well, and only one a person is reading (never bot to bot).
   if (run?.status !== "completed" || run.trigger === "bot_message") return;
-  const opened = await readOpenedUrls(deps.prisma, runId);
-  if (opened.length === 0) return;
+  const { opened, seenHashes } = await readRunLinkSources(deps.prisma, runId);
+  if (opened.length === 0 && seenHashes.size === 0) return;
   const messages = await deps.prisma.message.findMany({
     where: { runId, threadId: run.thread.id, role: "bot" },
     orderBy: { seq: "asc" },
     select: { id: true, role: true, blocks: true, clientNonce: true },
   });
   for (const message of messages) {
-    if (signal.aborted) return;
+    if (budget.signal.aborted) return;
     // The final reply has no nonce; message_user posts carry theirs. Narration never does.
     const addressed =
       message.clientNonce === null ||
       message.clientNonce.startsWith(USER_MESSAGE_CLIENT_NONCE_PREFIX);
     if (!addressed) continue;
     const link = linkPreviewCandidate(message);
-    // Exact equality with a URL the bot itself opened: nothing else is ever read for a bot.
-    if (!link || !opened.some((url) => isSameOpenedUrl(link, url))) continue;
-    await attachPreview(deps, run.thread, message.id, link, signal);
+    // Exact equality with a URL the bot opened, or one a public web tool showed it in this run
+    // (by hash): nothing else is ever read for a bot.
+    if (!link || !wasOpenedOrSeen(runId, link, opened, seenHashes)) continue;
+    await attachPreview(deps, run.thread, message.id, link, budget);
   }
+}
+
+function wasOpenedOrSeen(
+  runId: string,
+  link: string,
+  opened: string[],
+  seenHashes: Set<string>,
+): boolean {
+  if (opened.some((url) => isSameOpenedUrl(link, url))) return true;
+  const hash = seenUrlHash(runId, link);
+  return hash !== undefined && seenHashes.has(hash);
 }
 
 async function attachPreview(
@@ -159,12 +181,12 @@ async function attachPreview(
   thread: ThreadScope,
   messageId: string,
   link: string,
-  signal: AbortSignal,
+  budget: JobBudget,
 ): Promise<void> {
   const scope = { spaceId: thread.spaceId, userId: thread.userId, source: "job" as const };
-  const preview = await resolveLinkPreview(deps, scope, link, signal);
+  const preview = await resolveLinkPreview(deps, scope, link, budget.signal, budget.deadlineAt);
   // Past the deadline the page may be gone from under us: write nothing.
-  if (!preview || signal.aborted) return;
+  if (!preview || budget.signal.aborted) return;
 
   const artifact = preview.image
     ? await createPreviewArtifact(deps, thread, messageId, preview.image)
@@ -203,6 +225,7 @@ function cardBlock(link: string, preview: ResolvedLinkPreview, artifactId: strin
             artifactId,
             width: preview.image.width,
             height: preview.image.height,
+            ...(preview.image.fit ? { fit: preview.image.fit } : {}),
           },
         }
       : {}),

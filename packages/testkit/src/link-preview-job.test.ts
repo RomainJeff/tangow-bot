@@ -2,6 +2,8 @@ import {
   type LinkPreviewJobDeps,
   type LinkPreviewReadResult,
   runLinkPreviewJob,
+  seenUrlHash,
+  toolCompletionAuditPayload,
 } from "@rakazo/adapters";
 import { removeLinkPreviewBlock } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
@@ -113,6 +115,27 @@ describe("link.preview job for a message a person sent", () => {
     expect(cached?.imageKey).not.toBe(artifact?.storageKey);
     expect(db.artifacts.keys()).toContain(cached?.imageKey);
     expect(db.artifacts.keys()).toContain(artifact?.storageKey);
+  });
+
+  it("writes the icon marker on the card image of a site icon, and not on a page image", async () => {
+    const icon = setup({
+      read: async () => ({
+        ...okCompact,
+        image: okLarge.ok ? okLarge.image : undefined,
+        imageFit: "contain",
+      }),
+    });
+    icon.db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+    await runLinkPreviewJob(icon.deps, { messageId: "m1" });
+    expect(card(icon.db.blocksOf("m1"))).toMatchObject({
+      format: "compact",
+      image: { fit: "contain" },
+    });
+
+    const page = setup({ read: async () => okLarge });
+    page.db.seedMessage({ id: "m1", threadId: "thread-1", blocks: [text(PAGE)] });
+    await runLinkPreviewJob(page.deps, { messageId: "m1" });
+    expect(card(page.db.blocksOf("m1"))?.image).not.toHaveProperty("fit");
   });
 
   it("owns the image of a group thread by the group and its first member", async () => {
@@ -676,5 +699,111 @@ describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
     await runLinkPreviewJob(deps, { runId: "run-1" });
     expect(read).not.toHaveBeenCalled();
     expect(card(db.blocksOf("final"))).toBeUndefined();
+  });
+
+  describe("links the bot saw on the public web (CA 58-60)", () => {
+    const SEEN = "https://hit.test/article";
+    const seenEvent = (url: string, runId = "run-1") => ({
+      name: "web_search",
+      outcome: "succeeded",
+      seenUrlHashes: [seenUrlHash(runId, url)],
+    });
+
+    it("previews a link whose hash a web tool of the run recorded, and nothing it did not", async () => {
+      const { db, read, deps } = run({
+        opened: [],
+        extraEvents: [seenEvent(SEEN)],
+        messages: [{ id: "final", blocks: [text(`See ${SEEN}#part and https://other.test/x`)] }],
+      });
+      await runLinkPreviewJob(deps, { runId: "run-1" });
+      expect(card(db.blocksOf("final"))).toMatchObject({ url: `${SEEN}#part` });
+      expect(read).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses the same exact equality: a different path, query or slash has no card", async () => {
+      for (const link of [`${SEEN}?s=1`, `${SEEN}/`, "https://hit.test/Article"]) {
+        const { db, read, deps } = run({
+          opened: [],
+          extraEvents: [seenEvent(SEEN)],
+          messages: [{ id: "final", blocks: [text(link)] }],
+        });
+        await runLinkPreviewJob(deps, { runId: "run-1" });
+        expect(card(db.blocksOf("final")), link).toBeUndefined();
+        expect(read, link).not.toHaveBeenCalled();
+      }
+    });
+
+    it("ignores a link seen in another run of the same thread", async () => {
+      const { db, read, deps } = setup();
+      db.seedRun({ id: "run-1", threadId: "thread-1", toolEvents: [] });
+      db.seedRun({ id: "run-2", threadId: "thread-1", toolEvents: [seenEvent(SEEN, "run-2")] });
+      db.seedMessage({
+        id: "final",
+        threadId: "thread-1",
+        role: "bot",
+        runId: "run-1",
+        blocks: [text(SEEN)],
+      });
+      await runLinkPreviewJob(deps, { runId: "run-1" });
+      expect(read).not.toHaveBeenCalled();
+      expect(card(db.blocksOf("final"))).toBeUndefined();
+    });
+
+    it("ignores a hash salted for another run, even from an event of this run", async () => {
+      const { db, read, deps } = run({
+        opened: [],
+        extraEvents: [seenEvent(SEEN, "run-2")],
+        messages: [{ id: "final", blocks: [text(SEEN)] }],
+      });
+      await runLinkPreviewJob(deps, { runId: "run-1" });
+      expect(read).not.toHaveBeenCalled();
+      expect(card(db.blocksOf("final"))).toBeUndefined();
+    });
+
+    it("gives no card to a path-token link that only a browser snapshot showed (M1)", async () => {
+      const link = "https://svc.tld/confirm/AbC123";
+      const snapshot = {
+        name: "browser_snapshot",
+        args: {},
+        executionId: "call-1",
+        durationMs: 1,
+        result: {
+          content: [],
+          details: { url: link, elements: [{ ref: "e1", role: "link", value: link }], tree: link },
+        },
+      };
+      const { db, read, deps } = run({
+        opened: [],
+        extraEvents: [toolCompletionAuditPayload(snapshot, [], "run-1")],
+        messages: [{ id: "final", blocks: [text(`Confirm here: ${link}`)] }],
+      });
+      await runLinkPreviewJob(deps, { runId: "run-1" });
+      expect(read).not.toHaveBeenCalled();
+      expect(card(db.blocksOf("final"))).toBeUndefined();
+    });
+
+    it("ignores malformed hashes and keeps at most 300 per run", async () => {
+      const hashes = Array.from({ length: 301 }, (_, index) =>
+        seenUrlHash("run-1", `https://hit.test/${index}`),
+      );
+      const events = [
+        { name: "web_search", seenUrlHashes: ["not-a-hash", 3, null, "A".repeat(64)] },
+        { name: "web_fetch", seenUrlHashes: hashes },
+      ];
+      const inside = run({
+        opened: [],
+        extraEvents: events,
+        messages: [{ id: "final", blocks: [text("https://hit.test/299")] }],
+      });
+      await runLinkPreviewJob(inside.deps, { runId: "run-1" });
+      expect(card(inside.db.blocksOf("final"))).toBeDefined();
+      const beyond = run({
+        opened: [],
+        extraEvents: events,
+        messages: [{ id: "final", blocks: [text("https://hit.test/300")] }],
+      });
+      await runLinkPreviewJob(beyond.deps, { runId: "run-1" });
+      expect(card(beyond.db.blocksOf("final"))).toBeUndefined();
+    });
   });
 });

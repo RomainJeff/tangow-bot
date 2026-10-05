@@ -130,12 +130,17 @@ describe("readLinkPreview: formats", () => {
     expect(requests.at(-1)).toBe("https://news.example.test/a/og.png");
   });
 
-  it("makes one page request and at most one image request", async () => {
+  it("makes one page request and at most two image requests: the page's image, then the icon", async () => {
     const { deps: d, fetchMock } = deps((url) =>
-      url === ARTICLE ? page(articleHead("/og.png")) : new Response("x", { status: 500 }),
+      url === ARTICLE
+        ? page(
+            `<head><title>Doc</title><meta property="og:image" content="/og.png"><link rel="apple-touch-icon" href="/t.png"><link rel="icon" sizes="128x128" type="image/png" href="/i.png"></head>`,
+          )
+        : new Response("x", { status: 500 }),
     );
     await readLinkPreview(ARTICLE, d);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // The page, og.png, then only the first icon candidate: never a second icon.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("reads no image when the page names none", async () => {
@@ -320,5 +325,185 @@ describe("readLinkPreview: logs", () => {
     for (const leak of ["SECRET", "token", "/p/", "#f", "img.png", "?"]) {
       expect(everything).not.toContain(leak);
     }
+  });
+});
+
+describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
+  const homeHead = (links: string, og = "") =>
+    `<head><title>Home</title>${og}${links}</head><body>x</body>`;
+
+  it("uses the apple-touch-icon as the thumbnail of a compact card when the page has no image", async () => {
+    const icon = await png(180, 180);
+    const { deps: d, requests } = deps((url) =>
+      url === ARTICLE
+        ? page(homeHead(`<link rel="apple-touch-icon" sizes="180x180" href="/touch.png">`))
+        : imageResponse(icon),
+    );
+    const result = await readLinkPreview(ARTICLE, d);
+    expect(result).toMatchObject({
+      ok: true,
+      format: "compact",
+      title: "Home",
+      imageFit: "contain",
+      image: { width: 180, height: 180 },
+    });
+    expect(requests).toEqual([ARTICLE, "https://news.example.test/touch.png"]);
+  });
+
+  it("never makes a large card from an icon, however big it is", async () => {
+    const huge = await png(1200, 600);
+    const { deps: d } = deps((url) =>
+      url === ARTICLE
+        ? page(homeHead(`<link rel="apple-touch-icon" href="/touch.png">`))
+        : imageResponse(huge),
+    );
+    const result = await readLinkPreview(ARTICLE, d);
+    expect(result).toMatchObject({ ok: true, format: "compact", imageFit: "contain" });
+  });
+
+  it("falls back to the icon when the page image cannot be downloaded", async () => {
+    const icon = await png(128, 128);
+    const { deps: d, requests } = deps((url) => {
+      if (url === ARTICLE) {
+        return page(
+          homeHead(
+            `<link rel="icon" sizes="128x128" type="image/png" href="/i.png">`,
+            `<meta property="og:image" content="/og.png">`,
+          ),
+        );
+      }
+      return url.endsWith("/og.png") ? new Response("gone", { status: 404 }) : imageResponse(icon);
+    });
+    const result = await readLinkPreview(ARTICLE, d);
+    expect(result).toMatchObject({ ok: true, format: "compact", imageFit: "contain" });
+    expect(requests).toEqual([
+      ARTICLE,
+      "https://news.example.test/og.png",
+      "https://news.example.test/i.png",
+    ]);
+  });
+
+  it("keeps a page image over the icon, cropped as before, and does not fetch the icon", async () => {
+    const small = await png(300, 300);
+    const { deps: d, requests } = deps((url) =>
+      url === ARTICLE
+        ? page(
+            homeHead(
+              `<link rel="apple-touch-icon" href="/touch.png">`,
+              `<meta property="og:image" content="/og.png">`,
+            ),
+          )
+        : imageResponse(small),
+    );
+    const result = await readLinkPreview(ARTICLE, d);
+    expect(result).toMatchObject({ ok: true, format: "compact" });
+    expect(result).not.toHaveProperty("imageFit");
+    expect(requests).toEqual([ARTICLE, "https://news.example.test/og.png"]);
+  });
+
+  it("gives a compact card without thumbnail and asks for no favicon when there is no usable icon", async () => {
+    for (const links of [
+      "",
+      `<link rel="icon" sizes="any" type="image/svg+xml" href="/i.svg">`,
+      `<link rel="mask-icon" href="/mask.svg">`,
+      `<link rel="icon" href="/favicon.ico">`,
+      `<link rel="icon" sizes="32x32" href="/small.png">`,
+    ]) {
+      const { deps: d, requests } = deps((url) =>
+        url === ARTICLE ? page(homeHead(links)) : imageResponse(new Uint8Array([1])),
+      );
+      const result = await readLinkPreview(ARTICLE, d);
+      expect(result, links).toEqual({ ok: true, format: "compact", title: "Home" });
+      expect(requests, links).toEqual([ARTICLE]);
+    }
+  });
+
+  it("leaves a compact card without thumbnail when the icon cannot be used", async () => {
+    for (const failing of [
+      () => new Response("gone", { status: 404 }),
+      () => imageResponse(new Uint8Array([1, 2, 3, 4])),
+      () => imageResponse("<svg xmlns='http://www.w3.org/2000/svg'/>", "image/svg+xml"),
+    ]) {
+      const { deps: d } = deps((url) =>
+        url === ARTICLE ? page(homeHead(`<link rel="apple-touch-icon" href="/t.png">`)) : failing(),
+      );
+      expect(await readLinkPreview(ARTICLE, d)).toEqual({
+        ok: true,
+        format: "compact",
+        title: "Home",
+      });
+    }
+  });
+
+  it("goes through the same checks as any image: a private address is refused", async () => {
+    const { deps: d, requests } = deps((url) =>
+      url === ARTICLE
+        ? page(homeHead(`<link rel="apple-touch-icon" href="http://127.0.0.1/t.png">`))
+        : imageResponse(new Uint8Array([1])),
+    );
+    expect(await readLinkPreview(ARTICLE, d)).toEqual({
+      ok: true,
+      format: "compact",
+      title: "Home",
+    });
+    expect(requests).toEqual([ARTICLE]);
+  });
+
+  describe("the job's deadline", () => {
+    const withIcon = (url: string) =>
+      url === ARTICLE ? page(homeHead(`<link rel="apple-touch-icon" href="/t.png">`)) : undefined;
+
+    it("does not try the icon when less than 3 s of the budget remain, and caches nothing", async () => {
+      const { deps: d, requests } = deps(
+        (url) => withIcon(url) ?? imageResponse(new Uint8Array([1])),
+        { deadlineAt: Date.now() + 2_000 },
+      );
+      expect(await readLinkPreview(ARTICLE, d)).toEqual({
+        ok: false,
+        reason: "timeout",
+        transient: true,
+      });
+      expect(requests).toEqual([ARTICLE]);
+    });
+
+    it("tries the icon when enough of the budget remains", async () => {
+      const icon = await png(128, 128);
+      const { deps: d, requests } = deps((url) => withIcon(url) ?? imageResponse(icon), {
+        deadlineAt: Date.now() + 10_000,
+      });
+      expect(await readLinkPreview(ARTICLE, d)).toMatchObject({ ok: true, imageFit: "contain" });
+      expect(requests).toHaveLength(2);
+    });
+
+    it("is transient when the deadline cuts the icon read short, not a final card without thumbnail", async () => {
+      const controller = new AbortController();
+      const { deps: d } = deps(
+        (url) => {
+          const response = withIcon(url);
+          if (response) return response;
+          controller.abort();
+          return new Response("late", { status: 500 });
+        },
+        { signal: controller.signal },
+      );
+      expect(await readLinkPreview(ARTICLE, d)).toEqual({
+        ok: false,
+        reason: "aborted",
+        transient: true,
+      });
+    });
+
+    it("is transient when the deadline cuts the page image read short", async () => {
+      const controller = new AbortController();
+      const { deps: d } = deps(
+        (url) => {
+          if (url === ARTICLE) return page(articleHead("/og.png"));
+          controller.abort();
+          return new Response("late", { status: 500 });
+        },
+        { signal: controller.signal },
+      );
+      expect(await readLinkPreview(ARTICLE, d)).toMatchObject({ ok: false, transient: true });
+    });
   });
 });
