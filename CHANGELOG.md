@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-05
+
+#### Changed
+
+- Bots change part of a file in place instead of rewriting it whole, so edits are faster and no longer undo changes made to the rest of the file since the bot read it, and they read long text files page by page instead of failing past 250 KB.
+
 ### 2026-10-04
 
 #### Added

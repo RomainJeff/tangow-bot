@@ -146,10 +146,14 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "read_file",
     description:
-      "Read a UTF-8 text file from this bot's home. On a Team Computer, relative paths use the bot folder and shared/... accesses shared work. Open visual or binary files with open_path instead.",
+      "Read a UTF-8 text file from this bot's home. Long files come back in pages: pass the returned nextOffset as offset to continue. On a Team Computer, relative paths use the bot folder and shared/... accesses shared work. Open visual or binary files with open_path instead.",
     inputSchema: {
       type: "object",
-      properties: { path: { type: "string" } },
+      properties: {
+        path: { type: "string" },
+        offset: { type: "number", description: "1-based line to start from." },
+        limit: { type: "number", description: "Maximum number of lines to return." },
+      },
       required: ["path"],
     },
   },
@@ -164,6 +168,21 @@ export const builtinAgentTools: ConnectorTool[] = [
         content: { type: "string" },
       },
       required: ["path", "content"],
+    },
+  },
+  {
+    name: "edit_file",
+    description:
+      "Replace exact text in a UTF-8 file in this bot's home. old_text must match the current file exactly (copy it from read_file) and be unique unless replace_all is true. Prefer it over write_file for changes to an existing file. On a Team Computer, relative paths use the bot folder; use shared/... only for work other bots should share.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        old_text: { type: "string" },
+        new_text: { type: "string" },
+        replace_all: { type: "boolean" },
+      },
+      required: ["path", "old_text", "new_text"],
     },
   },
   {
