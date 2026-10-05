@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PR motion explainer</title>
+<style>
+:root{--bg:#0b0b0c;--stage:#111113;--card:#18181b;--edge:#2a2a30;--ink:#ecebe8;--muted:#8a8a93;--faint:#55555d;
+  --active:#e8a75c;--ok:#6fcf97;--fail:#ff6b5f;--glow:rgba(232,167,92,.55);color-scheme:dark}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f3ef;--stage:#fbfaf7;--card:#fff;--edge:#d9d6cc;--ink:#1d1d20;--muted:#6b6b73;--faint:#a6a49c;
+  --active:#b8691c;--ok:#1f8a54;--fail:#c8372d;--glow:rgba(184,105,28,.35);color-scheme:light}}
+:root[data-theme="light"]{--bg:#f4f3ef;--stage:#fbfaf7;--card:#fff;--edge:#d9d6cc;--ink:#1d1d20;--muted:#6b6b73;--faint:#a6a49c;
+  --active:#b8691c;--ok:#1f8a54;--fail:#c8372d;--glow:rgba(184,105,28,.35);color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 ui-sans-serif,system-ui,sans-serif}
+.app{max-width:1180px;margin:0 auto;padding:20px 16px 28px}
+.mono,svg text{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.view{position:relative;aspect-ratio:16/9;background:radial-gradient(ellipse at 50% 55%,var(--card) 0%,var(--stage) 60%);border:1px solid var(--edge);border-radius:18px;overflow:hidden}
+svg{display:block;width:100%;height:100%}
+.stage{position:relative}
+.hdr{position:absolute;z-index:1;left:4%;top:5.5%;right:4%;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:clamp(11px,1.35vw,15px)}
+.hdr b{color:var(--active);font-weight:500;margin-right:.9em}
+.seg{display:flex;gap:2px;background:var(--card);border:1px solid var(--edge);border-radius:999px;padding:2px}
+.seg button{font:inherit;font-size:.85em;color:var(--muted);background:none;border:0;border-radius:999px;padding:3px 10px;cursor:pointer}
+.seg button::before{content:"● ";font-size:.7em;vertical-align:.15em;opacity:.5}
+.seg button[aria-pressed="true"]{color:var(--ink);background:var(--edge)}
+.seg button[aria-pressed="true"]::before{opacity:1;color:var(--active)}
+/* nodes: tone classes drive colour; CSS transitions make discrete step changes feel continuous */
+.n rect.box{fill:var(--card);stroke:var(--edge);stroke-width:1.5;transition:stroke .5s,fill .5s}
+.n text.t{fill:var(--ink);font-size:22px}
+.n text.s{fill:var(--muted);font-size:14px;transition:fill .5s}
+.n,.e,.tag{transition:opacity .45s}
+.n.active rect.box{stroke:var(--active)} .n.active text.s{fill:var(--active)}
+.n.ok rect.box{stroke:var(--ok)} .n.ok text.s{fill:var(--ok)}
+.n.fail rect.box{stroke:var(--fail)} .n.fail text.s{fill:var(--fail)}
+.n.ghost{opacity:.35}
+.n.chip rect.box{rx:12}
+.n.chip text.t{fill:var(--muted);font-size:17px}
+.n .spin{fill:none;stroke:var(--active);stroke-width:2;opacity:0}
+.n.active .spin{opacity:1}
+.orb circle{fill:var(--ink)}
+.orb.fail circle{fill:var(--fail)} .orb.ok circle{fill:var(--ok)} .orb.active circle{fill:var(--active)}
+.orb text.t{fill:var(--ink);font-size:17px}.orb text.s{font-size:14px;fill:var(--muted)}
+.orb.fail text.s{fill:var(--fail)}.orb.ok text.s{fill:var(--ok)}.orb.active text.s{fill:var(--active)}
+.e path{fill:none;stroke:var(--edge);stroke-width:1.6;transition:stroke .5s}
+.e.active path{stroke:var(--active)} .e.ok path{stroke:var(--ok)}
+.e.fail path{stroke:var(--fail);stroke-dasharray:6 7}
+.pulse{fill:var(--active);filter:url(#glow)}
+.tag rect{fill:var(--card);stroke:var(--active);stroke-width:1.2}
+.tag text{fill:var(--active);font-size:14px}
+.tag line{stroke:var(--active);stroke-width:1.2}
+.tag circle{fill:var(--card);stroke:var(--active);stroke-width:1.5}
+.tag.fail rect,.tag.fail line,.tag.fail circle{stroke:var(--fail)}.tag.fail text{fill:var(--fail)}
+.tag.ok rect,.tag.ok line,.tag.ok circle{stroke:var(--ok)}.tag.ok text{fill:var(--ok)}
+.hidden{opacity:0}
+.cap{display:grid;grid-template-columns:auto 1fr;align-content:start;gap:4px 14px;margin-top:16px;min-height:5.6em}
+#idx{color:var(--muted);font-size:13px;padding-top:4px}
+#say{margin:0;font-size:19px;max-width:70ch}
+#tech{grid-column:2;margin:0;font-size:13px;color:var(--muted)}
+.ctrl{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;margin-top:12px}
+.ctrl button{font:inherit;font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--edge);border-radius:8px;padding:6px 14px;cursor:pointer}
+#slider{width:100%;accent-color:var(--active)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--active);outline-offset:3px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (max-width:640px){.view{border-radius:12px}.hdr{position:static;margin-bottom:10px;flex-wrap:wrap;font-size:13px}#say{font-size:17px}.cap{grid-template-columns:1fr}#tech{grid-column:1}}
+</style>
+
+<div class="app">
+  <div class="stage">
+    <div class="hdr mono"><div><b id="num"></b><span id="title"></span></div><div class="seg" role="group" aria-label="Version" id="seg"></div></div>
+  <div class="view" id="view">
+    <svg id="svg" viewBox="0 0 1600 900" role="img" aria-labelledby="ttl">
+      <title id="ttl"></title>
+      <defs><filter id="glow" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+      <g id="edges"></g><g id="nodes"></g><g id="tags"></g><g id="pulses"></g>
+    </svg>
+  </div>
+  </div>
+  <section class="cap" aria-label="Current step">
+    <div id="idx" class="mono"></div>
+    <p id="say" aria-hidden="true"></p>
+    <p id="tech" class="mono"></p>
+    <p id="live" class="sr" aria-live="polite"></p>
+  </section>
+  <div class="ctrl">
+    <button id="play">Pause</button>
+    <input id="slider" type="range" min="0" max="1000" value="0" aria-label="Progress">
+  </div>
+</div>
+
+<script>
+/* ======================= CONTENT: edit this block only ======================= */
+const PR={num:"#49",title:"home check accepts read-only files the computer owns"};
+const NODES={
+  oc:{x:250,y:310,kind:"orb",r:80,title:"OpenCode · uid 1000",sub:"idle"},
+  file:{x:800,y:310,w:360,title:"snapshot/objects/ab/cdef",sub:"-r--r--r--  owner uid 1000",tagAt:[-40,-100]},
+  sup:{x:250,y:630,w:300,title:"supervisor.provision",sub:"idle"},
+  check:{x:800,y:630,w:380,title:"assertComputerHomeWritable",sub:"idle",tagAt:[60,-90]},
+  bot:{x:1330,y:630,w:280,title:"bot",sub:"waiting"},
+  strict:{x:800,y:800,kind:"chip",w:380,title:"dirs, foreign files",sub:"still strict",show:false},
+};
+const EDGES={write:["oc","file"],prov:["sup","check"],walk:["check","file"],reply:["check","bot"]};
+const MODES={
+  before:[
+    {say:"The bot used OpenCode once. It saved a git snapshot in the computer home.",tech:"~/.local/share/opencode/snapshot/objects/** written 0444 by git",nodes:{oc:{sub:"snapshot",tone:"active"},file:{tone:"active",tag:"git makes objects read-only on purpose"}},pulse:["write"]},
+    {say:"Next message: the supervisor provisions the sandbox and checks the home first.",tech:"index.ts → assertComputerHomeWritable(home, uid, gid)",nodes:{oc:{sub:"done",tone:"idle"},file:{tone:"idle",tag:null},sup:{sub:"provisioning",tone:"active"},check:{sub:"walking ~/",tone:"active"}},pulse:["prov"]},
+    {say:"The rule: every file must carry the write bit.",tech:"required = isDirectory ? 0b111 : 0b010",nodes:{check:{sub:"needs w on every file",tag:"rule: mode has w"}},pulse:["walk"]},
+    {say:"The git object has no write bit. The check throws.",tech:"throw writabilityError → \"run sudo chown -R 1000:1000 …\"",nodes:{file:{tone:"fail",sub:"r--  no w bit"},check:{tone:"fail",sub:"throws",tag:["rule: mode has w","fail"]}},edges:{walk:"fail"},dur:1.3},
+    {say:"Every provision now fails the same way. The bot stops answering.",tech:"no sandbox → no run → no reply, on every message",nodes:{sup:{tone:"fail",sub:"provision failed"},bot:{tone:"fail",sub:"silent"}},edges:{reply:"fail",prov:"fail"},dur:1.5},
+  ],
+  after:[
+    {say:"The bot used OpenCode once. It saved a git snapshot in the computer home.",tech:"~/.local/share/opencode/snapshot/objects/** written 0444 by git",nodes:{oc:{sub:"snapshot",tone:"active"},file:{tone:"active",tag:"git makes objects read-only on purpose"}},pulse:["write"]},
+    {say:"Next message: the supervisor provisions the sandbox and checks the home first.",tech:"index.ts → assertComputerHomeWritable(home, uid, gid)",nodes:{oc:{sub:"done",tone:"idle"},file:{tone:"idle",tag:null},sup:{sub:"provisioning",tone:"active"},check:{sub:"walking ~/",tone:"active"}},pulse:["prov"]},
+    {say:"New rule for files: the computer owns it, or it is writable.",tech:"isFileUsable = stat.uid === uid || hasPermissions(…, 0b010)",nodes:{check:{sub:"owner? else needs w",tag:"rule: the owner can always chmod"}},pulse:["walk"]},
+    {say:"The git object belongs to uid 1000. It passes. Directories and foreign files keep the strict check.",tech:"dirs still need rwx (0b111) · files owned by another uid still need w",nodes:{file:{tone:"ok",sub:"owned by uid 1000 → usable"},check:{tone:"ok",sub:"passes",tag:["rule: the owner can always chmod","ok"]},strict:{show:true,tone:"active"}},edges:{walk:"ok"},dur:1.3},
+    {say:"The sandbox comes up. The bot answers again.",tech:"provision ok → run → reply",nodes:{sup:{tone:"ok",sub:"sandbox up"},bot:{tone:"ok",sub:"answers"},strict:{tone:"idle"}},edges:{prov:"ok",reply:"ok"},pulse:["reply"],dur:1.5},
+  ],
+};
+const START="before";
+const SEC=2.8;
+/* ============================================================================= */
+
+const $=id=>document.getElementById(id),NS="http://www.w3.org/2000/svg";
+const el=(tag,attrs={},parent)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);parent&&parent.append(e);return e;};
+const cl=(v,a=0,b=1)=>Math.max(a,Math.min(b,v)),E=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const mq=matchMedia('(prefers-reduced-motion: reduce)');let RM=mq.matches;mq.addEventListener('change',e=>RM=e.matches);
+$('num').textContent=PR.num;$('title').textContent=PR.title;$('ttl').textContent=`${PR.num} ${PR.title}`;document.title=`${PR.num} · ${PR.title}`;
+
+/* ---------- build the scene once ---------- */
+const G={};
+const size=n=>n.kind==="orb"?[2*(n.r||90),2*(n.r||90)]:n.kind==="chip"?[n.w||200,n.h||46]:[n.w||280,n.h||96];
+for(const id in NODES){const n=NODES[id],[w,h]=size(n),g=el('g',{class:n.kind==="orb"?'orb':'n'+(n.kind==="chip"?' chip':''),transform:`translate(${n.x},${n.y})`},$('nodes'));
+  const o={g,n,w,h};
+  if(n.kind==="orb"){const r=n.r||90,pts=[],M=Math.round(r*3.2);
+    for(let i=0;i<M;i++){const y=1-2*(i+.5)/M,rr=Math.sqrt(1-y*y),th=i*2.39996;pts.push([Math.cos(th)*rr,y,Math.sin(th)*rr,el('circle',{r:1.6},g)]);}
+    o.pts=pts;o.r=r;
+    o.t=el('text',{class:'t',y:r+40,'text-anchor':'middle'},g);o.s=el('text',{class:'s',y:r+64,'text-anchor':'middle'},g);
+  }else if(n.kind==="chip"){
+    el('rect',{class:'box',x:-w/2,y:-h/2,width:w,height:h,rx:h/2},g);
+    o.t=el('text',{class:'t',x:-w/2+22,y:6},g);o.s=el('text',{class:'s',x:w/2-22,y:6,'text-anchor':'end'},g);o.s.style.fontSize='17px';
+  }else{
+    el('rect',{class:'box',x:-w/2,y:-h/2,width:w,height:h,rx:10},g);
+    o.t=el('text',{class:'t',y:-6,'text-anchor':'middle'},g);
+    o.spin=el('path',{class:'spin',d:'M 0 -7 A 7 7 0 0 1 7 0'},g);
+    o.s=el('text',{class:'s',y:24,'text-anchor':'middle'},g);
+  }
+  o.t.textContent=n.title;
+  // tag (callout) anchored to the node's top-right corner unless n.tagAt=[dx,dy]
+  const [dx,dy]=n.tagAt||[w/2+60,-h/2-40];o.tag=el('g',{class:'tag hidden'},$('tags'));
+  const ax=n.x+(dx>0?w/2:-w/2)*(n.kind==="orb"?.72:1),ay=n.y+(dy<0?-h/2:h/2)*(n.kind==="orb"?.72:1);
+  el('line',{x1:ax,y1:ay,x2:n.x+dx,y2:n.y+dy},o.tag);el('circle',{cx:ax,cy:ay,r:5},o.tag);
+  o.tagR=el('rect',{x:n.x+dx,y:n.y+dy-16,height:32,rx:4},o.tag);o.tagT=el('text',{x:n.x+dx+12,y:n.y+dy+5},o.tag);o.tagDx=dx;
+  G[id]=o;}
+function anchor(a,b){const A=G[a],B=G[b],dx=B.n.x-A.n.x,dy=B.n.y-A.n.y;
+  const ex=o=>o.n.kind==="orb"?o.r*.9:o.w/2,ey=o=>o.n.kind==="orb"?o.r*.9:o.h/2;
+  if(Math.abs(dx)*A.h>Math.abs(dy)*A.w){const s=Math.sign(dx);return [[A.n.x+s*ex(A),A.n.y],[B.n.x-s*ex(B),B.n.y],'h'];}
+  const s=Math.sign(dy);return [[A.n.x,A.n.y+s*ey(A)],[B.n.x,B.n.y-s*ey(B)],'v'];}
+const EG={};
+for(const id in EDGES){const [a,b]=EDGES[id],[p,q,o]=anchor(a,b),g=el('g',{class:'e'},$('edges'));
+  const m=o==='h'?(p[0]+q[0])/2:(p[1]+q[1])/2;
+  const d=o==='h'?`M${p[0]},${p[1]} C${m},${p[1]} ${m},${q[1]} ${q[0]},${q[1]}`:`M${p[0]},${p[1]} C${p[0]},${m} ${q[0]},${m} ${q[0]},${q[1]}`;
+  const path=el('path',{d},g);EG[id]={g,path,len:0,dot:el('circle',{class:'pulse',r:6,opacity:0},$('pulses'))};}
+requestAnimationFrame(()=>{for(const id in EG)EG[id].len=EG[id].path.getTotalLength();});
+
+/* ---------- state = fold of steps 0..k (pure → scrubbing backward just works) ---------- */
+let mode=START,steps=MODES[mode],N=steps.length,CUM=[];
+function timing(){CUM=[0];steps.forEach((s,i)=>CUM.push(CUM[i]+(s.dur||1)));}
+function stateAt(k){const S={n:{},e:{}};for(const id in NODES)S.n[id]={sub:NODES[id].sub,tone:'idle',show:NODES[id].show!==false,tag:null};
+  for(const id in EDGES)S.e[id]={tone:'idle',show:true};
+  for(let i=0;i<=k;i++){const st=steps[i];for(const id in st.nodes||{})Object.assign(S.n[id],st.nodes[id]);
+    for(const id in st.edges||{}){const v=st.edges[id];if(v===false)S.e[id].show=false;else S.e[id]={tone:v,show:true};}}
+  return S;}
+let shownK=-1;
+function apply(k){if(k===shownK)return;shownK=k;const S=stateAt(k);
+  for(const id in G){const o=G[id],s=S.n[id],base=o.n.kind==="orb"?'orb':'n'+(o.n.kind==="chip"?' chip':'');
+    o.g.setAttribute('class',`${base} ${s.tone}${s.show?'':' hidden'}`);o.s.textContent=s.sub||'';
+    const [txt,tone]=Array.isArray(s.tag)?s.tag:[s.tag,'active'];
+    if(txt){o.tagT.textContent=txt;const w=o.tagT.getComputedTextLength()+24;o.tagR.setAttribute('width',w);
+      if(o.tagDx<0){o.tagR.setAttribute('x',o.n.x+o.tagDx-w);o.tagT.setAttribute('x',o.n.x+o.tagDx-w+12);}}
+    o.tag.setAttribute('class',`tag ${tone}${txt&&s.show?'':' hidden'}`);}
+  for(const id in EG){const s=S.e[id],act=(steps[k].pulse||[]).includes(id);
+    EG[id].g.setAttribute('class',`e ${act&&s.tone==='idle'?'active':s.tone}${s.show?'':' hidden'}`);}
+  const st=steps[k];$('idx').textContent=`${String(k+1).padStart(2,'0')}/${String(N).padStart(2,'0')}`;
+  $('say').textContent=st.say;$('tech').textContent=st.tech||'';$('live').textContent=`${mode}, step ${k+1} of ${N}. ${st.say}`;}
+
+/* ---------- controls ---------- */
+const seg=$('seg');const modeBtns={};
+for(const m in MODES){const b=document.createElement('button');b.textContent=m;b.onclick=()=>setMode(m);seg.append(b);modeBtns[m]=b;}
+let P=0,playing=true,hold=0;const slider=$('slider'),playB=$('play');
+function setMode(m){mode=m;steps=MODES[m];N=steps.length;timing();shownK=-1;P=0;hold=0;setPlay(true);
+  for(const k in modeBtns)modeBtns[k].setAttribute('aria-pressed',k===m);}
+function setPlay(on){playing=on;playB.textContent=on?'Pause':'Play';if(on&&P>=CUM[N]){P=0;hold=0;}}
+playB.onclick=()=>setPlay(!playing);
+slider.addEventListener('input',()=>{setPlay(false);P=slider.value/1000*CUM[N];});
+const stepOf=p=>{for(let k=0;k<N;k++)if(p<CUM[k+1])return k;return N-1;};
+const goStep=k=>{setPlay(false);P=CUM[cl(k,0,N-1)]+.001;};
+document.addEventListener('keydown',e=>{if(e.target===slider&&e.key.startsWith('Arrow'))e.preventDefault();
+  if(e.code==='Space'&&!(e.target instanceof HTMLButtonElement)){e.preventDefault();setPlay(!playing);}
+  else if(e.key==='ArrowRight')goStep(stepOf(P)+1);else if(e.key==='ArrowLeft')goStep(stepOf(P)-1);
+  else{const m=Object.keys(MODES).find(m=>m[0]===e.key.toLowerCase());if(m&&!e.metaKey&&!e.ctrlKey)setMode(m);}});
+
+/* ---------- frame loop ---------- */
+let last=performance.now(),tm=0;
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;tm+=dt;
+  if(playing){if(P<CUM[N])P=Math.min(CUM[N],P+dt/SEC);else if((hold+=dt)>2.5){const ms=Object.keys(MODES),nx=ms[(ms.indexOf(mode)+1)%ms.length];setMode(nx);}}
+  slider.value=Math.round(P/CUM[N]*1000);
+  const k=stepOf(P),u=cl((P-CUM[k])/(CUM[k+1]-CUM[k]));apply(k);
+  for(const id in EG){const e=EG[id],on=(steps[k].pulse||[]).includes(id)&&e.len&&!RM,t=E(cl(u/.7));
+    if(on){const pt=e.path.getPointAtLength(t*e.len);e.dot.setAttribute('cx',pt.x);e.dot.setAttribute('cy',pt.y);}
+    e.dot.setAttribute('opacity',on?Math.min(1,(1-t)*6,t*12+.2):0);}
+  for(const id in G){const o=G[id];
+    if(o.pts){const a=RM?.6:tm*.35,c=Math.cos(a),s=Math.sin(a),S=stateAt(k).n[id].tone==='fail'&&!RM?1+.015*Math.sin(tm*5):1;
+      for(const [x,y,z,dot] of o.pts){const X=x*c+z*s,Z=-x*s+z*c;dot.setAttribute('cx',(X*o.r*S).toFixed(1));dot.setAttribute('cy',(y*o.r*S).toFixed(1));dot.setAttribute('opacity',(.18+.82*(Z+1)/2).toFixed(2));}}
+    if(o.spin)o.spin.setAttribute('transform',`translate(${o.w/2-18},${-o.h/2+18}) rotate(${RM?0:tm*360%360})`);}
+  requestAnimationFrame(frame);}
+setMode(START);requestAnimationFrame(frame);
+window.__J=(m,k)=>{setMode(m);setPlay(false);P=CUM[k]+(CUM[k+1]-CUM[k])*.75;}; // debug: __J('after',2) → screenshot step 3
+</script>
