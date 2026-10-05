@@ -1,3 +1,4 @@
+import { extractLinksFromText } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
   closeUnterminatedFence,
@@ -45,6 +46,18 @@ describe("linkifyText", () => {
       { text: "www.example.org", href: "https://www.example.org" },
       { text: "." },
     ]);
+  });
+
+  it("finds the same links as the link preview extractor", () => {
+    for (const text of [
+      "See https://example.com/a, and www.example.org.",
+      "(www.example.org/x_(y)) then lemonde.fr and README.md",
+      "awww.example.org -www.example.org/a? <www.example.org>",
+      "www.example and www.example.org:8080/p!",
+    ]) {
+      const hrefs = linkifyText(text).flatMap((segment) => (segment.href ? [segment.href] : []));
+      expect(extractLinksFromText(text)).toEqual([...new Set(hrefs)]);
+    }
   });
 
   it("keeps balanced brackets in the URL and drops the one around it", () => {

@@ -1,8 +1,9 @@
 const CODE_MASK = "\u0000";
 const FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
-// A markdown link opener, or a bare URL. The opener comes first so `[https://a.tld](https://b.tld)`
-// is the link to b.tld, and the label is never read as a second URL.
-const LINK_TOKEN_SOURCE = `\\[[^\\]\\n]*\\]\\(|https?://[^\\s<>"${CODE_MASK}]+`;
+// A markdown link opener, a bare URL, or a bare `www.` address (the thread linkifier's rule). The
+// opener comes first so `[https://a.tld](https://b.tld)` is the link to b.tld, and the label is
+// never read as a second URL.
+const LINK_TOKEN_SOURCE = `\\[[^\\]\\n]*\\]\\(|(?:https?://|\\bwww\\.)[^\\s<>"${CODE_MASK}]+`;
 const URL_STOP = new RegExp(`[\\s<>"${CODE_MASK}]`);
 const URL_START = /^https?:\/\//i;
 const TRAILING_PUNCTUATION = /[.,;:!?'"*_~]+$/;
@@ -86,31 +87,64 @@ function markdownDestination(text: string, start: number): string {
 }
 
 /**
- * Every http(s) link in the text, in order and deduplicated: bare URLs and the destination of
- * markdown links, never inside fenced or inline code. Parentheses stay balanced
- * (`…/Foo_(bar)`), apostrophes are kept, and trailing sentence punctuation is dropped. With
- * `includeCode`, code is read like any other text (for page text, where backticks mean nothing).
+ * A scheme-less `www.` address as the https link it stands for, or undefined. Other scheme-less
+ * text stays no link: `README.md` or `setup.py` look like domains (.md and .py are real TLDs) but
+ * are files, and so is a bare `lemonde.fr`. The one rule for which bare text counts as a link.
  */
-export function extractLinksFromText(
+export function wwwLinkHref(value: string): string | undefined {
+  const text = value.trim();
+  return /^www\.[a-z\d-]+(?:\.[a-z\d-]+)+(?:[/?#:]|$)/i.test(text) ? `https://${text}` : undefined;
+}
+
+/** A link found in text: its target and where it sits in the text. */
+export interface LinkOccurrence {
+  href: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * Every http(s) link in the text, in order and with its position: bare URLs, bare `www.`
+ * addresses (as `https://www.…`) and the destination of markdown links, never inside fenced or
+ * inline code. `end` is where the link stops, trailing punctuation excluded.
+ */
+export function extractLinkOccurrences(
   text: string,
   options: { includeCode?: boolean } = {},
-): string[] {
+): LinkOccurrence[] {
   const masked = options.includeCode ? text : maskCode(text);
   const token = new RegExp(LINK_TOKEN_SOURCE, "gi");
-  const links: string[] = [];
+  const links: LinkOccurrence[] = [];
   for (let match = token.exec(masked); match; match = token.exec(masked)) {
-    if (URL_START.test(match[0])) {
-      links.push(trimUrlEnd(match[0]));
+    if (!match[0].startsWith("[")) {
+      const url = trimUrlEnd(match[0]);
+      const href = URL_START.test(url) ? url : wwwLinkHref(url);
+      if (href) links.push({ href, start: match.index, end: match.index + url.length });
       continue;
     }
     // A markdown link counts by its destination; a destination that is not http(s) counts for nothing.
     const start = token.lastIndex;
     if (!URL_START.test(masked.slice(start, start + 8))) continue;
     const destination = markdownDestination(masked, start);
-    links.push(trimUrlEnd(destination));
+    const href = trimUrlEnd(destination);
+    links.push({ href, start, end: start + href.length });
     token.lastIndex = start + destination.length;
   }
-  return [...new Set(links)];
+  return links;
+}
+
+/**
+ * Every http(s) link in the text, in order and deduplicated: bare URLs, bare `www.` addresses
+ * (as `https://www.…`) and the destination of markdown links, never inside fenced or inline
+ * code. Parentheses stay balanced (`…/Foo_(bar)`), apostrophes are kept, and trailing sentence
+ * punctuation is dropped. With `includeCode`, code is read like any other text (for page text,
+ * where backticks mean nothing).
+ */
+export function extractLinksFromText(
+  text: string,
+  options: { includeCode?: boolean } = {},
+): string[] {
+  return [...new Set(extractLinkOccurrences(text, options).map((link) => link.href))];
 }
 
 export function matchesSearchQuery(

@@ -1,5 +1,5 @@
 import { isPreviewableUrl, LINK_PREVIEW_TITLE_MAX_LENGTH } from "@rakazo/contracts";
-import { extractLinksFromText } from "./search.js";
+import { extractLinksFromText, wwwLinkHref } from "./search.js";
 
 /** Query parameter names that mark a link as a secret: never read, cached or logged. */
 const SECRET_PARAM_NAMES: ReadonlySet<string> = new Set([
@@ -17,7 +17,7 @@ const SECRET_PARAM_NAMES: ReadonlySet<string> = new Set([
   "unsubscribe",
 ]);
 
-/** The one link a message may preview: its first eligible http(s) link, outside code. */
+/** The one link a message may preview: its first eligible http(s) or bare `www.` link, outside code. */
 export function firstEligibleLink(text: string): string | undefined {
   return extractLinksFromText(text).find(isPreviewableUrl);
 }
@@ -62,10 +62,18 @@ export function messageHostsLinkPreview(message: {
   return true;
 }
 
-/** True when the message is nothing but this link: bare, in `<>`, or a link labelled with itself. */
+/**
+ * True when the message is nothing but this link: bare (a `www.` address included, for the
+ * https link it stands for), in `<>`, or a link labelled with itself.
+ */
 export function isLinkOnlyMessage(text: string, url: string): boolean {
   const value = text.trim();
-  return value === url || value === `<${url}>` || value === `[${url}](${url})`;
+  const isLink = (form: string) => form === url || wwwLinkHref(form) === url;
+  return (
+    isLink(value) ||
+    (value.startsWith("<") && value.endsWith(">") && isLink(value.slice(1, -1))) ||
+    value === `[${url}](${url})`
+  );
 }
 
 /**

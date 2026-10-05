@@ -44,6 +44,20 @@ describe("composerLinkPreviewTrigger", () => {
     expect(composerLinkPreviewTrigger("https://a.tld", "https://a.tldx", "type")).toBeUndefined();
   });
 
+  it("treats a bare www. address like any other link", () => {
+    expect(composerLinkPreviewTrigger("www.lemonde.fr", "www.lemonde.fr ", "type")).toBe(
+      "https://www.lemonde.fr",
+    );
+    expect(composerLinkPreviewTrigger("", "www.lemonde.fr", "type")).toBeUndefined();
+    expect(composerLinkPreviewTrigger("see ", "see www.lemonde.fr/x", "paste")).toBe(
+      "https://www.lemonde.fr/x",
+    );
+    expect(composerLinkPreviewTrigger("", "www.lemonde.fr/x?token=abc ", "type")).toBeUndefined();
+    expect(composerLinkPreviewTrigger("", "www.login.lemonde.fr ", "type")).toBeUndefined();
+    expect(composerLinkPreviewTrigger("", "lemonde.fr ", "type")).toBeUndefined();
+    expect(composerLinkPreviewTrigger("", "`www.lemonde.fr` ", "type")).toBeUndefined();
+  });
+
   it("never fires for a link with a secret in its query", () => {
     expect(composerLinkPreviewTrigger("", "https://a.tld/x?token=abc ", "type")).toBeUndefined();
     expect(composerLinkPreviewTrigger("", "https://a.tld/x?Sig=abc", "paste")).toBeUndefined();

@@ -22,6 +22,18 @@ describe("firstEligibleLink", () => {
     expect(firstEligibleLink("ftp://a.tld/x javascript:alert(1) mailto:a@b.tld")).toBeUndefined();
   });
 
+  it("takes a bare www. address as the https link it stands for", () => {
+    expect(firstEligibleLink("www.lemonde.fr ")).toBe("https://www.lemonde.fr");
+    expect(firstEligibleLink("voir www.lemonde.fr/x, merci")).toBe("https://www.lemonde.fr/x");
+    expect(firstEligibleLink("(see www.lemonde.fr/x).")).toBe("https://www.lemonde.fr/x");
+    expect(firstEligibleLink("`www.lemonde.fr`")).toBeUndefined();
+    expect(firstEligibleLink("```\nwww.lemonde.fr\n```")).toBeUndefined();
+    expect(firstEligibleLink("lemonde.fr")).toBeUndefined();
+    expect(firstEligibleLink("README.md www.lemonde")).toBeUndefined();
+    expect(firstEligibleLink("awww.lemonde.fr")).toBeUndefined();
+    expect(firstEligibleLink("www.lemonde.fr then https://a.tld")).toBe("https://www.lemonde.fr");
+  });
+
   it("skips fenced and inline code", () => {
     expect(firstEligibleLink("```\nhttps://code.tld/1\n```\nhttps://real.tld/2")).toBe(
       "https://real.tld/2",
@@ -90,6 +102,14 @@ describe("isLinkOnlyMessage", () => {
     expect(isLinkOnlyMessage(`  \n${url}\n `, url)).toBe(true);
     expect(isLinkOnlyMessage(`<${url}>`, url)).toBe(true);
     expect(isLinkOnlyMessage(`[${url}](${url})`, url)).toBe(true);
+  });
+
+  it("accepts a bare www. address for the https link it stands for", () => {
+    expect(isLinkOnlyMessage("www.lemonde.fr", "https://www.lemonde.fr")).toBe(true);
+    expect(isLinkOnlyMessage(" <www.lemonde.fr/x>\n", "https://www.lemonde.fr/x")).toBe(true);
+    expect(isLinkOnlyMessage("www.lemonde.fr.", "https://www.lemonde.fr")).toBe(false);
+    expect(isLinkOnlyMessage("www.lemonde.fr", "https://www.lemonde.fr/x")).toBe(false);
+    expect(isLinkOnlyMessage("lemonde.fr", "https://lemonde.fr")).toBe(false);
   });
 
   it("rejects anything more than the link", () => {

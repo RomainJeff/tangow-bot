@@ -11,6 +11,7 @@ import {
   previewSiteLabel,
   sanitizePreviewTitle,
 } from "./link-preview.js";
+import { extractLinkOccurrences } from "./search.js";
 
 /** How long a complete link must stay the first link before the page is read. */
 export const COMPOSER_LINK_PREVIEW_DEBOUNCE_MS = 800;
@@ -55,12 +56,11 @@ export function composerLinkPreviewTrigger(
   const link = firstEligibleLink(next);
   if (!link || hasSecretParam(link) || isAuthenticationDestination(link)) return undefined;
   const pasted = change === "paste" ? insertedSpan(prev, next) : undefined;
-  for (let at = next.indexOf(link); at !== -1; at = next.indexOf(link, at + 1)) {
-    const linkEnd = at + link.length;
-    if (pasted && at < pasted.end && linkEnd > pasted.start) return link;
+  for (const { href, start, end } of extractLinkOccurrences(next)) {
+    if (href !== link) continue;
+    if (pasted && start < pasted.end && end > pasted.start) return link;
     // The word the link sits in (a trailing `.` or `>` belongs to it) must be followed by a space.
-    const word = /\s/u.exec(next.slice(linkEnd));
-    if (word) return link;
+    if (/\s/u.test(next.slice(end))) return link;
   }
   return undefined;
 }
