@@ -68,6 +68,15 @@ describe("reduceLiveMessageBlocks", () => {
     ]);
   });
 
+  it("writes out the waiting tool chips when the status clears", () => {
+    const say = (blocks: MessageBlock[], payload: Record<string, unknown>) =>
+      reduceLiveMessageBlocks(blocks, { type: "progress", payload });
+    let blocks = say([], { text: "Checking calendar", activity: true });
+    blocks = reduceLiveMessageBlocks(blocks, { type: "tool", name: "calendar" });
+    blocks = say(blocks, { text: "", activity: true });
+    expect(blocks).toEqual([{ kind: "steps", steps: [{ label: "Calendar", count: 1 }] }]);
+  });
+
   it("replaces punctuated activity text with its tool step", () => {
     const activity = reduceLiveMessageBlocks([], {
       type: "progress",
