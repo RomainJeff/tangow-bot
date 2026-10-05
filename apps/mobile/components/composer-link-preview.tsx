@@ -1,5 +1,5 @@
 import type { ComposerLinkPreviewView } from "@rakazo/core";
-import { previewSiteLabel } from "@rakazo/core";
+import { previewSiteInitial, previewSiteLabel } from "@rakazo/core";
 import { radii, sizes } from "@rakazo/ui-tokens";
 import { memo } from "react";
 import { Image, Pressable, Text, View } from "react-native";
@@ -23,9 +23,12 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
   view,
   onRemove,
   disabled = false,
+  width,
 }: {
   view: Exclude<ComposerLinkPreviewView, { status: "idle" }>;
   onRemove: () => void;
+  /** The attachments row's width: a horizontal scroll view does not bound its children. */
+  width?: number;
   /** Inert during dictation: the × stays visible but stops responding. */
   disabled?: boolean;
 }) {
@@ -37,7 +40,16 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
   // While the page is read the host is all there is to say, and the one thing that moves.
   const site = view.status === "ready" ? view.site : previewSiteLabel(view.url);
   return (
-    <View style={{ alignSelf: "flex-start", maxWidth: sizes.linkCard }}>
+    // The card fills the composer row (never wider than a link card), and leaves room in its
+    // corner for the remove disc so neither the title nor the disc is clipped by the capsule.
+    <View
+      style={{
+        width: width === undefined ? undefined : Math.min(width, sizes.linkCard),
+        maxWidth: sizes.linkCard,
+        paddingTop: 6,
+        paddingEnd: 6,
+      }}
+    >
       <View
         accessible
         accessibilityLabel={
@@ -81,12 +93,27 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
             />
           </View>
         ) : (
-          <View style={{ width: 4 }} />
+          // No picture: the site's initial in the same tile, as on the card (decorative).
+          <View
+            accessibilityElementsHidden
+            style={{
+              width: THUMB,
+              height: THUMB,
+              borderRadius: radii.chip,
+              backgroundColor: tokens.secondary,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("title") }}>
+              {previewSiteInitial(view.url)}
+            </Text>
+          </View>
         )}
         <View style={{ flexShrink: 1, minWidth: 0 }}>
           {view.status === "ready" && view.title ? (
             <Text
-              numberOfLines={1}
+              numberOfLines={2}
               style={{
                 color: tokens.foreground,
                 writingDirection: "auto",
@@ -130,8 +157,8 @@ export const ComposerLinkPreview = memo(function ComposerLinkPreview({
         onPress={onRemove}
         style={{
           position: "absolute",
-          top: -6,
-          end: -6,
+          top: 0,
+          end: 0,
           width: REMOVE_SIZE,
           height: REMOVE_SIZE,
           borderRadius: radii.pill,

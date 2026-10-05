@@ -621,6 +621,7 @@ function Thread() {
   const notificationThreadId = snap?.threadId ?? currentBot?.threadId;
   activeThreadId.current = notificationThreadId;
   const linkPreview = useComposerLinkPreview(draft, notificationThreadId);
+  const [attachmentsRowWidth, setAttachmentsRowWidth] = useState<number | undefined>();
   const currentBotStatus = snap ? snap.run?.status : currentBot?.status;
   const hasLiveProgress = visibleMessages.some((message) => message.id.startsWith("progress:"));
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
@@ -2727,7 +2728,13 @@ function Thread() {
                 dictationVolume={dictation.volume}
                 attachments={
                   activePendingAttachments.length || linkPreview.view.status !== "idle" ? (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      // The link preview takes the row's width, which a horizontal scroll view
+                      // never imposes on its children: measure it once and pass it down.
+                      onLayout={(event) => setAttachmentsRowWidth(event.nativeEvent.layout.width)}
+                    >
                       <View style={{ flexDirection: "row", gap: 8 }}>
                         {activePendingAttachments.map((attachment) => (
                           <ComposerAttachment
@@ -2744,6 +2751,7 @@ function Thread() {
                         ))}
                         {linkPreview.view.status === "idle" ? null : (
                           <ComposerLinkPreview
+                            width={attachmentsRowWidth}
                             view={linkPreview.view}
                             disabled={dictation.dictating}
                             onRemove={() => linkPreview.controller.remove()}
