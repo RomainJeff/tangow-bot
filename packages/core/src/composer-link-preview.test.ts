@@ -219,6 +219,50 @@ describe("createComposerLinkPreview", () => {
     expect(spy).toHaveBeenCalledOnce();
   });
 
+  it("keeps the card and its one read while text is typed before the link", async () => {
+    const { controller, spy } = setup();
+    controller.update("https://a.tld/1", "paste");
+    await wait(800);
+    await flush();
+    expect(controller.getView()).toEqual({
+      status: "ready",
+      url: "https://a.tld/1",
+      site: "a.tld",
+      title: "Page",
+    });
+    for (const draft of ["Hhttps://a.tld/1", "Hihttps://a.tld/1", "Hi https://a.tld/1"]) {
+      controller.update(draft);
+    }
+    await wait(5_000);
+    expect(spy).toHaveBeenCalledOnce();
+    expect(controller.getView()).toEqual({
+      status: "ready",
+      url: "https://a.tld/1",
+      site: "a.tld",
+      title: "Page",
+    });
+  });
+
+  it("keeps a loading read while text is typed before the link, and drops it when the link is edited", async () => {
+    const signals: AbortSignal[] = [];
+    const { controller } = setup(
+      (_url, signal) =>
+        new Promise(() => {
+          signals.push(signal);
+        }),
+    );
+    controller.update("https://a.tld/1", "paste");
+    await wait(800);
+    controller.update("H https://a.tld/1");
+    expect(signals[0]?.aborted).toBe(false);
+    expect(controller.getView()).toEqual({ status: "loading", url: "https://a.tld/1" });
+    controller.update("H https://a.tld/12");
+    expect(signals[0]?.aborted).toBe(true);
+    expect(controller.getView()).toEqual({ status: "idle" });
+    await wait(5_000);
+    expect(signals).toHaveLength(1);
+  });
+
   it("never reads a link with a secret in its query", async () => {
     const { controller, spy } = setup();
     controller.update("https://a.tld/x?token=abc ");

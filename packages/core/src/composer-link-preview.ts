@@ -240,6 +240,8 @@ export function createComposerLinkPreview(
       text = next;
       if (next.trim() === "") return reset();
       if (removed) return;
+      // Only a new link must be complete: typing elsewhere in the draft keeps the current one.
+      if (link && firstEligibleLink(next) === link) return;
       const target = composerLinkPreviewTrigger(prev, next, change);
       if (target === link) return;
       stop();
