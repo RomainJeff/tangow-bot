@@ -5,7 +5,7 @@ import { appendToolCompletionAudit, toolCompletionAuditPayload } from "../execut
 import {
   OPENED_URLS_PER_RUN,
   openedUrlFromCompletion,
-  readRunLinkSources,
+  readThreadLinkSources,
   SEEN_URLS_PER_RUN,
   seenUrlHash,
   seenUrlHashesFromCompletion,
@@ -104,36 +104,83 @@ describe("the audit event keeps that one URL and nothing else of the arguments",
   });
 });
 
-describe("reading them back", () => {
-  it("reads by exact run id and ignores events that carry nothing valid", async () => {
-    const findMany = vi.fn(async () => [
-      { payload: { openedUrl: "https://a.test/1" } },
-      { payload: { name: "computer_observe" } },
-      { payload: { openedUrl: "javascript:alert(1)" } },
-      { payload: { openedUrl: "https://u:p@a.test/2" } },
-      { payload: { openedUrl: 42 } },
-      { payload: "x" },
-      { payload: { openedUrl: "https://a.test/3" } },
-    ]);
+describe("reading them back (CA 64-66)", () => {
+  const CURRENT = { id: "run-1", threadId: "thread-1", botId: "bot-1" };
+  const NOW = new Date("2026-10-05T12:00:00Z");
 
-    const { opened: urls } = await readRunLinkSources({ event: { findMany } } as never, "run-1");
+  function fakePrisma(
+    events: Array<{ runId: string | null; payload: unknown }>,
+    runs: Array<{ id: string }> = [],
+  ) {
+    const runFindMany = vi.fn(async (_args: unknown) => runs);
+    const eventFindMany = vi.fn(async (_args: unknown) => events);
+    return {
+      runFindMany,
+      eventFindMany,
+      prisma: { run: { findMany: runFindMany }, event: { findMany: eventFindMany } } as never,
+    };
+  }
 
-    expect(urls).toEqual(["https://a.test/1", "https://a.test/3"]);
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { runId: "run-1", type: "agent.tool.completed" } }),
+  it("selects up to 49 other runs of the thread and bot, then reads those run ids only", async () => {
+    const { prisma, runFindMany, eventFindMany } = fakePrisma([], [{ id: "run-0" }]);
+
+    const sources = await readThreadLinkSources(prisma, CURRENT, NOW);
+
+    expect(runFindMany).toHaveBeenCalledWith({
+      where: {
+        threadId: "thread-1",
+        botId: "bot-1",
+        status: "completed",
+        createdAt: { gte: new Date("2026-09-28T12:00:00Z") },
+        id: { not: "run-1" },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+      take: 49,
+    });
+    expect(eventFindMany).toHaveBeenCalledTimes(1);
+    expect(eventFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { runId: { in: ["run-1", "run-0"] }, type: "agent.tool.completed" },
+        take: expect.any(Number),
+      }),
     );
+    expect([...sources.keys()]).toEqual(["run-1", "run-0"]);
   });
 
-  it("stops at 50", async () => {
+  it("reads each run apart and ignores events that carry nothing valid", async () => {
+    const { prisma } = fakePrisma(
+      [
+        { runId: "run-0", payload: { openedUrl: "https://b.test/1" } },
+        { runId: "run-1", payload: { openedUrl: "https://a.test/1" } },
+        { runId: "run-1", payload: { name: "computer_observe" } },
+        { runId: "run-1", payload: { openedUrl: "javascript:alert(1)" } },
+        { runId: "run-1", payload: { openedUrl: "https://u:p@a.test/2" } },
+        { runId: "run-1", payload: { openedUrl: 42 } },
+        { runId: "run-1", payload: "x" },
+        { runId: "run-1", payload: { openedUrl: "https://a.test/3" } },
+        { runId: "run-other", payload: { openedUrl: "https://c.test/1" } },
+        { runId: null, payload: { openedUrl: "https://c.test/2" } },
+      ].reverse(),
+      [{ id: "run-0" }],
+    );
+
+    const sources = await readThreadLinkSources(prisma, CURRENT, NOW);
+
+    expect(sources.get("run-1")?.opened).toEqual(["https://a.test/1", "https://a.test/3"]);
+    expect(sources.get("run-0")?.opened).toEqual(["https://b.test/1"]);
+    expect(sources.has("run-other")).toBe(false);
+  });
+
+  it("stops at 50 opened URLs per run", async () => {
     const rows = Array.from({ length: 80 }, (_, index) => ({
+      runId: "run-1",
       payload: { openedUrl: `https://a.test/${index}` },
     }));
-    const { opened: urls } = await readRunLinkSources(
-      { event: { findMany: async () => rows } } as never,
-      "run-1",
-    );
+    const { prisma } = fakePrisma(rows.reverse());
+    const urls = (await readThreadLinkSources(prisma, CURRENT, NOW)).get("run-1")?.opened;
     expect(urls).toHaveLength(50);
-    expect(urls.at(-1)).toBe("https://a.test/49");
+    expect(urls?.at(-1)).toBe("https://a.test/49");
   });
 });
 
@@ -335,18 +382,21 @@ describe("links a public web tool showed the bot (CA 58-60)", () => {
     expect(new Set(recorded).size).toBe(SEEN_URLS_PER_RUN);
   });
 
-  it("reads them back by exact run id, valid hashes only", async () => {
+  it("reads them back per run, valid hashes only", async () => {
     const valid = seenUrlHash(RUN, "https://hit.test/a")!;
-    const findMany = vi.fn(async () => [
-      { payload: { seenUrlHashes: [valid, "nope", 1] } },
-      { payload: { seenUrlHashes: "x" } },
-      { payload: { openedUrl: "https://a.test/1" } },
-    ]);
-    const sources = await readRunLinkSources({ event: { findMany } } as never, "run-1");
-    expect([...sources.seenHashes]).toEqual([valid]);
-    expect(sources.opened).toEqual(["https://a.test/1"]);
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { runId: "run-1", type: "agent.tool.completed" } }),
-    );
+    const events = [
+      { runId: RUN, payload: { seenUrlHashes: [valid, "nope", 1] } },
+      { runId: RUN, payload: { seenUrlHashes: "x" } },
+      { runId: RUN, payload: { openedUrl: "https://a.test/1" } },
+    ];
+    const prisma = {
+      run: { findMany: async () => [] },
+      event: { findMany: async () => events },
+    } as never;
+    const sources = (
+      await readThreadLinkSources(prisma, { id: RUN, threadId: "thread-1", botId: "bot-1" })
+    ).get(RUN);
+    expect([...(sources?.seenHashes ?? [])]).toEqual([valid]);
+    expect(sources?.opened).toEqual(["https://a.test/1"]);
   });
 });

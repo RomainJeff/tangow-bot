@@ -627,12 +627,13 @@ describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
-  it("only counts the run's own opened URLs", async () => {
+  it("does not count the opened URLs of a run that is not completed", async () => {
     const { db, read, deps } = setup();
     db.seedRun({ id: "run-1", threadId: "thread-1", toolEvents: [] });
     db.seedRun({
       id: "run-2",
       threadId: "thread-1",
+      status: "failed",
       toolEvents: [{ name: "web_fetch", outcome: "succeeded", openedUrl: OPENED }],
     });
     db.seedMessage({
@@ -733,22 +734,6 @@ describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
       }
     });
 
-    it("ignores a link seen in another run of the same thread", async () => {
-      const { db, read, deps } = setup();
-      db.seedRun({ id: "run-1", threadId: "thread-1", toolEvents: [] });
-      db.seedRun({ id: "run-2", threadId: "thread-1", toolEvents: [seenEvent(SEEN, "run-2")] });
-      db.seedMessage({
-        id: "final",
-        threadId: "thread-1",
-        role: "bot",
-        runId: "run-1",
-        blocks: [text(SEEN)],
-      });
-      await runLinkPreviewJob(deps, { runId: "run-1" });
-      expect(read).not.toHaveBeenCalled();
-      expect(card(db.blocksOf("final"))).toBeUndefined();
-    });
-
     it("ignores a hash salted for another run, even from an event of this run", async () => {
       const { db, read, deps } = run({
         opened: [],
@@ -804,6 +789,157 @@ describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
       });
       await runLinkPreviewJob(beyond.deps, { runId: "run-1" });
       expect(card(beyond.db.blocksOf("final"))).toBeUndefined();
+    });
+  });
+
+  describe("links seen in a recent run of the same thread and bot (CA 64-66)", () => {
+    const SEEN = "https://hit.test/article";
+    const DAY = 24 * 60 * 60 * 1000;
+    const seen = (url: string, runId: string) => ({
+      name: "web_search",
+      outcome: "succeeded",
+      seenUrlHashes: [seenUrlHash(runId, url)],
+    });
+
+    /** A current run without any tool call, and its final reply that re-sends SEEN. */
+    function current(otherRuns: Parameters<ReturnType<typeof setup>["db"]["seedRun"]>[0][]) {
+      const ctx = setup();
+      for (const other of otherRuns) ctx.db.seedRun(other);
+      ctx.db.seedRun({ id: "run-now", threadId: "thread-1", toolEvents: [] });
+      ctx.db.seedMessage({
+        id: "final",
+        threadId: "thread-1",
+        role: "bot",
+        runId: "run-now",
+        blocks: [text(`Again: ${SEEN}`)],
+      });
+      return ctx;
+    }
+
+    it("previews a link seen in an earlier run of the thread, re-sent in a run with no tool call (CA 64)", async () => {
+      const { db, read, deps } = current([
+        {
+          id: "run-old",
+          threadId: "thread-1",
+          createdAt: new Date(Date.now() - 6 * DAY),
+          toolEvents: [seen(SEEN, "run-old")],
+        },
+      ]);
+      await runLinkPreviewJob(deps, { runId: "run-now" });
+      expect(card(db.blocksOf("final"))).toMatchObject({ url: SEEN });
+      expect(read).toHaveBeenCalledTimes(1);
+    });
+
+    it("previews a link an earlier run opened, not only one it saw", async () => {
+      const { db, deps } = current([
+        {
+          id: "run-old",
+          threadId: "thread-1",
+          createdAt: new Date(Date.now() - DAY),
+          toolEvents: [{ name: "web_fetch", outcome: "succeeded", openedUrl: SEEN }],
+        },
+      ]);
+      await runLinkPreviewJob(deps, { runId: "run-now" });
+      expect(card(db.blocksOf("final"))).toBeDefined();
+    });
+
+    it("does not use the hash of one run for the link of another (salt)", async () => {
+      const { db, read, deps } = current([
+        {
+          id: "run-old",
+          threadId: "thread-1",
+          createdAt: new Date(Date.now() - DAY),
+          toolEvents: [seen(SEEN, "run-elsewhere")],
+        },
+      ]);
+      await runLinkPreviewJob(deps, { runId: "run-now" });
+      expect(read).not.toHaveBeenCalled();
+      expect(card(db.blocksOf("final"))).toBeUndefined();
+    });
+
+    it.each([
+      ["another thread", { threadId: "thread-2" }],
+      ["another bot", { botId: "bot-2" }],
+      ["a run 8 days old", { createdAt: new Date(Date.now() - 8 * DAY) }],
+      ["a failed run", { status: "failed" }],
+      ["a stopped run", { status: "stopped" }],
+    ])("gives no card, and reads nothing, for a link seen in %s (CA 65)", async (_name, over) => {
+      const { db, read, deps } = current([
+        {
+          id: "run-old",
+          threadId: "thread-1",
+          createdAt: new Date(Date.now() - DAY),
+          toolEvents: [seen(SEEN, "run-old")],
+          ...over,
+        },
+      ]);
+      await runLinkPreviewJob(deps, { runId: "run-now" });
+      expect(read).not.toHaveBeenCalled();
+      expect(card(db.blocksOf("final"))).toBeUndefined();
+    });
+
+    it("considers 50 runs at most and reads events for those run ids only (CA 66)", async () => {
+      const older = Array.from({ length: 60 }, (_, index) => ({
+        id: `run-${index}`,
+        threadId: "thread-1",
+        // run-0 is the newest of the others, run-59 the oldest.
+        createdAt: new Date(Date.now() - (index + 1) * 60_000),
+        toolEvents: [seen(`https://hit.test/${index}`, `run-${index}`)],
+      }));
+      const ctx = current(older);
+      ctx.db.seedRun({
+        id: "run-failed",
+        threadId: "thread-1",
+        status: "failed",
+        createdAt: new Date(Date.now() - 30_000),
+        toolEvents: [seen("https://hit.test/failed", "run-failed")],
+      });
+      const runs = vi.spyOn(ctx.db.prisma.run, "findMany");
+      const events = vi.spyOn(ctx.db.prisma.event, "findMany");
+      ctx.db.seedMessage({
+        id: "inside",
+        threadId: "thread-1",
+        role: "bot",
+        runId: "run-now",
+        blocks: [text("https://hit.test/48")],
+      });
+      ctx.db.seedMessage({
+        id: "beyond",
+        threadId: "thread-1",
+        role: "bot",
+        runId: "run-now",
+        blocks: [text("https://hit.test/49")],
+      });
+      ctx.db.seedMessage({
+        id: "failed",
+        threadId: "thread-1",
+        role: "bot",
+        runId: "run-now",
+        blocks: [text("https://hit.test/failed")],
+      });
+
+      await runLinkPreviewJob(ctx.deps, { runId: "run-now" });
+
+      // 49 others plus the current run: run-48 is the last one that counts.
+      expect(card(ctx.db.blocksOf("inside"))).toBeDefined();
+      expect(card(ctx.db.blocksOf("beyond"))).toBeUndefined();
+      expect(card(ctx.db.blocksOf("failed"))).toBeUndefined();
+      expect(runs).toHaveBeenCalledTimes(1);
+      expect(runs.mock.calls[0]?.[0]).toMatchObject({
+        where: { threadId: "thread-1", botId: "bot-1", status: "completed" },
+        orderBy: { createdAt: "desc" },
+        take: 49,
+      });
+      expect(events).toHaveBeenCalledTimes(1);
+      const [call] = events.mock.calls as unknown as Array<
+        [{ where: { runId: { in: string[] } } }]
+      >;
+      const where = call![0].where;
+      expect(where.runId.in).toHaveLength(50);
+      expect(where.runId.in[0]).toBe("run-now");
+      expect(where.runId.in).toContain("run-48");
+      expect(where.runId.in).not.toContain("run-49");
+      expect(where.runId.in).not.toContain("run-failed");
     });
   });
 });

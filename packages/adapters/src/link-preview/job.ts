@@ -18,7 +18,7 @@ import {
   type ThreadEvents,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { readRunLinkSources, seenUrlHash } from "./opened-urls.js";
+import { type RunLinkSources, readThreadLinkSources, seenUrlHash } from "./opened-urls.js";
 import {
   type LinkPreviewServiceDeps,
   previewStoreContext,
@@ -136,6 +136,7 @@ async function previewRunMessages(
     select: {
       status: true,
       trigger: true,
+      botId: true,
       thread: {
         select: { id: true, spaceId: true, userId: true, botId: true, groupId: true },
       },
@@ -143,8 +144,12 @@ async function previewRunMessages(
   });
   // Only a run that ended well, and only one a person is reading (never bot to bot).
   if (run?.status !== "completed" || run.trigger === "bot_message") return;
-  const { opened, seenHashes } = await readRunLinkSources(deps.prisma, runId);
-  if (opened.length === 0 && seenHashes.size === 0) return;
+  const sources = await readThreadLinkSources(deps.prisma, {
+    id: runId,
+    threadId: run.thread.id,
+    botId: run.botId,
+  });
+  if (![...sources.values()].some((s) => s.opened.length > 0 || s.seenHashes.size > 0)) return;
   const messages = await deps.prisma.message.findMany({
     where: { runId, threadId: run.thread.id, role: "bot" },
     orderBy: { seq: "asc" },
@@ -158,22 +163,20 @@ async function previewRunMessages(
       message.clientNonce.startsWith(USER_MESSAGE_CLIENT_NONCE_PREFIX);
     if (!addressed) continue;
     const link = linkPreviewCandidate(message);
-    // Exact equality with a URL the bot opened, or one a public web tool showed it in this run
-    // (by hash): nothing else is ever read for a bot.
-    if (!link || !wasOpenedOrSeen(runId, link, opened, seenHashes)) continue;
+    // Exact equality with a URL this bot opened, or one a public web tool showed it (by hash), in
+    // this run or a completed one of the same thread in the last 7 days: nothing else is read.
+    if (!link || !wasOpenedOrSeen(link, sources)) continue;
     await attachPreview(deps, run.thread, message.id, link, budget);
   }
 }
 
-function wasOpenedOrSeen(
-  runId: string,
-  link: string,
-  opened: string[],
-  seenHashes: Set<string>,
-): boolean {
-  if (opened.some((url) => isSameOpenedUrl(link, url))) return true;
-  const hash = seenUrlHash(runId, link);
-  return hash !== undefined && seenHashes.has(hash);
+function wasOpenedOrSeen(link: string, sources: Map<string, RunLinkSources>): boolean {
+  for (const [sourceRunId, { opened, seenHashes }] of sources) {
+    if (opened.some((url) => isSameOpenedUrl(link, url))) return true;
+    const hash = seenUrlHash(sourceRunId, link);
+    if (hash !== undefined && seenHashes.has(hash)) return true;
+  }
+  return false;
 }
 
 async function attachPreview(

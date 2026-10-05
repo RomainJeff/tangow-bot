@@ -96,30 +96,69 @@ export interface RunLinkSources {
   seenHashes: Set<string>;
 }
 
-export async function readRunLinkSources(
-  prisma: Pick<PrismaClient, "event">,
-  runId: string,
-): Promise<RunLinkSources> {
-  const events = await prisma.event.findMany({
-    where: { runId, type: "agent.tool.completed" },
-    orderBy: { seq: "asc" },
-    select: { payload: true },
-    take: 2000,
+/** Runs of the same thread and bot whose links count: the current one and the newest others. */
+export const LINK_SOURCE_RUNS = 50;
+/** How far back a finished run still counts. */
+export const LINK_SOURCE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+/** Tool events read for all of those runs together, the newest first. */
+const LINK_SOURCE_EVENTS = 5000;
+
+/**
+ * The links the bot opened or saw in a completed run of the same thread and the same bot within
+ * the last 7 days, the given run included, at most 50 runs. It selects the run ids first (the
+ * `[threadId, status, createdAt]` index), then reads the `agent.tool.completed` events of those
+ * run ids only, so a whole thread's events are never scanned. A failed or stopped run, another
+ * thread, another bot and an older run never count. Results are keyed by run id: every hash is
+ * salted with its own run.
+ */
+export async function readThreadLinkSources(
+  prisma: Pick<PrismaClient, "event" | "run">,
+  run: { id: string; threadId: string; botId: string },
+  now: Date = new Date(),
+): Promise<Map<string, RunLinkSources>> {
+  const others = await prisma.run.findMany({
+    where: {
+      threadId: run.threadId,
+      botId: run.botId,
+      status: "completed",
+      createdAt: { gte: new Date(now.getTime() - LINK_SOURCE_WINDOW_MS) },
+      id: { not: run.id },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+    take: LINK_SOURCE_RUNS - 1,
   });
-  const opened: string[] = [];
-  const seenHashes = new Set<string>();
-  for (const { payload } of events) {
-    if (!isPlainRecord(payload)) continue;
-    const url = payload.openedUrl;
-    if (typeof url === "string" && isPreviewableUrl(url) && opened.length < OPENED_URLS_PER_RUN) {
-      opened.push(url);
-    }
-    const hashes = payload.seenUrlHashes;
-    if (!Array.isArray(hashes)) continue;
-    for (const hash of hashes) {
-      if (seenHashes.size >= SEEN_URLS_PER_RUN) break;
-      if (typeof hash === "string" && SHA256_HEX.test(hash)) seenHashes.add(hash);
-    }
+  const runIds = [run.id, ...others.map((other) => other.id)];
+  const events = await prisma.event.findMany({
+    where: { runId: { in: runIds }, type: "agent.tool.completed" },
+    orderBy: { seq: "desc" },
+    select: { runId: true, payload: true },
+    take: LINK_SOURCE_EVENTS,
+  });
+  const sources = new Map<string, RunLinkSources>(
+    runIds.map((id) => [id, { opened: [], seenHashes: new Set<string>() }]),
+  );
+  // Newest first from the database; each run is read oldest first, as it happened.
+  for (const { runId, payload } of events.reverse()) {
+    const source = runId ? sources.get(runId) : undefined;
+    if (source && isPlainRecord(payload)) collectSources(source, payload);
   }
-  return { opened, seenHashes };
+  return sources;
+}
+
+function collectSources(source: RunLinkSources, payload: Record<string, unknown>) {
+  const url = payload.openedUrl;
+  if (
+    typeof url === "string" &&
+    isPreviewableUrl(url) &&
+    source.opened.length < OPENED_URLS_PER_RUN
+  ) {
+    source.opened.push(url);
+  }
+  const hashes = payload.seenUrlHashes;
+  if (!Array.isArray(hashes)) return;
+  for (const hash of hashes) {
+    if (source.seenHashes.size >= SEEN_URLS_PER_RUN) break;
+    if (typeof hash === "string" && SHA256_HEX.test(hash)) source.seenHashes.add(hash);
+  }
 }
