@@ -60,7 +60,7 @@ export const ComposerShell = forwardRef<HTMLDivElement, ComposerShellProps>(func
       {...props}
     >
       {attachments ? (
-        <div data-slot="composer-attachments" className="flex flex-wrap gap-2 px-0.5 pt-0.5">
+        <div data-slot="composer-attachments" className="flex flex-wrap gap-2 px-0.5 pt-0.5 pb-1.5">
           {attachments}
         </div>
       ) : null}

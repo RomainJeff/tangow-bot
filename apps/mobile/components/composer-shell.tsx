@@ -249,8 +249,10 @@ function createComposerShellStyles() {
     attachmentsRow: {
       flexDirection: "row",
       gap: 8,
-      paddingHorizontal: 8,
-      paddingTop: 8,
+      paddingHorizontal: 10,
+      // Air on both sides: a preview or an attachment never touches the text below it.
+      paddingTop: 10,
+      paddingBottom: 10,
     },
     fieldRow: {
       flexDirection: "row",
