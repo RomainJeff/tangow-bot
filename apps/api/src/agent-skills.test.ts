@@ -195,6 +195,7 @@ describe("agent skills service (filesystem)", () => {
     expect((await skills.list(actor)).map((s) => s.id)).toEqual([
       "builtin:delegate-to-opencode",
       "builtin:Interrogate",
+      "builtin:Skill-authoring",
       "user:deploy",
     ]);
 

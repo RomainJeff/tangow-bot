@@ -211,7 +211,11 @@ describe("skill tools", () => {
       update: {},
     });
     const records = await listAgentSkillRecords(deps, { ...owner, botId: "bot-1" });
-    expect(records.map((r) => r.name)).toEqual(["delegate-to-opencode", "Interrogate"]);
+    expect(records.map((r) => r.name)).toEqual([
+      "delegate-to-opencode",
+      "Interrogate",
+      "Skill-authoring",
+    ]);
   });
 
   it("ships builtin skills as valid, readable, read-only SKILL.md records", async () => {
@@ -366,6 +370,7 @@ describe("skill tools", () => {
     expect(forA.map((s) => s.name)).toEqual([
       "delegate-to-opencode",
       "Interrogate",
+      "Skill-authoring",
       "Everyone",
       "Only bot A",
     ]);
@@ -373,11 +378,12 @@ describe("skill tools", () => {
     expect(forB.map((s) => s.name)).toEqual([
       "delegate-to-opencode",
       "Interrogate",
+      "Skill-authoring",
       "Everyone",
       "Not for A",
     ]);
     const all = await listAgentSkillRecords(deps, scope);
-    expect(all).toHaveLength(5);
+    expect(all).toHaveLength(6);
     // skill_read follows the same visibility.
     expect(
       await skillReadFromTool(deps, { ...scope, botId: "botB" }, { name: "Only bot A" }),
@@ -467,10 +473,10 @@ describe("skill tools", () => {
     // The exclusion semantics survive the rename: only botA sees it.
     expect(
       (await listAgentSkillRecords(deps, { ...owner, botId: "botA" })).map((s) => s.name),
-    ).toEqual(["delegate-to-opencode", "Interrogate", "New"]);
+    ).toEqual(["delegate-to-opencode", "Interrogate", "Skill-authoring", "New"]);
     expect(
       (await listAgentSkillRecords(deps, { ...owner, botId: "botB" })).map((s) => s.name),
-    ).toEqual(["delegate-to-opencode", "Interrogate"]);
+    ).toEqual(["delegate-to-opencode", "Interrogate", "Skill-authoring"]);
 
     expect(await skillDeleteFromTool(deps, owner, { name: "New" })).toEqual({
       ok: true,
