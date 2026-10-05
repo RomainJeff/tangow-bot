@@ -17,10 +17,6 @@ msgstr ""
 msgid " (unread)"
 msgstr "（未读）"
 
-#: src/components/AgentSteps.tsx:99
-msgid "(empty)"
-msgstr "（空）"
-
 #. placeholder {0}: group.entries.length
 #: src/pages/ModelSettingsOverlay.tsx:435
 msgid "{0, plural, one {# model} other {# models}}"

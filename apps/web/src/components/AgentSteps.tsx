@@ -75,8 +75,9 @@ export function AgentSteps({ block, live = false }: { block: StepsBlock; live?: 
           {openCall ? (
             openCall.input || openCall.output ? (
               <>
-                <StepPayload label={t`Input`} value={openCall.input} />
-                <StepPayload label={t`Output`} value={openCall.output} />
+                {/* A native harness's action carries its input only; no empty Output block. */}
+                {openCall.input ? <StepPayload label={t`Input`} value={openCall.input} /> : null}
+                {openCall.output ? <StepPayload label={t`Output`} value={openCall.output} /> : null}
               </>
             ) : (
               <p className="mt-3 text-label text-muted-foreground/80">
@@ -91,12 +92,11 @@ export function AgentSteps({ block, live = false }: { block: StepsBlock; live?: 
 }
 
 function StepPayload({ label, value }: { label: string; value: string }) {
-  const { t } = useLingui();
   return (
     <div className="mt-3">
       <p className="text-label text-muted-foreground/80">{label}</p>
       <pre className="rk-scroll mt-1 max-h-64 overflow-auto rounded-row bg-muted px-3 py-2 text-mono leading-[1.5] whitespace-pre-wrap text-foreground/90">
-        <code>{value || t`(empty)`}</code>
+        <code>{value}</code>
       </pre>
     </div>
   );
