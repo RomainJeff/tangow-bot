@@ -275,7 +275,10 @@ describe("link preview fetch: request and response rules (injected client)", () 
 
   it.each([
     [404, "http_error"],
-    [403, "http_error"],
+    [401, "access_denied"],
+    [402, "access_denied"],
+    [403, "access_denied"],
+    [451, "access_denied"],
     [410, "http_error"],
     [408, "server_error"],
     [429, "rate_limited"],

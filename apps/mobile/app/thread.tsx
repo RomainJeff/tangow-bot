@@ -1884,7 +1884,7 @@ function Thread() {
               {
                 name: "removeLinkPreview",
                 text: t("Remove preview"),
-                icon: { ios: "link.badge.minus", android: "unlink-outline" } as const,
+                icon: { ios: "eye.slash", android: "eye-off-outline" } as const,
                 onPress: () => void removeLinkPreview(message),
               },
             ]

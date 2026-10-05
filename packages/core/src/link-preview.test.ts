@@ -9,6 +9,7 @@ import {
   messageHostsLinkPreview,
   normalizePreviewUrl,
   previewSiteLabel,
+  previewTitleFromUrl,
   sanitizePreviewTitle,
 } from "./link-preview.js";
 import { isNarrationMessage, isUserNarrationMessage } from "./message-grouping.js";
@@ -329,5 +330,45 @@ describe("messageHostsLinkPreview", () => {
 
   it("ignores values that are not blocks", () => {
     expect(messageHostsLinkPreview({ role: "bot", blocks: [null, 3, "x", {}] })).toBe(true);
+  });
+});
+
+describe("previewTitleFromUrl (CA 73, 75)", () => {
+  it.each([
+    [
+      "https://www.lemonde.fr/international/article/2026/10/05/a-kiev-une-atmosphere-de-guerre-permanente-l-ennemi-est-en-train-de-detruire-la-ville_6788472_3210.html",
+      "A kiev une atmosphere de guerre permanente l ennemi est en train de detruire la ville",
+    ],
+    ["https://a.tld/news/some-story-title-12345", "Some story title"],
+    ["https://a.tld/news/some_story_title_123", "Some story title"],
+    ["https://a.tld/news/some-story.php?id=3#x", "Some story"],
+    ["https://a.tld/news/some-story.HTM", "Some story"],
+    ["https://a.tld/news/Un-%C3%A9t%C3%A9-en-Gr%C3%A8ce/", "Un été en Grèce"],
+    ["https://a.tld/news/%E0%A4-bad-escape", "%E0%A4 bad escape"],
+    ["https://a.tld/news/été-en-grèce", "Été en grèce"],
+    ["https://a.tld/a/b//two-words//", "Two words"],
+  ])("%s gives %s", (url, title) => {
+    expect(previewTitleFromUrl(url)).toBe(title);
+  });
+
+  it.each([
+    "https://a.tld/",
+    "https://a.tld",
+    "https://a.tld/politique",
+    "https://a.tld/politique.html",
+    "https://a.tld/article/6788472_3210",
+    "https://a.tld/article/12345",
+    "https://a.tld/2026-10-05",
+    "https://a.tld/a-1",
+    "https://a.tld/12-34-56",
+    "not a url",
+  ])("gives no title for %s", (url) => {
+    expect(previewTitleFromUrl(url)).toBeNull();
+  });
+
+  it("sanitizes what the address decodes to and caps its length", () => {
+    expect(previewTitleFromUrl("https://a.tld/pay%E2%80%AEevil-now")).toBe("Payevil now");
+    const long = `https://a.tld/${"word-".repeat(200)}end`;
+    expect(previewTitleFromUrl(long)?.length).toBeLessThanOrEqual(300);
   });
 });

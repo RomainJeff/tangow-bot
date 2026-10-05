@@ -171,7 +171,12 @@ describe("readLinkPreview: failures are classified", () => {
       "unsupported_type",
     ],
     ["a 404", () => new Response("no", { status: 404 }), "http_error"],
-    ["a 403", () => new Response("no", { status: 403 }), "http_error"],
+    ["a 410", () => new Response("no", { status: 410 }), "http_error"],
+    [
+      "a refusal with a one-word address",
+      () => new Response("no", { status: 403 }),
+      "access_denied",
+    ],
     ["a broken direct image", () => imageResponse(new Uint8Array([9, 9, 9])), "unsupported_type"],
     [
       "an SVG",
@@ -505,5 +510,175 @@ describe("readLinkPreview: site icon fallback (CA 61-63)", () => {
       );
       expect(await readLinkPreview(ARTICLE, d)).toMatchObject({ ok: false, transient: true });
     });
+  });
+});
+
+describe("readLinkPreview: a site that refuses the reader (CA 73-76)", () => {
+  const SLUG =
+    "/international/article/2026/10/05/a-kiev-une-atmosphere-de-guerre-permanente-l-ennemi-est-en-train-de-detruire-la-ville_6788472_3210.html";
+  const CLOSED = `https://www.monde.example.test${SLUG}`;
+  const HOME = "https://www.monde.example.test/";
+  const TITLE =
+    "A kiev une atmosphere de guerre permanente l ennemi est en train de detruire la ville";
+  const refusal = (status = 402) =>
+    new Response("<head><title>Accès restreint</title></head>", {
+      status,
+      headers: { "content-type": "text/html" },
+    });
+  const home = (links = `<link rel="apple-touch-icon" sizes="180x180" href="/touch.png">`) =>
+    page(`<head><title>Home</title>${links}</head><body>x</body>`);
+
+  it("draws a compact card from the address, with the icon read on the home page", async () => {
+    const icon = await png(180, 180);
+    const { deps: d, requests } = deps((url) =>
+      url === CLOSED ? refusal() : url === HOME ? home() : imageResponse(icon),
+    );
+    const result = await readLinkPreview(CLOSED, d);
+    expect(result).toMatchObject({
+      ok: true,
+      format: "compact",
+      title: TITLE,
+      imageFit: "contain",
+      image: { width: 180, height: 180 },
+    });
+    expect(requests).toEqual([CLOSED, HOME, "https://www.monde.example.test/touch.png"]);
+  });
+
+  it.each([401, 402, 403, 451])("does it for a %i", async (status) => {
+    const { deps: d } = deps((url) => (url === CLOSED ? refusal(status) : home("")));
+    expect(await readLinkPreview(CLOSED, d)).toEqual({ ok: true, format: "compact", title: TITLE });
+  });
+
+  it("never shows the title of the refusal page", async () => {
+    const icon = await png(180, 180);
+    const { deps: d } = deps((url) =>
+      url === CLOSED ? refusal() : url === HOME ? home() : imageResponse(icon),
+    );
+    const result = await readLinkPreview(CLOSED, d);
+    expect(JSON.stringify(result)).not.toMatch(/restreint/i);
+  });
+
+  it("gives a card without icon when the home page fails too", async () => {
+    for (const failing of [
+      () => new Response("gone", { status: 404 }),
+      () => new Response("blocked", { status: 402 }),
+      () => new Response("down", { status: 503 }),
+      () => Response.redirect("http://127.0.0.1/", 302),
+      () => page("<head><title>Home</title></head>"),
+    ]) {
+      const { deps: d, requests } = deps((url) => (url === CLOSED ? refusal() : failing()));
+      expect(await readLinkPreview(CLOSED, d)).toEqual({
+        ok: true,
+        format: "compact",
+        title: TITLE,
+      });
+      expect(requests).toEqual([CLOSED, HOME]);
+    }
+  });
+
+  it("gives a card without icon when the icon cannot be used", async () => {
+    const { deps: d } = deps((url) =>
+      url === CLOSED ? refusal() : url === HOME ? home() : new Response("gone", { status: 404 }),
+    );
+    expect(await readLinkPreview(CLOSED, d)).toEqual({ ok: true, format: "compact", title: TITLE });
+  });
+
+  it("uses only the icon rules: no SVG, no guessed favicon", async () => {
+    const { deps: d, requests } = deps((url) =>
+      url === CLOSED ? refusal() : home(`<link rel="icon" sizes="any" href="/i.svg">`),
+    );
+    expect(await readLinkPreview(CLOSED, d)).toEqual({ ok: true, format: "compact", title: TITLE });
+    expect(requests).toEqual([CLOSED, HOME]);
+  });
+
+  it("reads no home page and no icon when too little of the job's budget remains", async () => {
+    const { deps: d, requests } = deps(() => refusal(), { deadlineAt: Date.now() + 2_000 });
+    expect(await readLinkPreview(CLOSED, d)).toEqual({
+      ok: false,
+      reason: "timeout",
+      transient: true,
+    });
+    expect(requests).toEqual([CLOSED]);
+  });
+
+  it("reads no icon when the home page used up the budget", async () => {
+    const realNow = Date.now.bind(Date);
+    let skew = 0;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + skew);
+    try {
+      const { deps: d, requests } = deps(
+        (url) => {
+          if (url === HOME) skew = 8_000;
+          return url === CLOSED ? refusal() : home();
+        },
+        { deadlineAt: realNow() + 10_000 },
+      );
+      expect(await readLinkPreview(CLOSED, d)).toEqual({
+        ok: false,
+        reason: "timeout",
+        transient: true,
+      });
+      expect(requests).toEqual([CLOSED, HOME]);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it.each([
+    ["a one-word address", "https://news.example.test/politique"],
+    ["a numeric address", "https://news.example.test/article/6788472_3210"],
+    ["a date", "https://news.example.test/2026/10/05/"],
+    ["no path", "https://news.example.test/"],
+  ])("makes no card for %s, and reads nothing more", async (_name, url) => {
+    const { deps: d, requests } = deps(() => refusal());
+    expect(await readLinkPreview(url, d)).toEqual({
+      ok: false,
+      reason: "access_denied",
+      transient: false,
+    });
+    expect(requests).toEqual([url]);
+  });
+
+  it.each([
+    ["a 404", () => new Response("no", { status: 404 }), "http_error", false],
+    ["a 410", () => new Response("no", { status: 410 }), "http_error", false],
+    ["a 500", () => new Response("no", { status: 500 }), "server_error", true],
+    ["a 503", () => new Response("no", { status: 503 }), "server_error", true],
+    ["a 429", () => new Response("no", { status: 429 }), "rate_limited", true],
+  ] as const)("makes no fallback card for %s", async (_name, route, reason, transient) => {
+    const { deps: d, requests } = deps(route);
+    expect(await readLinkPreview(CLOSED, d)).toEqual({ ok: false, reason, transient });
+    expect(requests).toEqual([CLOSED]);
+  });
+
+  it("makes no fallback card for a login page or a blocked address", async () => {
+    const loginUrl = "https://login.monde.example.test/article/some-long-title-here";
+    const login = deps(() => refusal());
+    expect(await readLinkPreview(loginUrl, login.deps)).toMatchObject({
+      ok: false,
+      reason: "login_page",
+    });
+    expect(login.requests).toEqual([]);
+    const redirected = deps((url) =>
+      url === CLOSED ? Response.redirect("https://monde.example.test/sso", 302) : refusal(),
+    );
+    expect(await readLinkPreview(CLOSED, redirected.deps)).toMatchObject({
+      ok: false,
+      reason: "login_page",
+    });
+    const blocked = deps(() => refusal());
+    expect(
+      await readLinkPreview("http://127.0.0.1/some-long-title-here", blocked.deps),
+    ).toMatchObject({ ok: false, reason: "blocked_address" });
+    expect(blocked.requests).toEqual([]);
+  });
+
+  it("keeps its own user agent on every request", async () => {
+    const { deps: d, fetchMock } = deps((url) => (url === CLOSED ? refusal() : home("")));
+    await readLinkPreview(CLOSED, d);
+    for (const [, init] of fetchMock.mock.calls) {
+      const headers = init?.headers as Record<string, string>;
+      expect(headers["user-agent"]).toMatch(/RakazoLinkPreview/);
+    }
   });
 });

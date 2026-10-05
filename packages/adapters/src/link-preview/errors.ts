@@ -6,6 +6,7 @@ export type LinkPreviewFailureReason =
   | "login_page"
   | "too_many_redirects"
   | "http_error"
+  | "access_denied"
   | "unsupported_type"
   | "too_large"
   | "tls_error"

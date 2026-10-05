@@ -24,6 +24,8 @@ const DNS_TIMEOUT_MS = 3_000;
 /** The longest the token waits for the HTTP client to close its sockets. */
 const TEARDOWN_WAIT_MS = 1_000;
 const HEAD_END = "</head";
+/** Unauthorized, payment required, forbidden, unavailable for legal reasons. */
+const ACCESS_DENIED_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 451]);
 const ACCEPTED_ENCODINGS = new Set(["", "identity", "gzip", "x-gzip", "deflate", "br"]);
 const TLS_ERROR_CODE = /^(ERR_TLS|ERR_SSL)|CERT|SELF_SIGNED|^UNABLE_TO_(VERIFY|GET)/;
 
@@ -230,6 +232,11 @@ async function readResource(
     if (response.status === 429) throw new LinkPreviewError("rate_limited");
     if (response.status === 408 || response.status >= 500)
       throw new LinkPreviewError("server_error");
+    // A site that refuses an unknown reader (paywall, bot wall): the page is not read, but the
+    // caller may still draw a card from the address. Only the page: a refused image is just missing.
+    if (mode === "page" && ACCESS_DENIED_STATUSES.has(response.status)) {
+      throw new LinkPreviewError("access_denied");
+    }
     throw new LinkPreviewError("http_error");
   }
   const encodings = (response.headers.get("content-encoding") ?? "")
