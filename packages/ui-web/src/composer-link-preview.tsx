@@ -42,7 +42,7 @@ export function ComposerLinkPreview({
     <div
       data-slot="composer-link-preview"
       data-state={loading ? "loading" : "ready"}
-      className={cn("relative flex-none", className)}
+      className={cn("relative min-w-0 max-w-full", className)}
       {...props}
     >
       <div className="flex h-composer-attachment-thumb max-w-link-card items-center gap-2.5 rounded-card bg-background p-1 pe-3">

@@ -1,6 +1,7 @@
 import { setupI18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import { ComposerLinkPreview, ComposerShell } from "@rakazo/ui-web";
 import { createRoot } from "react-dom/client";
 import { placeHoverPill } from "../../src/pages/shell/hover-pill-placement";
 import {
@@ -140,6 +141,18 @@ createRoot(document.getElementById("root")!).render(
       {MESSAGES.map((entry) => (
         <Row key={entry.id} message={entry} />
       ))}
+      <ComposerShell
+        data-testid="composer-bar"
+        attachments={
+          <ComposerLinkPreview
+            site="lefigaro.fr"
+            title="J'ai eu peur je suis rentre chez moi la colere et l'inquietude des eleves et leurs parents face aux violences devant les lycees"
+            removeLabel="Remove preview"
+          />
+        }
+      >
+        <div className="min-h-9" />
+      </ComposerShell>
     </main>
   </I18nProvider>,
 );
