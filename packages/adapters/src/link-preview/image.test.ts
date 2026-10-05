@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { crc32, deflateSync } from "node:zlib";
 import sharp from "sharp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LinkPreviewError, type LinkPreviewFailureReason } from "./errors.js";
 import {
   createThumbnailDataUrl,
@@ -208,6 +208,60 @@ describe("encodePreviewImage", () => {
     );
     expect(workEnded).toBe(false);
     expect(await semaphore.run(async () => workEnded)).toBe(true);
+  });
+
+  it("starts the encode clock once a slot is held, not while waiting for one", async () => {
+    vi.useFakeTimers();
+    try {
+      const semaphore = createSemaphore(1);
+      let release = () => {};
+      const holder = semaphore.run(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      );
+      const png = await solid(10, 10).png().toBuffer();
+      const encoded = encodePreviewImage(png, { timeoutMs: 1_000, semaphore });
+      // Queued for 900 ms of the 1 s budget, then 200 ms more once the slot frees: over 1 s in
+      // all, yet within budget for the wait and for the encode each.
+      await vi.advanceTimersByTimeAsync(900);
+      release();
+      await holder;
+      await vi.advanceTimersByTimeAsync(200);
+      vi.useRealTimers();
+      expect((await encoded).bytes.length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never starts the work of a caller that gave up while queued", async () => {
+    const semaphore = createSemaphore(1);
+    let release = () => {};
+    const holder = semaphore.run(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    let inSlot: Promise<unknown> | undefined;
+    const watched: Semaphore = {
+      run: (work) =>
+        semaphore.run(async () => {
+          inSlot = work();
+          return inSlot;
+        }),
+    };
+    const png = await solid(10, 10).png().toBuffer();
+    expect(await reasonOf(encodePreviewImage(png, { timeoutMs: 20, semaphore: watched }))).toBe(
+      "timeout",
+    );
+    release();
+    await holder;
+    // The abandoned work got the slot, found it was given up on and gave it back without encoding.
+    expect(await semaphore.run(async () => "free")).toBe("free");
+    expect(await reasonOf(inSlot as Promise<unknown>)).toBe("timeout");
   });
 
   it("times out when no slot ever frees up", async () => {

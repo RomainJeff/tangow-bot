@@ -77,30 +77,51 @@ export async function createThumbnailDataUrl(
 
 type Sharp = typeof sharpModule;
 
-/** Holds an encode slot until the work really ends, even when the caller gave up on the timeout. */
+/**
+ * Two bounds of `timeoutMs` each: the wait for an encode slot, then the encode itself, whose clock
+ * starts only once a slot is held (a burst of queued encodes must not time out on each other's
+ * work). A caller that gives up while queued leaves nothing behind: its work never starts. One that
+ * gives up mid-encode keeps the slot until the work really ends.
+ */
 async function runEncode<T>(
   options: ImageEncodeOptions,
   work: (sharp: Sharp) => Promise<T>,
 ): Promise<T> {
   const semaphore = options.semaphore ?? processEncodeSemaphore;
-  const job = semaphore.run(async () => work((await import("sharp")).default));
-  // The race below can abandon `job`: its rejection must not go unhandled.
+  const timeoutMs = options.timeoutMs ?? IMAGE_ENCODE_TIMEOUT_MS;
+  let abandoned = false;
+  let acquired = () => {};
+  const slot = new Promise<void>((resolve) => {
+    acquired = resolve;
+  });
+  const job = semaphore.run(async () => {
+    if (abandoned) throw new LinkPreviewError("timeout");
+    acquired();
+    return work((await import("sharp")).default);
+  });
+  // The races below can abandon `job`: its rejection must not go unhandled.
   job.catch(() => undefined);
-  let timer: NodeJS.Timeout | undefined;
+  const timers: NodeJS.Timeout[] = [];
+  const deadline = () =>
+    new Promise<never>((_, reject) => {
+      timers.push(setTimeout(() => reject(new LinkPreviewError("timeout")), timeoutMs));
+    });
   try {
+    try {
+      await Promise.race([slot, deadline()]);
+    } catch (error) {
+      abandoned = true;
+      throw error;
+    }
+    for (const timer of timers.splice(0)) clearTimeout(timer);
     return await Promise.race([
       job.catch((error: unknown) => {
         throw toImageError(error);
       }),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new LinkPreviewError("timeout")),
-          options.timeoutMs ?? IMAGE_ENCODE_TIMEOUT_MS,
-        );
-      }),
+      deadline(),
     ]);
   } finally {
-    clearTimeout(timer);
+    for (const timer of timers) clearTimeout(timer);
   }
 }
 
