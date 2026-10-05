@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
 import {
   buildSkillMd,
   formatSkillsCatalogInstruction,
@@ -9,10 +10,12 @@ import {
 } from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BUILTIN_SKILLS_ROOT, loadBuiltinSkills } from "./builtin-skills.js";
+import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { marketplacesRoot } from "./marketplace-store.js";
 import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 import {
   listAgentSkillRecords,
+  readSkillDraft,
   type SkillToolDeps,
   skillCreateFromTool,
   skillDeleteFromTool,
@@ -555,5 +558,124 @@ describe("skill tools", () => {
     expect(await skillUpdateFromTool(deps, owner, { skillId: mktId, body: "x" })).toEqual(readOnly);
     expect(await skillDeleteFromTool(deps, owner, { skillId: mktId })).toEqual(readOnly);
     expect(await ids(owner)).toEqual(["user:mine", mktId]);
+  });
+});
+
+describe("skill drafts", () => {
+  const context = {
+    operationId: "op",
+    traceId: "trace",
+    spaceId: "w1",
+    userId: "u1",
+    signal: new AbortController().signal,
+  };
+  const text = (value: string) => new TextEncoder().encode(value);
+  const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+
+  async function draftBox(files: Record<string, string | { content: string; executable: true }>) {
+    const sandbox = new FakeSandboxProvider();
+    const computer = await sandbox.provision({ botId: "botA", homePath: "/home" }, context);
+    const box = sandbox.boxes.get(computer.id);
+    for (const [file, value] of Object.entries(files)) {
+      box?.files.set(
+        file,
+        typeof value === "string"
+          ? { content: text(value), executable: false }
+          : { content: text(value.content), executable: true },
+      );
+    }
+    return { sandbox, computer };
+  }
+
+  it("walks nested folders and returns paths relative to the draft", async () => {
+    const { sandbox, computer } = await draftBox({
+      "skill-drafts/deploy/SKILL.md": "md",
+      "skill-drafts/deploy/scripts/run.sh": { content: "echo hi", executable: true },
+      "skill-drafts/deploy/references/api/notes.md": "notes",
+      "skill-drafts/other/SKILL.md": "not this one",
+    });
+    const files = await readSkillDraft(sandbox, computer, "/skill-drafts/deploy", context);
+    if ("error" in files) throw new Error(files.error);
+    expect(files.map((f) => [f.path, decode(f.bytes), f.executable])).toEqual([
+      ["references/api/notes.md", "notes", false],
+      ["scripts/run.sh", "echo hi", true],
+      ["SKILL.md", "md", false],
+    ]);
+  });
+
+  it("refuses an oversized draft before reading any file", async () => {
+    const { sandbox, computer } = await draftBox(
+      Object.fromEntries([
+        ["d/SKILL.md", "md"],
+        ...Array.from({ length: SKILL_BUNDLE_MAX_ENTRIES }, (_, i) => [`d/f/${i}.txt`, "x"]),
+      ]),
+    );
+    const readFile = vi.spyOn(sandbox, "readFile");
+    expect(await readSkillDraft(sandbox, computer, "d", context)).toEqual({
+      error: `Skill folder has too many entries (> ${SKILL_BUNDLE_MAX_ENTRIES}).`,
+    });
+    expect(readFile.mock.calls).toEqual([]);
+  });
+
+  it("asks for a SKILL.md when the folder is missing or has none", async () => {
+    const { sandbox, computer } = await draftBox({ "d/notes.md": "n" });
+    const error = { error: "No SKILL.md at the root of the skill folder." };
+    expect(await readSkillDraft(sandbox, computer, "d", context)).toEqual(error);
+    expect(await readSkillDraft(sandbox, computer, "missing", context)).toEqual(error);
+  });
+
+  describe("skill_create with files", () => {
+    let dataDir: string;
+    let prisma: ReturnType<typeof makePrisma>;
+    let deps: SkillToolDeps;
+    beforeEach(async () => {
+      prisma = makePrisma();
+      dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-drafts-"));
+      deps = { prisma: prisma as never, dataDir };
+    });
+    afterEach(async () => {
+      await rm(dataDir, { recursive: true, force: true });
+    });
+    const creator = { spaceId: "w1", userId: "u1", botId: "botA" };
+    const skillMd = buildSkillMd({ name: "Deploy", description: "Ship it", body: "1. Run." });
+    const draft = [
+      { path: "SKILL.md", bytes: text(skillMd), executable: false },
+      { path: "scripts/run.sh", bytes: text("echo hi"), executable: true },
+    ];
+
+    it("saves the folder as a skill scoped to the creating bot", async () => {
+      expect(await skillCreateFromTool(deps, creator, { files: draft })).toMatchObject({
+        ok: true,
+        id: "user:deploy",
+        name: "Deploy",
+        description: "Ship it",
+      });
+      const dir = path.join(userSkillsRoot(dataDir, creator), "deploy");
+      expect(await readFile(path.join(dir, "scripts/run.sh"), "utf8")).toBe("echo hi");
+      expect((await stat(path.join(dir, "scripts/run.sh"))).mode & 0o111).toBe(0o111);
+      expect(
+        await prisma.skillSetting.findMany({ where: { skillKey: "user:deploy" } }),
+      ).toMatchObject([{ spaceId: "w1", userId: "u1", availability: "selected" }]);
+      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:deploy" } })).toMatchObject([
+        { spaceId: "w1", userId: "u1", botId: "botA", enabled: true },
+      ]);
+      expect((await skillReadFromTool(deps, creator, { name: "Deploy" })).content).toBe(skillMd);
+      expect(
+        await skillReadFromTool(deps, { ...creator, botId: "botB" }, { name: "Deploy" }),
+      ).toEqual({ error: "Skill not found." });
+      expect(await skillCreateFromTool(deps, creator, { files: draft })).toEqual({
+        error: 'A skill named "Deploy" already exists.',
+      });
+    });
+
+    it("rejects files combined with content and a draft without SKILL.md", async () => {
+      expect(await skillCreateFromTool(deps, creator, { files: draft, content: skillMd })).toEqual({
+        error: "Pass either path or name/description/body/content, not both.",
+      });
+      expect(await skillCreateFromTool(deps, creator, { files: draft.slice(1) })).toEqual({
+        error: "No SKILL.md at the root of the skill folder.",
+      });
+      expect(await listUserSkills(userSkillsRoot(dataDir, creator))).toEqual([]);
+    });
   });
 });
