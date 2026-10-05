@@ -235,7 +235,10 @@ export function reduceLiveMessageBlocks(
             ...(pendingToolNames.length > 0 ? { pendingToolNames } : {}),
           },
         ]
-      : [...kept];
+      : pendingToolNames.reduce<MessageBlock[]>(
+          (next, name) => appendToolCallSegment(next, name),
+          [...kept],
+        );
   }
   const priorText = liveMessageText(blocks);
   const flushedLength =

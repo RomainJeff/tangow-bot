@@ -7,6 +7,7 @@ import {
   buildBotMessageWakePrompt,
   clampBotMessage,
   nextBotMessageHop,
+  openRequestTo,
   repliesToOwnRequest,
   resolveBotAddress,
 } from "@rakazo/core";
@@ -34,6 +35,26 @@ export async function currentBotMessageHop(
   });
   const blocks = Array.isArray(source?.blocks) ? (source.blocks as MessageBlock[]) : [];
   return botMessageContext(blocks)?.hop ?? 0;
+}
+
+/** How many of the recipient's latest messages to search for a request it still waits on. */
+const OPEN_REQUEST_LOOKBACK = 100;
+
+async function findOpenRequest(prisma: PrismaClient, threadId: string, peerId: string) {
+  const recent = await prisma.message.findMany({
+    where: { threadId },
+    orderBy: { seq: "desc" },
+    take: OPEN_REQUEST_LOOKBACK,
+    select: { id: true, replyToMessageId: true, blocks: true },
+  });
+  return openRequestTo(
+    recent.map(({ id, replyToMessageId, blocks }) => ({
+      id,
+      replyToMessageId,
+      blocks: Array.isArray(blocks) ? (blocks as MessageBlock[]) : [],
+    })),
+    peerId,
+  );
 }
 
 export async function loadBotMessageContext(
@@ -131,13 +152,23 @@ export async function messageBot(
       note: `Already sent to ${target.name} in this turn; it was not sent again.`,
     }) as const;
 
-  // Mirrors repliesToOwnRequest on the recipient's side: this run was woken by the target's own
-  // request or question, so what it sends back is that answer, not something volunteered.
-  const repliesToRequest =
+  // Mirrors repliesToOwnRequest on the recipient's side. A result or status answers the target's
+  // request when this run was woken by it, or, for a chained delegation or a later steering run,
+  // when the target still has an open request to this sender in its own chat.
+  const answersSourceRequest =
     sourceContext?.fromBotId === target.id &&
     (sourceContext.intent === undefined ||
       sourceContext.intent === "request" ||
       sourceContext.intent === "question");
+  const inheritedReplyTo =
+    sourceContext?.fromBotId === target.id && intent !== "fyi"
+      ? sourceContext.returnToMessageId
+      : undefined;
+  const openRequestId =
+    (intent === "result" || intent === "status") && !answersSourceRequest && !inheritedReplyTo
+      ? await findOpenRequest(deps.prisma, targetThreadId, sender.id)
+      : undefined;
+  const repliesToRequest = answersSourceRequest || openRequestId !== undefined;
   const wakePrompt = buildBotMessageWakePrompt({
     from: sender,
     text: message,
@@ -234,10 +265,7 @@ export async function messageBot(
           threadId: targetThreadId,
           role: "user",
           blocks: [inboundBlock],
-          replyToMessageId:
-            sourceContext?.fromBotId === target.id && intent !== "fyi"
-              ? sourceContext.returnToMessageId
-              : undefined,
+          replyToMessageId: inheritedReplyTo ?? openRequestId,
           clientNonce: deliveryKey,
           markUnread: true,
         });

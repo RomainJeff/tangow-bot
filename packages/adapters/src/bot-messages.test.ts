@@ -1,3 +1,4 @@
+import { botMessageAllowsSilence } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -21,6 +22,8 @@ const sender = { id: "bot-sender", name: "Researcher" };
 function deps(
   options: {
     bots?: unknown[];
+    /** The target's own chat, newest first, as the open-request lookup reads it. */
+    targetMessages?: unknown[];
     hopBlocks?: unknown[];
     senderRunning?: boolean;
     alreadyDelivered?: unknown;
@@ -71,7 +74,10 @@ function deps(
           ],
         ),
     },
-    message: { findUnique: messageFindUnique, findMany: vi.fn().mockResolvedValue([]) },
+    message: {
+      findUnique: messageFindUnique,
+      findMany: vi.fn().mockResolvedValue(options.targetMessages ?? []),
+    },
     run: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     $transaction: vi.fn(async (fn: (client: unknown) => unknown) => {
       transactionAttempts += 1;
@@ -302,6 +308,138 @@ describe("messaging another bot", () => {
         data: expect.objectContaining({ replyToMessageId: undefined }),
       }),
     );
+  });
+
+  describe("a result for a request the target still waits on", () => {
+    const requestToSender = {
+      id: "message-request-a",
+      replyToMessageId: null,
+      blocks: [
+        {
+          kind: "bot_message_sent",
+          toBotId: "bot-sender",
+          toBotName: "Researcher",
+          text: "plan the trip",
+          intent: "request",
+        },
+      ],
+    };
+    // The run was woken by a third bot (A asked B, B asked C, C's result woke this run).
+    const wokenByThirdBot = [
+      {
+        kind: "bot_message_received",
+        fromBotId: "bot-third",
+        fromBotName: "Scout",
+        text: "found three hotels",
+        hop: 2,
+        intent: "result",
+        returnToMessageId: "message-ask-third",
+      },
+    ];
+    const lastCreate = (harness: ReturnType<typeof deps>) =>
+      harness.tx.message.create.mock.calls.at(-1)?.[0] as {
+        data: { replyToMessageId?: string };
+      };
+
+    it("links the result to it after a chained delegation, so it cannot be swallowed", async () => {
+      const harness = deps({
+        hopBlocks: wokenByThirdBot,
+        targetMessages: [requestToSender],
+      });
+      await messageBot(harness.deps, { ...run, sourceMessageId: "message-source" }, sender, {
+        bot_id: "bot-target",
+        message: "three hotels shortlisted",
+        intent: "result",
+      });
+
+      expect(lastCreate(harness).data.replyToMessageId).toBe("message-request-a");
+      expect(harness.tx.task.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            prompt: expect.stringContaining("for work you delegated"),
+          }),
+        }),
+      );
+      // What the target's run then reads back from the linked message.
+      const prisma = {
+        message: {
+          findUnique: vi.fn().mockResolvedValue({
+            blocks: [
+              {
+                kind: "bot_message_received",
+                fromBotId: "bot-sender",
+                fromBotName: "Researcher",
+                text: "three hotels shortlisted",
+                intent: "result",
+              },
+            ],
+            replyTo: { blocks: requestToSender.blocks },
+          }),
+        },
+      } as unknown as PrismaClient;
+      const context = await loadBotMessageContext(prisma, "message-result");
+      expect(botMessageAllowsSilence(context?.intent, context?.repliesToRequest)).toBe(false);
+    });
+
+    it("links a status or result sent from a steering or follow-up run", async () => {
+      for (const intent of ["status", "result"] as const) {
+        const harness = deps({ targetMessages: [requestToSender] });
+        await messageBot(harness.deps, run, sender, {
+          bot_id: "bot-target",
+          message: "update",
+          intent,
+        });
+        expect(lastCreate(harness).data.replyToMessageId).toBe("message-request-a");
+      }
+    });
+
+    it("leaves a volunteered result silent-capable when nothing is open", async () => {
+      const harness = deps({
+        targetMessages: [
+          // Answered already: a later result replied to the request.
+          {
+            id: "message-result-a",
+            replyToMessageId: "message-request-a",
+            blocks: [
+              {
+                kind: "bot_message_received",
+                fromBotId: "bot-sender",
+                fromBotName: "Researcher",
+                text: "done",
+                intent: "result",
+              },
+            ],
+          },
+          requestToSender,
+        ],
+      });
+      await messageBot(harness.deps, run, sender, {
+        bot_id: "bot-target",
+        message: "nothing to report",
+        intent: "result",
+      });
+
+      expect(lastCreate(harness).data.replyToMessageId).toBeUndefined();
+      expect(harness.tx.task.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            prompt: expect.stringContaining("on its own initiative"),
+          }),
+        }),
+      );
+    });
+
+    it("does not link an FYI or a new request to an open request", async () => {
+      for (const intent of ["fyi", "request"] as const) {
+        const harness = deps({ targetMessages: [requestToSender] });
+        await messageBot(harness.deps, run, sender, {
+          bot_id: "bot-target",
+          message: "hello",
+          intent,
+        });
+        expect(lastCreate(harness).data.replyToMessageId).toBeUndefined();
+      }
+    });
   });
 
   it("does not exempt a terminal reply to another terminal reply", async () => {

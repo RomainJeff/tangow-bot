@@ -516,7 +516,15 @@ export type AgentRuntimeEvent =
       progress?: string;
       result?: string;
     }
-  | { type: "done"; text?: string };
+  | {
+      type: "done";
+      text?: string;
+      /**
+       * The run stopped on an empty turn right after a tool turn that also wrote text. That text
+       * is the run's closing words, not a preamble, so a run allowed to say nothing still posts it.
+       */
+      closingNarration?: true;
+    };
 
 export interface AgentRuntimeCapabilities {
   streaming: boolean;

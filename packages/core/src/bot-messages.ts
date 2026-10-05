@@ -68,6 +68,40 @@ export function repliesToOwnRequest(replyToBlocks: readonly MessageBlock[]): boo
 }
 
 /**
+ * The request or question this thread's bot sent to `peerId` that the peer has not answered with
+ * a result yet, newest first, or undefined. Pass the thread's messages newest first. A status
+ * update does not close it: only the peer's `result` does.
+ */
+export function openRequestTo(
+  messagesNewestFirst: readonly {
+    id: string;
+    replyToMessageId?: string | null;
+    blocks: readonly MessageBlock[];
+  }[],
+  peerId: string,
+): string | undefined {
+  const answered = new Set<string>();
+  for (const message of messagesNewestFirst) {
+    const received = botMessageContext(message.blocks);
+    if (
+      received?.fromBotId === peerId &&
+      received.intent === "result" &&
+      message.replyToMessageId
+    ) {
+      answered.add(message.replyToMessageId);
+    }
+    const sentRequest = message.blocks.some(
+      (block) =>
+        block.kind === "bot_message_sent" &&
+        block.toBotId === peerId &&
+        repliesToOwnRequest([block]),
+    );
+    if (sentRequest && !answered.has(message.id)) return message.id;
+  }
+  return undefined;
+}
+
+/**
  * Does a `bot_message` run's own output belong in the bot's conversation with the user?
  *
  * Yes when the run carries back work this bot delegated: the peer sent a `result`/`status`, or is

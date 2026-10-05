@@ -420,6 +420,58 @@ describe("transient narration", () => {
     expect(finalText(blocks)).toBe(TOOL_FINAL_RESPONSE_FALLBACK);
   });
 
+  it("CA4b: the bot's own routine run that writes its report with its last tool call and then stops still posts the report", async () => {
+    const f = fixture({
+      trigger: "routine",
+      parentBotId: null,
+      async *runtimeRun() {
+        yield { type: "text", text: "Two invoices are overdue: ACME and Globex." };
+        yield { type: "tool", name: "remember", args: {}, executionId: "call-1" };
+        yield { type: "done", closingNarration: true };
+      },
+    });
+
+    await f.run();
+
+    expect(userProgressTexts(f.messages)).toEqual(["Two invoices are overdue: ACME and Globex."]);
+    expect(f.finalizeRun).toHaveBeenCalledOnce();
+  });
+
+  it("CA4c: a routine that only narrated before its tool calls, the last of which wrote nothing, posts nothing", async () => {
+    const f = fixture({
+      trigger: "routine",
+      parentBotId: null,
+      async *runtimeRun() {
+        yield { type: "text", text: "I'll check the calendar..." };
+        yield { type: "tool", name: "check_calendar", args: {}, executionId: "call-1" };
+        yield { type: "tool", name: "remember", args: {}, executionId: "call-2" };
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(f.messages).toEqual([]);
+  });
+
+  it("CA4d: a routine posts only the last tool turn's words, not the preamble before it", async () => {
+    const f = fixture({
+      trigger: "routine",
+      parentBotId: null,
+      async *runtimeRun() {
+        yield { type: "text", text: "I'll check the calendar..." };
+        yield { type: "tool", name: "check_calendar", args: {}, executionId: "call-1" };
+        yield { type: "text", text: "Nothing at risk, but the 3pm review moved." };
+        yield { type: "tool", name: "remember", args: {}, executionId: "call-2" };
+        yield { type: "done", closingNarration: true };
+      },
+    });
+
+    await f.run();
+
+    expect(userProgressTexts(f.messages)).toEqual(["Nothing at risk, but the 3pm review moved."]);
+  });
+
   it("CA5: a run not allowed to stay silent that narrates, calls a tool, and gets only the runtime's missing-reply fallback publishes the narration and still posts the fallback", async () => {
     const f = fixture({
       trigger: "user",

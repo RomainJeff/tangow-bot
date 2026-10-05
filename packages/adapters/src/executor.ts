@@ -333,6 +333,7 @@ import {
   finalBlocksAfterMidTurnProgress,
   isProgressMessageTruncated,
   isUserProgressClientNonce,
+  publishesClosingNarrationAtEnd,
   publishesHeldNarrationAtEnd,
   repeatsSentUserText,
   TOOL_FINAL_RESPONSE_FALLBACK,
@@ -1879,6 +1880,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // answers, published when the run pauses for the user (the context for what they are
         // asked), or published at the end when it is all the run said.
         const heldNarration: string[] = [];
+        // The runtime saw the run end right after a tool turn that also wrote text: that last
+        // held narration is the run's closing words rather than a preamble.
+        let closingNarration = false;
         let narrationSetAside = false;
         let deliveredBubbleThisAttempt = false;
         const setAsideMidTurnNarration = () => {
@@ -4420,6 +4424,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 },
               });
             } else if (event.type === "done") {
+              if (event.closingNarration) closingNarration = true;
               if (!assembled && event.text) {
                 if (publishedMidTurnUserMessage || narrationSetAside) {
                   // done.text is cumulative and would bring back narration that was published or
@@ -4502,6 +4507,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             })
           ) {
             // Only what was set aside: the segments now hold the run's own ending, if any.
+            await publishHeldNarration();
+          } else if (publishesClosingNarrationAtEnd({ answered, handedOff, closingNarration })) {
+            // A run that may stay silent still posts the words that came with its last tool
+            // call; the narration before it was only preamble.
+            heldNarration.splice(0, heldNarration.length - 1);
             await publishHeldNarration();
           }
           heldNarration.length = 0;

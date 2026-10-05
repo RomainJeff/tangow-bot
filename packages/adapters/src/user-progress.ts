@@ -141,6 +141,19 @@ export function publishesHeldNarrationAtEnd(run: {
 }
 
 /**
+ * A run that may stay silent drops the narration it set aside, except the words written with its
+ * last tool call when the run then simply stopped: those are its closing words (a routine's report
+ * written alongside a `remember` call), not a preamble like "I'll check the calendar…".
+ */
+export function publishesClosingNarrationAtEnd(run: {
+  answered: boolean;
+  handedOff: boolean;
+  closingNarration: boolean;
+}): boolean {
+  return run.closingNarration && !run.answered && !run.handedOff;
+}
+
+/**
  * What the runtime posts when a run did tool work but never wrote a reply. It is a notice, not
  * something the bot said, so it does not count as the run having answered.
  */
