@@ -1,5 +1,9 @@
 import type { AdapterContext, ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
-import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
+import {
+  SKILL_BUNDLE_MAX_BYTES,
+  SKILL_BUNDLE_MAX_ENTRIES,
+  SKILL_DESCRIPTION_MAX_CHARS,
+} from "@rakazo/contracts";
 import {
   asSkillAvailability,
   buildSkillMd,
@@ -11,6 +15,7 @@ import {
   parseSkillMd,
   SANDBOX_SKILL_MOUNTS,
   type SkillRecord,
+  searchSkills,
   userSkillKey,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
@@ -31,6 +36,7 @@ import {
 
 export const SKILL_TOOL_NAMES = new Set([
   "skill_read",
+  "skill_search",
   "skill_create",
   "skill_update",
   "skill_delete",
@@ -39,7 +45,6 @@ export const SKILL_TOOL_NAMES = new Set([
 /** Match CreateAgentSkillInput / UpdateAgentSkillInput / parseSkillMd bounds. */
 const MAX_SKILL_CONTENT_CHARS = 100_000;
 const MAX_SKILL_NAME_CHARS = 80;
-const MAX_SKILL_DESCRIPTION_CHARS = 2000;
 
 type SkillOwner = {
   spaceId: string;
@@ -99,8 +104,8 @@ function rejectInvalidSkillFields(name: string, description: string): string | u
   if (name.length > MAX_SKILL_NAME_CHARS) {
     return `Skill name must be at most ${MAX_SKILL_NAME_CHARS} characters.`;
   }
-  if (description.length > MAX_SKILL_DESCRIPTION_CHARS) {
-    return `Skill description must be at most ${MAX_SKILL_DESCRIPTION_CHARS} characters.`;
+  if (description.length > SKILL_DESCRIPTION_MAX_CHARS) {
+    return `Skill description must be at most ${SKILL_DESCRIPTION_MAX_CHARS} characters.`;
   }
   return undefined;
 }
@@ -170,6 +175,17 @@ export async function skillReadFromTool(
     content: skill.content,
     dir: sandboxSkillDir(skill),
   };
+}
+
+export async function skillSearchFromTool(
+  deps: SkillToolDeps,
+  owner: SkillOwner,
+  input: { query?: string },
+): Promise<Record<string, unknown>> {
+  const query = input.query?.trim() ?? "";
+  if (!query) return { error: "query is required." };
+  const hits = searchSkills(await listAgentSkillRecords(deps, owner), query);
+  return { skills: hits.map(({ name, description }) => ({ name, description })) };
 }
 
 /**

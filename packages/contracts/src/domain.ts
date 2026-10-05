@@ -538,11 +538,14 @@ export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
 });
 export type AgentSkillCatalogEntry = z.infer<typeof AgentSkillCatalogEntrySchema>;
 
+/** Agent Skills spec bound; every description sits in the prompt catalog on each turn. */
+export const SKILL_DESCRIPTION_MAX_CHARS = 1024;
+
 export const CreateAgentSkillInput = z
   .object({
     content: z.string().min(1).max(100_000).optional(),
     name: z.string().min(1).max(80).optional(),
-    description: z.string().min(1).max(2000).optional(),
+    description: z.string().min(1).max(SKILL_DESCRIPTION_MAX_CHARS).optional(),
     body: z.string().max(100_000).optional(),
   })
   .superRefine((input, ctx) => {
@@ -561,7 +564,7 @@ export const UpdateAgentSkillInput = z
     skillId: Id,
     content: z.string().min(1).max(100_000).optional(),
     name: z.string().min(1).max(80).optional(),
-    description: z.string().min(1).max(2000).optional(),
+    description: z.string().min(1).max(SKILL_DESCRIPTION_MAX_CHARS).optional(),
     body: z.string().max(100_000).optional(),
   })
   .superRefine((input, ctx) => {

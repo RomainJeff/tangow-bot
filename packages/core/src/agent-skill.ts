@@ -1,3 +1,5 @@
+import { SKILL_DESCRIPTION_MAX_CHARS } from "@rakazo/contracts";
+
 /**
  * Claude Agent Skills: reusable SKILL.md recipes shared across assistants.
  * The Pi runtime already understands this format; we persist and inject them.
@@ -82,8 +84,10 @@ export function parseSkillMd(content: string): ParsedSkillMd | { error: string }
   if (!name) return { error: "SKILL.md frontmatter requires name." };
   if (!description) return { error: "SKILL.md frontmatter requires description." };
   if (name.length > 80) return { error: "Skill name must be at most 80 characters." };
-  if (description.length > 2000) {
-    return { error: "Skill description must be at most 2000 characters." };
+  if (description.length > SKILL_DESCRIPTION_MAX_CHARS) {
+    return {
+      error: `Skill description must be at most ${SKILL_DESCRIPTION_MAX_CHARS} characters.`,
+    };
   }
   return { name, description, body, frontmatter };
 }
@@ -100,8 +104,8 @@ export function buildSkillMd(input: {
   if (!name) throw new Error("Skill name is required.");
   if (!description) throw new Error("Skill description is required.");
   if (name.length > 80) throw new Error("Skill name must be at most 80 characters.");
-  if (description.length > 2000) {
-    throw new Error("Skill description must be at most 2000 characters.");
+  if (description.length > SKILL_DESCRIPTION_MAX_CHARS) {
+    throw new Error(`Skill description must be at most ${SKILL_DESCRIPTION_MAX_CHARS} characters.`);
   }
   const merged: Record<string, unknown> = { ...(input.frontmatter ?? {}) };
   merged.name = name;
@@ -121,12 +125,20 @@ export function skillCatalogLine(entry: Pick<SkillCatalogEntry, "name" | "descri
   return `- ${entry.name}: ${entry.description}`;
 }
 
+export const SKILL_CATALOG_MAX_ENTRIES = 50;
+
 export function formatSkillsCatalogInstruction(entries: SkillCatalogEntry[]): string | undefined {
   if (entries.length === 0) return undefined;
-  const lines = entries.slice(0, 50).map(skillCatalogLine).join("\n");
+  const lines = entries.slice(0, SKILL_CATALOG_MAX_ENTRIES).map(skillCatalogLine).join("\n");
+  const hidden = entries.length - SKILL_CATALOG_MAX_ENTRIES;
   return [
     "Available Claude Agent Skills (SKILL.md recipes shared across assistants; generic how-tos, not account-specific routines):",
     lines,
+    ...(hidden > 0
+      ? [
+          `${hidden} more skills are available but not listed. If no listed skill matches the request, call skill_search with keywords before improvising.`,
+        ]
+      : []),
     "When a skill matches the user's request, call skill_read for that name and follow it immediately. Prefer matching skills over improvising multi-step recipes.",
     "Users can force a skill with /Name in the composer. Routines may mention a skill as @Name — that loads the skill at fire time.",
     "Create a skill with skill_create when a multi-step task is worth repeating (or when asked); read the Skill-authoring skill first. After creating one, mention /Name so the user can open it.",
@@ -220,6 +232,37 @@ export function mergeBuiltinSkills<T extends { name: string }>(
   userSkills: readonly T[],
 ): T[] {
   return [...builtins.filter((skill) => !findSkillByName(userSkills, skill.name)), ...userSkills];
+}
+
+const SKILL_SEARCH_LIMIT = 10;
+
+/**
+ * Keyword search over name + description: every query word found counts, name hits count
+ * double. Returns the best matches first, at most SKILL_SEARCH_LIMIT.
+ */
+export function searchSkills<T extends { name: string; description: string }>(
+  skills: readonly T[],
+  query: string,
+): T[] {
+  const words = query
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  if (words.length === 0) return [];
+  return skills
+    .map((skill, index) => {
+      const name = skill.name.toLowerCase();
+      const description = skill.description.toLowerCase();
+      const score = words.reduce(
+        (sum, word) => sum + (name.includes(word) ? 2 : 0) + (description.includes(word) ? 1 : 0),
+        0,
+      );
+      return { skill, score, index };
+    })
+    .filter((hit) => hit.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, SKILL_SEARCH_LIMIT)
+    .map((hit) => hit.skill);
 }
 
 export function findSkillByName<T extends { name: string }>(

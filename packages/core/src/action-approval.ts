@@ -46,6 +46,7 @@ const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "schedule_list",
   "scratchpad_list",
   "skill_read",
+  "skill_search",
   "web_fetch",
   "web_search",
 ]);

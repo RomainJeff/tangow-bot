@@ -14,10 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- A skill description is now limited to 1,024 characters, as in the Agent Skills format, since every description is sent to the bot on each turn.
 - Sign-in, verification, invitation, password-reset and unsubscribe links, and links carrying a token or a presigned signature, no longer get a preview, so your server never opens a single-use link nobody clicked.
 
 #### Fixed
 
+- A bot with more than 50 skills can now find and use the ones missing from its prompt list by searching skills by keywords, instead of never seeing them.
 - A link preview in the composer no longer disappears when you type before the link, fits the message box on a phone-width screen, no longer goes missing when you paste several links quickly in the desktop app, and no longer gives up early on slow sites on iOS.
 
 ### 2026-10-05

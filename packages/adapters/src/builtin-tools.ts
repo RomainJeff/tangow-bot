@@ -672,6 +672,18 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "skill_search",
+    description:
+      "Search all available skills by keywords in their name and description, including those not listed in the catalog. Returns names to pass to skill_read.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Keywords describing the task." },
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "skill_create",
     description:
       "Create a reusable Claude Agent Skill (generic how-to SKILL.md). It is persisted and injected into your prompt; new skills are visible to this agent only until the user shares them with other agents. Use when a multi-step task is worth repeating or the user asks to save a skill. Do not include account names, channels, or inboxes — those belong in a routine. Pass path to save a workspace folder with scripts and references.",

@@ -730,6 +730,7 @@ export function describeToolActivity(toolName: string, args: unknown): string {
   if (toolName === "web_search") return `Searching the web: ${detail(record.query)}`;
   if (toolName === "web_fetch") return `Reading page: ${detail(redactActivityUrl(record.url))}`;
   if (toolName === "skill_read") return `Reading skill: ${detail(record.name)}`;
+  if (toolName === "skill_search") return `Searching skills: ${detail(record.query)}`;
   if (toolName === "skill_create") return `Creating skill: ${detail(record.name ?? "skill")}`;
   if (toolName === "skill_update")
     return `Updating skill: ${detail(record.name ?? record.skillId)}`;

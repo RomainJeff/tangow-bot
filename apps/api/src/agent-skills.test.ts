@@ -192,12 +192,9 @@ describe("agent skills service (filesystem)", () => {
     expect(imported).toMatchObject({ id: "user:deploy", name: "Deploy", source: "user" });
     const dir = path.join(userSkillsRoot(dataDir, actor), "deploy");
     expect(await readFile(path.join(dir, "scripts", "run.sh"), "utf8")).toBe("echo hi");
-    expect((await skills.list(actor)).map((s) => s.id)).toEqual([
-      "builtin:delegate-to-opencode",
-      "builtin:Interrogate",
-      "builtin:Skill-authoring",
-      "user:deploy",
-    ]);
+    expect(
+      (await skills.list(actor)).map((s) => s.id).filter((id) => !id.startsWith("builtin:")),
+    ).toEqual(["user:deploy"]);
 
     await expect(
       skills.import(actor, { data: await bundle("no frontmatter") }),

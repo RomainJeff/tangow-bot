@@ -306,6 +306,7 @@ import {
   skillCreateFromTool,
   skillDeleteFromTool,
   skillReadFromTool,
+  skillSearchFromTool,
   skillUpdateFromTool,
 } from "./skill-tools.js";
 import {
@@ -351,6 +352,7 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "schedule_list",
   "scratchpad_list",
   "skill_read",
+  "skill_search",
   "web_search",
   "web_fetch",
   "browser_snapshot",
@@ -2968,6 +2970,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 name: args.name ? String(args.name) : undefined,
                 skillId: args.skillId ? String(args.skillId) : undefined,
               },
+            );
+          }
+          if (name === "skill_search") {
+            return skillSearchFromTool(
+              skillDeps,
+              { spaceId: run.spaceId, userId: run.userId, botId: run.botId },
+              { query: args.query ? String(args.query) : undefined },
             );
           }
           if (name === "skill_create" || name === "skill_update") {
