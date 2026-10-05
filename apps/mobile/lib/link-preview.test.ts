@@ -117,6 +117,17 @@ describe("cardReplacesBubble", () => {
     ).toBe(true);
   });
 
+  it("keeps the bubble, and its steps, when the row shows steps", () => {
+    const steps = unchecked({ kind: "steps", steps: [] });
+    expect(cardReplacesBubble([steps, text("https://www.example.com/post"), compact], card)).toBe(
+      false,
+    );
+    const reasoning = unchecked({ kind: "reasoning", text: "thinking" });
+    expect(
+      cardReplacesBubble([reasoning, text("https://www.example.com/post"), compact], card),
+    ).toBe(true);
+  });
+
   it("keeps the bubble when a word is added or other content is attached", () => {
     expect(cardReplacesBubble([text("look https://www.example.com/post"), compact], card)).toBe(
       false,

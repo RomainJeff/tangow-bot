@@ -39,12 +39,16 @@ export function openableLinkPreviewUrl(url: string): string | undefined {
   return isPreviewableUrl(url) ? url : undefined;
 }
 
-/** Block kinds that can sit next to a bare link without giving the message a bubble of its own. */
-const CARD_COMPANION_KINDS = new Set<string>(["text", "link_preview", "steps", "reasoning"]);
+/**
+ * Block kinds that can sit next to a bare link without giving the message a bubble of its own.
+ * Reasoning is never drawn; steps are, when shown, so they keep the bubble.
+ */
+const CARD_COMPANION_KINDS = new Set<string>(["text", "link_preview", "reasoning"]);
 
 /**
  * True when the card takes the bubble's place: the message is nothing but this link (bare, in
- * `<>`, or a link labelled with itself) and carries no other visible content.
+ * `<>`, or a link labelled with itself) and carries no other visible content. Pass the blocks the
+ * row draws (`visibleMessageBlocks`), so steps count only when they are shown.
  */
 export function cardReplacesBubble(
   blocks: readonly MessageBlock[],

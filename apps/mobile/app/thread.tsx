@@ -2055,7 +2055,7 @@ function Thread() {
     // link. A message that is itself a card (ask, routine run, ...) never carries one.
     const previewCard = chrome === "row" ? linkPreviewCardOf(message) : undefined;
     const cardReplacesBubbleView = previewCard
-      ? cardReplacesBubble(message.blocks, previewCard)
+      ? cardReplacesBubble(drawnBlocks, previewCard)
       : false;
     const bubble = (
       <MessageBubble
