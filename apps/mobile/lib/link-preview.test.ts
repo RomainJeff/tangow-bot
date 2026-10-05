@@ -54,7 +54,6 @@ describe("linkPreviewCardOf", () => {
       { kind: "ask", text: "Which?", status: "answered" },
       { kind: "routine_run", routineId: "r" },
       { kind: "handoff" },
-      { kind: "cloud_agent" },
       { kind: "mcp_approval" },
       { kind: "choice", text: "Pick" },
     ]) {

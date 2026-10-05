@@ -135,16 +135,6 @@ export function historyCompactJob(threadId: string): BackgroundJob {
   };
 }
 
-}
-
-  availableAt?: Date,
-): BackgroundJob {
-  return {
-    payload,
-    ...(availableAt ? { availableAt } : {}),
-  };
-}
-
 /** Jobs that never share the run workers' slots: they read third-party pages. */
 export const ISOLATED_JOB_NAMES: readonly BackgroundJobName[] = ["link.preview"];
 /** How many link previews one worker process reads at once. */

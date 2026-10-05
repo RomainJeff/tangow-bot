@@ -90,12 +90,6 @@ export function createBackgroundJobHandlers(deps: {
     "skill.teaching-expire": async (payload) => {
       await expireTaughtSkillTeaching(deps, payload.skillId);
     },
-          prisma: deps.prisma,
-          jobs: deps.jobs,
-          events: deps.events,,
-        payload,
-      );
-    },
     "link.preview": async (payload) => {
       if (!deps.artifacts) return;
       await runLinkPreviewJob(

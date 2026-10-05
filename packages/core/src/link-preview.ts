@@ -34,7 +34,6 @@ const PREVIEW_HOST_EXCLUDED_KINDS: ReadonlySet<string> = new Set([
   "routine_run",
   "subagent",
   "child_bot",
-  "cloud_agent",
   "mcp_approval",
 ]);
 

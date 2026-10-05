@@ -405,7 +405,6 @@ describe("messageHostsLinkPreview", () => {
     "routine_run",
     "subagent",
     "child_bot",
-    "cloud_agent",
     "mcp_approval",
   ])("refuses a message that holds a %s block", (kind) => {
     expect(messageHostsLinkPreview({ role: "bot", blocks: blocks({ kind }) })).toBe(false);
