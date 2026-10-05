@@ -1,7 +1,7 @@
 # Office toolchain available on this computer
 
-Everything below runs from the `shell` tool. `launch_app` and `open_path` only accept the
-built-in browser and a terminal: never try to launch LibreOffice or a "Terminal" app.
+Everything below runs from the `shell` tool. Open a document in LibreOffice with `launch_app`
+only when someone needs to see it on screen.
 
 ## Read
 - PDF text: `pdftotext -layout file.pdf -` ; page images: `pdftoppm -png -r 80 file.pdf out`
