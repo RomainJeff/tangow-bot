@@ -12,6 +12,7 @@ function handlers(): BackgroundJobHandlers {
     "skill.teaching-expire": vi.fn(async () => undefined),
     "history.compact": vi.fn(async () => undefined),
     "messaging.deliver": vi.fn(async () => undefined),
+    "link.preview": vi.fn(async () => undefined),
   };
 }
 

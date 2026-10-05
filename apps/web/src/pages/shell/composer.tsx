@@ -1,22 +1,41 @@
 import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import type { AgentSkillCatalogEntry, ThreadMessage } from "@rakazo/contracts";
+import type { AgentSkillCatalogEntry, LinkPreviewDraft, ThreadMessage } from "@rakazo/contracts";
 import { ATTACHMENT_ALLOWED_MIME_TYPES } from "@rakazo/contracts";
 import type { ComposerMention, SlashActionId } from "@rakazo/core";
 import {
+  type ComposerChange,
   clampMentionHighlightIndex,
+  createComposerLinkPreview,
   mentionChipKey,
+  previewSiteLabel,
   resolveMentionPickerKey,
   SLASH_ACTIONS,
   serializeComposerPrompt,
   truncateSlashDescription,
 } from "@rakazo/core";
 import type { ComposerState } from "@rakazo/ui-web";
-import { BotAvatar, Button, ComposerAttachment, ComposerShell, StopContour } from "@rakazo/ui-web";
+import {
+  BotAvatar,
+  Button,
+  ComposerAttachment,
+  ComposerLinkPreview,
+  ComposerShell,
+  StopContour,
+} from "@rakazo/ui-web";
 import { ArrowUp, Box, Check, Clock, Mic, Pencil, Plus, Puzzle, Settings, X } from "lucide-react";
 import type { ClipboardEvent, DragEvent, RefObject } from "react";
-import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { desktopBridge } from "../../lib/desktop.js";
 import { dictation, webSpeechAvailable } from "../../lib/dictation.js";
 import { isFileDrag, isFilePaste } from "../../lib/pending-attachments";
@@ -43,6 +62,7 @@ export const Composer = memo(function Composer({
   onAttachmentPick,
   onRemoveAttachment,
   onSend,
+  previewLink,
   onStop,
   dictationTranscribe,
   replyTarget,
@@ -76,7 +96,13 @@ export const Composer = memo(function Composer({
   fileInputRef: RefObject<HTMLInputElement | null>;
   onAttachmentPick: (files: FileList | null) => void | Promise<void>;
   onRemoveAttachment: (attachment: PendingAttachment) => void;
-  onSend: (text: string, mentions?: ComposerMention[]) => Promise<void>;
+  onSend: (
+    text: string,
+    mentions?: ComposerMention[],
+    options?: { linkPreview?: false },
+  ) => Promise<void>;
+  /** Reads what the first complete link of the draft looks like; absent, no preview is shown. */
+  previewLink?: (url: string, signal: AbortSignal) => Promise<LinkPreviewDraft | null>;
   onStop: () => Promise<void>;
   /** Whether the configured voice provider can transcribe — the dictation
    * engine used when Web Speech isn't available (Electron, most non-Chrome
@@ -86,7 +112,7 @@ export const Composer = memo(function Composer({
   replyTargetName?: string;
   onClearReply?: () => void;
   rewindTarget?: ThreadMessage | null;
-  rewindDraft?: { key: string; text: string } | null;
+  rewindDraft?: { key: string; text: string; linkPreviewRemoved?: boolean } | null;
   rewindRemovedCount?: number;
   rewindArtifacts?: { id: string; name: string }[];
   onCancelRewind?: () => void;
@@ -101,6 +127,22 @@ export const Composer = memo(function Composer({
 }) {
   const { t } = useLingui();
   const [draft, setDraft] = useState("");
+  const previewLinkRef = useRef(previewLink);
+  previewLinkRef.current = previewLink;
+  const [linkPreview] = useState(() =>
+    createComposerLinkPreview({
+      read: (url, signal) => previewLinkRef.current?.(url, signal) ?? Promise.resolve(null),
+    }),
+  );
+  const linkPreviewView = useSyncExternalStore(linkPreview.subscribe, linkPreview.getView);
+  // What changed the draft, told by the field itself: only a paste says so (a typed or
+  // programmatic edit waits for the link to be followed by a space).
+  const draftChange = useRef<ComposerChange>("type");
+  useEffect(() => {
+    linkPreview.update(draft, draftChange.current);
+    draftChange.current = "type";
+  }, [draft, linkPreview]);
+  useEffect(() => () => linkPreview.cancel(), [linkPreview]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionHighlightIndex, setMentionHighlightIndex] = useState(0);
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
@@ -173,12 +215,14 @@ export const Composer = memo(function Composer({
     : "";
   const rewindDraftKey = rewindDraft?.key ?? null;
   const rewindDraftText = rewindDraft?.text ?? "";
+  const rewindDraftLinkPreviewRemoved = rewindDraft?.linkPreviewRemoved ?? false;
 
   useEffect(() => {
     if (!rewindDraftKey) return;
     setDraft(rewindDraftText);
+    if (rewindDraftLinkPreviewRemoved) linkPreview.remove();
     textareaRef.current?.focus();
-  }, [rewindDraftKey, rewindDraftText]);
+  }, [rewindDraftKey, rewindDraftText, rewindDraftLinkPreviewRemoved, linkPreview]);
 
   function exitDictation(keepDictated: boolean) {
     setIsDictating(false);
@@ -417,7 +461,8 @@ export const Composer = memo(function Composer({
     el.scrollTop = el.scrollHeight;
   }, [isDictating, dictateSpeech]);
 
-  function updateDraft(value: string) {
+  function updateDraft(value: string, change: ComposerChange = "type") {
+    draftChange.current = change;
     setDraft(value);
     const mentionMatch = /(?:^|\s)@([\w-]*)$/.exec(value);
     setMentionQuery(mentionMatch ? (mentionMatch[1] ?? "") : null);
@@ -521,7 +566,9 @@ export const Composer = memo(function Composer({
     setSelectedSkill(null);
     const mentions = selectedMentions;
     setSelectedMentions([]);
-    void onSend(text, mentions);
+    const withoutPreview = linkPreview.isRemoved();
+    linkPreview.reset();
+    void onSend(text, mentions, withoutPreview ? { linkPreview: false } : undefined);
     const shell = shellRef.current;
     if (shell && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       shell.animate([{ transform: "scale(0.99)" }, { transform: "scale(1)" }], {
@@ -594,7 +641,7 @@ export const Composer = memo(function Composer({
     const textarea = event.currentTarget;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    updateDraft(`${draft.slice(0, start)}${text}${draft.slice(end)}`);
+    updateDraft(`${draft.slice(0, start)}${text}${draft.slice(end)}`, "paste");
     const caret = start + text.length;
     window.requestAnimationFrame(() => {
       textareaRef.current?.setSelectionRange(caret, caret);
@@ -769,7 +816,9 @@ export const Composer = memo(function Composer({
         data-testid="composer-bar"
         state={composerState}
         attachments={
-          (rewindArtifacts?.length ?? 0) > 0 || pendingAttachments.length > 0 ? (
+          (rewindArtifacts?.length ?? 0) > 0 ||
+          pendingAttachments.length > 0 ||
+          linkPreviewView.status !== "idle" ? (
             <>
               {rewindArtifacts?.map((artifact) => (
                 <ComposerAttachment
@@ -790,6 +839,29 @@ export const Composer = memo(function Composer({
                   disabled={isDictating}
                 />
               ))}
+              {linkPreviewView.status === "idle" ? null : (
+                <ComposerLinkPreview
+                  loading={linkPreviewView.status === "loading"}
+                  site={
+                    linkPreviewView.status === "ready"
+                      ? linkPreviewView.site
+                      : previewSiteLabel(linkPreviewView.url)
+                  }
+                  title={linkPreviewView.status === "ready" ? linkPreviewView.title : undefined}
+                  image={
+                    linkPreviewView.status === "ready" && linkPreviewView.thumbnail ? (
+                      <img
+                        src={linkPreviewView.thumbnail}
+                        alt=""
+                        className="absolute inset-0 size-full object-cover"
+                      />
+                    ) : undefined
+                  }
+                  removeLabel={t`Remove preview`}
+                  onRemove={() => linkPreview.remove()}
+                  disabled={isDictating}
+                />
+              )}
             </>
           ) : undefined
         }
@@ -1006,7 +1078,14 @@ export const Composer = memo(function Composer({
           <textarea
             ref={textareaRef}
             value={draft}
-            onChange={(event) => updateDraft(event.target.value)}
+            onChange={(event) =>
+              updateDraft(
+                event.target.value,
+                (event.nativeEvent as InputEvent).inputType === "insertFromPaste"
+                  ? "paste"
+                  : "type",
+              )
+            }
             onPaste={handlePaste}
             onKeyDown={(event) => {
               if (

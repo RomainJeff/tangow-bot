@@ -3,11 +3,17 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type { ThreadMessage } from "@rakazo/contracts";
 import type { RoutineGroupRun, RoutineRowRole } from "@rakazo/core";
-import { isNarrationMessage } from "@rakazo/core";
+import {
+  isLinkOnlyMessage,
+  isNarrationMessage,
+  previewSiteLabel,
+  sanitizePreviewTitle,
+} from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
   Interstitial,
+  LinkPreviewCard,
   MessageBubble,
   MessageRow,
   StackedAvatars,
@@ -28,6 +34,7 @@ import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageProviderLabel } from "../../lib/messaging";
 import { FALLBACK_BOT_COLOR } from "./layout";
+import { messageLinkPreview } from "./message-actions";
 
 const USER_TEXT_FOLD_LINES = 20;
 
@@ -72,6 +79,7 @@ import {
   ArtifactImage,
   ChartBlockView,
   ChoiceCard,
+  LinkPreviewImage,
   McpApprovalCard,
 } from "./message-cards";
 import type { RoutineHandoff } from "./routine-run-line";
@@ -207,9 +215,44 @@ export const MessageView = memo(function MessageView({
       {children}
     </MessageRow>
   );
+  // A message that is only its link: the card takes the bubble's place (and the bubble comes
+  // back if the preview is removed, since the text is stored as sent).
+  const previewCard = messageLinkPreview(message);
+  const texts = message.blocks.filter((block) => block.kind === "text");
+  const linkOnly =
+    previewCard !== undefined &&
+    texts.length === 1 &&
+    texts[0]?.kind === "text" &&
+    isLinkOnlyMessage(texts[0].text, previewCard.url);
+  /** The preview card, under the bubble and aligned to its edge. */
+  const previewView = (key?: number) => {
+    if (!previewCard) return null;
+    const image = previewCard.image;
+    return (
+      <div
+        key={key}
+        className={`mt-1 flex first:mt-0 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+      >
+        <LinkPreviewCard
+          href={previewCard.url}
+          site={previewSiteLabel(previewCard.url)}
+          title={previewCard.title ? sanitizePreviewTitle(previewCard.title) : undefined}
+          format={previewCard.format}
+          imageRatio={image ? image.width / image.height : undefined}
+          image={
+            image ? (
+              <LinkPreviewImage target={artifactTarget} artifactId={image.artifactId} />
+            ) : undefined
+          }
+        />
+      </div>
+    );
+  };
   if (!drawsSomething) return null;
   if (isNarration) {
-    const prose = visibleBlocks.filter((block) => block.kind !== "steps");
+    const prose = visibleBlocks.filter(
+      (block) => (block.kind === "text" && !linkOnly) || block.kind === "progress",
+    );
     return botRow(
       <>
         {messageContext}
@@ -232,12 +275,15 @@ export const MessageView = memo(function MessageView({
             )}
           </MessageBubble>
         ) : null}
+        {previewView()}
       </>,
     );
   }
   const rendered = message.blocks
     .map((block, i) => {
       if (isHiddenActivityBlock(block, showSteps)) return null;
+      if (block.kind === "link_preview") return block === previewCard ? previewView(i) : null;
+      if (linkOnly && block.kind === "text") return null;
       if (block.kind === "steps") return <AgentSteps key={i} block={block} live={isLive} />;
       if (block.kind === "handoff") {
         const from = memberName?.(block.fromBotId) ?? t`bot`;

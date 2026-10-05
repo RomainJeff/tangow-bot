@@ -71,7 +71,7 @@ describe("serenity SSRF fetch path", () => {
         fetch: fetchMock,
         resolveHostname: async () => {
           resolved = true;
-          return [{ address: "203.0.113.10", family: 4 as const }];
+          return [{ address: "8.8.8.8", family: 4 as const }];
         },
       },
     );
@@ -178,7 +178,7 @@ describe("serenity SSRF fetch path", () => {
       undefined,
       {
         fetch: fetchMock,
-        resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+        resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
       },
     );
     expect(result.ok).toBe(false);
@@ -221,7 +221,7 @@ describe("serenity SSRF fetch path", () => {
     ).resolves.toBe("private");
     await expect(
       classifySerenityEndpointTrust("https://serenity.example.test/mcp", async () => [
-        { address: "203.0.113.10", family: 4 as const },
+        { address: "8.8.8.8", family: 4 as const },
       ]),
     ).resolves.toBe("public");
   });
@@ -259,7 +259,7 @@ describe("serenity SSRF fetch path", () => {
         fetch: fetchMock,
         resolveHostname: async () => {
           resolved = true;
-          return [{ address: "203.0.113.10", family: 4 as const }];
+          return [{ address: "8.8.8.8", family: 4 as const }];
         },
       },
     );

@@ -73,3 +73,65 @@ describe("artifact search batching", () => {
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("link previews in search (CA 44, CA 46)", () => {
+  it("leaves card images out of both file lookups", async () => {
+    const { prisma } = fixture(0);
+    await querySpaceSearch(prisma as unknown as PrismaClient, actor, "report");
+    const [direct, group] = prisma.artifact.findMany.mock.calls.map(([args]) => args.where);
+    expect(direct).toMatchObject({ isLinkPreview: false, groupId: null });
+    expect(group).toMatchObject({ isLinkPreview: false });
+  });
+
+  it("cuts preview cards out of the JSON the SQL pre-filter matches, so a title takes no result slot", async () => {
+    const { prisma } = fixture(0);
+    await querySpaceSearch(prisma as unknown as PrismaClient, actor, "report");
+    // No artifact matched, so both calls are the tagged-template message searches.
+    const sql = prisma.$queryRaw.mock.calls.slice(0, 2).map(([strings]) => [...strings].join("?"));
+    expect(sql).toHaveLength(2);
+    for (const text of sql) {
+      expect(text).toContain("jsonb_path_query_array(m.blocks");
+      expect(text).toContain("link_preview");
+      expect(text).not.toContain("m.blocks::text");
+    }
+  });
+
+  it("never matches a page title kept in a preview card", async () => {
+    const sentinel = "ZEBRA-SENTINEL-TITLE";
+    const { prisma } = fixture(0);
+    // No artifact matched, so the first query is the direct message search.
+    prisma.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          id: "message-1",
+          threadId: "thread-1",
+          seq: 3,
+          botId: "bot-1",
+          botName: "Bot",
+          blocks: [
+            { kind: "text", text: "see https://example.test/a" },
+            {
+              kind: "link_preview",
+              url: "https://example.test/a",
+              format: "compact",
+              title: sentinel,
+            },
+          ],
+        },
+        {
+          id: "message-2",
+          threadId: "thread-1",
+          seq: 4,
+          botId: "bot-1",
+          botName: "Bot",
+          blocks: [{ kind: "text", text: `I wrote ${sentinel} myself` }],
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const hits = await querySpaceSearch(prisma as unknown as PrismaClient, actor, sentinel);
+
+    // Only the message the person wrote matches; the card's title is not searchable.
+    expect(hits.map((hit) => hit.messageId)).toEqual(["message-2"]);
+  });
+});

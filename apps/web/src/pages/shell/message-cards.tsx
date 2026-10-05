@@ -10,7 +10,7 @@ import {
   FramedBlock,
   Surface,
 } from "@rakazo/ui-web";
-import { X } from "lucide-react";
+import { ImageIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SuccessPop } from "../../components/ai/primitives";
 import { type ArtifactTarget, decodeArtifactBase64 } from "../../lib/artifact-open";
@@ -453,18 +453,13 @@ export function ChartBlockView({
   );
 }
 
-export function ArtifactImage({
-  target,
-  artifactId,
-  name,
-}: {
-  target: ArtifactTarget;
-  artifactId: string;
-  name: string;
-}) {
-  const { t } = useLingui();
+/**
+ * Loads an image artifact of the thread as an object URL, once its container nears the viewport.
+ * `failed` turns true when the artifact cannot be read, so a caller can draw its fallback.
+ */
+function useArtifactImageSrc(target: ArtifactTarget, artifactId: string) {
   const [src, setSrc] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [visible, setVisible] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const targetBotId = "botId" in target ? target.botId : undefined;
@@ -494,6 +489,7 @@ export function ArtifactImage({
     let cancelled = false;
     let objectUrl: string | null = null;
     setSrc(null);
+    setFailed(false);
     void rpc.artifacts
       .get(
         targetBotId
@@ -508,12 +504,57 @@ export function ArtifactImage({
         if (cancelled) URL.revokeObjectURL(objectUrl);
         else setSrc(objectUrl);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [artifactId, targetBotId, targetGroupId, visible]);
+
+  return { container, src, failed };
+}
+
+/**
+ * The picture of a link preview card, read from the thread's artifacts like an attached image:
+ * never a remote URL. Fills the card's frame; a tile with the image glyph stands in when the
+ * artifact cannot be read.
+ */
+export function LinkPreviewImage({
+  target,
+  artifactId,
+}: {
+  target: ArtifactTarget;
+  artifactId: string;
+}) {
+  const { container, src, failed } = useArtifactImageSrc(target, artifactId);
+  return (
+    <div
+      ref={container}
+      className={`absolute inset-0 overflow-hidden ${failed ? "grid place-items-center" : ""}`}
+    >
+      {src ? (
+        <img src={src} alt="" className="size-full object-cover" />
+      ) : failed ? (
+        <ImageIcon className="size-5 text-muted-foreground" strokeWidth={1.7} aria-hidden />
+      ) : null}
+    </div>
+  );
+}
+
+export function ArtifactImage({
+  target,
+  artifactId,
+  name,
+}: {
+  target: ArtifactTarget;
+  artifactId: string;
+  name: string;
+}) {
+  const { t } = useLingui();
+  const [open, setOpen] = useState(false);
+  const { container, src } = useArtifactImageSrc(target, artifactId);
 
   return (
     <div ref={container}>

@@ -86,6 +86,30 @@ export async function createThreadMessageInTransaction(
   });
 }
 
+/**
+ * The payload of a `thread.message.updated` event that rewrites a stored message's blocks. It
+ * names the message and carries the identity fields `thread.message.created` carries, so a client
+ * that rebuilds the message from the event alone still shows its reply quote. Clients merge it
+ * into the message they already hold: author, run and ordering come from there.
+ */
+export function messageUpdatedPayload(
+  message: {
+    id: string;
+    role: string;
+    replyToMessageId?: string | null;
+    replyQuote?: string | null;
+  },
+  blocks: unknown[],
+): Record<string, unknown> {
+  return {
+    messageId: message.id,
+    role: message.role,
+    blocks,
+    ...(message.replyToMessageId ? { replyToMessageId: message.replyToMessageId } : {}),
+    ...(message.replyQuote ? { replyQuote: message.replyQuote } : {}),
+  };
+}
+
 export class RunHistoryWriteError extends Error {
   constructor() {
     super("Run cannot write thread history");

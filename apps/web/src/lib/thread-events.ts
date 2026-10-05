@@ -11,6 +11,7 @@ import {
   applyThreadRewind,
   isActive,
   isRunTerminalEvent,
+  mergeMessageUpdate,
   mergeThreadHistory,
   prependThreadHistoryPage,
   progressMessageId,
@@ -499,7 +500,14 @@ export function reduceThreadSnapshot(
     const liveId = progressMessageId(event);
     const { remaining } = takeLiveMessage(prev.messages, liveId);
     const without = remaining.filter((message) => !replacedSubagent(message, replacedSubagentIds));
-    return { ...prev, cursor: event.seq, messages: upsertMessageById(without, next) };
+    const merged =
+      event.type === "thread.message.updated"
+        ? mergeMessageUpdate(
+            prev.messages.find((message) => message.id === next.id),
+            next,
+          )
+        : next;
+    return { ...prev, cursor: event.seq, messages: upsertMessageById(without, merged) };
   }
   return prev;
 }

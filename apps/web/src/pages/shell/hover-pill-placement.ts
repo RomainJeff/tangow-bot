@@ -67,7 +67,12 @@ export function placeHoverPill(row: HTMLElement): void {
   const placement = hoverPillPlacement({
     frame: frame.getBoundingClientRect(),
     pill: { width: pill.offsetWidth, height: pill.offsetHeight },
-    bubble: union(row.querySelectorAll('[data-slot="message-row-bubble"]')),
+    // A message that is only a link has no bubble: the pill goes beside its card.
+    bubble: union(
+      row.querySelector('[data-slot="message-row-bubble"]')
+        ? row.querySelectorAll('[data-slot="message-row-bubble"]')
+        : row.querySelectorAll('[data-slot="link-preview-card"]'),
+    ),
   });
   if (!placement) {
     delete row.dataset.pill;

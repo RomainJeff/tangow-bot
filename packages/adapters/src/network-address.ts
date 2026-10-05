@@ -136,37 +136,71 @@ export async function withPinnedDnsLookup<T>(
   return pinnedDns.run({ hostname, addresses }, run);
 }
 
+/** IANA special-purpose IPv4 registry, plus the Azure wire server (168.63.129.16).
+ * Anything here is never a public destination for a server-side fetch. */
+const BLOCKED_IPV4_RANGES = [
+  "0.0.0.0/8",
+  "10.0.0.0/8",
+  "100.64.0.0/10",
+  "127.0.0.0/8",
+  "168.63.129.16/32",
+  "169.254.0.0/16",
+  "172.16.0.0/12",
+  "192.0.0.0/24",
+  "192.0.2.0/24",
+  "192.88.99.0/24",
+  "192.168.0.0/16",
+  "198.18.0.0/15",
+  "198.51.100.0/24",
+  "203.0.113.0/24",
+  "224.0.0.0/3",
+].map(parseIpv4Cidr);
+
+/** IANA special-purpose IPv6 registry. Mapped, compatible, NAT64 and 6to4 forms
+ * are not listed: they are judged by the IPv4 address they embed. */
+const BLOCKED_IPV6_RANGES = [
+  "::/128",
+  "::1/128",
+  "::ffff:0:0:0/96",
+  "64:ff9b:1::/48",
+  "100::/64",
+  "2001::/23",
+  "2001:db8::/32",
+  "3fff::/20",
+  "5f00::/16",
+  "fc00::/7",
+  "fe80::/10",
+  "fec0::/10",
+  "ff00::/8",
+].map(parseIpv6Cidr);
+
 export function isPrivateAddress(address: string): boolean {
   const value = address.toLowerCase().replace(/^\[|\]$/g, "");
-  const mapped = value.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
-  const ipv4 = mapped ?? (isIP(value) === 4 ? value : undefined);
-  if (!ipv4) {
-    const ipv6 = parseIpv6(value);
-    if (ipv6 === undefined) return true;
-    if (ipv6 === 0n || ipv6 === 1n) return true;
-    if (ipv6 >> 120n === 0xffn) return true;
-    const topTenBits = ipv6 >> 118n;
-    // fe80::/10 link-local (and the adjacent fea0::/10 bit pattern 0x3fb)
-    if (topTenBits === 0x3fan || topTenBits === 0x3fbn) return true;
-    // fc00::/7 unique local (ULA), including fd00::/8
-    if (((ipv6 >> 120n) & 0xfen) === 0xfcn) return true;
-    const embeddedIpv4 = getEmbeddedIpv4Number(ipv6);
-    if (embeddedIpv4 !== undefined) return isPrivateIpv4Number(embeddedIpv4);
-    return false;
+  if (isIP(value) === 4) return isPrivateIpv4Number(ipv4ToNumber(value));
+  const ipv6 = parseIpv6(value);
+  if (ipv6 === undefined) return true;
+  if (BLOCKED_IPV6_RANGES.some(([prefix, bits]) => ipv6 >> (128n - bits) === prefix)) return true;
+  const embeddedIpv4 = getEmbeddedIpv4Number(ipv6);
+  return embeddedIpv4 !== undefined && isPrivateIpv4Number(embeddedIpv4);
+}
+
+/** Parse a host written the way `inet_aton` accepts it (`2130706433`, `0177.0.0.1`,
+ * `0x7f.1`). Returns undefined when the host is not a numeric IPv4 form. */
+export function parseLegacyIpv4(host: string): string | undefined {
+  const parts = host.replace(/\.$/, "").split(".");
+  if (parts.length > 4 || parts.some((part) => part === "")) return undefined;
+  const numbers: number[] = [];
+  for (const part of parts) {
+    const hex = /^0x([0-9a-f]*)$/i.exec(part);
+    if (hex) numbers.push(hex[1] ? Number.parseInt(hex[1], 16) : 0);
+    else if (/^0[0-7]*$/.test(part)) numbers.push(Number.parseInt(part, 8) || 0);
+    else if (/^[1-9][0-9]*$/.test(part)) numbers.push(Number(part));
+    else return undefined;
   }
-  const octets = ipv4.split(".").map(Number);
-  const [a, b] = octets;
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b != null && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b != null && b >= 64 && b <= 127) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    (a != null && a >= 224)
-  );
+  const last = numbers.pop() as number;
+  if (numbers.some((n) => n > 255) || last >= 256 ** (4 - numbers.length)) return undefined;
+  const value = numbers.reduce((sum, n, index) => sum + n * 256 ** (3 - index), last);
+  return [value >>> 24, (value >>> 16) & 255, (value >>> 8) & 255, value & 255].join(".");
 }
 
 export function isCloudMetadataAddress(address: string): boolean {
@@ -265,17 +299,17 @@ function isCloudMetadataIpv4Number(value: number): boolean {
 }
 
 function isPrivateIpv4Number(value: number): boolean {
-  const a = (value >>> 24) & 0xff;
-  const b = (value >>> 16) & 0xff;
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
+  return BLOCKED_IPV4_RANGES.some(([prefix, bits]) => value >>> (32 - bits) === prefix);
+}
+
+function parseIpv4Cidr(cidr: string): [prefix: number, bits: number] {
+  const [address = "", length = "32"] = cidr.split("/");
+  const bits = Number(length);
+  return [bits === 0 ? 0 : ipv4ToNumber(address) >>> (32 - bits), bits];
+}
+
+function parseIpv6Cidr(cidr: string): [prefix: bigint, bits: bigint] {
+  const [address = "", length = "128"] = cidr.split("/");
+  const bits = BigInt(length);
+  return [(parseIpv6(address) as bigint) >> (128n - bits), bits];
 }

@@ -5,6 +5,7 @@ import { Agent } from "undici";
 import {
   createAddressCheckedLookup,
   isPrivateAddress,
+  parseLegacyIpv4,
   type ResolvedAddress,
   type ResolveHostname,
 } from "./network-address.js";
@@ -78,6 +79,11 @@ export function isBlockedHostname(hostname: string): boolean {
     return true;
   }
   if (isIP(normalized) !== 0) return isPrivateAddress(normalized);
+  // A numeric last label is an IPv4 in disguise (`2130706433`, `0177.0.0.1`, `0x7f.1`).
+  if (/^(0x[0-9a-f]*|[0-9]+)$/i.test(normalized.slice(normalized.lastIndexOf(".") + 1))) {
+    const legacy = parseLegacyIpv4(normalized);
+    return legacy === undefined || isPrivateAddress(legacy);
+  }
   return false;
 }
 
@@ -204,7 +210,7 @@ async function followRedirects(
   };
 }
 
-async function cancelResponseBody(response: Response, signal: AbortSignal): Promise<void> {
+export async function cancelResponseBody(response: Response, signal: AbortSignal): Promise<void> {
   const cancel = response.body?.cancel() ?? Promise.resolve();
   // A hanging cancel must not outlive the shared deadline.
   await withAbort(

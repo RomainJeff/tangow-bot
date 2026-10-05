@@ -1,6 +1,7 @@
 import type {
   AgentHomeStore,
   AgentRuntime,
+  ArtifactStore,
   BackgroundJobHandlers,
   JobPublisher,
   MemoryStore,
@@ -15,6 +16,7 @@ import { scheduleComputerSleep, sleepComputerIfIdle } from "./computer-idle.js";
 import { performComputerUpdate } from "./computer-update.js";
 import type { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
+import { runLinkPreviewJob } from "./link-preview/job.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
 import type { EncryptedSecretStore } from "./secrets.js";
@@ -34,6 +36,8 @@ export function createBackgroundJobHandlers(deps: {
   memoryProviders: MemoryProviderResolver;
   deploymentModelKey?: string;
   messaging?: MessagingSurface;
+  /** Where link preview images are kept; without it `link.preview` jobs do nothing. */
+  artifacts?: ArtifactStore;
 }): BackgroundJobHandlers {
   const deliverMessaging = async (runId?: string) => {
     if (!deps.messaging) return;
@@ -85,6 +89,19 @@ export function createBackgroundJobHandlers(deps: {
     },
     "skill.teaching-expire": async (payload) => {
       await expireTaughtSkillTeaching(deps, payload.skillId);
+    },
+          prisma: deps.prisma,
+          jobs: deps.jobs,
+          events: deps.events,,
+        payload,
+      );
+    },
+    "link.preview": async (payload) => {
+      if (!deps.artifacts) return;
+      await runLinkPreviewJob(
+        { prisma: deps.prisma, artifacts: deps.artifacts, events: deps.events },
+        payload,
+      );
     },
     "history.compact": async (payload) => {
       await compactHistory(

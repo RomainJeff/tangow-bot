@@ -168,13 +168,18 @@ touch target in the capsule), `composerAction 36` (the send / stop disc).
 Composer attachments (both devices): `composerAttachmentThumb 64` (the image
 thumbnail / file-tile height), `composerAttachmentTile 200` (max width of a
 file tile before its name truncates), `composerRemove 22` (the × disc).
+Link preview card: `linkLargeImageRatio` 1.91 (the large format's picture, width over
+height) and `linkCard 360` (its width on web, capped by the column),
+`linkThumb 56` (the compact format's thumbnail), `linkPhotoMax 320` (the photo
+format's maximum height).
 
 The sizes a primitive needs as a class are mapped into Tailwind's spacing
 namespace in `packages/ui-web/src/styles.css` — `--spacing-hover-icon`,
 `--spacing-quick-reply`, `--spacing-composer-icon`, `--spacing-capsule`,
 `--spacing-mobile-stack`, `--spacing-call-button`, `--spacing-message`,
 `--spacing-composer-attachment-thumb`, `--spacing-composer-attachment-tile`,
-`--spacing-composer-remove` — so `size-composer-icon`, `h-capsule` and
+`--spacing-composer-remove`, `--spacing-link-card`, `--spacing-link-thumb`,
+`--spacing-link-photo-max` — so `size-composer-icon`, `h-capsule` and
 `w-message` resolve to the token instead of an arbitrary value. The rest are
 spent through a `size` prop.
 
@@ -272,6 +277,58 @@ out — that shadow belongs to `FramedBlock`.
 
 Used by: markdown tables, code blocks, secret-ask cards;
 outlined for a delegated task's result (subagent).
+
+### LinkPreviewCard
+
+What the page behind a link looks like, kept with the message's attachments: under
+the bubble (or alone, in the bubble's place, when the message is only its link),
+`gap-1` below it and aligned to its edge. Three formats the server picks from what
+it downloaded: `large` (picture at `linkLargeImageRatio`, 1.91:1, from `@rakazo/ui-tokens` on both surfaces, then title and site), `compact`
+(56 px thumbnail when there is a picture, title, site) and `photo` (the picture
+alone in a `rounded-bubble` frame capped at `linkPhotoMax`, the site under it).
+
+Props: `href`, `site` (the host of `href`, derived by `previewSiteLabel`, never cut
+from the end), `title?` (plain text, from `sanitizePreviewTitle`), `format`,
+`image?` (a node filling its frame), `imageRatio?` (a photo's width over height),
+`onOpen?`. Anatomy: an `<a target="_blank" rel="noreferrer noopener">` named
+"title, site" (a photo: the site) around a `Surface` of `w-link-card max-w-full`;
+title `text-row-name` at weight 500 on two lines, `dir="auto"` inside a `<bdi>`;
+site `text-meta text-muted-foreground`, wrapped rather than ellipsized; the
+frame is `bg-secondary`, the picture decorative (`alt=""`). Hover swaps the
+hairline to `border-outline` over the hover duration; arrival is `animate-arrive`,
+the only motion.
+
+The picture is never a remote URL: it is the preview's own artifact, loaded like an
+attached image, with a `secondary` tile and the image glyph when it cannot be
+read. The card draws nothing for a URL that is not http(s) and carries no control
+of its own: "Remove preview" lives in the message's actions (hover pill, or Edit
+and Copy under your own message).
+
+Do: leave a message that has no preview exactly as it is, and add no copy. Don't:
+add a shadow or a colour bar, a description of the page, a loading or error word,
+or `variant="outlined"` (reserved for a bot's work product).
+
+Used by: the web and desktop thread (`apps/web/src/pages/shell/message-view.tsx`).
+
+### ComposerLinkPreview
+
+What the first complete link of the draft will look like, in the composer's
+`attachments` row beside `ComposerAttachment` (iOS: the same row, `components/
+composer-link-preview.tsx`). Always the compact card whatever format the server
+picked: `h-composer-attachment-thumb` (64) in `bg-background` at `rounded-card`,
+a `size-link-thumb` thumbnail, the title on one line, the site under it. While the
+page is read, the thumbnail is an empty `bg-secondary` tile and the host is the
+shared `Shimmer` (iOS: `ShimmerText`), the one thing that moves; the card is named
+by that host. The × is the shared
+`ComposerRemoveButton` (`composerRemove`, `bg-primary`, `border-surface` ring,
+named "Remove preview"; 44 pt target on iOS). The card is not a link and a failed
+or empty read draws nothing and says nothing.
+
+The picture is only the inline thumbnail `links.preview` returns, accepted by
+`acceptPreviewThumbnail` (a `data:image/webp;base64,` URL of at most 70 000
+characters) and never copied into a message. When to read, the 800 ms debounce, the
+cancellation and the per-draft removal live once, in `createComposerLinkPreview`
+(`@rakazo/core`); a removed preview sends `linkPreview: false`.
 
 ### Task card
 

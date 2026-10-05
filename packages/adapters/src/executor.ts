@@ -23,6 +23,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import {
   historyCompactJob,
+  linkPreviewJob,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -229,6 +230,7 @@ import {
   CATALOG_EXECUTE,
   uniquifyInstalledToolName,
 } from "./lazy-tool-catalog.js";
+import { OPENED_URLS_PER_RUN, openedUrlFromCompletion } from "./link-preview/opened-urls.js";
 import {
   buildMcpCredentialBlob,
   needsOAuthProbe,
@@ -352,6 +354,8 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "browser_snapshot",
   "list_secrets",
 ]);
+/** The longest a finished run waits for its last tool-call audit before queueing the link preview. */
+const TOOL_AUDIT_WAIT_MS = 5_000;
 const MAX_MODEL_FILE_BYTES = 250_000;
 const TURN_ATTACHMENT_UNAVAILABLE =
   "An attachment in this message could not be loaded. Tell the user the attachment was unavailable and do not guess its contents.";
@@ -610,7 +614,7 @@ function isFailedToolResult(value: unknown): value is { error: unknown } {
 }
 
 export function toolCompletionFromResult(
-  base: Pick<AgentToolCompletion, "name" | "executionId" | "durationMs">,
+  base: Pick<AgentToolCompletion, "name" | "executionId" | "durationMs" | "args">,
   result: unknown,
 ): AgentToolCompletion {
   const paused = isToolPauseResult(result);
@@ -634,6 +638,10 @@ export function toolCompletionAuditPayload(
   if (completion.error !== undefined) {
     payload.error = sanitizeConnectorError(completion.error, secrets);
   }
+  // The one URL the audit keeps: what the bot opened, for the link preview rule. A URL a known
+  // secret changes under redaction is dropped, so it can never match a link in a message.
+  const openedUrl = openedUrlFromCompletion(completion);
+  if (openedUrl && redactSecrets(openedUrl, secrets) === openedUrl) payload.openedUrl = openedUrl;
   if (!isAuditableToolResult(completion.result)) return payload;
 
   payload.contentTypes = completion.result.content.flatMap((part) => {
@@ -666,15 +674,21 @@ export async function appendToolCompletionAudit(
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   completion: AgentToolCompletion,
   secrets: string[] = [],
+  openedUrlBudget?: { remaining: number },
 ): Promise<void> {
   try {
+    const payload = toolCompletionAuditPayload(completion, secrets);
+    if (payload.openedUrl !== undefined && openedUrlBudget) {
+      if (openedUrlBudget.remaining > 0) openedUrlBudget.remaining -= 1;
+      else delete payload.openedUrl;
+    }
     await deps.events.append({
       spaceId: target.spaceId,
       threadId: target.threadId,
       botId: target.botId,
       runId: target.runId,
       type: "agent.tool.completed",
-      payload: toolCompletionAuditPayload(completion, secrets),
+      payload,
     });
   } catch (error) {
     // Audit persistence must not change the tool result or strand the run.
@@ -1260,6 +1274,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
       heartbeat.unref?.();
 
       const runSecrets = [...deps.secrets];
+      // At most this many opened URLs are recorded per run (the link preview rule reads them).
+      const openedUrlBudget = { remaining: OPENED_URLS_PER_RUN };
+      // The audit of a finished tool call is written without anyone waiting for it (the runtime
+      // fires it and moves on). The link preview job reads those events, so the run waits for
+      // the ones still in flight before it queues the job.
+      const pendingToolAudits = new Set<Promise<void>>();
       try {
         const sourceBlocks =
           run.trigger === "messaging" && run.sourceMessageId
@@ -3922,8 +3942,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     resolveConnectedModel(run, provider, modelId, (values) =>
                       runSecrets.push(...values),
                     ),
-              onToolCompleted: (completion) =>
-                appendToolCompletionAudit(
+              onToolCompleted: (completion) => {
+                const audit = appendToolCompletionAudit(
                   deps,
                   {
                     spaceId: run.spaceId,
@@ -3933,7 +3953,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   },
                   completion,
                   runSecrets,
-                ),
+                  openedUrlBudget,
+                );
+                pendingToolAudits.add(audit);
+                void audit.finally(() => pendingToolAudits.delete(audit));
+                return audit;
+              },
               claimSteering: scripted
                 ? undefined
                 : async (seenIds) => {
@@ -4255,10 +4280,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
                         name: event.name,
                         executionId: event.executionId,
                         durationMs: Date.now() - startedAt,
+                        args: event.args,
                       },
                       result,
                     ),
                     runSecrets,
+                    openedUrlBudget,
                   );
                   if (isToolPauseResult(result)) return;
                 } catch (error) {
@@ -4466,6 +4493,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
           });
           if (!completed) return;
+          // After the commit, never inside it. Delegated runs report back to the ordering bot
+          // and routine cards are not messages to the person: no preview for either.
+          if (run.trigger !== "bot_message" && !isRoutineCardRun) {
+            // After the last tool call's audit event (which holds the URL it opened) is written:
+            // the job reads the run's events. The audit never rejects; a stuck write is only
+            // waited for a few seconds, the rest of the run's completion must not hang on it.
+            let giveUp: ReturnType<typeof setTimeout> | undefined;
+            await Promise.race([
+              Promise.all([...pendingToolAudits]),
+              new Promise((resolve) => {
+                giveUp = setTimeout(resolve, TOOL_AUDIT_WAIT_MS);
+              }),
+            ]);
+            clearTimeout(giveUp);
+            await deps.jobs
+              .enqueue(linkPreviewJob({ runId }))
+              .catch((error) => getLogger().error("link.preview enqueue", error));
+          }
           await settleRoutineRunCard("completed", text);
           if (completed.continuationRunId) {
             await deps.jobs
@@ -5266,7 +5311,7 @@ async function publishRoutineRunCard(
  * answers. `next` returns the replacement block, or null to leave the card (and the thread)
  * untouched.
  */
-async function updateRoutineRunCard(
+export async function updateRoutineRunCard(
   deps: Pick<ExecutorDeps, "prisma" | "events">,
   // `runId` is deliberately optional: a cancelled run may not write thread history, so the
   // card's own closing event is appended unattributed rather than rejected.
@@ -5276,6 +5321,9 @@ async function updateRoutineRunCard(
 ): Promise<void> {
   const committed = await deps.prisma
     .$transaction(async (tx) => {
+      // The thread lock first, then the read: a preview card or its removal marker written by
+      // someone else in between must survive this rewrite of the blocks.
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
       const message = await tx.message.findUnique({ where: { id: cardMessageId } });
       if (!message) return null;
       let changed = false;

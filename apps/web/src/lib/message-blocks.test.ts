@@ -33,4 +33,18 @@ describe("hasRenderableBlock", () => {
     expect(hasRenderableBlock([steps], false)).toBe(false);
     expect(hasRenderableBlock([], true)).toBe(false);
   });
+
+  it("does not count the preview's removal marker as something to draw", () => {
+    const marker: MessageBlock = { kind: "link_preview", removed: true };
+    const card: MessageBlock = {
+      kind: "link_preview",
+      url: "https://example.test/a",
+      format: "compact",
+      title: "A page",
+    };
+    expect(hasRenderableBlock([steps, marker], false)).toBe(false);
+    expect(hasRenderableBlock([marker], true)).toBe(false);
+    expect(hasRenderableBlock([steps, card], false)).toBe(true);
+    expect(hasRenderableBlock([marker, { kind: "text", text: "hi" }], false)).toBe(true);
+  });
 });

@@ -1,0 +1,334 @@
+// @vitest-environment jsdom
+
+import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import type { ReactNode } from "react";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// vitest doesn't run the lingui macro transform: same passthrough as the other web tests.
+function identityTag(strings: TemplateStringsArray, ...values: unknown[]): string {
+  return strings.reduce((acc, part, index) => `${acc}${part}${values[index] ?? ""}`, "");
+}
+vi.mock("@lingui/core/macro", () => ({ t: identityTag }));
+vi.mock("@lingui/react/macro", () => ({
+  useLingui: () => ({ t: identityTag }),
+  Trans: ({ children }: { children?: ReactNode }) => children,
+}));
+
+const api = vi.hoisted(() => ({
+  removeLinkPreview: vi.fn(),
+  artifactsGet: vi.fn(),
+}));
+vi.mock("../../lib/rpc", () => ({
+  rpc: {
+    messages: { removeLinkPreview: api.removeLinkPreview },
+    artifacts: { get: api.artifactsGet },
+  },
+}));
+
+import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
+import { MessageView } from "./message-view";
+
+const URL_A = "https://example.com/article";
+
+function message(role: "user" | "bot", blocks: unknown[]): ThreadMessage {
+  return {
+    id: "m1",
+    threadId: "t1",
+    seq: 1,
+    role,
+    blocks: blocks as MessageBlock[],
+    createdAt: "2026-10-05T10:00:00.000Z",
+    ...(role === "bot" ? { botId: "bot1" } : {}),
+  } as ThreadMessage;
+}
+
+const text = (value: string) => ({ kind: "text", text: value });
+const card = (overrides: Record<string, unknown> = {}) => ({
+  kind: "link_preview",
+  url: URL_A,
+  format: "compact",
+  title: "An article",
+  ...overrides,
+});
+const IMAGE = { artifactId: "art1", width: 1200, height: 628 };
+
+let container: HTMLDivElement;
+let root: ReturnType<typeof createRoot>;
+
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:preview" }));
+  api.removeLinkPreview.mockReset().mockResolvedValue({ ok: true });
+  api.artifactsGet.mockReset().mockResolvedValue({ contentBase64: "AAAA", mimeType: "image/webp" });
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  vi.unstubAllGlobals();
+});
+
+async function renderMessage(msg: ThreadMessage, extra: { replyToMessageId?: string } = {}) {
+  await act(async () => {
+    root.render(
+      <MessageView
+        artifactTarget={{ botId: "bot1" }}
+        chrome="row"
+        canAnswer={false}
+        message={msg}
+        inGroup={false}
+        showAuthor={false}
+        showAvatar={false}
+        onAnswer={async () => undefined}
+        onOpenBot={() => undefined}
+        onOpenPeerMessages={() => undefined}
+        peerBot={() => undefined}
+        onRefresh={async () => undefined}
+        onBotChanged={async () => undefined}
+        onAddRoutine={() => undefined}
+        {...extra}
+      />,
+    );
+  });
+}
+
+const cards = () =>
+  container.querySelectorAll<HTMLAnchorElement>('[data-slot="link-preview-card"]');
+const bubbles = () =>
+  container.querySelectorAll('[data-slot="user-bubble"], [data-slot="message-row-bubble"]');
+
+describe("link preview in the thread", () => {
+  it("draws no card on a message that is itself a card, as on iOS and the server", async () => {
+    await renderMessage(
+      message("bot", [
+        text(`look ${URL_A}`),
+        { kind: "ask", text: "Which?", status: "answered" },
+        card(),
+      ]),
+    );
+
+    expect(cards()).toHaveLength(0);
+  });
+
+  it.each(["compact", "large", "photo"] as const)(
+    "draws a %s card under the bubble",
+    async (format) => {
+      const blocks = [
+        text(`look ${URL_A}`),
+        card({
+          format,
+          ...(format === "compact" ? {} : { image: IMAGE }),
+          title: format === "photo" ? undefined : "An article",
+        }),
+      ];
+      await renderMessage(message("user", blocks));
+
+      expect(bubbles()).toHaveLength(1);
+      expect(cards()).toHaveLength(1);
+      const link = cards()[0]!;
+      expect(link.dataset.format).toBe(format);
+      expect(link.getAttribute("href")).toBe(URL_A);
+      expect(link.getAttribute("rel")).toBe("noreferrer noopener");
+      expect(link.getAttribute("aria-label")).toBe(
+        format === "photo" ? "example.com" : "An article, example.com",
+      );
+      // The card comes after the bubble.
+      expect(
+        bubbles()[0]!.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    },
+  );
+
+  it("aligns the card to the end for the person and to the start for a bot", async () => {
+    await renderMessage(message("user", [text(`hi ${URL_A}`), card()]));
+    expect(cards()[0]!.parentElement?.className).toContain("justify-end");
+    await renderMessage(message("bot", [text(`hi ${URL_A}`), card()]));
+    expect(cards()[0]!.parentElement?.className).toContain("justify-start");
+  });
+
+  it("takes the bubble's place when the message is only its link", async () => {
+    await renderMessage(message("user", [text(URL_A), card()]));
+    expect(bubbles()).toHaveLength(0);
+    expect(cards()).toHaveLength(1);
+
+    await renderMessage(message("user", [text(`<${URL_A}>`), card()]));
+    expect(bubbles()).toHaveLength(0);
+
+    // Preview removed: the bubble is back, the card gone.
+    await renderMessage(
+      message("user", [text(URL_A), { kind: "link_preview", url: URL_A, removed: true }]),
+    );
+    expect(bubbles()).toHaveLength(1);
+    expect(cards()).toHaveLength(0);
+  });
+
+  it("keeps the reply quote above a card that takes the bubble's place", async () => {
+    await renderMessage(message("user", [text(URL_A), card()]), { replyToMessageId: "m0" });
+
+    expect(bubbles()).toHaveLength(0);
+    expect(cards()).toHaveLength(1);
+    const quote = container.querySelector('[data-testid="reply-parent-preview"]');
+    expect(quote).not.toBeNull();
+    expect(
+      quote!.compareDocumentPosition(cards()[0]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("handles a bot's narration the same way: card under the bubble, or alone", async () => {
+    await renderMessage(message("bot", [text(`read ${URL_A}`), card()]));
+    expect(bubbles()).toHaveLength(1);
+    expect(cards()).toHaveLength(1);
+
+    await renderMessage(message("bot", [text(URL_A), card()]));
+    expect(bubbles()).toHaveLength(0);
+    expect(cards()).toHaveLength(1);
+    expect(container.querySelector('[data-slot="message-row"]')).not.toBeNull();
+  });
+
+  it("keeps the bubble above the card as soon as there is one more word", async () => {
+    await renderMessage(message("user", [text(`${URL_A} wow`), card()]));
+    expect(bubbles()).toHaveLength(1);
+    expect(cards()).toHaveLength(1);
+  });
+
+  it("draws nothing for a removal marker", async () => {
+    await renderMessage(
+      message("bot", [text(`read ${URL_A}`), { kind: "link_preview", url: URL_A, removed: true }]),
+    );
+    expect(cards()).toHaveLength(0);
+    expect(bubbles()).toHaveLength(1);
+  });
+
+  it.each([
+    "javascript:alert(1)",
+    "mailto:someone@example.com",
+    "tel:+33123456789",
+    "itms-services://?action=download-manifest",
+  ])("never makes a %s block clickable", async (url) => {
+    await renderMessage(message("user", [text("hello"), card({ url })]));
+    expect(cards()).toHaveLength(0);
+    expect(container.querySelector("a")).toBeNull();
+  });
+
+  it("renders the picture from the thread's artifact, never from a remote URL", async () => {
+    await renderMessage(
+      message("user", [text(`hi ${URL_A}`), card({ format: "large", image: IMAGE })]),
+    );
+
+    expect(api.artifactsGet).toHaveBeenCalledWith({ botId: "bot1", artifactId: "art1" });
+    const link = cards()[0]!;
+    const images = [...link.querySelectorAll("img")];
+    expect(images).toHaveLength(1);
+    expect(images[0]!.getAttribute("src")).toBe("blob:preview");
+    expect(images[0]!.getAttribute("alt")).toBe("");
+    for (const element of [link, ...link.querySelectorAll<HTMLElement>("*")]) {
+      expect(element.getAttribute("style") ?? "").not.toMatch(/url\(/i);
+      expect(element.getAttribute("src") ?? "").not.toMatch(/^https?:/i);
+      expect(element.className.toString()).not.toMatch(/bg-\[url/);
+    }
+  });
+
+  it("falls back to a tile with the image glyph when the artifact cannot be read", async () => {
+    api.artifactsGet.mockRejectedValue(new Error("gone"));
+    await renderMessage(message("user", [text(`hi ${URL_A}`), card({ image: IMAGE })]));
+
+    const link = cards()[0]!;
+    expect(link.querySelector("img")).toBeNull();
+    expect(link.querySelector("svg")).not.toBeNull();
+  });
+
+  it("shows a title with markup as plain text", async () => {
+    await renderMessage(
+      message("user", [text(`hi ${URL_A}`), card({ title: "<img src=x onerror=alert(1)>" })]),
+    );
+    expect(cards()[0]!.querySelector("img")).toBeNull();
+    expect(cards()[0]!.textContent).toContain("<img src=x onerror=alert(1)>");
+  });
+});
+
+describe("Remove preview action", () => {
+  const baseProps = {
+    onReply: () => undefined,
+    onReact: async () => undefined,
+    voiceReady: false,
+    speaking: false,
+    onSpeak: () => undefined,
+  };
+  const removeButton = () =>
+    container.querySelector<HTMLButtonElement>('button[aria-label="Remove preview"]');
+
+  it("is in a bot's hover pill after Copy, only when the message has a card", async () => {
+    await act(async () =>
+      root.render(
+        <MessageHoverActions
+          message={message("bot", [text(`hi ${URL_A}`), card()])}
+          {...baseProps}
+        />,
+      ),
+    );
+    const labels = [...container.querySelectorAll("button")].map((b) =>
+      b.getAttribute("aria-label"),
+    );
+    expect(labels.indexOf("Remove preview")).toBe(labels.indexOf("Copy") + 1);
+
+    await act(async () => removeButton()!.click());
+    expect(api.removeLinkPreview).toHaveBeenCalledWith({ messageId: "m1" });
+
+    await act(async () =>
+      root.render(
+        <MessageHoverActions
+          message={message("bot", [
+            text(`hi ${URL_A}`),
+            { kind: "link_preview", url: URL_A, removed: true },
+          ])}
+          {...baseProps}
+        />,
+      ),
+    );
+    expect(removeButton()).toBeNull();
+
+    await act(async () =>
+      root.render(<MessageHoverActions message={message("bot", [text("hi")])} {...baseProps} />),
+    );
+    expect(removeButton()).toBeNull();
+  });
+
+  it("is also under the person's own message, where their links live", async () => {
+    await act(async () =>
+      root.render(
+        <UserMessageActions
+          message={message("user", [text(`hi ${URL_A}`), card()])}
+          onEdit={() => undefined}
+        />,
+      ),
+    );
+    await act(async () => removeButton()!.click());
+    expect(api.removeLinkPreview).toHaveBeenCalledWith({ messageId: "m1" });
+
+    await act(async () =>
+      root.render(
+        <UserMessageActions message={message("user", [text("hi")])} onEdit={() => undefined} />,
+      ),
+    );
+    expect(removeButton()).toBeNull();
+  });
+
+  it("leaves the card alone when the server refuses", async () => {
+    api.removeLinkPreview.mockRejectedValue(new Error("nope"));
+    await act(async () =>
+      root.render(
+        <UserMessageActions
+          message={message("user", [text(`hi ${URL_A}`), card()])}
+          onEdit={() => undefined}
+        />,
+      ),
+    );
+    await act(async () => removeButton()!.click());
+    expect(api.removeLinkPreview).toHaveBeenCalledOnce();
+  });
+});

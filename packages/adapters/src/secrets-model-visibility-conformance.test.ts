@@ -220,7 +220,7 @@ describe("secrets model-visibility conformance", () => {
         signal: new AbortController().signal,
         remote: {
           fetch,
-          resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+          resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
         },
         registerRedactions,
       });
@@ -398,7 +398,7 @@ describe("secrets model-visibility conformance", () => {
         network: {
           fetch: (input: string | URL | Request, init?: RequestInit) =>
             globalThis.fetch(input, init),
-          resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }],
+          resolveHostname: async () => [{ address: "8.8.8.8", family: 4 }],
         },
       });
       const context = {

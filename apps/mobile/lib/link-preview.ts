@@ -1,0 +1,94 @@
+import type { LinkPreviewBlock, LinkPreviewCard, MessageBlock } from "@rakazo/contracts";
+import { isLinkPreviewCard, isPreviewableUrl } from "@rakazo/contracts";
+import {
+  isLinkOnlyMessage,
+  messageHostsLinkPreview,
+  previewSiteLabel,
+  sanitizePreviewTitle,
+} from "@rakazo/core";
+import { linkLargeImageRatio, sizes } from "@rakazo/ui-tokens";
+
+/**
+ * The card a message shows, or undefined when it shows none. Blocks reach the phone from live
+ * events without a schema pass, so the shape is checked again here: a removal marker anywhere in
+ * the message wins (a removed preview never comes back), the url must be http(s), and the format
+ * must carry what it draws. A card that fails any of it is dropped, never partly drawn. A
+ * message that is itself a card (`messageHostsLinkPreview`) shows none, and the title is cleaned
+ * again here, as on web: the screen never trusts what the server stored.
+ */
+export function linkPreviewCardOf(message: {
+  role: string;
+  blocks: readonly MessageBlock[];
+}): LinkPreviewCard | undefined {
+  if (!messageHostsLinkPreview(message)) return undefined;
+  const previews = message.blocks.filter(
+    (block): block is LinkPreviewBlock => block.kind === "link_preview",
+  );
+  if (previews.length === 0 || previews.some((block) => block.removed)) return undefined;
+  const card = previews.find(isLinkPreviewCard);
+  if (!card || !isPreviewableUrl(card.url)) return undefined;
+  if (card.format !== "compact" && !card.image) return undefined;
+  const title = card.title ? sanitizePreviewTitle(card.title) || undefined : undefined;
+  if (card.format !== "photo" && !title) return undefined;
+  return title === card.title ? card : { ...card, title };
+}
+
+/** The only url a card may open: http(s), no credentials. Never `tel:`, `mailto:` or a custom scheme. */
+export function openableLinkPreviewUrl(url: string): string | undefined {
+  return isPreviewableUrl(url) ? url : undefined;
+}
+
+/** Block kinds that can sit next to a bare link without giving the message a bubble of its own. */
+const CARD_COMPANION_KINDS = new Set<string>(["text", "link_preview", "steps", "reasoning"]);
+
+/**
+ * True when the card takes the bubble's place: the message is nothing but this link (bare, in
+ * `<>`, or a link labelled with itself) and carries no other visible content.
+ */
+export function cardReplacesBubble(
+  blocks: readonly MessageBlock[],
+  card: LinkPreviewCard,
+): boolean {
+  if (!blocks.every((block) => CARD_COMPANION_KINDS.has(block.kind))) return false;
+  const text = blocks.flatMap((block) => (block.kind === "text" ? [block.text] : [])).join("\n");
+  return isLinkOnlyMessage(text, card.url);
+}
+
+/** The accessible name of the card: "title, site", or the site alone for a photo. */
+export function linkPreviewLabel(card: LinkPreviewCard): string {
+  return [card.title, previewSiteLabel(card.url)].filter(Boolean).join(", ");
+}
+
+/**
+ * The card's width as a number, never a percentage: it caps at the bubble's own column (82% of a
+ * single-bot thread, 88% of the column right of a group's avatar) and at the `linkCard` token. A
+ * percentage on content that fits its content has nothing definite to resolve against.
+ */
+export function linkCardWidth({
+  windowWidth,
+  gutter,
+  avatarColumn,
+  mono,
+}: {
+  windowWidth: number;
+  gutter: number;
+  /** Width of the avatar column plus its gap, 0 when there is none. */
+  avatarColumn: number;
+  mono: boolean;
+}): number {
+  const column = windowWidth - gutter * 2 - (mono ? 0 : avatarColumn);
+  return Math.max(0, Math.min(sizes.linkCard, Math.floor(column * (mono ? 0.82 : 0.88))));
+}
+
+/**
+ * The image's height at the card's width: the fixed large ratio, or a photo at its own
+ * proportions capped at `linkPhotoMax`. The page's declared size is never trusted for layout
+ * beyond the proportions the server measured on the bytes it kept.
+ */
+export function linkPreviewImageHeight(card: LinkPreviewCard, width: number): number | undefined {
+  if (card.format === "large") return Math.round(width / linkLargeImageRatio);
+  if (card.format === "photo" && card.image) {
+    return Math.min(sizes.linkPhotoMax, Math.round((width * card.image.height) / card.image.width));
+  }
+  return undefined;
+}

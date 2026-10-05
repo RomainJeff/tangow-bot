@@ -1601,6 +1601,44 @@ describe("mobile thread event reduction", () => {
     expect(next?.cursor).toBe(4);
   });
 
+  it("merges a message update into the stored message: author, reply quote and order survive", () => {
+    const reply = {
+      ...mobileMessage("reply-1", [{ kind: "text", text: "see https://example.test/a" }]),
+      botId: "bot-b",
+      runId: "run-b",
+      replyToMessageId: "message-1",
+      replyQuote: "Done",
+      createdAt: "2026-08-16T00:00:05.000Z",
+    };
+    const initial = snapshot([
+      mobileMessage("message-1", [{ kind: "text", text: "Done" }]),
+      reply,
+      mobileMessage("after-1", [{ kind: "text", text: "later" }]),
+    ]);
+
+    const next = applyMobileThreadEvent(initial, {
+      type: "thread.message.updated",
+      seq: 40,
+      botId: "bot-a",
+      createdAt: "2026-08-16T00:09:00.000Z",
+      payload: {
+        messageId: "reply-1",
+        role: "bot",
+        blocks: [...reply.blocks, { kind: "link_preview", url: "https://example.test/a" }],
+      },
+    });
+
+    expect(next?.messages.map((m) => m.id)).toEqual(["message-1", "reply-1", "after-1"]);
+    expect(next?.messages[1]).toMatchObject({
+      botId: "bot-b",
+      runId: "run-b",
+      createdAt: "2026-08-16T00:00:05.000Z",
+      replyToMessageId: "message-1",
+      replyQuote: "Done",
+    });
+    expect(next?.messages[1]?.blocks).toHaveLength(2);
+  });
+
   it("appends a quoted reply carrying its excerpt", () => {
     const initial = snapshot([mobileMessage("message-1", [{ kind: "text", text: "Done" }])]);
 

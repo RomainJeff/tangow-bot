@@ -18,6 +18,7 @@ function handlers(): BackgroundJobHandlers {
     "skill.teaching-expire": vi.fn(async () => undefined),
     "history.compact": vi.fn(async () => undefined),
     "messaging.deliver": vi.fn(async () => undefined),
+    "link.preview": vi.fn(async () => undefined),
   };
 }
 
@@ -48,6 +49,24 @@ describe("background job contracts", () => {
       routineId: "routine-1",
       scheduledFor: "2026-08-15T12:00:00.000Z",
     });
+  });
+
+  it("validates link.preview: identifiers only, one or the other", async () => {
+    const target = handlers();
+    await dispatchBackgroundJob(target, "link.preview", { messageId: "message-1" });
+    await dispatchBackgroundJob(target, "link.preview", { runId: "run-1" });
+    expect(target["link.preview"]).toHaveBeenNthCalledWith(1, { messageId: "message-1" });
+    expect(target["link.preview"]).toHaveBeenNthCalledWith(2, { runId: "run-1" });
+    // A URL, text or any extra field is refused: the link is recomputed from the database.
+    for (const payload of [
+      {},
+      { messageId: "" },
+      { messageId: "m", url: "https://example.test/" },
+      { runId: "r", messageId: "m" },
+      { url: "https://example.test/" },
+    ]) {
+      expect(() => parseBackgroundJob("link.preview", payload)).toThrow();
+    }
   });
 
   it("rejects unknown names and malformed deliveries", () => {

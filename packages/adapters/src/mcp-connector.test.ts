@@ -27,7 +27,7 @@ const ASSIGNMENT = {
 const TEST_NETWORK = {
   // Read the global per call so a fetch stubbed after construction still wins.
   fetch: (input: string | URL | Request, init?: RequestInit) => globalThis.fetch(input, init),
-  resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }],
+  resolveHostname: async () => [{ address: "8.8.8.8", family: 4 }],
 };
 
 function logicalHref(input: string | URL | Request, init?: RequestInit): string {
@@ -438,7 +438,7 @@ describe("MCP connector session cache", () => {
         {} as never,
         {
           network: {
-            resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }],
+            resolveHostname: async () => [{ address: "8.8.8.8", family: 4 }],
             fetch: vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
               const request = new Request(input, init);
               const url = logicalHref(input, init);

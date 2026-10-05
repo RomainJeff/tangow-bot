@@ -18,6 +18,7 @@ import {
   cancelResponseBody,
   ensureAiDataConsent,
   isRunTerminalEvent,
+  mergeMessageUpdate,
   mergeThreadHistory,
   prependThreadHistoryPage,
   progressMessageId,
@@ -1229,6 +1230,13 @@ export function applyMobileThreadEvent(
         : undefined,
       replyQuote: event.payload?.replyQuote ? String(event.payload.replyQuote) : undefined,
     };
+    const merged =
+      event.type === "thread.message.updated"
+        ? mergeMessageUpdate(
+            prev.messages.find((message) => message.id === next.id),
+            next,
+          )
+        : next;
     return {
       ...prev,
       cursor: event.seq ?? prev.cursor,
@@ -1242,7 +1250,7 @@ export function applyMobileThreadEvent(
               )
             ),
         ),
-        next,
+        merged,
       ),
     };
   }

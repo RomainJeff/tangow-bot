@@ -1,6 +1,7 @@
 import type {
   AgentHomeStore,
   AgentRuntime,
+  ArtifactStore,
   JobPublisher,
   MemoryStore,
   MessagingSurface,
@@ -12,10 +13,12 @@ import { describe, expect, it, vi } from "vitest";
 import { createBackgroundJobHandlers } from "./background-job-handlers.js";
 import { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
+import { runLinkPreviewJob } from "./link-preview/job.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 
 vi.mock("./history-compaction.js", () => ({ compactHistory: vi.fn(async () => undefined) }));
+vi.mock("./link-preview/job.js", () => ({ runLinkPreviewJob: vi.fn(async () => undefined) }));
 vi.mock("./messaging-delivery.js", () => ({
   deliverMessagingOutbound: vi.fn(async () => undefined),
   mirrorMessagingOutbound: vi.fn(async () => undefined),
@@ -154,5 +157,37 @@ describe("createBackgroundJobHandlers", () => {
       thinkingLevel: null,
       oauth: undefined,
     });
+  });
+
+  it("runs link.preview with the database, the artifact store and the event notifier", async () => {
+    const prisma = {} as unknown as PrismaClient;
+    const artifacts = { put: vi.fn() } as unknown as ArtifactStore;
+    const events = { notify: vi.fn() } as unknown as ThreadEvents;
+    const make = (withArtifacts: boolean) =>
+      createBackgroundJobHandlers({
+        executor: {} as unknown as ReturnType<typeof createRunExecutor>,
+        prisma,
+        sandbox: {} as unknown as SandboxProvider,
+        home: {} as unknown as AgentHomeStore,
+        jobs: {} as unknown as JobPublisher,
+        events,
+        workerId: "worker-1",
+        runtime: {} as unknown as AgentRuntime,
+        secretStore: {} as unknown as EncryptedSecretStore,
+        memory: {} as unknown as MemoryStore,
+        memoryProviders: { resolve: vi.fn(async () => null) },
+        ...(withArtifacts ? { artifacts } : {}),
+      });
+
+    await make(true)["link.preview"]({ runId: "run-1" });
+    expect(runLinkPreviewJob).toHaveBeenCalledWith(
+      { prisma, artifacts, events },
+      { runId: "run-1" },
+    );
+
+    // Without a store for the images there is nothing to do, and it is not an error.
+    vi.mocked(runLinkPreviewJob).mockClear();
+    await expect(make(false)["link.preview"]({ messageId: "m" })).resolves.toBeUndefined();
+    expect(runLinkPreviewJob).not.toHaveBeenCalled();
   });
 });

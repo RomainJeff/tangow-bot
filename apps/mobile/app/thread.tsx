@@ -113,11 +113,13 @@ import { BotAvatar } from "../components/bot-avatar";
 import { BotBubble } from "../components/bot-bubble";
 import { BuzzingAvatar } from "../components/buzzing-avatar";
 import { ComposerAttachment } from "../components/composer-attachment";
+import { ComposerLinkPreview } from "../components/composer-link-preview";
 import { ComposerAttachBubble, ComposerShell } from "../components/composer-shell";
 import { DictationPreview } from "../components/dictation-preview";
 import { FramedBlock } from "../components/framed-block";
 import { GroupAvatar } from "../components/group-avatar";
 import { HandoffDivider, Interstitial } from "../components/interstitial";
+import { LinkPreviewCard } from "../components/link-preview-card";
 import {
   MarkdownArtifactPreview,
   type MarkdownArtifactPreviewTarget,
@@ -167,6 +169,7 @@ import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
+import { cardReplacesBubble, linkPreviewCardOf } from "../lib/link-preview";
 import {
   dismissThreadNotifications,
   resumeLiveNotifications,
@@ -199,6 +202,7 @@ import {
 } from "../lib/thread-scroll";
 import { nativeTextStyle } from "../lib/typography";
 import { useComposerDictation } from "../lib/use-composer-dictation";
+import { useComposerLinkPreview } from "../lib/use-composer-link-preview";
 import { speakText } from "../lib/voice";
 
 type PendingAttachment = PickedAttachment & { threadKey: string };
@@ -612,6 +616,7 @@ function Thread() {
   const displayName = currentBot?.name ?? name;
   const notificationThreadId = snap?.threadId ?? currentBot?.threadId;
   activeThreadId.current = notificationThreadId;
+  const linkPreview = useComposerLinkPreview(draft, notificationThreadId);
   const currentBotStatus = snap ? snap.run?.status : currentBot?.status;
   const hasLiveProgress = visibleMessages.some((message) => message.id.startsWith("progress:"));
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
@@ -1431,6 +1436,8 @@ function Thread() {
     // server already applied (`rewindApplied`), which stays applied, and
     // attachments already uploaded (unchanged behaviour: they upload again on
     // a retry, same as before this feature).
+    const withoutLinkPreview = linkPreview.controller.isRemoved();
+    linkPreview.controller.reset();
     const composerSnapshot = {
       draft,
       selectedMentions,
@@ -1523,6 +1530,7 @@ function Thread() {
               mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
               artifactIds: artifactIds.length ? artifactIds : undefined,
               replyToMessageId: reroutedToGroup ? undefined : composerSnapshot.replyTarget?.id,
+              linkPreview: withoutLinkPreview ? (false as const) : undefined,
             }
           : {
               botId: botTarget!,
@@ -1531,6 +1539,7 @@ function Thread() {
               mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
               artifactIds: artifactIds.length ? artifactIds : undefined,
               replyToMessageId: composerSnapshot.replyTarget?.id,
+              linkPreview: withoutLinkPreview ? (false as const) : undefined,
             },
       );
       delivered = true;
@@ -1563,6 +1572,8 @@ function Thread() {
         }
         if (isCurrentTarget(initialBotTarget, initialGroupTarget)) {
           setDraft(composerSnapshot.draft);
+          // The person had taken the link preview off: the draft comes back without it.
+          if (withoutLinkPreview) linkPreview.controller.remove();
           setSelectedMentions(composerSnapshot.selectedMentions);
           setSelectedSkill(composerSnapshot.selectedSkill);
           setReplyTarget(composerSnapshot.replyTarget);
@@ -1815,6 +1826,17 @@ function Thread() {
     }
   }
 
+  async function removeLinkPreview(message: MobileMessage) {
+    const targetBotId = botId;
+    const targetGroupId = groupId;
+    try {
+      await rpc("messages/removeLinkPreview", { messageId: message.id });
+    } catch (err) {
+      if (!isCurrentTarget(targetBotId, targetGroupId)) return;
+      setError(err instanceof Error ? err.message : t("Try again."));
+    }
+  }
+
   function messageActionGroups(message: MobileMessage): MessageSheetAction[][] {
     const text = copyableMobileMessageText(message);
     return [
@@ -1846,16 +1868,28 @@ function Thread() {
             ]
           : []),
       ],
-      text
-        ? [
-            {
-              name: "copy",
-              text: t("Copy"),
-              icon: { ios: "doc.on.doc", android: "copy-outline" },
-              onPress: () => void Clipboard.setStringAsync(text).catch(() => undefined),
-            },
-          ]
-        : [],
+      [
+        ...(text
+          ? [
+              {
+                name: "copy",
+                text: t("Copy"),
+                icon: { ios: "doc.on.doc", android: "copy-outline" } as const,
+                onPress: () => void Clipboard.setStringAsync(text).catch(() => undefined),
+              },
+            ]
+          : []),
+        ...(linkPreviewCardOf(message)
+          ? [
+              {
+                name: "removeLinkPreview",
+                text: t("Remove preview"),
+                icon: { ios: "link.badge.minus", android: "unlink-outline" } as const,
+                onPress: () => void removeLinkPreview(message),
+              },
+            ]
+          : []),
+      ],
     ];
   }
 
@@ -2008,6 +2042,10 @@ function Thread() {
       message.role === "bot" &&
       drawnBlocks.length > 0 &&
       !drawnBlocks.some((block) => CARD_ONLY_BLOCK_KINDS.has(block.kind));
+    const replyPreviewNode =
+      chrome === "row" && message.replyToMessageId
+        ? messagesById.get(message.replyToMessageId)
+        : undefined;
     const bubble = (
       <MessageBubble
         botId={botId ?? snap?.members?.[0]?.botId ?? ""}
@@ -2016,11 +2054,7 @@ function Thread() {
         botName={displayName}
         bots={mentionBots}
         members={snap?.members}
-        replyPreview={
-          chrome === "row" && message.replyToMessageId
-            ? messagesById.get(message.replyToMessageId)
-            : undefined
-        }
+        replyPreview={replyPreviewNode}
         canAnswer={message.id === answerableAskMessageId}
         onAnswer={answerMessage}
         onOpenBot={openBot}
@@ -2030,6 +2064,45 @@ function Thread() {
         routineRole={routineRole}
       />
     );
+    // The preview card sits under the bubble, or takes its place when the message is only the
+    // link. A message that is itself a card (ask, routine run, ...) never carries one.
+    const previewCard = chrome === "row" ? linkPreviewCardOf(message) : undefined;
+    const cardReplacesBubbleView = previewCard
+      ? cardReplacesBubble(message.blocks, previewCard)
+      : false;
+    const previewNode = previewCard ? (
+      <MessageArrival
+        isNew={isNew}
+        enterDelayMs={message.role === "bot" ? (arrivalStaggerMs.get(message.id) ?? 0) : 0}
+      >
+        <LinkPreviewCard
+          card={previewCard}
+          target={groupId ? { groupId } : { botId: botId ?? snap?.members?.[0]?.botId ?? "" }}
+          mono={message.role === "user" || !inGroup}
+          align={message.role === "user" ? "end" : "start"}
+          onLongPress={actionProps.onLongPress}
+          accessibilityActions={actionProps.accessibilityActions}
+          onAccessibilityAction={actionProps.onAccessibilityAction}
+        />
+      </MessageArrival>
+    ) : null;
+    const withPreview = (content: ReactNode) =>
+      previewNode ? (
+        cardReplacesBubbleView ? (
+          // The card takes the bubble's place, and the quote it carried stays above it.
+          <View style={{ alignItems: message.role === "user" ? "flex-end" : "flex-start" }}>
+            <ReplyQuote message={message} replyPreview={replyPreviewNode} />
+            {previewNode}
+          </View>
+        ) : (
+          <View style={{ gap: 4 }}>
+            {content}
+            {previewNode}
+          </View>
+        )
+      ) : (
+        content
+      );
     return (
       <ThreadRowContext.Provider key={message.id} value={message.id}>
         <View
@@ -2093,51 +2166,57 @@ function Thread() {
                 showAvatar={inGroup && (group?.isLastOfGroup ?? true)}
                 mono={!inGroup}
               >
-                {isNarrationBotBubble ? (
-                  <AnimatedMessageBubble
-                    variant="bot"
-                    isNew={isNew}
-                    enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}
-                    // A table scrolls sideways inside the bubble; a rightward drag
-                    // there must move the table, not start a reply.
-                    enableSwipeReply={
-                      !options?.enableJump &&
-                      !message.blocks.some(
-                        (block) => block.kind === "text" && hasMarkdownTable(block.text),
-                      )
-                    }
-                    onLongPress={actionProps.onLongPress!}
-                    onSwipeReply={() => setReplyTarget(message)}
-                    accessibilityActions={actionProps.accessibilityActions}
-                    onAccessibilityAction={actionProps.onAccessibilityAction}
-                  >
-                    {bubble}
-                  </AnimatedMessageBubble>
-                ) : (
-                  <MessageArrival
-                    isNew={isNew}
-                    enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}
-                  >
-                    <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+                {withPreview(
+                  isNarrationBotBubble ? (
+                    <AnimatedMessageBubble
+                      variant="bot"
+                      isNew={isNew}
+                      enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}
+                      // A table scrolls sideways inside the bubble; a rightward drag
+                      // there must move the table, not start a reply.
+                      enableSwipeReply={
+                        !options?.enableJump &&
+                        !message.blocks.some(
+                          (block) => block.kind === "text" && hasMarkdownTable(block.text),
+                        )
+                      }
+                      onLongPress={actionProps.onLongPress!}
+                      onSwipeReply={() => setReplyTarget(message)}
+                      accessibilityActions={actionProps.accessibilityActions}
+                      onAccessibilityAction={actionProps.onAccessibilityAction}
+                    >
                       {bubble}
-                    </Pressable>
-                  </MessageArrival>
+                    </AnimatedMessageBubble>
+                  ) : (
+                    <MessageArrival
+                      isNew={isNew}
+                      enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}
+                    >
+                      <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+                        {bubble}
+                      </Pressable>
+                    </MessageArrival>
+                  ),
                 )}
               </MessageRow>
             ) : chrome === "row" && message.role === "user" ? (
-              <AnimatedMessageBubble
-                variant="user"
-                isNew={isNew}
-                onLongPress={actionProps.onLongPress!}
-                accessibilityActions={actionProps.accessibilityActions}
-                onAccessibilityAction={actionProps.onAccessibilityAction}
-              >
-                {bubble}
-              </AnimatedMessageBubble>
+              withPreview(
+                <AnimatedMessageBubble
+                  variant="user"
+                  isNew={isNew}
+                  onLongPress={actionProps.onLongPress!}
+                  accessibilityActions={actionProps.accessibilityActions}
+                  onAccessibilityAction={actionProps.onAccessibilityAction}
+                >
+                  {bubble}
+                </AnimatedMessageBubble>,
+              )
             ) : chrome === "row" ? (
-              <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
-                {bubble}
-              </Pressable>
+              withPreview(
+                <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+                  {bubble}
+                </Pressable>,
+              )
             ) : (
               <View>{bubble}</View>
             )}
@@ -2641,7 +2720,7 @@ function Thread() {
                 dictating={dictation.dictating}
                 dictationVolume={dictation.volume}
                 attachments={
-                  activePendingAttachments.length ? (
+                  activePendingAttachments.length || linkPreview.view.status !== "idle" ? (
                     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                       <View style={{ flexDirection: "row", gap: 8 }}>
                         {activePendingAttachments.map((attachment) => (
@@ -2657,6 +2736,13 @@ function Thread() {
                             }
                           />
                         ))}
+                        {linkPreview.view.status === "idle" ? null : (
+                          <ComposerLinkPreview
+                            view={linkPreview.view}
+                            disabled={dictation.dictating}
+                            onRemove={() => linkPreview.controller.remove()}
+                          />
+                        )}
                       </View>
                     </ScrollView>
                   ) : undefined
@@ -4621,6 +4707,34 @@ function TaskCard({
   );
 }
 
+/** The quote of the message a reply answers, above its bubble (or its card), unfilled. */
+function ReplyQuote({
+  message,
+  replyPreview,
+}: {
+  message: MobileMessage;
+  replyPreview?: MobileMessage;
+}) {
+  const tokens = mobileTokens();
+  if (!replyPreview && !(message.replyToMessageId && message.replyQuote)) return null;
+  return (
+    <Text
+      numberOfLines={2}
+      style={{
+        marginBottom: 6,
+        color: tokens.mutedForeground,
+        ...nativeTextStyle("meta"),
+      }}
+    >
+      {message.replyQuote
+        ? `“${message.replyQuote}”`
+        : replyPreview
+          ? previewMessageText(replyPreview)
+          : ""}
+    </Text>
+  );
+}
+
 /**
  * What was said: the person's words in the `chatUser` bubble, a bot's in its
  * `muted` narration bubble (design contract § Grouping — "1 message = 1
@@ -4642,23 +4756,7 @@ function MessageText({
   const tokens = mobileTokens();
   const contentText = blockText(message);
   if (!contentText) return null;
-  const parent =
-    replyPreview || (message.replyToMessageId && message.replyQuote) ? (
-      <Text
-        numberOfLines={2}
-        style={{
-          marginBottom: 6,
-          color: tokens.mutedForeground,
-          ...nativeTextStyle("meta"),
-        }}
-      >
-        {message.replyQuote
-          ? `“${message.replyQuote}”`
-          : replyPreview
-            ? previewMessageText(replyPreview)
-            : ""}
-      </Text>
-    ) : null;
+  const parent = <ReplyQuote message={message} replyPreview={replyPreview} />;
   // `onLongPress` is deliberately left out here: the row-level RNGH gesture
   // (`AnimatedMessageBubble`) owns the long press for a plain text bubble,
   // and mixing the RN responder with RNGH on the same view is exactly what

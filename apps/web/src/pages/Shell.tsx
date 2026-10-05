@@ -238,7 +238,11 @@ export function ShellPage() {
   const [rewindArtifacts, setRewindArtifacts] = useState<{ id: string; name: string }[]>([]);
   // `key` re-seeds the composer draft: once when rewind starts, again when a failed send
   // has to hand the typed text back.
-  const [rewindDraft, setRewindDraft] = useState<{ key: string; text: string } | null>(null);
+  const [rewindDraft, setRewindDraft] = useState<{
+    key: string;
+    text: string;
+    linkPreviewRemoved?: boolean;
+  } | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
@@ -1868,7 +1872,11 @@ export function ShellPage() {
     setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id));
   }, []);
   const sendMessage = useCallback(
-    async (text: string, mentions: ComposerMention[] = []) => {
+    async (
+      text: string,
+      mentions: ComposerMention[] = [],
+      options: { linkPreview?: false } = {},
+    ) => {
       const initialBotTarget = activeBotId.current;
       const initialGroupTarget = activeGroupId.current;
       if ((!initialBotTarget && !initialGroupTarget) || sending) return;
@@ -1965,6 +1973,7 @@ export function ShellPage() {
             mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
             artifactIds: artifactIds.length ? artifactIds : undefined,
             replyToMessageId: reroutedToGroup ? undefined : activeReplyTarget?.id,
+            linkPreview: options.linkPreview,
           });
         } else if (botTarget) {
           const sent = await rpc.threads.send({
@@ -1974,6 +1983,7 @@ export function ShellPage() {
             mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
             artifactIds: artifactIds.length ? artifactIds : undefined,
             replyToMessageId: activeReplyTarget?.id,
+            linkPreview: options.linkPreview,
           });
           if (activeBotId.current === botTarget) {
             updateSnapshot((current) =>
@@ -2009,7 +2019,12 @@ export function ShellPage() {
       } catch (error) {
         // The composer already dropped the text on send, so hand it back for another try.
         if (rewindMessageId) {
-          setRewindDraft({ key: `retry:${newClientNonce()}`, text: trimmed });
+          // The person had taken the link preview off this message: the retry keeps it off.
+          setRewindDraft({
+            key: `retry:${newClientNonce()}`,
+            text: trimmed,
+            linkPreviewRemoved: options.linkPreview === false,
+          });
         }
         if (reroutedToGroup && groupTarget) {
           setSendError(error instanceof Error ? error.message : t`Failed to send message`);
@@ -2033,6 +2048,14 @@ export function ShellPage() {
       sending,
       t,
     ],
+  );
+  const composerThreadId = inGroup ? activeGroup?.threadId : active?.threadId;
+  const previewLink = useCallback(
+    (url: string, signal: AbortSignal) =>
+      composerThreadId
+        ? rpc.links.preview({ threadId: composerThreadId, url }, { signal })
+        : Promise.resolve(null),
+    [composerThreadId],
   );
   const followUpMessage = useCallback(async (text: string) => {
     const id = activeBotId.current;
@@ -2710,6 +2733,7 @@ export function ShellPage() {
                 onAttachmentPick={onAttachmentPick}
                 onRemoveAttachment={removeAttachment}
                 onSend={sendMessage}
+                previewLink={previewLink}
                 onStop={stopRun}
                 dictationTranscribe={Boolean(voiceStatus?.transcribe)}
                 replyTarget={activeReplyTarget}
