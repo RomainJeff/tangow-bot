@@ -26,6 +26,11 @@ msgstr ""
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# модель} few {# модели} many {# моделей} other {# модели}}"
 
+#. placeholder {0}: runs.length
+#: src/pages/shell/routine-run-line.tsx:335
+msgid "{0, plural, one {# run} other {# runs}}"
+msgstr ""
+
 #. placeholder {0}: file.name
 #: src/pages/Shell.tsx:1841
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
@@ -111,15 +116,15 @@ msgstr ""
 msgid "{botName}’s computer"
 msgstr "Компьютер {botName}"
 
-#: src/pages/shell/routine-run-line.tsx:331
-msgid "{cancelledCount} cancelled"
+#: src/pages/shell/routine-run-line.tsx:333
+msgid "{cancelledCount, plural, one {# cancelled} other {# cancelled}}"
 msgstr ""
 
 #: src/pages/ActivityList.tsx:140
 msgid "{days}d ago"
 msgstr "{days} дн. назад"
 
-#: src/pages/shell/message-view.tsx:256
+#: src/pages/shell/message-view.tsx:255
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -151,10 +156,6 @@ msgstr "{name}: остановлено"
 msgid "{remaining} left · bot is watching, not acting"
 msgstr "Осталось: {remaining} · бот наблюдает, но не действует"
 
-#: src/pages/shell/routine-run-line.tsx:333
-msgid "{runsCount} runs"
-msgstr ""
-
 #: src/components/ArtifactFileCard.tsx:220
 msgid "{size} B"
 msgstr "{size} Б"
@@ -163,7 +164,7 @@ msgstr "{size} Б"
 msgid "{stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
-#: src/components/TaskCard.tsx:86
+#: src/components/TaskCard.tsx:88
 msgid "{title} · Opens in full"
 msgstr ""
 
@@ -180,7 +181,7 @@ msgid "{workingBotName} is working"
 msgstr "{workingBotName} работает"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:683
+#: src/pages/shell/composer.tsx:702
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -535,7 +536,7 @@ msgstr "Одобрите этот сервер, чтобы ваш агент м�
 msgid "Archive"
 msgstr "Архивировать"
 
-#: src/pages/shell/message-view.tsx:346
+#: src/pages/shell/message-view.tsx:345
 msgid "archived"
 msgstr "в архиве"
 
@@ -543,7 +544,7 @@ msgstr "в архиве"
 msgid "Archived"
 msgstr "В архиве"
 
-#: src/pages/shell/message-view.tsx:357
+#: src/pages/shell/message-view.tsx:356
 msgid "Archived. Chat, memory, and files kept."
 msgstr "В архиве. Чат, память и файлы сохраняются."
 
@@ -601,11 +602,11 @@ msgstr "в {0}"
 msgid "at {timeSelect}"
 msgstr "в {timeSelect}"
 
-#: src/pages/shell/composer.tsx:790
+#: src/pages/shell/composer.tsx:809
 msgid "Attach file"
 msgstr "Прикрепить файл"
 
-#: src/pages/shell/message-view.tsx:96
+#: src/pages/shell/message-view.tsx:95
 msgid "Attachment"
 msgstr "Вложение"
 
@@ -682,15 +683,15 @@ msgstr "Загрузка рабочего стола…"
 msgid "Booting up {0}’s computer"
 msgstr "Загрузка компьютера {0}"
 
+#: src/pages/shell/message-view.tsx:243
 #: src/pages/shell/message-view.tsx:244
-#: src/pages/shell/message-view.tsx:245
-#: src/pages/shell/message-view.tsx:350
+#: src/pages/shell/message-view.tsx:349
 msgid "bot"
 msgstr "бот"
 
 #: src/pages/IntegrationSetup.tsx:51
 #: src/pages/Shell.tsx:1614
-#: src/pages/shell/message-view.tsx:203
+#: src/pages/shell/message-view.tsx:202
 msgid "Bot"
 msgstr "Бот"
 
@@ -763,11 +764,11 @@ msgstr "Не удаётся связаться с сервером."
 msgid "Cancel"
 msgstr "Отмена"
 
-#: src/pages/shell/composer.tsx:904
+#: src/pages/shell/composer.tsx:923
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:651
+#: src/pages/shell/composer.tsx:670
 msgid "Cancel edit"
 msgstr ""
 
@@ -779,14 +780,13 @@ msgstr "Отменить создание бота"
 msgid "Cancel new group"
 msgstr "Отменить создание группы"
 
-#: src/pages/shell/composer.tsx:632
+#: src/pages/shell/composer.tsx:651
 msgid "Cancel reply"
 msgstr "Отменить ответ"
 
 #: src/components/AskCard.tsx:23
-#: src/components/TaskCard.tsx:49
 #: src/pages/ActivityList.tsx:162
-#: src/pages/shell/routine-run-line.tsx:160
+#: src/pages/shell/routine-run-line.tsx:161
 msgid "Cancelled"
 msgstr "Отменено"
 
@@ -818,7 +818,7 @@ msgstr "Приложения для чата"
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Приложения чата, групповые каналы и подключения агентов."
 
-#: src/pages/shell/composer.tsx:1067
+#: src/pages/shell/composer.tsx:1086
 msgid "Chat Settings"
 msgstr "Настройки чата"
 
@@ -893,7 +893,7 @@ msgstr "ID клиента"
 msgid "Client secret"
 msgstr "Секрет клиента"
 
-#: src/components/TaskCard.tsx:153
+#: src/components/TaskCard.tsx:162
 #: src/pages/KnowledgeSection.tsx:670
 #: src/pages/KnowledgeSection.tsx:820
 #: src/pages/MessagingSettingsOverlay.tsx:361
@@ -951,7 +951,7 @@ msgstr "Закрыть панель"
 msgid "Close preview"
 msgstr "Закрыть предварительный просмотр"
 
-#: src/pages/shell/routine-run-line.tsx:268
+#: src/pages/shell/routine-run-line.tsx:269
 msgid "Close report"
 msgstr ""
 
@@ -998,14 +998,14 @@ msgstr "Команда"
 msgid "Complete"
 msgstr "Завершить"
 
-#: src/pages/shell/routine-run-line.tsx:157
-#: src/pages/shell/routine-run-line.tsx:331
+#: src/pages/shell/routine-run-line.tsx:158
+#: src/pages/shell/routine-run-line.tsx:334
 msgid "Completed"
 msgstr ""
 
 #: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:64
-#: src/pages/shell/message-view.tsx:510
+#: src/pages/shell/message-view.tsx:508
 msgid "Computer"
 msgstr "Компьютер"
 
@@ -1749,7 +1749,7 @@ msgstr "Удалите воспоминания тоже"
 msgid "Delete space"
 msgstr "Удалить пространство"
 
-#: src/pages/shell/message-view.tsx:348
+#: src/pages/shell/message-view.tsx:347
 msgid "deleted"
 msgstr "удалено"
 
@@ -1791,11 +1791,11 @@ msgstr "Настольное приложение"
 msgid "Desktop update"
 msgstr "Обновление настольного приложения"
 
-#: src/pages/shell/composer.tsx:860
+#: src/pages/shell/composer.tsx:879
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:942
+#: src/pages/shell/composer.tsx:961
 msgid "Dictating"
 msgstr ""
 
@@ -1827,7 +1827,7 @@ msgstr "Отключение…"
 msgid "Dismiss"
 msgstr "Закрыть"
 
-#: src/pages/shell/composer.tsx:612
+#: src/pages/shell/composer.tsx:630
 msgid "Dismiss error"
 msgstr "Закрыть ошибку"
 
@@ -1900,7 +1900,7 @@ msgstr "Черновик навыка"
 msgid "Duplicate"
 msgstr "Дублировать"
 
-#: src/pages/shell/message-view.tsx:178
+#: src/pages/shell/message-view.tsx:177
 msgid "Earlier message"
 msgstr "Предыдущее сообщение"
 
@@ -1918,7 +1918,7 @@ msgid "Edit Profile"
 msgstr "Редактировать профиль"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:647
+#: src/pages/shell/composer.tsx:666
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr ""
 
@@ -2022,9 +2022,8 @@ msgstr "Внешний диалог"
 msgid "Extra high"
 msgstr "Очень высокий"
 
-#: src/components/TaskCard.tsx:49
 #: src/pages/ActivityList.tsx:160
-#: src/pages/shell/routine-run-line.tsx:159
+#: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
 msgstr "Ошибка"
 
@@ -2247,7 +2246,7 @@ msgstr ""
 msgid "Inputs"
 msgstr "Входы"
 
-#: src/pages/shell/composer.tsx:918
+#: src/pages/shell/composer.tsx:937
 msgid "Insert dictation"
 msgstr ""
 
@@ -2319,11 +2318,11 @@ msgstr "изолированный"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Его диалог, файлы и задачи будут безвозвратно удалены. Созданные им боты останутся в вашем списке."
 
-#: src/pages/shell/transcript.tsx:664
+#: src/pages/shell/transcript.tsx:662
 msgid "Jump to latest"
 msgstr "Перейти к последнему"
 
-#: src/pages/shell/message-view.tsx:173
+#: src/pages/shell/message-view.tsx:172
 msgid "Jump to replied message"
 msgstr "Перейти к ответному сообщению"
 
@@ -2541,7 +2540,7 @@ msgstr "Память"
 msgid "Memory scope"
 msgstr "Область памяти"
 
-#: src/pages/shell/composer.tsx:669
+#: src/pages/shell/composer.tsx:688
 msgid "Mentions"
 msgstr "Упоминания"
 
@@ -2549,9 +2548,9 @@ msgstr "Упоминания"
 msgid "Mentions only"
 msgstr "Только упоминания"
 
-#: src/pages/shell/composer.tsx:951
-#: src/pages/shell/composer.tsx:1045
-#: src/pages/shell/message-view.tsx:98
+#: src/pages/shell/composer.tsx:970
+#: src/pages/shell/composer.tsx:1064
+#: src/pages/shell/message-view.tsx:97
 msgid "Message"
 msgstr "Сообщение"
 
@@ -2560,9 +2559,9 @@ msgstr "Сообщение"
 msgid "Message"
 msgstr "Сообщение"
 
-#: src/pages/shell/composer.tsx:951
-#: src/pages/shell/composer.tsx:1041
-#: src/pages/shell/composer.tsx:1045
+#: src/pages/shell/composer.tsx:970
+#: src/pages/shell/composer.tsx:1060
+#: src/pages/shell/composer.tsx:1064
 msgid "Message {activeName}"
 msgstr "Сообщение {activeName}"
 
@@ -2570,7 +2569,7 @@ msgstr "Сообщение {activeName}"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:592
+#: src/pages/shell/composer.tsx:610
 msgid "Message composer"
 msgstr "Поле сообщения"
 
@@ -2579,20 +2578,20 @@ msgstr "Поле сообщения"
 msgid "Message event"
 msgstr "Событие сообщения"
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Message from {peer}"
 msgstr "Сообщение от {peer}"
 
-#: src/pages/shell/composer.tsx:1042
+#: src/pages/shell/composer.tsx:1061
 msgid "Message…"
 msgstr "Сообщение…"
 
 #. placeholder {0}: sent.toBotName
-#: src/pages/shell/message-view.tsx:372
+#: src/pages/shell/message-view.tsx:371
 msgid "Messaged {0}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:268
+#: src/pages/shell/message-view.tsx:267
 msgid "Messaged {peer}"
 msgstr "Отправлено сообщение {peer}"
 
@@ -2921,8 +2920,8 @@ msgstr "Пока ничего не запомнено"
 msgid "Notifications"
 msgstr ""
 
-#: src/pages/shell/routine-run-line.tsx:169
-#: src/pages/shell/routine-run-line.tsx:203
+#: src/pages/shell/routine-run-line.tsx:170
+#: src/pages/shell/routine-run-line.tsx:204
 msgid "Notifications on"
 msgstr ""
 
@@ -3008,7 +3007,7 @@ msgstr "Открытые задачи"
 msgid "OpenAI-compatible server URL"
 msgstr "URL-адрес сервера, совместимого с OpenAI"
 
-#: src/pages/shell/message-view.tsx:359
+#: src/pages/shell/message-view.tsx:358
 msgid "Opened its thread."
 msgstr "Диалог открыт."
 
@@ -3178,12 +3177,8 @@ msgstr "Поставщик"
 msgid "Providers"
 msgstr "Провайдеры"
 
-#: src/components/CloudAgentCard.tsx:34
-msgid "Pull request"
-msgstr "Запрос на слияние"
-
 #: src/pages/ActivityList.tsx:148
-#: src/pages/shell/routine-run-line.tsx:153
+#: src/pages/shell/routine-run-line.tsx:154
 msgid "Queued"
 msgstr "В очереди"
 
@@ -3312,8 +3307,8 @@ msgstr "Удалить"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:759
-#: src/pages/shell/composer.tsx:769
+#: src/pages/shell/composer.tsx:778
+#: src/pages/shell/composer.tsx:788
 msgid "Remove {0}"
 msgstr "Удалить {0}"
 
@@ -3327,7 +3322,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr ""
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:835
+#: src/pages/shell/composer.tsx:854
 msgid "Remove mention {0}"
 msgstr "Удалить упоминание {0}"
 
@@ -3340,7 +3335,7 @@ msgid "Remove schedule"
 msgstr "Удалить расписание"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:813
+#: src/pages/shell/composer.tsx:832
 msgid "Remove skill {0}"
 msgstr "Удалить навык {0}"
 
@@ -3348,7 +3343,7 @@ msgstr "Удалить навык {0}"
 msgid "Remove webhook"
 msgstr "Удалить вебхук"
 
-#: src/pages/shell/message-view.tsx:358
+#: src/pages/shell/message-view.tsx:357
 msgid "Removed with chat, computer, and memory."
 msgstr "Удалено вместе с чатом, компьютером и памятью."
 
@@ -3392,12 +3387,12 @@ msgstr "Ответить"
 msgid "Reply in several short messages"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:629
+#: src/pages/shell/composer.tsx:648
 msgid "Replying to {replyName}"
 msgstr "Ответ на {replyName}"
 
 #. placeholder {0}: block.routineName
-#: src/pages/shell/routine-run-line.tsx:240
+#: src/pages/shell/routine-run-line.tsx:241
 msgid "Report, {0} · Opens in full"
 msgstr ""
 
@@ -3501,9 +3496,8 @@ msgstr "История запуска"
 msgid "Run time must be in the future."
 msgstr "Время выполнения должно быть в будущем."
 
-#: src/components/TaskCard.tsx:49
 #: src/pages/ActivityList.tsx:152
-#: src/pages/shell/routine-run-line.tsx:155
+#: src/pages/shell/routine-run-line.tsx:156
 msgid "Running"
 msgstr "Выполняется"
 
@@ -3629,7 +3623,7 @@ msgstr ""
 msgid "Select a bot"
 msgstr "Выберите бота"
 
-#: src/pages/shell/composer.tsx:872
+#: src/pages/shell/composer.tsx:891
 msgid "Send"
 msgstr "Отправить"
 
@@ -3695,11 +3689,11 @@ msgstr "URL-адрес сервера"
 msgid "Settings"
 msgstr "Настройки"
 
-#: src/pages/shell/composer.tsx:1069
+#: src/pages/shell/composer.tsx:1088
 msgid "Settings: General"
 msgstr "Настройки: Общие"
 
-#: src/pages/shell/composer.tsx:1071
+#: src/pages/shell/composer.tsx:1090
 msgid "Settings: Usage"
 msgstr "Настройки: Использование"
 
@@ -3736,12 +3730,12 @@ msgstr ""
 msgid "Show bots"
 msgstr "Показать ботов"
 
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show less"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx:873
-#: src/pages/shell/message-view.tsx:65
+#: src/pages/shell/message-view.tsx:64
 msgid "Show more"
 msgstr "Показать ещё"
 
@@ -3771,7 +3765,7 @@ msgid "Sign up"
 msgstr "Зарегистрироваться"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:716
+#: src/pages/shell/composer.tsx:735
 msgid "Skill {0}"
 msgstr "Навык {0}"
 
@@ -3860,8 +3854,8 @@ msgstr "Запуск…"
 msgid "Steps"
 msgstr "Шаги"
 
-#: src/pages/shell/composer.tsx:888
-#: src/pages/shell/composer.tsx:929
+#: src/pages/shell/composer.tsx:907
+#: src/pages/shell/composer.tsx:948
 #: src/pages/shell/side-panel.tsx:691
 #: src/pages/shell/side-panel.tsx:696
 msgid "Stop"
@@ -3890,7 +3884,7 @@ msgstr "Хранится в зашифрованном виде"
 msgid "Stored securely. Never shown here."
 msgstr "Хранится безопасно. Здесь не отображается."
 
-#: src/pages/shell/message-view.tsx:318
+#: src/pages/shell/message-view.tsx:317
 msgid "subagent"
 msgstr "субагент"
 
@@ -4051,8 +4045,8 @@ msgid "To:"
 msgstr "К:"
 
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/routine-run-line.tsx:395
-#: src/pages/shell/transcript.tsx:215
+#: src/pages/shell/routine-run-line.tsx:401
+#: src/pages/shell/transcript.tsx:214
 msgid "Today"
 msgstr ""
 
@@ -4293,8 +4287,8 @@ msgid "Workspace root"
 msgstr ""
 
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/routine-run-line.tsx:396
-#: src/pages/shell/transcript.tsx:216
+#: src/pages/shell/routine-run-line.tsx:402
+#: src/pages/shell/transcript.tsx:215
 msgid "Yesterday"
 msgstr ""
 

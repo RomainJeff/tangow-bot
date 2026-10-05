@@ -12,6 +12,10 @@ describe("writtenLanguage", () => {
     expect(writtenLanguage(["can you check what is on my calendar for this week"])).toBe("en");
   });
 
+  it("doesn't mistake English full of single-letter words for Portuguese", () => {
+    expect(writtenLanguage(["Write a list of a few items for a party"])).not.toBe("pt");
+  });
+
   it("stays silent on too little or mixed text", () => {
     expect(writtenLanguage(["ok"])).toBeUndefined();
     expect(writtenLanguage([])).toBeUndefined();

@@ -149,6 +149,35 @@ describe("repairMarkdownTables", () => {
     expect(repairMarkdownTables(fenced)).toBe(fenced);
   });
 
+  it("ignores pipes inside inline code and escaped pipes", () => {
+    const code = "Run `ls | wc -l`\nthen `cat a | sort`";
+    expect(repairMarkdownTables(code)).toBe(code);
+    expect(repairMarkdownTables("a \\| b | c\nd | e")).toBe("a \\| b | c\n| --- | --- |\nd | e");
+    const escapedMismatch = "a \\| b | c\nd | e | f";
+    expect(repairMarkdownTables(escapedMismatch)).toBe(escapedMismatch);
+  });
+
+  it("leaves blockquotes and lists alone", () => {
+    const quote = "> a | b\n> c | d";
+    expect(repairMarkdownTables(quote)).toBe(quote);
+    const list = "- a | b\n- c | d";
+    expect(repairMarkdownTables(list)).toBe(list);
+    const numbered = "1. a | b\n2. c | d";
+    expect(repairMarkdownTables(numbered)).toBe(numbered);
+  });
+
+  it("only closes a fence with the same marker, at least as long", () => {
+    const backtick = "```\n~~~\na | b\nc | d\n```";
+    expect(repairMarkdownTables(backtick)).toBe(backtick);
+    const longer = "````\n```\na | b\nc | d\n````";
+    expect(repairMarkdownTables(longer)).toBe(longer);
+  });
+
+  it("leaves prose with pipes alone when a real table starts right under it", () => {
+    const markdown = "Options: A | B\n| x | y |\n|---|---|\n| 1 | 2 |";
+    expect(repairMarkdownTables(markdown)).toBe(markdown);
+  });
+
   it("lets hasMarkdownTable see a repaired table", () => {
     expect(hasMarkdownTable("A | B\n1 | 2")).toBe(true);
   });

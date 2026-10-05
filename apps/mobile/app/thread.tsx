@@ -23,7 +23,6 @@ import {
   attachmentsForThread,
   buildComposerMentionOptions,
   type ComposerMention,
-  cloudAgentHttpsUrl,
   computeMessageGroups,
   foldRoutineRuns,
   isApprovalAskBlock,
@@ -71,7 +70,6 @@ import {
   AppState,
   FlatList,
   findNodeHandle,
-  Linking,
   Modal,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -232,7 +230,6 @@ const CARD_ONLY_BLOCK_KINDS = new Set<string>([
   "routine_run",
   "subagent",
   "child_bot",
-  "cloud_agent",
   "image",
   "file",
 ]);
@@ -505,6 +502,10 @@ function Thread() {
   // Until when a row the person opened is being held in place: the
   // follow-latest scroll stays out of its way meanwhile.
   const holdingRowUntil = useRef(0);
+  // A content change that landed during the hold, replayed once it ends.
+  const heldContentChange = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const contentChanged = useRef(() => {});
+  useEffect(() => () => clearTimeout(heldContentChange.current), []);
   // A row the person opens keeps the row just above it (the next index: the
   // list is inverted) in place instead of the latest message, so its header
   // stays put. The anchor stays set afterwards: switching it back moved the
@@ -1193,7 +1194,6 @@ function Thread() {
                 event.type === "thread.message.created" ||
                 event.type === "thread.message.updated" ||
                 event.type === "thread.subagent" ||
-                event.type === "thread.cloud_agent" ||
                 event.type === "thread.cleared" ||
                 event.type === "thread.rewound" ||
                 event.type === "run.waiting_input" ||
@@ -1481,6 +1481,9 @@ function Thread() {
     };
     clearOriginComposer();
     let rewindApplied = false;
+    // Once the server has the message (or the routine runs), a later failure
+    // (a refresh) must not put it back in the composer to be sent twice.
+    let delivered = false;
 
     setSending(true);
     setError(null);
@@ -1497,6 +1500,7 @@ function Thread() {
         );
       }
       if (!plan.shouldSend) {
+        delivered = true;
         dropDelayedSetup();
         if (reroutedToGroup && groupTarget) {
           router.push({
@@ -1554,6 +1558,7 @@ function Thread() {
               replyToMessageId: composerSnapshot.replyTarget?.id,
             },
       );
+      delivered = true;
       dropDelayedSetup();
       void loadSessionToken()
         .then((token) => resumeLiveNotifications(currentApiBase(), token, selectedSpaceId() ?? ""))
@@ -1574,17 +1579,23 @@ function Thread() {
     } catch (err) {
       // 7a: restore the snapshot — an already-applied rewind stays applied,
       // and a rewind that never reached the server comes back so the person
-      // doesn't lose their edit target on a retry.
-      setDraft(composerSnapshot.draft);
-      setSelectedMentions(composerSnapshot.selectedMentions);
-      setSelectedSkill(composerSnapshot.selectedSkill);
-      if (composerSnapshot.pendingAttachments.length) {
-        setPendingAttachments((current) => [...current, ...composerSnapshot.pendingAttachments]);
-      }
-      setReplyTarget(composerSnapshot.replyTarget);
-      if (!rewindApplied) {
-        setRewindTarget(composerSnapshot.rewindTarget);
-        setRewindArtifactIds(composerSnapshot.rewindArtifactIds);
+      // doesn't lose their edit target on a retry. Attachments carry their
+      // own thread key; the rest is the screen's single composer, so it only
+      // comes back if the person is still on the thread they sent from.
+      if (!delivered) {
+        if (composerSnapshot.pendingAttachments.length) {
+          setPendingAttachments((current) => [...current, ...composerSnapshot.pendingAttachments]);
+        }
+        if (isCurrentTarget(initialBotTarget, initialGroupTarget)) {
+          setDraft(composerSnapshot.draft);
+          setSelectedMentions(composerSnapshot.selectedMentions);
+          setSelectedSkill(composerSnapshot.selectedSkill);
+          setReplyTarget(composerSnapshot.replyTarget);
+          if (!rewindApplied) {
+            setRewindTarget(composerSnapshot.rewindTarget);
+            setRewindArtifactIds(composerSnapshot.rewindArtifactIds);
+          }
+        }
       }
       if (reroutedToGroup && groupTarget) {
         setError(err instanceof Error ? err.message : t("Failed to send message"));
@@ -1790,6 +1801,18 @@ function Thread() {
       animated: action === "smooth" && !reducedMotion,
     });
   }
+
+  contentChanged.current = () => {
+    const blocked = Boolean(
+      jumpScrollTarget.current ||
+        (pinnedAroundRef.current &&
+          ((pinnedAroundRef.current.botId && pinnedAroundRef.current.botId === botId) ||
+            (pinnedAroundRef.current.groupId && pinnedAroundRef.current.groupId === groupId))) ||
+        expandedHistoryThread.current === snap?.threadId,
+    );
+    performScroll(scrollBehavior.current.onContentChanged(blocked, latestMessageId));
+    setThreadScrollState(scrollBehavior.current.state());
+  };
 
   function updateUserScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     listOffset.current = event.nativeEvent.contentOffset.y;
@@ -2356,19 +2379,15 @@ function Thread() {
                     loadingOlderContent.current = false;
                     return;
                   }
-                  // A row the person just opened is holding its place.
-                  if (Date.now() < holdingRowUntil.current) return;
-                  const blocked = Boolean(
-                    jumpScrollTarget.current ||
-                      (pinnedAroundRef.current &&
-                        ((pinnedAroundRef.current.botId &&
-                          pinnedAroundRef.current.botId === botId) ||
-                          (pinnedAroundRef.current.groupId &&
-                            pinnedAroundRef.current.groupId === groupId))) ||
-                      expandedHistoryThread.current === snap?.threadId,
-                  );
-                  performScroll(scrollBehavior.current.onContentChanged(blocked, latestMessageId));
-                  setThreadScrollState(scrollBehavior.current.state());
+                  // A row the person just opened is holding its place: replay
+                  // the change once the hold ends, so it isn't lost.
+                  const held = holdingRowUntil.current - Date.now();
+                  clearTimeout(heldContentChange.current);
+                  if (held > 0) {
+                    heldContentChange.current = setTimeout(() => contentChanged.current(), held);
+                    return;
+                  }
+                  contentChanged.current();
                 }}
                 ListFooterComponent={loadEarlierControl}
                 ListHeaderComponent={workingFooter}
@@ -3491,8 +3510,7 @@ const MessageBubble = memo(function MessageBubble({
     return <RoutineRunLine item={item} handoff={handoffFor(item)} actionProps={actionProps} />;
   }
   const special = message.blocks.find(
-    (block) =>
-      block.kind === "subagent" || block.kind === "child_bot" || block.kind === "cloud_agent",
+    (block) => block.kind === "subagent" || block.kind === "child_bot",
   );
   if (special?.kind === "subagent") {
     const running = special.status === "running";
@@ -3507,44 +3525,6 @@ const MessageBubble = memo(function MessageBubble({
         streaming={running}
         actionProps={actionProps}
       />
-    );
-  }
-  if (special?.kind === "cloud_agent") {
-    const title = special.title || t("Cloud agent");
-    const statusLabel =
-      special.status === "running"
-        ? t("running")
-        : special.status === "finished"
-          ? t("finished")
-          : special.status === "cancelled"
-            ? t("cancelled")
-            : t("failed");
-    const prHref = cloudAgentHttpsUrl(special.prUrl);
-    const href = prHref ?? cloudAgentHttpsUrl(special.url);
-    return (
-      <View testID="cloud-agent-card" accessibilityLabel={`${title}: ${statusLabel}`}>
-        <TaskCard
-          title={title}
-          accessibilityRole={href ? "link" : "text"}
-          onPress={
-            href
-              ? () => {
-                  Linking.openURL(href).catch(() => undefined);
-                }
-              : undefined
-          }
-          state={
-            special.status === "running"
-              ? "running"
-              : special.status === "finished"
-                ? "done"
-                : special.status === "cancelled"
-                  ? "cancelled"
-                  : "failed"
-          }
-          meta={prHref ? t("Pull request") : special.branch}
-        />
-      </View>
     );
   }
   if (special?.kind === "child_bot") {
@@ -4577,7 +4557,7 @@ function RoutineGroup({
 }
 
 /**
- * A delegated task's result (a subagent, a cloud agent): the thread's only
+ * A delegated task's result (a subagent): the thread's only
  * outlined card, with a document glyph, so a work product reads apart from a
  * bubble, the raised question and a routine's log line. The whole card is one
  * target: it opens the full brief and result in a sheet (a long result fades
@@ -4591,8 +4571,6 @@ function TaskCard({
   body,
   streaming = false,
   actionProps,
-  onPress,
-  accessibilityRole,
 }: {
   title: string;
   state: TaskCardState;
@@ -4601,9 +4579,6 @@ function TaskCard({
   body?: string;
   streaming?: boolean;
   actionProps?: MessageActionProps;
-  /** Replaces opening the sheet (a cloud agent opens its pull request). */
-  onPress?: () => void;
-  accessibilityRole?: "link" | "button" | "text";
 }) {
   const tokens = mobileTokens();
   const colorScheme = useResolvedAppearance();
@@ -4619,7 +4594,7 @@ function TaskCard({
       : state === "failed"
         ? ROUTINE_STATE_SYMBOL.failed
         : ROUTINE_STATE_SYMBOL.cancelled;
-  const open = onPress ?? (body || meta ? () => setSheetOpen(true) : undefined);
+  const open = body || meta ? () => setSheetOpen(true) : undefined;
   const header = (full: boolean) => (
     <View style={{ gap: 4 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -4674,9 +4649,9 @@ function TaskCard({
     <>
       <Pressable
         {...actionProps}
-        accessibilityRole={accessibilityRole ?? (open ? "button" : undefined)}
+        accessibilityRole={open ? "button" : undefined}
         accessibilityLabel={[title, meta].filter(Boolean).join(", ")}
-        accessibilityHint={open && !onPress ? t("Opens in full") : undefined}
+        accessibilityHint={open ? t("Opens in full") : undefined}
         disabled={!open}
         onPress={open}
         unstable_pressDelay={130}

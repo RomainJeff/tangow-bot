@@ -8,7 +8,11 @@ import { describe, expect, it, vi } from "vitest";
 function identityTag(strings: TemplateStringsArray, ...values: unknown[]): string {
   return strings.reduce((acc, part, index) => `${acc}${part}${values[index] ?? ""}`, "");
 }
-vi.mock("@lingui/core/macro", () => ({ t: identityTag }));
+vi.mock("@lingui/core/macro", () => ({
+  t: identityTag,
+  plural: (count: number, forms: { one: string; other: string }) =>
+    (count === 1 ? forms.one : forms.other).replace("#", String(count)),
+}));
 vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({ t: identityTag }),
   Trans: ({ children }: { children?: unknown }) => children,
@@ -104,6 +108,7 @@ describe("RoutineGroupLine", () => {
     expect(html).toContain("Surveillance Accor");
     expect(html).toContain("4 runs");
     expect(html).toContain("Completed");
+    expect(html).toContain("text-success");
     expect(html).toContain('aria-expanded="false"');
   });
 
@@ -119,6 +124,9 @@ describe("RoutineGroupLine", () => {
 
     expect(html).toContain("1 cancelled");
     expect(html).not.toContain(">Completed<");
+    // The icon says cancelled too, not a green check beside "1 cancelled".
+    expect(html).not.toContain("text-success");
+    expect(html).toContain("lucide-circle-stop");
   });
 
   it("caps the inline list at GROUP_DIALOG_MAX runs (A8c)", () => {

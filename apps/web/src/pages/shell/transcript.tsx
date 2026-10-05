@@ -5,7 +5,6 @@ import {
   computeMessageGroups,
   foldRoutineRuns,
   isAsideOnlyMessage,
-  isNarrationMessage,
   isToolActivityBlock,
   latestActivityLabel,
   projectMessageReactions,
@@ -224,7 +223,8 @@ export const Transcript = memo(function Transcript({
           );
         }
       }
-      previous = { createdAt: at ?? previous?.createdAt, routine };
+      // The next row is measured from the group's last run, like on mobile.
+      previous = { createdAt: message.createdAt ?? previous?.createdAt, routine };
       if (previousRow) before.set(message.id, previousRow);
       previousRow = message;
     }
@@ -578,13 +578,11 @@ export const Transcript = memo(function Transcript({
                       <MessageHoverActions
                         message={message}
                         // No row carries a permanent clock: the time rides in the pill, next
-                        // to the bubble. A card shows its own time.
+                        // to the bubble or card. Cards have no clock of their own.
                         time={
-                          isNarrationMessage(message) ? (
-                            <time dateTime={message.createdAt} data-testid="message-hover-time">
-                              {messageTimeLabel(message.createdAt, i18n.locale)}
-                            </time>
-                          ) : undefined
+                          <time dateTime={message.createdAt} data-testid="message-hover-time">
+                            {messageTimeLabel(message.createdAt, i18n.locale)}
+                          </time>
                         }
                         onReply={onReply}
                         onReact={onReact}

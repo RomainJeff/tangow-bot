@@ -263,6 +263,7 @@ describe("skills binds", () => {
     expect(skillsBindsFor("/data", "s1", "u1", (p) => p.replace("/data", "/var/rakazo"))).toEqual([
       "/var/rakazo/skills/user/s1/u1:/skills/user:ro",
       "/var/rakazo/skills/marketplaces/s1:/skills/marketplaces:ro",
+      "/var/rakazo/managed-skills:/managed-skills:ro",
     ]);
   });
 });

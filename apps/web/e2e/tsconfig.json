@@ -12,7 +12,6 @@
     "fixtures",
     "activity-list.spec.ts",
     "auth-lifecycle.spec.ts",
-    "cloud-agent-card.spec.ts",
     "collapsible-sidebar-sections.spec.ts",
     "design-system.spec.ts",
     "golden.spec.ts",

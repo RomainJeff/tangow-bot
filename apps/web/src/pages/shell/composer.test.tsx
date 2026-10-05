@@ -235,7 +235,7 @@ afterEach(() => {
 });
 
 describe("Composer dictation forced-cancel paths", () => {
-  it("a Web Speech restart alone does not count as activity for the 60s silence cap", () => {
+  it("a Web Speech restart alone does not count as activity for the 60s silence cap", async () => {
     vi.useFakeTimers();
     const { container, root } = mount();
 
@@ -264,14 +264,15 @@ describe("Composer dictation forced-cancel paths", () => {
       vi.advanceTimersByTime(15_000); // 65s since the last genuine speech
     });
 
-    expect(dictationMock.stop).toHaveBeenCalledWith("cancel");
-    expect(queryButton(container, "Insert dictation")).toBeNull();
+    expect(dictationMock.finishDictate).toHaveBeenCalledOnce();
+    await act(async () => {});
+    expect(dictationMock.stop).not.toHaveBeenCalledWith("cancel");
     expect(queryButton(container, "Dictate")).toBeTruthy();
 
     unmount(root, container);
   });
 
-  it("a silent 60s with no speech at all forces dictation to cancel", () => {
+  it("a silent 60s with no speech at all ends dictation like ✓", async () => {
     vi.useFakeTimers();
     const { container, root } = mount();
 
@@ -282,13 +283,14 @@ describe("Composer dictation forced-cancel paths", () => {
       vi.advanceTimersByTime(64_000);
     });
 
-    expect(dictationMock.stop).toHaveBeenCalledWith("cancel");
+    expect(dictationMock.finishDictate).toHaveBeenCalledOnce();
+    await act(async () => {});
     expect(queryButton(container, "Dictate")).toBeTruthy();
 
     unmount(root, container);
   });
 
-  it("a 5-minute session cap forces cancel even with continuous genuine activity", () => {
+  it("a 5-minute session cap ends dictation like ✓ even with continuous genuine activity", async () => {
     vi.useFakeTimers();
     const { container, root } = mount();
 
@@ -302,16 +304,18 @@ describe("Composer dictation forced-cancel paths", () => {
       act(() => {
         dictationMock.emit({ status: "listening", transcript: `hello ${i}`, interim: "" });
       });
-      if (dictationMock.stop.mock.calls.length > 0) break;
+      if (dictationMock.finishDictate.mock.calls.length > 0) break;
     }
 
-    expect(dictationMock.stop).toHaveBeenCalledWith("cancel");
+    expect(dictationMock.finishDictate).toHaveBeenCalledOnce();
+    await act(async () => {});
     expect(queryButton(container, "Dictate")).toBeTruthy();
 
     unmount(root, container);
   });
 
-  it("hiding the tab forces dictation to cancel and restores the draft", () => {
+  it("hiding the tab ends dictation like ✓ and keeps the dictated text", async () => {
+    dictationMock.finishDictate.mockResolvedValueOnce("dictated words");
     const { container, root } = mount();
     act(() => {
       typeInto(draftTextarea(container), "keep me");
@@ -324,15 +328,41 @@ describe("Composer dictation forced-cancel paths", () => {
       Object.defineProperty(document, "hidden", { value: true, configurable: true });
       document.dispatchEvent(new Event("visibilitychange"));
     });
+    await act(async () => {});
 
-    expect(dictationMock.stop).toHaveBeenCalledWith("cancel");
+    expect(dictationMock.stop).not.toHaveBeenCalledWith("cancel");
     expect(queryButton(container, "Dictate")).toBeTruthy();
-    expect(draftTextarea(container).value).toBe("keep me");
+    expect(draftTextarea(container).value).toBe("keep me dictated words");
 
     unmount(root, container);
   });
 
-  it("an engine error snapshot forces dictation to cancel and restores the draft", () => {
+  it("✓ with a partial transcription keeps the text and shows the error", async () => {
+    dictationMock.finishDictate.mockImplementationOnce(async () => {
+      dictationMock.emit({
+        status: "idle",
+        transcript: "",
+        error: "Transcription request timed out.",
+      });
+      return "partial";
+    });
+    const { container, root } = mount();
+    act(() => {
+      button(container, "Dictate").click();
+    });
+    await act(async () => {
+      button(container, "Insert dictation").click();
+    });
+
+    expect(draftTextarea(container).value).toBe("partial");
+    expect(container.querySelector('[data-testid="composer-error"]')?.textContent).toContain(
+      "Transcription request timed out.",
+    );
+
+    unmount(root, container);
+  });
+
+  it("an engine error keeps the dictated text and shows the error", () => {
     const { container, root } = mount();
     act(() => {
       typeInto(draftTextarea(container), "keep me");
@@ -340,12 +370,45 @@ describe("Composer dictation forced-cancel paths", () => {
     act(() => {
       button(container, "Dictate").click();
     });
+    act(() => {
+      dictationMock.emit({ status: "listening", transcript: "two minutes", interim: "of words" });
+    });
 
     act(() => {
       dictationMock.emit({ status: "idle", transcript: "", error: "Dictation failed: network" });
     });
 
     expect(queryButton(container, "Dictate")).toBeTruthy();
+    expect(draftTextarea(container).value).toBe("keep me two minutes of words");
+    expect(container.querySelector('[data-testid="composer-error"]')?.textContent).toContain(
+      "Dictation failed: network",
+    );
+
+    act(() => {
+      button(container, "Dismiss error").click();
+    });
+    expect(container.querySelector('[data-testid="composer-error"]')).toBeNull();
+
+    unmount(root, container);
+  });
+
+  it("× restores the pre-dictation draft", () => {
+    const { container, root } = mount();
+    act(() => {
+      typeInto(draftTextarea(container), "keep me");
+    });
+    act(() => {
+      button(container, "Dictate").click();
+    });
+    act(() => {
+      dictationMock.emit({ status: "listening", transcript: "discard this", interim: "" });
+    });
+
+    act(() => {
+      button(container, "Cancel dictation").click();
+    });
+
+    expect(dictationMock.stop).toHaveBeenCalledWith("cancel");
     expect(draftTextarea(container).value).toBe("keep me");
 
     unmount(root, container);
@@ -366,7 +429,7 @@ describe("Composer dictation forced-cancel paths", () => {
     container.remove();
   });
 
-  it("starting the call cancels dictation first and the composer restores its snapshot", () => {
+  it("starting the call cuts dictation off and the composer keeps its draft", () => {
     const { container, root } = mount();
     act(() => {
       typeInto(draftTextarea(container), "keep me");

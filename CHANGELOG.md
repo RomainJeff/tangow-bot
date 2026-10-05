@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-09-30
+### 2026-10-05
 
 #### Changed
 
@@ -16,6 +16,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - On web and desktop, opening a bot's screen now shows the booting state and then the screen, or the connection error with Retry screen, instead of a blank viewer.
 - On mobile, the message field shrinks back to one line after you send a long message instead of staying tall and empty.
+
+### 2026-10-04
+
+#### Added
+
+- **OpenCode on bot computers.** Docker computers ship [OpenCode](https://opencode.ai) so a bot can delegate multi-file coding work in a cloned repository (new builtin skill `delegate-to-opencode`) and review the result. Sign in once with `opencode auth login` in the computer's terminal; the credentials stay in the computer's home and are left out of backups. Repository-versioned skills under `skills/` are mounted read-only at `/managed-skills` and the `computer` family is wired into OpenCode. See [developer tooling](docs/computer-runtime.md#developer-tooling).
+- **Bot computers come ready for development.** Docker computers now include git, GitHub CLI, Node.js with npm, pnpm and yarn, build tools, Python with pip and venv, and ripgrep; store a `GH_TOKEN` agent secret and bots can clone, push and open pull requests. See [developer tooling](docs/computer-runtime.md#developer-tooling).
+
+#### Changed
+
+- Bots hand coding work to OpenCode as background jobs and stay free to chat: several jobs run in parallel, each on its own branch, and the bot comes back on its own when one finishes, has it reviewed and explains the result in plain words. Signing OpenCode in now works with a link and a code from your phone (ChatGPT or GitHub Copilot) instead of typing in the computer's terminal, and nothing is pushed unless you ask for a pull request. Ask how a job is going and the bot answers from OpenCode's own to-do list and latest steps.
+- The computer's terminal is now Xfce Terminal running zsh, with completion, shared history, suggestions and the git branch in the prompt, instead of xterm with bash.
+- Bot computers on Docker can now use up to 8 GB of memory and 4 CPUs by default instead of 2 GB and 2 CPUs, so builds, tests and heavier pages run without hitting the ceiling.
+
+#### Fixed
+
+- Bots that had used OpenCode no longer stop answering: their Docker computer kept failing to start because OpenCode's read-only snapshot files were mistaken for a home the computer could not write to.
+
+#### Removed
+
+- **Cloud coding agents (Cursor).** The optional Cursor cloud agents integration and its cards in threads are gone; bots now do coding work with OpenCode on their own computer. The `CLOUD_AGENT_PROVIDER`, `CLOUD_AGENT_SPACE_ID` and `CURSOR_API_KEY` settings are no longer read and can be removed from your environment. Upgrading deletes the stored cloud agent records; cancel any agents still running in Cursor before you upgrade.
+
+#### Fixed
+
+- Bots go straight to the scripts and reference files of your own and marketplace skills on their computer instead of searching for them.
+
+### 2026-09-30
+
+#### Fixed
+
+- With a Jev browser connection, a bot's multi-step page task no longer gives up on its first step when a decision is a few seconds slow, so it keeps using Jev instead of clicking step by step.
 
 ### 2026-09-28
 

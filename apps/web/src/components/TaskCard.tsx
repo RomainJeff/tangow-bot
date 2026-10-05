@@ -16,13 +16,16 @@ export type TaskCardState = "running" | "done" | "failed" | "cancelled";
 
 const STATE_ICON = { running: CircleDashed, failed: CircleX, cancelled: StopCircle } as const;
 
+function taskStatusLabel(state: TaskCardState, t: ReturnType<typeof useLingui>["t"]) {
+  return state === "running" ? t`Running` : state === "failed" ? t`Failed` : t`Cancelled`;
+}
+
 /**
  * The visual card alone, with no click behaviour of its own: a delegated
  * task's result on `Surface variant="outlined"`, full column width — a
  * document glyph, the title, a status line (nothing for a finished task),
  * the brief in `meta` on two lines, a `border` hairline, then the result cut
- * to five lines. Used both by `TaskCard` (which makes the whole thing a
- * button) and by `CloudAgentCard` (which wraps it in its own link instead).
+ * to five lines. Used by `TaskCard`, which makes the whole thing a button.
  */
 export function TaskCardSurface({
   title,
@@ -45,8 +48,7 @@ export function TaskCardSurface({
 }) {
   const { t } = useLingui();
   const statusColorClass = state === "failed" ? "text-destructive" : "text-muted-foreground";
-  const statusLabel =
-    state === "running" ? t`Running` : state === "failed" ? t`Failed` : t`Cancelled`;
+  const statusLabel = taskStatusLabel(state, t);
   const StatusIcon = state === "done" ? null : STATE_ICON[state];
   return (
     <Surface variant="outlined" className="w-full overflow-hidden">
@@ -129,16 +131,23 @@ export function TaskCard({
 
   return (
     <>
-      <button
-        type="button"
-        data-testid={testId ?? "task-card"}
-        aria-label={[title, meta].filter(Boolean).join(", ")}
-        aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
-        className="block w-full text-start duration-(--duration-hover) ease-quiet hover:opacity-90"
-      >
-        {card}
-      </button>
+      {/* The button lies over the card instead of wrapping it: the result's
+          markdown can hold links, which cannot nest in a button. The card is
+          inert, so its links take no focus or click; the label says it all. */}
+      <div data-testid={testId ?? "task-card"} className="group relative">
+        <div inert className="duration-(--duration-hover) ease-quiet group-hover:opacity-90">
+          {card}
+        </div>
+        <button
+          type="button"
+          aria-label={[title, state === "done" ? null : taskStatusLabel(state, t), meta]
+            .filter(Boolean)
+            .join(", ")}
+          aria-haspopup="dialog"
+          onClick={() => setOpen(true)}
+          className="absolute inset-0 rounded-[inherit]"
+        />
+      </div>
       {open ? (
         <Dialog open onOpenChange={setOpen}>
           <DialogContent

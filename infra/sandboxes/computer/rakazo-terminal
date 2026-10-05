@@ -1,0 +1,5 @@
+#!/bin/sh
+export HOME=$(getent passwd "$(id -u)" | cut -d: -f6)
+export SHELL=/bin/zsh
+cd "$HOME" 2>/dev/null || true
+exec xfce4-terminal --disable-server

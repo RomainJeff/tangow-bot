@@ -46,7 +46,7 @@ export interface ComposerDictationHook {
   start: () => void;
   /** ✓ — keeps the composed text, exits dictation. Nothing is sent. */
   insert: () => void;
-  /** × or any forced-cancel path — restores the exact pre-dictation draft. */
+  /** × or leaving the thread — restores the exact pre-dictation draft. */
   cancel: () => void;
 }
 
@@ -89,6 +89,9 @@ export function useComposerDictation({
   // AppState report a transition that looks like the user leaving — see the
   // `AppState` effect below.
   const permissionPendingRef = useRef(false);
+  // Bumped on every start and exit, so callbacks from a session the composer
+  // already left (a late final result after ✓) can't overwrite the draft.
+  const sessionRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +104,7 @@ export function useComposerDictation({
   }, []);
 
   const resetDictationUiState = useCallback(() => {
+    sessionRef.current += 1;
     permissionPendingRef.current = false;
     setDictating(false);
     setFinalText("");
@@ -108,16 +112,12 @@ export function useComposerDictation({
     volume.set(null);
   }, [volume]);
 
-  const exitToSnapshot = useCallback(() => {
-    resetDictationUiState();
-    setDraft(snapshotRef.current);
-  }, [resetDictationUiState, setDraft]);
-
   const cancel = useCallback(() => {
     if (!dictatingRef.current) return;
     abortDictation();
-    exitToSnapshot();
-  }, [exitToSnapshot]);
+    resetDictationUiState();
+    setDraft(snapshotRef.current);
+  }, [resetDictationUiState, setDraft]);
 
   const insert = useCallback(() => {
     if (!dictatingRef.current) return;
@@ -139,6 +139,7 @@ export function useComposerDictation({
     volume.set(null);
     setDictating(true);
     permissionPendingRef.current = true;
+    const mine = ++sessionRef.current;
     void startDictation({
       spokenLanguage: writtenLanguage([...(recentWriting?.() ?? []), draftRef.current]),
       onStart: () => {
@@ -146,6 +147,7 @@ export function useComposerDictation({
       },
       onVolume: (value) => volume.set(value),
       onText: (text, isFinal) => {
+        if (sessionRef.current !== mine) return;
         if (isFinal) {
           finalTextRef.current = text;
           setFinalText(text);
@@ -162,15 +164,16 @@ export function useComposerDictation({
       },
       onEnd: (reason, alreadyDenied) => {
         // A caller-requested stop/abort already exited synchronously; this
-        // is only reached for the caps and permission-denied paths.
-        if (!dictatingRef.current) return;
-        exitToSnapshot();
+        // is only reached for the caps, error and permission-denied paths.
+        // Like ✓, they keep what was dictated: the draft already holds it.
+        if (sessionRef.current !== mine) return;
+        resetDictationUiState();
         // Only show the alert when permission was already denied before this
         // tap — refusing the system prompt itself just exits quietly.
         if (reason === "denied" && alreadyDenied) presentPermissionDeniedAlert();
       },
     });
-  }, [available, closePickers, exitToSnapshot, setDraft, volume, recentWriting]);
+  }, [available, closePickers, resetDictationUiState, setDraft, volume, recentWriting]);
 
   // Forced cancel: leaving the app while dictation runs (see
   // `cancelsDictationOnAppState` for why the permission prompt is ignored).

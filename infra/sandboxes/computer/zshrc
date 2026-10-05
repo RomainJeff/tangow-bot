@@ -1,0 +1,24 @@
+# Rakazo defaults, sourced from ~/.zshrc. Edit ~/.zshrc to override; this file ships with the image.
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=50000
+SAVEHIST=50000
+setopt APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE INTERACTIVE_COMMENTS AUTO_CD
+
+autoload -Uz compinit && compinit -d "$HOME/.cache/zcompdump"
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+
+autoload -Uz vcs_info
+zstyle ':vcs_info:git:*' formats ' %F{244}%b%f'
+precmd() { vcs_info }
+setopt PROMPT_SUBST
+PROMPT='%F{250}%~%f${vcs_info_msg_0_} %(?.%F{250}.%F{203})%#%f '
+
+bindkey -e
+alias ls='ls --color=auto' ll='ls -lah' grep='grep --color=auto'
+
+for plugin in \
+  /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
+  /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh; do
+  [[ -r "$plugin" ]] && source "$plugin"
+done
