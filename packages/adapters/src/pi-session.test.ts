@@ -41,7 +41,7 @@ describe("Pi JSONL sessions", () => {
     );
   });
 
-  it("uses Pi's session format for context and completed messages", async () => {
+  it("records the run context and completed messages as JSONL", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "rakazo-pi-session-"));
     try {
       const recorder = new PiJsonlSessionRecorder(path.join(root, "sessions"), root);

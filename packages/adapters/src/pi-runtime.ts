@@ -9,6 +9,7 @@ import {
   type Api,
   type AssistantMessage,
   clampThinkingLevel,
+  type JsonObject,
   type Model,
   type Models,
   type ModelThinkingLevel,
@@ -941,7 +942,8 @@ export function toHistory(
             type: "toolCall",
             id: call.id,
             name: call.name,
-            arguments: call.args,
+            // Stored calls round-trip through JSON, so their arguments are JSON values.
+            arguments: call.args as JsonObject,
           }));
           messages.push(assistant([...text, ...toolCalls], "toolUse"));
           text = [];

@@ -1,9 +1,7 @@
 import type { Dirent } from "node:fs";
-import { readdir, rm, stat } from "node:fs/promises";
+import { appendFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { type AgentMessage, type Branch, JsonlSessionRepo } from "@earendil-works/pi-agent-core";
-import { BACKGROUND_CONTEXT } from "@earendil-works/pi-agent-core/harness/context";
-import { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { getLogger } from "@rakazo/logging";
 
 export const PI_SESSION_RETENTION_DAYS = 30;
@@ -146,34 +144,23 @@ export interface PiSessionRecorder {
 }
 
 /**
- * Persists the low-level Agent transcript using Pi's native JSONL session format.
- * This is deliberately a recorder only: Rakazo remains responsible for running
+ * Appends the low-level Agent transcript to one JSONL file per run: a session header, then
+ * entries. This is deliberately a recorder only: Rakazo remains responsible for running
  * the agent and for its product history in Postgres.
  */
 export class PiJsonlSessionRecorder implements PiSessionRecorder {
   private readonly cwd: string;
   private readonly sessionsRoot: string;
-  private readonly fs: NodeExecutionEnv;
 
   constructor(sessionsRoot: string, cwd = process.cwd()) {
     this.cwd = path.resolve(cwd);
     this.sessionsRoot = path.resolve(sessionsRoot);
-    this.fs = new NodeExecutionEnv({ cwd: this.cwd });
   }
 
   async start(input: PiSessionStart): Promise<PiSessionHandle> {
     const sessionsRoot = piSessionBotRoot(this.sessionsRoot, input.userId, input.botId);
-    const repo = new JsonlSessionRepo({
-      fileSystem: this.fs,
-      sessionsRoot,
-    });
-    const session = await repo.create(
-      {
-        id: input.runId,
-        cwd: this.cwd,
-      },
-      BACKGROUND_CONTEXT,
-    );
+    await mkdir(sessionsRoot, { recursive: true });
+    const file = path.join(sessionsRoot, `${sessionScopeSegment(input.runId, "runId")}.jsonl`);
     try {
       await prunePiSessionFiles(sessionsRoot);
     } catch (error) {
@@ -183,21 +170,29 @@ export class PiJsonlSessionRecorder implements PiSessionRecorder {
         error,
       });
     }
-    const handle = new BestEffortPiSession(
-      await session.createBranch("main", null, BACKGROUND_CONTEXT),
-      input.runId,
-    );
+    const handle = new BestEffortPiSession(file, input.runId);
 
-    await handle.appendCustomEntry("rakazo_context", {
-      rakazoUserId: input.userId,
-      rakazoBotId: input.botId,
-      rakazoRunId: input.runId,
-      rakazoThreadId: input.threadId,
-      ...(input.traceId ? { rakazoTraceId: input.traceId } : {}),
-      model: input.model,
-      provider: input.provider,
-      thinkingLevel: input.thinkingLevel,
-      systemPrompt: input.systemPrompt,
+    await handle.append({
+      kind: "session",
+      id: input.runId,
+      cwd: this.cwd,
+      timestamp: new Date().toISOString(),
+    });
+    await handle.append({
+      kind: "entry",
+      type: "custom",
+      customType: "rakazo_context",
+      data: {
+        rakazoUserId: input.userId,
+        rakazoBotId: input.botId,
+        rakazoRunId: input.runId,
+        rakazoThreadId: input.threadId,
+        ...(input.traceId ? { rakazoTraceId: input.traceId } : {}),
+        model: input.model,
+        provider: input.provider,
+        thinkingLevel: input.thinkingLevel,
+        systemPrompt: input.systemPrompt,
+      },
     });
     for (const message of input.initialMessages) {
       await handle.appendMessage(message);
@@ -211,23 +206,19 @@ class BestEffortPiSession implements PiSessionHandle {
   private failureLogged = false;
 
   constructor(
-    private readonly session: Branch,
+    private readonly file: string,
     private readonly runId: string,
   ) {}
 
   async appendMessage(message: AgentMessage): Promise<void> {
-    try {
-      await this.session.appendMessage(message, BACKGROUND_CONTEXT);
-    } catch (error) {
-      this.logFailure("message", error);
-    }
+    await this.append({ kind: "entry", type: "message", message });
   }
 
-  async appendCustomEntry(customType: string, data: Record<string, string>): Promise<void> {
+  async append(record: Record<string, unknown>): Promise<void> {
     try {
-      await this.session.appendCustomEntry(customType, data, BACKGROUND_CONTEXT);
+      await appendFile(this.file, `${JSON.stringify(record)}\n`, "utf8");
     } catch (error) {
-      this.logFailure("context", error);
+      this.logFailure(String(record.kind), error);
     }
   }
 

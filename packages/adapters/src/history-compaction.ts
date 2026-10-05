@@ -1,4 +1,3 @@
-import { DEFAULT_COMPACTION_SETTINGS, estimateTokens } from "@earendil-works/pi-agent-core";
 import type {
   AdapterContext,
   AgentHistoryMessage,
@@ -21,6 +20,9 @@ import type {
   ConfiguredMemoryProvider,
   MemoryProviderResolver,
 } from "./memory-provider-factory.js";
+
+/** pi's compaction defaults; pi 1.0 moved them out of pi-agent-core into the coding agent. */
+const DEFAULT_COMPACTION_SETTINGS = { reserveTokens: 16384, keepRecentTokens: 20000 } as const;
 
 /**
  * Sentinel for "nothing compacted yet". Message `seq` is 0-based, so an exclusive lower bound of
@@ -124,12 +126,9 @@ export function historyWindowSize(options: {
  */
 export const NON_HISTORY_TOKEN_ESTIMATE = 12_000;
 
-/**
- * pi's estimator takes a pi `AgentMessage`; Rakazo history rows are `{ role, content }` with the
- * content already rendered to text, and the estimator reads a user message's content as-is.
- */
+/** pi's chars/4 heuristic; Rakazo history rows are already rendered to text. */
 function estimateMessageTokens(content: string): number {
-  return estimateTokens({ role: "user", content, timestamp: 0 });
+  return Math.ceil(content.length / 4);
 }
 
 type SizedHistoryMessage = Pick<AgentHistoryMessage, "content" | "parts">;
