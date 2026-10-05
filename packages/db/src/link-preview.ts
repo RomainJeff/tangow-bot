@@ -114,7 +114,8 @@ export async function findCachedLinkPreview(
 /**
  * Stores one entry (replacing an older one of the same key), then evicts the space's oldest
  * entries past the 500-entry / 100 MB caps. Returns the storage keys of the image bytes that
- * lost their row, for the caller to delete from the store.
+ * lost their row, for the caller to delete from the store. An advisory lock per space makes the
+ * read-then-write one step, so two parallel stores of one link never both miss the replaced image.
  */
 export async function storeLinkPreviewCache(
   prisma: Pick<PrismaClient, "$transaction">,
@@ -147,6 +148,7 @@ export async function storeLinkPreviewCache(
           source: entry.source ?? "server",
         };
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`link-preview-cache:${input.spaceId}`}))`;
     const removedImageKeys: string[] = [];
     const where = { spaceId_keyHash: { spaceId: input.spaceId, keyHash: input.keyHash } };
     const previous = await tx.linkPreviewCache.findUnique({ where });
