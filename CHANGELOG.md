@@ -8,15 +8,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-04
 
+#### Added
+
+- **OpenCode on bot computers.** Docker computers ship [OpenCode](https://opencode.ai) so a bot can delegate multi-file coding work in a cloned repository (new builtin skill `delegate-to-opencode`) and review the result. Sign in once with `opencode auth login` in the computer's terminal; the credentials stay in the computer's home and are left out of backups. Repository-versioned skills under `skills/` are mounted read-only at `/managed-skills` and the `computer` family is wired into OpenCode. See [developer tooling](docs/computer-runtime.md#developer-tooling).
+- **Bot computers come ready for development.** Docker computers now include git, GitHub CLI, Node.js with npm, pnpm and yarn, build tools, Python with pip and venv, and ripgrep; store a `GH_TOKEN` agent secret and bots can clone, push and open pull requests. See [developer tooling](docs/computer-runtime.md#developer-tooling).
+
+#### Changed
+
+- Bots hand coding work to OpenCode as background jobs and stay free to chat: several jobs run in parallel, each on its own branch, and the bot comes back on its own when one finishes, has it reviewed and explains the result in plain words. Signing OpenCode in now works with a link and a code from your phone (ChatGPT or GitHub Copilot) instead of typing in the computer's terminal, and nothing is pushed unless you ask for a pull request. Ask how a job is going and the bot answers from OpenCode's own to-do list and latest steps.
+- The computer's terminal is now Xfce Terminal running zsh, with completion, shared history, suggestions and the git branch in the prompt, instead of xterm with bash.
+- Bot computers on Docker can now use up to 8 GB of memory and 4 CPUs by default instead of 2 GB and 2 CPUs, so builds, tests and heavier pages run without hitting the ceiling.
+
 #### Fixed
 
+- Bots that had used OpenCode no longer stop answering: their Docker computer kept failing to start because OpenCode's read-only snapshot files were mistaken for a home the computer could not write to.
+- Bots go straight to the scripts and reference files of your own and marketplace skills on their computer instead of searching for them.
 - A bot running on your Claude or ChatGPT subscription no longer stops with a revoked-token error when another run renewed the sign-in at the same moment; it continues with the renewed sign-in.
+
+#### Removed
+
+- **Cloud coding agents (Cursor).** The optional Cursor cloud agents integration and its cards in threads are gone; bots now do coding work with OpenCode on their own computer. The `CLOUD_AGENT_PROVIDER`, `CLOUD_AGENT_SPACE_ID` and `CURSOR_API_KEY` settings are no longer read and can be removed from your environment. Upgrading deletes the stored cloud agent records; cancel any agents still running in Cursor before you upgrade.
 
 ### 2026-09-30
 
 #### Fixed
 
 - With a Jev browser connection, a bot's multi-step page task no longer gives up on its first step when a decision is a few seconds slow, so it keeps using Jev instead of clicking step by step.
+
+### 2026-09-28
+
+#### Added
+
+- **Long-pressing a message on web and desktop touch screens now opens an action sheet with quick reactions and its actions.** Hold a bubble for a moment to react, reply, copy, listen or edit and resend, sliding up from the bottom; a plain tap no longer reveals anything, and mouse and keyboard keep the existing hover pill.
+- **Dictate into the message field on phone, web and desktop.** Tap the mic and your words appear in the field as you speak; ✓ keeps them for you to review and send, × puts the field back as it was. On iPhone the speech is recognised on the device, so the audio never leaves it.
+
+#### Changed
+
+- On web and desktop, routine runs now read as the same log as mobile: one line per run with its time, status and a tap to open its report and the message it sent; earlier runs of the same routine with nothing between them fold into one line while the latest keeps its own, only a routine's latest run opens on its own when it failed or is subscribed, and a long report or task result fades out and opens whole in a dialog with a tap. A delegated task's result (a subagent or a cloud agent) is now a full-width outlined card with a document icon instead of a card with a coloured "completed" badge.
+- Conversations now read like a messaging app on web, desktop and mobile: each bot message sits in its own grey bubble and yours in a dark one, a bot alone no longer repeats its avatar and name on every reply because the header carries them, a group names each speaker once above their messages with their avatar underneath, answered questions settle flat into the thread, and a conversation between two bots keeps both of them on the same side.
+- On web and desktop the message field is now a single capsule that starts with the attach button, grows taller before it scrolls, and shows pending attachments inside it as thumbnails.
+- The message field now rests on a thin outline and lifts only while you write, and the Stop button's edge glows in the answering bot's colour while it replies.
+- On web and desktop, the voice call now starts from a phone icon in the conversation header instead of the mic in the message field, which now dictates.
+- While a bot works in a thread, its avatar on the working line (the typing bubble on mobile) now buzzes left and right on web, desktop and mobile, and stays still when reduced motion is on.
+- On mobile, routine runs read as a log: one line per run with its time, status and a tap to open its report and the message it sent; earlier runs of the same routine with nothing between them fold into one line while the latest keeps its own, only a routine's latest run opens on its own when it failed or is subscribed, and a long report or task result fades out and opens whole with a tap. A delegated task's result is a full-width outlined sheet with a document icon instead of a card with a "Completed" badge.
+- On phones the message field now keeps the attach button apart as a larger round button that opens the native photo, camera and file sheet, grows to five lines, shows pending attachments inside it as thumbnails, and closes the keyboard when you swipe the conversation down.
+- On mobile, the thread now confirms every touch: sending clears the field at once and restores it if the send fails, a new bot reply eases in, a held bubble settles with a light tap before the actions sheet opens, a reaction pops when it lands, a decided card's checkmark draws itself in, two bots glance at each other when one messages the other, and swiping a bot's reply reveals a reply shortcut.
+
+#### Fixed
+
+- On web and desktop, a bot message's hover actions and time now appear right next to its bubble instead of at the far edge of the thread, your own messages show only discreet Edit and resend and Copy icons under the bubble, and routine lines no longer carry hover actions that covered their time and stayed on screen after you opened them.
+- A table a bot writes without its `|---|` separator line now shows as a table instead of a run of pipes, in routine reports and messages on web, desktop and mobile.
+- On a phone's browser, a dialog holding a wide table (a routine report, a task result) no longer runs off the screen: the table scrolls sideways inside it.
+- On web, dictation no longer closes as soon as it opens when you write in another language than your browser's: it now asks for a locale the speech engine knows.
+- A failed or still-running routine run no longer gets folded together with completed runs on either side of it, which used to move it out of place in the thread on mobile, web and desktop.
+- What a bot is doing while it works ("Searching the web: …") is no longer cut off for good: on web and desktop a chevron opens the whole line, and on mobile it slides sideways under your finger.
+- On web, a wide table in a bot's message now scrolls sideways instead of shrinking each column down to one letter per line.
+- On web, dictation now listens in the language you write in, instead of only your browser's own language.
+- Routine and other cards in a conversation fit the screen again on a phone browser instead of running off its right edge, and a bot message's time no longer shows over a card.
+- On web and desktop, a bot's avatar now has a clean edge instead of a thin dark fringe around its body.
+- On a phone browser, a long "working" line such as a web search now ends with an ellipsis instead of stretching the conversation wider than the screen.
+- On mobile, the conversation between two bots scrolls smoothly, and dictating no longer stutters the thread while you speak.
+- On iPhone, dictation listens in the language you write in, even when the phone itself is set to another language, instead of closing or transcribing French as English.
+- On mobile, opening or closing a routine run or a group keeps its line where you tapped it and moves the rest of the thread instead, including a run inside an open group, and each run in a group is named by its day and time instead of repeating the routine's name.
+- On mobile, a conversation with many bot avatars scrolls smoothly again: avatars down the thread rest on a still frame and only move while their bot works or glances, instead of each redrawing on every frame.
+- On mobile, holding a bot's message opens its actions while your finger is still down, and a bubble only presses in when you hold it, not when your thumb brushes it while scrolling.
+- On mobile, a table in a bot's answer or report scrolls sideways in the conversation again with room above and below it, and a tap still opens it whole.
+- On mobile, reopening a conversation no longer replays the entrance of every message in it.
+- On mobile, routine run cards span the conversation again instead of shrinking to their text and running over the next line; they are shorter, open their report with a tap anywhere on the card, keep their status, and drop a time and headline that only repeated what sits right above.
+- On mobile, a table in a bot's answer or report now reads like a phone table: compact rows with columns sized to what they hold, two or three lines per cell and a sideways scroll, and a tap opens it whole with each row as its own record.
+- On mobile, the typing bubble now stays in view above the message field when a bot starts answering, and a sent message and a swipe to reply settle quickly instead of bouncing.
 
 ### 2026-09-27
 
@@ -41,7 +101,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- While a bot works in a thread, its avatar next to the working line now buzzes left and right on web, desktop and mobile, and stays still when reduced motion is on.
 - A routine woken by a webhook, Git event or message now shows up in the bot's thread on web, desktop and mobile as its own collapsible run card, one per routine, instead of posting its instructions and the raw payload as a message from you; like other background routines, it only notifies you when "Notify me on every run" is on.
 
 #### Fixed

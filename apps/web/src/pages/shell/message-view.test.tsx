@@ -82,6 +82,9 @@ function render(readOnly: boolean) {
       <MessageView
         artifactTarget={{ botId: "bot-specialist" }}
         chrome="row"
+        inGroup={false}
+        showAuthor={false}
+        showAvatar={false}
         canAnswer={false}
         readOnly={readOnly}
         message={message}

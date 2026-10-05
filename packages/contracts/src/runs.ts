@@ -20,7 +20,6 @@ export const RunActivityRowSchema = z.object({
     "bot_message",
     "webhook",
     "messaging",
-    "cloud_agent",
     "delegate",
     "delegate_followup",
     "work_return",

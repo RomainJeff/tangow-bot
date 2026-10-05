@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { HoverPill } from "./hover-pill.js";
 
 describe("HoverPill", () => {
-  it("is hidden at rest and revealed by hover or focus on the row", () => {
+  it("is hidden at rest and revealed by hover or keyboard focus on the row", () => {
     const html = renderToString(
       <HoverPill>
         <button type="button" aria-label="Reply" />
@@ -18,7 +18,9 @@ describe("HoverPill", () => {
     // pointer-media variants — a touch device never hovers, so it stays hidden.
     expect(html).toContain("group-hover:opacity-100");
     expect(html).toContain("group-hover:pointer-events-auto");
-    expect(html).toContain("group-focus-within:opacity-100");
+    // Keyboard focus only: a clicked button keeps focus, and must not pin it.
+    expect(html).toContain("group-has-[:focus-visible]:opacity-100");
+    expect(html).not.toContain("group-focus-within");
     expect(html).not.toContain("pointer-fine");
     expect(html).not.toContain("pointer-coarse");
   });
@@ -34,6 +36,14 @@ describe("HoverPill", () => {
     expect(html).toContain("bg-surface");
     expect(html).toContain("shadow-floating");
     expect(html).not.toContain("right-");
+  });
+
+  it("moves next to the bubble when the row places it", () => {
+    const html = renderToString(<HoverPill>{null}</HoverPill>);
+
+    expect(html).toContain("group-data-[pill=beside]:start-(--pill-x)");
+    expect(html).toContain("group-data-[pill=beside]:top-(--pill-y)");
+    expect(html).toContain("group-data-[pill=beside]:end-auto");
   });
 
   it("spreads the remaining props onto its root", () => {

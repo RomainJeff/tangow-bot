@@ -111,6 +111,10 @@ export function WorkThreadDialog({
                           artifactTarget={{ botId: specialist.botId }}
                           chrome={chrome}
                           message={message}
+                          // One specialist's thread: its identity is the dialog's title.
+                          inGroup={false}
+                          showAuthor={false}
+                          showAvatar={false}
                           canAnswer={false}
                           readOnly
                           onAnswer={noop}

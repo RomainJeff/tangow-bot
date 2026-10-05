@@ -216,6 +216,7 @@ describe("agent skills service (filesystem)", () => {
     const dir = path.join(userSkillsRoot(dataDir, actor), "deploy");
     expect(await readFile(path.join(dir, "scripts", "run.sh"), "utf8")).toBe("echo hi");
     expect((await skills.list(actor)).map((s) => s.id)).toEqual([
+      "builtin:delegate-to-opencode",
       "builtin:Interrogate",
       "user:deploy",
     ]);

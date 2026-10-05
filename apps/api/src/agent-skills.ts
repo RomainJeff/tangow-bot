@@ -1,10 +1,10 @@
 import { ORPCError } from "@orpc/server";
 import {
-  BUILTIN_AGENT_SKILLS,
   bundleFormat,
   isExists,
   listMarketplaceSkills,
   listUserSkills,
+  loadBuiltinSkills,
   type MarketplaceSkillFile,
   marketplacesRoot,
   removeUserSkill,
@@ -58,8 +58,8 @@ function assertWritable(file: SkillFile): asserts file is UserSkillFile {
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-function builtinCatalog(): AgentSkill[] {
-  return BUILTIN_AGENT_SKILLS.map((skill) => ({
+async function builtinCatalog(): Promise<AgentSkill[]> {
+  return (await loadBuiltinSkills()).map((skill) => ({
     id: `builtin:${skill.name}`,
     name: skill.name,
     description: skill.description,
@@ -150,10 +150,10 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
     return file;
   }
 
-  function assertNameFree(existing: UserSkillFile[], name: string, exceptId?: string) {
+  async function assertNameFree(existing: UserSkillFile[], name: string, exceptId?: string) {
     const clash =
       existing.some((s) => s.id !== exceptId && sameName(s.name, name)) ||
-      builtinCatalog().some((s) => sameName(s.name, name));
+      (await builtinCatalog()).some((s) => sameName(s.name, name));
     if (clash) {
       throw new ORPCError("CONFLICT", { message: "A skill with that name already exists." });
     }
@@ -206,8 +206,12 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
   }
 
   async function catalog(actor: Actor, botId?: string): Promise<Array<AgentSkill & Access>> {
-    const [rows, access] = await Promise.all([allFiles(actor), accessIndex(actor)]);
-    const builtins = builtinCatalog().map((skill) => ({
+    const [rows, access, builtinSkills] = await Promise.all([
+      allFiles(actor),
+      accessIndex(actor),
+      builtinCatalog(),
+    ]);
+    const builtins = builtinSkills.map((skill) => ({
       ...skill,
       ...access.of(skill.id),
     }));
@@ -225,7 +229,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
     input: { content?: string; name?: string; description?: string; body?: string },
   ): Promise<AgentSkill> {
     const resolved = resolveSkillContent(input);
-    assertNameFree(await files(actor), resolved.name);
+    await assertNameFree(await files(actor), resolved.name);
     await writeUserSkill(
       root(actor),
       { name: resolved.name, content: resolved.content },
@@ -243,7 +247,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
 
     async get(actor: Actor, input: { skillId?: string; name?: string }): Promise<AgentSkill> {
       if (input.skillId?.startsWith("builtin:")) {
-        const builtin = builtinCatalog().find((skill) => skill.id === input.skillId);
+        const builtin = (await builtinCatalog()).find((skill) => skill.id === input.skillId);
         if (!builtin) throw new IsolationError();
         return builtin;
       }
@@ -253,7 +257,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       const name = input.name?.trim() ?? "";
       const file = findSkillByName(await allFiles(actor), name);
       if (file) return toAgentSkill(file);
-      const builtin = findSkillByName(builtinCatalog(), name);
+      const builtin = findSkillByName(await builtinCatalog(), name);
       if (!builtin) throw new IsolationError();
       return builtin;
     },
@@ -277,7 +281,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       let name = "";
       await writeUserSkillBundle(root(actor), bytes, async (skillMd) => {
         const resolved = resolveSkillContent({ content: skillMd });
-        assertNameFree(await files(actor), resolved.name);
+        await assertNameFree(await files(actor), resolved.name);
         name = resolved.name;
         return resolved;
       }).catch((error: unknown) => {
@@ -312,7 +316,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
         return toAgentSkill(await owned(actor, newKey));
       }
       // Rename: the directory moves first (bundle extras follow), then access rows follow the key.
-      assertNameFree(await files(actor), resolved.name, existing.id);
+      await assertNameFree(await files(actor), resolved.name, existing.id);
       await renameUserSkill(root(actor), existing.name, skill).catch(conflictOrRethrow);
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
       await prisma.$transaction([
@@ -350,7 +354,7 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       },
     ): Promise<AgentSkillCatalogEntry> {
       const existing = input.skillId.startsWith("builtin:")
-        ? builtinCatalog().find((skill) => skill.id === input.skillId)
+        ? (await builtinCatalog()).find((skill) => skill.id === input.skillId)
         : await owned(actor, input.skillId);
       if (!existing) throw new IsolationError();
       const scope = { spaceId: actor.spaceId, userId: actor.userId };

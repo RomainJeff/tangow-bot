@@ -54,8 +54,8 @@ export function resolveSpaceComputerLimit(
  * sibling bots. The pids default is #343's existing 2048, unchanged. Set any of
  * these to "0", "none" or "unlimited" to opt out.
  */
-const DEFAULT_COMPUTER_MEMORY = "2g";
-const DEFAULT_COMPUTER_CPUS = "2";
+const DEFAULT_COMPUTER_MEMORY = "8g";
+const DEFAULT_COMPUTER_CPUS = "4";
 const DEFAULT_COMPUTER_PIDS_LIMIT = "2048";
 /** The daemon refuses HostConfig.Memory below this at container creation. */
 const MIN_DOCKER_MEMORY_BYTES = 6 * 1024 ** 2;

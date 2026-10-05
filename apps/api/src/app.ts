@@ -22,7 +22,6 @@ import {
   ChatSdkMessagingSurface,
   ComposioConnector,
   createBackgroundJobHandlers,
-  createCloudAgentConnection,
   createConnectorStack,
   createJobReconciler,
   createMessagingContextLoader,
@@ -56,7 +55,6 @@ import {
   pipedreamConfigFromEnv,
   piSessionsRoot,
   pushTokenPath,
-  reconcileCloudAgents,
   reconcileComputerUpdates,
   removePiUserSessions,
   removeUserSkillDirs,
@@ -373,12 +371,6 @@ export async function createApp(
       await removeUserSkillDirs(env.dataDir, userId);
     },
   });
-  // One provider instance so emulator launches and polls share the same Map.
-  const cloudAgent = createCloudAgentConnection({
-    CLOUD_AGENT_PROVIDER: env.cloudAgentProvider,
-    CURSOR_API_KEY: env.cursorApiKey,
-    CLOUD_AGENT_SPACE_ID: env.cloudAgentSpaceId,
-  });
   const shutdown = new AbortController();
   const executor = createRunExecutor({
     prisma,
@@ -403,11 +395,7 @@ export async function createApp(
         signal: AbortSignal.timeout(15_000),
       });
     },
-    secrets: [
-      env.deploymentModelKey ?? "",
-      env.composioApiKey ?? "",
-      env.cursorApiKey ?? "",
-    ].filter(Boolean),
+    secrets: [env.deploymentModelKey ?? "", env.composioApiKey ?? ""].filter(Boolean),
     secretStore: secrets,
     secretHttp: remoteConnectors,
     deploymentModelKey: env.deploymentModelKey,
@@ -417,7 +405,6 @@ export async function createApp(
     events,
     messaging: messaging ? createMessagingContextLoader(prisma) : undefined,
     web: createWebProvider(),
-    cloudAgent,
     shutdownSignal: shutdown.signal,
   });
 
@@ -435,7 +422,6 @@ export async function createApp(
     memoryProviders,
     deploymentModelKey: env.deploymentModelKey,
     messaging,
-    cloudAgent,
   });
   if (inMemoryJobs) {
     await inMemoryJobs.start(jobHandlers);
@@ -445,14 +431,12 @@ export async function createApp(
         prisma,
         jobs,
         sandbox,
-        reconcileCloudAgents: () => reconcileCloudAgents({ prisma, jobs, cloudAgent }),
         reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
       })
     : undefined;
   reconciler?.start();
 
   const router = createRouter({
-    cloudAgent,
     prisma,
     events,
     auth,

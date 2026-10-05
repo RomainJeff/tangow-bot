@@ -26,6 +26,9 @@ export const MAPPED_SIZE_KEYS = [
   "mobileStack",
   "callButton",
   "message",
+  "composerAttachmentThumb",
+  "composerAttachmentTile",
+  "composerRemove",
 ] as const satisfies readonly SizeKey[];
 
 /**
@@ -41,7 +44,7 @@ const twMerge = extendTailwindMerge({
       shadow: Object.keys(lightShadows).map(kebabCase),
       spacing: [...Object.keys(space), ...MAPPED_SIZE_KEYS].map(kebabCase),
       ease: ["quiet"],
-      animate: ["arrive"],
+      animate: ["arrive", "pivot"],
     },
   },
 });

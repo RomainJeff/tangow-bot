@@ -77,6 +77,7 @@ import {
   shouldNotifyBrowser,
 } from "../lib/browser-notifications";
 import { loadComputerScreen } from "../lib/computer-screen";
+import { dictation } from "../lib/dictation";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { copyableMessageText } from "../lib/message-text";
 import { revokePendingAttachmentPreviews } from "../lib/pending-attachments";
@@ -1575,6 +1576,16 @@ export function ShellPage() {
     () => userVisibleMessages(activeSnapshot?.messages ?? [], { includePeerReceipts: true }),
     [activeSnapshot?.messages],
   );
+  // Dictation's language guess (`dictationLangFor`): the person's own recent
+  // writing here, read lazily only when dictation actually starts.
+  const recentWriting = useCallback(
+    () =>
+      transcriptMessages
+        .filter((message) => message.role === "user")
+        .slice(-8)
+        .map((message) => copyableMessageText(message)),
+    [transcriptMessages],
+  );
   const transcriptArtifactTarget = useMemo<ArtifactTarget>(
     () => (inGroup ? { groupId: groupId ?? "" } : { botId: active?.id ?? "" }),
     [active?.id, groupId, inGroup],
@@ -2650,6 +2661,24 @@ export function ShellPage() {
             panel={panel}
             setPanel={setPanel}
             refreshThread={refreshThread}
+            disabled={Boolean(recordingSkill)}
+            onVoice={
+              !inGroup && active
+                ? () => {
+                    // The composer's dictation and the call share the same
+                    // `Dictation` instance; starting the call must cancel a
+                    // dictation in progress first (the composer restores its
+                    // draft once it sees dictation get cut off from under it).
+                    dictation.stop("cancel");
+                    if (!voiceStatus?.ready) {
+                      openSettings("voice");
+                      return;
+                    }
+                    setCallOpen(true);
+                  }
+                : undefined
+            }
+            voiceButtonRef={voiceButtonRef}
           />
           <div className="mx-auto flex min-h-0 w-full max-w-thread flex-1 flex-col px-3.5">
             {!active && !activeGroup && initialBotsLoaded ? (
@@ -2664,6 +2693,7 @@ export function ShellPage() {
                 key={activeSnapshot?.threadId}
                 scrollRef={messageScroll}
                 artifactTarget={transcriptArtifactTarget}
+                inGroup={inGroup}
                 messages={transcriptMessages}
                 olderCursor={activeSnapshot?.olderCursor ?? null}
                 loadingOlder={loadingOlder}
@@ -2710,6 +2740,7 @@ export function ShellPage() {
                   inGroup ? (activeGroup?.name ?? activeSnapshot?.groupName) : active?.name
                 }
                 running={composerRunning}
+                botColor={active?.color}
                 disabled={Boolean(recordingSkill)}
                 pendingAttachments={activePendingAttachments}
                 attachmentNotice={attachmentNotice}
@@ -2724,18 +2755,7 @@ export function ShellPage() {
                 onRemoveAttachment={removeAttachment}
                 onSend={sendMessage}
                 onStop={stopRun}
-                onVoice={
-                  !inGroup && active
-                    ? () => {
-                        if (!voiceStatus?.ready) {
-                          openSettings("voice");
-                          return;
-                        }
-                        setCallOpen(true);
-                      }
-                    : undefined
-                }
-                voiceButtonRef={voiceButtonRef}
+                dictationTranscribe={Boolean(voiceStatus?.transcribe)}
                 replyTarget={activeReplyTarget}
                 replyTargetName={replyTargetName}
                 onClearReply={() => setReplyTarget(null)}
@@ -2749,6 +2769,7 @@ export function ShellPage() {
                 }
                 mentionTargets={composerMentionTargets}
                 agentSkills={agentSkills}
+                recentWriting={recentWriting}
                 onSlashOpen={refreshAgentSkills}
                 onSlashAction={(action) => {
                   if (action === "chat-settings") {

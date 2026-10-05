@@ -1,10 +1,18 @@
 import { expect, type Page, type Route, test } from "@playwright/test";
-import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 
 type Message = Record<string, unknown>;
 
-/** A user message followed by three consecutive prose messages from the same bot,
- * close enough in time to collapse under one shared header. */
+/**
+ * A user message followed by three consecutive prose messages from the same
+ * bot, close enough in time to collapse under one shared header.
+ *
+ * Rendered in a group (multi-bot) thread: a mono (single-bot) thread never
+ * shows a per-message name or avatar any more (D2-a puts the bot's identity
+ * in the header instead), so grouping's shared header only shows there — the
+ * grouping *spacing* (3px within a group, 14px between groups) still applies
+ * in a mono thread, but that has no header to assert on.
+ */
 function groupedThread(botId: string): Message[] {
   const at = (minute: number) => `2026-09-17T09:${String(minute).padStart(2, "0")}:00.000Z`;
   return [
@@ -93,15 +101,27 @@ async function setAppearance(page: Page, theme: "light" | "dark") {
   await expect(settings).toBeHidden();
 }
 
-test("a bot's stacked consecutive messages share one header", async ({ page }, testInfo) => {
+test("a bot's stacked consecutive messages in a group thread share one header", async ({
+  page,
+}, testInfo) => {
   const stamp = Date.now();
   await signup(page, `message-grouping-${stamp}@rakazo.test`, "password12", "Message Grouping");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
-  const botId = activeBotId(page);
+  const chiefId = activeBotId(page);
 
-  await showGroupedThread(page, botId);
+  // A single-member group is still a "multi" thread for grouping purposes
+  // (`inGroup === true`): its grammar carries a name and avatar per group,
+  // unlike a mono thread.
+  const group = await rpc<{ id: string }>(page, "groups/create", {
+    name: "Solo group",
+    botIds: [chiefId],
+  });
+  await page.goto(`/app/g/${group.id}`);
+  await page.waitForURL(/\/app\/g\/[^/]+$/);
+
+  await showGroupedThread(page, chiefId);
 
   const transcript = page.getByTestId("transcript");
   const g1 = transcript.locator('[data-message-id="g1"]');
@@ -111,31 +131,33 @@ test("a bot's stacked consecutive messages share one header", async ({ page }, t
   await expect(g2).toBeVisible();
   await expect(g3).toBeVisible();
 
-  // The first message of the group keeps its full header: name and time.
-  const g1Row = g1.locator('[data-slot="message-row"]');
-  await expect(g1Row).not.toHaveAttribute("data-continued", "true");
+  // The first message of the group keeps the shared header: a name, and an
+  // avatar reserved at the group's foot (not its own row).
   await expect(g1.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
-  await expect(g1.locator('[data-slot="message-row-time"] time')).toHaveText(/\d/);
+  await expect(g1.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar')).toHaveCount(
+    0,
+  );
 
-  // The second and third messages are continuations: no repeated header, just content.
-  const g2Row = g2.locator('[data-slot="message-row"]');
-  const g3Row = g3.locator('[data-slot="message-row"]');
-  await expect(g2Row).toHaveAttribute("data-continued", "true");
-  await expect(g3Row).toHaveAttribute("data-continued", "true");
+  // The second and third messages are continuations: no repeated name.
   await expect(g2.locator('[data-slot="message-row-author"]')).toHaveCount(0);
   await expect(g3.locator('[data-slot="message-row-author"]')).toHaveCount(0);
 
-  // Exactly one author header across the whole group of three.
+  // Exactly one author header across the whole group of three, and exactly
+  // one avatar — at the group's foot (the last message), not its head.
   await expect(
     transcript
       .locator('[data-message-id="g1"], [data-message-id="g2"], [data-message-id="g3"]')
       .locator('[data-slot="message-row-author"]'),
   ).toHaveCount(1);
+  await expect(g3.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar')).toHaveCount(
+    1,
+  );
 
-  // A continuation still carries its own time, revealed on hover in the avatar gutter.
-  const g2Time = g2.locator('[data-slot="message-row-time"]');
+  // Every message in the group still reveals its own time on hover, even a
+  // continuation with no header of its own.
+  const g2Time = g2.getByTestId("message-hover-time");
   await expect(g2Time).toHaveCount(1);
-  await g2Row.hover();
+  await g2.hover();
   await expect(g2Time).toBeAttached();
 
   await setAppearance(page, "light");

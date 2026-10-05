@@ -39,8 +39,9 @@ export function MessageFrame({
         data-testid={chrome === "row" ? "message-bubble-frame" : undefined}
         className={
           chrome === "row"
-            ? // The pill floats at the row's own top-end corner (absolute, `end-3`),
-              // so both rows run the full column width. A user row right-aligns its
+            ? // The pill floats in this frame: beside the bubble when there is
+              // room (`placeHoverPill`), else at its top-end corner, so both
+              // rows run the full column width. A user row right-aligns its
               // bubble with `items-end` and caps it at 78% (`UserBubble`); the old
               // `w-fit` collapsed to the left once the bubble reached that 78% cap,
               // because fit-content resolves a percentage-capped child to full width.

@@ -12,6 +12,7 @@ import {
   nativeMcpRelayHeaders,
   readBoundedJsonResponse,
   resolveSupervisorToken,
+  SANDBOX_SKILL_MOUNTS,
 } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { getLogger, SERVICE_NAMES } from "@rakazo/logging";
@@ -51,6 +52,7 @@ import {
   xdotoolCommand,
 } from "./computer-spec.js";
 import { assertComputerHomeWritable } from "./home-ownership.js";
+import { syncManagedSkills } from "./managed-skills.js";
 import {
   MAX_NATIVE_PROCESS_WRITE_BYTES,
   nativeProcessSchema,
@@ -346,8 +348,9 @@ export function skillsBindsFor(
   translate: (p: string) => string,
 ): string[] {
   return [
-    `${translate(path.join(dataDir, "skills", "user", spaceId, userId))}:/skills/user:ro`,
-    `${translate(path.join(dataDir, "skills", "marketplaces", spaceId))}:/skills/marketplaces:ro`,
+    `${translate(path.join(dataDir, "skills", "user", spaceId, userId))}:${SANDBOX_SKILL_MOUNTS.user}:ro`,
+    `${translate(path.join(dataDir, "skills", "marketplaces", spaceId))}:${SANDBOX_SKILL_MOUNTS.marketplaces}:ro`,
+    `${translate(path.join(dataDir, "managed-skills"))}:${SANDBOX_SKILL_MOUNTS.managed}:ro`,
   ];
 }
 
@@ -1418,8 +1421,10 @@ app.delete("/computers/:id", async (c) => {
   }
 });
 
-function startSupervisor() {
+async function startSupervisor() {
   const logger = createRootLogger(SERVICE_NAMES.supervisor);
+  // Repo skills are published to DATA_DIR so computers see them via the /managed-skills bind.
+  await syncManagedSkills(repositoryRoot, dataDir, logger);
   // Resolve the ceilings before binding the port. They are otherwise parsed inside
   // containerCreateOptions, so a malformed RAKAZO_COMPUTER_* value would let the supervisor start
   // and pass its healthcheck, then fail the first POST /computers with a 500 that reads like a
@@ -1454,7 +1459,7 @@ function closeListeningServer(server: {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  startSupervisor();
+  void startSupervisor();
 }
 
 async function ensureComputerImage() {
@@ -1482,6 +1487,9 @@ async function ensureComputerImage() {
             "xcapture.c",
             "rakazo-browser",
             "rakazo-page-browser",
+            "rakazo-terminal",
+            "terminalrc",
+            "zshrc",
             "rakazo-browser.desktop",
             "embed.html",
             "clipboard-bridge.js",
@@ -1489,6 +1497,7 @@ async function ensureComputerImage() {
             "fluxbox.init",
             "fluxbox.apps",
             "fluxbox.menu",
+            "libreoffice.xcd",
           ],
         },
         { t: COMPUTER_IMAGE },

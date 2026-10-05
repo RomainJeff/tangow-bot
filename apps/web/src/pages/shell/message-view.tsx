@@ -1,13 +1,14 @@
-import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import type { RoutineGroupRun, RoutineRowRole } from "@rakazo/core";
 import { isNarrationMessage, parseWorkReturn } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
   Interstitial,
+  MessageBubble,
   MessageRow,
   StackedAvatars,
   Surface,
@@ -20,14 +21,13 @@ import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
-import { CloudAgentCard } from "../../components/CloudAgentCard";
 import { SessionRebuiltLine } from "../../components/SessionRebuiltLine";
+import { TaskCard } from "../../components/TaskCard";
 import { SkillDraftCard } from "../../components/teach/SkillDraftCard";
 import { WorkReturnCard } from "../../components/WorkReturnCard";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
-import { messageTimeLabel } from "../../lib/message-time";
 import { messageProviderLabel } from "../../lib/messaging";
 import { FALLBACK_BOT_COLOR } from "./layout";
 
@@ -75,8 +75,9 @@ import {
   ChartBlockView,
   ChoiceCard,
   McpApprovalCard,
-  RoutineRunCard,
 } from "./message-cards";
+import type { RoutineHandoff } from "./routine-run-line";
+import { RoutineGroupLine, RoutineRunLine } from "./routine-run-line";
 
 /**
  * The one line a card that takes an action leaves behind when a message is only read: nothing
@@ -124,7 +125,9 @@ export const MessageView = memo(function MessageView({
   canAnswer,
   readOnly = false,
   message,
-  continued,
+  inGroup,
+  showAuthor,
+  showAvatar,
   onAnswer,
   onOpenBot,
   onOpenPeerMessages,
@@ -137,6 +140,7 @@ export const MessageView = memo(function MessageView({
   onRefresh,
   onBotChanged,
   onAddRoutine,
+  routineRole,
 }: {
   artifactTarget: ArtifactTarget;
   /** How the transcript frames this message — derived once, from the same
@@ -146,9 +150,18 @@ export const MessageView = memo(function MessageView({
   /** Draws the message to be read only: its action cards become the line they carry. */
   readOnly?: boolean;
   message: ThreadMessage;
-  /** True when this message continues the previous bot message's group, so
-   * the shared header (avatar, name, time) is suppressed. */
-  continued?: boolean;
+  /** True in a multi-bot (group) thread: a bot row reserves an avatar column
+   * and its bubble caps at 88% of the content column. False in a single-bot
+   * (mono) thread: no avatar column, no name, and the bubble caps at 82% of
+   * the thread — the bot's identity lives in the header instead (D2-a). */
+  inGroup: boolean;
+  /** Show the author name above this message: the first message of a group
+   * (`computeMessageGroups`'s `isFirstOfGroup`). Always false in a mono
+   * thread. */
+  showAuthor: boolean;
+  /** Show the avatar for this message: the last message of a group
+   * (`isLastOfGroup`). Always false in a mono thread. */
+  showAvatar: boolean;
   onAnswer: (message: ThreadMessage, text: string) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
@@ -163,6 +176,10 @@ export const MessageView = memo(function MessageView({
   onRefresh: () => Promise<void>;
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
+  /** How this message's routine run renders once runs are folded (a line, a
+   * group, or nothing — drawn by another line). Undefined for every message
+   * that isn't a routine run. */
+  routineRole?: RoutineRowRole;
 }) {
   const { t } = useLingui();
   const isNarration = isNarrationMessage(message);
@@ -194,7 +211,9 @@ export const MessageView = memo(function MessageView({
       shapeSeed: bot?.shapeSeed,
     };
   };
-  /** A bot speaking: avatar, name, time, then prose that the thread does not frame. */
+  /** A bot speaking: a shared name/avatar per group in a multi-bot thread
+   * (none at all in mono — D2-a puts the bot's identity in the header
+   * instead), then the bubble or card the thread does not otherwise frame. */
   const botRow = (children: ReactNode) => (
     <MessageRow
       avatar={
@@ -206,10 +225,9 @@ export const MessageView = memo(function MessageView({
         />
       }
       author={<span dir="auto">{speakerName ?? author?.name ?? t`Bot`}</span>}
-      time={
-        <time dateTime={message.createdAt}>{messageTimeLabel(message.createdAt, i18n.locale)}</time>
-      }
-      continued={continued}
+      hasAvatarColumn={inGroup}
+      showAuthor={showAuthor}
+      showAvatar={showAvatar}
     >
       {children}
     </MessageRow>
@@ -224,7 +242,12 @@ export const MessageView = memo(function MessageView({
           block.kind === "steps" ? <AgentSteps key={i} block={block} live={isLive} /> : null,
         )}
         {prose.length > 0 ? (
-          <div data-testid="message-bot-bubble" className="space-y-2.5" dir="auto">
+          <MessageBubble
+            data-testid="message-bot-bubble"
+            inGroup={inGroup}
+            className="space-y-2.5"
+            dir="auto"
+          >
             {prose.map((block, i) =>
               block.kind === "text" || block.kind === "progress" ? (
                 <div key={i}>
@@ -232,7 +255,7 @@ export const MessageView = memo(function MessageView({
                 </div>
               ) : null,
             )}
-          </div>
+          </MessageBubble>
         ) : null}
       </>,
     );
@@ -314,41 +337,23 @@ export const MessageView = memo(function MessageView({
       if (block.kind === "session_rebuilt") return <SessionRebuiltLine key={i} />;
       if (block.kind === "progress") {
         return (
-          <div key={i} data-testid="message-bot-bubble" dir="auto">
+          <MessageBubble key={i} data-testid="message-bot-bubble" inGroup={inGroup} dir="auto">
             <ChatMarkdown streaming>{block.text}</ChatMarkdown>
-          </div>
+          </MessageBubble>
         );
       }
       if (block.kind === "subagent") {
         const running = block.status === "running";
         const failed = block.status === "failed";
         return (
-          <Surface key={i} className="w-[min(420px,90%)] px-4.5 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-author font-medium text-foreground" dir="auto">
-                {block.name}
-              </span>
-              <span
-                className={`rounded-full px-3 py-1 text-meta ${
-                  failed
-                    ? "bg-destructive/15 text-destructive"
-                    : running
-                      ? "bg-warning/15 text-warning"
-                      : "bg-success/15 text-success"
-                }`}
-              >
-                {running ? <Trans>subagent</Trans> : block.status}
-              </span>
-            </div>
-            <div className="mt-2 text-meta text-muted-foreground">{block.task}</div>
-            {block.progress || block.result ? (
-              <div className="mt-2.5 text-meta text-muted-foreground">
-                <ChatMarkdown streaming={running}>
-                  {block.result || block.progress || ""}
-                </ChatMarkdown>
-              </div>
-            ) : null}
-          </Surface>
+          <TaskCard
+            key={i}
+            title={block.name || t`subagent`}
+            state={running ? "running" : failed ? "failed" : "done"}
+            meta={block.task}
+            body={block.result || block.progress}
+            streaming={running}
+          />
         );
       }
       if (block.kind === "child_bot") {
@@ -391,7 +396,25 @@ export const MessageView = memo(function MessageView({
         );
       }
       if (block.kind === "routine_run") {
-        return <RoutineRunCard key={i} block={block} />;
+        const handoffFor = (run: RoutineGroupRun): RoutineHandoff | undefined => {
+          const sent = run.sentTo;
+          if (!sent) return undefined;
+          return {
+            receipt: <BotAvatar {...avatarOf(sent.toBotId)} size={14} />,
+            bots: [avatarOf(message.botId ?? ""), avatarOf(sent.toBotId)],
+            label: t`Messaged ${sent.toBotName}`,
+            onClick: () =>
+              onOpenPeerMessages({ peerBotId: sent.toBotId, peerBotName: sent.toBotName }),
+          };
+        };
+        if (routineRole?.kind === "group") {
+          return <RoutineGroupLine key={i} runs={routineRole.runs} handoffFor={handoffFor} />;
+        }
+        const run: RoutineGroupRun =
+          routineRole?.kind === "run"
+            ? routineRole.run
+            : { messageId: message.id, createdAt: message.createdAt, run: block, latest: true };
+        return <RoutineRunLine key={i} item={run} handoff={handoffFor(run)} />;
       }
       if (block.kind === "choice") {
         const botId = "botId" in artifactTarget ? artifactTarget.botId : message.botId;
@@ -472,9 +495,9 @@ export const MessageView = memo(function MessageView({
       }
       if (block.kind === "text") {
         return (
-          <div key={i} data-testid="message-bot-bubble" dir="auto">
+          <MessageBubble key={i} data-testid="message-bot-bubble" inGroup={inGroup} dir="auto">
             <ChatMarkdown>{block.text}</ChatMarkdown>
-          </div>
+          </MessageBubble>
         );
       }
       if (block.kind === "card") {
@@ -515,7 +538,6 @@ export const MessageView = memo(function MessageView({
           />
         );
       }
-      if (block.kind === "cloud_agent") return <CloudAgentCard key={i} block={block} />;
       if (block.kind === "skill_draft") {
         return (
           <div key={i} className="flex justify-start">

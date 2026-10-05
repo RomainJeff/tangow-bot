@@ -58,7 +58,9 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   await rpc(page, "routines/testRun", { routineId: routine.id });
 
   await page.goto(`/app/${subBotId}`);
-  const card = page.getByTestId("routine-run-card");
+  // A single execution renders as one log line, not a card (spec PR A item 2)
+  // — `RoutineGroupLine` only appears once at least two quiet runs fold.
+  const card = page.getByTestId("routine-run-line");
   await expect(card).toBeVisible({ timeout: 30_000 });
   await expect(card).toContainText("Status check");
   await expect(card).toContainText(/Running|Completed/i);
@@ -68,16 +70,16 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   await expect(card).not.toContainText("Subscribed");
   await expect(card.getByRole("img", { name: /Notifications on/i })).toBeVisible();
 
-  // notify:true defaults the card open (CA13) — the digest toggle starts expanded, rendering
+  // notify:true defaults the line open (A5) — the disclosure starts expanded, rendering
   // the routine's digest as sanitised markdown (CA-R4) with no live image loads (CA-R5).
-  const collapseButton = card.getByRole("button", { name: "Hide details" });
-  await expect(collapseButton).toBeVisible();
+  const toggle = card.getByRole("button", { name: /Status check/ });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(card.locator("strong")).toBeVisible();
   await expect(card.locator("img")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "routine-run-card");
 
-  await collapseButton.click();
-  await expect(card.getByRole("button", { name: "Show details" })).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
 
   await expect
     .poll(
@@ -120,7 +122,7 @@ test("renders a webhook-woken routine as a run card, not a user message", async 
   });
   expect(delivered.ok()).toBe(true);
 
-  const card = page.getByTestId("routine-run-card");
+  const card = page.getByTestId("routine-run-line");
   await expect(card).toBeVisible({ timeout: 30_000 });
   await expect(card).toContainText("Deploy watch");
   await expect(card).toContainText("Completed", { timeout: 60_000 });

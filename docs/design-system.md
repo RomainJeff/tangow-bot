@@ -16,8 +16,9 @@ arrangement belongs in a primitive.
 
 - Two panes, no chrome in between: the sidebar and the thread, nothing framing
   them.
-- Messages are not cards. The thread frames exactly one thing: a decision only a
-  person can make.
+- Messages are bubbles, not cards. Bot prose sits in a `muted` bubble, the
+  person's words in the dark `chatUser` one; the thread elevates exactly one
+  thing: a decision only a person can make.
 - Ink everywhere. A bot's colour lives in its avatar and nowhere else.
 - One elevation per screen. Everything else is a fill and a hairline.
 - Nothing loops except the avatar of a bot that is working.
@@ -49,9 +50,11 @@ colours. An `rgba` in a slot is a bug.
 | `primaryForeground` | `#FBFBF9` | `#0C0C0E` | |
 | `secondary` | `#EDEDEB` [ink 6%] | `#1F1F21` [white 8%] | secondary capsule, Stop |
 | `secondaryForeground` | `#111114` | `#F2F2F0` | |
-| `chatUser` | `#F1F1EE` | `#222226` | user bubble, mention chip |
-| `chatUserForeground` | `#111114` | `#F2F2F0` | |
-| `muted` | `#EDEDEB` [6%] | `#1F1F21` [8%] | segmented track |
+| `chatUser` | `#111114` | `#3E3E44` | user bubble: ink in light, tone on tone in dark |
+| `chatUserForeground` | `#FBFBF9` | `#F2F2F0` | |
+| `mentionChip` | `#F1F1EE` | `#222226` | mention chip in the composer |
+| `mentionChipForeground` | `#111114` | `#F2F2F0` | |
+| `muted` | `#EDEDEB` [6%] | `#1F1F21` [8%] | bot bubble, segmented track |
 | `mutedForeground` | `#6E6E73` | `#9A9AA1` | clickable grey: meta, times, section labels, icons |
 | `accent` | `#EFEFEE` [5%] | `#1B1B1C` [6%] | icon-button hover |
 | `accentForeground` | `#111114` | `#F2F2F0` | |
@@ -80,7 +83,7 @@ colours. An `rgba` in a slot is a bug.
 Utilities: `text-body`, `text-author`, `text-time`, `text-meta`, `text-label`,
 `text-row-name`, `text-row-status`, `text-title`, `text-capsule`,
 `text-working`, `text-reasoning`, `text-block-header`, `text-question`,
-`text-mono`. Each carries its own line height, tracking and weight.
+`text-mono`, `text-composer`. Each carries its own line height, tracking and weight.
 
 | Key | Size | Leading | Tracking | Weight | Use |
 | --- | --- | --- | --- | --- | --- |
@@ -98,6 +101,7 @@ Utilities: `text-body`, `text-author`, `text-time`, `text-meta`, `text-label`,
 | `blockHeader` | 12.5 | 1.3 | 0.01em | 500 | framed-block header |
 | `question` | 16 | 1.45 | -0.008em | 400 | framed-block question |
 | `mono` | 12.5 | 1.3 | 0 | 400 | durations and figures |
+| `composer` | 17 | 1.294 | -0.01em | 400 | the mobile composer field (the native iOS body) |
 
 Fonts: `--font-sans` is Geist Variable, `--font-mono` is Geist Mono Variable,
 both bundled offline. `font-mono` pairs with `tabular-nums` wherever a number
@@ -107,9 +111,11 @@ ticks.
 
 Layout, in px: `sidebar 280`, `thread 800`, `header 56`, `panel 384`, `block
 520` — `w-sidebar`, `max-w-thread`, `h-header`, `w-panel`, `max-w-block` (a
-framed block standing alone in the thread, §3.3). Gaps use the native Tailwind
-scale, which accepts any multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22,
-`gap-7` is 28. Never `gap-[…]`.
+framed block standing alone in the thread, §3.3); `composerField 220` —
+`max-h-composer-field`, the web/desktop composer field before it scrolls
+internally. Gaps use the native Tailwind scale, which accepts any
+multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22, `gap-7` is 28. Never
+`gap-[…]`.
 
 ### Radii
 
@@ -120,7 +126,7 @@ scale, which accepts any multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22,
 | `card` | 14 | `rounded-card` | unframed cards, the panel |
 | `draft` | 16 | — | shared draft (wave 2) |
 | `block` | 18 | `rounded-block` | framed blocks |
-| `bubble` | 19 | `rounded-bubble` | user bubble |
+| `bubble` | 18 | `rounded-bubble` | every message bubble, bot and user |
 | `pill` | 9999 | `rounded-full` | capsules, round buttons, composer, avatars |
 
 ### Elevation
@@ -129,10 +135,13 @@ scale, which accepts any multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22,
 | --- | --- | --- | --- |
 | `row` | `0 1px 2px rgba(17, 17, 20, 0.06)` | `none` | selected sidebar row |
 | `card` | `0 0 0 1px rgba(17, 17, 20, 0.08), 0 12px 30px -16px rgba(17, 17, 20, 0.4)` | `0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 30px -16px rgba(0, 0, 0, 0.8)` | framed blocks, the panel |
-| `composer` | `0 1px 2px rgba(17, 17, 20, 0.06), 0 12px 28px -18px rgba(17, 17, 20, 0.5)` | `0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 28px -18px rgba(0, 0, 0, 0.8)` | the composer capsule |
+| `composerRest` | `0 0 0 1px rgba(17, 17, 20, 0.09)` | `0 0 0 1px rgba(255, 255, 255, 0.08)` | the composer at rest: a hairline only |
+| `composerFocus` | `0 0 0 1px rgba(17, 17, 20, 0.09), 0 12px 28px -18px rgba(17, 17, 20, 0.55)` | `0 0 0 1px rgba(255, 255, 255, 0.16), 0 12px 28px -18px rgba(0, 0, 0, 0.8)` | the composer while its field has focus (dark also brightens the hairline) |
 | `floating` | `0 1px 2px rgba(17, 17, 20, 0.08), 0 8px 20px -10px rgba(17, 17, 20, 0.35)` | `0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px -10px rgba(0, 0, 0, 0.7)` | the hover pill |
+| `settled` | `0 0 0 1px rgba(17, 17, 20, 0.08)` | `0 0 0 1px rgba(255, 255, 255, 0.08)` | an answered framed block: the hairline without the drop |
 
-Utilities `shadow-row`, `shadow-card`, `shadow-composer`, `shadow-floating`.
+Utilities `shadow-row`, `shadow-card`, `shadow-composer-rest`, `shadow-composer-focus`,
+`shadow-floating`, `shadow-settled`.
 Unframed cards have **no** shadow: `bg-surface` and a `border` hairline.
 
 ### Motion
@@ -145,19 +154,29 @@ Unframed cards have **no** shadow: `bg-surface` and a `border` hairline.
 | `hover` | 160 ms | colour and fill on hover (`duration-(--duration-hover)`) |
 | `breathe` | 5.6 s | the idle avatar |
 | `caret` | 1 s step-end | the typing caret |
+| `pivot` | 320 ms, rotate -90° → 0 with scale and fade | the send arrow arriving with the first character |
+| `morph` | 260 ms, rotate 45° | the mobile + turning into × while its sheet is open |
+| `flow` | 2.6 s per lap | the Stop contour while a reply streams (static under reduced motion) |
 
 ### Sizes
 
 Avatars: `receipt 14`, `stackXs 16`, `interstitial 17`, `chip 18`, `stack 20`,
 `message 26`, `row 28`, `call 120`. Controls: `hoverIcon 28`, `quickReply 32`,
-`composerIcon 34`, `capsule 36`, `mobileStack 44`, `callButton 52`.
+`composerIcon 34`, `capsule 36`, `mobileStack 44`, `callButton 52`. Mobile composer:
+`composerAttach 48` (the detached + bubble), `composerTarget 44` (a button's
+touch target in the capsule), `composerAction 36` (the send / stop disc).
+Composer attachments (both devices): `composerAttachmentThumb 64` (the image
+thumbnail / file-tile height), `composerAttachmentTile 200` (max width of a
+file tile before its name truncates), `composerRemove 22` (the × disc).
 
-The seven sizes a primitive needs as a class are mapped into Tailwind's spacing
+The sizes a primitive needs as a class are mapped into Tailwind's spacing
 namespace in `packages/ui-web/src/styles.css` — `--spacing-hover-icon`,
 `--spacing-quick-reply`, `--spacing-composer-icon`, `--spacing-capsule`,
-`--spacing-mobile-stack`, `--spacing-call-button`, `--spacing-message` — so
-`size-composer-icon`, `h-capsule` and `w-message` resolve to the token instead
-of an arbitrary value. The rest are spent through a `size` prop.
+`--spacing-mobile-stack`, `--spacing-call-button`, `--spacing-message`,
+`--spacing-composer-attachment-thumb`, `--spacing-composer-attachment-tile`,
+`--spacing-composer-remove` — so `size-composer-icon`, `h-capsule` and
+`w-message` resolve to the token instead of an arbitrary value. The rest are
+spent through a `size` prop.
 
 ## Primitives
 
@@ -214,17 +233,20 @@ The only framed element of the thread: a decision or a question the bot cannot
 settle alone.
 
 Props: `header?: { who, dot? }`, `question`, `consequence?`, `children?`,
-`actions?`, `answered?`. Anatomy: `bg-surface rounded-block shadow-card`; an
+`actions?`, `answered?`. Anatomy: `bg-surface rounded-block shadow-card`, every
+line inset by 14 (`px-3.5`) so its text starts where a bubble's text does; an
 optional header line with a 6 px ink dot and `text-block-header`; the question
 in `text-question`; the consequence in `text-meta`; `children` for controls; the
 actions wrapped in a row of capsules. States: open (controls and actions) and
 **answered** — setting `answered` settles the block: the controls and the
 actions are dropped whether or not they are still passed, one `text-meta` line
-takes their place and the root carries `data-answered="true"`. Nothing that
+takes their place, the root carries `data-answered="true"` and its shadow drops
+to `shadow-settled`, giving the thread back its one elevation. Nothing that
 cannot be pressed is left looking pressable.
 
-The card is the body of a normal bot message row — the row's own avatar and
-name already say who is asking, so the card repeats that only for a
+The card is the body of a normal bot message row, full width of the column
+rather than capped like a bubble — the group's name and avatar already say who
+is asking, so the card repeats that only for a
 consequential approval, name-less ("Needs your call"); a plain question,
 `ask_user` question, or `choice` passes no `header` at all and opens straight
 on the question.
@@ -242,40 +264,131 @@ The unframed card: one fill, one hairline, never a shadow.
 Props: `radius?: "card" | "block"` (default `card`), `as?`. Renders
 `bg-surface border border-border` with `rounded-card` or `rounded-block`.
 
-Do: tables, code blocks, routine and agent cards. Don't: add `shadow-card` to
-make it stand out — that shadow belongs to `FramedBlock`.
+`variant="outlined"` (mobile and web) trades the hairline for a 1 pt
+`outline` edge: the thread's only outlined card, for a work product.
 
-Used by: markdown tables, code blocks, routine-run, cloud-agent and secret-ask
-cards.
+Do: tables, code blocks, agent cards. Don't: add `shadow-card` to make it stand
+out — that shadow belongs to `FramedBlock`.
+
+Used by: markdown tables, code blocks, secret-ask cards;
+outlined for a delegated task's result (subagent).
+
+### Task card
+
+A delegated task's result on `Surface variant="outlined"`, full column width: a
+`doc.text` glyph in ink, the title (announced as a header), the brief in `meta`
+on two lines, a `border` hairline, then the result. The whole card is one
+target and opens the brief and result whole in a sheet; a long result fades
+out under the expand badge. A finished task shows no status word; running,
+failed and cancelled show the routine run's symbol and word under the title.
+
+Web and desktop share this exactly: `apps/web/src/components/TaskCard.tsx`
+exports `TaskCardSurface` (the visual card alone, `lucide-react`'s `FileText`
+glyph) and `TaskCard` (the whole card as a button that opens a `ui-web`
+`Dialog` with the brief and result).
+
+### Routine run line
+
+A routine run is a log line, not a card: no box, a 44 pt row with a status
+symbol (`checkmark.circle.fill` success, `xmark.circle.fill` destructive,
+`circle.dotted`, `clock`, `stop.circle` muted), the name (`rowName` 500, never
+truncated), the time (`time`, tabular), the status word (`label` 500, muted, or
+destructive when it failed), then fixed receipt, bell and disclosure slots kept
+when empty so the columns line up. The disclosure is iOS's: `chevron.forward`
+turning down. Opening shows the report under a 1 pt `outline` rail and, centred
+like every exchange between bots, the message the run then sent (the collapsed
+line carries it as the receipt bot's 14 pt avatar). A failed or subscribed run
+opens on its report. Between two routine lines a time marker only says the day,
+when it changes.
+
+Earlier runs of the same routine with nothing between them fold into one line
+(the routine's name, how many runs, the span, a cancelled count when there is
+one); the latest run always keeps its own line. A failed or running run is
+never folded, and — like a message from outside the routine — cuts the
+sequence: nothing folds across it, so it never moves out of place. Only a
+routine's latest run opens on its own (failed, or subscribed). An open group
+lists each run; past eight runs it opens in a sheet, by day.
+
+`packages/core/src/routine-groups.ts` is the one `foldRoutineRuns` both mobile
+and web read groups from. Web renders it as `RoutineRunLine` /
+`RoutineGroupLine` in `apps/web/src/pages/shell/routine-run-line.tsx`: the same
+row, the same fold, the `ReasoningDisclosure` idiom (`lucide-react`'s
+`ChevronRight` turning 90°) for the disclosure, a `border-s border-outline`
+rail, the existing `CollaborationMarker` centred for the handoff, and a
+`ui-web` `Dialog` (sectioned by day) once a group passes eight runs.
+
+### Clipped preview
+
+Content cut to a height (a routine report at eight lines, a task result at
+five) fades into its host over 56 pt, with a 28 pt round expand badge
+(`arrow.up.left.and.arrow.down.right`, `secondary` fill, `outline` ring) on the
+fade, bottom right. The badge only marks it: the whole preview is the target
+and opens the rest in a sheet. Content that fits is never cut.
+
+`packages/ui-web/src/clipped-preview.tsx` is the web primitive: `ClippedPreview`
+estimates from the raw text whether it is worth cutting, fades to a caller-given
+`fadeFrom` token and opens a `Dialog` on click. Its `onOpen` is optional — when
+an ancestor already opens the whole card (a `TaskCard`), it stays decoration
+only, since a native `<button>` cannot nest another one.
 
 ### MessageRow
 
-A bot message: avatar, name, time, prose. No fill, no border.
+The scaffold around a bot message: who is speaking, never a fill of its own.
 
-Props: `avatar`, `author`, `time?`, `children`, `meta?: { label, onClick? }`,
-`trailing?`. The avatar column is `w-message` wide so every row starts on the
-same line whatever the avatar renders. The header is `text-author` plus
-`text-time`; the body is `text-body text-pretty`; `meta` is a button in
-`text-meta` suffixed by a chevron. The root is `group relative`, which is what
-reveals a `HoverPill` passed as `trailing`.
+Props: `avatar`, `author`, `children`, `trailing?`, `showAuthor?`,
+`showAvatar?`, `hasAvatarColumn?`. Messages are grouped by `computeMessageGroups`
+(`packages/core/src/message-grouping.ts`, see Grouping). In a group thread the
+author (`text-author`, inset 12 so it lines up with the bubble text) heads the
+first message of a group and the avatar (`w-message`, bottom-aligned) sits at
+the foot of the last one; the other rows keep the avatar column empty so every
+bubble shares one edge, 8 from the avatar. A single-bot thread passes
+`hasAvatarColumn={false}`: no name, no avatar, no gutter — the header already
+says who this is. No row carries a permanent time; web reveals it on hover or
+focus. The root is `group relative`, which reveals a `HoverPill` passed as
+`trailing`.
 
-Do: put the proof line in `meta` so it stays one tap from the message. Don't:
-give the row a background to "group" it.
+The native mirror (`apps/mobile/components/message-row.tsx`) has the same
+props with a `mono` flag.
 
-The native mirror (`apps/mobile/components/message-row.tsx`) spends the `body`
-token on a string child and drops a node child into a plain `View` instead:
-React Native has no style inheritance through a `View`, so markdown and cards
-bring their own typography.
+Used by: every bot message in the thread, cards included.
 
-Used by: every bot message in the thread.
+### MessageBubble
+
+What a bot said: `bg-muted rounded-bubble`, 10 × 14 padding, fitting its
+content up to 82% of the thread (single bot) or 88% of the column (`inGroup`).
+`meta?: { label, onClick? }` draws the proof line inside the bubble, under the
+text, in `text-meta` suffixed by a chevron. Its `data-slot="message-row-bubble"`
+scopes the markdown rules for a bubble: code on `background`, tables without a
+surface, their hairlines running edge to edge.
+
+One message is one bubble: never split a message by paragraph. Agent steps sit
+above the bubble, unfilled.
+
+The native mirror is `apps/mobile/components/bot-bubble.tsx`. It caps its width
+with a number computed from the window: a bubble that fits its content has no
+definite width, so a percentage (its own, or the markdown's `100%`) measures the
+text wider than it draws and clips the last line.
+
+Used by: bot narration (text and progress).
 
 ### UserBubble
 
-What the person said, the one filled bubble of the thread: `bg-chat-user`,
-`rounded-bubble`, `whitespace-pre-wrap`, at most 78% of the column, aligned to
-the end edge.
+What the person said: `bg-chat-user` (ink in light, tone on tone in dark),
+`text-chat-user-foreground`, `rounded-bubble`, 10 × 15 padding,
+`whitespace-pre-wrap`, at most 78% of the column, aligned to the end edge. The
+dark fill is the person's alone: a bot never gets it, not even in a
+conversation between bots.
 
 Used by: user messages.
+
+### Grouping
+
+Consecutive messages from one author form a group: 3 between their bubbles, 14
+between groups, 0 between two consecutive asides. A group breaks on a new
+author, a time marker, more than five minutes, a reply, an aside (handoff, bot
+message markers) and any card, which is always a group of its own.
+`computeMessageGroups` is the one source of truth for web and mobile; call it
+once per list, on the chronological messages, and read its result by id.
 
 ### Interstitial
 
@@ -284,6 +397,9 @@ A handoff between two bots, centred between messages and quiet enough to skip.
 Props: `avatars` (usually a `StackedAvatars` at 17), `children`, `onClick?`. It
 is a `div` until `onClick` makes it a `button` that fades on hover.
 
+A marker cuts the bubble group around it; consecutive markers stack with no
+gap. A handoff reads as a centred line between two 28 × 1 hairlines.
+
 Used by: `bot_message_sent`, `bot_message_received` and `handoff` events.
 
 ### StackedAvatars
@@ -291,7 +407,7 @@ Used by: `bot_message_sent`, `bot_message_received` and `handoff` events.
 The bots behind a group, a delegation or a receipt, in one glance.
 
 Props: `items: { color, identity?, working?, shapeSeed? }[]`, `size: 14 | 16 |
-17 | 20`, `max?` (default 3), `label?`. Composes `BotAvatar`; each avatar after
+17 | 20` (native adds 28 for a header, with a round `+n` pill), `max?` (default 3), `label?`. Composes `BotAvatar`; each avatar after
 the first slides under the previous one by 5, 4 or 3 px depending on the size,
 and the rest collapse into `+N` in `text-label`. With a `label` the stack is a
 `role="img"` carrying that name; without one it is `aria-hidden`, which is right
@@ -317,55 +433,151 @@ reading, so nothing animates a number at someone who asked for stillness.
 states do — there is no bot) and the reserved avatar column disappears too,
 instead of leaving a blank 26 px gap.
 
-Used by: the bottom of the thread during a run.
+Used by: the bottom of the web thread during a run. Mobile shows a typing
+bubble instead (`apps/mobile/components/typing-bubble.tsx`): three pulsing dots
+in a `muted` bubble, or the live activity line in `Shimmer` when one bot is
+working and its activity is known.
 
 ### HoverPill
 
-Message actions, absent until the row is hovered or focused: `bg-surface`,
-`rounded-full`, `shadow-floating`, anchored to the `end` edge. On a fine
-pointer (`pointer-fine:`), it is `opacity-0 pointer-events-none` at rest;
-`group-hover` and `group-focus-within` on the row reveal it over
-`--duration-hover`. A coarse pointer has no hover to reveal it with, so it
-stays visible by default — the primitive itself only ever gates on
-`pointer-fine:`; a coarse pointer is always the unconditional (visible) case.
+Message actions, absent until the row is hovered or focused from the
+keyboard: `bg-surface`, `rounded-full`, `shadow-floating`, `opacity-0
+pointer-events-none` at rest — `group-hover` and a `:focus-visible` inside the
+row reveal it over `--duration-hover` (a click that leaves focus on a button,
+such as unfolding a routine, does not pin it). It is for a bot's message only:
+your own message gets bare Edit and resend / Copy icons under its bubble on
+hover instead (`UserMessageActions`), and a routine line, which opens on a
+tap, gets none. It sits next to the bubble it acts on, on the side facing the
+thread's centre, when the bubble leaves room; otherwise at the row's top
+`end` corner. The row measures this on enter and focus
+(`hover-pill-placement.ts`) and hands it over as `data-pill="beside"` with
+`--pill-x` / `--pill-y`. A bubble's time rides in the pill, ahead of the
+actions. A touch pointer never hovers, so the
+pill never appears there at all: touch reaches a message's actions through
+`ActionSheet` instead (long press on the bubble, see below), not through a
+coarse-pointer variant of this primitive.
 
-Props: `children` — `roundIconSm` buttons, each with its own `aria-label`.
-`roundIconSm` is `size-hover-icon` (28 px) on a fine pointer and
-`pointer-coarse:size-11` (44 px) on a coarse one, composed by the caller —
-the primitive does not size its children.
+Props: `children` — the message's time (`text-time`, muted) then
+`roundIconSm` (`size-hover-icon`, 28 px) buttons, each with its own
+`aria-label`: Reply, React, Copy, Speak/Stop (`message-hover-actions.tsx`).
 
-Two densities, both composed by the caller from the same children (see
-`message-hover-actions.tsx`): on a **fine** pointer the pill holds Reply ·
-React · Copy · Speak · More, each `hidden pointer-fine:grid` (except React,
-always shown); on a **coarse** pointer it holds only React and More
-(`hidden pointer-coarse:grid`) — Reply, Copy, Speak/Stop and Edit and resend
-move into More's menu there instead (`pointer-fine:hidden` on those menu
-items, so they don't also duplicate a fine pointer's dedicated icons). Edit
-and resend is never a pill icon on either density, since it is not one of the
-five; if a row has nothing else for More to hold on a fine pointer (a bot
-row, say), More itself hides there rather than open onto an empty menu.
-
-Do: put it in `MessageRow`'s `trailing` slot. Don't: reveal it on click,
-anchor it to `right`, or repeat a pill icon inside More on the density where
-that icon is already visible.
+Do: put it in `MessageRow`'s `trailing` slot. Don't: reveal it on click, or
+anchor it to `right`.
 
 Used by: Reply, React, Copy, Speak, Edit and resend, and More on a message.
+
+### ActionSheet
+
+A bottom-anchored action sheet, touch's own way into a message's actions —
+opened by a 450 ms long press on a bubble (`transcript.tsx`), never by a tap.
+Built on the same Base UI `Dialog` as the centered `Dialog` primitive, so
+Escape, a backdrop click, and focus trapping come for free; this primitive
+adds the bottom anchoring, the slide-up entrance and the drag-to-dismiss
+gesture. Anatomy: full width, `max-w-thread` on larger screens, `rounded-t-block`,
+a grab handle, a screen-reader-only `Dialog.Title` (the sheet shows no visible
+heading). Dragging the handle down past 80 px (or a fast flick short of it)
+closes it; short of that it snaps back. Entrance slides up over
+`--duration-arrive`; under reduced motion it only fades in, never slides.
+
+Props: `open`, `onOpenChange`, `title` (screen-reader only), `children`.
+
+While held, the bubble itself settles to `scale(0.96)` after 150 ms
+(`data-long-pressing="true"` on the row, a CSS rule scoped to
+`[data-slot="message-row-bubble"]`/`[data-slot="user-bubble"]`, no transform
+under reduced motion), and `-webkit-touch-callout: none` on both bubble slots
+keeps iOS's own long-press callout from competing with the sheet opening
+under it.
+
+Used by: `message-actions-sheet.tsx` — the same quick reactions and action
+handlers as `HoverPill`'s, reused rather than duplicated
+(`message-actions.ts`), so touch and pointer never drift on what a message
+allows.
 
 ### ComposerShell
 
 The capsule at the bottom of the thread, and the one elevation of that screen:
-`bg-surface rounded-full shadow-composer`.
+`bg-surface rounded-composer shadow-composer-rest`, lifting to
+`shadow-composer-focus` on `:focus-within` — a single elevation, not a
+separate focus ring layered on top. Bottom-aligned (`items-end`) so its buttons stay on the last line
+while the field grows; at least `min-h-12` (48 px) even empty.
 
-Props: `leading?` (a mention chip, or the speaking bot's avatar — it tightens
-the leading padding), `children` (the field), `trailing?` (round-icon buttons),
-`state?: idle | typing | dictating | speaking | working`. `dictating` draws four
-3 × 14 bars, `working` draws three dots; both are `aria-hidden` chrome. The
-`speaking` beat is composed from the slots, so its label stays translatable.
+Props: `attach?` (the attach button — the capsule's **leading edge**, before
+any chip: `+ · [chips] · text · [mic] · action(s)`), `leading?` (a
+mention/skill chip, or the speaking bot's avatar), `children` (the field),
+`trailing?` (round-icon buttons: dictate, then send / stop), `attachments?` (a
+row of `ComposerAttachment`, rendered **above** the input line, inside the
+capsule — pending attachments and rewind artifacts both land here, wrapping on
+web), `state?: idle | typing | dictating | speaking`.
 
-Do: show Send only when the draft or a chip is non-empty. Don't: put a second
-shadow inside the capsule.
+**Dictation mode** (`state="dictating"`): the capsule swaps its ambient
+`shadow-composer-rest`/`-focus` for a 1.5 px `foreground` ring (`+` and any
+chip stay in place, just inactive — the caller disables them). Two new props
+draw a row **under** the field: `dictationCancel?` (×, start) and
+`dictationConfirm?` (✓ — plus Stop when a reply is running — end), with this
+component's own four bars in between as the waveform (`data-slot="composer-
+dictating"`, `aria-hidden`, 3 × 14, reused unchanged from before dictation
+existed). Only drawn together with the row when `state="dictating"`. The
+field itself is the caller's job: `apps/web/src/pages/shell/composer.tsx`
+swaps its `<textarea>` for a read-only preview `<div>` while dictating (a
+textarea can't style a range), showing the pre-dictation draft plus each
+dictated word fading/blurring in over 260 ms (`rk-word-in`, off under reduced
+motion) and the not-yet-final tail in `mutedForeground`. The `speaking` beat
+is composed from the slots, so its label stays translatable.
 
-Used by: the thread composer.
+**Removed**: the `working` state and its three dots — a run in
+progress is now carried by the Stop button's own contour (`StopContour`), not
+by chrome inside the capsule.
+
+Do: show Send only when the draft or a chip is non-empty; put the attach
+button in `attach`, never in `trailing`; dictation and the call never fight
+over the composer — the call moved to the thread header (a phone icon labelled `Voice`, 1:1
+only; the mic always means dictation) and cancels a dictation in progress before it opens. Don't: put a second
+shadow inside the capsule, reach for `state="working"` (removed), or let
+dictation send anything itself — ✓ only inserts into the draft.
+
+Used by: the thread composer (`apps/web/src/pages/shell/composer.tsx`); the
+call button lives in `apps/web/src/pages/shell/thread-header.tsx` instead.
+
+### ComposerAttachment
+
+A pending attachment, or a rewind artifact, inside the composer's
+`attachments` slot: an image thumbnail, or a file tile with a paperclip and a
+truncated name, each carrying a × disc.
+
+Props: `name` (alt text, or the file tile's truncated label), `previewUrl?`
+(present → thumbnail; absent → file tile), `removeLabel` (the caller's
+translated "Remove {name}"), `onRemove?`, `disabled?` (× inert while
+dictating — the attachment itself stays visible and unchanged). Anatomy: `size-composer-attachment-thumb`
+(64 px) `rounded-card` thumbnail, or a `bg-secondary` `rounded-card` tile
+capped at `max-w-composer-attachment-tile` (200 px) with a truncated name; the
+× is a `size-composer-remove` (22 px) `bg-primary` disc with a `border-surface`
+ring, absolutely positioned at the top end corner.
+
+Do: use it for both `pendingAttachments` and `rewindArtifacts` — never a plain
+pill above the composer. Don't: let a long file name widen the tile; it
+truncates instead.
+
+Used by: the thread composer's `attachments` slot.
+
+### StopContour
+
+The Stop button's own edge: the contour **is** the rim
+of the disc, not a ring drawn outside it — two glows of the responding bot's
+colour chase each other around a 2 px ring, one lap per `--duration-flow`
+(2.6 s), while the disc (`bg-primary`) sits at `inset-0.5` and a small
+`bg-primary-foreground` square marks the button underneath. No head, no
+accessible name — it fills a `roundIcon` button that already has one.
+
+Props: `color?` — the bot's identity colour as a plain CSS colour string, the
+same precedent as `BotAvatar`'s `color` prop (data, not a token; carried as
+the inline custom property `--contour`). Omit it in a group, or when no bot is
+known: the contour falls back to `color-mix(in srgb, var(--foreground) 45%,
+transparent)`. Reduced motion: the ring holds still, fully lit, no rotation.
+
+Do: pass the room's single bot's colour when there is one. Don't: give it an
+`aria-label` — the wrapping button owns "Stop".
+
+Used by: the thread composer's Stop button, while a run is going.
 
 ### ReasoningDisclosure
 

@@ -11,6 +11,7 @@ import {
 import { BotAvatar, Button, useElapsed } from "@rakazo/ui-web";
 import { Mic, MicOff, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { desktopBridge } from "../lib/desktop";
 import { dictation } from "../lib/dictation";
 import { speaker } from "../lib/tts";
 import { type AskBlock, canAnswerAskByVoice } from "../lib/voice-ask";
@@ -122,6 +123,10 @@ export function CallView({
       await dictation.listen({
         mode: "endpoint",
         transcribe,
+        // Electron's Chromium reports Web Speech as available but it usually
+        // has no speech-service key there, so on desktop the configured
+        // provider is tried first (same fix as the composer's dictation).
+        preferTranscribe: Boolean(desktopBridge()) && transcribe,
         onFinal: (text) => void handleTranscript(text),
       });
     } catch (err) {

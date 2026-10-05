@@ -1,11 +1,20 @@
 import { radii } from "@rakazo/ui-tokens";
 import type { ReactNode } from "react";
+import { useEffect, useRef } from "react";
 import type { ViewProps } from "react-native";
 import { StyleSheet, Text, View } from "react-native";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
+import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
+import {
+  type FramedBlockPhase,
+  framedBlockDidTransitionToAnswered,
+} from "../lib/framed-block-transition";
+import { successHaptic } from "../lib/haptics";
 import { useThemedStyles } from "../lib/native";
 import { shadowsForAppearance } from "../lib/theme";
 import { nativeTextStyle } from "../lib/typography";
+import { AnsweredCheck } from "./answered-check";
 
 export interface FramedBlockHeader {
   /** Who is asking, already translated by the caller. */
@@ -35,6 +44,16 @@ export interface FramedBlockProps extends Omit<ViewProps, "children"> {
 /**
  * The only framed element of the thread: a decision or a question the bot
  * cannot make alone. Mirrors `packages/ui-web/src/framed-block.tsx`.
+ *
+ * 7e: this is the one place the design-motion spec allows a height animation
+ * — never on a list row (the transverse rules forbid that, to keep the
+ * inverted `FlatList`'s anchor from jumping), but here, inside a row that is
+ * already laid out, the card owns its own settle: the controls collapse, the
+ * answered line cross-fades in behind a drawn check, and a success haptic
+ * confirms — but only the FIRST time this card flips from open to answered
+ * while it is mounted. A card already answered when the thread opens (or
+ * when this row first mounts at all) renders that line directly, with no
+ * animation and no haptic.
  */
 export function FramedBlock({
   header,
@@ -47,10 +66,30 @@ export function FramedBlock({
   ...props
 }: FramedBlockProps) {
   const styles = useThemedStyles(createFramedBlockStyles);
+  const tokens = mobileTokens();
+  const reducedMotion = useChatReducedMotion();
+
+  const phase: FramedBlockPhase = answered ? "answered" : "open";
+  const phaseRef = useRef<FramedBlockPhase | null>(null);
+  const didTransition = framedBlockDidTransitionToAnswered(phaseRef.current, phase);
+  phaseRef.current = phase;
+
+  useEffect(() => {
+    if (didTransition) successHaptic();
+    // `didTransition` only ever reads true once per card (the open→answered
+    // edge itself never repeats), so re-running this on its own change is
+    // exactly the "at that moment, not at tap" rule (spec 7e).
+  }, [didTransition]);
+
+  const collapseMs = reducedMotion ? CHAT_MOTION.reducedFadeMs : CHAT_MOTION.decisionCollapseMs;
+
   return (
-    <View
+    <Animated.View
       accessibilityState={answered ? { busy: false } : undefined}
-      style={[styles.root, style]}
+      // Only the render that settles the card animates its height; any other
+      // size change (a pending label, a new line of text) stays instant.
+      layout={didTransition ? LinearTransition.duration(collapseMs) : undefined}
+      style={[styles.root, answered ? styles.rootSettled : undefined, style]}
       {...props}
     >
       {header ? (
@@ -66,20 +105,30 @@ export function FramedBlock({
       </Text>
       {consequence ? <Text style={styles.consequence}>{consequence}</Text> : null}
       {answered ? (
-        <View style={styles.answered}>
+        <Animated.View
+          entering={
+            didTransition
+              ? FadeIn.duration(
+                  reducedMotion ? CHAT_MOTION.reducedFadeMs : CHAT_MOTION.decisionCheckMs,
+                )
+              : undefined
+          }
+          style={[styles.answered, { flexDirection: "row", alignItems: "center", gap: 6 }]}
+        >
+          <AnsweredCheck color={tokens.foreground} animate={didTransition && !reducedMotion} />
           {typeof answered === "string" ? (
             <Text style={styles.answeredText}>{answered}</Text>
           ) : (
             answered
           )}
-        </View>
+        </Animated.View>
       ) : (
-        <>
+        <Animated.View exiting={FadeOut.duration(collapseMs)}>
           {children ? <View style={styles.body}>{children}</View> : null}
           {actions ? <View style={styles.actions}>{actions}</View> : null}
-        </>
+        </Animated.View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -93,12 +142,16 @@ function createFramedBlockStyles() {
       backgroundColor: tokens.surface,
       boxShadow: shadowsForAppearance(resolveMobileAppearance()).card,
     },
+    // Answered: the drop goes, the hairline stays — the thread keeps one elevation.
+    rootSettled: {
+      boxShadow: shadowsForAppearance(resolveMobileAppearance()).settled,
+    },
     header: {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      paddingHorizontal: 16,
-      paddingTop: 13,
+      paddingHorizontal: 14,
+      paddingTop: 12,
     },
     dot: {
       width: 6,
@@ -112,7 +165,7 @@ function createFramedBlockStyles() {
       ...nativeTextStyle("blockHeader"),
     },
     question: {
-      paddingHorizontal: 16,
+      paddingHorizontal: 14,
       paddingTop: 8,
       color: tokens.foreground,
       ...nativeTextStyle("question"),
@@ -120,31 +173,30 @@ function createFramedBlockStyles() {
     // Matches the header's own paddingTop: with no header, the question opens
     // the card at the same spot the header would have.
     questionNoHeader: {
-      paddingTop: 13,
+      paddingTop: 12,
     },
     consequence: {
-      paddingHorizontal: 16,
+      paddingHorizontal: 14,
       paddingTop: 6,
       color: tokens.mutedForeground,
       ...nativeTextStyle("meta"),
     },
     answered: {
-      padding: 16,
-      paddingTop: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
     },
     answeredText: {
       color: tokens.mutedForeground,
       ...nativeTextStyle("meta"),
     },
     body: {
-      paddingHorizontal: 16,
+      paddingHorizontal: 14,
       paddingTop: 12,
     },
     actions: {
       flexDirection: "column",
       gap: 8,
-      padding: 16,
-      paddingTop: 14,
+      padding: 14,
     },
   });
 }

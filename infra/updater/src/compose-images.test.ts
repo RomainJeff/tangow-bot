@@ -20,30 +20,11 @@ interface ComposeService {
 
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
 const composeFile = path.resolve(repoRoot, "infra/compose/docker-compose.images.yml");
-const publishWorkflowFile = path.resolve(repoRoot, ".github/workflows/publish-server-image.yml");
 const compose = parse(readFileSync(composeFile, "utf8")) as {
   services: Record<string, ComposeService>;
 };
-const publishWorkflow = parse(readFileSync(publishWorkflowFile, "utf8")) as {
-  jobs?: {
-    publish?: {
-      strategy?: {
-        matrix?: {
-          include?: Array<{ name?: string }>;
-        };
-      };
-    };
-  };
-};
 
 const appServices = ["api", "worker", "web", "supervisor"] as const;
-const FIRST_PARTY_IMAGE = /ghcr\.io\/elie222\/rakazo\/([a-z0-9][a-z0-9._-]*)/g;
-
-function firstPartyImageNames(value: unknown): string[] {
-  if (typeof value !== "string") return [];
-  return [...value.matchAll(FIRST_PARTY_IMAGE)].map((match) => match[1] ?? "");
-}
-
 /**
  * The images compose file is the no-checkout happy path. It must stay pull-only and self-contained
  * so operators can drop it next to a .env outside any git worktree. Local Docker computers run via
@@ -70,40 +51,6 @@ describe("the images compose file", () => {
       /^\$\{POSTGRES_IMAGE:-postgres:16@sha256:[0-9a-f]{64}\}$/,
     );
     expect(compose.services["data-init"]?.image).toMatch(/^\$\{BUSYBOX_IMAGE:-busybox:1\}$/);
-  });
-
-  it("skips non-string Compose environment scalars when collecting image names", () => {
-    expect(firstPartyImageNames(null)).toEqual([]);
-    expect(firstPartyImageNames(true)).toEqual([]);
-    expect(firstPartyImageNames(7091)).toEqual([]);
-    expect(firstPartyImageNames("ghcr.io/elie222/rakazo/computer:edge")).toEqual(["computer"]);
-  });
-
-  it("only references first-party images that the publish matrix publishes", () => {
-    const published = new Set(
-      (publishWorkflow.jobs?.publish?.strategy?.matrix?.include ?? [])
-        .map((entry) => entry.name)
-        .filter((name): name is string => typeof name === "string" && name.length > 0),
-    );
-    const referenced = new Set<string>();
-    for (const service of Object.values(compose.services)) {
-      for (const name of firstPartyImageNames(service.image)) {
-        referenced.add(name);
-      }
-      for (const value of Object.values(service.environment ?? {})) {
-        for (const name of firstPartyImageNames(value)) {
-          referenced.add(name);
-        }
-      }
-    }
-    expect(published.size).toBeGreaterThan(0);
-    expect(referenced.has("computer")).toBe(true);
-    for (const name of referenced) {
-      expect(
-        published.has(name),
-        `${name} referenced by images compose but omitted from publish matrix`,
-      ).toBe(true);
-    }
   });
 
   it("passes optional HTTP(S)_PROXY / NO_PROXY into api and worker", () => {

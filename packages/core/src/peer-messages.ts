@@ -52,6 +52,17 @@ export function peerMessagesFrom(messages: readonly ThreadMessage[]): PeerMessag
   return collected;
 }
 
+/**
+ * Strips a single leading `[to <name>] ` peer-address prefix for display in the peer-messages
+ * exchange (spec `[to X]` bullet). This is a pure display cleanup, tolerant of surrounding
+ * whitespace: the stored message and the history sent to the LLM (`packages/core/src/
+ * attachments.ts`) keep the prefix untouched. Only the prefix anchored at the very start of the
+ * string is removed; a `[to X]`-shaped substring anywhere else in the text is left alone.
+ */
+export function stripPeerAddressPrefix(text: string): string {
+  return text.replace(/^\s*\[to [^\]]+?\]\s*/, "");
+}
+
 /** One conversation per peer, most recently active first. */
 export function peerConversations(messages: readonly ThreadMessage[]): PeerConversation[] {
   const byPeer = new Map<string, PeerConversation>();
