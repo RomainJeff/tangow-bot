@@ -1,3 +1,5 @@
+import type { AdapterContext, ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
+import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
 import {
   asSkillAvailability,
   buildSkillMd,
@@ -14,14 +16,17 @@ import {
 import type { PrismaClient } from "@rakazo/db";
 import { loadBuiltinSkills } from "./builtin-skills.js";
 import { listMarketplaceSkills, marketplacesRoot } from "./marketplace-store.js";
+import type { SkillTreeFile } from "./skill-store.js";
 import {
   isExists,
   listUserSkills,
   removeUserSkill,
   renameUserSkill,
+  replaceUserSkillFiles,
   skillDirName,
   userSkillsRoot,
   writeUserSkill,
+  writeUserSkillFiles,
 } from "./skill-store.js";
 
 export const SKILL_TOOL_NAMES = new Set([
@@ -167,15 +172,96 @@ export async function skillReadFromTool(
   };
 }
 
+/**
+ * Pulls a skill folder the bot drafted in its workspace through the sandbox port. The whole tree
+ * is listed and checked against the caps before any file is read.
+ */
+export async function readSkillDraft(
+  sandbox: Pick<SandboxProvider, "listFiles" | "readFile">,
+  computer: ComputerRef,
+  dir: string,
+  context: AdapterContext,
+): Promise<SkillTreeFile[] | { error: string }> {
+  const found: Array<{ source: string; path: string; executable: boolean }> = [];
+  let entries = 0;
+  let bytes = 0;
+  const tooBig = () =>
+    entries > SKILL_BUNDLE_MAX_ENTRIES
+      ? `Skill folder has too many entries (> ${SKILL_BUNDLE_MAX_ENTRIES}).`
+      : bytes > SKILL_BUNDLE_MAX_BYTES
+        ? `Skill folder too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`
+        : undefined;
+  // Relative paths are rebuilt from entry names: providers list workspace-relative paths, but
+  // the draft dir may be spelled differently (leading slash, team bot prefix).
+  const walk = async (source: string, relative: string): Promise<string | undefined> => {
+    for (const entry of await sandbox.listFiles(computer, source, context)) {
+      const name = entry.path.split("/").pop() ?? "";
+      const child = relative ? `${relative}/${name}` : name;
+      entries += 1;
+      if (entry.kind === "file") {
+        bytes += entry.size;
+        found.push({ source: entry.path, path: child, executable: entry.executable === true });
+      }
+      const failure =
+        tooBig() ?? (entry.kind === "dir" ? await walk(entry.path, child) : undefined);
+      if (failure) return failure;
+    }
+    return undefined;
+  };
+  let failure: string | undefined;
+  try {
+    failure = await walk(dir, "");
+  } catch {
+    return { error: "Could not read the skill folder." };
+  }
+  if (failure) return { error: failure };
+  if (!found.some((file) => file.path === "SKILL.md")) {
+    return { error: "No SKILL.md at the root of the skill folder." };
+  }
+  const files: SkillTreeFile[] = [];
+  for (const file of found) {
+    try {
+      const content = await sandbox.readFile(computer, file.source, context, {
+        maxBytes: SKILL_BUNDLE_MAX_BYTES,
+      });
+      files.push({ path: file.path, bytes: content, executable: file.executable });
+    } catch {
+      return { error: `Could not read ${file.path} from the skill folder.` };
+    }
+  }
+  return files;
+}
+
+function parseDraftSkillMd(files: SkillTreeFile[]): ReturnType<typeof parseSkillMd> {
+  const skillMd = files.find((file) => file.path === "SKILL.md");
+  if (!skillMd) return { error: "No SKILL.md at the root of the skill folder." };
+  return parseSkillMd(new TextDecoder().decode(skillMd.bytes));
+}
+
 export async function skillCreateFromTool(
   deps: SkillToolDeps,
   owner: SkillOwner,
-  input: { name?: string; description?: string; body?: string; content?: string },
+  input: {
+    name?: string;
+    description?: string;
+    body?: string;
+    content?: string;
+    files?: SkillTreeFile[];
+  },
 ): Promise<Record<string, unknown>> {
   let name = "";
   let description = "";
   let content = "";
-  if (input.content?.trim()) {
+  if (input.files) {
+    if (input.content || input.name || input.description || input.body) {
+      return { error: "Pass either path or name/description/body/content, not both." };
+    }
+    const parsed = parseDraftSkillMd(input.files);
+    if ("error" in parsed) return { error: parsed.error };
+    name = parsed.name;
+    description = parsed.description;
+    content = buildSkillMd(parsed);
+  } else if (input.content?.trim()) {
     const parsed = parseSkillMd(input.content);
     if ("error" in parsed) return { error: parsed.error };
     name = parsed.name;
@@ -203,13 +289,18 @@ export async function skillCreateFromTool(
 
   const root = userSkillsRoot(deps.dataDir, owner);
   try {
-    await writeUserSkill(root, { name, content }, "create");
+    if (input.files) {
+      await writeUserSkillFiles(root, input.files, async () => ({ name, content }));
+    } else {
+      await writeUserSkill(root, { name, content }, "create");
+    }
   } catch (error) {
-    return {
-      error: isExists(error)
-        ? `A skill named "${name}" already exists.`
-        : "Could not create skill.",
-    };
+    if (isExists(error)) return { error: `A skill named "${name}" already exists.` };
+    // writeUserSkillFiles messages name the offending draft file and carry no host path.
+    if (input.files && error instanceof Error && !("code" in error)) {
+      return { error: error.message };
+    }
+    return { error: "Could not create skill." };
   }
   const skillKey = userSkillKey(name);
   if (owner.botId) {
@@ -250,6 +341,7 @@ export async function skillUpdateFromTool(
     description?: string;
     body?: string;
     content?: string;
+    files?: SkillTreeFile[];
   },
 ): Promise<Record<string, unknown>> {
   const existing = await findOwnedSkill(deps, owner, {
@@ -264,7 +356,16 @@ export async function skillUpdateFromTool(
   let nextName = existing.name;
   let nextDescription = existing.description;
 
-  if (input.content?.trim()) {
+  if (input.files) {
+    if (input.content || input.newName || input.description || input.body) {
+      return { error: "Pass either path or newName/description/body/content, not both." };
+    }
+    const parsed = parseDraftSkillMd(input.files);
+    if ("error" in parsed) return { error: parsed.error };
+    nextName = parsed.name;
+    nextDescription = parsed.description;
+    nextContent = buildSkillMd(parsed);
+  } else if (input.content?.trim()) {
     const parsed = parseSkillMd(input.content);
     if ("error" in parsed) return { error: parsed.error };
     nextName = parsed.name;
@@ -304,12 +405,18 @@ export async function skillUpdateFromTool(
   const scope = { spaceId: owner.spaceId, userId: owner.userId };
   const oldKey = userSkillKey(existing.name);
   const newKey = userSkillKey(nextName);
+  const skill = { name: nextName, content: nextContent };
   try {
-    if (oldKey === newKey) {
-      await writeUserSkill(root, { name: nextName, content: nextContent }, "replace");
+    if (input.files) {
+      await replaceUserSkillFiles(root, existing.name, input.files, async () => skill);
+    } else if (oldKey === newKey) {
+      await writeUserSkill(root, skill, "replace");
     } else {
-      // Rename: the directory moves first (bundle extras follow), then access rows follow the key.
-      await renameUserSkill(root, existing.name, { name: nextName, content: nextContent });
+      // The whole directory moves, so bundle extras follow the new name.
+      await renameUserSkill(root, existing.name, skill);
+    }
+    // Access rows follow the key once the folder has moved.
+    if (oldKey !== newKey) {
       await deps.prisma.$transaction([
         deps.prisma.skillSetting.updateMany({
           where: { ...scope, skillKey: oldKey },
@@ -322,11 +429,12 @@ export async function skillUpdateFromTool(
       ]);
     }
   } catch (error) {
-    return {
-      error: isExists(error)
-        ? `A skill named "${nextName}" already exists.`
-        : "Could not update skill.",
-    };
+    if (isExists(error)) return { error: `A skill named "${nextName}" already exists.` };
+    // replaceUserSkillFiles messages name the offending draft file and carry no host path.
+    if (input.files && error instanceof Error && !("code" in error)) {
+      return { error: error.message };
+    }
+    return { error: "Could not update skill." };
   }
   return { ok: true, id: newKey, name: nextName, description: nextDescription };
 }

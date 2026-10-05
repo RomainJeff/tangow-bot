@@ -136,15 +136,85 @@ export async function renameUserSkill(
 
 /**
  * Imports a `.skill` bundle: a gzip tar or zip with SKILL.md at its root (or inside a single top-level
- * directory) plus any extra files (scripts/, references/, ...). Extracts into a temp dir under
- * root, lets `resolve` validate the SKILL.md (and return the normalized content), then renames
- * the tree into place with "create" semantics: EEXIST on a name clash, never a half-written
- * skill. Same hardening as the marketplace tarball: files and directories only, byte cap.
+ * directory) plus any extra files (scripts/, references/, ...). Same hardening as the marketplace
+ * tarball: files and directories only, byte cap.
  */
 export async function writeUserSkillBundle(
   root: string,
   archive: Buffer,
   resolve: (skillMd: string) => Promise<{ name: string; content: string }>,
+): Promise<void> {
+  await importSkillTree(root, (out) => extractBundle(archive, out), resolve, "create");
+}
+
+export type SkillTreeFile = { path: string; bytes: Uint8Array; executable: boolean };
+
+/**
+ * Imports a skill folder already read into memory (a bot's workspace draft) with the bundle's
+ * guarantees: relative paths that stay inside the skill, entry and byte caps.
+ */
+export async function writeUserSkillFiles(
+  root: string,
+  files: SkillTreeFile[],
+  resolve: (skillMd: string) => Promise<{ name: string; content: string }>,
+): Promise<void> {
+  await importSkillTree(root, populateFiles(files), resolve, "create");
+}
+
+/**
+ * Swaps a saved skill's whole folder for `files`. When the new SKILL.md renames the skill, the
+ * folder moves with "create" semantics (EEXIST on a clash) and the old one is removed.
+ */
+export async function replaceUserSkillFiles(
+  root: string,
+  oldName: string,
+  files: SkillTreeFile[],
+  resolve: (skillMd: string) => Promise<{ name: string; content: string }>,
+): Promise<void> {
+  await importSkillTree(root, populateFiles(files), resolve, { replace: oldName });
+}
+
+function populateFiles(files: SkillTreeFile[]): (out: string) => Promise<void> {
+  if (files.length > SKILL_BUNDLE_MAX_ENTRIES) {
+    throw new Error(`Skill has too many files (> ${SKILL_BUNDLE_MAX_ENTRIES}).`);
+  }
+  const bytes = files.reduce((sum, file) => sum + file.bytes.byteLength, 0);
+  if (bytes > SKILL_BUNDLE_MAX_BYTES) {
+    throw new Error(`Skill too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`);
+  }
+  return async (out) => {
+    const base = path.resolve(out);
+    for (const file of files) {
+      const target = path.resolve(base, file.path);
+      if (
+        path.isAbsolute(file.path) ||
+        file.path.split(/[\\/]/).includes("..") ||
+        !target.startsWith(base + path.sep)
+      ) {
+        throw new Error(`Skill file escapes the skill folder: ${file.path}.`);
+      }
+      await mkdir(path.dirname(target), { recursive: true })
+        .then(() => writeFile(target, file.bytes, file.executable ? { mode: 0o755 } : {}))
+        .catch((error: unknown) => {
+          if (error instanceof Error && "code" in error) {
+            throw new Error(`Skill file could not be written: ${file.path}.`);
+          }
+          throw error;
+        });
+    }
+  };
+}
+
+/**
+ * Populates a temp dir under root, lets `resolve` validate the SKILL.md (and return the normalized
+ * content), then moves the tree into place without ever leaving a half-written skill. "create"
+ * claims the destination (EEXIST on a name clash); `replace` swaps out the named skill's folder.
+ */
+async function importSkillTree(
+  root: string,
+  populate: (out: string) => Promise<void>,
+  resolve: (skillMd: string) => Promise<{ name: string; content: string }>,
+  target: "create" | { replace: string },
 ): Promise<void> {
   await mkdir(root, { recursive: true });
   // No SKILL.md directly inside the wrapper, so listUserSkills never sees a half-imported skill.
@@ -152,17 +222,29 @@ export async function writeUserSkillBundle(
   try {
     const out = path.join(wrapper, "bundle");
     await mkdir(out);
-    await extractBundle(archive, out);
+    await populate(out);
     const skillDir = await locateSkillDir(out);
     const resolved = await resolve(await readFile(path.join(skillDir, "SKILL.md"), "utf8"));
     await writeFile(path.join(skillDir, "SKILL.md"), resolved.content, "utf8");
     const dest = path.join(root, skillDirName(resolved.name));
+    const old = target === "create" ? undefined : path.join(root, skillDirName(target.replace));
+    if (old === dest) {
+      // The old folder waits in the wrapper (removed below) until the new one is in place.
+      const aside = path.join(wrapper, "old");
+      await rename(old, aside);
+      await rename(skillDir, dest).catch(async (error) => {
+        await rename(aside, dest);
+        throw error;
+      });
+      return;
+    }
     await mkdir(dest); // EEXIST = name clash, same signal as writeUserSkill "create"
     // rename(2) replaces the empty directory we just claimed.
     await rename(skillDir, dest).catch(async (error) => {
       await rm(dest, { recursive: true, force: true });
       throw error;
     });
+    if (old) await rm(old, { recursive: true, force: true });
   } finally {
     await rm(wrapper, { recursive: true, force: true });
   }
@@ -310,7 +392,7 @@ async function extractZipEntry(
  * A filesystem error in here is about the archive's own layout — a file and a directory claiming
  * the same name, an entry named "." — not about the user's skill list, and its message carries the
  * temp path we extracted into. Reword it so the import answers BAD_REQUEST naming the entry
- * instead of the CONFLICT that the name-clash mkdir in writeUserSkillBundle raises, and so no host
+ * instead of the CONFLICT that the name-clash mkdir in importSkillTree raises, and so no host
  * path reaches the user. The byte cap and yauzl's own stream errors carry no `code` and pass
  * through untouched.
  */
