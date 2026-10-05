@@ -1,4 +1,9 @@
-import type { JobPublisher, JobWorkerHost } from "@rakazo/adapter-kit";
+import {
+  ISOLATED_JOB_NAMES,
+  type JobPublisher,
+  type JobWorkerHost,
+  LINK_PREVIEW_JOB_CONCURRENCY,
+} from "@rakazo/adapter-kit";
 import { ComposioConnector, IntegrationProviderSettings } from "@rakazo/adapters";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 
@@ -9,6 +14,7 @@ import {
   createBackgroundJobHandlers,
   createConnectorStack,
   createJobReconciler,
+  createLinkPreviewPurge,
   createMessagingContextLoader,
   createPostgresReconciliationLeadership,
   createRunExecutor,
@@ -170,7 +176,19 @@ async function main() {
     inMemoryJobs ??
     new GraphileJobWorkerHost(pool, {
       concurrency: parsePositiveInteger(process.env.GRAPHILE_WORKER_CONCURRENCY, 4),
+      except: ISOLATED_JOB_NAMES,
     });
+  // Link previews read third-party pages: they get a runner of their own, so they can never
+  // take a slot a bot run is waiting for (and a slow site can only slow other previews). The
+  // in-memory driver (`WAKEUP_DRIVER=memory`, development only) has one queue for every job: no
+  // separate runner, so no isolation, and no `maxAttempts` either.
+  const previewHost: JobWorkerHost | undefined = inMemoryJobs
+    ? undefined
+    : new GraphileJobWorkerHost(pool, {
+        concurrency: LINK_PREVIEW_JOB_CONCURRENCY,
+        only: ISOLATED_JOB_NAMES,
+        noHandleSignals: true,
+      });
   const executor = createRunExecutor({
     prisma,
     runtime,
@@ -218,6 +236,7 @@ async function main() {
     memoryProviders,
     deploymentModelKey,
     messaging,
+    artifacts,
   });
   // graphile-worker run() connects through the shared pool. createPool already
   // retries connect() on 53300 a finite number of times. Keep retrying start
@@ -228,22 +247,30 @@ async function main() {
   // observes runner.promise after start and restarts with the same backoff if
   // the runner dies later on 53300 (unhandledRejection still swallows that
   // code so we do not Docker crash-loop on transient completeJob failures).
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      await jobHost.start(jobHandlers);
-      break;
-    } catch (error) {
-      if (!isTooManyDatabaseConnections(error)) throw error;
-      logger.error("worker job host start waiting on database capacity", error);
-      await new Promise((resolve) => setTimeout(resolve, databaseCapacityBackoffMs(attempt)));
+  async function startWithCapacityRetry(
+    host: JobWorkerHost,
+    handlers: Parameters<JobWorkerHost["start"]>[0],
+  ) {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await host.start(handlers);
+        return;
+      } catch (error) {
+        if (!isTooManyDatabaseConnections(error)) throw error;
+        logger.error("worker job host start waiting on database capacity", error);
+        await new Promise((resolve) => setTimeout(resolve, databaseCapacityBackoffMs(attempt)));
+      }
     }
   }
+  await startWithCapacityRetry(jobHost, jobHandlers);
+  if (previewHost) await startWithCapacityRetry(previewHost, jobHandlers);
   const reconciler = createJobReconciler({
     prisma,
     jobs,
     events,
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
+    purgeLinkPreviews: createLinkPreviewPurge({ prisma, artifacts }),
   });
   reconciler.start();
 
@@ -254,6 +281,7 @@ async function main() {
     try {
       await reconciler.stop();
       await jobHost.stop();
+      await previewHost?.stop();
       await jobs.close();
       await realtime.close();
       await connector.stop();

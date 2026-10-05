@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ArtifactStore } from "@rakazo/adapter-kit";
-import type { Actor } from "@rakazo/contracts";
+import type { Actor, MessageBlock } from "@rakazo/contracts";
 import { ATTACHMENT_MAX_COUNT } from "@rakazo/contracts";
 import {
   AttachmentValidationError,
@@ -195,6 +195,8 @@ export async function resolveSendAttachments(
       groupId: null,
       spaceId: actor.spaceId,
       userId: actor.userId,
+      // A card image is not a file the person can attach.
+      isLinkPreview: false,
     },
   });
   return toAttachmentResolution(ids, rows);
@@ -215,6 +217,7 @@ export async function resolveGroupSendAttachments(
       id: { in: ids },
       spaceId: actor.spaceId,
       userId: actor.userId,
+      isLinkPreview: false,
       OR: [
         { groupId },
         // Accept artifacts uploaded by a current member before group ownership
@@ -226,15 +229,27 @@ export async function resolveGroupSendAttachments(
   return toAttachmentResolution(ids, rows);
 }
 
+/** The marker a message sent with its preview turned off carries from the start. */
+function linkPreviewOptOutBlocks(options: { linkPreview?: false }): MessageBlock[] {
+  // No preview is ever added to such a message, whatever its first link.
+  return options.linkPreview === false ? [{ kind: "link_preview", removed: true }] : [];
+}
+
 export function buildUserMessageBlocks(
   text: string | undefined,
   attachmentBlocks: ReturnType<typeof messageBlockForArtifact>[],
+  options: { linkPreview?: false } = {},
 ) {
-  const blocks = [];
+  const blocks: MessageBlock[] = [];
   const caption = text?.trim();
   if (caption) blocks.push({ kind: "text" as const, text: caption });
-  blocks.push(...attachmentBlocks);
+  blocks.push(...attachmentBlocks, ...linkPreviewOptOutBlocks(options));
   return blocks;
+}
+
+/** A follow-up's blocks: its text exactly as sent (never trimmed away), plus the opt-out marker. */
+export function buildFollowUpBlocks(text: string, options: { linkPreview?: false } = {}) {
+  return [{ kind: "text" as const, text }, ...linkPreviewOptOutBlocks(options)];
 }
 
 export function buildSendPrompt(

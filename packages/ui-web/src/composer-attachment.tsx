@@ -14,6 +14,29 @@ export interface ComposerAttachmentProps extends ComponentPropsWithoutRef<"div">
   disabled?: boolean;
 }
 
+/** The × disc at the top end of a pending item in the composer capsule. */
+export function ComposerRemoveButton({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className="absolute -top-1.5 -end-1.5 grid size-composer-remove place-items-center rounded-full border-2 border-surface bg-primary text-primary-foreground disabled:pointer-events-none disabled:opacity-50"
+    >
+      <X size={11} strokeWidth={3} />
+    </button>
+  );
+}
+
 /**
  * A pending attachment (or a rewind artifact) inside the composer capsule: an
  * image thumbnail, or a file tile with a paperclip and a truncated name, each
@@ -45,15 +68,7 @@ export function ComposerAttachment({
           </span>
         </div>
       )}
-      <button
-        type="button"
-        aria-label={removeLabel}
-        onClick={onRemove}
-        disabled={disabled}
-        className="absolute -top-1.5 -end-1.5 grid size-composer-remove place-items-center rounded-full border-2 border-surface bg-primary text-primary-foreground disabled:pointer-events-none disabled:opacity-50"
-      >
-        <X size={11} strokeWidth={3} />
-      </button>
+      <ComposerRemoveButton label={removeLabel} onClick={onRemove} disabled={disabled} />
     </div>
   );
 }

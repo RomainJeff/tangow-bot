@@ -2,13 +2,15 @@ import { useLingui } from "@lingui/react/macro";
 import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
 import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@rakazo/contracts";
 import { HoverPill, Popover, PopoverContent, PopoverTrigger } from "@rakazo/ui-web";
-import { Copy, Pencil, Reply, Smile, Square, Volume2 } from "lucide-react";
+import { Copy, Link2Off, Pencil, Reply, Smile, Square, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import {
   canEditAndResendMessage,
+  canRemoveLinkPreview,
   canSpeakMessage,
   copyMessageToClipboard,
+  removeLinkPreview,
 } from "./message-actions";
 
 const iconClass =
@@ -95,6 +97,17 @@ export function MessageHoverActions({
         >
           <Copy size={14} strokeWidth={1.7} />
         </button>
+        {canRemoveLinkPreview(message) ? (
+          <button
+            type="button"
+            aria-label={t`Remove preview`}
+            title={t`Remove preview`}
+            onClick={() => removeLinkPreview(message)}
+            className={iconClass}
+          >
+            <Link2Off size={14} strokeWidth={1.7} />
+          </button>
+        ) : null}
         {canSpeak ? (
           <button
             type="button"
@@ -153,6 +166,17 @@ export function UserMessageActions({
       >
         <Copy size={14} strokeWidth={1.7} />
       </button>
+      {canRemoveLinkPreview(message) ? (
+        <button
+          type="button"
+          aria-label={t`Remove preview`}
+          title={t`Remove preview`}
+          onClick={() => removeLinkPreview(message)}
+          className={iconClass}
+        >
+          <Link2Off size={14} strokeWidth={1.7} />
+        </button>
+      ) : null}
     </div>
   );
 }

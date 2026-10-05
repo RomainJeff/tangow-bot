@@ -1323,6 +1323,67 @@ describe("thread event reduction", () => {
     expect(next?.messages[0]?.blocks[0]).toMatchObject({ status: "answered", answer: "Paris" });
   });
 
+  it("merges an update into the stored message: author, reply quote and order survive", () => {
+    const reply: ThreadMessage = {
+      ...message("reply-1", [{ kind: "text", text: "see https://example.test/a" }], 5),
+      botId: "bot-b",
+      runId: "run-b",
+      replyToMessageId: "message-1",
+      replyQuote: "Done",
+      createdAt: "2026-08-16T00:00:05.000Z",
+    };
+    const initial = snapshot([
+      message("message-1", [{ kind: "text", text: "Done" }], 1),
+      reply,
+      message("after-1", [{ kind: "text", text: "later" }], 6),
+    ]);
+    const card = { kind: "link_preview", url: "https://example.test/a", format: "compact" };
+
+    const next = reduceThreadSnapshot(
+      initial,
+      event({
+        type: "thread.message.updated",
+        seq: 40,
+        botId: "bot-a",
+        runId: undefined,
+        createdAt: "2026-08-16T00:09:00.000Z",
+        payload: { messageId: "reply-1", role: "bot", blocks: [...reply.blocks, card] },
+      }),
+    );
+
+    expect(next?.messages.map((m) => m.id)).toEqual(["message-1", "reply-1", "after-1"]);
+    expect(next?.messages[1]).toMatchObject({
+      botId: "bot-b",
+      runId: "run-b",
+      seq: 5,
+      createdAt: "2026-08-16T00:00:05.000Z",
+      replyToMessageId: "message-1",
+      replyQuote: "Done",
+    });
+    expect(next?.messages[1]?.blocks).toHaveLength(2);
+    expect(next?.cursor).toBe(40);
+  });
+
+  it("drops an update to a message this page never loaded instead of appending it", () => {
+    const initial = snapshot([message("message-1", [{ kind: "text", text: "Done" }], 1)]);
+
+    const next = reduceThreadSnapshot(
+      initial,
+      event({
+        type: "thread.message.updated",
+        seq: 41,
+        payload: {
+          messageId: "old-1",
+          role: "user",
+          blocks: [{ kind: "link_preview", url: "https://example.test/a", removed: true }],
+        },
+      }),
+    );
+
+    expect(next?.messages.map((m) => m.id)).toEqual(["message-1"]);
+    expect(next?.cursor).toBe(41);
+  });
+
   it("preserves botId on durable bot messages", () => {
     const initial = snapshot([]);
     const next = reduceThreadSnapshot(

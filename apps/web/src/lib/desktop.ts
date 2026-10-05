@@ -12,6 +12,18 @@ export function desktopBridge(): RakazoDesktop | undefined {
   return typeof window === "undefined" ? undefined : window.rakazoDesktop;
 }
 
+/**
+ * The start of a page as this computer reads it, for a link the server was refused. Only the
+ * desktop app can (a browser cannot read another site); anywhere else, or on an older desktop,
+ * it is null and the server's card stays.
+ */
+export function readPageHeadOnDesktop(
+  url: string,
+): Promise<{ head: string; contentType: string } | null> {
+  const bridge = desktopBridge()?.pageHead;
+  return bridge ? bridge.read(url) : Promise.resolve(null);
+}
+
 /** The compact `code#state` form the manual paste flow already accepts. */
 export function desktopOAuthCode(callback: RakazoDesktopOAuthCallback) {
   return callback.state === undefined ? callback.code : `${callback.code}#${callback.state}`;

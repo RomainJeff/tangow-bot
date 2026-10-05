@@ -1,3 +1,5 @@
+import { wwwLinkHref } from "@rakazo/core";
+
 export type ChatMarkdownProps = {
   children: string;
   streaming?: boolean;
@@ -68,9 +70,7 @@ export function linkHref(url: string, allowRelative = false): string | undefined
   const safe = sanitizeMarkdownUrl(url, allowRelative);
   if (safe) return safe;
   const value = url.trim();
-  return /^www\.[a-z\d-]+(?:\.[a-z\d-]+)+(?:[/?#:]|$)/i.test(value)
-    ? `https://${value}`
-    : undefined;
+  return wwwLinkHref(value);
 }
 
 export type TextSegment = { text: string; href?: string };

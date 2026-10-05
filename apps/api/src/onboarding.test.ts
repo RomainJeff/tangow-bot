@@ -17,6 +17,7 @@ function fixture(catalog: unknown[]) {
     $executeRaw: vi.fn(),
     message: {
       findMany: vi.fn(async () => [{ id: "choice", blocks: [{ kind: "choice", answerId: null }] }]),
+      findFirst: vi.fn(),
       update: vi.fn(),
     },
   };
@@ -70,9 +71,33 @@ it("marks only the authorized connector when provider slugs collide", async () =
     status: "pending",
   }));
   deps.prisma.message = { findMany: vi.fn(async () => [{ id: "cards", blocks }]) } as never;
+  tx.message.findFirst = vi.fn(async () => ({ blocks }));
   await markAppConnected(deps, actor, "bot", "slack", "pipedream");
   expect(tx.message.update).toHaveBeenCalledWith({
     where: { id: "cards" },
     data: { blocks: [blocks[0], { ...blocks[1], status: "connected" }] },
+  });
+});
+
+it("rewrites the blocks as stored under the thread lock, keeping a preview marker written meanwhile", async () => {
+  const { deps, actor, tx } = fixture([]);
+  const card = {
+    kind: "app_connect",
+    connectorId: "composio",
+    provider: "slack",
+    name: "Slack",
+    status: "pending",
+  };
+  const marker = { kind: "link_preview", removed: true };
+  // The scan saw the card alone; by the time the write holds the lock, the marker is there too.
+  deps.prisma.message = { findMany: vi.fn(async () => [{ id: "cards", blocks: [card] }]) } as never;
+  tx.message.findFirst = vi.fn(async () => ({ blocks: [card, marker] }));
+
+  await markAppConnected(deps, actor, "bot", "slack");
+
+  expect(tx.$executeRaw).toHaveBeenCalled();
+  expect(tx.message.update).toHaveBeenCalledWith({
+    where: { id: "cards" },
+    data: { blocks: [{ ...card, status: "connected" }, marker] },
   });
 });

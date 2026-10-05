@@ -23,6 +23,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import {
   historyCompactJob,
+  linkPreviewJob,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -4519,6 +4520,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
           });
           if (!completed) return;
+          // After the commit, never inside it. Delegated runs report back to the ordering bot
+          // and routine cards are not messages to the person: no preview for either.
+          if (run.trigger !== "bot_message" && !isRoutineCardRun) {
+            await deps.jobs
+              .enqueue(linkPreviewJob({ runId }))
+              .catch((error) => getLogger().error("link.preview enqueue", error));
+          }
           await settleRoutineRunCard("completed", text);
           if (completed.continuationRunId) {
             await deps.jobs
@@ -5319,7 +5327,7 @@ async function publishRoutineRunCard(
  * answers. `next` returns the replacement block, or null to leave the card (and the thread)
  * untouched.
  */
-async function updateRoutineRunCard(
+export async function updateRoutineRunCard(
   deps: Pick<ExecutorDeps, "prisma" | "events">,
   // `runId` is deliberately optional: a cancelled run may not write thread history, so the
   // card's own closing event is appended unattributed rather than rejected.
@@ -5329,6 +5337,9 @@ async function updateRoutineRunCard(
 ): Promise<void> {
   const committed = await deps.prisma
     .$transaction(async (tx) => {
+      // The thread lock first, then the read: a preview card or its removal marker written by
+      // someone else in between must survive this rewrite of the blocks.
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
       const message = await tx.message.findUnique({ where: { id: cardMessageId } });
       if (!message) return null;
       let changed = false;

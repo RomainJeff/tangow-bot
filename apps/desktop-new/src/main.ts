@@ -42,6 +42,7 @@ import {
   stackResourceDir,
 } from "./local-stack.js";
 import { oauthCallbackFrom } from "./oauth-callback.js";
+import { createPageFetch, createPageHeadReader } from "./page-head.js";
 import {
   bundledRendererCandidates,
   contentType,
@@ -1185,6 +1186,30 @@ app.whenReady().then(async () => {
       );
     },
   );
+  // Link previews for sites that refuse the server: this computer reads the start of the page,
+  // in a partition of its own (in memory, no cookies in or out), and the renderer sends it on.
+  const pageHeadSession = session.fromPartition("rakazo-link-preview");
+  const readPageHead = createPageHeadReader(
+    createPageFetch(
+      (url) =>
+        net.request({
+          url,
+          session: pageHeadSession,
+          method: "GET",
+          credentials: "omit",
+          redirect: "manual",
+          useSessionCookies: false,
+        }),
+      async (hostname) =>
+        (await pageHeadSession.resolveHost(hostname)).endpoints.map((endpoint) => endpoint.address),
+    ),
+  );
+  ipcMain.handle("desktop.pageHead.read", (event, url: unknown) => {
+    if (!fromMainWindow(event) || event.senderFrame !== event.sender.mainFrame) {
+      throw new Error("Invalid page request.");
+    }
+    return readPageHead(url);
+  });
   ipcMain.handle("desktop.platform", () => process.platform);
   ipcMain.handle("desktop.window.close", (event) => {
     windowFrom(event)?.close();

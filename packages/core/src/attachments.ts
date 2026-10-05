@@ -148,6 +148,8 @@ export function blocksToAgentHistoryText(
       if (block.kind === "text") return block.text;
       // Legacy reasoning blocks are not part of the answer and stay out of history.
       if (block.kind === "reasoning") return "";
+      // A preview is page content the model never wrote or saw as the user's text: not history.
+      if (block.kind === "link_preview") return "";
       // Without this the next turn cannot tell which tools it already ran, and repeats them.
       if (block.kind === "steps") return toolStepsToHistoryText(block.steps);
       if (block.kind === "chart") return `[chart: ${block.name}]`;

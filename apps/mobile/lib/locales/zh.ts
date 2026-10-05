@@ -396,6 +396,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   Release: "释放控制",
   "Remove {name}": "移除 {name}",
   "Remove mention {name}": "移除提及 {name}",
+  "Remove preview": "移除预览",
   "Remove skill {name}": "移除技能 {name}",
   "Removed with chat, computer, and memory.": "已连同对话、电脑和记忆一起移除。",
   "Replies and completed work": "回复和已完成的工作",

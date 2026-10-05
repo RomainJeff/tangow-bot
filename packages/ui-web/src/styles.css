@@ -80,6 +80,10 @@
   --spacing-call-button: var(--size-call-button);
   --spacing-message: var(--size-message);
   --spacing-composer-attachment-thumb: var(--size-composer-attachment-thumb);
+  --spacing-link-card: var(--size-link-card);
+  --spacing-link-thumb: var(--size-link-thumb);
+  --spacing-link-icon-inset: var(--size-link-icon-inset);
+  --spacing-link-photo-max: var(--size-link-photo-max);
   --spacing-composer-attachment-tile: var(--size-composer-attachment-tile);
   --spacing-composer-remove: var(--size-composer-remove);
 

@@ -3,11 +3,18 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type { ThreadMessage } from "@rakazo/contracts";
 import type { RoutineGroupRun, RoutineRowRole } from "@rakazo/core";
-import { isNarrationMessage } from "@rakazo/core";
+import {
+  isLinkOnlyMessage,
+  isNarrationMessage,
+  previewSiteLabel,
+  sanitizePreviewTitle,
+  textWithoutPreviewedLinkLine,
+} from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
   Interstitial,
+  LinkPreviewCard,
   MessageBubble,
   MessageRow,
   StackedAvatars,
@@ -28,6 +35,7 @@ import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageProviderLabel } from "../../lib/messaging";
 import { FALLBACK_BOT_COLOR } from "./layout";
+import { messageLinkPreview } from "./message-actions";
 
 const USER_TEXT_FOLD_LINES = 20;
 
@@ -72,6 +80,7 @@ import {
   ArtifactImage,
   ChartBlockView,
   ChoiceCard,
+  LinkPreviewImage,
   McpApprovalCard,
 } from "./message-cards";
 import type { RoutineHandoff } from "./routine-run-line";
@@ -207,9 +216,64 @@ export const MessageView = memo(function MessageView({
       {children}
     </MessageRow>
   );
+  // A message that is only its link: the card takes the bubble's place (and the bubble comes
+  // back if the preview is removed, since the text is stored as sent).
+  const previewCard = messageLinkPreview(message);
+  const texts = message.blocks.filter((block) => block.kind === "text");
+  const linkOnly =
+    previewCard !== undefined &&
+    texts.length === 1 &&
+    texts[0]?.kind === "text" &&
+    isLinkOnlyMessage(texts[0].text, previewCard.url);
+  /**
+   * What the bubble shows of a text: without the line that is only the previewed link, which the
+   * card already shows. The stored text, Copy, search and the model keep it. Undefined when that
+   * line was all there was.
+   */
+  const bubbleText = (text: string): string | undefined => {
+    if (!previewCard || linkOnly) return text;
+    const shown = textWithoutPreviewedLinkLine(text, previewCard.url);
+    return shown || shown === text ? shown : undefined;
+  };
+  /** The preview card, under the bubble and aligned to its edge. */
+  const previewView = (key?: number) => {
+    if (!previewCard) return null;
+    const image = previewCard.image;
+    return (
+      <div
+        key={key}
+        className={`mt-1 flex first:mt-0 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+      >
+        <LinkPreviewCard
+          // The same width cap as the bubble it stands for, so the side still says who sent it.
+          className={
+            message.role === "user" ? "max-w-39/50" : inGroup ? "max-w-22/25" : "max-w-41/50"
+          }
+          href={previewCard.url}
+          site={previewSiteLabel(previewCard.url)}
+          title={previewCard.title ? sanitizePreviewTitle(previewCard.title) : undefined}
+          format={previewCard.format}
+          imageRatio={image ? image.width / image.height : undefined}
+          image={
+            image ? (
+              <LinkPreviewImage
+                target={artifactTarget}
+                artifactId={image.artifactId}
+                fit={image.fit}
+              />
+            ) : undefined
+          }
+        />
+      </div>
+    );
+  };
   if (!drawsSomething) return null;
   if (isNarration) {
-    const prose = visibleBlocks.filter((block) => block.kind !== "steps");
+    const prose = visibleBlocks.flatMap((block) => {
+      if (block.kind === "progress") return [{ text: block.text, streaming: true }];
+      const text = block.kind === "text" && !linkOnly ? bubbleText(block.text) : undefined;
+      return text === undefined ? [] : [{ text, streaming: false }];
+    });
     return botRow(
       <>
         {messageContext}
@@ -223,21 +287,22 @@ export const MessageView = memo(function MessageView({
             className="space-y-2.5"
             dir="auto"
           >
-            {prose.map((block, i) =>
-              block.kind === "text" || block.kind === "progress" ? (
-                <div key={i}>
-                  <ChatMarkdown streaming={block.kind === "progress"}>{block.text}</ChatMarkdown>
-                </div>
-              ) : null,
-            )}
+            {prose.map((entry, i) => (
+              <div key={i}>
+                <ChatMarkdown streaming={entry.streaming}>{entry.text}</ChatMarkdown>
+              </div>
+            ))}
           </MessageBubble>
         ) : null}
+        {previewView()}
       </>,
     );
   }
   const rendered = message.blocks
     .map((block, i) => {
       if (isHiddenActivityBlock(block, showSteps)) return null;
+      if (block.kind === "link_preview") return block === previewCard ? previewView(i) : null;
+      if (linkOnly && block.kind === "text") return null;
       if (block.kind === "steps") return <AgentSteps key={i} block={block} live={isLive} />;
       if (block.kind === "handoff") {
         const from = memberName?.(block.fromBotId) ?? t`bot`;
@@ -447,22 +512,24 @@ export const MessageView = memo(function MessageView({
           </div>
         );
       }
-      if (block.kind === "text" && message.role === "user") {
-        return (
-          <UserBubble
-            key={i}
-            data-testid="message-user-bubble"
-            className="wrap-anywhere"
-            dir="auto"
-          >
-            <UserText text={block.text} />
-          </UserBubble>
-        );
-      }
       if (block.kind === "text") {
+        const shown = bubbleText(block.text);
+        if (shown === undefined) return null;
+        if (message.role === "user") {
+          return (
+            <UserBubble
+              key={i}
+              data-testid="message-user-bubble"
+              className="wrap-anywhere"
+              dir="auto"
+            >
+              <UserText text={shown} />
+            </UserBubble>
+          );
+        }
         return (
           <MessageBubble key={i} data-testid="message-bot-bubble" inGroup={inGroup} dir="auto">
-            <ChatMarkdown>{block.text}</ChatMarkdown>
+            <ChatMarkdown>{shown}</ChatMarkdown>
           </MessageBubble>
         );
       }

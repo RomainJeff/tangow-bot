@@ -8,6 +8,7 @@ import {
   onDesktopOAuthCallback,
   type RakazoDesktop,
   type RakazoDesktopOAuthCallback,
+  readPageHeadOnDesktop,
   windowChromeKind,
 } from "./desktop.js";
 
@@ -172,5 +173,24 @@ describe("attempt correlation", () => {
     const received: string[] = [];
     expect(() => onDesktopOAuthCallback((code) => received.push(code))()).not.toThrow();
     expect(received).toEqual([]);
+  });
+});
+
+describe("page head reader for link previews", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("goes through the desktop bridge when there is one", async () => {
+    const page = { head: "<head><title>T</title></head", contentType: "text/html" };
+    const read = vi.fn(async () => page);
+    vi.stubGlobal("window", { rakazoDesktop: { ...desktop("darwin"), pageHead: { read } } });
+    await expect(readPageHeadOnDesktop("https://news.example.com/a")).resolves.toEqual(page);
+    expect(read).toHaveBeenCalledWith("https://news.example.com/a");
+  });
+
+  it("gives nothing in a plain browser or on a desktop that predates it", async () => {
+    vi.stubGlobal("window", {});
+    await expect(readPageHeadOnDesktop("https://news.example.com/a")).resolves.toBeNull();
+    vi.stubGlobal("window", { rakazoDesktop: desktop("darwin") });
+    await expect(readPageHeadOnDesktop("https://news.example.com/a")).resolves.toBeNull();
   });
 });

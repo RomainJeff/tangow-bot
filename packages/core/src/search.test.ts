@@ -14,6 +14,15 @@ describe("search helpers", () => {
     ]);
   });
 
+  it("keeps balanced parentheses and apostrophes and ignores code", () => {
+    expect(
+      extractLinksFromText(
+        "[a](https://en.wikipedia.org/wiki/Foo_(bar)) (see https://a.tld/it's).\n`https://code.tld`\n```\nhttps://fence.tld\n```",
+      ),
+    ).toEqual(["https://en.wikipedia.org/wiki/Foo_(bar)", "https://a.tld/it's"]);
+    expect(extractLinksFromText("https://a.tld/x https://a.tld/x")).toEqual(["https://a.tld/x"]);
+  });
+
   it("matches case-insensitive substrings", () => {
     expect(matchesSearchQuery("Venue", "Research venues")).toBe(true);
     expect(matchesSearchQuery("missing", "Research venues")).toBe(false);

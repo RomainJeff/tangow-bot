@@ -25,7 +25,7 @@ const PIPEDREAM_APPS = [
 /** Deterministic HTTP/MCP boundary emulator used by integration and browser journeys. */
 export class ThirdPartyConnectorEmulator {
   readonly records: EmulatorRecord[] = [];
-  readonly resolveHostname: ResolveHostname = async () => [{ address: "203.0.113.10", family: 4 }];
+  readonly resolveHostname: ResolveHostname = async () => [{ address: "8.8.8.8", family: 4 }];
 
   private readonly connectedApps = new Map<string, Set<string>>();
   private readonly accountOwners = new Map<string, { externalUserId: string; app: string }>();

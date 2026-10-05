@@ -11,6 +11,7 @@ import {
   applyThreadRewind,
   isActive,
   isRunTerminalEvent,
+  mergeMessageUpdate,
   mergeThreadHistory,
   prependThreadHistoryPage,
   progressMessageId,
@@ -496,10 +497,19 @@ export function reduceThreadSnapshot(
     const replacedSubagentIds = new Set(
       blocks.filter((block) => block.kind === "subagent").map((block) => block.agentId),
     );
+    const merged =
+      event.type === "thread.message.updated"
+        ? mergeMessageUpdate(
+            prev.messages.find((message) => message.id === next.id),
+            next,
+          )
+        : next;
+    // An update to a message this page never loaded stays out of the thread.
+    if (!merged) return { ...prev, cursor: event.seq };
     const liveId = progressMessageId(event);
     const { remaining } = takeLiveMessage(prev.messages, liveId);
     const without = remaining.filter((message) => !replacedSubagent(message, replacedSubagentIds));
-    return { ...prev, cursor: event.seq, messages: upsertMessageById(without, next) };
+    return { ...prev, cursor: event.seq, messages: upsertMessageById(without, merged) };
   }
   return prev;
 }

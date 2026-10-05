@@ -21,6 +21,10 @@ const payloadSchemas = {
   "skill.teaching-expire": z.object({ skillId: z.string().min(1) }),
   "history.compact": z.object({ threadId: z.string().min(1) }),
   "messaging.deliver": z.object({ runId: z.string().min(1).optional() }),
+  "link.preview": z.union([
+    z.object({ messageId: z.string().min(1) }).strict(),
+    z.object({ runId: z.string().min(1) }).strict(),
+  ]),
 } satisfies { [Name in BackgroundJobName]: z.ZodType<BackgroundJobPayloads[Name]> };
 
 export function parseBackgroundJob(name: string, payload: unknown): BackgroundJob {
@@ -128,5 +132,33 @@ export function historyCompactJob(threadId: string): BackgroundJob {
     name: "history.compact",
     payload: { threadId },
     replaceKey: historyCompactJobKey(threadId),
+  };
+}
+
+/** Jobs that never share the run workers' slots: they read third-party pages. */
+export const ISOLATED_JOB_NAMES: readonly BackgroundJobName[] = ["link.preview"];
+/** How many link previews one worker process reads at once. */
+export const LINK_PREVIEW_JOB_CONCURRENCY = 2;
+/** Behind every run, timer and delivery. */
+const LINK_PREVIEW_JOB_PRIORITY = 10;
+
+export function linkPreviewJobKey(payload: BackgroundJobPayloads["link.preview"]): string {
+  return "messageId" in payload
+    ? `link.preview:message:${payload.messageId}`
+    : `link.preview:run:${payload.runId}`;
+}
+
+/** One attempt, low priority: a failed or lost preview is simply not shown, never retried. */
+export function linkPreviewJob(
+  payload: BackgroundJobPayloads["link.preview"],
+  availableAt?: Date,
+): BackgroundJob {
+  return {
+    name: "link.preview",
+    payload,
+    replaceKey: linkPreviewJobKey(payload),
+    priority: LINK_PREVIEW_JOB_PRIORITY,
+    maxAttempts: 1,
+    ...(availableAt ? { availableAt } : {}),
   };
 }

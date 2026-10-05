@@ -31,7 +31,7 @@ export async function webFetchFromTool(
   const url = String(args.url ?? "").trim();
   if (!url) return { error: "url is required" };
   try {
-    const result = await fetchProvider.fetch(
+    return await fetchProvider.fetch(
       {
         url,
         maxChars: clampMaxChars(args.maxChars),
@@ -39,7 +39,6 @@ export async function webFetchFromTool(
       },
       context,
     );
-    return result;
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }

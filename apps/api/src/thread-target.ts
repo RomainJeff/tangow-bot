@@ -1,5 +1,10 @@
 import { ORPCError } from "@orpc/server";
-import { type JobPublisher, runContinueJob, type SandboxProvider } from "@rakazo/adapter-kit";
+import {
+  type JobPublisher,
+  linkPreviewJob,
+  runContinueJob,
+  type SandboxProvider,
+} from "@rakazo/adapter-kit";
 import { cancelComputerRunWork, screenLeaseIdForRun, toComputerRef } from "@rakazo/adapters";
 import {
   type Actor,
@@ -709,6 +714,7 @@ export async function sendThreadMessage(
     replyToMessageId?: string;
     replyQuote?: string;
     clientNonce?: string;
+    linkPreview?: false;
   },
 ) {
   const existing = await replayExistingSend(deps, target.threadId, input.clientNonce);
@@ -755,7 +761,9 @@ export async function sendThreadMessage(
           actor,
           mentionTargets.connectorMentionIds,
         );
-        const blocks = buildUserMessageBlocks(input.text, attachmentBlocks);
+        const blocks = buildUserMessageBlocks(input.text, attachmentBlocks, {
+          linkPreview: input.linkPreview,
+        });
         const message = await createThreadMessageInTransaction(tx, {
           threadId: target.threadId,
           role: "user",
@@ -915,7 +923,9 @@ export async function sendThreadMessage(
         actor,
         mentionTargets.connectorMentionIds,
       );
-      const blocks = buildUserMessageBlocks(input.text, attachmentBlocks);
+      const blocks = buildUserMessageBlocks(input.text, attachmentBlocks, {
+        linkPreview: input.linkPreview,
+      });
       const message = await createThreadMessageInTransaction(tx, {
         threadId: target.threadId,
         role: "user",
@@ -1052,7 +1062,24 @@ export async function sendThreadMessage(
     getLogger().error("thread send realtime notification", error);
   });
   await enqueueRunsNeedingContinue(deps.jobs, committed.runs);
+  await enqueueLinkPreview(deps.jobs, committed.message.id, input.linkPreview);
   return sendResult(committed.message, committed.runs);
+}
+
+/**
+ * Asks for a link preview of a message that is now committed. A message sent with the preview
+ * turned off already carries the removal marker, so nothing is queued for it. Best effort: a
+ * message without its preview is a normal outcome, never a failed send.
+ */
+export async function enqueueLinkPreview(
+  jobs: JobPublisher,
+  messageId: string,
+  linkPreview: false | undefined,
+): Promise<void> {
+  if (linkPreview === false) return;
+  await jobs.enqueue(linkPreviewJob({ messageId })).catch((error) => {
+    getLogger().error("link.preview enqueue", error);
+  });
 }
 
 /**

@@ -392,6 +392,7 @@ export const RU_MESSAGES: Record<string, string> = {
   Release: "Освободить управление",
   "Remove {name}": "Удалить {name}",
   "Remove mention {name}": "Удалить упоминание {name}",
+  "Remove preview": "Убрать предпросмотр",
   "Remove skill {name}": "Удалить навык {name}",
   "Removed with chat, computer, and memory.": "Удалено вместе с чатом, компьютером и памятью.",
   "Replies and completed work": "Ответы и выполненная работа",

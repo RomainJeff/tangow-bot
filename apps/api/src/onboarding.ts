@@ -103,13 +103,24 @@ async function post(
   return committed.message.id;
 }
 
+/**
+ * Rewrites one message's blocks under the thread lock, from the blocks as stored right now: a
+ * link preview card or its removal marker written since the caller last looked is kept.
+ */
 async function updateBlocks(
   deps: OnboardingDeps,
   target: { spaceId: string; botId: string; threadId: string },
   messageId: string,
-  blocks: MessageBlock[],
+  rewrite: (blocks: MessageBlock[]) => MessageBlock[],
 ): Promise<void> {
   const event = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$executeRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
+    const message = await tx.message.findFirst({
+      where: { id: messageId, threadId: target.threadId },
+      select: { blocks: true },
+    });
+    if (!message || !Array.isArray(message.blocks)) return null;
+    const blocks = rewrite(message.blocks as MessageBlock[]);
     await tx.message.update({ where: { id: messageId }, data: { blocks } });
     return appendEventInTransaction(tx, {
       spaceId: target.spaceId,
@@ -119,7 +130,7 @@ async function updateBlocks(
       payload: { messageId, role: "bot", blocks },
     });
   });
-  await deps.events.notify(target.threadId, event.seq);
+  if (event) await deps.events.notify(target.threadId, event.seq);
 }
 
 /** Sentinel answerId for a focus card the user dismissed without choosing. */
@@ -358,14 +369,15 @@ export async function markAppConnected(
       )
     )
       continue;
-    const next = blocks.map((block) =>
-      block.kind === "app_connect" &&
-      (block.connectorId ?? "composio") === connectorId &&
-      featuredConnectorProvidersMatch(block.provider, provider)
-        ? { ...block, status: "connected" as const }
-        : block,
+    await updateBlocks(deps, target, message.id, (current) =>
+      current.map((block) =>
+        block.kind === "app_connect" &&
+        (block.connectorId ?? "composio") === connectorId &&
+        featuredConnectorProvidersMatch(block.provider, provider)
+          ? { ...block, status: "connected" as const }
+          : block,
+      ),
     );
-    await updateBlocks(deps, target, message.id, next);
   }
 }
 

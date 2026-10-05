@@ -58,6 +58,7 @@ export * from "./installed-connectors.js";
 export * from "./integration-provider-settings.js";
 export * from "./job-reconciler.js";
 export * from "./keyless-http-web.js";
+export * from "./link-preview/index.js";
 export * from "./marketplace-store.js";
 export * from "./mcp-connector.js";
 export * from "./mcp-emulator.js";
