@@ -468,6 +468,8 @@ describe("AskCard action layout", () => {
     const start = html.indexOf('data-testid="ask-options"');
     return html.slice(start, html.indexOf("</div>", start));
   };
+  const actionsHtml = (html: string) =>
+    html.slice(html.indexOf('data-slot="framed-block-actions"'));
 
   it("keeps an approval's decision on the right, primary last", () => {
     const html = render({
@@ -506,7 +508,7 @@ describe("AskCard action layout", () => {
       ],
     });
     expect(optionsRow(html)).toContain("Seoul");
-    expect(optionsRow(html)).not.toContain("justify-end");
+    expect(actionsHtml(html)).not.toContain("Seoul");
     expect(actionsRow(html)).toEqual({ align: "start", labels: ["Other answer…"] });
   });
 
@@ -533,6 +535,60 @@ describe("AskCard action layout", () => {
     );
     expect(actionsRow(html)).toEqual({ align: "end", labels: ["Next"] });
     expect(optionsRow(html)).toContain("Seoul");
-    expect(optionsRow(html)).not.toContain("justify-end");
+    expect(actionsHtml(html)).not.toContain("Seoul");
+  });
+});
+
+describe("AskCard stepper navigation", () => {
+  let container: HTMLElement;
+  let root: Root;
+
+  beforeEach(() => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  });
+
+  it("orders Back, Skip, Send answers in the end-aligned row on an optional last step", () => {
+    act(() => {
+      root.render(
+        <AskCard
+          block={{
+            kind: "ask",
+            text: "Two questions",
+            questions: [
+              { id: "q1", question: "Where?", options: [{ id: "a", label: "Seoul" }] },
+              {
+                id: "q2",
+                question: "When?",
+                required: false,
+                options: [{ id: "b", label: "May" }],
+              },
+            ],
+          }}
+          canAnswer={true}
+          onAnswer={async () => {}}
+          messageId="msg-stepper-client"
+        />,
+      );
+    });
+    const next = [...container.querySelectorAll("button")].find((el) => el.textContent === "Next");
+    act(() => next?.click());
+
+    const row = container.querySelector('[data-slot="framed-block-actions"]');
+    expect(row?.getAttribute("data-align")).toBe("end");
+    expect([...(row?.querySelectorAll("button") ?? [])].map((el) => el.textContent)).toEqual([
+      "Back",
+      "Skip",
+      "Send answers",
+    ]);
+    expect(row?.textContent).not.toContain("May");
+    expect(container.textContent).toContain("When?");
   });
 });
