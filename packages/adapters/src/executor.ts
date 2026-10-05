@@ -2969,7 +2969,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
             );
           }
-          if (name === "skill_create") {
+          if (name === "skill_create" || name === "skill_update") {
             const draftPath = typeof args.path === "string" ? args.path.trim() : "";
             const files = draftPath
               ? await readSkillDraft(
@@ -2980,39 +2980,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 )
               : undefined;
             if (files && "error" in files) return finish(files);
-            return finish(
-              await skillCreateFromTool(
-                skillDeps,
-                { spaceId: run.spaceId, userId: run.userId, botId: run.botId },
-                {
+            const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+            if (name === "skill_create") {
+              return finish(
+                await skillCreateFromTool(skillDeps, skillOwner, {
                   files,
                   name: args.name ? String(args.name) : undefined,
                   description: args.description ? String(args.description) : undefined,
                   body: args.body ? String(args.body) : undefined,
                   content: args.content ? String(args.content) : undefined,
-                },
-              ),
-            );
-          }
-          if (name === "skill_update") {
+                }),
+              );
+            }
             return finish(
-              await skillUpdateFromTool(
-                skillDeps,
-                {
-                  spaceId: run.spaceId,
-                  userId: run.userId,
-                  botId: run.botId,
-                },
-                {
-                  name: args.name ? String(args.name) : undefined,
-                  skillId: args.skillId ? String(args.skillId) : undefined,
-                  newName: args.newName ? String(args.newName) : undefined,
-                  description:
-                    args.description !== undefined ? String(args.description) : undefined,
-                  body: args.body !== undefined ? String(args.body) : undefined,
-                  content: args.content ? String(args.content) : undefined,
-                },
-              ),
+              await skillUpdateFromTool(skillDeps, skillOwner, {
+                files,
+                name: args.name ? String(args.name) : undefined,
+                skillId: args.skillId ? String(args.skillId) : undefined,
+                newName: args.newName ? String(args.newName) : undefined,
+                description: args.description !== undefined ? String(args.description) : undefined,
+                body: args.body !== undefined ? String(args.body) : undefined,
+                content: args.content ? String(args.content) : undefined,
+              }),
             );
           }
           if (name === "skill_delete") {

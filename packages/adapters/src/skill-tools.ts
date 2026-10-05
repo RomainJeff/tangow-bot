@@ -22,6 +22,7 @@ import {
   listUserSkills,
   removeUserSkill,
   renameUserSkill,
+  replaceUserSkillFiles,
   skillDirName,
   userSkillsRoot,
   writeUserSkill,
@@ -231,6 +232,12 @@ export async function readSkillDraft(
   return files;
 }
 
+function parseDraftSkillMd(files: SkillTreeFile[]): ReturnType<typeof parseSkillMd> {
+  const skillMd = files.find((file) => file.path === "SKILL.md");
+  if (!skillMd) return { error: "No SKILL.md at the root of the skill folder." };
+  return parseSkillMd(new TextDecoder().decode(skillMd.bytes));
+}
+
 export async function skillCreateFromTool(
   deps: SkillToolDeps,
   owner: SkillOwner,
@@ -249,9 +256,7 @@ export async function skillCreateFromTool(
     if (input.content || input.name || input.description || input.body) {
       return { error: "Pass either path or name/description/body/content, not both." };
     }
-    const skillMd = input.files.find((file) => file.path === "SKILL.md");
-    if (!skillMd) return { error: "No SKILL.md at the root of the skill folder." };
-    const parsed = parseSkillMd(new TextDecoder().decode(skillMd.bytes));
+    const parsed = parseDraftSkillMd(input.files);
     if ("error" in parsed) return { error: parsed.error };
     name = parsed.name;
     description = parsed.description;
@@ -336,6 +341,7 @@ export async function skillUpdateFromTool(
     description?: string;
     body?: string;
     content?: string;
+    files?: SkillTreeFile[];
   },
 ): Promise<Record<string, unknown>> {
   const existing = await findOwnedSkill(deps, owner, {
@@ -350,7 +356,16 @@ export async function skillUpdateFromTool(
   let nextName = existing.name;
   let nextDescription = existing.description;
 
-  if (input.content?.trim()) {
+  if (input.files) {
+    if (input.content || input.newName || input.description || input.body) {
+      return { error: "Pass either path or newName/description/body/content, not both." };
+    }
+    const parsed = parseDraftSkillMd(input.files);
+    if ("error" in parsed) return { error: parsed.error };
+    nextName = parsed.name;
+    nextDescription = parsed.description;
+    nextContent = buildSkillMd(parsed);
+  } else if (input.content?.trim()) {
     const parsed = parseSkillMd(input.content);
     if ("error" in parsed) return { error: parsed.error };
     nextName = parsed.name;
@@ -390,12 +405,18 @@ export async function skillUpdateFromTool(
   const scope = { spaceId: owner.spaceId, userId: owner.userId };
   const oldKey = userSkillKey(existing.name);
   const newKey = userSkillKey(nextName);
+  const skill = { name: nextName, content: nextContent };
   try {
-    if (oldKey === newKey) {
-      await writeUserSkill(root, { name: nextName, content: nextContent }, "replace");
+    if (input.files) {
+      await replaceUserSkillFiles(root, existing.name, input.files, async () => skill);
+    } else if (oldKey === newKey) {
+      await writeUserSkill(root, skill, "replace");
     } else {
-      // Rename: the directory moves first (bundle extras follow), then access rows follow the key.
-      await renameUserSkill(root, existing.name, { name: nextName, content: nextContent });
+      // The whole directory moves, so bundle extras follow the new name.
+      await renameUserSkill(root, existing.name, skill);
+    }
+    // Access rows follow the key once the folder has moved.
+    if (oldKey !== newKey) {
       await deps.prisma.$transaction([
         deps.prisma.skillSetting.updateMany({
           where: { ...scope, skillKey: oldKey },
@@ -408,11 +429,12 @@ export async function skillUpdateFromTool(
       ]);
     }
   } catch (error) {
-    return {
-      error: isExists(error)
-        ? `A skill named "${nextName}" already exists.`
-        : "Could not update skill.",
-    };
+    if (isExists(error)) return { error: `A skill named "${nextName}" already exists.` };
+    // replaceUserSkillFiles messages name the offending draft file and carry no host path.
+    if (input.files && error instanceof Error && !("code" in error)) {
+      return { error: error.message };
+    }
+    return { error: "Could not update skill." };
   }
   return { ok: true, id: newKey, name: nextName, description: nextDescription };
 }

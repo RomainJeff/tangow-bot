@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
@@ -630,7 +630,7 @@ describe("skill drafts", () => {
     expect(await readSkillDraft(sandbox, computer, "missing", context)).toEqual(error);
   });
 
-  describe("skill_create with files", () => {
+  describe("skill_create and skill_update with files", () => {
     let dataDir: string;
     let prisma: ReturnType<typeof makePrisma>;
     let deps: SkillToolDeps;
@@ -682,6 +682,60 @@ describe("skill drafts", () => {
         error: "No SKILL.md at the root of the skill folder.",
       });
       expect(await listUserSkills(userSkillsRoot(dataDir, creator))).toEqual([]);
+    });
+
+    const shipMd = buildSkillMd({ name: "Ship", description: "Ship faster", body: "1. Go." });
+
+    it("replaces a saved skill's scripts from a folder", async () => {
+      await skillCreateFromTool(deps, creator, { files: draft });
+      const nextMd = buildSkillMd({ name: "Deploy", description: "Ship it", body: "2. Check." });
+      expect(
+        await skillUpdateFromTool(deps, creator, {
+          name: "Deploy",
+          files: [
+            { path: "SKILL.md", bytes: text(nextMd), executable: false },
+            { path: "scripts/check.sh", bytes: text("echo ok"), executable: true },
+          ],
+        }),
+      ).toEqual({ ok: true, id: "user:deploy", name: "Deploy", description: "Ship it" });
+      const dir = path.join(userSkillsRoot(dataDir, creator), "deploy");
+      expect(await readdir(path.join(dir, "scripts"))).toEqual(["check.sh"]);
+      expect((await stat(path.join(dir, "scripts/check.sh"))).mode & 0o111).toBe(0o111);
+      expect((await skillReadFromTool(deps, creator, { name: "Deploy" })).content).toBe(nextMd);
+    });
+
+    it("moves access rows when the folder's SKILL.md renames the skill", async () => {
+      await skillCreateFromTool(deps, creator, { files: draft });
+      expect(
+        await skillUpdateFromTool(deps, creator, {
+          name: "Deploy",
+          files: [{ path: "SKILL.md", bytes: text(shipMd), executable: false }],
+        }),
+      ).toEqual({ ok: true, id: "user:ship", name: "Ship", description: "Ship faster" });
+      expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:deploy" } })).toEqual(
+        [],
+      );
+      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:deploy" } })).toEqual([]);
+      expect(
+        await prisma.skillSetting.findMany({ where: { skillKey: "user:ship" } }),
+      ).toMatchObject([{ availability: "selected" }]);
+      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:ship" } })).toMatchObject([
+        { botId: "botA", enabled: true },
+      ]);
+      expect(await readdir(userSkillsRoot(dataDir, creator))).toEqual(["ship"]);
+    });
+
+    it("rejects files combined with body and folders for read-only skills", async () => {
+      await skillCreateFromTool(deps, creator, { files: draft });
+      expect(
+        await skillUpdateFromTool(deps, creator, { name: "Deploy", files: draft, body: "x" }),
+      ).toEqual({ error: "Pass either path or newName/description/body/content, not both." });
+      expect(
+        await skillUpdateFromTool(deps, creator, { name: "Interrogate", files: draft }),
+      ).toEqual({ error: "Builtin and plugin skills are read-only." });
+      expect(
+        await readdir(path.join(userSkillsRoot(dataDir, creator), "deploy", "scripts")),
+      ).toEqual(["run.sh"]);
     });
   });
 });

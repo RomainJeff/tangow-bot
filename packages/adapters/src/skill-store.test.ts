@@ -12,6 +12,7 @@ import {
   removeUserSkill,
   removeUserSkillDirs,
   renameUserSkill,
+  replaceUserSkillFiles,
   skillDirName,
   userSkillsRoot,
   writeUserSkill,
@@ -346,6 +347,78 @@ describe("skill store", () => {
         "Skill bundle must contain SKILL.md at its root.",
       );
       expect(await readdir(root)).toEqual([]);
+    });
+
+    const seedDeploy = (root: string) =>
+      writeUserSkillFiles(
+        root,
+        [file("SKILL.md", md("Deploy", "Old")), file("scripts/old.sh", "old", true)],
+        resolve,
+      );
+
+    it("replaces a skill's whole folder in place", async () => {
+      const root = await tmpRoot();
+      await seedDeploy(root);
+      await replaceUserSkillFiles(
+        root,
+        "Deploy",
+        [file("SKILL.md", md("Deploy", "New")), file("scripts/new.sh", "new", true)],
+        resolve,
+      );
+      const dir = path.join(root, "deploy");
+      expect(await readdir(path.join(dir, "scripts"))).toEqual(["new.sh"]);
+      expect(await readFile(path.join(dir, "scripts/new.sh"), "utf8")).toBe("new");
+      expect((await stat(path.join(dir, "scripts/new.sh"))).mode & 0o111).toBe(0o111);
+      expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toBe(
+        `${md("Deploy", "New")}\n<!-- normalized -->\n`,
+      );
+      expect(await readdir(root)).toEqual(["deploy"]);
+    });
+
+    it("moves the folder when the new SKILL.md renames the skill", async () => {
+      const root = await tmpRoot();
+      await seedDeploy(root);
+      await replaceUserSkillFiles(
+        root,
+        "Deploy",
+        [file("SKILL.md", md("Ship")), file("scripts/new.sh", "new")],
+        resolve,
+      );
+      expect(await readdir(root)).toEqual(["ship"]);
+      expect(await readdir(path.join(root, "ship", "scripts"))).toEqual(["new.sh"]);
+    });
+
+    it("fails with EEXIST when the rename lands on another skill, leaving both intact", async () => {
+      const root = await tmpRoot();
+      await seedDeploy(root);
+      await writeUserSkill(root, { name: "Ship", content: md("Ship", "Theirs") }, "create");
+      const error = await replaceUserSkillFiles(
+        root,
+        "Deploy",
+        [file("SKILL.md", md("Ship")), file("x.txt", "x")],
+        resolve,
+      ).catch((e: unknown) => e);
+      expect(isExists(error)).toBe(true);
+      expect((await readdir(root)).sort()).toEqual(["deploy", "ship"]);
+      expect(await readFile(path.join(root, "deploy", "scripts/old.sh"), "utf8")).toBe("old");
+      expect(await readFile(path.join(root, "ship", "SKILL.md"), "utf8")).toBe(
+        md("Ship", "Theirs"),
+      );
+    });
+
+    it("leaves the saved skill untouched when the new folder is rejected", async () => {
+      const root = await tmpRoot();
+      await seedDeploy(root);
+      await expect(
+        replaceUserSkillFiles(
+          root,
+          "Deploy",
+          [file("SKILL.md", md("Deploy", "New")), file("../x", "x")],
+          resolve,
+        ),
+      ).rejects.toThrow("Skill file escapes the skill folder: ../x.");
+      expect(await readdir(root)).toEqual(["deploy"]);
+      expect(await readdir(path.join(root, "deploy", "scripts"))).toEqual(["old.sh"]);
     });
   });
 
