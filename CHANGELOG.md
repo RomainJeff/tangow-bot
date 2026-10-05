@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-06
 
+#### Added
+
+- **Bots come with built-in Notion skills.** With a Notion connection, a bot can search and find pages, query databases, add rows, create pages and tasks, capture a conversation as documentation, prepare meetings, and turn a spec or a Notion task into an implementation plan; each skill appears as `builtin:notion-…`.
+
 #### Changed
 
 - Sign-in, verification, invitation, password-reset and unsubscribe links, and links carrying a token or a presigned signature, no longer get a preview, so your server never opens a single-use link nobody clicked.
