@@ -674,10 +674,15 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "skill_create",
     description:
-      "Create a reusable Claude Agent Skill (generic how-to SKILL.md). It is persisted and injected into your prompt; new skills are visible to this agent only until the user shares them with other agents. Use when a multi-step task is worth repeating or the user asks to save a skill. Do not include account names, channels, or inboxes — those belong in a routine.",
+      "Create a reusable Claude Agent Skill (generic how-to SKILL.md). It is persisted and injected into your prompt; new skills are visible to this agent only until the user shares them with other agents. Use when a multi-step task is worth repeating or the user asks to save a skill. Do not include account names, channels, or inboxes — those belong in a routine. Pass path to save a workspace folder with scripts and references.",
     inputSchema: {
       type: "object",
       properties: {
+        path: {
+          type: "string",
+          description:
+            "Workspace folder with SKILL.md and optional scripts/ and references/; saves the whole folder. Use instead of name/description/body/content.",
+        },
         name: { type: "string", description: "Short skill name." },
         description: {
           type: "string",
@@ -704,6 +709,11 @@ export const builtinAgentTools: ConnectorTool[] = [
       properties: {
         name: { type: "string", description: "Current exact skill name." },
         skillId: { type: "string" },
+        path: {
+          type: "string",
+          description:
+            "Workspace folder with the full new skill (SKILL.md, scripts/, references/); replaces the saved folder. Use instead of newName/description/body/content.",
+        },
         newName: { type: "string" },
         description: { type: "string" },
         body: { type: "string" },
