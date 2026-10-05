@@ -24,14 +24,23 @@ export function linkPreviewKeyHash(spaceId: string, normalizedUrl: string): stri
   return createHash("sha256").update(`${spaceId}\n${normalizedUrl}`).digest("hex");
 }
 
+/**
+ * Where an entry came from. `restricted`: the site refused the server (401, 402, 403, 451), so the
+ * entry is a fallback card or a bare failure, and the sender's device may still read the page.
+ * `device`: the head was read by the sender's device; the server fetched the image. Absent means
+ * `server`.
+ */
+export type LinkPreviewCacheSource = "server" | "restricted" | "device";
+
 export type CachedLinkPreview =
   | {
       status: "ok";
       format: "large" | "photo" | "compact";
       title?: string;
       image?: { key: string; width: number; height: number; bytes: number; fit?: "contain" };
+      source?: LinkPreviewCacheSource;
     }
-  | { status: "failed" };
+  | { status: "failed"; source?: LinkPreviewCacheSource };
 
 type CacheRow = {
   status: string;
@@ -42,14 +51,21 @@ type CacheRow = {
   imageHeight: number | null;
   imageBytes: number;
   imageFit: string | null;
+  source: string;
 };
 
+function toSource(value: string): LinkPreviewCacheSource {
+  return value === "restricted" || value === "device" ? value : "server";
+}
+
 function toCached(row: CacheRow): CachedLinkPreview | null {
-  if (row.status === "failed") return { status: "failed" };
+  const source = toSource(row.source);
+  if (row.status === "failed") return { status: "failed", source };
   if (row.status !== "ok") return null;
   if (row.format !== "large" && row.format !== "photo" && row.format !== "compact") return null;
   return {
     status: "ok",
+    source,
     format: row.format,
     ...(row.title ? { title: row.title } : {}),
     ...(row.imageKey && row.imageWidth && row.imageHeight
@@ -102,6 +118,7 @@ export async function storeLinkPreviewCache(
           imageHeight: null,
           imageBytes: 0,
           imageFit: null,
+          source: entry.source ?? "server",
         }
       : {
           status: "ok",
@@ -112,6 +129,7 @@ export async function storeLinkPreviewCache(
           imageHeight: entry.image?.height ?? null,
           imageBytes: entry.image?.bytes ?? 0,
           imageFit: entry.image?.fit ?? null,
+          source: entry.source ?? "server",
         };
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const removedImageKeys: string[] = [];

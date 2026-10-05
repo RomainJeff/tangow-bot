@@ -3,7 +3,7 @@ import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import type { AgentSkillCatalogEntry, LinkPreviewDraft, ThreadMessage } from "@rakazo/contracts";
 import { ATTACHMENT_ALLOWED_MIME_TYPES } from "@rakazo/contracts";
-import type { ComposerMention, SlashActionId } from "@rakazo/core";
+import type { ComposerMention, ComposerPageHead, SlashActionId } from "@rakazo/core";
 import {
   type ComposerChange,
   clampMentionHighlightIndex,
@@ -37,7 +37,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { desktopBridge } from "../../lib/desktop.js";
+import { desktopBridge, readPageHeadOnDesktop } from "../../lib/desktop.js";
 import { dictation, webSpeechAvailable } from "../../lib/dictation.js";
 import { isFileDrag, isFilePaste } from "../../lib/pending-attachments";
 import type { PendingAttachment } from "./layout";
@@ -103,7 +103,11 @@ export const Composer = memo(function Composer({
     options?: { linkPreview?: false },
   ) => Promise<void>;
   /** Reads what the first complete link of the draft looks like; absent, no preview is shown. */
-  previewLink?: (url: string, signal: AbortSignal) => Promise<LinkPreviewDraft | null>;
+  previewLink?: (
+    url: string,
+    signal: AbortSignal,
+    page?: ComposerPageHead,
+  ) => Promise<LinkPreviewDraft | null>;
   onStop: () => Promise<void>;
   /** Whether the configured voice provider can transcribe — the dictation
    * engine used when Web Speech isn't available (Electron, most non-Chrome
@@ -132,7 +136,10 @@ export const Composer = memo(function Composer({
   previewLinkRef.current = previewLink;
   const [linkPreview] = useState(() =>
     createComposerLinkPreview({
-      read: (url, signal) => previewLinkRef.current?.(url, signal) ?? Promise.resolve(null),
+      read: (url, signal, page) =>
+        previewLinkRef.current?.(url, signal, page) ?? Promise.resolve(null),
+      // Only the desktop app can read another site's page: a plain browser keeps the server's card.
+      ...(desktopBridge()?.pageHead ? { readPageHead: readPageHeadOnDesktop } : {}),
     }),
   );
   const linkPreviewView = useSyncExternalStore(linkPreview.subscribe, linkPreview.getView);

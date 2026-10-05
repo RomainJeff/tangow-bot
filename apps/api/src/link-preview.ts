@@ -4,7 +4,8 @@ import {
   type LinkPreviewServiceDeps,
   previewStoreContext,
   removePreviewBytes,
-  resolveLinkPreview,
+  resolveLinkPreviewDetailed,
+  resolveLinkPreviewWithDeviceHead,
 } from "@rakazo/adapters";
 import type { Actor, LinkPreviewDraft } from "@rakazo/contracts";
 import {
@@ -51,7 +52,7 @@ export interface LinkPreviewApiDeps {
   artifacts: ArtifactStore;
   events: Pick<ThreadEvents, "notify">;
   /** Test seams of the page reader and the per-person in-flight cap. */
-  linkPreview?: Pick<LinkPreviewServiceDeps, "read" | "readDeps" | "now"> & {
+  linkPreview?: Pick<LinkPreviewServiceDeps, "read" | "readFromHead" | "readDeps" | "now"> & {
     inFlight?: InFlightGuard;
   };
 }
@@ -68,11 +69,16 @@ const writableThread = (actor: Actor) => ({
  * checked before anything else (cache, quota, network), and every refusal is the same error.
  * Whatever goes wrong afterwards (a refused address, a missing page, a limit) is the same null.
  * No artifact is created: the thumbnail travels inline.
+ *
+ * `deviceReadable` is the one thing a draft adds: the site refused the server (or answered with a
+ * passing 429 or 5xx), so the sender's device may read the page and call again with its `pageHead`.
+ * The server uses a `pageHead` only while it is still refused for that link, and ignores it
+ * otherwise; no other failure reason is told apart.
  */
 export async function previewLinkForComposer(
   deps: LinkPreviewApiDeps,
   actor: Actor,
-  input: { threadId: string; url: string },
+  input: { threadId: string; url: string; pageHead?: string; pageHeadType?: string },
   signal: AbortSignal,
 ): Promise<LinkPreviewDraft | null> {
   const thread = await deps.prisma.thread.findFirst({
@@ -83,6 +89,7 @@ export async function previewLinkForComposer(
 
   const release = (deps.linkPreview?.inFlight ?? composerInFlight).acquire(actor.userId);
   if (!release) return null;
+  let ephemeralKey: string | undefined;
   try {
     const service: LinkPreviewServiceDeps = {
       prisma: deps.prisma,
@@ -90,13 +97,20 @@ export async function previewLinkForComposer(
       ...deps.linkPreview,
     };
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(COMPOSER_PREVIEW_DEADLINE_MS)]);
-    const preview = await resolveLinkPreview(
-      service,
-      { spaceId: actor.spaceId, userId: actor.userId, source: "composer" },
-      input.url,
-      deadline,
-    );
-    if (!preview) return null;
+    const scope = { spaceId: actor.spaceId, userId: actor.userId, source: "composer" as const };
+    const { preview, deviceReadable, ephemeralImageKey } = input.pageHead
+      ? await resolveLinkPreviewWithDeviceHead(
+          service,
+          scope,
+          input.url,
+          input.pageHead,
+          deadline,
+          input.pageHeadType,
+        )
+      : await resolveLinkPreviewDetailed(service, scope, input.url, deadline);
+    ephemeralKey = ephemeralImageKey;
+    // A refusal with no fallback card shows nothing, but still tells the device it may read.
+    if (!preview) return deviceReadable ? { format: "compact", deviceReadable: true } : null;
     let thumbnail: string | undefined;
     if (preview.image) {
       thumbnail = await deps.artifacts
@@ -109,8 +123,11 @@ export async function previewLinkForComposer(
       ...(preview.format !== "photo" && preview.title ? { title: preview.title } : {}),
       ...(thumbnail ? { thumbnail } : {}),
       ...(thumbnail && preview.image?.fit ? { thumbnailFit: preview.image.fit } : {}),
+      ...(deviceReadable ? { deviceReadable: true as const } : {}),
     };
   } finally {
+    // A device-read card the cache does not keep: its image served this draft, nothing else.
+    if (ephemeralKey) await removePreviewBytes(deps.artifacts, actor, [ephemeralKey]);
     release();
   }
 }

@@ -192,6 +192,33 @@ describe("link preview rpc contracts", () => {
     expect(remove["~standard"].validate({})).toHaveProperty("issues");
   });
 
+  it("takes a pageHead of 512 KiB at most, and a draft says only that the device may read", () => {
+    const input = appContract.links.preview["~orpc"].inputSchema!;
+    const at = (pageHead: string) =>
+      input["~standard"].validate({ threadId: "t", url: "https://a.tld", pageHead });
+    expect(at("x".repeat(512 * 1024))).not.toHaveProperty("issues");
+    expect(at("x".repeat(512 * 1024 + 1))).toHaveProperty("issues");
+    expect(at(1 as unknown as string)).toHaveProperty("issues");
+    const typed = (pageHeadType: string) =>
+      input["~standard"].validate({
+        threadId: "t",
+        url: "https://a.tld",
+        pageHead: "<head></head",
+        pageHeadType,
+      });
+    expect(typed("text/html; charset=utf-8")).not.toHaveProperty("issues");
+    expect(typed("t".repeat(201))).toHaveProperty("issues");
+    expect(LinkPreviewDraftSchema.parse({ format: "compact", deviceReadable: true })).toEqual({
+      format: "compact",
+      deviceReadable: true,
+    });
+    for (const reason of [false, "denied", "access_denied"]) {
+      expect(
+        LinkPreviewDraftSchema.safeParse({ format: "compact", deviceReadable: reason }).success,
+      ).toBe(false);
+    }
+  });
+
   it("only lets a draft carry an inline WebP thumbnail of bounded size", () => {
     const thumbnail = "data:image/webp;base64,AAAA";
     expect(LinkPreviewDraftSchema.parse({ format: "compact", title: "T", thumbnail })).toEqual({

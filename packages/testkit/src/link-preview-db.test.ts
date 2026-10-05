@@ -66,7 +66,42 @@ describe("cache entries", () => {
     });
     expect(await findCachedLinkPreview(db.prisma, "space-1", "k", NOW)).toEqual({
       status: "failed",
+      source: "server",
     });
+  });
+
+  it("remembers where an entry came from: the server, a refusal of the site, or the device", async () => {
+    const db = createFakeThreadDb();
+    const read = async (key: string) => findCachedLinkPreview(db.prisma, "space-1", key, NOW);
+    await storeLinkPreviewCache(db.prisma, {
+      spaceId: "space-1",
+      keyHash: "plain",
+      entry: { status: "ok", format: "compact", title: "T" },
+      now: NOW,
+    });
+    await storeLinkPreviewCache(db.prisma, {
+      spaceId: "space-1",
+      keyHash: "refused",
+      entry: { status: "failed", source: "restricted" },
+      now: NOW,
+    });
+    await storeLinkPreviewCache(db.prisma, {
+      spaceId: "space-1",
+      keyHash: "device",
+      entry: { status: "ok", format: "compact", title: "T", source: "device" },
+      now: NOW,
+    });
+    expect(await read("plain")).toMatchObject({ status: "ok", source: "server" });
+    expect(await read("refused")).toEqual({ status: "failed", source: "restricted" });
+    expect(await read("device")).toMatchObject({ status: "ok", source: "device" });
+    // A device-read card replaces the refusal it was made for.
+    await storeLinkPreviewCache(db.prisma, {
+      spaceId: "space-1",
+      keyHash: "refused",
+      entry: { status: "ok", format: "compact", title: "Real", source: "device" },
+      now: NOW,
+    });
+    expect(await read("refused")).toMatchObject({ title: "Real", source: "device" });
   });
 
   it("remembers that an image is a site icon, and only then", async () => {

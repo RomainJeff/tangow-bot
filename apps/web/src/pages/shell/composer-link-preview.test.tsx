@@ -20,14 +20,29 @@ vi.mock("../../lib/dictation.js", () => ({
   dictation: { state: { status: "idle", transcript: "" }, subscribe: () => () => {} },
   webSpeechAvailable: () => false,
 }));
-vi.mock("../../lib/desktop.js", () => ({ desktopBridge: () => undefined }));
+const shell = vi.hoisted(() => ({
+  bridge: undefined as
+    | {
+        pageHead?: { read: (url: string) => Promise<{ head: string; contentType: string } | null> };
+      }
+    | undefined,
+}));
+vi.mock("../../lib/desktop.js", () => ({
+  desktopBridge: () => shell.bridge,
+  readPageHeadOnDesktop: (url: string) =>
+    shell.bridge?.pageHead?.read(url) ?? Promise.resolve(null),
+}));
 
 import { Composer } from "./composer.js";
 
 const THUMB = "data:image/webp;base64,UklGRg==";
 const PAGE = "https://example.com/article";
 
-type Preview = (url: string, signal: AbortSignal) => Promise<LinkPreviewDraft | null>;
+type Preview = (
+  url: string,
+  signal: AbortSignal,
+  page?: { head: string; contentType?: string },
+) => Promise<LinkPreviewDraft | null>;
 
 function baseProps(overrides: Record<string, unknown> = {}) {
   return {
@@ -103,6 +118,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  shell.bridge = undefined;
   act(() => root.unmount());
   container.remove();
   vi.useRealTimers();
@@ -268,5 +284,52 @@ describe("Composer link preview", () => {
     expect(card()).toBeTruthy();
     edit("");
     expect(card()).toBeNull();
+  });
+});
+
+describe("Composer link preview: a page the server was refused (spec 22, CA 82, CA 83)", () => {
+  const refused: LinkPreviewDraft = {
+    format: "compact",
+    title: "Article title",
+    deviceReadable: true,
+  };
+
+  it("in a plain browser makes no device read: the server's card stays (CA 83)", async () => {
+    const previewLink = vi.fn<Preview>(async () => refused);
+    mount({ previewLink });
+    paste(PAGE);
+    await wait(800);
+    await wait(0);
+    expect(previewLink).toHaveBeenCalledOnce();
+    expect(card()?.textContent).toContain("Article title");
+  });
+
+  it("in the desktop app reads the page there and shows the card the server makes from it (CA 82)", async () => {
+    const page = { head: "<head><title>Real title</title></head", contentType: "text/html" };
+    const read = vi.fn(async () => page);
+    shell.bridge = { pageHead: { read } };
+    const previewLink = vi.fn<Preview>(async (_url, _signal, withPage) =>
+      withPage ? { format: "compact", title: "Real title", thumbnail: THUMB } : refused,
+    );
+    mount({ previewLink });
+    paste(PAGE);
+    await wait(800);
+    await wait(0);
+    expect(read).toHaveBeenCalledWith(PAGE);
+    expect(previewLink).toHaveBeenCalledTimes(2);
+    expect(previewLink.mock.calls[1]?.[2]).toEqual(page);
+    expect(card()?.textContent).toContain("Real title");
+    expect(card()?.querySelector("img")?.getAttribute("src")).toBe(THUMB);
+  });
+
+  it("in the desktop app, makes no device read for a page the server read", async () => {
+    const read = vi.fn(async () => ({ head: "<head></head", contentType: "text/html" }));
+    shell.bridge = { pageHead: { read } };
+    const previewLink = vi.fn<Preview>(async () => ({ format: "compact", title: "Server page" }));
+    mount({ previewLink });
+    paste(PAGE);
+    await wait(800);
+    await wait(0);
+    expect(read).not.toHaveBeenCalled();
   });
 });

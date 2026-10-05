@@ -92,9 +92,28 @@ export type ComposerLinkPreviewView =
 
 const IDLE: ComposerLinkPreviewView = { status: "idle" };
 
+/** The start of a page as the device read it, with the Content-Type it came with. */
+export interface ComposerPageHead {
+  head: string;
+  contentType?: string;
+}
+
 export interface ComposerLinkPreviewDeps {
-  /** Reads the page for `url`; null (or a throw) means there is nothing to show. */
-  read: (url: string, signal: AbortSignal) => Promise<LinkPreviewDraft | null>;
+  /**
+   * Reads the page for `url` on the server; null (or a throw) means there is nothing to show.
+   * `page` is what the sender's own device read, given only after a draft said `deviceReadable`.
+   */
+  read: (
+    url: string,
+    signal: AbortSignal,
+    page?: ComposerPageHead,
+  ) => Promise<LinkPreviewDraft | null>;
+  /**
+   * Native shells only (iOS, the desktop app): reads the start of the page on this device, for a
+   * site that refuses the server. Absent in a browser, which cannot read another site. Null, a
+   * throw or an empty head mean the page could not be read: the server's draft stays.
+   */
+  readPageHead?: (url: string, signal: AbortSignal) => Promise<ComposerPageHead | null | undefined>;
   debounceMs?: number;
 }
 
@@ -118,7 +137,8 @@ export interface ComposerLinkPreviewController {
  * first eligible link of the draft is complete, 800 ms after it became the first link, and drops
  * the read when that link changes or goes away. A failure, a null answer or a draft that has
  * moved on leaves nothing on screen and no message. Removing the preview is for the draft: no
- * read is made for it again until the draft is emptied or sent.
+ * read is made for it again until the draft is emptied or sent. A native shell may also give it
+ * `readPageHead`, used only when the server's draft says the page is `deviceReadable`.
  */
 export function createComposerLinkPreview(
   deps: ComposerLinkPreviewDeps,
@@ -146,36 +166,64 @@ export function createComposerLinkPreview(
     abort = undefined;
   };
 
+  /** The card a draft makes, or undefined when it holds nothing to show. */
+  const readyView = (
+    url: string,
+    draft: LinkPreviewDraft | null,
+  ): ComposerLinkPreviewView | undefined => {
+    const title = draft?.title ? sanitizePreviewTitle(draft.title) : "";
+    const thumbnail = acceptPreviewThumbnail(draft?.thumbnail);
+    if (!title && !thumbnail) return undefined;
+    return {
+      status: "ready",
+      url,
+      site: previewSiteLabel(url),
+      ...(title ? { title } : {}),
+      ...(thumbnail ? { thumbnail } : {}),
+      ...(thumbnail && draft?.thumbnailFit === LINK_PREVIEW_IMAGE_FIT
+        ? { thumbnailFit: LINK_PREVIEW_IMAGE_FIT }
+        : {}),
+    };
+  };
+
+  /**
+   * The server's draft first. When it says the site refused the server and this device can read
+   * pages, the device reads the head and the server is asked again with it; the better card
+   * replaces the fallback. Any failure on the way keeps what is already shown, silently.
+   */
+  const load = async (url: string, signal: AbortSignal) => {
+    let first: LinkPreviewDraft | null = null;
+    try {
+      first = await deps.read(url, signal);
+    } catch {
+      first = null;
+    }
+    if (signal.aborted) return;
+    const firstView = readyView(url, first);
+    const readPageHead = deps.readPageHead;
+    if (!first?.deviceReadable || !readPageHead) return show(firstView ?? IDLE);
+    // A fallback card shows while the device reads; with none, the loading card stays.
+    if (firstView) show(firstView);
+    let upgraded: ComposerLinkPreviewView | undefined;
+    try {
+      const page = await readPageHead(url, signal);
+      if (page?.head && !signal.aborted) {
+        upgraded = readyView(url, await deps.read(url, signal, page));
+      }
+    } catch {
+      upgraded = undefined;
+    }
+    if (signal.aborted) return;
+    show(upgraded ?? firstView ?? IDLE);
+  };
+
   const start = (url: string) => {
     const controller = new AbortController();
     abort = controller;
     timer = setTimeout(() => {
       timer = undefined;
       show({ status: "loading", url });
-      deps.read(url, controller.signal).then(
-        (draft) => {
-          if (controller.signal.aborted) return;
-          const title = draft?.title ? sanitizePreviewTitle(draft.title) : "";
-          const thumbnail = acceptPreviewThumbnail(draft?.thumbnail);
-          show(
-            title || thumbnail
-              ? {
-                  status: "ready",
-                  url,
-                  site: previewSiteLabel(url),
-                  ...(title ? { title } : {}),
-                  ...(thumbnail ? { thumbnail } : {}),
-                  ...(thumbnail && draft?.thumbnailFit === LINK_PREVIEW_IMAGE_FIT
-                    ? { thumbnailFit: LINK_PREVIEW_IMAGE_FIT }
-                    : {}),
-                }
-              : IDLE,
-          );
-        },
-        () => {
-          if (!controller.signal.aborted) show(IDLE);
-        },
-      );
+      void load(url, controller.signal);
     }, debounceMs);
   };
 

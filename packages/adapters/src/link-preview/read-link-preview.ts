@@ -1,6 +1,7 @@
 import { LINK_PREVIEW_IMAGE_FIT } from "@rakazo/contracts";
 import { previewTitleFromUrl } from "@rakazo/core";
 import { isTransientReason, LinkPreviewError, type LinkPreviewFailureReason } from "./errors.js";
+import type { LinkPreviewHead } from "./head-parser.js";
 import { parseLinkPreviewHead } from "./head-parser.js";
 import { type EncodedPreviewImage, encodePreviewImage, type ImageEncodeOptions } from "./image.js";
 import {
@@ -42,6 +43,8 @@ export type LinkPreviewReadResult =
       image?: EncodedPreviewImage;
       /** `contain` when the image is the site's icon, which clients draw whole, never cropped. */
       imageFit?: typeof LINK_PREVIEW_IMAGE_FIT;
+      /** True for the fallback card of a site that refused the server (401, 402, 403, 451). */
+      restricted?: true;
     }
   | { ok: false; reason: LinkPreviewFailureReason; transient: boolean };
 
@@ -109,28 +112,83 @@ export async function readLinkPreview(
       }
     }
 
-    const head = parseLinkPreviewHead(page.bytes, { contentType: page.contentType, url: page.url });
-    if (!head.title) return fail("page", new LinkPreviewError("no_title"));
-    const pageImage = head.imageUrl ? await readImage(head.imageUrl, deps, fail) : undefined;
-    if (head.imageUrl && !pageImage && deps.signal?.aborted) return cutShort("aborted");
-    // No usable page image: the site's icon stands in. It never makes a large card, and only the
-    // icon the page itself names is tried (no guessed /favicon.ico).
-    let icon: EncodedPreviewImage | undefined;
-    if (!pageImage && head.iconUrl) {
-      if (!hasBudgetForIcon(deps)) return cutShort("timeout");
-      icon = await readImage(head.iconUrl, deps, fail);
-      if (!icon && deps.signal?.aborted) return cutShort("aborted");
-    }
-    const format = decideLinkPreviewFormat({ kind: "html", title: head.title, image: pageImage });
-    if (!format) return fail("page", new LinkPreviewError("no_title"));
-    const image = pageImage ?? icon;
-    return {
-      ok: true,
-      format,
-      title: head.title,
-      ...(image ? { image } : {}),
-      ...(icon ? { imageFit: LINK_PREVIEW_IMAGE_FIT } : {}),
-    };
+    return await previewFromHead(
+      parseLinkPreviewHead(page.bytes, { contentType: page.contentType, url: page.url }),
+      deps,
+      fail,
+      cutShort,
+    );
+  } catch (error) {
+    return fail("page", error);
+  }
+}
+
+/**
+ * The card for a parsed page head: the page image if it can be had, else the site icon the head
+ * names (never a large card), the format decided from what was really downloaded. Shared by the
+ * server's own read and by a head the sender's device read.
+ */
+async function previewFromHead(
+  head: LinkPreviewHead,
+  deps: LinkPreviewReadDeps,
+  fail: (stage: "page" | "image", error: unknown) => LinkPreviewReadResult,
+  cutShort: (reason: "aborted" | "timeout") => LinkPreviewReadResult,
+): Promise<LinkPreviewReadResult> {
+  if (!head.title) return fail("page", new LinkPreviewError("no_title"));
+  const pageImage = head.imageUrl ? await readImage(head.imageUrl, deps, fail) : undefined;
+  if (head.imageUrl && !pageImage && deps.signal?.aborted) return cutShort("aborted");
+  // No usable page image: the site's icon stands in. It never makes a large card, and only the
+  // icon the page itself names is tried (no guessed /favicon.ico).
+  let icon: EncodedPreviewImage | undefined;
+  if (!pageImage && head.iconUrl) {
+    if (!hasBudgetForIcon(deps)) return cutShort("timeout");
+    icon = await readImage(head.iconUrl, deps, fail);
+    if (!icon && deps.signal?.aborted) return cutShort("aborted");
+  }
+  const format = decideLinkPreviewFormat({ kind: "html", title: head.title, image: pageImage });
+  if (!format) return fail("page", new LinkPreviewError("no_title"));
+  const image = pageImage ?? icon;
+  return {
+    ok: true,
+    format,
+    title: head.title,
+    ...(image ? { image } : {}),
+    ...(icon ? { imageFit: LINK_PREVIEW_IMAGE_FIT } : {}),
+  };
+}
+
+/**
+ * The preview of a page whose head the sender's device read, for a link the site refuses the
+ * server. The head is untrusted: it goes through the same parser as a fetched page (title
+ * sanitized, image and icon resolved against the link and a valid `<base>`), and the server
+ * fetches and re-encodes the image itself, so nothing remote ever reaches a reader. The device's
+ * Content-Type, when it gave one, supplies the charset as it would for a page fetched here. Never
+ * throws.
+ */
+export async function readLinkPreviewFromHead(
+  url: string,
+  headBytes: Uint8Array,
+  deps: LinkPreviewReadDeps = {},
+  contentType?: string,
+): Promise<LinkPreviewReadResult> {
+  const host = hostOf(url);
+  const cutShort = (reason: "aborted" | "timeout"): LinkPreviewReadResult => ({
+    ok: false,
+    reason,
+    transient: true,
+  });
+  const fail = (stage: "page" | "image", error: unknown): LinkPreviewReadResult => {
+    const reason = error instanceof LinkPreviewError ? error.reason : "network";
+    if (host) deps.log?.({ host, stage, reason });
+    return { ok: false, reason, transient: isTransientReason(reason) };
+  };
+  try {
+    return await previewFromHead(
+      parseLinkPreviewHead(headBytes, { url, contentType }),
+      deps,
+      fail,
+      cutShort,
+    );
   } catch (error) {
     return fail("page", error);
   }
@@ -153,13 +211,12 @@ async function readRestrictedSiteCard(
   // The icon costs two requests, the home page then the image: not worth starting without the time.
   if (!hasBudgetForIcon(deps)) return cutShort("timeout");
   const iconUrl = await readHomeIconUrl(url, deps, fail);
-  if (!iconUrl)
-    return deps.signal?.aborted ? cutShort("aborted") : { ok: true, format: "compact", title };
+  const bare = { ok: true, format: "compact", title, restricted: true } as const;
+  if (!iconUrl) return deps.signal?.aborted ? cutShort("aborted") : bare;
   if (!hasBudgetForIcon(deps)) return cutShort("timeout");
   const icon = await readImage(iconUrl, deps, fail);
-  if (!icon)
-    return deps.signal?.aborted ? cutShort("aborted") : { ok: true, format: "compact", title };
-  return { ok: true, format: "compact", title, image: icon, imageFit: LINK_PREVIEW_IMAGE_FIT };
+  if (!icon) return deps.signal?.aborted ? cutShort("aborted") : bare;
+  return { ...bare, image: icon, imageFit: LINK_PREVIEW_IMAGE_FIT };
 }
 
 /** The icon the site's own home page names, read the same safe way; undefined when it cannot be had. */

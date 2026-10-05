@@ -34,6 +34,7 @@ describe("desktop preload bridge", () => {
     expect(Object.keys(bridge).sort()).toEqual([
       "localSettings",
       "oauth",
+      "pageHead",
       "platform",
       "update",
       "window",
@@ -48,6 +49,7 @@ describe("desktop preload bridge", () => {
 
     await bridge.oauth.open?.("https://provider.example.com/authorize");
     await bridge.oauth.cancel?.("https://provider.example.com/authorize");
+    await bridge.pageHead?.read("https://news.example.com/a");
     await bridge.window.close();
     await bridge.window.minimize();
     await bridge.window.toggleMaximize();
@@ -59,6 +61,7 @@ describe("desktop preload bridge", () => {
     expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
       "desktop.oauth.open",
       "desktop.oauth.cancel",
+      "desktop.pageHead.read",
       "desktop.window.close",
       "desktop.window.minimize",
       "desktop.window.toggleMaximize",
@@ -76,6 +79,7 @@ describe("desktop preload bridge", () => {
     expect(Object.keys(bridge).sort()).toEqual([
       "localSettings",
       "oauth",
+      "pageHead",
       "platform",
       "update",
       "window",

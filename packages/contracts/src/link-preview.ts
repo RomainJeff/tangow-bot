@@ -3,6 +3,10 @@ import { Id } from "./ids.js";
 
 export const LINK_PREVIEW_URL_MAX_LENGTH = 2048;
 export const LINK_PREVIEW_TITLE_MAX_LENGTH = 300;
+/** The longest start of a page (up to `</head>`) a device may send, in characters (one per byte). */
+export const LINK_PREVIEW_PAGE_HEAD_MAX_LENGTH = 512 * 1024;
+/** The Content-Type that came with that head. */
+export const LINK_PREVIEW_PAGE_HEAD_TYPE_MAX_LENGTH = 200;
 export const LINK_PREVIEW_THUMBNAIL_PREFIX = "data:image/webp;base64,";
 /**
  * Length cap of the composer thumbnail's data URL, in characters: base64 adds a third, so 70 000
@@ -104,5 +108,12 @@ export const LinkPreviewDraftSchema = z.object({
     .optional(),
   /** `contain` when the thumbnail is a site icon: drawn whole, not cropped. */
   thumbnailFit: z.literal(LINK_PREVIEW_IMAGE_FIT).optional(),
+  /**
+   * True when the site refused the server (or answered with a passing 429 or 5xx) and the
+   * sender's own device may read the page and send its head back as `pageHead`. It says nothing
+   * more: a refused address, a missing page or a limit never set it. A draft with no title and
+   * no thumbnail shows nothing; it is how a refusal with no usable fallback carries this flag.
+   */
+  deviceReadable: z.literal(true).optional(),
 });
 export type LinkPreviewDraft = z.infer<typeof LinkPreviewDraftSchema>;

@@ -26,6 +26,7 @@ function composer(
     cached?: object | null;
     reads?: { space: number; actor: number };
     read?: NonNullable<LinkPreviewApiDeps["linkPreview"]>["read"];
+    readFromHead?: NonNullable<LinkPreviewApiDeps["linkPreview"]>["readFromHead"];
     inFlight?: NonNullable<LinkPreviewApiDeps["linkPreview"]>["inFlight"];
     bytes?: Uint8Array;
   } = {},
@@ -68,13 +69,21 @@ function composer(
     options.read ??
       (async () => ({ ok: true as const, format: "compact" as const, title: "A page" })),
   );
+  const readFromHead = vi.fn(
+    options.readFromHead ??
+      (async () => ({ ok: true as const, format: "compact" as const, title: "From the head" })),
+  );
   const deps = {
     prisma: prisma as unknown as PrismaClient,
     artifacts: artifacts as never,
     events: { notify: vi.fn() },
-    linkPreview: { read, ...(options.inFlight ? { inFlight: options.inFlight } : {}) },
+    linkPreview: {
+      read,
+      readFromHead,
+      ...(options.inFlight ? { inFlight: options.inFlight } : {}),
+    },
   } satisfies LinkPreviewApiDeps;
-  return { deps, prisma, tx, artifacts, read };
+  return { deps, prisma, tx, artifacts, read, readFromHead };
 }
 
 const fresh = { expiresAt: new Date(Date.now() + 3_600_000), status: "ok", imageBytes: 0 };
@@ -218,15 +227,15 @@ describe("links.preview: what it answers", () => {
       "blocked_address",
       "unsafe_url",
       "no_title",
-      "timeout",
       "http_error",
       "unsupported_type",
-      "rate_limited",
+      "login_page",
+      "too_large",
     ] as const;
     const answers = [];
     for (const reason of reasons) {
       const { deps } = composer({
-        read: async () => ({ ok: false, reason, transient: reason === "timeout" }),
+        read: async () => ({ ok: false, reason, transient: false }),
       });
       answers.push(
         await previewLinkForComposer(
@@ -261,6 +270,121 @@ describe("links.preview: what it answers", () => {
       ),
     ).resolves.toEqual({ format: "compact", title: "Cached" });
     expect(read).not.toHaveBeenCalled();
+  });
+});
+
+describe("links.preview: the sender's device may read (spec 22)", () => {
+  const ask = (deps: LinkPreviewApiDeps, pageHead?: string, pageHeadType?: string) =>
+    previewLinkForComposer(
+      deps,
+      actor,
+      {
+        threadId: "thread-1",
+        url: URL_TO_PREVIEW,
+        ...(pageHead ? { pageHead } : {}),
+        ...(pageHeadType ? { pageHeadType } : {}),
+      },
+      new AbortController().signal,
+    );
+
+  it("flags the fallback card of a site that refused the server", async () => {
+    const { deps } = composer({
+      read: async () => ({ ok: true, format: "compact", title: "Fallback", restricted: true }),
+    });
+    await expect(ask(deps)).resolves.toEqual({
+      format: "compact",
+      title: "Fallback",
+      deviceReadable: true,
+    });
+  });
+
+  it("flags a refusal that left no card, and a failure that may pass, with a draft that shows nothing", async () => {
+    for (const [reason, transient] of [
+      ["access_denied", false],
+      ["rate_limited", true],
+      ["server_error", true],
+    ] as const) {
+      const { deps } = composer({ read: async () => ({ ok: false, reason, transient }) });
+      await expect(ask(deps), reason).resolves.toEqual({
+        format: "compact",
+        deviceReadable: true,
+      });
+    }
+  });
+
+  it("never flags a timeout, a network or DNS error: nothing the site answered", async () => {
+    for (const reason of ["timeout", "network", "aborted", "busy"] as const) {
+      const { deps } = composer({ read: async () => ({ ok: false, reason, transient: true }) });
+      await expect(ask(deps), reason).resolves.toBeNull();
+    }
+  });
+
+  it("does not flag a readable page", async () => {
+    const { deps } = composer();
+    const draft = await ask(deps);
+    expect(draft).toEqual({ format: "compact", title: "A page" });
+  });
+
+  it("uses a pageHead only while the server is still refused, and answers with the card it makes", async () => {
+    const restricted = { ...fresh, format: "compact", title: "Fallback", source: "restricted" };
+    const { deps, read, readFromHead, tx } = composer({ cached: restricted });
+
+    const draft = await ask(deps, "<head><title>Caf\u00e9</title></head>");
+
+    expect(draft).toEqual({ format: "compact", title: "From the head" });
+    expect(read).not.toHaveBeenCalled();
+    expect(readFromHead).toHaveBeenCalledTimes(1);
+    const [url, bytes] = readFromHead.mock.calls[0] ?? [];
+    expect(url).toBe(URL_TO_PREVIEW);
+    // One character per byte: the device's text is turned back into its bytes.
+    expect(Buffer.from(bytes as Uint8Array).toString("latin1")).toBe(
+      "<head><title>Caf\u00e9</title></head>",
+    );
+    expect(tx.linkPreviewCache.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ source: "device" }) }),
+    );
+  });
+
+  it("hands the response's Content-Type to the head reader, for its charset", async () => {
+    const restricted = { ...fresh, format: "compact", title: "Fallback", source: "restricted" };
+    const { deps, readFromHead } = composer({ cached: restricted });
+    await ask(deps, "<head></head>", "text/html; charset=iso-8859-1");
+    expect(readFromHead.mock.calls[0]?.[3]).toBe("text/html; charset=iso-8859-1");
+  });
+
+  it("deletes the image of a device-read card the cache does not keep, once the draft is made", async () => {
+    // No cache entry: the read ends in a passing 503, so the head's card is not remembered.
+    const { deps, artifacts } = composer({
+      read: async () => ({ ok: false, reason: "server_error", transient: true }),
+      readFromHead: async () => ({
+        ok: true,
+        format: "compact",
+        title: "From the head",
+        image: { bytes: Buffer.from(TINY_WEBP), width: 1, height: 1 },
+      }),
+      bytes: TINY_WEBP,
+    });
+    const draft = await ask(deps, "<head></head>");
+    expect(draft).toMatchObject({ title: "From the head" });
+    expect(draft?.thumbnail).toBeDefined();
+    expect(artifacts.put).toHaveBeenCalledTimes(1);
+    expect(artifacts.remove).toHaveBeenCalledWith("blob-new", expect.anything());
+  });
+
+  it("ignores a pageHead for a page the server can read", async () => {
+    const readable = { ...fresh, format: "compact", title: "Server", source: "server" };
+    const { deps, readFromHead } = composer({ cached: readable });
+    await expect(ask(deps, "<head><title>Forged</title></head>")).resolves.toEqual({
+      format: "compact",
+      title: "Server",
+    });
+    expect(readFromHead).not.toHaveBeenCalled();
+  });
+
+  it("still checks the thread first, whatever the pageHead", async () => {
+    const { deps, readFromHead } = composer({ thread: null });
+    await expect(ask(deps, "<head></head>")).rejects.toBeInstanceOf(IsolationError);
+    expect(readFromHead).not.toHaveBeenCalled();
   });
 });
 

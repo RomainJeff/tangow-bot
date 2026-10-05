@@ -86,7 +86,12 @@ import {
   IntegrationProviderConfigSchema,
   IntegrationSetupStateSchema,
 } from "./integration-settings.js";
-import { LINK_PREVIEW_URL_MAX_LENGTH, LinkPreviewDraftSchema } from "./link-preview.js";
+import {
+  LINK_PREVIEW_PAGE_HEAD_MAX_LENGTH,
+  LINK_PREVIEW_PAGE_HEAD_TYPE_MAX_LENGTH,
+  LINK_PREVIEW_URL_MAX_LENGTH,
+  LinkPreviewDraftSchema,
+} from "./link-preview.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
@@ -829,9 +834,22 @@ export const appContract = {
     query: oc.input(z.object({ q: z.string().max(200) })).output(SearchQueryOutputSchema),
   },
   links: {
-    /** Composer preview of a link about to be sent; null when there is nothing to show. */
+    /**
+     * Composer preview of a link about to be sent; null when there is nothing to show.
+     * `pageHead` is the start of the page as the sender's device read it, one character per byte
+     * (`latin1`), sent only after a draft said `deviceReadable`: the server uses it only if the site
+     * still refuses the server for this link, and otherwise ignores it.
+     */
     preview: oc
-      .input(z.object({ threadId: Id, url: z.string().max(LINK_PREVIEW_URL_MAX_LENGTH) }))
+      .input(
+        z.object({
+          threadId: Id,
+          url: z.string().max(LINK_PREVIEW_URL_MAX_LENGTH),
+          pageHead: z.string().max(LINK_PREVIEW_PAGE_HEAD_MAX_LENGTH).optional(),
+          /** The Content-Type the device got the head with: its charset is honored like a fetched page's. */
+          pageHeadType: z.string().max(LINK_PREVIEW_PAGE_HEAD_TYPE_MAX_LENGTH).optional(),
+        }),
+      )
       .output(LinkPreviewDraftSchema.nullable()),
   },
   messages: {

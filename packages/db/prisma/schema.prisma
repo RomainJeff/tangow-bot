@@ -995,6 +995,10 @@ model LinkPreviewCache {
   imageBytes  Int      @default(0)
   /// "contain" when the image is the site's icon (drawn whole); null otherwise.
   imageFit    String?
+  /// "server" (read by the server), "restricted" (the site refused the server: a fallback card or
+  /// a bare failure) or "device" (the head was read by the sender's device and the server fetched
+  /// the image).
+  source      String   @default("server")
   createdAt   DateTime @default(now())
   expiresAt   DateTime
 

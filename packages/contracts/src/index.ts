@@ -10,6 +10,7 @@ export * from "./link-preview.js";
 export * from "./local-settings.js";
 export * from "./mcp.js";
 export * from "./openai-compatible-ui.js";
+export * from "./page-head-reader.js";
 export * from "./reactions.js";
 export * from "./rpc.js";
 export * from "./runs.js";

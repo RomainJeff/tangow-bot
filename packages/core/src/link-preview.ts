@@ -161,51 +161,9 @@ export function hasSecretParam(url: string): boolean {
   }
 }
 
-const AUTHENTICATION_HOSTS: ReadonlySet<string> = new Set(["accounts.google.com"]);
-const AUTHENTICATION_HOST_LABELS: ReadonlySet<string> = new Set([
-  "auth",
-  "authenticate",
-  "authentication",
-  "authenticator",
-  "idp",
-  "identity",
-  "login",
-  "oauth",
-  "signin",
-  "sso",
-]);
-const AUTHENTICATION_PATH_SEGMENTS: ReadonlySet<string> = new Set([
-  "auth",
-  "authenticate",
-  "authorize",
-  "login",
-  "saml",
-  "sign-in",
-  "sign_in",
-  "signin",
-  "sso",
-]);
-
-/**
- * True when a link leads to a sign-in page, which never gets a preview: Google's account host,
- * a host label that names authentication (`login.example.com`), or a final path segment that does
- * (`/sso`, `/a/sign-in`). A path that merely contains such a word (`/blog/login-tips`) is a
- * normal page. Applied to the link as written and to every redirect hop of the server read.
- */
-export function isAuthenticationDestination(url: string): boolean {
-  try {
-    const { hostname, pathname } = new URL(url);
-    const host = hostname.toLowerCase();
-    if (AUTHENTICATION_HOSTS.has(host)) return true;
-    if (host.split(".").some((label) => AUTHENTICATION_HOST_LABELS.has(label))) return true;
-    const last = pathname.split("/").filter(Boolean).at(-1);
-    return (
-      last !== undefined && AUTHENTICATION_PATH_SEGMENTS.has(decodeURIComponent(last).toLowerCase())
-    );
-  } catch {
-    return false;
-  }
-}
+// One implementation, in contracts: the desktop main process (which cannot import this package)
+// applies the same rule to the pages its device reads.
+export { isAuthenticationDestination } from "@rakazo/contracts";
 
 /**
  * A page title made safe to render: control, bidirectional, zero-width and tag characters are

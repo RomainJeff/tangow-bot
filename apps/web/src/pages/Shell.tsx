@@ -26,7 +26,7 @@ import {
   ATTACHMENT_MAX_COUNT,
   normalizeCreateBotProfile,
 } from "@rakazo/contracts";
-import type { ComposerMention } from "@rakazo/core";
+import type { ComposerMention, ComposerPageHead } from "@rakazo/core";
 import {
   attachmentsForThread,
   buildComposerMentionOptions,
@@ -2051,9 +2051,21 @@ export function ShellPage() {
   );
   const composerThreadId = inGroup ? activeGroup?.threadId : active?.threadId;
   const previewLink = useCallback(
-    (url: string, signal: AbortSignal) =>
+    (url: string, signal: AbortSignal, page?: ComposerPageHead) =>
       composerThreadId
-        ? rpc.links.preview({ threadId: composerThreadId, url }, { signal })
+        ? rpc.links.preview(
+            {
+              threadId: composerThreadId,
+              url,
+              ...(page
+                ? {
+                    pageHead: page.head,
+                    ...(page.contentType ? { pageHeadType: page.contentType } : {}),
+                  }
+                : {}),
+            },
+            { signal },
+          )
         : Promise.resolve(null),
     [composerThreadId],
   );

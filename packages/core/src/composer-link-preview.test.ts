@@ -1,5 +1,6 @@
 import type { LinkPreviewDraft } from "@rakazo/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ComposerPageHead } from "./composer-link-preview.js";
 import {
   acceptPreviewThumbnail,
   COMPOSER_LINK_PREVIEW_DEBOUNCE_MS,
@@ -339,5 +340,164 @@ describe("createComposerLinkPreview", () => {
     controller.update("");
     await wait(5_000);
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("createComposerLinkPreview: the device reads a page the server was refused (spec 22)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const URL_ = "https://news.example.com/article-title-here";
+  const fallback: LinkPreviewDraft = {
+    format: "compact",
+    title: "Article title here",
+    deviceReadable: true,
+  };
+  const full: LinkPreviewDraft = { format: "compact", title: "The real title", thumbnail: THUMB };
+  const wait = (ms: number) => vi.advanceTimersByTimeAsync(ms);
+  const PAGE = {
+    head: "<head><title>The real title</title>",
+    contentType: "text/html; charset=utf-8",
+  };
+
+  function setup(options: {
+    first?: LinkPreviewDraft | null;
+    second?: LinkPreviewDraft | null | Error;
+    head?: (url: string, signal: AbortSignal) => Promise<ComposerPageHead | null | undefined>;
+    withDevice?: boolean;
+  }) {
+    const read = vi.fn(async (_url: string, _signal: AbortSignal, page?: ComposerPageHead) => {
+      if (page === undefined) return options.first === undefined ? fallback : options.first;
+      if (options.second instanceof Error) throw options.second;
+      return options.second === undefined ? full : options.second;
+    });
+    const readPageHead = vi.fn(options.head ?? (async () => PAGE));
+    const controller = createComposerLinkPreview({
+      read,
+      ...(options.withDevice === false ? {} : { readPageHead }),
+    });
+    const views: ComposerLinkPreviewView[] = [];
+    controller.subscribe(() => views.push(controller.getView()));
+    return { controller, read, readPageHead, views };
+  }
+
+  it("shows the fallback, reads the page on the device, asks again with its head and shows the better card", async () => {
+    const { controller, read, readPageHead, views } = setup({});
+    controller.update(`${URL_} `);
+    await wait(800);
+    await wait(0);
+
+    expect(readPageHead).toHaveBeenCalledOnce();
+    expect(readPageHead.mock.calls[0]?.[0]).toBe(URL_);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(read.mock.calls[1]?.[2]).toEqual(PAGE);
+    expect(views.map((view) => (view.status === "ready" ? view.title : view.status))).toEqual([
+      "loading",
+      "Article title here",
+      "The real title",
+    ]);
+    expect(controller.getView()).toMatchObject({ status: "ready", thumbnail: THUMB });
+  });
+
+  it("never reads on the device when the server's draft does not say so", async () => {
+    for (const first of [{ format: "compact" as const, title: "Readable page" }, null]) {
+      const { controller, read, readPageHead } = setup({ first });
+      controller.update(`${URL_} `);
+      await wait(800);
+      await wait(0);
+      expect(readPageHead).not.toHaveBeenCalled();
+      expect(read).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("never reads on the device in a plain browser, which gives it no reader", async () => {
+    const { controller, read, readPageHead } = setup({ withDevice: false });
+    controller.update(`${URL_} `);
+    await wait(800);
+    await wait(0);
+    expect(readPageHead).not.toHaveBeenCalled();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(controller.getView()).toMatchObject({ status: "ready", title: "Article title here" });
+  });
+
+  it("keeps the fallback, silently, when the device cannot read the page", async () => {
+    for (const head of [
+      async () => null,
+      async () => ({ head: "" }),
+      async () => undefined,
+      async () => {
+        throw new Error("blocked");
+      },
+    ]) {
+      const { controller, read, views } = setup({ head });
+      controller.update(`${URL_} `);
+      await wait(800);
+      await wait(0);
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(controller.getView()).toMatchObject({ status: "ready", title: "Article title here" });
+      expect(views.at(-1)).toMatchObject({ status: "ready" });
+    }
+  });
+
+  it("keeps the fallback when the server refuses the head, or answers with nothing", async () => {
+    for (const second of [new Error("503"), null, { format: "compact" as const }]) {
+      const { controller } = setup({ second });
+      controller.update(`${URL_} `);
+      await wait(800);
+      await wait(0);
+      expect(controller.getView()).toMatchObject({ status: "ready", title: "Article title here" });
+    }
+  });
+
+  it("keeps loading while the device reads when the server had no card to show, and ends on the device's", async () => {
+    let release: (page: ComposerPageHead) => void = () => undefined;
+    const { controller } = setup({
+      first: { format: "compact", deviceReadable: true },
+      head: () => new Promise((resolve) => (release = resolve)),
+    });
+    controller.update(`${URL_} `);
+    await wait(800);
+    await wait(0);
+    expect(controller.getView()).toEqual({ status: "loading", url: URL_ });
+    release(PAGE);
+    await wait(0);
+    expect(controller.getView()).toMatchObject({ status: "ready", title: "The real title" });
+  });
+
+  it("shows nothing when the device cannot read it and the server had no card", async () => {
+    const { controller } = setup({
+      first: { format: "compact", deviceReadable: true },
+      head: async () => null,
+    });
+    controller.update(`${URL_} `);
+    await wait(800);
+    await wait(0);
+    expect(controller.getView()).toEqual({ status: "idle" });
+  });
+
+  it("drops a device read that outlived its link", async () => {
+    let release: (page: ComposerPageHead) => void = () => undefined;
+    const { controller, read } = setup({
+      head: () => new Promise((resolve) => (release = resolve)),
+    });
+    controller.update(`${URL_} `);
+    await wait(800);
+    await wait(0);
+    controller.update("something else entirely");
+    release({ head: "<head><title>Late</title>" });
+    await wait(0);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(controller.getView()).toEqual({ status: "idle" });
+  });
+
+  it("does not read again for a draft whose preview was removed", async () => {
+    const { controller, readPageHead } = setup({});
+    controller.update(`${URL_} `);
+    await wait(800);
+    await wait(0);
+    controller.remove();
+    controller.update(`${URL_} and more`);
+    await wait(2_000);
+    expect(readPageHead).toHaveBeenCalledOnce();
   });
 });

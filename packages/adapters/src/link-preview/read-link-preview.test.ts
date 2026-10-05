@@ -5,6 +5,7 @@ import {
   decideLinkPreviewFormat,
   type LinkPreviewReadDeps,
   readLinkPreview,
+  readLinkPreviewFromHead,
 } from "./read-link-preview.js";
 import { createLinkPreviewFetcherForTests } from "./safe-fetch-for-tests.js";
 
@@ -546,7 +547,12 @@ describe("readLinkPreview: a site that refuses the reader (CA 73-76)", () => {
 
   it.each([401, 402, 403, 451])("does it for a %i", async (status) => {
     const { deps: d } = deps((url) => (url === CLOSED ? refusal(status) : home("")));
-    expect(await readLinkPreview(CLOSED, d)).toEqual({ ok: true, format: "compact", title: TITLE });
+    expect(await readLinkPreview(CLOSED, d)).toEqual({
+      ok: true,
+      format: "compact",
+      title: TITLE,
+      restricted: true,
+    });
   });
 
   it("never shows the title of the refusal page", async () => {
@@ -571,6 +577,7 @@ describe("readLinkPreview: a site that refuses the reader (CA 73-76)", () => {
         ok: true,
         format: "compact",
         title: TITLE,
+        restricted: true,
       });
       expect(requests).toEqual([CLOSED, HOME]);
     }
@@ -580,14 +587,24 @@ describe("readLinkPreview: a site that refuses the reader (CA 73-76)", () => {
     const { deps: d } = deps((url) =>
       url === CLOSED ? refusal() : url === HOME ? home() : new Response("gone", { status: 404 }),
     );
-    expect(await readLinkPreview(CLOSED, d)).toEqual({ ok: true, format: "compact", title: TITLE });
+    expect(await readLinkPreview(CLOSED, d)).toEqual({
+      ok: true,
+      format: "compact",
+      title: TITLE,
+      restricted: true,
+    });
   });
 
   it("uses only the icon rules: no SVG, no guessed favicon", async () => {
     const { deps: d, requests } = deps((url) =>
       url === CLOSED ? refusal() : home(`<link rel="icon" sizes="any" href="/i.svg">`),
     );
-    expect(await readLinkPreview(CLOSED, d)).toEqual({ ok: true, format: "compact", title: TITLE });
+    expect(await readLinkPreview(CLOSED, d)).toEqual({
+      ok: true,
+      format: "compact",
+      title: TITLE,
+      restricted: true,
+    });
     expect(requests).toEqual([CLOSED, HOME]);
   });
 
@@ -680,5 +697,98 @@ describe("readLinkPreview: a site that refuses the reader (CA 73-76)", () => {
       const headers = init?.headers as Record<string, string>;
       expect(headers["user-agent"]).toMatch(/RakazoLinkPreview/);
     }
+  });
+});
+
+describe("readLinkPreviewFromHead: the head a device read", () => {
+  const bytes = (text: string, encoding: "utf8" | "latin1" = "utf8") => Buffer.from(text, encoding);
+
+  it("parses it like a fetched page and fetches the image itself, for a large card", async () => {
+    const big = await png(1200, 630);
+    const { deps: d, requests } = deps(() => imageResponse(big));
+    const result = await readLinkPreviewFromHead(ARTICLE, bytes(articleHead("/og.png")), d);
+    expect(result).toMatchObject({ ok: true, format: "large", title: "Story & more" });
+    // One request, for the image the head names, resolved against the link: no page request.
+    expect(requests).toEqual(["https://news.example.test/og.png"]);
+  });
+
+  it("resolves the image against a valid <base href>, and ignores one that is not http(s)", async () => {
+    const small = await png(300, 300);
+    const based = deps(() => imageResponse(small));
+    await readLinkPreviewFromHead(
+      ARTICLE,
+      bytes(
+        '<head><base href="https://cdn.example.test/assets/"><title>T</title><meta property="og:image" content="og.png"></head>',
+      ),
+      based.deps,
+    );
+    expect(based.requests).toEqual(["https://cdn.example.test/assets/og.png"]);
+    const bad = deps(() => imageResponse(small));
+    await readLinkPreviewFromHead(
+      ARTICLE,
+      bytes(
+        '<head><base href="javascript:alert(1)"><title>T</title><meta property="og:image" content="og.png"></head>',
+      ),
+      bad.deps,
+    );
+    expect(bad.requests).toEqual(["https://news.example.test/og.png"]);
+  });
+
+  it("falls back to the icon the head names, drawn whole, and never makes it a large card", async () => {
+    const icon = await png(180, 180);
+    const { deps: d, requests } = deps(() => imageResponse(icon));
+    const result = await readLinkPreviewFromHead(
+      ARTICLE,
+      bytes('<head><title>T</title><link rel="apple-touch-icon" href="/touch.png"></head>'),
+      d,
+    );
+    expect(result).toMatchObject({ ok: true, format: "compact", title: "T", imageFit: "contain" });
+    expect(requests).toEqual(["https://news.example.test/touch.png"]);
+  });
+
+  it("decodes the charset the head declares, like the server does", async () => {
+    const { deps: d } = deps(() => new Response("no", { status: 404 }));
+    const result = await readLinkPreviewFromHead(
+      ARTICLE,
+      bytes('<head><meta charset="iso-8859-1"><title>Caf\u00e9 du jour</title></head>', "latin1"),
+      d,
+    );
+    expect(result).toMatchObject({ ok: true, format: "compact", title: "Café du jour" });
+  });
+
+  it("cleans the title the way a fetched title is cleaned", async () => {
+    const { deps: d } = deps(() => new Response("no", { status: 404 }));
+    const result = await readLinkPreviewFromHead(
+      ARTICLE,
+      bytes(`<head><title>  Hello \u202eevil\u200b \n  &amp; world  </title></head>`),
+      d,
+    );
+    expect(result).toMatchObject({ ok: true, title: "Hello evil & world" });
+  });
+
+  it("gives a compact card without thumbnail when the image cannot be had, and nothing without a title", async () => {
+    const { deps: d } = deps(() => new Response("gone", { status: 404 }));
+    expect(await readLinkPreviewFromHead(ARTICLE, bytes(articleHead("/og.png")), d)).toEqual({
+      ok: true,
+      format: "compact",
+      title: "Story & more",
+    });
+    expect(await readLinkPreviewFromHead(ARTICLE, bytes("<head></head>"), d)).toMatchObject({
+      ok: false,
+      reason: "no_title",
+    });
+  });
+
+  it("never asks for a private image address the device-supplied head names", async () => {
+    const { deps: d, requests } = deps(() => imageResponse(new Uint8Array([1])));
+    const result = await readLinkPreviewFromHead(
+      ARTICLE,
+      bytes(
+        '<head><title>T</title><meta property="og:image" content="http://127.0.0.1/secret.png"></head>',
+      ),
+      d,
+    );
+    expect(result).toMatchObject({ ok: true, format: "compact", title: "T" });
+    expect(requests).toEqual([]);
   });
 });
