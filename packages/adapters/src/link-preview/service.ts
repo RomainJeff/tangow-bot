@@ -5,6 +5,7 @@ import {
   type CachedLinkPreview,
   findCachedLinkPreview,
   type LinkPreviewReadSource,
+  linkPreviewDeviceKeyHash,
   linkPreviewKeyHash,
   type PrismaClient,
   reserveLinkPreviewRead,
@@ -126,6 +127,21 @@ export async function resolveLinkPreview(
   return (await resolveLinkPreviewDetailed(deps, scope, url, signal, deadlineAt)).preview;
 }
 
+/**
+ * The card this person's own device read for a link the site refuses the server, if one is still
+ * fresh. Only ever theirs: another member's head never reaches this person's messages.
+ */
+async function findOwnDeviceRead(
+  deps: LinkPreviewServiceDeps,
+  scope: LinkPreviewScope,
+  normalized: string,
+  now: Date,
+): Promise<Extract<CachedLinkPreview, { status: "ok" }> | null> {
+  const keyHash = linkPreviewDeviceKeyHash(scope.spaceId, scope.userId, normalized);
+  const cached = await findCachedLinkPreview(deps.prisma, scope.spaceId, keyHash, now);
+  return cached?.status === "ok" && cached.source === "device" ? cached : null;
+}
+
 function resolvedOf(entry: Extract<CachedLinkPreview, { status: "ok" }>): ResolvedLinkPreview {
   return {
     format: entry.format,
@@ -151,10 +167,13 @@ export async function resolveLinkPreviewDetailed(
 
     const cached = await findCachedLinkPreview(deps.prisma, scope.spaceId, keyHash, now);
     if (cached) {
+      const refused = cached.source === "restricted";
+      const device = refused ? await findOwnDeviceRead(deps, scope, normalized, now) : null;
+      if (device) return { preview: resolvedOf(device), deviceReadable: false, refused };
       return {
         preview: cached.status === "ok" ? resolvedOf(cached) : null,
-        deviceReadable: cached.source === "restricted",
-        refused: cached.source === "restricted",
+        deviceReadable: refused,
+        refused,
       };
     }
 
@@ -177,6 +196,7 @@ export async function resolveLinkPreviewDetailed(
     });
     const refused = result.ok ? result.restricted === true : result.reason === "access_denied";
     const source = refused ? ("restricted" as const) : undefined;
+    const device = refused ? await findOwnDeviceRead(deps, scope, normalized, now) : null;
     const deviceReadable =
       refused || (!result.ok && result.transient && DEVICE_RETRY_REASONS.has(result.reason));
     if (!result.ok) {
@@ -190,9 +210,11 @@ export async function resolveLinkPreviewDetailed(
           now,
         );
       }
+      if (device) return { preview: resolvedOf(device), deviceReadable: false, refused };
       return { preview: null, deviceReadable, refused };
     }
     const entry = await storeResult(deps, scope, keyHash, result, now, source);
+    if (device) return { preview: resolvedOf(device), deviceReadable: false, refused };
     return entry ? { preview: resolvedOf(entry), deviceReadable, refused } : NOTHING;
   } catch (error) {
     // The error name only: Prisma and fetch errors can carry the request.
@@ -209,8 +231,9 @@ export async function resolveLinkPreviewDetailed(
  * this link (a fresh refusal in this space's cache, or a read that ends in one now): for a site
  * the server can read, an unsafe, secret or sign-in link, or an oversized head it is ignored and
  * the answer is the server's own. Parsed like a fetched page; the image is fetched and re-encoded
- * here. The result is cached for the space (source `device`), so the message job and a bot's later
- * link to the same page reuse it. Never throws.
+ * here. The result is cached for this person only (source `device`, their own key), so the job of
+ * their message and a bot's later link in their own threads reuse it; the space's entry stays the
+ * server's refusal, so no other member ever gets a card a device described. Never throws.
  */
 export async function resolveLinkPreviewWithDeviceHead(
   deps: LinkPreviewServiceDeps,
@@ -252,8 +275,8 @@ export async function resolveLinkPreviewWithDeviceHead(
     );
     // A head that gives nothing leaves the fallback in place, uncached and unchanged.
     if (!result.ok) return server;
-    const keyHash = linkPreviewKeyHash(scope.spaceId, normalized);
-    // Only a refusal by the site itself lets a device-read card be remembered for the space: while
+    const keyHash = linkPreviewDeviceKeyHash(scope.spaceId, scope.userId, normalized);
+    // Only a refusal by the site itself lets a device-read card be remembered for this person: while
     // the site merely fails for now (429, 5xx) the card serves this draft and nothing else.
     const entry = await storeResult(deps, scope, keyHash, result, now, "device", server.refused);
     if (!entry) return server;

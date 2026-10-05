@@ -25,9 +25,24 @@ export function linkPreviewKeyHash(spaceId: string, normalizedUrl: string): stri
 }
 
 /**
+ * The key of a card one person's device read: theirs alone, so a head a member sends never
+ * becomes another member's card or a bot's card in someone else's thread.
+ */
+export function linkPreviewDeviceKeyHash(
+  spaceId: string,
+  userId: string,
+  normalizedUrl: string,
+): string {
+  return createHash("sha256")
+    .update(`device\n${spaceId}\n${userId}\n${normalizedUrl}`)
+    .digest("hex");
+}
+
+/**
  * Where an entry came from. `restricted`: the site refused the server (401, 402, 403, 451), so the
  * entry is a fallback card or a bare failure, and the sender's device may still read the page.
- * `device`: the head was read by the sender's device; the server fetched the image. Absent means
+ * `device`: the head was read by the sender's device and the server fetched the image; such an
+ * entry is stored under that person's own key (`linkPreviewDeviceKeyHash`). Absent means
  * `server`.
  */
 export type LinkPreviewCacheSource = "server" | "restricted" | "device";

@@ -164,14 +164,12 @@ describe("the server takes a device's page head (CA 84)", () => {
     // No request for the page again (the cached refusal is the proof); the server asked for the
     // image the head names, and only that.
     expect(requests).toEqual([IMAGE]);
-    expect(cacheRows()).toHaveLength(1);
-    expect(cacheRows()[0]).toMatchObject({
-      status: "ok",
-      source: "device",
-      title: "Le vrai titre",
-    });
-    const key = cacheRows()[0]?.imageKey as string;
-    expect(deps.artifacts.keys()).toEqual([key]);
+    // The space keeps the server's refusal; the device's card is a second entry, this person's own.
+    expect(cacheRows()).toHaveLength(2);
+    expect(cacheRows().find((row) => row.source === "restricted")).toBeDefined();
+    const device = cacheRows().find((row) => row.source === "device");
+    expect(device).toMatchObject({ status: "ok", title: "Le vrai titre" });
+    expect(deps.artifacts.keys()).toContain(device?.imageKey as string);
   });
 
   it("re-checks the refusal itself when nothing is cached, and keeps a card made for a passing failure out of the cache (429, 5xx)", async () => {
@@ -198,7 +196,9 @@ describe("the server takes a device's page head (CA 84)", () => {
       const answer = await resolveLinkPreviewWithDeviceHead(deps, scope, ARTICLE, HEAD);
       expect(answer).toMatchObject({ refused: true });
       expect(answer).not.toHaveProperty("ephemeralImageKey");
-      expect(cacheRows()).toMatchObject([{ source: "device", title: "Le vrai titre" }]);
+      expect(cacheRows().find((row) => row.source === "device")).toMatchObject({
+        title: "Le vrai titre",
+      });
     }
   });
 
@@ -320,7 +320,7 @@ describe("the server takes a device's page head (CA 84)", () => {
   });
 });
 
-describe("the cache serves the device's card to everything else in the space (CA 85)", () => {
+describe("the device's card serves its reader's own messages and threads, and no one else (CA 85)", () => {
   const text = (value: string) => ({ kind: "text", text: value });
   const card = (blocks: unknown[] | undefined) =>
     blocks?.find((block) => (block as { kind?: string }).kind === "link_preview") as
@@ -366,6 +366,28 @@ describe("the cache serves the device's card to everything else in the space (CA
     await runLinkPreviewJob(deps, { runId: "run-1" });
 
     expect(card(db.blocksOf("final"))).toMatchObject({ title: "Le vrai titre" });
+    expect(requests).toEqual([]);
+  });
+
+  it("does not give it to another member of the space, whose message keeps the server's fallback", async () => {
+    const { db, deps, requests } = await withDeviceCard();
+    db.seedThread({ id: "thread-3", spaceId: "space-1", userId: "user-2", botId: "bot-1" });
+    db.seedMessage({ id: "m3", threadId: "thread-3", blocks: [text(`look ${ARTICLE}`)] });
+    db.seedRun({ id: "run-3", threadId: "thread-3" });
+    db.seedMessage({
+      id: "final-3",
+      threadId: "thread-3",
+      role: "bot",
+      runId: "run-3",
+      blocks: [text(`Source: ${ARTICLE}`)],
+    });
+
+    await runLinkPreviewJob(deps, { messageId: "m3" });
+    await runLinkPreviewJob(deps, { runId: "run-3" });
+
+    // The space's cached refusal answers: the fallback card, no new request, no device title.
+    expect(card(db.blocksOf("m3"))).toMatchObject({ title: "Le vrai titre du jour" });
+    expect(card(db.blocksOf("final-3"))).toMatchObject({ title: "Le vrai titre du jour" });
     expect(requests).toEqual([]);
   });
 
