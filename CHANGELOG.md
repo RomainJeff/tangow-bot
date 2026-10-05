@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Bots can save complete skills with scripts and reference files.** A bot drafts the skill folder in its workspace and saves it in one step, on every surface; new skills stay visible to that bot only until you share them.
+- **Bots can save and later edit complete skills with scripts and reference files.** A bot drafts the skill folder in its workspace and saves it in one step, then edits a saved skill the same way, on every surface; new skills stay visible to that bot only until you share them.
 
 #### Changed
 
