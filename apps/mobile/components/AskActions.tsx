@@ -10,8 +10,8 @@ import {
   View,
   type ViewProps,
 } from "react-native";
-import { askActionLabel } from "../lib/ask-action-label";
 import Animated, { withTiming } from "react-native-reanimated";
+import { askActionLabel } from "../lib/ask-action-label";
 import { CHAT_MOTION, useChatReducedMotion, usePressScaleStyle } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
