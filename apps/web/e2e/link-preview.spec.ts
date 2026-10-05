@@ -107,3 +107,16 @@ test("link previews render in three formats and never contact the linked site", 
   }
   await captureScreenshot(page, testInfo, "link-preview-phone");
 });
+
+test("the composer's draft card shrinks to a phone-width capsule", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/e2e/fixtures/link-preview.html");
+
+  const composer = await page.getByTestId("composer-bar").boundingBox();
+  const draft = await page.locator('[data-slot="composer-link-preview"]').boundingBox();
+  expect(composer!.width).toBeLessThan(360);
+  expect(draft!.x).toBeGreaterThanOrEqual(composer!.x);
+  expect(draft!.x + draft!.width).toBeLessThanOrEqual(composer!.x + composer!.width);
+  await page.locator('[data-slot="composer-link-preview"]').scrollIntoViewIfNeeded();
+  await captureScreenshot(page, testInfo, "link-preview-composer-phone");
+});

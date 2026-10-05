@@ -1,21 +1,31 @@
 import { isPreviewableUrl, LINK_PREVIEW_TITLE_MAX_LENGTH } from "@rakazo/contracts";
 import { extractLinksFromText, wwwLinkHref } from "./search.js";
 
-/** Query parameter names that mark a link as a secret: never read, cached or logged. */
-const SECRET_PARAM_NAMES: ReadonlySet<string> = new Set([
+/**
+ * Words that mark a query parameter as a secret when its name holds one (`access_token`,
+ * `apiKey`, `X-Goog-Signature`): the link is never read, cached or logged.
+ */
+const SECRET_PARAM_WORDS: ReadonlySet<string> = new Set([
   "token",
   "key",
   "secret",
   "sig",
   "signature",
-  "code",
   "password",
   "auth",
   "session",
   "magic",
   "reset",
   "unsubscribe",
+  "apikey",
+  "credential",
+  "jwt",
+  "otp",
+  "ticket",
 ]);
+
+/** Prefixes of presigned cloud storage links (S3, GCS): every such parameter belongs to one. */
+const SECRET_PARAM_PREFIXES = ["x-amz-", "x-goog-"];
 
 /** The one link a message may preview: its first eligible http(s) or bare `www.` link, outside code. */
 export function firstEligibleLink(text: string): string | undefined {
@@ -148,11 +158,23 @@ export function textWithoutPreviewedLinkLine(text: string, url: string): string 
   return kept.join("\n");
 }
 
-/** True when a query parameter is named like a secret (case-insensitive). */
+function isSecretParamName(name: string): boolean {
+  const lower = name.toLowerCase();
+  // An OAuth grant is `code` alone; `country_code` or `lang_code` are ordinary.
+  if (lower === "code") return true;
+  if (SECRET_PARAM_PREFIXES.some((prefix) => lower.startsWith(prefix))) return true;
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .some((word) => SECRET_PARAM_WORDS.has(word));
+}
+
+/** True when a query parameter is named like a secret, by any word of its name (case-insensitive). */
 export function hasSecretParam(url: string): boolean {
   try {
     for (const name of new URL(url).searchParams.keys()) {
-      if (SECRET_PARAM_NAMES.has(name.toLowerCase())) return true;
+      if (isSecretParamName(name)) return true;
     }
     return false;
   } catch {

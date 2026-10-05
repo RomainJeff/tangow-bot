@@ -31,13 +31,13 @@ describe("desktop.pageHead.read input validation", () => {
     ["an oversized url", `https://news.example.com/${"a".repeat(3000)}`],
   ])("rejects %s without any request", async (_name, input) => {
     fetchPage.mockClear();
-    await expect(reader()(input)).rejects.toThrow("Invalid page request");
+    await expect(reader().read(input)).rejects.toThrow("Invalid page request");
     expect(fetchPage).not.toHaveBeenCalled();
   });
 
   it("returns the head of a public page and its Content-Type, read with the preview reader's User-Agent and no cookies", async () => {
     fetchPage.mockClear();
-    await expect(reader()("https://news.example.com/story")).resolves.toEqual({
+    await expect(reader().read("https://news.example.com/story")).resolves.toEqual({
       head: "<head><title>T</title></head",
       contentType: "text/html; charset=utf-8",
     });
@@ -51,17 +51,21 @@ describe("desktop.pageHead.read input validation", () => {
 
   it("caps the answer at 512 KiB", async () => {
     const huge = vi.fn(async () => html("a".repeat(2 * PAGE_HEAD_MAX_BYTES)));
-    const page = await createPageHeadReader(huge)("https://news.example.com/story");
+    const page = await createPageHeadReader(huge).read("https://news.example.com/story");
     expect(page?.head).toHaveLength(PAGE_HEAD_MAX_BYTES);
   });
 
   it("answers null for a page that cannot be read", async () => {
     const refused = vi.fn(async () => new Response("no", { status: 403 }));
-    await expect(createPageHeadReader(refused)("https://news.example.com/s")).resolves.toBeNull();
+    await expect(
+      createPageHeadReader(refused).read("https://news.example.com/s"),
+    ).resolves.toBeNull();
     const broken = vi.fn(async () => {
       throw new Error("boom");
     });
-    await expect(createPageHeadReader(broken)("https://news.example.com/s")).resolves.toBeNull();
+    await expect(
+      createPageHeadReader(broken).read("https://news.example.com/s"),
+    ).resolves.toBeNull();
   });
 
   it("serves two reads at a time and answers null to a third", async () => {
@@ -74,7 +78,7 @@ describe("desktop.pageHead.read input validation", () => {
           else release.push(() => resolve(html("<head></head>")));
         }),
     );
-    const read = createPageHeadReader(slow);
+    const { read } = createPageHeadReader(slow);
     const first = read("https://news.example.com/1");
     const second = read("https://news.example.com/2");
     await expect(read("https://news.example.com/3")).resolves.toBeNull();
@@ -89,7 +93,7 @@ describe("desktop.pageHead.read input validation", () => {
 
   it("starts at most 20 reads a minute, then again when the minute has passed", async () => {
     let clock = 1_000;
-    const read = createPageHeadReader(fetchPage, { now: () => clock });
+    const { read } = createPageHeadReader(fetchPage, { now: () => clock });
     fetchPage.mockClear();
     for (let index = 0; index < 20; index += 1) {
       await expect(read("https://news.example.com/a")).resolves.not.toBeNull();
@@ -98,6 +102,33 @@ describe("desktop.pageHead.read input validation", () => {
     expect(fetchPage).toHaveBeenCalledTimes(20);
     clock += 60_001;
     await expect(read("https://news.example.com/a")).resolves.not.toBeNull();
+  });
+
+  it("stops a cancelled read and gives its slot to the next link", async () => {
+    const signals: AbortSignal[] = [];
+    const hanging = vi.fn(async (url: string, init: { signal: AbortSignal }) => {
+      if (url.endsWith("/c")) return html("<head><title>C</title></head>");
+      signals.push(init.signal);
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+      });
+    });
+    const { read, cancel } = createPageHeadReader(hanging);
+    const a = read("https://news.example.com/a", "read-a");
+    const b = read("https://news.example.com/b", "read-b");
+    await vi.waitFor(() => expect(signals).toHaveLength(2));
+
+    cancel("read-a");
+    cancel("unknown");
+    await expect(a).resolves.toBeNull();
+    expect(signals.map((signal) => signal.aborted)).toEqual([true, false]);
+    await expect(read("https://news.example.com/c", "read-c")).resolves.toEqual({
+      head: "<head><title>C</title></head",
+      contentType: "text/html; charset=utf-8",
+    });
+
+    cancel("read-b");
+    await expect(b).resolves.toBeNull();
   });
 });
 
@@ -216,7 +247,7 @@ describe("createPageFetch over Electron's request", () => {
 
   it("drives the shared reader end to end: a redirect to a private address is never requested", async () => {
     const { requests, fetchPage } = adapter();
-    const read = createPageHeadReader(fetchPage)("https://news.example.com/story");
+    const read = createPageHeadReader(fetchPage).read("https://news.example.com/story");
     await vi.waitFor(() => expect(requests).toHaveLength(1));
     requests[0]?.emit("redirect", 302, "GET", "http://169.254.169.254/latest");
     await expect(read).resolves.toBeNull();
@@ -240,7 +271,7 @@ describe("every hop is resolved and must be public (M1)", () => {
       "Not a public address",
     );
     expect(requests).toEqual([]);
-    const read = createPageHeadReader(adapter(async () => addresses).fetchPage);
+    const { read } = createPageHeadReader(adapter(async () => addresses).fetchPage);
     await expect(read("https://localtest.example.com/x")).resolves.toBeNull();
   });
 
@@ -262,7 +293,7 @@ describe("every hop is resolved and must be public (M1)", () => {
       resolved.push(hostname);
       return answers.get(hostname) ?? [];
     });
-    const read = createPageHeadReader(fetchPage)("https://news.example.com/story");
+    const read = createPageHeadReader(fetchPage).read("https://news.example.com/story");
     await vi.waitFor(() => expect(requests).toHaveLength(1));
     requests[0]?.emit("redirect", 302, "GET", "https://cdn.example.com/story");
     await expect(read).resolves.toBeNull();
@@ -274,7 +305,7 @@ describe("every hop is resolved and must be public (M1)", () => {
     let calls = 0;
     const resolveHost = async () => (++calls === 1 ? ["93.184.216.34"] : ["127.0.0.1"]);
     const { requests, fetchPage } = adapter(resolveHost);
-    const read = createPageHeadReader(fetchPage);
+    const { read } = createPageHeadReader(fetchPage);
 
     const first = read("https://rebind.example.com/story");
     await vi.waitFor(() => expect(requests).toHaveLength(1));

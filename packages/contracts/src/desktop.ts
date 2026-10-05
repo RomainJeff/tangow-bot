@@ -55,7 +55,10 @@ export interface RakazoDesktop {
    * server. Null when the page cannot be read. Optional for older desktops.
    */
   pageHead?: {
-    read: (url: string) => Promise<{ head: string; contentType: string } | null>;
+    /** `id` names the read so `cancel` can stop it and free its slot. */
+    read: (url: string, id: string) => Promise<{ head: string; contentType: string } | null>;
+    /** Optional for desktops that predate it. */
+    cancel?: (id: string) => Promise<void>;
   };
   oauth: {
     /**

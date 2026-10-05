@@ -1,13 +1,38 @@
 import type { LinkPreviewDraft } from "@rakazo/contracts";
+import { LINK_PREVIEW_COMPOSER_DEADLINE_MS } from "@rakazo/contracts";
 import {
   type ComposerLinkPreviewController,
   type ComposerLinkPreviewView,
+  type ComposerPageHead,
   createComposerLinkPreview,
   inferComposerChange,
 } from "@rakazo/core";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { rpc } from "./api";
 import { readPageHeadOnDevice } from "./page-head";
+
+export function previewComposerLink(
+  threadId: string,
+  url: string,
+  signal: AbortSignal,
+  page?: ComposerPageHead,
+) {
+  return rpc<LinkPreviewDraft | null>(
+    "links/preview",
+    {
+      threadId,
+      url,
+      ...(page
+        ? {
+            pageHead: page.head,
+            ...(page.contentType ? { pageHeadType: page.contentType } : {}),
+          }
+        : {}),
+    },
+    // Past the server's own deadline, so a slow site still answers `deviceReadable`.
+    { signal, timeoutMs: LINK_PREVIEW_COMPOSER_DEADLINE_MS + 2_000 },
+  );
+}
 
 /**
  * The composer's link preview for the thread screen: the shared state machine of
@@ -24,23 +49,7 @@ export function useComposerLinkPreview(
     createComposerLinkPreview({
       read: (url, signal, page) => {
         const id = threadIdRef.current;
-        return id
-          ? rpc<LinkPreviewDraft | null>(
-              "links/preview",
-              {
-                threadId: id,
-                url,
-                ...(page
-                  ? {
-                      pageHead: page.head,
-                      ...(page.contentType ? { pageHeadType: page.contentType } : {}),
-                    }
-                  : {}),
-              },
-              // The server fetches the image of a device-read page: its own deadline is 10 s.
-              { signal, ...(page ? { timeoutMs: 12_000 } : {}) },
-            )
-          : Promise.resolve(null);
+        return id ? previewComposerLink(id, url, signal, page) : Promise.resolve(null);
       },
       // The phone reads the page only for a site that refused the server (`deviceReadable`).
       readPageHead: readPageHeadOnDevice,

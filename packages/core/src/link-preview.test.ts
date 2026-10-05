@@ -254,6 +254,11 @@ describe("isAuthenticationDestination (CA 71)", () => {
       "https://example.com/oauth/authorize?client=1",
       "https://example.com/Login",
       "https://example.com/%6Cogin",
+      "https://example.com/wp-login.php",
+      "https://example.com/login.html",
+      "https://example.com/session/new",
+      "https://example.com/users/sessions/new",
+      "https://example.com/%E0/login",
     ]) {
       expect(isAuthenticationDestination(url), url).toBe(true);
     }
@@ -267,9 +272,26 @@ describe("isAuthenticationDestination (CA 71)", () => {
       "https://www.example.com/article",
       "https://example.com/login-page.html",
       "https://notlogin.example.com/",
+      "https://example.com/news/new",
+      "https://example.com/blog/how-to-verify-an-email",
       "not a url",
     ]) {
       expect(isAuthenticationDestination(url), url).toBe(false);
+    }
+  });
+
+  it("flags a single-use link by any of its path segments: opening it would spend it", () => {
+    for (const url of [
+      "https://example.com/magic-link/abc123",
+      "https://example.com/auth/v1/Verify/abc123",
+      "https://example.com/email/confirm/abc123",
+      "https://example.com/unsubscribe/abc123",
+      "https://example.com/invite/abc123",
+      "https://example.com/reset-password/abc123",
+      "https://example.com/password_reset/abc123",
+      "https://example.com/account/activate/abc123",
+    ]) {
+      expect(isAuthenticationDestination(url), url).toBe(true);
     }
   });
 });
@@ -291,6 +313,23 @@ describe("hasSecretParam", () => {
       "unsubscribe",
       "TOKEN",
       "Key",
+      "X-Amz-Signature",
+      "X-Amz-Credential",
+      "X-Amz-Date",
+      "X-Goog-Signature",
+      "x-goog-credential",
+      "access_token",
+      "accessToken",
+      "id_token",
+      "confirmation_token",
+      "api_key",
+      "apikey",
+      "apiKey",
+      "client_secret",
+      "jwt",
+      "otp",
+      "ticket",
+      "credential",
     ]) {
       expect(hasSecretParam(`https://a.tld/p?x=1&${name}=v`), name).toBe(true);
     }
@@ -299,6 +338,11 @@ describe("hasSecretParam", () => {
   it("ignores values, paths, fragments and lookalike names", () => {
     expect(hasSecretParam("https://a.tld/token/key?q=token")).toBe(false);
     expect(hasSecretParam("https://a.tld/p?monkey=1&tokens=2")).toBe(false);
+    expect(
+      hasSecretParam(
+        "https://a.tld/p?q=a&page=2&keywords=b&keyword=c&utm_source=d&v=dQw4w9WgXcQ&si=e&author=f&codec=g&tickets=h&country_code=fr",
+      ),
+    ).toBe(false);
     expect(hasSecretParam("https://a.tld/p#token=1")).toBe(false);
     expect(hasSecretParam("https://a.tld/p")).toBe(false);
     expect(hasSecretParam("garbage")).toBe(false);

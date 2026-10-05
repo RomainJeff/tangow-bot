@@ -138,30 +138,44 @@ export interface PageHeadReaderOptions {
  * every hop is resolved and checked (see `createPageFetch`); at most two reads run at once and
  * twenty start in a minute, the rest answer null. The answer is the head as text of at most
  * 512 KiB with its Content-Type, or null when the page cannot be read.
+ *
+ * `desktop.pageHead.cancel`: the renderer names each read, and cancelling that name stops its
+ * request and frees its slot at once; it still counts toward the minute.
  */
 export function createPageHeadReader(
   fetchPage: (url: string, init: PageHeadFetchInit) => Promise<Response>,
   options: PageHeadReaderOptions = {},
-): (url: unknown) => Promise<PageHeadRead | null> {
+): {
+  read: (url: unknown, id?: unknown) => Promise<PageHeadRead | null>;
+  cancel: (id: unknown) => void;
+} {
   const maxConcurrent = options.maxConcurrent ?? MAX_PAGE_HEAD_READS;
   const maxPerMinute = options.maxPerMinute ?? MAX_PAGE_HEAD_READS_PER_MINUTE;
   const now = options.now ?? Date.now;
-  let running = 0;
+  const running = new Map<string | symbol, AbortController>();
   let starts: number[] = [];
-  return async (url) => {
-    if (typeof url !== "string" || devicePageUrl(url) === undefined) {
-      throw new Error("Invalid page request.");
-    }
-    const at = now();
-    starts = starts.filter((start) => at - start < MINUTE_MS);
-    if (running >= maxConcurrent || starts.length >= maxPerMinute) return null;
-    running += 1;
-    starts.push(at);
-    try {
-      const page = await readPageHead(url, { fetch: fetchPage });
-      return page !== undefined && page.head.length <= PAGE_HEAD_MAX_BYTES ? page : null;
-    } finally {
-      running -= 1;
-    }
+  return {
+    async read(url, id) {
+      if (typeof url !== "string" || devicePageUrl(url) === undefined) {
+        throw new Error("Invalid page request.");
+      }
+      const at = now();
+      starts = starts.filter((start) => at - start < MINUTE_MS);
+      if (running.size >= maxConcurrent || starts.length >= maxPerMinute) return null;
+      // A read an older renderer left unnamed, or named twice, cannot be cancelled.
+      const key = typeof id === "string" && !running.has(id) ? id : Symbol();
+      const controller = new AbortController();
+      running.set(key, controller);
+      starts.push(at);
+      try {
+        const page = await readPageHead(url, { fetch: fetchPage, signal: controller.signal });
+        return page !== undefined && page.head.length <= PAGE_HEAD_MAX_BYTES ? page : null;
+      } finally {
+        running.delete(key);
+      }
+    },
+    cancel(id) {
+      if (typeof id === "string") running.get(id)?.abort();
+    },
   };
 }

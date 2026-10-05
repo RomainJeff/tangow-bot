@@ -19,7 +19,8 @@ contextBridge.exposeInMainWorld("rakazoDesktop", {
     install: () => ipcRenderer.invoke("desktop.update.install"),
   },
   pageHead: {
-    read: (url) => ipcRenderer.invoke("desktop.pageHead.read", url),
+    read: (url, id) => ipcRenderer.invoke("desktop.pageHead.read", url, id),
+    cancel: (id) => ipcRenderer.invoke("desktop.pageHead.cancel", id),
   },
   oauth: {
     open: (url) => ipcRenderer.invoke("desktop.oauth.open", url),

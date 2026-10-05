@@ -3,7 +3,6 @@ import type { Actor } from "@rakazo/contracts";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  COMPOSER_PREVIEW_DEADLINE_MS,
   createInFlightGuard,
   type LinkPreviewApiDeps,
   previewLinkForComposer,
@@ -484,7 +483,6 @@ describe("links.preview: cancellation and deadline", () => {
       { threadId: "thread-1", url: URL_TO_PREVIEW },
       new AbortController().signal,
     );
-    expect(COMPOSER_PREVIEW_DEADLINE_MS).toBe(10_000);
     expect(timeout).toHaveBeenCalledWith(10_000);
   });
 });
