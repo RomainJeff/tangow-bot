@@ -16,10 +16,14 @@ import { memo, useEffect, useId, useRef, useState } from "react";
 import { View } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
 import Svg, { ClipPath, Defs, G, Path } from "react-native-svg";
+import { CHAT_MOTION } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { useAvatarStyle } from "./avatar-style";
 import { NativeSymbol } from "./native-symbol";
+
+/** A one-shot look, right after mount only (7f) — see `OrganicAvatar`. */
+export type BotAvatarGlance = "left" | "right";
 
 export const BotAvatar = memo(function BotAvatar({
   color,
@@ -29,6 +33,8 @@ export const BotAvatar = memo(function BotAvatar({
   shapeSeed,
   variant,
   muted = false,
+  glance,
+  still = false,
 }: {
   color: string;
   size?: number;
@@ -38,6 +44,18 @@ export const BotAvatar = memo(function BotAvatar({
   shapeSeed?: number | null;
   variant?: AvatarStyle;
   muted?: boolean;
+  /**
+   * A new "Messaged / Message from" marker (7f): this avatar glances once
+   * toward its peer, then back to centre. Read only at mount — the caller
+   * passes it exclusively for a marker the arrivals helper just flagged as
+   * new, never for one already on screen at thread open. Organic variant
+   * only; the robot avatar ignores it.
+   */
+  glance?: BotAvatarGlance;
+  /** Rests on one drawn frame instead of breathing and blinking, and moves
+   * only while the bot works or glances. For avatars repeated down a thread,
+   * where a loop each would redraw every frame and stall scrolling. */
+  still?: boolean;
 }) {
   const { t } = useI18n();
   const tokens = useMobileTokens();
@@ -57,6 +75,8 @@ export const BotAvatar = memo(function BotAvatar({
           shapeSeed={shapeSeed}
           size={size}
           isWorking={isWorking}
+          glance={glance}
+          still={still}
         />
       ) : (
         <View
@@ -164,16 +184,23 @@ export function OrganicAvatar({
   shapeSeed,
   size,
   isWorking,
+  glance,
   drive,
+  still = false,
 }: {
   color: string;
   identity?: string;
   shapeSeed?: number | null;
   size: number;
   isWorking: boolean;
+  glance?: BotAvatarGlance;
   drive?: OrganicAvatarDrive | null;
+  /** See `BotAvatar`'s `still`. */
+  still?: boolean;
 }) {
   const reducedMotion = useReducedMotion();
+  const [glancing, setGlancing] = useState(Boolean(glance) && !reducedMotion);
+  const animate = !still || isWorking || Boolean(drive) || glancing;
   const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
   const shape = SHAPES[seed % SHAPES.length]!;
   const clipId = `bloub-${useId().replace(/[^a-zA-Z0-9-_]/g, "")}`;
@@ -187,8 +214,8 @@ export function OrganicAvatar({
   const [fill, setFill] = useState(color);
 
   useEffect(() => {
-    if (reducedMotion) {
-      // No crossfade under reduced motion: snap straight to the new colour.
+    if (reducedMotion || !animate) {
+      // No crossfade under reduced motion or at rest: snap straight to the new colour.
       colorMorph.current = { from: color, to: color, at: clock.current };
       renderedColor.current = color;
       setFill(color);
@@ -196,14 +223,40 @@ export function OrganicAvatar({
     }
     if (colorMorph.current.to === color) return;
     colorMorph.current = { from: renderedColor.current, to: color, at: clock.current };
-  }, [color, reducedMotion]);
+  }, [color, reducedMotion, animate]);
+
+  // 7f: a one-shot glance toward the peer bloub, read once at mount only —
+  // `glance` is a mount-time direction (the caller only ever sets it for a
+  // marker the arrivals helper just flagged as new), not a live prop to
+  // re-trigger on. Skipped entirely under reduced motion (MA-10: nothing, no
+  // fade substitute, for the avatar look).
+  useEffect(() => {
+    if (!glance || reducedMotion) return;
+    const yaw = glance === "right" ? CHAT_MOTION.glanceYawDeg : -CHAT_MOTION.glanceYawDeg;
+    engine.setLook({ yaw, pitch: 0, mix: 1, spin: 0, wander: 0 }, clock.current);
+    const timer = setTimeout(() => {
+      engine.setLook(null, clock.current);
+    }, CHAT_MOTION.glanceHoldMs);
+    // A still avatar keeps its loop only until the look has eased back.
+    const settle = setTimeout(
+      () => setGlancing(false),
+      CHAT_MOTION.glanceHoldMs + CHAT_MOTION.glanceSettleMs,
+    );
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(settle);
+    };
+  }, []);
 
   useEffect(() => {
-    if (reducedMotion) {
+    if (reducedMotion || !animate) {
       // One still frame, settled into the state: no morph, no loop.
       engine.reset("idle", clock.current);
       engine.setShape(shape.radii, clock.current - BotEngine.SHAPE_MORPH);
       setFrame(engine.sample(clock.current + 1));
+      colorMorph.current = { from: color, to: color, at: clock.current };
+      renderedColor.current = color;
+      setFill(color);
       return;
     }
     engine.setShape(shape.radii, clock.current);
@@ -238,7 +291,7 @@ export function OrganicAvatar({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [engine, shape, isWorking, reducedMotion, drive]);
+  }, [engine, shape, isWorking, reducedMotion, drive, animate]);
 
   // Same eye rule as web: the eyes show the "paper" behind the ink, so pick it from
   // the body luminance, and ink a pale body's outline so it stays visible.

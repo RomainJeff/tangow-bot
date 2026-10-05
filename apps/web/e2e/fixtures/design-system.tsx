@@ -3,14 +3,17 @@ import {
   AvatarStyleProvider,
   BotAvatar,
   Button,
+  ComposerAttachment,
   ComposerShell,
   FramedBlock,
   HoverPill,
   Interstitial,
+  MessageBubble,
   MessageRow,
   ReasoningDisclosure,
   Shimmer,
   StackedAvatars,
+  StopContour,
   Surface,
   UserBubble,
   WorkingLine,
@@ -96,8 +99,6 @@ function Kitchen() {
         <MessageRow
           avatar={<BotAvatar color={MAYA.color} identity="maya" size={26} />}
           author="Maya"
-          time="09:12"
-          meta={{ label: "2 sources" }}
           trailing={
             <HoverPill>
               <Button aria-label="Reply" variant="roundIcon" size="roundIconSm">
@@ -115,8 +116,10 @@ function Kitchen() {
             </HoverPill>
           }
         >
-          Tuesday afternoon is the only slot that works for everyone. I can hold it until the end of
-          the day.
+          <MessageBubble inGroup meta={{ label: "2 sources" }}>
+            Tuesday afternoon is the only slot that works for everyone. I can hold it until the end
+            of the day.
+          </MessageBubble>
         </MessageRow>
         <UserBubble>Hold it, and tell the team.</UserBubble>
         <Interstitial
@@ -130,6 +133,14 @@ function Kitchen() {
           label="Maya is drafting the recap"
           startedAt={Date.now() - 41_300}
         />
+        {/* A long live activity line, laid out like the transcript's working row. */}
+        <div className="flex min-h-10 items-center px-1" data-testid="working-line-long">
+          <WorkingLine
+            avatar={<BotAvatar color={MAYA.color} identity="maya" size={26} status="running" />}
+            label="Searching the web: Club Med Marrakech OR Agadir OR Palmyre OR Djerba OR Opio OR Grand Massif baby club toussaint"
+            startedAt={Date.now() - 12_000}
+          />
+        </div>
         <div className="text-reasoning text-muted-foreground">
           <Shimmer>Reading the calendar</Shimmer>
         </div>
@@ -200,16 +211,21 @@ function Kitchen() {
 
       <Section title="composer">
         <ComposerShell
-          trailing={
+          attach={
             <Button aria-label="Attach file" variant="roundIcon" size="roundIcon">
               <Plus />
             </Button>
           }
         >
-          <span className="text-body text-foreground-subtle">Message Maya</span>
+          <span className="text-body text-muted-foreground">Message Maya</span>
         </ComposerShell>
         <ComposerShell
           state="dictating"
+          attach={
+            <Button aria-label="Attach file" variant="roundIcon" size="roundIcon">
+              <Plus />
+            </Button>
+          }
           trailing={
             <Button aria-label="Voice" variant="roundIcon" size="roundIcon">
               <Mic />
@@ -219,14 +235,21 @@ function Kitchen() {
           <span className="text-body text-foreground">Hold the roof terrace</span>
         </ComposerShell>
         <ComposerShell
-          state="working"
+          attach={
+            <Button aria-label="Attach file" variant="roundIcon" size="roundIcon">
+              <Plus />
+            </Button>
+          }
+          attachments={
+            <ComposerAttachment name="roof-terrace.jpg" removeLabel="Remove roof-terrace.jpg" />
+          }
           trailing={
-            <Button aria-label="Stop" variant="capsuleSecondary" size="roundIcon">
-              <Square />
+            <Button aria-label="Stop" variant="roundIcon" size="roundIcon">
+              <StopContour color={IVY.color} />
             </Button>
           }
         >
-          <span className="text-body text-foreground-subtle">working</span>
+          <span className="text-body text-foreground-subtle">Message Ivy</span>
         </ComposerShell>
         <ComposerShell
           state="speaking"

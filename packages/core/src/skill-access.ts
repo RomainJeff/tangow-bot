@@ -38,6 +38,13 @@ export function isMarketplaceSkillKey(key: string): boolean {
   return key.startsWith("mkt:");
 }
 
+/** Where the computer mounts skill files read-only; the supervisor binds and skill_read agree. */
+export const SANDBOX_SKILL_MOUNTS = {
+  user: "/skills/user",
+  marketplaces: "/skills/marketplaces",
+  managed: "/managed-skills",
+} as const;
+
 /** Marketplace skills start hidden (design Q8); user skills stay visible to every bot. */
 export function defaultSkillAvailability(key: string): SkillAvailability {
   return isMarketplaceSkillKey(key) ? "selected" : "all";

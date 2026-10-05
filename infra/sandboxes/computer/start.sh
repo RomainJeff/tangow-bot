@@ -8,6 +8,15 @@ export PATH="$AGENT_HOME/.local/bin:/usr/local/bin:$PATH"
 export NPM_CONFIG_PREFIX="$AGENT_HOME/.local"
 export PIP_USER=1
 cd "$AGENT_HOME"
+# The home is a mount, so the image cannot ship ~/.zshrc. Seed one that loads the image defaults;
+# it also keeps zsh from opening its first-run wizard. An existing ~/.zshrc is left as is.
+[[ -e "$AGENT_HOME/.zshrc" ]] || printf '%s\n' 'source /etc/rakazo/zshrc' >"$AGENT_HOME/.zshrc"
+# OpenCode reads global skills from ~/.config/opencode/skills/**/SKILL.md and follows symlinks
+# (Glob.scan symlink: true), so one link to the read-only mount is enough. A user may replace it
+# with a directory of their own; an existing entry is left as is.
+mkdir -p "$AGENT_HOME/.config/opencode"
+[[ -e "$AGENT_HOME/.config/opencode/skills" || -L "$AGENT_HOME/.config/opencode/skills" ]] \
+  || ln -s /managed-skills/computer "$AGENT_HOME/.config/opencode/skills"
 
 if [[ -n "${RAKAZO_COMPUTER_CONTROL_TOKEN:-}" ]]; then
   /usr/local/bin/rakazo-computer-control >/tmp/rakazo/control.log 2>&1 &
@@ -44,6 +53,10 @@ cp /etc/rakazo/fluxbox/menu /tmp/fluxbox-home/.fluxbox/menu 2>/dev/null || true
 cat > /tmp/fluxbox-home/.fluxbox/startup <<'EOF'
 #!/bin/sh
 xsetroot -solid "#111113"
+mkdir -p "$HOME/.config/plank/dock1/launchers"
+cp /etc/rakazo/plank/dock1/settings "$HOME/.config/plank/dock1/settings"
+cp /etc/rakazo/plank/dock1/launchers/*.dockitem "$HOME/.config/plank/dock1/launchers/"
+plank &
 exec fluxbox -rc /tmp/fluxbox-home/.fluxbox/init
 EOF
 chmod +x /tmp/fluxbox-home/.fluxbox/startup
@@ -60,6 +73,31 @@ register_browser_handler() {
 register_browser_handler x-scheme-handler/http
 register_browser_handler x-scheme-handler/https
 register_browser_handler text/html
+register_handler() {
+  local desktop="$1" mime="$2"
+  if [[ ! -f "/usr/share/applications/$desktop" ]] \
+    || ! xdg-mime default "$desktop" "$mime" >/dev/null 2>&1 \
+    || [[ "$(xdg-mime query default "$mime" 2>/dev/null || true)" != "$desktop" ]]; then
+    echo "failed to register $desktop for $mime" >&2
+    exit 1
+  fi
+}
+register_handler pcmanfm.desktop inode/directory
+for mime in \
+  application/vnd.openxmlformats-officedocument.wordprocessingml.document \
+  application/msword application/vnd.oasis.opendocument.text application/rtf text/rtf; do
+  register_handler libreoffice-writer.desktop "$mime"
+done
+for mime in \
+  application/vnd.openxmlformats-officedocument.spreadsheetml.sheet \
+  application/vnd.ms-excel application/vnd.oasis.opendocument.spreadsheet text/csv; do
+  register_handler libreoffice-calc.desktop "$mime"
+done
+for mime in \
+  application/vnd.openxmlformats-officedocument.presentationml.presentation \
+  application/vnd.ms-powerpoint application/vnd.oasis.opendocument.presentation; do
+  register_handler libreoffice-impress.desktop "$mime"
+done
 if ! xdg-settings set default-web-browser rakazo-browser.desktop >/dev/null 2>&1 \
   || [[ "$(xdg-settings get default-web-browser 2>/dev/null || true)" != "rakazo-browser.desktop" ]]; then
   echo "failed to set default web browser to rakazo-browser" >&2

@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { ORPCError } from "@orpc/server";
 import {
   aiRecipient,
-  cloudAgentsEnabled,
   parseModelSecret,
   selectConfiguredModel,
   toStringRecord,
@@ -169,14 +168,6 @@ export async function aiConsentStatus(
         baseUrl: toStringRecord(memory.settings).baseUrl,
       }),
     );
-  if (
-    uses.includes("model") &&
-    deps.cloudAgent &&
-    cloudAgentsEnabled(deps.cloudAgent, actor.spaceId) &&
-    !deps.cloudAgent.provider.describe().capabilities.offline
-  ) {
-    add(aiRecipient({ provider: deps.cloudAgent.provider.describe().id, use: "model" }));
-  }
   return {
     scope: createHash("sha256")
       .update(JSON.stringify([actor.userId, actor.spaceId]))

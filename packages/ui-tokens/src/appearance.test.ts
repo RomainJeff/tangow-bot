@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  botAccentOn,
   type ColorTokens,
+  contrastRatio,
   cssVariableName,
   darkTokens,
   lightTokens,
@@ -115,5 +117,42 @@ describe("tokens.css", () => {
     expect(css).toContain("--space-sidebar: 280px");
     expect(css).toContain("--duration-arrive: 240ms");
     expect(css).toContain("--motion-ease");
+  });
+});
+
+// The composer placeholder uses `mutedForeground`: `foregroundSubtle` falls
+// short of 4.5:1 on `surface` in both themes.
+describe("composer placeholder contrast", () => {
+  it("keeps mutedForeground over surface at or above 4.5:1 in both themes", () => {
+    expect(contrastRatio(lightTokens.mutedForeground, lightTokens.surface)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+    expect(contrastRatio(darkTokens.mutedForeground, darkTokens.surface)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+  });
+
+  it("is a real improvement over the retired foregroundSubtle, which fell short", () => {
+    expect(contrastRatio(lightTokens.foregroundSubtle, lightTokens.surface)).toBeLessThan(4.5);
+    expect(contrastRatio(darkTokens.foregroundSubtle, darkTokens.surface)).toBeLessThan(4.5);
+  });
+});
+
+describe("botAccentOn", () => {
+  it("keeps a bot colour that reads on the page", () => {
+    expect(botAccentOn("#E0714F", "light")).toBe("#E0714F");
+    expect(botAccentOn("#E0714F", "dark")).toBe("#E0714F");
+  });
+
+  it("drops the near-black bot colour on dark and white on light", () => {
+    expect(botAccentOn("#17181A", "dark")).toBeUndefined();
+    expect(botAccentOn("#17181A", "light")).toBe("#17181A");
+    expect(botAccentOn("#FFFFFF", "light")).toBeUndefined();
+    expect(botAccentOn("#FFFFFF", "dark")).toBe("#FFFFFF");
+  });
+
+  it("drops a missing or non-hex colour", () => {
+    expect(botAccentOn(undefined, "light")).toBeUndefined();
+    expect(botAccentOn("tomato", "dark")).toBeUndefined();
   });
 });

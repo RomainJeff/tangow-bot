@@ -7,6 +7,7 @@ describe("STACKED_AVATAR_OVERLAP", () => {
     expect(STACKED_AVATAR_OVERLAP[16]).toBe(4);
     expect(STACKED_AVATAR_OVERLAP[17]).toBe(4);
     expect(STACKED_AVATAR_OVERLAP[20]).toBe(5);
+    expect(STACKED_AVATAR_OVERLAP[28]).toBe(7);
   });
 });
 

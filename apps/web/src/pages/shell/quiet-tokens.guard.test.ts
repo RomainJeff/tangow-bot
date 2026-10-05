@@ -23,6 +23,7 @@ const GUARDED = [
   "pages/shell/sidebar.tsx",
   "pages/shell/thread-header.tsx",
   "pages/shell/message-hover-actions.tsx",
+  "pages/shell/message-actions-sheet.tsx",
   "components/AgentSteps.tsx",
   "components/AskCard.tsx",
 ];

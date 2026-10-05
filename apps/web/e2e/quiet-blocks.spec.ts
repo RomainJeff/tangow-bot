@@ -61,11 +61,13 @@ test("framed blocks capture a pending approval and an answered question as norma
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Deny", exact: true })).toBeVisible();
 
-  // The approval is a normal bot row: avatar, the bot's real name, and time —
-  // the framed card is just the row's body, no longer a standalone element.
+  // The approval is a normal bot row — the framed card is just the row's body,
+  // no longer a standalone element. Mono (single-bot) thread: no per-row name
+  // or avatar, the header already says who this is.
   const approvalMessage = page.locator("[data-message-id]").filter({ has: allowOnce });
   await expect(approvalMessage.locator('[data-slot="message-row"]')).toBeVisible();
-  await expect(approvalMessage.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
+  await expect(approvalMessage.locator('[data-slot="message-row-author"]')).toHaveCount(0);
+  await expect(approvalMessage.locator('[data-slot="message-row-avatar"]')).toHaveCount(0);
   await expect(approvalMessage.getByTestId("message-bubble-frame")).toBeVisible();
   await expect(approvalMessage.locator(".ms-10.max-w-block")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "quiet-blocks-approval-light");
@@ -93,7 +95,7 @@ test("framed blocks capture a pending approval and an answered question as norma
   // The question is a normal bot row too, before it is answered.
   const questionMessage = page.locator("[data-message-id]").filter({ has: berlin });
   await expect(questionMessage.locator('[data-slot="message-row"]')).toBeVisible();
-  await expect(questionMessage.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
+  await expect(questionMessage.locator('[data-slot="message-row-author"]')).toHaveCount(0);
   await expect(questionMessage.getByTestId("message-bubble-frame")).toBeVisible();
   await expect(questionMessage.locator(".ms-10.max-w-block")).toHaveCount(0);
 
@@ -101,11 +103,11 @@ test("framed blocks capture a pending approval and an answered question as norma
   const answered = page.getByText("Answered: Berlin", { exact: true });
   await expect(answered).toBeVisible({ timeout: 30_000 });
 
-  // Answered, it is still a normal bot row: avatar and name stay, only the
-  // card settles to the one answer line.
+  // Answered, it is still a normal bot row: only the card settles to the one
+  // answer line.
   const answeredMessage = page.locator("[data-message-id]").filter({ has: answered });
   await expect(answeredMessage.locator('[data-slot="message-row"]')).toBeVisible();
-  await expect(answeredMessage.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
+  await expect(answeredMessage.locator('[data-slot="message-row-author"]')).toHaveCount(0);
   await expect(answeredMessage.getByTestId("message-bubble-frame")).toBeVisible();
   await expect(answeredMessage.locator(".ms-10.max-w-block")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "quiet-blocks-answered-light");

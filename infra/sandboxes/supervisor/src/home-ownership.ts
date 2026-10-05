@@ -9,6 +9,11 @@ function hasPermissions(stat: Stats, uid: number, gid: number, required: number)
   return ((stat.mode >> shift) & required) === required;
 }
 
+/** Git and similar tools keep owned files read-only on purpose; the owner can still chmod them. */
+function isFileUsable(stat: Stats, uid: number, gid: number): boolean {
+  return stat.uid === uid || hasPermissions(stat, uid, gid, 0b010);
+}
+
 function isMissingOrNotDirectory(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException).code;
   return code === "ENOENT" || code === "ELOOP" || code === "ENOTDIR";
@@ -66,11 +71,13 @@ async function assertWritableEntry(
     throw new Error(`computer home ${root} must be a directory`);
   }
 
-  const required = stat.isDirectory() ? 0b111 : 0b010;
-  if (!hasPermissions(stat, uid, gid, required)) {
+  if (!stat.isDirectory()) {
+    if (!isFileUsable(stat, uid, gid)) throw writabilityError(target, root, uid, gid);
+    return;
+  }
+  if (!hasPermissions(stat, uid, gid, 0b111)) {
     throw writabilityError(target, root, uid, gid);
   }
-  if (!stat.isDirectory()) return;
 
   const directory = await opendir(target);
   for await (const entry of directory) {
@@ -123,7 +130,7 @@ async function assertWritableDirectory(
     if (childStat.isDirectory()) {
       throw new Error(`computer home ${root} changed during validation; retry the request`);
     }
-    if (!hasPermissions(childStat, uid, gid, 0b010)) {
+    if (!isFileUsable(childStat, uid, gid)) {
       throw writabilityError(path.join(displayPath, entry.name), root, uid, gid);
     }
   }

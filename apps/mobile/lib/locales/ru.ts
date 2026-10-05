@@ -52,8 +52,6 @@ export const RU_MESSAGES: Record<string, string> = {
   "Updating Team Computer": "Обновление компьютера команды",
   "Updating {name}’s Computer": "Обновление компьютера {name}",
   "Workers and operations are stopped": "Воркеры и операции остановлены",
-  "Cloud agent": "Облачный агент",
-  "Pull request": "Запрос на слияние",
   running: "выполняется",
   finished: "завершено",
   failed: "ошибка",
@@ -705,6 +703,12 @@ export const RU_MESSAGES: Record<string, string> = {
   "{count} selected": "Выбрано: {count}",
   "{count} skills installed": "Установлено навыков: {count}",
 
+  Table: "Таблица",
+  "Opens the full table": "Открывает таблицу целиком",
+  "{count} runs": "Запусков: {count}",
+  "{count} cancelled": "Отменено: {count}",
+  "Opens in full": "Открывает целиком",
+  "Report, {name}": "Отчёт, {name}",
   "Notifications on": "Уведомления включены",
   "Show details": "Показать детали",
   "Hide details": "Скрыть детали",
@@ -712,4 +716,11 @@ export const RU_MESSAGES: Record<string, string> = {
   "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
     "Включено — уведомление и развёрнутая карточка при каждом запуске. Выключено — только тихий след в этом чате.",
   "Could not update routine": "Не удалось обновить программу",
+
+  Dictate: "Диктовать",
+  "Cancel dictation": "Отменить надиктовку",
+  "Insert dictation": "Вставить надиктованный текст",
+  Dictating: "Идёт надиктовка",
+  "Microphone access is off": "Нет доступа к микрофону",
+  "Open Settings": "Открыть настройки",
 };

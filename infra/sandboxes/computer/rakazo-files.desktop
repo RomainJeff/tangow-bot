@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Files
+Exec=pcmanfm /home/rakazo
+Icon=system-file-manager
+Terminal=false
+Categories=System;FileManager;
+MimeType=inode/directory;
+StartupNotify=false

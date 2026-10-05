@@ -191,6 +191,14 @@ pnpm test:integration
 pnpm test:e2e
 ```
 
+### End-to-end tests
+
+CI does not run the web end-to-end suite, so it is on every change:
+
+- Run `pnpm test:e2e` before pushing anything that changes behavior or UI. Narrow a run with `pnpm test:e2e --spec=<file>` or `--grep=<title>`, then run the full suite once before the pull request.
+- Update the specs in `apps/web/e2e/` in the same change: adjust the ones whose behavior or copy changed, and add one for any new screen or flow.
+- A failing end-to-end test is fixed or updated, never skipped or deleted to get green.
+
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for the development workflow and test matrix.
 
 ## Documentation
@@ -198,7 +206,6 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the development workflow and test m
 - [Self-hosting](./docs/self-host.md)
 - [Self-host secrets](./docs/self-host-secrets.md)
 - [Computer runtime and isolation](./docs/computer-runtime.md)
-- [Desktop releases](./docs/desktop-release.md)
 - [Mobile releases](./docs/mobile-release.md)
 - [Rebuilding the mobile and desktop clients](./docs/shipping-clients.md)
 - [Performance testing](./docs/performance.md)

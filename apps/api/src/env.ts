@@ -1,8 +1,4 @@
-import {
-  resolveCloudAgentProvider,
-  resolveDeploymentModel,
-  resolveSandboxProvider,
-} from "@rakazo/adapters";
+import { resolveDeploymentModel, resolveSandboxProvider } from "@rakazo/adapters";
 import {
   resolveAuthSecret,
   resolveEncryptionKey,
@@ -10,7 +6,7 @@ import {
   resolveSupervisorToken,
 } from "@rakazo/core";
 
-export { resolveCloudAgentProvider, resolveSandboxProvider } from "@rakazo/adapters";
+export { resolveSandboxProvider } from "@rakazo/adapters";
 
 export interface AppEnv {
   nodeEnv: string;
@@ -33,9 +29,6 @@ export interface AppEnv {
   sandboxSupervisorToken: string | undefined;
   screenProxySecret: string;
   sandboxProvider: string;
-  cloudAgentProvider: string;
-  cloudAgentSpaceId: string | undefined;
-  cursorApiKey: string | undefined;
   agentRuntime: string;
   deploymentModelKey: string | undefined;
   e2bApiKey: string | undefined;
@@ -96,7 +89,6 @@ export interface AppEnv {
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const authSecret = resolveAuthSecret(source);
   const sandboxProvider = resolveSandboxProvider(source);
-  const cloudAgentProvider = resolveCloudAgentProvider(source);
   const deploymentModel = resolveDeploymentModel(source);
   const updaterUrl = optional(source.RAKAZO_UPDATER_URL);
   const updaterToken = optional(source.RAKAZO_UPDATER_TOKEN);
@@ -121,9 +113,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
       sandboxProvider === "docker" ? resolveSupervisorToken(source) : undefined,
     screenProxySecret: resolveScreenProxySecret(source),
     sandboxProvider,
-    cloudAgentProvider,
-    cloudAgentSpaceId: optional(source.CLOUD_AGENT_SPACE_ID),
-    cursorApiKey: optional(source.CURSOR_API_KEY),
     agentRuntime: source.AGENT_RUNTIME ?? "pi",
     // Provider, model and key resolve together: see resolveDeploymentModel.
     deploymentModelKey: deploymentModel.key,

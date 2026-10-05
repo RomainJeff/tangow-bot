@@ -36,7 +36,14 @@ export function showsTimeMarker(
  */
 export function threadTimeMarkerLabel(
   createdAt: string,
-  options: { locale: string; today: string; yesterday: string; now?: Date },
+  options: {
+    locale: string;
+    today: string;
+    yesterday: string;
+    now?: Date;
+    /** False for the day alone ("Today", "Wed, Sep 2"). */
+    withTime?: boolean;
+  },
 ): string {
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) return "";
@@ -45,12 +52,11 @@ export function threadTimeMarkerLabel(
   const dayDiff = Math.round(
     (localDayIndex(options.now ?? new Date()) - localDayIndex(date)) / 86_400_000,
   );
-  if (dayDiff === 0) return `${options.today} ${time}`;
-  if (dayDiff === 1) return `${options.yesterday} ${time}`;
-  const day = date.toLocaleDateString(locale, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-  return `${day} ${time}`;
+  const day =
+    dayDiff === 0
+      ? options.today
+      : dayDiff === 1
+        ? options.yesterday
+        : date.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" });
+  return options.withTime === false ? day : `${day} ${time}`;
 }

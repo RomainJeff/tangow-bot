@@ -40,6 +40,16 @@ export class ThreadScrollBehavior {
     return "smooth";
   }
 
+  /**
+   * The bottom of the thread grew without a new message: the typing bubble
+   * appeared or changed size. Follow it only when the reader sits at the
+   * latest messages, so it never hides behind the composer.
+   */
+  onTailChanged(): ThreadScrollAction {
+    if (!this.laidOut || !this.contentReady || this.currentState.detached) return null;
+    return "smooth";
+  }
+
   onUserScroll(distanceFromEnd: number): ThreadScrollState {
     const detached = distanceFromEnd > 80;
     this.setState(detached, detached && this.currentState.unread);

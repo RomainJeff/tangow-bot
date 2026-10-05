@@ -8,24 +8,48 @@ import { memo, useMemo } from "react";
 import type { TextProps } from "react-native";
 import { Linking, StyleSheet, Text, View } from "react-native";
 import type { ChatMarkdownProps } from "./markdown";
-import { linkHref, linkifyText, nativeImagePolicy } from "./markdown";
+import { linkHref, linkifyText, nativeImagePolicy, repairMarkdownTables } from "./markdown";
+import type { GridNode } from "./table-grid.native";
+import { TableGrid } from "./table-grid.native";
+import { TABLE_CELL_PADDING_X } from "./table-layout";
 
-function markdownStyles(palette: ColorTokens) {
+/**
+ * `inBubble` (design contract §B "Markdown dans une bulle"): a bot bubble's
+ * padding (10 × 14) is not a surface an inline element can reuse, so code and
+ * tables need their own rules inside it. Everything else (a `Surface` card,
+ * `FramedBlock`, an artifact preview) renders exactly as before — this only
+ * changes `table`/`tr`/`th`/`td` (no surface fill, `border` hairlines bleeding
+ * to the bubble's edge, cells aligned on its 14 px padding, horizontal scroll
+ * for a wide table) and the bubble's own body/paragraph size (16/1.45 per
+ * design contract §3.7, vs the shared 15.5/23 used outside a bubble).
+ */
+function markdownStyles(palette: ColorTokens, inBubble: boolean) {
   return StyleSheet.create({
-    body: {
-      color: palette.foreground,
-      fontSize: 15.5,
-      lineHeight: 23,
-      width: "100%",
-      minWidth: 0,
-      flexShrink: 1,
-    },
-    paragraph: {
-      marginTop: 0,
-      marginBottom: 9,
-      width: "100%",
-      flexShrink: 1,
-    },
+    body: inBubble
+      ? {
+          color: palette.foreground,
+          fontSize: 16,
+          lineHeight: 23,
+          // A bubble fits its content: no `width: "100%"` here or on the
+          // paragraph, which would resolve against an indefinite width and
+          // measure the text wider than the bubble draws it.
+          minWidth: 0,
+          // Cancels the last paragraph's bottom margin so the bubble's padding
+          // reads the same above and below the text.
+          marginBottom: -9,
+          flexShrink: 1,
+        }
+      : {
+          color: palette.foreground,
+          fontSize: 15.5,
+          lineHeight: 23,
+          width: "100%",
+          minWidth: 0,
+          flexShrink: 1,
+        },
+    paragraph: inBubble
+      ? { marginTop: 0, marginBottom: 9, width: "auto", flexShrink: 1 }
+      : { marginTop: 0, marginBottom: 9, width: "100%", flexShrink: 1 },
     heading1: {
       color: palette.foreground,
       fontSize: 21,
@@ -81,12 +105,6 @@ function markdownStyles(palette: ColorTokens) {
     blockquote: {
       backgroundColor: "transparent",
       borderLeftColor: palette.border,
-    },
-    table: {
-      borderColor: palette.border,
-    },
-    tr: {
-      borderColor: palette.border,
     },
     hr: {
       backgroundColor: palette.border,
@@ -148,19 +166,76 @@ const renderRules: RenderRules = {
 // `allowedImageHandlers: []` + `defaultImageHandler={null}` below back it up.
 const renderRulesNoImages: RenderRules = { ...renderRules, image: () => null };
 
+/**
+ * Tables render as a `TableGrid` read straight from the markdown tree, so a
+ * phone gets compact, content-sized columns instead of the library's cells,
+ * which share the width equally and inherit the body's text size. In a
+ * bubble the table bleeds to the bubble's edge and its first column lines up
+ * with the bubble's text.
+ */
+/** Room a table takes above and below on top of the paragraph gap, so it
+ * does not sit tight against the text around it. */
+const TABLE_BLOCK_GAP = 8;
+
+function withTables(base: RenderRules, palette: ColorTokens, bleed: number): RenderRules {
+  return {
+    ...base,
+    table: (node) => (
+      <View
+        key={node.key}
+        style={{
+          marginHorizontal: -bleed,
+          marginTop: TABLE_BLOCK_GAP,
+          marginBottom: 9 + TABLE_BLOCK_GAP,
+        }}
+      >
+        <TableGrid
+          table={node as unknown as GridNode}
+          palette={palette}
+          inset={Math.max(0, bleed - TABLE_CELL_PADDING_X)}
+        />
+      </View>
+    ),
+  };
+}
+
 export const ChatMarkdown = memo(function ChatMarkdown({
   children,
   streaming = false,
   allowImages = true,
   palette = darkTokens,
   colorScheme = "dark",
-}: ChatMarkdownProps & { palette?: ColorTokens; colorScheme?: ResolvedAppearance }) {
-  const styles = useMemo(() => markdownStyles(palette), [palette]);
+  inBubble = false,
+  bleed,
+}: ChatMarkdownProps & {
+  palette?: ColorTokens;
+  colorScheme?: ResolvedAppearance;
+  /** Inside a bot bubble (design contract §B "Markdown dans une bulle"): code
+   * stays on `background`, tables lose their surface and bleed their
+   * hairlines to the bubble's edge. Outside a bubble (a `Surface` card,
+   * `FramedBlock`, an artifact preview) this is left at its default, false —
+   * their markdown renders exactly as before. */
+  inBubble?: boolean;
+  /** The host's horizontal padding (a card's): a table bleeds its hairlines
+   * to the host's edge and lines its first column up with the host's text.
+   * A bubble uses its own 14. */
+  bleed?: number;
+}) {
+  const styles = useMemo(() => markdownStyles(palette, inBubble), [palette, inBubble]);
   const imagePolicy = nativeImagePolicy(allowImages);
+  const rules = useMemo(
+    () =>
+      withTables(
+        imagePolicy.blockImages ? renderRulesNoImages : renderRules,
+        palette,
+        bleed ?? (inBubble ? 14 : 0),
+      ),
+    [imagePolicy.blockImages, palette, inBubble, bleed],
+  );
   const sharedProps = {
     colorScheme,
     style: styles,
-    rules: imagePolicy.blockImages ? renderRulesNoImages : renderRules,
+    rules,
     allowedImageHandlers: imagePolicy.allowedImageHandlers,
     defaultImageHandler: imagePolicy.defaultImageHandler,
     markdownit,
@@ -171,13 +246,13 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   };
 
   return (
-    <View style={layout.wrap}>
+    <View style={inBubble ? layout.bubbleWrap : layout.wrap}>
       {streaming ? (
         <MarkdownStream {...sharedProps} cursorColor={palette.mutedForeground} streaming>
-          {children}
+          {repairMarkdownTables(children)}
         </MarkdownStream>
       ) : (
-        <Markdown {...sharedProps}>{children}</Markdown>
+        <Markdown {...sharedProps}>{repairMarkdownTables(children)}</Markdown>
       )}
     </View>
   );
@@ -220,7 +295,13 @@ const layout = StyleSheet.create({
     minWidth: 0,
     flexShrink: 1,
   },
+  bubbleWrap: {
+    minWidth: 0,
+    flexShrink: 1,
+  },
 });
 
 export type { ChatMarkdownProps } from "./markdown";
-export { truncateMarkdownForRender } from "./markdown";
+export { hasMarkdownTable, truncateMarkdownForRender } from "./markdown";
+export type { GridNode, TableActions } from "./table-grid.native";
+export { TableActionsProvider, TableRecords } from "./table-grid.native";
