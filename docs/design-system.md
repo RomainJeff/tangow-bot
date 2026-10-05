@@ -292,6 +292,11 @@ thumbnail (the server marks the image `fit: "contain"`; an icon is never a `larg
 card): the icon is drawn whole and centered in the same 56 px `bg-secondary` tile,
 inset by `p-link-icon-inset` (the `linkIconInset` token, 8 pt on iOS), never cropped. Pictures that are not icons keep
 filling the tile and crop at the center.
+A compact card with no picture at all keeps the tile and draws the site's initial in it
+(`previewSiteInitial`, `text-title text-muted-foreground`, centered, decorative). When the
+card shows the link, the bubble leaves out a line that is only that link
+(`textWithoutPreviewedLinkLine`; a link inside a sentence stays; Copy, search and the model
+keep the stored text).
 
 Props: `href`, `site` (the host of `href`, derived by `previewSiteLabel`, never cut
 from the end), `title?` (plain text, from `sanitizePreviewTitle`), `format`,

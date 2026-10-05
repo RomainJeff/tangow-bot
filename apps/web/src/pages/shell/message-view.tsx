@@ -8,6 +8,7 @@ import {
   isNarrationMessage,
   previewSiteLabel,
   sanitizePreviewTitle,
+  textWithoutPreviewedLinkLine,
 } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
@@ -224,6 +225,16 @@ export const MessageView = memo(function MessageView({
     texts.length === 1 &&
     texts[0]?.kind === "text" &&
     isLinkOnlyMessage(texts[0].text, previewCard.url);
+  /**
+   * What the bubble shows of a text: without the line that is only the previewed link, which the
+   * card already shows. The stored text, Copy, search and the model keep it. Undefined when that
+   * line was all there was.
+   */
+  const bubbleText = (text: string): string | undefined => {
+    if (!previewCard || linkOnly) return text;
+    const shown = textWithoutPreviewedLinkLine(text, previewCard.url);
+    return shown || shown === text ? shown : undefined;
+  };
   /** The preview card, under the bubble and aligned to its edge. */
   const previewView = (key?: number) => {
     if (!previewCard) return null;
@@ -258,9 +269,11 @@ export const MessageView = memo(function MessageView({
   };
   if (!drawsSomething) return null;
   if (isNarration) {
-    const prose = visibleBlocks.filter(
-      (block) => (block.kind === "text" && !linkOnly) || block.kind === "progress",
-    );
+    const prose = visibleBlocks.flatMap((block) => {
+      if (block.kind === "progress") return [{ text: block.text, streaming: true }];
+      const text = block.kind === "text" && !linkOnly ? bubbleText(block.text) : undefined;
+      return text === undefined ? [] : [{ text, streaming: false }];
+    });
     return botRow(
       <>
         {messageContext}
@@ -274,13 +287,11 @@ export const MessageView = memo(function MessageView({
             className="space-y-2.5"
             dir="auto"
           >
-            {prose.map((block, i) =>
-              block.kind === "text" || block.kind === "progress" ? (
-                <div key={i}>
-                  <ChatMarkdown streaming={block.kind === "progress"}>{block.text}</ChatMarkdown>
-                </div>
-              ) : null,
-            )}
+            {prose.map((entry, i) => (
+              <div key={i}>
+                <ChatMarkdown streaming={entry.streaming}>{entry.text}</ChatMarkdown>
+              </div>
+            ))}
           </MessageBubble>
         ) : null}
         {previewView()}
@@ -501,22 +512,24 @@ export const MessageView = memo(function MessageView({
           </div>
         );
       }
-      if (block.kind === "text" && message.role === "user") {
-        return (
-          <UserBubble
-            key={i}
-            data-testid="message-user-bubble"
-            className="wrap-anywhere"
-            dir="auto"
-          >
-            <UserText text={block.text} />
-          </UserBubble>
-        );
-      }
       if (block.kind === "text") {
+        const shown = bubbleText(block.text);
+        if (shown === undefined) return null;
+        if (message.role === "user") {
+          return (
+            <UserBubble
+              key={i}
+              data-testid="message-user-bubble"
+              className="wrap-anywhere"
+              dir="auto"
+            >
+              <UserText text={shown} />
+            </UserBubble>
+          );
+        }
         return (
           <MessageBubble key={i} data-testid="message-bot-bubble" inGroup={inGroup} dir="auto">
-            <ChatMarkdown>{block.text}</ChatMarkdown>
+            <ChatMarkdown>{shown}</ChatMarkdown>
           </MessageBubble>
         );
       }

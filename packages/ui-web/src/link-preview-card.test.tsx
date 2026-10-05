@@ -30,7 +30,7 @@ describe("LinkPreviewCard", () => {
     expect(html).not.toContain("<button");
   });
 
-  it("compact: a 56 px thumbnail when there is a picture, none otherwise, title on two lines", () => {
+  it("compact: a 56 px thumbnail, the picture or the site's initial, title on two lines", () => {
     const withPicture = renderToString(
       <LinkPreviewCard
         format="compact"
@@ -55,7 +55,41 @@ describe("LinkPreviewCard", () => {
     expect(withPicture).toContain("line-clamp-2");
     expect(withPicture).toContain('dir="auto"');
     expect(withPicture).toContain("<bdi>A page</bdi>");
-    expect(without).not.toContain("size-link-thumb");
+    expect(withPicture).not.toContain("link-preview-initial");
+    expect(without).toContain("size-link-thumb");
+    expect(without).toContain("bg-secondary");
+    expect(without).toContain("ps-2");
+  });
+
+  it("compact without a picture: the host's initial, centered, in muted ink, hidden from assistive tech (CA 77)", () => {
+    const html = renderToString(
+      <LinkPreviewCard
+        format="compact"
+        href="https://www.lefigaro.fr/vie-de-bureau/x"
+        site="lefigaro.fr"
+        title="Un titre"
+      />,
+    );
+
+    expect(html).toMatch(
+      /<div data-slot="link-preview-initial" aria-hidden="true"[^>]*class="[^"]*items-center justify-center[^"]*text-title text-muted-foreground[^"]*">L<\/div>/,
+    );
+    expect(html).toContain('aria-label="Un titre, lefigaro.fr"');
+    expect(html).not.toContain("<img");
+  });
+
+  it("large and photo cards never take a letter tile", () => {
+    for (const format of ["large", "photo"] as const) {
+      const html = renderToString(
+        <LinkPreviewCard
+          format={format}
+          href="https://example.com/a"
+          site="example.com"
+          title="A page"
+        />,
+      );
+      expect(html).not.toContain("link-preview-initial");
+    }
   });
 
   it("large: the picture on top at 1.91:1, then title and site", () => {

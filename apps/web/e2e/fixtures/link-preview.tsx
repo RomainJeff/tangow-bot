@@ -65,6 +65,19 @@ const MESSAGES: ThreadMessage[] = [
       image: { artifactId: "art-1", width: 180, height: 180, fit: "contain" },
     },
   ]),
+  message("letter", "bot", [
+    {
+      kind: "text",
+      text: "Voici l'article du Figaro :\nhttps://www.lefigaro.fr/actualite-france/j-ai-eu-peur-je-suis-rentre-chez-moi-la-colere-et-l-inquietude-des-eleves-et-leurs-parents-face-aux-violences-devant-les-lycees-20261004",
+    },
+    {
+      kind: "link_preview",
+      url: "https://www.lefigaro.fr/actualite-france/j-ai-eu-peur-je-suis-rentre-chez-moi-la-colere-et-l-inquietude-des-eleves-et-leurs-parents-face-aux-violences-devant-les-lycees-20261004",
+      format: "compact",
+      title:
+        "J'ai eu peur je suis rentre chez moi la colere et l'inquietude des eleves et leurs parents face aux violences devant les lycees",
+    },
+  ]),
   message("photo", "user", [
     { kind: "text", text: "https://images.example.com/p.jpg" },
     {

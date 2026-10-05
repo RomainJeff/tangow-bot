@@ -27,6 +27,7 @@ vi.mock("../../lib/rpc", () => ({
   },
 }));
 
+import { copyableMessageText } from "../../lib/message-text";
 import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
 import { MessageView } from "./message-view";
 
@@ -202,6 +203,65 @@ describe("link preview in the thread", () => {
     await renderMessage(message("user", [text(`${URL_A} wow`), card()]));
     expect(bubbles()).toHaveLength(1);
     expect(cards()).toHaveLength(1);
+  });
+
+  it("shows the site's initial in the thumbnail of a compact card without a picture (CA 77)", async () => {
+    await renderMessage(message("bot", [text(`read ${URL_A}`), card()]));
+    const initial = cards()[0]!.querySelector('[data-slot="link-preview-initial"]');
+    expect(initial?.textContent).toBe("E");
+    expect(initial?.getAttribute("aria-hidden")).toBe("true");
+    expect(cards()[0]!.getAttribute("aria-label")).toBe("An article, example.com");
+
+    await renderMessage(message("bot", [text(`read ${URL_A}`), card({ image: IMAGE })]));
+    expect(cards()[0]!.querySelector('[data-slot="link-preview-initial"]')).toBeNull();
+  });
+
+  describe("the line that is only the link", () => {
+    const bubbleTexts = () => [...bubbles()].map((bubble) => bubble.textContent);
+
+    it.each(["bot", "user"] as const)(
+      "is not drawn in a %s's bubble, the text around it stays (CA 78)",
+      async (role) => {
+        await renderMessage(message(role, [text(`Voici l'article :\n${URL_A}`), card()]));
+        expect(bubbleTexts()).toEqual(["Voici l'article :"]);
+        expect(container.textContent).not.toContain(URL_A);
+        expect(cards()).toHaveLength(1);
+      },
+    );
+
+    it.each(["bot", "user"] as const)(
+      "stays when the link is in the middle of a %s's sentence",
+      async (role) => {
+        await renderMessage(message(role, [text(`Regarde ${URL_A} c'est bien`), card()]));
+        expect(bubbleTexts()[0]).toContain(URL_A);
+      },
+    );
+
+    it("handles the <url> and [url](url) forms and several lines", async () => {
+      await renderMessage(
+        message("user", [text(`Un\n<${URL_A}>\n\nDeux\n[${URL_A}](${URL_A})`), card()]),
+      );
+      expect(bubbleTexts()[0]).not.toContain("example.com");
+      expect(bubbleTexts()[0]).toContain("Un");
+      expect(bubbleTexts()[0]).toContain("Deux");
+    });
+
+    it("is still drawn when the preview was removed, and in a message with no card", async () => {
+      await renderMessage(
+        message("bot", [
+          text(`Voici :\n${URL_A}`),
+          { kind: "link_preview", url: URL_A, removed: true },
+        ]),
+      );
+      expect(bubbleTexts()[0]).toContain(URL_A);
+      await renderMessage(message("user", [text(`Voici :\n${URL_A}`)]));
+      expect(bubbleTexts()[0]).toContain(URL_A);
+    });
+
+    it("keeps the link in what Copy puts on the clipboard (CA 79)", () => {
+      const full = message("bot", [text(`Voici l'article :\n${URL_A}`), card()]);
+      expect(copyableMessageText(full)).toBe(`Voici l'article :\n${URL_A}`);
+    });
   });
 
   it("draws nothing for a removal marker", async () => {

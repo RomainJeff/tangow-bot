@@ -5,6 +5,7 @@ import {
   messageHostsLinkPreview,
   previewSiteLabel,
   sanitizePreviewTitle,
+  textWithoutPreviewedLinkLine,
 } from "@rakazo/core";
 import { linkLargeImageRatio, sizes } from "@rakazo/ui-tokens";
 
@@ -52,6 +53,24 @@ export function cardReplacesBubble(
   if (!blocks.every((block) => CARD_COMPANION_KINDS.has(block.kind))) return false;
   const text = blocks.flatMap((block) => (block.kind === "text" ? [block.text] : [])).join("\n");
   return isLinkOnlyMessage(text, card.url);
+}
+
+/**
+ * The blocks a bubble draws when its card shows the link: each text without the lines that are
+ * only that link (`textWithoutPreviewedLinkLine`), a text that was nothing else dropped. Display
+ * only: the stored message, its copy and what the model reads keep the link. Blocks that are not
+ * text, and texts with no such line, come back as they are.
+ */
+export function blocksWithoutPreviewedLinkLine(
+  blocks: readonly MessageBlock[],
+  url: string,
+): readonly MessageBlock[] {
+  return blocks.flatMap((block): MessageBlock[] => {
+    if (block.kind !== "text") return [block];
+    const text = textWithoutPreviewedLinkLine(block.text, url);
+    if (text === block.text) return [block];
+    return text ? [{ ...block, text }] : [];
+  });
 }
 
 /** The accessible name of the card: "title, site", or the site alone for a photo. */

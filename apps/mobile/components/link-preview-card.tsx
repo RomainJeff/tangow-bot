@@ -1,5 +1,5 @@
 import type { LinkPreviewCard as LinkPreviewCardBlock } from "@rakazo/contracts";
-import { previewSiteLabel } from "@rakazo/core";
+import { previewSiteInitial, previewSiteLabel } from "@rakazo/core";
 import { radii, sizes } from "@rakazo/ui-tokens";
 import { useEffect, useRef, useState } from "react";
 import type { ViewProps } from "react-native";
@@ -134,7 +134,17 @@ export function LinkPreviewCard({
           size={20}
           color={tokens.mutedForeground}
         />
-      ) : null}
+      ) : card.image ? null : (
+        // A compact card without a picture: the site's initial in the same tile (decorative).
+        <Text
+          style={{
+            color: tokens.mutedForeground,
+            ...nativeTextStyle("title"),
+          }}
+        >
+          {previewSiteInitial(card.url)}
+        </Text>
+      )}
     </View>
   );
 
@@ -217,15 +227,13 @@ export function LinkPreviewCard({
                     alignItems: "center",
                     gap: 10,
                     paddingVertical: 8,
-                    paddingStart: card.image ? 8 : 12,
+                    paddingStart: 8,
                     paddingEnd: 12,
                   }}
                 >
-                  {card.image ? (
-                    <View style={{ width: sizes.linkThumb }}>
-                      {picture(undefined, { borderRadius: radii.chip, overflow: "hidden" })}
-                    </View>
-                  ) : null}
+                  <View style={{ width: sizes.linkThumb }}>
+                    {picture(undefined, { borderRadius: radii.chip, overflow: "hidden" })}
+                  </View>
                   <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                     {title}
                     {siteLine}

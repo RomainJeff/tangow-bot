@@ -169,7 +169,11 @@ import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
-import { cardReplacesBubble, linkPreviewCardOf } from "../lib/link-preview";
+import {
+  blocksWithoutPreviewedLinkLine,
+  cardReplacesBubble,
+  linkPreviewCardOf,
+} from "../lib/link-preview";
 import {
   dismissThreadNotifications,
   resumeLiveNotifications,
@@ -2046,6 +2050,12 @@ function Thread() {
       chrome === "row" && message.replyToMessageId
         ? messagesById.get(message.replyToMessageId)
         : undefined;
+    // The preview card sits under the bubble, or takes its place when the message is only the
+    // link. A message that is itself a card (ask, routine run, ...) never carries one.
+    const previewCard = chrome === "row" ? linkPreviewCardOf(message) : undefined;
+    const cardReplacesBubbleView = previewCard
+      ? cardReplacesBubble(message.blocks, previewCard)
+      : false;
     const bubble = (
       <MessageBubble
         botId={botId ?? snap?.members?.[0]?.botId ?? ""}
@@ -2062,14 +2072,10 @@ function Thread() {
         actionProps={actionProps}
         isNew={isNew}
         routineRole={routineRole}
+        // The card shows the link, so the bubble does not repeat the line that is only that link.
+        previewedUrl={previewCard && !cardReplacesBubbleView ? previewCard.url : undefined}
       />
     );
-    // The preview card sits under the bubble, or takes its place when the message is only the
-    // link. A message that is itself a card (ask, routine run, ...) never carries one.
-    const previewCard = chrome === "row" ? linkPreviewCardOf(message) : undefined;
-    const cardReplacesBubbleView = previewCard
-      ? cardReplacesBubble(message.blocks, previewCard)
-      : false;
     const previewNode = previewCard ? (
       <MessageArrival
         isNew={isNew}
@@ -3357,6 +3363,7 @@ const MessageBubble = memo(function MessageBubble({
   actionProps,
   isNew,
   routineRole,
+  previewedUrl,
 }: {
   botId: string;
   botName?: string;
@@ -3375,6 +3382,8 @@ const MessageBubble = memo(function MessageBubble({
   isNew: boolean;
   /** How a routine run renders once runs are folded (a line, a group). */
   routineRole?: RoutineRowRole;
+  /** The link its card shows: a line that is only this link is left out of the text drawn. */
+  previewedUrl?: string;
 }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
@@ -3694,7 +3703,10 @@ const MessageBubble = memo(function MessageBubble({
   const attachments = message.blocks.filter(
     (block) => block.kind === "image" || block.kind === "file",
   );
-  const caption = message.blocks
+  const shownBlocks = previewedUrl
+    ? blocksWithoutPreviewedLinkLine(message.blocks, previewedUrl)
+    : message.blocks;
+  const caption = shownBlocks
     .flatMap((block) => {
       if (block.kind === "channel_message" && block.text) {
         return [
@@ -3834,7 +3846,7 @@ const MessageBubble = memo(function MessageBubble({
       </Surface>
     );
   }
-  const segments = messagePresentationSegments(message.blocks);
+  const segments = messagePresentationSegments(shownBlocks);
   const steps = showSteps ? stepsBlocks(message.blocks) : [];
   const live = message.id.startsWith("progress:");
   const firstContent = segments.findIndex((segment) => segment.kind === "content");

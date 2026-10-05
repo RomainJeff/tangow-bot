@@ -103,6 +103,52 @@ export function previewSiteLabel(url: string): string {
   }
 }
 
+/**
+ * The letter a card without a picture shows in its thumbnail: the first letter or digit of the site
+ * (`previewSiteLabel`), uppercased. Empty when the site has none.
+ */
+export function previewSiteInitial(url: string): string {
+  return (
+    previewSiteLabel(url)
+      .match(/[\p{L}\p{N}]/u)?.[0]
+      ?.toUpperCase() ?? ""
+  );
+}
+
+/**
+ * The message text without the lines that are only the previewed link (bare, in `<>`, a markdown
+ * link labelled with itself or a bare `www.` form of it; see `isLinkOnlyMessage`), for a bubble
+ * whose card already shows that link. A link inside a sentence, in a list or a quote, indented as
+ * code or in a fenced block stays. The blank line a removal leaves is dropped and the text is
+ * trimmed of the blank lines around it; text with no such line comes back unchanged and an empty
+ * result means nothing was left to say. Stored, copied and searched text is never this one.
+ */
+export function textWithoutPreviewedLinkLine(text: string, url: string): string {
+  const lines = text.split(/\r?\n/);
+  const kept: string[] = [];
+  let fence: string | undefined;
+  let removed = false;
+  for (const line of lines) {
+    const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence) {
+      if (marker && marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
+    } else if (marker) {
+      fence = marker;
+    } else if (!/^(?: {4}|\t)/.test(line) && line.trim() && isLinkOnlyMessage(line, url)) {
+      removed = true;
+      continue;
+    } else if (removed && !line.trim() && !kept.at(-1)?.trim()) {
+      // The blank line that followed a removal, next to another blank line or the start.
+      continue;
+    }
+    kept.push(line);
+  }
+  if (!removed) return text;
+  while (kept.length > 0 && !kept[0]?.trim()) kept.shift();
+  while (kept.length > 0 && !kept.at(-1)?.trim()) kept.pop();
+  return kept.join("\n");
+}
+
 /** True when a query parameter is named like a secret (case-insensitive). */
 export function hasSecretParam(url: string): boolean {
   try {
@@ -181,13 +227,17 @@ export function sanitizePreviewTitle(title: string): string {
   return (lastUnit >= 0xd800 && lastUnit <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd();
 }
 
+/** A single-letter article or `qu` before a vowel or `h`, which French elides (`j ai` is `j'ai`). */
+const SLUG_ELISION = /(^|\s)(qu|[jldnsmtc]) (?=[aeiouàâäéèêëîïôöùûüœæh])/giu;
+
 const SLUG_EXTENSION = /\.(?:html?|php)$/i;
 const SLUG_TRAILING_ID = /(?:[-_]\d+)+$/;
 
 /**
  * A card title drawn from the address alone, for a site that refuses to be read: the last
  * non-empty path segment, percent-decoded, without extension (`.html`, `.htm`, `.php`) or trailing
- * numeric id (`_6788472_3210`, `-12345`), dashes and underscores as spaces, first letter capitalised.
+ * numeric id (`_6788472_3210`, `-12345`), dashes and underscores as spaces, French elisions restored
+ * (`j ai` gives `j'ai`; accents are never guessed), first letter capitalised.
  * Null unless at least two words with a letter remain, so a bare id or a one-word section gives no card.
  */
 export function previewTitleFromUrl(url: string): string | null {
@@ -206,6 +256,8 @@ export function previewTitleFromUrl(url: string): string | null {
   }
   const title = sanitizePreviewTitle(
     decoded.replace(SLUG_EXTENSION, "").replace(SLUG_TRAILING_ID, "").replace(/[-_]+/g, " "),
-  ).replace(/^\p{L}/u, (first) => first.toUpperCase());
+  )
+    .replace(SLUG_ELISION, "$1$2'")
+    .replace(/^\p{L}/u, (first) => first.toUpperCase());
   return title.split(" ").filter((word) => /\p{L}/u.test(word)).length >= 2 ? title : null;
 }

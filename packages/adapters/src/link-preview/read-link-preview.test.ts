@@ -519,7 +519,7 @@ describe("readLinkPreview: a site that refuses the reader (CA 73-76)", () => {
   const CLOSED = `https://www.monde.example.test${SLUG}`;
   const HOME = "https://www.monde.example.test/";
   const TITLE =
-    "A kiev une atmosphere de guerre permanente l ennemi est en train de detruire la ville";
+    "A kiev une atmosphere de guerre permanente l'ennemi est en train de detruire la ville";
   const refusal = (status = 402) =>
     new Response("<head><title>Accès restreint</title></head>", {
       status,

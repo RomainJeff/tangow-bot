@@ -8,9 +8,11 @@ import {
   isLinkOnlyMessage,
   messageHostsLinkPreview,
   normalizePreviewUrl,
+  previewSiteInitial,
   previewSiteLabel,
   previewTitleFromUrl,
   sanitizePreviewTitle,
+  textWithoutPreviewedLinkLine,
 } from "./link-preview.js";
 import { isNarrationMessage, isUserNarrationMessage } from "./message-grouping.js";
 import { isAsideOnlyMessage } from "./message-visibility.js";
@@ -120,6 +122,97 @@ describe("isLinkOnlyMessage", () => {
     expect(isLinkOnlyMessage(`[label](${url})`, url)).toBe(false);
     expect(isLinkOnlyMessage(`${url}\nhttps://b.tld`, url)).toBe(false);
     expect(isLinkOnlyMessage(`${url}/`, url)).toBe(false);
+  });
+});
+
+describe("previewSiteInitial (CA 77)", () => {
+  it.each([
+    ["https://www.lefigaro.fr/vie-de-bureau/x", "L"],
+    ["https://example.com/", "E"],
+    ["https://Blog.Example.com:8443/a", "B"],
+    ["https://www.www.example.com/", "W"],
+    ["https://bücher.de/", "X"],
+    ["https://éclair.fr/", "X"],
+    ["http://192.168.1.1/", "1"],
+  ])("%s shows %s", (url, initial) => {
+    expect(previewSiteInitial(url)).toBe(initial);
+  });
+
+  it("is empty for text that is no url", () => {
+    expect(previewSiteInitial("nonsense")).toBe("");
+  });
+});
+
+describe("textWithoutPreviewedLinkLine (CA 78, 79)", () => {
+  const url = "https://www.lefigaro.fr/vie-de-bureau/article-12";
+  const strip = (text: string) => textWithoutPreviewedLinkLine(text, url);
+
+  it("removes a bare link on its own line and keeps the text", () => {
+    expect(strip(`Voici l'article :\n${url}`)).toBe("Voici l'article :");
+    expect(strip(`${url}\nVoici l'article`)).toBe("Voici l'article");
+  });
+
+  it("removes the link in angle brackets, as a self-labelled markdown link, or as a bare www. form", () => {
+    expect(strip(`Lu :\n<${url}>`)).toBe("Lu :");
+    expect(strip(`Lu :\n[${url}](${url})`)).toBe("Lu :");
+    expect(textWithoutPreviewedLinkLine("Lu :\nwww.lemonde.fr/x", "https://www.lemonde.fr/x")).toBe(
+      "Lu :",
+    );
+    expect(strip(`Lu :\n  ${url}  `)).toBe("Lu :");
+  });
+
+  it("drops the blank line the removal leaves, not the paragraphs around it", () => {
+    expect(strip(`Intro\n\n${url}\n\nSuite`)).toBe("Intro\n\nSuite");
+    expect(strip(`Intro\n\n${url}`)).toBe("Intro");
+    expect(strip(`${url}\n\nSuite`)).toBe("Suite");
+    expect(strip(`Intro\n${url}\n\nSuite`)).toBe("Intro\n\nSuite");
+    expect(strip(`A\n\nB\n\n${url}\n\nC`)).toBe("A\n\nB\n\nC");
+  });
+
+  it("removes every line that is the link", () => {
+    expect(strip(`${url}\nPuis\n${url}\nFin`)).toBe("Puis\nFin");
+    expect(strip(`Lu\r\n${url}\r\nFin`)).toBe("Lu\nFin");
+  });
+
+  it("is empty when nothing but the link remains", () => {
+    expect(strip(url)).toBe("");
+    expect(strip(`\n${url}\n\n${url}\n`)).toBe("");
+  });
+
+  it("keeps a link inside a sentence, a list, a quote, a longer line or another link", () => {
+    for (const text of [
+      `Regarde ${url} c'est bien`,
+      `${url} c'est bien`,
+      `- ${url}`,
+      `> ${url}`,
+      `[l'article](${url})`,
+      `${url}.`,
+      `${url}/`,
+      `${url}?a=1`,
+      "https://other.tld/x",
+    ]) {
+      expect(strip(`Début\n${text}`)).toBe(`Début\n${text}`);
+    }
+  });
+
+  it("leaves a link in a fenced or indented code block", () => {
+    const fenced = `Code :\n\`\`\`\n${url}\n\`\`\`\nFin`;
+    expect(strip(fenced)).toBe(fenced);
+    const tilde = `~~~\n${url}\n~~~\n${url}`;
+    expect(strip(tilde)).toBe(`~~~\n${url}\n~~~`);
+    const indented = `Code :\n\n    ${url}`;
+    expect(strip(indented)).toBe(indented);
+  });
+
+  it("returns the very same text when no line is the link", () => {
+    const text = "Rien\n\n\n  à retirer  \n";
+    expect(strip(text)).toBe(text);
+  });
+
+  it("is only for display: the stored text still carries the link for copy, search and the model", () => {
+    const text = `Voici l'article :\n${url}`;
+    strip(text);
+    expect(blocksToAgentHistoryText([{ kind: "text", text }])).toContain(url);
   });
 });
 
@@ -337,7 +430,7 @@ describe("previewTitleFromUrl (CA 73, 75)", () => {
   it.each([
     [
       "https://www.lemonde.fr/international/article/2026/10/05/a-kiev-une-atmosphere-de-guerre-permanente-l-ennemi-est-en-train-de-detruire-la-ville_6788472_3210.html",
-      "A kiev une atmosphere de guerre permanente l ennemi est en train de detruire la ville",
+      "A kiev une atmosphere de guerre permanente l'ennemi est en train de detruire la ville",
     ],
     ["https://a.tld/news/some-story-title-12345", "Some story title"],
     ["https://a.tld/news/some_story_title_123", "Some story title"],
@@ -364,6 +457,28 @@ describe("previewTitleFromUrl (CA 73, 75)", () => {
     "not a url",
   ])("gives no title for %s", (url) => {
     expect(previewTitleFromUrl(url)).toBeNull();
+  });
+
+  it("restores French elisions, with the article's own apostrophe and no guessed accent (CA 80)", () => {
+    expect(
+      previewTitleFromUrl(
+        "https://www.lefigaro.fr/actualite-france/j-ai-eu-peur-je-suis-rentre-chez-moi-la-colere-et-l-inquietude-des-eleves-et-leurs-parents-face-aux-violences-devant-les-lycees-20261004",
+      ),
+    ).toBe(
+      "J'ai eu peur je suis rentre chez moi la colere et l'inquietude des eleves et leurs parents face aux violences devant les lycees",
+    );
+    expect(
+      previewTitleFromUrl("https://a.tld/n/qu-il-parte-d-ici-s-en-va-m-ecoute-t-es-c-est-n-hesite"),
+    ).toBe("Qu'il parte d'ici s'en va m'ecoute t'es c'est n'hesite");
+  });
+
+  it("elides only a lone letter or qu before a vowel or h", () => {
+    expect(previewTitleFromUrl("https://a.tld/n/j-mange-l-ours-d-or")).toBe("J mange l'ours d'or");
+    expect(previewTitleFromUrl("https://a.tld/n/le-mur-quai-ou-sa-vie")).toBe(
+      "Le mur quai ou sa vie",
+    );
+    expect(previewTitleFromUrl("https://a.tld/n/jai-lami-dhier-ou")).toBe("Jai lami dhier ou");
+    expect(previewTitleFromUrl("https://a.tld/n/a-b-c-d-e")).toBe("A b c d'e");
   });
 
   it("sanitizes what the address decodes to and caps its length", () => {

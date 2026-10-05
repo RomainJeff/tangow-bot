@@ -21,7 +21,7 @@ test("link previews render in three formats and never contact the linked site", 
   await page.goto("/e2e/fixtures/link-preview.html");
 
   const cards = page.locator('[data-slot="link-preview-card"]');
-  await expect(cards).toHaveCount(5);
+  await expect(cards).toHaveCount(6);
   await expect(page.locator('[data-format="large"]')).toHaveAttribute(
     "aria-label",
     "The city that removed its traffic lights, example.com",
@@ -64,6 +64,25 @@ test("link previews render in three formats and never contact the linked site", 
   const cover = page.locator('[data-message-id="compact"] [data-slot="link-preview-picture"]');
   await expect(cover).toHaveAttribute("data-fit", "cover");
   await expect(cover.locator("img")).toHaveCSS("object-fit", "cover");
+
+  // A compact card without a picture shows the site's initial in the same 56 px tile (the tile is
+  // decorative, the card keeps its name), and the bubble does not repeat the link's own line.
+  const letter = page.locator('[data-message-id="letter"]');
+  const tile = letter.locator('[data-slot="link-preview-initial"]');
+  await expect(tile).toHaveText("L");
+  await expect(tile).toHaveAttribute("aria-hidden", "true");
+  expect((await tile.locator("xpath=..").boundingBox())!.width).toBe(56);
+  await expect(letter.locator('[data-slot="link-preview-card"]')).toHaveAttribute(
+    "aria-label",
+    /^J'ai eu peur .* lycees, lefigaro\.fr$/,
+  );
+  await expect(letter.locator('[data-testid="message-bot-bubble"]')).toHaveText(
+    "Voici l'article du Figaro :",
+  );
+  // A link in the middle of a sentence stays.
+  await expect(
+    page.locator('[data-message-id="compact"] [data-testid="message-user-bubble"]'),
+  ).toContainText("https://news.example.org/briefing");
 
   // A link-only message has no bubble: the card carries the message's actions.
   const linkOnly = page.locator('[data-message-id="link-only"]');

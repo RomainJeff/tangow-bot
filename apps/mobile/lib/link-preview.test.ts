@@ -2,6 +2,7 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { sizes } from "@rakazo/ui-tokens";
 import { describe, expect, it } from "vitest";
 import {
+  blocksWithoutPreviewedLinkLine,
   cardReplacesBubble,
   composerThumbnailFit,
   linkCardWidth,
@@ -203,5 +204,37 @@ describe("linkPreviewImageFit", () => {
     const largeIcon = unchecked({ ...large, image: { ...image, fit: "contain" } });
     expect(linkPreviewImageFit(cardOf([largeIcon])!)).toEqual({ resizeMode: "cover", inset: 0 });
     expect(composerThumbnailFit(undefined)).toEqual({ resizeMode: "cover", inset: 0 });
+  });
+});
+
+describe("blocksWithoutPreviewedLinkLine", () => {
+  const url = "https://www.example.com/post";
+
+  it("leaves the link line out of each text and keeps the rest (CA 78)", () => {
+    const steps = unchecked({ kind: "steps", steps: [] });
+    expect(blocksWithoutPreviewedLinkLine([text(`Voici :\n${url}`), steps, compact], url)).toEqual([
+      text("Voici :"),
+      steps,
+      compact,
+    ]);
+    expect(blocksWithoutPreviewedLinkLine([text(`<${url}>\n\nSuite`)], url)).toEqual([
+      text("Suite"),
+    ]);
+  });
+
+  it("drops a text that was nothing but the link", () => {
+    expect(blocksWithoutPreviewedLinkLine([text(url), compact], url)).toEqual([compact]);
+  });
+
+  it("keeps a link inside a sentence and returns unchanged blocks as they are", () => {
+    const blocks = [text(`Regarde ${url} c'est bien`), compact];
+    expect(blocksWithoutPreviewedLinkLine(blocks, url)).toEqual(blocks);
+    expect(blocksWithoutPreviewedLinkLine(blocks, url)[0]).toBe(blocks[0]);
+  });
+
+  it("never changes the stored message", () => {
+    const blocks = [text(`Voici :\n${url}`)];
+    blocksWithoutPreviewedLinkLine(blocks, url);
+    expect(blocks).toEqual([text(`Voici :\n${url}`)]);
   });
 });

@@ -1,3 +1,4 @@
+import { previewSiteInitial } from "@rakazo/core";
 import { linkLargeImageRatio } from "@rakazo/ui-tokens";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "./lib/utils.js";
@@ -50,6 +51,22 @@ export function LinkPreviewPicture({
         alt=""
         className={cn("size-full", whole ? "object-contain" : "object-cover")}
       />
+    </div>
+  );
+}
+
+/**
+ * What a compact card with no picture shows in its thumbnail: the site's initial, centered on the
+ * `secondary` tile in `muted-foreground`. Decorative, so the card keeps its name.
+ */
+function LinkPreviewInitial({ children }: { children: string }) {
+  return (
+    <div
+      data-slot="link-preview-initial"
+      aria-hidden
+      className="absolute inset-0 flex items-center justify-center text-title text-muted-foreground"
+    >
+      {children}
     </div>
   );
 }
@@ -128,7 +145,7 @@ export function LinkPreviewCard({
           className={cn(
             "overflow-hidden transition-colors duration-(--duration-hover) ease-quiet group-hover/link-card:border-outline",
             format === "compact" && "flex items-center gap-2.5 py-2 pe-3",
-            format === "compact" && (image ? "ps-2" : "ps-3"),
+            format === "compact" && "ps-2",
           )}
         >
           {format === "large" ? (
@@ -146,11 +163,9 @@ export function LinkPreviewCard({
             </>
           ) : (
             <>
-              {image ? (
-                <div className="relative size-link-thumb shrink-0 overflow-hidden rounded-chip bg-secondary">
-                  {image}
-                </div>
-              ) : null}
+              <div className="relative size-link-thumb shrink-0 overflow-hidden rounded-chip bg-secondary">
+                {image ?? <LinkPreviewInitial>{previewSiteInitial(href)}</LinkPreviewInitial>}
+              </div>
               <div className="min-w-0">
                 {titleLine}
                 <Site>{site}</Site>
