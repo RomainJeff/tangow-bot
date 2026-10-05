@@ -180,6 +180,8 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
       }
 
       if (fakeAgentState.mode === "scripted-turns") {
+        // A reply nudge is a later prompt: the scripted turns only play on the first.
+        if (fakeAgentState.promptInputs.length > 1) return;
         let callCount = 0;
         for (const turn of fakeAgentState.turns) {
           if (turn.text) {
