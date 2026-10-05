@@ -114,7 +114,7 @@ Duplicate, already shipped or in progress → write a minimal `## Scoping` secti
   ```bash
   python3 .agents/skills/scope-card/scripts/langfuse-pull.py <scratchpad>/traces.jsonl --days 7 --type AGENT --io-chars 700
   ```
-  and launches `scope-card-trace-scout` with the question, the file, the trace URL prefix the script prints and the window. Add `TOOL` observations only when the question is about tools: this is the most expensive scout. Run text often reveals the cause; check the key example in the extract yourself. Keys never leave the script; the extract stays in the scratchpad. Into Notion go aggregate figures and trace links only, never conversation excerpts. Traces describe one instance: they prove a problem exists, they never set a product criterion.
+  and launches `scope-card-trace-scout` with the question, the file, the trace URL prefix the script prints and the window. Add `TOOL` observations only when the question is about tools: this is the most expensive scout. Run text often reveals the cause; check the key example in the extract yourself. Keys never leave the script; the extract stays in the scratchpad. Into Notion go aggregate figures and trace links only, never conversation excerpts. Traces describe one instance: they prove a problem exists, they never set a product criterion. Before a figure goes into the card, apply **principle-explain-the-number** (read its SKILL.md): say what limits it and rule out that it measures something else. A common trap is counting bot-to-bot messages the user never sees; report the figure that reaches the user, and the other one only as context.
 - This thread reads the **primitives bench**: §1, plus the subsection of the moment touched (§2.x agent run, §3.x messaging, §4.x cross-cutting). Not for a purely backend bug.
 
 ### 4. Branch by type
@@ -131,10 +131,10 @@ Duplicate, already shipped or in progress → write a minimal `## Scoping` secti
 **Tools sparingly.** A tool weighs on every model turn and on harness maintenance; a skill costs nothing until it is loaded. For every option that changes bot behaviour, prefer in this order: a short instruction, a skill loaded on demand, an option on an existing core tool (sending messages, routines, memory, computer), and only last a new tool, justified by a core primitive or an important UX. Say in the cell which one the option uses.
 
 **bug**
-- Repro: numbered steps, surface, frequency.
-- Root cause proven in the code (permalink), regression if any (`git log -S` or `git blame` in the scout worktree), the test that would fail today.
+- Repro: numbered steps, surface, frequency. Reproduce it yourself before asking, the way poteto-mode's Bug fix playbook does: when the bug shows on web or desktop and an instance is reachable, drive it with the built-in browser, observing only (no message sent, nothing created or deleted on the user's behalf). Ask for a screenshot only for an iOS-only bug or an instance you cannot reach, and say why.
+- Root cause proven in the code (permalink), the test that would fail today. Regression and motivation history go through the **why** skill (read its SKILL.md; source control is usually the only evidence category needed): which change introduced the behaviour and why it was made, never a PR attributed from memory.
 - Bot behaviour at stake → Langfuse traces or server logs; when production access is blocked, give the user the commands.
-- Visual bug: "expected state" referenced to `docs/design-system.md`, plus the screenshot attached to the card; otherwise ask for one. Do not launch the app.
+- Visual bug: "expected state" referenced to `docs/design-system.md`, plus a screenshot of the current state, taken yourself when you could reproduce it, otherwise the one attached to the card or asked for.
 - No Mobbin, Muse, Dots or mockup.
 
 **feature**
@@ -155,7 +155,7 @@ Duplicate, already shipped or in progress → write a minimal `## Scoping` secti
 
 ### 5. Synthesis
 
-**Before writing, check the 2-3 pieces of evidence the verdict rests on yourself**: read the cited lines in the scout worktree, run `git log -S` for any regression claim. Scouts sometimes get a path or a file wrong, and memory can be stale.
+**Before writing, check the 2-3 pieces of evidence the verdict rests on yourself**: read the cited lines in the scout worktree, run `git log -S` for any regression claim. Scouts sometimes get a path or a file wrong, and memory can be stale. Every claim in the toggles carries its evidence or its label in the same sentence, as poteto-mode asks of its replies: *mesuré* (run, query, trace), *déduit* (read in the code), or *supposé* (not checked). A guess never reads as a fact.
 
 This thread writes: problem, users affected, scope in and out, **observable** acceptance criteria, edge cases (empty, loading, error, concurrency), i18n impact, size, PR breakdown, a suggested process weight (trivial fix / visible UI change / touches untrusted input, tools, sandbox, secrets or auth, so security review required / new capability), risks (security, parity, provider neutrality when a vendor is involved), open questions.
 

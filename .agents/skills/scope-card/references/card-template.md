@@ -47,7 +47,7 @@ Same content, readable:
 > - **Étape 1** : on dit clairement au bot de se taire quand il n'a rien d'utile, et seul un message envoyé exprès arrive chez toi.
 > - **Étape 2, si besoin** : c'est le code, et plus le bot, qui décide si un message mérite une notification.
 
-In the toggles, technical vocabulary is fine (it is the spec draft), but every cell stays a complete, understandable sentence.
+In the toggles, technical vocabulary is fine (it is the spec draft), but every cell stays a complete, understandable sentence, and every claim carries its evidence (a permalink, a trace, a command output) or its label: *mesuré*, *déduit* or *supposé*.
 
 ## Full skeleton (feature UX)
 
