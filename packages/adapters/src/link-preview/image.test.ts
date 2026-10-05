@@ -249,8 +249,9 @@ describe("encodePreviewImage", () => {
     const watched: Semaphore = {
       run: (work) =>
         semaphore.run(async () => {
-          inSlot = work();
-          return inSlot;
+          const running = work();
+          inSlot = running;
+          return running;
         }),
     };
     const png = await solid(10, 10).png().toBuffer();

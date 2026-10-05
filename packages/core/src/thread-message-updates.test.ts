@@ -54,6 +54,6 @@ describe("shared message updates", () => {
       blocks: update.blocks,
     });
     expect(mergeMessageUpdate(undefined, update)).toBeUndefined();
-    expect(mergeMessageUpdate(existing, { ...update, replyQuote: "new" }).replyQuote).toBe("new");
+    expect(mergeMessageUpdate(existing, { ...update, replyQuote: "new" })?.replyQuote).toBe("new");
   });
 });
