@@ -388,6 +388,8 @@ export class PiAgentRuntime implements AgentRuntime {
         let silentToolContinuations = 0;
         let toolWorkPendingFinal = false;
         let endedSilentlyAfterTools = false;
+        let lastToolTurnHadText = false;
+        let closingNarration = false;
         agent.subscribe(async (event) => {
           if (event.type === "message_end") {
             await piSession?.appendMessage(event.message);
@@ -444,6 +446,7 @@ export class PiAgentRuntime implements AgentRuntime {
                 event.message,
                 event.toolResults,
               );
+              lastToolTurnHadText = messageText.trim() !== "";
               silentToolContinuations = 0;
             } else if (toolWorkPendingFinal && !hasToolCalls && !hasToolResults) {
               if (messageText.trim()) {
@@ -524,8 +527,10 @@ export class PiAgentRuntime implements AgentRuntime {
             streamed = budgetMessage;
           }
         } else if (!host.pausePending && endedSilentlyAfterTools) {
-          // Pre-tool narration is not a reply either: finish with no text at all.
+          // Earlier narration is not a reply either: finish with no text. The words written with
+          // the final tool call are the exception, flagged on `done` for the executor to post.
           streamed = "";
+          closingNarration = lastToolTurnHadText;
         } else if (!host.pausePending && toolWorkPendingFinal) {
           // Discard cumulative pre-tool narration from the terminal payload and make the
           // missing final response visible to the user instead of silently completing.
@@ -548,7 +553,11 @@ export class PiAgentRuntime implements AgentRuntime {
           }
         }
         traceOutput = streamed;
-        queue.push(streamed.trim() ? { type: "done", text: streamed } : { type: "done" });
+        queue.push(
+          streamed.trim()
+            ? { type: "done", text: streamed }
+            : { type: "done", ...(closingNarration ? { closingNarration: true as const } : {}) },
+        );
       } catch (error) {
         traceError = error;
         const message = sanitizeError(error instanceof Error ? error.message : String(error));

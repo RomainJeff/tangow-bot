@@ -991,7 +991,81 @@ describe("Pi connector tool dispatch", () => {
 
     expect(fakeAgentState.followUpMessages).toEqual([]);
     expect(JSON.stringify(events)).not.toContain("could not produce a final response");
-    // The pre-tool narration is not carried as the run's final text.
+    // The turn's words are not carried as the run's final text; they are flagged as closing words
+    // for the executor, since the run stopped right after the tool turn that wrote them.
+    expect(events.at(-1)).toEqual({ type: "done", closingNarration: true });
+  });
+
+  it("flags the words written with the last tool call when a silent-capable run then stops", async () => {
+    fakeAgentState.mode = "scripted-turns";
+    fakeAgentState.turns = [
+      { text: "I'll check the calendar.", calls: [{ name: "check_calendar" }] },
+      { text: "Two invoices are overdue.", calls: [{ name: "remember" }] },
+    ];
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "routine-closing",
+        prompt: "check invoices",
+        instructions: "Report overdue invoices.",
+        history: [],
+        tools: [],
+        model: { provider: "test", id: "dispatch-test-model" },
+        allowSilentEmpty: true,
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "routine-closing",
+        traceId: "routine-closing",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
+    expect(fakeAgentState.followUpMessages).toEqual([]);
+    expect(events.at(-1)).toEqual({ type: "done", closingNarration: true });
+  });
+
+  it("does not flag a closing narration when the last tool turn wrote nothing", async () => {
+    fakeAgentState.mode = "scripted-turns";
+    fakeAgentState.turns = [
+      { text: "I'll check the calendar.", calls: [{ name: "check_calendar" }] },
+      { calls: [{ name: "remember" }] },
+    ];
+    const runtime = new PiAgentRuntime();
+    const events: unknown[] = [];
+
+    for await (const event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "routine-preamble",
+        prompt: "check invoices",
+        instructions: "Report overdue invoices.",
+        history: [],
+        tools: [],
+        model: { provider: "test", id: "dispatch-test-model" },
+        allowSilentEmpty: true,
+        executeTool: vi.fn(async () => ({ ok: true })),
+      },
+      {
+        operationId: "routine-preamble",
+        traceId: "routine-preamble",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      events.push(event);
+    }
+
     expect(events.at(-1)).toEqual({ type: "done" });
   });
 
