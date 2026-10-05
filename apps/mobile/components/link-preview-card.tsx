@@ -90,6 +90,7 @@ export function LinkPreviewCard({
     gutter: THREAD_GUTTER,
     avatarColumn: sizes.message + AVATAR_GAP,
     mono,
+    byPerson: align === "end",
   });
   const href = openableLinkPreviewUrl(card.url);
   const image = useCardImage(target, card.image?.artifactId);

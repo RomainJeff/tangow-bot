@@ -62,4 +62,12 @@ test("link previews render in three formats and never contact the linked site", 
     );
     await captureScreenshot(page, testInfo, `link-preview-${scheme}`);
   }
+
+  // On a phone the card keeps its bubble's width cap, so its side still says who sent it.
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const card of await cards.all()) {
+    const box = await card.boundingBox();
+    expect(box!.width).toBeLessThan(390 * 0.85);
+  }
+  await captureScreenshot(page, testInfo, "link-preview-phone");
 });

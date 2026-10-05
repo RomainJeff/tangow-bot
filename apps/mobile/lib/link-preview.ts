@@ -69,15 +69,19 @@ export function linkCardWidth({
   gutter,
   avatarColumn,
   mono,
+  byPerson = false,
 }: {
   windowWidth: number;
   gutter: number;
   /** Width of the avatar column plus its gap, 0 when there is none. */
   avatarColumn: number;
   mono: boolean;
+  /** The person's own card: capped like the user bubble (78%), so its side still says who sent it. */
+  byPerson?: boolean;
 }): number {
   const column = windowWidth - gutter * 2 - (mono ? 0 : avatarColumn);
-  return Math.max(0, Math.min(sizes.linkCard, Math.floor(column * (mono ? 0.82 : 0.88))));
+  const share = byPerson ? 0.78 : mono ? 0.82 : 0.88;
+  return Math.max(0, Math.min(sizes.linkCard, Math.floor(column * share)));
 }
 
 /**

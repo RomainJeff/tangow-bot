@@ -151,6 +151,14 @@ describe("link preview in the thread", () => {
     expect(cards()[0]!.parentElement?.className).toContain("justify-start");
   });
 
+  it("caps the card like the bubble it stands for, so its side still says who sent it", async () => {
+    await renderMessage(message("user", [text(URL_A), card()]));
+    expect(cards()[0]!.className).toContain("max-w-39/50");
+    expect(cards()[0]!.className).not.toContain("max-w-full");
+    await renderMessage(message("bot", [text(URL_A), card()]));
+    expect(cards()[0]!.className).toContain("max-w-41/50");
+  });
+
   it("takes the bubble's place when the message is only its link", async () => {
     await renderMessage(message("user", [text(URL_A), card()]));
     expect(bubbles()).toHaveLength(0);

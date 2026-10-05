@@ -149,6 +149,12 @@ describe("linkCardWidth", () => {
     expect(linkCardWidth({ ...base, mono: false })).toBe(Math.floor((402 - 28 - 34) * 0.88));
   });
 
+  it("caps the person's own card like their bubble, at 78% of the thread", () => {
+    expect(linkCardWidth({ ...base, mono: true, byPerson: true })).toBe(
+      Math.floor((402 - 28) * 0.78),
+    );
+  });
+
   it("never grows past the link card token, on a wide window", () => {
     expect(linkCardWidth({ ...base, windowWidth: 1024, mono: true })).toBe(sizes.linkCard);
   });

@@ -234,6 +234,10 @@ export const MessageView = memo(function MessageView({
         className={`mt-1 flex first:mt-0 ${message.role === "user" ? "justify-end" : "justify-start"}`}
       >
         <LinkPreviewCard
+          // The same width cap as the bubble it stands for, so the side still says who sent it.
+          className={
+            message.role === "user" ? "max-w-39/50" : inGroup ? "max-w-22/25" : "max-w-41/50"
+          }
           href={previewCard.url}
           site={previewSiteLabel(previewCard.url)}
           title={previewCard.title ? sanitizePreviewTitle(previewCard.title) : undefined}
