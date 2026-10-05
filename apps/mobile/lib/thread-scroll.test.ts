@@ -76,3 +76,20 @@ describe("mobile thread scroll state identity", () => {
     expect(behavior.onUserScroll(400)).toBe(detached);
   });
 });
+
+describe("mobile thread tail", () => {
+  it("follows the typing bubble only when the reader is at the latest messages", () => {
+    const behavior = new ThreadScrollBehavior();
+    behavior.openThread("thread-1");
+
+    // Nothing to follow before the thread has laid out and shown its messages.
+    expect(behavior.onTailChanged()).toBe(null);
+    behavior.onLayout();
+    behavior.onContentChanged(false, "m1");
+    expect(behavior.onTailChanged()).toBe("smooth");
+
+    // A reader who scrolled up keeps their place.
+    behavior.onUserScroll(400);
+    expect(behavior.onTailChanged()).toBe(null);
+  });
+});

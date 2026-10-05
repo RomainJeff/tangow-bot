@@ -72,3 +72,20 @@ test("the design-system kitchen sink renders every primitive light and dark", as
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(12, 12, 14)");
   await captureScreenshot(page, testInfo, "design-system-dark");
 });
+
+test("a long working line is cut with an ellipsis, never widening a phone screen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/e2e/fixtures/design-system.html");
+
+  const row = page.getByTestId("working-line-long");
+  await expect(row).toBeVisible();
+  const label = row.locator('[data-slot="working-line-label"]');
+  // The label overflows its own box (so the ellipsis shows) while the page stays phone-wide.
+  expect(await label.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await expect(row.locator('[data-slot="working-line-elapsed"]')).toBeInViewport();
+});

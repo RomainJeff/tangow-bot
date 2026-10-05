@@ -1,4 +1,11 @@
-import { ChatMarkdown, LinkifiedText, truncateMarkdownForRender } from "@rakazo/chat-ui/native";
+import type { GridNode, TableActions } from "@rakazo/chat-ui/native";
+import {
+  ChatMarkdown,
+  hasMarkdownTable,
+  LinkifiedText,
+  TableActionsProvider,
+  truncateMarkdownForRender,
+} from "@rakazo/chat-ui/native";
 import type {
   AgentSkillCatalogEntry,
   Connection,
@@ -16,7 +23,8 @@ import {
   attachmentsForThread,
   buildComposerMentionOptions,
   type ComposerMention,
-  cloudAgentHttpsUrl,
+  computeMessageGroups,
+  foldRoutineRuns,
   isApprovalAskBlock,
   isAsideOnlyMessage,
   isRunTerminalEvent,
@@ -25,6 +33,8 @@ import {
   latestAnswerableAskMessageId,
   mentionChipKey,
   projectMessageReactions,
+  type RoutineGroupRun,
+  type RoutineRowRole,
   resolveComposerSendPlan,
   SLASH_ACTIONS,
   type SlashActionId,
@@ -35,23 +45,34 @@ import {
   truncateSlashDescription,
   userVisibleMessages,
 } from "@rakazo/core";
-import { motion, radii, sizes } from "@rakazo/ui-tokens";
+import { botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import type { ReactNode } from "react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  createContext,
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  AccessibilityInfo,
   ActionSheetIOS,
   ActivityIndicator,
   Alert,
   AppState,
   FlatList,
-  Image,
-  Linking,
+  findNodeHandle,
   Modal,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  PixelRatio,
   Platform,
   Pressable,
   ScrollView,
@@ -63,15 +84,22 @@ import {
   type ViewStyle,
 } from "react-native";
 import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
+import type { SharedValue } from "react-native-reanimated";
 import Animated, {
   Easing,
+  FadeIn,
+  FadeInDown,
   Keyframe,
+  runOnJS,
+  runOnUI,
+  useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { AppConnectCard } from "../components/AppConnectCard";
 import {
   AskActions,
@@ -80,11 +108,16 @@ import {
   TERTIARY_CAPSULE_HEIGHT,
 } from "../components/AskActions";
 import { AgentSteps } from "../components/agent-steps";
+import { AnimatedMessageBubble, MessageArrival } from "../components/animated-message-bubble";
 import { BotAvatar } from "../components/bot-avatar";
-import { ComposerShell } from "../components/composer-shell";
+import { BotBubble } from "../components/bot-bubble";
+import { BuzzingAvatar } from "../components/buzzing-avatar";
+import { ComposerAttachment } from "../components/composer-attachment";
+import { ComposerAttachBubble, ComposerShell } from "../components/composer-shell";
+import { DictationPreview } from "../components/dictation-preview";
 import { FramedBlock } from "../components/framed-block";
 import { GroupAvatar } from "../components/group-avatar";
-import { Interstitial } from "../components/interstitial";
+import { HandoffDivider, Interstitial } from "../components/interstitial";
 import {
   MarkdownArtifactPreview,
   type MarkdownArtifactPreviewTarget,
@@ -93,18 +126,21 @@ import type { MessageSheetAction } from "../components/message-actions-sheet";
 import { MessageActionsSheet } from "../components/message-actions-sheet";
 import { MessageRow } from "../components/message-row";
 import { NativeSymbol } from "../components/native-symbol";
+import { PreviewSheet } from "../components/preview-sheet";
+import { ReactionPill } from "../components/reaction-pill";
 import { ShimmerText } from "../components/shimmer-text";
 import { StackedAvatars } from "../components/stacked-avatars";
+import { StopContour } from "../components/stop-contour";
 import { Surface } from "../components/surface";
+import { TablePreview } from "../components/table-preview";
+import { TypingBubble } from "../components/typing-bubble";
 import { UserBubble } from "../components/user-bubble";
-import { WorkingLine } from "../components/working-line";
 import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import {
   applyMobileThreadEvent,
   blockText,
   copyableMobileMessageText,
   currentApiBase,
-  earliestRunStartMs,
   loadSessionToken,
   type MobileBot,
   type MobileGroup,
@@ -121,11 +157,13 @@ import {
   shouldApplyMobileThreadRefresh,
   subscribeThread,
 } from "../lib/api";
-import { mobileTokens } from "../lib/appearance";
+import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { type MobileArtifactTarget, openMobileArtifact } from "../lib/artifact-open";
+import { presentAttachSheet } from "../lib/attach-sheet";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
+import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
-import { commitHaptic, selectionHaptic } from "../lib/haptics";
+import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
@@ -135,6 +173,7 @@ import {
   setOpenNotificationThread,
   syncAppBadge,
 } from "../lib/live-notifications";
+import { messageArrivalStaggerMs, useMessageArrivals } from "../lib/message-arrivals";
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
@@ -148,8 +187,10 @@ import {
   pickFromLibrary,
   takePhoto,
 } from "../lib/pick-attachments";
+import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
 import { closeSheet, openSheet } from "../lib/sheet";
+import { hexWithAlpha } from "../lib/stop-contour-math";
 import { shadowsForAppearance } from "../lib/theme";
 import {
   type ThreadScrollAction,
@@ -157,6 +198,7 @@ import {
   type ThreadScrollState,
 } from "../lib/thread-scroll";
 import { nativeTextStyle } from "../lib/typography";
+import { useComposerDictation } from "../lib/use-composer-dictation";
 import { speakText } from "../lib/voice";
 
 type PendingAttachment = PickedAttachment & { threadKey: string };
@@ -171,12 +213,33 @@ type AskAction = NonNullable<Extract<MessageBlock, { kind: "ask" }>["actions"]>[
  */
 type MessageChrome = "row" | "aside";
 
-/** Gaps from the design contract's space scale: 28 between messages, 22 for
- * the quieter asides. */
-const MESSAGE_GAP = 28;
-const ASIDE_GAP = 22;
-/** Avatar column plus its gap: a bot row's reactions line up under its prose. */
-const FRAMED_INDENT = sizes.message + 11;
+/** 7g: a bot row whose blocks are only ever one of these is a card, not
+ * narration — a decision, an ask, a routine/subagent trace, a peer-message
+ * marker or a bare attachment. Swipe-to-reply is a *narration* bubble's
+ * gesture only; these keep today's plain long-press wrapper. */
+const CARD_ONLY_BLOCK_KINDS = new Set<string>([
+  "ask",
+  "handoff",
+  "bot_message_sent",
+  "bot_message_received",
+  "channel_message",
+  "meta",
+  "routine_run",
+  "subagent",
+  "child_bot",
+  "image",
+  "file",
+]);
+
+/** Gaps from design contract § Grouping: 3 within a group, 14 between groups
+ * (replaces the old `MESSAGE_GAP` / `ASIDE_GAP` for both rows and asides), 0
+ * between two consecutive asides. */
+const GROUP_GAP = 14;
+const WITHIN_GROUP_GAP = 3;
+/** Avatar column (`sizes.message`, 26) plus its gap (8): a bot row's
+ * reactions, and a card's indent, line up under its group's prose in multi.
+ * 0 in mono, which has no avatar column. */
+const FRAMED_INDENT = sizes.message + 8;
 
 /** The 30 pt capsule a mention or a skill rides in, inside the composer. */
 const composerChip: ViewStyle = {
@@ -231,14 +294,6 @@ function formatAttachmentSkip(item: { name: string; reason: string }): string {
   return `${name} (${item.reason})`;
 }
 
-/** The clock beside a bot's name, and the title of the message action sheet. */
-function messageClockTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(dateLocaleForUi(), {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 function isWorkingStatus(status: string | undefined): boolean {
   return (
     status === "queued" ||
@@ -250,6 +305,26 @@ function isWorkingStatus(status: string | undefined): boolean {
 }
 
 type NotificationRouteState = "loading" | "ready" | "failed";
+
+/**
+ * Lets a row that grows in place (a routine report opening) keep its header
+ * still. The thread is an inverted list, so a taller row pushes the rows
+ * above it up; while it moves, the list keeps the row just above it where it
+ * is, natively and in the same frame, so the header stays put and only what
+ * is below moves.
+ */
+const ThreadGrowthContext = createContext<{
+  /** The row with this message id is about to change height under the person's finger. */
+  hold: (rowId: string | null) => void;
+} | null>(null);
+
+/** The message id of the thread row a component is drawn in. */
+const ThreadRowContext = createContext<string | null>(null);
+
+/** The height of the `Expandable` a component is drawn in, if any. */
+const ExpandableHeightContext = createContext<SharedValue<number> | null>(null);
+
+const KEEP_VISIBLE_POSITION = { minIndexForVisible: 0 };
 
 export default function ThreadRoute() {
   const tokens = useMobileTokens();
@@ -391,6 +466,12 @@ function Thread() {
   const [selectedMentions, setSelectedMentions] = useState<ComposerMention[]>([]);
   const [selectedSkill, setSelectedSkill] = useState<AgentSkillCatalogEntry | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  // the single source of truth for the + bubble's icon/label and the
+  // attach sheet's open state — closed by `presentAttachSheet` on every path
+  // out, and as a safety net below when the app returns to the foreground.
+  const [attachSheetOpen, setAttachSheetOpen] = useState(false);
+  const attachBubbleRef = useRef<View>(null);
+  const textInputRef = useRef<TextInput>(null);
   const [replyTarget, setReplyTarget] = useState<MobileMessage | null>(null);
   const [rewindTarget, setRewindTarget] = useState<MobileMessage | null>(null);
   // ponytail: artifact ids ride along invisibly — mobile has no attachment chips to restore into.
@@ -404,6 +485,42 @@ function Thread() {
   const [markdownPreview, setMarkdownPreview] = useState<MarkdownArtifactPreviewTarget | null>(
     null,
   );
+  // A tapped markdown table opens whole, as records, in `TablePreview`.
+  const [tablePreview, setTablePreview] = useState<GridNode | null>(null);
+  // The live list's scroll offset, and whether the pinned page (a plain
+  // ScrollView, not inverted) is showing instead of it.
+  const listOffset = useRef(0);
+  const pinnedPageShowing = useRef(false);
+  // Until when a row the person opened is being held in place: the
+  // follow-latest scroll stays out of its way meanwhile.
+  const holdingRowUntil = useRef(0);
+  // A content change that landed during the hold, replayed once it ends.
+  const heldContentChange = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const contentChanged = useRef(() => {});
+  useEffect(() => () => clearTimeout(heldContentChange.current), []);
+  // A row the person opens keeps the row just above it (the next index: the
+  // list is inverted) in place instead of the latest message, so its header
+  // stays put. The anchor stays set afterwards: switching it back moved the
+  // thread on its own, and it keeps the same place as the latest message would
+  // for everything else the thread does.
+  const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
+  const liveMessagesRef = useRef<readonly MobileMessage[]>([]);
+  const holdRow = useCallback((rowId: string | null) => {
+    holdingRowUntil.current = Date.now() + 900;
+    const rows = liveMessagesRef.current;
+    const index = rowId ? rows.findIndex((row) => row.id === rowId) : -1;
+    if (index < 0) return;
+    setAnchorIndex(Math.min(index + 1, rows.length - 1));
+  }, []);
+  const threadGrowth = useMemo(() => ({ hold: holdRow }), [holdRow]);
+  const keptPosition = useMemo(
+    () => (anchorIndex == null ? KEEP_VISIBLE_POSITION : { minIndexForVisible: anchorIndex }),
+    [anchorIndex],
+  );
+  const tableActions = useMemo<TableActions>(
+    () => ({ open: setTablePreview, label: () => t("Table"), hint: t("Opens the full table") }),
+    [t],
+  );
   const showSteps = useDisplayAgentSteps();
   const reactionView = useMemo(
     () =>
@@ -415,6 +532,20 @@ function Thread() {
     [snap?.messages, showSteps],
   );
   const visibleMessages = reactionView.visibleMessages;
+  // Rule R (design contract § Grouping), computed once over the canonical
+  // chronological list and indexed by id — the live inverted `FlatList` and
+  // the pinned-jump chronological `ScrollView` below both read this same map,
+  // so a reversed index can never move a name or an avatar (CA-7a). Every
+  // message here already has visible presentation (`hasVisibleMessagePresentation`
+  // above), so nothing left in the list is transparent.
+  const messageGroups = useMemo(
+    () => computeMessageGroups(visibleMessages, { isTransparent: () => false }),
+    [visibleMessages],
+  );
+  const messageGroupsById = useMemo(
+    () => new Map(visibleMessages.map((message, index) => [message.id, messageGroups[index]!])),
+    [visibleMessages, messageGroups],
+  );
   const latestMessageId = visibleMessages.at(-1)?.id ?? null;
   const rewindRemovedCount = rewindTarget
     ? visibleMessages.filter((message) => (message.seq ?? 0) > (rewindTarget.seq ?? 0)).length
@@ -672,6 +803,14 @@ function Thread() {
                 muted={!currentBot.notifyOnFinish}
               />
             ) : null}
+            {inGroup && groupAvatarItems.length > 0 ? (
+              <StackedAvatars
+                items={groupAvatarItems}
+                size={28}
+                pillOverflow
+                label={groupMemberNames || undefined}
+              />
+            ) : null}
             <Text
               numberOfLines={1}
               style={{
@@ -682,15 +821,6 @@ function Thread() {
               {displayName || t("Thread")}
             </Text>
           </View>
-          {inGroup && groupAvatarItems.length > 0 ? (
-            <View style={{ marginTop: 2 }}>
-              <StackedAvatars
-                items={groupAvatarItems}
-                size={sizes.stackXs}
-                label={groupMemberNames || undefined}
-              />
-            </View>
-          ) : null}
         </Pressable>
       ),
       headerRight: () =>
@@ -1000,6 +1130,9 @@ function Thread() {
   useEffect(() => {
     const appState = AppState.addEventListener("change", (state) => {
       if (state === "active") {
+        // Safety net: the attach sheet can only close
+        // itself while its host screen is in the foreground.
+        setAttachSheetOpen(false);
         if (!navigation.isFocused() || !notificationThreadId) return;
         void setOpenNotificationThread({
           botId,
@@ -1053,7 +1186,6 @@ function Thread() {
                 event.type === "thread.message.created" ||
                 event.type === "thread.message.updated" ||
                 event.type === "thread.subagent" ||
-                event.type === "thread.cloud_agent" ||
                 event.type === "thread.cleared" ||
                 event.type === "thread.rewound" ||
                 event.type === "run.waiting_input" ||
@@ -1200,6 +1332,41 @@ function Thread() {
     if (selectedSkill) setSelectedSkill(null);
   }
 
+  // Entering dictation closes and disables both pickers — a draft starting
+  // with "@" or "/" must not stay tappable while the field is read-only.
+  const closePickers = useCallback(() => {
+    setMentionQuery(null);
+    setSlashQuery(null);
+  }, []);
+  const recentWriting = useCallback(
+    () =>
+      (snap?.messages ?? [])
+        .filter((message) => message.role === "user")
+        .slice(-8)
+        .map((message) => blockText(message)),
+    [snap?.messages],
+  );
+  const dictation = useComposerDictation({
+    draft,
+    setDraft,
+    threadKey,
+    closePickers,
+    recentWriting,
+  });
+
+  useEffect(() => {
+    if (dictation.dictating) AccessibilityInfo.announceForAccessibility(t("Dictating"));
+  }, [dictation.dictating, t]);
+
+  function insertDictation() {
+    const caret = draft.length;
+    dictation.insert();
+    requestAnimationFrame(() => {
+      textInputRef.current?.focus();
+      textInputRef.current?.setSelection(caret, caret);
+    });
+  }
+
   function serializeComposerPromptText(): string {
     return serializeComposerPrompt(draft, selectedSkill, selectedMentions);
   }
@@ -1227,6 +1394,14 @@ function Thread() {
     selectedMentions.length > 0 ||
     activePendingAttachments.length > 0;
 
+  // Stop contour colour: the answering bot's own identity colour in a 1:1
+  // thread. A group (several bots may be working), an unknown colour, or one
+  // that would vanish into the page (near-black on dark, white on light) dims
+  // to `foreground`.
+  const stopContourColor =
+    (!inGroup && botAccentOn(currentBot?.color, resolveMobileAppearance())) ||
+    hexWithAlpha(tokens.foreground, 0.45);
+
   async function send() {
     const initialBotTarget = botId;
     const initialGroupTarget = groupId;
@@ -1250,6 +1425,41 @@ function Thread() {
       // Covers group-mention reroute while the bot thread stays mounted underneath.
       if (initialBotTarget) cancelFocusPrompt(initialBotTarget);
     };
+
+    // 7a / M2: snapshot the composer as it stands at the tap, then clear it
+    // immediately — restored below if the send fails, except a rewind the
+    // server already applied (`rewindApplied`), which stays applied, and
+    // attachments already uploaded (unchanged behaviour: they upload again on
+    // a retry, same as before this feature).
+    const composerSnapshot = {
+      draft,
+      selectedMentions,
+      selectedSkill,
+      pendingAttachments: attachments,
+      replyTarget,
+      rewindTarget,
+      rewindArtifactIds,
+    };
+    const clearOriginComposer = () => {
+      setPendingAttachments((current) =>
+        current.filter((attachment) => attachment.threadKey !== originThreadKey),
+      );
+      setDraft("");
+      setMentionQuery(null);
+      setSlashQuery(null);
+      setSelectedSkill(null);
+      setSelectedMentions([]);
+      setReplyTarget(null);
+      setRewindTarget(null);
+      setRewindArtifactIds([]);
+      setAttachmentNotice(null);
+    };
+    clearOriginComposer();
+    let rewindApplied = false;
+    // Once the server has the message (or the routine runs), a later failure
+    // (a refresh) must not put it back in the composer to be sent twice.
+    let delivered = false;
+
     setSending(true);
     setError(null);
     try {
@@ -1264,23 +1474,9 @@ function Thread() {
           ),
         );
       }
-      const clearOriginComposer = () => {
-        setPendingAttachments((current) =>
-          current.filter((attachment) => attachment.threadKey !== originThreadKey),
-        );
-        setDraft("");
-        setMentionQuery(null);
-        setSlashQuery(null);
-        setSelectedSkill(null);
-        setSelectedMentions([]);
-        setReplyTarget(null);
-        setRewindTarget(null);
-        setRewindArtifactIds([]);
-        setAttachmentNotice(null);
-      };
       if (!plan.shouldSend) {
+        delivered = true;
         dropDelayedSetup();
-        clearOriginComposer();
         if (reroutedToGroup && groupTarget) {
           router.push({
             pathname: "/group-thread",
@@ -1296,8 +1492,10 @@ function Thread() {
         }
         return;
       }
-      const artifactIds: string[] = rewindTarget ? [...rewindArtifactIds] : [];
-      for (const pending of attachments) {
+      const artifactIds: string[] = composerSnapshot.rewindTarget
+        ? [...composerSnapshot.rewindArtifactIds]
+        : [];
+      for (const pending of composerSnapshot.pendingAttachments) {
         const artifact = await rpc<{ id: string }>("artifacts/create", {
           ...(groupTarget ? { groupId: groupTarget } : { botId: botTarget! }),
           name: pending.name,
@@ -1307,11 +1505,12 @@ function Thread() {
         artifactIds.push(artifact.id);
       }
       // Truncation happens here rather than on Edit, so backing out costs nothing.
-      if (rewindTarget && !reroutedToGroup) {
+      if (composerSnapshot.rewindTarget && !reroutedToGroup) {
         await rpc("threads/rewind", {
           ...(groupTarget ? { groupId: groupTarget } : { botId: botTarget! }),
-          messageId: rewindTarget.id,
+          messageId: composerSnapshot.rewindTarget.id,
         });
+        rewindApplied = true;
       }
       const clientNonce = newClientNonce();
       await rpc(
@@ -1323,7 +1522,7 @@ function Thread() {
               text: trimmed || undefined,
               mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
               artifactIds: artifactIds.length ? artifactIds : undefined,
-              replyToMessageId: reroutedToGroup ? undefined : replyTarget?.id,
+              replyToMessageId: reroutedToGroup ? undefined : composerSnapshot.replyTarget?.id,
             }
           : {
               botId: botTarget!,
@@ -1331,14 +1530,14 @@ function Thread() {
               text: trimmed || undefined,
               mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
               artifactIds: artifactIds.length ? artifactIds : undefined,
-              replyToMessageId: replyTarget?.id,
+              replyToMessageId: composerSnapshot.replyTarget?.id,
             },
       );
+      delivered = true;
       dropDelayedSetup();
       void loadSessionToken()
         .then((token) => resumeLiveNotifications(currentApiBase(), token, selectedSpaceId() ?? ""))
         .catch(() => undefined);
-      clearOriginComposer();
       if (reroutedToGroup && groupTarget) {
         router.push({
           pathname: "/group-thread",
@@ -1353,6 +1552,26 @@ function Thread() {
         await refresh();
       }
     } catch (err) {
+      // 7a: restore the snapshot — an already-applied rewind stays applied,
+      // and a rewind that never reached the server comes back so the person
+      // doesn't lose their edit target on a retry. Attachments carry their
+      // own thread key; the rest is the screen's single composer, so it only
+      // comes back if the person is still on the thread they sent from.
+      if (!delivered) {
+        if (composerSnapshot.pendingAttachments.length) {
+          setPendingAttachments((current) => [...current, ...composerSnapshot.pendingAttachments]);
+        }
+        if (isCurrentTarget(initialBotTarget, initialGroupTarget)) {
+          setDraft(composerSnapshot.draft);
+          setSelectedMentions(composerSnapshot.selectedMentions);
+          setSelectedSkill(composerSnapshot.selectedSkill);
+          setReplyTarget(composerSnapshot.replyTarget);
+          if (!rewindApplied) {
+            setRewindTarget(composerSnapshot.rewindTarget);
+            setRewindArtifactIds(composerSnapshot.rewindArtifactIds);
+          }
+        }
+      }
       if (reroutedToGroup && groupTarget) {
         setError(err instanceof Error ? err.message : t("Failed to send message"));
       } else if (isCurrentTarget(botTarget, groupTarget)) {
@@ -1428,15 +1647,18 @@ function Thread() {
   );
 
   function showAttachMenu() {
-    Alert.alert(t("Attach"), undefined, [
-      {
-        text: t("Photo library"),
-        onPress: () => void addAttachments(pickFromLibrary),
-      },
-      { text: t("Camera"), onPress: () => void addAttachments(takePhoto) },
-      { text: t("File"), onPress: () => void addAttachments(pickDocuments) },
-      { text: t("Cancel"), style: "cancel" },
-    ]);
+    presentAttachSheet({
+      title: t("Attach"),
+      cancel: t("Cancel"),
+      colorScheme,
+      anchor: findNodeHandle(attachBubbleRef.current),
+      onOpenChange: setAttachSheetOpen,
+      options: [
+        { text: t("Photo library"), onPress: () => void addAttachments(pickFromLibrary) },
+        { text: t("Camera"), onPress: () => void addAttachments(takePhoto) },
+        { text: t("File"), onPress: () => void addAttachments(pickDocuments) },
+      ],
+    });
   }
 
   async function addAttachments(
@@ -1470,6 +1692,7 @@ function Thread() {
   const answerableAskMessageId = latestAnswerableAskMessageId(snap);
   const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
   const liveMessages = useMemo(() => [...visibleMessages].reverse(), [visibleMessages]);
+  liveMessagesRef.current = liveMessages;
   const messagesById = useMemo(
     () => new Map((snap?.messages ?? []).map((message) => [message.id, message])),
     [snap?.messages],
@@ -1481,6 +1704,68 @@ function Thread() {
         ((pinnedTarget.botId && pinnedTarget.botId === botId) ||
           (pinnedTarget.groupId && pinnedTarget.groupId === groupId))),
   );
+  pinnedPageShowing.current = showPinnedPage;
+
+  // MA-1: only a genuinely new message animates. "Load earlier" and the
+  // pinned/jump page (its own ScrollView never reads `newMessageIds`) are
+  // folded in as seeded — learned, but never reported as new — so returning
+  // to the live list doesn't mistake them for arrivals either. Keyed on the
+  // loaded snapshot's thread, not the route: the screen mounts (or switches
+  // bot) before that thread's messages load, and seeding then would make
+  // every message already there play its entrance.
+  // Routine runs as log lines: a run keeps the message it then sent, and a
+  // bot's consecutive runs with nothing between them share one line.
+  const routineRoles = useMemo(() => foldRoutineRuns(visibleMessages), [visibleMessages]);
+  // The time markers down the rendered rows. Routine lines carry their own
+  // time, so between two of them a marker only says the day, when it changes.
+  const { timeMarkers, previousRows } = useMemo(() => {
+    const markers = new Map<string, string>();
+    // The row drawn before each one: a folded run or a run's handoff is skipped.
+    const before = new Map<string, MobileMessage>();
+    let previousRow: MobileMessage | undefined;
+    const labelOptions = {
+      locale: dateLocaleForUi(),
+      today: t("Today"),
+      yesterday: t("Yesterday"),
+    };
+    let previous: { createdAt?: string; routine: boolean } | undefined;
+    for (const message of visibleMessages) {
+      const role = routineRoles.get(message.id);
+      if (role?.kind === "hidden") continue;
+      const routine = role?.kind === "run" || role?.kind === "group";
+      const at = role?.kind === "group" ? role.runs[0]?.createdAt : message.createdAt;
+      if (at) {
+        const shows =
+          routine && previous?.routine
+            ? new Date(previous.createdAt ?? at).toDateString() !== new Date(at).toDateString()
+            : showsTimeMarker(previous?.createdAt, at);
+        if (shows) {
+          markers.set(
+            message.id,
+            threadTimeMarkerLabel(at, { ...labelOptions, withTime: !routine }),
+          );
+        }
+      }
+      previous = { createdAt: message.createdAt ?? previous?.createdAt, routine };
+      if (previousRow) before.set(message.id, previousRow);
+      previousRow = message;
+    }
+    return { timeMarkers: markers, previousRows: before };
+  }, [visibleMessages, routineRoles, t]);
+  const newMessageIds = useMessageArrivals(snap?.threadId, visibleMessages, {
+    seed: loadingOlderContent.current || showPinnedPage,
+  });
+  const arrivalStaggerMs = useMemo(
+    () =>
+      messageArrivalStaggerMs(
+        visibleMessages
+          .filter((message) => newMessageIds.has(message.id) && message.createdAt)
+          .map((message) => ({ id: message.id, createdAt: message.createdAt! })),
+      ),
+    [visibleMessages, newMessageIds],
+  );
+  // 7d: a reaction pill pops on appearing or its count rising, never on mount alone.
+  const poppedReactionKeys = useReactionPops(threadKey, reactionView.reactions);
 
   function performScroll(action: ThreadScrollAction) {
     if (!action || showPinnedPage) return;
@@ -1490,7 +1775,20 @@ function Thread() {
     });
   }
 
+  contentChanged.current = () => {
+    const blocked = Boolean(
+      jumpScrollTarget.current ||
+        (pinnedAroundRef.current &&
+          ((pinnedAroundRef.current.botId && pinnedAroundRef.current.botId === botId) ||
+            (pinnedAroundRef.current.groupId && pinnedAroundRef.current.groupId === groupId))) ||
+        expandedHistoryThread.current === snap?.threadId,
+    );
+    performScroll(scrollBehavior.current.onContentChanged(blocked, latestMessageId));
+    setThreadScrollState(scrollBehavior.current.state());
+  };
+
   function updateUserScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    listOffset.current = event.nativeEvent.contentOffset.y;
     // Inverted FlatList: contentOffset.y is distance from the latest messages.
     setThreadScrollState(
       scrollBehavior.current.onUserScroll(Math.max(0, event.nativeEvent.contentOffset.y)),
@@ -1508,6 +1806,9 @@ function Thread() {
         reaction,
         clientNonce: newClientNonce(),
       });
+      // 7d: a success haptic for *my* reaction only, never for one received
+      // in real time from someone else, and never on a failed call.
+      successHaptic();
     } catch (err) {
       if (!isCurrentTarget(targetBotId, targetGroupId)) return;
       setError(err instanceof Error ? err.message : t("Could not update reaction"));
@@ -1647,20 +1948,39 @@ function Thread() {
     };
   }
 
+  /** Rule R's gap (design contract § Grouping): 0 between two consecutive
+   * asides, 3 within a group, 14 otherwise (opening a new group, or the very
+   * first rendered row). */
+  function gapBeforeRow(
+    message: MobileMessage,
+    chrome: MessageChrome,
+    previousMessage: MobileMessage | undefined,
+  ): number {
+    if (
+      chrome === "aside" &&
+      previousMessage &&
+      isAsideOnlyMessage(visibleMessageBlocks(previousMessage.blocks, showSteps))
+    ) {
+      return 0;
+    }
+    // Routine lines stack like a log, with no gap between them.
+    const routineLine = (candidate: MobileMessage | undefined) =>
+      Boolean(candidate && routineRoles.has(candidate.id));
+    if (routineLine(message) && routineLine(previousMessage)) return 0;
+    return messageGroupsById.get(message.id)?.isFirstOfGroup === false
+      ? WITHIN_GROUP_GAP
+      : GROUP_GAP;
+  }
+
   function renderMessageRow(
     message: MobileMessage,
-    options?: { enableJump?: boolean; previousCreatedAt?: string },
+    options?: { enableJump?: boolean; previousMessage?: MobileMessage },
   ) {
+    const routineRole = routineRoles.get(message.id);
+    // Drawn by another line: a folded routine run, or the message a run sent.
+    if (routineRole?.kind === "hidden") return null;
     const actionProps = messageActionProps(message);
-    const createdAt = message.createdAt;
-    const timeMarker =
-      createdAt && showsTimeMarker(options?.previousCreatedAt, createdAt)
-        ? threadTimeMarkerLabel(createdAt, {
-            locale: dateLocaleForUi(),
-            today: t("Today"),
-            yesterday: t("Yesterday"),
-          })
-        : "";
+    const timeMarker = timeMarkers.get(message.id) ?? "";
     const messageReactions = reactionView.reactions.get(message.id);
     const drawnBlocks = visibleMessageBlocks(message.blocks, showSteps);
     // An aside is a note between messages and carries no author; a bot's
@@ -1674,6 +1994,20 @@ function Thread() {
       ? (snap?.activeRuns?.find((run) => run.botId === authorBotId)?.status ??
         (snap?.run?.botId === authorBotId ? snap?.run?.status : currentBotStatus))
       : undefined;
+    const group = messageGroupsById.get(message.id);
+    // MA-1: never for a message present at thread open, "Load earlier", or
+    // the jump/pinned page — `options.enableJump` is only ever passed by the
+    // pinned ScrollView's own call site, so excluding it here is exactly
+    // "never in the jump view".
+    const isNew = Boolean(!options?.enableJump && newMessageIds.has(message.id));
+    // 7g: swipe-to-reply is a bot *narration* bubble's gesture only — a
+    // decision card, an ask, a routine/subagent card, a peer-message marker
+    // or an attachment keep their existing behaviour untouched.
+    const isNarrationBotBubble =
+      chrome === "row" &&
+      message.role === "bot" &&
+      drawnBlocks.length > 0 &&
+      !drawnBlocks.some((block) => CARD_ONLY_BLOCK_KINDS.has(block.kind));
     const bubble = (
       <MessageBubble
         botId={botId ?? snap?.members?.[0]?.botId ?? ""}
@@ -1692,101 +2026,146 @@ function Thread() {
         onOpenBot={openBot}
         onPreviewMarkdown={setMarkdownPreview}
         actionProps={actionProps}
+        isNew={isNew}
+        routineRole={routineRole}
       />
     );
     return (
-      <View
-        key={message.id}
-        onLayout={
-          options?.enableJump
-            ? (event) => {
-                if (jumpScrollTarget.current !== message.id) return;
-                const y = Math.max(0, event.nativeEvent.layout.y - 24);
-                requestAnimationFrame(() => {
-                  if (jumpScrollTarget.current !== message.id) return;
-                  pinnedScroll.current?.scrollTo({ y, animated: true });
-                  jumpScrollTarget.current = null;
-                });
-              }
-            : undefined
-        }
-        style={{ marginTop: chrome === "aside" ? ASIDE_GAP : MESSAGE_GAP }}
-      >
-        {timeMarker ? (
-          <Text
-            style={{
-              alignSelf: "center",
-              marginBottom: MESSAGE_GAP,
-              color: tokens.mutedForeground,
-              ...nativeTextStyle("label"),
-            }}
-          >
-            {timeMarker}
-          </Text>
-        ) : null}
+      <ThreadRowContext.Provider key={message.id} value={message.id}>
         <View
+          key={message.id}
+          onLayout={
+            options?.enableJump
+              ? (event) => {
+                  if (jumpScrollTarget.current !== message.id) return;
+                  const y = Math.max(0, event.nativeEvent.layout.y - 24);
+                  requestAnimationFrame(() => {
+                    if (jumpScrollTarget.current !== message.id) return;
+                    pinnedScroll.current?.scrollTo({ y, animated: true });
+                    jumpScrollTarget.current = null;
+                  });
+                }
+              : undefined
+          }
           style={{
-            opacity: rewindTarget && (message.seq ?? 0) >= (rewindTarget.seq ?? 0) ? 0.4 : 1,
+            // A day marker between two routine lines still needs its air above.
+            marginTop: Math.max(
+              timeMarker ? GROUP_GAP : 0,
+              gapBeforeRow(
+                message,
+                chrome,
+                routineRoles.size ? previousRows.get(message.id) : options?.previousMessage,
+              ),
+            ),
           }}
         >
-          {chrome === "row" && message.role === "bot" ? (
-            <MessageRow
-              avatar={
-                <BotAvatar
-                  color={author.color}
-                  identity={authorBotId}
-                  shapeSeed={author.shapeSeed}
-                  size={sizes.message}
-                  status={authorStatus}
-                />
-              }
-              author={author.name}
-              time={createdAt ? messageClockTime(createdAt) : undefined}
+          {timeMarker ? (
+            <Text
+              style={{
+                alignSelf: "center",
+                marginBottom: GROUP_GAP,
+                color: tokens.mutedForeground,
+                ...nativeTextStyle("label"),
+              }}
             >
+              {timeMarker}
+            </Text>
+          ) : null}
+          <View
+            style={{
+              opacity: rewindTarget && (message.seq ?? 0) >= (rewindTarget.seq ?? 0) ? 0.4 : 1,
+            }}
+          >
+            {chrome === "row" && message.role === "bot" ? (
+              <MessageRow
+                avatar={
+                  <BotAvatar
+                    color={author.color}
+                    identity={authorBotId}
+                    shapeSeed={author.shapeSeed}
+                    size={sizes.message}
+                    status={authorStatus}
+                    still
+                  />
+                }
+                author={author.name}
+                showAuthor={inGroup && (group?.isFirstOfGroup ?? true)}
+                showAvatar={inGroup && (group?.isLastOfGroup ?? true)}
+                mono={!inGroup}
+              >
+                {isNarrationBotBubble ? (
+                  <AnimatedMessageBubble
+                    variant="bot"
+                    isNew={isNew}
+                    enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}
+                    // A table scrolls sideways inside the bubble; a rightward drag
+                    // there must move the table, not start a reply.
+                    enableSwipeReply={
+                      !options?.enableJump &&
+                      !message.blocks.some(
+                        (block) => block.kind === "text" && hasMarkdownTable(block.text),
+                      )
+                    }
+                    onLongPress={actionProps.onLongPress!}
+                    onSwipeReply={() => setReplyTarget(message)}
+                    accessibilityActions={actionProps.accessibilityActions}
+                    onAccessibilityAction={actionProps.onAccessibilityAction}
+                  >
+                    {bubble}
+                  </AnimatedMessageBubble>
+                ) : (
+                  <MessageArrival
+                    isNew={isNew}
+                    enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}
+                  >
+                    <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+                      {bubble}
+                    </Pressable>
+                  </MessageArrival>
+                )}
+              </MessageRow>
+            ) : chrome === "row" && message.role === "user" ? (
+              <AnimatedMessageBubble
+                variant="user"
+                isNew={isNew}
+                onLongPress={actionProps.onLongPress!}
+                accessibilityActions={actionProps.accessibilityActions}
+                onAccessibilityAction={actionProps.onAccessibilityAction}
+              >
+                {bubble}
+              </AnimatedMessageBubble>
+            ) : chrome === "row" ? (
               <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
                 {bubble}
               </Pressable>
-            </MessageRow>
-          ) : chrome === "row" ? (
-            <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
-              {bubble}
-            </Pressable>
-          ) : (
-            <View>{bubble}</View>
-          )}
-          {messageReactions ? (
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                gap: 4,
-                marginTop: 6,
-                marginStart: chrome === "row" && message.role === "bot" ? FRAMED_INDENT : 0,
-                justifyContent: message.role === "user" ? "flex-end" : "flex-start",
-              }}
-            >
-              {[...messageReactions].map(([emoji, count]) => (
-                <Text
-                  key={emoji}
-                  style={{
-                    color: tokens.foreground,
-                    backgroundColor: tokens.muted,
-                    borderColor: tokens.border,
-                    borderWidth: StyleSheet.hairlineWidth,
-                    borderRadius: radii.pill,
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
-                    ...nativeTextStyle("meta"),
-                  }}
-                >
-                  {emoji}
-                  {count > 1 ? ` ${count}` : ""}
-                </Text>
-              ))}
-            </View>
-          ) : null}
+            ) : (
+              <View>{bubble}</View>
+            )}
+            {messageReactions ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 4,
+                  marginTop: 6,
+                  marginStart:
+                    chrome === "row" && message.role === "bot" && inGroup ? FRAMED_INDENT : 0,
+                  justifyContent: message.role === "user" ? "flex-end" : "flex-start",
+                }}
+              >
+                {[...messageReactions].map(([emoji, count]) => (
+                  <ReactionPill
+                    key={emoji}
+                    emoji={emoji}
+                    count={count}
+                    pop={poppedReactionKeys.has(reactionPopKey(message.id, emoji))}
+                  />
+                ))}
+              </View>
+            ) : null}
+          </View>
         </View>
-      </View>
+      </ThreadRowContext.Provider>
     );
   }
 
@@ -1804,25 +2183,83 @@ function Thread() {
         ]
       : [];
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
-  const workingLabel =
-    (workingBotsForLine.length === 1 ? activityLabel : undefined) ??
-    `${
-      workingBotsForLine.length === 1
-        ? t("{name} is working", { name: workingBotsForLine[0]?.name ?? t("Agent") })
-        : t("{count} agents working", { count: workingBotsForLine.length })
-    }…`;
-  // The clock reads from when the run began, not from when this screen
-  // mounted, so reopening a thread does not restart it at zero.
-  const workingStartedAt = earliestRunStartMs(workingRuns);
-  // The one thing that keeps moving during a run; everything else is still.
-  const workingFooter = workingBotsForLine.length ? (
-    <View style={{ marginTop: MESSAGE_GAP }}>
-      <WorkingLine
-        avatar={<GroupAvatar members={workingBotsForLine} size={sizes.message} />}
-        label={workingLabel}
-        startedAt={workingStartedAt}
+  const workingName =
+    workingBotsForLine.length === 1
+      ? (workingBotsForLine[0]?.name ?? t("Agent"))
+      : t("{count} agents working", { count: workingBotsForLine.length });
+  const workingAvatar =
+    workingBotsForLine.length === 1 ? (
+      <BotAvatar
+        color={workingBotsForLine[0]?.color ?? tokens.mutedForeground}
+        identity={workingBotsForLine[0]?.botId}
+        shapeSeed={workingBotsForLine[0]?.shapeSeed}
+        size={sizes.message}
+        status="running"
       />
-    </View>
+    ) : (
+      <GroupAvatar members={workingBotsForLine} size={sizes.message} />
+    );
+  // The typing bubble (design contract decision D1-b): no elapsed clock, no
+  // generic "is working…" copy — three pulsing dots, or, for a single bot
+  // whose activity is known, that activity in chatoyant text instead.
+  //
+  // 7c: it exits with a 120ms fade rather than snapping away the instant work
+  // stops. `footerVisible` keeps the row mounted for that fade; `lastWorking`
+  // remembers the avatar/name/activity to keep drawing while `workingActive`
+  // has already gone false but the fade hasn't finished.
+  const workingActive = workingBotsForLine.length > 0;
+  const [footerVisible, setFooterVisible] = useState(workingActive);
+  const footerOpacity = useSharedValue(workingActive ? 1 : 0);
+  const shownActivityLabel = workingBotsForLine.length === 1 ? activityLabel : undefined;
+  const lastWorking = useRef({
+    avatar: workingAvatar,
+    name: workingName,
+    activityLabel: shownActivityLabel,
+  });
+  if (workingActive) {
+    lastWorking.current = {
+      avatar: workingAvatar,
+      name: workingName,
+      activityLabel: shownActivityLabel,
+    };
+  }
+  useEffect(() => {
+    if (workingActive) {
+      setFooterVisible(true);
+      footerOpacity.value = 1;
+      return;
+    }
+    if (!footerVisible) return;
+    footerOpacity.value = withTiming(0, { duration: CHAT_MOTION.typingExitMs }, (finished) => {
+      if (finished) runOnJS(setFooterVisible)(false);
+    });
+    // footerVisible is read, not a trigger: re-running this branch every time
+    // it flips would cancel the very fade it just started.
+  }, [workingActive]);
+  const footerAnimatedStyle = useAnimatedStyle(() => ({ opacity: footerOpacity.value }));
+  const workingFooter = footerVisible ? (
+    <Animated.View
+      style={[{ marginTop: GROUP_GAP }, footerAnimatedStyle]}
+      // The typing bubble grows the thread without a new message; keep it in
+      // view above the composer when the reader is at the latest messages.
+      onLayout={() => performScroll(scrollBehavior.current.onTailChanged())}
+    >
+      <MessageRow
+        avatar={
+          <BuzzingAvatar>
+            {workingActive ? workingAvatar : lastWorking.current.avatar}
+          </BuzzingAvatar>
+        }
+        author={workingActive ? workingName : lastWorking.current.name}
+        showAuthor={inGroup}
+        showAvatar={inGroup}
+        mono={!inGroup}
+      >
+        <TypingBubble
+          activityLabel={workingActive ? shownActivityLabel : lastWorking.current.activityLabel}
+        />
+      </MessageRow>
+    </Animated.View>
   ) : null;
 
   const loadEarlierControl =
@@ -1843,616 +2280,726 @@ function Thread() {
     ) : null;
 
   return (
-    <KeyboardAvoidingView
-      behavior="height"
-      keyboardVerticalOffset={headerHeight}
-      style={{
-        flex: 1,
-        backgroundColor: tokens.background,
-        paddingHorizontal: 20,
-      }}
-    >
-      {error ? <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text> : null}
-      {runError ? (
-        <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
-      ) : null}
-      <View style={{ flex: 1, position: "relative" }}>
-        {showPinnedPage ? (
-          <ScrollView
-            key={jumpScrollTarget.current ?? pinnedTarget?.messageId ?? threadKey}
-            ref={pinnedScroll}
-            style={{ flex: 1, marginTop: 8 }}
-            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-          >
-            {loadEarlierControl}
-            {visibleMessages.map((message, index) =>
-              renderMessageRow(message, {
-                enableJump: true,
-                previousCreatedAt: visibleMessages[index - 1]?.createdAt,
-              }),
+    <TableActionsProvider value={tableActions}>
+      <ThreadGrowthContext.Provider value={threadGrowth}>
+        <KeyboardAvoidingView
+          behavior="height"
+          keyboardVerticalOffset={headerHeight}
+          style={{
+            flex: 1,
+            backgroundColor: tokens.background,
+            paddingHorizontal: 14,
+          }}
+        >
+          {error ? (
+            <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
+          ) : null}
+          {runError ? (
+            <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
+          ) : null}
+          <View style={{ flex: 1, position: "relative" }}>
+            {showPinnedPage ? (
+              <ScrollView
+                key={jumpScrollTarget.current ?? pinnedTarget?.messageId ?? threadKey}
+                ref={pinnedScroll}
+                style={{ flex: 1, marginTop: 8 }}
+                maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
+                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                keyboardShouldPersistTaps="handled"
+              >
+                {loadEarlierControl}
+                {visibleMessages.map((message, index) =>
+                  renderMessageRow(message, {
+                    enableJump: true,
+                    previousMessage: visibleMessages[index - 1],
+                  }),
+                )}
+                {workingFooter}
+              </ScrollView>
+            ) : (
+              <FlatList
+                key={threadKey}
+                ref={scroll}
+                data={liveMessages}
+                inverted
+                keyExtractor={(message) => message.id}
+                extraData={answerableAskMessageId}
+                style={{ flex: 1, marginTop: 8 }}
+                maintainVisibleContentPosition={keptPosition}
+                scrollEventThrottle={16}
+                // dragging the thread down dismisses the keyboard following the
+                // finger on iOS (Android has no true interactive equivalent, so it
+                // dismisses on the drag instead); a tap that lands on a row's own
+                // control still fires that control instead of just closing the keyboard.
+                keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+                keyboardShouldPersistTaps="handled"
+                onScrollBeginDrag={() => {
+                  userDragging.current = true;
+                }}
+                onScroll={(event) => {
+                  listOffset.current = event.nativeEvent.contentOffset.y;
+                  if (userDragging.current) updateUserScroll(event);
+                }}
+                onScrollEndDrag={(event) => {
+                  updateUserScroll(event);
+                  userDragging.current = false;
+                }}
+                onMomentumScrollEnd={updateUserScroll}
+                onLayout={() => performScroll(scrollBehavior.current.onLayout())}
+                onContentSizeChange={() => {
+                  if (loadingOlderContent.current) {
+                    loadingOlderContent.current = false;
+                    return;
+                  }
+                  // A row the person just opened is holding its place: replay
+                  // the change once the hold ends, so it isn't lost.
+                  const held = holdingRowUntil.current - Date.now();
+                  clearTimeout(heldContentChange.current);
+                  if (held > 0) {
+                    heldContentChange.current = setTimeout(() => contentChanged.current(), held);
+                    return;
+                  }
+                  contentChanged.current();
+                }}
+                ListFooterComponent={loadEarlierControl}
+                ListHeaderComponent={workingFooter}
+                renderItem={({ item, index }) =>
+                  renderMessageRow(item, { previousMessage: liveMessages[index + 1] })
+                }
+              />
             )}
-            {workingFooter}
-          </ScrollView>
-        ) : (
-          <FlatList
-            key={threadKey}
-            ref={scroll}
-            data={liveMessages}
-            inverted
-            keyExtractor={(message) => message.id}
-            extraData={answerableAskMessageId}
-            style={{ flex: 1, marginTop: 8 }}
-            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-            scrollEventThrottle={16}
-            onScrollBeginDrag={() => {
-              userDragging.current = true;
-            }}
-            onScroll={(event) => {
-              if (userDragging.current) updateUserScroll(event);
-            }}
-            onScrollEndDrag={(event) => {
-              updateUserScroll(event);
-              userDragging.current = false;
-            }}
-            onMomentumScrollEnd={updateUserScroll}
-            onLayout={() => performScroll(scrollBehavior.current.onLayout())}
-            onContentSizeChange={() => {
-              if (loadingOlderContent.current) {
-                loadingOlderContent.current = false;
-                return;
-              }
-              const blocked = Boolean(
-                jumpScrollTarget.current ||
-                  (pinnedAroundRef.current &&
-                    ((pinnedAroundRef.current.botId && pinnedAroundRef.current.botId === botId) ||
-                      (pinnedAroundRef.current.groupId &&
-                        pinnedAroundRef.current.groupId === groupId))) ||
-                  expandedHistoryThread.current === snap?.threadId,
-              );
-              performScroll(scrollBehavior.current.onContentChanged(blocked, latestMessageId));
-              setThreadScrollState(scrollBehavior.current.state());
-            }}
-            ListFooterComponent={loadEarlierControl}
-            ListHeaderComponent={workingFooter}
-            renderItem={({ item, index }) =>
-              renderMessageRow(item, { previousCreatedAt: liveMessages[index + 1]?.createdAt })
-            }
-          />
-        )}
-        {!showPinnedPage && threadScrollState.detached ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              threadScrollState.unread ? t("Jump to latest, new messages") : t("Jump to latest")
-            }
-            onPress={() => {
-              performScroll(scrollBehavior.current.jumpToLatest());
-              setThreadScrollState(scrollBehavior.current.state());
-            }}
-            style={{
-              position: "absolute",
-              left: "50%",
-              marginLeft: -21,
-              bottom: 12,
-              width: 42,
-              height: 42,
-              borderRadius: 21,
-              borderWidth: 1,
-              borderColor: native.fillPressed,
-              backgroundColor: native.fill,
-              boxShadow: shadowsForAppearance(colorScheme).floating,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <NativeSymbol
-              ios="arrow.down"
-              android="arrow-down"
-              size={18}
-              color={tokens.foreground}
-            />
-            {threadScrollState.unread ? (
-              <View
+            {!showPinnedPage && threadScrollState.detached ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  threadScrollState.unread ? t("Jump to latest, new messages") : t("Jump to latest")
+                }
+                onPress={() => {
+                  performScroll(scrollBehavior.current.jumpToLatest());
+                  setThreadScrollState(scrollBehavior.current.state());
+                }}
                 style={{
                   position: "absolute",
-                  top: 3,
-                  right: 3,
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: tokens.primary,
-                }}
-              />
-            ) : null}
-          </Pressable>
-        ) : null}
-      </View>
-      <View
-        style={{
-          // Keyboard covers the nav bar / home indicator, so the safe-area
-          // inset would render as dead space between composer and keyboard.
-          paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom + 12, 24),
-        }}
-      >
-        {replyTarget ? (
-          <View
-            style={{
-              marginTop: 12,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: tokens.border,
-              backgroundColor: tokens.card,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>
-                {t("Replying to")}
-              </Text>
-              <Text style={{ color: tokens.foreground, fontSize: 13 }} numberOfLines={1}>
-                {previewMessageText(replyTarget)}
-              </Text>
-            </View>
-            <Pressable accessibilityLabel={t("Cancel reply")} onPress={() => setReplyTarget(null)}>
-              <Text style={{ color: tokens.mutedForeground }}>✕</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        {rewindTarget ? (
-          <View
-            style={{
-              marginTop: 12,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: tokens.border,
-              backgroundColor: tokens.sidebar,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <Text
-              style={{ color: tokens.mutedForeground, fontSize: 12, flex: 1 }}
-              numberOfLines={2}
-            >
-              {`Editing message · ${rewindRemovedCount} messages after it will be removed`}
-            </Text>
-            <Pressable accessibilityLabel="Cancel edit" onPress={cancelRewind}>
-              <Text style={{ color: tokens.mutedForeground }}>✕</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        {attachmentNotice ? (
-          <Text style={{ color: tokens.warning, marginTop: 12, fontSize: 13 }}>
-            {attachmentNotice}
-          </Text>
-        ) : null}
-        {activePendingAttachments.length ? (
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 8,
-              marginTop: 12,
-            }}
-          >
-            {activePendingAttachments.map((attachment) => (
-              <View
-                key={attachment.id}
-                style={{
-                  flexDirection: "row",
+                  left: "50%",
+                  marginLeft: -21,
+                  bottom: 12,
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  borderWidth: 1,
+                  borderColor: native.fillPressed,
+                  backgroundColor: native.fill,
+                  boxShadow: shadowsForAppearance(colorScheme).floating,
                   alignItems: "center",
-                  gap: 8,
-                  borderRadius: 999,
+                  justifyContent: "center",
+                }}
+              >
+                <NativeSymbol
+                  ios="arrow.down"
+                  android="arrow-down"
+                  size={18}
+                  color={tokens.foreground}
+                />
+                {threadScrollState.unread ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 3,
+                      right: 3,
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: tokens.primary,
+                    }}
+                  />
+                ) : null}
+              </Pressable>
+            ) : null}
+          </View>
+          <View
+            style={{
+              // Keyboard covers the nav bar / home indicator, so the safe-area
+              // inset would render as dead space between composer and keyboard.
+              // 8 px above the keyboard when it's open, 8 px above the
+              // safe area otherwise (floored so devices without a safe-area inset,
+              // e.g. Android's 3-button nav, still keep a little breathing room).
+              paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20),
+            }}
+          >
+            {replyTarget ? (
+              // 7g: rises in on every appearance — the action sheet's "Reply" and
+              // a bubble swipe past the threshold both just set `replyTarget`.
+              <Animated.View
+                entering={
+                  reducedMotion
+                    ? FadeIn.duration(CHAT_MOTION.reducedFadeMs)
+                    : FadeInDown.duration(CHAT_MOTION.replyPreviewMs)
+                }
+                style={{
+                  marginTop: 12,
+                  borderRadius: 14,
                   borderWidth: 1,
                   borderColor: tokens.border,
                   backgroundColor: tokens.card,
                   paddingHorizontal: 12,
-                  paddingVertical: 8,
-                }}
-              >
-                {attachment.previewUri ? (
-                  <Image
-                    source={{ uri: attachment.previewUri }}
-                    style={{ width: 28, height: 28, borderRadius: 6 }}
-                  />
-                ) : (
-                  <Text style={{ color: tokens.foreground }}>📎</Text>
-                )}
-                <Text style={{ color: tokens.foreground, maxWidth: 140 }} numberOfLines={1}>
-                  {attachment.name}
-                </Text>
-                <Pressable
-                  accessibilityLabel={t("Remove {name}", {
-                    name: attachment.name,
-                  })}
-                  onPress={() =>
-                    setPendingAttachments((current) =>
-                      current.filter((item) => item.id !== attachment.id),
-                    )
-                  }
-                >
-                  <NativeSymbol
-                    ios="xmark"
-                    android="close"
-                    size={14}
-                    color={tokens.mutedForeground}
-                  />
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        ) : null}
-        {mentionOptions.length ? (
-          <View
-            testID="mention-picker"
-            style={{
-              marginTop: 12,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: tokens.border,
-              backgroundColor: tokens.card,
-              overflow: "hidden",
-            }}
-          >
-            {mentionOptions.map((mention) => (
-              <Pressable
-                key={mentionChipKey(mention)}
-                accessibilityLabel={t("@{name}", { name: mention.name })}
-                onPress={() => insertMention(mention)}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  paddingHorizontal: 14,
                   paddingVertical: 10,
-                }}
-              >
-                <MentionOptionIcon mention={mention} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ color: tokens.foreground, fontSize: 14 }}>@{mention.name}</Text>
-                  {mention.subtitle ? (
-                    <Text
-                      numberOfLines={1}
-                      style={{
-                        color: tokens.mutedForeground,
-                        fontSize: 12.5,
-                        marginTop: 2,
-                      }}
-                    >
-                      {mention.subtitle}
-                    </Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-        {slashSkillOptions.length || slashActionOptions.length ? (
-          <View
-            testID="slash-picker"
-            style={{
-              marginTop: 12,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: tokens.border,
-              backgroundColor: tokens.card,
-              overflow: "hidden",
-            }}
-          >
-            {slashSkillOptions.map((skill) => (
-              <Pressable
-                key={skill.id}
-                accessibilityLabel={t("Skill {name}", { name: skill.name })}
-                onPress={() => insertSkill(skill)}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                }}
-              >
-                <NativeSymbol
-                  ios="cube"
-                  android="cube-outline"
-                  size={16}
-                  color={tokens.mutedForeground}
-                />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ color: tokens.foreground, fontSize: 14 }}>{skill.name}</Text>
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      color: tokens.mutedForeground,
-                      fontSize: 12.5,
-                      marginTop: 2,
-                    }}
-                  >
-                    {truncateSlashDescription(skill.description)}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-            {slashActionOptions.map((action) => (
-              <Pressable
-                key={action.id}
-                accessibilityLabel={t(action.label)}
-                onPress={() => runSlashAction(action.id)}
-                style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  gap: 10,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
+                  gap: 8,
                 }}
               >
-                <NativeSymbol
-                  ios="gearshape"
-                  android="settings-outline"
-                  size={16}
-                  color={tokens.mutedForeground}
-                />
-                <Text style={{ color: tokens.foreground, fontSize: 14 }}>{t(action.label)}</Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-        <View style={{ marginTop: 16 }}>
-          <ComposerShell
-            state={working ? "working" : canSend ? "typing" : "idle"}
-            focused={composerFocused}
-            leading={
-              selectedSkill || selectedMentions.length > 0 ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    gap: 6,
-                    flexShrink: 1,
-                    maxWidth: "60%",
-                  }}
-                >
-                  {selectedSkill ? (
-                    <View
-                      testID="skill-chip"
-                      style={[composerChip, { backgroundColor: tokens.accent }]}
-                    >
-                      <NativeSymbol
-                        ios="cube"
-                        android="cube-outline"
-                        size={14}
-                        color={tokens.mutedForeground}
-                      />
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          color: tokens.foreground,
-                          flexShrink: 1,
-                          ...nativeTextStyle("capsule"),
-                        }}
-                      >
-                        {selectedSkill.name}
-                      </Text>
-                      <Pressable
-                        accessibilityLabel={t("Remove skill {name}", {
-                          name: selectedSkill.name,
-                        })}
-                        hitSlop={8}
-                        onPress={() => setSelectedSkill(null)}
-                      >
-                        <NativeSymbol
-                          ios="xmark"
-                          android="close"
-                          size={12}
-                          color={tokens.mutedForeground}
-                        />
-                      </Pressable>
-                    </View>
-                  ) : null}
-                  {selectedMentions.map((mention) => (
-                    <View
-                      key={mentionChipKey(mention)}
-                      testID="mention-chip"
-                      style={[composerChip, { backgroundColor: tokens.chatUser }]}
-                    >
-                      <MentionChipIcon mention={mention} />
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          color: tokens.chatUserForeground,
-                          flexShrink: 1,
-                          ...nativeTextStyle("capsule"),
-                        }}
-                      >
-                        {mention.name}
-                      </Text>
-                      <Pressable
-                        accessibilityLabel={t("Remove mention {name}", {
-                          name: mention.name,
-                        })}
-                        hitSlop={8}
-                        onPress={() =>
-                          setSelectedMentions((current) =>
-                            current.filter(
-                              (selected) => mentionChipKey(selected) !== mentionChipKey(mention),
-                            ),
-                          )
-                        }
-                      >
-                        <NativeSymbol
-                          ios="xmark"
-                          android="close"
-                          size={12}
-                          color={tokens.mutedForeground}
-                        />
-                      </Pressable>
-                    </View>
-                  ))}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: tokens.mutedForeground, fontSize: 12 }}>
+                    {t("Replying to")}
+                  </Text>
+                  <Text style={{ color: tokens.foreground, fontSize: 13 }} numberOfLines={1}>
+                    {previewMessageText(replyTarget)}
+                  </Text>
                 </View>
-              ) : undefined
-            }
-            trailing={
-              <>
-                <ComposerButton label={t("Attach file")} onPress={showAttachMenu}>
-                  <NativeSymbol ios="plus" android="add" size={17} color={tokens.mutedForeground} />
-                </ComposerButton>
-                {canSend ? (
-                  <ComposerButton
-                    label={t("Send")}
-                    tone="primary"
-                    arrive
-                    disabled={sending}
-                    onPress={() => void send()}
-                  >
-                    <NativeSymbol
-                      ios="arrow.up"
-                      android="arrow-up"
-                      size={16}
-                      color={tokens.primaryForeground}
-                    />
-                  </ComposerButton>
-                ) : null}
-                {working ? (
-                  <ComposerButton
-                    label={t("Stop")}
-                    tone="secondary"
-                    disabled={sending}
-                    onPress={() => void stop()}
-                  >
-                    <NativeSymbol
-                      ios="stop.fill"
-                      android="stop"
-                      size={13}
-                      color={tokens.foreground}
-                    />
-                  </ComposerButton>
-                ) : null}
-              </>
-            }
-          >
-            <TextInput
-              value={draft}
-              onChangeText={updateDraft}
-              accessibilityLabel={
-                displayName ? t("Message {name}", { name: displayName }) : t("Message")
-              }
-              onKeyPress={(event) => {
-                if (
-                  event.nativeEvent.key === "Backspace" &&
-                  draft.length === 0 &&
-                  (selectedSkill !== null || selectedMentions.length > 0)
-                ) {
-                  removeLastChip();
-                }
-              }}
-              placeholder={
-                selectedSkill || selectedMentions.length
-                  ? undefined
-                  : displayName
-                    ? t("Message {name}", { name: displayName })
-                    : t("Message…")
-              }
-              placeholderTextColor={tokens.foregroundSubtle}
-              selectionColor={tokens.foreground}
-              cursorColor={tokens.foreground}
-              keyboardAppearance={colorScheme}
-              multiline
-              textAlignVertical="center"
-              blurOnSubmit={false}
-              onFocus={() => setComposerFocused(true)}
-              onBlur={() => setComposerFocused(false)}
-              style={{
-                color: tokens.foreground,
-                maxHeight: 100,
-                writingDirection: "auto",
-                ...nativeTextStyle("body"),
-                // A multiline iOS field puts all of a line height's extra
-                // leading above the glyphs, so the text sat low in the
-                // capsule; the font's own line box centres it.
-                ...(Platform.OS === "ios"
-                  ? { lineHeight: undefined, paddingVertical: 6 }
-                  : { paddingVertical: 4 }),
-              }}
-            />
-          </ComposerShell>
-        </View>
-      </View>
-      <Modal
-        visible={botActionsOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setBotActionsOpen(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            padding: 24,
-            backgroundColor: tokens.overlay,
-          }}
-        >
-          <Pressable
-            accessibilityLabel={t("Cancel")}
-            onPress={() => setBotActionsOpen(false)}
-            style={{
-              position: "absolute",
-              top: 0,
-              right: 0,
-              bottom: 0,
-              left: 0,
-            }}
-          />
-          <View
-            accessibilityViewIsModal
-            style={{
-              backgroundColor: tokens.popover,
-              borderRadius: 24,
-              paddingVertical: 12,
-            }}
-          >
-            {botActions.map((action) => (
-              <Pressable
-                key={action.text}
-                accessibilityRole="button"
-                onPress={() => {
-                  setBotActionsOpen(false);
-                  action.onPress();
-                }}
+                <Pressable
+                  accessibilityLabel={t("Cancel reply")}
+                  onPress={() => setReplyTarget(null)}
+                >
+                  <Text style={{ color: tokens.mutedForeground }}>✕</Text>
+                </Pressable>
+              </Animated.View>
+            ) : null}
+            {rewindTarget ? (
+              <View
                 style={{
-                  minHeight: 56,
-                  justifyContent: "center",
-                  paddingHorizontal: 24,
+                  marginTop: 12,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: tokens.border,
+                  backgroundColor: tokens.sidebar,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
                 }}
               >
                 <Text
-                  style={{
-                    color: action.destructive ? tokens.destructive : tokens.popoverForeground,
-                    fontSize: 16,
-                  }}
+                  style={{ color: tokens.mutedForeground, fontSize: 12, flex: 1 }}
+                  numberOfLines={2}
                 >
-                  {action.text}
+                  {`Editing message · ${rewindRemovedCount} messages after it will be removed`}
                 </Text>
-              </Pressable>
-            ))}
+                <Pressable accessibilityLabel="Cancel edit" onPress={cancelRewind}>
+                  <Text style={{ color: tokens.mutedForeground }}>✕</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            {attachmentNotice ? (
+              <Text style={{ color: tokens.warning, marginTop: 12, fontSize: 13 }}>
+                {attachmentNotice}
+              </Text>
+            ) : null}
+            {mentionOptions.length ? (
+              <View
+                testID="mention-picker"
+                style={{
+                  marginTop: 12,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: tokens.border,
+                  backgroundColor: tokens.card,
+                  overflow: "hidden",
+                }}
+              >
+                {mentionOptions.map((mention) => (
+                  <Pressable
+                    key={mentionChipKey(mention)}
+                    accessibilityLabel={t("@{name}", { name: mention.name })}
+                    onPress={() => insertMention(mention)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                    }}
+                  >
+                    <MentionOptionIcon mention={mention} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ color: tokens.foreground, fontSize: 14 }}>
+                        @{mention.name}
+                      </Text>
+                      {mention.subtitle ? (
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: tokens.mutedForeground,
+                            fontSize: 12.5,
+                            marginTop: 2,
+                          }}
+                        >
+                          {mention.subtitle}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            {slashSkillOptions.length || slashActionOptions.length ? (
+              <View
+                testID="slash-picker"
+                style={{
+                  marginTop: 12,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: tokens.border,
+                  backgroundColor: tokens.card,
+                  overflow: "hidden",
+                }}
+              >
+                {slashSkillOptions.map((skill) => (
+                  <Pressable
+                    key={skill.id}
+                    accessibilityLabel={t("Skill {name}", { name: skill.name })}
+                    onPress={() => insertSkill(skill)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                    }}
+                  >
+                    <NativeSymbol
+                      ios="cube"
+                      android="cube-outline"
+                      size={16}
+                      color={tokens.mutedForeground}
+                    />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ color: tokens.foreground, fontSize: 14 }}>{skill.name}</Text>
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          color: tokens.mutedForeground,
+                          fontSize: 12.5,
+                          marginTop: 2,
+                        }}
+                      >
+                        {truncateSlashDescription(skill.description)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+                {slashActionOptions.map((action) => (
+                  <Pressable
+                    key={action.id}
+                    accessibilityLabel={t(action.label)}
+                    onPress={() => runSlashAction(action.id)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 10,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                    }}
+                  >
+                    <NativeSymbol
+                      ios="gearshape"
+                      android="settings-outline"
+                      size={16}
+                      color={tokens.mutedForeground}
+                    />
+                    <Text style={{ color: tokens.foreground, fontSize: 14 }}>
+                      {t(action.label)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+            <View
+              style={{
+                marginTop: 16,
+                // 12 px side margins — the screen already gives the thread
+                // column 20 px (`paddingHorizontal` above), so this row claims
+                // back 8 of those to land on 12.
+                marginHorizontal: -8,
+                flexDirection: "row",
+                alignItems: "flex-end",
+                gap: 8,
+              }}
+            >
+              {dictation.dictating ? null : (
+                <ComposerAttachBubble
+                  ref={attachBubbleRef}
+                  open={attachSheetOpen}
+                  focused={composerFocused}
+                  onPress={showAttachMenu}
+                />
+              )}
+              <ComposerShell
+                style={{ flex: 1 }}
+                state={canSend ? "typing" : "idle"}
+                focused={composerFocused}
+                dictating={dictation.dictating}
+                dictationVolume={dictation.volume}
+                attachments={
+                  activePendingAttachments.length ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        {activePendingAttachments.map((attachment) => (
+                          <ComposerAttachment
+                            key={attachment.id}
+                            name={attachment.name}
+                            previewUri={attachment.previewUri}
+                            disabled={dictation.dictating}
+                            onRemove={() =>
+                              setPendingAttachments((current) =>
+                                current.filter((item) => item.id !== attachment.id),
+                              )
+                            }
+                          />
+                        ))}
+                      </View>
+                    </ScrollView>
+                  ) : undefined
+                }
+                leading={
+                  selectedSkill || selectedMentions.length > 0 ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        gap: 6,
+                        flexShrink: 1,
+                        maxWidth: "60%",
+                      }}
+                    >
+                      {selectedSkill ? (
+                        <View
+                          testID="skill-chip"
+                          style={[composerChip, { backgroundColor: tokens.accent }]}
+                        >
+                          <NativeSymbol
+                            ios="cube"
+                            android="cube-outline"
+                            size={14}
+                            color={tokens.mutedForeground}
+                          />
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: tokens.foreground,
+                              flexShrink: 1,
+                              ...nativeTextStyle("capsule"),
+                            }}
+                          >
+                            {selectedSkill.name}
+                          </Text>
+                          <Pressable
+                            accessibilityLabel={t("Remove skill {name}", {
+                              name: selectedSkill.name,
+                            })}
+                            hitSlop={8}
+                            disabled={dictation.dictating}
+                            onPress={() => setSelectedSkill(null)}
+                          >
+                            <NativeSymbol
+                              ios="xmark"
+                              android="close"
+                              size={12}
+                              color={tokens.mutedForeground}
+                            />
+                          </Pressable>
+                        </View>
+                      ) : null}
+                      {selectedMentions.map((mention) => (
+                        <View
+                          key={mentionChipKey(mention)}
+                          testID="mention-chip"
+                          style={[composerChip, { backgroundColor: tokens.mentionChip }]}
+                        >
+                          <MentionChipIcon mention={mention} />
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: tokens.mentionChipForeground,
+                              flexShrink: 1,
+                              ...nativeTextStyle("capsule"),
+                            }}
+                          >
+                            {mention.name}
+                          </Text>
+                          <Pressable
+                            accessibilityLabel={t("Remove mention {name}", {
+                              name: mention.name,
+                            })}
+                            hitSlop={8}
+                            disabled={dictation.dictating}
+                            onPress={() =>
+                              setSelectedMentions((current) =>
+                                current.filter(
+                                  (selected) =>
+                                    mentionChipKey(selected) !== mentionChipKey(mention),
+                                ),
+                              )
+                            }
+                          >
+                            <NativeSymbol
+                              ios="xmark"
+                              android="close"
+                              size={12}
+                              color={tokens.mutedForeground}
+                            />
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  ) : undefined
+                }
+                trailing={
+                  dictation.dictating ? undefined : (
+                    <>
+                      {dictation.available ? (
+                        <ComposerButton
+                          label={t("Dictate")}
+                          haptic="none"
+                          variant="bare"
+                          disabled={sending}
+                          onPress={dictation.start}
+                        >
+                          <NativeSymbol
+                            ios="mic"
+                            android="mic-outline"
+                            size={20}
+                            color={tokens.foreground}
+                          />
+                        </ComposerButton>
+                      ) : null}
+                      {canSend ? (
+                        <ComposerButton
+                          label={t("Send")}
+                          haptic="send"
+                          arrive
+                          disabled={sending}
+                          onPress={() => void send()}
+                        >
+                          <NativeSymbol
+                            ios="arrow.up"
+                            android="arrow-up"
+                            size={16}
+                            color={tokens.primaryForeground}
+                          />
+                        </ComposerButton>
+                      ) : null}
+                      {working ? (
+                        <ComposerButton
+                          label={t("Stop")}
+                          haptic="commit"
+                          disabled={sending}
+                          contour={
+                            <StopContour size={sizes.composerAction + 4} color={stopContourColor} />
+                          }
+                          onPress={() => void stop()}
+                        >
+                          <NativeSymbol
+                            ios="stop.fill"
+                            android="stop"
+                            size={13}
+                            color={tokens.primaryForeground}
+                          />
+                        </ComposerButton>
+                      ) : null}
+                    </>
+                  )
+                }
+                dictationCancel={
+                  dictation.dictating ? (
+                    <ComposerButton
+                      label={t("Cancel dictation")}
+                      haptic="none"
+                      variant="bare"
+                      onPress={dictation.cancel}
+                    >
+                      <NativeSymbol
+                        ios="xmark"
+                        android="close"
+                        size={16}
+                        color={tokens.foreground}
+                      />
+                    </ComposerButton>
+                  ) : undefined
+                }
+                dictationConfirm={
+                  dictation.dictating ? (
+                    <>
+                      {working ? (
+                        <ComposerButton
+                          label={t("Stop")}
+                          haptic="commit"
+                          disabled={sending}
+                          contour={
+                            <StopContour size={sizes.composerAction + 4} color={stopContourColor} />
+                          }
+                          onPress={() => void stop()}
+                        >
+                          <NativeSymbol
+                            ios="stop.fill"
+                            android="stop"
+                            size={13}
+                            color={tokens.primaryForeground}
+                          />
+                        </ComposerButton>
+                      ) : null}
+                      <ComposerButton
+                        label={t("Insert dictation")}
+                        haptic="none"
+                        onPress={insertDictation}
+                      >
+                        <NativeSymbol
+                          ios="checkmark"
+                          android="checkmark"
+                          size={16}
+                          color={tokens.primaryForeground}
+                        />
+                      </ComposerButton>
+                    </>
+                  ) : undefined
+                }
+              >
+                {dictation.dictating ? (
+                  <DictationPreview
+                    prefix={dictation.previewPrefix}
+                    finalText={dictation.finalText}
+                    interimText={dictation.interimText}
+                  />
+                ) : (
+                  <TextInput
+                    ref={textInputRef}
+                    value={draft}
+                    onChangeText={updateDraft}
+                    accessibilityLabel={
+                      displayName ? t("Message {name}", { name: displayName }) : t("Message")
+                    }
+                    onKeyPress={(event) => {
+                      if (
+                        event.nativeEvent.key === "Backspace" &&
+                        draft.length === 0 &&
+                        (selectedSkill !== null || selectedMentions.length > 0)
+                      ) {
+                        removeLastChip();
+                      }
+                    }}
+                    placeholder={
+                      selectedSkill || selectedMentions.length
+                        ? undefined
+                        : displayName
+                          ? t("Message {name}", { name: displayName })
+                          : t("Message…")
+                    }
+                    placeholderTextColor={tokens.mutedForeground}
+                    selectionColor={tokens.foreground}
+                    cursorColor={tokens.foreground}
+                    keyboardAppearance={colorScheme}
+                    multiline
+                    textAlignVertical="center"
+                    blurOnSubmit={false}
+                    onFocus={() => setComposerFocused(true)}
+                    onBlur={() => setComposerFocused(false)}
+                    style={{
+                      color: tokens.foreground,
+                      // 5 lines max, then the field scrolls internally. iOS's
+                      // multiline box is border-box (Yoga), so its 11 pt of
+                      // vertical padding below counts against this height too —
+                      // without adding it back, only about 4 lines actually fit.
+                      maxHeight: Platform.OS === "ios" ? 5 * 22 + 2 * 11 : 110,
+                      writingDirection: "auto",
+                      ...nativeTextStyle("composer"),
+                      // A multiline iOS field puts all of a line height's extra
+                      // leading above the glyphs, so the text sat low in the
+                      // capsule; the font's own line box centres it. The row is
+                      // `sizes.composerTarget` (44) tall, and one composer line is
+                      // 22, so 11 on each side centres it there.
+                      ...(Platform.OS === "ios"
+                        ? { lineHeight: undefined, paddingVertical: 11 }
+                        : { paddingVertical: 4 }),
+                    }}
+                  />
+                )}
+              </ComposerShell>
+            </View>
           </View>
-        </View>
-      </Modal>
-      {markdownPreview && artifactTarget ? (
-        <MarkdownArtifactPreview
-          threadTarget={artifactTarget}
-          target={markdownPreview}
-          onClose={() => setMarkdownPreview(null)}
-        />
-      ) : null}
-    </KeyboardAvoidingView>
+          <Modal
+            visible={botActionsOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setBotActionsOpen(false)}
+          >
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                padding: 24,
+                backgroundColor: tokens.overlay,
+              }}
+            >
+              <Pressable
+                accessibilityLabel={t("Cancel")}
+                onPress={() => setBotActionsOpen(false)}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                }}
+              />
+              <View
+                accessibilityViewIsModal
+                style={{
+                  backgroundColor: tokens.popover,
+                  borderRadius: 24,
+                  paddingVertical: 12,
+                }}
+              >
+                {botActions.map((action) => (
+                  <Pressable
+                    key={action.text}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setBotActionsOpen(false);
+                      action.onPress();
+                    }}
+                    style={{
+                      minHeight: 56,
+                      justifyContent: "center",
+                      paddingHorizontal: 24,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: action.destructive ? tokens.destructive : tokens.popoverForeground,
+                        fontSize: 16,
+                      }}
+                    >
+                      {action.text}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </Modal>
+          {markdownPreview && artifactTarget ? (
+            <MarkdownArtifactPreview
+              threadTarget={artifactTarget}
+              target={markdownPreview}
+              onClose={() => setMarkdownPreview(null)}
+            />
+          ) : null}
+          {tablePreview ? (
+            <TablePreview table={tablePreview} onClose={() => setTablePreview(null)} />
+          ) : null}
+        </KeyboardAvoidingView>
+      </ThreadGrowthContext.Provider>
+    </TableActionsProvider>
   );
 }
 
@@ -2517,45 +3064,52 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
   );
 }
 
-/** A round 34 pt control of the composer capsule; `hitSlop` brings the tap
- * target back to 44 pt without widening the capsule. */
-/** The send arrow arrives like the web's `animate-arrive`: up from 6 pt, fading in. */
-const COMPOSER_ARRIVE = new Keyframe({
-  0: { opacity: 0, transform: [{ translateY: 6 }] },
+/** The send arrow pivots in like the web's `animate-arrive`, but rotating —
+ * -90° to 0°, scaling up from .6, fading in — over `motion.pivot`. */
+const COMPOSER_PIVOT = new Keyframe({
+  0: { opacity: 0, transform: [{ rotate: "-90deg" }, { scale: 0.6 }] },
   100: {
     opacity: 1,
-    transform: [{ translateY: 0 }],
+    transform: [{ rotate: "0deg" }, { scale: 1 }],
     easing: Easing.bezier(0.32, 0.72, 0, 1),
   },
-}).duration(motion.arrive);
+}).duration(motion.pivot);
 
-/** A round composer control: settles to 0.94 while pressed, the web's
- * `rk-press-round`, and a plain one fills with `accent` like its hover. */
+/** A composer action disc: a `sizes.composerTarget` (44 pt) touch target
+ * around a `sizes.composerAction` (36 pt) `primary` disc — settles to scale
+ * .9 while pressed (skipped under reduced motion), the web's `rk-press-round`. */
 function ComposerButton({
   label,
   onPress,
   disabled,
-  tone = "plain",
   arrive = false,
+  haptic,
+  contour,
+  variant = "disc",
   children,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
-  tone?: "plain" | "primary" | "secondary";
-  /** Animate in on mount — the send arrow appearing with the first character. */
+  /** Animate in with a pivot on mount — the send arrow appearing with the first character. */
   arrive?: boolean;
+  /** "none" for a dictation control that already fires its own haptic (mic tap, ✓ insert) or has none (×). */
+  haptic: "send" | "commit" | "none";
+  /** The Stop button's animated ring, drawn just outside the disc. */
+  contour?: ReactNode;
+  /** "bare" draws just the icon at full size in the touch target, no ink
+   * disc — dictation's × (the design has no disc behind Cancel,
+   * unlike Send/Stop/✓). */
+  variant?: "disc" | "bare";
   children: ReactNode;
 }) {
   const tokens = useMobileTokens();
   const reducedMotion = useReducedMotion();
   const pressed = useSharedValue(0);
-  const [held, setHeld] = useState(false);
   const pressStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 - pressed.value * 0.06 }],
+    transform: [{ scale: 1 - pressed.value * 0.1 }],
   }));
   const press = (down: boolean) => {
-    setHeld(down);
     if (reducedMotion) return;
     pressed.value = withTiming(down ? 1 : 0, {
       duration: motion.press,
@@ -2563,39 +3117,45 @@ function ComposerButton({
     });
   };
   return (
-    <Animated.View entering={arrive ? COMPOSER_ARRIVE : undefined} style={pressStyle}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        disabled={disabled}
-        hitSlop={5}
-        onPress={() => {
-          if (tone === "plain") selectionHaptic();
-          else commitHaptic();
-          onPress();
-        }}
-        onPressIn={() => press(true)}
-        onPressOut={() => press(false)}
-        style={{
-          width: sizes.composerIcon,
-          height: sizes.composerIcon,
-          borderRadius: radii.pill,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor:
-            tone === "primary"
-              ? tokens.primary
-              : tone === "secondary"
-                ? tokens.secondary
-                : held
-                  ? tokens.accent
-                  : "transparent",
-          opacity: disabled ? 0.5 : tone !== "plain" && held ? 0.85 : 1,
-        }}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={() => {
+        if (haptic === "send") sendHaptic();
+        else if (haptic === "commit") commitHaptic();
+        onPress();
+      }}
+      onPressIn={() => press(true)}
+      onPressOut={() => press(false)}
+      style={{
+        width: sizes.composerTarget,
+        height: sizes.composerTarget,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {contour}
+      <Animated.View
+        entering={arrive && !reducedMotion ? COMPOSER_PIVOT : undefined}
+        style={[
+          variant === "disc"
+            ? {
+                width: sizes.composerAction,
+                height: sizes.composerAction,
+                borderRadius: radii.pill,
+                backgroundColor: tokens.primary,
+                alignItems: "center",
+                justifyContent: "center",
+              }
+            : { alignItems: "center", justifyContent: "center" },
+          pressStyle,
+        ]}
       >
         {children}
-      </Pressable>
-    </Animated.View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -2640,6 +3200,7 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
       identity={mention.id}
       shapeSeed={mention.shapeSeed}
       size={sizes.chip}
+      still
     />
   );
 }
@@ -2687,10 +3248,13 @@ async function speakMessage(botId: string, message: MobileMessage) {
   }
 }
 
-type MessageActionProps = Pick<
-  TextProps,
-  "onLongPress" | "accessibilityActions" | "onAccessibilityAction"
->;
+type MessageActionProps = Pick<TextProps, "accessibilityActions" | "onAccessibilityAction"> & {
+  // Plain `() => void`, not `TextProps["onLongPress"]`'s `(event) => void`:
+  // every implementation ignores the event, and this shape assigns cleanly
+  // both to a `Pressable`'s `onLongPress` (a card's untouched wrapper) and to
+  // `AnimatedMessageBubble`'s RNGH-driven `onLongPress` (a plain callback).
+  onLongPress: () => void;
+};
 
 const MessageBubble = memo(function MessageBubble({
   botId,
@@ -2705,6 +3269,8 @@ const MessageBubble = memo(function MessageBubble({
   onOpenBot,
   onPreviewMarkdown,
   actionProps,
+  isNew,
+  routineRole,
 }: {
   botId: string;
   botName?: string;
@@ -2718,14 +3284,21 @@ const MessageBubble = memo(function MessageBubble({
   onOpenBot: (botId: string, name: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   actionProps: MessageActionProps;
+  /** 7f: a new "Messaged / Message from" marker makes its two bloubs glance
+   * at each other once. Never for one already on screen at thread open. */
+  isNew: boolean;
+  /** How a routine run renders once runs are folded (a line, a group). */
+  routineRole?: RoutineRowRole;
 }) {
-  const colorScheme = useResolvedAppearance();
   const tokens = mobileTokens();
   const { t } = useI18n();
   const router = useRouter();
   const showSteps = useDisplayAgentSteps();
   const artifactTarget: MobileArtifactTarget = groupId ? { groupId } : { botId };
   const cardBotId = message.botId ?? botId;
+  // Mono-bot grammar (design contract §3b): the narration bubble caps at 82%
+  // of the thread instead of 88% of the content column.
+  const mono = !groupId;
   const appConnectBlocks = message.blocks.filter(
     (block): block is Extract<MessageBlock, { kind: "app_connect" }> =>
       block.kind === "app_connect",
@@ -2800,19 +3373,22 @@ const MessageBubble = memo(function MessageBubble({
     const from = memberName(members, handoff.fromBotId) ?? t("bot");
     const to = memberName(members, handoff.toBotId) ?? t("bot");
     const label = t("{from} messaged {to}", { from, to });
-    return (
-      <Interstitial
-        avatars={
-          <StackedAvatars
-            items={[avatarOf(handoff.fromBotId), avatarOf(handoff.toBotId)]}
-            size={sizes.stackXs}
-          />
-        }
-      >
-        {handoff.text ? `${label} · ${handoff.text}` : label}
-      </Interstitial>
-    );
+    return <HandoffDivider>{handoff.text ? `${label} · ${handoff.text}` : label}</HandoffDivider>;
   }
+  const openPeerMessages = (peerBotId: string | undefined, peer: string | undefined) =>
+    router.push({
+      pathname: "/peer-messages",
+      params: {
+        botId: cardBotId,
+        botName: memberName(members, cardBotId) ?? botName ?? "",
+        botColor: botColorOf(cardBotId),
+        botShapeSeed: avatarOf(cardBotId).shapeSeed?.toString() ?? "",
+        peerBotId,
+        peerBotName: peer ?? "",
+        peerColor: botColorOf(peerBotId),
+        peerShapeSeed: avatarOf(peerBotId).shapeSeed?.toString() ?? "",
+      },
+    });
   const peerMessage = message.blocks.find(
     (
       block,
@@ -2827,25 +3403,21 @@ const MessageBubble = memo(function MessageBubble({
       ? t("Messaged {peer}", { peer: peer ?? t("Bot") })
       : t("Message from {peer}", { peer: peer ?? t("Bot") });
     const pair = sent ? [cardBotId, peerBotId] : [peerBotId, cardBotId];
+    // 7f: a brand-new marker's two bloubs glance at each other once — the
+    // first item (rendered on the left by `StackedAvatars`) looks right,
+    // toward the second, which looks left, toward it.
+    const pairItems = pair.map((id, index) => ({
+      ...avatarOf(id),
+      ...(isNew ? { glance: index === 0 ? ("right" as const) : ("left" as const) } : {}),
+    }));
     // Compact receipt only: peer bodies stay out of the human thread; the full
     // view-only exchange opens on its own screen.
     return (
       <Interstitial
         accessibilityLabel={label}
-        avatars={<StackedAvatars items={pair.map(avatarOf)} size={sizes.stackXs} />}
-        onPress={() =>
-          router.push({
-            pathname: "/peer-messages",
-            params: {
-              botId: cardBotId,
-              botName: memberName(members, cardBotId) ?? botName ?? "",
-              botColor: botColorOf(cardBotId),
-              peerBotId,
-              peerBotName: peer ?? "",
-              peerColor: botColorOf(peerBotId),
-            },
-          })
-        }
+        avatars={<StackedAvatars items={pairItems} size={sizes.interstitial} still />}
+        hitSlop={{ top: 5, bottom: 5, left: 8, right: 8 }}
+        onPress={() => openPeerMessages(peerBotId, peer)}
       >
         {label}
       </Interstitial>
@@ -2875,129 +3447,49 @@ const MessageBubble = memo(function MessageBubble({
       block.kind === "routine_run",
   );
   if (routineRun) {
-    return <RoutineRunCard block={routineRun} actionProps={actionProps} />;
+    const handoffFor = (item: RoutineGroupRun): RoutineHandoff | undefined => {
+      const sent = item.sentTo;
+      if (!sent) return undefined;
+      return {
+        receipt: <BotAvatar {...avatarOf(sent.toBotId)} size={sizes.receipt} still />,
+        avatars: (
+          <StackedAvatars
+            items={[avatarOf(cardBotId), avatarOf(sent.toBotId)]}
+            size={sizes.interstitial}
+            still
+          />
+        ),
+        label: t("Messaged {peer}", { peer: sent.toBotName ?? t("Bot") }),
+        onPress: () => openPeerMessages(sent.toBotId, sent.toBotName),
+      };
+    };
+    if (routineRole?.kind === "group") {
+      return (
+        <RoutineGroup runs={routineRole.runs} handoffFor={handoffFor} actionProps={actionProps} />
+      );
+    }
+    const item =
+      routineRole?.kind === "run"
+        ? routineRole.run
+        : { messageId: message.id, createdAt: message.createdAt, run: routineRun, latest: true };
+    return <RoutineRunLine item={item} handoff={handoffFor(item)} actionProps={actionProps} />;
   }
   const special = message.blocks.find(
-    (block) =>
-      block.kind === "subagent" || block.kind === "child_bot" || block.kind === "cloud_agent",
+    (block) => block.kind === "subagent" || block.kind === "child_bot",
   );
   if (special?.kind === "subagent") {
     const running = special.status === "running";
     const failed = special.status === "failed";
+    const body = special.result || special.progress;
     return (
-      <Pressable {...actionProps} style={{ width: "90%" }}>
-        <Surface style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              gap: 8,
-            }}
-          >
-            <Text
-              style={{
-                color: tokens.foreground,
-                fontSize: 15,
-                fontWeight: "600",
-              }}
-            >
-              {special.name || t("subagent")}
-            </Text>
-            <Text
-              style={{
-                color: failed
-                  ? tokens.destructive
-                  : running
-                    ? tokens.mutedForeground
-                    : tokens.success,
-                ...nativeTextStyle("label"),
-              }}
-            >
-              {running
-                ? t("Running")
-                : special.status === "failed"
-                  ? t("Failed")
-                  : special.status === "completed"
-                    ? t("Completed")
-                    : special.status}
-            </Text>
-          </View>
-          {special.task ? (
-            <Text
-              style={{ color: tokens.mutedForeground, marginTop: 8, ...nativeTextStyle("meta") }}
-            >
-              {special.task}
-            </Text>
-          ) : null}
-          {special.result || special.progress ? (
-            <View style={{ marginTop: 8 }}>
-              <ChatMarkdown palette={tokens} colorScheme={colorScheme} streaming={running}>
-                {special.result || special.progress || ""}
-              </ChatMarkdown>
-            </View>
-          ) : null}
-        </Surface>
-      </Pressable>
-    );
-  }
-  if (special?.kind === "cloud_agent") {
-    const title = special.title || t("Cloud agent");
-    const statusLabel =
-      special.status === "running"
-        ? t("running")
-        : special.status === "finished"
-          ? t("finished")
-          : special.status === "cancelled"
-            ? t("cancelled")
-            : t("failed");
-    const failed = special.status === "failed";
-    const finished = special.status === "finished";
-    const prHref = cloudAgentHttpsUrl(special.prUrl);
-    const href = prHref ?? cloudAgentHttpsUrl(special.url);
-    return (
-      <Pressable
-        onPress={() => {
-          if (href) Linking.openURL(href).catch(() => undefined);
-        }}
-        testID="cloud-agent-card"
-        accessibilityRole={href ? "link" : "text"}
-        accessibilityLabel={`${title}: ${statusLabel}`}
-        disabled={!href}
-        style={{ width: "90%" }}
-      >
-        <Surface style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
-            <Text style={{ color: tokens.cardForeground, fontSize: 15, fontWeight: "600" }}>
-              {title}
-            </Text>
-            <Text
-              style={{
-                color: failed
-                  ? tokens.destructive
-                  : finished
-                    ? tokens.success
-                    : tokens.mutedForeground,
-                ...nativeTextStyle("label"),
-              }}
-            >
-              {statusLabel}
-            </Text>
-          </View>
-          {prHref ? (
-            <Text
-              style={{ color: tokens.mutedForeground, marginTop: 8, ...nativeTextStyle("meta") }}
-            >
-              {t("Pull request")}
-            </Text>
-          ) : special.branch ? (
-            <Text
-              style={{ color: tokens.mutedForeground, marginTop: 8, ...nativeTextStyle("meta") }}
-            >
-              {special.branch}
-            </Text>
-          ) : null}
-        </Surface>
-      </Pressable>
+      <TaskCard
+        title={special.name || t("subagent")}
+        state={running ? "running" : failed ? "failed" : "done"}
+        meta={special.task}
+        body={body}
+        streaming={running}
+        actionProps={actionProps}
+      />
     );
   }
   if (special?.kind === "child_bot") {
@@ -3271,6 +3763,7 @@ const MessageBubble = memo(function MessageBubble({
           message={{ ...message, blocks: segment.blocks }}
           replyPreview={index === firstContent ? replyPreview : undefined}
           actionProps={actionProps}
+          mono={mono}
         />
       ))}
       {appConnectBlocks.map((block, index) => (
@@ -3286,26 +3779,6 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-/** "3m ago"-style label from an ISO timestamp, in the active UI locale. Falls
-    back to a clock time when `Intl.RelativeTimeFormat` isn't available. */
-function routineRunTimeLabel(iso: string | undefined): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  const locale = dateLocaleForUi();
-  const diffMin = Math.round((Date.now() - date.getTime()) / 60_000);
-  try {
-    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
-    if (Math.abs(diffMin) < 1) return rtf.format(0, "minute");
-    if (Math.abs(diffMin) < 60) return rtf.format(-diffMin, "minute");
-    const diffHour = Math.round(diffMin / 60);
-    if (Math.abs(diffHour) < 24) return rtf.format(-diffHour, "hour");
-    return rtf.format(-Math.round(diffHour / 24), "day");
-  } catch {
-    return date.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
-  }
-}
-
 /** Native routine-run card: a sub-bot's routine traced by its run lifecycle
     (queued/running/completed/failed/cancelled) instead of a free closing
     text. Mirrors the web `RoutineRunCard`'s semantics; visual template is the
@@ -3317,24 +3790,336 @@ function routineRunTimeLabel(iso: string | undefined): string | null {
     it (threat model S1, spec CA-R5/CA-R12). The card's chrome never carries
     the bot's color (spec CA-R10): a subscribed routine is only ever
     distinguished by being expanded by default and by a monochrome bell. */
-function RoutineRunCard({
-  block,
-  actionProps,
+/** A headline that only restates the routine's name ("📭 Check inbox" for
+ * `check-inbox-midi`) adds nothing under it. */
+function headlineRepeatsName(headline: string, name: string): boolean {
+  const letters = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  const short = letters(headline);
+  return short.length > 0 && letters(name).includes(short);
+}
+
+type TaskCardState = "running" | "done" | "failed" | "cancelled";
+
+/** The run's state as one symbol: the shape tells it apart without colour, the colour only confirms. */
+const ROUTINE_STATE_SYMBOL = {
+  queued: { ios: "clock", android: "time-outline" },
+  running: { ios: "circle.dotted", android: "ellipse-outline" },
+  completed: { ios: "checkmark.circle.fill", android: "checkmark-circle" },
+  failed: { ios: "xmark.circle.fill", android: "close-circle" },
+  cancelled: { ios: "stop.circle", android: "stop-circle-outline" },
+} as const;
+
+/** How far the last lines of a cut preview fade into its host. */
+const PREVIEW_FADE_HEIGHT = 56;
+/** A cut routine report: eight lines of the 23 pt body. */
+const REPORT_PREVIEW_HEIGHT = 8 * 23;
+/** A cut task result: five lines. */
+const TASK_PREVIEW_HEIGHT = 5 * 23;
+/** Past this many runs, a group opens in a sheet instead of in place. */
+const GROUP_INLINE_MAX = 8;
+
+/**
+ * A row's content opening under its header (a routine's report, a group's
+ * runs), its height animated on the UI thread. The header stays where the
+ * person tapped it: while it moves, the list keeps the row above in place
+ * (see `ThreadGrowthContext`). At rest the content takes its own height, so a
+ * row opening inside it flows through.
+ */
+function Expandable({
+  open,
+  fromTap,
+  children,
 }: {
-  block: Extract<MessageBlock, { kind: "routine_run" }>;
+  open: boolean;
+  /** Set by the header's tap: only a change the person asked for is animated. */
+  fromTap: { current: boolean };
+  children: ReactNode;
+}) {
+  const growth = useContext(ThreadGrowthContext);
+  const rowId = useContext(ThreadRowContext);
+  const parentHeight = useContext(ExpandableHeightContext);
+  const reducedMotion = useChatReducedMotion();
+  const [mounted, setMounted] = useState(open);
+  // Always a number: the content is laid out on its own (a clipped parent
+  // would squeeze it), and the box follows it.
+  const height = useSharedValue(0);
+  const contentHeight = useRef(0);
+  const animating = useRef(open);
+
+  // A box opening inside this one grows this one by as much, in the same
+  // frame, so nothing below it is cut while it moves.
+  useAnimatedReaction(
+    () => height.value,
+    (current, previous) => {
+      if (previous == null || !parentHeight) return;
+      parentHeight.value = parentHeight.value + (current - previous);
+    },
+  );
+
+  const settle = (closed: boolean) => {
+    fromTap.current = false;
+    animating.current = false;
+    if (closed) {
+      // Measured afresh on the next opening: kept, the same height read as
+      // "nothing changed" and the box stayed shut.
+      contentHeight.current = 0;
+      setMounted(false);
+    }
+  };
+
+  const animateTo = (target: number, closing: boolean) => {
+    const moves = fromTap.current;
+    if (moves) growth?.hold(rowId);
+    animating.current = true;
+    const duration = moves && !reducedMotion ? 240 : 0;
+    runOnUI(() => {
+      "worklet";
+      height.value = withTiming(
+        target,
+        { duration, easing: CHAT_MOTION.botEnterEasing },
+        (finished) => {
+          if (finished) runOnJS(settle)(closing);
+        },
+      );
+    })();
+  };
+
+  useEffect(() => {
+    if (open) {
+      if (!mounted) {
+        animating.current = true;
+        setMounted(true);
+      }
+    } else if (mounted) {
+      animateTo(0, true);
+    }
+  }, [open]);
+
+  const style = useAnimatedStyle(() => ({ height: height.value }));
+  if (!mounted) return null;
+  return (
+    <Animated.View style={[{ overflow: "hidden" }, style]}>
+      <ExpandableHeightContext.Provider value={height}>
+        <View
+          style={{ position: "absolute", top: 0, left: 0, right: 0 }}
+          onLayout={(event) => {
+            const next = event.nativeEvent.layout.height;
+            if (Math.abs(next - contentHeight.current) < 1) return;
+            contentHeight.current = next;
+            if (!open) return;
+            // Opening, or the content settling while it opens: follow it.
+            if (animating.current) animateTo(next, false);
+            else if (Math.abs(height.value - next) >= 1) height.value = next;
+          }}
+        >
+          {children}
+        </View>
+      </ExpandableHeightContext.Provider>
+    </Animated.View>
+  );
+}
+
+/**
+ * Content cut to `maxHeight` when it runs longer: its last lines fade into
+ * the host and a round expand badge sits on the fade, bottom right (Photos,
+ * Maps). The badge only marks it; the whole preview is the target and opens
+ * the rest. Content that fits renders as is.
+ */
+function ClippedPreview({
+  maxHeight,
+  fadeColor,
+  onOpen,
+  accessibilityLabel,
+  children,
+}: {
+  maxHeight: number;
+  fadeColor: string;
+  onOpen: () => void;
+  accessibilityLabel: string;
+  children: ReactNode;
+}) {
+  const tokens = mobileTokens();
+  const { t } = useI18n();
+  const reducedMotion = useChatReducedMotion();
+  const [height, setHeight] = useState(0);
+  // Only worth cutting when it hides a few lines, not the last one.
+  const capped = height > maxHeight + 3 * 23;
+  // The content is measured outside the flow, so the row takes its final
+  // height at once: laid out in full first, then cut, it grew and shrank in
+  // one frame and the thread jumped. The last paragraph's bottom margin (9)
+  // is the host's own end.
+  const body = (
+    <View
+      style={{ position: "absolute", top: 0, left: 0, right: 0 }}
+      onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
+    >
+      {children}
+    </View>
+  );
+  if (!capped) {
+    return <View style={{ height: Math.max(0, height - 9), overflow: "hidden" }}>{body}</View>;
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={t("Opens in full")}
+      onPress={onOpen}
+      unstable_pressDelay={130}
+      style={{ height: maxHeight, overflow: "hidden" }}
+    >
+      {({ pressed }) => (
+        <>
+          {/* A cut in the middle of a line is laid out outside the flow: a height
+              cap on the text itself made iOS stop wrapping. */}
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            {body}
+          </View>
+          <Svg
+            pointerEvents="none"
+            width="100%"
+            height={PREVIEW_FADE_HEIGHT}
+            style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}
+          >
+            <Defs>
+              <LinearGradient id="preview-fade" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={fadeColor} stopOpacity={0} />
+                <Stop offset="0.6" stopColor={fadeColor} stopOpacity={1} />
+              </LinearGradient>
+            </Defs>
+            <Rect width="100%" height={PREVIEW_FADE_HEIGHT} fill="url(#preview-fade)" />
+          </Svg>
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              right: 8,
+              bottom: 8,
+              width: sizes.hoverIcon,
+              height: sizes.hoverIcon,
+              borderRadius: sizes.hoverIcon / 2,
+              borderWidth: 1,
+              borderColor: tokens.outline,
+              backgroundColor: pressed ? tokens.surface : tokens.secondary,
+              alignItems: "center",
+              justifyContent: "center",
+              transform: [{ scale: pressed && !reducedMotion ? 0.94 : 1 }],
+            }}
+          >
+            <NativeSymbol
+              ios="arrow.up.left.and.arrow.down.right"
+              android="expand-outline"
+              size={13}
+              weight="semibold"
+              color={tokens.foreground}
+            />
+          </View>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+/** The bot a run then messaged, drawn by the run: a receipt at rest, the centred line when open. */
+interface RoutineHandoff {
+  receipt: ReactNode;
+  avatars: ReactNode;
+  label: string;
+  onPress: () => void;
+}
+
+/** How long a page sheet takes to slide away before the next screen can push. */
+const SHEET_DISMISS_MS = 350;
+
+/** A handoff tapped inside a sheet: the sheet closes, then the bots' exchange opens. */
+function handoffFromSheet(handoff: RoutineHandoff, close: () => void): RoutineHandoff {
+  return {
+    ...handoff,
+    onPress: () => {
+      close();
+      setTimeout(handoff.onPress, SHEET_DISMISS_MS);
+    },
+  };
+}
+
+function routineTime(createdAt: string | undefined, withDay: boolean): string {
+  if (!createdAt) return "";
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return "";
+  const locale = dateLocaleForUi();
+  const time = date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  return withDay ? `${date.toLocaleDateString(locale, { weekday: "short" })} ${time}` : time;
+}
+
+/** A group's span: its hours on one day, its days across several ("Mon – Wed", "Sep 22 – 28"). */
+function routineRange(first: string | undefined, last: string | undefined): string {
+  if (!first || !last) return "";
+  if (sameLocalDay(first, last))
+    return `${routineTime(first, false)} – ${routineTime(last, false)}`;
+  const locale = dateLocaleForUi();
+  const start = new Date(first);
+  const end = new Date(last);
+  const overAWeek = end.getTime() - start.getTime() > 6 * 86_400_000;
+  const day = (date: Date) =>
+    overAWeek
+      ? date.toLocaleDateString(locale, { month: "short", day: "numeric" })
+      : date.toLocaleDateString(locale, { weekday: "short" });
+  return `${day(start)} – ${day(end)}`;
+}
+
+function sameLocalDay(left: string | undefined, right: string | undefined): boolean {
+  if (!left || !right) return true;
+  return new Date(left).toDateString() === new Date(right).toDateString();
+}
+
+/**
+ * A routine run as a log line, not a card: status symbol, name, time, status
+ * word, then fixed receipt, bell and disclosure slots so the columns line up
+ * down a run of routines. Opening it shows the report under a hairline rail
+ * (cut long reports open whole in a sheet) and, centred as every exchange
+ * between bots is, the message it then sent. A failed run and a subscribed
+ * one open on their report.
+ */
+function RoutineRunLine({
+  item,
+  handoff,
+  actionProps,
+  nested = false,
+  withDay = false,
+}: {
+  item: RoutineGroupRun;
+  handoff?: RoutineHandoff;
   actionProps: MessageActionProps;
+  /** A line inside an open group: smaller symbol, no own long press. */
+  nested?: boolean;
+  withDay?: boolean;
 }) {
   const tokens = mobileTokens();
   const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
-  const digest = block.digest?.trim() || undefined;
+  const block = item.run;
+  const headline =
+    block.headline && !headlineRepeatsName(block.headline, block.routineName)
+      ? block.headline
+      : undefined;
+  // The headline is the digest's first line; alone, it is the whole report.
+  const digest = block.digest?.trim() || headline;
   const subscribed = Boolean(block.notify);
+  const failed = block.state === "failed";
+  const opens = Boolean(digest || handoff);
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  const expanded = manualExpanded ?? subscribed;
-  const statusColor =
+  const [reportOpen, setReportOpen] = useState(false);
+  // Only a routine's latest run opens on its own (failed, or subscribed):
+  // older ones stay folded so a thread of past failures is not a wall of reports.
+  const expanded =
+    opens && (manualExpanded ?? Boolean(digest && item.latest && (subscribed || failed)));
+  const fromTap = useRef(false);
+  // At accessibility text sizes the time and status move under the name.
+  const stacked = PixelRatio.getFontScale() > 1.35;
+  const symbolColor =
     block.state === "completed"
       ? tokens.success
-      : block.state === "failed"
+      : failed
         ? tokens.destructive
         : tokens.mutedForeground;
   const statusLabel =
@@ -3344,106 +4129,514 @@ function RoutineRunCard({
         ? t("Running")
         : block.state === "completed"
           ? t("Completed")
-          : block.state === "failed"
+          : failed
             ? t("Failed")
             : t("Cancelled");
-  const timeLabel = routineRunTimeLabel(
-    block.state === "queued" || block.state === "running"
-      ? block.startedAt
-      : (block.endedAt ?? block.startedAt),
-  );
-  return (
-    <Pressable {...actionProps} style={{ width: "90%" }}>
-      <Surface
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-          gap: 6,
-        }}
-      >
-        {/* The routine name owns the full width and is never truncated by the
-            state pill or timestamp (explicit requirement): they always sit on
-            their own row below it, not squeezed onto the same line. */}
-        <Text style={{ color: tokens.foreground, fontSize: 15, fontWeight: "600" }}>
-          {block.routineName}
+  const statusStyle = {
+    color: failed ? tokens.destructive : tokens.mutedForeground,
+    ...nativeTextStyle("label", { weight: 500 }),
+  };
+  const time = routineTime(item.createdAt, withDay);
+  const trailing = (
+    <>
+      {time && !nested ? (
+        <Text
+          style={{
+            color: tokens.mutedForeground,
+            ...nativeTextStyle("time"),
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {time}
         </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-          {block.state === "running" ? (
-            <ShimmerText
-              style={{ color: statusColor, ...nativeTextStyle("label", { weight: 600 }) }}
-            >
-              {`● ${statusLabel}`}
-            </ShimmerText>
-          ) : (
-            // The dot never carries the status alone: the word is always shown too.
-            <Text style={{ color: statusColor, ...nativeTextStyle("label", { weight: 600 }) }}>
-              {`● ${statusLabel}`}
-            </Text>
-          )}
-          {timeLabel ? (
-            <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("time") }}>
-              {timeLabel}
-            </Text>
-          ) : null}
-          {subscribed ? (
-            <View accessibilityRole="image" accessibilityLabel={t("Notifications on")}>
-              <NativeSymbol
-                ios="bell"
-                android="notifications-outline"
-                size={14}
-                color={tokens.mutedForeground}
-              />
-            </View>
-          ) : null}
-        </View>
-        {block.headline ? (
+      ) : null}
+      {block.state === "running" ? (
+        <ShimmerText style={statusStyle}>{statusLabel}</ShimmerText>
+      ) : (
+        <Text style={statusStyle}>{statusLabel}</Text>
+      )}
+    </>
+  );
+  const symbol = ROUTINE_STATE_SYMBOL[block.state];
+  const accessibilityLabel = [
+    block.routineName,
+    statusLabel,
+    time,
+    subscribed ? t("Notifications on") : null,
+    handoff?.label,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return (
+    <View>
+      <Pressable
+        {...(nested ? {} : actionProps)}
+        accessible
+        accessibilityRole={opens ? "button" : undefined}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={opens ? { expanded } : undefined}
+        onPress={
+          opens
+            ? () => {
+                fromTap.current = true;
+                setManualExpanded(!expanded);
+              }
+            : undefined
+        }
+        // A thumb scrolling the thread past the line does not press it.
+        unstable_pressDelay={130}
+        style={({ pressed }) => ({
+          minHeight: 44,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          marginHorizontal: -8,
+          paddingHorizontal: 8,
+          borderRadius: radii.row,
+          backgroundColor: pressed && opens ? tokens.secondary : "transparent",
+        })}
+      >
+        <NativeSymbol
+          ios={symbol.ios}
+          android={symbol.android}
+          size={nested ? 14 : 18}
+          color={symbolColor}
+        />
+        <View style={{ flex: 1, gap: 2 }}>
+          {/* The name is never truncated: it wraps before the trailing slots move.
+              Inside a group every line is the same routine, so it says when instead. */}
           <Text
-            numberOfLines={1}
-            style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}
+            style={{ color: tokens.foreground, ...nativeTextStyle("rowName", { weight: 500 }) }}
           >
-            {block.headline}
+            {nested && time ? time : block.routineName}
           </Text>
-        ) : null}
-        {digest ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={expanded ? t("Hide details") : t("Show details")}
-            onPress={() => setManualExpanded(!expanded)}
-            hitSlop={15}
-            style={{ flexDirection: "row", alignItems: "center", marginTop: 2 }}
-          >
+          {stacked ? <View style={{ flexDirection: "row", gap: 8 }}>{trailing}</View> : null}
+        </View>
+        {stacked ? null : trailing}
+        {/* Fixed slots, kept when empty, so the columns line up down a run of routines. */}
+        <View style={{ width: sizes.receipt, alignItems: "center" }}>
+          {handoff && !expanded ? handoff.receipt : null}
+        </View>
+        <View style={{ width: 14, alignItems: "center" }}>
+          {subscribed ? (
             <NativeSymbol
-              ios={expanded ? "chevron.up" : "chevron.down"}
-              android={expanded ? "chevron-up-outline" : "chevron-down-outline"}
+              ios="bell"
+              android="notifications-outline"
               size={14}
               color={tokens.mutedForeground}
             />
-          </Pressable>
-        ) : null}
-        {expanded && digest ? (
-          <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled>
+          ) : null}
+        </View>
+        <View style={{ width: 14, alignItems: "center" }}>
+          {opens ? <Disclosure open={expanded} /> : null}
+        </View>
+      </Pressable>
+      <Expandable open={expanded} fromTap={fromTap}>
+        <View
+          style={{
+            marginStart: nested ? 6 : 9,
+            paddingStart: nested ? 20 : 18,
+            borderStartWidth: 1,
+            borderStartColor: tokens.outline,
+            marginBottom: 8,
+            gap: 10,
+          }}
+        >
+          {digest ? (
+            <ClippedPreview
+              maxHeight={REPORT_PREVIEW_HEIGHT}
+              fadeColor={tokens.background}
+              onOpen={() => setReportOpen(true)}
+              accessibilityLabel={t("Report, {name}", { name: block.routineName })}
+            >
+              <ChatMarkdown
+                allowImages={false}
+                palette={tokens}
+                colorScheme={colorScheme}
+                bleed={18}
+              >
+                {truncateMarkdownForRender(digest)}
+              </ChatMarkdown>
+            </ClippedPreview>
+          ) : null}
+          {handoff ? (
+            <Interstitial
+              accessibilityLabel={handoff.label}
+              avatars={handoff.avatars}
+              onPress={handoff.onPress}
+            >
+              {handoff.label}
+            </Interstitial>
+          ) : null}
+        </View>
+      </Expandable>
+      {reportOpen && digest ? (
+        <PreviewSheet title={block.routineName} onClose={() => setReportOpen(false)}>
+          <View style={{ paddingTop: 16, gap: 16 }}>
             <ChatMarkdown allowImages={false} palette={tokens} colorScheme={colorScheme}>
               {truncateMarkdownForRender(digest)}
             </ChatMarkdown>
-          </ScrollView>
-        ) : null}
-      </Surface>
-    </Pressable>
+            {handoff ? (
+              <Interstitial
+                accessibilityLabel={handoff.label}
+                avatars={handoff.avatars}
+                onPress={handoffFromSheet(handoff, () => setReportOpen(false)).onPress}
+              >
+                {handoff.label}
+              </Interstitial>
+            ) : null}
+          </View>
+        </PreviewSheet>
+      ) : null}
+    </View>
+  );
+}
+
+/** iOS's disclosure: a forward chevron that turns down when open. */
+function Disclosure({ open }: { open: boolean }) {
+  const tokens = mobileTokens();
+  const reducedMotion = useChatReducedMotion();
+  const turn = useSharedValue(open ? 1 : 0);
+  useEffect(() => {
+    turn.value = reducedMotion
+      ? open
+        ? 1
+        : 0
+      : withTiming(open ? 1 : 0, { duration: 240, easing: CHAT_MOTION.botEnterEasing });
+  }, [open, reducedMotion, turn]);
+  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value * 90}deg` }] }));
+  return (
+    <Animated.View style={style}>
+      <NativeSymbol
+        ios="chevron.forward"
+        android="chevron-forward-outline"
+        size={14}
+        color={tokens.mutedForeground}
+      />
+    </Animated.View>
   );
 }
 
 /**
- * What was said: the person's words in the one filled bubble of the thread,
- * a bot's in prose the thread does not frame.
+ * Several consecutive routine runs of a bot, with no message between them,
+ * as one line: how many, over what span, and whether any was cancelled
+ * (failed and running runs are never folded, they keep their own line).
+ * Opening it lists each run as a line of its own; a long group opens in a
+ * sheet, by day.
+ */
+function RoutineGroup({
+  runs,
+  handoffFor,
+  actionProps,
+}: {
+  runs: RoutineGroupRun[];
+  handoffFor: (run: RoutineGroupRun) => RoutineHandoff | undefined;
+  actionProps: MessageActionProps;
+}) {
+  const tokens = mobileTokens();
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const fromTap = useRef(false);
+  const first = runs[0]!;
+  const last = runs.at(-1)!;
+  const spansDays = !sameLocalDay(first.createdAt, last.createdAt);
+  const range = routineRange(first.createdAt, last.createdAt);
+  const cancelled = runs.filter((item) => item.run.state === "cancelled").length;
+  const statusLabel = cancelled ? t("{count} cancelled", { count: cancelled }) : t("Completed");
+  const countLabel = t("{count} runs", { count: runs.length });
+  const handoffs = runs.map(handoffFor);
+  const receipts = new Set(runs.map((item) => item.sentTo?.toBotId).filter(Boolean));
+  const receipt = receipts.size === 1 ? handoffs.find(Boolean)?.receipt : null;
+  const inSheet = runs.length > GROUP_INLINE_MAX;
+  const lines = (
+    <View style={{ marginStart: 28 }}>
+      {runs.map((item, index) => (
+        <RoutineRunLine
+          key={item.messageId}
+          item={item}
+          handoff={handoffs[index]}
+          actionProps={actionProps}
+          nested
+          withDay={spansDays}
+        />
+      ))}
+    </View>
+  );
+  return (
+    <View>
+      <Pressable
+        {...actionProps}
+        accessibilityRole="button"
+        accessibilityLabel={[first.run.routineName, countLabel, range, statusLabel].join(", ")}
+        accessibilityState={{ expanded: open }}
+        onPress={() => {
+          fromTap.current = true;
+          setOpen(!open);
+        }}
+        unstable_pressDelay={130}
+        style={({ pressed }) => ({
+          minHeight: 44,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          marginHorizontal: -8,
+          paddingHorizontal: 8,
+          borderRadius: radii.row,
+          backgroundColor: pressed ? tokens.secondary : "transparent",
+        })}
+      >
+        <NativeSymbol
+          ios={ROUTINE_STATE_SYMBOL.completed.ios}
+          android={ROUTINE_STATE_SYMBOL.completed.android}
+          size={18}
+          color={tokens.success}
+        />
+        {/* A group is one routine: its name, and how many earlier runs it holds. */}
+        <Text
+          style={{
+            flex: 1,
+            color: tokens.foreground,
+            ...nativeTextStyle("rowName", { weight: 500 }),
+          }}
+        >
+          {`${first.run.routineName} `}
+          <Text style={{ color: tokens.mutedForeground }}>{countLabel}</Text>
+        </Text>
+        <Text
+          style={{
+            color: tokens.mutedForeground,
+            ...nativeTextStyle("time"),
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {range}
+        </Text>
+        <Text
+          style={{ color: tokens.mutedForeground, ...nativeTextStyle("label", { weight: 500 }) }}
+        >
+          {statusLabel}
+        </Text>
+        <View style={{ width: sizes.receipt, alignItems: "center" }}>{receipt}</View>
+        <View style={{ width: 14 }} />
+        <View style={{ width: 14, alignItems: "center" }}>
+          <Disclosure open={open && !inSheet} />
+        </View>
+      </Pressable>
+      <Expandable open={open && !inSheet} fromTap={fromTap}>
+        {lines}
+      </Expandable>
+      {open && inSheet ? (
+        <PreviewSheet title={first.run.routineName} onClose={() => setOpen(false)}>
+          <View style={{ paddingTop: 8 }}>
+            {runs.map((item, index) => {
+              const dayStarts =
+                index === 0 || !sameLocalDay(runs[index - 1]!.createdAt, item.createdAt);
+              return (
+                <View key={item.messageId}>
+                  {dayStarts && item.createdAt ? (
+                    <Text
+                      style={{
+                        marginTop: index === 0 ? 8 : 16,
+                        marginBottom: 4,
+                        color: tokens.mutedForeground,
+                        ...nativeTextStyle("label", { weight: 500 }),
+                      }}
+                    >
+                      {threadTimeMarkerLabel(item.createdAt, {
+                        locale: dateLocaleForUi(),
+                        today: t("Today"),
+                        yesterday: t("Yesterday"),
+                        withTime: false,
+                      })}
+                    </Text>
+                  ) : null}
+                  <RoutineRunLine
+                    item={item}
+                    handoff={
+                      handoffs[index]
+                        ? handoffFromSheet(handoffs[index]!, () => setOpen(false))
+                        : undefined
+                    }
+                    actionProps={actionProps}
+                    nested
+                  />
+                </View>
+              );
+            })}
+          </View>
+        </PreviewSheet>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * A delegated task's result (a subagent): the thread's only
+ * outlined card, with a document glyph, so a work product reads apart from a
+ * bubble, the raised question and a routine's log line. The whole card is one
+ * target: it opens the full brief and result in a sheet (a long result fades
+ * out under the expand badge). A finished task shows no status word; running,
+ * failed and cancelled do, under the title.
+ */
+function TaskCard({
+  title,
+  state,
+  meta,
+  body,
+  streaming = false,
+  actionProps,
+}: {
+  title: string;
+  state: TaskCardState;
+  meta?: string;
+  /** Markdown result, shown as a preview and whole in the sheet. */
+  body?: string;
+  streaming?: boolean;
+  actionProps?: MessageActionProps;
+}) {
+  const tokens = mobileTokens();
+  const colorScheme = useResolvedAppearance();
+  const { t } = useI18n();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const statusColor = state === "failed" ? tokens.destructive : tokens.mutedForeground;
+  const statusStyle = { color: statusColor, ...nativeTextStyle("label", { weight: 500 }) };
+  const statusLabel =
+    state === "running" ? t("Running") : state === "failed" ? t("Failed") : t("Cancelled");
+  const statusSymbol =
+    state === "running"
+      ? ROUTINE_STATE_SYMBOL.running
+      : state === "failed"
+        ? ROUTINE_STATE_SYMBOL.failed
+        : ROUTINE_STATE_SYMBOL.cancelled;
+  const open = body || meta ? () => setSheetOpen(true) : undefined;
+  const header = (full: boolean) => (
+    <View style={{ gap: 4 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <NativeSymbol
+          ios="doc.text"
+          android="document-text-outline"
+          size={18}
+          color={tokens.foreground}
+        />
+        <Text
+          accessibilityRole="header"
+          style={{
+            flex: 1,
+            color: tokens.foreground,
+            ...nativeTextStyle("rowName", { weight: 600 }),
+          }}
+        >
+          {title}
+        </Text>
+      </View>
+      {state === "done" ? null : (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginStart: 28 }}>
+          <NativeSymbol
+            ios={statusSymbol.ios}
+            android={statusSymbol.android}
+            size={13}
+            color={statusColor}
+          />
+          {state === "running" ? (
+            <ShimmerText style={statusStyle}>{statusLabel}</ShimmerText>
+          ) : (
+            <Text style={statusStyle}>{statusLabel}</Text>
+          )}
+        </View>
+      )}
+      {meta ? (
+        <Text
+          numberOfLines={full ? undefined : 2}
+          style={{ color: tokens.mutedForeground, marginStart: 28, ...nativeTextStyle("meta") }}
+        >
+          {meta}
+        </Text>
+      ) : null}
+    </View>
+  );
+  const markdown = body ? (
+    <ChatMarkdown palette={tokens} colorScheme={colorScheme} streaming={streaming} bleed={14}>
+      {body}
+    </ChatMarkdown>
+  ) : null;
+  return (
+    <>
+      <Pressable
+        {...actionProps}
+        accessibilityRole={open ? "button" : undefined}
+        accessibilityLabel={[title, meta].filter(Boolean).join(", ")}
+        accessibilityHint={open ? t("Opens in full") : undefined}
+        disabled={!open}
+        onPress={open}
+        unstable_pressDelay={130}
+      >
+        {({ pressed }) => (
+          <Surface
+            variant="outlined"
+            style={{ overflow: "hidden", backgroundColor: pressed ? tokens.secondary : undefined }}
+          >
+            <View style={{ paddingHorizontal: 14, paddingVertical: 12 }}>{header(false)}</View>
+            {markdown ? (
+              <View
+                // The card is the target: the preview (a table included) does not take touches.
+                pointerEvents="none"
+                style={{
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: tokens.border,
+                  paddingHorizontal: 14,
+                  paddingTop: 12,
+                  paddingBottom: 12,
+                }}
+              >
+                <ClippedPreview
+                  maxHeight={TASK_PREVIEW_HEIGHT}
+                  fadeColor={pressed ? tokens.secondary : tokens.surface}
+                  onOpen={() => open?.()}
+                  accessibilityLabel={title}
+                >
+                  {markdown}
+                </ClippedPreview>
+              </View>
+            ) : null}
+          </Surface>
+        )}
+      </Pressable>
+      {sheetOpen ? (
+        <PreviewSheet title={title} onClose={() => setSheetOpen(false)}>
+          <View style={{ paddingTop: 16, gap: 16 }}>
+            {meta ? (
+              <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+                {meta}
+              </Text>
+            ) : null}
+            {body ? (
+              <ChatMarkdown palette={tokens} colorScheme={colorScheme} streaming={streaming}>
+                {body}
+              </ChatMarkdown>
+            ) : null}
+          </View>
+        </PreviewSheet>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * What was said: the person's words in the `chatUser` bubble, a bot's in its
+ * `muted` narration bubble (design contract § Grouping — "1 message = 1
+ * bubble") — never both in the same box. The reply preview stays above the
+ * bubble, aligned on its edge, unfilled.
  */
 function MessageText({
   message,
   replyPreview,
   actionProps,
+  mono = false,
 }: {
   message: MobileMessage;
   replyPreview?: MobileMessage;
   actionProps: MessageActionProps;
+  mono?: boolean;
 }) {
   const colorScheme = useResolvedAppearance();
   const tokens = mobileTokens();
@@ -3466,27 +4659,43 @@ function MessageText({
             : ""}
       </Text>
     ) : null;
+  // `onLongPress` is deliberately left out here: the row-level RNGH gesture
+  // (`AnimatedMessageBubble`) owns the long press for a plain text bubble,
+  // and mixing the RN responder with RNGH on the same view is exactly what
+  // the design-motion spec's transverse rules forbid. Accessibility actions
+  // still live on the bubble itself.
   if (message.role === "user") {
     return (
       <View style={{ alignItems: "flex-end" }}>
         {parent}
-        <UserBubble {...actionProps}>
-          <LinkifiedText onLongPress={actionProps.onLongPress}>{contentText}</LinkifiedText>
+        <UserBubble
+          accessibilityActions={actionProps.accessibilityActions}
+          onAccessibilityAction={actionProps.onAccessibilityAction}
+        >
+          {/* The long press is the row gesture's (AnimatedMessageBubble), not the text's. */}
+          <LinkifiedText>{contentText}</LinkifiedText>
         </UserBubble>
       </View>
     );
   }
   return (
-    <Pressable {...actionProps} style={{ minWidth: 0, maxWidth: "100%" }}>
+    <View style={{ alignItems: "flex-start", minWidth: 0, maxWidth: "100%" }}>
       {parent}
-      <ChatMarkdown
-        palette={tokens}
-        colorScheme={colorScheme}
-        streaming={message.id.startsWith("progress:")}
+      <BotBubble
+        accessibilityActions={actionProps.accessibilityActions}
+        onAccessibilityAction={actionProps.onAccessibilityAction}
+        mono={mono}
       >
-        {contentText}
-      </ChatMarkdown>
-    </Pressable>
+        <ChatMarkdown
+          palette={tokens}
+          colorScheme={colorScheme}
+          streaming={message.id.startsWith("progress:")}
+          inBubble
+        >
+          {contentText}
+        </ChatMarkdown>
+      </BotBubble>
+    </View>
   );
 }
 

@@ -483,9 +483,7 @@ test("the setup probe refuses redirects instead of following them", async () => 
     await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
     await setup.getByRole("button", { name: "Continue" }).click();
 
-    // Electron's net.fetch with redirect:"manual" surfaces redirects as a
-    // network failure rather than an HTTP 3xx body we can classify.
-    await expect(setup.locator("#status")).toHaveText("Could not reach that address.");
+    await expect(setup.locator("#status")).toHaveText(/^That address redirects elsewhere\./);
     await expect(async () => {
       await expect(readFile(path.join(userData, "setup.json"), "utf8")).rejects.toThrow();
     }).toPass();

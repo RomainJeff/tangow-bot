@@ -7,6 +7,7 @@ import {
   closeUnterminatedFence,
   linkHref,
   linkifyText,
+  repairMarkdownTables,
   sanitizeMarkdownUrl,
 } from "./markdown";
 
@@ -102,7 +103,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   streaming = false,
   allowImages = true,
 }: ChatMarkdownProps) {
-  const source = streaming ? closeUnterminatedFence(children) : children;
+  const source = repairMarkdownTables(streaming ? closeUnterminatedFence(children) : children);
 
   return (
     <div className={streaming ? "rk-chat-markdown rk-chat-markdown-streaming" : "rk-chat-markdown"}>

@@ -8,9 +8,10 @@ import { nativeTextStyle } from "../lib/typography";
 export type UserBubbleProps = TextProps;
 
 /**
- * What the person said, the only filled bubble of the thread. Mirrors
- * `packages/ui-web/src/user-bubble.tsx`; mobile caps the width at 84% and uses
- * 16/1.45 prose per design contract §3.7, vs the web 78% and 16.5/1.58.
+ * What the person said, one of the thread's two filled bubbles (the other is
+ * the bot's `muted` narration bubble — design contract § Grouping). Mirrors
+ * `packages/ui-web/src/user-bubble.tsx`; mobile caps the width at 78% and uses
+ * 16/1.45 prose per design contract §3.7, vs the web 16.5/1.58.
  */
 export function UserBubble({ style, ...props }: UserBubbleProps) {
   const styles = useThemedStyles(createUserBubbleStyles);
@@ -22,12 +23,12 @@ function createUserBubbleStyles() {
   return StyleSheet.create({
     bubble: {
       alignSelf: "flex-end",
-      maxWidth: "84%",
+      maxWidth: "78%",
       borderRadius: radii.bubble,
       backgroundColor: tokens.chatUser,
       color: tokens.chatUserForeground,
-      paddingHorizontal: 17,
-      paddingVertical: 11,
+      paddingHorizontal: 15,
+      paddingVertical: 10,
       ...nativeTextStyle("body", { size: 16, leading: 1.45 }),
     },
   });

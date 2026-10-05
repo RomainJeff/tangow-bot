@@ -39,8 +39,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Project ID": "项目 ID",
   "Set up Executor on your server in the web app.": "请在网页应用中为服务器设置 Executor。",
 
-  "Cloud agent": "云端智能体",
-  "Pull request": "拉取请求",
   running: "运行中",
   finished: "已完成",
   failed: "失败",
@@ -689,6 +687,12 @@ export const ZH_MESSAGES: Record<string, string> = {
   Low: "低",
   High: "高",
 
+  Table: "表格",
+  "Opens the full table": "打开完整表格",
+  "{count} runs": "{count} 次运行",
+  "{count} cancelled": "已取消 {count} 次",
+  "Opens in full": "打开完整内容",
+  "Report, {name}": "报告，{name}",
   "Notifications on": "通知已开启",
   "Show details": "显示详情",
   "Hide details": "隐藏详情",
@@ -696,4 +700,11 @@ export const ZH_MESSAGES: Record<string, string> = {
   "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
     "开启后每次运行都会通知并展开卡片；关闭则仅在此对话中保留静默记录。",
   "Could not update routine": "无法更新例行任务",
+
+  Dictate: "语音输入",
+  "Cancel dictation": "取消语音输入",
+  "Insert dictation": "插入语音输入的文字",
+  Dictating: "正在语音输入",
+  "Microphone access is off": "麦克风未授权",
+  "Open Settings": "打开设置",
 };

@@ -136,3 +136,82 @@ export function closeUnterminatedFence(markdown: string): string {
 
   return openFence ? `${markdown}\n${openFence.marker.repeat(openFence.length)}` : markdown;
 }
+
+const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+/** A blockquote or list item: a separator inserted there would land outside
+ * the container, so those lines are never repaired. */
+const CONTAINER_PREFIX = /^ {0,3}(>|[-*+][ \t]|\d{1,9}[.)][ \t])/;
+const SEPARATOR_ROW = /^[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/;
+
+/** The cells of a pipe row, or 0 when the line is not one (fewer than two
+ * cells). Pipes inside inline code and escaped `\|` don't count. */
+function pipeCells(line: string): number {
+  if (CONTAINER_PREFIX.test(line)) return 0;
+  const trimmed = line
+    .replace(/(`+).+?\1/g, "")
+    .replace(/\\\|/g, "")
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "");
+  if (!trimmed.includes("|")) return 0;
+  return trimmed.split("|").length;
+}
+
+/**
+ * Bots often write a table without its `|---|` separator row, which GFM then
+ * reads as one paragraph of pipes. Two or more consecutive pipe rows with the
+ * same number of cells get the separator (and the blank line a table needs
+ * before it), so they render as the table they were meant to be. Code
+ * fences and tables that already have a separator are left alone.
+ */
+export function repairMarkdownTables(markdown: string): string {
+  if (!markdown.includes("|")) return markdown;
+  const lines = markdown.split("\n");
+  const out: string[] = [];
+  let fence: string | undefined;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    const fenceMatch = line.match(FENCE_LINE);
+    if (fenceMatch?.[1]) {
+      const marker = fenceMatch[1];
+      if (!fence) fence = marker;
+      else if (
+        marker[0] === fence[0] &&
+        marker.length >= fence.length &&
+        (fenceMatch[2] ?? "").trim() === ""
+      ) {
+        fence = undefined;
+      }
+      out.push(line);
+      continue;
+    }
+    const inFence = fence !== undefined;
+    const previous = lines[i - 1] ?? "";
+    const next = lines[i + 1] ?? "";
+    const cells = inFence ? 0 : pipeCells(line);
+    // `next` heading its own real table (a separator right under it) means
+    // this line is prose with pipes above that table, not a header.
+    const startsTable =
+      cells >= 2 &&
+      pipeCells(previous) === 0 &&
+      pipeCells(next) === cells &&
+      !SEPARATOR_ROW.test(next) &&
+      !SEPARATOR_ROW.test(lines[i + 2] ?? "");
+    if (startsTable) {
+      if (previous.trim() !== "") out.push("");
+      out.push(line, `|${" --- |".repeat(cells)}`);
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+/** A GFM table: a pipe row followed by its `---` separator row. */
+const MARKDOWN_TABLE =
+  /^[^\n]*\|[^\n]*\n[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/m;
+
+/** Whether markdown holds a table, which scrolls sideways on a phone. */
+export function hasMarkdownTable(markdown: string): boolean {
+  return MARKDOWN_TABLE.test(repairMarkdownTables(markdown));
+}

@@ -24,7 +24,13 @@
       ],
       "expo-router",
       "expo-secure-store",
-      ["expo-audio", { "enableBackgroundPlayback": false }],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "microphonePermission": "Rakazo uses the microphone to turn your voice into text in the message field."
+        }
+      ],
       "expo-localization",
       "@react-native-vector-icons/ionicons",
       "@react-native-vector-icons/material-design-icons",
@@ -40,12 +46,19 @@
         {
           "photosPermission": "Rakazo uses your photo library so you can attach images to a bot message.",
           "cameraPermission": "Rakazo uses the camera so you can attach photos to a bot message.",
-          "microphonePermission": false
+          "microphonePermission": "Rakazo uses the microphone to turn your voice into text in the message field."
         }
       ],
       "expo-sharing",
       "./plugins/with-worklets-headers",
       "./plugins/with-scene-lifecycle",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Rakazo uses the microphone to turn your voice into text in the message field.",
+          "speechRecognitionPermission": "Rakazo turns your voice into text on this device."
+        }
+      ],
       "@bacons/apple-targets"
     ],
     "ios": {

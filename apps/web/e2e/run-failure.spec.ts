@@ -30,7 +30,7 @@ test("a failed run is visible once without returning after reload", async ({ pag
   // "fail this run" makes the scripted runtime throw, so the run fails the same way a
   // real provider error would, without depending on how models are configured.
   await page.getByPlaceholder(/^Message /).fill("fail this run");
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
 
   const error = page.getByTestId("composer-error");
   await expect(error).toBeVisible({ timeout: 30_000 });
@@ -46,7 +46,7 @@ test("a failed run is visible once without returning after reload", async ({ pag
   await captureScreenshot(page, testInfo, "seen-run-error-hidden-after-reload");
 
   await page.getByPlaceholder(/^Message /).fill("fail this run");
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect(error).toBeVisible({ timeout: 30_000 });
   await expect(error).toContainText("Scripted run failure");
 
@@ -65,7 +65,7 @@ test("a covered run error is not remembered until it is presented", async ({ pag
   await page.setViewportSize({ width: 390, height: 844 });
 
   await page.getByPlaceholder(/^Message /).fill("fail this run");
-  const sendButton = await page.getByRole("button", { name: "Send" }).elementHandle();
+  const sendButton = await page.getByRole("button", { name: "Send", exact: true }).elementHandle();
   if (!sendButton) throw new Error("Send button not found");
   await page.getByRole("button", { name: "Open navigation" }).click();
   await expect(page.getByRole("button", { name: "Close navigation" })).toBeVisible();
@@ -89,7 +89,9 @@ test("a covered run error is not remembered until it is presented", async ({ pag
 
   const recordedErrorCount = await seenRunErrorCount(page);
   await page.getByPlaceholder(/^Message /).fill("fail this run");
-  const nextSendButton = await page.getByRole("button", { name: "Send" }).elementHandle();
+  const nextSendButton = await page
+    .getByRole("button", { name: "Send", exact: true })
+    .elementHandle();
   if (!nextSendButton) throw new Error("Send button not found");
   await page.getByRole("button", { name: "Open navigation" }).click();
   await nextSendButton.evaluate((button) => (button as HTMLButtonElement).click());
@@ -110,7 +112,9 @@ test("a covered run error is not remembered until it is presented", async ({ pag
   await expect(page.locator("main")).not.toHaveAttribute("aria-hidden", "true");
   await expect(page.locator("main")).toHaveJSProperty("inert", false);
   await page.getByPlaceholder(/^Message /).fill("fail this run");
-  const modalSendButton = await page.getByRole("button", { name: "Send" }).elementHandle();
+  const modalSendButton = await page
+    .getByRole("button", { name: "Send", exact: true })
+    .elementHandle();
   if (!modalSendButton) throw new Error("Send button not found");
   await openNewSpace(page);
   const newSpaceDialog = page.getByRole("dialog", { name: "New space" });

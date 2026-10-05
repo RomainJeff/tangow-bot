@@ -275,6 +275,38 @@ describe("skill prompt helpers", () => {
     expect(expandSkillReferencesInPrompt(twice, skills)).toBe(twice);
   });
 
+  it("points expanded skills at their files without breaking idempotence", () => {
+    const skills = [
+      {
+        name: "Daily standup",
+        description: "d",
+        source: "user" as const,
+        readOnly: false,
+        content: SAMPLE,
+      },
+    ];
+    const dirFor = () => "/skills/user/daily%20standup";
+    const forced = expandSkillReferencesInPrompt(
+      "/Daily standup\nfocus on blockers",
+      skills,
+      dirFor,
+    );
+    expect(forced).toContain(
+      `${SAMPLE.trim()}\n\nFiles: /skills/user/daily%20standup\n\nfocus on blockers`,
+    );
+    expect(expandSkillReferencesInPrompt(forced, skills, dirFor)).toBe(forced);
+
+    const mentioned = expandSkillReferencesInPrompt(
+      "Run @Daily standup then email me",
+      skills,
+      dirFor,
+    );
+    expect(mentioned).toContain("Files: /skills/user/daily%20standup");
+    expect(expandSkillReferencesInPrompt(mentioned, skills, dirFor)).toBe(mentioned);
+
+    expect(expandSkillReferencesInPrompt("/Daily standup", skills)).not.toContain("Files:");
+  });
+
   it("builds catalog instructions for auto-use", () => {
     const line = formatSkillsCatalogInstruction([
       {

@@ -1,6 +1,6 @@
 import type { ThreadMessage } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { peerConversations, peerMessagesFrom } from "./peer-messages.js";
+import { peerConversations, peerMessagesFrom, stripPeerAddressPrefix } from "./peer-messages.js";
 
 function message(id: string, createdAt: string, blocks: ThreadMessage["blocks"]): ThreadMessage {
   return { id, threadId: "t_1", seq: 1, role: "bot", blocks, createdAt };
@@ -44,5 +44,33 @@ describe("peer conversations", () => {
 
   it("finds nothing in a thread with no peer traffic", () => {
     expect(peerConversations([plainText])).toEqual([]);
+  });
+});
+
+describe("stripPeerAddressPrefix", () => {
+  it("removes a leading [to <name>] prefix", () => {
+    expect(stripPeerAddressPrefix("[to Claudius] Salut")).toBe("Salut");
+  });
+
+  it("tolerates surrounding whitespace", () => {
+    expect(stripPeerAddressPrefix("  [to Claudius]   Salut")).toBe("Salut");
+  });
+
+  it("leaves text with no prefix untouched", () => {
+    expect(stripPeerAddressPrefix("Salut")).toBe("Salut");
+  });
+
+  it("only strips the leading prefix, not one later in the text", () => {
+    expect(stripPeerAddressPrefix("[to Claudius] see [to Warren] later")).toBe(
+      "see [to Warren] later",
+    );
+  });
+
+  it("stops the name at the first closing bracket (non-greedy)", () => {
+    expect(stripPeerAddressPrefix("[to A] [to B] hi")).toBe("[to B] hi");
+  });
+
+  it("does not match a bracket that never closes", () => {
+    expect(stripPeerAddressPrefix("[to Claudius Salut")).toBe("[to Claudius Salut");
   });
 });

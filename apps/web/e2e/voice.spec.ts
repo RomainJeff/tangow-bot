@@ -8,17 +8,12 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   await completeOnboarding(page);
 
   await expect(page.getByRole("button", { name: "Call", exact: true })).toHaveCount(0);
-  await expect(
-    page.getByTestId("composer-bar").getByRole("button", { name: "Voice", exact: true }),
-  ).toHaveCount(1);
-  await captureScreenshot(page, testInfo, "voice-composer");
-  await page
-    .getByTestId("composer-bar")
-    .getByRole("button", { name: "Voice", exact: true })
-    .click();
+  // The call moved to the thread header; the composer's mic is dictation now.
+  await expect(page.getByTestId("open-voice-call")).toHaveCount(1);
+  await captureScreenshot(page, testInfo, "voice-header");
+  await page.getByTestId("open-voice-call").click();
   await expect(page.getByTestId("voice-settings")).toBeVisible();
   await expect(page.getByLabel("API key", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Dictate", exact: true })).toHaveCount(0);
   await captureScreenshot(page, testInfo, "voice-settings");
   await page.getByRole("button", { name: "Close voice settings" }).click();
   await expect(page.getByTestId("voice-settings")).toHaveCount(0);
@@ -88,10 +83,7 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   await page.getByTestId("open-computer-panel").click();
   await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "computer");
 
-  await page
-    .getByTestId("composer-bar")
-    .getByRole("button", { name: "Voice", exact: true })
-    .click();
+  await page.getByTestId("open-voice-call").click();
   await expect(page.getByTestId("call-view")).toBeVisible();
   await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "closed");
   await expect(page.getByRole("button", { name: "End call" })).toBeVisible();
