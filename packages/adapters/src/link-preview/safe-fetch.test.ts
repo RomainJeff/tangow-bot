@@ -4,7 +4,7 @@ import type { AddressInfo, Socket } from "node:net";
 import { Readable } from "node:stream";
 import { createGzip } from "node:zlib";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { LinkPreviewError, type LinkPreviewFailureReason } from "./errors.js";
+import { isTransientReason, LinkPreviewError, type LinkPreviewFailureReason } from "./errors.js";
 import { createReadLimiter } from "./limits.js";
 import {
   caresResolveHostname,
@@ -106,6 +106,56 @@ describe("link preview fetch: URL policy and redirects (injected client)", () =>
       ),
     ).toBe(reason);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "https://accounts.google.com/",
+    "https://login.example.com/",
+    "https://example.com/sso",
+    "https://example.com/a/sign-in",
+  ])("refuses a sign-in page before opening a connection: %s (CA 71)", async (url) => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const options = { fetch: fetchMock, resolveHostname: publicResolver };
+    expect(
+      await reasonOf(fetchWithSeams(url, "page", { ...options, limiter: createReadLimiter() })),
+    ).toBe("login_page");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(isTransientReason("login_page")).toBe(false);
+  });
+
+  it.each([
+    "https://example.com/login",
+    "https://login.example.com/start",
+    "https://accounts.google.com/signin/v2",
+  ])("refuses a redirect to a sign-in page: %s (CA 71)", async (location) => {
+    const fetchMock = vi.fn<typeof fetch>(async () => redirect(location));
+    expect(
+      await reasonOf(
+        fetchWithSeams("https://example.test/start", "page", {
+          fetch: fetchMock,
+          resolveHostname: publicResolver,
+          limiter: createReadLimiter(),
+        }),
+      ),
+    ).toBe("login_page");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads a page whose path only contains a sign-in word, and an image from any host", async () => {
+    const options = { resolveHostname: publicResolver, limiter: createReadLimiter() };
+    const page = await fetchWithSeams("https://example.com/blog/login-tips", "page", {
+      ...options,
+      fetch: vi.fn<typeof fetch>(async () => html("<title>t</title>")),
+    });
+    expect(page.kind).toBe("html");
+    const png = new Response(new Uint8Array([1, 2, 3]), {
+      headers: { "content-type": "image/png" },
+    });
+    const image = await fetchWithSeams("https://auth.cdn.example.com/login", "image", {
+      ...options,
+      fetch: vi.fn<typeof fetch>(async () => png),
+    });
+    expect(image.kind).toBe("image");
   });
 
   it("follows five redirects and refuses the sixth", async () => {

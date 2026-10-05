@@ -152,10 +152,6 @@ export interface AgentToolCompletion {
   name: string;
   executionId: string;
   durationMs: number;
-  /** What the model asked for. Never copied into the audit event, except a fetched link's URL. */
-  args?: Record<string, unknown>;
-  /** True when a subagent inside the run made the call. */
-  nested?: boolean;
   result?: unknown;
   error?: unknown;
   paused?: boolean;
@@ -768,12 +764,6 @@ export interface WebFetchResult {
   title: string;
   text: string;
   truncated: boolean;
-  /**
-   * Absolute http(s) links the page's HTML holds (`<a href>`), for the host only. It is never
-   * part of what the model reads: the tool layer removes it before the result is returned.
-   * Optional: a provider that does not parse links omits it.
-   */
-  links?: string[];
 }
 
 /** Page-level browser on the bot computer (DOM refs), not a hosted browser vendor. */

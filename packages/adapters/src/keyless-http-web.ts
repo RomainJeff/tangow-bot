@@ -7,7 +7,6 @@ import type {
   WebSearchHit,
   WebSearchRequest,
 } from "@rakazo/adapter-kit";
-import { isPreviewableUrl } from "@rakazo/contracts";
 import { JSDOM } from "jsdom";
 import { clampMaxChars, clampMaxResults } from "./web-limits.js";
 import { fetchSafeWebText, type ResolveHostname } from "./web-ssrf.js";
@@ -117,7 +116,6 @@ export class KeylessHttpWebProvider implements WebProvider {
     if (!body.trim()) throw new Error(`Failed to fetch content from ${url}`);
     const extracted = extractReadableText(body, url);
     const truncated = extracted.text.length > maxChars;
-    const links = extractPageLinks(body, url);
     return {
       url,
       title: extracted.title,
@@ -125,7 +123,6 @@ export class KeylessHttpWebProvider implements WebProvider {
         ? `${extracted.text.slice(0, maxChars)}\n\n[Content truncated]`
         : extracted.text,
       truncated,
-      ...(links.length > 0 ? { links } : {}),
     };
   }
 }
@@ -163,44 +160,6 @@ function unwrapDuckDuckGoUrl(rawUrl: string): string {
     return parsed.href;
   } catch {
     return rawUrl;
-  }
-}
-
-/** At most this many links are kept for one page. */
-export const MAX_PAGE_LINKS = 500;
-
-/**
- * The absolute http(s) links of a page's `<a href>`, in document order and deduplicated, resolved
- * against the final URL or a valid http(s) `<base href>`. Fragment-only links, other schemes
- * (`javascript:`, `mailto:`, `data:`), credentials, unresolvable links and any link over 2048
- * characters are left out. Readability drops links from its text, so this is the only place they
- * are read; they are for the host and never go to the model.
- */
-export function extractPageLinks(html: string, finalUrl: string): string[] {
-  try {
-    const document = new JSDOM(html, { url: finalUrl }).window.document;
-    let base = finalUrl;
-    const baseHref = document.querySelector("base[href]")?.getAttribute("href")?.trim();
-    if (baseHref) {
-      try {
-        const resolved = new URL(baseHref, finalUrl);
-        if (resolved.protocol === "http:" || resolved.protocol === "https:") base = resolved.href;
-      } catch {}
-    }
-    const links = new Set<string>();
-    for (const anchor of Array.from(document.querySelectorAll("a[href]"))) {
-      if (links.size >= MAX_PAGE_LINKS) break;
-      const href = anchor.getAttribute("href")?.trim();
-      if (!href || href.startsWith("#") || href.length > 2048) continue;
-      try {
-        const resolved = new URL(href, base);
-        resolved.hash = "";
-        if (isPreviewableUrl(resolved.href)) links.add(resolved.href);
-      } catch {}
-    }
-    return [...links];
-  } catch {
-    return [];
   }
 }
 

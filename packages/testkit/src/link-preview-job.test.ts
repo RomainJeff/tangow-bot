@@ -1,11 +1,7 @@
 import {
-  KeylessHttpWebProvider,
   type LinkPreviewJobDeps,
   type LinkPreviewReadResult,
   runLinkPreviewJob,
-  seenUrlHash,
-  toolCompletionAuditPayload,
-  webFetchFromTool,
 } from "@rakazo/adapters";
 import { removeLinkPreviewBlock } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
@@ -193,7 +189,7 @@ describe("link.preview job for a message a person sent", () => {
           db.seedMessage({
             id: "m1",
             threadId: "thread-1",
-            blocks: [text("https://example.test/login?token=abc")],
+            blocks: [text("https://example.test/page?token=abc")],
           }),
       ],
       [
@@ -515,15 +511,13 @@ describe("link.preview job for a message a person sent", () => {
   });
 });
 
-describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
-  const OPENED = "https://a.test/x";
+describe("link.preview job for a bot's run (CA 13, CA 70, CA 71)", () => {
+  const LINK = "https://a.test/x";
 
   function run(options: {
-    opened?: string[];
     status?: string;
     trigger?: string;
     messages?: Array<{ id: string; nonce?: string | null; blocks: unknown[] }>;
-    extraEvents?: Array<Record<string, unknown>>;
   }) {
     const ctx = setup();
     ctx.db.seedRun({
@@ -531,17 +525,9 @@ describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
       threadId: "thread-1",
       status: options.status,
       trigger: options.trigger,
-      toolEvents: [
-        ...(options.opened ?? [OPENED]).map((openedUrl) => ({
-          name: "web_fetch",
-          outcome: "succeeded",
-          openedUrl,
-        })),
-        ...(options.extraEvents ?? []),
-      ],
     });
     for (const message of options.messages ?? [
-      { id: "final", nonce: null, blocks: [text(`Source: ${OPENED}`)] },
+      { id: "final", nonce: null, blocks: [text(`Source: ${LINK}`)] },
     ]) {
       ctx.db.seedMessage({
         id: message.id,
@@ -555,112 +541,35 @@ describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
     return ctx;
   }
 
-  it("previews the final reply and the message_user posts, for links the bot opened", async () => {
+  it("previews the final reply and the message_user posts, whether or not the bot opened the link (CA 70)", async () => {
     const { db, read, deps } = run({
       messages: [
         {
           id: "progress",
           nonce: "user-progress:run-1:0:x",
-          blocks: [text(`working on ${OPENED}`)],
+          blocks: [text(`working on ${LINK}`)],
         },
-        { id: "said", nonce: "user-message:run-1:0:x", blocks: [text(`here: ${OPENED}`)] },
-        { id: "final", nonce: null, blocks: [text(`Source: ${OPENED}`)] },
+        { id: "said", nonce: "user-message:run-1:0:x", blocks: [text(`here: ${LINK}`)] },
+        { id: "final", nonce: null, blocks: [text(`Source: ${LINK}`)] },
       ],
     });
 
     await runLinkPreviewJob(deps, { runId: "run-1" });
 
-    expect(card(db.blocksOf("said"))).toMatchObject({ url: OPENED });
-    expect(card(db.blocksOf("final"))).toMatchObject({ url: OPENED });
+    expect(card(db.blocksOf("said"))).toMatchObject({ url: LINK });
+    expect(card(db.blocksOf("final"))).toMatchObject({ url: LINK });
     // Narration is never previewed.
     expect(card(db.blocksOf("progress"))).toBeUndefined();
     // Same link twice: one page read.
     expect(read).toHaveBeenCalledTimes(1);
   });
 
-  it("recomputes from the database, so a resumed run is no different (CA 13)", async () => {
-    // Nothing but identifiers travels in the job: a worker that never saw the run reads the
-    // URLs from the events table by run id.
-    const { db, deps } = run({});
-    await runLinkPreviewJob(deps, { runId: "run-1" });
-    expect(card(db.blocksOf("final"))).toBeDefined();
-  });
-
-  it("matches a link exactly: a fragment is fine, nothing else is", async () => {
-    const eligible = ["https://a.test/x#frag", "HTTPS://A.TEST/x"];
-    const refused = [
-      "https://a.test/x?s=1",
-      "https://a.test/x/",
-      "https://a.test/X",
-      "https://a.test/x%2F",
-      "https://a.test:8443/x",
-      "http://a.test/x",
-      "https://sub.a.test/x",
-      "https://a.test./x",
-    ];
-    for (const link of eligible) {
-      const { db, deps } = run({ messages: [{ id: "final", blocks: [text(link)] }] });
-      await runLinkPreviewJob(deps, { runId: "run-1" });
-      expect(card(db.blocksOf("final")), link).toBeDefined();
-    }
-    for (const link of refused) {
-      const { db, read, deps } = run({ messages: [{ id: "final", blocks: [text(link)] }] });
-      await runLinkPreviewJob(deps, { runId: "run-1" });
-      expect(card(db.blocksOf("final")), link).toBeUndefined();
-      expect(read, `${link} must not be contacted`).not.toHaveBeenCalled();
-    }
-  });
-
-  it("does not make the final URL of a redirect eligible", async () => {
-    // The recorded URL is what the bot asked for; the page it was redirected to is not recorded.
-    const { db, read, deps } = run({
-      opened: [OPENED],
-      messages: [{ id: "final", blocks: [text("https://b.test/z")] }],
+  it("previews a link from a run that used no tool at all", async () => {
+    const { db, deps } = run({
+      messages: [{ id: "final", blocks: [text("https://never-opened.test/page")] }],
     });
     await runLinkPreviewJob(deps, { runId: "run-1" });
-    expect(card(db.blocksOf("final"))).toBeUndefined();
-    expect(read).not.toHaveBeenCalled();
-  });
-
-  it("reads nothing for a link the bot never opened", async () => {
-    const { db, read, deps } = run({ opened: [] });
-    await runLinkPreviewJob(deps, { runId: "run-1" });
-    expect(card(db.blocksOf("final"))).toBeUndefined();
-    expect(read).not.toHaveBeenCalled();
-  });
-
-  it("does not count the opened URLs of a run that is not completed", async () => {
-    const { db, read, deps } = setup();
-    db.seedRun({ id: "run-1", threadId: "thread-1", toolEvents: [] });
-    db.seedRun({
-      id: "run-2",
-      threadId: "thread-1",
-      status: "failed",
-      toolEvents: [{ name: "web_fetch", outcome: "succeeded", openedUrl: OPENED }],
-    });
-    db.seedMessage({
-      id: "final",
-      threadId: "thread-1",
-      role: "bot",
-      runId: "run-1",
-      blocks: [text(OPENED)],
-    });
-
-    await runLinkPreviewJob(deps, { runId: "run-1" });
-
-    expect(read).not.toHaveBeenCalled();
-    expect(card(db.blocksOf("final"))).toBeUndefined();
-  });
-
-  it("keeps at most 50 opened URLs for a run", async () => {
-    const opened = Array.from({ length: 51 }, (_, index) => `https://a.test/${index}`);
-    const first = run({ opened, messages: [{ id: "final", blocks: [text(opened[49]!)] }] });
-    await runLinkPreviewJob(first.deps, { runId: "run-1" });
-    expect(card(first.db.blocksOf("final"))).toBeDefined();
-
-    const beyond = run({ opened, messages: [{ id: "final", blocks: [text(opened[50]!)] }] });
-    await runLinkPreviewJob(beyond.deps, { runId: "run-1" });
-    expect(card(beyond.db.blocksOf("final"))).toBeUndefined();
+    expect(card(db.blocksOf("final"))).toMatchObject({ url: "https://never-opened.test/page" });
   });
 
   it.each([
@@ -681,7 +590,7 @@ describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
       { kind: "routine_run", routineName: "r", state: "completed" },
     ]) {
       const { db, read, deps } = run({
-        messages: [{ id: "final", blocks: [text(OPENED), block] }],
+        messages: [{ id: "final", blocks: [text(LINK), block] }],
       });
       await runLinkPreviewJob(deps, { runId: "run-1" });
       expect(read).not.toHaveBeenCalled();
@@ -689,337 +598,22 @@ describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
     }
   });
 
-  it("ignores opened URLs that carry credentials, are too long, or are not http(s)", async () => {
-    const { db, read, deps } = run({
-      opened: [
-        "https://user:pw@a.test/x",
-        `https://a.test/${"a".repeat(2100)}`,
-        "ftp://a.test/x",
-        "file:///etc/passwd",
-      ],
-      messages: [{ id: "final", blocks: [text("https://a.test/x")] }],
-    });
+  it.each([
+    "https://accounts.google.com/signin/v2/identifier",
+    "https://login.example.com/",
+    "https://example.com/sso",
+    "https://example.com/a/sign-in",
+  ])("reads nothing for a link to a sign-in page: %s (CA 71)", async (link) => {
+    const { db, read, deps } = run({ messages: [{ id: "final", blocks: [text(link)] }] });
     await runLinkPreviewJob(deps, { runId: "run-1" });
     expect(read).not.toHaveBeenCalled();
     expect(card(db.blocksOf("final"))).toBeUndefined();
   });
 
-  describe("links the bot saw on the public web (CA 58-60)", () => {
-    const SEEN = "https://hit.test/article";
-    const seenEvent = (url: string, runId = "run-1") => ({
-      name: "web_search",
-      outcome: "succeeded",
-      seenUrlHashes: [seenUrlHash(runId, url)],
-    });
-
-    it("previews a link whose hash a web tool of the run recorded, and nothing it did not", async () => {
-      const { db, read, deps } = run({
-        opened: [],
-        extraEvents: [seenEvent(SEEN)],
-        messages: [{ id: "final", blocks: [text(`See ${SEEN}#part and https://other.test/x`)] }],
-      });
-      await runLinkPreviewJob(deps, { runId: "run-1" });
-      expect(card(db.blocksOf("final"))).toMatchObject({ url: `${SEEN}#part` });
-      expect(read).toHaveBeenCalledTimes(1);
-    });
-
-    it("uses the same exact equality: a different path, query or slash has no card", async () => {
-      for (const link of [`${SEEN}?s=1`, `${SEEN}/`, "https://hit.test/Article"]) {
-        const { db, read, deps } = run({
-          opened: [],
-          extraEvents: [seenEvent(SEEN)],
-          messages: [{ id: "final", blocks: [text(link)] }],
-        });
-        await runLinkPreviewJob(deps, { runId: "run-1" });
-        expect(card(db.blocksOf("final")), link).toBeUndefined();
-        expect(read, link).not.toHaveBeenCalled();
-      }
-    });
-
-    it("ignores a hash salted for another run, even from an event of this run", async () => {
-      const { db, read, deps } = run({
-        opened: [],
-        extraEvents: [seenEvent(SEEN, "run-2")],
-        messages: [{ id: "final", blocks: [text(SEEN)] }],
-      });
-      await runLinkPreviewJob(deps, { runId: "run-1" });
-      expect(read).not.toHaveBeenCalled();
-      expect(card(db.blocksOf("final"))).toBeUndefined();
-    });
-
-    it("gives no card to a path-token link that only a browser snapshot showed (M1)", async () => {
-      const link = "https://svc.tld/confirm/AbC123";
-      const snapshot = {
-        name: "browser_snapshot",
-        args: {},
-        executionId: "call-1",
-        durationMs: 1,
-        result: {
-          content: [],
-          details: { url: link, elements: [{ ref: "e1", role: "link", value: link }], tree: link },
-        },
-      };
-      const { db, read, deps } = run({
-        opened: [],
-        extraEvents: [toolCompletionAuditPayload(snapshot, [], "run-1")],
-        messages: [{ id: "final", blocks: [text(`Confirm here: ${link}`)] }],
-      });
-      await runLinkPreviewJob(deps, { runId: "run-1" });
-      expect(read).not.toHaveBeenCalled();
-      expect(card(db.blocksOf("final"))).toBeUndefined();
-    });
-
-    describe("links in the HTML of a page web_fetch read (CA 67-69)", () => {
-      const HOME = "https://home.test/";
-      const ARTICLE = "https://home.test/x/123_article";
-      const homepage = `<html><head><title>Home</title></head><body>
-        <main><p>${"Front page text. ".repeat(20)}</p><a href="/x/123_article">The story</a>
-        <a href="javascript:void(0)">js</a><a href="mailto:a@b.test">mail</a>
-        <a href="https://u:pw@home.test/secret">creds</a><a href="http://[bad">bad</a></main>
-      </body></html>`;
-      const signal = new AbortController().signal;
-      const context = { operationId: "o", traceId: "t", spaceId: "s", userId: "u", signal };
-
-      /** The audit payload of a real keyless `web_fetch` of the homepage, links and all. */
-      async function fetchHomepage(tool = "web_fetch") {
-        const web = new KeylessHttpWebProvider({
-          fetch: async () =>
-            new Response(homepage, { status: 200, headers: { "content-type": "text/html" } }),
-          resolveHostname: async () => [{ address: "93.184.216.34", family: 4 }],
-        });
-        let links: string[] | undefined;
-        const output = await webFetchFromTool(web, context, { url: HOME }, (found) => {
-          links = found;
-        });
-        return toolCompletionAuditPayload(
-          {
-            name: tool,
-            executionId: "call-1",
-            durationMs: 1,
-            args: { url: HOME },
-            result: { content: [], details: output },
-          },
-          [],
-          "run-1",
-          tool === "web_fetch" ? links : undefined,
-        );
-      }
-
-      it("gives a card to an article linked from a homepage the bot read, when it cites it (CA 67)", async () => {
-        const { db, read, deps } = run({
-          opened: [],
-          extraEvents: [await fetchHomepage()],
-          messages: [{ id: "final", blocks: [text(`À la une : ${ARTICLE}`)] }],
-        });
-        await runLinkPreviewJob(deps, { runId: "run-1" });
-        expect(card(db.blocksOf("final"))).toMatchObject({ url: ARTICLE });
-        expect(read).toHaveBeenCalledTimes(1);
-      });
-
-      it("never makes a javascript:, mailto:, credential or unresolvable link seen (CA 69)", async () => {
-        const event = await fetchHomepage();
-        for (const link of [
-          "javascript:void(0)",
-          "mailto:a@b.test",
-          "https://u:pw@home.test/secret",
-          "https://home.test/not-on-the-page",
-        ]) {
-          const { db, read, deps } = run({
-            opened: [],
-            extraEvents: [event],
-            messages: [{ id: "final", blocks: [text(`See ${link}`)] }],
-          });
-          await runLinkPreviewJob(deps, { runId: "run-1" });
-          expect(card(db.blocksOf("final")), link).toBeUndefined();
-          expect(read, link).not.toHaveBeenCalled();
-        }
-      });
-
-      it("gives no card to a page link that a browser tool returned instead (CA 69)", async () => {
-        const { db, read, deps } = run({
-          opened: [],
-          extraEvents: [await fetchHomepage("browser_navigate")],
-          messages: [{ id: "final", blocks: [text(`À la une : ${ARTICLE}`)] }],
-        });
-        await runLinkPreviewJob(deps, { runId: "run-1" });
-        expect(card(db.blocksOf("final"))).toBeUndefined();
-        expect(read).not.toHaveBeenCalled();
-      });
-    });
-
-    it("ignores malformed hashes and keeps at most 300 per run", async () => {
-      const hashes = Array.from({ length: 301 }, (_, index) =>
-        seenUrlHash("run-1", `https://hit.test/${index}`),
-      );
-      const events = [
-        { name: "web_search", seenUrlHashes: ["not-a-hash", 3, null, "A".repeat(64)] },
-        { name: "web_fetch", seenUrlHashes: hashes },
-      ];
-      const inside = run({
-        opened: [],
-        extraEvents: events,
-        messages: [{ id: "final", blocks: [text("https://hit.test/299")] }],
-      });
-      await runLinkPreviewJob(inside.deps, { runId: "run-1" });
-      expect(card(inside.db.blocksOf("final"))).toBeDefined();
-      const beyond = run({
-        opened: [],
-        extraEvents: events,
-        messages: [{ id: "final", blocks: [text("https://hit.test/300")] }],
-      });
-      await runLinkPreviewJob(beyond.deps, { runId: "run-1" });
-      expect(card(beyond.db.blocksOf("final"))).toBeUndefined();
-    });
-  });
-
-  describe("links seen in a recent run of the same thread and bot (CA 64-66)", () => {
-    const SEEN = "https://hit.test/article";
-    const DAY = 24 * 60 * 60 * 1000;
-    const seen = (url: string, runId: string) => ({
-      name: "web_search",
-      outcome: "succeeded",
-      seenUrlHashes: [seenUrlHash(runId, url)],
-    });
-
-    /** A current run without any tool call, and its final reply that re-sends SEEN. */
-    function current(otherRuns: Parameters<ReturnType<typeof setup>["db"]["seedRun"]>[0][]) {
-      const ctx = setup();
-      for (const other of otherRuns) ctx.db.seedRun(other);
-      ctx.db.seedRun({ id: "run-now", threadId: "thread-1", toolEvents: [] });
-      ctx.db.seedMessage({
-        id: "final",
-        threadId: "thread-1",
-        role: "bot",
-        runId: "run-now",
-        blocks: [text(`Again: ${SEEN}`)],
-      });
-      return ctx;
-    }
-
-    it("previews a link seen in an earlier run of the thread, re-sent in a run with no tool call (CA 64)", async () => {
-      const { db, read, deps } = current([
-        {
-          id: "run-old",
-          threadId: "thread-1",
-          createdAt: new Date(Date.now() - 6 * DAY),
-          toolEvents: [seen(SEEN, "run-old")],
-        },
-      ]);
-      await runLinkPreviewJob(deps, { runId: "run-now" });
-      expect(card(db.blocksOf("final"))).toMatchObject({ url: SEEN });
-      expect(read).toHaveBeenCalledTimes(1);
-    });
-
-    it("previews a link an earlier run opened, not only one it saw", async () => {
-      const { db, deps } = current([
-        {
-          id: "run-old",
-          threadId: "thread-1",
-          createdAt: new Date(Date.now() - DAY),
-          toolEvents: [{ name: "web_fetch", outcome: "succeeded", openedUrl: SEEN }],
-        },
-      ]);
-      await runLinkPreviewJob(deps, { runId: "run-now" });
-      expect(card(db.blocksOf("final"))).toBeDefined();
-    });
-
-    it("does not use the hash of one run for the link of another (salt)", async () => {
-      const { db, read, deps } = current([
-        {
-          id: "run-old",
-          threadId: "thread-1",
-          createdAt: new Date(Date.now() - DAY),
-          toolEvents: [seen(SEEN, "run-elsewhere")],
-        },
-      ]);
-      await runLinkPreviewJob(deps, { runId: "run-now" });
-      expect(read).not.toHaveBeenCalled();
-      expect(card(db.blocksOf("final"))).toBeUndefined();
-    });
-
-    it.each([
-      ["another thread", { threadId: "thread-2" }],
-      ["another bot", { botId: "bot-2" }],
-      ["a run 8 days old", { createdAt: new Date(Date.now() - 8 * DAY) }],
-      ["a failed run", { status: "failed" }],
-      ["a stopped run", { status: "stopped" }],
-    ])("gives no card, and reads nothing, for a link seen in %s (CA 65)", async (_name, over) => {
-      const { db, read, deps } = current([
-        {
-          id: "run-old",
-          threadId: "thread-1",
-          createdAt: new Date(Date.now() - DAY),
-          toolEvents: [seen(SEEN, "run-old")],
-          ...over,
-        },
-      ]);
-      await runLinkPreviewJob(deps, { runId: "run-now" });
-      expect(read).not.toHaveBeenCalled();
-      expect(card(db.blocksOf("final"))).toBeUndefined();
-    });
-
-    it("considers 50 runs at most and reads events for those run ids only (CA 66)", async () => {
-      const older = Array.from({ length: 60 }, (_, index) => ({
-        id: `run-${index}`,
-        threadId: "thread-1",
-        // run-0 is the newest of the others, run-59 the oldest.
-        createdAt: new Date(Date.now() - (index + 1) * 60_000),
-        toolEvents: [seen(`https://hit.test/${index}`, `run-${index}`)],
-      }));
-      const ctx = current(older);
-      ctx.db.seedRun({
-        id: "run-failed",
-        threadId: "thread-1",
-        status: "failed",
-        createdAt: new Date(Date.now() - 30_000),
-        toolEvents: [seen("https://hit.test/failed", "run-failed")],
-      });
-      const runs = vi.spyOn(ctx.db.prisma.run, "findMany");
-      const events = vi.spyOn(ctx.db.prisma.event, "findMany");
-      ctx.db.seedMessage({
-        id: "inside",
-        threadId: "thread-1",
-        role: "bot",
-        runId: "run-now",
-        blocks: [text("https://hit.test/48")],
-      });
-      ctx.db.seedMessage({
-        id: "beyond",
-        threadId: "thread-1",
-        role: "bot",
-        runId: "run-now",
-        blocks: [text("https://hit.test/49")],
-      });
-      ctx.db.seedMessage({
-        id: "failed",
-        threadId: "thread-1",
-        role: "bot",
-        runId: "run-now",
-        blocks: [text("https://hit.test/failed")],
-      });
-
-      await runLinkPreviewJob(ctx.deps, { runId: "run-now" });
-
-      // 49 others plus the current run: run-48 is the last one that counts.
-      expect(card(ctx.db.blocksOf("inside"))).toBeDefined();
-      expect(card(ctx.db.blocksOf("beyond"))).toBeUndefined();
-      expect(card(ctx.db.blocksOf("failed"))).toBeUndefined();
-      expect(runs).toHaveBeenCalledTimes(1);
-      expect(runs.mock.calls[0]?.[0]).toMatchObject({
-        where: { threadId: "thread-1", botId: "bot-1", status: "completed" },
-        orderBy: { createdAt: "desc" },
-        take: 49,
-      });
-      expect(events).toHaveBeenCalledTimes(1);
-      const [call] = events.mock.calls as unknown as Array<
-        [{ where: { runId: { in: string[] } } }]
-      >;
-      const where = call![0].where;
-      expect(where.runId.in).toHaveLength(50);
-      expect(where.runId.in[0]).toBe("run-now");
-      expect(where.runId.in).toContain("run-48");
-      expect(where.runId.in).not.toContain("run-49");
-      expect(where.runId.in).not.toContain("run-failed");
-    });
+  it("still previews a page whose path only contains a sign-in word", async () => {
+    const link = "https://example.com/blog/login-tips";
+    const { db, deps } = run({ messages: [{ id: "final", blocks: [text(link)] }] });
+    await runLinkPreviewJob(deps, { runId: "run-1" });
+    expect(card(db.blocksOf("final"))).toMatchObject({ url: link });
   });
 });

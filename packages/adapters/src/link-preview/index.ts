@@ -4,7 +4,6 @@ export * from "./head-parser.js";
 export * from "./image.js";
 export * from "./job.js";
 export * from "./limits.js";
-export * from "./opened-urls.js";
 export * from "./read-link-preview.js";
 export {
   caresResolveHostname,

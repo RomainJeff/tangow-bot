@@ -231,12 +231,6 @@ import {
   uniquifyInstalledToolName,
 } from "./lazy-tool-catalog.js";
 import {
-  OPENED_URLS_PER_RUN,
-  openedUrlFromCompletion,
-  SEEN_URLS_PER_RUN,
-  seenUrlHashesFromCompletion,
-} from "./link-preview/opened-urls.js";
-import {
   buildMcpCredentialBlob,
   needsOAuthProbe,
   parseMcpServerToolArgs,
@@ -359,8 +353,6 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "browser_snapshot",
   "list_secrets",
 ]);
-/** The longest a finished run waits for its last tool-call audit before queueing the link preview. */
-const TOOL_AUDIT_WAIT_MS = 5_000;
 const MAX_MODEL_FILE_BYTES = 250_000;
 const TURN_ATTACHMENT_UNAVAILABLE =
   "An attachment in this message could not be loaded. Tell the user the attachment was unavailable and do not guess its contents.";
@@ -619,7 +611,7 @@ function isFailedToolResult(value: unknown): value is { error: unknown } {
 }
 
 export function toolCompletionFromResult(
-  base: Pick<AgentToolCompletion, "name" | "executionId" | "durationMs" | "args">,
+  base: Pick<AgentToolCompletion, "name" | "executionId" | "durationMs">,
   result: unknown,
 ): AgentToolCompletion {
   const paused = isToolPauseResult(result);
@@ -630,8 +622,6 @@ export function toolCompletionFromResult(
 export function toolCompletionAuditPayload(
   completion: AgentToolCompletion,
   secrets: string[] = [],
-  runId?: string,
-  pageLinks?: readonly string[],
 ): Record<string, unknown> {
   const durationMs = Number.isFinite(completion.durationMs)
     ? Math.max(0, Math.round(completion.durationMs))
@@ -645,16 +635,6 @@ export function toolCompletionAuditPayload(
   if (completion.error !== undefined) {
     payload.error = sanitizeConnectorError(completion.error, secrets);
   }
-  // The one URL the audit keeps: what the bot opened, for the link preview rule. A URL a known
-  // secret changes under redaction is dropped, so it can never match a link in a message.
-  const openedUrl = openedUrlFromCompletion(completion);
-  if (openedUrl && redactSecrets(openedUrl, secrets) === openedUrl) payload.openedUrl = openedUrl;
-  // And the links a public web tool showed the bot, as SHA-256 hashes salted with the run id: a
-  // link can be matched against, never read back.
-  const seenUrlHashes = runId
-    ? seenUrlHashesFromCompletion(completion, runId, secrets, pageLinks).slice(0, SEEN_URLS_PER_RUN)
-    : [];
-  if (seenUrlHashes.length > 0) payload.seenUrlHashes = seenUrlHashes;
   if (!isAuditableToolResult(completion.result)) return payload;
 
   payload.contentTypes = completion.result.content.flatMap((part) => {
@@ -682,42 +662,20 @@ export function toolCompletionAuditPayload(
   return payload;
 }
 
-/** The seen-link hashes already recorded for a run, which together never pass the per-run cap. */
-export type SeenUrlBudget = { hashes: Set<string> };
-
 export async function appendToolCompletionAudit(
   deps: { events: Pick<ThreadEvents, "append"> },
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   completion: AgentToolCompletion,
   secrets: string[] = [],
-  openedUrlBudget?: { remaining: number },
-  seenUrlBudget?: SeenUrlBudget,
-  pageLinks?: readonly string[],
 ): Promise<void> {
   try {
-    const payload = toolCompletionAuditPayload(completion, secrets, target.runId, pageLinks);
-    if (Array.isArray(payload.seenUrlHashes) && seenUrlBudget) {
-      // First come, first served: a large page read early can use the whole per-run cap and leave
-      // later search hits without a card. Accepted for now (a card is only a convenience); a
-      // per-call share would be the fix if it shows up.
-      const fresh = (payload.seenUrlHashes as string[])
-        .filter((hash) => !seenUrlBudget.hashes.has(hash))
-        .slice(0, Math.max(0, SEEN_URLS_PER_RUN - seenUrlBudget.hashes.size));
-      for (const hash of fresh) seenUrlBudget.hashes.add(hash);
-      if (fresh.length > 0) payload.seenUrlHashes = fresh;
-      else delete payload.seenUrlHashes;
-    }
-    if (payload.openedUrl !== undefined && openedUrlBudget) {
-      if (openedUrlBudget.remaining > 0) openedUrlBudget.remaining -= 1;
-      else delete payload.openedUrl;
-    }
     await deps.events.append({
       spaceId: target.spaceId,
       threadId: target.threadId,
       botId: target.botId,
       runId: target.runId,
       type: "agent.tool.completed",
-      payload,
+      payload: toolCompletionAuditPayload(completion, secrets),
     });
   } catch (error) {
     // Audit persistence must not change the tool result or strand the run.
@@ -1303,13 +1261,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
       heartbeat.unref?.();
 
       const runSecrets = [...deps.secrets];
-      // At most this many opened URLs are recorded per run (the link preview rule reads them).
-      const openedUrlBudget = { remaining: OPENED_URLS_PER_RUN };
-      const seenUrlBudget: SeenUrlBudget = { hashes: new Set() };
-      // The audit of a finished tool call is written without anyone waiting for it (the runtime
-      // fires it and moves on). The link preview job reads those events, so the run waits for
-      // the ones still in flight before it queues the job.
-      const pendingToolAudits = new Set<Promise<void>>();
       try {
         const sourceBlocks =
           run.trigger === "messaging" && run.sourceMessageId
@@ -1863,14 +1814,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
         };
         const tryFlushPendingTools = () => {
           if (pendingToolNames.length > 0 && endsSentence(currentTextSegment)) flushPendingTools();
-        };
-        // The links of a page `web_fetch` read, by call: kept out of the result the model gets and
-        // handed to the audit, which only ever stores their salted hashes.
-        const pageLinksByCall = new Map<string, string[]>();
-        const takePageLinks = (executionId: string) => {
-          const links = pageLinksByCall.get(executionId);
-          pageLinksByCall.delete(executionId);
-          return links;
         };
         const recordToolOutput = (executionId: string, result: unknown) => {
           const detail = toolDetails.get(executionId);
@@ -2816,11 +2759,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return finish(await webSearchFromTool(web, context, args));
           }
           if (name === "web_fetch") {
-            return finish(
-              await webFetchFromTool(web, context, args, (links) =>
-                pageLinksByCall.set(executionId, links),
-              ),
-            );
+            return finish(await webFetchFromTool(web, context, args));
           }
           if (PAGE_BROWSER_TOOL_NAMES.has(name)) {
             if (heldForTakeover) {
@@ -3984,8 +3923,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     resolveConnectedModel(run, provider, modelId, (values) =>
                       runSecrets.push(...values),
                     ),
-              onToolCompleted: (completion) => {
-                const audit = appendToolCompletionAudit(
+              onToolCompleted: (completion) =>
+                appendToolCompletionAudit(
                   deps,
                   {
                     spaceId: run.spaceId,
@@ -3995,14 +3934,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   },
                   completion,
                   runSecrets,
-                  openedUrlBudget,
-                  seenUrlBudget,
-                  takePageLinks(completion.executionId),
-                );
-                pendingToolAudits.add(audit);
-                void audit.finally(() => pendingToolAudits.delete(audit));
-                return audit;
-              },
+                ),
               claimSteering: scripted
                 ? undefined
                 : async (seenIds) => {
@@ -4324,14 +4256,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                         name: event.name,
                         executionId: event.executionId,
                         durationMs: Date.now() - startedAt,
-                        args: event.args,
                       },
                       result,
                     ),
                     runSecrets,
-                    openedUrlBudget,
-                    seenUrlBudget,
-                    takePageLinks(event.executionId),
                   );
                   if (isToolPauseResult(result)) return;
                 } catch (error) {
@@ -4542,17 +4470,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // After the commit, never inside it. Delegated runs report back to the ordering bot
           // and routine cards are not messages to the person: no preview for either.
           if (run.trigger !== "bot_message" && !isRoutineCardRun) {
-            // After the last tool call's audit event (which holds the URL it opened) is written:
-            // the job reads the run's events. The audit never rejects; a stuck write is only
-            // waited for a few seconds, the rest of the run's completion must not hang on it.
-            let giveUp: ReturnType<typeof setTimeout> | undefined;
-            await Promise.race([
-              Promise.all([...pendingToolAudits]),
-              new Promise((resolve) => {
-                giveUp = setTimeout(resolve, TOOL_AUDIT_WAIT_MS);
-              }),
-            ]);
-            clearTimeout(giveUp);
             await deps.jobs
               .enqueue(linkPreviewJob({ runId }))
               .catch((error) => getLogger().error("link.preview enqueue", error));

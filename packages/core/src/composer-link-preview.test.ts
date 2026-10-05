@@ -49,6 +49,14 @@ describe("composerLinkPreviewTrigger", () => {
     expect(composerLinkPreviewTrigger("", "https://a.tld/x?Sig=abc", "paste")).toBeUndefined();
   });
 
+  it("never fires for a link to a sign-in page (CA 71)", () => {
+    expect(composerLinkPreviewTrigger("", "https://login.a.tld/ ", "type")).toBeUndefined();
+    expect(composerLinkPreviewTrigger("", "https://a.tld/sso", "paste")).toBeUndefined();
+    expect(composerLinkPreviewTrigger("", "https://a.tld/blog/login-tips ", "type")).toBe(
+      "https://a.tld/blog/login-tips",
+    );
+  });
+
   it("ignores links in code and links that are not http(s)", () => {
     expect(composerLinkPreviewTrigger("", "`https://a.tld` ", "type")).toBeUndefined();
     expect(composerLinkPreviewTrigger("", "ftp://a.tld/x ", "type")).toBeUndefined();

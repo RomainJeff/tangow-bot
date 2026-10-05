@@ -3,6 +3,7 @@
 export type LinkPreviewFailureReason =
   | "unsafe_url"
   | "blocked_address"
+  | "login_page"
   | "too_many_redirects"
   | "http_error"
   | "unsupported_type"

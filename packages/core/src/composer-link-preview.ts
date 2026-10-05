@@ -7,6 +7,7 @@ import {
 import {
   firstEligibleLink,
   hasSecretParam,
+  isAuthenticationDestination,
   previewSiteLabel,
   sanitizePreviewTitle,
 } from "./link-preview.js";
@@ -44,7 +45,7 @@ export function inferComposerChange(prev: string, next: string): ComposerChange 
 /**
  * The link of `next` that is ready to be read, or undefined. The first eligible link must be
  * complete: pasted, or its word followed by a space or a line break. A link still being typed
- * (nothing after it yet) never is, and neither is a link with a secret in its query.
+ * (nothing after it yet) never is, and neither is a link with a secret in its query or one to a sign-in page.
  */
 export function composerLinkPreviewTrigger(
   prev: string,
@@ -52,7 +53,7 @@ export function composerLinkPreviewTrigger(
   change: ComposerChange,
 ): string | undefined {
   const link = firstEligibleLink(next);
-  if (!link || hasSecretParam(link)) return undefined;
+  if (!link || hasSecretParam(link) || isAuthenticationDestination(link)) return undefined;
   const pasted = change === "paste" ? insertedSpan(prev, next) : undefined;
   for (let at = next.indexOf(link); at !== -1; at = next.indexOf(link, at + 1)) {
     const linkEnd = at + link.length;

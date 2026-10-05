@@ -1250,8 +1250,6 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
           name: tool.name,
           executionId,
           durationMs: Math.max(0, Date.now() - startedAt),
-          args,
-          ...(host.depth > 0 ? { nested: true } : {}),
           ...(result === undefined ? {} : { result }),
           ...(failure === undefined ? {} : { error: failure }),
           ...(host.pausePending ? { paused: true } : {}),

@@ -73,15 +73,7 @@ export interface FakeThreadDb {
     replyToMessageId?: string | null;
     replyQuote?: string | null;
   }): void;
-  seedRun(input: {
-    id: string;
-    threadId: string;
-    status?: string;
-    trigger?: string;
-    botId?: string;
-    createdAt?: Date;
-    toolEvents?: Array<Record<string, unknown>>;
-  }): void;
+  seedRun(input: { id: string; threadId: string; status?: string; trigger?: string }): void;
   /** Called after every message read, to let another transaction run in between. */
   onMessageRead(hook: (() => Promise<void>) | undefined): void;
   blocksOf(messageId: string): unknown[] | undefined;
@@ -101,7 +93,6 @@ export function createFakeThreadDb(): FakeThreadDb {
     externalMessages: new Map<string, Row>(),
   };
   let counter = 0;
-  let eventCounter = 0;
   const nextId = (prefix: string) => `${prefix}-${++counter}`;
   const locks = new Map<string, Promise<void>>();
   const hooks: { afterMessageRead?: () => Promise<void> } = {};
@@ -233,19 +224,6 @@ export function createFakeThreadDb(): FakeThreadDb {
         async findFirst(args: { where: Record<string, unknown> }) {
           return [...tables.runs.values()].find((run) => matches(run, args.where)) ?? null;
         },
-        async findMany(args: {
-          where: Record<string, unknown>;
-          orderBy?: { createdAt: "asc" | "desc" };
-          take?: number;
-        }) {
-          const sign = args.orderBy?.createdAt === "asc" ? 1 : -1;
-          const rows = [...tables.runs.values()]
-            .filter((run) => matches(run, args.where))
-            .sort(
-              (a, b) => sign * ((a.createdAt as Date).getTime() - (b.createdAt as Date).getTime()),
-            );
-          return rows.slice(0, args.take ?? rows.length);
-        },
         async updateMany(args: { where: Record<string, unknown>; data: Record<string, unknown> }) {
           const rows = [...tables.runs.values()].filter((run) => matches(run, args.where));
           for (const run of rows) Object.assign(run, args.data);
@@ -263,16 +241,10 @@ export function createFakeThreadDb(): FakeThreadDb {
           tables.events.set(row.id, row);
           return row;
         },
-        async findMany(args: {
-          where: Record<string, unknown>;
-          orderBy?: { seq: "asc" | "desc" };
-          take?: number;
-        }) {
-          const sign = args.orderBy?.seq === "desc" ? -1 : 1;
-          const rows = [...tables.events.values()]
+        async findMany(args: { where: Record<string, unknown> }) {
+          return [...tables.events.values()]
             .filter((e) => matches(e, args.where))
-            .sort((a, b) => sign * ((a.seq as number) - (b.seq as number)));
-          return rows.slice(0, args.take ?? rows.length);
+            .sort((a, b) => (a.seq as number) - (b.seq as number));
         },
       },
       artifact: table(tables.artifact, {
@@ -406,36 +378,16 @@ export function createFakeThreadDb(): FakeThreadDb {
         replyQuote,
       });
     },
-    seedRun({
-      id,
-      threadId,
-      status = "completed",
-      trigger = "user",
-      botId = "bot-1",
-      createdAt = new Date(),
-      toolEvents = [],
-    }) {
+    seedRun({ id, threadId, status = "completed", trigger = "user" }) {
       tables.runs.set(id, {
         id,
         threadId,
         status,
         trigger,
         spaceId: "space-1",
-        botId,
-        createdAt,
+        botId: "bot-1",
         userId: "user-1",
         checkpoint: null,
-      });
-      toolEvents.forEach((payload, index) => {
-        const eventId = `tool-${id}-${index}`;
-        tables.events.set(eventId, {
-          id: eventId,
-          threadId,
-          runId: id,
-          type: "agent.tool.completed",
-          seq: -1000 + eventCounter++,
-          payload,
-        });
       });
     },
     onMessageRead(hook) {

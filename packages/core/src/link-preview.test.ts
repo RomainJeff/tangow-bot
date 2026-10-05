@@ -2,11 +2,10 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { blocksToAgentHistoryText } from "./attachments.js";
 import {
-  extractSeenUrls,
   firstEligibleLink,
   hasSecretParam,
+  isAuthenticationDestination,
   isLinkOnlyMessage,
-  isSameOpenedUrl,
   messageHostsLinkPreview,
   normalizePreviewUrl,
   previewSiteLabel,
@@ -103,35 +102,13 @@ describe("isLinkOnlyMessage", () => {
   });
 });
 
-describe("normalizePreviewUrl and isSameOpenedUrl", () => {
+describe("normalizePreviewUrl", () => {
   it("lowercases scheme and host, converts to punycode, drops default ports and the fragment only", () => {
     expect(normalizePreviewUrl("HTTPS://A.TLD:443/x#frag")).toBe("https://a.tld/x");
     expect(normalizePreviewUrl("http://a.tld:80/x")).toBe("http://a.tld/x");
     expect(normalizePreviewUrl("https://bücher.tld/x")).toBe("https://xn--bcher-kva.tld/x");
     expect(normalizePreviewUrl("https://a.tld/X/%2F/?q=%41#")).toBe("https://a.tld/X/%2F/?q=%41");
     expect(normalizePreviewUrl("not a url")).toBeNull();
-  });
-
-  it("is exact equality: only the fragment may differ", () => {
-    const opened = "https://a.tld/x";
-    expect(isSameOpenedUrl(opened, opened)).toBe(true);
-    expect(isSameOpenedUrl(opened, "https://a.tld/x#frag")).toBe(true);
-    expect(isSameOpenedUrl(opened, "HTTPS://A.TLD:443/x")).toBe(true);
-    for (const other of [
-      "https://a.tld/x?s=1",
-      "https://a.tld/x/",
-      "https://a.tld/X",
-      "https://a.tld/x%2F",
-      "https://a.tld:8443/x",
-      "http://a.tld/x",
-      "https://sub.a.tld/x",
-      "https://a.tld./x",
-      "https://www.a.tld/x",
-    ]) {
-      expect(isSameOpenedUrl(opened, other), other).toBe(false);
-    }
-    expect(isSameOpenedUrl(opened, "garbage")).toBe(false);
-    expect(isSameOpenedUrl("garbage", "garbage")).toBe(false);
   });
 });
 
@@ -148,6 +125,38 @@ describe("previewSiteLabel", () => {
     const long = `accounts.google.com.${"evil-subdomain.".repeat(8)}tld`;
     expect(previewSiteLabel(`https://${long}/x`)).toBe(long);
     expect(previewSiteLabel("nonsense")).toBe("");
+  });
+});
+
+describe("isAuthenticationDestination (CA 71)", () => {
+  it("flags Google's account host, an authentication host label and an authentication final segment", () => {
+    for (const url of [
+      "https://accounts.google.com/signin/v2",
+      "https://login.example.com/",
+      "https://Sso.Example.com/start",
+      "https://example.com/sso",
+      "https://example.com/a/sign-in",
+      "https://example.com/a/sign_in/",
+      "https://example.com/oauth/authorize?client=1",
+      "https://example.com/Login",
+      "https://example.com/%6Cogin",
+    ]) {
+      expect(isAuthenticationDestination(url), url).toBe(true);
+    }
+  });
+
+  it("leaves a normal page alone, even one that names a sign-in word elsewhere", () => {
+    for (const url of [
+      "https://example.com/blog/login-tips",
+      "https://example.com/login/help",
+      "https://example.com/authors",
+      "https://www.example.com/article",
+      "https://example.com/login-page.html",
+      "https://notlogin.example.com/",
+      "not a url",
+    ]) {
+      expect(isAuthenticationDestination(url), url).toBe(false);
+    }
   });
 });
 
@@ -300,56 +309,5 @@ describe("messageHostsLinkPreview", () => {
 
   it("ignores values that are not blocks", () => {
     expect(messageHostsLinkPreview({ role: "bot", blocks: [null, 3, "x", {}] })).toBe(true);
-  });
-});
-
-describe("extractSeenUrls", () => {
-  it("takes the url of search hits and the links of fetched text, normalized and deduplicated", () => {
-    const urls = extractSeenUrls({
-      results: [
-        { title: "A", url: "https://A.test/x#frag", snippet: "see https://b.test/y." },
-        { title: "B", url: "https://a.test/x", snippet: "" },
-      ],
-    });
-    expect(urls).toEqual(["https://a.test/x", "https://b.test/y"]);
-  });
-
-  it("reads page text and snapshot trees as plain text (code included) and the link in markdown", () => {
-    const urls = extractSeenUrls({
-      text: "Home [Shop](https://s.test/shop_(new)) and\n```\nhttps://c.test/code\n```",
-      tree: "- link 'Docs' https://d.test/docs\n- link x",
-      elements: [{ ref: "e1", name: "https://e.test/p", role: "link" }],
-    });
-    expect(urls).toEqual([
-      "https://s.test/shop_(new)",
-      "https://c.test/code",
-      "https://d.test/docs",
-      "https://e.test/p",
-    ]);
-  });
-
-  it("never reads a sentence as one link", () => {
-    expect(extractSeenUrls("https://one.test/a https://two.test/b")).toEqual([
-      "https://one.test/a",
-      "https://two.test/b",
-    ]);
-  });
-
-  it("ignores keys, other schemes, credentials and links over 2048 characters", () => {
-    const urls = extractSeenUrls({
-      "https://key.test/": 1,
-      a: "ftp://f.test/x javascript:alert(1) https://u:p@c.test/x",
-      b: `https://long.test/${"a".repeat(2100)}`,
-    });
-    expect(urls).toEqual([]);
-  });
-
-  it("is bounded on deep or huge values", () => {
-    let deep: unknown = "https://deep.test/x";
-    for (let i = 0; i < 20; i += 1) deep = { next: deep };
-    expect(extractSeenUrls(deep)).toEqual([]);
-    expect(
-      extractSeenUrls(Array.from({ length: 30_000 }, (_, i) => `https://h.test/${i}`)),
-    ).toHaveLength(20_000);
   });
 });

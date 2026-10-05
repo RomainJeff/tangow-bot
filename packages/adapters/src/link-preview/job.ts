@@ -8,7 +8,7 @@ import {
 import {
   firstEligibleLink,
   hasSecretParam,
-  isSameOpenedUrl,
+  isAuthenticationDestination,
   messageHostsLinkPreview,
 } from "@rakazo/core";
 import {
@@ -18,7 +18,6 @@ import {
   type ThreadEvents,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { type RunLinkSources, readThreadLinkSources, seenUrlHash } from "./opened-urls.js";
 import {
   type LinkPreviewServiceDeps,
   previewStoreContext,
@@ -51,7 +50,8 @@ function kindOf(block: unknown): string | undefined {
 /**
  * The one link a message may get a preview for, or null: it has no text link, or already
  * carries a card or the removal marker, or is a kind of message previews are never made for
- * (`messageHostsLinkPreview`, the rule web and iOS draw by), or its link names a secret.
+ * (`messageHostsLinkPreview`, the rule web and iOS draw by), or its link names a secret or leads
+ * to a sign-in page.
  */
 export function linkPreviewCandidate(message: { role: string; blocks: unknown }): string | null {
   const { blocks } = message;
@@ -67,7 +67,7 @@ export function linkPreviewCandidate(message: { role: string; blocks: unknown })
     )
     .join("\n");
   const link = firstEligibleLink(text);
-  return link && !hasSecretParam(link) ? link : null;
+  return link && !hasSecretParam(link) && !isAuthenticationDestination(link) ? link : null;
 }
 
 type ThreadScope = {
@@ -136,7 +136,6 @@ async function previewRunMessages(
     select: {
       status: true,
       trigger: true,
-      botId: true,
       thread: {
         select: { id: true, spaceId: true, userId: true, botId: true, groupId: true },
       },
@@ -144,12 +143,6 @@ async function previewRunMessages(
   });
   // Only a run that ended well, and only one a person is reading (never bot to bot).
   if (run?.status !== "completed" || run.trigger === "bot_message") return;
-  const sources = await readThreadLinkSources(deps.prisma, {
-    id: runId,
-    threadId: run.thread.id,
-    botId: run.botId,
-  });
-  if (![...sources.values()].some((s) => s.opened.length > 0 || s.seenHashes.size > 0)) return;
   const messages = await deps.prisma.message.findMany({
     where: { runId, threadId: run.thread.id, role: "bot" },
     orderBy: { seq: "asc" },
@@ -163,20 +156,8 @@ async function previewRunMessages(
       message.clientNonce.startsWith(USER_MESSAGE_CLIENT_NONCE_PREFIX);
     if (!addressed) continue;
     const link = linkPreviewCandidate(message);
-    // Exact equality with a URL this bot opened, or one a public web tool showed it (by hash), in
-    // this run or a completed one of the same thread in the last 7 days: nothing else is read.
-    if (!link || !wasOpenedOrSeen(link, sources)) continue;
-    await attachPreview(deps, run.thread, message.id, link, budget);
+    if (link) await attachPreview(deps, run.thread, message.id, link, budget);
   }
-}
-
-function wasOpenedOrSeen(link: string, sources: Map<string, RunLinkSources>): boolean {
-  for (const [sourceRunId, { opened, seenHashes }] of sources) {
-    if (opened.some((url) => isSameOpenedUrl(link, url))) return true;
-    const hash = seenUrlHash(sourceRunId, link);
-    if (hash !== undefined && seenHashes.has(hash)) return true;
-  }
-  return false;
 }
 
 async function attachPreview(

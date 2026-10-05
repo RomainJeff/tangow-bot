@@ -1,6 +1,7 @@
 import dns from "node:dns";
 import { isIP } from "node:net";
 import { LINK_PREVIEW_URL_MAX_LENGTH } from "@rakazo/contracts";
+import { isAuthenticationDestination } from "@rakazo/core";
 import { Agent } from "undici";
 import {
   createAddressCheckedLookup,
@@ -110,7 +111,7 @@ export async function fetchLinkPreviewResourceWithSeams(
   const policy = seams.unsafeForTests ?? {};
   const isAddressAllowed =
     policy.isAddressAllowed ?? ((address: string) => !isPrivateAddress(address));
-  const first = parseHopUrl(rawUrl, undefined, policy.allowAnyPort);
+  const first = parseHopUrl(rawUrl, undefined, mode, policy.allowAnyPort);
   const release = (options.limiter ?? processReadLimiter).tryAcquire(first.hostname);
   if (!release) throw new LinkPreviewError("busy");
 
@@ -154,7 +155,7 @@ export async function fetchLinkPreviewResourceWithSeams(
         await cancelResponseBody(response, signal);
         if (!location) throw new LinkPreviewError("http_error");
         if (redirects >= MAX_REDIRECTS) throw new LinkPreviewError("too_many_redirects");
-        url = parseHopUrl(location, url.href, policy.allowAnyPort);
+        url = parseHopUrl(location, url.href, mode, policy.allowAnyPort);
         continue;
       }
       return await readResource(response, url.href, mode, signal);
@@ -186,8 +187,16 @@ async function settleWithin(work: Promise<unknown>, ms: number): Promise<void> {
   }
 }
 
-/** Scheme, credentials, port and length checks, applied to the first URL and every redirect. */
-function parseHopUrl(raw: string, base: string | undefined, allowAnyPort = false): URL {
+/**
+ * Scheme, credentials, port and length checks, applied to the first URL and every redirect. A page
+ * that is a sign-in page is refused as well, at the first URL and at each hop.
+ */
+function parseHopUrl(
+  raw: string,
+  base: string | undefined,
+  mode: LinkPreviewFetchMode,
+  allowAnyPort = false,
+): URL {
   if (raw.length > LINK_PREVIEW_URL_MAX_LENGTH) throw new LinkPreviewError("unsafe_url");
   let url: URL;
   try {
@@ -203,6 +212,9 @@ function parseHopUrl(raw: string, base: string | undefined, allowAnyPort = false
     url.href.length > LINK_PREVIEW_URL_MAX_LENGTH
   ) {
     throw new LinkPreviewError("unsafe_url");
+  }
+  if (mode === "page" && isAuthenticationDestination(url.href)) {
+    throw new LinkPreviewError("login_page");
   }
   return url;
 }
