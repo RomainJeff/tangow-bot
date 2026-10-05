@@ -1,0 +1,20 @@
+{
+  "notion": {
+    "dataSource": "collection://00000000-0000-0000-0000-000000000000",
+    "toolPrefix": "mcp__notion__"
+  },
+  "github": {
+    "repos": ["RomainJeff/rakazo-bot"]
+  },
+  "base": "main",
+  "permalinkRepo": "RomainJeff/rakazo-bot",
+  "scoutWorktree": "~/dev/rakazo-scout-wt",
+  "refsDir": "~/dev/refs",
+  "referenceRepos": [],
+  "localSources": [],
+  "decisionDirs": [],
+  "decisionLinks": [],
+  "langfuse": {
+    "envFile": "~/.config/langfuse/rakazo.env"
+  }
+}
