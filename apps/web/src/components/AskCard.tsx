@@ -11,6 +11,7 @@ import {
   spawnBotEdits,
   spawnBotReadOnlyDetail,
 } from "@rakazo/core";
+import type { FramedBlockActionsAlign } from "@rakazo/ui-web";
 import { Button, FramedBlock, Input, Textarea } from "@rakazo/ui-web";
 import type { ComponentProps, ReactNode } from "react";
 import { Fragment, useEffect, useId, useState } from "react";
@@ -54,6 +55,14 @@ function approvalActionVariant(id: string): "capsule" | "capsuleSecondary" | "te
   return "tertiary";
 }
 
+// Left to right: dismiss, Edit, the secondary approval, the primary one.
+const EDIT_RANK = 1;
+function approvalActionRank(id: string): number {
+  if (id === "allow") return 3;
+  if (id === "always") return 2;
+  return 0;
+}
+
 function secretFieldLabel(purpose: AskBlock["purpose"]): string {
   if (purpose === "password") return t`Password`;
   if (purpose === "api_key") return t`API key`;
@@ -65,16 +74,6 @@ function OptionsRow({ className, children }: { className?: string; children: Rea
   return (
     <div data-testid="ask-options" className={`flex flex-wrap gap-2 ${className ?? ""}`.trim()}>
       {children}
-    </div>
-  );
-}
-
-/** A footer split between a leading group (Back/Skip/Cancel/Other) and a trailing primary action. */
-function FooterRow({ leading, trailing }: { leading?: ReactNode; trailing: ReactNode }) {
-  return (
-    <div className="flex w-full items-center justify-between">
-      <div className="flex gap-2">{leading}</div>
-      {trailing}
     </div>
   );
 }
@@ -191,6 +190,7 @@ export function AskCard({
 
   let children: ReactNode = null;
   let actions: ReactNode = null;
+  let actionsAlign: FramedBlockActionsAlign = "end";
 
   // Only a pending spawn_bot card that carries its fields can be edited, and only by the run's
   // owner. A card from an older server has no `spawnBot`: it stays read-only, approve or cancel.
@@ -219,45 +219,46 @@ export function AskCard({
         }
         return void submitAnswer(id);
       };
-      actions = (
-        <OptionsRow>
-          {approvalActions.map((action) => (
-            <Fragment key={action.id}>
-              <Button
-                variant={approvalActionVariant(action.id)}
-                size="capsule"
-                consequential={action.id === "allow"}
-                disabled={
-                  submitting || (action.id === "allow" && botEditing && !draft?.name.trim())
-                }
-                onClick={() => submitApproval(action.id)}
-              >
-                {pendingAction === action.id ? (
-                  <Trans>Sending…</Trans>
-                ) : (
-                  approvalActionLabel(action)
-                )}
-              </Button>
-              {action.id === "allow" && spawnBot && !botEditing ? (
-                <Button
-                  variant="tertiary"
-                  size="capsule"
-                  disabled={submitting}
-                  onClick={() =>
-                    setBotDraft({
-                      messageId,
-                      name: spawnBot.name,
-                      instructions: spawnBot.instructions,
-                    })
-                  }
-                >
-                  <Trans>Edit</Trans>
-                </Button>
-              ) : null}
-            </Fragment>
-          ))}
-        </OptionsRow>
-      );
+      const ranked = approvalActions.map((action) => ({
+        key: action.id,
+        rank: approvalActionRank(action.id),
+        node: (
+          <Button
+            variant={approvalActionVariant(action.id)}
+            size="capsule"
+            consequential={action.id === "allow"}
+            disabled={submitting || (action.id === "allow" && botEditing && !draft?.name.trim())}
+            onClick={() => submitApproval(action.id)}
+          >
+            {pendingAction === action.id ? <Trans>Sending…</Trans> : approvalActionLabel(action)}
+          </Button>
+        ),
+      }));
+      if (spawnBot && !botEditing) {
+        ranked.push({
+          key: "edit",
+          rank: EDIT_RANK,
+          node: (
+            <Button
+              variant="tertiary"
+              size="capsule"
+              disabled={submitting}
+              onClick={() =>
+                setBotDraft({
+                  messageId,
+                  name: spawnBot.name,
+                  instructions: spawnBot.instructions,
+                })
+              }
+            >
+              <Trans>Edit</Trans>
+            </Button>
+          ),
+        });
+      }
+      actions = ranked
+        .sort((a, b) => a.rank - b.rank)
+        .map(({ key, node }) => <Fragment key={key}>{node}</Fragment>);
       if (spawnBot && draft) {
         const readOnly = spawnBotReadOnlyDetail(spawnBot);
         const invalid = invalidBotFields(error);
@@ -332,6 +333,8 @@ export function AskCard({
         </Button>
       );
     } else if (askActions?.length) {
+      // "Other answer…" belongs to the list of answers; sending a typed one is a decision.
+      if (!editing) actionsAlign = "start";
       children = (
         <>
           <OptionsRow>
@@ -364,33 +367,29 @@ export function AskCard({
         </>
       );
       actions = editing ? (
-        <FooterRow
-          leading={
-            <Button
-              type="button"
-              variant="tertiary"
-              size="capsule"
-              disabled={submitting}
-              onClick={() => {
-                setAnswer("");
-                setEditing(false);
-              }}
-            >
-              <Trans>Cancel</Trans>
-            </Button>
-          }
-          trailing={
-            <Button
-              type="button"
-              variant="capsule"
-              size="capsule"
-              disabled={!answer.trim() || submitting}
-              onClick={() => void submitAnswer(answer)}
-            >
-              {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
-            </Button>
-          }
-        />
+        <>
+          <Button
+            type="button"
+            variant="tertiary"
+            size="capsule"
+            disabled={submitting}
+            onClick={() => {
+              setAnswer("");
+              setEditing(false);
+            }}
+          >
+            <Trans>Cancel</Trans>
+          </Button>
+          <Button
+            type="button"
+            variant="capsule"
+            size="capsule"
+            disabled={!answer.trim() || submitting}
+            onClick={() => void submitAnswer(answer)}
+          >
+            {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
+          </Button>
+        </>
       ) : (
         <Button
           type="button"
@@ -415,58 +414,50 @@ export function AskCard({
         />
       ) : null;
       actions = editing ? (
-        <FooterRow
-          leading={
-            <Button
-              type="button"
-              variant="tertiary"
-              size="capsule"
-              disabled={submitting}
-              onClick={() => {
-                setAnswer("");
-                setEditing(false);
-              }}
-            >
-              <Trans>Cancel</Trans>
-            </Button>
-          }
-          trailing={
-            <Button
-              type="button"
-              variant="capsule"
-              size="capsule"
-              disabled={!answer.trim() || submitting}
-              onClick={() => void submitAnswer(answer)}
-            >
-              {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
-            </Button>
-          }
-        />
+        <>
+          <Button
+            type="button"
+            variant="tertiary"
+            size="capsule"
+            disabled={submitting}
+            onClick={() => {
+              setAnswer("");
+              setEditing(false);
+            }}
+          >
+            <Trans>Cancel</Trans>
+          </Button>
+          <Button
+            type="button"
+            variant="capsule"
+            size="capsule"
+            disabled={!answer.trim() || submitting}
+            onClick={() => void submitAnswer(answer)}
+          >
+            {submitting ? <Trans>Sending…</Trans> : <Trans>Send answer</Trans>}
+          </Button>
+        </>
       ) : (
-        <FooterRow
-          leading={
-            <Button
-              type="button"
-              variant="tertiary"
-              size="capsule"
-              disabled={submitting}
-              onClick={() => setEditing(true)}
-            >
-              <Trans>Edit first</Trans>
-            </Button>
-          }
-          trailing={
-            <Button
-              type="button"
-              variant="capsule"
-              size="capsule"
-              disabled={submitting}
-              onClick={() => void submitAnswer("approved")}
-            >
-              {submitting ? <Trans>Sending…</Trans> : <Trans>Send it</Trans>}
-            </Button>
-          }
-        />
+        <>
+          <Button
+            type="button"
+            variant="tertiary"
+            size="capsule"
+            disabled={submitting}
+            onClick={() => setEditing(true)}
+          >
+            <Trans>Edit first</Trans>
+          </Button>
+          <Button
+            type="button"
+            variant="capsule"
+            size="capsule"
+            disabled={submitting}
+            onClick={() => void submitAnswer("approved")}
+          >
+            {submitting ? <Trans>Sending…</Trans> : <Trans>Send it</Trans>}
+          </Button>
+        </>
       );
     }
   }
@@ -485,6 +476,7 @@ export function AskCard({
       consequence={botEditing ? undefined : consequence}
       answered={answered}
       actions={actions}
+      actionsAlign={actionsAlign}
     >
       {children}
       {error && !botEditing ? (
@@ -682,60 +674,54 @@ function MultiQuestionAsk({
       answered={answered}
       actions={
         answered === undefined ? (
-          <FooterRow
-            leading={
-              <>
-                {index > 0 ? (
-                  <Button
-                    type="button"
-                    variant="tertiary"
-                    size="capsule"
-                    disabled={submitting}
-                    onClick={() => setIndex(index - 1)}
-                  >
-                    <Trans>Back</Trans>
-                  </Button>
-                ) : null}
-                {current.required === false ? (
-                  <Button
-                    type="button"
-                    variant="tertiary"
-                    size="capsule"
-                    disabled={submitting}
-                    onClick={() => {
-                      update(current.id, { selected: [], other: "", skipped: true });
-                      if (!isLast) setIndex(index + 1);
-                    }}
-                  >
-                    <Trans>Skip</Trans>
-                  </Button>
-                ) : null}
-              </>
-            }
-            trailing={
-              isLast ? (
-                <Button
-                  type="button"
-                  variant="capsule"
-                  size="capsule"
-                  disabled={submitting || !requiredSatisfied}
-                  onClick={() => void submit()}
-                >
-                  {submitting ? <Trans>Sending…</Trans> : <Trans>Send answers</Trans>}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="capsule"
-                  size="capsule"
-                  disabled={submitting}
-                  onClick={() => setIndex(index + 1)}
-                >
-                  <Trans>Next</Trans>
-                </Button>
-              )
-            }
-          />
+          <>
+            {index > 0 ? (
+              <Button
+                type="button"
+                variant="tertiary"
+                size="capsule"
+                disabled={submitting}
+                onClick={() => setIndex(index - 1)}
+              >
+                <Trans>Back</Trans>
+              </Button>
+            ) : null}
+            {current.required === false ? (
+              <Button
+                type="button"
+                variant="tertiary"
+                size="capsule"
+                disabled={submitting}
+                onClick={() => {
+                  update(current.id, { selected: [], other: "", skipped: true });
+                  if (!isLast) setIndex(index + 1);
+                }}
+              >
+                <Trans>Skip</Trans>
+              </Button>
+            ) : null}
+            {isLast ? (
+              <Button
+                type="button"
+                variant="capsule"
+                size="capsule"
+                disabled={submitting || !requiredSatisfied}
+                onClick={() => void submit()}
+              >
+                {submitting ? <Trans>Sending…</Trans> : <Trans>Send answers</Trans>}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="capsule"
+                size="capsule"
+                disabled={submitting}
+                onClick={() => setIndex(index + 1)}
+              >
+                <Trans>Next</Trans>
+              </Button>
+            )}
+          </>
         ) : null
       }
     >

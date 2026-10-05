@@ -305,9 +305,9 @@ describe("AskCard editable Create bot card", () => {
     vi.unstubAllGlobals();
   });
 
-  it("CA10: a pending card keeps its detail and adds Edit between Create bot and Cancel", () => {
+  it("CA10: a pending card keeps its detail and puts Edit between Cancel and Create bot", () => {
     show(pendingCard());
-    expect(labels()).toEqual(["Create bot", "Edit", "Cancel"]);
+    expect(labels()).toEqual(["Cancel", "Edit", "Create bot"]);
     expect(container.querySelector("pre")?.textContent).toContain("Instructions:");
     expect(container.querySelector("input")).toBeNull();
   });
@@ -318,7 +318,7 @@ describe("AskCard editable Create bot card", () => {
 
     expect(container.textContent).toContain("Create bot?");
     expect(container.textContent).not.toContain("Create bot “Veille”?");
-    expect(labels()).toEqual(["Create bot", "Cancel"]);
+    expect(labels()).toEqual(["Cancel", "Create bot"]);
     expect(nameInput().value).toBe("Veille");
     expect(document.activeElement).toBe(nameInput());
     expect(instructionsField().value).toBe(spawnBot.instructions);
@@ -425,12 +425,12 @@ describe("AskCard editable Create bot card", () => {
     type(nameInput(), "Draft");
     show(pendingCard(), { messageId: "msg-2" });
     expect(container.querySelector("input")).toBeNull();
-    expect(labels()).toEqual(["Create bot", "Edit", "Cancel"]);
+    expect(labels()).toEqual(["Cancel", "Edit", "Create bot"]);
   });
 
   it("CA24: no Edit without spawnBot, when unanswerable, or on another approval", () => {
     show(pendingCard({ spawnBot: undefined }));
-    expect(labels()).toEqual(["Create bot", "Cancel"]);
+    expect(labels()).toEqual(["Cancel", "Create bot"]);
     show(pendingCard(), { canAnswer: false });
     expect(labels()).toEqual([]);
     show(
@@ -443,6 +443,96 @@ describe("AskCard editable Create bot card", () => {
         ],
       }),
     );
-    expect(labels()).toEqual(["Allow once", "Deny"]);
+    expect(labels()).toEqual(["Deny", "Allow once"]);
+  });
+});
+
+describe("AskCard action layout", () => {
+  const render = (block: AskBlock) =>
+    renderToStaticMarkup(
+      <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-layout" />,
+    );
+  /** The framed block's action row: its alignment and its button labels, left to right. */
+  const actionsRow = (html: string) => {
+    const start = html.indexOf('data-slot="framed-block-actions"');
+    if (start < 0) return null;
+    const row = html.slice(start);
+    return {
+      align: /data-align="(\w+)"/.exec(row)?.[1],
+      labels: [...row.matchAll(/<button[^>]*>(.*?)<\/button>/g)].map((match) =>
+        match[1]?.replace(/<svg.*?<\/svg>/g, ""),
+      ),
+    };
+  };
+  const optionsRow = (html: string) => {
+    const start = html.indexOf('data-testid="ask-options"');
+    return html.slice(start, html.indexOf("</div>", start));
+  };
+
+  it("keeps an approval's decision on the right, primary last", () => {
+    const html = render({
+      kind: "ask",
+      text: "Send the email?",
+      approvalEffectId: "effect-1",
+      actions: [
+        { id: "allow", label: "Allow once" },
+        { id: "always", label: "Always allow" },
+        { id: "deny", label: "Deny" },
+      ],
+    });
+    expect(actionsRow(html)).toEqual({
+      align: "end",
+      labels: ["Deny", "Always allow this tool", "Allow once"],
+    });
+  });
+
+  it("keeps a secret's single action on the right", () => {
+    const html = render({
+      kind: "ask",
+      text: "Paste the key",
+      purpose: "api_key",
+      input: "secret",
+    });
+    expect(actionsRow(html)).toEqual({ align: "end", labels: ["Save"] });
+  });
+
+  it("keeps the answers of a choice on the left, not the decision to type another", () => {
+    const html = render({
+      kind: "ask",
+      text: "Which city?",
+      actions: [
+        { id: "seoul", label: "Seoul" },
+        { id: "tokyo", label: "Tokyo" },
+      ],
+    });
+    expect(optionsRow(html)).toContain("Seoul");
+    expect(optionsRow(html)).not.toContain("justify-end");
+    expect(actionsRow(html)).toEqual({ align: "start", labels: ["Other answer…"] });
+  });
+
+  it("puts a plain question's decision on the right, Edit first before Send it", () => {
+    const html = render({ kind: "ask", text: "Send this draft?" });
+    expect(actionsRow(html)).toEqual({ align: "end", labels: ["Edit first", "Send it"] });
+  });
+
+  it("puts a stepper's navigation before its primary, on the right", () => {
+    const html = renderToStaticMarkup(
+      <AskCard
+        block={{
+          kind: "ask",
+          text: "Two questions",
+          questions: [
+            { id: "q1", question: "Where?", options: [{ id: "a", label: "Seoul" }] },
+            { id: "q2", question: "When?", required: false, options: [{ id: "b", label: "May" }] },
+          ],
+        }}
+        canAnswer={true}
+        onAnswer={async () => {}}
+        messageId="msg-stepper"
+      />,
+    );
+    expect(actionsRow(html)).toEqual({ align: "end", labels: ["Next"] });
+    expect(optionsRow(html)).toContain("Seoul");
+    expect(optionsRow(html)).not.toContain("justify-end");
   });
 });
