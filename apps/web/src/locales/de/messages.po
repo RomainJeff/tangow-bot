@@ -3330,6 +3330,15 @@ msgstr "Erwähnung von {0} entfernen"
 msgid "Remove message trigger"
 msgstr ""
 
+#: src/pages/shell/composer.tsx:867
+#: src/pages/shell/message-actions-sheet.tsx:80
+#: src/pages/shell/message-hover-actions.tsx:103
+#: src/pages/shell/message-hover-actions.tsx:104
+#: src/pages/shell/message-hover-actions.tsx:172
+#: src/pages/shell/message-hover-actions.tsx:173
+msgid "Remove preview"
+msgstr "Vorschau entfernen"
+
 #: src/pages/RoutineEditor.tsx:399
 msgid "Remove schedule"
 msgstr "Zeitplan entfernen"
