@@ -11,10 +11,14 @@ import {
   type ViewProps,
 } from "react-native";
 import { askActionLabel } from "../lib/ask-action-label";
+import Animated, { withTiming } from "react-native-reanimated";
+import { CHAT_MOTION, useChatReducedMotion, usePressScaleStyle } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 import { NativeSymbol } from "./native-symbol";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type AskAction = { id: string; label: string; outcome?: "created" | "cancelled" };
 
@@ -59,32 +63,49 @@ export function CapsuleButton({
   hitSlop?: PressableProps["hitSlop"];
 }) {
   const tokens = useMobileTokens();
+  // 7e: the capsule presses in 0.95 — nothing at all under reduced motion
+  // (MA-10), not a fade substitute.
+  const reducedMotion = useChatReducedMotion();
+  const { scale, style: pressScaleStyle } = usePressScaleStyle();
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityActions={accessibilityActions}
       onAccessibilityAction={onAccessibilityAction}
       disabled={disabled}
       onPress={onPress}
-      hitSlop={hitSlop ?? (kind === "tertiary" ? TERTIARY_HIT_SLOP : undefined)}
-      style={{
-        alignSelf: "stretch",
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        height,
-        borderRadius: radii.pill,
-        paddingHorizontal: 16,
-        backgroundColor:
-          kind === "primary"
-            ? tokens.primary
-            : kind === "secondary"
-              ? tokens.secondary
-              : "transparent",
-        opacity: disabled ? 0.5 : 1,
+      onPressIn={() => {
+        if (!reducedMotion) {
+          scale.value = withTiming(CHAT_MOTION.capsulePressScale, {
+            duration: CHAT_MOTION.capsulePressMs,
+          });
+        }
       }}
+      onPressOut={() => {
+        if (!reducedMotion) scale.value = withTiming(1, { duration: CHAT_MOTION.capsulePressMs });
+      }}
+      hitSlop={hitSlop ?? (kind === "tertiary" ? TERTIARY_HIT_SLOP : undefined)}
+      style={[
+        {
+          alignSelf: "stretch",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          height,
+          borderRadius: radii.pill,
+          paddingHorizontal: 16,
+          backgroundColor:
+            kind === "primary"
+              ? tokens.primary
+              : kind === "secondary"
+                ? tokens.secondary
+                : "transparent",
+          opacity: disabled ? 0.5 : 1,
+        },
+        pressScaleStyle,
+      ]}
     >
       {icon}
       <Text
@@ -100,7 +121,7 @@ export function CapsuleButton({
       >
         {label}
       </Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

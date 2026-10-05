@@ -1,0 +1,352 @@
+#!/usr/bin/env bash
+# oc: run OpenCode coding jobs in the background, one git worktree per job.
+# The bot calls it as `bash <skill dir>/scripts/oc <command> ...`; SKILL.md lists the commands.
+# Output is short key=value lines because the bot reads it on every wake-up.
+set -euo pipefail
+shopt -s nullglob
+
+SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SELF="$SKILL_DIR/scripts/oc"
+JOBS="$HOME/oc-jobs"
+MAX_RUNNING=3
+STALL_MINUTES=10
+
+die() { echo "error: $*" >&2; exit 1; }
+meta() { cat "$1/$2" 2>/dev/null || true; }
+
+job_dir() {
+  [[ "$1" =~ ^[A-Za-z0-9-]+$ ]] || die "invalid job id: $1"
+  [[ -d "$JOBS/$1" ]] || die "no job $1 (run: oc status)"
+  echo "$JOBS/$1"
+}
+
+# The exit file wins over the pid: a finished job whose parent is a PID 1 that never reaps
+# stays a zombie, and kill -0 still succeeds on zombies.
+alive() {
+  local pid
+  [[ ! -e "$1/exit" ]] || return 1
+  pid=$(meta "$1" pid)
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+state() {
+  local d=$1
+  if alive "$d"; then
+    # ponytail: no output for STALL_MINUTES = stalled; a long silent test run can trip it.
+    if [[ -n "$(find "$d/log" -mmin +"$STALL_MINUTES" 2>/dev/null)" ]]; then echo stalled; else echo running; fi
+  elif [[ -e "$d/stopped" ]]; then echo stopped
+  elif [[ "$(meta "$d" exit)" == 0 ]]; then echo "done"
+  else echo failed
+  fi
+}
+
+running_count() {
+  local n=0 d
+  for d in "$JOBS"/*/; do alive "${d%/}" && n=$((n + 1)); done
+  echo "$n"
+}
+
+last_activity() {
+  tail -n 1 "$1/log" 2>/dev/null | jq -r '[.type, (.part.tool // empty)] | join(" ")' 2>/dev/null || true
+}
+
+# Run detail for `oc status ID --detail`: totals, OpenCode's latest todo list, the last steps.
+detail() {
+  jq -rs '
+    def short: tostring | gsub("\\s+"; " ") | .[0:120];
+    [.[] | select(.type == "tool_use") | .part] as $tools
+    | [.[] | select(.type == "step_finish") | .part] as $steps
+    | "steps=\($steps | length) tools=\($tools | length) failed_tools=\([$tools[] | select(.state.status == "error")] | length) tokens_in=\([$steps[].tokens.input // 0] | add // 0) tokens_out=\([$steps[].tokens.output // 0] | add // 0) cost=\([$steps[].cost // 0] | add // 0)",
+      ([$tools[] | select(.tool == "todowrite") | .state.input.todos] | last // empty
+        | "## Todo", (.[] | "[\(.status)] \(.content | short)")),
+      "## Recent",
+      ([.[] | select((.type == "tool_use" and .part.tool != "todowrite") or .type == "text" or .type == "error")] | .[-10:][]
+        | if .type == "tool_use" then "\(.part.tool)\(if .part.state.status == "error" then " (failed)" else "" end): \(.part.state.title // .part.state.input.description // .part.state.input.filePath // .part.state.input.command // "" | short)"
+          elif .type == "text" then "text: \(.part.text | short)"
+          else "error: \(.error.data.message // .error.name // .error | short)" end)
+  ' "$1/log" 2>/dev/null || true
+  if [[ -s "$1/stderr" ]]; then
+    echo "## Errors"
+    tail -n 5 "$1/stderr"
+  fi
+}
+
+last_text() {
+  jq -rs '[.[] | select(.type == "text") | .part.text] | last // empty' "$1/log" 2>/dev/null || true
+}
+
+# Starts the job's opencode run detached from the shell call: setsid leaves the process group
+# that the computer's command timeout kills, so the job outlives the 5-minute shell limit.
+launch() {
+  local d=$1
+  rm -f "$d/exit" "$d/stopped"
+  touch "$d/log"
+  setsid nohup bash "$SELF" _run "$d" >/dev/null 2>&1 </dev/null &
+  echo "$!" >"$d/pid"
+}
+
+run_job() {
+  local d=$1 v code=0
+  local args=(run --format json --dir "$(meta "$d" worktree)")
+  v=$(meta "$d" session)
+  if [[ -n "$v" ]]; then args+=(-s "$v"); else args+=(--title "$(meta "$d" title)"); fi
+  v=$(meta "$d" agent); [[ -z "$v" ]] || args+=(--agent "$v")
+  v=$(meta "$d" model); [[ -z "$v" ]] || args+=(-m "$v")
+  v=$(meta "$d" effort); [[ -z "$v" ]] || args+=(--variant "$v")
+  OPENCODE_CONFIG="$SKILL_DIR/$(meta "$d" config)" \
+    opencode "${args[@]}" "$(cat "$d/prompt.md")" >>"$d/log" 2>>"$d/stderr" || code=$?
+  if [[ -z "$(meta "$d" session)" ]]; then
+    jq -rn 'first(inputs | .sessionID? // empty)' "$d/log" >"$d/session" 2>/dev/null || true
+  fi
+  echo "$code" >"$d/exit"
+}
+
+# Unique against job dirs and against branches kept by `oc clean`.
+new_id() {
+  local root=$1 base id n=1
+  base=$(date +%m%d-%H%M%S)
+  id=$base
+  while [[ -e "$JOBS/$id" ]] || git -C "$root" show-ref -q --verify "refs/heads/oc/$id"; do
+    n=$((n + 1))
+    id="$base-$n"
+  done
+  echo "$id"
+}
+
+check_capacity() {
+  if (($(running_count) >= MAX_RUNNING)); then
+    echo "state=busy running=$MAX_RUNNING max=$MAX_RUNNING"
+    exit 0
+  fi
+}
+
+cmd_doctor() {
+  if ! command -v opencode >/dev/null; then echo "state=no_opencode"; return; fi
+  local auth
+  auth=$(opencode auth list 2>&1 | sed -E 's/\x1b\[[0-9;]*m//g' || true)
+  if grep -Eq '[1-9][0-9]* (credentials?|environment variables?)' <<<"$auth"; then
+    echo "state=ready"
+  else
+    echo "state=no_credentials"
+  fi
+  if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then echo "github=ok"; else echo "github=missing"; fi
+  echo "running=$(running_count) max=$MAX_RUNNING"
+}
+
+cmd_login() {
+  local args=() input=""
+  case "${1:-}" in
+    openai | chatgpt) args=(-p openai -m "ChatGPT Pro/Plus (headless)") ;;
+    copilot | github-copilot) args=(-p github-copilot); input=$'\r' ;;
+    *) die "usage: oc login openai|copilot" ;;
+  esac
+  local d="$JOBS/.login"
+  mkdir -p "$d"
+  : >"$d/log"
+  printf '%s' "$input" >"$d/input"
+  setsid nohup bash "$SELF" _login "$d" "${args[@]}" >/dev/null 2>&1 </dev/null &
+  local clean url code i
+  for ((i = 0; i < 30; i++)); do
+    sleep 1
+    clean=$(sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g' "$d/log")
+    url=$(grep -Eo 'https://[^ ]+' <<<"$clean" | head -n 1 || true)
+    code=$(grep -Eo 'Enter code: [A-Za-z0-9-]+' <<<"$clean" | head -n 1 | cut -d' ' -f3 || true)
+    if [[ -n "$url" && -n "$code" ]]; then
+      echo "url=$url"
+      echo "code=$code"
+      echo "expires_in_minutes=15"
+      return
+    fi
+  done
+  echo "state=login_failed"
+  tail -n 5 <<<"$clean"
+}
+
+run_login() {
+  local d=$1
+  shift
+  # The login prompt waits forever and ignores SIGTERM, hence SIGKILL after 15 minutes.
+  timeout -s KILL 900 opencode auth login "$@" <"$d/input" >"$d/log" 2>&1 || true
+}
+
+cmd_start() {
+  local repo="" brief="" push=0 plan=0 model="" effort=""
+  while (($#)); do
+    case "$1" in
+      --repo) repo=$2; shift 2 ;;
+      --brief) brief=$2; shift 2 ;;
+      --model) model=$2; shift 2 ;;
+      --effort) effort=$2; shift 2 ;;
+      --push) push=1; shift ;;
+      --plan) plan=1; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  [[ -n "$repo" && -n "$brief" ]] || die "usage: oc start --repo PATH --brief FILE [--push] [--plan] [--model M] [--effort high]"
+  [[ -f "$brief" ]] || die "brief not found: $brief"
+  local root
+  root=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null) || die "not a git repository: $repo"
+  check_capacity
+
+  mkdir -p "$JOBS"
+  local id d wt
+  id=$(new_id "$root")
+  d="$JOBS/$id"
+  wt="$d/repo"
+  mkdir "$d"
+  git -C "$root" worktree add -q -b "oc/$id" "$wt" HEAD || { rm -rf "$d"; die "could not create a working copy for $root"; }
+  echo "$root" >"$d/root"
+  echo "$wt" >"$d/worktree"
+  echo "oc/$id" >"$d/branch"
+  git -C "$wt" rev-parse HEAD >"$d/base"
+  date +%s >"$d/started"
+  cp "$brief" "$d/brief.md"
+  (grep -m 1 -E '\S' "$brief" | sed -E 's/^#+ *//' | cut -c 1-60) >"$d/title" || echo "Rakazo job $id" >"$d/title"
+  echo "$model" >"$d/model"
+  echo "$effort" >"$d/effort"
+  if ((push)); then echo opencode-push.json >"$d/config"; else echo opencode.json >"$d/config"; fi
+
+  {
+    cat "$brief"
+    printf '\n---\n\nRakazo job %s. Your working copy is %s, on branch %s.\n' "$id" "$wt" "oc/$id"
+    if ((plan)); then
+      echo readonly >"$d/agent"
+      printf 'This is a planning job: read the code, change nothing, and end with a short plan as your final message (approach, files involved, risks, open questions).\n'
+    else
+      printf 'Follow the own-the-task skill. Write your report to %s/REPORT.md.\n' "$d"
+      if ((push)); then
+        printf 'When the work is verified, push the branch and open a pull request.\n'
+      else
+        printf 'Commit on your branch. Do not push and do not open a pull request.\n'
+      fi
+    fi
+  } >"$d/prompt.md"
+
+  launch "$d"
+  echo "id=$id branch=oc/$id"
+}
+
+cmd_status() {
+  local ids=() d id detailed=0
+  for id in "$@"; do
+    if [[ "$id" == --detail ]]; then detailed=1; else ids+=("$id"); fi
+  done
+  if ((${#ids[@]} == 0)); then
+    for d in "$JOBS"/*/; do ids+=("$(basename "$d")"); done
+  fi
+  ((${#ids[@]})) || { echo "no jobs"; return; }
+  for id in "${ids[@]}"; do
+    d=$(job_dir "$id")
+    echo "id=$id state=$(state "$d") minutes=$((($(date +%s) - $(meta "$d" started)) / 60)) last=\"$(last_activity "$d")\""
+    ((!detailed)) || detail "$d"
+  done
+}
+
+cmd_result() {
+  local d wt base
+  d=$(job_dir "${1:?usage: oc result ID}")
+  wt=$(meta "$d" worktree)
+  base=$(meta "$d" base)
+  echo "state=$(state "$d") branch=$(meta "$d" branch)"
+  echo "## Report"
+  if [[ -s "$d/REPORT.md" ]]; then cat "$d/REPORT.md"; else last_text "$d"; fi
+  echo "## Commits"
+  git -C "$wt" log --oneline "$base..HEAD"
+  echo "## Uncommitted"
+  git -C "$wt" status --short
+  echo "## Diff"
+  git -C "$wt" diff --stat "$base"
+  if [[ "$(state "$d")" == failed && -s "$d/stderr" ]]; then
+    echo "## Errors"
+    tail -n 20 "$d/stderr"
+  fi
+}
+
+cmd_send() {
+  local id=${1:?usage: oc send ID FILE [--push]} file=${2:?usage: oc send ID FILE [--push]} d
+  d=$(job_dir "$id")
+  [[ ! -e "$d/review" ]] || die "$id is a review; send follow-ups to the job itself"
+  [[ -f "$file" ]] || die "file not found: $file"
+  if alive "$d"; then echo "state=running (wait until it finishes, or stop it)"; return; fi
+  [[ -n "$(meta "$d" session)" ]] || die "job $id has no OpenCode session to continue; start a new job"
+  check_capacity
+  cp "$file" "$d/prompt.md"
+  [[ "${3:-}" != --push ]] || echo opencode-push.json >"$d/config"
+  launch "$d"
+  echo "ok id=$id"
+}
+
+cmd_review() {
+  local id=${1:?usage: oc review ID} d r
+  d=$(job_dir "$id")
+  [[ "$id" != *-review ]] || die "$id is already a review"
+  if alive "$d"; then echo "state=running (review once it is done)"; return; fi
+  check_capacity
+  r="$JOBS/$id-review"
+  rm -rf "$r"
+  mkdir "$r"
+  cp "$d/root" "$d/worktree" "$d/branch" "$d/base" "$r/"
+  date +%s >"$r/started"
+  echo "Review $(meta "$d" title)" >"$r/title"
+  echo readonly >"$r/agent"
+  echo opencode.json >"$r/config"
+  echo shared >"$r/review"
+  {
+    printf 'Review the work on branch %s in %s against the brief below.\n' "$(meta "$d" branch)" "$(meta "$d" worktree)"
+    printf 'Look at everything since commit %s (git log and git diff from it, plus uncommitted changes), and run the checks and tests the repository uses. Change nothing.\n' "$(meta "$d" base)"
+    printf 'End your final message with three parts: "Verdict: ship", "Verdict: fix first" or "Verdict: redo"; the concrete problems, most serious first, each with its file; and each done criterion marked met, not met or unverified.\n\n'
+    printf '# Brief\n\n'
+    cat "$d/brief.md"
+    printf '\n\n# Report from the job\n\n'
+    meta "$d" REPORT.md
+  } >"$r/prompt.md"
+  launch "$r"
+  echo "id=$id-review"
+}
+
+cmd_stop() {
+  local d pid
+  d=$(job_dir "${1:?usage: oc stop ID}")
+  if ! alive "$d"; then echo "state=$(state "$d")"; return; fi
+  pid=$(meta "$d" pid)
+  touch "$d/stopped"
+  kill -TERM -- "-$pid" 2>/dev/null || true
+  sleep 2
+  kill -KILL -- "-$pid" 2>/dev/null || true
+  echo 143 >"$d/exit"
+  echo "stopped"
+}
+
+cmd_clean() {
+  local id=${1:?usage: oc clean ID [--force]} d wt
+  d=$(job_dir "$id")
+  if alive "$d"; then die "job $id is running; stop it first"; fi
+  if [[ ! -e "$d/review" ]]; then
+    wt=$(meta "$d" worktree)
+    if [[ "${2:-}" != --force && -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]]; then
+      die "job $id has uncommitted changes; add --force to drop them"
+    fi
+    git -C "$(meta "$d" root)" worktree remove --force "$wt" 2>/dev/null || true
+    git -C "$(meta "$d" root)" worktree prune
+    rm -rf "$JOBS/$id-review"
+  fi
+  echo "ok kept_branch=$(meta "$d" branch)"
+  rm -rf "$d"
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+  doctor) cmd_doctor ;;
+  login) cmd_login "$@" ;;
+  start) cmd_start "$@" ;;
+  status) cmd_status "$@" ;;
+  result) cmd_result "$@" ;;
+  send) cmd_send "$@" ;;
+  review) cmd_review "$@" ;;
+  stop) cmd_stop "$@" ;;
+  clean) cmd_clean "$@" ;;
+  _run) run_job "$@" ;;
+  _login) run_login "$@" ;;
+  *) echo "usage: oc doctor|login|start|status|result|send|review|stop|clean" ;;
+esac

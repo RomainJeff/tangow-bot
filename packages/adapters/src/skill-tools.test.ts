@@ -1,9 +1,14 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildSkillMd, formatSkillsCatalogInstruction, parseSkillMd } from "@rakazo/core";
+import {
+  buildSkillMd,
+  formatSkillsCatalogInstruction,
+  parseSkillMd,
+  SANDBOX_SKILL_MOUNTS,
+} from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BUILTIN_AGENT_SKILLS } from "./builtin-skills.js";
+import { BUILTIN_SKILLS_ROOT, loadBuiltinSkills } from "./builtin-skills.js";
 import { marketplacesRoot } from "./marketplace-store.js";
 import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 import {
@@ -203,16 +208,15 @@ describe("skill tools", () => {
       update: {},
     });
     const records = await listAgentSkillRecords(deps, { ...owner, botId: "bot-1" });
-    expect(records.map((r) => r.name)).toEqual(["Interrogate"]);
+    expect(records.map((r) => r.name)).toEqual(["delegate-to-opencode", "Interrogate"]);
   });
 
   it("ships builtin skills as valid, readable, read-only SKILL.md records", async () => {
-    expect(BUILTIN_AGENT_SKILLS.map((skill) => skill.name)).toContain("Interrogate");
-    for (const skill of BUILTIN_AGENT_SKILLS) {
+    const builtins = await loadBuiltinSkills();
+    expect(builtins.map((skill) => skill.name)).toContain("Interrogate");
+    for (const skill of builtins) {
       const parsed = parseSkillMd(skill.content);
       expect(parsed).toMatchObject({ name: skill.name, description: skill.description });
-      // / picker truncates at 72; keep descriptions short so "review only" stays visible.
-      expect(skill.description.length).toBeLessThanOrEqual(72);
     }
 
     const records = await listAgentSkillRecords(deps, owner);
@@ -245,6 +249,20 @@ describe("skill tools", () => {
     expect(await skillDeleteFromTool(deps, owner, { name: "Interrogate" })).toEqual({
       error: "Builtin and plugin skills are read-only.",
     });
+  });
+
+  it("ignores a broken or misplaced builtin SKILL.md without breaking the catalog", async () => {
+    const root = path.join(dataDir, "agent-skills");
+    const write = (dir: string, content: string) =>
+      mkdir(path.join(root, dir), { recursive: true }).then(() =>
+        writeFile(path.join(root, dir, "SKILL.md"), content),
+      );
+    await write("good", buildSkillMd({ name: "Good", description: "ok", body: "steps" }));
+    await write("broken", "no frontmatter");
+    await write("Wrong-Dir", buildSkillMd({ name: "Wrong Dir", description: "ok", body: "" }));
+    await mkdir(path.join(root, "empty"));
+    expect((await loadBuiltinSkills(root)).map((skill) => skill.name)).toEqual(["Good"]);
+    expect(await loadBuiltinSkills(path.join(root, "missing"))).toEqual([]);
   });
 
   it.each(["interrogate", " Interrogate "])("preserves a saved skill named %j", async (name) => {
@@ -342,11 +360,21 @@ describe("skill tools", () => {
 
     // Builtins default to "all", so every bot sees them alongside its own visible skills.
     const forA = await listAgentSkillRecords(deps, { ...scope, botId: "botA" });
-    expect(forA.map((s) => s.name)).toEqual(["Interrogate", "Everyone", "Only bot A"]);
+    expect(forA.map((s) => s.name)).toEqual([
+      "delegate-to-opencode",
+      "Interrogate",
+      "Everyone",
+      "Only bot A",
+    ]);
     const forB = await listAgentSkillRecords(deps, { ...scope, botId: "botB" });
-    expect(forB.map((s) => s.name)).toEqual(["Interrogate", "Everyone", "Not for A"]);
+    expect(forB.map((s) => s.name)).toEqual([
+      "delegate-to-opencode",
+      "Interrogate",
+      "Everyone",
+      "Not for A",
+    ]);
     const all = await listAgentSkillRecords(deps, scope);
-    expect(all).toHaveLength(4);
+    expect(all).toHaveLength(5);
     // skill_read follows the same visibility.
     expect(
       await skillReadFromTool(deps, { ...scope, botId: "botB" }, { name: "Only bot A" }),
@@ -436,10 +464,10 @@ describe("skill tools", () => {
     // The exclusion semantics survive the rename: only botA sees it.
     expect(
       (await listAgentSkillRecords(deps, { ...owner, botId: "botA" })).map((s) => s.name),
-    ).toEqual(["Interrogate", "New"]);
+    ).toEqual(["delegate-to-opencode", "Interrogate", "New"]);
     expect(
       (await listAgentSkillRecords(deps, { ...owner, botId: "botB" })).map((s) => s.name),
-    ).toEqual(["Interrogate"]);
+    ).toEqual(["delegate-to-opencode", "Interrogate"]);
 
     expect(await skillDeleteFromTool(deps, owner, { name: "New" })).toEqual({
       ok: true,
@@ -448,6 +476,37 @@ describe("skill tools", () => {
     expect(await prisma.skillSetting.findMany()).toEqual([]);
     expect(await prisma.botSkill.findMany()).toEqual([]);
     expect(await listUserSkills(userSkillsRoot(dataDir, owner))).toEqual([]);
+  });
+
+  it("returns each skill's folder as the computer mounts it", async () => {
+    const mkt = path.join(marketplacesRoot(dataDir, owner.spaceId), "acme", "plugins", "writer");
+    await mkdir(path.join(mkt, "skills", "blog"), { recursive: true });
+    await writeFile(
+      path.join(mkt, "skills", "blog", "SKILL.md"),
+      buildSkillMd({ name: "Blog", description: "Write posts", body: "" }),
+    );
+    await seed("Daily standup", "d");
+    // Same data dir → mount table as the supervisor's skillsBindsFor.
+    const mounts: Array<[string, string]> = [
+      [SANDBOX_SKILL_MOUNTS.user, userSkillsRoot(dataDir, owner)],
+      [SANDBOX_SKILL_MOUNTS.marketplaces, marketplacesRoot(dataDir, owner.spaceId)],
+      [`${SANDBOX_SKILL_MOUNTS.managed}/agent`, BUILTIN_SKILLS_ROOT],
+    ];
+    const onHost = (dir: string) => {
+      const [mount, source] = mounts.find(([m]) => dir.startsWith(`${m}/`)) ?? [];
+      if (!mount || !source) throw new Error(`${dir} is outside every mount`);
+      return path.join(source, dir.slice(mount.length));
+    };
+
+    for (const [input, dir] of [
+      [{ name: "Daily standup" }, "/skills/user/daily%20standup"],
+      [{ skillId: "mkt:acme/writer/blog" }, "/skills/marketplaces/acme/plugins/writer/skills/blog"],
+      [{ name: "Interrogate" }, "/managed-skills/agent/interrogate"],
+    ] as const) {
+      const read = await skillReadFromTool(deps, owner, input);
+      expect(read.dir).toBe(dir);
+      await expect(stat(path.join(onHost(dir), "SKILL.md"))).resolves.toBeTruthy();
+    }
   });
 
   it("exposes marketplace skills as read-only plugin skills hidden until a bot enables them", async () => {

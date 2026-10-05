@@ -66,6 +66,12 @@ describe("threadTimeMarkerLabel", () => {
     );
   });
 
+  it("says the day alone when asked to", () => {
+    const dayOnly = { ...labels, now, withTime: false };
+    expect(threadTimeMarkerLabel(localIso(2026, 9, 4, 9, 5), dayOnly)).toBe("Today");
+    expect(threadTimeMarkerLabel(localIso(2026, 9, 2, 19, 19), dayOnly)).toBe("Wed, Sep 2");
+  });
+
   it("returns an empty label for an unparsable timestamp", () => {
     expect(threadTimeMarkerLabel("not-a-date", { ...labels, now })).toBe("");
   });

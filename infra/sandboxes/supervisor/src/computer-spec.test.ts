@@ -170,7 +170,7 @@ describe("graphical computer spec", () => {
     const start = readFileSync(path.join(root, "start.sh"), "utf8");
     const browser = readFileSync(path.join(root, "rakazo-browser"), "utf8");
     const desktop = readFileSync(path.join(root, "rakazo-browser.desktop"), "utf8");
-    expect(dockerfile).toMatch(/chromium/);
+    expect(dockerfile).toMatch(/google-chrome-stable/);
     expect(dockerfile).toMatch(/rakazo-browser\.desktop/);
     expect(dockerfile).toMatch(/control.py/);
     expect(dockerfile).toMatch(/USER 1000:1000/);
@@ -185,18 +185,52 @@ describe("graphical computer spec", () => {
     expect(start).toMatch(/failed to register rakazo-browser/);
     expect(start).toMatch(/failed to set default web browser/);
     expect(start).toMatch(/xdg-settings set default-web-browser rakazo-browser\.desktop/);
+    expect(start).toMatch(/register_handler pcmanfm\.desktop inode\/directory/);
+    expect(start).toMatch(/register_handler libreoffice-writer\.desktop/);
+    expect(start).toMatch(/register_handler libreoffice-calc\.desktop/);
+    expect(start).toMatch(/register_handler libreoffice-impress\.desktop/);
+    expect(start).toMatch(/-f "\/usr\/share\/applications\/\$desktop"/);
+    expect(start).toMatch(/failed to register \$desktop/);
+    expect(dockerfile).toMatch(/UserInstallation=file:\/\/\/tmp\//);
     expect(start).not.toMatch(/xdg-mime default rakazo-browser\.desktop .*\|\| true/);
     expect(start).toMatch(/x11vnc .* -viewonly /);
-    expect(browser).toMatch(/\.browser-profiles\/chromium/);
-    expect(browser).toMatch(/chromium-screen-\$DISPLAY_NUM/);
+    expect(browser).toMatch(/\.browser-profiles\/chrome"/);
+    expect(browser).toMatch(/chrome-screen-\$DISPLAY_NUM/);
     expect(browser).toMatch(/USER_DATA_DIR_SET/);
     expect(browser).toMatch(/RAKAZO_BROWSER_PROFILE/);
     expect(desktop).toMatch(/Exec=\/usr\/local\/bin\/rakazo-browser %U/);
+    const terminal = readFileSync(path.join(root, "rakazo-terminal"), "utf8");
+    const menu = readFileSync(path.join(root, "fluxbox.menu"), "utf8");
+    expect(dockerfile).toMatch(/xfce4-terminal/);
+    expect(dockerfile).not.toMatch(/^\s+xterm \\$/m);
+    expect(dockerfile).toMatch(/--shell \/bin\/zsh rakazo/);
+    expect(terminal).toMatch(/exec xfce4-terminal --disable-server$/m);
+    expect(menu).toMatch(/\(Terminal\) \{rakazo-terminal\}/);
+    expect(start).toMatch(/source \/etc\/rakazo\/zshrc/);
     expect(dockerfile).toMatch(/rakazo-page-browser/);
     expect(browser).toMatch(/remote-debugging-port/);
     expect(desktop).toMatch(/x-scheme-handler\/http/);
     expect(desktop).toMatch(/x-scheme-handler\/https/);
     expect(start).not.toMatch(/windowsize 1280 800/);
+  });
+
+  it("ships developer tooling with a verified Node and gh as git's GitHub credential helper", () => {
+    const root = path.resolve(import.meta.dirname, "../../computer");
+    const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
+    for (const pkg of ["git", "gh", "build-essential", "python3-venv", "ripgrep"]) {
+      expect(dockerfile).toMatch(new RegExp(`^\\s+${pkg} \\\\$`, "m"));
+    }
+    expect(dockerfile).toMatch(/signed-by=\/usr\/share\/keyrings\/githubcli-archive-keyring\.gpg/);
+    expect(dockerfile).toMatch(/sha256sum -c -/);
+    expect(dockerfile).toMatch(/NODE_SHA256_AMD64=[0-9a-f]{64}/);
+    expect(dockerfile).toMatch(/NODE_SHA256_ARM64=[0-9a-f]{64}/);
+    expect(dockerfile).toMatch(
+      /credential\.https:\/\/github\.com\.helper '!\/usr\/bin\/gh auth git-credential'/,
+    );
+    // Tooling installs as root before the image drops to the unprivileged user.
+    expect(dockerfile.indexOf("gh auth git-credential")).toBeLessThan(
+      dockerfile.indexOf("USER 1000:1000"),
+    );
   });
 
   it.skipIf(process.platform === "win32")(
@@ -207,10 +241,10 @@ describe("graphical computer spec", () => {
       const bin = path.join(temp, "bin");
       const capture = path.join(temp, "args");
       const home = path.join(temp, "home");
-      const chromium = path.join(bin, "chromium");
+      const chrome = path.join(bin, "google-chrome-stable");
       mkdirSync(bin);
-      writeFileSync(chromium, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
-      chmodSync(chromium, 0o755);
+      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
+      chmodSync(chrome, 0o755);
 
       const run = (display: string, args: string[] = []) => {
         const result = spawnSync("sh", [path.join(root, "rakazo-browser"), ...args], {
@@ -228,22 +262,20 @@ describe("graphical computer spec", () => {
       };
 
       try {
-        expect(run(":1")).toContain(`--user-data-dir=${home}/.browser-profiles/chromium`);
+        expect(run(":1")).toContain(`--user-data-dir=${home}/.browser-profiles/chrome`);
         expect(run(":1").some((arg) => arg.startsWith("--remote-debugging-port="))).toBe(true);
-        expect(run(":2")).toContain(`--user-data-dir=${home}/.browser-profiles/chromium-screen-2`);
+        expect(run(":2")).toContain(`--user-data-dir=${home}/.browser-profiles/chrome-screen-2`);
         expect(run(":2")).toContain("--remote-debugging-port=9223");
         for (const display of [8, 9]) {
           const args = run(`:0${display}.0`);
           expect(args).toContain(`--remote-debugging-port=${9221 + display}`);
           expect(args).toContain(
-            `--user-data-dir=${home}/.browser-profiles/chromium-screen-${display}`,
+            `--user-data-dir=${home}/.browser-profiles/chrome-screen-${display}`,
           );
         }
         const explicit = run(":3", [`--user-data-dir=${home}/custom-profile`]);
         expect(explicit).toContain(`--user-data-dir=${home}/custom-profile`);
-        expect(explicit).not.toContain(
-          `--user-data-dir=${home}/.browser-profiles/chromium-screen-3`,
-        );
+        expect(explicit).not.toContain(`--user-data-dir=${home}/.browser-profiles/chrome-screen-3`);
       } finally {
         rmSync(temp, { recursive: true, force: true });
       }
@@ -257,13 +289,13 @@ describe("graphical computer spec", () => {
       const temp = mkdtempSync(path.join(tmpdir(), "rakazo-browser-crash-"));
       const bin = path.join(temp, "bin");
       const home = path.join(temp, "home");
-      const chromium = path.join(bin, "chromium");
+      const chrome = path.join(bin, "google-chrome-stable");
       const capture = path.join(temp, "args");
       mkdirSync(bin);
-      writeFileSync(chromium, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
-      chmodSync(chromium, 0o755);
+      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
+      chmodSync(chrome, 0o755);
 
-      const profile = path.join(home, ".browser-profiles/chromium");
+      const profile = path.join(home, ".browser-profiles/chrome");
       const prefsDir = path.join(profile, "Default");
       mkdirSync(prefsDir, { recursive: true });
       const prefsPath = path.join(prefsDir, "Preferences");
@@ -574,10 +606,25 @@ describe("graphical computer spec", () => {
           "assert allow(['env', 'DISPLAY=:2', 'xdg-open', 'https://example.com'], ':2')",
           "assert allow(['env', 'DISPLAY=:1', 'rakazo-browser'], ':1')",
           "assert allow(['env', 'DISPLAY=:2', 'rakazo-browser', 'https://example.com'], ':2')",
-          "assert allow(['env', 'DISPLAY=:1', 'xterm'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'rakazo-terminal'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'rakazo-terminal', 'id'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'rakazo-terminal', '-x'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'xterm'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'pcmanfm', '/home/rakazo'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazo/report.docx'], ':1')",
+          "assert long_lived(['env', 'DISPLAY=:1', 'libreoffice'])",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '--accept=socket,port=2002;urp;'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'macro:///Standard.Module1.Main'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'vnd.sun.star.script:Lib.Mod.Main?language=Basic&location=application'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'https://example.com/x.docx'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'file:///etc/passwd'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/etc/passwd'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazo/../../etc/passwd'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazoevil/x.docx'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'pcmanfm', '/etc'], ':1')",
           "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser'])",
           "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser', 'https://example.com'])",
-          "assert long_lived(['env', 'DISPLAY=:1', 'xterm'])",
+          "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-terminal'])",
           "assert long_lived(['env', 'DISPLAY=:1', 'xdg-open', 'https://example.com'])",
           "assert not long_lived(['env', 'DISPLAY=:1', 'xdotool', 'key', '--clearmodifiers', 'a'])",
           "assert not allow(['env', 'DISPLAY=:1', 'chromium', 'https://example.com'], ':1')",
@@ -682,9 +729,9 @@ describe("computer resource limits", () => {
 
   it("caps memory and cpu by default and keeps #343's pids ceiling", () => {
     const { HostConfig } = containerCreateOptions(createInput);
-    expect(HostConfig.Memory).toBe(2 * 1024 ** 3);
+    expect(HostConfig.Memory).toBe(8 * 1024 ** 3);
     expect(HostConfig.MemorySwap).toBe(HostConfig.Memory);
-    expect(HostConfig.NanoCpus).toBe(2 * 1e9);
+    expect(HostConfig.NanoCpus).toBe(4 * 1e9);
     expect(HostConfig.PidsLimit).toBe(2048);
   });
 

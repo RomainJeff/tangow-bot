@@ -18,7 +18,6 @@ import {
   runJobKey,
 } from "@rakazo/adapter-kit";
 import type {
-  CloudAgentConnection,
   ComposioProvider,
   ComputerExecutionLease,
   ConnectorRegistry,
@@ -68,6 +67,7 @@ import {
   replaceComputer,
   resolveAutoReviewChecker,
   resolveBotWorkspacePath,
+  sandboxSkillDir,
   sanitizeComposioError,
   sanitizeConnectorError,
   savePushToken,
@@ -464,7 +464,6 @@ function mcpAssignmentDto(row: {
 }
 
 export interface RouterDeps {
-  cloudAgent?: CloudAgentConnection | null;
   prisma: PrismaClient;
   events: ThreadEvents;
   auth: Auth;
@@ -2618,7 +2617,7 @@ export function createRouter(deps: RouterDeps) {
           if (existing) return { runId: existing.id };
         }
         const skillRecords = await agentSkills.listWithContent(context.actor, routine.botId);
-        const prompt = expandSkillReferencesInPrompt(routine.prompt, skillRecords);
+        const prompt = expandSkillReferencesInPrompt(routine.prompt, skillRecords, sandboxSkillDir);
         let run: { id: string };
         try {
           // Task + run must commit together so a nonce collision cannot leave an orphan queued Task.

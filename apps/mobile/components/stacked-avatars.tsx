@@ -5,6 +5,7 @@ import { useThemedStyles } from "../lib/native";
 import type { StackedAvatarSize } from "../lib/stacked-avatars-layout";
 import { STACKED_AVATAR_OVERLAP, stackedAvatarsLayout } from "../lib/stacked-avatars-layout";
 import { nativeTextStyle } from "../lib/typography";
+import type { BotAvatarGlance } from "./bot-avatar";
 import { BotAvatar } from "./bot-avatar";
 
 export type { StackedAvatarSize };
@@ -14,6 +15,8 @@ export interface StackedAvatarItem {
   identity?: string;
   working?: boolean;
   shapeSeed?: number | null;
+  /** 7f: this item's bloub glances once toward the other item, at mount. */
+  glance?: BotAvatarGlance;
 }
 
 export interface StackedAvatarsProps extends Omit<ViewProps, "children"> {
@@ -27,6 +30,15 @@ export interface StackedAvatarsProps extends Omit<ViewProps, "children"> {
    * right when the sentence beside it already names the bots.
    */
   label?: string;
+  /**
+   * `28`-size header variant (design contract §C/§D): the overflow beyond
+   * `max` renders as a round `+n` pill (`muted` fill, 12/600 `foreground`, 2px
+   * `background` ring) instead of the plain `+N` label every other stack size
+   * uses.
+   */
+  pillOverflow?: boolean;
+  /** Forwarded to each `BotAvatar`: rest on one frame, for stacks repeated down a thread. */
+  still?: boolean;
 }
 
 /**
@@ -38,6 +50,8 @@ export function StackedAvatars({
   size,
   max = 3,
   label,
+  pillOverflow = false,
+  still = false,
   style,
   ...props
 }: StackedAvatarsProps) {
@@ -65,10 +79,25 @@ export function StackedAvatars({
             shapeSeed={item.shapeSeed}
             size={size}
             status={item.working ? "running" : undefined}
+            glance={item.glance}
+            still={still}
           />
         </View>
       ))}
-      {overflow > 0 ? <Text style={styles.overflow}>{`+${overflow}`}</Text> : null}
+      {overflow > 0 ? (
+        pillOverflow ? (
+          <View
+            style={[
+              styles.pill,
+              { width: size, height: size, borderRadius: size / 2, marginStart: -overlap },
+            ]}
+          >
+            <Text style={styles.pillText}>{`+${overflow}`}</Text>
+          </View>
+        ) : (
+          <Text style={styles.overflow}>{`+${overflow}`}</Text>
+        )
+      ) : null}
     </View>
   );
 }
@@ -84,6 +113,18 @@ function createStackedAvatarsStyles() {
       paddingStart: 4,
       color: tokens.mutedForeground,
       ...nativeTextStyle("label"),
+    },
+    pill: {
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: tokens.muted,
+      borderWidth: 2,
+      borderColor: tokens.background,
+    },
+    pillText: {
+      color: tokens.foreground,
+      fontSize: 12,
+      fontWeight: "600",
     },
   });
 }

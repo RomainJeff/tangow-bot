@@ -7,17 +7,19 @@ import {
   isSkillVisible,
   mergeBuiltinSkills,
   parseSkillMd,
+  SANDBOX_SKILL_MOUNTS,
   type SkillRecord,
   userSkillKey,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
-import { BUILTIN_AGENT_SKILLS } from "./builtin-skills.js";
+import { loadBuiltinSkills } from "./builtin-skills.js";
 import { listMarketplaceSkills, marketplacesRoot } from "./marketplace-store.js";
 import {
   isExists,
   listUserSkills,
   removeUserSkill,
   renameUserSkill,
+  skillDirName,
   userSkillsRoot,
   writeUserSkill,
 } from "./skill-store.js";
@@ -43,8 +45,8 @@ type SkillOwner = {
 
 export type SkillToolDeps = { prisma: PrismaClient; dataDir: string };
 
-function builtinRecords(): Array<SkillRecord & { id: string }> {
-  return BUILTIN_AGENT_SKILLS.map((skill) => ({
+async function builtinRecords(): Promise<Array<SkillRecord & { id: string }>> {
+  return (await loadBuiltinSkills()).map((skill) => ({
     id: `builtin:${skill.name}`,
     name: skill.name,
     description: skill.description,
@@ -52,6 +54,19 @@ function builtinRecords(): Array<SkillRecord & { id: string }> {
     source: "builtin" as const,
     readOnly: true,
   }));
+}
+
+/** The skill's folder inside the computer, derived from its id the way the mounts lay it out. */
+export function sandboxSkillDir(skill: { id: string; name: string }): string {
+  if (isMarketplaceSkillKey(skill.id)) {
+    const [marketplace, plugin, slug] = skill.id.slice("mkt:".length).split("/");
+    if (!marketplace || !plugin || !slug) throw new Error(`Malformed skill id ${skill.id}`);
+    return `${SANDBOX_SKILL_MOUNTS.marketplaces}/${marketplace}/plugins/${plugin}/skills/${slug}`;
+  }
+  if (skill.id.startsWith("builtin:")) {
+    return `${SANDBOX_SKILL_MOUNTS.managed}/agent/${skillDirName(skill.name)}`;
+  }
+  return `${SANDBOX_SKILL_MOUNTS.user}/${skillDirName(skill.name)}`;
 }
 
 function readOnlyError(skill: {
@@ -89,13 +104,14 @@ export async function listAgentSkillRecords(
   deps: SkillToolDeps,
   owner: SkillOwner,
 ): Promise<Array<SkillRecord & { id: string }>> {
-  const [userSkills, marketplaceSkills] = await Promise.all([
+  const [builtins, userSkills, marketplaceSkills] = await Promise.all([
+    builtinRecords(),
     listUserSkills(userSkillsRoot(deps.dataDir, owner)),
     listMarketplaceSkills(marketplacesRoot(deps.dataDir, owner.spaceId)),
   ]);
   // Builtins join the catalog before filtering: a user skill shadows a same-named builtin,
   // and per-bot availability applies to builtins too.
-  const records = mergeBuiltinSkills(builtinRecords(), [...userSkills, ...marketplaceSkills]);
+  const records = mergeBuiltinSkills(builtins, [...userSkills, ...marketplaceSkills]);
   return owner.botId ? await onlyVisibleTo(deps.prisma, owner, owner.botId, records) : records;
 }
 
@@ -147,6 +163,7 @@ export async function skillReadFromTool(
     source: skill.source,
     readOnly: skill.readOnly,
     content: skill.content,
+    dir: sandboxSkillDir(skill),
   };
 }
 

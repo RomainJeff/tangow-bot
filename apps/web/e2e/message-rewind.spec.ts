@@ -1,5 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+
+// Edit and resend sits under your own bubble on hover. Incoming replies can
+// scroll the row away from the pointer, so hover again until the click lands.
+async function editAndResend(row: Locator) {
+  await expect(async () => {
+    await row.hover();
+    await row.getByRole("button", { name: "Edit and resend" }).click({ timeout: 2_000 });
+  }).toPass();
+}
 
 test("edit and resend rewinds the thread to the edited message", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -23,10 +32,7 @@ test("edit and resend rewinds the thread to the edited message", async ({ page }
   const secondRow = transcript.locator("[data-message-id]").filter({ hasText: secondText }).first();
   await expect(secondRow).toBeVisible({ timeout: 20_000 });
 
-  // Edit and resend lives inside More at every pointer density.
-  await firstRow.hover();
-  await firstRow.getByRole("button", { name: "More" }).click();
-  await page.getByRole("menuitem", { name: "Edit and resend" }).click();
+  await editAndResend(firstRow);
 
   const chip = page.getByTestId("rewind-chip");
   await expect(chip).toBeVisible();
@@ -41,9 +47,7 @@ test("edit and resend rewinds the thread to the edited message", async ({ page }
   await expect(chip).toHaveCount(0);
   await expect(secondRow).toBeVisible();
 
-  await firstRow.hover();
-  await firstRow.getByRole("button", { name: "More" }).click();
-  await page.getByRole("menuitem", { name: "Edit and resend" }).click();
+  await editAndResend(firstRow);
   await expect(page.getByTestId("rewind-chip")).toBeVisible();
   await composer.fill(editedText);
   await composer.press("Enter");

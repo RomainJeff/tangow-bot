@@ -244,7 +244,7 @@ function BloubAvatar({
   // from the body luminance, and ink a pale body's outline so it stays visible.
   const { paper, outline } = avatarInk(color);
   const VB = BLOUB_HALF_VIEWBOX;
-  const maskId = `${uid}-mask`;
+  const clipId = `${uid}-clip`;
   const dots = (
     <g>
       {frame.dots.map((dot, index) => {
@@ -291,16 +291,10 @@ function BloubAvatar({
       }}
     >
       <defs>
-        {/* The eyes are holes punched in the body, so the silhouette clips them. */}
-        <mask id={maskId} maskUnits="userSpaceOnUse" x={-VB} y={-VB} width={VB * 2} height={VB * 2}>
-          <path d={frame.bodyPath} fill="#fff" />
-          {frame.eyes.map((eye, index) => (
-            <path key={index} d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill="#000" />
-          ))}
-          {frame.notch ? (
-            <circle cx={frame.notch.x} cy={frame.notch.y} r={frame.notch.r} fill="#000" />
-          ) : null}
-        </mask>
+        {/* The eyes are holes in the body, so the silhouette clips them. */}
+        <clipPath id={clipId}>
+          <path d={frame.bodyPath} />
+        </clipPath>
         {frame.arcs.map((arc) => (
           <linearGradient
             key={arc.id}
@@ -320,16 +314,16 @@ function BloubAvatar({
       {arcs("back")}
       {frame.dotsBehind ? dots : null}
       <g opacity={frame.bodyAlpha}>
-        {/* Opaque backing in the body shape: what the eye holes show through. */}
-        <path d={frame.bodyPath} fill={paper} />
-        <rect
-          x={-VB}
-          y={-VB}
-          width={VB * 2}
-          height={VB * 2}
-          fill={color}
-          mask={`url(#${maskId})`}
-        />
+        {/* Paint the eyes over the ink rather than punching them through to a paper
+            backing: a backing under the whole body bleeds through the antialiased
+            silhouette as a dark fringe. */}
+        <path d={frame.bodyPath} fill={color} />
+        <g clipPath={`url(#${clipId})`} fill={paper}>
+          {frame.eyes.map((eye, index) => (
+            <path key={index} d={eye.d} transform={eye.matrix} opacity={eye.alpha} />
+          ))}
+          {frame.notch ? <circle cx={frame.notch.x} cy={frame.notch.y} r={frame.notch.r} /> : null}
+        </g>
         {outline ? (
           <path d={frame.bodyPath} fill="none" stroke={outline} strokeWidth={RAYON * 0.06} />
         ) : null}
