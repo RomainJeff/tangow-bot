@@ -46,10 +46,12 @@ describe("desktop preload bridge", () => {
       "toggleMaximize",
     ]);
     expect(Object.keys(bridge.update).sort()).toEqual(["check", "download", "install", "state"]);
+    expect(Object.keys(bridge.pageHead ?? {}).sort()).toEqual(["cancel", "read"]);
 
     await bridge.oauth.open?.("https://provider.example.com/authorize");
     await bridge.oauth.cancel?.("https://provider.example.com/authorize");
-    await bridge.pageHead?.read("https://news.example.com/a");
+    await bridge.pageHead?.read("https://news.example.com/a", "page-head-1");
+    await bridge.pageHead?.cancel?.("page-head-1");
     await bridge.window.close();
     await bridge.window.minimize();
     await bridge.window.toggleMaximize();
@@ -62,6 +64,7 @@ describe("desktop preload bridge", () => {
       "desktop.oauth.open",
       "desktop.oauth.cancel",
       "desktop.pageHead.read",
+      "desktop.pageHead.cancel",
       "desktop.window.close",
       "desktop.window.minimize",
       "desktop.window.toggleMaximize",
@@ -71,6 +74,12 @@ describe("desktop preload bridge", () => {
       "desktop.update.download",
       "desktop.update.install",
     ]);
+    expect(invoke).toHaveBeenCalledWith(
+      "desktop.pageHead.read",
+      "https://news.example.com/a",
+      "page-head-1",
+    );
+    expect(invoke).toHaveBeenCalledWith("desktop.pageHead.cancel", "page-head-1");
   });
 
   it("keeps setup off the app bridge so a connected server cannot re-point the app", () => {

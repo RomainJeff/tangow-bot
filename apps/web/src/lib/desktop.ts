@@ -12,16 +12,28 @@ export function desktopBridge(): RakazoDesktop | undefined {
   return typeof window === "undefined" ? undefined : window.rakazoDesktop;
 }
 
+let pageHeadReads = 0;
+
 /**
  * The start of a page as this computer reads it, for a link the server was refused. Only the
  * desktop app can (a browser cannot read another site); anywhere else, or on an older desktop,
- * it is null and the server's card stays.
+ * it is null and the server's card stays. Aborting `signal` stops the read on the desktop, so a
+ * link pasted over another does not wait for a slot.
  */
-export function readPageHeadOnDesktop(
+export async function readPageHeadOnDesktop(
   url: string,
+  signal: AbortSignal,
 ): Promise<{ head: string; contentType: string } | null> {
   const bridge = desktopBridge()?.pageHead;
-  return bridge ? bridge.read(url) : Promise.resolve(null);
+  if (!bridge || signal.aborted) return null;
+  const id = `page-head-${++pageHeadReads}`;
+  const cancel = () => void bridge.cancel?.(id);
+  signal.addEventListener("abort", cancel, { once: true });
+  try {
+    return await bridge.read(url, id);
+  } finally {
+    signal.removeEventListener("abort", cancel);
+  }
 }
 
 /** The compact `code#state` form the manual paste flow already accepts. */
