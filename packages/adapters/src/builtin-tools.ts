@@ -167,6 +167,21 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "edit_file",
+    description:
+      "Replace exact text in a UTF-8 file in this bot's home. old_text must match the current file exactly (copy it from read_file) and be unique unless replace_all is true. Prefer it over write_file for changes to an existing file. On a Team Computer, relative paths use the bot folder; use shared/... only for work other bots should share.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        old_text: { type: "string" },
+        new_text: { type: "string" },
+        replace_all: { type: "boolean" },
+      },
+      required: ["path", "old_text", "new_text"],
+    },
+  },
+  {
     name: "attach_file",
     description:
       "Attach a workspace file from this bot's home to the chat thread as an image or common file. The file stays in place; users can open it from the message.",

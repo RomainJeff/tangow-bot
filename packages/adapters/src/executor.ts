@@ -206,6 +206,8 @@ import { sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
+import type { TextEditResult } from "./file-text.js";
+import { applyTextEdit } from "./file-text.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import type { HistoryWindowMode } from "./history-compaction.js";
 import {
@@ -353,6 +355,12 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "list_secrets",
 ]);
 const MAX_MODEL_FILE_BYTES = 250_000;
+const EDIT_FILE_ERRORS: Record<Extract<TextEditResult, { ok: false }>["error"], string> = {
+  empty_old_text: "old_text is empty; pass the exact text to replace",
+  not_found: "old_text not found; read the file again with read_file and copy the text exactly",
+  ambiguous:
+    "old_text matches several places; include more surrounding text or set replace_all to true",
+};
 const TURN_ATTACHMENT_UNAVAILABLE =
   "An attachment in this message could not be loaded. Tell the user the attachment was unavailable and do not guess its contents.";
 const STEERING_ATTACHMENT_UNAVAILABLE = TURN_ATTACHMENT_UNAVAILABLE;
@@ -2515,6 +2523,46 @@ export function createRunExecutor(deps: ExecutorDeps) {
               context,
             );
             return finish({ ok: true, path: filePath });
+          }
+          if (name === "edit_file") {
+            const filePath = String(args.path ?? "");
+            const storedPath = resolveBotWorkspacePath(computerMode, bot.id, filePath);
+            let bytes: Uint8Array;
+            try {
+              bytes = await deps.sandbox.readFile(computer, storedPath, context, {
+                maxBytes: ATTACHMENT_MAX_BYTES,
+              });
+            } catch (error) {
+              if (error instanceof Error && /exceeds \d+ bytes/.test(error.message)) {
+                return { error: "file is too large to edit; use shell", path: filePath };
+              }
+              throw error;
+            }
+            let current: string;
+            try {
+              current = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+            } catch {
+              return { error: "file is not UTF-8 text; use shell to change it", path: filePath };
+            }
+            const edit = applyTextEdit(current, {
+              oldText: textContentArg(args.old_text, ""),
+              newText: textContentArg(args.new_text, ""),
+              replaceAll: args.replace_all === true,
+            });
+            if (!edit.ok) {
+              return {
+                error: EDIT_FILE_ERRORS[edit.error],
+                path: filePath,
+                ...(edit.matches === undefined ? {} : { matches: edit.matches }),
+              };
+            }
+            workspaceCheckpoint.markDirty();
+            await deps.sandbox.writeFile(
+              computer,
+              { path: storedPath, content: new TextEncoder().encode(edit.content) },
+              context,
+            );
+            return finish({ ok: true, path: filePath, replacements: edit.replacements });
           }
           if (name === "render_plot") {
             if (args.charts !== undefined) {

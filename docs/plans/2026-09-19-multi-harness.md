@@ -120,7 +120,7 @@ Tout le reste vient du harness, pas de Rakazo :
 
 | Rakazo (Pi) | Claude Code |
 |---|---|
-| `shell`, `read_file`, `write_file`, `list_files` | Bash, Read, Write, Edit, Glob, Grep natifs |
+| `shell`, `read_file`, `write_file`, `edit_file`, `list_files` | Bash, Read, Write, Edit, Glob, Grep natifs |
 | `remember`, `recall_memory`, `save_memory`, `forget_memory`, `scratchpad_*` | `CLAUDE.md`, memory dir, TodoWrite natifs |
 | `skill_*` | `.claude/skills` |
 | `web_fetch`, `web_search` | WebFetch / WebSearch natifs |

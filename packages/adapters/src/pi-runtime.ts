@@ -712,6 +712,7 @@ export function describeToolActivity(toolName: string, args: unknown): string {
   if (toolName === "shell") return `Running: ${detail(record.command)}`;
   if (toolName === "read_file") return `Reading ${detail(record.path)}`;
   if (toolName === "write_file") return `Writing ${detail(record.path)}`;
+  if (toolName === "edit_file") return `Editing ${detail(record.path)}`;
   if (toolName === "list_files") return `Listing ${detail(record.path ?? ".")}`;
   if (toolName === "attach_file") return `Attaching ${detail(record.path)}`;
   if (toolName === "open_path") return `Opening ${detail(record.path)}`;
@@ -1066,6 +1067,14 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         return {
           path: String(raw.path ?? "notes/result.txt"),
           content: textContentArg(raw.content, ""),
+        };
+      }
+      if (tool.name === "edit_file") {
+        return {
+          path: String(raw.path ?? ""),
+          old_text: textContentArg(raw.old_text, ""),
+          new_text: textContentArg(raw.new_text, ""),
+          replace_all: raw.replace_all === true,
         };
       }
       if (tool.name === "computer_act") {
