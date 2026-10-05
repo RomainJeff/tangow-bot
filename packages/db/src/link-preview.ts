@@ -193,8 +193,9 @@ export async function storeLinkPreviewCache(
 /**
  * Counts a real read against the space (30 a minute) and, for the composer, the person (10 a
  * minute), in the database so the API and every worker share the budget. False when over a
- * limit: the caller shows no preview and caches nothing. The advisory lock makes the
- * count-then-insert one step per space.
+ * limit: the caller shows no preview and caches nothing. Advisory locks make the count-then-insert
+ * one step per space and, for a composer read, per person too (their budget spans every space).
+ * The space lock is always taken first, so two reads never wait on each other in a cycle.
  */
 export async function reserveLinkPreviewRead(
   prisma: Pick<PrismaClient, "$transaction">,
@@ -204,13 +205,17 @@ export async function reserveLinkPreviewRead(
   const since = new Date(now.getTime() - READ_WINDOW_MS);
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`link-preview-reads:${input.spaceId}`}))`;
+    const actor = input.source === "composer" ? input.userId : undefined;
+    if (actor) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`link-preview-reads:user:${actor}`}))`;
+    }
     const spaceReads = await tx.linkPreviewRead.count({
       where: { spaceId: input.spaceId, createdAt: { gte: since } },
     });
     if (spaceReads >= LINK_PREVIEW_SPACE_READS_PER_MINUTE) return false;
-    if (input.source === "composer" && input.userId) {
+    if (actor) {
       const actorReads = await tx.linkPreviewRead.count({
-        where: { userId: input.userId, source: "composer", createdAt: { gte: since } },
+        where: { userId: actor, source: "composer", createdAt: { gte: since } },
       });
       if (actorReads >= LINK_PREVIEW_ACTOR_READS_PER_MINUTE) return false;
     }

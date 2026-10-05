@@ -308,6 +308,37 @@ describe("read budget (CA 22, CA 55)", () => {
     ).toBe(true);
   });
 
+  it("locks the person as well as the space for a composer read, space first", async () => {
+    const db = createFakeThreadDb();
+    const locks: unknown[] = [];
+    const prisma = {
+      $transaction: (work: (tx: unknown) => Promise<unknown>) =>
+        db.prisma.$transaction((tx: Record<string, unknown>) =>
+          work({
+            ...tx,
+            $executeRaw: async (_strings: TemplateStringsArray, ...values: unknown[]) => {
+              locks.push(...values);
+              return 0;
+            },
+          }),
+        ),
+    } as unknown as Parameters<typeof reserveLinkPreviewRead>[0];
+
+    await reserveLinkPreviewRead(prisma, {
+      spaceId: "space-1",
+      source: "composer",
+      userId: "user-1",
+      now: NOW,
+    });
+    await reserveLinkPreviewRead(prisma, { spaceId: "space-2", source: "job", now: NOW });
+
+    expect(locks).toEqual([
+      "link-preview-reads:space-1",
+      "link-preview-reads:user:user-1",
+      "link-preview-reads:space-2",
+    ]);
+  });
+
   it("counts a composer read against the space too", async () => {
     const db = createFakeThreadDb();
     for (let index = 0; index < 30; index += 1) {
