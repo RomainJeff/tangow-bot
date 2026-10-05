@@ -95,13 +95,35 @@ const AUTHENTICATION_PATH_SEGMENTS = new Set([
   "sign_in",
   "signin",
   "sso",
+  "wp-login",
+]);
+const AUTHENTICATION_PATH_ENDINGS = new Set(["session/new", "sessions/new"]);
+const SINGLE_USE_PATH_SEGMENTS = new Set([
+  "activate",
+  "activation",
+  "confirm",
+  "confirmation",
+  "invitation",
+  "invite",
+  "magic-link",
+  "magic_link",
+  "magiclink",
+  "password-reset",
+  "password_reset",
+  "reset-password",
+  "reset_password",
+  "unsubscribe",
+  "verify",
+  "verification",
 ]);
 
 /**
- * True when a link leads to a sign-in page, which never gets a preview: Google's account host,
- * a host label that names authentication (`login.example.com`), or a final path segment that does
- * (`/sso`, `/a/sign-in`). A path that merely contains such a word (`/blog/login-tips`) is a
- * normal page. Applied to the link as written and to every redirect hop of a server or device read.
+ * True when a link leads to a sign-in page or spends itself when opened, which never gets a
+ * preview: Google's account host, a host label that names authentication (`login.example.com`), a
+ * final path segment that does (`/sso`, `/a/sign-in`, `/wp-login.php`, `/session/new`), or any
+ * path segment of a single-use link (`/magic-link/<token>`, `/verify/<token>`, `/invite/<code>`).
+ * A path that merely contains such a word (`/blog/login-tips`) is a normal page. Applied to the
+ * link as written and to every redirect hop of a server or device read.
  * @param {string} url
  */
 export function isAuthenticationDestination(url) {
@@ -110,12 +132,25 @@ export function isAuthenticationDestination(url) {
     const host = hostname.toLowerCase();
     if (AUTHENTICATION_HOSTS.has(host)) return true;
     if (host.split(".").some((label) => AUTHENTICATION_HOST_LABELS.has(label))) return true;
-    const last = pathname.split("/").filter(Boolean).at(-1);
-    return (
-      last !== undefined && AUTHENTICATION_PATH_SEGMENTS.has(decodeURIComponent(last).toLowerCase())
-    );
+    const segments = pathname
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => decodePathSegment(segment).toLowerCase());
+    if (segments.some((segment) => SINGLE_USE_PATH_SEGMENTS.has(segment))) return true;
+    if (AUTHENTICATION_PATH_ENDINGS.has(segments.slice(-2).join("/"))) return true;
+    const last = segments.at(-1)?.replace(/\.(?:html?|php|aspx?|jsp)$/, "");
+    return last !== undefined && AUTHENTICATION_PATH_SEGMENTS.has(last);
   } catch {
     return false;
+  }
+}
+
+/** @param {string} segment */
+function decodePathSegment(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
   }
 }
 
