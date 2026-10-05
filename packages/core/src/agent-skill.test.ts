@@ -8,6 +8,7 @@ import {
   formatSkillsCatalogInstruction,
   mergeBuiltinSkills,
   parseSkillMd,
+  searchSkills,
 } from "./agent-skill.js";
 
 describe("built-in skill merging", () => {
@@ -319,5 +320,34 @@ describe("skill prompt helpers", () => {
     expect(line).toContain("- Daily standup: Prepare standup notes");
     expect(line).toContain("skill_read");
     expect(line).toContain("Prefer matching skills");
+    expect(line).not.toContain("skill_search");
+  });
+
+  it("points to skill_search when the catalog overflows", () => {
+    const entries = Array.from({ length: 53 }, (_, i) => ({
+      name: `Skill ${i}`,
+      description: `Does ${i}`,
+      source: "user" as const,
+      readOnly: false,
+    }));
+    const catalog = formatSkillsCatalogInstruction(entries)!;
+    expect(catalog).toContain("- Skill 49: Does 49");
+    expect(catalog).not.toContain("- Skill 50:");
+    expect(catalog).toContain("3 more skills are available but not listed");
+    expect(catalog).toContain("skill_search");
+  });
+
+  it("searches skills by name and description, name first", () => {
+    const skills = [
+      { name: "Weekly report", description: "Summarize the week for the team" },
+      { name: "Team digest", description: "Daily digest of messages" },
+      { name: "Deploy", description: "Ship to production" },
+    ];
+    expect(searchSkills(skills, "team").map((s) => s.name)).toEqual([
+      "Team digest",
+      "Weekly report",
+    ]);
+    expect(searchSkills(skills, "Production, ship!").map((s) => s.name)).toEqual(["Deploy"]);
+    expect(searchSkills(skills, "  ")).toEqual([]);
   });
 });

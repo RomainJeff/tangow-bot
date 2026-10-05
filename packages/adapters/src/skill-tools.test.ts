@@ -20,10 +20,15 @@ import {
   skillCreateFromTool,
   skillDeleteFromTool,
   skillReadFromTool,
+  skillSearchFromTool,
   skillUpdateFromTool,
 } from "./skill-tools.js";
 
 type Row = Record<string, unknown>;
+
+/** Builtins ship with the repo and grow over time; tests compare only the skills they seed. */
+const ownNames = (records: Array<{ name: string; source: string }>) =>
+  records.filter((record) => record.source !== "builtin").map((record) => record.name);
 
 const matches = (row: Row, where: Row) =>
   Object.entries(where).every(([key, value]) => row[key] === value);
@@ -211,11 +216,8 @@ describe("skill tools", () => {
       update: {},
     });
     const records = await listAgentSkillRecords(deps, { ...owner, botId: "bot-1" });
-    expect(records.map((r) => r.name)).toEqual([
-      "delegate-to-opencode",
-      "Interrogate",
-      "Skill-authoring",
-    ]);
+    expect(records.map((r) => r.name)).toContain("Interrogate");
+    expect(ownNames(records)).toEqual([]);
   });
 
   it("ships builtin skills as valid, readable, read-only SKILL.md records", async () => {
@@ -367,27 +369,24 @@ describe("skill tools", () => {
 
     // Builtins default to "all", so every bot sees them alongside its own visible skills.
     const forA = await listAgentSkillRecords(deps, { ...scope, botId: "botA" });
-    expect(forA.map((s) => s.name)).toEqual([
-      "delegate-to-opencode",
-      "Interrogate",
-      "Skill-authoring",
-      "Everyone",
-      "Only bot A",
-    ]);
+    expect(forA.map((s) => s.name)).toContain("Interrogate");
+    expect(ownNames(forA)).toEqual(["Everyone", "Only bot A"]);
     const forB = await listAgentSkillRecords(deps, { ...scope, botId: "botB" });
-    expect(forB.map((s) => s.name)).toEqual([
-      "delegate-to-opencode",
-      "Interrogate",
-      "Skill-authoring",
-      "Everyone",
-      "Not for A",
-    ]);
+    expect(forB.map((s) => s.name)).toContain("Interrogate");
+    expect(ownNames(forB)).toEqual(["Everyone", "Not for A"]);
     const all = await listAgentSkillRecords(deps, scope);
-    expect(all).toHaveLength(6);
+    expect(ownNames(all)).toHaveLength(3);
     // skill_read follows the same visibility.
     expect(
       await skillReadFromTool(deps, { ...scope, botId: "botB" }, { name: "Only bot A" }),
     ).toEqual({ error: "Skill not found." });
+    // skill_search too.
+    const search = async (botId: string) =>
+      (await skillSearchFromTool(deps, { ...scope, botId }, { query: "only bot" })).skills;
+    expect(await search("botA")).toContainEqual(expect.objectContaining({ name: "Only bot A" }));
+    expect(await search("botB")).not.toContainEqual(
+      expect.objectContaining({ name: "Only bot A" }),
+    );
   });
 
   it("scopes a bot-created skill to its creator", async () => {
@@ -471,12 +470,10 @@ describe("skill tools", () => {
       "New",
     ]);
     // The exclusion semantics survive the rename: only botA sees it.
-    expect(
-      (await listAgentSkillRecords(deps, { ...owner, botId: "botA" })).map((s) => s.name),
-    ).toEqual(["delegate-to-opencode", "Interrogate", "Skill-authoring", "New"]);
-    expect(
-      (await listAgentSkillRecords(deps, { ...owner, botId: "botB" })).map((s) => s.name),
-    ).toEqual(["delegate-to-opencode", "Interrogate", "Skill-authoring"]);
+    expect(ownNames(await listAgentSkillRecords(deps, { ...owner, botId: "botA" }))).toEqual([
+      "New",
+    ]);
+    expect(ownNames(await listAgentSkillRecords(deps, { ...owner, botId: "botB" }))).toEqual([]);
 
     expect(await skillDeleteFromTool(deps, owner, { name: "New" })).toEqual({
       ok: true,
