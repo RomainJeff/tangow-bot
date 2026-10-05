@@ -1,4 +1,5 @@
 import type { ActionApprovalRule as StoredActionApprovalRule } from "@rakazo/contracts";
+import type { CreationGate } from "./creation-gate.js";
 
 const APPROVAL_EXEMPT_TOOLS = new Set([
   "computer_observe",
@@ -93,17 +94,24 @@ export function connectorToolRequiresApproval(toolName: string): boolean {
   return !READ_ONLY_CONNECTOR_PATTERN.test(name);
 }
 
-export function toolRequiresApproval(toolName: string, viaConnector: boolean): boolean {
+export function toolRequiresApproval(
+  toolName: string,
+  viaConnector: boolean,
+  gate?: CreationGate,
+): boolean {
+  if (toolRequiresExplicitApproval(toolName, gate)) return true;
   if (APPROVAL_EXEMPT_TOOLS.has(toolName)) return false;
-  if (toolRequiresExplicitApproval(toolName)) return true;
   if (APPROVAL_REQUIRED_BUILTIN_TOOLS.has(toolName)) return true;
   if (viaConnector) return connectorToolRequiresApproval(toolName);
   return false;
 }
 
-/** Security-boundary changes cannot be auto-reviewed or permanently allowed. */
-export function toolRequiresExplicitApproval(toolName: string): boolean {
-  return EXPLICIT_APPROVAL_BUILTIN_TOOLS.has(toolName);
+/**
+ * Security-boundary changes, and every card the creation gate demands, cannot be auto-reviewed,
+ * allowed by a rule or permanently allowed.
+ */
+export function toolRequiresExplicitApproval(toolName: string, gate?: CreationGate): boolean {
+  return gate?.kind === "card" || EXPLICIT_APPROVAL_BUILTIN_TOOLS.has(toolName);
 }
 
 /**

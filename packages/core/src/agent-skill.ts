@@ -6,6 +6,8 @@ import { SKILL_DESCRIPTION_MAX_CHARS } from "@rakazo/contracts";
  * Distinct from taught skills (demo/record playbooks on a single bot).
  */
 
+import { hasHiddenText } from "./spawn-bot.js";
+
 const FRONTMATTER_FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 export type SkillSource = "user" | "builtin" | "plugin";
@@ -90,6 +92,35 @@ export function parseSkillMd(content: string): ParsedSkillMd | { error: string }
     };
   }
   return { name, description, body, frontmatter };
+}
+
+export const BOT_SKILL_DESCRIPTION_MAX_LENGTH = 300;
+
+/**
+ * What a bot may write as a skill. Its name and description become one line of every bot's
+ * system prompt, so they stay one visible line, and nothing in the file may be hidden from the
+ * person reading it. Other frontmatter keys are the user's to add.
+ */
+export function validateBotSkill(skill: ParsedSkillMd, content: string): string | undefined {
+  if (hasHiddenText(skill.name)) {
+    return "Skill name must be a single line of visible text.";
+  }
+  if (hasHiddenText(skill.description)) {
+    return "Skill description must be a single line of visible text.";
+  }
+  if (skill.description.length > BOT_SKILL_DESCRIPTION_MAX_LENGTH) {
+    return `Skill description must be at most ${BOT_SKILL_DESCRIPTION_MAX_LENGTH} characters.`;
+  }
+  const extraKeys = Object.keys(skill.frontmatter).filter(
+    (key) => key !== "name" && key !== "description",
+  );
+  if (extraKeys.length > 0) {
+    return `Skill frontmatter may only hold name and description, not ${extraKeys.join(", ")}.`;
+  }
+  if (hasHiddenText(content, true)) {
+    return "Skill content must not contain invisible or control characters.";
+  }
+  return undefined;
 }
 
 /** Build SKILL.md, preserving unknown frontmatter keys from a prior parse. */
@@ -287,6 +318,17 @@ function restAlreadyIncludesSkillContent(rest: string, content: string): boolean
 }
 
 /** Expand forced `/Name` or routine `@Name` mentions into full skill bodies for the task prompt. */
+/** The skills expandSkillReferencesInPrompt puts into this prompt, in the same order. */
+export function referencedSkills<T extends SkillRecord>(prompt: string, skills: readonly T[]): T[] {
+  const forced = extractForcedSkillName(prompt);
+  const forcedSkill = forced ? findSkillByName(skills, forced.name) : undefined;
+  if (forcedSkill) return [forcedSkill];
+  return extractRoutineSkillMentions(
+    prompt,
+    skills.map((skill) => skill.name),
+  ).flatMap((mention) => findSkillByName(skills, mention) ?? []);
+}
+
 export function expandSkillReferencesInPrompt<T extends SkillRecord>(
   prompt: string,
   skills: readonly T[],

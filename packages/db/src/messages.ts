@@ -35,7 +35,9 @@ export function loadRunHistoryMessages(
       blocks: true,
       replyToMessageId: true,
       replyQuote: true,
-      replyTo: { select: { id: true, threadId: true, role: true, blocks: true } },
+      replyTo: {
+        select: { id: true, threadId: true, role: true, botId: true, runId: true, blocks: true },
+      },
     },
   });
 }

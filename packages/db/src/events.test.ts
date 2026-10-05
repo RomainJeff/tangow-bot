@@ -1368,7 +1368,7 @@ describe("answerRunInput", () => {
     });
     expect(tx.externalEffect.update).toHaveBeenCalledWith({
       where: { id: "effect-1" },
-      data: { status: "approved" },
+      data: { status: "approved", answeredAt: expect.any(Date) },
     });
   });
 
@@ -1440,7 +1440,7 @@ describe("answerRunInput", () => {
     expect(tx.task.updateMany).not.toHaveBeenCalled();
     expect(tx.externalEffect.update).toHaveBeenCalledWith({
       where: { id: "effect-1" },
-      data: { status: "approved" },
+      data: { status: "approved", answeredAt: expect.any(Date) },
     });
     expect(tx.actionApprovalRule.upsert).toHaveBeenCalledWith({
       where: {
@@ -1512,6 +1512,58 @@ describe("answerRunInput", () => {
     ).resolves.toBe(false);
 
     expect(tx.run.updateMany).not.toHaveBeenCalled();
+    expect(tx.actionApprovalRule.upsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses an always answer on a card that does not offer it, writing no rule", async () => {
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
+      message: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "message-1",
+          blocks: [
+            {
+              kind: "ask",
+              approvalEffectId: "effect-1",
+              text: "Create routine?",
+              status: "pending",
+              actions: [
+                { id: "allow", label: "Allow once" },
+                { id: "deny", label: "Deny" },
+              ],
+            },
+          ],
+        }),
+      },
+      run: {
+        findFirst: vi.fn().mockResolvedValue({ botId: "bot-1", userId: "run-owner" }),
+        updateMany: vi.fn(),
+      },
+      externalEffect: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValue({ id: "effect-1", status: "intended", kind: "schedule_create" }),
+        update: vi.fn(),
+      },
+      actionApprovalRule: { upsert: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+
+    await expect(
+      answerRunInput(prisma, {
+        spaceId: "workspace-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        messageId: "message-1",
+        answeredByUserId: "run-owner",
+        answer: "always",
+      }),
+    ).resolves.toBe(false);
+
+    expect(tx.run.updateMany).not.toHaveBeenCalled();
+    expect(tx.externalEffect.update).not.toHaveBeenCalled();
     expect(tx.actionApprovalRule.upsert).not.toHaveBeenCalled();
   });
 
@@ -2989,7 +3041,7 @@ describe("answerRunInput on a Create bot card with edits", () => {
 
     expect(w.effectUpdate).toHaveBeenCalledWith({
       where: { id: "effect-1" },
-      data: { status: "approved" },
+      data: { status: "approved", answeredAt: expect.any(Date) },
     });
     expect(w.effectUpdateMany).not.toHaveBeenCalled();
     expect(w.botFindMany).not.toHaveBeenCalled();
@@ -3033,6 +3085,7 @@ describe("answerRunInput on a Create bot card with edits", () => {
         request: approved,
         idempotencyKey: approvalEffectKey("run-1", "spawn_bot", approved),
         status: "approved",
+        answeredAt: expect.any(Date),
       },
     });
     const answered = w.state.blocks[0] as Record<string, unknown>;

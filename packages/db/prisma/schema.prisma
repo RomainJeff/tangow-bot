@@ -590,6 +590,10 @@ model Run {
   routine              Routine?         @relation(fields: [routineId], references: [id], onDelete: SetNull)
   // Inbound webhook runs only: false when the woken routine opted out of approving each action.
   requireToolApproval  Boolean          @default(true)
+  // Set once the run may have read outside content (an ExposureReason), never cleared: a routine
+  // or a skill it creates afterwards needs the user's approval.
+  exposedAt            DateTime?
+  exposureReason       String?
   startedAt            DateTime?
   completedAt          DateTime?
   botOutcomeReturnedAt DateTime?
@@ -662,6 +666,8 @@ model ExternalEffect {
   reviewDecision String?
   reviewReason   String?
   reviewModel    String?
+  // When the user allowed or denied the card: a refusal locks out asking again from this time.
+  answeredAt     DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1166,14 +1172,16 @@ model BotMcpServer {
 /// Skills v2 phase 1 — global availability of a skill, keyed by skillKey ("user:<lower(name)>").
 /// No row = "all". Rows are renamed with the skill and deleted with it.
 model SkillSetting {
-  id           String   @id @default(cuid())
-  spaceId      String
-  space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  userId       String
-  skillKey     String
-  availability String   @default("all")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(cuid())
+  spaceId        String
+  space          Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId         String
+  skillKey       String
+  availability   String   @default("all")
+  // The bot that wrote the skill, cleared once the user edits it: a bot changes only its own.
+  createdByBotId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([spaceId, userId, skillKey])
   @@map("skill_settings")

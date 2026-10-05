@@ -1057,13 +1057,14 @@ export async function answerRunInputInTransaction(
             request: spawnBotEdit.approved,
             idempotencyKey: spawnBotEdit.key,
             status: "approved",
+            answeredAt: new Date(),
           },
         });
         if (rewritten.count !== 1) throw new Error("Bot creation changed while it was edited");
       } else {
         await tx.externalEffect.update({
           where: { id: approvalEffect!.id },
-          data: { status: allowed ? "approved" : "denied" },
+          data: { status: allowed ? "approved" : "denied", answeredAt: new Date() },
         });
       }
       if (input.answer === "always") {

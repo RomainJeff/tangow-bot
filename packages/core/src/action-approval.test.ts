@@ -13,8 +13,18 @@ import {
   toolRequiresExplicitApproval,
   unattendedTriggerToolRequiresApproval,
 } from "./action-approval.js";
+import { creationGate, runStance } from "./creation-gate.js";
 
 describe("toolRequiresApproval", () => {
+  it("makes a creation the gate sends to a card explicit, exempt tool or not", () => {
+    const card = creationGate("schedule_create", runStance({ trigger: "user", exposed: true }));
+    const direct = creationGate("schedule_create", runStance({ trigger: "user", exposed: false }));
+    expect(toolRequiresApproval("schedule_create", false, card)).toBe(true);
+    expect(toolRequiresExplicitApproval("schedule_create", card)).toBe(true);
+    expect(toolRequiresApproval("schedule_create", false, direct)).toBe(false);
+    expect(toolRequiresExplicitApproval("schedule_create", direct)).toBe(false);
+  });
+
   it("requires approval for consequential builtins and destination writes", () => {
     expect(toolRequiresApproval("destination.write", false)).toBe(true);
     expect(toolRequiresApproval("destination.write", true)).toBe(true);

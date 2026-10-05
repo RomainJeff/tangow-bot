@@ -43,6 +43,21 @@ export const RunStatus = z.enum([
 ]);
 export type RunStatus = z.infer<typeof RunStatus>;
 
+/** What woke a run. Closed: a new trigger must say who started it (runStartedByUser in core). */
+export const RunTrigger = z.enum([
+  "user",
+  "routine",
+  "resume",
+  "follow_up",
+  "reaction",
+  "spawn",
+  "skill",
+  "bot_message",
+  "webhook",
+  "messaging",
+]);
+export type RunTrigger = z.infer<typeof RunTrigger>;
+
 export const EffectStatus = z.enum(["intended", "completed", "failed", "ambiguous", "reconciled"]);
 export type EffectStatus = z.infer<typeof EffectStatus>;
 
