@@ -20,6 +20,8 @@ Expect: the card title and bullets; the question; the JSONL path (one observatio
 
 - Grep and Read in chunks; group by `traceId` when you need a run's tool sequence. Count before you judge.
 - State the criterion you used in one line (what counts as "adds nothing", "slow", "tool failure"), so the caller can challenge it.
+- Separate what reaches the user from internal traffic (bot-to-bot messages, internal calls mislabelled as runs). Report the user-facing figure first.
+- For each figure, name what limits it (sample size, truncation, how the trigger was inferred) and what else it could be measuring.
 - Say plainly when the extract cannot answer (missing field, too few runs).
 
 ## Output contract (in the caller's language, at most 15 lines, no preamble)
