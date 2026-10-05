@@ -1364,6 +1364,26 @@ describe("thread event reduction", () => {
     expect(next?.cursor).toBe(40);
   });
 
+  it("drops an update to a message this page never loaded instead of appending it", () => {
+    const initial = snapshot([message("message-1", [{ kind: "text", text: "Done" }], 1)]);
+
+    const next = reduceThreadSnapshot(
+      initial,
+      event({
+        type: "thread.message.updated",
+        seq: 41,
+        payload: {
+          messageId: "old-1",
+          role: "user",
+          blocks: [{ kind: "link_preview", url: "https://example.test/a", removed: true }],
+        },
+      }),
+    );
+
+    expect(next?.messages.map((m) => m.id)).toEqual(["message-1"]);
+    expect(next?.cursor).toBe(41);
+  });
+
   it("preserves botId on durable bot messages", () => {
     const initial = snapshot([]);
     const next = reduceThreadSnapshot(

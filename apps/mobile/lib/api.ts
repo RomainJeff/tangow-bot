@@ -1237,6 +1237,8 @@ export function applyMobileThreadEvent(
             next,
           )
         : next;
+    // An update to a message this screen never loaded stays out of the thread.
+    if (!merged) return { ...prev, cursor: event.seq ?? prev.cursor };
     return {
       ...prev,
       cursor: event.seq ?? prev.cursor,

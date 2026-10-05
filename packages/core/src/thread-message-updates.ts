@@ -3,6 +3,8 @@
  * blocks (and reply fields when the event names them) replace the old ones, while author, run,
  * order (`seq`) and creation time stay those of the stored message. The event only describes the
  * rewrite, not the message's identity: its bot can be the thread's rather than the author's.
+ * Undefined when the client does not hold the message (an older page it never loaded): the update
+ * is then dropped rather than shown as a new message at the end of the thread.
  */
 export function mergeMessageUpdate<
   Message extends {
@@ -11,8 +13,8 @@ export function mergeMessageUpdate<
     replyToMessageId?: string | null;
     replyQuote?: string | null;
   },
->(existing: Message | undefined, update: Message): Message {
-  if (!existing) return update;
+>(existing: Message | undefined, update: Message): Message | undefined {
+  if (!existing) return undefined;
   return {
     ...existing,
     role: update.role,

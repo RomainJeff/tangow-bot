@@ -1639,6 +1639,23 @@ describe("mobile thread event reduction", () => {
     expect(next?.messages[1]?.blocks).toHaveLength(2);
   });
 
+  it("drops an update to a message this screen never loaded instead of appending it", () => {
+    const initial = snapshot([mobileMessage("message-1", [{ kind: "text", text: "Done" }])]);
+
+    const next = applyMobileThreadEvent(initial, {
+      type: "thread.message.updated",
+      seq: 41,
+      payload: {
+        messageId: "old-1",
+        role: "user",
+        blocks: [{ kind: "link_preview", url: "https://example.test/a", removed: true }],
+      },
+    });
+
+    expect(next?.messages.map((m) => m.id)).toEqual(["message-1"]);
+    expect(next?.cursor).toBe(41);
+  });
+
   it("appends a quoted reply carrying its excerpt", () => {
     const initial = snapshot([mobileMessage("message-1", [{ kind: "text", text: "Done" }])]);
 

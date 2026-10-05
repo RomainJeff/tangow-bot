@@ -497,9 +497,6 @@ export function reduceThreadSnapshot(
     const replacedSubagentIds = new Set(
       blocks.filter((block) => block.kind === "subagent").map((block) => block.agentId),
     );
-    const liveId = progressMessageId(event);
-    const { remaining } = takeLiveMessage(prev.messages, liveId);
-    const without = remaining.filter((message) => !replacedSubagent(message, replacedSubagentIds));
     const merged =
       event.type === "thread.message.updated"
         ? mergeMessageUpdate(
@@ -507,6 +504,11 @@ export function reduceThreadSnapshot(
             next,
           )
         : next;
+    // An update to a message this page never loaded stays out of the thread.
+    if (!merged) return { ...prev, cursor: event.seq };
+    const liveId = progressMessageId(event);
+    const { remaining } = takeLiveMessage(prev.messages, liveId);
+    const without = remaining.filter((message) => !replacedSubagent(message, replacedSubagentIds));
     return { ...prev, cursor: event.seq, messages: upsertMessageById(without, merged) };
   }
   return prev;

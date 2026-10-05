@@ -53,7 +53,7 @@ describe("shared message updates", () => {
       ...existing,
       blocks: update.blocks,
     });
-    expect(mergeMessageUpdate(undefined, update)).toBe(update);
+    expect(mergeMessageUpdate(undefined, update)).toBeUndefined();
     expect(mergeMessageUpdate(existing, { ...update, replyQuote: "new" }).replyQuote).toBe("new");
   });
 });
