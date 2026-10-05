@@ -16,6 +16,7 @@ import {
   userSkillsRoot,
   writeUserSkill,
   writeUserSkillBundle,
+  writeUserSkillFiles,
 } from "./skill-store.js";
 
 const dirs: string[] = [];
@@ -248,6 +249,102 @@ describe("skill store", () => {
       await expect(
         writeUserSkillBundle(root, Buffer.from("plain text"), resolve),
       ).rejects.toThrow();
+      expect(await readdir(root)).toEqual([]);
+    });
+  });
+
+  describe("files", () => {
+    const resolve = async (skillMd: string) => {
+      const name = /^name: (.*)$/m.exec(skillMd)?.[1] ?? "";
+      return { name, content: `${skillMd}\n<!-- normalized -->\n` };
+    };
+    const text = (value: string) => new TextEncoder().encode(value);
+    const file = (filePath: string, value: string, executable = false) => ({
+      path: filePath,
+      bytes: text(value),
+      executable,
+    });
+
+    it("writes SKILL.md and nested files, keeping the executable bit", async () => {
+      const root = await tmpRoot();
+      await writeUserSkillFiles(
+        root,
+        [
+          file("SKILL.md", md("Deploy")),
+          file("scripts/run.sh", "echo hi", true),
+          file("references/api/notes.md", "n"),
+        ],
+        resolve,
+      );
+      const dir = path.join(root, "deploy");
+      expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toBe(
+        `${md("Deploy")}\n<!-- normalized -->\n`,
+      );
+      expect(await readFile(path.join(dir, "scripts/run.sh"), "utf8")).toBe("echo hi");
+      expect(await readFile(path.join(dir, "references/api/notes.md"), "utf8")).toBe("n");
+      expect((await stat(path.join(dir, "scripts/run.sh"))).mode & 0o111).toBe(0o111);
+      expect((await stat(path.join(dir, "references/api/notes.md"))).mode & 0o111).toBe(0);
+      expect(await readdir(root)).toEqual(["deploy"]);
+    });
+
+    it("writes the files under a relative root", async () => {
+      const root = path.relative(process.cwd(), await tmpRoot());
+      await writeUserSkillFiles(
+        root,
+        [file("SKILL.md", md("Deploy")), file("scripts/run.sh", "echo hi")],
+        resolve,
+      );
+      expect(await readFile(path.join(root, "deploy", "scripts/run.sh"), "utf8")).toBe("echo hi");
+    });
+
+    it("rejects paths that leave the skill folder and leaves nothing behind", async () => {
+      const root = await tmpRoot();
+      for (const bad of ["../x", "scripts/../../x", "/etc/x"]) {
+        await expect(
+          writeUserSkillFiles(root, [file("SKILL.md", md("Deploy")), file(bad, "x")], resolve),
+        ).rejects.toThrow(`Skill file escapes the skill folder: ${bad}.`);
+      }
+      expect(await readdir(root)).toEqual([]);
+      expect(await readdir(path.dirname(root))).not.toContain("x");
+    });
+
+    it("rejects too many files and too many bytes before writing", async () => {
+      const root = await tmpRoot();
+      const many = [
+        file("SKILL.md", md("Many")),
+        ...Array.from({ length: SKILL_BUNDLE_MAX_ENTRIES }, (_, i) => file(`f/${i}.txt`, "x")),
+      ];
+      await expect(writeUserSkillFiles(root, many, resolve)).rejects.toThrow(
+        `Skill has too many files (> ${SKILL_BUNDLE_MAX_ENTRIES}).`,
+      );
+      const big = [
+        file("SKILL.md", md("Big")),
+        { path: "blob.bin", bytes: new Uint8Array(SKILL_BUNDLE_MAX_BYTES), executable: false },
+      ];
+      await expect(writeUserSkillFiles(root, big, resolve)).rejects.toThrow(
+        `Skill too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`,
+      );
+      expect(await readdir(root)).toEqual([]);
+    });
+
+    it("fails with EEXIST on a name clash without touching the existing skill", async () => {
+      const root = await tmpRoot();
+      await writeUserSkill(root, { name: "Deploy", content: md("Deploy", "Old") }, "create");
+      const error = await writeUserSkillFiles(
+        root,
+        [file("SKILL.md", md("Deploy")), file("x.txt", "x")],
+        resolve,
+      ).catch((e: unknown) => e);
+      expect(isExists(error)).toBe(true);
+      expect(await readdir(path.join(root, "deploy"))).toEqual(["SKILL.md"]);
+      expect(await readdir(root)).toEqual(["deploy"]);
+    });
+
+    it("rejects a folder without SKILL.md and cleans up", async () => {
+      const root = await tmpRoot();
+      await expect(writeUserSkillFiles(root, [file("notes.md", "n")], resolve)).rejects.toThrow(
+        "Skill bundle must contain SKILL.md at its root.",
+      );
       expect(await readdir(root)).toEqual([]);
     });
   });
