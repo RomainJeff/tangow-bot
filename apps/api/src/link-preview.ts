@@ -8,6 +8,7 @@ import {
   resolveLinkPreviewWithDeviceHead,
 } from "@rakazo/adapters";
 import type { Actor, LinkPreviewDraft } from "@rakazo/contracts";
+import { LINK_PREVIEW_COMPOSER_DEADLINE_MS } from "@rakazo/contracts";
 import {
   IsolationError,
   type PrismaClient,
@@ -16,8 +17,6 @@ import {
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 
-/** A composer read is cut at this deadline, or as soon as the client goes away. */
-export const COMPOSER_PREVIEW_DEADLINE_MS = 10_000;
 /** Composer reads one person may have running at once, in this process. */
 export const COMPOSER_PREVIEWS_IN_FLIGHT = 3;
 
@@ -96,7 +95,10 @@ export async function previewLinkForComposer(
       artifacts: deps.artifacts,
       ...deps.linkPreview,
     };
-    const deadline = AbortSignal.any([signal, AbortSignal.timeout(COMPOSER_PREVIEW_DEADLINE_MS)]);
+    const deadline = AbortSignal.any([
+      signal,
+      AbortSignal.timeout(LINK_PREVIEW_COMPOSER_DEADLINE_MS),
+    ]);
     const scope = { spaceId: actor.spaceId, userId: actor.userId, source: "composer" as const };
     const { preview, deviceReadable, ephemeralImageKey } = input.pageHead
       ? await resolveLinkPreviewWithDeviceHead(

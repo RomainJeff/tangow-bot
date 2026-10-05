@@ -7,6 +7,11 @@ export const LINK_PREVIEW_TITLE_MAX_LENGTH = 300;
 export const LINK_PREVIEW_PAGE_HEAD_MAX_LENGTH = 512 * 1024;
 /** The Content-Type that came with that head. */
 export const LINK_PREVIEW_PAGE_HEAD_TYPE_MAX_LENGTH = 200;
+/**
+ * The server cuts a composer read at this deadline; a client waits a little longer, so the answer
+ * (a card, or `deviceReadable`) still reaches it.
+ */
+export const LINK_PREVIEW_COMPOSER_DEADLINE_MS = 10_000;
 export const LINK_PREVIEW_THUMBNAIL_PREFIX = "data:image/webp;base64,";
 /**
  * Length cap of the composer thumbnail's data URL, in characters: base64 adds a third, so 70 000
