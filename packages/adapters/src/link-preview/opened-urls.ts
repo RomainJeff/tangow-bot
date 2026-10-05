@@ -65,25 +65,44 @@ export function seenUrlHash(runId: string, url: string): string | undefined {
     : undefined;
 }
 
+/** Reads a link the way a bot's message would carry it, so a percent-encoded secret still shows. */
+function decodedLink(url: string): string {
+  try {
+    return decodeURIComponent(url);
+  } catch {
+    return url;
+  }
+}
+
 /**
  * The salted hashes of the links a finished public web tool call showed the bot (a search hit, a
  * link in a fetched page, the final URL of a fetch): `web_search` and `web_fetch` of the bot
- * itself, with no error, read from the raw result. A link that redaction would change as it
- * appears in the text, or that names a secret, is left out. Only hashes leave this function, so
- * the audit never holds a plaintext link beyond `openedUrl`.
+ * itself, with no error, read from the raw result. For `web_fetch`, `pageLinks` adds the `<a href>`
+ * links of the page's HTML, which never reach the model but are as public as the page. A link that
+ * redaction would change as it appears in the text, or that names a secret, is left out. Only
+ * hashes leave this function, so the audit never holds a plaintext link beyond `openedUrl`.
  */
 export function seenUrlHashesFromCompletion(
   completion: Pick<AgentToolCompletion, "name" | "nested" | "error" | "paused" | "result">,
   runId: string,
   secrets: string[] = [],
+  pageLinks: readonly string[] = [],
 ): string[] {
   if (!SEEING_TOOLS.has(completion.name) || completion.nested || !succeeded(completion)) return [];
   const hashes = new Set<string>();
   const unaltered = (raw: string, url: string) =>
     redactSecrets(raw, secrets) === raw && !hasSecretParam(url);
-  for (const url of extractSeenUrls(toolOutcome(completion.result), unaltered)) {
+  const add = (url: string) => {
     const hash = seenUrlHash(runId, url);
     if (hash) hashes.add(hash);
+  };
+  for (const url of extractSeenUrls(toolOutcome(completion.result), unaltered)) add(url);
+  if (completion.name === "web_fetch" && pageLinks.length > 0) {
+    const unalteredLink = (raw: string, url: string) => {
+      const decoded = decodedLink(raw);
+      return unaltered(raw, url) && redactSecrets(decoded, secrets) === decoded;
+    };
+    for (const url of extractSeenUrls([...pageLinks], unalteredLink)) add(url);
   }
   return [...hashes];
 }

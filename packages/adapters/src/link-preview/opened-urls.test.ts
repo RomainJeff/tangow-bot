@@ -223,6 +223,67 @@ describe("links a public web tool showed the bot (CA 58-60)", () => {
     );
   });
 
+  describe("links in the HTML of a fetched page (CA 67-69)", () => {
+    const home = { content: [], details: { url: "https://home.test/", text: "Front page" } };
+    const hashes = (name: string, links: string[], secrets: string[] = [], over = {}) =>
+      seenUrlHashesFromCompletion(completion({ name, result: home, ...over }), RUN, secrets, links);
+
+    it("hashes the page links after what the result shows, normalized and deduplicated", () => {
+      expect(
+        hashes("web_fetch", [
+          "https://home.test/x/123_article#top",
+          "https://home.test/x/123_article",
+          "https://home.test/",
+        ]),
+      ).toEqual(
+        ["https://home.test/", "https://home.test/x/123_article"].map((url) =>
+          seenUrlHash(RUN, url),
+        ),
+      );
+    });
+
+    it("never counts them for another tool, a nested call, a failed call or a paused one", () => {
+      const links = ["https://home.test/x/123_article"];
+      expect(hashes("web_search", links)).toEqual(
+        seenUrlHashesFromCompletion(completion({ name: "web_search", result: home }), RUN),
+      );
+      for (const name of ["browser_navigate", "browser_snapshot", "mcp__mail__read", "shell"]) {
+        expect(hashes(name, links), name).toEqual([]);
+      }
+      expect(hashes("web_fetch", links, [], { nested: true })).toEqual([]);
+      expect(hashes("web_fetch", links, [], { error: new Error("blocked") })).toEqual([]);
+      expect(hashes("web_fetch", links, [], { paused: true })).toEqual([]);
+    });
+
+    it("drops credentials, other schemes, secret parameters and redacted links", () => {
+      expect(
+        hashes(
+          "web_fetch",
+          [
+            "javascript:alert(1)",
+            "mailto:a@b.test",
+            "data:text/html,hi",
+            "/relative/not/absolute",
+            "https://user:pw@home.test/private",
+            "https://home.test/a?token=abc",
+            "https://home.test/b-hunter2-secret",
+            "https://home.test/caf%C3%A9-secret",
+            `https://home.test/${"a".repeat(2100)}`,
+            "https://home.test/ok",
+          ],
+          ["hunter2-secret", "caf\u00e9-secret"],
+        ),
+      ).toEqual(["https://home.test/", "https://home.test/ok"].map((url) => seenUrlHash(RUN, url)));
+    });
+
+    it("writes only hashes to the audit and respects the 300 cap", () => {
+      const links = Array.from({ length: 500 }, (_, index) => `https://home.test/p/${index}`);
+      const payload = toolCompletionAuditPayload(completion({ result: home }), [], RUN, links);
+      expect(payload.seenUrlHashes).toHaveLength(SEEN_URLS_PER_RUN);
+      expect(JSON.stringify(payload)).not.toContain("home.test/p/");
+    });
+  });
+
   describe("never from the logged-in browser (M1)", () => {
     const snapshot = {
       url: "https://a.test/x",

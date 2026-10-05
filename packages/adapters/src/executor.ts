@@ -631,6 +631,7 @@ export function toolCompletionAuditPayload(
   completion: AgentToolCompletion,
   secrets: string[] = [],
   runId?: string,
+  pageLinks?: readonly string[],
 ): Record<string, unknown> {
   const durationMs = Number.isFinite(completion.durationMs)
     ? Math.max(0, Math.round(completion.durationMs))
@@ -651,7 +652,7 @@ export function toolCompletionAuditPayload(
   // And the links a public web tool showed the bot, as SHA-256 hashes salted with the run id: a
   // link can be matched against, never read back.
   const seenUrlHashes = runId
-    ? seenUrlHashesFromCompletion(completion, runId, secrets).slice(0, SEEN_URLS_PER_RUN)
+    ? seenUrlHashesFromCompletion(completion, runId, secrets, pageLinks).slice(0, SEEN_URLS_PER_RUN)
     : [];
   if (seenUrlHashes.length > 0) payload.seenUrlHashes = seenUrlHashes;
   if (!isAuditableToolResult(completion.result)) return payload;
@@ -691,9 +692,10 @@ export async function appendToolCompletionAudit(
   secrets: string[] = [],
   openedUrlBudget?: { remaining: number },
   seenUrlBudget?: SeenUrlBudget,
+  pageLinks?: readonly string[],
 ): Promise<void> {
   try {
-    const payload = toolCompletionAuditPayload(completion, secrets, target.runId);
+    const payload = toolCompletionAuditPayload(completion, secrets, target.runId, pageLinks);
     if (Array.isArray(payload.seenUrlHashes) && seenUrlBudget) {
       // First come, first served: a large page read early can use the whole per-run cap and leave
       // later search hits without a card. Accepted for now (a card is only a convenience); a
@@ -1862,6 +1864,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const tryFlushPendingTools = () => {
           if (pendingToolNames.length > 0 && endsSentence(currentTextSegment)) flushPendingTools();
         };
+        // The links of a page `web_fetch` read, by call: kept out of the result the model gets and
+        // handed to the audit, which only ever stores their salted hashes.
+        const pageLinksByCall = new Map<string, string[]>();
+        const takePageLinks = (executionId: string) => {
+          const links = pageLinksByCall.get(executionId);
+          pageLinksByCall.delete(executionId);
+          return links;
+        };
         const recordToolOutput = (executionId: string, result: unknown) => {
           const detail = toolDetails.get(executionId);
           if (detail) detail.output = describeToolPayload(result);
@@ -2806,7 +2816,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return finish(await webSearchFromTool(web, context, args));
           }
           if (name === "web_fetch") {
-            return finish(await webFetchFromTool(web, context, args));
+            return finish(
+              await webFetchFromTool(web, context, args, (links) =>
+                pageLinksByCall.set(executionId, links),
+              ),
+            );
           }
           if (PAGE_BROWSER_TOOL_NAMES.has(name)) {
             if (heldForTakeover) {
@@ -3983,6 +3997,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   runSecrets,
                   openedUrlBudget,
                   seenUrlBudget,
+                  takePageLinks(completion.executionId),
                 );
                 pendingToolAudits.add(audit);
                 void audit.finally(() => pendingToolAudits.delete(audit));
@@ -4316,6 +4331,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     runSecrets,
                     openedUrlBudget,
                     seenUrlBudget,
+                    takePageLinks(event.executionId),
                   );
                   if (isToolPauseResult(result)) return;
                 } catch (error) {

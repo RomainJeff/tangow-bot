@@ -1,9 +1,11 @@
 import {
+  KeylessHttpWebProvider,
   type LinkPreviewJobDeps,
   type LinkPreviewReadResult,
   runLinkPreviewJob,
   seenUrlHash,
   toolCompletionAuditPayload,
+  webFetchFromTool,
 } from "@rakazo/adapters";
 import { removeLinkPreviewBlock } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
@@ -765,6 +767,84 @@ describe("link.preview job for a bot's run (CA 13, CA 26-29)", () => {
       await runLinkPreviewJob(deps, { runId: "run-1" });
       expect(read).not.toHaveBeenCalled();
       expect(card(db.blocksOf("final"))).toBeUndefined();
+    });
+
+    describe("links in the HTML of a page web_fetch read (CA 67-69)", () => {
+      const HOME = "https://home.test/";
+      const ARTICLE = "https://home.test/x/123_article";
+      const homepage = `<html><head><title>Home</title></head><body>
+        <main><p>${"Front page text. ".repeat(20)}</p><a href="/x/123_article">The story</a>
+        <a href="javascript:void(0)">js</a><a href="mailto:a@b.test">mail</a>
+        <a href="https://u:pw@home.test/secret">creds</a><a href="http://[bad">bad</a></main>
+      </body></html>`;
+      const signal = new AbortController().signal;
+      const context = { operationId: "o", traceId: "t", spaceId: "s", userId: "u", signal };
+
+      /** The audit payload of a real keyless `web_fetch` of the homepage, links and all. */
+      async function fetchHomepage(tool = "web_fetch") {
+        const web = new KeylessHttpWebProvider({
+          fetch: async () =>
+            new Response(homepage, { status: 200, headers: { "content-type": "text/html" } }),
+          resolveHostname: async () => [{ address: "93.184.216.34", family: 4 }],
+        });
+        let links: string[] | undefined;
+        const output = await webFetchFromTool(web, context, { url: HOME }, (found) => {
+          links = found;
+        });
+        return toolCompletionAuditPayload(
+          {
+            name: tool,
+            executionId: "call-1",
+            durationMs: 1,
+            args: { url: HOME },
+            result: { content: [], details: output },
+          },
+          [],
+          "run-1",
+          tool === "web_fetch" ? links : undefined,
+        );
+      }
+
+      it("gives a card to an article linked from a homepage the bot read, when it cites it (CA 67)", async () => {
+        const { db, read, deps } = run({
+          opened: [],
+          extraEvents: [await fetchHomepage()],
+          messages: [{ id: "final", blocks: [text(`À la une : ${ARTICLE}`)] }],
+        });
+        await runLinkPreviewJob(deps, { runId: "run-1" });
+        expect(card(db.blocksOf("final"))).toMatchObject({ url: ARTICLE });
+        expect(read).toHaveBeenCalledTimes(1);
+      });
+
+      it("never makes a javascript:, mailto:, credential or unresolvable link seen (CA 69)", async () => {
+        const event = await fetchHomepage();
+        for (const link of [
+          "javascript:void(0)",
+          "mailto:a@b.test",
+          "https://u:pw@home.test/secret",
+          "https://home.test/not-on-the-page",
+        ]) {
+          const { db, read, deps } = run({
+            opened: [],
+            extraEvents: [event],
+            messages: [{ id: "final", blocks: [text(`See ${link}`)] }],
+          });
+          await runLinkPreviewJob(deps, { runId: "run-1" });
+          expect(card(db.blocksOf("final")), link).toBeUndefined();
+          expect(read, link).not.toHaveBeenCalled();
+        }
+      });
+
+      it("gives no card to a page link that a browser tool returned instead (CA 69)", async () => {
+        const { db, read, deps } = run({
+          opened: [],
+          extraEvents: [await fetchHomepage("browser_navigate")],
+          messages: [{ id: "final", blocks: [text(`À la une : ${ARTICLE}`)] }],
+        });
+        await runLinkPreviewJob(deps, { runId: "run-1" });
+        expect(card(db.blocksOf("final"))).toBeUndefined();
+        expect(read).not.toHaveBeenCalled();
+      });
     });
 
     it("ignores malformed hashes and keeps at most 300 per run", async () => {

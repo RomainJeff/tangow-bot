@@ -2,8 +2,10 @@ import type { AdapterContext } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
 import { FakeWebProvider } from "./fake-web.js";
 import {
+  extractPageLinks,
   extractReadableText,
   KeylessHttpWebProvider,
+  MAX_PAGE_LINKS,
   parseDuckDuckGoResults,
 } from "./keyless-http-web.js";
 import { clampMaxChars, clampMaxResults } from "./web-limits.js";
@@ -70,6 +72,70 @@ describe("keyless HTTP web provider", () => {
     expect(result.text.length).toBeLessThanOrEqual(120 + "\n\n[Content truncated]".length);
   });
 
+  it("collects the page links with the fetch, resolved, and returns the same text as without", async () => {
+    const html = `<html><head><title>Home</title><base href="/news/"></head><body>
+      <article><p>${"word ".repeat(80)}</p><a href="x/123_article">Story</a></article>
+      <a href="https://other.test/y#frag">Other</a></body></html>`;
+    const provider = new KeylessHttpWebProvider({
+      fetch: async () =>
+        new Response(html, { status: 200, headers: { "content-type": "text/html" } }),
+      resolveHostname: publicResolver,
+    });
+    const result = await provider.fetch({ url: "https://example.test/", maxChars: 8000 }, ctx);
+    expect(result.links).toEqual([
+      "https://example.test/news/x/123_article",
+      "https://other.test/y",
+    ]);
+    expect(result.text).not.toContain("123_article");
+  });
+
+  describe("extractPageLinks", () => {
+    const page = (body: string, head = "") =>
+      `<html><head>${head}</head><body>${body}</body></html>`;
+
+    it("resolves against the final URL, or a valid http(s) base", () => {
+      const body = '<a href="/a">a</a><a href="b">b</a>';
+      expect(extractPageLinks(page(body), "https://s.test/dir/page")).toEqual([
+        "https://s.test/a",
+        "https://s.test/dir/b",
+      ]);
+      expect(
+        extractPageLinks(page(body, '<base href="https://cdn.test/root/">'), "https://s.test/p"),
+      ).toEqual(["https://cdn.test/a", "https://cdn.test/root/b"]);
+      expect(
+        extractPageLinks(page(body, '<base href="javascript:void(0)">'), "https://s.test/dir/p"),
+      ).toEqual(["https://s.test/a", "https://s.test/dir/b"]);
+    });
+
+    it("skips fragments, other schemes, credentials, unresolvable and over-long links, and dedupes", () => {
+      const links = [
+        "#top",
+        "javascript:void(0)",
+        "mailto:a@b.test",
+        "tel:+33",
+        "data:text/html,x",
+        "https://u:p@s.test/c",
+        "http://[bad",
+        `/${"a".repeat(2100)}`,
+        "/ok",
+        "/ok#again",
+        "",
+      ];
+      const anchors = links.map((href) => `<a href="${href}">l</a>`).join("");
+      const body = `${anchors}<a>none</a>`;
+      expect(extractPageLinks(page(body), "https://s.test/")).toEqual(["https://s.test/ok"]);
+    });
+
+    it("keeps at most 500 links", () => {
+      const body = Array.from({ length: 600 }, (_, index) => `<a href="/p/${index}">l</a>`).join(
+        "",
+      );
+      const links = extractPageLinks(page(body), "https://s.test/");
+      expect(links).toHaveLength(MAX_PAGE_LINKS);
+      expect(links[0]).toBe("https://s.test/p/0");
+    });
+  });
+
   it("falls back to HTML strip when Readability finds nothing", () => {
     const extracted = extractReadableText(
       "<html><title>Plain</title><body><div>just text here</div></body></html>",
@@ -114,6 +180,26 @@ describe("web tool apply with fake provider", () => {
       text: "Body text",
       truncated: false,
     });
+  });
+
+  it("hands the links over out of band, and returns the same tool output with or without them", async () => {
+    const base = {
+      url: "https://example.test/1",
+      title: "One",
+      text: "Body text",
+      truncated: false,
+    };
+    const without = new FakeWebProvider();
+    without.fetchResult = base;
+    const withLinks = new FakeWebProvider();
+    withLinks.fetchResult = { ...base, links: ["https://example.test/x/123_article"] };
+    const seen: string[][] = [];
+    const args = { url: base.url, maxChars: 100 };
+    const plain = await webFetchFromTool(without, ctx, args, (links) => seen.push(links));
+    const linked = await webFetchFromTool(withLinks, ctx, args, (links) => seen.push(links));
+    expect(JSON.stringify(linked)).toBe(JSON.stringify(plain));
+    expect(linked).not.toHaveProperty("links");
+    expect(seen).toEqual([["https://example.test/x/123_article"]]);
   });
 
   it("surfaces provider errors as tool errors", async () => {

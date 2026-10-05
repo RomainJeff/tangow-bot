@@ -23,10 +23,16 @@ export async function webSearchFromTool(
   }
 }
 
+/**
+ * `onPageLinks` receives the links of the page's HTML, out of band: they are removed from the
+ * returned value, so the tool output the model reads (and its size) is the same with or without
+ * them.
+ */
 export async function webFetchFromTool(
   fetchProvider: WebFetchProvider,
   context: AdapterContext,
   args: Record<string, unknown>,
+  onPageLinks?: (links: string[]) => void,
 ) {
   const url = String(args.url ?? "").trim();
   if (!url) return { error: "url is required" };
@@ -39,7 +45,9 @@ export async function webFetchFromTool(
       },
       context,
     );
-    return result;
+    const { links, ...output } = result;
+    if (links && links.length > 0) onPageLinks?.(links);
+    return output;
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
