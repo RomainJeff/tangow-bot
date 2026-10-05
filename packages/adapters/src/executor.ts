@@ -207,7 +207,7 @@ import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import type { TextEditResult } from "./file-text.js";
-import { applyTextEdit } from "./file-text.js";
+import { applyTextEdit, readLineWindow } from "./file-text.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import type { HistoryWindowMode } from "./history-compaction.js";
 import {
@@ -355,6 +355,15 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "list_secrets",
 ]);
 const MAX_MODEL_FILE_BYTES = 250_000;
+
+function positiveIntegerArg(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+const READ_FILE_ERRORS = {
+  offset_out_of_range: "offset is past the end of the file; use a smaller offset",
+  line_too_long: "a single line is too large to return; use shell to inspect it",
+};
 const EDIT_FILE_ERRORS: Record<Extract<TextEditResult, { ok: false }>["error"], string> = {
   empty_old_text: "old_text is empty; pass the exact text to replace",
   not_found: "old_text not found; read the file again with read_file and copy the text exactly",
@@ -2477,38 +2486,37 @@ export function createRunExecutor(deps: ExecutorDeps) {
             let bytes: Uint8Array;
             try {
               bytes = await deps.sandbox.readFile(computer, storedPath, context, {
-                maxBytes: MAX_MODEL_FILE_BYTES,
+                maxBytes: ATTACHMENT_MAX_BYTES,
               });
             } catch (error) {
               if (error instanceof Error && /exceeds \d+ bytes/.test(error.message)) {
-                return {
-                  error: "file is too large for model context",
-                  path: filePath,
-                };
+                return { error: "file is too large to read; use shell", path: filePath };
               }
               throw error;
             }
-            if (bytes.byteLength > MAX_MODEL_FILE_BYTES) {
-              return {
-                error: "file is too large for model context",
-                path: filePath,
-                size: bytes.byteLength,
-              };
-            }
+            let text: string;
             try {
-              return {
-                path: filePath,
-                content: redactSecrets(
-                  new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-                  runSecrets,
-                ),
-              };
+              text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
             } catch {
               return {
                 error: "file is not UTF-8 text; use open_path to inspect it",
                 path: filePath,
               };
             }
+            const window = readLineWindow(redactSecrets(text, runSecrets), {
+              offset: positiveIntegerArg(args.offset) ?? 1,
+              limit: positiveIntegerArg(args.limit),
+              maxBytes: MAX_MODEL_FILE_BYTES,
+            });
+            if (!window.ok) {
+              return {
+                error: READ_FILE_ERRORS[window.error],
+                path: filePath,
+                totalLines: window.totalLines,
+              };
+            }
+            const { ok: _ok, ...page } = window;
+            return { path: filePath, ...page };
           }
           if (name === "write_file") {
             const filePath = String(args.path ?? "notes/result.txt");

@@ -1085,7 +1085,14 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         };
       }
       if (tool.name === "list_files") return { path: String(raw.path ?? "") };
-      if (tool.name === "read_file" || tool.name === "open_path") {
+      if (tool.name === "read_file") {
+        return {
+          path: String(raw.path ?? ""),
+          ...(raw.offset === undefined ? {} : { offset: raw.offset }),
+          ...(raw.limit === undefined ? {} : { limit: raw.limit }),
+        };
+      }
+      if (tool.name === "open_path") {
         return { path: String(raw.path ?? "") };
       }
       if (tool.name === "launch_app") {
