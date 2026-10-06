@@ -78,6 +78,7 @@ export function startScreenLinkSession(ports) {
   let unlisten = null;
   let ended = false;
   let draining = false;
+  let keyboardOnScreen = false;
   const queue = [];
   const sticky = {};
 
@@ -125,6 +126,7 @@ export function startScreenLinkSession(ports) {
     entry.onConnect = () => {
       if (owner !== generation) return;
       entry.canvas = stage.canvasOf(slot);
+      if (keyboardOnScreen && stage.keyboardFocus() === "none") rfb.focus();
       dispatch({ type: "connect" });
       watchPaint(owner, entry);
     };
@@ -187,9 +189,14 @@ export function startScreenLinkSession(ports) {
     );
   }
 
-  /** Events are queued so an effect that raises another event never re-enters `step`. */
+  /**
+   * Events are queued so an effect that raises another event never re-enters `step`.
+   * noVNC listens for keys on its own canvas, which leaves the page with the old RFB: whether
+   * the user was typing into the screen is sampled while live, so the next canvas can take over.
+   */
   function dispatch(event) {
     if (ended) return;
+    if (isLive()) keyboardOnScreen = stage.keyboardFocus() === "screen";
     queue.push({ ...event, now: clock.now() });
     if (draining) return;
     draining = true;

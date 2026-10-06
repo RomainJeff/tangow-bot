@@ -54,9 +54,9 @@ export function step(model, event, env) {
       if (phase !== "idle") break;
       m.online = event.online;
       m.hiddenAt = event.visible ? null : now;
-      m.outageStart = now;
+      openOutage(m, now);
       announce(m, fx, "connecting");
-      waitUntil(m, fx, now, now);
+      waitUntil(m, fx, now, now, true);
       break;
     case "connect":
       if (phase === "opening") m.phase = { name: "painting", since: now };
@@ -68,7 +68,7 @@ export function step(model, event, env) {
       drop(m, fx, now, env);
       break;
     case "tick":
-      tick(m, fx, now, env, model.lastAt);
+      tick(m, fx, now, env, nextWake(model));
       break;
     case "hidden":
       m.hiddenAt ??= now;
@@ -82,8 +82,9 @@ export function step(model, event, env) {
       break;
     }
     case "online":
+      if (m.online) break;
       m.online = true;
-      nudge(m, fx, now);
+      if (phase === "waiting" || phase === "opening") recycle(m, fx, now);
       break;
     case "offline":
       m.online = false;
@@ -99,13 +100,13 @@ export function nextWake(model) {
   const budgetEnd = model.outageStart + BUDGET_MS;
   switch (phase.name) {
     case "opening":
-      return Math.min(phase.since + ATTEMPT_TIMEOUT_MS, budgetEnd);
+      return model.online ? Math.min(phase.since + ATTEMPT_TIMEOUT_MS, budgetEnd) : null;
     case "painting":
       return phase.since + FIRST_FRAME_GRACE_MS;
     case "live":
       return model.lastAt + HEARTBEAT_MS;
     case "waiting":
-      return model.online ? Math.min(phase.until, budgetEnd) : budgetEnd;
+      return model.online ? Math.min(phase.until, budgetEnd) : null;
     default:
       return null;
   }
@@ -118,24 +119,27 @@ function drop(m, fx, now, env) {
   if (phase.name !== "opening" && now - phase.since >= STABLE_MS) {
     openOutage(m, now);
     announce(m, fx, m.painted ? "reconnecting" : "connecting");
-    waitUntil(m, fx, now, now);
+    waitUntil(m, fx, now, now, true);
     return;
   }
   fail(m, fx, now, env);
 }
 
-function tick(m, fx, now, env, lastAt) {
+/** A timer that fired far past its due time means the device slept: start over on a fresh budget. */
+function tick(m, fx, now, env, due) {
   const phase = m.phase;
   if (m.hiddenAt !== null) return;
-  if (phase.name === "live") {
-    if (now - lastAt > CLOCK_GAP_MS) recycle(m, fx, now);
+  if (due !== null && now - due > CLOCK_GAP_MS) {
+    recycle(m, fx, now);
     return;
   }
+  if (phase.name === "live") return;
   if (phase.name === "painting") {
     if (now - phase.since >= FIRST_FRAME_GRACE_MS) goLive(m, fx, phase.since);
     return;
   }
-  if (now - m.outageStart >= BUDGET_MS) {
+  if (!m.online) return;
+  if (outOfBudget(m, now)) {
     stop(m, fx);
     return;
   }
@@ -154,17 +158,21 @@ function recycle(m, fx, now) {
   if (name === "opening" || name === "painting" || name === "live") fx.push({ type: "abort" });
   openOutage(m, now);
   announce(m, fx, m.painted ? "reconnecting" : "connecting", true);
-  waitUntil(m, fx, now, earliestNudge(m, now));
+  waitUntil(m, fx, now, earliestNudge(m, now), true);
 }
 
 function nudge(m, fx, now) {
   if (m.phase.name !== "waiting") return;
+  if (m.online && outOfBudget(m, now)) {
+    stop(m, fx);
+    return;
+  }
   waitUntil(m, fx, now, Math.min(m.phase.until, earliestNudge(m, now)));
 }
 
 function fail(m, fx, now, env) {
   m.failures += 1;
-  if (m.hiddenAt === null && now - m.outageStart >= BUDGET_MS) {
+  if (m.hiddenAt === null && m.online && outOfBudget(m, now)) {
     stop(m, fx);
     return;
   }
@@ -176,9 +184,13 @@ function fail(m, fx, now, env) {
   waitUntil(m, fx, now, now + backoff(m.failures, env.rand));
 }
 
-function waitUntil(m, fx, now, until) {
+/**
+ * Offline only holds retries: the attempt that opens a fresh budget goes out anyway, so a page
+ * whose browser wrongly reports offline still connects, and a truly offline one fails at once.
+ */
+function waitUntil(m, fx, now, until, fresh = false) {
   m.phase = { name: "waiting", until };
-  if (until > now || m.hiddenAt !== null || !m.online) return;
+  if (until > now || m.hiddenAt !== null || (!m.online && !fresh)) return;
   m.phase = { name: "opening", since: now };
   m.attemptedAt = now;
   fx.push({ type: "attempt" });
@@ -204,6 +216,10 @@ function stop(m, fx) {
 function freeze(m, fx) {
   m.frozen = true;
   fx.push({ type: "freeze" });
+}
+
+function outOfBudget(m, now) {
+  return now - m.outageStart >= BUDGET_MS;
 }
 
 function openOutage(m, now) {

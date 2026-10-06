@@ -8,6 +8,7 @@ export interface RfbLike {
   addEventListener(type: "connect" | "disconnect", listener: () => void): void;
   removeEventListener(type: "connect" | "disconnect", listener: () => void): void;
   disconnect(): void;
+  focus(): void;
   sendKey(keysym: number, code?: string, down?: boolean): void;
   clipboardPasteFrom(text: string): void;
 }
@@ -31,6 +32,8 @@ export interface Stage<Slot = unknown, Canvas extends CanvasLike = CanvasLike> {
   /** Remove the live layer's content and any frozen copy. */
   clear(): void;
   nextFrame(callback: () => void): () => void;
+  /** Where the keyboard focus is: in the live layer, on nothing, or on some other control. */
+  keyboardFocus(): "screen" | "none" | "elsewhere";
 }
 
 export interface Page {

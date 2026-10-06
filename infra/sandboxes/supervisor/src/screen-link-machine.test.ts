@@ -286,16 +286,91 @@ describe("embed screen link machine", () => {
     ]);
   });
 
-  it("waits for the network before it retries", () => {
+  it("holds retries and the budget while offline, then starts a fresh budget once online", () => {
     const m = machine();
     m.feed({ type: "start", visible: true, online: true });
     liveAt(m, 0);
     m.advanceTo(20_000);
     m.feed({ type: "offline" });
     m.feed({ type: "drop" });
+    m.feed({ type: "drop" });
+    m.advanceTo(90_000);
+    expect(m.attempts()).toEqual([0, 20_000]);
+    expect(m.emitted()).toEqual(["0 connecting", "0 connected", "20000 reconnecting"]);
+    expect(m.feed({ type: "online" })).toEqual([
+      { type: "emit", state: "reconnecting" },
+      { type: "attempt" },
+    ]);
+    m.advanceTo(200_000, () => m.feed({ type: "drop" }));
+    expect(m.emitted().at(-1)).toBe("150000 failed");
+  });
+
+  it("still tries once at start when the browser reports offline, then waits for the network", () => {
+    const m = machine();
+    expect(m.feed({ type: "start", visible: true, online: false })).toEqual([
+      { type: "emit", state: "connecting" },
+      { type: "attempt" },
+    ]);
+    m.feed({ type: "drop" });
+    m.advanceTo(120_000);
     expect(m.attempts()).toEqual([0]);
-    m.advanceTo(50_000);
-    expect(m.feed({ type: "online" })).toEqual([{ type: "attempt" }]);
+    expect(m.emitted()).toEqual(["0 connecting"]);
+    expect(m.feed({ type: "online" })).toEqual([
+      { type: "emit", state: "connecting" },
+      { type: "attempt" },
+    ]);
+  });
+
+  it("connects at start even when the browser wrongly reports offline", () => {
+    const m = machine();
+    m.feed({ type: "start", visible: true, online: false });
+    m.advanceTo(300);
+    m.feed({ type: "connect" });
+    m.feed({ type: "painted" });
+    expect(m.emitted()).toEqual(["0 connecting", "300 connected"]);
+  });
+
+  it("starts a fresh budget when a retry timer fires more than 5 s late", () => {
+    const m = machine();
+    m.feed({ type: "start", visible: true, online: true });
+    liveAt(m, 0);
+    m.advanceTo(20_000);
+    m.feed({ type: "drop" });
+    m.feed({ type: "drop" });
+    m.jump(140_000);
+    expect(m.feed({ type: "tick" })).toEqual([
+      { type: "emit", state: "reconnecting" },
+      { type: "attempt" },
+    ]);
+    expect(nextWake(m.model)).toBe(150_000);
+  });
+
+  it("restarts an attempt in flight when its timeout fires more than 5 s late", () => {
+    const m = machine();
+    m.feed({ type: "start", visible: true, online: true });
+    liveAt(m, 0);
+    m.advanceTo(20_000);
+    m.feed({ type: "drop" });
+    m.jump(140_000);
+    expect(m.feed({ type: "tick" })).toEqual([
+      { type: "abort" },
+      { type: "emit", state: "reconnecting" },
+      { type: "attempt" },
+    ]);
+  });
+
+  it("fails without a new attempt on a short return after the budget ran out", () => {
+    const m = machine();
+    m.feed({ type: "start", visible: true, online: true });
+    m.feed({ type: "drop" });
+    m.advanceTo(55_000, () => m.feed({ type: "drop" }));
+    m.feed({ type: "hidden" });
+    m.jump(62_000);
+    expect(m.feed({ type: "visible" })).toEqual([
+      { type: "stop" },
+      { type: "emit", state: "failed" },
+    ]);
+    expect(m.attempts()).toEqual([0, 1_000, 3_000, 7_000, 15_000, 30_000, 45_000]);
   });
 
   it("never runs two attempts at once across drops, recycles and timeouts", () => {

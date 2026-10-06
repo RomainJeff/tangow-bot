@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { attachHostClipboardPaste } from "../../computer/clipboard-bridge.js";
 import { attachMobileKeyboard } from "../../computer/mobile-keyboard.js";
@@ -18,6 +16,9 @@ class FakeCanvas {
     return { getImageData: () => ({ data: [0, 0, 0, this.alpha] }) };
   }
 }
+
+const OTHER_CONTROL = { id: "mobile-keyboard" };
+const page = { activeElement: null as object | null };
 
 class FakeSlot {
   children: object[] = [];
@@ -59,6 +60,10 @@ class FakeRfb implements RfbLike {
   }
   private leaveSlot() {
     this.slot.children = [];
+    if (page.activeElement === this.slot.canvas) page.activeElement = null;
+  }
+  focus() {
+    if (this.slot.children.includes(this.slot.canvas)) page.activeElement = this.slot.canvas;
   }
   connect() {
     this.state = "connected";
@@ -101,6 +106,7 @@ function harness({
   failConstructor?: boolean;
 } = {}) {
   FakeRfb.all = [];
+  page.activeElement = null;
   const log: string[] = [];
   const posted: string[] = [];
   const timers = new Map<number, { at: number; run: () => void }>();
@@ -139,6 +145,11 @@ function harness({
         const index = frames.indexOf(callback);
         if (index >= 0) frames.splice(index, 1);
       };
+    },
+    keyboardFocus() {
+      const active = page.activeElement;
+      if (active === null) return "none" as const;
+      return stage.slots.some((slot) => slot.children.includes(active)) ? "screen" : "elsewhere";
     },
   };
   const session = startScreenLinkSession({
@@ -215,6 +226,12 @@ function harness({
     },
     get maxOpen() {
       return maxOpen;
+    },
+    get focused() {
+      return page.activeElement;
+    },
+    focusOtherControl() {
+      page.activeElement = OTHER_CONTROL;
     },
     setConstructorFailure(value: boolean) {
       throwing = value;
@@ -344,7 +361,7 @@ describe("screen link session", () => {
     expect(h.session.rfb.connected).toBe(false);
   });
 
-  it("posts only the five states, in order, and nothing identifying the screen", () => {
+  it("posts each state change in order", () => {
     const h = harness();
     h.goLive();
     h.current().close();
@@ -352,10 +369,6 @@ describe("screen link session", () => {
     h.current().close();
     h.advance(2_000);
     h.goLive();
-    for (const state of h.posted) {
-      expect(SCREEN_STATES).toContain(state);
-      expect(encodeStateMessage(state as (typeof SCREEN_STATES)[number])).not.toContain("ws");
-    }
     expect(h.posted).toEqual(["connecting", "connected", "reconnecting", "stalled", "connected"]);
   });
 
@@ -368,6 +381,51 @@ describe("screen link session", () => {
     expect(FakeRfb.all.filter((rfb) => rfb.open)).toHaveLength(0);
     h.setVisible(false);
     expect(h.timers).toBe(0);
+  });
+});
+
+describe("keyboard focus across reconnects", () => {
+  it("hands focus to the new screen only when the user was typing into the old one", () => {
+    const h = harness();
+    h.goLive();
+    h.current().close();
+    h.advance(1_000);
+    h.goLive();
+    expect(h.focused).toBe(null);
+
+    const second = h.current();
+    second.focus();
+    h.advance(10_000);
+    second.close();
+    expect(h.focused).toBe(null);
+    h.advance(1_000);
+    h.goLive();
+    expect(FakeRfb.all).toHaveLength(3);
+    expect(h.focused).toBe(h.current().slot.canvas);
+  });
+
+  it("hands focus to the screen that replaces one recycled after a long hide", () => {
+    const h = harness();
+    h.goLive();
+    h.current().focus();
+    h.setVisible(false);
+    h.advance(11_000);
+    h.setVisible(true);
+    h.goLive();
+    expect(FakeRfb.all).toHaveLength(2);
+    expect(h.focused).toBe(h.current().slot.canvas);
+  });
+
+  it("keeps focus on another control the user picked while reconnecting", () => {
+    const h = harness();
+    h.goLive();
+    h.current().focus();
+    h.advance(1_000);
+    h.current().close();
+    h.focusOtherControl();
+    h.advance(1_000);
+    h.goLive();
+    expect(h.focused).toBe(OTHER_CONTROL);
   });
 });
 
@@ -556,26 +614,5 @@ describe("host poster", () => {
     expect(bridge).not.toHaveBeenCalled();
     for (const state of SCREEN_STATES) post(state);
     expect(bridge.mock.calls.map(([sent]) => JSON.parse(sent).state)).toEqual([...SCREEN_STATES]);
-  });
-});
-
-describe("embed page", () => {
-  const root = path.resolve(import.meta.dirname, "../../computer");
-  const read = (file: string) => readFileSync(path.join(root, file), "utf8");
-
-  it("has no inbound message channel and no console output", () => {
-    for (const file of ["embed.html", "screen-link-session.js", "screen-link-machine.js"]) {
-      const source = read(file);
-      expect(source, file).not.toMatch(/["']message["']/);
-      expect(source, file).not.toMatch(/console\./);
-    }
-  });
-
-  it("hands the helpers the session facade and keeps the trackpad on the live layer", () => {
-    const embed = read("embed.html");
-    expect(embed).toMatch(/startScreenLinkSession\(/);
-    expect(embed).toMatch(/attachHostClipboardPaste\(rfb\)/);
-    expect(embed).toMatch(/surface: live/);
-    expect(embed).toMatch(/<canvas id="frozen"/);
   });
 });

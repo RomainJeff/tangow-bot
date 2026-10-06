@@ -131,6 +131,11 @@
           const id = requestAnimationFrame(callback);
           return () => cancelAnimationFrame(id);
         },
+        keyboardFocus() {
+          const active = document.activeElement;
+          if (!active || active === document.body) return "none";
+          return live.contains(active) ? "screen" : "elsewhere";
+        },
       };
       const page = {
         visible: () => document.visibilityState !== "hidden",
