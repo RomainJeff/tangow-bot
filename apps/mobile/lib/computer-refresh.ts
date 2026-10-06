@@ -1,25 +1,11 @@
 import type { ComputerStatus } from "@rakazo/contracts";
+import type { HeldScreenUrl } from "@rakazo/core";
+import { computerScreenKey, isScreenUrlReusable } from "@rakazo/core";
 
-/**
- * Every `computer/screenUrl` call seals a fresh capability, and the viewer is keyed by that URL.
- * Re-reading it on each poll would remount the viewer every two seconds, so polls only read the
- * screen when the status that shapes it changed, when the held URL nears expiry, or after the
- * viewer reported the current URL unusable.
- */
-export const SCREEN_URL_RENEW_MS = 50 * 60_000;
-
-function screenKey(status: ComputerStatus) {
-  return [
-    status.state,
-    status.mode,
-    status.kind,
-    status.controlHolder,
-    status.controlBotId,
-    status.screenAvailable,
-    status.screenWidth,
-    status.screenHeight,
-    status.homeRevision,
-  ].join("|");
+interface RefreshInput {
+  screenAttempts?: number;
+  /** Read the screen URL even when the held one is still reusable. Polls pass false. */
+  force?: boolean;
 }
 
 /** One polling lifecycle per mounted computer target. Explicit refreshes supersede older reads. */
@@ -37,20 +23,9 @@ export function createComputerRefresh(options: {
   let activeActions = 0;
   let pendingRevision: number | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  // A completed read is cached even when it returned null (no screen for this status), so the
-  // status alone decides when to ask again; the viewer clears the cache when a URL stops working.
-  let screenLoaded = false;
-  let screenStatus: string | undefined;
-  let screenReadAt = 0;
-
-  function screenStale(status: ComputerStatus, force: boolean) {
-    return (
-      force ||
-      !screenLoaded ||
-      screenStatus !== screenKey(status) ||
-      Date.now() - screenReadAt >= SCREEN_URL_RENEW_MS
-    );
-  }
+  // A completed read is held even when it returned null (no screen for this status), so the
+  // status alone decides when to ask again; the viewer clears it when a URL stops working.
+  let held: HeldScreenUrl | undefined;
 
   function invalidate() {
     revision += 1;
@@ -60,10 +35,10 @@ export function createComputerRefresh(options: {
   function schedule() {
     clearTimeout(timer);
     if (!active || activeActions > 0 || pendingRevision === revision) return;
-    timer = setTimeout(() => void refresh({ poll: true }).catch(() => undefined), 2000);
+    timer = setTimeout(() => void refresh({ force: false }).catch(() => undefined), 2000);
   }
 
-  async function refresh({ screenAttempts = 1, poll = false } = {}) {
+  async function refresh({ screenAttempts = 1, force = true } = {}) {
     if (!active) return;
     invalidate();
     const requestRevision = revision;
@@ -73,13 +48,13 @@ export function createComputerRefresh(options: {
       const status = await options.readStatus();
       if (!current()) return;
       options.onStatus(status);
-      if (screenStale(status, !poll)) {
+      if (force || !isScreenUrlReusable(held, status, Date.now())) {
+        const key = computerScreenKey(status);
+        const readAt = Date.now();
         try {
           const url = await options.readScreen(screenAttempts);
           if (!current()) return;
-          screenLoaded = true;
-          screenStatus = screenKey(status);
-          screenReadAt = Date.now();
+          held = { url, key, readAt };
           options.onScreen(url);
         } catch {
           // Keep the last URL after a failed read; a successful null clears it.
@@ -97,10 +72,10 @@ export function createComputerRefresh(options: {
   }
 
   return {
-    refresh: (input?: { screenAttempts?: number }) => refresh(input),
+    refresh: (input?: RefreshInput) => refresh(input),
     /** The viewer could not use the current URL: read a fresh one on the next poll. */
     invalidateScreen() {
-      screenLoaded = false;
+      held = undefined;
     },
     isActive: () => active,
     beginAction() {
@@ -114,7 +89,7 @@ export function createComputerRefresh(options: {
       }
       return {
         isActive,
-        refresh: (input?: { screenAttempts?: number }) =>
+        refresh: (input?: RefreshInput) =>
           isActive() && !finished ? refresh(input) : Promise.resolve(undefined),
         finish() {
           if (finished) return;
@@ -140,8 +115,7 @@ export function createComputerRefresh(options: {
       active = false;
       lifetime += 1;
       activeActions = 0;
-      screenLoaded = false;
-      screenStatus = undefined;
+      held = undefined;
       invalidate();
     },
   };

@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
 import {
   buildSkillMd,
   formatSkillsCatalogInstruction,
@@ -9,18 +10,25 @@ import {
 } from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BUILTIN_SKILLS_ROOT, loadBuiltinSkills } from "./builtin-skills.js";
+import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { marketplacesRoot } from "./marketplace-store.js";
 import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 import {
   listAgentSkillRecords,
+  readSkillDraft,
   type SkillToolDeps,
   skillCreateFromTool,
   skillDeleteFromTool,
   skillReadFromTool,
+  skillSearchFromTool,
   skillUpdateFromTool,
 } from "./skill-tools.js";
 
 type Row = Record<string, unknown>;
+
+/** Builtins ship with the repo and grow over time; tests compare only the skills they seed. */
+const ownNames = (records: Array<{ name: string; source: string }>) =>
+  records.filter((record) => record.source !== "builtin").map((record) => record.name);
 
 const matches = (row: Row, where: Row) =>
   Object.entries(where).every(([key, value]) => row[key] === value);
@@ -208,7 +216,8 @@ describe("skill tools", () => {
       update: {},
     });
     const records = await listAgentSkillRecords(deps, { ...owner, botId: "bot-1" });
-    expect(records.map((r) => r.name)).toEqual(["delegate-to-opencode", "Interrogate"]);
+    expect(records.map((r) => r.name)).toContain("Interrogate");
+    expect(ownNames(records)).toEqual([]);
   });
 
   it("ships builtin skills as valid, readable, read-only SKILL.md records", async () => {
@@ -360,25 +369,24 @@ describe("skill tools", () => {
 
     // Builtins default to "all", so every bot sees them alongside its own visible skills.
     const forA = await listAgentSkillRecords(deps, { ...scope, botId: "botA" });
-    expect(forA.map((s) => s.name)).toEqual([
-      "delegate-to-opencode",
-      "Interrogate",
-      "Everyone",
-      "Only bot A",
-    ]);
+    expect(forA.map((s) => s.name)).toContain("Interrogate");
+    expect(ownNames(forA)).toEqual(["Everyone", "Only bot A"]);
     const forB = await listAgentSkillRecords(deps, { ...scope, botId: "botB" });
-    expect(forB.map((s) => s.name)).toEqual([
-      "delegate-to-opencode",
-      "Interrogate",
-      "Everyone",
-      "Not for A",
-    ]);
+    expect(forB.map((s) => s.name)).toContain("Interrogate");
+    expect(ownNames(forB)).toEqual(["Everyone", "Not for A"]);
     const all = await listAgentSkillRecords(deps, scope);
-    expect(all).toHaveLength(5);
+    expect(ownNames(all)).toHaveLength(3);
     // skill_read follows the same visibility.
     expect(
       await skillReadFromTool(deps, { ...scope, botId: "botB" }, { name: "Only bot A" }),
     ).toEqual({ error: "Skill not found." });
+    // skill_search too.
+    const search = async (botId: string) =>
+      (await skillSearchFromTool(deps, { ...scope, botId }, { query: "only bot" })).skills;
+    expect(await search("botA")).toContainEqual(expect.objectContaining({ name: "Only bot A" }));
+    expect(await search("botB")).not.toContainEqual(
+      expect.objectContaining({ name: "Only bot A" }),
+    );
   });
 
   it("scopes a bot-created skill to its creator", async () => {
@@ -462,12 +470,10 @@ describe("skill tools", () => {
       "New",
     ]);
     // The exclusion semantics survive the rename: only botA sees it.
-    expect(
-      (await listAgentSkillRecords(deps, { ...owner, botId: "botA" })).map((s) => s.name),
-    ).toEqual(["delegate-to-opencode", "Interrogate", "New"]);
-    expect(
-      (await listAgentSkillRecords(deps, { ...owner, botId: "botB" })).map((s) => s.name),
-    ).toEqual(["delegate-to-opencode", "Interrogate"]);
+    expect(ownNames(await listAgentSkillRecords(deps, { ...owner, botId: "botA" }))).toEqual([
+      "New",
+    ]);
+    expect(ownNames(await listAgentSkillRecords(deps, { ...owner, botId: "botB" }))).toEqual([]);
 
     expect(await skillDeleteFromTool(deps, owner, { name: "New" })).toEqual({
       ok: true,
@@ -555,5 +561,178 @@ describe("skill tools", () => {
     expect(await skillUpdateFromTool(deps, owner, { skillId: mktId, body: "x" })).toEqual(readOnly);
     expect(await skillDeleteFromTool(deps, owner, { skillId: mktId })).toEqual(readOnly);
     expect(await ids(owner)).toEqual(["user:mine", mktId]);
+  });
+});
+
+describe("skill drafts", () => {
+  const context = {
+    operationId: "op",
+    traceId: "trace",
+    spaceId: "w1",
+    userId: "u1",
+    signal: new AbortController().signal,
+  };
+  const text = (value: string) => new TextEncoder().encode(value);
+  const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+
+  async function draftBox(files: Record<string, string | { content: string; executable: true }>) {
+    const sandbox = new FakeSandboxProvider();
+    const computer = await sandbox.provision({ botId: "botA", homePath: "/home" }, context);
+    const box = sandbox.boxes.get(computer.id);
+    for (const [file, value] of Object.entries(files)) {
+      box?.files.set(
+        file,
+        typeof value === "string"
+          ? { content: text(value), executable: false }
+          : { content: text(value.content), executable: true },
+      );
+    }
+    return { sandbox, computer };
+  }
+
+  it("walks nested folders and returns paths relative to the draft", async () => {
+    const { sandbox, computer } = await draftBox({
+      "skill-drafts/deploy/SKILL.md": "md",
+      "skill-drafts/deploy/scripts/run.sh": { content: "echo hi", executable: true },
+      "skill-drafts/deploy/references/api/notes.md": "notes",
+      "skill-drafts/other/SKILL.md": "not this one",
+    });
+    const files = await readSkillDraft(sandbox, computer, "/skill-drafts/deploy", context);
+    if ("error" in files) throw new Error(files.error);
+    expect(files.map((f) => [f.path, decode(f.bytes), f.executable])).toEqual([
+      ["references/api/notes.md", "notes", false],
+      ["scripts/run.sh", "echo hi", true],
+      ["SKILL.md", "md", false],
+    ]);
+  });
+
+  it("refuses an oversized draft before reading any file", async () => {
+    const { sandbox, computer } = await draftBox(
+      Object.fromEntries([
+        ["d/SKILL.md", "md"],
+        ...Array.from({ length: SKILL_BUNDLE_MAX_ENTRIES }, (_, i) => [`d/f/${i}.txt`, "x"]),
+      ]),
+    );
+    const readFile = vi.spyOn(sandbox, "readFile");
+    expect(await readSkillDraft(sandbox, computer, "d", context)).toEqual({
+      error: `Skill folder has too many entries (> ${SKILL_BUNDLE_MAX_ENTRIES}).`,
+    });
+    expect(readFile.mock.calls).toEqual([]);
+  });
+
+  it("asks for a SKILL.md when the folder is missing or has none", async () => {
+    const { sandbox, computer } = await draftBox({ "d/notes.md": "n" });
+    const error = { error: "No SKILL.md at the root of the skill folder." };
+    expect(await readSkillDraft(sandbox, computer, "d", context)).toEqual(error);
+    expect(await readSkillDraft(sandbox, computer, "missing", context)).toEqual(error);
+  });
+
+  describe("skill_create and skill_update with files", () => {
+    let dataDir: string;
+    let prisma: ReturnType<typeof makePrisma>;
+    let deps: SkillToolDeps;
+    beforeEach(async () => {
+      prisma = makePrisma();
+      dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-drafts-"));
+      deps = { prisma: prisma as never, dataDir };
+    });
+    afterEach(async () => {
+      await rm(dataDir, { recursive: true, force: true });
+    });
+    const creator = { spaceId: "w1", userId: "u1", botId: "botA" };
+    const skillMd = buildSkillMd({ name: "Deploy", description: "Ship it", body: "1. Run." });
+    const draft = [
+      { path: "SKILL.md", bytes: text(skillMd), executable: false },
+      { path: "scripts/run.sh", bytes: text("echo hi"), executable: true },
+    ];
+
+    it("saves the folder as a skill scoped to the creating bot", async () => {
+      expect(await skillCreateFromTool(deps, creator, { files: draft })).toMatchObject({
+        ok: true,
+        id: "user:deploy",
+        name: "Deploy",
+        description: "Ship it",
+      });
+      const dir = path.join(userSkillsRoot(dataDir, creator), "deploy");
+      expect(await readFile(path.join(dir, "scripts/run.sh"), "utf8")).toBe("echo hi");
+      expect((await stat(path.join(dir, "scripts/run.sh"))).mode & 0o111).toBe(0o111);
+      expect(
+        await prisma.skillSetting.findMany({ where: { skillKey: "user:deploy" } }),
+      ).toMatchObject([{ spaceId: "w1", userId: "u1", availability: "selected" }]);
+      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:deploy" } })).toMatchObject([
+        { spaceId: "w1", userId: "u1", botId: "botA", enabled: true },
+      ]);
+      expect((await skillReadFromTool(deps, creator, { name: "Deploy" })).content).toBe(skillMd);
+      expect(
+        await skillReadFromTool(deps, { ...creator, botId: "botB" }, { name: "Deploy" }),
+      ).toEqual({ error: "Skill not found." });
+      expect(await skillCreateFromTool(deps, creator, { files: draft })).toEqual({
+        error: 'A skill named "Deploy" already exists.',
+      });
+    });
+
+    it("rejects files combined with content and a draft without SKILL.md", async () => {
+      expect(await skillCreateFromTool(deps, creator, { files: draft, content: skillMd })).toEqual({
+        error: "Pass either path or name/description/body/content, not both.",
+      });
+      expect(await skillCreateFromTool(deps, creator, { files: draft.slice(1) })).toEqual({
+        error: "No SKILL.md at the root of the skill folder.",
+      });
+      expect(await listUserSkills(userSkillsRoot(dataDir, creator))).toEqual([]);
+    });
+
+    const shipMd = buildSkillMd({ name: "Ship", description: "Ship faster", body: "1. Go." });
+
+    it("replaces a saved skill's scripts from a folder", async () => {
+      await skillCreateFromTool(deps, creator, { files: draft });
+      const nextMd = buildSkillMd({ name: "Deploy", description: "Ship it", body: "2. Check." });
+      expect(
+        await skillUpdateFromTool(deps, creator, {
+          name: "Deploy",
+          files: [
+            { path: "SKILL.md", bytes: text(nextMd), executable: false },
+            { path: "scripts/check.sh", bytes: text("echo ok"), executable: true },
+          ],
+        }),
+      ).toEqual({ ok: true, id: "user:deploy", name: "Deploy", description: "Ship it" });
+      const dir = path.join(userSkillsRoot(dataDir, creator), "deploy");
+      expect(await readdir(path.join(dir, "scripts"))).toEqual(["check.sh"]);
+      expect((await stat(path.join(dir, "scripts/check.sh"))).mode & 0o111).toBe(0o111);
+      expect((await skillReadFromTool(deps, creator, { name: "Deploy" })).content).toBe(nextMd);
+    });
+
+    it("moves access rows when the folder's SKILL.md renames the skill", async () => {
+      await skillCreateFromTool(deps, creator, { files: draft });
+      expect(
+        await skillUpdateFromTool(deps, creator, {
+          name: "Deploy",
+          files: [{ path: "SKILL.md", bytes: text(shipMd), executable: false }],
+        }),
+      ).toEqual({ ok: true, id: "user:ship", name: "Ship", description: "Ship faster" });
+      expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:deploy" } })).toEqual(
+        [],
+      );
+      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:deploy" } })).toEqual([]);
+      expect(
+        await prisma.skillSetting.findMany({ where: { skillKey: "user:ship" } }),
+      ).toMatchObject([{ availability: "selected" }]);
+      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:ship" } })).toMatchObject([
+        { botId: "botA", enabled: true },
+      ]);
+      expect(await readdir(userSkillsRoot(dataDir, creator))).toEqual(["ship"]);
+    });
+
+    it("rejects files combined with body and folders for read-only skills", async () => {
+      await skillCreateFromTool(deps, creator, { files: draft });
+      expect(
+        await skillUpdateFromTool(deps, creator, { name: "Deploy", files: draft, body: "x" }),
+      ).toEqual({ error: "Pass either path or newName/description/body/content, not both." });
+      expect(
+        await skillUpdateFromTool(deps, creator, { name: "Interrogate", files: draft }),
+      ).toEqual({ error: "Builtin and plugin skills are read-only." });
+      expect(
+        await readdir(path.join(userSkillsRoot(dataDir, creator), "deploy", "scripts")),
+      ).toEqual(["run.sh"]);
+    });
   });
 });

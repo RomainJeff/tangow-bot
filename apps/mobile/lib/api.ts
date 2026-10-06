@@ -18,6 +18,7 @@ import {
   cancelResponseBody,
   ensureAiDataConsent,
   isRunTerminalEvent,
+  mergeMessageUpdate,
   mergeThreadHistory,
   prependThreadHistoryPage,
   progressMessageId,
@@ -1229,6 +1230,15 @@ export function applyMobileThreadEvent(
         : undefined,
       replyQuote: event.payload?.replyQuote ? String(event.payload.replyQuote) : undefined,
     };
+    const merged =
+      event.type === "thread.message.updated"
+        ? mergeMessageUpdate(
+            prev.messages.find((message) => message.id === next.id),
+            next,
+          )
+        : next;
+    // An update to a message this screen never loaded stays out of the thread.
+    if (!merged) return { ...prev, cursor: event.seq ?? prev.cursor };
     return {
       ...prev,
       cursor: event.seq ?? prev.cursor,
@@ -1242,7 +1252,7 @@ export function applyMobileThreadEvent(
               )
             ),
         ),
-        next,
+        merged,
       ),
     };
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { assertSafeWebUrl, fetchSafeWebText, isBlockedHostname } from "./web-ssrf.js";
 
-const publicResolver = async () => [{ address: "203.0.113.10", family: 4 as const }];
+const publicResolver = async () => [{ address: "8.8.8.8", family: 4 as const }];
 
 describe("web SSRF policy", () => {
   it.each([
@@ -44,6 +44,28 @@ describe("web SSRF policy", () => {
     expect(isBlockedHostname("169.254.1.1")).toBe(true);
     expect(isBlockedHostname("::1")).toBe(true);
     expect(isBlockedHostname("example.test")).toBe(false);
+  });
+
+  it.each([
+    "2130706433",
+    "0177.0.0.1",
+    "0x7f.1",
+    "0x7f000001",
+    "127.1",
+    "localhost.",
+    "foo.localhost",
+    "x.internal",
+    "x.local",
+    "168.63.129.16",
+    "192.0.0.192",
+    "[::ffff:7f00:1]",
+    "::ffff:7f00:1",
+    "2001::1",
+    "100::1",
+    "64:ff9b:1::1",
+    "999999999999",
+  ])("blocks the host form %s before DNS", (hostname) => {
+    expect(isBlockedHostname(hostname.replace(/^\[|\]$/g, ""))).toBe(true);
   });
 
   it("re-validates redirect targets and blocks redirect-to-private", async () => {
@@ -130,7 +152,7 @@ describe("web SSRF policy", () => {
         resolveHostname: async () => {
           resolutions += 1;
           if (resolutions > 1) throw new Error("lookup reached");
-          return [{ address: "203.0.113.10", family: 4 as const }];
+          return [{ address: "8.8.8.8", family: 4 as const }];
         },
       }),
     ).rejects.toMatchObject({ cause: { message: "lookup reached" } });
@@ -435,7 +457,7 @@ describe("web SSRF policy", () => {
     const stalledResolver = () =>
       new Promise<Array<{ address: string; family: number }>>((resolve) => {
         resolveCalls += 1;
-        setTimeout(() => resolve([{ address: "203.0.113.10", family: 4 }]), 500);
+        setTimeout(() => resolve([{ address: "8.8.8.8", family: 4 }]), 500);
       });
 
     await expect(

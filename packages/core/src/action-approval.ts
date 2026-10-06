@@ -10,6 +10,7 @@ const APPROVAL_EXEMPT_TOOLS = new Set([
   "list_files",
   "read_file",
   "write_file",
+  "edit_file",
   "shell",
   "open_path",
   "launch_app",
@@ -44,6 +45,7 @@ const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "schedule_list",
   "scratchpad_list",
   "skill_read",
+  "skill_search",
   "web_fetch",
   "web_search",
 ]);

@@ -1,6 +1,7 @@
 import * as z from "zod";
 import { BotSecretDestination } from "./bot-secrets.js";
 import { Id } from "./ids.js";
+import { LinkPreviewBlock } from "./link-preview.js";
 import { McpTransportSchema } from "./mcp.js";
 
 export const ProductEventType = z.enum([
@@ -335,6 +336,7 @@ export const MessageBlock = z.discriminatedUnion("kind", [
         client can default the toggle open/closed without a second lookup. */
     notify: z.boolean().optional(),
   }),
+  LinkPreviewBlock,
 ]);
 export type MessageBlock = z.infer<typeof MessageBlock>;
 

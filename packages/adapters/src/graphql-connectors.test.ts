@@ -120,7 +120,7 @@ describe("GraphQL connector import", () => {
       config: { auth: { type: "none" } },
       remote: {
         fetch: fetch as unknown as typeof globalThis.fetch,
-        resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+        resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
       },
     });
     expect(prepared.operationCount).toBe(3);
@@ -277,7 +277,7 @@ describe("GraphQL connector import", () => {
           sentQuery = String(JSON.parse(String(init?.body)).query);
           return Response.json({ data: { viewer: { id: "1", status: "ok" } } });
         },
-        resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+        resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
       },
     );
     expect(sentQuery).toMatch(/viewer\s*\{\s*id\s+status\s*\}/);
@@ -391,7 +391,7 @@ describe("GraphQL connector import", () => {
             data: { search: { __typename: "Person", name: "Ada" } },
           });
         },
-        resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+        resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
       },
     );
     expect(sentQuery).toContain("... on Person { name }");
@@ -494,7 +494,7 @@ describe("GraphQL execution failures", () => {
     };
     const provider = new InstalledConnectorProvider(prisma as never, {} as never, {
       fetch: fetchImpl,
-      resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+      resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
     });
     const context = {
       spaceId: "space-1",
@@ -530,7 +530,7 @@ describe("GraphQL execution failures", () => {
         new AbortController().signal,
         {
           fetch: async () => Response.json({ errors: [{ message: "Field 'hero' is required" }] }),
-          resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+          resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
         },
       ),
     ).rejects.toThrow(/Field 'hero' is required/);
@@ -549,7 +549,7 @@ describe("GraphQL execution failures", () => {
         {
           fetch: async () =>
             new Response("nope", { status: 500, headers: { "content-type": "text/plain" } }),
-          resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+          resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
         },
       ),
     ).rejects.toThrow(/HTTP 500/);
@@ -571,7 +571,7 @@ describe("GraphQL execution failures", () => {
               status: 200,
               headers: { "content-type": "text/html" },
             }),
-          resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+          resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
         },
       ),
     ).rejects.toThrow(/not valid JSON/);
@@ -589,7 +589,7 @@ describe("GraphQL execution failures", () => {
         new AbortController().signal,
         {
           fetch: async () => Response.json("temporarily unavailable"),
-          resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+          resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
         },
       ),
     ).rejects.toThrow(/not a JSON object/);
@@ -606,7 +606,7 @@ describe("GraphQL execution failures", () => {
       new AbortController().signal,
       {
         fetch: async () => Response.json({ data: { value: "x".repeat(1_000_000) } }),
-        resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+        resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
       },
     );
 
@@ -631,7 +631,7 @@ describe("GraphQL execution failures", () => {
               status: 200,
               headers: { "content-type": "text/html" },
             }),
-          resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+          resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
         },
       ),
     ).rejects.toThrow(/not valid JSON/);
@@ -653,7 +653,7 @@ describe("GraphQL execution failures", () => {
               errors: [{ message: "Oversized operation failed" }],
               padding: "x".repeat(1_000_000),
             }),
-          resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+          resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
         },
       ),
     ).rejects.toThrow(/Oversized operation failed/);
@@ -671,7 +671,7 @@ describe("GraphQL execution failures", () => {
         new AbortController().signal,
         {
           fetch: async () => Response.json({ data: { value: "x".repeat(2_000_000) } }),
-          resolveHostname: async () => [{ address: "203.0.113.10", family: 4 as const }],
+          resolveHostname: async () => [{ address: "8.8.8.8", family: 4 as const }],
         },
       ),
     ).rejects.toThrow(/validation limit/);

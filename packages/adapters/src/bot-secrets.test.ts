@@ -12,7 +12,7 @@ const destination: BotSecretDestination = {
 };
 const secretStore = new EncryptedSecretStore("test-only-encryption-key");
 const secret = "fake-key-with+/special=characters";
-const publicResolver = async () => [{ address: "203.0.113.10", family: 4 as const }];
+const publicResolver = async () => [{ address: "8.8.8.8", family: 4 as const }];
 
 async function fixture(auth = destination.auth) {
   const encrypted = await secretStore.put(

@@ -1,5 +1,8 @@
-import type { ThreadMessage } from "@rakazo/contracts";
+import type { LinkPreviewCard, ThreadMessage } from "@rakazo/contracts";
+import { isLinkPreviewCard } from "@rakazo/contracts";
+import { messageHostsLinkPreview } from "@rakazo/core";
 import { copyableMessageText } from "../../lib/message-text";
+import { rpc } from "../../lib/rpc";
 
 /**
  * Shared by the hover pill (`message-hover-actions.tsx`) and the touch long-press
@@ -24,4 +27,29 @@ export function copyMessageToClipboard(message: ThreadMessage): void {
   const text = copyableMessageText(message);
   if (!text || !navigator.clipboard) return;
   void navigator.clipboard.writeText(text).catch(() => undefined);
+}
+
+/**
+ * The preview card a message carries, if any: a removal marker is not one, and neither is a card
+ * on a message that is itself a card (`messageHostsLinkPreview`, the rule iOS and the server use).
+ */
+export function messageLinkPreview(message: ThreadMessage): LinkPreviewCard | undefined {
+  if (!messageHostsLinkPreview(message)) return undefined;
+  for (const block of message.blocks) {
+    if (block.kind === "link_preview" && isLinkPreviewCard(block)) return block;
+  }
+  return undefined;
+}
+
+/** Remove preview is offered only while the message has a card to remove. */
+export function canRemoveLinkPreview(message: ThreadMessage): boolean {
+  return messageLinkPreview(message) !== undefined;
+}
+
+/**
+ * Asks the server to drop the card. The thread's own update event removes it from every open
+ * surface, so nothing is shown here, and a failure leaves the card where it was.
+ */
+export function removeLinkPreview(message: ThreadMessage): void {
+  void rpc.messages.removeLinkPreview({ messageId: message.id }).catch(() => undefined);
 }

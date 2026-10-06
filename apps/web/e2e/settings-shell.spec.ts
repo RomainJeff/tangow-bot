@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
 
-test("settings shell is two-pane and deep-links Models Memory Browser Voice Usage", async ({
+test("settings shell is two-pane and deep-links Models Memory Decision Model Voice Usage", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
@@ -46,23 +46,25 @@ test("settings shell is two-pane and deep-links Models Memory Browser Voice Usag
   await expect(memory.getByRole("button", { name: "Recall only" })).toBeVisible();
   await captureScreenshot(page, testInfo, "settings-shell-memory-serenity");
 
-  await settings.getByTestId("settings-nav-browser").click();
-  await expect(settings).toHaveAttribute("data-settings-section", "browser");
-  await expect(settings.getByRole("heading", { name: "Browser", exact: true })).toBeVisible();
-  const browserSettings = settings.getByTestId("browser-settings");
-  await expect(browserSettings.getByLabel("OpenRouter API key")).toBeVisible();
-  await expect(browserSettings.getByRole("button", { name: "Connect" })).toBeDisabled();
-  await browserSettings.getByText("Advanced").click();
-  await expect(browserSettings.getByLabel("Base URL")).toBeVisible();
-  await expect(browserSettings.getByLabel("Model")).toBeVisible();
-  await captureScreenshot(page, testInfo, "settings-shell-browser");
-  await browserSettings.getByLabel("OpenRouter API key").fill("test-key-not-real");
-  await browserSettings.getByRole("button", { name: "Connect" }).click();
-  await expect(browserSettings.getByText("Connected", { exact: true })).toBeVisible();
-  await expect(browserSettings.getByLabel("OpenRouter API key")).toHaveCount(0);
-  await browserSettings.getByRole("button", { name: "Disconnect" }).click();
-  await expect(browserSettings.getByLabel("OpenRouter API key")).toBeVisible();
-  await expect(browserSettings.getByText("Connected", { exact: true })).toHaveCount(0);
+  await settings.getByTestId("settings-nav-decision-model").click();
+  await expect(settings).toHaveAttribute("data-settings-section", "decision-model");
+  await expect(
+    settings.getByRole("heading", { name: "Decision Model", exact: true }),
+  ).toBeVisible();
+  const decisionModelSettings = settings.getByTestId("decision-model-settings");
+  await expect(decisionModelSettings.getByLabel("OpenRouter API key")).toBeVisible();
+  await expect(decisionModelSettings.getByRole("button", { name: "Connect" })).toBeDisabled();
+  await decisionModelSettings.getByText("Advanced").click();
+  await expect(decisionModelSettings.getByLabel("Base URL")).toBeVisible();
+  await expect(decisionModelSettings.getByLabel("Model")).toBeVisible();
+  await captureScreenshot(page, testInfo, "settings-shell-decision-model");
+  await decisionModelSettings.getByLabel("OpenRouter API key").fill("test-key-not-real");
+  await decisionModelSettings.getByRole("button", { name: "Connect" }).click();
+  await expect(decisionModelSettings.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(decisionModelSettings.getByLabel("OpenRouter API key")).toHaveCount(0);
+  await decisionModelSettings.getByRole("button", { name: "Disconnect" }).click();
+  await expect(decisionModelSettings.getByLabel("OpenRouter API key")).toBeVisible();
+  await expect(decisionModelSettings.getByText("Connected", { exact: true })).toHaveCount(0);
 
   await settings.getByTestId("settings-nav-voice").click();
   await expect(settings).toHaveAttribute("data-settings-section", "voice");

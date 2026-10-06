@@ -1,6 +1,7 @@
 import type { ComputerStatus } from "@rakazo/contracts";
+import { SCREEN_URL_RENEW_MS } from "@rakazo/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createComputerRefresh, SCREEN_URL_RENEW_MS } from "./computer-refresh";
+import { createComputerRefresh } from "./computer-refresh";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -345,6 +346,61 @@ describe("screen URL reuse", () => {
     await vi.advanceTimersByTimeAsync(0);
     const action = fixture.controller.beginAction();
     await action.refresh();
+    action.finish();
+    expect(fixture.readScreen).toHaveBeenCalledTimes(2);
+    fixture.controller.dispose();
+  });
+
+  it("skips the read on a non-forced refresh while the key is unchanged", async () => {
+    vi.useFakeTimers();
+    const fixture = setup();
+    fixture.controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    const action = fixture.controller.beginAction();
+    await action.refresh({ force: false });
+    action.finish();
+    expect(fixture.readStatus).toHaveBeenCalledTimes(2);
+    expect(fixture.readScreen).toHaveBeenCalledTimes(1);
+    expect(fixture.onScreen).toHaveBeenCalledExactlyOnceWith("https://screen.example.test");
+    fixture.controller.dispose();
+  });
+
+  it("reads again on a non-forced refresh once the screen stamp changed", async () => {
+    vi.useFakeTimers();
+    const fixture = setup();
+    fixture.readStatus.mockResolvedValue({ ...running, screenStamp: "aaaa" });
+    fixture.controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.readStatus.mockResolvedValue({ ...running, screenStamp: "bbbb" });
+    fixture.readScreen.mockResolvedValue("https://renewed.example.test");
+    const action = fixture.controller.beginAction();
+    await action.refresh({ force: false });
+    action.finish();
+    expect(fixture.readScreen).toHaveBeenCalledTimes(2);
+    expect(fixture.onScreen).toHaveBeenLastCalledWith("https://renewed.example.test");
+    fixture.controller.dispose();
+  });
+
+  it("reads again on a forced refresh while the key is unchanged", async () => {
+    vi.useFakeTimers();
+    const fixture = setup();
+    fixture.controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    const action = fixture.controller.beginAction();
+    await action.refresh({ force: true });
+    action.finish();
+    expect(fixture.readScreen).toHaveBeenCalledTimes(2);
+    fixture.controller.dispose();
+  });
+
+  it("forces the next non-forced refresh after the viewer invalidates the screen", async () => {
+    vi.useFakeTimers();
+    const fixture = setup();
+    fixture.controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.controller.invalidateScreen();
+    const action = fixture.controller.beginAction();
+    await action.refresh({ force: false });
     action.finish();
     expect(fixture.readScreen).toHaveBeenCalledTimes(2);
     fixture.controller.dispose();

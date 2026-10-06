@@ -66,6 +66,8 @@ function fixture({
   });
 
   const prisma = {
+    // The thread lock a card update takes before it reads the message.
+    $queryRaw: vi.fn(async () => []),
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
@@ -353,6 +355,7 @@ function cancelFixture({
   const events: Array<Record<string, unknown>> = [];
   let nextEventSeq = 1;
   const prisma = {
+    $queryRaw: vi.fn(async () => []),
     run: {
       findMany: vi.fn(async ({ where }: { where: { status: string } }) =>
         where.status === runStatus

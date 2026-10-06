@@ -86,6 +86,12 @@ import {
   IntegrationProviderConfigSchema,
   IntegrationSetupStateSchema,
 } from "./integration-settings.js";
+import {
+  LINK_PREVIEW_PAGE_HEAD_MAX_LENGTH,
+  LINK_PREVIEW_PAGE_HEAD_TYPE_MAX_LENGTH,
+  LINK_PREVIEW_URL_MAX_LENGTH,
+  LinkPreviewDraftSchema,
+} from "./link-preview.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RunsListOutputSchema } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
@@ -129,6 +135,8 @@ const threadSendInput = threadTarget
     replyToMessageId: Id.optional(),
     replyQuote: z.string().trim().min(1).max(REPLY_QUOTE_MAX_LENGTH).optional(),
     clientNonce: z.string().min(1).max(200).optional(),
+    /** `false` opts this message out of any link preview, whatever its first link. */
+    linkPreview: z.literal(false).optional(),
   })
   .superRefine((input, ctx) => {
     const text = input.text?.trim() ?? "";
@@ -326,7 +334,12 @@ export const appContract = {
       .output(z.object({ ok: z.literal(true) })),
     stop: oc.input(threadTarget).output(z.object({ ok: z.literal(true) })),
     followUp: oc
-      .input(threadTarget.safeExtend({ text: z.string().min(1) }))
+      .input(
+        threadTarget.safeExtend({
+          text: z.string().min(1),
+          linkPreview: z.literal(false).optional(),
+        }),
+      )
       .output(z.object({ ok: z.literal(true) })),
     clear: oc.input(threadTarget).output(z.object({ ok: z.literal(true) })),
     /** Drops the target user message and everything after it, before resending an edit. */
@@ -831,6 +844,30 @@ export const appContract = {
   },
   search: {
     query: oc.input(z.object({ q: z.string().max(200) })).output(SearchQueryOutputSchema),
+  },
+  links: {
+    /**
+     * Composer preview of a link about to be sent; null when there is nothing to show.
+     * `pageHead` is the start of the page as the sender's device read it, one character per byte
+     * (`latin1`), sent only after a draft said `deviceReadable`: the server uses it only if the site
+     * still refuses the server for this link, and otherwise ignores it.
+     */
+    preview: oc
+      .input(
+        z.object({
+          threadId: Id,
+          url: z.string().max(LINK_PREVIEW_URL_MAX_LENGTH),
+          pageHead: z.string().max(LINK_PREVIEW_PAGE_HEAD_MAX_LENGTH).optional(),
+          /** The Content-Type the device got the head with: its charset is honored like a fetched page's. */
+          pageHeadType: z.string().max(LINK_PREVIEW_PAGE_HEAD_TYPE_MAX_LENGTH).optional(),
+        }),
+      )
+      .output(LinkPreviewDraftSchema.nullable()),
+  },
+  messages: {
+    removeLinkPreview: oc
+      .input(z.object({ messageId: Id }))
+      .output(z.object({ ok: z.literal(true) })),
   },
   runs: {
     list: oc.input(z.object({ filter: z.enum(["active", "recent"]) })).output(RunsListOutputSchema),

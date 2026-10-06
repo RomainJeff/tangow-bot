@@ -753,6 +753,7 @@ describe("browser_run", () => {
       botId: "b1",
       provider: "test",
       model: "agent-model",
+      thinkingLevel: "medium",
       systemPrompt: "",
       history: [],
       prompt: "start the trip",

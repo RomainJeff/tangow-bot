@@ -209,6 +209,8 @@ model Space {
   botSecrets BotSecret[]
   externalConversations       ExternalConversation[]
   agentSecrets                AgentSecret[]
+  linkPreviewCache            LinkPreviewCache[]
+  linkPreviewReads            LinkPreviewRead[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -512,6 +514,7 @@ model Message {
   sourceRuns            Run[]             @relation("RunSourceMessage")
   externalTranscriptFor  ExternalMessage?
   steeringMessages SteeringMessage[]
+  previewArtifacts Artifact[]        @relation("LinkPreviewArtifact")
   createdAt        DateTime  @default(now())
 
   @@unique([threadId, seq])
@@ -948,10 +951,63 @@ model Artifact {
   hash       String
   storageKey String
   createdAt  DateTime   @default(now())
+  /// The image of a link preview card, never a user file: kept out of file lists, search and
+  /// attachments. Removed with its message (`previewMessageId` goes null, a sweep deletes it).
+  isLinkPreview    Boolean  @default(false)
+  previewMessageId String?
+  previewMessage   Message? @relation("LinkPreviewArtifact", fields: [previewMessageId], references: [id], onDelete: SetNull)
 
   @@index([spaceId, botId])
   @@index([groupId])
+  @@index([isLinkPreview, previewMessageId])
   @@map("artifacts")
+}
+
+/// One page read for a link preview, shared by every process: the per-minute count of real reads
+/// per space (and per person for the composer) is taken from these rows. Short-lived.
+model LinkPreviewRead {
+  id        String   @id @default(cuid())
+  spaceId   String
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  /// Who asked, for composer reads; null for the background job.
+  userId    String?
+  source    String
+  createdAt DateTime @default(now())
+
+  @@index([spaceId, createdAt])
+  @@index([userId, createdAt])
+  @@map("link_preview_reads")
+}
+
+/// A link preview read, kept 24 hours per space. `keyHash` is sha256(spaceId + normalized URL):
+/// the URL itself is never stored. Failures are kept only when they describe the link.
+model LinkPreviewCache {
+  id          String   @id @default(cuid())
+  spaceId     String
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  keyHash     String
+  /// "ok" or "failed"
+  status      String
+  format      String?
+  title       String?
+  /// Storage key of the WebP bytes in the artifact store; null without an image.
+  imageKey    String?
+  imageWidth  Int?
+  imageHeight Int?
+  imageBytes  Int      @default(0)
+  /// "contain" when the image is the site's icon (drawn whole); null otherwise.
+  imageFit    String?
+  /// "server" (read by the server), "restricted" (the site refused the server: a fallback card or
+  /// a bare failure) or "device" (the head was read by the sender's device and the server fetched
+  /// the image).
+  source      String   @default("server")
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  @@unique([spaceId, keyHash])
+  @@index([spaceId, createdAt])
+  @@index([expiresAt])
+  @@map("link_preview_cache")
 }
 
 model UsageRecord {

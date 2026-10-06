@@ -4,6 +4,7 @@ import path from "node:path";
 import type {
   AdapterContext,
   AgentHomeStore,
+  ComputerRef,
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
@@ -15,6 +16,7 @@ import {
   computerSupportsUpdate,
   holdComputerExecutionLeaseForTakeover,
   provisionComputer,
+  releaseBotScreen,
   releaseComputerExecutionLease,
   renewComputerExecutionLease,
   replaceComputer,
@@ -1282,6 +1284,57 @@ describe("computer provisioning", () => {
       }
     },
   );
+});
+
+describe("releaseBotScreen", () => {
+  const ref: ComputerRef = {
+    id: "computer-1",
+    botId: "team-home",
+    kind: "fake",
+    providerRef: "computer-1",
+  };
+  const botsWithGeneration = (generation: number) => {
+    const generations = new Map([["bot-1", generation]]);
+    const prisma = {
+      bot: {
+        updateMany: async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { screenGeneration: { increment: number } };
+        }) => {
+          const current = generations.get(where.id);
+          if (current === undefined) return { count: 0 };
+          generations.set(where.id, current + data.screenGeneration.increment);
+          return { count: 1 };
+        },
+      },
+    } as unknown as PrismaClient;
+    return { generations, prisma };
+  };
+
+  it("moves the bot's screen generation on once its slot is released", async () => {
+    const { generations, prisma } = botsWithGeneration(4);
+    const sandbox = { releaseScreen: async () => undefined };
+
+    await releaseBotScreen({ prisma, sandbox }, ref, context);
+
+    expect(generations.get("bot-1")).toBe(5);
+  });
+
+  it("keeps the generation when the release fails and the slot survives", async () => {
+    const { generations, prisma } = botsWithGeneration(4);
+    const sandbox = {
+      releaseScreen: async () => {
+        throw new Error("computer desktop failed to stop");
+      },
+    };
+
+    await releaseBotScreen({ prisma, sandbox }, ref, context);
+
+    expect(generations.get("bot-1")).toBe(4);
+  });
 });
 
 describe("computer execution leases", () => {

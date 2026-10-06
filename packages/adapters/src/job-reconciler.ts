@@ -105,6 +105,7 @@ export function createJobReconciler(
     events?: ThreadEvents;
     leadership?: ReconciliationLeadership;
     reconcileComputerUpdates?: () => Promise<void>;
+    purgeLinkPreviews?: () => Promise<void>;
   },
   options: { intervalMs?: number; batchSize?: number } = {},
 ) {
@@ -123,7 +124,9 @@ export function createJobReconciler(
       if (deps.leadership && !(await deps.leadership.tryAcquire())) return;
 
       const auxiliary = await Promise.allSettled(
-        [deps.reconcileComputerUpdates].map(async (reconcile) => reconcile?.()),
+        [deps.reconcileComputerUpdates, deps.purgeLinkPreviews].map(async (reconcile) =>
+          reconcile?.(),
+        ),
       );
       for (const result of auxiliary) {
         if (result.status === "rejected")
@@ -365,7 +368,7 @@ export function createJobReconciler(
 }
 
 /** Prefer the full bot transcript for a run so interim progress is not mistaken for the sole result. */
-async function botRunOutcomeText(
+export async function botRunOutcomeText(
   prisma: {
     message: {
       findMany: (args: {

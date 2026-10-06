@@ -21,6 +21,20 @@ async function cacheMobileArtifact(
   return file;
 }
 
+/**
+ * A thread image artifact as a local file uri, for drawing inline. An artifact never changes, so
+ * a file already in the cache is reused instead of fetched again each time its row mounts.
+ */
+export async function mobileArtifactImageUri(
+  target: MobileArtifactTarget,
+  artifactId: string,
+  mimeType: string,
+): Promise<string> {
+  const cached = new File(Paths.cache, artifactCacheFileName(artifactId, mimeType));
+  if (cached.exists && cached.size > 0) return cached.uri;
+  return (await cacheMobileArtifact(target, artifactId, mimeType)).uri;
+}
+
 export async function readMobileArtifactText(
   target: MobileArtifactTarget,
   artifactId: string,

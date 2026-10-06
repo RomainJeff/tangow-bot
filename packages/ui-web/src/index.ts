@@ -30,7 +30,9 @@ export * from "./components/ui/tooltip.js";
 export {
   ComposerAttachment,
   type ComposerAttachmentProps,
+  ComposerRemoveButton,
 } from "./composer-attachment.js";
+export { ComposerLinkPreview, type ComposerLinkPreviewProps } from "./composer-link-preview.js";
 export { ComposerShell, type ComposerShellProps, type ComposerState } from "./composer-shell.js";
 export { formatElapsed, formatShortDuration } from "./format-elapsed.js";
 export {
@@ -43,6 +45,12 @@ export { HoverPill, type HoverPillProps } from "./hover-pill.js";
 export { Interstitial, type InterstitialProps } from "./interstitial.js";
 export { usePrefersReducedMotion } from "./lib/reduced-motion.js";
 export { cn } from "./lib/utils.js";
+export {
+  LinkPreviewCard,
+  type LinkPreviewCardProps,
+  type LinkPreviewFormat,
+  LinkPreviewPicture,
+} from "./link-preview-card.js";
 export {
   MessageBubble,
   type MessageBubbleProps,

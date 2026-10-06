@@ -8,7 +8,7 @@ import {
   limitRemoteMcpPayload,
 } from "./remote-mcp.js";
 
-const publicResolver = async () => [{ address: "203.0.113.10", family: 4 as const }];
+const publicResolver = async () => [{ address: "8.8.8.8", family: 4 as const }];
 
 describe("remote MCP URL policy", () => {
   it("accepts public HTTPS endpoints", async () => {
@@ -138,7 +138,7 @@ describe("remote MCP URL policy", () => {
         else resolve({ address: String(address), family });
       });
     });
-    expect(result).toEqual({ address: "203.0.113.10", family: 4 });
+    expect(result).toEqual({ address: "8.8.8.8", family: 4 });
   });
 
   it("reports why a connection failed instead of a bare fetch failure", async () => {
@@ -188,7 +188,7 @@ describe("remote MCP URL policy", () => {
     const resolve = async () => {
       resolutions += 1;
       if (resolutions > 1) throw new Error("lookup reached");
-      return [{ address: "203.0.113.10", family: 4 as const }];
+      return [{ address: "8.8.8.8", family: 4 as const }];
     };
     for (const injected of [undefined, globalThis.fetch, capturedNodeFetch] as const) {
       resolutions = 0;
@@ -211,7 +211,7 @@ describe("remote MCP URL policy", () => {
     const resolve = async () => {
       resolutions += 1;
       if (resolutions > 1) throw new Error("lookup reached");
-      return [{ address: "203.0.113.10", family: 4 as const }];
+      return [{ address: "8.8.8.8", family: 4 as const }];
     };
     try {
       const safeFetch = createSafeRemoteFetch(captured, resolve);
@@ -281,7 +281,7 @@ describe("remote MCP URL policy", () => {
       seen.host = new Headers(init?.headers).get("host");
       seen.leakedDispatcher = Boolean(init && "dispatcher" in init);
       const hostname = new URL(String(input)).hostname.replace(/^\[|\]$/g, "");
-      if (hostname === "127.0.0.1" || hostname === "203.0.113.10") {
+      if (hostname === "127.0.0.1" || hostname === "8.8.8.8") {
         throw new Error(`injected fetch reached rebound host ${hostname}`);
       }
       seen.lookup = await new Promise<{ address: string; family?: number }>((resolve, reject) => {
@@ -300,7 +300,7 @@ describe("remote MCP URL policy", () => {
       expect(seen.leakedDispatcher).toBe(false);
       expect(seen.href).toBe("https://connectors.example.test/mcp");
       expect(seen.host).toBe("connectors.example.test");
-      expect(seen.lookup).toEqual({ address: "203.0.113.10", family: 4 });
+      expect(seen.lookup).toEqual({ address: "8.8.8.8", family: 4 });
     } finally {
       await safeFetch.close();
     }

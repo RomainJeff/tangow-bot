@@ -1,11 +1,8 @@
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
-import {
-  openScreenCapability,
-  SCREEN_PROXY_TTL_MS,
-  sealScreenCapability,
-} from "./screen-capability.js";
+import { SCREEN_PROXY_TTL_MS } from "../computer-screen-url.js";
+import { openScreenCapability, sealScreenCapability } from "./screen-capability.js";
 
 const scope = {
   botId: "bot",
@@ -42,6 +39,7 @@ describe("sealed screen capabilities", () => {
         .match(/<script type="module">([\s\S]*?)<\/script>/)![1]!
         .replace(/^\s*import[\s\S]*?;\s*$/gm, "");
       let socketUrl = "";
+      let viewOnly: boolean | undefined;
       runInNewContext(script, {
         document: { location: url, getElementById: () => ({}) },
         window: { location: url },
@@ -50,6 +48,18 @@ describe("sealed screen capabilities", () => {
             socketUrl = value;
           }
         },
+        // The session is stubbed to open its first connection the way the real one does:
+        // through createRfb with the URL the embed derived from its own location.
+        startScreenLinkSession: (ports: {
+          createRfb: (slot: unknown, value: string) => unknown;
+          url: string;
+          viewOnly: boolean;
+        }) => {
+          ports.createRfb({}, ports.url);
+          viewOnly = ports.viewOnly;
+          return { rfb: { viewOnly: ports.viewOnly } };
+        },
+        hostPoster: () => () => {},
         attachHostClipboardPaste: () => {},
         // Embed imports are stripped for this smoke; stub the touch-keyboard
         // and trackpad bridges the same way as clipboard. Returning false
@@ -63,6 +73,7 @@ describe("sealed screen capabilities", () => {
       expect(socket.host).toBe(url.host);
       expect(socket.pathname).toBe(url.pathname.replace("/embed.html", "/websockify"));
       expect(socketUrl).not.toContain("fake-socket-token");
+      expect(viewOnly).toBe(!interactive);
       expect(openScreenCapability(socket.pathname, "fake-secret", 101)?.target).toMatchObject({
         path: "/websockify?token=fake-socket-token",
         interactive,

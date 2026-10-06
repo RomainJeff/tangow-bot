@@ -385,7 +385,7 @@ export function inferScript(
       /(?:called|named|path|file)\s+([A-Za-z0-9._/-]+)/i.exec(prompt)?.[1] ?? "notes/result.txt";
     return [
       { assistant: "writing that into my home and attaching it to the thread." },
-      { toolCalls: [{ name: "write_file", args: { path: filePath, content } }] },
+      { toolCalls: [{ name: "write_file", args: { path: filePath, content, overwrite: true } }] },
       { toolCalls: [{ name: "attach_file", args: { path: filePath } }], complete: true },
     ];
   }
@@ -400,7 +400,7 @@ export function inferScript(
     return [
       { assistant: "writing that into my home now." },
       {
-        toolCalls: [{ name: "write_file", args: { path: filePath, content } }],
+        toolCalls: [{ name: "write_file", args: { path: filePath, content, overwrite: true } }],
         complete: true,
       },
     ];

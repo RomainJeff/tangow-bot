@@ -15,6 +15,10 @@ export interface RunTraceRecorderOptions {
   correlationTraceId?: string;
   provider: string;
   model: string;
+  /** Thinking level actually sent to the provider, after clamping to the model. */
+  thinkingLevel: string;
+  /** Injectable clock, so tests produce deterministic timestamps. */
+  now?: () => number;
   systemPrompt: string;
   /** Replayed history, recorded as trace input only. */
   history: readonly AgentMessage[];
@@ -77,14 +81,16 @@ function costDetails(usage: Usage): string {
  * it as a generation would invent free calls that never ran.
  */
 export class RunTraceRecorder {
-  readonly trace = new RunTrace();
+  readonly trace: RunTrace;
   private readonly root?: RunTraceSpan;
   private generation?: RunTraceSpan;
   private readonly tools = new Map<string, RunTraceSpan>();
   private pendingInput: unknown[] = [];
   private turns = 0;
+  private firstTokenSeen = false;
 
   constructor(private readonly options: RunTraceRecorderOptions) {
+    this.trace = new RunTrace({ now: options.now });
     this.root = this.trace.openSpan({
       name: "rakazo.run",
       attributes: {
@@ -104,6 +110,7 @@ export class RunTraceRecorder {
           : {}),
         "langfuse.observation.model.name": options.model,
         "langfuse.trace.metadata.provider": options.provider,
+        "langfuse.trace.metadata.thinkingLevel": options.thinkingLevel,
       },
     });
     this.pendingInput.push({ role: "user", content: options.prompt });
@@ -118,12 +125,26 @@ export class RunTraceRecorder {
         attributes: {
           "langfuse.observation.type": "generation",
           "langfuse.observation.model.name": this.options.model,
+          "langfuse.observation.metadata.thinkingLevel": this.options.thinkingLevel,
           "langfuse.observation.input": serialize(this.pendingInput),
         },
       },
       this.root,
     );
     this.pendingInput = [];
+    this.firstTokenSeen = false;
+  }
+
+  /**
+   * Marks the first streamed text or thinking delta of the open generation.
+   * Langfuse derives time to first token from this timestamp and the span start.
+   */
+  firstToken(): void {
+    if (!this.generation || this.firstTokenSeen) return;
+    this.firstTokenSeen = true;
+    this.generation.setAttributes({
+      "langfuse.observation.completion_start_time": new Date(this.trace.now()).toISOString(),
+    });
   }
 
   /** Records a message produced during the run as input to the next generation. */

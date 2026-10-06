@@ -25,6 +25,8 @@ export class GraphileJobPublisher implements JobPublisher {
     await utils.addJob(job.name, wrapJobPayload(job.payload), {
       runAt: job.availableAt,
       jobKey: job.replaceKey,
+      priority: job.priority,
+      maxAttempts: job.maxAttempts,
     });
   }
 
@@ -66,6 +68,10 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
       concurrency?: number;
       pollInterval?: number;
       noHandleSignals?: boolean;
+      /** Run only these jobs: a host of its own whose slots no other job can take. */
+      only?: readonly string[];
+      /** Leave these jobs to another host. */
+      except?: readonly string[];
       /** Test seam: delay between 53300 restart attempts. */
       sleep?: (ms: number) => Promise<void>;
     } = {},
@@ -98,19 +104,22 @@ export class GraphileJobWorkerHost implements JobWorkerHost {
   private async launchRunner(): Promise<void> {
     const handlers = this.handlers;
     if (!handlers) throw new Error("Background job worker has no handlers");
+    const { only, except } = this.options;
     const taskList = Object.fromEntries(
-      Object.keys(handlers).map((name) => [
-        name,
-        async (payload: unknown) => {
-          const unpacked = unwrapJobPayload(payload);
-          await runCorrelatedJob({
-            name,
-            payload: unpacked.payload,
-            correlation: unpacked.correlation,
-            run: () => dispatchBackgroundJob(handlers, name, unpacked.payload),
-          });
-        },
-      ]),
+      Object.keys(handlers)
+        .filter((name) => (!only || only.includes(name)) && !except?.includes(name))
+        .map((name) => [
+          name,
+          async (payload: unknown) => {
+            const unpacked = unwrapJobPayload(payload);
+            await runCorrelatedJob({
+              name,
+              payload: unpacked.payload,
+              correlation: unpacked.correlation,
+              run: () => dispatchBackgroundJob(handlers, name, unpacked.payload),
+            });
+          },
+        ]),
     );
     const runner = await run({
       pgPool: this.pgPool,

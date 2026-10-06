@@ -121,6 +121,7 @@ export async function querySpaceSearch(
       userId: actor.userId,
       groupId: null,
       botId: { not: null },
+      isLinkPreview: false,
       name: { contains: query, mode: "insensitive" },
       bot: { archivedAt: null },
     },
@@ -160,6 +161,7 @@ export async function querySpaceSearch(
       spaceId: actor.spaceId,
       userId: actor.userId,
       groupId: { not: null },
+      isLinkPreview: false,
       name: { contains: query, mode: "insensitive" },
     },
     include: { group: { select: { name: true } } },
@@ -221,6 +223,7 @@ export async function querySpaceSearch(
     );
   }
 
+  // Preview cards are cut out of the JSON before the match: a page title must not take a result slot.
   const pattern = `%${query}%`;
   const messageRows = await prisma.$queryRaw<
     Array<{
@@ -239,7 +242,7 @@ export async function querySpaceSearch(
     WHERE t."spaceId" = ${actor.spaceId}
       AND t."userId" = ${actor.userId}
       AND b."archivedAt" IS NULL
-      AND m.blocks::text ILIKE ${pattern}
+      AND jsonb_path_query_array(m.blocks, '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
     ORDER BY m."createdAt" DESC
     LIMIT ${SEARCH_LIMIT}
   `;
@@ -272,7 +275,7 @@ export async function querySpaceSearch(
     WHERE t."spaceId" = ${actor.spaceId}
       AND t."userId" = ${actor.userId}
       AND t."groupId" IS NOT NULL
-      AND m.blocks::text ILIKE ${pattern}
+      AND jsonb_path_query_array(m.blocks, '$[*] ? (!exists(@.kind) || @.kind != "link_preview")')::text ILIKE ${pattern}
     ORDER BY m."createdAt" DESC
     LIMIT ${SEARCH_LIMIT}
   `;
@@ -338,7 +341,9 @@ function pushMessageHits(
       }
     }
   }
-  if (!messageHit && matchesSearchQuery(ctx.query, JSON.stringify(blocks))) {
+  // A preview card holds page content (title, image id), not anything the person wrote or kept.
+  const searchable = blocks.filter((block) => block.kind !== "link_preview");
+  if (!messageHit && matchesSearchQuery(ctx.query, JSON.stringify(searchable))) {
     ctx.push({
       kind: "message",
       ...destination,

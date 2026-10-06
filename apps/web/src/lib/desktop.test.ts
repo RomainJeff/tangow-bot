@@ -8,6 +8,7 @@ import {
   onDesktopOAuthCallback,
   type RakazoDesktop,
   type RakazoDesktopOAuthCallback,
+  readPageHeadOnDesktop,
   windowChromeKind,
 } from "./desktop.js";
 
@@ -172,5 +173,54 @@ describe("attempt correlation", () => {
     const received: string[] = [];
     expect(() => onDesktopOAuthCallback((code) => received.push(code))()).not.toThrow();
     expect(received).toEqual([]);
+  });
+});
+
+describe("page head reader for link previews", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("goes through the desktop bridge when there is one", async () => {
+    const page = { head: "<head><title>T</title></head", contentType: "text/html" };
+    const read = vi.fn(async () => page);
+    vi.stubGlobal("window", { rakazoDesktop: { ...desktop("darwin"), pageHead: { read } } });
+    await expect(
+      readPageHeadOnDesktop("https://news.example.com/a", new AbortController().signal),
+    ).resolves.toEqual(page);
+    expect(read).toHaveBeenCalledWith("https://news.example.com/a", expect.any(String));
+  });
+
+  it("cancels the desktop read it started when the composer drops the link", async () => {
+    const reads = new Map<string, () => void>();
+    const read = vi.fn(
+      (_url: string, id: string) =>
+        new Promise<null>((resolve) => reads.set(id, () => resolve(null))),
+    );
+    const cancel = vi.fn(async (id: string) => reads.get(id)?.());
+    vi.stubGlobal("window", {
+      rakazoDesktop: { ...desktop("darwin"), pageHead: { read, cancel } },
+    });
+    const first = new AbortController();
+    const second = new AbortController();
+    const a = readPageHeadOnDesktop("https://news.example.com/a", first.signal);
+    const b = readPageHeadOnDesktop("https://news.example.com/b", second.signal);
+    const [idA, idB] = [...reads.keys()];
+
+    first.abort();
+    await expect(a).resolves.toBeNull();
+    expect(cancel.mock.calls).toEqual([[idA]]);
+    expect(idA).not.toBe(idB);
+
+    reads.get(idB as string)?.();
+    await b;
+    second.abort();
+    expect(cancel.mock.calls).toEqual([[idA]]);
+  });
+
+  it("gives nothing in a plain browser or on a desktop that predates it", async () => {
+    const signal = new AbortController().signal;
+    vi.stubGlobal("window", {});
+    await expect(readPageHeadOnDesktop("https://news.example.com/a", signal)).resolves.toBeNull();
+    vi.stubGlobal("window", { rakazoDesktop: desktop("darwin") });
+    await expect(readPageHeadOnDesktop("https://news.example.com/a", signal)).resolves.toBeNull();
   });
 });

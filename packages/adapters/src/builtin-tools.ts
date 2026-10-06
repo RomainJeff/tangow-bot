@@ -148,24 +148,44 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "read_file",
     description:
-      "Read a UTF-8 text file from this bot's home. On a Team Computer, relative paths use the bot folder and shared/... accesses shared work. Open visual or binary files with open_path instead.",
+      "Read a UTF-8 text file from this bot's home. Long files come back in pages: pass the returned nextOffset as offset to continue. On a Team Computer, relative paths use the bot folder and shared/... accesses shared work. Open visual or binary files with open_path instead.",
     inputSchema: {
       type: "object",
-      properties: { path: { type: "string" } },
+      properties: {
+        path: { type: "string" },
+        offset: { type: "number", description: "1-based line to start from." },
+        limit: { type: "number", description: "Maximum number of lines to return." },
+      },
       required: ["path"],
     },
   },
   {
     name: "write_file",
     description:
-      "Write a UTF-8 file into this bot's home. On a Team Computer, relative paths use the bot folder; use shared/... only for work other bots should share.",
+      "Create a new UTF-8 file in this bot's home. Fails if the file exists: to change part of an existing file use edit_file; set overwrite to true only to replace the whole file. On a Team Computer, relative paths use the bot folder; use shared/... only for work other bots should share.",
     inputSchema: {
       type: "object",
       properties: {
         path: { type: "string" },
         content: { type: "string" },
+        overwrite: { type: "boolean" },
       },
       required: ["path", "content"],
+    },
+  },
+  {
+    name: "edit_file",
+    description:
+      "Replace exact text in a UTF-8 file in this bot's home. old_text must match the current file exactly (copy it from read_file) and be unique unless replace_all is true. Prefer it over write_file for changes to an existing file. On a Team Computer, relative paths use the bot folder; use shared/... only for work other bots should share.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        old_text: { type: "string" },
+        new_text: { type: "string" },
+        replace_all: { type: "boolean" },
+      },
+      required: ["path", "old_text", "new_text"],
     },
   },
   {
@@ -655,12 +675,29 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
-    name: "skill_create",
+    name: "skill_search",
     description:
-      "Create a reusable Claude Agent Skill (generic how-to SKILL.md). It is persisted and injected into your prompt; new skills are visible to this agent only until the user shares them with other agents. Use when a multi-step task is worth repeating or the user asks to save a skill. Do not include account names, channels, or inboxes — those belong in a routine.",
+      "Search all available skills by keywords in their name and description, including those not listed in the catalog. Returns names to pass to skill_read.",
     inputSchema: {
       type: "object",
       properties: {
+        query: { type: "string", description: "Keywords describing the task." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "skill_create",
+    description:
+      "Create a reusable Claude Agent Skill (generic how-to SKILL.md). It is persisted and injected into your prompt; new skills are visible to this agent only until the user shares them with other agents. Use when a multi-step task is worth repeating or the user asks to save a skill. Do not include account names, channels, or inboxes — those belong in a routine. Pass path to save a workspace folder with scripts and references.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description:
+            "Workspace folder with SKILL.md and optional scripts/ and references/; saves the whole folder. Use instead of name/description/body/content.",
+        },
         name: { type: "string", description: "Short skill name." },
         description: {
           type: "string",
@@ -687,6 +724,11 @@ export const builtinAgentTools: ConnectorTool[] = [
       properties: {
         name: { type: "string", description: "Current exact skill name." },
         skillId: { type: "string" },
+        path: {
+          type: "string",
+          description:
+            "Workspace folder with the full new skill (SKILL.md, scripts/, references/); replaces the saved folder. Use instead of newName/description/body/content.",
+        },
         newName: { type: "string" },
         description: { type: "string" },
         body: { type: "string" },

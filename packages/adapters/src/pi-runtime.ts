@@ -331,6 +331,7 @@ export class PiAgentRuntime implements AgentRuntime {
             correlationTraceId: context?.traceId,
             provider: model.provider,
             model: model.id,
+            thinkingLevel,
             systemPrompt,
             history,
             prompt: initialPrompt,
@@ -395,6 +396,13 @@ export class PiAgentRuntime implements AgentRuntime {
           }
           if (event.type === "turn_start") {
             traceRecorder?.turnStart();
+          }
+          if (
+            event.type === "message_update" &&
+            (event.assistantMessageEvent.type === "text_delta" ||
+              event.assistantMessageEvent.type === "thinking_delta")
+          ) {
+            traceRecorder?.firstToken();
           }
           if (event.type === "tool_execution_end") {
             traceRecorder?.toolEnd(event.toolCallId, event.result, event.isError);
@@ -712,6 +720,7 @@ export function describeToolActivity(toolName: string, args: unknown): string {
   if (toolName === "shell") return `Running: ${detail(record.command)}`;
   if (toolName === "read_file") return `Reading ${detail(record.path)}`;
   if (toolName === "write_file") return `Writing ${detail(record.path)}`;
+  if (toolName === "edit_file") return `Editing ${detail(record.path)}`;
   if (toolName === "list_files") return `Listing ${detail(record.path ?? ".")}`;
   if (toolName === "attach_file") return `Attaching ${detail(record.path)}`;
   if (toolName === "open_path") return `Opening ${detail(record.path)}`;
@@ -729,6 +738,7 @@ export function describeToolActivity(toolName: string, args: unknown): string {
   if (toolName === "web_search") return `Searching the web: ${detail(record.query)}`;
   if (toolName === "web_fetch") return `Reading page: ${detail(redactActivityUrl(record.url))}`;
   if (toolName === "skill_read") return `Reading skill: ${detail(record.name)}`;
+  if (toolName === "skill_search") return `Searching skills: ${detail(record.query)}`;
   if (toolName === "skill_create") return `Creating skill: ${detail(record.name ?? "skill")}`;
   if (toolName === "skill_update")
     return `Updating skill: ${detail(record.name ?? record.skillId)}`;
@@ -1066,6 +1076,15 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         return {
           path: String(raw.path ?? "notes/result.txt"),
           content: textContentArg(raw.content, ""),
+          overwrite: raw.overwrite === true,
+        };
+      }
+      if (tool.name === "edit_file") {
+        return {
+          path: String(raw.path ?? ""),
+          old_text: textContentArg(raw.old_text, ""),
+          new_text: textContentArg(raw.new_text, ""),
+          replace_all: raw.replace_all === true,
         };
       }
       if (tool.name === "computer_act") {
@@ -1076,7 +1095,14 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         };
       }
       if (tool.name === "list_files") return { path: String(raw.path ?? "") };
-      if (tool.name === "read_file" || tool.name === "open_path") {
+      if (tool.name === "read_file") {
+        return {
+          path: String(raw.path ?? ""),
+          ...(raw.offset === undefined ? {} : { offset: raw.offset }),
+          ...(raw.limit === undefined ? {} : { limit: raw.limit }),
+        };
+      }
+      if (tool.name === "open_path") {
         return { path: String(raw.path ?? "") };
       }
       if (tool.name === "launch_app") {
@@ -1486,7 +1512,11 @@ function safeJsonSchemaParameters(tool: ConnectorTool) {
 
 function builtinParameters(tool: ConnectorTool) {
   if (tool.name === "write_file") {
-    return Type.Object({ path: Type.String(), content: Type.String() });
+    return Type.Object({
+      path: Type.String(),
+      content: Type.String(),
+      overwrite: Type.Optional(Type.Boolean()),
+    });
   }
   if (tool.name === "destination.write") {
     return Type.Object({

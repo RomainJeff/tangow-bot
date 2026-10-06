@@ -1,10 +1,13 @@
+import type { AdapterContext } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
 import {
   displayBotWorkspacePath,
   resolveBotWorkspaceCwd,
   resolveBotWorkspacePath,
   teamBotWorkspaceDirectory,
+  workspaceFileExists,
 } from "./computer-support.js";
+import { FakeSandboxProvider } from "./fake-sandbox.js";
 
 describe("Team Computer bot folders", () => {
   it("uses the bot folder for relative paths and cwd", () => {
@@ -51,5 +54,28 @@ describe("Team Computer bot folders", () => {
     expect(displayBotWorkspacePath("dedicated", "bot-1", "notes", "notes/result.txt")).toBe(
       "notes/result.txt",
     );
+  });
+});
+
+describe("workspaceFileExists", () => {
+  it("finds files at the root and in folders, and nothing else", async () => {
+    const context = {
+      operationId: "op",
+      traceId: "trace",
+      spaceId: "space",
+      userId: "user",
+      signal: new AbortController().signal,
+    } as AdapterContext;
+    const sandbox = new FakeSandboxProvider();
+    const computer = await sandbox.provision({ botId: "bot-1", homePath: "home" }, context);
+    for (const path of ["todo.md", "notes/result.txt"]) {
+      await sandbox.writeFile(computer, { path, content: new TextEncoder().encode("x") }, context);
+    }
+
+    expect(await workspaceFileExists(sandbox, computer, "todo.md", context)).toBe(true);
+    expect(await workspaceFileExists(sandbox, computer, "notes/result.txt", context)).toBe(true);
+    expect(await workspaceFileExists(sandbox, computer, "notes/other.txt", context)).toBe(false);
+    expect(await workspaceFileExists(sandbox, computer, "notes", context)).toBe(false);
+    expect(await workspaceFileExists(sandbox, computer, "missing/dir/a.txt", context)).toBe(false);
   });
 });

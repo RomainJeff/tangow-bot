@@ -41,6 +41,7 @@ import {
   teachRecordingTtlMs,
 } from "@rakazo/core";
 import {
+  appendEventInTransaction,
   type createRepos,
   expireComputerExecutionLeases,
   IsolationError,
@@ -258,33 +259,49 @@ async function updateSkillDraftMessage(
   for (const message of messages) {
     const parsed = message.blocks as MessageBlock[];
     if (!Array.isArray(parsed)) continue;
-    const index = parsed.findIndex(
-      (block) => block.kind === "skill_draft" && block.skillId === skill.id,
-    );
-    if (index === -1) continue;
-    const existing = parsed[index];
-    if (existing?.kind !== "skill_draft") continue;
+    const isDraft = (
+      block: MessageBlock,
+    ): block is Extract<MessageBlock, { kind: "skill_draft" }> =>
+      block.kind === "skill_draft" && block.skillId === skill.id;
+    if (!parsed.some(isDraft)) continue;
     const playbook = input.playbook ?? parsePlaybook(skill.playbook);
-    const nextBlocks: MessageBlock[] = [...parsed];
-    nextBlocks[index] = {
-      kind: "skill_draft",
-      skillId: skill.id,
-      name: input.name ?? existing.name,
-      goal: skill.goal,
-      playbook,
-      status: input.status ?? existing.status,
-    };
-    await deps.prisma.message.update({
-      where: { id: message.id },
-      data: { blocks: nextBlocks as never },
+    // The thread lock, then the blocks as stored now: a link preview card or its removal
+    // marker written since the scan above is kept, not overwritten.
+    const written = await deps.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${bot.thread!.id} FOR UPDATE`;
+      const current = await tx.message.findFirst({
+        where: { id: message.id, threadId: bot.thread!.id },
+        select: { blocks: true },
+      });
+      if (!current || !Array.isArray(current.blocks)) return null;
+      const nextBlocks = (current.blocks as MessageBlock[]).map((block) =>
+        isDraft(block)
+          ? {
+              kind: "skill_draft" as const,
+              skillId: skill.id,
+              name: input.name ?? block.name,
+              goal: skill.goal,
+              playbook,
+              status: input.status ?? block.status,
+            }
+          : block,
+      );
+      await tx.message.update({
+        where: { id: message.id },
+        data: { blocks: nextBlocks as never },
+      });
+      const event = await appendEventInTransaction(tx, {
+        spaceId: actor.spaceId,
+        threadId: bot.thread!.id,
+        botId: bot.id,
+        type: "thread.message.updated",
+        payload: { messageId: message.id, role: "bot", blocks: nextBlocks },
+      });
+      return event.seq;
     });
-    await deps.events.append({
-      spaceId: actor.spaceId,
-      threadId: bot.thread.id,
-      botId: bot.id,
-      type: "thread.message.updated",
-      payload: { messageId: message.id, role: "bot", blocks: nextBlocks },
-    });
+    if (written !== null) {
+      await deps.events.notify(bot.thread.id, written).catch(() => undefined);
+    }
     return;
   }
 }

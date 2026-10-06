@@ -10,7 +10,17 @@ vi.mock("graphile-worker", () => ({
   makeWorkerUtils: vi.fn(),
 }));
 
-import { databaseCapacityBackoffMs, GraphileJobWorkerHost } from "./wakeup.js";
+import {
+  ISOLATED_JOB_NAMES,
+  LINK_PREVIEW_JOB_CONCURRENCY,
+  linkPreviewJob,
+} from "@rakazo/adapter-kit";
+import { makeWorkerUtils } from "graphile-worker";
+import {
+  databaseCapacityBackoffMs,
+  GraphileJobPublisher,
+  GraphileJobWorkerHost,
+} from "./wakeup.js";
 
 function handlers(): BackgroundJobHandlers {
   return {
@@ -22,6 +32,7 @@ function handlers(): BackgroundJobHandlers {
     "skill.teaching-expire": vi.fn(async () => undefined),
     "history.compact": vi.fn(async () => undefined),
     "messaging.deliver": vi.fn(async () => undefined),
+    "link.preview": vi.fn(async () => undefined),
   };
 }
 
@@ -148,5 +159,87 @@ describe("GraphileJobWorkerHost runner lifecycle", () => {
 
     await host.stop();
     expect(run).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("link.preview isolation (CA 36, CA 37)", () => {
+  afterEach(() => {
+    run.mockReset();
+  });
+
+  it("keeps link.preview out of the run workers' slots and gives it a runner of its own", async () => {
+    const main = mockRunner();
+    const previews = mockRunner();
+    run.mockResolvedValueOnce(main.runner).mockResolvedValueOnce(previews.runner);
+    const runHost = new GraphileJobWorkerHost({} as Pool, {
+      concurrency: 4,
+      except: ISOLATED_JOB_NAMES,
+    });
+    const previewHost = new GraphileJobWorkerHost({} as Pool, {
+      concurrency: LINK_PREVIEW_JOB_CONCURRENCY,
+      only: ISOLATED_JOB_NAMES,
+      noHandleSignals: true,
+    });
+
+    await runHost.start(handlers());
+    await previewHost.start(handlers());
+
+    const [mainOptions, previewOptions] = run.mock.calls.map(([options]) => options);
+    // Run workers: everything but link.preview, with the usual four slots.
+    expect(Object.keys(mainOptions.taskList)).toContain("run.continue");
+    expect(Object.keys(mainOptions.taskList)).not.toContain("link.preview");
+    expect(mainOptions.concurrency).toBe(4);
+    // Previews: only themselves, two at a time, so ten slow sites can never reach a run.
+    expect(Object.keys(previewOptions.taskList)).toEqual(["link.preview"]);
+    expect(previewOptions.concurrency).toBe(2);
+    expect(previewOptions.noHandleSignals).toBe(true);
+
+    await runHost.stop();
+    await previewHost.stop();
+  });
+
+  it("hands a link.preview job to its handler with the identifiers it was queued with", async () => {
+    const preview = mockRunner();
+    run.mockResolvedValueOnce(preview.runner);
+    const target = handlers();
+    const host = new GraphileJobWorkerHost({} as Pool, { only: ISOLATED_JOB_NAMES });
+    await host.start(target);
+
+    const { taskList } = run.mock.calls[0]![0];
+    await taskList["link.preview"]({ messageId: "message-1" });
+
+    expect(target["link.preview"]).toHaveBeenCalledWith({ messageId: "message-1" });
+    await host.stop();
+  });
+});
+
+describe("link.preview job definition", () => {
+  it("is queued once, behind everything else, and never retried", () => {
+    expect(linkPreviewJob({ messageId: "message-1" })).toEqual({
+      name: "link.preview",
+      payload: { messageId: "message-1" },
+      replaceKey: "link.preview:message:message-1",
+      priority: 10,
+      maxAttempts: 1,
+    });
+    expect(linkPreviewJob({ runId: "run-1" })).toMatchObject({
+      replaceKey: "link.preview:run:run-1",
+      priority: 10,
+      maxAttempts: 1,
+    });
+  });
+
+  it("passes priority and maxAttempts to the queue", async () => {
+    const addJob = vi.fn(async () => undefined);
+    vi.mocked(makeWorkerUtils).mockResolvedValue({ addJob, release: vi.fn() } as never);
+    const publisher = new GraphileJobPublisher({} as Pool);
+
+    await publisher.enqueue(linkPreviewJob({ runId: "run-1" }));
+
+    expect(addJob).toHaveBeenCalledWith(
+      "link.preview",
+      expect.anything(),
+      expect.objectContaining({ jobKey: "link.preview:run:run-1", priority: 10, maxAttempts: 1 }),
+    );
   });
 });

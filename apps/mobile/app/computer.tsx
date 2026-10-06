@@ -1,5 +1,6 @@
 import type { ComputerMode, ComputerReleaseReason } from "@rakazo/contracts";
 import { useLocalSearchParams, useNavigation } from "expo-router";
+import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import {
@@ -11,6 +12,7 @@ import { WebView } from "react-native-webview";
 import { ComputerMaintenanceActions } from "../components/computer-maintenance-actions";
 import { ComputerModePicker } from "../components/computer-mode-picker";
 import { NativeSymbol } from "../components/native-symbol";
+import { ScreenLinkOverlay } from "../components/screen-link-overlay";
 import { currentAccessHeaders } from "../lib/access-store";
 import { currentApiBase, rpc } from "../lib/api";
 import {
@@ -27,6 +29,8 @@ import { createComputerRefresh } from "../lib/computer-refresh";
 import { defaultApiBase } from "../lib/endpoint";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
+import { screenLinkEffects } from "../lib/screen-link";
+import { useScreenLink } from "../lib/use-screen-link";
 
 export default function Computer() {
   const { t } = useI18n();
@@ -72,6 +76,14 @@ export default function Computer() {
     [botId],
   );
   const refresh = refreshController.refresh;
+  const screenEffects = useMemo(
+    () => screenLinkEffects(refreshController.refresh),
+    [refreshController],
+  );
+  const onScreenError = () => {
+    refreshController.invalidateScreen();
+    setScreenError(t("Could not load the desktop. This device cannot reach the screen URL."));
+  };
 
   useEffect(() => {
     setComputer(null);
@@ -91,10 +103,12 @@ export default function Computer() {
     takeControl,
     overlay,
     force = false,
+    forceScreen = true,
   }: {
     takeControl: boolean;
     overlay: boolean;
     force?: boolean;
+    forceScreen?: boolean;
   }) {
     if (!botId || !refreshController.isActive()) return false;
     const action = refreshController.beginAction();
@@ -106,7 +120,10 @@ export default function Computer() {
       if (!action.isActive()) return false;
       if (takeControl) await rpc("computer/takeover", { botId });
       if (!action.isActive()) return false;
-      await action.refresh({ screenAttempts: SCREEN_URL_OPEN_ATTEMPTS });
+      await action.refresh({
+        screenAttempts: SCREEN_URL_OPEN_ATTEMPTS,
+        force: forceScreen || !screenUrl,
+      });
       if (!action.isActive()) return false;
       setError(null);
       return true;
@@ -129,6 +146,7 @@ export default function Computer() {
       takeControl: false,
       overlay: computer?.state !== "running",
       force: true,
+      forceScreen: computer?.state !== "running",
     }).catch(() => undefined);
   }, [readyBotId, botId, computer?.state, switching]);
 
@@ -202,6 +220,13 @@ export default function Computer() {
 
   const placeholder =
     screenError ?? previewPlaceholder(computer?.state, booting, name, computer?.mode);
+  const openPreview = (
+    <Pressable
+      accessibilityLabel={t("Open computer")}
+      onPress={() => void openComputer()}
+      style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
+    />
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.background, padding: 24 }}>
@@ -225,25 +250,20 @@ export default function Computer() {
           <ScreenWebView
             url={embeddedScreenUrl}
             interactive={false}
-            onError={() => {
-              refreshController.invalidateScreen();
-              setScreenError(
-                t("Could not load the desktop. This device cannot reach the screen URL."),
-              );
-            }}
+            onError={onScreenError}
+            effects={screenEffects}
+            cover={openPreview}
           />
         ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
-            <Text style={{ color: tokens.mutedForeground, textAlign: "center" }}>
-              {placeholder}
-            </Text>
-          </View>
+          <>
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <Text style={{ color: tokens.mutedForeground, textAlign: "center" }}>
+                {placeholder}
+              </Text>
+            </View>
+            {openPreview}
+          </>
         )}
-        <Pressable
-          accessibilityLabel={t("Open computer")}
-          onPress={() => void openComputer()}
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-        />
       </View>
       <View
         style={{
@@ -432,12 +452,8 @@ export default function Computer() {
                   <ScreenWebView
                     url={embeddedScreenUrl}
                     interactive={hasControl}
-                    onError={() => {
-                      refreshController.invalidateScreen();
-                      setScreenError(
-                        t("Could not load the desktop. This device cannot reach the screen URL."),
-                      );
-                    }}
+                    onError={onScreenError}
+                    effects={screenEffects}
                   />
                 ) : (
                   <View
@@ -501,38 +517,106 @@ function ComputerReleaseActions({
   );
 }
 
+/** `cover` sits over a live screen only, so a failed screen keeps its retry reachable. */
 function ScreenWebView({
   url,
   interactive,
   onError,
+  effects,
+  cover,
 }: {
   url: string;
   interactive: boolean;
   onError: () => void;
+  effects: ReturnType<typeof screenLinkEffects>;
+  cover?: ReactNode;
 }) {
-  const tokens = useMobileTokens();
+  const [attempt, setAttempt] = useState(0);
   return (
-    <WebView
-      key={url}
-      // ponytail: headers only reach the top-level load, so noVNC subresources and its
-      // websocket still go out bare. Enough for a service-token origin (Access lets the
-      // whole session through after the first request); needs a signed cookie bounce if
-      // Cloudflare ever starts challenging them individually.
-      source={{ uri: url, headers: currentAccessHeaders(currentApiBase(), defaultApiBase()) }}
-      style={{ flex: 1, backgroundColor: tokens.background }}
-      pointerEvents={interactive ? "auto" : "none"}
-      javaScriptEnabled
-      domStorageEnabled
-      keyboardDisplayRequiresUserAction={false}
-      allowsInlineMediaPlayback
-      mediaPlaybackRequiresUserAction={false}
-      originWhitelist={["*"]}
-      mixedContentMode="always"
-      setSupportMultipleWindows={false}
-      scrollEnabled={false}
-      overScrollMode="never"
+    <ScreenSession
+      key={`${url}#${attempt}`}
+      url={url}
+      interactive={interactive}
       onError={onError}
-      onHttpError={onError}
+      effects={effects}
+      cover={cover}
+      onRetry={() => {
+        // Bumped once the forced read settles, in the same render as any new URL, so a retry
+        // remounts once whether the read returns a new URL, the same one, or fails.
+        void effects.onReload().then(() => setAttempt((count) => count + 1));
+      }}
     />
+  );
+}
+
+function ScreenSession({
+  url,
+  interactive,
+  onError,
+  effects,
+  cover,
+  onRetry,
+}: {
+  url: string;
+  interactive: boolean;
+  onError: () => void;
+  effects: ReturnType<typeof screenLinkEffects>;
+  cover?: ReactNode;
+  onRetry: () => void;
+}) {
+  const { t } = useI18n();
+  const tokens = useMobileTokens();
+  const { view, webViewProps } = useScreenLink(url, effects);
+  if (view === "failed") {
+    return (
+      <View
+        style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 16 }}
+      >
+        <Text style={{ color: tokens.mutedForeground, textAlign: "center" }}>
+          {t("Could not load the desktop. This device cannot reach the screen URL.")}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onRetry}
+          style={{
+            minHeight: 44,
+            justifyContent: "center",
+            backgroundColor: tokens.muted,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 12,
+          }}
+        >
+          <Text style={{ color: tokens.foreground }}>{t("Try again.")}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <View style={{ flex: 1 }}>
+      <WebView
+        // ponytail: headers only reach the top-level load, so noVNC subresources and its
+        // websocket still go out bare. Enough for a service-token origin (Access lets the
+        // whole session through after the first request); needs a signed cookie bounce if
+        // Cloudflare ever starts challenging them individually.
+        source={{ uri: url, headers: currentAccessHeaders(currentApiBase(), defaultApiBase()) }}
+        style={{ flex: 1, backgroundColor: tokens.background }}
+        pointerEvents={interactive && view === "none" ? "auto" : "none"}
+        javaScriptEnabled
+        domStorageEnabled
+        keyboardDisplayRequiresUserAction={false}
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        mixedContentMode="always"
+        setSupportMultipleWindows={false}
+        scrollEnabled={false}
+        overScrollMode="never"
+        onError={onError}
+        onHttpError={onError}
+        {...webViewProps}
+      />
+      {view === "connecting" || view === "reconnecting" ? <ScreenLinkOverlay view={view} /> : null}
+      {cover}
+    </View>
   );
 }

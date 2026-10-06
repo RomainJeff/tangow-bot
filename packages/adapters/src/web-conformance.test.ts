@@ -11,7 +11,7 @@ const ctx: AdapterContext = {
   signal: new AbortController().signal,
 };
 
-const publicResolver = async () => [{ address: "203.0.113.10", family: 4 as const }];
+const publicResolver = async () => [{ address: "8.8.8.8", family: 4 as const }];
 
 /**
  * Offline conformance: every WebProvider must advertise search+fetch and honor

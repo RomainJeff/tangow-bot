@@ -38,6 +38,11 @@
       "types": "./src/node/screen-capability.ts",
       "development": "./src/node/screen-capability.ts",
       "default": "./src/node/screen-capability.ts"
+    },
+    "./computer-screen-url": {
+      "types": "./src/computer-screen-url.ts",
+      "development": "./src/computer-screen-url.ts",
+      "default": "./src/computer-screen-url.ts"
     }
   },
   "scripts": {

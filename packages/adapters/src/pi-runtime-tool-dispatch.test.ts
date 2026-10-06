@@ -291,6 +291,20 @@ const writeFileTool: ConnectorTool = {
   },
 };
 
+const editFileTool: ConnectorTool = {
+  name: "edit_file",
+  description: "Replace exact text in a UTF-8 file.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: { type: "string" },
+      old_text: { type: "string" },
+      new_text: { type: "string" },
+      replace_all: { type: "boolean" },
+    },
+  },
+};
+
 const shellTool = {
   name: "shell",
   description: "Run a command",
@@ -1380,7 +1394,46 @@ describe("Pi connector tool dispatch", () => {
       {
         path: "shared/state.json",
         content: '{\n  "last_run": 1787648953\n}',
+        overwrite: false,
       },
+      "call-1",
+    );
+  });
+
+  it("passes edit_file text and flags to the executor unchanged", async () => {
+    fakeAgentState.invoke = {
+      name: "edit_file",
+      args: { path: "notes/a.md", old_text: "draft", new_text: "final", replace_all: true },
+    };
+    const executeTool = vi.fn(async () => ({ ok: true }));
+    const runtime = new PiAgentRuntime();
+
+    for await (const _event of runtime.run(
+      {
+        botId: "b",
+        threadId: "t",
+        runId: "r",
+        prompt: "fix the note",
+        instructions: "Use edit_file.",
+        history: [],
+        tools: [editFileTool],
+        model: { provider: "test", id: "dispatch-test-model" },
+        executeTool,
+      },
+      {
+        operationId: "3",
+        traceId: "3",
+        spaceId: "w",
+        userId: "u",
+        signal: new AbortController().signal,
+      },
+    )) {
+      // Exhaust the runtime event stream so tool execution completes.
+    }
+
+    expect(executeTool).toHaveBeenCalledWith(
+      "edit_file",
+      { path: "notes/a.md", old_text: "draft", new_text: "final", replace_all: true },
       "call-1",
     );
   });

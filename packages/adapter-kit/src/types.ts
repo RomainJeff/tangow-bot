@@ -569,6 +569,8 @@ export interface BackgroundJobPayloads {
   "skill.teaching-expire": { skillId: string };
   "history.compact": { threadId: string };
   "messaging.deliver": { runId?: string };
+  /** Identifiers only: the link, its eligibility and the run status are re-read from the database. */
+  "link.preview": { messageId: string } | { runId: string };
 }
 
 export type BackgroundJobName = keyof BackgroundJobPayloads;
@@ -579,6 +581,10 @@ export type BackgroundJob = {
     payload: BackgroundJobPayloads[Name];
     availableAt?: Date;
     replaceKey?: string;
+    /** Graphile priority: lower runs first (default 0). */
+    priority?: number;
+    /** Attempts before the job is given up on (the queue default is 25). */
+    maxAttempts?: number;
   };
 }[BackgroundJobName];
 

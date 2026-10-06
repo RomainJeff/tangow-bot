@@ -63,6 +63,7 @@ import {
   probeOpenAiCompatibleModels,
   provisionComputer,
   queueComputerUpdate,
+  releaseBotScreen,
   releaseComputerExecutionLease,
   replaceComputer,
   resolveAutoReviewChecker,
@@ -76,6 +77,7 @@ import {
   screenLeaseIdForRun,
   scriptedCatalogEntry,
   serializeModelSecret,
+  sweepOrphanPreviewArtifacts,
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
@@ -143,7 +145,12 @@ import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
 import { aiConsentStatus, allowAiConsent } from "./ai-consent.js";
-import { createOwnedArtifact, getOwnedArtifact, getSpaceArtifact } from "./artifacts.js";
+import {
+  buildFollowUpBlocks,
+  createOwnedArtifact,
+  getOwnedArtifact,
+  getSpaceArtifact,
+} from "./artifacts.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
   executionBlocksUserTakeover,
@@ -156,6 +163,11 @@ import {
   serializeSpaceDecisionConfig,
 } from "./decision-provider-config.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
+import {
+  type LinkPreviewApiDeps,
+  previewLinkForComposer,
+  removeMessageLinkPreview,
+} from "./link-preview.js";
 import { createMarketplacesService } from "./marketplaces.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
 import {
@@ -190,6 +202,7 @@ import {
   shouldForwardPeerThreadEvent,
 } from "./thread-message-pages.js";
 import {
+  enqueueLinkPreview,
   reactToThreadMessage,
   resolveThreadTarget,
   sendThreadMessage,
@@ -480,6 +493,8 @@ export interface RouterDeps {
   connectors: ConnectorRegistry;
   remoteConnectors?: RemoteConnectorDependencies;
   artifacts: ArtifactStore;
+  /** Test seams of the link preview reader. */
+  linkPreview?: LinkPreviewApiDeps["linkPreview"];
   dataDir: string;
   /** Present when the external messaging surface is enabled. */
   messaging?: { enabled: boolean; providers: string[]; openSignup: boolean };
@@ -1411,7 +1426,7 @@ export function createRouter(deps: RouterDeps) {
               computer.executionRunId,
               adapterContext,
             );
-            await deps.sandbox.releaseScreen?.(ref, adapterContext).catch(() => undefined);
+            await releaseBotScreen(deps, ref, adapterContext);
           }),
         );
         return { ok: true as const };
@@ -1550,6 +1565,8 @@ export function createRouter(deps: RouterDeps) {
           historyCompactionGeneration,
           "thread-clear",
         );
+        // The cleared messages took their preview cards with them: drop the card images.
+        await sweepOrphanPreviewArtifacts(deps, { spaceId: context.actor.spaceId });
         return { ok: true as const };
       }),
       rewind: authed.threads.rewind.handler(async ({ context, input }) => {
@@ -1577,6 +1594,7 @@ export function createRouter(deps: RouterDeps) {
             deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
           ),
         );
+        await sweepOrphanPreviewArtifacts(deps, { spaceId: context.actor.spaceId });
         // Compaction survived the rewind, so its summary still matches the remaining history.
         if (rewound.compactionReset) {
           await purgeCompactedHistoryMemory(
@@ -1598,7 +1616,7 @@ export function createRouter(deps: RouterDeps) {
             threadId: target.threadId,
             botId: target.botId,
             userId: context.actor.userId,
-            blocks: [{ kind: "text", text: input.text }],
+            blocks: buildFollowUpBlocks(input.text, { linkPreview: input.linkPreview }),
             prompt: input.text,
             trigger: "follow_up",
           });
@@ -1607,6 +1625,7 @@ export function createRouter(deps: RouterDeps) {
               getLogger().error("follow-up enqueue", error);
             });
           }
+          await enqueueLinkPreview(deps.jobs, sent.messageId, input.linkPreview);
           return { ok: true as const };
         }
         const committed = await deps.prisma.$transaction(async (tx) => {
@@ -1621,7 +1640,7 @@ export function createRouter(deps: RouterDeps) {
           });
           const botId = group?.members[0]?.botId;
           if (!botId) throw new IsolationError();
-          const blocks = [{ kind: "text" as const, text: input.text }];
+          const blocks = buildFollowUpBlocks(input.text, { linkPreview: input.linkPreview });
           const message = await createThreadMessageInTransaction(tx, {
             threadId: target.threadId,
             role: "user",
@@ -1682,7 +1701,7 @@ export function createRouter(deps: RouterDeps) {
             payload: { messageId: message.id, role: "user", blocks },
           });
           await touchGroupUpdatedAt(tx, target.groupId);
-          return { runId: run?.id, eventSeq: event.seq };
+          return { runId: run?.id, eventSeq: event.seq, messageId: message.id };
         });
         await deps.events.notify(target.threadId, committed.eventSeq).catch((error) => {
           getLogger().error("group follow-up realtime notification", error);
@@ -1692,6 +1711,7 @@ export function createRouter(deps: RouterDeps) {
             getLogger().error("group follow-up enqueue", error);
           });
         }
+        await enqueueLinkPreview(deps.jobs, committed.messageId, input.linkPreview);
         return { ok: true as const };
       }),
       answer: authed.threads.answer.handler(async ({ context, input }) => {
@@ -4586,6 +4606,8 @@ export function createRouter(deps: RouterDeps) {
             groupId: null,
             spaceId: context.actor.spaceId,
             userId: context.actor.userId,
+            // Card images of link previews are not files the person owns.
+            isLinkPreview: false,
           },
         });
         return rows.map((row) => ({
@@ -4733,6 +4755,22 @@ export function createRouter(deps: RouterDeps) {
       query: authed.search.query.handler(async ({ context, input }) => ({
         hits: await querySpaceSearch(deps.prisma, context.actor, input.q),
       })),
+    },
+    links: {
+      preview: authed.links.preview.handler(({ context, input }) =>
+        previewLinkForComposer(
+          { ...deps, linkPreview: deps.linkPreview },
+          context.actor,
+          input,
+          context.signal ?? new AbortController().signal,
+        ),
+      ),
+    },
+    messages: {
+      removeLinkPreview: authed.messages.removeLinkPreview.handler(async ({ context, input }) => {
+        await removeMessageLinkPreview(deps, context.actor, input);
+        return { ok: true as const };
+      }),
     },
     runs: {
       list: authed.runs.list.handler(async ({ context, input }) => ({
@@ -5067,7 +5105,7 @@ async function computerStatus(
     botId,
     botName: bot.name,
   });
-  return toComputerStatus(botId, bot.computer, busyBotName);
+  return toComputerStatus(botId, bot.screenGeneration, bot.computer, busyBotName);
 }
 
 async function runComputerReplace(

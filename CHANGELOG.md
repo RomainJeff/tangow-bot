@@ -6,20 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-10-05
+### 2026-10-06
+
+#### Added
+
+- **Bots come with built-in Notion skills.** With a Notion connection, a bot can search and find pages, query databases, add rows, create pages and tasks, capture a conversation as documentation, prepare meetings, and turn a spec or a Notion task into an implementation plan; each skill appears as `builtin:notion-…`.
+- **A bot's screen now shows when it is connecting and reconnects by itself.** On web, desktop and iPhone, "Connecting…" appears until the first image and "Reconnecting" appears over the last image when the connection drops, while the screen reconnects in place instead of reloading. If it cannot come back within a minute, the usual error and retry button appear.
+- **A bot asks before it creates another bot, and you can edit the proposal.** On web, desktop and mobile, a Create bot card shows the bot's name, role, instructions and first message, nothing is created until you tap Create bot, and Edit lets you change the name and instructions first. A bot that keeps getting the same distinct kind of work may propose a dedicated bot once through that card.
 
 #### Changed
 
 - On every surface, a bot now asks the teammate whose role fits part of your request, and checks with you before contacting several teammates at once.
-- On web, desktop and mobile, a bot that wants to create another bot now shows you a card with its name, role, instructions and first message, and nothing is created until you tap Create bot.
-- When you keep bringing a bot the same distinct kind of work, it may propose once to create a dedicated bot for it through that card.
-- On web, desktop and mobile, you can now edit the name and instructions on a bot's Create bot card before you create it.
-- In a web voice call, a card that asks you to approve something with details now only offers Cancel, so you approve it from the chat where you can read everything.
+- In a web voice call, a card to create a bot now only offers Cancel, so you approve it from the chat where you can read everything.
+- The Space's decision model connection now lives in **Settings → Decision Model** on web and desktop, renamed from **Browser**, with the same OpenRouter key and no change to how bots use it.
+- A skill description is now limited to 1,024 characters, as in the Agent Skills format, since every description is sent to the bot on each turn.
+- A bot now changes an existing file in its workspace by editing the part that changes, and replaces a whole file only on purpose, instead of rewriting it from memory and losing content it did not copy back.
+- Sign-in, verification, invitation, password-reset and unsubscribe links, and links carrying a token or a presigned signature, no longer get a preview, so your server never opens a single-use link nobody clicked.
 
 #### Fixed
 
 - On mobile, the card to create a space now shows Create space and Cancel instead of Allow once and Deny.
 - On mobile, a bot's Instructions field and its selected avatar shape now follow light and dark mode instead of staying dark, so the text is readable in light mode.
+- A bot with more than 50 skills can now find and use the ones missing from its prompt list by searching skills by keywords, instead of never seeing them.
+- A link preview in the composer no longer disappears when you type before the link, fits the message box on a phone-width screen, no longer goes missing when you paste several links quickly in the desktop app, and no longer gives up early on slow sites on iOS.
+- The bot's screen no longer reloads while the bot works or when you come back to its conversation on web and desktop, and no longer reloads right after it opens on iPhone.
+
+### 2026-10-05
+
+#### Added
+
+- **Bots can save and later edit complete skills with scripts and reference files.** A bot drafts the skill folder in its workspace and saves it in one step, then edits a saved skill the same way, on every surface; new skills stay visible to that bot only until you share them.
+- **Links you share now show a preview card.** When you send a link, or a bot shares one with you, the page's title, site and picture (or the site's icon) appear under the message on web, desktop and iOS, and you can remove a preview before or after sending. Your Rakazo server reads the page, or the phone or desktop app that shares the link does when a site blocks servers; nobody's device fetches anything when reading a conversation.
+
+#### Changed
+
+- Bots change part of a file in place instead of rewriting it whole, so edits are faster and no longer undo changes made to the rest of the file since the bot read it, and they read long text files page by page instead of failing past 250 KB.
 
 ### 2026-10-04
 

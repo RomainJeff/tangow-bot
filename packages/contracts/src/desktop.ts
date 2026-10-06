@@ -49,6 +49,17 @@ export interface RakazoDesktop {
     state: () => Promise<{ minimized: boolean; maximized: boolean; fullScreen: boolean }>;
   };
   update: RakazoDesktopUpdate;
+  /**
+   * Link previews for sites that refuse the server: this computer reads the start of the page
+   * (no cookies, public http(s) hosts only, 512 KiB at most) and the composer sends it to the
+   * server. Null when the page cannot be read. Optional for older desktops.
+   */
+  pageHead?: {
+    /** `id` names the read so `cancel` can stop it and free its slot. */
+    read: (url: string, id: string) => Promise<{ head: string; contentType: string } | null>;
+    /** Optional for desktops that predate it. */
+    cancel?: (id: string) => Promise<void>;
+  };
   oauth: {
     /**
      * Open system-browser auth. A redirect_uri must be HTTP loopback with state;

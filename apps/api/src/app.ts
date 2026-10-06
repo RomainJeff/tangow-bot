@@ -24,6 +24,7 @@ import {
   createBackgroundJobHandlers,
   createConnectorStack,
   createJobReconciler,
+  createLinkPreviewPurge,
   createMessagingContextLoader,
   createMessagingTeamChatSender,
   createRunExecutor,
@@ -409,6 +410,7 @@ export async function createApp(
     memoryProviders,
     deploymentModelKey: env.deploymentModelKey,
     messaging,
+    artifacts,
   });
   if (inMemoryJobs) {
     await inMemoryJobs.start(jobHandlers);
@@ -418,6 +420,7 @@ export async function createApp(
         prisma,
         jobs,
         reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
+        purgeLinkPreviews: createLinkPreviewPurge({ prisma, artifacts }),
       })
     : undefined;
   reconciler?.start();

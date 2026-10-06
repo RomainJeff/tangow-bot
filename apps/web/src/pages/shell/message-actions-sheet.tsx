@@ -2,12 +2,14 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
 import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@rakazo/contracts";
 import { ActionSheet } from "@rakazo/ui-web";
-import { Copy, Pencil, Reply, Square, Volume2 } from "lucide-react";
+import { Copy, Link2Off, Pencil, Reply, Square, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   canEditAndResendMessage,
+  canRemoveLinkPreview,
   canSpeakMessage,
   copyMessageToClipboard,
+  removeLinkPreview,
 } from "./message-actions";
 
 interface ActionRow {
@@ -21,7 +23,7 @@ interface ActionRow {
  * The touch long-press sheet for a thread message (`transcript.tsx`): quick
  * reactions, then its actions — same handlers as the hover pill
  * (`message-hover-actions.tsx`, via `./message-actions`), same order (Reply,
- * Copy, Speak/Stop, Edit and resend), so the two surfaces never drift.
+ * Copy, Remove preview, Speak/Stop, Edit and resend), so the two surfaces never drift.
  * Mirrors the mobile app's `MessageActionsSheet` content, built on the web's
  * own `ActionSheet` primitive instead of the native sheet host.
  */
@@ -71,6 +73,16 @@ export function MessageActionsSheet({
           icon: <Copy size={18} strokeWidth={1.7} aria-hidden="true" />,
           onSelect: () => copyMessageToClipboard(message),
         },
+        ...(canRemoveLinkPreview(message)
+          ? [
+              {
+                key: "remove-preview",
+                label: t`Remove preview`,
+                icon: <Link2Off size={18} strokeWidth={1.7} aria-hidden="true" />,
+                onSelect: () => removeLinkPreview(message),
+              },
+            ]
+          : []),
         ...(canSpeakMessage(message, voiceReady)
           ? [
               {

@@ -23,6 +23,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import {
   historyCompactJob,
+  linkPreviewJob,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -204,6 +205,7 @@ import {
   type ComputerExecutionLease,
   holdComputerExecutionLeaseForTakeover,
   provisionComputer,
+  releaseBotScreen,
   releaseComputerExecutionLease,
   renewComputerExecutionLease,
   screenLeaseIdForRun,
@@ -214,6 +216,7 @@ import {
   resolveBotWorkspaceCwd,
   resolveBotWorkspacePath,
   teamBotWorkspaceDirectory,
+  workspaceFileExists,
 } from "./computer-support.js";
 import { observationToolResult, parseComputerActions } from "./computer-tools.js";
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
@@ -221,6 +224,8 @@ import { sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
+import type { TextEditResult } from "./file-text.js";
+import { applyTextEdit, readLineWindow } from "./file-text.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import type { HistoryWindowMode } from "./history-compaction.js";
 import {
@@ -313,10 +318,12 @@ import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import {
   listAgentSkillRecords,
+  readSkillDraft,
   sandboxSkillDir,
   skillCreateFromTool,
   skillDeleteFromTool,
   skillReadFromTool,
+  skillSearchFromTool,
   skillUpdateFromTool,
 } from "./skill-tools.js";
 import {
@@ -362,12 +369,30 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "schedule_list",
   "scratchpad_list",
   "skill_read",
+  "skill_search",
   "web_search",
   "web_fetch",
   "browser_snapshot",
   "list_secrets",
 ]);
 const MAX_MODEL_FILE_BYTES = 250_000;
+
+function positiveIntegerArg(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+const READ_FILE_ERRORS = {
+  offset_out_of_range: "offset is past the end of the file; use a smaller offset",
+  line_too_long: "a single line is too large to return; use shell to inspect it",
+};
+const WRITE_FILE_EXISTS_ERROR =
+  "file already exists; use edit_file to change part of it, or set overwrite to true to replace it whole";
+const EDIT_FILE_ERRORS: Record<Extract<TextEditResult, { ok: false }>["error"], string> = {
+  empty_old_text: "old_text is empty; pass the exact text to replace",
+  not_found: "old_text not found; read the file again with read_file and copy the text exactly",
+  ambiguous:
+    "old_text matches several places; include more surrounding text or set replace_all to true",
+};
 const TURN_ATTACHMENT_UNAVAILABLE =
   "An attachment in this message could not be loaded. Tell the user the attachment was unavailable and do not guess its contents.";
 const STEERING_ATTACHMENT_UNAVAILABLE = TURN_ATTACHMENT_UNAVAILABLE;
@@ -2509,52 +2534,98 @@ export function createRunExecutor(deps: ExecutorDeps) {
             let bytes: Uint8Array;
             try {
               bytes = await deps.sandbox.readFile(computer, storedPath, context, {
-                maxBytes: MAX_MODEL_FILE_BYTES,
+                maxBytes: ATTACHMENT_MAX_BYTES,
               });
             } catch (error) {
               if (error instanceof Error && /exceeds \d+ bytes/.test(error.message)) {
-                return {
-                  error: "file is too large for model context",
-                  path: filePath,
-                };
+                return { error: "file is too large to read; use shell", path: filePath };
               }
               throw error;
             }
-            if (bytes.byteLength > MAX_MODEL_FILE_BYTES) {
-              return {
-                error: "file is too large for model context",
-                path: filePath,
-                size: bytes.byteLength,
-              };
-            }
+            let text: string;
             try {
-              return {
-                path: filePath,
-                content: redactSecrets(
-                  new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-                  runSecrets,
-                ),
-              };
+              text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
             } catch {
               return {
                 error: "file is not UTF-8 text; use open_path to inspect it",
                 path: filePath,
               };
             }
+            const window = readLineWindow(redactSecrets(text, runSecrets), {
+              offset: positiveIntegerArg(args.offset) ?? 1,
+              limit: positiveIntegerArg(args.limit),
+              maxBytes: MAX_MODEL_FILE_BYTES,
+            });
+            if (!window.ok) {
+              return {
+                error: READ_FILE_ERRORS[window.error],
+                path: filePath,
+                totalLines: window.totalLines,
+              };
+            }
+            const { ok: _ok, ...page } = window;
+            return { path: filePath, ...page };
           }
           if (name === "write_file") {
             const filePath = String(args.path ?? "notes/result.txt");
             const content = textContentArg(args.content, "");
+            const storedPath = resolveBotWorkspacePath(computerMode, bot.id, filePath);
+            if (
+              args.overwrite !== true &&
+              (await workspaceFileExists(deps.sandbox, computer, storedPath, context))
+            ) {
+              return { error: WRITE_FILE_EXISTS_ERROR, path: filePath };
+            }
             workspaceCheckpoint.markDirty();
             await deps.sandbox.writeFile(
               computer,
               {
-                path: resolveBotWorkspacePath(computerMode, bot.id, filePath),
+                path: storedPath,
                 content: new TextEncoder().encode(content),
               },
               context,
             );
             return finish({ ok: true, path: filePath });
+          }
+          if (name === "edit_file") {
+            const filePath = String(args.path ?? "");
+            const storedPath = resolveBotWorkspacePath(computerMode, bot.id, filePath);
+            let bytes: Uint8Array;
+            try {
+              bytes = await deps.sandbox.readFile(computer, storedPath, context, {
+                maxBytes: ATTACHMENT_MAX_BYTES,
+              });
+            } catch (error) {
+              if (error instanceof Error && /exceeds \d+ bytes/.test(error.message)) {
+                return { error: "file is too large to edit; use shell", path: filePath };
+              }
+              throw error;
+            }
+            let current: string;
+            try {
+              current = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+            } catch {
+              return { error: "file is not UTF-8 text; use shell to change it", path: filePath };
+            }
+            const edit = applyTextEdit(current, {
+              oldText: textContentArg(args.old_text, ""),
+              newText: textContentArg(args.new_text, ""),
+              replaceAll: args.replace_all === true,
+            });
+            if (!edit.ok) {
+              return {
+                error: EDIT_FILE_ERRORS[edit.error],
+                path: filePath,
+                ...(edit.matches === undefined ? {} : { matches: edit.matches }),
+              };
+            }
+            workspaceCheckpoint.markDirty();
+            await deps.sandbox.writeFile(
+              computer,
+              { path: storedPath, content: new TextEncoder().encode(edit.content) },
+              context,
+            );
+            return finish({ ok: true, path: filePath, replacements: edit.replacements });
           }
           if (name === "render_plot") {
             if (args.charts !== undefined) {
@@ -2953,43 +3024,46 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
             );
           }
-          if (name === "skill_create") {
-            return finish(
-              await skillCreateFromTool(
-                skillDeps,
-                {
-                  spaceId: run.spaceId,
-                  userId: run.userId,
-                  botId: run.botId,
-                },
-                {
+          if (name === "skill_search") {
+            return skillSearchFromTool(
+              skillDeps,
+              { spaceId: run.spaceId, userId: run.userId, botId: run.botId },
+              { query: args.query ? String(args.query) : undefined },
+            );
+          }
+          if (name === "skill_create" || name === "skill_update") {
+            const draftPath = typeof args.path === "string" ? args.path.trim() : "";
+            const files = draftPath
+              ? await readSkillDraft(
+                  deps.sandbox,
+                  computer,
+                  resolveBotWorkspacePath(computerMode, bot.id, draftPath),
+                  context,
+                )
+              : undefined;
+            if (files && "error" in files) return finish(files);
+            const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+            if (name === "skill_create") {
+              return finish(
+                await skillCreateFromTool(skillDeps, skillOwner, {
+                  files,
                   name: args.name ? String(args.name) : undefined,
                   description: args.description ? String(args.description) : undefined,
                   body: args.body ? String(args.body) : undefined,
                   content: args.content ? String(args.content) : undefined,
-                },
-              ),
-            );
-          }
-          if (name === "skill_update") {
+                }),
+              );
+            }
             return finish(
-              await skillUpdateFromTool(
-                skillDeps,
-                {
-                  spaceId: run.spaceId,
-                  userId: run.userId,
-                  botId: run.botId,
-                },
-                {
-                  name: args.name ? String(args.name) : undefined,
-                  skillId: args.skillId ? String(args.skillId) : undefined,
-                  newName: args.newName ? String(args.newName) : undefined,
-                  description:
-                    args.description !== undefined ? String(args.description) : undefined,
-                  body: args.body !== undefined ? String(args.body) : undefined,
-                  content: args.content ? String(args.content) : undefined,
-                },
-              ),
+              await skillUpdateFromTool(skillDeps, skillOwner, {
+                files,
+                name: args.name ? String(args.name) : undefined,
+                skillId: args.skillId ? String(args.skillId) : undefined,
+                newName: args.newName ? String(args.newName) : undefined,
+                description: args.description !== undefined ? String(args.description) : undefined,
+                body: args.body !== undefined ? String(args.body) : undefined,
+                content: args.content ? String(args.content) : undefined,
+              }),
             );
           }
           if (name === "skill_delete") {
@@ -4516,6 +4590,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
           });
           if (!completed) return;
+          // After the commit, never inside it. Delegated runs report back to the ordering bot
+          // and routine cards are not messages to the person: no preview for either.
+          if (run.trigger !== "bot_message" && !isRoutineCardRun) {
+            await deps.jobs
+              .enqueue(linkPreviewJob({ runId }))
+              .catch((error) => getLogger().error("link.preview enqueue", error));
+          }
           await settleRoutineRunCard("completed", text);
           if (completed.continuationRunId) {
             await deps.jobs
@@ -4703,9 +4784,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         clearInterval(heartbeat);
         if (!retainComputerLease) {
           if (screenRelease) {
-            await deps.sandbox
-              .releaseScreen?.(screenRelease.computer, screenRelease.context)
-              .catch(() => undefined);
+            await releaseBotScreen(deps, screenRelease.computer, screenRelease.context);
           }
           await releaseComputerExecutionLease(deps.prisma, computerLease).catch(() => undefined);
         }
@@ -5316,7 +5395,7 @@ async function publishRoutineRunCard(
  * answers. `next` returns the replacement block, or null to leave the card (and the thread)
  * untouched.
  */
-async function updateRoutineRunCard(
+export async function updateRoutineRunCard(
   deps: Pick<ExecutorDeps, "prisma" | "events">,
   // `runId` is deliberately optional: a cancelled run may not write thread history, so the
   // card's own closing event is appended unattributed rather than rejected.
@@ -5326,6 +5405,9 @@ async function updateRoutineRunCard(
 ): Promise<void> {
   const committed = await deps.prisma
     .$transaction(async (tx) => {
+      // The thread lock first, then the read: a preview card or its removal marker written by
+      // someone else in between must survive this rewrite of the blocks.
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
       const message = await tx.message.findUnique({ where: { id: cardMessageId } });
       if (!message) return null;
       let changed = false;

@@ -40,7 +40,7 @@ describeIntegration("reusable credential lifecycle", () => {
       defaultModel: "scripted",
       remoteConnectors: {
         fetch,
-        resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }],
+        resolveHostname: async () => [{ address: "8.8.8.8", family: 4 }],
       },
     });
   });
