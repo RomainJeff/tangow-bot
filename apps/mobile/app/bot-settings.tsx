@@ -1,3 +1,4 @@
+import type { SpaceDecisionConfig } from "@rakazo/contracts";
 import {
   BOT_COLORS,
   BOT_DESCRIPTION_MAX_LENGTH,
@@ -64,6 +65,7 @@ export default function BotSettingsScreen() {
   const [credentials, setCredentials] = useState<MobileModelCredential[]>([]);
   const [catalog, setCatalog] = useState<MobileModel[]>([]);
   const [me, setMe] = useState<MobileMe | null>(null);
+  const [decisionConnected, setDecisionConnected] = useState(false);
   const [modelMetaReady, setModelMetaReady] = useState(false);
   const [modelMetaError, setModelMetaError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +93,12 @@ export default function BotSettingsScreen() {
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("Could not load bot")));
   }, [botId]);
+
+  useEffect(() => {
+    void rpc<SpaceDecisionConfig | null>("decision/providerConfig")
+      .then((config) => setDecisionConnected(config != null))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     void Promise.all([
@@ -185,21 +193,22 @@ export default function BotSettingsScreen() {
     return choices;
   }, [connectedOptions, modelKey, spaceDefaultLabel]);
 
+  const defaultThinkingLabel = decisionConnected ? t("Auto") : t("Default (medium)");
   const thinkingChoices: PickerChoice[] = useMemo(
     () => [
-      { key: "", label: t("Default (medium)") },
+      { key: "", label: defaultThinkingLabel },
       ...thinkingOptions.map((level) => ({
         key: level,
         label: thinkingLevelLabel(level, t),
       })),
     ],
-    [t, thinkingOptions],
+    [defaultThinkingLabel, t, thinkingOptions],
   );
 
   const selectedModelLabel =
     modelChoices.find((choice) => choice.key === modelKey)?.label ?? spaceDefaultLabel;
   const selectedThinkingLabel =
-    thinkingChoices.find((choice) => choice.key === thinkingLevel)?.label ?? t("Default (medium)");
+    thinkingChoices.find((choice) => choice.key === thinkingLevel)?.label ?? defaultThinkingLabel;
 
   function selectModel(key: string) {
     if (key === modelKey) return;

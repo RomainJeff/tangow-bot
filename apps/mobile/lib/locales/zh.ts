@@ -100,6 +100,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   Archive: "归档",
   "Archive keeps everything and can be undone. Delete is permanent.":
     "归档会保留全部内容，可以撤销。删除不可恢复。",
+  Auto: "自动",
   "Default (medium)": "默认（中）",
   "Archived bots": "已归档的 Bot",
   "Archived. Chat, memory, and files kept.": "已归档。对话、记忆和文件均已保留。",

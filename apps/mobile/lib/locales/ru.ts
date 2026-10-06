@@ -10,6 +10,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Could not complete action": "Не удалось выполнить действие",
   "Could not verify or save these credentials":
     "Не удалось проверить или сохранить эти учетные данные",
+  Auto: "Авто",
   "Default (medium)": "По умолчанию (средний)",
   "Direct MCP": "Прямой MCP",
   Dismiss: "Закрыть",
