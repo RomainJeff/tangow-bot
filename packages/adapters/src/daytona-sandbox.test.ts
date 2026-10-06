@@ -1,4 +1,5 @@
 import type { Sandbox } from "@daytona/sdk";
+import { SCREEN_PROXY_TTL_MS } from "@rakazo/core";
 import { describe, expect, it, vi } from "vitest";
 import { DaytonaSandboxProvider, type DaytonaSandboxSdk } from "./daytona-sandbox.js";
 import { desktopCommandResponder } from "./linux-desktop.test-support.js";
@@ -130,6 +131,43 @@ describe("DaytonaSandboxProvider", () => {
     await provider.stop(computer, context);
     expect(fixture.expireSignedPreviewUrl).toHaveBeenCalledWith(6100, "preview-token");
     expect(fixture.stop).toHaveBeenCalledWith(120);
+  });
+
+  it("shares one preview for a capability lifetime and revokes every live one on stop", async () => {
+    const fixture = daytonaFixture();
+    let minted = 0;
+    fixture.getSignedPreviewUrl.mockImplementation(async (port: number) => {
+      minted += 1;
+      return { url: `https://${port}-preview-${minted}.daytona.test`, token: `token-${minted}` };
+    });
+    const provider = new DaytonaSandboxProvider({ apiKey: "test-key" }, fixture.client);
+    const computer = await provider.provision({ botId: "bot-a", homePath: "/unused" }, context);
+    await provider.prepare(computer, context);
+    const _screenRegistry = desktopCommandResponder();
+    const start = Date.now();
+    const now = vi.spyOn(Date, "now");
+    const previewHost = async (at: number) => {
+      now.mockReturnValue(start + at);
+      const screen = await provider.connectScreen(
+        computer,
+        { view: "stream", interactive: false },
+        context,
+      );
+      return new URL(screen.url!).host;
+    };
+    try {
+      expect(await previewHost(0)).toBe("6100-preview-1.daytona.test");
+      expect(await previewHost(SCREEN_PROXY_TTL_MS - 1)).toBe("6100-preview-1.daytona.test");
+      expect(await previewHost(SCREEN_PROXY_TTL_MS)).toBe("6100-preview-2.daytona.test");
+      expect(await previewHost(2 * SCREEN_PROXY_TTL_MS)).toBe("6100-preview-3.daytona.test");
+      await provider.stop(computer, context);
+      expect(fixture.expireSignedPreviewUrl.mock.calls).toEqual([
+        [6100, "token-2"],
+        [6100, "token-3"],
+      ]);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("reconnects stopped sandboxes and replaces missing ones", async () => {

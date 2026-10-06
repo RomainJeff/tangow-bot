@@ -847,6 +847,8 @@ export const ComputerStatusSchema = z.object({
   screenWidth: z.number().int().positive(),
   screenHeight: z.number().int().positive(),
   homeRevision: z.string().nullable(),
+  /** Opaque: equal while the sealed screen capability's scope is unchanged. */
+  screenStamp: z.string(),
   busyBotName: z.string().nullable(),
   canUpdate: z.boolean(),
 });

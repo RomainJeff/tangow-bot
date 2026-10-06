@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **Bots come with built-in Notion skills.** With a Notion connection, a bot can search and find pages, query databases, add rows, create pages and tasks, capture a conversation as documentation, prepare meetings, and turn a spec or a Notion task into an implementation plan; each skill appears as `builtin:notion-…`.
+- **A bot's screen now shows when it is connecting and reconnects by itself.** On web, desktop and iPhone, "Connecting…" appears until the first image and "Reconnecting" appears over the last image when the connection drops, while the screen reconnects in place instead of reloading. If it cannot come back within a minute, the usual error and retry button appear.
 
 #### Changed
 
@@ -22,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - A bot with more than 50 skills can now find and use the ones missing from its prompt list by searching skills by keywords, instead of never seeing them.
 - A link preview in the composer no longer disappears when you type before the link, fits the message box on a phone-width screen, no longer goes missing when you paste several links quickly in the desktop app, and no longer gives up early on slow sites on iOS.
+- The bot's screen no longer reloads while the bot works or when you come back to its conversation on web and desktop, and no longer reloads right after it opens on iPhone.
 
 ### 2026-10-05
 

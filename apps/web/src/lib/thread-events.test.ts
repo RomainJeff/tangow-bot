@@ -9,6 +9,7 @@ import {
   activeThreadRuns,
   applyThreadSendReceipt,
   clearActiveThreadRuns,
+  clearBusyWhileWaitingTakeover,
   computerPanelAutoBoot,
   computerPanelAutoUsesBoot,
   computerPanelNeedsMaintenance,
@@ -502,6 +503,18 @@ describe("thread event reduction", () => {
     expect(computerTakeoverBlocked(reconciled.computer, reconciled.snapshot.run?.status)).toBe(
       false,
     );
+  });
+
+  it("clears the busy banner of a lagging status read while the run waits for takeover", () => {
+    const lagging = computer({ busyBotName: "Chief" });
+
+    expect(clearBusyWhileWaitingTakeover(lagging, "waiting_takeover")).toEqual({
+      ...lagging,
+      busyBotName: null,
+    });
+    expect(clearBusyWhileWaitingTakeover(lagging, "running")).toBe(lagging);
+    expect(clearBusyWhileWaitingTakeover(lagging, undefined)).toBe(lagging);
+    expect(clearBusyWhileWaitingTakeover(null, "waiting_takeover")).toBeNull();
   });
 
   it("ignores a refresh whose cursor is behind the event-sourced snapshot", () => {
@@ -1619,6 +1632,7 @@ function computer(overrides: Partial<ComputerStatus> = {}): ComputerStatus {
     screenWidth: 1280,
     screenHeight: 800,
     homeRevision: null,
+    screenStamp: "",
     busyBotName: null,
     canUpdate: true,
     ...overrides,

@@ -2442,6 +2442,7 @@ describe("stopThreadRuns", () => {
       $transaction: vi.fn(async (callback: (client: typeof transaction) => unknown) =>
         callback(transaction),
       ),
+      bot: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       // Simulate workers clearing leases / execution columns as soon as the
       // transaction commits. A post-commit lookup would now miss both sandboxes.
       computer: {
@@ -2514,6 +2515,10 @@ describe("stopThreadRuns", () => {
         screenLeaseId: "run-b:4",
       }),
     );
+    expect(vi.mocked(prisma.bot.updateMany).mock.calls).toEqual([
+      [{ where: { id: "bot-a" }, data: { screenGeneration: { increment: 1 } } }],
+      [{ where: { id: "bot-b" }, data: { screenGeneration: { increment: 1 } } }],
+    ]);
     expect(prisma.computer.findMany).not.toHaveBeenCalled();
     expect(prisma.computerExecutionLease.updateMany).toHaveBeenCalledWith({
       where: { runId: { in: ["run-a", "run-b"] } },
@@ -2561,6 +2566,7 @@ describe("stopThreadRuns", () => {
       $transaction: vi.fn(async (callback: (client: typeof transaction) => unknown) =>
         callback(transaction),
       ),
+      bot: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       computer: {
         findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),

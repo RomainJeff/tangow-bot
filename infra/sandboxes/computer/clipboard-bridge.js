@@ -32,10 +32,9 @@ export function clipboardTextFromPaste(event) {
   return data.getData("text/plain") || data.getData("text") || "";
 }
 
-/** True when noVNC RFB can accept clipboard and key events. */
+/** True only while the session says the connection is live; anything else drops the input. */
 export function isRfbConnected(rfb) {
-  const state = rfb?._rfbConnectionState;
-  return !state || state === "connected";
+  return rfb?.connected === true;
 }
 
 /**
@@ -65,7 +64,7 @@ export function sendRemotePaste(sendKey) {
 
 /**
  * Sync host paste into the RFB session, then paste into the remote desktop.
- * @param {{ viewOnly?: boolean, clipboardPasteFrom?: (text: string) => void, sendKey?: Function, _rfbConnectionState?: string }} rfb
+ * @param {{ viewOnly?: boolean, clipboardPasteFrom?: (text: string) => void, sendKey?: Function, connected?: boolean }} rfb
  * @param {string} text
  */
 export function pasteHostText(rfb, text) {
@@ -79,7 +78,7 @@ export function pasteHostText(rfb, text) {
 }
 
 /**
- * @param {{ viewOnly?: boolean, clipboardPasteFrom?: (text: string) => void, sendKey?: Function, _rfbConnectionState?: string }} rfb
+ * @param {{ viewOnly?: boolean, clipboardPasteFrom?: (text: string) => void, sendKey?: Function, connected?: boolean }} rfb
  * @param {{ target?: EventTarget }} [options]
  * @returns {() => void} detach
  */

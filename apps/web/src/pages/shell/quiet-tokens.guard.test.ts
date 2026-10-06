@@ -18,6 +18,7 @@ const GUARDED = [
   "pages/shell/composer.tsx",
   "pages/shell/message-cards.tsx",
   "pages/shell/side-panel.tsx",
+  "pages/shell/screen-frame.tsx",
   "pages/shell/message-view.tsx",
   "pages/shell/transcript.tsx",
   "pages/shell/sidebar.tsx",

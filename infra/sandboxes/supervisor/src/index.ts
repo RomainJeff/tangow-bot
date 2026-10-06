@@ -888,6 +888,8 @@ async function ensureComputerImage() {
             "embed.html",
             "clipboard-bridge.js",
             "mobile-keyboard.js",
+            "screen-link-machine.js",
+            "screen-link-session.js",
             "fluxbox.init",
             "fluxbox.apps",
             "fluxbox.menu",

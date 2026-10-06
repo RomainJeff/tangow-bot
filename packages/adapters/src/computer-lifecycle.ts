@@ -574,6 +574,28 @@ export async function releaseComputerExecutionLease(
   });
 }
 
+/**
+ * Releasing a bot's desktop slot drops its view token, and the next slot gets a new one, so the
+ * bot's screen generation moves on and URLs sealed for the old slot stop being reused.
+ */
+export async function releaseBotScreen(
+  deps: { prisma: PrismaClient; sandbox: Pick<SandboxProvider, "releaseScreen"> },
+  computer: ComputerRef,
+  context: AdapterContext,
+): Promise<void> {
+  if (!deps.sandbox.releaseScreen) return;
+  try {
+    await deps.sandbox.releaseScreen(computer, context);
+  } catch {
+    // A failed release keeps the slot and its token.
+    return;
+  }
+  if (!context.botId) return;
+  await deps.prisma.bot
+    .updateMany({ where: { id: context.botId }, data: { screenGeneration: { increment: 1 } } })
+    .catch(() => undefined);
+}
+
 function isUniqueConstraintError(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2002");
 }

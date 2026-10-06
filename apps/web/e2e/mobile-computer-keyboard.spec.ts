@@ -16,13 +16,38 @@ test("touch users can open and dismiss the remote computer keyboard", async ({
     ],
     ["/mobile-keyboard.js", await readFile(path.join(computerRoot, "mobile-keyboard.js"), "utf8")],
     [
+      "/screen-link-machine.js",
+      await readFile(path.join(computerRoot, "screen-link-machine.js"), "utf8"),
+    ],
+    [
+      "/screen-link-session.js",
+      await readFile(path.join(computerRoot, "screen-link-session.js"), "utf8"),
+    ],
+    [
       "/core/rfb.js",
       `export default class RFB {
-        constructor() {
+        constructor(target) {
           this.viewOnly = false;
           this.focusOnClick = true;
-          globalThis.__rfbKeys = [];
+          this.listeners = {};
+          globalThis.__rfbKeys ??= [];
+          this.screen = document.createElement("div");
+          const canvas = document.createElement("canvas");
+          canvas.width = 64;
+          canvas.height = 48;
+          this.screen.append(canvas);
+          target.append(this.screen);
+          setTimeout(() => {
+            const context = canvas.getContext("2d");
+            context.fillStyle = "#fff";
+            context.fillRect(0, 0, 64, 48);
+            this.dispatch("connect");
+          }, 0);
         }
+        addEventListener(type, listener) { (this.listeners[type] ??= new Set()).add(listener); }
+        removeEventListener(type, listener) { this.listeners[type]?.delete(listener); }
+        dispatch(type) { for (const listener of this.listeners[type] ?? []) listener(); }
+        disconnect() { this.screen.remove(); }
         sendKey(...args) { globalThis.__rfbKeys.push(args); }
       }`,
     ],
@@ -81,13 +106,19 @@ test("touch users can open and dismiss the remote computer keyboard", async ({
       })),
     )
     .toEqual({ height: "420px", top: "12px" });
-  await keyboardInput.pressSequentially("mobile typing");
-  const forwardedKeysyms = await page.evaluate(() =>
-    Reflect.get(globalThis, "__rfbKeys").map(([keysym]: [number]) => keysym),
-  );
-  expect(forwardedKeysyms).toEqual(
-    Array.from("mobile typing", (character) => character.codePointAt(0)),
-  );
+  const typed = "mobile typing";
+  await keyboardInput.pressSequentially(typed);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (count) =>
+          Reflect.get(globalThis, "__rfbKeys")
+            .slice(-count)
+            .map(([keysym]: [number]) => keysym),
+        typed.length,
+      ),
+    )
+    .toEqual(Array.from(typed, (character) => character.codePointAt(0)));
   await captureScreenshot(page, testInfo, "mobile-computer-keyboard-open");
 
   await page.getByRole("button", { name: "Hide keyboard" }).click();

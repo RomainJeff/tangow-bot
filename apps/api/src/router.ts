@@ -63,6 +63,7 @@ import {
   probeOpenAiCompatibleModels,
   provisionComputer,
   queueComputerUpdate,
+  releaseBotScreen,
   releaseComputerExecutionLease,
   replaceComputer,
   resolveAutoReviewChecker,
@@ -1425,7 +1426,7 @@ export function createRouter(deps: RouterDeps) {
               computer.executionRunId,
               adapterContext,
             );
-            await deps.sandbox.releaseScreen?.(ref, adapterContext).catch(() => undefined);
+            await releaseBotScreen(deps, ref, adapterContext);
           }),
         );
         return { ok: true as const };
@@ -5103,7 +5104,7 @@ async function computerStatus(
     botId,
     botName: bot.name,
   });
-  return toComputerStatus(botId, bot.computer, busyBotName);
+  return toComputerStatus(botId, bot.screenGeneration, bot.computer, busyBotName);
 }
 
 async function runComputerReplace(

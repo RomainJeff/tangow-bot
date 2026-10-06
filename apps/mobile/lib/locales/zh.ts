@@ -12,6 +12,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Could not complete action": "无法完成操作",
   Dismiss: "关闭",
   "Getting ready": "正在准备",
+  "Connecting…": "正在连接…",
   Reconnecting: "正在重新连接",
   "Recovering Team Computer": "正在恢复团队电脑",
   "Recovering {name}’s Computer": "正在恢复 {name} 的电脑",
