@@ -7,8 +7,8 @@ import {
   Cpu,
   Gauge,
   Monitor,
-  MousePointerClick,
   Settings,
+  Signpost,
   Volume2,
   XIcon,
 } from "lucide-react";
@@ -20,7 +20,7 @@ import {
   UpdatesSettingsPanel,
   UsageSettingsPanel,
 } from "./AccountSettingsOverlay";
-import { BrowserSettingsPanel } from "./BrowserSettingsPanel";
+import { DecisionModelSettingsPanel } from "./DecisionModelSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
@@ -29,7 +29,7 @@ export type SettingsSection =
   | "general"
   | "models"
   | "memory"
-  | "browser"
+  | "decision-model"
   | "voice"
   | "usage"
   | "computer"
@@ -79,10 +79,10 @@ export function SettingsOverlay({
   const usageRef = useRef<HTMLDivElement>(null);
   const [section, setSection] = useState<SettingsSection>(initialSection);
   const [memoryBusy, setMemoryBusy] = useState(false);
-  const [browserBusy, setBrowserBusy] = useState(false);
+  const [decisionModelBusy, setDecisionModelBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const showComputer = isDeploymentOwner && computersAreUnavailable(sandboxProvider);
-  const panelBusy = memoryBusy || browserBusy || voiceBusy;
+  const panelBusy = memoryBusy || decisionModelBusy || voiceBusy;
 
   useEffect(() => {
     setSection(initialSection);
@@ -98,7 +98,7 @@ export function SettingsOverlay({
     { id: "general", label: t`General`, icon: Settings },
     { id: "models", label: t`Models`, icon: Cpu },
     { id: "memory", label: t`Memory`, icon: Brain },
-    { id: "browser", label: t`Browser`, icon: MousePointerClick },
+    { id: "decision-model", label: t`Decision Model`, icon: Signpost },
     { id: "voice", label: t`Voice`, icon: Volume2 },
     { id: "usage", label: t`Usage`, icon: Gauge },
     ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
@@ -208,7 +208,7 @@ export function SettingsOverlay({
                 section === "models" ||
                 section === "voice" ||
                 section === "memory" ||
-                section === "browser"
+                section === "decision-model"
                   ? "flex flex-col overflow-hidden"
                   : "rk-scroll overflow-y-auto overscroll-contain px-6 pb-6 pt-5 sm:px-8 sm:pb-8"
               }`}
@@ -246,8 +246,8 @@ export function SettingsOverlay({
                   onBusyChange={setMemoryBusy}
                 />
               ) : null}
-              {section === "browser" ? (
-                <BrowserSettingsPanel onBusyChange={setBrowserBusy} />
+              {section === "decision-model" ? (
+                <DecisionModelSettingsPanel onBusyChange={setDecisionModelBusy} />
               ) : null}
               {section === "voice" ? (
                 <VoiceSettingsOverlay embedded onClose={requestClose} onBusyChange={setVoiceBusy} />

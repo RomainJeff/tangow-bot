@@ -7,7 +7,11 @@ import { rpc } from "../lib/rpc";
 const DECISION_PROVIDER = "openrouter";
 
 /** Space decision provider: lets bots delegate multi-step page tasks to browser_run. */
-export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
+export function DecisionModelSettingsPanel({
+  onBusyChange,
+}: {
+  onBusyChange?: (busy: boolean) => void;
+}) {
   const { t } = useLingui();
   const apiKeyId = useId();
   const baseUrlId = useId();
@@ -30,7 +34,7 @@ export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: b
       .catch((err) => {
         if (cancelled) return;
         setConfig(null);
-        setError(err instanceof Error ? err.message : t`Could not load browser settings`);
+        setError(err instanceof Error ? err.message : t`Could not load decision model settings`);
       });
     return () => {
       cancelled = true;
@@ -79,7 +83,10 @@ export function BrowserSettingsPanel({ onBusyChange }: { onBusyChange?: (busy: b
   }
 
   return (
-    <div data-testid="browser-settings" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      data-testid="decision-model-settings"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    >
       <p className="px-6 pt-1 text-reasoning text-muted-foreground sm:px-8">
         <Trans>Let bots complete multi-step web page tasks faster.</Trans>
       </p>
