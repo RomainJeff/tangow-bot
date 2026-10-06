@@ -200,6 +200,7 @@ import {
   resolveBotWorkspaceCwd,
   resolveBotWorkspacePath,
   teamBotWorkspaceDirectory,
+  workspaceFileExists,
 } from "./computer-support.js";
 import { observationToolResult, parseComputerActions } from "./computer-tools.js";
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
@@ -368,6 +369,8 @@ const READ_FILE_ERRORS = {
   offset_out_of_range: "offset is past the end of the file; use a smaller offset",
   line_too_long: "a single line is too large to return; use shell to inspect it",
 };
+const WRITE_FILE_EXISTS_ERROR =
+  "file already exists; use edit_file to change part of it, or set overwrite to true to replace it whole";
 const EDIT_FILE_ERRORS: Record<Extract<TextEditResult, { ok: false }>["error"], string> = {
   empty_old_text: "old_text is empty; pass the exact text to replace",
   not_found: "old_text not found; read the file again with read_file and copy the text exactly",
@@ -2525,11 +2528,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "write_file") {
             const filePath = String(args.path ?? "notes/result.txt");
             const content = textContentArg(args.content, "");
+            const storedPath = resolveBotWorkspacePath(computerMode, bot.id, filePath);
+            if (
+              args.overwrite !== true &&
+              (await workspaceFileExists(deps.sandbox, computer, storedPath, context))
+            ) {
+              return { error: WRITE_FILE_EXISTS_ERROR, path: filePath };
+            }
             workspaceCheckpoint.markDirty();
             await deps.sandbox.writeFile(
               computer,
               {
-                path: resolveBotWorkspacePath(computerMode, bot.id, filePath),
+                path: storedPath,
                 content: new TextEncoder().encode(content),
               },
               context,

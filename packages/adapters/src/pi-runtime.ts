@@ -1068,6 +1068,7 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
         return {
           path: String(raw.path ?? "notes/result.txt"),
           content: textContentArg(raw.content, ""),
+          overwrite: raw.overwrite === true,
         };
       }
       if (tool.name === "edit_file") {
@@ -1503,7 +1504,11 @@ function safeJsonSchemaParameters(tool: ConnectorTool) {
 
 function builtinParameters(tool: ConnectorTool) {
   if (tool.name === "write_file") {
-    return Type.Object({ path: Type.String(), content: Type.String() });
+    return Type.Object({
+      path: Type.String(),
+      content: Type.String(),
+      overwrite: Type.Optional(Type.Boolean()),
+    });
   }
   if (tool.name === "destination.write") {
     return Type.Object({

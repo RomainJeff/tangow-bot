@@ -160,12 +160,13 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "write_file",
     description:
-      "Write a UTF-8 file into this bot's home. On a Team Computer, relative paths use the bot folder; use shared/... only for work other bots should share.",
+      "Create a new UTF-8 file in this bot's home. Fails if the file exists: to change part of an existing file use edit_file; set overwrite to true only to replace the whole file. On a Team Computer, relative paths use the bot folder; use shared/... only for work other bots should share.",
     inputSchema: {
       type: "object",
       properties: {
         path: { type: "string" },
         content: { type: "string" },
+        overwrite: { type: "boolean" },
       },
       required: ["path", "content"],
     },
