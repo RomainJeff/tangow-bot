@@ -331,6 +331,7 @@ export class PiAgentRuntime implements AgentRuntime {
             correlationTraceId: context?.traceId,
             provider: model.provider,
             model: model.id,
+            thinkingLevel,
             systemPrompt,
             history,
             prompt: initialPrompt,
@@ -395,6 +396,13 @@ export class PiAgentRuntime implements AgentRuntime {
           }
           if (event.type === "turn_start") {
             traceRecorder?.turnStart();
+          }
+          if (
+            event.type === "message_update" &&
+            (event.assistantMessageEvent.type === "text_delta" ||
+              event.assistantMessageEvent.type === "thinking_delta")
+          ) {
+            traceRecorder?.firstToken();
           }
           if (event.type === "tool_execution_end") {
             traceRecorder?.toolEnd(event.toolCallId, event.result, event.isError);
