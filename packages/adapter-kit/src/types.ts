@@ -434,6 +434,11 @@ export interface AgentRunRequest {
     /** Present only when the runtime traces this run. */
     trace?: ToolCallTrace,
   ) => Promise<unknown>;
+  /**
+   * Called with every tool call of one model turn, before any of those calls runs; a rejection
+   * blocks the call. Lets the executor record what a turn is about to read before it reads it.
+   */
+  prepareToolBatch?: (calls: readonly { name: string; args: unknown }[]) => Promise<void>;
   /** Called after a tool returns; implementations must not persist raw result contents. */
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */

@@ -4,6 +4,8 @@ import {
   type AgentMessage,
   type AgentTool,
   type AgentToolResult,
+  type BeforeToolCallContext,
+  type BeforeToolCallResult,
 } from "@earendil-works/pi-agent-core";
 import {
   type Api,
@@ -30,7 +32,7 @@ import type {
   ToolCallTrace,
 } from "@rakazo/adapter-kit";
 import type { AskQuestion } from "@rakazo/contracts";
-import { redactSecrets } from "@rakazo/core";
+import { RUN_STATE_UNSAVED_ERROR, redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { isToolPauseResult } from "./approval-effect.js";
 import { builtinAgentTools, DELEGATION_TOOL_NAMES } from "./builtin-tools.js";
@@ -138,6 +140,22 @@ const SILENT_TOOL_CONTINUATION_PROMPT =
   "Continue the original task from the latest tool result. Do not stop after a tool call; use any remaining tools needed, then give the user the final answer.";
 const TOOL_FINAL_RESPONSE_FALLBACK =
   "I completed the tool step but could not produce a final response. Please ask me to continue.";
+/** The run hears every call of a turn before the first one runs, whatever the batch order. */
+export async function prepareToolBatch(
+  request: Pick<AgentRunRequest, "prepareToolBatch">,
+  { assistantMessage }: BeforeToolCallContext,
+): Promise<BeforeToolCallResult | undefined> {
+  if (!request.prepareToolBatch) return undefined;
+  const calls = assistantMessage.content.flatMap((part) =>
+    part.type === "toolCall" ? [{ name: part.name, args: part.arguments }] : [],
+  );
+  try {
+    await request.prepareToolBatch(calls);
+    return undefined;
+  } catch {
+    return { block: true, reason: RUN_STATE_UNSAVED_ERROR };
+  }
+}
 const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 // Reasoning-capable models must not start at "off": for OpenRouter, pi-ai maps
 // that to reasoning.effort "none", which 400s on endpoints that mandate
@@ -344,6 +362,7 @@ export class PiAgentRuntime implements AgentRuntime {
         agent = new Agent({
           sessionId: conversationSessionId(request.threadId, request.botId),
           steeringMode: "all",
+          beforeToolCall: (context) => prepareToolBatch(request, context),
           streamFn: (m, ctx, options) =>
             models.streamSimple(m, ctx, reliableStreamOptions(m, options, request.model.maxTokens)),
           getApiKey: async () => apiKey,
@@ -1352,6 +1371,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   };
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
+    beforeToolCall: (context) => prepareToolBatch(host.request, context),
     streamFn: (m, ctx, options) =>
       selectedModel.models.streamSimple(
         m,

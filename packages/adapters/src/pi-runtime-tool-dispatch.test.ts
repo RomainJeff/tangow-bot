@@ -1,4 +1,5 @@
 import type { AdapterContext, ConnectorTool, ToolCallTrace } from "@rakazo/adapter-kit";
+import { RUN_STATE_UNSAVED_ERROR } from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fakeAgentState = vi.hoisted(() => ({
@@ -30,6 +31,7 @@ const fakeAgentState = vi.hoisted(() => ({
   promptInputs: [] as string[],
   promptImages: [] as unknown[][],
   toolResult: undefined as unknown,
+  beforeToolCall: undefined as ((context: unknown) => Promise<unknown>) | undefined,
 }));
 
 vi.mock("@earendil-works/pi-agent-core", () => ({
@@ -47,8 +49,10 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
       prepareNextTurnWithContext?: (input: {
         context: { messages: unknown[] };
       }) => Promise<{ context?: { messages: unknown[] } } | undefined>;
+      beforeToolCall?: (context: unknown) => Promise<unknown>;
     }) {
       this.tools = options.initialState.tools;
+      fakeAgentState.beforeToolCall = options.beforeToolCall;
       this.prepareNextTurnWithContext = options.prepareNextTurnWithContext;
       fakeAgentState.tools = this.tools;
       fakeAgentState.initialMessages = options.initialState.messages;
@@ -261,7 +265,7 @@ vi.mock("./pi-openai-compatible-provider.js", () => ({
 
 import { decideWithin } from "./decision.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
-import { maxToolCallsPerTurn, PiAgentRuntime } from "./pi-runtime.js";
+import { maxToolCallsPerTurn, PiAgentRuntime, type prepareToolBatch } from "./pi-runtime.js";
 import { TOOL_RESULT_TEXT_LIMIT } from "./pi-runtime-limits.js";
 import { TraceExporter } from "./trace-export.js";
 
@@ -331,6 +335,70 @@ describe("Pi connector tool dispatch", () => {
       args: { collection: "notes", title: "Result", body: "Done" },
     };
     delete process.env.MAX_TOOL_CALLS_PER_TURN;
+  });
+
+  describe("a turn's tool calls announced before any runs", () => {
+    const call = (name: string, id: string) => ({
+      type: "toolCall" as const,
+      id,
+      name,
+      arguments: { id },
+    });
+    const contextFor = (toolName: string, ...names: string[]) =>
+      ({
+        assistantMessage: { role: "assistant", content: names.map((n, i) => call(n, `c${i}`)) },
+        toolCall: call(toolName, "c0"),
+        args: {},
+        context: { systemPrompt: "", messages: [], tools: [] },
+      }) as unknown as Parameters<typeof prepareToolBatch>[1];
+
+    it("hands the executor every tool of the turn, and blocks the call when it fails", async () => {
+      fakeAgentState.mode = "empty";
+      const seen: { name: string; args: unknown }[][] = [];
+      let fail = false;
+      const runtime = new PiAgentRuntime();
+      for await (const _event of runtime.run(
+        {
+          botId: "b",
+          threadId: "t",
+          runId: "tool-batch",
+          prompt: "go",
+          instructions: "Use tools.",
+          history: [],
+          tools: [],
+          model: { provider: "test", id: "dispatch-test-model" },
+          executeTool: vi.fn(),
+          prepareToolBatch: async (calls) => {
+            if (fail) throw new Error("database down");
+            seen.push([...calls]);
+          },
+        },
+        {
+          operationId: "tb",
+          traceId: "tb",
+          spaceId: "w",
+          userId: "u",
+          signal: new AbortController().signal,
+        },
+      )) {
+        // drain
+      }
+      await expect(
+        fakeAgentState.beforeToolCall?.(
+          contextFor("schedule_create", "schedule_create", "web_fetch"),
+        ),
+      ).resolves.toBeUndefined();
+      expect(seen).toEqual([
+        [
+          { name: "schedule_create", args: { id: "c0" } },
+          { name: "web_fetch", args: { id: "c1" } },
+        ],
+      ]);
+      fail = true;
+      await expect(
+        fakeAgentState.beforeToolCall?.(contextFor("web_fetch", "web_fetch")),
+      ).resolves.toEqual({ block: true, reason: RUN_STATE_UNSAVED_ERROR });
+    });
   });
 
   it("injects durable steering at Pi's next safe turn boundary", async () => {
