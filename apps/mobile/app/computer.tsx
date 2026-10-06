@@ -1,7 +1,7 @@
 import type { ComputerMode, ComputerReleaseReason } from "@rakazo/contracts";
 import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { AppState, Modal, Pressable, Text, View } from "react-native";
 import {
   initialWindowMetrics,
   SafeAreaProvider,
@@ -86,6 +86,21 @@ export default function Computer() {
     if (botId) refreshController.start();
     return () => refreshController.dispose();
   }, [botId, refreshController]);
+
+  useEffect(() => {
+    let hiddenAt: number | null = null;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") {
+        hiddenAt ??= Date.now();
+        return;
+      }
+      if (hiddenAt === null) return;
+      const hiddenForMs = Date.now() - hiddenAt;
+      hiddenAt = null;
+      void refreshController.resume(hiddenForMs).catch(() => undefined);
+    });
+    return () => subscription.remove();
+  }, [refreshController]);
 
   async function bootComputer({
     takeControl,

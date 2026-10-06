@@ -2,6 +2,15 @@ import type { ComputerStatus } from "@rakazo/contracts";
 
 export const SCREEN_PROXY_TTL_MS = 60 * 60_000;
 export const SCREEN_URL_RENEW_MS = SCREEN_PROXY_TTL_MS - 10 * 60_000;
+export const SCREEN_RESUME_MS = 10_000;
+
+/**
+ * A page hidden this long has lost the viewer's connection (iOS suspends it) and nothing
+ * reconnects it, so the held URL is read again to reload the viewer.
+ */
+export function shouldReloadScreenAfterHidden(hiddenForMs: number): boolean {
+  return hiddenForMs >= SCREEN_RESUME_MS;
+}
 
 /**
  * Every `computer/screenUrl` call seals a fresh capability, and the viewer is keyed by that URL.

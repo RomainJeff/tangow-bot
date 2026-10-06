@@ -6,6 +6,7 @@ import {
   isScreenUrlReusable,
   SCREEN_PROXY_TTL_MS,
   SCREEN_URL_RENEW_MS,
+  shouldReloadScreenAfterHidden,
 } from "./computer-screen-url.js";
 
 const status: ComputerStatus = {
@@ -94,5 +95,13 @@ describe("isScreenUrlReusable", () => {
     expect(isScreenUrlReusable(held, status, 1000 + SCREEN_PROXY_TTL_MS, SCREEN_PROXY_TTL_MS)).toBe(
       false,
     );
+  });
+});
+
+describe("shouldReloadScreenAfterHidden", () => {
+  it("reloads from 10 seconds hidden and not before", () => {
+    expect(shouldReloadScreenAfterHidden(9_999)).toBe(false);
+    expect(shouldReloadScreenAfterHidden(10_000)).toBe(true);
+    expect(shouldReloadScreenAfterHidden(120_000)).toBe(true);
   });
 });

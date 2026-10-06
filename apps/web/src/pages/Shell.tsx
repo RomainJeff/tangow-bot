@@ -39,6 +39,7 @@ import {
   resolveComposerSendPlan,
   runThreadSubscription,
   searchHitThreadTarget,
+  shouldReloadScreenAfterHidden,
   speechFromBlocks,
   userVisibleMessages,
 } from "@rakazo/core";
@@ -2426,6 +2427,28 @@ export function ShellPage() {
     const timer = window.setInterval(ping, 60_000);
     return () => window.clearInterval(timer);
   }, [panel, computerOpen, active?.id, computer?.state]);
+
+  useEffect(() => {
+    let hiddenAt: number | null = null;
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        hiddenAt ??= Date.now();
+        return;
+      }
+      if (hiddenAt === null) return;
+      const hiddenForMs = Date.now() - hiddenAt;
+      hiddenAt = null;
+      const botId = activeBotId.current;
+      if (!botId || !computerVisible.current || !computerCacheRef.current.get(botId)?.screen?.url) {
+        return;
+      }
+      if (shouldReloadScreenAfterHidden(hiddenForMs)) {
+        void refreshComputerScreen(botId, { force: true }).catch(() => null);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   useEffect(() => {
     if ((panel !== "computer" && !computerOpen) || !active || !screenUrl) return;
