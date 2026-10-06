@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-07
+
+#### Changed
+
+- A routine or a skill a bot creates after reading a web page, a mail, an attachment, another bot's message or a routine's report now waits for your confirmation on a card that shows the whole routine, or every file of the skill.
+- Routines can no longer be created from a messaging channel.
+- A bot now changes or deletes only the skills it wrote and you have neither edited nor shared, and saves a skill only in a conversation you started.
+
 ### 2026-10-06
 
 #### Added
