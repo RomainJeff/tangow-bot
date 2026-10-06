@@ -127,7 +127,11 @@ describe("real Pi against an offline model HTTP endpoint", () => {
     });
     server.assertComplete();
     expect(calls).toEqual([
-      { name: "write_file", args: { path: "notes.txt", content: "hello\n" }, id: "write-1" },
+      {
+        name: "write_file",
+        args: { path: "notes.txt", content: "hello\n", overwrite: false },
+        id: "write-1",
+      },
     ]);
     expect(await readFile(path.join(dir, "notes.txt"), "utf8")).toBe("hello\n");
     expect(events.at(-1)).toEqual({ type: "done", text: "Saved notes.txt." });
