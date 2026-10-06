@@ -352,6 +352,8 @@ export interface AgentSteeringMessage {
   images?: AgentInputImage[];
 }
 
+export type AgentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
 export interface AgentRunModel {
   provider: string;
   id: string;
@@ -368,7 +370,7 @@ export interface AgentRunModel {
   /** Context-window limit used when sizing prompts and completions. */
   contextWindow?: number;
   /** Preferred thinking effort for reasoning models; clamped to the model’s supported set. */
-  thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null;
+  thinkingLevel?: AgentThinkingLevel | null;
   /** In-process OAuth credential from the encrypted store for this run. */
   oauth?: {
     credential: AgentModelOAuthCredential;

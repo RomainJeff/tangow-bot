@@ -9,6 +9,7 @@ import {
   type Api,
   type AssistantMessage,
   clampThinkingLevel,
+  getSupportedThinkingLevels,
   type Model,
   type Models,
   type ModelThinkingLevel,
@@ -20,10 +21,12 @@ import {
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type {
   AdapterContext,
+  AgentRunModel,
   AgentRunRequest,
   AgentRuntime,
   AgentRuntimeEvent,
   AgentSteeringMessage,
+  AgentThinkingLevel,
   AgentToolCompletion,
   AgentToolExecutionResult,
   ConnectorTool,
@@ -196,6 +199,12 @@ export class PiAgentRuntime implements AgentRuntime {
       adapterVersion: "0.1.0",
       capabilities: { streaming: true, compaction: true, tools: true, scripted: false },
     };
+  }
+
+  /** The set `thinkingLevelFor` clamps into for this model. */
+  thinkingLevels(model: AgentRunModel): AgentThinkingLevel[] {
+    const resolved = resolveRuntimeModel({ ...model, oauth: undefined }).model;
+    return resolved ? getSupportedThinkingLevels(resolved) : ["off"];
   }
 
   async abort(runId: string): Promise<void> {

@@ -1,9 +1,11 @@
 import type {
   AdapterContext,
   AdapterDescriptor,
+  AgentRunModel,
   AgentRunRequest,
   AgentRuntimeCapabilities,
   AgentRuntimeEvent,
+  AgentThinkingLevel,
   ArtifactPut,
   BackgroundJob,
   BackgroundJobHandlers,
@@ -231,6 +233,8 @@ export interface AgentRuntime {
     context?: Partial<AdapterContext>,
   ): AsyncIterable<AgentRuntimeEvent>;
   abort(runId: string): Promise<void>;
+  /** Thinking levels this runtime accepts for the model. Omitted: effort is never chosen per run. */
+  thinkingLevels?(model: AgentRunModel): AgentThinkingLevel[];
 }
 
 export interface ModelProvider {
