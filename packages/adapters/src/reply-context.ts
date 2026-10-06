@@ -4,7 +4,14 @@ import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { blocksToAgentHistoryText, messageReaction, renderBotMessageBlock } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 
-type QuotedMessage = { id: string; threadId: string; role: string; blocks: unknown };
+type QuotedMessage = {
+  id: string;
+  threadId: string;
+  role: string;
+  botId?: string | null;
+  runId?: string | null;
+  blocks: unknown;
+};
 type ReplyMessage = QuotedMessage & {
   replyToMessageId?: string | null;
   replyQuote?: string | null;
@@ -166,14 +173,24 @@ export function messageToAgentHistoryTurn(
   };
 }
 
-/** Fetch the explicit target even when it has fallen outside the history window. */
+/**
+ * Fetch the explicit target even when it has fallen outside the history window: the text the
+ * model reads, and the quoted message it came from.
+ */
 export async function loadReplyContext(
   prisma: PrismaClient,
   threadId: string,
   sourceMessageId: string | null | undefined,
-): Promise<string | undefined> {
+): Promise<{ text: string; quoted: QuotedMessage } | undefined> {
   if (!sourceMessageId) return undefined;
-  const selection = { id: true, threadId: true, role: true, blocks: true } as const;
+  const selection = {
+    id: true,
+    threadId: true,
+    role: true,
+    botId: true,
+    runId: true,
+    blocks: true,
+  } as const;
   const source = await prisma.message.findFirst({
     where: { id: sourceMessageId, threadId },
     select: {
@@ -183,5 +200,6 @@ export async function loadReplyContext(
       replyTo: { select: selection },
     },
   });
-  return source ? replyContext(source, threadId) : undefined;
+  const text = source ? replyContext(source, threadId) : undefined;
+  return text && source?.replyTo ? { text, quoted: source.replyTo } : undefined;
 }

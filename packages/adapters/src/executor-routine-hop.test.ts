@@ -1,4 +1,5 @@
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
+import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { describe, expect, it, vi } from "vitest";
 import type * as AutoReviewModule from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
@@ -42,10 +43,23 @@ type RunOverrides = {
   messageHop?: number;
   /** `inheritedHop` of the run's routine. */
   routineHop?: number | null;
+  /** A schedule_create request the user already approved on its card. */
+  approved?: Record<string, unknown>;
 };
 
 function fixture(overrides: RunOverrides = {}, runId = "run-1") {
-  const effects: Effect[] = [];
+  const effects: Effect[] = overrides.approved
+    ? [
+        {
+          id: "effect-approved",
+          runId,
+          kind: "schedule_create",
+          idempotencyKey: approvalEffectKey(runId, "schedule_create", overrides.approved),
+          status: "approved",
+          request: overrides.approved,
+        },
+      ]
+    : [];
   const results: unknown[] = [];
   const run = {
     id: runId,
@@ -232,9 +246,15 @@ const schedule = {
   executionId: "call_0",
 };
 
+// A run another bot or a webhook woke creates a routine only once the user approved its card.
 describe("schedule_create in a bot-to-bot chain", () => {
   it("stores one hop more than the message that woke the run", async () => {
-    const f = fixture({ trigger: "bot_message", sourceMessageId: "message-1", messageHop: 4 });
+    const f = fixture({
+      trigger: "bot_message",
+      sourceMessageId: "message-1",
+      messageHop: 4,
+      approved: schedule.args,
+    });
     f.setCalls([schedule]);
     await f.run();
 
@@ -245,7 +265,12 @@ describe("schedule_create in a bot-to-bot chain", () => {
   });
 
   it("keeps counting from the routine's own hop in a webhook wake", async () => {
-    const f = fixture({ trigger: "webhook", routineId: "routine-1", routineHop: 3 });
+    const f = fixture({
+      trigger: "webhook",
+      routineId: "routine-1",
+      routineHop: 3,
+      approved: schedule.args,
+    });
     f.setCalls([schedule]);
     await f.run();
 
@@ -255,7 +280,12 @@ describe("schedule_create in a bot-to-bot chain", () => {
   });
 
   it("refuses at the chain limit and creates nothing", async () => {
-    const f = fixture({ trigger: "bot_message", sourceMessageId: "message-1", messageHop: 6 });
+    const f = fixture({
+      trigger: "bot_message",
+      sourceMessageId: "message-1",
+      messageHop: 6,
+      approved: schedule.args,
+    });
     f.setCalls([schedule]);
     await f.run();
 

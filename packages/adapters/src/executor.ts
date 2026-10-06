@@ -39,27 +39,34 @@ import {
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
 } from "@rakazo/contracts";
+import type { ExposureHistoryMessage, ExposureReason, SkillSaveRequest } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
   type ActionApprovalRule,
   appendTextSegment,
   appendToolCallSegment,
   applyJudgeDecision,
+  approvedReplayCall,
+  asSkillSaveRequest,
   assertTransition,
   avatarIdentitySeed,
   BOT_DELEGATION_GUIDANCE,
   BOT_OFFER_DEDICATED_BOT,
+  blocksCarryAttachment,
   botMessageAllowsSilence,
   botMessageContext,
   botMessageRelaysToUser,
   connectorKindFromToolName,
   containsSecret,
   createStreamingRedactor,
+  creationCardError,
+  creationGate,
   endsSentence,
   expandSkillReferencesInPrompt,
   formatSkillRunPrompt,
   formatSkillsCatalogInstruction,
   hasHiddenText,
+  historyExposes,
   humanizeToolName,
   inferAttachmentMimeType,
   isMessagingChannelRun,
@@ -74,14 +81,21 @@ import {
   normalizeSpawnBotArgs,
   planActionGate,
   promptInvokesSkill,
+  RUN_STATE_UNSAVED_ERROR,
   redactSecrets,
+  referencedSkills,
+  refusalLocks,
   renderBotDirectory,
   resolveActionApprovalDetail,
+  runStance,
+  runStartedByUser,
   SHAPES,
   sandboxCommandTimeoutMs,
+  skillExposesRun,
   spawnBotToolArgs,
   type ToolCallDetail,
   type ToolCallStreak,
+  toolExposesRun,
   toolRequiresApproval,
   toolRequiresExplicitApproval,
   unattendedTriggerToolRequiresApproval,
@@ -319,9 +333,12 @@ import {
 import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import {
+  checkSkillSave,
   listAgentSkillRecords,
   readSkillDraft,
   sandboxSkillDir,
+  saveSkillFromTool,
+  shapeSkillSave,
   skillCreateFromTool,
   skillDeleteFromTool,
   skillReadFromTool,
@@ -378,6 +395,18 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "list_secrets",
 ]);
 const MAX_MODEL_FILE_BYTES = 250_000;
+
+/** The text fields of a skill_create or skill_update call; a folder comes by path. */
+function skillSaveFields(args: Record<string, unknown>) {
+  return {
+    name: args.name ? String(args.name) : undefined,
+    skillId: args.skillId ? String(args.skillId) : undefined,
+    newName: args.newName ? String(args.newName) : undefined,
+    description: args.description !== undefined ? String(args.description) : undefined,
+    body: args.body !== undefined ? String(args.body) : undefined,
+    content: args.content ? String(args.content) : undefined,
+  };
+}
 
 function positiveIntegerArg(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
@@ -852,7 +881,8 @@ export function buildApprovalContinuation(
         }
         return `${uniquified ?? effect.kind}: ${formatRequest(bound.args)}`;
       }
-      return `${effect.kind}: ${formatRequest(effect.request)}`;
+      const replay = approvedReplayCall(effect.kind, effect.request);
+      return `${replay.tool}: ${formatRequest(replay.args)}`;
     }),
   ].join("\n");
 }
@@ -1308,14 +1338,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
 
       const runSecrets = [...deps.secrets];
       try {
+        // A follow_up's source message tells whether the user or another bot started it.
+        const sourceMessage =
+          (run.trigger === "messaging" || run.trigger === "follow_up") && run.sourceMessageId
+            ? await deps.prisma.message.findUnique({
+                where: { id: run.sourceMessageId },
+                select: { role: true, blocks: true },
+              })
+            : null;
+        const sourceRole = sourceMessage?.role;
         const sourceBlocks =
-          run.trigger === "messaging" && run.sourceMessageId
-            ? ((
-                await deps.prisma.message.findUnique({
-                  where: { id: run.sourceMessageId },
-                  select: { blocks: true },
-                })
-              )?.blocks as MessageBlock[] | undefined)
+          run.trigger === "messaging"
+            ? (sourceMessage?.blocks as MessageBlock[] | undefined)
             : undefined;
         const channelId = messagingChannelId(sourceBlocks);
         const messagingChannelRun = isMessagingChannelRun(run.trigger, sourceBlocks);
@@ -1944,6 +1978,52 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return secretPausedToolResult();
         };
 
+        // Read from the run row and never cleared, so a run resumed on another worker keeps it.
+        let exposed = run.exposedAt != null;
+        const exposeRun = async (reason: ExposureReason) => {
+          if (exposed) return;
+          await deps.prisma.run.updateMany({
+            where: { id: runId, exposedAt: null },
+            data: { exposedAt: new Date(), exposureReason: reason },
+          });
+          exposed = true;
+        };
+        const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+        const readSkill = (args: Record<string, unknown>) =>
+          skillReadFromTool(skillDeps, skillOwner, {
+            name: args.name ? String(args.name) : undefined,
+            skillId: args.skillId ? String(args.skillId) : undefined,
+          });
+        const readExposes = (read: Record<string, unknown>) =>
+          typeof read.source === "string" && skillExposesRun(read.source);
+        /** Whether messages shown to the model, replayed or quoted, carry outside content. */
+        const messagesExpose = async (shown: readonly ExposureHistoryMessage[]) => {
+          const runIds = [
+            ...new Set(
+              shown.flatMap((message) =>
+                message.role === "bot" && message.runId ? [message.runId] : [],
+              ),
+            ),
+          ];
+          const runs =
+            runIds.length > 0
+              ? await deps.prisma.run.findMany({
+                  where: { id: { in: runIds } },
+                  select: {
+                    id: true,
+                    trigger: true,
+                    exposedAt: true,
+                    sourceMessage: { select: { role: true } },
+                  },
+                })
+              : [];
+          return historyExposes(
+            shown,
+            run.botId,
+            runs.map((stored) => ({ ...stored, sourceRole: stored.sourceMessage?.role })),
+          );
+        };
+
         const mutatingEffectOccurrences = new Map<string, number>();
         const consumedEffectIds = new Set<string>();
         const nextMutatingEffectOccurrence = (toolName: string, args: Record<string, unknown>) => {
@@ -2037,6 +2117,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 "Approved catalog request could not be resolved to a tool. Deny and retry the direct tool call.",
             };
           }
+          // Settled once the catalog resolved: a connector tool never carries a built-in's name.
+          const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name);
           if (
             !catalogRemapped &&
             connectorCall.route?.resourceId &&
@@ -2059,6 +2141,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // hit the already-approved effect instead of creating a second approval card.
           const nextApprovedTool = approvedEffectReplays.nextToolName();
           const nextApprovedRequest = approvedEffectReplays.nextRequest();
+          // Decided on the run as it stood before this call. A request the user already
+          // approved replays as approved, whatever the gate says now.
+          const gate = viaConnector
+            ? undefined
+            : creationGate(name, runStance({ trigger: run.trigger, sourceRole, exposed }));
+          const replaysApproval = nextApprovedTool === name;
+          if (gate?.kind === "refuse" && !replaysApproval) return { error: gate.error };
+          const effectName = gate?.kind === "card" && !replaysApproval ? gate.effectKind : name;
           const liveRoute =
             connectorCall.route?.resourceId &&
             connectorCall.route.connectorId &&
@@ -2083,7 +2173,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
           if (
             nextApprovedTool &&
-            nextApprovedTool !== name &&
+            nextApprovedTool !== effectName &&
             !sameBoundResource &&
             !sameCatalogTarget
           ) {
@@ -2093,13 +2183,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           // Drain FIFO only when the pending approval matches this path (catalog vs direct).
           const replayEffectToolName = approvalReplayEffectToolName(
-            name,
+            effectName,
             nextApprovedTool,
             sameBoundResource || sameCatalogTarget,
           );
           if (
             nextApprovedTool &&
-            (nextApprovedTool === name || sameBoundResource || sameCatalogTarget)
+            (nextApprovedTool === effectName || sameBoundResource || sameCatalogTarget)
           ) {
             const pathError = approvalReplayPathError(
               name,
@@ -2148,16 +2238,41 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
             }
           }
-          const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name);
+          // The exact skill to write, keyed and shown on a card as is; an approval replays it as
+          // stored. A folder saved directly is read when it is written; one shown on a card is
+          // read now, and that snapshot is what the approval writes.
+          let skillSave: SkillSaveRequest | undefined;
+          if ((name === "skill_create" || name === "skill_update") && !approvedReplayConsumed) {
+            const draftPath = typeof args.path === "string" ? args.path.trim() : "";
+            if (!draftPath || gate?.kind === "card") {
+              const files = draftPath
+                ? await readSkillDraft(
+                    deps.sandbox,
+                    computer,
+                    resolveBotWorkspacePath(computerMode, bot.id, draftPath),
+                    context,
+                  )
+                : undefined;
+              if (files && "error" in files) return files;
+              const shaped = await shapeSkillSave(skillDeps, skillOwner, name, {
+                ...skillSaveFields(args),
+                files,
+              });
+              if ("error" in shaped) return shaped;
+              skillSave = shaped;
+              args = { ...shaped };
+              effectRequest = args;
+            }
+          }
           const requiresUnattendedApproval = unattendedTriggerToolRequiresApproval(
             run,
             name,
             viaConnector,
           );
           const requiresApprovalByDefault =
-            requiresUnattendedApproval || toolRequiresApproval(name, viaConnector);
+            requiresUnattendedApproval || toolRequiresApproval(name, viaConnector, gate);
           const requiresMandatoryApproval =
-            requiresUnattendedApproval || toolRequiresExplicitApproval(name);
+            requiresUnattendedApproval || toolRequiresExplicitApproval(name, gate);
           const connectorKind = connectorKindFromToolName(
             name,
             connectedPlugins.map((plugin) => plugin.provider),
@@ -2218,6 +2333,34 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "spawn_bot" && !approvedReplayConsumed) {
             const refusal = await spawnBotPreflight(deps, run, effectKey, args);
             if (refusal) return refusal;
+          }
+          if (
+            (gate?.kind === "card" || skillSave) &&
+            !approvedReplayConsumed &&
+            !(await deps.prisma.externalEffect.findUnique({
+              where: { idempotencyKey: effectKey },
+              select: { id: true },
+            }))
+          ) {
+            const skillError =
+              skillSave && (await checkSkillSave(skillDeps, skillOwner, skillSave));
+            if (skillError) return { error: skillError };
+            if (gate?.kind === "card") {
+              const refusal = await creationCardPreflight(deps, run, effectName, {
+                toolName: name,
+                args,
+                lockAfterRefusal: gate.lockAfterRefusal,
+              });
+              if (refusal) return refusal;
+            }
+          }
+          // Marked before the tool can run, so its output never reaches a run still marked clean.
+          if (toolExposesRun(name, viaConnector)) {
+            try {
+              await exposeRun("tool");
+            } catch {
+              return { error: RUN_STATE_UNSAVED_ERROR };
+            }
           }
           // Connector read-only hints must not bypass approval, review, or replay decisions.
           const applied = READ_ONLY_AGENT_TOOLS.has(name)
@@ -2383,6 +2526,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 buildApprovalAskBlock(applied!.effect.id, name, args, runSecrets, {
                   reviewReason,
                   runUserId: run.userId,
+                  mandatory: gate?.kind === "card",
                 }),
               ],
             });
@@ -3014,60 +3158,38 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return finish(cancelled);
           }
           if (name === "skill_read") {
-            return skillReadFromTool(
-              skillDeps,
-              {
-                spaceId: run.spaceId,
-                userId: run.userId,
-                botId: run.botId,
-              },
-              {
-                name: args.name ? String(args.name) : undefined,
-                skillId: args.skillId ? String(args.skillId) : undefined,
-              },
-            );
+            const read = await readSkill(args);
+            if (readExposes(read)) {
+              try {
+                await exposeRun("skill");
+              } catch {
+                return { error: RUN_STATE_UNSAVED_ERROR };
+              }
+            }
+            return read;
           }
           if (name === "skill_search") {
-            return skillSearchFromTool(
-              skillDeps,
-              { spaceId: run.spaceId, userId: run.userId, botId: run.botId },
-              { query: args.query ? String(args.query) : undefined },
-            );
+            return skillSearchFromTool(skillDeps, skillOwner, {
+              query: args.query ? String(args.query) : undefined,
+            });
           }
           if (name === "skill_create" || name === "skill_update") {
+            const save = asSkillSaveRequest(args);
+            if (save) return finish(await saveSkillFromTool(skillDeps, skillOwner, save));
+            // Only a folder saved directly reaches here unshaped: it is read as it is written.
             const draftPath = typeof args.path === "string" ? args.path.trim() : "";
-            const files = draftPath
-              ? await readSkillDraft(
-                  deps.sandbox,
-                  computer,
-                  resolveBotWorkspacePath(computerMode, bot.id, draftPath),
-                  context,
-                )
-              : undefined;
-            if (files && "error" in files) return finish(files);
-            const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
-            if (name === "skill_create") {
-              return finish(
-                await skillCreateFromTool(skillDeps, skillOwner, {
-                  files,
-                  name: args.name ? String(args.name) : undefined,
-                  description: args.description ? String(args.description) : undefined,
-                  body: args.body ? String(args.body) : undefined,
-                  content: args.content ? String(args.content) : undefined,
-                }),
-              );
+            if (!draftPath) {
+              return finish({ error: "This skill change could not be read. Ask the user again." });
             }
-            return finish(
-              await skillUpdateFromTool(skillDeps, skillOwner, {
-                files,
-                name: args.name ? String(args.name) : undefined,
-                skillId: args.skillId ? String(args.skillId) : undefined,
-                newName: args.newName ? String(args.newName) : undefined,
-                description: args.description !== undefined ? String(args.description) : undefined,
-                body: args.body !== undefined ? String(args.body) : undefined,
-                content: args.content ? String(args.content) : undefined,
-              }),
+            const files = await readSkillDraft(
+              deps.sandbox,
+              computer,
+              resolveBotWorkspacePath(computerMode, bot.id, draftPath),
+              context,
             );
+            if ("error" in files) return finish(files);
+            const write = name === "skill_create" ? skillCreateFromTool : skillUpdateFromTool;
+            return finish(await write(skillDeps, skillOwner, { ...skillSaveFields(args), files }));
           }
           if (name === "skill_delete") {
             return finish(
@@ -3839,8 +3961,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           turnBlocks,
           currentTurnImages,
         );
+        const taskPromptSource = [task.prompt, attachedFilesPrompt, missingImagesInstruction]
+          .filter(Boolean)
+          .join("\n\n");
         const taskPrompt = expandSkillReferencesInPrompt(
-          [task.prompt, attachedFilesPrompt, missingImagesInstruction].filter(Boolean).join("\n\n"),
+          taskPromptSource,
           agentSkills,
           sandboxSkillDir,
         );
@@ -3858,7 +3983,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           (request) => redactSecrets(JSON.stringify(request), runSecrets),
           { exposedToolNames: new Set(tools.map((tool) => tool.name)) },
         );
-        const replyContext = await loadReplyContext(deps.prisma, thread.id, run.sourceMessageId);
+        const reply = await loadReplyContext(deps.prisma, thread.id, run.sourceMessageId);
+        const replyContext = reply?.text;
         // The clock stays out of the system prefix so it can be cached; the turn prompt is new
         // every run, so the model still gets the real present moment.
         const prompt = [
@@ -3978,6 +4104,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyWindowMode = window.mode;
           }
           const runtimeHistory = [...historicalContext, ...history];
+          const replayedIds = new Set(history.map((message) => message.id));
+          const startExposure = async (): Promise<ExposureReason | undefined> => {
+            if (!runStartedByUser({ trigger: run.trigger, sourceRole })) return "trigger";
+            const startBlocks = turnBlocks ?? (sourceMessage?.blocks as MessageBlock[] | undefined);
+            if (startBlocks && blocksCarryAttachment(startBlocks)) return "attachment";
+            const injected = referencedSkills(taskPromptSource, agentSkills);
+            if (injected.some((skill) => skillExposesRun(skill.source))) return "skill";
+            const replayed = messages.filter((message) => replayedIds.has(message.id));
+            const quoted = [reply?.quoted, ...replayed.map((message) => message.replyTo)].flatMap(
+              (target) => (target?.threadId === thread.id ? [target] : []),
+            );
+            if (await messagesExpose([...replayed, ...quoted])) return "history";
+            return undefined;
+          };
+          const exposure = await startExposure();
+          if (exposure) await exposeRun(exposure);
           // Split by role so a change in how past turns are rehydrated is visible here.
           const historyTokensByRole = runtimeHistory.reduce<Record<string, number>>(
             (totals, message) => {
@@ -4054,6 +4196,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     resolveConnectedModel(run, provider, modelId, (values) =>
                       runSecrets.push(...values),
                     ),
+              prepareToolBatch: async (calls) => {
+                if (exposed) return;
+                if (
+                  calls.some((call) =>
+                    toolExposesRun(call.name, !BUILTIN_AGENT_TOOL_NAMES.has(call.name)),
+                  )
+                ) {
+                  return exposeRun("tool");
+                }
+                for (const call of calls) {
+                  if (call.name !== "skill_read" || !call.args || typeof call.args !== "object") {
+                    continue;
+                  }
+                  if (readExposes(await readSkill(call.args as Record<string, unknown>))) {
+                    return exposeRun("skill");
+                  }
+                }
+              },
               onToolCompleted: (completion) =>
                 appendToolCompletionAudit(
                   deps,
@@ -4077,8 +4237,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       leaseFence: fence,
                       seenIds,
                     });
+                    if (steering.some((item) => blocksCarryAttachment(item.blocks))) {
+                      await exposeRun("attachment");
+                    }
+                    const quotes = await Promise.all(
+                      steering.map((item) =>
+                        loadReplyContext(deps.prisma, thread.id, item.messageId),
+                      ),
+                    );
+                    if (
+                      await messagesExpose(quotes.flatMap((quote) => (quote ? [quote.quoted] : [])))
+                    ) {
+                      await exposeRun("history");
+                    }
                     return Promise.all(
-                      steering.map(async (item) => {
+                      steering.map(async (item, index) => {
                         const { images, files, unavailableInstruction } =
                           await settleSteeringAttachmentLoads(
                             loadCurrentTurnImages(deps, item.blocks, context),
@@ -4108,12 +4281,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                           messageId: item.messageId,
                           historyText: item.text,
                           text: buildSteeringMessageText(
-                            [
-                              await loadReplyContext(deps.prisma, thread.id, item.messageId),
-                              item.text,
-                            ]
-                              .filter(Boolean)
-                              .join("\n\n"),
+                            [quotes[index]?.text, item.text].filter(Boolean).join("\n\n"),
                             filesInstruction,
                             unavailableInstruction,
                           ),
@@ -5585,6 +5753,54 @@ async function spawnBotPreflight(
     if (cancelledRecently) return { ...SPAWN_BOT_CANCELLED_RESULT };
   }
   return undefined;
+}
+
+const ROUTINE_DECLINED_ERROR =
+  "The user declined a routine from this bot in the last day. Do not create it again.";
+const ROUTINE_PENDING_ERROR =
+  "A routine from this bot is already waiting for the user's answer. Do not create another one until they answer.";
+/** After a refusal, a bot woken by something other than the user waits this long to ask again. */
+const CREATION_CARD_LOCK_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Runs only before a first gate card: what the card cannot show in full is refused. A card that
+ * locks after a refusal, in a run nobody started, waits while another one of this bot is
+ * unanswered and for a day after the user refused one shown in such a run.
+ */
+async function creationCardPreflight(
+  deps: ExecutorDeps,
+  run: { botId: string },
+  effectKind: string,
+  card: { toolName: string; args: Record<string, unknown>; lockAfterRefusal: boolean },
+): Promise<{ error: string } | undefined> {
+  const tooLarge = creationCardError(card.toolName, card.args);
+  if (tooLarge) return { error: tooLarge };
+  if (!card.lockAfterRefusal) return undefined;
+  const pending = await deps.prisma.externalEffect.findFirst({
+    where: {
+      kind: effectKind,
+      status: "intended",
+      run: { botId: run.botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+    },
+    select: { id: true },
+  });
+  if (pending) return { error: ROUTINE_PENDING_ERROR };
+  const refusals = await deps.prisma.externalEffect.findMany({
+    where: {
+      kind: effectKind,
+      status: "denied",
+      answeredAt: { gte: new Date(Date.now() - CREATION_CARD_LOCK_MS) },
+      run: { botId: run.botId },
+    },
+    select: { run: { select: { trigger: true, sourceMessage: { select: { role: true } } } } },
+  });
+  const locked = refusals.some((refusal) =>
+    refusalLocks(card.toolName, {
+      trigger: refusal.run.trigger,
+      sourceRole: refusal.run.sourceMessage?.role,
+    }),
+  );
+  return locked ? { error: ROUTINE_DECLINED_ERROR } : undefined;
 }
 
 /**

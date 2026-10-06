@@ -517,7 +517,7 @@ export async function saveSkillFromTool(
 export async function skillCreateFromTool(
   deps: SkillToolDeps,
   owner: SkillOwner,
-  input: Omit<SkillSaveInput, "skillId" | "newName">,
+  input: SkillSaveInput,
 ): Promise<Record<string, unknown>> {
   const planned = await planSkillSave(deps, owner, "skill_create", input);
   return "error" in planned ? planned : writeSkillSave(deps, owner, planned);
