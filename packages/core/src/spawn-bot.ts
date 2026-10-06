@@ -162,11 +162,21 @@ const HIDDEN_TEXT = new RegExp(
     "(?<![\\p{Extended_Pictographic}\\uFE0F\\u{1F3FB}-\\u{1F3FF}])\\u200D",
     "\\u200D(?!\\p{Extended_Pictographic})",
     "(?<![\\p{Extended_Pictographic}0-9#*])\\uFE0F",
+    "(?<=[0-9#*])\\uFE0F(?!\\u20E3)",
+    // Braille blank renders as an empty cell: a name or a line can end in it unseen.
+    "\\u2800",
   ].join("|"),
   "u",
 );
 const SINGLE_LINE_CONTROLS = /\p{Cc}/u;
 const MULTI_LINE_CONTROLS = /(?![\n\t])\p{Cc}/u;
+
+/** True when the text holds characters the person reading the card would not see. */
+export function hasHiddenText(text: string, multiLine = false): boolean {
+  return (
+    HIDDEN_TEXT.test(text) || (multiLine ? MULTI_LINE_CONTROLS : SINGLE_LINE_CONTROLS).test(text)
+  );
+}
 
 /** The card renders the name as text; a name shaped like a link or markup could pass for one. */
 const LINK_LIKE_NAME = /[[\]<>]|:\/\/|www\./i;
@@ -175,7 +185,7 @@ const LINK_LIKE_NAME = /[[\]<>]|:\/\/|www\./i;
 export function botNameKey(name: string): string {
   return name
     .normalize("NFKC")
-    .replace(/\p{Cf}/gu, "")
+    .replace(/\p{Cf}|[\uFE00-\uFE0F]/gu, "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -186,7 +196,10 @@ export function validateBotNameText(
   name: string,
   existingBotNames: readonly string[],
 ): string | undefined {
-  if (HIDDEN_TEXT.test(name) || SINGLE_LINE_CONTROLS.test(name)) {
+  if (LINK_LIKE_NAME.test(name)) {
+    return "name cannot contain [, ], <, > or a web address (://, www.).";
+  }
+  if (hasHiddenText(name)) {
     return "name must be a single line of visible text, without invisible or control characters.";
   }
   const key = botNameKey(name);
@@ -219,18 +232,15 @@ export function validateSpawnBotArgs(
   if (args.prompt.length > SPAWN_BOT_PROMPT_MAX_LENGTH) {
     return `prompt must be at most ${SPAWN_BOT_PROMPT_MAX_LENGTH} characters.`;
   }
-  if (LINK_LIKE_NAME.test(args.name)) {
-    return "name cannot contain [, ], <, > or a web address (://, www.).";
-  }
   const nameError = validateBotNameText(args.name, existingBotNames);
   if (nameError) return nameError;
-  if (HIDDEN_TEXT.test(args.title) || SINGLE_LINE_CONTROLS.test(args.title)) {
+  if (hasHiddenText(args.title)) {
     return "title must be a single line of visible text, without invisible or control characters.";
   }
-  if (HIDDEN_TEXT.test(args.instructions) || MULTI_LINE_CONTROLS.test(args.instructions)) {
+  if (hasHiddenText(args.instructions, true)) {
     return "instructions must not contain invisible or control characters.";
   }
-  if (HIDDEN_TEXT.test(args.prompt) || MULTI_LINE_CONTROLS.test(args.prompt)) {
+  if (hasHiddenText(args.prompt, true)) {
     return "prompt must not contain invisible or control characters.";
   }
   if (args.computerMode && args.computerMode !== "team" && args.computerMode !== "dedicated") {

@@ -1854,7 +1854,7 @@ describe("buildSystemInstructions", () => {
 
   describe("spawn_bot guidance", () => {
     const always =
-      "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it. Never create a bot on your own initiative. It always pauses for the user's approval; never claim the bot exists before the tool succeeds.";
+      "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it. Never create a bot on your own initiative, except the one dedicated-bot proposal your instructions allow. It always pauses for the user's approval; never claim the bot exists before the tool succeeds.";
     const bare = {
       botInstructions: parts.botInstructions,
       hasHistoricalContext: false,
@@ -1868,7 +1868,9 @@ describe("buildSystemInstructions", () => {
         const instructions = buildSystemInstructions(variant);
         expect(instructions).toContain(always);
         expect(instructions.split("Do not run_subagent to demo it.")).toHaveLength(2);
-        expect(instructions).toContain("demo it. Never create a bot on your own initiative.");
+        expect(instructions).toContain(
+          "demo it. Never create a bot on your own initiative, except the one dedicated-bot proposal your instructions allow.",
+        );
       }
     });
 

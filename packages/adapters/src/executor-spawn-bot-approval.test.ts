@@ -106,6 +106,7 @@ function fixture({
   rules = [] as ActionApprovalRule[],
   autoReview = false,
   secrets = [SECRET],
+  sourceMessage = undefined as { role: string; blocks: unknown[] } | undefined,
 } = {}) {
   const { effects } = world;
   const results: unknown[] = [];
@@ -120,6 +121,7 @@ function fixture({
     trigger,
     requireToolApproval,
     leaseFence: 0,
+    sourceMessageId: sourceMessage ? "source-1" : null,
   };
   world.runs.push(run);
   const externalEffect = {
@@ -213,7 +215,11 @@ function fixture({
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
-    message: { findMany: vi.fn(async () => []) },
+    message: {
+      findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => (sourceMessage ? { id: "source-1", ...sourceMessage } : null)),
+      findFirst: vi.fn(async () => null),
+    },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Create a bot" })) },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -751,6 +757,32 @@ describe("spawn_bot approval in the executor", () => {
       f.setCalls([{ args: { ...veille, name: "Autre" }, executionId: "call-1" }]);
       await f.run_();
       expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+    });
+
+    it("still asks the user who follows up in a call or while the bot works", async () => {
+      const f = fixture({
+        world: withCancelledCard(1),
+        trigger: "follow_up",
+        sourceMessage: { role: "user", blocks: [{ kind: "text", text: "Create it as Autre" }] },
+      });
+      f.setCalls([{ args: { ...veille, name: "Autre" }, executionId: "call-1" }]);
+      await f.run_();
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+    });
+
+    it("refuses a group handoff, which is a follow-up a bot sent", async () => {
+      const f = fixture({
+        world: withCancelledCard(1),
+        trigger: "follow_up",
+        sourceMessage: {
+          role: "bot",
+          blocks: [{ kind: "handoff", fromBotId: "bot-2", toBotId: "bot-1", text: "Go", hop: 1 }],
+        },
+      });
+      f.setCalls([{ args: { ...veille, name: "Autre" }, executionId: "call-1" }]);
+      await f.run_();
+      expect(f.results[0]).toEqual(SPAWN_BOT_CANCELLED_RESULT);
+      expect(f.pauseRunForInput).not.toHaveBeenCalled();
     });
 
     it("lets an unattended bot ask again after 24 hours", async () => {

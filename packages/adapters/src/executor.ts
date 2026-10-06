@@ -50,6 +50,7 @@ import {
   BOT_DELEGATION_GUIDANCE,
   BOT_OFFER_DEDICATED_BOT,
   botMessageAllowsSilence,
+  botMessageContext,
   botMessageRelaysToUser,
   connectorKindFromToolName,
   containsSecret,
@@ -58,6 +59,7 @@ import {
   expandSkillReferencesInPrompt,
   formatSkillRunPrompt,
   formatSkillsCatalogInstruction,
+  hasHiddenText,
   humanizeToolName,
   inferAttachmentMimeType,
   isMessagingChannelRun,
@@ -930,7 +932,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     parts.agentEnvironmentInstruction,
     "A bot and a subagent are different. Never use both for the same request.",
     "create_space proposes a new privacy boundary inside the current organization. Use it when the user asks to create a space or separate data between teams or projects. It always pauses for explicit user approval; never claim the space exists before the tool succeeds.",
-    "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it. Never create a bot on your own initiative. It always pauses for the user's approval; never claim the bot exists before the tool succeeds.",
+    "spawn_bot creates a lasting regular bot (own chat, computer, memory) that appears in the user's bot list. If the user asked to create a bot, call spawn_bot once and stop. Do not run_subagent to demo it. Never create a bot on your own initiative, except the one dedicated-bot proposal your instructions allow. It always pauses for the user's approval; never claim the bot exists before the tool succeeds.",
     "update_bot updates this bot's own name (chat header / list label), title, and description. When the user asks you to rename yourself or change your title or description, call update_bot — do not claim you changed them without the tool.",
     "run_subagent is a short helper inside this turn only. It is not a bot, has no thread, and does not show in the list. Use it for parallel work you will summarize here.",
     parts.botDirectory ? BOT_DELEGATION_GUIDANCE : undefined,
@@ -3505,9 +3507,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             // the card waited. finish() settles the effect, so nothing stays half-approved.
             const invalid = validateSpawnBotArgs(args, await activeBotNames(deps.prisma, run));
             const spawnArgs = normalizeSpawnBotArgs(args);
-            if (invalid || "error" in spawnArgs) {
-              return finish({ error: invalid ?? (spawnArgs as { error: string }).error });
-            }
+            if (invalid) return finish({ error: invalid });
+            if ("error" in spawnArgs) return finish({ error: spawnArgs.error });
             const spawned = await spawnBot(deps, {
               spawnedBy: {
                 id: bot.id,
@@ -3579,6 +3580,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               if (nextTitle.length > BOT_TITLE_MAX_LENGTH) {
                 return finish({
                   error: `title must be at most ${BOT_TITLE_MAX_LENGTH} characters.`,
+                });
+              }
+              if (hasHiddenText(nextTitle)) {
+                return finish({
+                  error:
+                    "title must be a single line of visible text, without invisible or control characters.",
                 });
               }
               patch.title = nextTitle;
@@ -5527,7 +5534,14 @@ const SPAWN_BOT_CANCEL_LOCK_MS = 24 * 60 * 60 * 1000;
  */
 async function spawnBotPreflight(
   deps: ExecutorDeps,
-  run: { id: string; botId: string; spaceId: string; userId: string; trigger: string },
+  run: {
+    id: string;
+    botId: string;
+    spaceId: string;
+    userId: string;
+    trigger: string;
+    sourceMessageId?: string | null;
+  },
   effectKey: string,
   args: Record<string, unknown>,
 ): Promise<unknown | undefined> {
@@ -5557,7 +5571,7 @@ async function spawnBotPreflight(
   });
   if (cancelledHere) return { ...SPAWN_BOT_CANCELLED_RESULT };
 
-  if (run.trigger !== "user") {
+  if (!(await personWokeRun(deps.prisma, run))) {
     const cancelledRecently = await deps.prisma.externalEffect.findFirst({
       where: {
         kind: "spawn_bot",
@@ -5570,6 +5584,24 @@ async function spawnBotPreflight(
     if (cancelledRecently) return { ...SPAWN_BOT_CANCELLED_RESULT };
   }
   return undefined;
+}
+
+/**
+ * A follow-up typed by the person (in a voice call, or queued while the bot worked) counts like
+ * a message opened in the app. A group handoff is also a follow_up run, but its source is a bot.
+ */
+async function personWokeRun(
+  prisma: PrismaClient,
+  run: { trigger: string; sourceMessageId?: string | null },
+): Promise<boolean> {
+  if (isUserOpenedTrigger(run.trigger)) return true;
+  if (run.trigger !== "follow_up" || !run.sourceMessageId) return false;
+  const source = await prisma.message.findUnique({
+    where: { id: run.sourceMessageId },
+    select: { role: true, blocks: true },
+  });
+  const blocks = Array.isArray(source?.blocks) ? (source.blocks as MessageBlock[]) : [];
+  return source?.role === "user" && !botMessageContext(blocks);
 }
 
 /**

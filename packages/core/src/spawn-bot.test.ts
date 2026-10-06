@@ -12,6 +12,7 @@ import {
   spawnBotEdits,
   spawnBotReadOnlyDetail,
   spawnBotToolArgs,
+  validateBotNameText,
   validateSpawnBotArgs,
 } from "./spawn-bot.js";
 
@@ -126,6 +127,9 @@ describe("hidden characters and lines (CA21)", () => {
     ["a Hangul filler", "a\u3164b"],
     ["a combining grapheme joiner", "a\u034Fb"],
     ["a Mongolian variation selector", "a\u180Bb"],
+    ["a variation selector after a digit without a keycap", "Alice1\uFE0F"],
+    ["a variation selector after # without a keycap", "Ops#\uFE0F"],
+    ["a braille blank", "Alice\u2800"],
   ])("refuses %s", (_label, text) => {
     expect(validateSpawnBotArgs({ ...ok, name: text }, [])).toEqual(expect.any(String));
     expect(validateSpawnBotArgs({ ...ok, title: text }, [])).toEqual(expect.any(String));
@@ -167,6 +171,12 @@ describe("bot name comparison (CA22)", () => {
     expect(validateSpawnBotArgs({ ...ok, name: "Alice  B" }, ["Alice B"])).toContain("already");
   });
 
+  it("ignores an emoji presentation selector", () => {
+    expect(validateSpawnBotArgs({ ...ok, name: "Bot \u2764\uFE0F" }, ["Bot \u2764"])).toContain(
+      "already",
+    );
+  });
+
   it("keeps different names apart", () => {
     expect(botNameKey("Alice B")).not.toBe(botNameKey("Alice"));
   });
@@ -183,6 +193,10 @@ describe("names that could pass for a link (CA23)", () => {
     "see e.example://x",
   ])("refuses %j", (name) => {
     expect(validateSpawnBotArgs({ ...ok, name }, [])).toContain("web address");
+  });
+
+  it("refuses the same names on a rename", () => {
+    expect(validateBotNameText("[Ops](https://x.example)", [])).toContain("web address");
   });
 
   it("accepts an ordinary name with parentheses and punctuation", () => {
