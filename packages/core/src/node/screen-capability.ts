@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
-import { SCREEN_PROXY_TTL_MS } from "../computer-screen-url.js";
+import { SCREEN_PROXY_TTL_MS } from "@rakazo/core/computer-screen-url";
 
 export const SCREEN_TARGET_ENDPOINT = "/api/internal/screen-target";
 export const SCREEN_RECHECK_MS = 1_000;
