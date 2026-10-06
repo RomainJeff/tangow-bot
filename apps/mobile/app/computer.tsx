@@ -91,10 +91,12 @@ export default function Computer() {
     takeControl,
     overlay,
     force = false,
+    forceScreen = true,
   }: {
     takeControl: boolean;
     overlay: boolean;
     force?: boolean;
+    forceScreen?: boolean;
   }) {
     if (!botId || !refreshController.isActive()) return false;
     const action = refreshController.beginAction();
@@ -106,7 +108,10 @@ export default function Computer() {
       if (!action.isActive()) return false;
       if (takeControl) await rpc("computer/takeover", { botId });
       if (!action.isActive()) return false;
-      await action.refresh({ screenAttempts: SCREEN_URL_OPEN_ATTEMPTS });
+      await action.refresh({
+        screenAttempts: SCREEN_URL_OPEN_ATTEMPTS,
+        force: forceScreen || !screenUrl,
+      });
       if (!action.isActive()) return false;
       setError(null);
       return true;
@@ -129,6 +134,7 @@ export default function Computer() {
       takeControl: false,
       overlay: computer?.state !== "running",
       force: true,
+      forceScreen: computer?.state !== "running",
     }).catch(() => undefined);
   }, [readyBotId, botId, computer?.state, switching]);
 

@@ -5103,7 +5103,7 @@ async function computerStatus(
     botId,
     botName: bot.name,
   });
-  return toComputerStatus(botId, bot.computer, busyBotName);
+  return toComputerStatus(botId, bot.screenGeneration, bot.computer, busyBotName);
 }
 
 async function runComputerReplace(

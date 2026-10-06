@@ -207,7 +207,7 @@ export function reconcileRefreshedThread(
   }
 
   let snapshot = mergeThreadSnapshot(prev, snap, preserveLoadedHistory);
-  let computer = snap.computer ?? null;
+  const computer = snap.computer ?? null;
 
   const localWaiting =
     sameThread &&
@@ -225,12 +225,19 @@ export function reconcileRefreshedThread(
         run.id === runId ? { ...run, status: "waiting_takeover" } : run,
       ),
     };
-    if (computer?.busyBotName) computer = { ...computer, busyBotName: null };
-  } else if (snapshot.run?.status === "waiting_takeover" && computer?.busyBotName) {
-    computer = { ...computer, busyBotName: null };
   }
 
-  return { snapshot, computer };
+  return { snapshot, computer: clearBusyWhileWaitingTakeover(computer, snapshot.run?.status) };
+}
+
+/** A server read can lag the run events, so it must not bring the busy banner back while the bot waits for control. */
+export function clearBusyWhileWaitingTakeover(
+  computer: ComputerStatus | null,
+  runStatus: string | undefined,
+): ComputerStatus | null {
+  return computer?.busyBotName && runStatus === "waiting_takeover"
+    ? { ...computer, busyBotName: null }
+    : computer;
 }
 
 export function prependThreadMessagePage(

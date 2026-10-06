@@ -22,7 +22,7 @@ import type {
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs } from "@rakazo/core";
+import { boundedSandboxCommandTimeoutMs, SCREEN_URL_RENEW_MS } from "@rakazo/core";
 import { screenSessionKey } from "./computer-screens.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
 import {
@@ -469,7 +469,8 @@ export class DaytonaSandboxProvider implements SandboxProvider {
   private async screenPreview(sandbox: Sandbox, screenKey: string, viewPort: number) {
     const previewKey = `${sandbox.id}:${screenKey}:${viewPort}`;
     const cached = this.screenPreviews.get(previewKey);
-    if (cached && cached.expiresAt > Date.now() + 60_000) return cached;
+    // Clients hold a screen URL for up to SCREEN_URL_RENEW_MS, so the preview under it must outlive that.
+    if (cached && cached.expiresAt > Date.now() + SCREEN_URL_RENEW_MS) return cached;
     const pending = this.screenPreviewStarts.get(previewKey);
     if (pending) return pending;
     let start!: Promise<{

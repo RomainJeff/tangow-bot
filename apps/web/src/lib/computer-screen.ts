@@ -1,26 +1,93 @@
+import type { ComputerStatus } from "@rakazo/contracts";
+import type { HeldScreenUrl } from "@rakazo/core";
+import {
+  computerScreenKey,
+  isScreenUrlReusable,
+  SCREEN_PROXY_TTL_MS,
+  SCREEN_URL_RENEW_MS,
+} from "@rakazo/core";
+
+const SCREEN_RETRY_FLOOR_MS = 60_000;
+
 export interface ComputerScreenResult {
   url: string | null;
   error: string | null;
 }
 
-/** Only the latest request for the visible computer may replace its screen or error. */
+/**
+ * Each read returns a new URL, and a new URL reloads the viewer. A background read keeps the held
+ * URL while it is reusable for the current status and joins a read already in flight for the same
+ * status; a forced read always asks again. Only the latest request for the visible computer may
+ * replace its screen or error.
+ */
 export async function loadComputerScreen(options: {
+  botId: string;
+  status: ComputerStatus | null;
+  held: HeldScreenUrl | undefined;
+  force?: boolean;
+  reads: Map<string, Promise<HeldScreenUrl>>;
   load: () => Promise<{ url: string | null }>;
   isCurrent: () => boolean;
-  commit: (result: ComputerScreenResult) => void;
+  commit: (result: ComputerScreenResult, held: HeldScreenUrl | undefined) => void;
   fallbackError: string;
 }): Promise<string | null> {
+  const { held, status, force = false } = options;
+  const key = status ? computerScreenKey(status) : "";
+  const slot = `${options.botId}:${key}`;
+  const inflight = force ? undefined : options.reads.get(slot);
+  if (!force && !inflight && held && isScreenUrlReusable(held, status, Date.now())) {
+    if (!options.isCurrent()) return null;
+    options.commit({ url: held.url, error: null }, held);
+    return held.url;
+  }
   let result: ComputerScreenResult;
+  let next: HeldScreenUrl | undefined;
   try {
-    const screen = await options.load();
-    result = { url: screen.url, error: null };
+    next = await (inflight ?? startRead(options.reads, slot, key, options.load));
+    result = { url: next.url, error: null };
   } catch (error) {
+    // The proxy still accepts the held URL until its capability expires.
+    if (!force && held && isScreenUrlReusable(held, status, Date.now(), SCREEN_PROXY_TTL_MS)) {
+      return options.isCurrent() ? held.url : null;
+    }
     result = {
       url: null,
       error: error instanceof Error && error.message ? error.message : options.fallbackError,
     };
   }
   if (!options.isCurrent()) return null;
-  options.commit(result);
+  options.commit(result, next);
   return result.url;
+}
+
+function startRead(
+  reads: Map<string, Promise<HeldScreenUrl>>,
+  slot: string,
+  key: string,
+  load: () => Promise<{ url: string | null }>,
+): Promise<HeldScreenUrl> {
+  const readAt = Date.now();
+  const read = load()
+    .then(({ url }) => ({ url, key, readAt }))
+    .finally(() => {
+      if (reads.get(slot) === read) reads.delete(slot);
+    });
+  reads.set(slot, read);
+  return read;
+}
+
+/** The URL to paint when returning to a bot: its held one, only while it still fits the cached status. */
+export function cachedScreenUrl(
+  held: HeldScreenUrl | undefined,
+  status: ComputerStatus | null | undefined,
+  now: number,
+): string | null {
+  return isScreenUrlReusable(held, status, now) ? (held?.url ?? null) : null;
+}
+
+/** Delay before renewing the held URL, or `undefined` when none is held. */
+export function screenRenewDelay(held: HeldScreenUrl | undefined, now: number): number | undefined {
+  if (!held?.url) return undefined;
+  // A failed renewal keeps the held URL until it expires, so retry at most once a minute.
+  return Math.max(held.readAt + SCREEN_URL_RENEW_MS - now, SCREEN_RETRY_FLOOR_MS);
 }

@@ -26,7 +26,7 @@ import {
   ATTACHMENT_MAX_COUNT,
   normalizeCreateBotProfile,
 } from "@rakazo/contracts";
-import type { ComposerMention, ComposerPageHead } from "@rakazo/core";
+import type { ComposerMention, ComposerPageHead, HeldScreenUrl } from "@rakazo/core";
 import {
   attachmentsForThread,
   buildComposerMentionOptions,
@@ -75,7 +75,7 @@ import {
   requestBrowserNotificationPermission,
   shouldNotifyBrowser,
 } from "../lib/browser-notifications";
-import { loadComputerScreen } from "../lib/computer-screen";
+import { cachedScreenUrl, loadComputerScreen, screenRenewDelay } from "../lib/computer-screen";
 import { dictation } from "../lib/dictation";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { copyableMessageText } from "../lib/message-text";
@@ -88,6 +88,7 @@ import {
   activeThreadRuns,
   applyThreadSendReceipt,
   clearActiveThreadRuns,
+  clearBusyWhileWaitingTakeover,
   computerPanelAutoBoot,
   computerPanelAutoUsesBoot,
   computerTakeoverBlocked,
@@ -282,7 +283,7 @@ export function ShellPage() {
   // bot paints its computer pane instantly instead of blanking it while the
   // thread + screen RPCs round-trip again (see refreshThread / refreshComputerScreen).
   const computerCacheRef = useRef(
-    new Map<string, { computer: ComputerStatus | null; screenUrl: string | null }>(),
+    new Map<string, { computer: ComputerStatus | null; screen?: HeldScreenUrl }>(),
   );
   // Caps computerCacheRef so a long session that opens many distinct bots
   // over time doesn't accumulate one entry per bot forever. Re-inserting on
@@ -292,10 +293,10 @@ export function ShellPage() {
 
   function cacheComputerFor(
     botId: string,
-    patch: Partial<{ computer: ComputerStatus | null; screenUrl: string | null }>,
+    patch: Partial<{ computer: ComputerStatus | null; screen: HeldScreenUrl | undefined }>,
   ) {
     const cache = computerCacheRef.current;
-    const prev = cache.get(botId) ?? { computer: null, screenUrl: null };
+    const prev = cache.get(botId) ?? { computer: null };
     cache.delete(botId);
     cache.set(botId, { ...prev, ...patch });
     if (cache.size > COMPUTER_CACHE_LIMIT) {
@@ -531,6 +532,8 @@ export function ShellPage() {
   const activeGroupId = useRef<string | undefined>(groupId);
   activeGroupId.current = groupId;
   const screenRequest = useRef(0);
+  const screenReads = useRef(new Map<string, Promise<HeldScreenUrl>>());
+  const computerStatusRequest = useRef(0);
   const contextBot =
     botMenu?.kind === "bot" ? bots.find((bot) => bot.id === botMenu.id) : undefined;
   const contextGroup =
@@ -811,21 +814,38 @@ export function ShellPage() {
     return snap;
   }
 
-  async function refreshComputerScreen(id: string) {
+  async function refreshComputerScreen(id: string, { force = false } = {}) {
     if (!computerVisible.current) return null;
     const request = ++screenRequest.current;
     return loadComputerScreen({
+      botId: id,
+      status: activeBotId.current === id ? computerRef.current : null,
+      held: computerCacheRef.current.get(id)?.screen,
+      force,
+      reads: screenReads.current,
       load: () => rpc.computer.screenUrl({ botId: id }),
       isCurrent: () =>
         request === screenRequest.current && activeBotId.current === id && computerVisible.current,
-      commit: (screen) => {
+      commit: (screen, held) => {
         setScreenUrl(screen.url);
         setComputerError(screen.error);
         setComputerErrorFromScreen(Boolean(screen.error));
-        cacheComputerFor(id, { screenUrl: screen.url });
+        cacheComputerFor(id, { screen: held });
       },
       fallbackError: t`Could not connect to the computer screen`,
     });
+  }
+
+  // Events carry no screen stamp, so the screen decision waits for the server status.
+  async function refreshComputerStatus(id: string) {
+    if (!computerVisible.current) return;
+    const request = ++computerStatusRequest.current;
+    const status = await rpc.computer.status({ botId: id });
+    if (request !== computerStatusRequest.current || activeBotId.current !== id) return;
+    const reconciled = clearBusyWhileWaitingTakeover(status, snapshotRef.current?.run?.status);
+    commitComputer(reconciled);
+    cacheComputerFor(id, { computer: reconciled });
+    await refreshComputerScreen(id);
   }
 
   async function loadOlderMessages() {
@@ -1075,7 +1095,7 @@ export function ShellPage() {
     if (cached) {
       // Paint the last-known computer instantly; refreshThread/refreshComputerScreen
       // below still run and reconcile with fresh data in the background.
-      setScreenUrl(cached.screenUrl);
+      setScreenUrl(cachedScreenUrl(cached.screen, cached.computer, Date.now()));
       commitComputer(cached.computer);
     } else {
       setScreenUrl(null);
@@ -1155,7 +1175,7 @@ export function ShellPage() {
           // waiting_input: reconcile ask cards if a stale post-send refresh raced SSE.
           void refreshThread(active.id).catch(() => undefined);
         } else if (isComputerStatusEvent(event)) {
-          void refreshComputerScreen(active.id).catch(() => undefined);
+          void refreshComputerStatus(active.id).catch(() => undefined);
         }
       },
     });
@@ -2303,7 +2323,13 @@ export function ShellPage() {
       const snap = await refreshThread(botId).catch(() => null);
       if (cancelled || activeBotId.current !== botId) return;
       const state = snap?.computer?.state;
-      const screen = state === "running" ? await refreshComputerScreen(botId) : null;
+      let screen: string | null = null;
+      if (state === "running") {
+        const request = screenRequest.current + 1;
+        screen = await refreshComputerScreen(botId);
+        // A newer screen read owns the outcome; its null is not a missing screen.
+        if (screenRequest.current !== request) return;
+      }
       if (cancelled || activeBotId.current !== botId) return;
       const action = computerPanelAutoBoot(state, screen);
       if (action === "wait") {
@@ -2401,6 +2427,27 @@ export function ShellPage() {
     return () => window.clearInterval(timer);
   }, [panel, computerOpen, active?.id, computer?.state]);
 
+  useEffect(() => {
+    if ((panel !== "computer" && !computerOpen) || !active || !screenUrl) return;
+    const botId = active.id;
+    let timer: number | undefined;
+    let disposed = false;
+    const schedule = () => {
+      const delay = screenRenewDelay(computerCacheRef.current.get(botId)?.screen, Date.now());
+      if (disposed || delay === undefined) return;
+      timer = window.setTimeout(() => {
+        void refreshComputerScreen(botId)
+          .catch(() => null)
+          .finally(schedule);
+      }, delay);
+    };
+    schedule();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, [panel, computerOpen, active?.id, screenUrl]);
+
   async function openComputer() {
     if (!active) return;
     const needsTakeover = !userHoldsComputerControl(computer, active.id);
@@ -2456,7 +2503,7 @@ export function ShellPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => active && void refreshComputerScreen(active.id)}
+          onClick={() => active && void refreshComputerScreen(active.id, { force: true })}
         >
           <Trans>Retry screen</Trans>
         </Button>

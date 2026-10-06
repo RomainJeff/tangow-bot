@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { computerSupportsUpdate } from "@rakazo/adapters";
 import type { ComputerStatus } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, computerScreenSize } from "@rakazo/core";
@@ -49,9 +50,27 @@ export async function resolveBusyBotName(
     : null;
 }
 
+/** Changes exactly when the capability sealed by `computer.screenUrl` stops matching the proxy's checks. */
+function screenStamp(
+  botScreenGeneration: number,
+  computer: { id: string; screenGeneration: number; controlLeaseId?: string | null } | null,
+): string {
+  if (!computer) return "";
+  return createHash("sha256")
+    .update(
+      `${computer.id}:${computer.screenGeneration}:${botScreenGeneration}:${computer.controlLeaseId ?? ""}`,
+    )
+    .digest("hex")
+    .slice(0, 16);
+}
+
 export function toComputerStatus(
   botId: string,
+  botScreenGeneration: number,
   computer: {
+    id: string;
+    screenGeneration: number;
+    controlLeaseId?: string | null;
     kind: string;
     state: string;
     scope: string;
@@ -88,6 +107,7 @@ export function toComputerStatus(
     screenWidth: screen.width,
     screenHeight: screen.height,
     homeRevision: computer?.homeRevision ?? null,
+    screenStamp: screenStamp(botScreenGeneration, computer),
     busyBotName,
     canUpdate: computerSupportsUpdate(kind),
   };

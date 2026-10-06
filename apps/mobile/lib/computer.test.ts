@@ -23,6 +23,7 @@ function computer(overrides: Partial<ComputerStatus> = {}): ComputerStatus {
     screenWidth: 1280,
     screenHeight: 800,
     homeRevision: null,
+    screenStamp: "",
     busyBotName: null,
     canUpdate: true,
     ...overrides,

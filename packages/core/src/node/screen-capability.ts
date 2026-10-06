@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { SCREEN_PROXY_TTL_MS } from "../computer-screen-url.js";
 
-export const SCREEN_PROXY_TTL_MS = 60 * 60_000;
 export const SCREEN_TARGET_ENDPOINT = "/api/internal/screen-target";
 export const SCREEN_RECHECK_MS = 1_000;
 

@@ -1,11 +1,8 @@
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
-import {
-  openScreenCapability,
-  SCREEN_PROXY_TTL_MS,
-  sealScreenCapability,
-} from "./screen-capability.js";
+import { SCREEN_PROXY_TTL_MS } from "../computer-screen-url.js";
+import { openScreenCapability, sealScreenCapability } from "./screen-capability.js";
 
 const scope = {
   botId: "bot",

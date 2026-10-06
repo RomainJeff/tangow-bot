@@ -1,4 +1,5 @@
 import type { Sandbox } from "@daytona/sdk";
+import { SCREEN_URL_RENEW_MS } from "@rakazo/core";
 import { describe, expect, it, vi } from "vitest";
 import { DaytonaSandboxProvider, type DaytonaSandboxSdk } from "./daytona-sandbox.js";
 import { desktopCommandResponder } from "./linux-desktop.test-support.js";
@@ -130,6 +131,31 @@ describe("DaytonaSandboxProvider", () => {
     await provider.stop(computer, context);
     expect(fixture.expireSignedPreviewUrl).toHaveBeenCalledWith(6100, "preview-token");
     expect(fixture.stop).toHaveBeenCalledWith(120);
+  });
+
+  it("mints a new preview once the cached one cannot outlast a held screen URL", async () => {
+    const fixture = daytonaFixture();
+    const provider = new DaytonaSandboxProvider({ apiKey: "test-key" }, fixture.client);
+    const computer = await provider.provision({ botId: "bot-a", homePath: "/unused" }, context);
+    await provider.prepare(computer, context);
+    const _screenRegistry = desktopCommandResponder();
+    const start = Date.now();
+    const now = vi.spyOn(Date, "now");
+    const view = () =>
+      provider.connectScreen(computer, { view: "stream", interactive: false }, context);
+    try {
+      now.mockReturnValue(start);
+      await view();
+      const previewTtlMs = 3_600_000;
+      now.mockReturnValue(start + previewTtlMs - SCREEN_URL_RENEW_MS - 1);
+      await view();
+      expect(fixture.getSignedPreviewUrl).toHaveBeenCalledTimes(1);
+      now.mockReturnValue(start + previewTtlMs - SCREEN_URL_RENEW_MS);
+      await view();
+      expect(fixture.getSignedPreviewUrl).toHaveBeenCalledTimes(2);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("reconnects stopped sandboxes and replaces missing ones", async () => {

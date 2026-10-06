@@ -534,7 +534,12 @@ export async function threadSnapshot(
       messages: messagesWithLiveEvents(core.messagePage.messages, core.liveEvents),
       olderCursor: core.messagePage.olderCursor,
       run: core.run ? mapRun(core.run) : null,
-      computer: toComputerStatus(target.botId, target.bot.computer, busyBotName),
+      computer: toComputerStatus(
+        target.botId,
+        target.bot.screenGeneration,
+        target.bot.computer,
+        busyBotName,
+      ),
     };
   }
 
