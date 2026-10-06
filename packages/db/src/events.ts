@@ -12,9 +12,15 @@ import {
   isApprovalAskBlock,
   isSecretAskBlock,
   messagingChannelId,
+  normalizeSpawnBotArgs,
   sanitizeJsonValue,
+  spawnBotApprovalBlock,
+  spawnBotToolArgs,
+  validateSpawnBotArgs,
 } from "@rakazo/core";
+import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { getLogger } from "@rakazo/logging";
+import { activeBotNames } from "./bot-names.js";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
@@ -213,6 +219,8 @@ export interface AnswerRunInput {
   messageId: string;
   answeredByUserId: string;
   answer: string;
+  /** Changes to a Create bot card, applied with "allow" by the run's owner only. */
+  edits?: { name?: string; instructions?: string };
 }
 
 export interface SendUserMessageInput {
@@ -770,6 +778,55 @@ export async function answerRunInput(
   return true;
 }
 
+type SpawnBotEdit = {
+  proposed: Record<string, string>;
+  approved: Record<string, string>;
+  key: string;
+  /** text, detail and spawnBot of the card, rebuilt from the approved request. */
+  card: Pick<Extract<MessageBlock, { kind: "ask" }>, "text" | "detail" | "spawnBot">;
+};
+
+/**
+ * What a Create bot card becomes when the owner edited it: validated exactly like the model's own
+ * request, with nothing written. Returns undefined when the edits change nothing once normalized.
+ */
+async function planSpawnBotEdit(
+  tx: Prisma.TransactionClient,
+  effect: { id: string; request: unknown; idempotencyKey: string },
+  edits: { name?: string; instructions?: string },
+  scope: { runId: string; spaceId: string; userId: string },
+): Promise<SpawnBotEdit | undefined> {
+  const request = effect.request;
+  if (!request || typeof request !== "object" || Array.isArray(request)) {
+    throw new InvalidAnswerError("This bot creation cannot be edited");
+  }
+  const stored = normalizeSpawnBotArgs(request as Record<string, unknown>);
+  if ("error" in stored) throw new InvalidAnswerError(stored.error);
+  const proposed = spawnBotToolArgs(stored);
+  const edited = normalizeSpawnBotArgs({
+    ...(request as Record<string, unknown>),
+    ...(edits.name !== undefined ? { name: edits.name } : {}),
+    ...(edits.instructions !== undefined ? { instructions: edits.instructions } : {}),
+  });
+  if ("error" in edited) throw new InvalidAnswerError(edited.error);
+  const approved = spawnBotToolArgs(edited);
+  if (approved.name === proposed.name && approved.instructions === proposed.instructions) {
+    return undefined;
+  }
+  const invalid = validateSpawnBotArgs(approved, await activeBotNames(tx, scope));
+  if (invalid) throw new InvalidAnswerError(invalid);
+  const key = approvalEffectKey(scope.runId, "spawn_bot", approved);
+  const taken = await tx.externalEffect.findUnique({
+    where: { idempotencyKey: key },
+    select: { id: true },
+  });
+  if (taken) {
+    throw new InvalidAnswerError("This run already has a bot creation with these exact settings");
+  }
+  const { text, detail, spawnBot } = spawnBotApprovalBlock(effect.id, approved, scope.userId);
+  return { proposed, approved, key, card: { text, detail, spawnBot } };
+}
+
 /**
  * Answer the pending ask of a waiting_input run inside an existing transaction. Called by
  * answerRunInput, and exported so a caller that already holds a transaction can reuse it.
@@ -810,6 +867,20 @@ export async function answerRunInputInTransaction(
     if (!message || pending?.block.kind !== "ask") return null;
     const pendingAsk = pending.block;
     const storedBlocks = message.blocks as Prisma.InputJsonValue[];
+
+    // Edits only make sense on a Create bot approval, answered "allow" by the run's owner. Checked
+    // before any other branch and before any name is read, so the refusal reveals nothing.
+    if (input.edits) {
+      if (pendingAsk.questions?.length || !isApprovalAskBlock(pendingAsk)) {
+        throw new InvalidAnswerError("Only a Create bot card can be edited");
+      }
+      if (input.answer !== "allow") {
+        throw new InvalidAnswerError("Edits can only be sent when creating the bot");
+      }
+      if (input.answeredByUserId !== run.userId) {
+        throw new InvalidAnswerError("Only the owner of this run can edit the bot");
+      }
+    }
 
     // ask_user v2: a multi-question card submits one JSON payload of per-question answers.
     if (pendingAsk.questions?.length) {
@@ -921,8 +992,14 @@ export async function answerRunInputInTransaction(
     }
     if (secretAsk && !runSecretWriter) return null;
     if (secretAsk && pendingAsk.credential && run.userId !== input.answeredByUserId) return null;
-    let approvalEffect: { id: string; kind: string } | null = null;
+    let approvalEffect: {
+      id: string;
+      kind: string;
+      request: unknown;
+      idempotencyKey: string;
+    } | null = null;
     let approvalUserId: string | null = null;
+    let spawnBotEdit: SpawnBotEdit | undefined;
 
     if (approvalAsk) {
       if (!pendingAsk.actions?.some((action) => action.id === input.answer)) return null;
@@ -938,6 +1015,16 @@ export async function answerRunInputInTransaction(
       if (input.answer === "always") {
         if (run.userId !== input.answeredByUserId) return null;
         approvalUserId = input.answeredByUserId;
+      }
+      if (input.edits) {
+        if (approvalEffect.kind !== "spawn_bot") {
+          throw new InvalidAnswerError("Only a Create bot card can be edited");
+        }
+        spawnBotEdit = await planSpawnBotEdit(tx, approvalEffect, input.edits, {
+          runId: input.runId,
+          spaceId: input.spaceId,
+          userId: run.userId,
+        });
       }
     }
 
@@ -957,10 +1044,28 @@ export async function answerRunInputInTransaction(
 
     if (approvalAsk) {
       const allowed = input.answer === "allow" || input.answer === "always";
-      await tx.externalEffect.update({
-        where: { id: approvalEffect!.id },
-        data: { status: allowed ? "approved" : "denied" },
-      });
+      if (spawnBotEdit) {
+        // Compare-and-set: only the effect the plan was made from may be rewritten. Anything
+        // else throws, which rolls back the run update above and leaves the card pending.
+        const rewritten = await tx.externalEffect.updateMany({
+          where: {
+            id: approvalEffect!.id,
+            status: "intended",
+            idempotencyKey: approvalEffect!.idempotencyKey,
+          },
+          data: {
+            request: spawnBotEdit.approved,
+            idempotencyKey: spawnBotEdit.key,
+            status: "approved",
+          },
+        });
+        if (rewritten.count !== 1) throw new Error("Bot creation changed while it was edited");
+      } else {
+        await tx.externalEffect.update({
+          where: { id: approvalEffect!.id },
+          data: { status: allowed ? "approved" : "denied" },
+        });
+      }
       if (input.answer === "always") {
         await tx.actionApprovalRule.upsert({
           where: {
@@ -1023,16 +1128,32 @@ export async function answerRunInputInTransaction(
       if (task.count !== 1) throw new Error("Run task was not available to answer");
     }
 
+    const answeredAsk = {
+      ...pendingAsk,
+      ...(spawnBotEdit ? spawnBotEdit.card : {}),
+      status: "answered" as const,
+      answer: secretAsk ? "" : freeTextAnswer || input.answer,
+    };
     const blocks = storedBlocks.map((block, index) =>
-      index === pending.index
-        ? {
-            ...pendingAsk,
-            status: "answered" as const,
-            answer: secretAsk ? "" : freeTextAnswer || input.answer,
-          }
-        : block,
+      index === pending.index ? answeredAsk : block,
     );
     await tx.message.update({ where: { id: message.id }, data: { blocks } });
+    if (spawnBotEdit) {
+      // Before the message.updated event, so one notify covers both. The audit keeps what the model
+      // proposed next to what the person approved.
+      await appendEventInTransaction(tx, {
+        spaceId: input.spaceId,
+        threadId: input.threadId,
+        botId: run.botId,
+        type: "effect.edited",
+        runId: input.runId,
+        payload: {
+          effectId: approvalEffect!.id,
+          proposed: spawnBotEdit.proposed,
+          approved: spawnBotEdit.approved,
+        },
+      });
+    }
     const updated = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
       threadId: input.threadId,

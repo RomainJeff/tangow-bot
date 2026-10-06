@@ -1,4 +1,6 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
+import { ProductEventSchema } from "@rakazo/contracts";
+import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "./client.js";
 import {
@@ -2822,5 +2824,478 @@ describe("appendEvent", () => {
     // Postgres rejects unpaired surrogates in json; the sanitized form must not contain any.
     expect(persisted.delta).not.toMatch(/[\uD800-\uDFFF]/);
     expect(() => JSON.stringify(persisted)).not.toThrow();
+  });
+});
+
+describe("answerRunInput on a Create bot card with edits", () => {
+  const OWNER = "user-1";
+  const proposedRequest = {
+    name: "Veille",
+    title: "Watches competitors",
+    instructions: "Track our competitors weekly.",
+    prompt: "Start with the top three.",
+    computer_mode: "dedicated",
+  };
+  const oldKey = approvalEffectKey("run-1", "spawn_bot", proposedRequest);
+
+  function card(overrides: Record<string, unknown> = {}) {
+    return {
+      kind: "ask",
+      approvalEffectId: "effect-1",
+      text: "Create bot “Veille”?",
+      detail: "Title: Watches competitors",
+      status: "pending",
+      actions: [
+        { id: "allow", label: "Create bot", outcome: "created" },
+        { id: "deny", label: "Cancel", outcome: "cancelled" },
+      ],
+      spawnBot: {
+        name: "Veille",
+        title: "Watches competitors",
+        instructions: "Track our competitors weekly.",
+        prompt: "Start with the top three.",
+        computerMode: "dedicated",
+      },
+      ...overrides,
+    };
+  }
+
+  /** Rows behave like the database: a failed transaction restores everything it wrote. */
+  function world(
+    options: {
+      kind?: string;
+      block?: Record<string, unknown>;
+      botNames?: string[];
+      takenKeys?: string[];
+      casCount?: number;
+    } = {},
+  ) {
+    const state = {
+      runStatus: "waiting_input",
+      effect: {
+        id: "effect-1",
+        kind: options.kind ?? "spawn_bot",
+        status: "intended",
+        request: { ...proposedRequest } as Record<string, unknown>,
+        idempotencyKey: oldKey,
+      },
+      blocks: [options.block ?? card()] as unknown[],
+      events: [] as Array<{ type: string; payload: unknown; seq: number }>,
+    };
+    const botFindMany = vi.fn(async () => (options.botNames ?? []).map((name) => ({ name })));
+    const effectFindUnique = vi.fn(async ({ where }: { where: { idempotencyKey: string } }) =>
+      (options.takenKeys ?? []).includes(where.idempotencyKey) ? { id: "effect-other" } : null,
+    );
+    const effectUpdateMany = vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { id: string; status: string; idempotencyKey: string };
+        data: Partial<typeof state.effect>;
+      }) => {
+        if (options.casCount === 0) return { count: 0 };
+        if (
+          state.effect.id !== where.id ||
+          state.effect.status !== where.status ||
+          state.effect.idempotencyKey !== where.idempotencyKey
+        ) {
+          return { count: 0 };
+        }
+        Object.assign(state.effect, data);
+        return { count: 1 };
+      },
+    );
+    const effectUpdate = vi.fn(async ({ data }: { data: Partial<typeof state.effect> }) => {
+      Object.assign(state.effect, data);
+    });
+    const runFindFirst = vi.fn(async () =>
+      state.runStatus === "waiting_input"
+        ? { botId: "bot-1", userId: OWNER, checkpoint: null }
+        : null,
+    );
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
+      message: {
+        findFirst: vi.fn(async () => ({ id: "message-1", blocks: state.blocks })),
+        update: vi.fn(async ({ data }: { data: { blocks: unknown[] } }) => {
+          state.blocks = data.blocks;
+        }),
+      },
+      run: {
+        findFirst: runFindFirst,
+        findUnique: vi.fn().mockResolvedValue({ status: "queued", startedAt: null }),
+        updateMany: vi.fn(async () => {
+          state.runStatus = "queued";
+          return { count: 1 };
+        }),
+      },
+      externalEffect: {
+        findFirst: vi.fn(async () =>
+          state.effect.status === "intended" ? { ...state.effect } : null,
+        ),
+        findUnique: effectFindUnique,
+        updateMany: effectUpdateMany,
+        update: effectUpdate,
+      },
+      bot: { findMany: botFindMany },
+      task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      actionApprovalRule: { upsert: vi.fn() },
+      thread: { update: vi.fn(async () => ({ nextEventSeq: 10 + state.events.length })) },
+      event: {
+        create: vi.fn(
+          async ({ data }: { data: { seq: number; type: string; payload: unknown } }) => {
+            state.events.push({ type: data.type, payload: data.payload, seq: data.seq });
+            return { ...event(data.seq), type: data.type };
+          },
+        ),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => {
+        const snapshot = structuredClone(state);
+        try {
+          return await callback(tx);
+        } catch (error) {
+          Object.assign(state, snapshot);
+          throw error;
+        }
+      }),
+    } as unknown as PrismaClient;
+    return { state, tx, prisma, botFindMany, effectFindUnique, effectUpdateMany, effectUpdate };
+  }
+
+  const answer = (
+    prisma: PrismaClient,
+    extra: {
+      answer?: string;
+      answeredByUserId?: string;
+      edits?: { name?: string; instructions?: string };
+    },
+  ) =>
+    answerRunInput(prisma, {
+      spaceId: "workspace-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      messageId: "message-1",
+      answeredByUserId: OWNER,
+      answer: "allow",
+      ...extra,
+    });
+
+  it("CA3 answers without edits exactly as before", async () => {
+    const w = world();
+    await expect(answer(w.prisma, {})).resolves.toBe(true);
+
+    expect(w.effectUpdate).toHaveBeenCalledWith({
+      where: { id: "effect-1" },
+      data: { status: "approved" },
+    });
+    expect(w.effectUpdateMany).not.toHaveBeenCalled();
+    expect(w.botFindMany).not.toHaveBeenCalled();
+    expect(w.state.effect.request).toEqual(proposedRequest);
+    expect(w.state.effect.idempotencyKey).toBe(oldKey);
+    expect(w.state.events.map((entry) => entry.type)).toEqual(["thread.message.updated"]);
+    expect(w.state.blocks).toEqual([{ ...card(), status: "answered", answer: "allow" }]);
+  });
+
+  it("CA24 answers an old card that has no spawnBot without edits", async () => {
+    const { spawnBot: _spawnBot, ...oldCard } = card();
+    const w = world({ block: oldCard });
+    await expect(answer(w.prisma, {})).resolves.toBe(true);
+    expect(w.state.effect.status).toBe("approved");
+    expect(w.state.blocks).toEqual([{ ...oldCard, status: "answered", answer: "allow" }]);
+  });
+
+  it("CA4 rewrites the request, the key and the card, and approves the effect", async () => {
+    const w = world();
+    await expect(
+      answer(w.prisma, {
+        edits: { name: "  Radar ", instructions: "Watch\r\nour competitors." },
+      }),
+    ).resolves.toBe(true);
+
+    const approved = {
+      name: "Radar",
+      title: "Watches competitors",
+      instructions: "Watch\nour competitors.",
+      prompt: "Start with the top three.",
+      computer_mode: "dedicated",
+    };
+    expect(w.state.effect).toMatchObject({
+      status: "approved",
+      request: approved,
+      idempotencyKey: approvalEffectKey("run-1", "spawn_bot", approved),
+    });
+    expect(w.effectUpdateMany).toHaveBeenCalledWith({
+      where: { id: "effect-1", status: "intended", idempotencyKey: oldKey },
+      data: {
+        request: approved,
+        idempotencyKey: approvalEffectKey("run-1", "spawn_bot", approved),
+        status: "approved",
+      },
+    });
+    const answered = w.state.blocks[0] as Record<string, unknown>;
+    expect(answered).toMatchObject({
+      status: "answered",
+      answer: "allow",
+      text: "Create bot “Radar”?",
+      spawnBot: {
+        name: "Radar",
+        title: "Watches competitors",
+        instructions: "Watch\nour competitors.",
+        prompt: "Start with the top three.",
+        computerMode: "dedicated",
+      },
+    });
+    expect(answered.detail).toContain("Watch");
+    expect(answered.detail).not.toContain("Track our");
+    expect(w.state.events.map((entry) => entry.type)).toEqual([
+      "effect.edited",
+      "thread.message.updated",
+    ]);
+    expect(w.state.events[0]!.seq).toBeLessThan(w.state.events[1]!.seq);
+    expect(w.botFindMany).toHaveBeenCalledWith({
+      where: { spaceId: "workspace-1", userId: OWNER, archivedAt: null },
+      select: { name: true },
+    });
+  });
+
+  it("CA21 audits the proposal next to the approval and puts the edit before the update", async () => {
+    const w = world();
+    await answer(w.prisma, { edits: { name: "Radar" } });
+
+    expect(w.state.events[0]).toMatchObject({
+      type: "effect.edited",
+      payload: {
+        effectId: "effect-1",
+        proposed: proposedRequest,
+        approved: { ...proposedRequest, name: "Radar" },
+      },
+    });
+    expect(
+      ProductEventSchema.safeParse({
+        ...event(1),
+        ...w.state.events[0],
+        createdAt: "2026-09-29T12:00:00.000Z",
+        runId: undefined,
+      }).success,
+    ).toBe(true);
+    expect(w.tx.run.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      w.tx.event.create.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("CA8 treats edits that normalise to the same values as no edits", async () => {
+    const w = world();
+    await expect(
+      answer(w.prisma, {
+        edits: { name: "  Veille ", instructions: " Track our competitors weekly.\n" },
+      }),
+    ).resolves.toBe(true);
+
+    expect(w.effectUpdate).toHaveBeenCalledOnce();
+    expect(w.effectUpdateMany).not.toHaveBeenCalled();
+    expect(w.botFindMany).not.toHaveBeenCalled();
+    expect(w.state.effect.idempotencyKey).toBe(oldKey);
+    expect(w.state.effect.request).toEqual(proposedRequest);
+    expect(w.state.events.map((entry) => entry.type)).toEqual(["thread.message.updated"]);
+  });
+
+  it("CA8 lets instructions be cleared, and the request then carries none", async () => {
+    const w = world();
+    await answer(w.prisma, { edits: { instructions: "" } });
+
+    const { instructions: _instructions, ...withoutInstructions } = proposedRequest;
+    expect(w.state.effect.request).toEqual(withoutInstructions);
+    expect(w.state.effect.idempotencyKey).toBe(
+      approvalEffectKey("run-1", "spawn_bot", withoutInstructions),
+    );
+    expect(w.state.blocks[0]).toMatchObject({ spawnBot: { instructions: "" } });
+    expect((w.state.blocks[0] as { detail: string }).detail).not.toContain("Instructions:");
+  });
+
+  it.each([
+    ["an empty name", { name: "   " }, "name is required."],
+    ["a name of 81 characters", { name: "n".repeat(81) }, "at most 80"],
+    ["a name held by an active bot", { name: " VEILLE2 " }, "already exists"],
+    ["a hidden character", { name: "Ra​dar" }, "invisible"],
+    ["a link-shaped name", { name: "[x](https://e)" }, "web address"],
+    ["instructions of 3001 characters", { instructions: "i".repeat(3001) }, "at most 3000"],
+    ["an isolated surrogate in the name", { name: "Radar\uD800" }, "invisible"],
+    ["an isolated surrogate in the instructions", { instructions: "a\uDC00" }, "invisible"],
+  ])("CA6 refuses %s and changes nothing", async (_label, edits, message) => {
+    const w = world({ botNames: ["Veille2"] });
+    const before = structuredClone(w.state);
+
+    await expect(answer(w.prisma, { edits })).rejects.toThrow(InvalidAnswerError);
+    await expect(answer(w.prisma, { edits })).rejects.toThrow(message);
+
+    expect(w.state).toEqual(before);
+    expect(w.tx.run.updateMany).not.toHaveBeenCalled();
+    expect(w.effectUpdateMany).not.toHaveBeenCalled();
+    expect(w.effectUpdate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a deny", { answer: "deny" }],
+    ["an always", { answer: "always" }],
+  ])("CA7 refuses edits with %s", async (_label, extra) => {
+    const w = world({
+      block: card({
+        actions: [
+          { id: "allow", label: "Create bot" },
+          { id: "always", label: "Always" },
+          { id: "deny", label: "Cancel" },
+        ],
+      }),
+    });
+    await expect(answer(w.prisma, { ...extra, edits: { name: "Radar" } })).rejects.toThrow(
+      InvalidAnswerError,
+    );
+    expect(w.tx.run.updateMany).not.toHaveBeenCalled();
+    expect(w.state.effect.status).toBe("intended");
+  });
+
+  it("CA7 refuses edits on an approval that is not a Create bot", async () => {
+    for (const kind of ["create_space", "destination.write"]) {
+      const w = world({ kind });
+      await expect(answer(w.prisma, { edits: { name: "Radar" } })).rejects.toThrow(
+        InvalidAnswerError,
+      );
+      expect(w.tx.run.updateMany).not.toHaveBeenCalled();
+      expect(w.state.effect.status).toBe("intended");
+      expect(w.state.effect.request).toEqual(proposedRequest);
+    }
+  });
+
+  it("CA16 refuses edits from another member before reading any name", async () => {
+    const w = world();
+    await expect(
+      answer(w.prisma, { answeredByUserId: "member-2", edits: { name: "Radar" } }),
+    ).rejects.toThrow(InvalidAnswerError);
+
+    expect(w.botFindMany).not.toHaveBeenCalled();
+    expect(w.effectFindUnique).not.toHaveBeenCalled();
+    expect(w.tx.externalEffect.findFirst).not.toHaveBeenCalled();
+    expect(w.tx.run.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("CA16 still lets another member approve without edits, as before", async () => {
+    const w = world();
+    await expect(answer(w.prisma, { answeredByUserId: "member-2" })).resolves.toBe(true);
+    expect(w.state.effect.status).toBe("approved");
+  });
+
+  it.each([
+    [
+      "a choice card",
+      { kind: "ask", text: "Which?", status: "pending", actions: [{ id: "a", label: "A" }] },
+      "a",
+    ],
+    ["a secret card", { kind: "ask", text: "Key?", input: "secret", status: "pending" }, "allow"],
+    [
+      "a multi-question card",
+      {
+        kind: "ask",
+        text: "Questions",
+        status: "pending",
+        questions: [{ id: "q1", question: "Q?", options: [{ id: "o", label: "O" }] }],
+      },
+      JSON.stringify({ answers: { q1: { selected: ["o"] } } }),
+    ],
+  ])("CA16 refuses edits on %s", async (_label, block, answerText) => {
+    const w = world({ block });
+    await expect(
+      answer(w.prisma, { answer: answerText, edits: { name: "Radar" } }),
+    ).rejects.toThrow(InvalidAnswerError);
+    expect(w.tx.run.updateMany).not.toHaveBeenCalled();
+    expect(w.botFindMany).not.toHaveBeenCalled();
+    expect(w.state.blocks).toEqual([block]);
+  });
+
+  it("CA7 keeps answering a card that was already answered as a conflict", async () => {
+    const w = world({ block: card({ status: "answered", answer: "deny" }) });
+    await expect(answer(w.prisma, { edits: { name: "Radar" } })).resolves.toBe(false);
+    expect(w.tx.run.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("CA7 answers a run that no longer waits as a conflict", async () => {
+    const w = world();
+    w.state.runStatus = "cancelled";
+    await expect(answer(w.prisma, { edits: { name: "Radar" } })).resolves.toBe(false);
+    expect(w.effectUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("CA9 refuses a key that already exists without cancelling the transaction", async () => {
+    const approved = { ...proposedRequest, name: "Radar" };
+    const w = world({ takenKeys: [approvalEffectKey("run-1", "spawn_bot", approved)] });
+    const before = structuredClone(w.state);
+
+    const failure = await answer(w.prisma, { edits: { name: "Radar" } }).catch(
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(InvalidAnswerError);
+    expect((failure as Error).message).toBe(
+      "This run already has a bot creation with these exact settings",
+    );
+    expect(w.state).toEqual(before);
+    expect(w.tx.run.updateMany).not.toHaveBeenCalled();
+    expect(w.effectFindUnique).toHaveBeenCalledOnce();
+  });
+
+  it("CA18 rolls everything back when the effect changed under the update", async () => {
+    const w = world({ casCount: 0 });
+    const before = structuredClone(w.state);
+
+    await expect(answer(w.prisma, { edits: { name: "Radar" } })).rejects.toThrow(
+      "Bot creation changed while it was edited",
+    );
+
+    expect(w.tx.run.updateMany).toHaveBeenCalledOnce();
+    expect(w.state).toEqual(before);
+    expect(w.state.runStatus).toBe("waiting_input");
+    expect(w.state.effect.status).toBe("intended");
+    expect(w.state.blocks).toEqual([card()]);
+    expect(w.state.events).toEqual([]);
+  });
+
+  it("CA18 refuses to rewrite an effect whose key moved since the card was read", async () => {
+    const w = world();
+    // Another writer settles the key between the plan and the update.
+    w.tx.externalEffect.findUnique = vi.fn(async () => {
+      w.state.effect.idempotencyKey = "moved";
+      return null;
+    });
+
+    await expect(answer(w.prisma, { edits: { name: "Radar" } })).rejects.toThrow(
+      "Bot creation changed while it was edited",
+    );
+    expect(w.effectUpdateMany).toHaveBeenCalledOnce();
+    expect(w.state.runStatus).toBe("waiting_input");
+    expect(w.state.effect.status).toBe("intended");
+    expect(w.state.effect.request).toEqual(proposedRequest);
+    expect(w.state.blocks).toEqual([card()]);
+    expect(w.state.events).toEqual([]);
+  });
+
+  it("CA17 lets only one of two racing answers through", async () => {
+    const w = world();
+    const first = await answer(w.prisma, { edits: { name: "Radar" } });
+    const second = await answer(w.prisma, {});
+    expect(first).toBe(true);
+    expect(second).toBe(false);
+    expect(w.state.effect.status).toBe("approved");
+    expect(w.state.runStatus).toBe("queued");
+    expect(w.state.effect.request).toMatchObject({ name: "Radar" });
+  });
+
+  it("CA19 stores a request whose key is the approval key of that request", async () => {
+    const w = world();
+    await answer(w.prisma, { edits: { name: "Radar", instructions: "Other." } });
+    expect(w.state.effect.idempotencyKey).toBe(
+      approvalEffectKey("run-1", "spawn_bot", w.state.effect.request),
+    );
   });
 });

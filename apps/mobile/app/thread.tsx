@@ -23,6 +23,7 @@ import {
   attachmentsForThread,
   buildComposerMentionOptions,
   type ComposerMention,
+  canEditSpawnBotCard,
   computeMessageGroups,
   foldRoutineRuns,
   isApprovalAskBlock,
@@ -146,6 +147,7 @@ import {
   loadSessionToken,
   type MobileBot,
   type MobileGroup,
+  type MobileMe,
   type MobileMessage,
   type MobileMessagePage,
   type MobileSnapshot,
@@ -197,6 +199,8 @@ import {
 import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
 import { closeSheet, openSheet } from "../lib/sheet";
+import type { SpawnBotEdits } from "../lib/spawn-bot-edit";
+import { openSpawnBotEdit, syncSpawnBotEdit } from "../lib/spawn-bot-edit";
 import { hexWithAlpha } from "../lib/stop-contour-math";
 import { shadowsForAppearance } from "../lib/theme";
 import {
@@ -1629,16 +1633,26 @@ function Thread() {
   }
 
   const answerMessage = useCallback(
-    async (message: MobileMessage, answer: string) => {
+    async (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => {
       const targetBotId = botId;
       const targetGroupId = groupId;
       if ((!targetBotId && !targetGroupId) || !message.runId) return;
-      await rpc("threads/answer", {
-        ...(targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! }),
-        runId: message.runId,
-        messageId: message.id,
-        answer,
-      });
+      try {
+        await rpc("threads/answer", {
+          ...(targetGroupId ? { groupId: targetGroupId } : { botId: targetBotId! }),
+          runId: message.runId,
+          messageId: message.id,
+          answer,
+          ...(edits ? { edits } : {}),
+        });
+      } catch (error) {
+        // A refused edit may mean the card was answered meanwhile: reload so the sheet
+        // can close on a card that is no longer answerable.
+        if (edits && isCurrentTarget(targetBotId, targetGroupId)) {
+          await refresh().catch(() => undefined);
+        }
+        throw error;
+      }
       if (isCurrentTarget(targetBotId, targetGroupId)) await refresh();
     },
     [botId, groupId],
@@ -1706,6 +1720,19 @@ function Thread() {
   }
 
   const answerableAskMessageId = latestAnswerableAskMessageId(snap);
+  // The edit sheet lives only while its card can still be answered.
+  useEffect(() => syncSpawnBotEdit(answerableAskMessageId), [answerableAskMessageId]);
+  // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
+  const [viewerUserId, setViewerUserId] = useState<string>();
+  useEffect(() => {
+    rpc<MobileMe>("me")
+      .then((me) => setViewerUserId(me.userId))
+      .catch(() => undefined);
+  }, []);
+  const listExtraData = useMemo(
+    () => ({ answerableAskMessageId, viewerUserId }),
+    [answerableAskMessageId, viewerUserId],
+  );
   const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
   const liveMessages = useMemo(() => [...visibleMessages].reverse(), [visibleMessages]);
   liveMessagesRef.current = liveMessages;
@@ -2067,6 +2094,7 @@ function Thread() {
         members={snap?.members}
         replyPreview={replyPreviewNode}
         canAnswer={message.id === answerableAskMessageId}
+        viewerUserId={viewerUserId}
         onAnswer={answerMessage}
         onOpenBot={openBot}
         onPreviewMarkdown={setMarkdownPreview}
@@ -2409,7 +2437,7 @@ function Thread() {
                 data={liveMessages}
                 inverted
                 keyExtractor={(message) => message.id}
-                extraData={answerableAskMessageId}
+                extraData={listExtraData}
                 style={{ flex: 1, marginTop: 8 }}
                 maintainVisibleContentPosition={keptPosition}
                 scrollEventThrottle={16}
@@ -3365,6 +3393,7 @@ const MessageBubble = memo(function MessageBubble({
   members,
   replyPreview,
   canAnswer,
+  viewerUserId,
   onAnswer,
   onOpenBot,
   onPreviewMarkdown,
@@ -3381,7 +3410,8 @@ const MessageBubble = memo(function MessageBubble({
   members?: MobileSnapshot["members"];
   replyPreview?: MobileMessage;
   canAnswer: boolean;
-  onAnswer: (message: MobileMessage, answer: string) => Promise<void>;
+  viewerUserId?: string;
+  onAnswer: (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   actionProps: MessageActionProps;
@@ -3692,6 +3722,18 @@ const MessageBubble = memo(function MessageBubble({
                 accessibilityActions={actionProps.accessibilityActions}
                 onAccessibilityAction={actionProps.onAccessibilityAction}
                 onAnswer={(answer) => onAnswer(message, answer)}
+                onEdit={
+                  askBlock.spawnBot &&
+                  canAnswer &&
+                  canEditSpawnBotCard(askBlock.spawnBot, viewerUserId)
+                    ? () =>
+                        openSpawnBotEdit(router, {
+                          messageId: message.id,
+                          spawnBot: askBlock.spawnBot!,
+                          submit: (edits) => onAnswer(message, "allow", edits),
+                        })
+                    : undefined
+                }
               />
             ) : undefined
           }

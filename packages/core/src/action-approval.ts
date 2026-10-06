@@ -18,7 +18,6 @@ const APPROVAL_EXEMPT_TOOLS = new Set([
   "request_takeover",
   "request_secret",
   "run_subagent",
-  "spawn_bot",
   "schedule_create",
   "schedule_list",
   "schedule_cancel",
@@ -32,7 +31,7 @@ const APPROVAL_REQUIRED_BUILTIN_TOOLS = new Set([
   "forget_secret",
   "forget_memory",
 ]);
-const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set(["create_space"]);
+const EXPLICIT_APPROVAL_BUILTIN_TOOLS = new Set(["create_space", "spawn_bot"]);
 
 const UNATTENDED_SAFE_BUILTIN_TOOLS = new Set([
   "browser_snapshot",

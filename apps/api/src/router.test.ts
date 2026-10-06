@@ -4,6 +4,7 @@ import type { Actor } from "@rakazo/contracts";
 import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { openScreenCapability } from "@rakazo/core/node/screen-capability";
 import type { PrismaClient } from "@rakazo/db";
+import { InvalidAnswerError } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { describe, expect, it, vi } from "vitest";
 import { createRouter, type RouterDeps } from "./router.js";
@@ -345,6 +346,101 @@ describe("thread answer delivery", () => {
     expect(enqueue).toHaveBeenCalledOnce();
     expect(sink.events.some((event) => event.message === "thread answer enqueue")).toBe(true);
     installLogger(createLogger({ service: "rakazo-api", level: "off", sinks: [] }));
+  });
+
+  describe("edits on a Create bot card", () => {
+    const actor = {
+      spaceId: "workspace-1",
+      userId: "user-1",
+      email: "user@rakazo.test",
+      isDeploymentOwner: true,
+    } satisfies Actor;
+
+    function setup(answerRunInput: ReturnType<typeof vi.fn>) {
+      const prisma = {
+        bot: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "bot-1",
+            thread: { id: "thread-1" },
+            computer: null,
+          }),
+        },
+      } as unknown as PrismaClient;
+      const deps = {
+        prisma,
+        events: { answerRunInput },
+        jobs: { enqueue: vi.fn().mockResolvedValue(undefined) },
+        env: {
+          defaultProvider: "fake",
+          defaultModel: "fake-model",
+          webOrigin: "http://127.0.0.1:5173",
+          screenProxySecret: "fake-test-secret",
+          sandboxProvider: "fake",
+        },
+        dataDir: "/tmp/rakazo-router-test",
+      } as unknown as RouterDeps;
+      const handler = new RPCHandler(createRouter(deps));
+      return (json: Record<string, unknown>) =>
+        handler.handle(
+          new Request("http://127.0.0.1/rpc/threads/answer", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              json: { botId: "bot-1", runId: "run-1", messageId: "message-1", ...json },
+            }),
+          }),
+          { prefix: "/rpc", context: { actor } },
+        );
+    }
+
+    it("passes the edits to the answer transaction", async () => {
+      const answerRunInput = vi.fn().mockResolvedValue(true);
+      const post = setup(answerRunInput);
+      const { response } = await post({
+        answer: "allow",
+        edits: { name: "Radar", instructions: "" },
+      });
+      expect(response.status).toBe(200);
+      expect(answerRunInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          answeredByUserId: "user-1",
+          answer: "allow",
+          edits: { name: "Radar", instructions: "" },
+        }),
+      );
+    });
+
+    it("answers without edits as before", async () => {
+      const answerRunInput = vi.fn().mockResolvedValue(true);
+      const post = setup(answerRunInput);
+      const { response } = await post({ answer: "allow" });
+      expect(response.status).toBe(200);
+      expect(answerRunInput.mock.calls[0]![0].edits).toBeUndefined();
+    });
+
+    it.each([
+      ["an unknown field", { edits: { title: "x" } }],
+      ["a name over 200 characters", { edits: { name: "n".repeat(201) } }],
+      ["instructions over 4000 characters", { edits: { instructions: "i".repeat(4001) } }],
+    ])("CA7 and CA20 reject %s before touching the run", async (_label, extra) => {
+      const answerRunInput = vi.fn().mockResolvedValue(true);
+      const post = setup(answerRunInput);
+      const { response } = await post({ answer: "allow", ...extra });
+      expect(response.status).toBe(400);
+      expect(answerRunInput).not.toHaveBeenCalled();
+    });
+
+    it("reports a refused edit as a bad request, not a stale prompt", async () => {
+      const answerRunInput = vi
+        .fn()
+        .mockRejectedValue(new InvalidAnswerError('A bot named "Radar" already exists.'));
+      const post = setup(answerRunInput);
+      const { response } = await post({ answer: "allow", edits: { name: "Radar" } });
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        json: { code: "BAD_REQUEST", message: 'A bot named "Radar" already exists.' },
+      });
+    });
   });
 });
 

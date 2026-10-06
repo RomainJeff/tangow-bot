@@ -7,6 +7,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import type { createRepos, PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
+import { resolveRunHop } from "./bot-messages.js";
 import {
   archiveBot,
   archiveSpawnedBot,
@@ -93,6 +94,55 @@ describe("spawned bot creation", () => {
       threadId: "thread-1",
     });
     expect(enqueue).toHaveBeenCalledOnce();
+  });
+
+  it("starts the first run of a spawned bot at hop 0, whatever hop its creator was at", async () => {
+    const createBot = vi.fn().mockResolvedValue({
+      id: "child-3",
+      name: "Scout",
+      title: "",
+      threadId: "thread-3",
+    });
+    const db = await import("@rakazo/db");
+    const createReposSpy = vi
+      .spyOn(db, "createRepos")
+      .mockReturnValue({ createBot } as unknown as ReturnType<typeof createRepos>);
+    const messageSpy = vi
+      .spyOn(db, "createThreadMessageInTransaction")
+      .mockResolvedValue({} as never);
+    const runCreate = vi.fn().mockResolvedValue({ id: "child-run" });
+    const tx = {
+      task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
+      run: { create: runCreate },
+    };
+    const prisma = {
+      run: { findUnique: vi.fn().mockResolvedValue(null) },
+      $transaction: vi.fn(async (fn: (client: unknown) => unknown) => fn(tx)),
+    } as unknown as PrismaClient;
+
+    await spawnBot(
+      {
+        prisma,
+        jobs: { enqueue: vi.fn().mockResolvedValue(undefined) } as unknown as JobPublisher,
+      },
+      {
+        spawnedBy: { id: "parent-1", name: "Chief", spaceId: "workspace-1", userId: "user-1" },
+        // The parent run may sit at any hop; nothing about it is copied onto the child's run.
+        runId: "run-at-hop-5",
+        spawnKey: "tool-call-3",
+        name: "Scout",
+        prompt: "Start scouting",
+      },
+    );
+
+    const data = runCreate.mock.calls[0]?.[0].data;
+    expect(data).toMatchObject({ trigger: "spawn" });
+    expect(data).not.toHaveProperty("sourceMessageId");
+    expect(data).not.toHaveProperty("routineId");
+    const hopDb = { message: { findUnique: vi.fn() }, routine: { findUnique: vi.fn() } };
+    expect(await resolveRunHop(hopDb as never, { ...data, routineId: null })).toBe(0);
+    createReposSpy.mockRestore();
+    messageSpy.mockRestore();
   });
 
   it("passes computerMode through to createBot", async () => {

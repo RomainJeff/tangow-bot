@@ -1,6 +1,6 @@
 import { radii, sizes } from "@rakazo/ui-tokens";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -11,6 +11,7 @@ import {
   type ViewProps,
 } from "react-native";
 import Animated, { withTiming } from "react-native-reanimated";
+import { askActionLabel } from "../lib/ask-action-label";
 import { CHAT_MOTION, useChatReducedMotion, usePressScaleStyle } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
@@ -19,13 +20,7 @@ import { NativeSymbol } from "./native-symbol";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-type AskAction = { id: string; label: string };
-
-const KNOWN_ASK_ACTION_LABELS: Record<string, string> = {
-  allow: "Allow once",
-  always: "Always allow this tool",
-  deny: "Deny",
-};
+type AskAction = { id: string; label: string; outcome?: "created" | "cancelled" };
 
 /** No design token covers the tertiary capsule's height — the design contract
  * (§3.7) spells it out directly: 40 pt, against the 44 pt primary/secondary. */
@@ -225,6 +220,7 @@ export function AskActions({
   approval,
   disabled,
   onAnswer,
+  onEdit,
   allowFreeText,
   accessibilityActions,
   onAccessibilityAction,
@@ -235,6 +231,8 @@ export function AskActions({
   approval: boolean;
   disabled?: boolean;
   onAnswer: (answer: string) => Promise<void>;
+  /** A spawn_bot approval can be edited before it is created: a tertiary capsule after Allow. */
+  onEdit?: () => void;
   allowFreeText?: boolean;
   accessibilityActions?: ViewProps["accessibilityActions"];
   onAccessibilityAction?: ViewProps["onAccessibilityAction"];
@@ -261,11 +259,7 @@ export function AskActions({
     }
   }
 
-  function labelFor(action: AskAction): string {
-    return Object.hasOwn(KNOWN_ASK_ACTION_LABELS, action.id)
-      ? t(KNOWN_ASK_ACTION_LABELS[action.id]!)
-      : action.label;
-  }
+  const labelFor = (action: AskAction) => askActionLabel(action, t);
 
   return (
     <View style={{ gap: 8 }}>
@@ -276,26 +270,36 @@ export function AskActions({
             const isAlways = action.id === "always";
             const kind: CapsuleKind = isAllow ? "primary" : isAlways ? "secondary" : "tertiary";
             return (
-              <CapsuleButton
-                key={action.id}
-                kind={kind}
-                height={kind === "tertiary" ? TERTIARY_CAPSULE_HEIGHT : sizes.mobileStack}
-                disabled={disabled || submitting}
-                onPress={() => void submit(action.id)}
-                accessibilityActions={accessibilityActions}
-                onAccessibilityAction={onAccessibilityAction}
-                icon={
-                  isAllow ? (
-                    <NativeSymbol
-                      ios="lock.fill"
-                      android="lock-closed"
-                      size={13}
-                      color={tokens.primaryForeground}
-                    />
-                  ) : undefined
-                }
-                label={pendingAction === action.id ? t("Sending…") : labelFor(action)}
-              />
+              <Fragment key={action.id}>
+                <CapsuleButton
+                  kind={kind}
+                  height={kind === "tertiary" ? TERTIARY_CAPSULE_HEIGHT : sizes.mobileStack}
+                  disabled={disabled || submitting}
+                  onPress={() => void submit(action.id)}
+                  accessibilityActions={accessibilityActions}
+                  onAccessibilityAction={onAccessibilityAction}
+                  icon={
+                    isAllow ? (
+                      <NativeSymbol
+                        ios="lock.fill"
+                        android="lock-closed"
+                        size={13}
+                        color={tokens.primaryForeground}
+                      />
+                    ) : undefined
+                  }
+                  label={pendingAction === action.id ? t("Sending…") : labelFor(action)}
+                />
+                {isAllow && onEdit ? (
+                  <CapsuleButton
+                    kind="tertiary"
+                    height={TERTIARY_CAPSULE_HEIGHT}
+                    disabled={disabled || submitting}
+                    onPress={onEdit}
+                    label={t("Edit")}
+                  />
+                ) : null}
+              </Fragment>
             );
           })}
         </View>

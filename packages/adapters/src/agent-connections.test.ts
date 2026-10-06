@@ -32,6 +32,8 @@ function createDeps(
     connection?: Record<string, unknown> | null;
     pendingConnection?: Record<string, unknown> | null;
     sourceHop?: number;
+    /** The `inheritedHop` of the run's routine. */
+    routineHop?: number;
     /** Simulates a revoke landing between the pre-check and the transaction. */
     connectionRevokedInsideTx?: boolean;
     /** Simulates a revoke landing after the in-transaction approval read. */
@@ -165,6 +167,7 @@ function createDeps(
           : null,
       ),
     },
+    routine: { findUnique: vi.fn(async () => ({ inheritedHop: overrides.routineHop ?? null })) },
     user: { findUnique: vi.fn(async () => ({ id: "user-1", name: "Alice Owner" })) },
     thread: { findFirst: vi.fn(async () => ({ id: "thread-2" })) },
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(txMock)),
@@ -394,6 +397,22 @@ describe("messageConnectedAgent", () => {
     const result = await messageConnectedAgent(
       deps,
       { ...run, sourceMessageId: "msg-src" },
+      sender,
+      { address: "+15552222222", message: "again" },
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ ok: false, error: expect.stringMatching(/limit/i) }),
+    );
+  });
+
+  it("counts the hop a routine inherited when the run has no source message", async () => {
+    const deps = createDeps({
+      connection: { id: "ac-1", requesterBotId: "bot-1", targetBotId: "bot-2", status: "approved" },
+      routineHop: 6,
+    });
+    const result = await messageConnectedAgent(
+      deps,
+      { ...run, trigger: "routine", routineId: "routine-1" },
       sender,
       { address: "+15552222222", message: "again" },
     );

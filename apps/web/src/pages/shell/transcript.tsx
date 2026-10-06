@@ -29,6 +29,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
@@ -64,6 +65,7 @@ export const Transcript = memo(function Transcript({
   olderCursor,
   loadingOlder,
   answerableAskMessageId,
+  viewerUserId,
   running,
   workingBots,
   workingStartedAt,
@@ -95,13 +97,14 @@ export const Transcript = memo(function Transcript({
   olderCursor: number | null;
   loadingOlder: boolean;
   answerableAskMessageId: string | null;
+  viewerUserId?: string;
   running: boolean;
   workingBots: GroupAvatarMember[];
   /** Epoch ms the earliest working run started; undefined ticks from mount. */
   workingStartedAt?: number;
   onLoadOlder: () => void | Promise<void>;
   onOpenBot: (botId: string) => void;
-  onAnswer: (message: ThreadMessage, text: string) => Promise<void>;
+  onAnswer: (message: ThreadMessage, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   onReply: (message: ThreadMessage) => void;
   onEdit: (message: ThreadMessage) => void;
   rewindFromSeq: number | null;
@@ -594,6 +597,7 @@ export const Transcript = memo(function Transcript({
                       showAuthor={inGroup && group.isFirstOfGroup}
                       showAvatar={inGroup && group.isLastOfGroup}
                       canAnswer={message.id === answerableAskMessageId}
+                      viewerUserId={viewerUserId}
                       onOpenBot={onOpenBot}
                       onOpenPeerMessages={onOpenPeerMessages}
                       onAnswer={onAnswer}

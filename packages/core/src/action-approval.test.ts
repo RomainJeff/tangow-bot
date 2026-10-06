@@ -29,6 +29,18 @@ describe("toolRequiresApproval", () => {
     expect(toolRequiresExplicitApproval("archive_bot")).toBe(false);
   });
 
+  it("always asks before a bot creates another bot", () => {
+    expect(toolRequiresApproval("spawn_bot", false)).toBe(true);
+    expect(toolRequiresExplicitApproval("spawn_bot")).toBe(true);
+    expect(
+      unattendedTriggerToolRequiresApproval(
+        { trigger: "user", requireToolApproval: false },
+        "spawn_bot",
+        false,
+      ),
+    ).toBe(false);
+  });
+
   it("does not gate read-only or local work", () => {
     for (const name of [
       "list_files",
@@ -37,7 +49,6 @@ describe("toolRequiresApproval", () => {
       "write_file",
       "shell",
       "remember",
-      "spawn_bot",
       "run_subagent",
     ]) {
       expect(toolRequiresApproval(name, false)).toBe(false);
@@ -134,6 +145,39 @@ describe("unattendedTriggerToolRequiresApproval", () => {
     expect(unattendedTriggerToolRequiresApproval(optedOut, "github_create_issue", true)).toBe(
       false,
     );
+  });
+});
+
+describe("approval does not depend on who started the run", () => {
+  const tools = [
+    { name: "destination.write", viaConnector: false },
+    { name: "GMAIL_SEND_EMAIL", viaConnector: true },
+  ];
+
+  it("toolRequiresApproval takes no trigger", () => {
+    for (const { name, viaConnector } of tools) {
+      expect(toolRequiresApproval(name, viaConnector)).toBe(true);
+    }
+  });
+
+  it.each([
+    ["user", false],
+    ["bot_message", false],
+    ["spawn", false],
+    ["follow_up", false],
+    ["routine", false],
+    ["messaging", false],
+    ["webhook", true],
+  ])("%s with tool approval required asks: %s", (trigger, asks) => {
+    for (const { name, viaConnector } of tools) {
+      expect(
+        unattendedTriggerToolRequiresApproval(
+          { trigger, requireToolApproval: true },
+          name,
+          viaConnector,
+        ),
+      ).toBe(asks);
+    }
   });
 });
 

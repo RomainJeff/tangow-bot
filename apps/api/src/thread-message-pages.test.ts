@@ -152,6 +152,15 @@ describe("thread message pages", () => {
     ).toBe(false);
   });
 
+  it("CA21 keeps the audit of an edited effect out of a peer run's stream", () => {
+    expect(
+      shouldForwardPeerThreadEvent({
+        type: "effect.edited",
+        payload: { effectId: "effect-1", proposed: {}, approved: {} },
+      }),
+    ).toBe(false);
+  });
+
   it("forwards a peer run's start and terminals so the working indicator lives and clears", () => {
     expect(shouldForwardPeerThreadEvent({ type: "run.started", payload: {} })).toBe(true);
     for (const type of ["run.completed", "run.failed", "run.cancelled"]) {

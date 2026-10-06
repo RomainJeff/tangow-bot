@@ -200,6 +200,61 @@ describe("schedule tool persistence", () => {
     expect(enqueue).toHaveBeenCalledOnce();
   });
 
+  describe("bot-to-bot chain hop", () => {
+    function scheduleDeps() {
+      const create = vi.fn(async (args: { data: Record<string, unknown> }) => ({
+        id: "routine-1",
+        ...args.data,
+        crons: ["*/1 * * * *"],
+      }));
+      const enqueue = vi.fn(async () => undefined);
+      const deps = {
+        prisma: { routine: { create } },
+        events: { append: vi.fn(async () => undefined) },
+        jobs: { enqueue, cancel: vi.fn(async () => undefined) },
+      } as unknown as Parameters<typeof createScheduleFromTool>[0];
+      return { deps, create, enqueue };
+    }
+    const input = {
+      spaceId: "ws-1",
+      botId: "bot-1",
+      userId: "user-1",
+      threadId: "thread-1",
+      name: "Morning joke",
+      prompt: "Tell a joke",
+      schedule: { every: 1, unit: "minutes" },
+    };
+
+    it("stores one hop more than the run that creates the routine", async () => {
+      const { deps, create } = scheduleDeps();
+      const result = await createScheduleFromTool(deps, { ...input, currentHop: 4 });
+      expect(result).toMatchObject({ ok: true });
+      expect(create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ inheritedHop: 5 }),
+      });
+    });
+
+    it("refuses when the routine would sit past the chain limit", async () => {
+      const { deps, create, enqueue } = scheduleDeps();
+      const result = await createScheduleFromTool(deps, { ...input, currentHop: 6 });
+      expect(result).toEqual({
+        error: "bot-to-bot chain limit reached; ask the user to set up this routine",
+      });
+      expect(create).not.toHaveBeenCalled();
+      expect(enqueue).not.toHaveBeenCalled();
+    });
+
+    it("leaves inheritedHop null for a run a person started", async () => {
+      const { deps, create } = scheduleDeps();
+      await createScheduleFromTool(deps, { ...input, currentHop: 0 });
+      await createScheduleFromTool(deps, input);
+      expect(create).toHaveBeenCalledTimes(2);
+      for (const [args] of create.mock.calls) {
+        expect(args.data.inheritedHop).toBeNull();
+      }
+    });
+  });
+
   it("keeps the routine when event append fails after enqueue", async () => {
     const cancel = vi.fn(async () => undefined);
     const remove = vi.fn(async () => undefined);

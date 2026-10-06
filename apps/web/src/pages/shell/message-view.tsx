@@ -26,6 +26,7 @@ import type { ReactNode } from "react";
 import { memo, useState } from "react";
 import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
+import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
 import { TaskCard } from "../../components/TaskCard";
@@ -110,6 +111,7 @@ export const MessageView = memo(function MessageView({
   artifactTarget,
   chrome,
   canAnswer,
+  viewerUserId,
   message,
   inGroup,
   showAuthor,
@@ -133,6 +135,7 @@ export const MessageView = memo(function MessageView({
    * visible blocks it renders, so this view never re-derives it. */
   chrome: "row" | "aside";
   canAnswer: boolean;
+  viewerUserId?: string;
   message: ThreadMessage;
   /** True in a multi-bot (group) thread: a bot row reserves an avatar column
    * and its bubble caps at 88% of the content column. False in a single-bot
@@ -146,7 +149,7 @@ export const MessageView = memo(function MessageView({
   /** Show the avatar for this message: the last message of a group
    * (`isLastOfGroup`). Always false in a mono thread. */
   showAvatar: boolean;
-  onAnswer: (message: ThreadMessage, text: string) => Promise<void>;
+  onAnswer: (message: ThreadMessage, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   speakerName?: string;
@@ -555,7 +558,8 @@ export const MessageView = memo(function MessageView({
             key={i}
             block={block}
             canAnswer={canAnswer}
-            onAnswer={(text) => onAnswer(message, text)}
+            viewerUserId={viewerUserId}
+            onAnswer={(text, edits) => onAnswer(message, text, edits)}
             messageId={message.id}
           />
         );

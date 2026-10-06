@@ -1624,6 +1624,18 @@ msgstr "Yeni space oluştur"
 msgid "Create Routine"
 msgstr "Rutin oluştur"
 
+#: src/lib/approval-labels.ts:11
+msgid "Create bot"
+msgstr "Bot oluştur"
+
+#: src/components/AskCard.tsx:243
+msgid "Edit"
+msgstr "Düzenle"
+
+#: src/components/AskCard.tsx:474
+msgid "Create bot?"
+msgstr "Bot oluşturulsun mu?"
+
 #: src/components/AskCard.tsx:35
 #: src/pages/CallView.tsx:420
 #: src/pages/shell/dialogs.tsx:91
@@ -3578,6 +3590,11 @@ msgstr "Kaydediliyor…"
 #: src/pages/CallView.tsx:65
 msgid "Say yes or no, or answer in a sentence."
 msgstr "Evet ya da hayır de veya bir cümleyle yanıtla."
+
+#: src/pages/CallView.tsx:68
+#: src/pages/CallView.tsx:69
+msgid "Approve it in the chat, or say no to cancel."
+msgstr "Sohbette onayla ya da iptal etmek için hayır de."
 
 #: src/pages/ModelSettingsOverlay.tsx:1082
 #: src/pages/PluginsOverlay.tsx:941

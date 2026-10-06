@@ -298,7 +298,7 @@ export function inferScript(
     const name = namedBot(prompt) ?? "Helper";
     return [
       {
-        assistant: "creating a bot for that.",
+        assistant: "i can create that bot once you approve the card.",
         toolCalls: [
           {
             name: "spawn_bot",

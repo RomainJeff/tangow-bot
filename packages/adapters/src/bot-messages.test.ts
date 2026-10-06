@@ -1,9 +1,9 @@
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
-  currentBotMessageHop,
   loadBotMessageContext,
   messageBot,
+  resolveRunHop,
   returnBotMessageOutcome,
 } from "./bot-messages.js";
 import type { ExecutorDeps } from "./executor.js";
@@ -22,6 +22,8 @@ function deps(
   options: {
     bots?: unknown[];
     hopBlocks?: unknown[];
+    /** The `inheritedHop` of the run's routine. */
+    routineHop?: number | null;
     senderRunning?: boolean;
     alreadyDelivered?: unknown;
     targetArchived?: boolean;
@@ -72,6 +74,9 @@ function deps(
         ),
     },
     message: { findUnique: messageFindUnique, findMany: vi.fn().mockResolvedValue([]) },
+    routine: {
+      findUnique: vi.fn().mockResolvedValue({ inheritedHop: options.routineHop ?? null }),
+    },
     run: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     $transaction: vi.fn(async (fn: (client: unknown) => unknown) => {
       transactionAttempts += 1;
@@ -393,25 +398,172 @@ describe("messaging another bot", () => {
   });
 });
 
-describe("hop lookup", () => {
+describe("run hop", () => {
+  const received = (hop: number) => ({
+    kind: "bot_message_received",
+    fromBotId: "b",
+    fromBotName: "B",
+    text: "x",
+    hop,
+  });
+  const handoff = (hop: number) => ({
+    kind: "handoff",
+    fromBotId: "b",
+    toBotId: "a",
+    text: "x",
+    hop,
+  });
+  function hopDb(blocks: unknown[], routineHop: number | null = null) {
+    return {
+      message: { findUnique: vi.fn().mockResolvedValue({ blocks }) },
+      routine: { findUnique: vi.fn().mockResolvedValue({ inheritedHop: routineHop }) },
+    } as unknown as PrismaClient;
+  }
+
   it("treats a run a person started as the start of a chain", async () => {
-    const prisma = { message: { findUnique: vi.fn() } } as unknown as PrismaClient;
-    expect(await currentBotMessageHop(prisma, null)).toBe(0);
+    const prisma = hopDb([]);
+    expect(await resolveRunHop(prisma, { sourceMessageId: null, routineId: null })).toBe(0);
+    expect(await resolveRunHop(prisma, { trigger: "user" })).toBe(0);
     expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    expect(prisma.routine.findUnique).not.toHaveBeenCalled();
   });
 
-  it("reads the hop back off the message that woke the bot", async () => {
-    const prisma = {
-      message: {
-        findUnique: vi.fn().mockResolvedValue({
-          blocks: [
-            { kind: "text", text: "noise" },
-            { kind: "bot_message_received", fromBotId: "b", fromBotName: "B", text: "x", hop: 3 },
-          ],
-        }),
-      },
+  it.each([
+    ["bot message alone", [received(3)], null, 3],
+    ["handoff alone", [handoff(4)], null, 4],
+    ["routine alone", [], 5, 5],
+    ["message and handoff, the deeper wins", [received(2), handoff(4)], null, 4],
+    ["message and routine, the deeper wins", [received(3)], 5, 5],
+    ["routine shallower than the message", [received(5)], 2, 5],
+    ["all three, the max wins", [received(2), handoff(3), { kind: "text", text: "n" }], 4, 4],
+    ["nothing on the message and no inherited hop", [{ kind: "text", text: "n" }], null, 0],
+  ])("takes the deepest hop: %s", async (_label, blocks, routineHop, expected) => {
+    const prisma = hopDb(blocks, routineHop);
+    expect(
+      await resolveRunHop(prisma, {
+        sourceMessageId: "message-1",
+        routineId: "routine-1",
+        trigger: "webhook",
+      }),
+    ).toBe(expected);
+  });
+
+  it("does not read the routine for a run without one", async () => {
+    const prisma = hopDb([received(3)], 5);
+    expect(await resolveRunHop(prisma, { sourceMessageId: "message-1", routineId: null })).toBe(3);
+    expect(prisma.routine.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("counts a routine run whose routine is gone as the end of the chain", async () => {
+    const prisma = hopDb([]);
+    expect(await resolveRunHop(prisma, { trigger: "routine", routineId: null })).toBe(6);
+    // A routine deleted during its own run: the run still carries the id, the row is gone.
+    const gone = {
+      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      routine: { findUnique: vi.fn().mockResolvedValue(null) },
     } as unknown as PrismaClient;
-    expect(await currentBotMessageHop(prisma, "message-1")).toBe(3);
+    for (const trigger of ["routine", "webhook"]) {
+      expect(await resolveRunHop(gone, { trigger, routineId: "routine-gone" })).toBe(6);
+    }
+    // An inbound webhook for a bot with no routine never had one: its chain starts at 0.
+    expect(await resolveRunHop(prisma, { trigger: "webhook", routineId: null })).toBe(0);
+    // A caller that does not carry routineId (the job reconciler) is not mistaken for a deleted one.
+    expect(await resolveRunHop(prisma, { trigger: "routine" })).toBe(0);
+    expect(await resolveRunHop(prisma, { trigger: "bot_message", routineId: null })).toBe(0);
+    expect(await resolveRunHop(prisma, { trigger: "spawn", routineId: null })).toBe(0);
+  });
+
+  it("sends a message from a run at the inherited hop one hop further", async () => {
+    const harness = deps({ routineHop: 5 });
+    const sent = await messageBot(
+      harness.deps,
+      { ...run, trigger: "routine", routineId: "routine-1" },
+      sender,
+      { bot_id: "bot-target", message: "carry on" },
+    );
+    expect(sent.ok).toBe(true);
+    expect(harness.tx.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          blocks: [expect.objectContaining({ kind: "bot_message_received", hop: 6 })],
+        }),
+      }),
+    );
+  });
+
+  it("carries a routine created at hop 4 to hop 6, and refuses the message after that", async () => {
+    // schedule_create at hop 4 stores 5, so the routine's run sends at hop 6.
+    const first = deps({ routineHop: 5 });
+    const sent = await messageBot(
+      first.deps,
+      { ...run, trigger: "routine", routineId: "routine-1" },
+      sender,
+      { bot_id: "bot-target", message: "a" },
+    );
+    expect(sent.ok).toBe(true);
+    expect(first.tx.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ blocks: [expect.objectContaining({ hop: 6 })] }),
+      }),
+    );
+    // The recipient, woken at hop 6, cannot pass the chain on.
+    const second = deps({ hopBlocks: [received(6)] });
+    const refused = await messageBot(
+      second.deps,
+      { ...run, trigger: "bot_message", sourceMessageId: "message-source" },
+      sender,
+      { bot_id: "bot-target", message: "b" },
+    );
+    expect(refused.ok).toBe(false);
+    expect(second.tx.run.create).not.toHaveBeenCalled();
+  });
+
+  it("lets a webhook wake of a routine with an inherited hop continue the chain", async () => {
+    const harness = deps({ routineHop: 5 });
+    const webhookRun = { ...run, trigger: "webhook", routineId: "routine-1" };
+    expect(await resolveRunHop(harness.deps.prisma, webhookRun)).toBe(5);
+    const sent = await messageBot(harness.deps, webhookRun, sender, {
+      bot_id: "bot-target",
+      message: "carry on",
+    });
+    expect(sent.ok).toBe(true);
+    expect(harness.tx.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          blocks: [expect.objectContaining({ hop: 6 })],
+        }),
+      }),
+    );
+  });
+
+  it("refuses a message from a routine run whose routine was deleted", async () => {
+    const harness = deps();
+    const sent = await messageBot(
+      harness.deps,
+      { ...run, trigger: "routine", routineId: null },
+      sender,
+      { bot_id: "bot-target", message: "again" },
+    );
+    expect(sent.ok).toBe(false);
+    expect(harness.tx.run.create).not.toHaveBeenCalled();
+  });
+
+  it("starts a spawned bot's chain over: its first message goes out at hop 1", async () => {
+    const harness = deps();
+    const spawnRun = { ...run, trigger: "spawn", routineId: null, sourceMessageId: null };
+    expect(await resolveRunHop(harness.deps.prisma, spawnRun)).toBe(0);
+    const sent = await messageBot(harness.deps, spawnRun, sender, {
+      bot_id: "bot-target",
+      message: "hello from the new bot",
+    });
+    expect(sent.ok).toBe(true);
+    expect(harness.tx.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          blocks: [expect.objectContaining({ kind: "bot_message_received", hop: 1 })],
+        }),
+      }),
+    );
   });
 
   it("loads peer context directly from the source message", async () => {

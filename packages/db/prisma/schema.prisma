@@ -692,6 +692,8 @@ model Routine {
   messageProvider String?
   // Inbound (webhook, GitHub, message) wakes ask before every action unless the owner opts out.
   requireToolApproval Boolean @default(true)
+  // Bot-to-bot chain hop a bot's schedule_create carried into this routine; null when a person made it.
+  inheritedHop   Int?
   lastRunAt      DateTime?
   nextRunAt      DateTime?
   createdAt      DateTime  @default(now())

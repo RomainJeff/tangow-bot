@@ -1,6 +1,7 @@
 import { runContinueJob } from "@rakazo/adapter-kit";
 import type { BotMessageIntent, MessageBlock } from "@rakazo/contracts";
 import {
+  BOT_MESSAGE_MAX_HOPS,
   BOT_MESSAGE_MAX_LENGTH,
   botMessageContext,
   botMessageHopExhausted,
@@ -19,21 +20,45 @@ import {
 import { getLogger } from "@rakazo/logging";
 import type { ExecutorDeps } from "./executor.js";
 
+type RunHopSource = {
+  sourceMessageId?: string | null;
+  routineId?: string | null;
+  trigger?: string;
+};
+
 /**
- * The hop the current run sits at, read back from the message that woke this
- * bot. A run a person started carries no bot message, so it starts at 0.
+ * The hop the run sits at: the deepest of the bot message or group handoff that woke it and
+ * the hop its routine inherited when a bot created it mid-chain. A run a person started
+ * carries none of these, so it starts at 0. A routine run whose routine is gone (routineId
+ * null) cannot prove where it started, so it counts as the end of the chain.
  */
-export async function currentBotMessageHop(
-  prisma: PrismaClient,
-  sourceMessageId: string | null | undefined,
+export async function resolveRunHop(
+  db: Pick<PrismaClient, "message" | "routine">,
+  run: RunHopSource,
 ): Promise<number> {
-  if (!sourceMessageId) return 0;
-  const source = await prisma.message.findUnique({
-    where: { id: sourceMessageId },
-    select: { blocks: true },
-  });
+  // Only a scheduled routine run always has a routine: a webhook run may never have had one.
+  if (run.routineId === null && run.trigger === "routine") {
+    return BOT_MESSAGE_MAX_HOPS;
+  }
+  const [source, routine] = await Promise.all([
+    run.sourceMessageId
+      ? db.message.findUnique({ where: { id: run.sourceMessageId }, select: { blocks: true } })
+      : null,
+    run.routineId
+      ? db.routine.findUnique({ where: { id: run.routineId }, select: { inheritedHop: true } })
+      : null,
+  ]);
+  // The run row is read once, so a routine deleted during its own run still has an id here.
+  if (run.routineId && !routine) return BOT_MESSAGE_MAX_HOPS;
   const blocks = Array.isArray(source?.blocks) ? (source.blocks as MessageBlock[]) : [];
-  return botMessageContext(blocks)?.hop ?? 0;
+  const handoff = blocks.find(
+    (block): block is Extract<MessageBlock, { kind: "handoff" }> => block.kind === "handoff",
+  );
+  return Math.max(
+    botMessageContext(blocks)?.hop ?? 0,
+    handoff?.hop ?? 0,
+    routine?.inheritedHop ?? 0,
+  );
 }
 
 export async function loadBotMessageContext(
@@ -65,6 +90,8 @@ export async function messageBot(
     botId: string;
     userId: string;
     sourceMessageId?: string | null;
+    routineId?: string | null;
+    trigger?: string;
   },
   sender: { id: string; name: string },
   input: {
@@ -87,7 +114,7 @@ export async function messageBot(
 
   const sourceContext = await loadBotMessageContext(deps.prisma, run.sourceMessageId);
   const intent = input.intent ?? "request";
-  const hop = nextBotMessageHop(sourceContext?.hop);
+  const hop = nextBotMessageHop(await resolveRunHop(deps.prisma, run));
 
   const candidates = await deps.prisma.bot.findMany({
     where: { spaceId: run.spaceId, userId: run.userId, archivedAt: null },

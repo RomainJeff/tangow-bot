@@ -13,6 +13,7 @@ const run = {
 function harness(
   sourceBlocks: unknown,
   existing?: { sourceRuns: { id: string; botId: string }[] },
+  runRow: { routineId?: string | null; trigger?: string; inheritedHop?: number | null } = {},
 ) {
   const runCreate = vi.fn(async () => ({ id: "run-b" }));
   const messageCreate = vi.fn(async () => ({ id: "message-1" }));
@@ -30,15 +31,22 @@ function harness(
     run: {
       findFirst: vi.fn(async () => ({
         id: run.id,
+        sourceMessageId: "message-source",
+        routineId: runRow.routineId ?? null,
+        trigger: runRow.trigger ?? "follow_up",
         sourceMessage: { blocks: sourceBlocks },
       })),
       findUnique: vi.fn(async () => ({ status: "running" })),
       create: runCreate,
     },
     message: {
-      findUnique: vi.fn(async () => existing ?? null),
+      findUnique: vi.fn(
+        async (args: { where: { id?: string } }) =>
+          (args.where.id ? { blocks: sourceBlocks } : existing) ?? null,
+      ),
       create: messageCreate,
     },
+    routine: { findUnique: vi.fn(async () => ({ inheritedHop: runRow.inheritedHop ?? null })) },
     thread: {
       update: vi.fn(async (args: { select: { nextMessageSeq?: boolean } }) =>
         args.select.nextMessageSeq ? { nextMessageSeq: 2 } : { nextEventSeq: 2 },
@@ -125,6 +133,47 @@ describe("group handoff ownership", () => {
       error:
         "group handoff limit reached for this chain; finish the current stage in the shared thread instead",
     });
+    expect(runCreate).not.toHaveBeenCalled();
+  });
+
+  it("carries a handoff from a run at hop 5 to hop 6, not back to 1", async () => {
+    const { deps, messageCreate } = harness([
+      { kind: "bot_message_received", fromBotId: "bot-c", fromBotName: "C", text: "x", hop: 5 },
+    ]);
+
+    await expect(
+      handoffToGroupBot(deps as never, run, "group-1", { bot_id: "bot-b", message: "Next stage" }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(messageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ blocks: [expect.objectContaining({ hop: 6 })] }),
+      }),
+    );
+  });
+
+  it("carries a handoff from a routine run that inherited hop 5 to hop 6", async () => {
+    const { deps, messageCreate } = harness([], undefined, {
+      routineId: "routine-1",
+      trigger: "routine",
+      inheritedHop: 5,
+    });
+
+    await expect(
+      handoffToGroupBot(deps as never, run, "group-1", { bot_id: "bot-b", message: "Next stage" }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(messageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ blocks: [expect.objectContaining({ hop: 6 })] }),
+      }),
+    );
+  });
+
+  it("refuses a handoff from a routine run whose routine was deleted", async () => {
+    const { deps, runCreate } = harness([], undefined, { trigger: "routine" });
+
+    await expect(
+      handoffToGroupBot(deps as never, run, "group-1", { bot_id: "bot-b", message: "Next stage" }),
+    ).resolves.toMatchObject({ error: expect.stringMatching(/limit reached/) });
     expect(runCreate).not.toHaveBeenCalled();
   });
 

@@ -135,6 +135,15 @@ export default function Layout() {
                   }}
                 />
                 <Stack.Screen
+                  name="edit-bot-proposal"
+                  options={{
+                    title: "",
+                    presentation: "formSheet",
+                    sheetAllowedDetents: [0.6, 1],
+                    sheetGrabberVisible: true,
+                  }}
+                />
+                <Stack.Screen
                   name="sheet"
                   options={{
                     headerShown: false,

@@ -13,6 +13,7 @@ import {
   ModelConnectInputSchema,
   ModelOAuthBeginSchema,
   normalizeCreateBotProfile,
+  ProductEventSchema,
   ProductEventType,
   parseModelContextWindow,
   parseModelMaxImagesPerPrompt,
@@ -452,5 +453,72 @@ describe("unknown message blocks", () => {
 
   it("rejects blocks that are not a list", () => {
     expect(ThreadMessageSchema.safeParse({ ...message([]), blocks: "text" }).success).toBe(false);
+  });
+});
+
+describe("editable Create bot card contract", () => {
+  const answerInput = appContract.threads.answer["~orpc"].inputSchema!;
+  const target = { botId: "bot-1", runId: "run-1", messageId: "message-1", answer: "allow" };
+  const spawnBot = {
+    name: "Veille",
+    title: "",
+    instructions: "Track them.",
+    prompt: "",
+    computerMode: "",
+  } as const;
+  const ask = { kind: "ask", text: "Create bot “Veille”?", status: "pending" } as const;
+
+  it("CA1 accepts an ask block with or without spawnBot", () => {
+    expect(MessageBlock.parse({ ...ask, spawnBot })).toEqual({ ...ask, spawnBot });
+    expect(MessageBlock.parse(ask)).toEqual(ask);
+    expect(
+      MessageBlock.safeParse({ ...ask, spawnBot: { ...spawnBot, computerMode: "shared" } }).success,
+    ).toBe(false);
+  });
+
+  it("CA1 accepts threads/answer with or without edits", () => {
+    expect(answerInput.safeParse(target).success).toBe(true);
+    expect(
+      answerInput.safeParse({ ...target, edits: { name: "Autre", instructions: "" } }).success,
+    ).toBe(true);
+    expect(answerInput.safeParse({ ...target, edits: {} }).success).toBe(true);
+  });
+
+  it("CA7 rejects an edit of any other field", () => {
+    expect(answerInput.safeParse({ ...target, edits: { title: "x" } }).success).toBe(false);
+    expect(answerInput.safeParse({ ...target, edits: { name: "x", prompt: "y" } }).success).toBe(
+      false,
+    );
+  });
+
+  it("CA20 bounds edits before any lock", () => {
+    expect(answerInput.safeParse({ ...target, edits: { name: "n".repeat(200) } }).success).toBe(
+      true,
+    );
+    expect(answerInput.safeParse({ ...target, edits: { name: "n".repeat(201) } }).success).toBe(
+      false,
+    );
+    expect(
+      answerInput.safeParse({ ...target, edits: { instructions: "i".repeat(4000) } }).success,
+    ).toBe(true);
+    expect(
+      answerInput.safeParse({ ...target, edits: { instructions: "i".repeat(4001) } }).success,
+    ).toBe(false);
+  });
+
+  it("CA21 accepts effect.edited as a product event", () => {
+    expect(ProductEventType.options).toContain("effect.edited");
+    expect(
+      ProductEventSchema.safeParse({
+        id: "event-1",
+        spaceId: "space-1",
+        threadId: "thread-1",
+        botId: "bot-1",
+        seq: 3,
+        type: "effect.edited",
+        createdAt: "2026-09-29T12:00:00.000Z",
+        payload: { effectId: "effect-1", proposed: { name: "A" }, approved: { name: "B" } },
+      }).success,
+    ).toBe(true);
   });
 });
