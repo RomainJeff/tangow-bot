@@ -3,7 +3,7 @@ import {
   type AskBlock,
   callAskActions,
   canAnswerAskByVoice,
-  isDetailApproval,
+  isScreenOnlyApproval,
   spokenAskAnswer,
 } from "./voice-ask";
 
@@ -45,33 +45,53 @@ describe("canAnswerAskByVoice", () => {
   });
 });
 
-describe("voice call approvals with a detail", () => {
-  const approval = (detail?: string) =>
+const veille = {
+  name: "Veille",
+  title: "Watches competitors",
+  instructions: "Track them.",
+  prompt: "",
+  computerMode: "",
+} as const;
+
+describe("voice call approvals", () => {
+  const approval = (overrides: Partial<AskBlock> = {}) =>
     ask({
       text: "Create bot “Veille”?",
       approvalEffectId: "effect-1",
-      ...(detail ? { detail } : {}),
       actions: [
         { id: "allow", label: "Create bot", outcome: "created" },
         { id: "deny", label: "Cancel", outcome: "cancelled" },
       ],
+      ...overrides,
     });
 
-  it("offers only deny when the card carries a detail", () => {
-    expect(callAskActions(approval("Title: Veille")).map((action) => action.id)).toEqual(["deny"]);
-    expect(isDetailApproval(approval("Title: Veille"))).toBe(true);
+  it("offers only deny on a Create bot card", () => {
+    const block = approval({ detail: "Title: Watches competitors", spawnBot: veille });
+    expect(callAskActions(block).map((action) => action.id)).toEqual(["deny"]);
+    expect(isScreenOnlyApproval(block)).toBe(true);
   });
 
-  it("leaves an approval without a detail, and a plain ask, unchanged", () => {
-    expect(callAskActions(approval()).map((action) => action.id)).toEqual(["allow", "deny"]);
-    expect(isDetailApproval(approval())).toBe(false);
+  it("keeps every action on other approvals, even with a detail", () => {
+    const createSpace = approval({
+      text: "Create space “Ops”?",
+      detail: "A new space with its own bots.",
+      actions: [
+        { id: "allow", label: "Create space", outcome: "created" },
+        { id: "deny", label: "Cancel", outcome: "cancelled" },
+      ],
+    });
+    expect(callAskActions(createSpace).map((action) => action.id)).toEqual(["allow", "deny"]);
+    expect(isScreenOnlyApproval(createSpace)).toBe(false);
+    expect(spokenAskAnswer(createSpace, "yes")).toBe("yes");
     expect(
-      callAskActions(ask({ detail: "x", actions: [{ id: "a", label: "A" }] })).map((a) => a.id),
+      callAskActions(ask({ spawnBot: veille, actions: [{ id: "a", label: "A" }] })).map(
+        (a) => a.id,
+      ),
     ).toEqual(["a"]);
   });
 
-  it("never turns a spoken sentence into an approval of a detailed card", () => {
-    const block = approval("Title: Veille");
+  it("never turns a spoken sentence into an approval of a Create bot card", () => {
+    const block = approval({ spawnBot: veille });
     expect(spokenAskAnswer(block, "yes")).toBeNull();
     expect(spokenAskAnswer(block, "go ahead, create it")).toBeNull();
     expect(spokenAskAnswer(block, "no")).toBe("deny");

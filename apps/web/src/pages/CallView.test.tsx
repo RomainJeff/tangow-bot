@@ -53,20 +53,27 @@ const spawnActions: NonNullable<AskBlock["actions"]> = [
 ];
 
 describe("CallView approval actions", () => {
-  it("offers only Cancel for an approval that has a detail", () => {
+  it("offers only Cancel on a Create bot card", () => {
     const html = renderCall({
       kind: "ask",
       text: "Create bot “Veille”?",
       approvalEffectId: "effect-1",
       detail: "Title: Veille",
       actions: spawnActions,
+      spawnBot: {
+        name: "Veille",
+        title: "Veille",
+        instructions: "Track them.",
+        prompt: "",
+        computerMode: "",
+      },
     });
 
     expect(html).toContain("Cancel");
     expect(html).not.toContain("Create bot");
   });
 
-  it("keeps both actions, correctly labelled, for an approval without a detail", () => {
+  it("keeps both actions, correctly labelled, on an approval that is not a Create bot card", () => {
     const html = renderCall({
       kind: "ask",
       text: "Create bot “Veille”?",

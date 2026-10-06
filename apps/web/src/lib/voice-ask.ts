@@ -15,26 +15,26 @@ export function canAnswerAskByVoice(block: AskBlock): boolean {
 }
 
 /**
- * An approval card that carries a `detail` (what will be created, in full) can
- * only be read on screen: the call speaks the question alone, so it never
- * offers to approve it. The person approves in the thread, where the detail is.
+ * A Create bot card carries instructions and a first message that must be read
+ * before approving, so the call never offers to approve it. The person approves
+ * in the thread, where the full card is.
  */
-export function isDetailApproval(block: AskBlock): boolean {
-  return isApprovalAskBlock(block) && Boolean(block.detail);
+export function isScreenOnlyApproval(block: AskBlock): boolean {
+  return isApprovalAskBlock(block) && Boolean(block.spawnBot);
 }
 
-/** The actions the call offers for an ask: only `deny` for a detailed approval. */
+/** The actions the call offers for an ask: only `deny` for a screen-only approval. */
 export function callAskActions(block: AskBlock): NonNullable<AskBlock["actions"]> {
   const actions = block.actions ?? [];
-  return isDetailApproval(block) ? actions.filter((action) => action.id === "deny") : actions;
+  return isScreenOnlyApproval(block) ? actions.filter((action) => action.id === "deny") : actions;
 }
 
 /**
- * What a spoken sentence answers, or null to ignore it. A detailed approval
- * takes a spoken refusal only, as the `deny` action; nothing said can approve it.
+ * What a spoken sentence answers, or null when it cannot answer. A screen-only
+ * approval takes a spoken refusal only, as the `deny` action; nothing said can approve it.
  */
 export function spokenAskAnswer(block: AskBlock, transcript: string): string | null {
   const decision = spokenDecision(transcript);
-  if (isDetailApproval(block)) return decision === "no" ? "deny" : null;
+  if (isScreenOnlyApproval(block)) return decision === "no" ? "deny" : null;
   return decision ?? transcript;
 }

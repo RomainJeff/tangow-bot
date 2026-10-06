@@ -12,7 +12,7 @@ import {
   type AskBlock,
   callAskActions,
   canAnswerAskByVoice,
-  isDetailApproval,
+  isScreenOnlyApproval,
   spokenAskAnswer,
 } from "../lib/voice-ask";
 
@@ -65,6 +65,8 @@ export function CallView({
   askPromptRef.current = t`Say yes or no, or answer in a sentence.`;
   const secretPromptRef = useRef(t`Hang up first, then enter the code on screen.`);
   secretPromptRef.current = t`Hang up first, then enter the code on screen.`;
+  const screenApprovalPromptRef = useRef(t`Approve it in the chat, or say no to cancel.`);
+  screenApprovalPromptRef.current = t`Approve it in the chat, or say no to cancel.`;
   const duration = useElapsed();
 
   function setCallPhase(next: Phase) {
@@ -162,9 +164,9 @@ export function CallView({
       if (pendingAsk) {
         const answer = spokenAskAnswer(pendingAsk.block, text);
         if (answer === null) {
-          // A detailed approval is settled in the thread; only a refusal is taken here.
+          // A screen-only approval is settled in the thread; only a refusal is taken here.
           setHeard("");
-          void listen();
+          void speaker.speak(screenApprovalPromptRef.current, { botId });
           return;
         }
         await onAnswer(pendingAsk.message, answer);
@@ -260,9 +262,11 @@ export function CallView({
         void speaker.speak(
           secretAsk
             ? `${text}. ${secretPromptRef.current}`
-            : ask && !isDetailApproval(ask)
-              ? `${text}. ${askPromptRef.current}`
-              : text,
+            : ask && isScreenOnlyApproval(ask)
+              ? `${text}. ${screenApprovalPromptRef.current}`
+              : ask
+                ? `${text}. ${askPromptRef.current}`
+                : text,
           {
             botId,
             messageId: lastBot.id,
