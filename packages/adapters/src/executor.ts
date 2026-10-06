@@ -209,7 +209,7 @@ import { sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
-import { resolveEffort } from "./effort.js";
+import { EFFORT_HISTORY_TURNS, resolveEffort } from "./effort.js";
 import type { TextEditResult } from "./file-text.js";
 import { applyTextEdit, readLineWindow } from "./file-text.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
@@ -1662,10 +1662,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 reasoning: resolved.reasoning,
               }) ?? [],
             message: redactSecrets(task.prompt, runSecrets),
-            history: history.map(({ role, content }) => ({
-              role,
-              content: redactSecrets(content, runSecrets),
-            })),
+            history: history
+              .filter((turn) => turn.id !== run.sourceMessageId)
+              .slice(-EFFORT_HISTORY_TURNS)
+              .map(({ role, content }) => ({ role, content: redactSecrets(content, runSecrets) })),
           },
           context,
         );

@@ -36,8 +36,18 @@ async function runtimeThinkingLevel(
     userId: "user-1",
     status: "queued",
     trigger: "user",
+    sourceMessageId: "message-2",
     leaseFence: 0,
   };
+  const turn = (id: string, seq: number, role: "user" | "bot", text: string) => ({
+    id,
+    threadId: run.threadId,
+    seq,
+    role,
+    runId: null,
+    botId: role === "bot" ? run.botId : null,
+    blocks: [{ kind: "text", text }],
+  });
   const prisma = {
     run: {
       findUnique: vi.fn(async () => run),
@@ -63,7 +73,13 @@ async function runtimeThinkingLevel(
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
-    message: { findMany: vi.fn(async () => []) },
+    message: {
+      findMany: vi.fn(async () => [
+        turn("message-2", 2, "user", "Thanks!"),
+        turn("message-1", 1, "bot", "Here is the summary."),
+      ]),
+      findFirst: vi.fn(async () => null),
+    },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Thanks!" })) },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -127,7 +143,9 @@ describe("run effort", () => {
   it("runs at the level the decision model picks when the bot has none", async () => {
     const provider = new FakeDecisionProvider({ script: [answerLowest] });
     expect(await runtimeThinkingLevel(null, provider)).toBe("low");
-    expect(provider.calls).toHaveLength(1);
+    expect(provider.calls.map((request) => request.state)).toEqual([
+      { message: "Thanks!", earlier: [{ role: "assistant", text: "Here is the summary." }] },
+    ]);
   });
 
   it("keeps the bot's hand-picked level", async () => {

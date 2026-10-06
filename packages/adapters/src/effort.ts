@@ -15,7 +15,8 @@ const EFFORT_DECISION_TIMEOUT_MS = 500;
 
 const MESSAGE_CHAR_BUDGET = 1_200;
 const TURN_CHAR_BUDGET = 300;
-const RECENT_TURNS = 4;
+/** Prior turns the classifier reads: about the last two exchanges. */
+export const EFFORT_HISTORY_TURNS = 4;
 
 /**
  * What the classifier reads for each level Auto may pick, lowest first. `off` is left out to
@@ -53,7 +54,7 @@ export interface EffortInput {
   supported: readonly AgentThinkingLevel[];
   /** The latest message, already redacted. */
   message: string;
-  /** Prior turns, oldest first, already redacted. */
+  /** Up to `EFFORT_HISTORY_TURNS` turns before the message, oldest first, already redacted. */
   history: readonly Pick<AgentHistoryMessage, "role" | "content">[];
 }
 
@@ -97,9 +98,10 @@ function effortDecisionRequest(
   return {
     state: {
       message: clip(message, MESSAGE_CHAR_BUDGET),
-      earlier: history
-        .slice(-RECENT_TURNS)
-        .map((turn) => ({ role: turn.role, text: clip(turn.content, TURN_CHAR_BUDGET) })),
+      earlier: history.map((turn) => ({
+        role: turn.role,
+        text: clip(turn.content, TURN_CHAR_BUDGET),
+      })),
     },
     questions: {
       effort: {

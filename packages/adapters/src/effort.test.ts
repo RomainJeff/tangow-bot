@@ -79,25 +79,22 @@ describe("resolveEffort", () => {
     expect(await effort(provider)).toEqual({ source: "auto", level: "high", probability: 0.5 });
   });
 
-  it("sends the latest message and the last turns, clipped", async () => {
+  it("sends the message and earlier turns, clipped", async () => {
     const provider = new FakeDecisionProvider({ script: [scored({ "1": 1 })] });
-    const history = Array.from({ length: 6 }, (_, index) => ({
-      role: "user" as const,
-      content: `turn ${index} ${"x".repeat(400)}`,
-    }));
-    await effort(provider, { message: "y".repeat(2_000), history });
-    const state = provider.calls[0]!.state as {
-      message: string;
-      earlier: Array<{ role: string; text: string }>;
-    };
-    expect(state.message.length).toBe(1_201);
-    expect(state.earlier.map((turn) => turn.text.slice(0, 6))).toEqual([
-      "turn 2",
-      "turn 3",
-      "turn 4",
-      "turn 5",
-    ]);
-    expect(state.earlier[0]!.text.length).toBe(301);
+    await effort(provider, {
+      message: "y".repeat(2_000),
+      history: [
+        { role: "user", content: "x".repeat(400) },
+        { role: "assistant", content: "Done." },
+      ],
+    });
+    expect(provider.calls[0]!.state).toEqual({
+      message: `${"y".repeat(1_200)}…`,
+      earlier: [
+        { role: "user", text: `${"x".repeat(300)}…` },
+        { role: "assistant", text: "Done." },
+      ],
+    });
   });
 
   it("falls back to the connection level when the decision is unavailable", async () => {
