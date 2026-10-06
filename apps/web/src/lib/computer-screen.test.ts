@@ -3,7 +3,7 @@ import type { HeldScreenUrl } from "@rakazo/core";
 import { computerScreenKey } from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComputerScreenResult } from "./computer-screen";
-import { cachedScreenUrl, loadComputerScreen, screenRenewDelay } from "./computer-screen";
+import { cachedScreenUrl, loadComputerScreen } from "./computer-screen";
 
 const running: ComputerStatus = {
   botId: "bot-1",
@@ -155,9 +155,14 @@ describe("computer screen requests", () => {
       });
     }
 
-    it("show the error on a forced read even with a usable URL held", async () => {
+    it("keep the held URL on a forced read until it expires", async () => {
       const viewer = screen(failingAfterFirst());
       await viewer.refresh(running);
+      vi.setSystemTime(20 * MINUTE);
+      await expect(viewer.refresh(running, true)).resolves.toBe("https://screen.example/1");
+      expect(viewer.shown).toEqual([{ url: "https://screen.example/1", error: null }]);
+
+      vi.setSystemTime(60 * MINUTE);
       await expect(viewer.refresh(running, true)).resolves.toBeNull();
       expect(viewer.shown.at(-1)).toEqual({
         url: null,
@@ -264,24 +269,5 @@ describe("cachedScreenUrl", () => {
     expect(cachedScreenUrl(undefined, running, MINUTE)).toBeNull();
     expect(cachedScreenUrl(held, null, MINUTE)).toBeNull();
     expect(cachedScreenUrl({ ...held, url: null }, running, MINUTE)).toBeNull();
-  });
-});
-
-describe("screenRenewDelay", () => {
-  const held: HeldScreenUrl = { url: "https://screen.example/1", key: "key", readAt: 1_000 };
-
-  it("waits until the held URL is 50 minutes old", () => {
-    expect(screenRenewDelay(held, 1_000 + 10 * MINUTE)).toBe(40 * MINUTE);
-  });
-
-  it("retries at most once a minute once the URL is due or overdue", () => {
-    expect(screenRenewDelay(held, 1_000 + 50 * MINUTE)).toBe(MINUTE);
-    expect(screenRenewDelay(held, 1_000 + 55 * MINUTE)).toBe(MINUTE);
-    expect(screenRenewDelay(held, 1_000 + 50 * MINUTE - 30_000)).toBe(MINUTE);
-  });
-
-  it("schedules nothing without a held URL", () => {
-    expect(screenRenewDelay(undefined, 0)).toBeUndefined();
-    expect(screenRenewDelay({ ...held, url: null }, 0)).toBeUndefined();
   });
 });

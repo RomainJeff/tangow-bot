@@ -3,6 +3,7 @@
 import { act } from "react";
 import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
+import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // vitest doesn't run the lingui macro transform: same passthrough as the other web tests.
@@ -11,9 +12,11 @@ function identityTag(strings: TemplateStringsArray, ...values: unknown[]): strin
 }
 vi.mock("@lingui/react/macro", () => ({ useLingui: () => ({ t: identityTag }) }));
 
+import type { ScreenLinkHandlers } from "./screen-frame";
 import { ScreenFrame } from "./screen-frame";
 
-const SCREEN_URL = "https://screen.example/novnc/session/control/1.abc_DEF/embed.html";
+const EMBED_URL = "https://screen.example/novnc/session/control/1.abc_DEF/embed.html";
+const PLAIN_URL = "https://screen.example/vnc.html";
 
 function state(value: string) {
   return JSON.stringify({ type: "rakazo-screen-state", version: 1, state: value });
@@ -23,7 +26,20 @@ function state(value: string) {
 
 let container: HTMLDivElement;
 let root: Root;
-const handlers = { onAdjudicate: vi.fn(), onReload: vi.fn(), onFailed: vi.fn() };
+let handlers: {
+  onAdjudicate: Mock<ScreenLinkHandlers["onAdjudicate"]>;
+  onReload: Mock<ScreenLinkHandlers["onReload"]>;
+  onFailed: Mock<ScreenLinkHandlers["onFailed"]>;
+};
+let visibility: "visible" | "hidden";
+
+function mount(url: string) {
+  act(() =>
+    root.render(
+      <ScreenFrame url={url} title="Bot screen" allow="" interactive handlers={handlers} />,
+    ),
+  );
+}
 
 function iframe() {
   const frame = container.querySelector("iframe");
@@ -31,24 +47,46 @@ function iframe() {
   return frame;
 }
 
-function post(value: string) {
+function label() {
+  return container.querySelector("[role=status]")?.textContent ?? null;
+}
+
+function post(value: string, source: MessageEventSource | null = iframe().contentWindow) {
   act(() => {
-    window.dispatchEvent(
-      new MessageEvent("message", { data: state(value), source: iframe().contentWindow }),
-    );
+    window.dispatchEvent(new MessageEvent("message", { data: state(value), source }));
+  });
+}
+
+function load() {
+  act(() => {
+    iframe().dispatchEvent(new Event("load"));
+  });
+}
+
+function hideFor(ms: number) {
+  visibility = "hidden";
+  act(() => {
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  vi.advanceTimersByTime(ms);
+  visibility = "visible";
+  act(() => {
+    document.dispatchEvent(new Event("visibilitychange"));
   });
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
+  visibility = "visible";
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
+  handlers = {
+    onAdjudicate: vi.fn<ScreenLinkHandlers["onAdjudicate"]>(),
+    onReload: vi.fn<ScreenLinkHandlers["onReload"]>(),
+    onFailed: vi.fn<ScreenLinkHandlers["onFailed"]>(),
+  };
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  act(() =>
-    root.render(
-      <ScreenFrame url={SCREEN_URL} title="Bot screen" allow="" interactive handlers={handlers} />,
-    ),
-  );
 });
 
 afterEach(() => {
@@ -57,31 +95,85 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("ScreenFrame", () => {
-  it("covers a screen that is still connecting and blocks input until it is connected", () => {
-    expect(container.querySelector("[role=status]")?.textContent).toBe("Connecting…");
+describe("ScreenFrame on a page that reports its state", () => {
+  it("covers the screen and blocks input until its own frame says it is connected", () => {
+    mount(EMBED_URL);
+    expect(label()).toBe("Connecting…");
     expect(iframe().style.pointerEvents).toBe("none");
 
+    post("connected", window);
+    post("connected", null);
+    expect(label()).toBe("Connecting…");
+
     post("connected");
-    expect(container.querySelector("[role=status]")).toBeNull();
+    expect(label()).toBeNull();
     expect(iframe().style.pointerEvents).toBe("auto");
   });
 
   it("keeps the last frame under a Reconnecting label while the link is down", () => {
+    mount(EMBED_URL);
     post("connected");
+    post("reconnecting", window);
+    expect(label()).toBeNull();
+
     post("reconnecting");
-    expect(container.querySelector("[role=status]")?.textContent).toBe("Reconnecting");
-    expect(container.querySelector("iframe")).not.toBeNull();
+    expect(label()).toBe("Reconnecting");
     expect(iframe().style.pointerEvents).toBe("none");
   });
 
-  it("removes the frame and reports the failure when the link gives up", () => {
+  it("reads the status when the page reports it stalled", () => {
+    mount(EMBED_URL);
+    post("stalled");
+    expect(handlers.onAdjudicate).toHaveBeenCalledTimes(1);
+    expect(handlers.onReload).toHaveBeenCalledTimes(0);
+  });
+
+  it("lets a returning page reconnect itself, then reloads it if it stays silent", () => {
+    mount(EMBED_URL);
+    post("connected");
+    hideFor(15_000);
+    expect(handlers.onReload).toHaveBeenCalledTimes(0);
+
+    vi.advanceTimersByTime(10_000);
+    expect(handlers.onReload).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes the frame and reports the failed URL when the link gives up", () => {
+    mount(EMBED_URL);
     post("reconnecting");
     act(() => {
       vi.advanceTimersByTime(75_000);
     });
     expect(container.querySelector("iframe")).toBeNull();
-    expect(container.querySelector("[role=status]")).toBeNull();
-    expect(handlers.onFailed).toHaveBeenCalledTimes(1);
+    expect(label()).toBeNull();
+    expect(handlers.onFailed.mock.calls).toEqual([[EMBED_URL]]);
+  });
+
+  it("starts over at Connecting… on a new URL", () => {
+    mount(EMBED_URL);
+    post("connected");
+    mount("https://screen.example/novnc/session/view/2.xyz/embed.html");
+    expect(label()).toBe("Connecting…");
+  });
+});
+
+describe("ScreenFrame on a plain page", () => {
+  it("ignores messages and shows the connection until the frame loads", () => {
+    mount(PLAIN_URL);
+    post("connected");
+    expect(label()).toBe("Connecting…");
+
+    load();
+    expect(label()).toBeNull();
+  });
+
+  it("reloads after a long absence and not after a short one", () => {
+    mount(PLAIN_URL);
+    load();
+    hideFor(9_000);
+    expect(handlers.onReload).toHaveBeenCalledTimes(0);
+
+    hideFor(15_000);
+    expect(handlers.onReload).toHaveBeenCalledTimes(1);
   });
 });

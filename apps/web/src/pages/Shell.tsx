@@ -75,7 +75,7 @@ import {
   requestBrowserNotificationPermission,
   shouldNotifyBrowser,
 } from "../lib/browser-notifications";
-import { cachedScreenUrl, loadComputerScreen, screenRenewDelay } from "../lib/computer-screen";
+import { cachedScreenUrl, loadComputerScreen } from "../lib/computer-screen";
 import { dictation } from "../lib/dictation";
 import { scheduleFocusPrompt } from "../lib/focus-prompt";
 import { copyableMessageText } from "../lib/message-text";
@@ -123,11 +123,11 @@ import {
 } from "./shell/dialogs";
 import type { Panel, PendingAttachment } from "./shell/layout";
 import { FALLBACK_BOT_COLOR, firstThreadRoute, panelIsOpen } from "./shell/layout";
+import type { ScreenLinkHandlers } from "./shell/screen-frame";
 import { ComputerOverlay, SidePanel } from "./shell/side-panel";
 import { BotsSidebar } from "./shell/sidebar";
 import { ThreadHeader } from "./shell/thread-header";
 import { Transcript } from "./shell/transcript";
-import type { ScreenLinkHandlers } from "./shell/use-screen-link";
 
 const BotContextMenu = lazy(() =>
   import("./BotContextMenu").then((module) => ({ default: module.BotContextMenu })),
@@ -438,6 +438,8 @@ export function ShellPage() {
   // Screen-load failures can sit beside a still-valid embed URL; boot and
   // takeover failures must stay visible even when a URL remains.
   const [computerErrorFromScreen, setComputerErrorFromScreen] = useState(false);
+  // The screen URL whose connection gave up; it stays failed until it is replaced or retried.
+  const [failedScreenUrl, setFailedScreenUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!computerOpen) {
       setComputerViewport(null);
@@ -509,14 +511,29 @@ export function ShellPage() {
   const readVisibleGroups = useRef(new Set<string>());
   const notifiedBrowserEvents = useRef(new Set<string>());
   const pendingBrowserNotifications = useRef(new Map<string, PendingBrowserNotification>());
+  const computerShown = panel === "computer" || computerOpen;
   const computerVisible = useRef(false);
-  computerVisible.current = panel === "computer" || computerOpen;
+  computerVisible.current = computerShown;
   const autoSpoken = useRef<string | null>(null);
   const autoSpokenBotId = useRef<string | null>(null);
 
   const inGroup = Boolean(groupId);
   const active = inGroup ? undefined : (bots.find((b) => b.id === botId) ?? bots[0]);
   const activeGroup = groups.find((group) => group.id === groupId);
+  const [computerWasShown, setComputerWasShown] = useState(computerShown);
+  if (computerShown !== computerWasShown) {
+    setComputerWasShown(computerShown);
+    // A URL kept while the screen was closed may be past its capability; never open it.
+    if (computerShown && active) {
+      setScreenUrl(
+        cachedScreenUrl(
+          computerCacheRef.current.get(active.id)?.screen,
+          computerRef.current,
+          Date.now(),
+        ),
+      );
+    }
+  }
   const activePendingAttachments = useMemo(
     () => attachmentsForThread(pendingAttachments, inGroup ? groupId : active?.id),
     [active?.id, groupId, inGroup, pendingAttachments],
@@ -2428,27 +2445,6 @@ export function ShellPage() {
     return () => window.clearInterval(timer);
   }, [panel, computerOpen, active?.id, computer?.state]);
 
-  useEffect(() => {
-    if ((panel !== "computer" && !computerOpen) || !active || !screenUrl) return;
-    const botId = active.id;
-    let timer: number | undefined;
-    let disposed = false;
-    const schedule = () => {
-      const delay = screenRenewDelay(computerCacheRef.current.get(botId)?.screen, Date.now());
-      if (disposed || delay === undefined) return;
-      timer = window.setTimeout(() => {
-        void refreshComputerScreen(botId)
-          .catch(() => null)
-          .finally(schedule);
-      }, delay);
-    };
-    schedule();
-    return () => {
-      disposed = true;
-      window.clearTimeout(timer);
-    };
-  }, [panel, computerOpen, active?.id, screenUrl]);
-
   async function openComputer() {
     if (!active) return;
     const needsTakeover = !userHoldsComputerControl(computer, active.id);
@@ -2459,6 +2455,8 @@ export function ShellPage() {
         overlay: (needsTakeover && !blocked) || computer?.state !== "running",
         force: computer?.state !== "running",
       });
+      // The full viewer opens a new connection, so it waits for a URL the proxy still accepts.
+      await refreshComputerScreen(active.id);
       setComputerOpen(true);
     } catch {
       // computerError already set in bootComputer
@@ -2497,19 +2495,27 @@ export function ShellPage() {
   const embeddedScreenUrl = embeddableScreenUrl(screenUrl);
   const hasControl = userHoldsComputerControl(computer, active?.id);
   const hideScreenLoadError = computerErrorFromScreen && Boolean(embeddedScreenUrl);
+  const screenFailed = embeddedScreenUrl !== null && embeddedScreenUrl === failedScreenUrl;
+  const computerScreenErrorText =
+    computerError && !hideScreenLoadError
+      ? computerError
+      : screenFailed
+        ? t`Could not connect to the computer screen`
+        : null;
   const computerScreenError =
-    computerError && !hideScreenLoadError ? (
+    computerScreenErrorText !== null ? (
       <div role="alert" className="flex flex-col items-center gap-3 px-6 text-center text-sm">
-        <p className="text-destructive">{computerError}</p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => active && void refreshComputerScreen(active.id, { force: true })}
-        >
+        <p className="text-destructive">{computerScreenErrorText}</p>
+        <Button variant="outline" size="sm" onClick={() => active && void retryScreen(active.id)}>
           <Trans>Retry screen</Trans>
         </Button>
       </div>
     ) : null;
+
+  async function retryScreen(id: string) {
+    await refreshComputerScreen(id, { force: true });
+    if (activeBotId.current === id) setFailedScreenUrl(null);
+  }
 
   const screenLink: ScreenLinkHandlers = {
     onAdjudicate() {
@@ -2520,9 +2526,8 @@ export function ShellPage() {
       const botId = activeBotId.current;
       if (botId) void refreshComputerScreen(botId, { force: true }).catch(() => null);
     },
-    onFailed() {
-      setComputerError(t`Could not connect to the computer screen`);
-      setComputerErrorFromScreen(false);
+    onFailed(url) {
+      setFailedScreenUrl(url);
     },
   };
 

@@ -43,8 +43,8 @@ import { WindowChrome } from "../WindowChrome";
 import { BotSettings, CreateBotForm } from "./bot-panel";
 import type { Panel } from "./layout";
 import { firstThreadRoute, panelIsOpen } from "./layout";
+import type { ScreenLinkHandlers } from "./screen-frame";
 import { ScreenFrame } from "./screen-frame";
-import type { ScreenLinkHandlers } from "./use-screen-link";
 
 export function SidePanel({
   panel,

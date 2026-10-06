@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { ComputerStatus } from "@rakazo/contracts";
 import { computerScreenKey } from "@rakazo/core";
@@ -27,18 +27,20 @@ test("the bot screen keeps its connection until the bot's run ends", async ({ pa
     state: "running",
   });
 
+  let screenLoads = 0;
   let screenReads = 0;
   const screenReadsByBot = new Map<string, number>();
   let rpcCalls = 0;
   page.on("request", (request) => {
     if (request.url().includes("/rpc/")) rpcCalls += 1;
   });
-  await page.route("https://screen.example/**", (route) =>
-    route.fulfill({
+  await page.route("https://screen.example/**", (route) => {
+    screenLoads += 1;
+    return route.fulfill({
       contentType: "text/html",
       body: "<!doctype html><title>Test desktop</title><p>Desktop connected</p>",
-    }),
-  );
+    });
+  });
   await page.route("**/rpc/computer/screenUrl", (route) => {
     screenReads += 1;
     const requested = route.request().postDataJSON()?.json?.botId;
@@ -70,9 +72,11 @@ test("the bot screen keeps its connection until the bot's run ends", async ({ pa
   await page.getByTestId("open-computer-panel").click();
   const frame = page.getByTestId("computer-preview").locator("iframe");
   await expect(frame).toHaveAttribute("src", /^https:\/\/screen\.example\/vnc\.html\?read=\d+$/);
-  await expectQuiet(() => rpcCalls);
+  await settle(() => rpcCalls);
   const readsBeforeEnd = screenReads;
+  const loadsBeforeEnd = screenLoads;
   const src = await frame.getAttribute("src");
+  await markScreen(frame);
   const keyBeforeEnd = computerScreenKey(await computerStatus(page, botId));
 
   await page.getByRole("button", { name: "Stop", exact: true }).click();
@@ -86,11 +90,13 @@ test("the bot screen keeps its connection until the bot's run ends", async ({ pa
     .toBe("idle");
   await expect(page.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
   // The end-of-run thread refresh and computer status events land after the run reads idle.
-  await expectQuiet(() => rpcCalls);
+  await page.waitForTimeout(QUIET_WINDOW_MS);
 
   expect(computerScreenKey(await computerStatus(page, botId))).toBe(keyBeforeEnd);
   expect(screenReads).toBe(readsBeforeEnd);
+  expect(screenLoads).toBe(loadsBeforeEnd);
   await expect(frame).toHaveAttribute("src", src ?? "");
+  expect(await screenMark(frame)).toBe("kept");
   await captureScreenshot(page, testInfo, "computer-screen-stable-after-run");
 
   const panelToggle = page.getByTestId("open-computer-panel");
@@ -103,13 +109,20 @@ test("the bot screen keeps its connection until the bot's run ends", async ({ pa
   await expect(page).toHaveURL(new RegExp(`/app/${botId}$`));
   await panelToggle.click();
   await expect(frame).toHaveAttribute("src", src ?? "");
-  await expectQuiet(() => rpcCalls);
+  await markScreen(frame);
+  const loadsAfterReturn = screenLoads;
+  await page.waitForTimeout(QUIET_WINDOW_MS);
   expect(computerScreenKey(await computerStatus(page, botId))).toBe(keyBeforeEnd);
   expect(screenReadsByBot.get(botId)).toBe(readsOfBotBeforeLeaving);
+  expect(screenLoads).toBe(loadsAfterReturn);
+  expect(await screenMark(frame)).toBe("kept");
 });
 
+/** Long enough for every refresh and status event a finished trigger causes to land. */
+const QUIET_WINDOW_MS = 5_000;
+
 /** Waits until the page makes no more RPC calls between two polls. */
-async function expectQuiet(calls: () => number) {
+async function settle(calls: () => number) {
   let last = -1;
   await expect
     .poll(
@@ -122,6 +135,19 @@ async function expectQuiet(calls: () => number) {
       { intervals: [1_000] },
     )
     .toBe(true);
+}
+
+/** A reload or a remount replaces the screen's document, and the new one carries no mark. */
+async function markScreen(frame: Locator) {
+  const document = await (await frame.elementHandle())?.contentFrame();
+  if (!document) throw new Error("the screen frame has no document");
+  await document.waitForLoadState();
+  await document.evaluate(() => Reflect.set(window, "screenMark", "kept"));
+}
+
+async function screenMark(frame: Locator) {
+  const document = await (await frame.elementHandle())?.contentFrame();
+  return (await document?.evaluate(() => Reflect.get(window, "screenMark") ?? null)) ?? null;
 }
 
 function computerStatus(page: Page, botId: string) {

@@ -106,21 +106,19 @@ test("touch users can open and dismiss the remote computer keyboard", async ({
       })),
     )
     .toEqual({ height: "420px", top: "12px" });
-  const modifierReleases = 8;
+  const typed = "mobile typing";
+  await keyboardInput.pressSequentially(typed);
   await expect
-    .poll(() => page.evaluate(() => Reflect.get(globalThis, "__rfbKeys").length))
-    .toBe(modifierReleases);
-  await keyboardInput.pressSequentially("mobile typing");
-  const forwardedKeysyms = await page.evaluate(
-    (skip) =>
-      Reflect.get(globalThis, "__rfbKeys")
-        .slice(skip)
-        .map(([keysym]: [number]) => keysym),
-    modifierReleases,
-  );
-  expect(forwardedKeysyms).toEqual(
-    Array.from("mobile typing", (character) => character.codePointAt(0)),
-  );
+    .poll(() =>
+      page.evaluate(
+        (count) =>
+          Reflect.get(globalThis, "__rfbKeys")
+            .slice(-count)
+            .map(([keysym]: [number]) => keysym),
+        typed.length,
+      ),
+    )
+    .toEqual(Array.from(typed, (character) => character.codePointAt(0)));
   await captureScreenshot(page, testInfo, "mobile-computer-keyboard-open");
 
   await page.getByRole("button", { name: "Hide keyboard" }).click();

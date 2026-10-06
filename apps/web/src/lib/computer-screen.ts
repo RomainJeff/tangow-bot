@@ -1,13 +1,6 @@
 import type { ComputerStatus } from "@rakazo/contracts";
 import type { HeldScreenUrl } from "@rakazo/core";
-import {
-  computerScreenKey,
-  isScreenUrlReusable,
-  SCREEN_PROXY_TTL_MS,
-  SCREEN_URL_RENEW_MS,
-} from "@rakazo/core";
-
-const SCREEN_RETRY_FLOOR_MS = 60_000;
+import { computerScreenKey, isScreenUrlReusable, SCREEN_PROXY_TTL_MS } from "@rakazo/core";
 
 export interface ComputerScreenResult {
   url: string | null;
@@ -17,8 +10,9 @@ export interface ComputerScreenResult {
 /**
  * Each read returns a new URL, and a new URL reloads the viewer. A background read keeps the held
  * URL while it is reusable for the current status and joins a read already in flight for the same
- * status; a forced read always asks again. Only the latest request for the visible computer may
- * replace its screen or error.
+ * status; a forced read always asks again. A read that fails keeps the held URL while the proxy
+ * still accepts it. Only the latest request for the visible computer may replace its screen or
+ * error.
  */
 export async function loadComputerScreen(options: {
   botId: string;
@@ -46,8 +40,7 @@ export async function loadComputerScreen(options: {
     next = await (inflight ?? startRead(options.reads, slot, key, options.load));
     result = { url: next.url, error: null };
   } catch (error) {
-    // The proxy still accepts the held URL until its capability expires.
-    if (!force && held && isScreenUrlReusable(held, status, Date.now(), SCREEN_PROXY_TTL_MS)) {
+    if (held && isScreenUrlReusable(held, status, Date.now(), SCREEN_PROXY_TTL_MS)) {
       return options.isCurrent() ? held.url : null;
     }
     result = {
@@ -83,11 +76,4 @@ export function cachedScreenUrl(
   now: number,
 ): string | null {
   return isScreenUrlReusable(held, status, now) ? (held?.url ?? null) : null;
-}
-
-/** Delay before renewing the held URL, or `undefined` when none is held. */
-export function screenRenewDelay(held: HeldScreenUrl | undefined, now: number): number | undefined {
-  if (!held?.url) return undefined;
-  // A failed renewal keeps the held URL until it expires, so retry at most once a minute.
-  return Math.max(held.readAt + SCREEN_URL_RENEW_MS - now, SCREEN_RETRY_FLOOR_MS);
 }
