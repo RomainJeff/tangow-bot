@@ -112,6 +112,46 @@ test("custom connections persist reasoning support and bot thinking", async ({
   await expect(thinking).toHaveValue("low");
 });
 
+test("bot thinking defaults to Auto when a Decision Model is connected", async ({
+  page,
+}, testInfo) => {
+  const stamp = Date.now();
+  await signup(page, `auto-effort-${stamp}@rakazo.test`, "password12", `Auto ${stamp}`);
+  await completeOnboarding(page);
+  await openUserSettings(page, "models");
+  await page.getByPlaceholder("Search providers").fill("openai-compatible");
+  await page.getByRole("button", { name: /OpenAI-compatible/ }).click();
+  await page.getByLabel("OpenAI-compatible server URL").fill("http://127.0.0.1:8090/v1");
+  await page.getByLabel("Model id").fill("reasoning-model");
+  await page.getByText("Advanced", { exact: true }).click();
+  await page.getByRole("checkbox", { name: "Supports thinking" }).check();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Saved.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close model settings" }).click();
+  // Connecting a real Decision Model needs a hosted key; the selector only reads whether one exists.
+  await page.route("**/rpc/decision/providerConfig", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        json: { provider: "openrouter", settings: {}, updatedAt: new Date().toISOString() },
+      }),
+    }),
+  );
+  await page.locator("main").getByRole("button", { name: "Chief", exact: true }).click();
+  const settings = page.getByTestId("bot-settings");
+  await settings.getByTestId("bot-settings-advanced").evaluate((element) => {
+    (element as HTMLDetailsElement).open = true;
+  });
+  await settings
+    .getByRole("combobox", { name: "Model", exact: true })
+    .selectOption("openai-compatible::reasoning-model");
+  const thinking = settings.getByRole("combobox", { name: "Thinking", exact: true });
+  await expect(thinking).toHaveValue("");
+  await expect(thinking.locator("option").first()).toHaveText("Auto");
+  await thinking.scrollIntoViewIfNeeded();
+  await captureScreenshot(page, testInfo, "bot-thinking-auto");
+});
+
 test("connects, lists, and uses an OpenAI-compatible endpoint", async ({ page }, testInfo) => {
   const server = createServer((request, response) => {
     if (request.method === "GET" && request.url === "/v1/models") {

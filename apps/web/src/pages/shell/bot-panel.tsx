@@ -336,6 +336,7 @@ export function BotSettings({
   const [credentials, setCredentials] = useState<ModelCredential[]>([]);
   const [catalog, setCatalog] = useState<ModelCatalogEntry[]>([]);
   const [me, setMe] = useState<Me | null>(null);
+  const [decisionConnected, setDecisionConnected] = useState(false);
   const [modelMetaReady, setModelMetaReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -344,6 +345,10 @@ export function BotSettings({
       .voices({})
       .then(setVoices)
       .catch(() => setVoices([]));
+    void rpc.decision
+      .providerConfig()
+      .then((config) => setDecisionConnected(config != null))
+      .catch(() => undefined);
     void Promise.all([rpc.models.credentials(), rpc.models.list(), rpc.me()])
       .then(([nextCredentials, nextCatalog, nextMe]) => {
         setCredentials(nextCredentials);
@@ -552,7 +557,9 @@ export function BotSettings({
                 onChange={(event) => setThinkingLevel(event.target.value)}
               >
                 <NativeSelectOption value="">
-                  {t`Default (${thinkingLevelLabel(defaultThinkingLevel)})`}
+                  {decisionConnected
+                    ? t`Auto`
+                    : t`Default (${thinkingLevelLabel(defaultThinkingLevel)})`}
                 </NativeSelectOption>
                 {thinkingOptions.map((level) => (
                   <NativeSelectOption key={level} value={level}>
