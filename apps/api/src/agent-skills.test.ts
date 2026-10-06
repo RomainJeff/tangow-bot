@@ -132,6 +132,26 @@ describe("agent skills service (filesystem)", () => {
     expect(prisma.botSkill._store).toEqual([]);
   });
 
+  it("takes a skill back from the bot that wrote it once the user edits it", async () => {
+    const skills = service();
+    const created = await skills.create(actor, { name: "Coffee", description: "Order" });
+    prisma.skillSetting._store.push({
+      ...(actor as Row),
+      skillKey: created.id,
+      availability: "selected",
+      createdByBotId: "bot-1",
+    });
+    await skills.update(actor, { skillId: created.id, description: "Order my usual" });
+    expect(prisma.skillSetting._store).toEqual([
+      expect.objectContaining({ skillKey: "user:coffee", createdByBotId: null }),
+    ]);
+    prisma.skillSetting._store[0]!.createdByBotId = "bot-1";
+    await skills.update(actor, { skillId: created.id, name: "Espresso" });
+    expect(prisma.skillSetting._store).toEqual([
+      expect.objectContaining({ skillKey: "user:espresso", createdByBotId: null }),
+    ]);
+  });
+
   it("rejects duplicate names with CONFLICT and unknown ids with IsolationError", async () => {
     const skills = service();
     await skills.create(actor, { name: "Alpha", description: "A" });

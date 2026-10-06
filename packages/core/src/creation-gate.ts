@@ -122,6 +122,54 @@ export function creationCardError(
   if (text("content").length > CARD_SKILL_MAX_LENGTH) {
     return `This skill must be at most ${CARD_SKILL_MAX_LENGTH} characters for the user to confirm it.`;
   }
+  return Array.isArray(args.files) ? skillFolderCardError(text("content"), args.files) : undefined;
+}
+
+/** A folder card lists SKILL.md and every other file, each text file in full. */
+export const CARD_SKILL_FOLDER_MAX_FILES = 20;
+export const CARD_SKILL_FOLDER_MAX_TEXT_BYTES = 64 * 1024;
+export const CARD_SKILL_FOLDER_MAX_BYTES = 1024 * 1024;
+
+export const SKILL_FOLDER_TOO_LARGE_ERROR = `This skill folder is too large to show the user for approval (at most ${CARD_SKILL_FOLDER_MAX_FILES} files, ${CARD_SKILL_FOLDER_MAX_TEXT_BYTES / 1024} KB of text and ${CARD_SKILL_FOLDER_MAX_BYTES / 1024 / 1024} MB in all). It can be saved directly in a conversation that has not read outside content.`;
+
+function skillFolderCardError(skillMd: string, files: readonly unknown[]): string | undefined {
+  const parsed = files.map(asSkillFolderFile);
+  if (parsed.some((file) => !file)) return "This skill folder could not be read.";
+  const sizes = [{ path: "SKILL.md", executable: false, text: skillMd }, ...parsed].map((file) => ({
+    text: "text" in file!,
+    bytes: skillFolderFileBytes(file!),
+  }));
+  const textBytes = sizes.reduce((sum, file) => sum + (file.text ? file.bytes : 0), 0);
+  const allBytes = sizes.reduce((sum, file) => sum + file.bytes, 0);
+  return sizes.length > CARD_SKILL_FOLDER_MAX_FILES ||
+    textBytes > CARD_SKILL_FOLDER_MAX_TEXT_BYTES ||
+    allBytes > CARD_SKILL_FOLDER_MAX_BYTES
+    ? SKILL_FOLDER_TOO_LARGE_ERROR
+    : undefined;
+}
+
+/**
+ * A file of a skill folder besides SKILL.md, read when its card was asked: the card shows it and
+ * an approval writes it, so the workspace is never read again. Text stays readable on the card;
+ * anything that is not UTF-8 text is kept as base64 and shown by name and size.
+ */
+export type SkillFolderFile = { path: string; executable: boolean } & (
+  | { text: string }
+  | { base64: string }
+);
+
+export function skillFolderFileBytes(file: SkillFolderFile): number {
+  if ("text" in file) return new TextEncoder().encode(file.text).byteLength;
+  const padding = file.base64.endsWith("==") ? 2 : file.base64.endsWith("=") ? 1 : 0;
+  return (file.base64.length / 4) * 3 - padding;
+}
+
+function asSkillFolderFile(value: unknown): SkillFolderFile | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const { path, executable, text, base64 } = value as Record<string, unknown>;
+  if (typeof path !== "string" || typeof executable !== "boolean") return undefined;
+  if (typeof text === "string" && base64 === undefined) return { path, executable, text };
+  if (typeof base64 === "string" && text === undefined) return { path, executable, base64 };
   return undefined;
 }
 
@@ -131,15 +179,21 @@ export type SkillSaveRequest = {
   name: string;
   /** The whole SKILL.md that will be written, exactly as the card shows it. */
   content: string;
+  /** Saved from a workspace folder: its other files, which replace the skill's whole folder. */
+  files?: SkillFolderFile[];
 };
 
 /** A stored skill card request, parsed: it comes back from the database on replay. */
 export function asSkillSaveRequest(value: unknown): SkillSaveRequest | undefined {
   if (!value || typeof value !== "object") return undefined;
-  const { change, name, content } = value as Record<string, unknown>;
+  const { change, name, content, files } = value as Record<string, unknown>;
   if (change !== "created" && change !== "updated") return undefined;
   if (typeof name !== "string" || typeof content !== "string") return undefined;
-  return { change, name, content };
+  if (files === undefined) return { change, name, content };
+  if (!Array.isArray(files)) return undefined;
+  const parsed = files.map(asSkillFolderFile);
+  if (parsed.some((file) => !file)) return undefined;
+  return { change, name, content, files: parsed as SkillFolderFile[] };
 }
 
 /**

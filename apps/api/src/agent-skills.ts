@@ -312,18 +312,23 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       const oldKey = existing.id;
       const newKey = userSkillKey(resolved.name);
       const skill = { name: resolved.name, content: resolved.content };
+      const scope = { spaceId: actor.spaceId, userId: actor.userId };
+      // Once the user edits a skill it is theirs: the bot that wrote it can no longer change it.
       if (oldKey === newKey) {
         await writeUserSkill(root(actor), skill, "replace");
+        await prisma.skillSetting.updateMany({
+          where: { ...scope, skillKey: oldKey },
+          data: { createdByBotId: null },
+        });
         return toAgentSkill(await owned(actor, newKey));
       }
       // Rename: the directory moves first (bundle extras follow), then access rows follow the key.
       await assertNameFree(await files(actor), resolved.name, existing.id);
       await renameUserSkill(root(actor), existing.name, skill).catch(conflictOrRethrow);
-      const scope = { spaceId: actor.spaceId, userId: actor.userId };
       await prisma.$transaction([
         prisma.skillSetting.updateMany({
           where: { ...scope, skillKey: oldKey },
-          data: { skillKey: newKey },
+          data: { skillKey: newKey, createdByBotId: null },
         }),
         prisma.botSkill.updateMany({
           where: { ...scope, skillKey: oldKey },

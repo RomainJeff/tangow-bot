@@ -4,6 +4,7 @@ import {
   SKILL_BUNDLE_MAX_ENTRIES,
   SKILL_DESCRIPTION_MAX_CHARS,
 } from "@rakazo/contracts";
+import type { SkillFolderFile, SkillSaveRequest } from "@rakazo/core";
 import {
   asSkillAvailability,
   buildSkillMd,
@@ -17,6 +18,7 @@ import {
   type SkillRecord,
   searchSkills,
   userSkillKey,
+  validateBotSkill,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { loadBuiltinSkills } from "./builtin-skills.js";
@@ -167,10 +169,11 @@ export async function skillReadFromTool(
 ): Promise<Record<string, unknown>> {
   const skill = await findOwnedSkill(deps, owner, input);
   if (!skill) return { error: "Skill not found." };
+  // Source first: a replayed, truncated output still tells whose skill it was (historyExposes).
   return {
+    source: skill.source,
     name: skill.name,
     description: skill.description,
-    source: skill.source,
     readOnly: skill.readOnly,
     content: skill.content,
     dir: sandboxSkillDir(skill),
@@ -248,118 +251,182 @@ export async function readSkillDraft(
   return files;
 }
 
+const unixNewlines = (value: string) => value.replace(/\r\n?/g, "\n");
+
 function parseDraftSkillMd(files: SkillTreeFile[]): ReturnType<typeof parseSkillMd> {
   const skillMd = files.find((file) => file.path === "SKILL.md");
   if (!skillMd) return { error: "No SKILL.md at the root of the skill folder." };
-  return parseSkillMd(new TextDecoder().decode(skillMd.bytes));
+  return parseSkillMd(unixNewlines(new TextDecoder().decode(skillMd.bytes)));
 }
 
-export async function skillCreateFromTool(
+/** Keeps a draft file as text when it is UTF-8, so the card can show it in full. */
+function snapshotFile(file: SkillTreeFile): SkillFolderFile {
+  const kept = { path: file.path, executable: file.executable };
+  const text = utf8Text(file.bytes);
+  return text === undefined || text.includes("\0")
+    ? { ...kept, base64: Buffer.from(file.bytes).toString("base64") }
+    : { ...kept, text };
+}
+
+function utf8Text(bytes: Uint8Array): string | undefined {
+  try {
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+function treeFile(file: SkillFolderFile): SkillTreeFile {
+  const bytes =
+    "text" in file ? new TextEncoder().encode(file.text) : Buffer.from(file.base64, "base64");
+  return { path: file.path, bytes: new Uint8Array(bytes), executable: file.executable };
+}
+
+const folderFiles = (files: SkillTreeFile[]) =>
+  files.filter((file) => file.path !== "SKILL.md").map(snapshotFile);
+
+const BOTH_CREATE_INPUTS = "Pass either path or name/description/body/content, not both.";
+const BOTH_UPDATE_INPUTS = "Pass either path or newName/description/body/content, not both.";
+const SHARED_SKILL_ERROR = "Ask the user before changing a shared skill.";
+
+/** A bot changes or deletes a skill only if it wrote it and no other bot can see it. */
+async function botOwnsPrivateSkill(
+  prisma: PrismaClient,
+  owner: SkillOwner & { botId: string },
+  skillKey: string,
+): Promise<boolean> {
+  const scope = { spaceId: owner.spaceId, userId: owner.userId, skillKey };
+  const [setting, access] = await Promise.all([
+    prisma.skillSetting.findUnique({ where: { spaceId_userId_skillKey: scope } }),
+    prisma.botSkill.findMany({ where: { ...scope, enabled: true } }),
+  ]);
+  return (
+    setting?.createdByBotId === owner.botId &&
+    setting.availability === "selected" &&
+    access.length === 1 &&
+    access[0]?.botId === owner.botId
+  );
+}
+
+function botSkillError(owner: SkillOwner, content: string): string | undefined {
+  if (!owner.botId) return undefined;
+  const parsed = parseSkillMd(content);
+  return "error" in parsed ? parsed.error : validateBotSkill(parsed, content);
+}
+
+type SkillSaveInput = {
+  name?: string;
+  skillId?: string;
+  newName?: string;
+  description?: string;
+  body?: string;
+  content?: string;
+  /** A folder drafted in the bot's workspace, read by readSkillDraft. */
+  files?: SkillTreeFile[];
+};
+
+/** The SKILL.md rules a saved request must meet, checked again when an approval writes it. */
+function validSkillSave(
+  owner: SkillOwner,
+  request: SkillSaveRequest,
+): SkillSaveRequest | { error: string } {
+  const invalid = rejectOversizedContent(request.content) ?? botSkillError(owner, request.content);
+  return invalid ? { error: invalid } : request;
+}
+
+/**
+ * The exact skill a skill_create or skill_update call would write, valid on its own, or the tool
+ * error. A card shows this request and an approved one is written as is, folder files included.
+ * Whether it still fits the stored skills is checkSkillSave's, so a call retried after its save
+ * completed can find that save's effect first.
+ */
+export async function shapeSkillSave(
   deps: SkillToolDeps,
   owner: SkillOwner,
-  input: {
-    name?: string;
-    description?: string;
-    body?: string;
-    content?: string;
-    files?: SkillTreeFile[];
-  },
-): Promise<Record<string, unknown>> {
-  let name = "";
-  let description = "";
-  let content = "";
+  tool: "skill_create" | "skill_update",
+  input: SkillSaveInput,
+): Promise<SkillSaveRequest | { error: string }> {
+  const content = input.content === undefined ? undefined : unixNewlines(input.content);
+  const body = input.body === undefined ? undefined : unixNewlines(input.body);
+  const shaped =
+    tool === "skill_create"
+      ? shapeCreate({ ...input, content, body })
+      : await shapeUpdate(deps, owner, { ...input, content, body });
+  return "error" in shaped ? shaped : validSkillSave(owner, shaped);
+}
+
+/** The tool error when a shaped save no longer fits the stored skills, or undefined. */
+export async function checkSkillSave(
+  deps: SkillToolDeps,
+  owner: SkillOwner,
+  request: SkillSaveRequest,
+): Promise<string | undefined> {
+  const next = parseSkillMd(request.content);
+  if ("error" in next) return next.error;
+  if (request.change === "created") {
+    const existing = await findOwnedSkill(deps, owner, { name: next.name });
+    return existing ? `A skill named "${existing.name}" already exists.` : undefined;
+  }
+  const existing = await findOwnedSkill(deps, owner, { name: request.name });
+  if (!existing) return "Skill not found.";
+  const readOnly = readOnlyError(existing);
+  if (readOnly) return readOnly;
+  if (
+    owner.botId &&
+    !(await botOwnsPrivateSkill(
+      deps.prisma,
+      { ...owner, botId: owner.botId },
+      userSkillKey(existing.name),
+    ))
+  ) {
+    return SHARED_SKILL_ERROR;
+  }
+  if (next.name.toLowerCase() !== existing.name.toLowerCase()) {
+    const clash = await findOwnedSkill(deps, owner, { name: next.name });
+    if (clash && clash.id !== existing.id) return `A skill named "${clash.name}" already exists.`;
+  }
+  return undefined;
+}
+
+function shapeCreate(input: SkillSaveInput): SkillSaveRequest | { error: string } {
   if (input.files) {
     if (input.content || input.name || input.description || input.body) {
-      return { error: "Pass either path or name/description/body/content, not both." };
+      return { error: BOTH_CREATE_INPUTS };
     }
     const parsed = parseDraftSkillMd(input.files);
     if ("error" in parsed) return { error: parsed.error };
-    name = parsed.name;
-    description = parsed.description;
-    content = buildSkillMd(parsed);
-  } else if (input.content?.trim()) {
+    const invalid = rejectInvalidSkillFields(parsed.name, parsed.description);
+    if (invalid) return { error: invalid };
+    return {
+      change: "created",
+      name: parsed.name,
+      content: buildSkillMd(parsed),
+      files: folderFiles(input.files),
+    };
+  }
+  if (input.content?.trim()) {
     const parsed = parseSkillMd(input.content);
     if ("error" in parsed) return { error: parsed.error };
-    name = parsed.name;
-    description = parsed.description;
-    content = buildSkillMd(parsed);
-  } else {
-    name = String(input.name ?? "").trim();
-    description = String(input.description ?? "").trim();
-    const body = String(input.body ?? "").trim();
-    if (!name || !description) {
-      return {
-        error: "Provide name and description (and optional body), or full SKILL.md content.",
-      };
-    }
-    const invalid = rejectInvalidSkillFields(name, description);
-    if (invalid) return { error: invalid };
-    content = buildSkillMd({ name, description, body });
+    return { change: "created", name: parsed.name, content: buildSkillMd(parsed) };
   }
-
-  const oversized = rejectOversizedContent(content);
-  if (oversized) return { error: oversized };
-
-  const existing = await findOwnedSkill(deps, owner, { name });
-  if (existing) return { error: `A skill named "${existing.name}" already exists.` };
-
-  const root = userSkillsRoot(deps.dataDir, owner);
-  try {
-    if (input.files) {
-      await writeUserSkillFiles(root, input.files, async () => ({ name, content }));
-    } else {
-      await writeUserSkill(root, { name, content }, "create");
-    }
-  } catch (error) {
-    if (isExists(error)) return { error: `A skill named "${name}" already exists.` };
-    // writeUserSkillFiles messages name the offending draft file and carry no host path.
-    if (input.files && error instanceof Error && !("code" in error)) {
-      return { error: error.message };
-    }
-    return { error: "Could not create skill." };
+  const name = String(input.name ?? "").trim();
+  const description = String(input.description ?? "").trim();
+  const body = String(input.body ?? "").trim();
+  if (!name || !description) {
+    return {
+      error: "Provide name and description (and optional body), or full SKILL.md content.",
+    };
   }
-  const skillKey = userSkillKey(name);
-  if (owner.botId) {
-    // A bot-created skill starts scoped to its creator (design Q2); the user widens it in the UI.
-    // API/panel creation (no botId) stays "all agents": no access rows.
-    const scope = { spaceId: owner.spaceId, userId: owner.userId };
-    await deps.prisma.$transaction([
-      deps.prisma.skillSetting.upsert({
-        where: { spaceId_userId_skillKey: { ...scope, skillKey } },
-        create: { ...scope, skillKey, availability: "selected" },
-        update: { availability: "selected" },
-      }),
-      deps.prisma.botSkill.upsert({
-        where: { botId_skillKey: { botId: owner.botId, skillKey } },
-        create: { ...scope, botId: owner.botId, skillKey, enabled: true },
-        update: { enabled: true },
-      }),
-    ]);
-  }
-  return {
-    ok: true,
-    id: skillKey,
-    name,
-    description,
-    hint: owner.botId
-      ? `Created skill, available to this agent. Mention /${name} so the user can open it; they can share it with other agents from its settings.`
-      : `Created skill. Mention /${name} so the user can open it.`,
-  };
+  const invalid = rejectInvalidSkillFields(name, description);
+  if (invalid) return { error: invalid };
+  return { change: "created", name, content: buildSkillMd({ name, description, body }) };
 }
 
-export async function skillUpdateFromTool(
+async function shapeUpdate(
   deps: SkillToolDeps,
   owner: SkillOwner,
-  input: {
-    name?: string;
-    skillId?: string;
-    newName?: string;
-    description?: string;
-    body?: string;
-    content?: string;
-    files?: SkillTreeFile[];
-  },
-): Promise<Record<string, unknown>> {
+  input: SkillSaveInput,
+): Promise<SkillSaveRequest | { error: string }> {
   const existing = await findOwnedSkill(deps, owner, {
     skillId: input.skillId,
     name: input.name,
@@ -371,16 +438,18 @@ export async function skillUpdateFromTool(
   let nextContent = existing.content;
   let nextName = existing.name;
   let nextDescription = existing.description;
+  let files: SkillFolderFile[] | undefined;
 
   if (input.files) {
     if (input.content || input.newName || input.description || input.body) {
-      return { error: "Pass either path or newName/description/body/content, not both." };
+      return { error: BOTH_UPDATE_INPUTS };
     }
     const parsed = parseDraftSkillMd(input.files);
     if ("error" in parsed) return { error: parsed.error };
     nextName = parsed.name;
     nextDescription = parsed.description;
     nextContent = buildSkillMd(parsed);
+    files = folderFiles(input.files);
   } else if (input.content?.trim()) {
     const parsed = parseSkillMd(input.content);
     if ("error" in parsed) return { error: parsed.error };
@@ -407,29 +476,123 @@ export async function skillUpdateFromTool(
 
   const invalid = rejectInvalidSkillFields(nextName, nextDescription);
   if (invalid) return { error: invalid };
-  const oversized = rejectOversizedContent(nextContent);
-  if (oversized) return { error: oversized };
+  return {
+    change: "updated",
+    name: existing.name,
+    content: nextContent,
+    ...(files ? { files } : {}),
+  };
+}
 
-  if (nextName.toLowerCase() !== existing.name.toLowerCase()) {
-    const clash = await findOwnedSkill(deps, owner, { name: nextName });
-    if (clash && clash.id !== existing.id) {
-      return { error: `A skill named "${clash.name}" already exists.` };
-    }
-  }
+async function planSkillSave(
+  deps: SkillToolDeps,
+  owner: SkillOwner,
+  tool: "skill_create" | "skill_update",
+  input: SkillSaveInput,
+): Promise<SkillSaveRequest | { error: string }> {
+  const shaped = await shapeSkillSave(deps, owner, tool, input);
+  if ("error" in shaped) return shaped;
+  const error = await checkSkillSave(deps, owner, shaped);
+  return error ? { error } : shaped;
+}
 
+/** Writes a request a card showed, checking it again so a card answered later meets every rule. */
+export async function saveSkillFromTool(
+  deps: SkillToolDeps,
+  owner: SkillOwner,
+  request: SkillSaveRequest,
+): Promise<Record<string, unknown>> {
+  const valid = validSkillSave(owner, request);
+  if ("error" in valid) return valid;
+  const error = await checkSkillSave(deps, owner, valid);
+  return error ? { error } : writeSkillSave(deps, owner, valid);
+}
+
+export async function skillCreateFromTool(
+  deps: SkillToolDeps,
+  owner: SkillOwner,
+  input: Omit<SkillSaveInput, "skillId" | "newName">,
+): Promise<Record<string, unknown>> {
+  const planned = await planSkillSave(deps, owner, "skill_create", input);
+  return "error" in planned ? planned : writeSkillSave(deps, owner, planned);
+}
+
+export async function skillUpdateFromTool(
+  deps: SkillToolDeps,
+  owner: SkillOwner,
+  input: SkillSaveInput,
+): Promise<Record<string, unknown>> {
+  const planned = await planSkillSave(deps, owner, "skill_update", input);
+  return "error" in planned ? planned : writeSkillSave(deps, owner, planned);
+}
+
+function saveError(error: unknown, folder: boolean, name: string, fallback: string): string {
+  if (isExists(error)) return `A skill named "${name}" already exists.`;
+  // Folder import messages name the offending draft file and carry no host path.
+  if (folder && error instanceof Error && !("code" in error)) return error.message;
+  return fallback;
+}
+
+async function writeSkillSave(
+  deps: SkillToolDeps,
+  owner: SkillOwner,
+  request: SkillSaveRequest,
+): Promise<Record<string, unknown>> {
+  const next = parseSkillMd(request.content);
+  if ("error" in next) return next;
+  const skill = { name: next.name, content: request.content };
+  const tree = request.files && [
+    { path: "SKILL.md", bytes: new TextEncoder().encode(request.content), executable: false },
+    ...request.files.map(treeFile),
+  ];
   const root = userSkillsRoot(deps.dataDir, owner);
   const scope = { spaceId: owner.spaceId, userId: owner.userId };
-  const oldKey = userSkillKey(existing.name);
-  const newKey = userSkillKey(nextName);
-  const skill = { name: nextName, content: nextContent };
+  const newKey = userSkillKey(skill.name);
+
+  if (request.change === "created") {
+    try {
+      if (tree) await writeUserSkillFiles(root, tree, async () => skill);
+      else await writeUserSkill(root, skill, "create");
+    } catch (error) {
+      return { error: saveError(error, Boolean(tree), skill.name, "Could not create skill.") };
+    }
+    if (owner.botId) {
+      // A bot-created skill starts scoped to its creator (design Q2); the user widens it in the UI.
+      // API/panel creation (no botId) stays "all agents": no access rows.
+      const createdByBotId = owner.botId;
+      await deps.prisma.$transaction([
+        deps.prisma.skillSetting.upsert({
+          where: { spaceId_userId_skillKey: { ...scope, skillKey: newKey } },
+          create: { ...scope, skillKey: newKey, availability: "selected", createdByBotId },
+          update: { availability: "selected", createdByBotId },
+        }),
+        deps.prisma.botSkill.upsert({
+          where: { botId_skillKey: { botId: owner.botId, skillKey: newKey } },
+          create: { ...scope, botId: owner.botId, skillKey: newKey, enabled: true },
+          update: { enabled: true },
+        }),
+      ]);
+    }
+    return {
+      ok: true,
+      id: newKey,
+      name: skill.name,
+      description: next.description,
+      hint: owner.botId
+        ? `Created skill, available to this agent. Mention /${skill.name} so the user can open it; they can share it with other agents from its settings.`
+        : `Created skill. Mention /${skill.name} so the user can open it.`,
+    };
+  }
+
+  const oldKey = userSkillKey(request.name);
   try {
-    if (input.files) {
-      await replaceUserSkillFiles(root, existing.name, input.files, async () => skill);
+    if (tree) {
+      await replaceUserSkillFiles(root, request.name, tree, async () => skill);
     } else if (oldKey === newKey) {
       await writeUserSkill(root, skill, "replace");
     } else {
       // The whole directory moves, so bundle extras follow the new name.
-      await renameUserSkill(root, existing.name, skill);
+      await renameUserSkill(root, request.name, skill);
     }
     // Access rows follow the key once the folder has moved.
     if (oldKey !== newKey) {
@@ -445,14 +608,9 @@ export async function skillUpdateFromTool(
       ]);
     }
   } catch (error) {
-    if (isExists(error)) return { error: `A skill named "${nextName}" already exists.` };
-    // replaceUserSkillFiles messages name the offending draft file and carry no host path.
-    if (input.files && error instanceof Error && !("code" in error)) {
-      return { error: error.message };
-    }
-    return { error: "Could not update skill." };
+    return { error: saveError(error, Boolean(tree), skill.name, "Could not update skill.") };
   }
-  return { ok: true, id: newKey, name: nextName, description: nextDescription };
+  return { ok: true, id: newKey, name: skill.name, description: next.description };
 }
 
 export async function skillDeleteFromTool(
@@ -466,6 +624,12 @@ export async function skillDeleteFromTool(
   if (readOnly) return { error: readOnly };
   const scope = { spaceId: owner.spaceId, userId: owner.userId };
   const skillKey = userSkillKey(existing.name);
+  if (
+    owner.botId &&
+    !(await botOwnsPrivateSkill(deps.prisma, { ...owner, botId: owner.botId }, skillKey))
+  ) {
+    return { error: SHARED_SKILL_ERROR };
+  }
   // File first, rows second: orphan rows are harmless, a row-less file would widen to "all".
   await removeUserSkill(userSkillsRoot(deps.dataDir, owner), existing.name);
   await deps.prisma.$transaction([

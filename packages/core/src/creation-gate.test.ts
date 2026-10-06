@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   approvedReplayCall,
+  asSkillSaveRequest,
   creationCardError,
   creationGate,
   refusalLocks,
@@ -105,7 +106,38 @@ describe("creationGate", () => {
   });
 });
 
+describe("asSkillSaveRequest", () => {
+  it("reads a stored folder save and refuses a malformed file", () => {
+    const files = [
+      { path: "scripts/run.sh", executable: true, text: "echo hi" },
+      { path: "assets/logo.png", executable: false, base64: "iVBORw==" },
+    ];
+    expect(
+      asSkillSaveRequest({ change: "created", name: "Deploy", content: "---", files }),
+    ).toEqual({ change: "created", name: "Deploy", content: "---", files });
+    expect(
+      asSkillSaveRequest({
+        change: "created",
+        name: "Deploy",
+        content: "---",
+        files: [{ path: "a", executable: false, text: "x", base64: "eA==" }],
+      }),
+    ).toBe(undefined);
+  });
+});
+
 describe("approvedReplayCall", () => {
+  it("replays a folder save without its files, which the stored request keeps", () => {
+    expect(
+      approvedReplayCall("skill_save", {
+        change: "created",
+        name: "Deploy",
+        content: "---",
+        files: [{ path: "a.md", executable: false, text: "x" }],
+      }),
+    ).toEqual({ tool: "skill_create", args: { content: "---" } });
+  });
+
   it("replays a skill card as the tool that writes its change", () => {
     expect(
       approvedReplayCall("skill_save", { change: "updated", name: "Coffee", content: "---" }),
@@ -121,6 +153,39 @@ describe("approvedReplayCall", () => {
 });
 
 describe("creationCardError", () => {
+  it("refuses a skill folder too large to list on a card", () => {
+    const files = (count: number, text = "x") =>
+      Array.from({ length: count }, (_, index) => ({
+        path: `references/${index}.md`,
+        executable: false,
+        text,
+      }));
+    const tooLarge =
+      "This skill folder is too large to show the user for approval (at most 20 files, 64 KB of text and 1 MB in all). It can be saved directly in a conversation that has not read outside content.";
+    expect(creationCardError("skill_create", { content: "---", files: files(19) })).toBe(undefined);
+    expect(creationCardError("skill_create", { content: "---", files: files(20) })).toBe(tooLarge);
+    expect(
+      creationCardError("skill_update", { content: "abc", files: files(1, "x".repeat(65533)) }),
+    ).toBe(undefined);
+    expect(
+      creationCardError("skill_update", { content: "abcd", files: files(1, "x".repeat(65533)) }),
+    ).toBe(tooLarge);
+    const binary = (bytes: number) => ({
+      path: "assets/a.bin",
+      executable: false,
+      base64: Buffer.alloc(bytes).toString("base64"),
+    });
+    expect(creationCardError("skill_create", { content: "", files: [binary(1048576)] })).toBe(
+      undefined,
+    );
+    expect(creationCardError("skill_create", { content: "x", files: [binary(1048576)] })).toBe(
+      tooLarge,
+    );
+    expect(creationCardError("skill_create", { content: "", files: [{ path: "a" }] })).toBe(
+      "This skill folder could not be read.",
+    );
+  });
+
   it("refuses a request a card could not show in full", () => {
     expect(creationCardError("schedule_create", { name: "Daily", prompt: "x".repeat(2000) })).toBe(
       undefined,
