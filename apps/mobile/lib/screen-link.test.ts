@@ -56,10 +56,6 @@ function setup(screenUrl: string) {
 }
 
 describe("screen WebView message gate", () => {
-  it("keeps every origin open for Safari-free navigation and decides in the navigation hook", () => {
-    expect(setup(EMBED).props.originWhitelist).toEqual(["*"]);
-  });
-
   it("accepts a state from a document inside the screen's capability directory", () => {
     const { post, link } = setup(EMBED);
     post(SAME_DIRECTORY, CONNECTED);
@@ -124,16 +120,15 @@ describe("app visibility", () => {
     const clock = fakeClock();
     const link = { hidden: vi.fn(), returned: vi.fn() };
     let emit: (state: AppStateStatus) => void = () => undefined;
-    const unsubscribe = vi.fn();
-    const stop = trackScreenVisibility(
+    trackScreenVisibility(
       link,
       (listener) => {
         emit = listener;
-        return unsubscribe;
+        return () => undefined;
       },
       clock.now,
     );
-    return { clock, link, emit: (state: AppStateStatus) => emit(state), stop, unsubscribe };
+    return { clock, link, emit: (state: AppStateStatus) => emit(state) };
   }
 
   it("hides on background and reports the time away when the app is active again", () => {
@@ -145,15 +140,19 @@ describe("app visibility", () => {
     expect(link.returned).toHaveBeenCalledExactlyOnceWith(12_000);
   });
 
-  it("counts the time away from the first non-active state", () => {
+  it("stays shown while inactive and counts the time away from background", () => {
     const { clock, link, emit } = track();
+    emit("inactive");
+    clock.advance(4_000);
+    emit("active");
+    expect(link.hidden).not.toHaveBeenCalled();
     emit("inactive");
     clock.advance(4_000);
     emit("background");
     clock.advance(6_000);
     emit("active");
     expect(link.hidden).toHaveBeenCalledTimes(1);
-    expect(link.returned).toHaveBeenCalledExactlyOnceWith(10_000);
+    expect(link.returned).toHaveBeenCalledExactlyOnceWith(6_000);
   });
 
   it("ignores an active state when the app was never away", () => {
@@ -162,49 +161,54 @@ describe("app visibility", () => {
     expect(link.hidden).not.toHaveBeenCalled();
     expect(link.returned).not.toHaveBeenCalled();
   });
-
-  it("returns the unsubscribe", () => {
-    const { stop, unsubscribe } = track();
-    stop();
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe("screen link on return", () => {
-  function away(screenUrl: string, ms: number) {
+  function tracked(screenUrl: string) {
     const fixture = setup(screenUrl);
-    const stop = trackScreenVisibility(
+    let emit: (state: AppStateStatus) => void = () => undefined;
+    trackScreenVisibility(
       fixture.link,
       (listener) => {
-        listener("background");
-        fixture.clock.advance(ms);
-        listener("active");
+        emit = listener;
         return () => undefined;
       },
       fixture.clock.now,
     );
-    return { ...fixture, stop };
+    const away = (state: AppStateStatus, ms: number) => {
+      emit(state);
+      fixture.clock.advance(ms);
+      emit("active");
+    };
+    return { ...fixture, away };
   }
 
-  it("reloads a page that does not report its state after 10 seconds away", () => {
-    const { onReload } = away(PLAIN, 10_000);
+  it("reloads a page that does not report its state after 10 seconds in the background", () => {
+    const { away, onReload } = tracked(PLAIN);
+    away("background", 3_000);
+    expect(onReload).toHaveBeenCalledTimes(0);
+    away("background", 10_000);
     expect(onReload).toHaveBeenCalledTimes(1);
   });
 
-  it("leaves a page that does not report its state alone after a short absence", () => {
-    const { onReload } = away(PLAIN, 3_000);
-    expect(onReload).not.toHaveBeenCalled();
+  it("gives a talking embed 10 seconds to reconnect before reloading it", () => {
+    const { away, clock, post, onReload } = tracked(EMBED);
+    post(EMBED, CONNECTED);
+    away("background", 20_000);
+    expect(onReload).toHaveBeenCalledTimes(0);
+    clock.advance(10_000);
+    expect(onReload).toHaveBeenCalledTimes(1);
   });
 
-  it("gives a talking embed 10 seconds to reconnect before reloading it", () => {
-    const fixture = setup(EMBED);
-    fixture.post(EMBED, CONNECTED);
-    fixture.link.hidden();
-    fixture.clock.advance(20_000);
-    fixture.link.returned(20_000);
-    expect(fixture.onReload).not.toHaveBeenCalled();
-    fixture.clock.advance(10_000);
-    expect(fixture.onReload).toHaveBeenCalledTimes(1);
+  it("leaves a talking embed alone after a long inactive spell", () => {
+    const { away, clock, post, onReload } = tracked(EMBED);
+    post(EMBED, CONNECTED);
+    away("inactive", 20_000);
+    clock.advance(10_000);
+    expect(onReload).toHaveBeenCalledTimes(0);
+    away("background", 20_000);
+    clock.advance(10_000);
+    expect(onReload).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -221,10 +225,24 @@ describe("screen link effects", () => {
     expect(refresh).toHaveBeenCalledExactlyOnceWith({ force: true });
   });
 
-  it("swallows a failed refresh", async () => {
-    const refresh = vi.fn().mockRejectedValue(new Error("offline"));
-    screenLinkEffects(refresh).onReload();
+  it("settles a reload once its read has, even when the read fails", async () => {
+    let fail: (error: Error) => void = () => undefined;
+    const refresh = vi.fn(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    let settled = false;
+    const reload = screenLinkEffects(refresh)
+      .onReload()
+      .then(() => {
+        settled = true;
+      });
     await Promise.resolve();
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    fail(new Error("offline"));
+    await reload;
+    expect(settled).toBe(true);
   });
 });

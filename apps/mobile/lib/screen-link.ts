@@ -23,7 +23,10 @@ export function screenWebViewProps(
   };
 }
 
-/** Anything but `active` hides the screen; coming back reports how long it was away. */
+/**
+ * Only `background` hides the screen: while `inactive` (Control Center, app switcher, a call
+ * banner) the WebView stays on screen and keeps running. Coming back reports the time away.
+ */
 export function trackScreenVisibility(
   link: Pick<ScreenLink, "hidden" | "returned">,
   subscribe: (listener: (state: AppStateStatus) => void) => () => void,
@@ -31,13 +34,13 @@ export function trackScreenVisibility(
 ): () => void {
   let hiddenAt: number | null = null;
   return subscribe((state) => {
-    if (state !== "active") {
+    if (state === "background") {
       if (hiddenAt !== null) return;
       hiddenAt = now();
       link.hidden();
       return;
     }
-    if (hiddenAt === null) return;
+    if (state !== "active" || hiddenAt === null) return;
     const hiddenForMs = now() - hiddenAt;
     hiddenAt = null;
     link.returned(hiddenForMs);
@@ -46,6 +49,10 @@ export function trackScreenVisibility(
 
 /** What a screen link may ask the host: a status read that reuses the URL, or a new one. */
 export function screenLinkEffects(refresh: (input: { force: boolean }) => Promise<unknown>) {
-  const run = (force: boolean) => void refresh({ force }).catch(() => undefined);
-  return { onAdjudicate: () => run(false), onReload: () => run(true) };
+  const run = (force: boolean) =>
+    refresh({ force }).then(
+      () => undefined,
+      () => undefined,
+    );
+  return { onAdjudicate: () => void run(false), onReload: () => run(true) };
 }

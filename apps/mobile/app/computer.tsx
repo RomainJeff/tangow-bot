@@ -1,5 +1,6 @@
 import type { ComputerMode, ComputerReleaseReason } from "@rakazo/contracts";
 import { useLocalSearchParams, useNavigation } from "expo-router";
+import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import {
@@ -219,6 +220,13 @@ export default function Computer() {
 
   const placeholder =
     screenError ?? previewPlaceholder(computer?.state, booting, name, computer?.mode);
+  const openPreview = (
+    <Pressable
+      accessibilityLabel={t("Open computer")}
+      onPress={() => void openComputer()}
+      style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
+    />
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: tokens.background, padding: 24 }}>
@@ -244,19 +252,18 @@ export default function Computer() {
             interactive={false}
             onError={onScreenError}
             effects={screenEffects}
+            cover={openPreview}
           />
         ) : (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
-            <Text style={{ color: tokens.mutedForeground, textAlign: "center" }}>
-              {placeholder}
-            </Text>
-          </View>
+          <>
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
+              <Text style={{ color: tokens.mutedForeground, textAlign: "center" }}>
+                {placeholder}
+              </Text>
+            </View>
+            {openPreview}
+          </>
         )}
-        <Pressable
-          accessibilityLabel={t("Open computer")}
-          onPress={() => void openComputer()}
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-        />
       </View>
       <View
         style={{
@@ -510,16 +517,19 @@ function ComputerReleaseActions({
   );
 }
 
+/** `cover` sits over a live screen only, so a failed screen keeps its retry reachable. */
 function ScreenWebView({
   url,
   interactive,
   onError,
   effects,
+  cover,
 }: {
   url: string;
   interactive: boolean;
   onError: () => void;
   effects: ReturnType<typeof screenLinkEffects>;
+  cover?: ReactNode;
 }) {
   const [attempt, setAttempt] = useState(0);
   return (
@@ -529,9 +539,11 @@ function ScreenWebView({
       interactive={interactive}
       onError={onError}
       effects={effects}
+      cover={cover}
       onRetry={() => {
-        setAttempt((count) => count + 1);
-        effects.onReload();
+        // Bumped once the forced read settles, in the same render as any new URL, so a retry
+        // remounts once whether the read returns a new URL, the same one, or fails.
+        void effects.onReload().then(() => setAttempt((count) => count + 1));
       }}
     />
   );
@@ -542,12 +554,14 @@ function ScreenSession({
   interactive,
   onError,
   effects,
+  cover,
   onRetry,
 }: {
   url: string;
   interactive: boolean;
   onError: () => void;
   effects: ReturnType<typeof screenLinkEffects>;
+  cover?: ReactNode;
   onRetry: () => void;
 }) {
   const { t } = useI18n();
@@ -602,6 +616,7 @@ function ScreenSession({
         {...webViewProps}
       />
       {view === "connecting" || view === "reconnecting" ? <ScreenLinkOverlay view={view} /> : null}
+      {cover}
     </View>
   );
 }
