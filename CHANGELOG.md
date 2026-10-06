@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Bots come with built-in Notion skills.** With a Notion connection, a bot can search and find pages, query databases, add rows, create pages and tasks, capture a conversation as documentation, prepare meetings, and turn a spec or a Notion task into an implementation plan; each skill appears as `builtin:notion-…`.
 - **A bot's screen now shows when it is connecting and reconnects by itself.** On web, desktop and iPhone, "Connecting…" appears until the first image and "Reconnecting" appears over the last image when the connection drops, while the screen reconnects in place instead of reloading. If it cannot come back within a minute, the usual error and retry button appear.
+- **Bots adjust how hard they think to each message when a Decision Model is connected.** On web, desktop and mobile, a bot whose thinking is left on its default now shows "Auto" and lets the Decision Model pick its reasoning effort per message, so a quick thanks gets a fast reply and a hard question gets more thought. A thinking level you pick by hand on the bot still wins.
 
 #### Changed
 
