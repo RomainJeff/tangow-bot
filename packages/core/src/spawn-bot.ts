@@ -117,6 +117,7 @@ export function spawnBotReadOnlyDetail(bot: SpawnBotDetailFields): string | unde
 export function spawnBotApprovalBlock(
   effectId: string,
   args: Record<string, unknown>,
+  ownerUserId?: string,
 ): Extract<MessageBlock, { kind: "ask" }> {
   const normalized = normalizeSpawnBotArgs(args);
   const fields =
@@ -142,8 +143,17 @@ export function spawnBotApprovalBlock(
         fields.computerMode === "team" || fields.computerMode === "dedicated"
           ? fields.computerMode
           : "",
+      ...(ownerUserId ? { ownerUserId } : {}),
     },
   };
+}
+
+/** A card from a server that does not name its owner stays editable; the server still checks. */
+export function canEditSpawnBotCard(
+  spawnBot: { ownerUserId?: string },
+  viewerUserId: string | undefined,
+): boolean {
+  return !spawnBot.ownerUserId || spawnBot.ownerUserId === viewerUserId;
 }
 
 /**

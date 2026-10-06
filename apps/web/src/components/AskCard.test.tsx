@@ -253,12 +253,16 @@ describe("AskCard editable Create bot card", () => {
   let root: Root;
   const onAnswer = vi.fn<(text: string, edits?: unknown) => Promise<void>>();
 
-  function show(block: AskBlock, options: { canAnswer?: boolean; messageId?: string } = {}) {
+  function show(
+    block: AskBlock,
+    options: { canAnswer?: boolean; messageId?: string; viewerUserId?: string } = {},
+  ) {
     act(() => {
       root.render(
         <AskCard
           block={block}
           canAnswer={options.canAnswer ?? true}
+          viewerUserId={options.viewerUserId}
           onAnswer={onAnswer}
           messageId={options.messageId ?? "msg-1"}
         />,
@@ -385,12 +389,24 @@ describe("AskCard editable Create bot card", () => {
     expect(container.querySelector("input")).toBeNull();
   });
 
-  it("CA23: Cancel while editing never sends edits", async () => {
+  it("CA23: Cancel while editing leaves the edit, and the card's Cancel then refuses", async () => {
     show(pendingCard());
     act(() => button("Edit").click());
     type(nameInput(), "Veille EU");
     await click(button("Cancel"));
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(container.querySelector("input")).toBeNull();
+    expect(labels()).toEqual(["Create bot", "Edit", "Cancel"]);
+    await click(button("Cancel"));
     expect(onAnswer.mock.calls).toEqual([["deny"]]);
+  });
+
+  it("offers Edit only to the run's owner", () => {
+    const owned = pendingCard({ spawnBot: { ...spawnBot, ownerUserId: "user-1" } });
+    show(owned, { viewerUserId: "user-1" });
+    expect(labels()).toEqual(["Create bot", "Edit", "Cancel"]);
+    show(owned, { viewerUserId: "user-2" });
+    expect(labels()).toEqual(["Create bot", "Cancel"]);
   });
 
   it("CA23: the card becoming answered abandons the edit", () => {

@@ -65,6 +65,7 @@ export const Transcript = memo(function Transcript({
   olderCursor,
   loadingOlder,
   answerableAskMessageId,
+  viewerUserId,
   running,
   workingBots,
   workingStartedAt,
@@ -96,6 +97,7 @@ export const Transcript = memo(function Transcript({
   olderCursor: number | null;
   loadingOlder: boolean;
   answerableAskMessageId: string | null;
+  viewerUserId?: string;
   running: boolean;
   workingBots: GroupAvatarMember[];
   /** Epoch ms the earliest working run started; undefined ticks from mount. */
@@ -595,6 +597,7 @@ export const Transcript = memo(function Transcript({
                       showAuthor={inGroup && group.isFirstOfGroup}
                       showAvatar={inGroup && group.isLastOfGroup}
                       canAnswer={message.id === answerableAskMessageId}
+                      viewerUserId={viewerUserId}
                       onOpenBot={onOpenBot}
                       onOpenPeerMessages={onOpenPeerMessages}
                       onAnswer={onAnswer}

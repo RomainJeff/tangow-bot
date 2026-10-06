@@ -111,6 +111,7 @@ export const MessageView = memo(function MessageView({
   artifactTarget,
   chrome,
   canAnswer,
+  viewerUserId,
   message,
   inGroup,
   showAuthor,
@@ -134,6 +135,7 @@ export const MessageView = memo(function MessageView({
    * visible blocks it renders, so this view never re-derives it. */
   chrome: "row" | "aside";
   canAnswer: boolean;
+  viewerUserId?: string;
   message: ThreadMessage;
   /** True in a multi-bot (group) thread: a bot row reserves an avatar column
    * and its bubble caps at 88% of the content column. False in a single-bot
@@ -556,6 +558,7 @@ export const MessageView = memo(function MessageView({
             key={i}
             block={block}
             canAnswer={canAnswer}
+            viewerUserId={viewerUserId}
             onAnswer={(text, edits) => onAnswer(message, text, edits)}
             messageId={message.id}
           />

@@ -83,6 +83,13 @@ describe("buildApprovalAskBlock", () => {
       return block;
     };
 
+    it("names the run's owner, the only person who can edit the card", () => {
+      const block = buildApprovalAskBlock("effect-1", "spawn_bot", { name: "Veille" }, [], {
+        runUserId: "user-1",
+      });
+      expect(block.kind === "ask" && block.spawnBot?.ownerUserId).toBe("user-1");
+    });
+
     it("shows every field and offers Create bot or Cancel, never always", () => {
       const block = askBlock({
         name: "Veille",

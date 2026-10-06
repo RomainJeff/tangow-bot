@@ -2382,6 +2382,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               blocks: [
                 buildApprovalAskBlock(applied!.effect.id, name, args, runSecrets, {
                   reviewReason,
+                  runUserId: run.userId,
                 }),
               ],
             });

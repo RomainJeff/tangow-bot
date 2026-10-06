@@ -2768,6 +2768,7 @@ export function ShellPage() {
                 olderCursor={activeSnapshot?.olderCursor ?? null}
                 loadingOlder={loadingOlder}
                 answerableAskMessageId={answerableAskMessageId}
+                viewerUserId={userId}
                 running={transcriptRunning}
                 workingBots={workingBots}
                 workingStartedAt={workingStartedAt}

@@ -153,6 +153,8 @@ export const MessageBlock = z.discriminatedUnion("kind", [
         instructions: z.string(),
         prompt: z.string(),
         computerMode: z.enum(["", "team", "dedicated"]),
+        /** The run's owner, the only person the server lets edit the card. */
+        ownerUserId: z.string().optional(),
       })
       .optional(),
   }),

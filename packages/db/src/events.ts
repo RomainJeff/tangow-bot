@@ -823,7 +823,7 @@ async function planSpawnBotEdit(
   if (taken) {
     throw new InvalidAnswerError("This run already has a bot creation with these exact settings");
   }
-  const { text, detail, spawnBot } = spawnBotApprovalBlock(effect.id, approved);
+  const { text, detail, spawnBot } = spawnBotApprovalBlock(effect.id, approved, scope.userId);
   return { proposed, approved, key, card: { text, detail, spawnBot } };
 }
 

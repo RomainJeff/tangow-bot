@@ -9,11 +9,13 @@ export function buildApprovalAskBlock(
   toolName: string,
   args: Record<string, unknown>,
   secrets: string[],
-  options?: { reviewReason?: string },
+  options?: { reviewReason?: string; runUserId?: string },
 ): MessageBlock {
   // spawn_bot arguments are redacted before they become the effect request, so the card
   // shows exactly what will be created; a second pass would only inflate short secrets.
-  if (toolName === "spawn_bot") return spawnBotApprovalBlock(effectId, args);
+  if (toolName === "spawn_bot") {
+    return spawnBotApprovalBlock(effectId, args, options?.runUserId);
+  }
   const summary = describeApprovalAction(toolName, args);
   const detail = formatApprovalDetail(toolName, args, options?.reviewReason);
   const safeDetail = detail ? redactSecrets(detail, secrets) : undefined;

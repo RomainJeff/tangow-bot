@@ -7,6 +7,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   botNameKey,
+  canEditSpawnBotCard,
   normalizeSpawnBotArgs,
   spawnBotApprovalBlock,
   spawnBotEdits,
@@ -348,5 +349,17 @@ describe("spawnBotReadOnlyDetail", () => {
     expect(card.detail?.replace("Instructions:\n  Track them.\n", "")).toBe(
       spawnBotReadOnlyDetail(bot),
     );
+  });
+});
+
+describe("canEditSpawnBotCard", () => {
+  it("lets only the run's owner edit a card that names one", () => {
+    expect(canEditSpawnBotCard({ ownerUserId: "user-1" }, "user-1")).toBe(true);
+    expect(canEditSpawnBotCard({ ownerUserId: "user-1" }, "user-2")).toBe(false);
+    expect(canEditSpawnBotCard({ ownerUserId: "user-1" }, undefined)).toBe(false);
+  });
+
+  it("keeps a card from an older server editable", () => {
+    expect(canEditSpawnBotCard({}, "user-2")).toBe(true);
   });
 });

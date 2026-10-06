@@ -23,6 +23,7 @@ import {
   attachmentsForThread,
   buildComposerMentionOptions,
   type ComposerMention,
+  canEditSpawnBotCard,
   computeMessageGroups,
   foldRoutineRuns,
   isApprovalAskBlock,
@@ -146,6 +147,7 @@ import {
   loadSessionToken,
   type MobileBot,
   type MobileGroup,
+  type MobileMe,
   type MobileMessage,
   type MobileMessagePage,
   type MobileSnapshot,
@@ -1720,6 +1722,17 @@ function Thread() {
   const answerableAskMessageId = latestAnswerableAskMessageId(snap);
   // The edit sheet lives only while its card can still be answered.
   useEffect(() => syncSpawnBotEdit(answerableAskMessageId), [answerableAskMessageId]);
+  // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
+  const [viewerUserId, setViewerUserId] = useState<string>();
+  useEffect(() => {
+    rpc<MobileMe>("me")
+      .then((me) => setViewerUserId(me.userId))
+      .catch(() => undefined);
+  }, []);
+  const listExtraData = useMemo(
+    () => ({ answerableAskMessageId, viewerUserId }),
+    [answerableAskMessageId, viewerUserId],
+  );
   const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
   const liveMessages = useMemo(() => [...visibleMessages].reverse(), [visibleMessages]);
   liveMessagesRef.current = liveMessages;
@@ -2081,6 +2094,7 @@ function Thread() {
         members={snap?.members}
         replyPreview={replyPreviewNode}
         canAnswer={message.id === answerableAskMessageId}
+        viewerUserId={viewerUserId}
         onAnswer={answerMessage}
         onOpenBot={openBot}
         onPreviewMarkdown={setMarkdownPreview}
@@ -2423,7 +2437,7 @@ function Thread() {
                 data={liveMessages}
                 inverted
                 keyExtractor={(message) => message.id}
-                extraData={answerableAskMessageId}
+                extraData={listExtraData}
                 style={{ flex: 1, marginTop: 8 }}
                 maintainVisibleContentPosition={keptPosition}
                 scrollEventThrottle={16}
@@ -3379,6 +3393,7 @@ const MessageBubble = memo(function MessageBubble({
   members,
   replyPreview,
   canAnswer,
+  viewerUserId,
   onAnswer,
   onOpenBot,
   onPreviewMarkdown,
@@ -3395,6 +3410,7 @@ const MessageBubble = memo(function MessageBubble({
   members?: MobileSnapshot["members"];
   replyPreview?: MobileMessage;
   canAnswer: boolean;
+  viewerUserId?: string;
   onAnswer: (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
@@ -3707,7 +3723,9 @@ const MessageBubble = memo(function MessageBubble({
                 onAccessibilityAction={actionProps.onAccessibilityAction}
                 onAnswer={(answer) => onAnswer(message, answer)}
                 onEdit={
-                  askBlock.spawnBot && canAnswer
+                  askBlock.spawnBot &&
+                  canAnswer &&
+                  canEditSpawnBotCard(askBlock.spawnBot, viewerUserId)
                     ? () =>
                         openSpawnBotEdit(router, {
                           messageId: message.id,

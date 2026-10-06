@@ -4,6 +4,7 @@ import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type { ThreadMessage } from "@rakazo/contracts";
 import { BOT_NAME_MAX_LENGTH, SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
 import {
+  canEditSpawnBotCard,
   isApprovalAskBlock,
   isSecretAskBlock,
   selectedAskActionLabel,
@@ -102,11 +103,14 @@ function AnswerInput({
 export function AskCard({
   block,
   canAnswer,
+  viewerUserId,
   onAnswer,
   messageId,
 }: {
   block: AskBlock;
   canAnswer: boolean;
+  /** Only the run's owner may edit a Create bot card. */
+  viewerUserId?: string;
   onAnswer: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   messageId: string;
 }) {
@@ -187,15 +191,27 @@ export function AskCard({
   let children: ReactNode = null;
   let actions: ReactNode = null;
 
-  // Only a pending spawn_bot card that carries its fields can be edited. A card from an older
-  // server has no `spawnBot`: it stays read-only, approve or cancel as is.
-  const spawnBot = approval && answered === undefined ? block.spawnBot : undefined;
+  // Only a pending spawn_bot card that carries its fields can be edited, and only by the run's
+  // owner. A card from an older server has no `spawnBot`: it stays read-only, approve or cancel.
+  const spawnBot =
+    approval &&
+    answered === undefined &&
+    block.spawnBot &&
+    canEditSpawnBotCard(block.spawnBot, viewerUserId)
+      ? block.spawnBot
+      : undefined;
   const draft = botDraft?.messageId === messageId ? botDraft : null;
   const botEditing = spawnBot !== undefined && draft !== null;
 
   if (answered === undefined) {
     if (approvalActions?.length) {
       const submitApproval = (id: string) => {
+        // While editing, Cancel leaves the edit; the card's own Cancel refuses the bot.
+        if (id === "deny" && botEditing) {
+          setBotDraft(null);
+          setError(null);
+          return;
+        }
         if (id === "allow" && spawnBot && draft) {
           const edits = spawnBotEdits(spawnBot, draft);
           return void submitAnswer("allow", edits);
