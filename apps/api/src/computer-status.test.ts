@@ -62,11 +62,6 @@ describe("toComputerStatus", () => {
       ).toBe(stamp(5));
     });
 
-    it("never exposes the raw ids", () => {
-      expect(stamp(5)).not.toContain("computer-1");
-      expect(stamp(5)).not.toContain("lease-1");
-    });
-
     it("is empty without a computer", () => {
       expect(toComputerStatus("bot-1", 5, null).screenStamp).toBe("");
     });

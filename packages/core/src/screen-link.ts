@@ -1,5 +1,3 @@
-import { SCREEN_RESUME_MS, shouldReloadScreenAfterHidden } from "./computer-screen-url.js";
-
 /**
  * The link between a host (web, Desktop, iOS) and the screen page it shows. The page reports
  * its connection state; the host treats every message as hostile because the bot can serve
@@ -114,6 +112,8 @@ const FLOOD_WINDOW_MS = 10_000;
 const ADJUDICATIONS_PER_WINDOW = 3;
 const ADJUDICATION_WINDOW_MS = 60_000;
 const ADJUDICATION_SPACING_MS = 5_000;
+/** A page hidden this long has lost its viewer connection (iOS suspends it). */
+const SCREEN_RESUME_MS = 10_000;
 
 export function initialScreenLink(url: string, now: number, hidden = false): ScreenLinkModel {
   return {
@@ -178,7 +178,7 @@ function adjudicate(model: ScreenLinkModel, now: number): Step {
   const recent = model.adjudications.filter((at) => now - at < ADJUDICATION_WINDOW_MS);
   const last = recent.at(-1);
   if (last !== undefined && now - last < ADJUDICATION_SPACING_MS) return quiet(model);
-  if (recent.length >= ADJUDICATIONS_PER_WINDOW) return quiet(relink(model, "failed", now));
+  if (recent.length >= ADJUDICATIONS_PER_WINDOW) return quiet(model);
   return { model: { ...model, adjudications: [...recent, now] }, effects: ["adjudicate"] };
 }
 
@@ -223,7 +223,7 @@ function returned(model: ScreenLinkModel, hiddenForMs: number, now: number): Ste
     since: exclude(model.since),
     loadedAt: model.loadedAt === null ? null : exclude(model.loadedAt),
   };
-  if (!shouldReloadScreenAfterHidden(hiddenForMs)) return quiet(shown);
+  if (hiddenForMs < SCREEN_RESUME_MS) return quiet(shown);
   if (model.talking && model.link !== "failed") {
     return quiet({ ...shown, since: now, resumeDeadline: now + SCREEN_RESUME_MS });
   }

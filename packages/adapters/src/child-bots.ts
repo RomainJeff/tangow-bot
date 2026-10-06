@@ -20,6 +20,7 @@ import {
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import { releaseBotScreen } from "./computer-lifecycle.js";
 import { toComputerRef } from "./computer-support.js";
 import { checkpointAndRecordComputerWorkspace } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
@@ -439,13 +440,11 @@ export async function destroyBot(
   await Promise.all(
     stoppedGroupBots.map(async (stoppedBot) => {
       if (!stoppedBot.computer?.providerRef) return;
-      await deps.sandbox
-        .releaseScreen?.(toComputerRef(stoppedBot.computer), {
-          ...context,
-          operationId: `destroy-group-run:${stoppedBot.id}`,
-          botId: stoppedBot.id,
-        })
-        .catch(() => undefined);
+      await releaseBotScreen(deps, toComputerRef(stoppedBot.computer), {
+        ...context,
+        operationId: `destroy-group-run:${stoppedBot.id}`,
+        botId: stoppedBot.id,
+      });
     }),
   );
   if (dedicated) {

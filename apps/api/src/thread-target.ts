@@ -5,7 +5,12 @@ import {
   runContinueJob,
   type SandboxProvider,
 } from "@rakazo/adapter-kit";
-import { cancelComputerRunWork, screenLeaseIdForRun, toComputerRef } from "@rakazo/adapters";
+import {
+  cancelComputerRunWork,
+  releaseBotScreen,
+  screenLeaseIdForRun,
+  toComputerRef,
+} from "@rakazo/adapters";
 import {
   type Actor,
   GROUP_MEMBER_MIN,
@@ -1251,7 +1256,7 @@ export async function stopThreadRuns(
       };
       const ref = toComputerRef(computer);
       await cancelComputerRunWork(deps.sandbox, ref, computer.id, runId, context);
-      await deps.sandbox.releaseScreen?.(ref, context).catch(() => undefined);
+      await releaseBotScreen(deps, ref, context);
     }),
   );
   await expireComputerExecutionLeases(deps.prisma, { runId: { in: runIds } });

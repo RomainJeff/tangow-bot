@@ -22,7 +22,7 @@ import type {
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs, SCREEN_URL_RENEW_MS } from "@rakazo/core";
+import { boundedSandboxCommandTimeoutMs, SCREEN_PROXY_TTL_MS } from "@rakazo/core";
 import { screenSessionKey } from "./computer-screens.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
 import {
@@ -31,7 +31,13 @@ import {
 } from "./computer-workspace.js";
 import { LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
 
-const DAYTONA_SCREEN_TTL_SECONDS = 3_600;
+/**
+ * A preview is handed out while it can outlive a screen capability sealed now, so it serves one
+ * capability lifetime and at most two are live at once.
+ */
+const DAYTONA_SCREEN_TTL_SECONDS = (2 * SCREEN_PROXY_TTL_MS) / 1_000;
+
+type ScreenPreview = { url: string; token: string; expiresAt: number; viewPort: number };
 
 export type DaytonaSandboxSdk = Pick<Daytona, "create" | "get">;
 
@@ -74,14 +80,9 @@ export class DaytonaSandboxProvider implements SandboxProvider {
     },
   });
   private readonly preparations = new Map<string, Promise<void>>();
-  private readonly screenPreviews = new Map<
-    string,
-    { url: string; token: string; expiresAt: number; viewPort: number }
-  >();
-  private readonly screenPreviewStarts = new Map<
-    string,
-    Promise<{ url: string; token: string; expiresAt: number; viewPort: number }>
-  >();
+  /** Every preview that may still be held, newest last. */
+  private readonly screenPreviews = new Map<string, ScreenPreview[]>();
+  private readonly screenPreviewStarts = new Map<string, Promise<ScreenPreview>>();
 
   constructor(config: DaytonaConfig & { apiKey: string }, client?: DaytonaSandboxSdk) {
     this.client =
@@ -319,12 +320,7 @@ export class DaytonaSandboxProvider implements SandboxProvider {
       this.forget(id);
       return;
     }
-    const previewKeys = [...this.screenPreviews.keys()].filter((key) => key.startsWith(`${id}:`));
-    await Promise.all(
-      previewKeys.map((previewKey) =>
-        this.revokeScreenPreview(sandbox, this.screenPreviews.get(previewKey)),
-      ),
-    );
+    await this.revokeScreenPreviews(sandbox, id);
     this.forget(id);
     await sandbox.computerUse.stop().catch(() => undefined);
     await sandbox.stop(120);
@@ -337,12 +333,7 @@ export class DaytonaSandboxProvider implements SandboxProvider {
       this.forget(id);
       return;
     }
-    const previewKeys = [...this.screenPreviews.keys()].filter((key) => key.startsWith(`${id}:`));
-    await Promise.all(
-      previewKeys.map((previewKey) =>
-        this.revokeScreenPreview(sandbox, this.screenPreviews.get(previewKey)),
-      ),
-    );
+    await this.revokeScreenPreviews(sandbox, id);
     this.forget(id);
     try {
       await sandbox.delete(120, true);
@@ -468,17 +459,11 @@ export class DaytonaSandboxProvider implements SandboxProvider {
 
   private async screenPreview(sandbox: Sandbox, screenKey: string, viewPort: number) {
     const previewKey = `${sandbox.id}:${screenKey}:${viewPort}`;
-    const cached = this.screenPreviews.get(previewKey);
-    // Clients hold a screen URL for up to SCREEN_URL_RENEW_MS, so the preview under it must outlive that.
-    if (cached && cached.expiresAt > Date.now() + SCREEN_URL_RENEW_MS) return cached;
+    const cached = this.screenPreviews.get(previewKey)?.at(-1);
+    if (cached && cached.expiresAt > Date.now() + SCREEN_PROXY_TTL_MS) return cached;
     const pending = this.screenPreviewStarts.get(previewKey);
     if (pending) return pending;
-    let start!: Promise<{
-      url: string;
-      token: string;
-      expiresAt: number;
-      viewPort: number;
-    }>;
+    let start!: Promise<ScreenPreview>;
     start = sandbox
       .getSignedPreviewUrl(viewPort, DAYTONA_SCREEN_TTL_SECONDS)
       .then(async (preview) => {
@@ -492,7 +477,10 @@ export class DaytonaSandboxProvider implements SandboxProvider {
           await sandbox.expireSignedPreviewUrl(viewPort, preview.token).catch(() => undefined);
           throw new Error("Daytona screen preview was invalidated during teardown");
         }
-        this.screenPreviews.set(previewKey, cachedPreview);
+        const live = (this.screenPreviews.get(previewKey) ?? []).filter(
+          (preview) => preview.expiresAt > Date.now(),
+        );
+        this.screenPreviews.set(previewKey, [...live, cachedPreview]);
         return cachedPreview;
       })
       .finally(() => {
@@ -504,12 +492,15 @@ export class DaytonaSandboxProvider implements SandboxProvider {
     return start;
   }
 
-  private async revokeScreenPreview(
-    sandbox: Sandbox,
-    preview: { url: string; token: string; expiresAt: number; viewPort: number } | undefined,
-  ): Promise<void> {
-    if (!preview) return;
-    await sandbox.expireSignedPreviewUrl(preview.viewPort, preview.token).catch(() => undefined);
+  private async revokeScreenPreviews(sandbox: Sandbox, id: string): Promise<void> {
+    const previews = [...this.screenPreviews]
+      .filter(([key]) => key.startsWith(`${id}:`))
+      .flatMap(([, live]) => live);
+    await Promise.all(
+      previews.map((preview) =>
+        sandbox.expireSignedPreviewUrl(preview.viewPort, preview.token).catch(() => undefined),
+      ),
+    );
   }
 
   private forget(id: string): void {

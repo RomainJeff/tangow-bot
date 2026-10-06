@@ -258,7 +258,33 @@ describe("createScreenLink", () => {
       "0 adjudicate",
       "5000 adjudicate",
       "10000 adjudicate",
-      "15000 failed",
+    ]);
+  });
+
+  it("keeps following a flapping embed after its status reads run out", () => {
+    const { link, log, time } = screen();
+    for (let outage = 0; outage < 4; outage++) {
+      link.message(say("connected"));
+      time.advance(10_000);
+      link.message(say("reconnecting"));
+      link.message(say("stalled"));
+      time.advance(3_000);
+    }
+    link.message(say("connected"));
+    expect(log).toEqual([
+      "0 connecting",
+      "0 none",
+      "10000 reconnecting",
+      "10000 adjudicate",
+      "13000 none",
+      "23000 reconnecting",
+      "23000 adjudicate",
+      "26000 none",
+      "36000 reconnecting",
+      "36000 adjudicate",
+      "39000 none",
+      "49000 reconnecting",
+      "52000 none",
     ]);
   });
 

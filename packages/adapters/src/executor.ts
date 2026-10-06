@@ -190,6 +190,7 @@ import {
   type ComputerExecutionLease,
   holdComputerExecutionLeaseForTakeover,
   provisionComputer,
+  releaseBotScreen,
   releaseComputerExecutionLease,
   renewComputerExecutionLease,
   screenLeaseIdForRun,
@@ -4733,9 +4734,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         clearInterval(heartbeat);
         if (!retainComputerLease) {
           if (screenRelease) {
-            await deps.sandbox
-              .releaseScreen?.(screenRelease.computer, screenRelease.context)
-              .catch(() => undefined);
+            await releaseBotScreen(deps, screenRelease.computer, screenRelease.context);
           }
           await releaseComputerExecutionLease(deps.prisma, computerLease).catch(() => undefined);
         }

@@ -375,6 +375,7 @@ describe("destroyBot", () => {
       },
       routine: { findMany: vi.fn().mockResolvedValue([]) },
       artifact: { findMany: vi.fn().mockResolvedValue([]) },
+      bot: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       $transaction: transaction,
     } as unknown as PrismaClient;
 
@@ -443,6 +444,10 @@ describe("destroyBot", () => {
         botId: "bot-2",
       }),
     );
+    expect(prisma.bot.updateMany).toHaveBeenCalledWith({
+      where: { id: "bot-2" },
+      data: { screenGeneration: { increment: 1 } },
+    });
   });
 
   it("surfaces transaction failures instead of reporting deletion success", async () => {
