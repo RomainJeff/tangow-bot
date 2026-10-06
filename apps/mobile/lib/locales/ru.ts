@@ -24,6 +24,7 @@ export const RU_MESSAGES: Record<string, string> = {
   Minimal: "Минимальный",
   "Open web app": "Открыть веб-приложение",
   "Project ID": "ID проекта",
+  "Connecting…": "Подключение…",
   Reconnecting: "Повторное подключение",
   "Recovering Team Computer": "Восстановление компьютера команды",
   "Recovering {name}’s Computer": "Восстановление компьютера {name}",

@@ -405,35 +405,4 @@ describe("screen URL reuse", () => {
     expect(fixture.readScreen).toHaveBeenCalledTimes(2);
     fixture.controller.dispose();
   });
-
-  it("reads the screen once more when the app resumes after 10 seconds away", async () => {
-    vi.useFakeTimers();
-    const fixture = setup();
-    fixture.controller.start();
-    await vi.advanceTimersByTimeAsync(0);
-    await fixture.controller.resume(10_000);
-    expect(fixture.readScreen).toHaveBeenCalledTimes(2);
-    fixture.controller.dispose();
-  });
-
-  it("keeps the held screen when the app resumes after 3 seconds away", async () => {
-    vi.useFakeTimers();
-    const fixture = setup();
-    fixture.controller.start();
-    await vi.advanceTimersByTimeAsync(0);
-    await fixture.controller.resume(3_000);
-    expect(fixture.readScreen).toHaveBeenCalledTimes(1);
-    fixture.controller.dispose();
-  });
-
-  it("does not read a screen on resume when none is held", async () => {
-    vi.useFakeTimers();
-    const fixture = setup();
-    fixture.readScreen.mockResolvedValue(null);
-    fixture.controller.start();
-    await vi.advanceTimersByTimeAsync(0);
-    await fixture.controller.resume(60_000);
-    expect(fixture.readScreen).toHaveBeenCalledTimes(1);
-    fixture.controller.dispose();
-  });
 });

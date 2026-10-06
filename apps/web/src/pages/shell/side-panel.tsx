@@ -43,6 +43,8 @@ import { WindowChrome } from "../WindowChrome";
 import { BotSettings, CreateBotForm } from "./bot-panel";
 import type { Panel } from "./layout";
 import { firstThreadRoute, panelIsOpen } from "./layout";
+import { ScreenFrame } from "./screen-frame";
+import type { ScreenLinkHandlers } from "./use-screen-link";
 
 export function SidePanel({
   panel,
@@ -56,6 +58,7 @@ export function SidePanel({
   bootstrapMe,
   embeddedScreenUrl,
   computerScreenError,
+  screenLink,
   openComputer,
   refreshThread,
   refreshGroupThread,
@@ -103,6 +106,7 @@ export function SidePanel({
   bootstrapMe: Me | null | undefined;
   embeddedScreenUrl: string | null;
   computerScreenError: ReactNode;
+  screenLink: ScreenLinkHandlers;
   openComputer: () => Promise<void>;
   refreshThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
   refreshGroupThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
@@ -267,13 +271,12 @@ export function SidePanel({
                     ) : computer?.state === "running" &&
                       embeddedScreenUrl &&
                       !computerScreenError ? (
-                      <iframe
+                      <ScreenFrame
+                        url={embeddedScreenUrl}
                         title={t`Bot screen preview`}
-                        src={embeddedScreenUrl}
-                        sandbox={screenIframeSandbox(embeddedScreenUrl)}
-                        className="h-full w-full border-0 bg-black"
                         allow="clipboard-read; clipboard-write"
-                        style={{ pointerEvents: "none" }}
+                        interactive={false}
+                        handlers={screenLink}
                       />
                     ) : (
                       <div className="grid h-full place-items-center px-6 text-center text-meta text-muted-foreground/80">
@@ -556,17 +559,6 @@ function DesktopKindEmptyState({ className }: { className?: string }) {
   );
 }
 
-function screenIframeSandbox(url: string | null) {
-  if (!url) return undefined;
-  try {
-    return new URL(url, window.location.href).pathname.startsWith("/novnc/")
-      ? "allow-scripts allow-pointer-lock"
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function computerPlaceholder(
   state: ComputerStatus["state"] | undefined,
   booting: boolean,
@@ -592,6 +584,7 @@ export function ComputerOverlay({
   computerViewport,
   embeddedScreenUrl,
   computerScreenError,
+  screenLink,
   hasControl,
   recordingSkill,
   teachBusy,
@@ -612,6 +605,7 @@ export function ComputerOverlay({
   computerViewport: { height: number; offsetTop: number } | null;
   embeddedScreenUrl: string | null;
   computerScreenError: ReactNode;
+  screenLink: ScreenLinkHandlers;
   hasControl: boolean;
   recordingSkill: TaughtSkill | null;
   teachBusy: boolean;
@@ -746,15 +740,12 @@ export function ComputerOverlay({
             <DesktopKindEmptyState className="grid h-full place-items-center px-8 text-center text-meta text-muted-foreground/80" />
           ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
             <>
-              <iframe
+              <ScreenFrame
+                url={embeddedScreenUrl}
                 title={t`Bot screen`}
-                src={embeddedScreenUrl}
-                sandbox={screenIframeSandbox(embeddedScreenUrl)}
-                className="h-full w-full border-0 bg-black"
                 allow="clipboard-read; clipboard-write; fullscreen"
-                style={{
-                  pointerEvents: recordingSkill || !hasControl ? "none" : "auto",
-                }}
+                interactive={!recordingSkill && hasControl}
+                handlers={screenLink}
               />
               {active ? (
                 <TeachCaptureOverlay

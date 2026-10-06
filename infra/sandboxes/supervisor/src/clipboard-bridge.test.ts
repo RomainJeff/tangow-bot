@@ -95,7 +95,7 @@ describe("host clipboard paste bridge", () => {
     const keys: Array<[number, string, boolean | undefined]> = [];
     const rfb = {
       viewOnly: false,
-      _rfbConnectionState: "connected",
+      connected: true,
       clipboardPasteFrom: vi.fn(),
       sendKey: (keysym: number, code: string, down?: boolean) => {
         keys.push([keysym, code, down]);
@@ -109,8 +109,10 @@ describe("host clipboard paste bridge", () => {
     expect(keys.at(-3)).toEqual([0x76, "KeyV", true]);
     expect(pasteHostText({ ...rfb, viewOnly: true }, "x")).toBe(false);
     expect(pasteHostText(rfb, "")).toBe(false);
-    expect(pasteHostText({ ...rfb, _rfbConnectionState: "connecting" }, "x")).toBe(false);
-    expect(pasteHostText({ ...rfb, _rfbConnectionState: "disconnected" }, "x")).toBe(false);
+    expect(pasteHostText({ ...rfb, connected: false }, "x")).toBe(false);
+    expect(
+      pasteHostText({ viewOnly: false, clipboardPasteFrom: vi.fn(), sendKey: vi.fn() }, "x"),
+    ).toBe(false);
   });
 
   it("does not swallow paste while the RFB session is still connecting", () => {
@@ -125,7 +127,7 @@ describe("host clipboard paste bridge", () => {
     };
     const rfb = {
       viewOnly: false,
-      _rfbConnectionState: "connecting",
+      connected: false,
       clipboardPasteFrom: vi.fn(),
       sendKey: vi.fn(),
     };
@@ -156,7 +158,7 @@ describe("host clipboard paste bridge", () => {
     };
     const rfb = {
       viewOnly: false,
-      _rfbConnectionState: "connected",
+      connected: true,
       clipboardPasteFrom: vi.fn(),
       sendKey: vi.fn(),
     };
@@ -209,4 +211,17 @@ describe("host clipboard paste bridge", () => {
     expect(start).toMatch(/clipboard-bridge\.js/);
     expect(supervisor).toMatch(/"clipboard-bridge\.js"/);
   });
+
+  it.each(["screen-link-machine.js", "screen-link-session.js"])(
+    "ships %s with the embed and checks it at startup",
+    (file) => {
+      const root = path.resolve(import.meta.dirname, "../../computer");
+      const supervisor = readFileSync(path.join(import.meta.dirname, "index.ts"), "utf8");
+      expect(readFileSync(path.join(root, "Dockerfile"), "utf8")).toContain(
+        `COPY --chmod=644 ${file} /usr/share/novnc/${file}`,
+      );
+      expect(readFileSync(path.join(root, "start.sh"), "utf8")).toContain(`$NOVNC_ROOT/${file}`);
+      expect(supervisor).toContain(`"${file}"`);
+    },
+  );
 });

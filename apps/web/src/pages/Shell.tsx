@@ -39,7 +39,6 @@ import {
   resolveComposerSendPlan,
   runThreadSubscription,
   searchHitThreadTarget,
-  shouldReloadScreenAfterHidden,
   speechFromBlocks,
   userVisibleMessages,
 } from "@rakazo/core";
@@ -128,6 +127,7 @@ import { ComputerOverlay, SidePanel } from "./shell/side-panel";
 import { BotsSidebar } from "./shell/sidebar";
 import { ThreadHeader } from "./shell/thread-header";
 import { Transcript } from "./shell/transcript";
+import type { ScreenLinkHandlers } from "./shell/use-screen-link";
 
 const BotContextMenu = lazy(() =>
   import("./BotContextMenu").then((module) => ({ default: module.BotContextMenu })),
@@ -2429,28 +2429,6 @@ export function ShellPage() {
   }, [panel, computerOpen, active?.id, computer?.state]);
 
   useEffect(() => {
-    let hiddenAt: number | null = null;
-    const onVisibility = () => {
-      if (document.visibilityState !== "visible") {
-        hiddenAt ??= Date.now();
-        return;
-      }
-      if (hiddenAt === null) return;
-      const hiddenForMs = Date.now() - hiddenAt;
-      hiddenAt = null;
-      const botId = activeBotId.current;
-      if (!botId || !computerVisible.current || !computerCacheRef.current.get(botId)?.screen?.url) {
-        return;
-      }
-      if (shouldReloadScreenAfterHidden(hiddenForMs)) {
-        void refreshComputerScreen(botId, { force: true }).catch(() => null);
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, []);
-
-  useEffect(() => {
     if ((panel !== "computer" && !computerOpen) || !active || !screenUrl) return;
     const botId = active.id;
     let timer: number | undefined;
@@ -2532,6 +2510,21 @@ export function ShellPage() {
         </Button>
       </div>
     ) : null;
+
+  const screenLink: ScreenLinkHandlers = {
+    onAdjudicate() {
+      const botId = activeBotId.current;
+      if (botId) void refreshComputerStatus(botId).catch(() => undefined);
+    },
+    onReload() {
+      const botId = activeBotId.current;
+      if (botId) void refreshComputerScreen(botId, { force: true }).catch(() => null);
+    },
+    onFailed() {
+      setComputerError(t`Could not connect to the computer screen`);
+      setComputerErrorFromScreen(false);
+    },
+  };
 
   const userName = session.data?.user.name ?? t`You`;
   const initials = userName
@@ -2868,6 +2861,7 @@ export function ShellPage() {
         bootstrapMe={bootstrapMe}
         embeddedScreenUrl={embeddedScreenUrl}
         computerScreenError={computerScreenError}
+        screenLink={screenLink}
         openComputer={openComputer}
         refreshThread={refreshThread}
         refreshGroupThread={refreshGroupThread}
@@ -3326,6 +3320,7 @@ export function ShellPage() {
         computerViewport={computerViewport}
         embeddedScreenUrl={embeddedScreenUrl}
         computerScreenError={computerScreenError}
+        screenLink={screenLink}
         hasControl={hasControl}
         recordingSkill={recordingSkill}
         teachBusy={teachBusy}

@@ -40,6 +40,7 @@ export * from "./routine-groups.js";
 export * from "./run-state.js";
 export * from "./sandbox-command.js";
 export * from "./screen-lease.js";
+export * from "./screen-link.js";
 export * from "./search.js";
 export * from "./secrets-guard.js";
 export * from "./self-update.js";

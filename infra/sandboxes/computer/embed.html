@@ -6,12 +6,25 @@
     <style>
       html,
       body,
-      #screen {
+      #screen,
+      #live,
+      #live > div {
         margin: 0;
         height: 100%;
         width: 100%;
         background: #0e0e10;
         overflow: hidden;
+      }
+      #screen {
+        position: relative;
+      }
+      #frozen {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
       }
       #mobile-controls {
         position: fixed;
@@ -46,7 +59,7 @@
         width: 100%;
         height: 100%;
       }
-      #screen.trackpad-active {
+      #live.trackpad-active {
         touch-action: none;
       }
       #mobile-keyboard-input {
@@ -71,6 +84,7 @@
       import keysyms from "./core/input/keysymdef.js";
       import RFB from "./core/rfb.js";
       import { attachMobileKeyboard, attachMobileTrackpad, isTouchBrowser } from "./mobile-keyboard.js";
+      import { hostPoster, startScreenLinkSession } from "./screen-link-session.js";
 
       function query(name, fallback) {
         const match = `${document.location.href}${window.location.hash}`.match(
@@ -88,10 +102,72 @@
       const prefix = window.location.pathname.replace(/[^/]+$/, "");
       const protocol = window.location.protocol === "https:" ? "wss" : "ws";
       const url = `${protocol}://${window.location.host}${prefix}${path}`;
-      const rfb = new RFB(document.getElementById("screen"), url);
-      rfb.viewOnly = flag("view_only");
-      rfb.scaleViewport = true;
-      rfb.clipViewport = false;
+
+      const live = document.getElementById("live");
+      const frozen = document.getElementById("frozen");
+      const stage = {
+        newSlot() {
+          const slot = document.createElement("div");
+          live.replaceChildren(slot);
+          return slot;
+        },
+        canvasOf: (slot) => slot.querySelector("canvas"),
+        freeze(canvas) {
+          if (!canvas.width || !canvas.height) return;
+          frozen.width = canvas.width;
+          frozen.height = canvas.height;
+          frozen.getContext("2d").drawImage(canvas, 0, 0);
+          frozen.hidden = false;
+        },
+        thaw() {
+          frozen.hidden = true;
+          frozen.width = 0;
+        },
+        clear() {
+          live.replaceChildren();
+          stage.thaw();
+        },
+        nextFrame(callback) {
+          const id = requestAnimationFrame(callback);
+          return () => cancelAnimationFrame(id);
+        },
+      };
+      const page = {
+        visible: () => document.visibilityState !== "hidden",
+        online: () => navigator.onLine !== false,
+        listen(listener) {
+          const events = [
+            [document, "visibilitychange", () => listener(page.visible() ? "visible" : "hidden")],
+            [window, "online", () => listener("online")],
+            [window, "offline", () => listener("offline")],
+          ];
+          for (const [target, type, handler] of events) target.addEventListener(type, handler);
+          return () => {
+            for (const [target, type, handler] of events) target.removeEventListener(type, handler);
+          };
+        },
+      };
+      const clock = {
+        now: () => Date.now(),
+        setTimeout: (callback, ms) => window.setTimeout(callback, ms),
+        clearTimeout: (timer) => window.clearTimeout(timer),
+      };
+
+      const { rfb } = startScreenLinkSession({
+        createRfb(slot, socketUrl) {
+          const connection = new RFB(slot, socketUrl);
+          connection.scaleViewport = true;
+          connection.clipViewport = false;
+          return connection;
+        },
+        url,
+        viewOnly: flag("view_only"),
+        stage,
+        page,
+        clock,
+        rand: Math.random,
+        post: hostPoster(window),
+      });
       if (!rfb.viewOnly) attachHostClipboardPaste(rfb);
       if (!rfb.viewOnly && isTouchBrowser()) {
         attachMobileKeyboard(rfb, {
@@ -103,13 +179,16 @@
         });
         attachMobileTrackpad(rfb, {
           button: document.getElementById("mobile-trackpad"),
-          surface: document.getElementById("screen"),
+          surface: live,
         });
       }
     </script>
   </head>
   <body>
-    <div id="screen"></div>
+    <div id="screen">
+      <div id="live"></div>
+      <canvas id="frozen" hidden></canvas>
+    </div>
     <div id="mobile-controls">
       <button
         id="mobile-keyboard"

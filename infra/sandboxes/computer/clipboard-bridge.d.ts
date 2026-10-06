@@ -24,7 +24,7 @@ export function clipboardTextFromPaste(event: {
   clipboardData?: { getData: (type: string) => string } | null;
 }): string;
 
-export function isRfbConnected(rfb: { _rfbConnectionState?: string } | null | undefined): boolean;
+export function isRfbConnected(rfb: { connected?: boolean } | null | undefined): boolean;
 
 export function releaseModifierKeys(
   sendKey: (keysym: number, code: string, down?: boolean) => void,
@@ -39,7 +39,7 @@ export function pasteHostText(
     viewOnly?: boolean;
     clipboardPasteFrom?: (text: string) => void;
     sendKey?: (keysym: number, code: string, down?: boolean) => void;
-    _rfbConnectionState?: string;
+    connected?: boolean;
   },
   text: string,
 ): boolean;
@@ -62,7 +62,7 @@ export function attachHostClipboardPaste(
     viewOnly?: boolean;
     clipboardPasteFrom?: (text: string) => void;
     sendKey?: (keysym: number, code: string, down?: boolean) => void;
-    _rfbConnectionState?: string;
+    connected?: boolean;
   },
   options?: { target?: EventTargetLike },
 ): () => void;

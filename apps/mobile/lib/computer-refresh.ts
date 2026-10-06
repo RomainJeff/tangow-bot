@@ -1,10 +1,6 @@
 import type { ComputerStatus } from "@rakazo/contracts";
 import type { HeldScreenUrl } from "@rakazo/core";
-import {
-  computerScreenKey,
-  isScreenUrlReusable,
-  shouldReloadScreenAfterHidden,
-} from "@rakazo/core";
+import { computerScreenKey, isScreenUrlReusable } from "@rakazo/core";
 
 interface RefreshInput {
   screenAttempts?: number;
@@ -80,11 +76,6 @@ export function createComputerRefresh(options: {
     /** The viewer could not use the current URL: read a fresh one on the next poll. */
     invalidateScreen() {
       held = undefined;
-    },
-    /** The app came back to the foreground: reload the viewer when it was away long enough to lose its connection. */
-    async resume(hiddenForMs: number) {
-      if (!held?.url || !shouldReloadScreenAfterHidden(hiddenForMs)) return;
-      await refresh({ force: true });
     },
     isActive: () => active,
     beginAction() {
