@@ -16,6 +16,9 @@ import type { ComponentProps, ReactNode } from "react";
 import { Fragment, useEffect, useId, useState } from "react";
 import { approvalActionLabel } from "../lib/approval-labels";
 
+const DETAIL_CLASS =
+  "max-h-72 overflow-auto rounded-card bg-muted px-3.5 py-3 font-mono text-mono whitespace-pre-wrap break-words text-muted-foreground";
+
 export type AskBlock = Extract<ThreadMessage["blocks"][number], { kind: "ask" }>;
 export type SpawnBotCardEdits = NonNullable<ReturnType<typeof spawnBotEdits>>;
 
@@ -170,9 +173,7 @@ export function AskCard({
       <span className="break-all">{block.credential.origin}</span>
     ) : undefined
   ) : block.detail ? (
-    <pre className="max-h-72 overflow-auto rounded-card bg-muted px-3.5 py-3 font-mono text-mono whitespace-pre-wrap break-words text-muted-foreground">
-      {block.detail}
-    </pre>
+    <pre className={DETAIL_CLASS}>{block.detail}</pre>
   ) : undefined;
 
   const answered =
@@ -297,11 +298,7 @@ export function AskCard({
                 onChange={(event) => setBotDraft({ ...draft, instructions: event.target.value })}
               />
             </div>
-            {readOnly ? (
-              <pre className="max-h-72 overflow-auto rounded-card bg-muted px-3.5 py-3 font-mono text-mono whitespace-pre-wrap break-words text-muted-foreground">
-                {readOnly}
-              </pre>
-            ) : null}
+            {readOnly ? <pre className={DETAIL_CLASS}>{readOnly}</pre> : null}
             {error ? (
               <p role="alert" className="text-meta text-destructive">
                 {error}

@@ -1139,7 +1139,7 @@ export async function answerRunInputInTransaction(
     );
     await tx.message.update({ where: { id: message.id }, data: { blocks } });
     if (spawnBotEdit) {
-      // Before the message update, so one notify covers both. The audit keeps what the model
+      // Before the message.updated event, so one notify covers both. The audit keeps what the model
       // proposed next to what the person approved.
       await appendEventInTransaction(tx, {
         spaceId: input.spaceId,

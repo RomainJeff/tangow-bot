@@ -1,5 +1,6 @@
 import { BOT_NAME_MAX_LENGTH, SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
 import { spawnBotEdits, spawnBotReadOnlyDetail } from "@rakazo/core";
+import { radii } from "@rakazo/ui-tokens";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -89,7 +90,7 @@ export default function EditBotProposal() {
   const fieldStyle = {
     marginTop: 8,
     backgroundColor: tokens.muted,
-    borderRadius: 11,
+    borderRadius: radii.row,
     padding: 16,
     color: tokens.foreground,
   };
