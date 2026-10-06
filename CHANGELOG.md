@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- The Space's decision model connection now lives in **Settings → Decision Model** on web and desktop, renamed from **Browser**, with the same OpenRouter key and no change to how bots use it.
 - A skill description is now limited to 1,024 characters, as in the Agent Skills format, since every description is sent to the bot on each turn.
 - A bot now changes an existing file in its workspace by editing the part that changes, and replaces a whole file only on purpose, instead of rewriting it from memory and losing content it did not copy back.
 - Sign-in, verification, invitation, password-reset and unsubscribe links, and links carrying a token or a presigned signature, no longer get a preview, so your server never opens a single-use link nobody clicked.

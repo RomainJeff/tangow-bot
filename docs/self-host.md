@@ -255,7 +255,7 @@ support. Existing token limits still apply; effort is not a separate reasoning-t
 
 Do not commit `.env`. Never put `COMPOSIO_API_KEY`, OpenRouter keys, or provider tokens in git, logs, or chat.
 
-A Space owner can connect an optional decision provider from **Settings → Browser** on web and
+A Space owner can connect an optional decision provider from **Settings → Decision Model** on web and
 desktop. Today the only adapter is OpenRouter's Decisions API, which serves TypeSafe's Jev model: an
 OpenRouter API key, and under **Advanced** a base URL for a compatible proxy and a model id (default
 `typesafe/jev-1.13`, pinned rather than the `~typesafe/jev-latest` alias). The key is stored
