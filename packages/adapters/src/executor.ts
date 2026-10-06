@@ -209,6 +209,7 @@ import { sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
+import { resolveEffort } from "./effort.js";
 import type { TextEditResult } from "./file-text.js";
 import { applyTextEdit, readLineWindow } from "./file-text.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
@@ -1647,6 +1648,27 @@ export function createRunExecutor(deps: ExecutorDeps) {
           (values) => runSecrets.push(...values),
         );
         runSecrets.push(...resolved.redact);
+        // Started now and awaited when the model is built, so the decision overlaps run setup.
+        const effortPromise = resolveEffort(
+          decisionProvider,
+          {
+            manual: thinkingLevel,
+            fallback: resolved.thinkingLevel ?? null,
+            supported:
+              deps.runtime.thinkingLevels?.({
+                provider: runModelProvider,
+                id: runModelId,
+                baseUrl: resolved.baseUrl,
+                reasoning: resolved.reasoning,
+              }) ?? [],
+            message: redactSecrets(task.prompt, runSecrets),
+            history: history.map(({ role, content }) => ({
+              role,
+              content: redactSecrets(content, runSecrets),
+            })),
+          },
+          context,
+        );
         await deps.prisma.run.updateMany({
           where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
           data: { modelProvider: runModelProvider, modelId: runModelId },
@@ -3952,6 +3974,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyMessagesAvailable,
             historyWindowMode,
           });
+          const effort = await effortPromise;
           const runtimeEvents = deps.runtime.run(
             {
               botId: bot.id,
@@ -3974,7 +3997,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 contextWindow: resolved.contextWindow,
                 acceptsImages: resolved.acceptsImages,
                 maxImagesPerPrompt: resolved.maxImagesPerPrompt,
-                thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? null,
+                thinkingLevel: effort.level,
                 oauth: resolved.oauth
                   ? { credential: resolved.oauth, persist: resolved.persistOAuth }
                   : undefined,
