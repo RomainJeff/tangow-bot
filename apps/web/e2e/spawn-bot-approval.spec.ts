@@ -20,6 +20,14 @@ test("a bot asks before creating a bot, and Cancel creates nothing", async ({ pa
   await expect(detail).toContainText("Start on the assigned work.");
   await expect(page.getByRole("button", { name: "Create bot", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator('[data-slot="framed-block-actions"]')
+      .filter({
+        has: page.getByRole("button", { name: "Create bot", exact: true }),
+      })
+      .getByRole("button"),
+  ).toHaveText(["Cancel", "Create bot"]);
   await expect(page.getByRole("button", { name: "Create space", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Always allow this tool" })).toHaveCount(0);
   await captureScreenshot(page, testInfo, "spawn-bot-approval-card");
@@ -51,6 +59,14 @@ test("Edit changes the name before Create bot, and the bot is created with it", 
   await expect(page.getByText("Create bot “Veille”?", { exact: true })).toBeVisible({
     timeout: 30_000,
   });
+  await expect(
+    page
+      .locator('[data-slot="framed-block-actions"]')
+      .filter({
+        has: page.getByRole("button", { name: "Edit", exact: true }),
+      })
+      .getByRole("button"),
+  ).toHaveText(["Cancel", "Edit", "Create bot"]);
   await page.getByRole("button", { name: "Edit", exact: true }).click();
 
   await expect(page.getByText("Create bot?", { exact: true })).toBeVisible();

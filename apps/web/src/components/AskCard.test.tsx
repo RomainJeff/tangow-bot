@@ -396,7 +396,7 @@ describe("AskCard editable Create bot card", () => {
     await click(button("Cancel"));
     expect(onAnswer).not.toHaveBeenCalled();
     expect(container.querySelector("input")).toBeNull();
-    expect(labels()).toEqual(["Create bot", "Edit", "Cancel"]);
+    expect(labels()).toEqual(["Cancel", "Edit", "Create bot"]);
     await click(button("Cancel"));
     expect(onAnswer.mock.calls).toEqual([["deny"]]);
   });
@@ -404,9 +404,9 @@ describe("AskCard editable Create bot card", () => {
   it("offers Edit only to the run's owner", () => {
     const owned = pendingCard({ spawnBot: { ...spawnBot, ownerUserId: "user-1" } });
     show(owned, { viewerUserId: "user-1" });
-    expect(labels()).toEqual(["Create bot", "Edit", "Cancel"]);
+    expect(labels()).toEqual(["Cancel", "Edit", "Create bot"]);
     show(owned, { viewerUserId: "user-2" });
-    expect(labels()).toEqual(["Create bot", "Cancel"]);
+    expect(labels()).toEqual(["Cancel", "Create bot"]);
   });
 
   it("CA23: the card becoming answered abandons the edit", () => {
