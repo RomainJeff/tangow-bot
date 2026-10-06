@@ -23,7 +23,7 @@ A skill folder holds:
 
 1. skill_read the skill and note its `dir` (read-only).
 2. Copy the whole folder with shell: `rm -rf skill-drafts/<name> && mkdir -p skill-drafts && cp -a <dir> skill-drafts/<name>`.
-3. Edit the copy with write_file or shell. Run any changed script once.
+3. Edit the copy's files with edit_file; add new files with write_file. Run any changed script once.
 4. Save with skill_update `{ "name": "<name>", "path": "skill-drafts/<name>" }`. The saved folder is replaced by the copy, so a file missing from it is deleted.
 5. Once the save succeeds, delete the draft: `rm -rf skill-drafts/<name>`.
 6. Mention /Name so the user can open it.

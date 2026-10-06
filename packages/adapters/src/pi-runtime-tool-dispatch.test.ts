@@ -1394,6 +1394,7 @@ describe("Pi connector tool dispatch", () => {
       {
         path: "shared/state.json",
         content: '{\n  "last_run": 1787648953\n}',
+        overwrite: false,
       },
       "call-1",
     );

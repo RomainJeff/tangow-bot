@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import type { ComputerAction, ComputerObservation, ComputerRef } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  ComputerAction,
+  ComputerObservation,
+  ComputerRef,
+  SandboxProvider,
+} from "@rakazo/adapter-kit";
 import type { ComputerMode } from "@rakazo/contracts";
 
 export function toComputerRef(computer: {
@@ -89,6 +95,25 @@ export function resolveBotWorkspacePath(
   const normalized = normalizeWorkspacePath(explicitRootPath ?? requestedPath);
   if (explicitRootPath !== null || isTeamRootPath(normalized)) return normalized;
   return path.posix.join(teamBotWorkspaceDirectory(botId), normalized);
+}
+
+export async function workspaceFileExists(
+  sandbox: Pick<SandboxProvider, "listFiles">,
+  computer: ComputerRef,
+  filePath: string,
+  context: AdapterContext,
+): Promise<boolean> {
+  const target = filePath.replace(/\\/g, "/");
+  const directory = path.posix.dirname(target);
+  let entries: Awaited<ReturnType<SandboxProvider["listFiles"]>>;
+  try {
+    entries = await sandbox.listFiles(computer, directory === "." ? "" : directory, context);
+  } catch {
+    // A missing parent directory means the file does not exist yet.
+    return false;
+  }
+  const name = path.posix.basename(target);
+  return entries.some((entry) => entry.kind === "file" && path.posix.basename(entry.path) === name);
 }
 
 export function resolveBotWorkspaceCwd(
