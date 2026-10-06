@@ -8,6 +8,79 @@ import { describe, expect, it } from "vitest";
 import { buildApprovalAskBlock } from "./approval-ask.js";
 
 describe("buildApprovalAskBlock", () => {
+  it("shows a gate card's routine whole, with no way to allow it for good", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "schedule_create",
+      { name: "Daily digest", prompt: "Read my mail\nnotify: false", cron: "0 9 * * *" },
+      [],
+      { mandatory: true },
+    );
+    expect(block).toEqual({
+      kind: "ask",
+      approvalEffectId: "effect-1",
+      text: "Create routine?",
+      detail: "name: Daily digest\ncron: 0 9 * * *\nprompt:\n  Read my mail\n  notify: false",
+      status: "pending",
+      actions: [
+        { id: "allow", label: "Allow once" },
+        { id: "deny", label: "Deny" },
+      ],
+    });
+  });
+
+  it("shows a gate card's skill as the whole SKILL.md it will write", () => {
+    const content = `---\nname: Coffee\ndescription: Order my usual\n---\n\n${"step\n".repeat(1500)}`;
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "skill_create",
+      { change: "created", name: "Coffee", content },
+      [],
+      { mandatory: true },
+    );
+    expect(block).toMatchObject({ text: "Save skill?", detail: content });
+  });
+
+  it("lists every file of a skill folder under its own label", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "skill_update",
+      {
+        change: "updated",
+        name: "Deploy",
+        content: "---\nname: Deploy\ndescription: Ship it\n---\n\n1. Run.",
+        files: [
+          { path: "scripts/run.sh", executable: true, text: "echo hi\nSKILL.md" },
+          { path: "assets/logo.png", executable: false, base64: "iVBORwD/" },
+        ],
+      },
+      [],
+      { mandatory: true },
+    );
+    expect(block).toMatchObject({
+      text: "Save skill?",
+      detail: [
+        "SKILL.md",
+        "  ---",
+        "  name: Deploy",
+        "  description: Ship it",
+        "  ---",
+        "  ",
+        "  1. Run.",
+        "scripts/run.sh (executable)",
+        "  echo hi",
+        "  SKILL.md",
+        "assets/logo.png (binary, 6 bytes)",
+      ].join("\n"),
+    });
+  });
+
+  it("gives a tool named like an object key the ordinary card", () => {
+    expect(
+      buildApprovalAskBlock("effect-1", "constructor", {}, [], { mandatory: true }),
+    ).toMatchObject({ text: "Review before constructor", detail: undefined });
+  });
+
   it("binds the approval to its effect and redacts secrets", () => {
     const block = buildApprovalAskBlock(
       "effect-1",

@@ -1,5 +1,11 @@
 import type { MessageBlock } from "@rakazo/contracts";
-import { redactSecrets, spawnBotApprovalBlock } from "@rakazo/core";
+import type { SkillFolderFile } from "@rakazo/core";
+import {
+  asSkillSaveRequest,
+  redactSecrets,
+  skillFolderFileBytes,
+  spawnBotApprovalBlock,
+} from "@rakazo/core";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
@@ -9,12 +15,27 @@ export function buildApprovalAskBlock(
   toolName: string,
   args: Record<string, unknown>,
   secrets: string[],
-  options?: { reviewReason?: string; runUserId?: string },
+  options?: { reviewReason?: string; runUserId?: string; mandatory?: boolean },
 ): MessageBlock {
   // spawn_bot arguments are redacted before they become the effect request, so the card
   // shows exactly what will be created; a second pass would only inflate short secrets.
   if (toolName === "spawn_bot") {
     return spawnBotApprovalBlock(effectId, args, options?.runUserId);
+  }
+  if (options?.mandatory && Object.hasOwn(CREATION_CARDS, toolName)) {
+    const card = CREATION_CARDS[toolName as keyof typeof CREATION_CARDS];
+    return {
+      kind: "ask",
+      approvalEffectId: effectId,
+      text: card.title,
+      // Bounded before the card (creationCardError): shown whole, never truncated.
+      detail: redactSecrets(card.detail(args), secrets),
+      status: "pending",
+      actions: [
+        { id: "allow", label: "Allow once" },
+        { id: "deny", label: "Deny" },
+      ],
+    };
   }
   const summary = describeApprovalAction(toolName, args);
   const detail = formatApprovalDetail(toolName, args, options?.reviewReason);
@@ -44,6 +65,71 @@ export function buildApprovalAskBlock(
           ],
   };
 }
+
+function indent(value: string): string {
+  return value
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+}
+
+const SCHEDULE_DETAIL_KEYS = [
+  "name",
+  "cron",
+  "every",
+  "unit",
+  "runAt",
+  "delayMinutes",
+  "delaySeconds",
+  "timezone",
+  "notify",
+] as const;
+
+type CreationCard = { title: string; detail: (args: Record<string, unknown>) => string };
+
+function folderFileLabel(file: SkillFolderFile): string {
+  const notes = [
+    ...(file.executable ? ["executable"] : []),
+    ...("text" in file ? [] : ["binary", `${skillFolderFileBytes(file)} bytes`]),
+  ];
+  return notes.length > 0 ? `${file.path} (${notes.join(", ")})` : file.path;
+}
+
+/** A folder lists every file under its own label: text in full, anything else by size. */
+const skillCard: CreationCard = {
+  title: "Save skill?",
+  detail: (args) => {
+    const save = asSkillSaveRequest(args);
+    if (!save?.files) return String(args.content ?? "");
+    return [
+      "SKILL.md",
+      indent(save.content),
+      ...save.files.flatMap((file) =>
+        "text" in file ? [folderFileLabel(file), indent(file.text)] : [folderFileLabel(file)],
+      ),
+    ].join("\n");
+  },
+};
+
+/**
+ * Everything a gate card creates. Multi-line values sit indented under their label, so a line
+ * forged inside a prompt cannot pass for a field; a skill shows its whole SKILL.md.
+ */
+const CREATION_CARDS = {
+  schedule_create: {
+    title: "Create routine?",
+    detail: (args) =>
+      [
+        ...SCHEDULE_DETAIL_KEYS.flatMap((key) =>
+          args[key] == null || args[key] === "" ? [] : [`${key}: ${String(args[key])}`],
+        ),
+        "prompt:",
+        indent(String(args.prompt ?? "")),
+      ].join("\n"),
+  },
+  skill_create: skillCard,
+  skill_update: skillCard,
+} satisfies Record<string, CreationCard>;
 
 function describeApprovalAction(toolName: string, args: Record<string, unknown>): string {
   if (toolName === "destination.write") {

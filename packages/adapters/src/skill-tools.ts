@@ -10,6 +10,7 @@ import {
   buildSkillMd,
   defaultSkillAvailability,
   findSkillByName,
+  hasHiddenText,
   isMarketplaceSkillKey,
   isSkillVisible,
   mergeBuiltinSkills,
@@ -282,8 +283,14 @@ function treeFile(file: SkillFolderFile): SkillTreeFile {
   return { path: file.path, bytes: new Uint8Array(bytes), executable: file.executable };
 }
 
-const folderFiles = (files: SkillTreeFile[]) =>
-  files.filter((file) => file.path !== "SKILL.md").map(snapshotFile);
+/** The folder's other files, or the error for a file name that could forge a card line. */
+function folderFiles(files: SkillTreeFile[]): SkillFolderFile[] | { error: string } {
+  const unreadable = files.find((file) => hasHiddenText(file.path));
+  if (unreadable) {
+    return { error: `Skill file name ${JSON.stringify(unreadable.path)} must be visible text.` };
+  }
+  return files.filter((file) => file.path !== "SKILL.md").map(snapshotFile);
+}
 
 const BOTH_CREATE_INPUTS = "Pass either path or name/description/body/content, not both.";
 const BOTH_UPDATE_INPUTS = "Pass either path or newName/description/body/content, not both.";
@@ -397,12 +404,9 @@ function shapeCreate(input: SkillSaveInput): SkillSaveRequest | { error: string 
     if ("error" in parsed) return { error: parsed.error };
     const invalid = rejectInvalidSkillFields(parsed.name, parsed.description);
     if (invalid) return { error: invalid };
-    return {
-      change: "created",
-      name: parsed.name,
-      content: buildSkillMd(parsed),
-      files: folderFiles(input.files),
-    };
+    const files = folderFiles(input.files);
+    if ("error" in files) return files;
+    return { change: "created", name: parsed.name, content: buildSkillMd(parsed), files };
   }
   if (input.content?.trim()) {
     const parsed = parseSkillMd(input.content);
@@ -449,7 +453,9 @@ async function shapeUpdate(
     nextName = parsed.name;
     nextDescription = parsed.description;
     nextContent = buildSkillMd(parsed);
-    files = folderFiles(input.files);
+    const kept = folderFiles(input.files);
+    if ("error" in kept) return kept;
+    files = kept;
   } else if (input.content?.trim()) {
     const parsed = parseSkillMd(input.content);
     if ("error" in parsed) return { error: parsed.error };

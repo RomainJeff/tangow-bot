@@ -873,6 +873,11 @@ describe("skill drafts", () => {
           files: folder("---\nname: Deploy\ndescription: d\n---\n\nPay\u{E0041}"),
         }),
       ).toEqual({ error: "Skill content must not contain invisible or control characters." });
+      expect(
+        await skillCreateFromTool(deps, creator, {
+          files: [...draft, { path: "a\nSKILL.md", bytes: text("x"), executable: false }],
+        }),
+      ).toEqual({ error: 'Skill file name "a\\nSKILL.md" must be visible text.' });
       expect(await listUserSkills(userSkillsRoot(dataDir, creator))).toEqual([]);
     });
 
