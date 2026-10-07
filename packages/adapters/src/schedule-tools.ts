@@ -9,7 +9,7 @@ import {
   nextBotMessageHop,
   nextCronDate,
   ONCE_ROUTINE_CRON,
-  routineCardSchedule,
+  routineScheduleLabel,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 
@@ -265,11 +265,6 @@ type StoredRoutine = {
   notify: boolean;
   timezone: string;
   crons: string[];
-  active: boolean;
-  webhookEnabled: boolean;
-  githubEnabled: boolean;
-  messageProvider: string | null;
-  lastRunAt: Date | null;
   nextRunAt: Date | null;
 };
 
@@ -280,7 +275,7 @@ function routineResult(row: StoredRoutine) {
     routineId: row.id,
     name: row.name,
     prompt: row.prompt,
-    schedule: routineCardSchedule(row),
+    schedule: routineScheduleLabel(row, row.timezone),
     notify: row.notify,
     cron: row.crons[0],
     nextRunAt: row.nextRunAt?.toISOString() ?? null,
