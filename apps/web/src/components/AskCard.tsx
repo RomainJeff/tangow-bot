@@ -13,8 +13,10 @@ import {
 } from "@rakazo/core";
 import type { FramedBlockActionsAlign } from "@rakazo/ui-web";
 import { Button, FramedBlock, Input, Textarea } from "@rakazo/ui-web";
+import { ChevronRight } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Fragment, useEffect, useId, useState } from "react";
+import { Link } from "react-router-dom";
 import { approvalActionLabel } from "../lib/approval-labels";
 
 const DETAIL_CLASS =
@@ -47,6 +49,21 @@ function formatAnsweredState(
   if (answer === "always") return t`Always allowed`;
   if (answer === "deny") return t`Denied`;
   return t`Answered: ${answer}`;
+}
+
+/** What became of a routine card: a link to the routine. */
+function RoutineSettled({ block }: { block: AskBlock }) {
+  if (!block.created) return t`Answered`;
+  return (
+    <Link
+      to={{ search: `?routine=${encodeURIComponent(block.created.id)}` }}
+      className="inline-flex items-center gap-1 duration-(--duration-hover) ease-quiet hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      {t`Routine created`} ·{" "}
+      <span className="font-medium text-foreground">{block.created.label}</span>
+      <ChevronRight className="size-3 shrink-0" aria-hidden />
+    </Link>
+  );
 }
 
 function approvalActionVariant(id: string): "capsule" | "capsuleSecondary" | "tertiary" {
@@ -164,10 +181,12 @@ export function AskCard({
     );
   }
 
-  // The row above already names the bot; the card only repeats itself for a
-  // consequential approval, name-less. A plain question opens with no header.
-  const header = approval ? { who: t`Needs your call` } : undefined;
-  const consequence = secretInput ? (
+  // A routine card shows what it set up instead of the plain-text detail.
+  const routineCard = approval ? block.routine : undefined;
+  // The row above already names the bot; the card only repeats itself for a consequential
+  // approval, name-less. A plain question or a routine card opens with no header.
+  const header = approval && !routineCard ? { who: t`Needs your call` } : undefined;
+  const consequence = routineCard ? undefined : secretInput ? (
     block.credential?.origin ? (
       <span className="break-all">{block.credential.origin}</span>
     ) : undefined
@@ -175,18 +194,22 @@ export function AskCard({
     <pre className={DETAIL_CLASS}>{block.detail}</pre>
   ) : undefined;
 
-  const answered =
-    block.status === "answered"
-      ? formatAnsweredState(
+  const answered: ReactNode =
+    block.status === "answered" ? (
+      routineCard ? (
+        <RoutineSettled block={block} />
+      ) : (
+        formatAnsweredState(
           block.answer,
           Boolean(approvalActions),
           secretInput,
           approvalActions?.find((action) => action.id === block.answer)?.outcome,
           askActions,
         )
-      : !canAnswer
-        ? t`No longer active`
-        : undefined;
+      )
+    ) : !canAnswer ? (
+      t`No longer active`
+    ) : undefined;
 
   let children: ReactNode = null;
   let actions: ReactNode = null;
@@ -469,9 +492,13 @@ export function AskCard({
       header={header ? { ...header, dot: answered === undefined } : undefined}
       // An approval question can carry model-written text (a bot's name): never fetch an image for it.
       question={
-        <ChatMarkdown allowImages={!approval}>
-          {botEditing ? t`Create bot?` : block.text}
-        </ChatMarkdown>
+        routineCard ? (
+          block.text
+        ) : (
+          <ChatMarkdown allowImages={!approval}>
+            {botEditing ? t`Create bot?` : block.text}
+          </ChatMarkdown>
+        )
       }
       consequence={botEditing ? undefined : consequence}
       answered={answered}

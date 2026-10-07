@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { selectedAskActionLabel } from "@rakazo/core";
+import { routineConfirmationBlock, selectedAskActionLabel } from "@rakazo/core";
 import { act } from "react";
 import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // vitest doesn't run the lingui macro/babel transform, so these macro imports must be
@@ -590,5 +591,40 @@ describe("AskCard stepper navigation", () => {
     ]);
     expect(row?.textContent).not.toContain("May");
     expect(container.textContent).toContain("When?");
+  });
+});
+
+describe("AskCard routine confirmation", () => {
+  const render = (block: AskBlock) =>
+    renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/app/bot-1"]}>
+        <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-routine" />
+      </MemoryRouter>,
+    );
+  const answeredLine = (html: string) => {
+    const start = html.indexOf('data-slot="framed-block-answered"');
+    return start < 0
+      ? null
+      : html.slice(html.indexOf(">", start) + 1, html.indexOf("</div>", start));
+  };
+
+  it("confirms a routine the user asked for, settled, with nothing to answer", () => {
+    const html = render(
+      routineConfirmationBlock("effect-1", {
+        id: "routine-1",
+        name: "Offres de la semaine",
+        schedule: "Every hour UTC",
+        prompt: "Résume les nouvelles offres. **Vite**",
+        notify: false,
+      }),
+    );
+    expect(html).toContain("Every hour UTC");
+    expect(html).toContain('href="/app/bot-1?routine=routine-1"');
+    expect(answeredLine(html)?.replace(/<[^>]+>/g, "")).toBe(
+      "Routine created · Offres de la semaine",
+    );
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("<pre");
+    expect(html).not.toContain("Needs your call");
   });
 });

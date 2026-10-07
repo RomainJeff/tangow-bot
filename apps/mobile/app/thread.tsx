@@ -3696,13 +3696,48 @@ const MessageBubble = memo(function MessageBubble({
   );
   if (askBlock?.kind === "ask" && askBlock.actions?.length) {
     const approval = isApprovalAskBlock(askBlock);
+    // A routine card shows what it set up instead of the plain-text detail.
+    const routineCard = approval ? askBlock.routine : undefined;
     // The row above already names the bot; the card only repeats itself for a
-    // consequential approval, name-less. A question with fixed options opens
-    // with no header.
-    const header = approval ? { who: t("Needs your call") } : undefined;
+    // consequential approval, name-less. A question with fixed options or a
+    // routine card opens with no header.
+    const header = approval && !routineCard ? { who: t("Needs your call") } : undefined;
+    const created = askBlock.created;
+    const routineSettled = (): ReactNode => {
+      if (!created) return t("Answered");
+      return (
+        <Pressable
+          accessibilityRole="link"
+          onPress={() =>
+            router.push({
+              pathname: "/routine",
+              params: {
+                botId: cardBotId,
+                botName: memberName(members, cardBotId) ?? botName ?? "",
+                routineId: created.id,
+              },
+            })
+          }
+          style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}
+        >
+          <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+            {t("Routine created")} ·{" "}
+            <Text style={{ color: tokens.foreground, fontWeight: "600" }}>{created.label}</Text>
+          </Text>
+          <NativeSymbol
+            ios="chevron.right"
+            android="chevron-forward"
+            size={11}
+            color={tokens.mutedForeground}
+          />
+        </Pressable>
+      );
+    };
     const answeredLine =
       askBlock.status === "answered"
-        ? formatApprovalAnswer(askBlock.answer, askBlock.actions, approval)
+        ? routineCard
+          ? routineSettled()
+          : formatApprovalAnswer(askBlock.answer, askBlock.actions, approval)
         : !canAnswer
           ? t("No longer active")
           : undefined;
@@ -3711,7 +3746,7 @@ const MessageBubble = memo(function MessageBubble({
         <FramedBlock
           header={header ? { ...header, dot: answeredLine === undefined } : undefined}
           question={<Text {...actionProps}>{askBlock.text}</Text>}
-          consequence={askBlock.detail}
+          consequence={routineCard ? undefined : askBlock.detail}
           answered={answeredLine}
           actions={
             answeredLine === undefined ? (
