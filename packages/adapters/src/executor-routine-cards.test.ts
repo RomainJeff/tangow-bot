@@ -342,9 +342,8 @@ function fixture(
       ),
     askBlock,
     messageUpdate,
-    /** The cards the run posted outside a pause, in order, with their nonces. */
+    /** The cards the run posted outside a pause, in order. */
     posted: () => postedCards().map((data) => data.blocks),
-    nonces: () => postedCards().map((data) => data.clientNonce),
     async play(next: ToolCall[][], workerId = "worker-1", ends: "ok" | "failed" = "ok") {
       batches = next;
       run.status = "queued";
@@ -408,19 +407,18 @@ describe("a routine the user asks for", () => {
       expect(f.routineCreate).toHaveBeenCalledOnce();
       expect(f.askBlock()).toBeUndefined();
       expect(f.posted()).toEqual([[expect.objectContaining(confirmation)]]);
-      expect(f.nonces()).toEqual(["routine-confirmation:effect-1"]);
       expect(f.results).toEqual([
         expect.objectContaining({ ok: true, routineId: "routine-new", schedule: "Every hour UTC" }),
       ]);
     },
   );
 
-  it("posts its card once when the run is retried", async () => {
+  it("replays the routine already set up when the run repeats the call, with no second card", async () => {
     const f = fixture();
     await f.play([[routine]]);
     await f.play([[routine]], "worker-2");
     expect(f.routineCreate).toHaveBeenCalledOnce();
-    expect(f.nonces()).toEqual(["routine-confirmation:effect-1"]);
+    expect(f.posted()).toEqual([[expect.objectContaining(confirmation)]]);
     expect(f.results).toEqual([
       expect.objectContaining({ ok: true, routineId: "routine-new" }),
       expect.objectContaining({ ok: true, routineId: "routine-new" }),

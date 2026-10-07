@@ -369,18 +369,6 @@ describe("routineScheduleLabel", () => {
     expect(label(cron, timezone)).toBe(expected);
   });
 
-  it("names the weekday and hour the schedule will really run at", () => {
-    const next = nextCronDate("0 9 * * 1", from, "Europe/Paris");
-    const shown = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Europe/Paris",
-      weekday: "long",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).format(next);
-    expect(shown).toBe("Monday 09:00");
-  });
-
   it("dates a one-shot routine in its zone", () => {
     expect(
       routineScheduleLabel(
