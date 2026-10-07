@@ -36,19 +36,31 @@ function routineAsk(effectId: string, routine: RoutinePreview, text: string): As
   };
 }
 
-/**
- * What the user sees once a routine they asked for is set up: the routine card already settled,
- * linking to the routine, with nothing to answer. It opens on when the routine runs.
- */
-export function routineConfirmationBlock(
-  effectId: string,
-  routine: RoutinePreview & { id: string },
-): AskBlock {
-  const { id, ...preview } = routine;
+export type CreatedRoutine = RoutinePreview & { id: string };
+
+/** A routine card once its routine exists: it opens on when the routine runs and links to it. */
+function settledOn({
+  id,
+  ...preview
+}: CreatedRoutine): Pick<AskBlock, "text" | "routine" | "created"> {
   return {
-    ...routineAsk(effectId, preview, preview.schedule),
-    status: "answered",
+    text: preview.schedule,
+    routine: preview,
     created: { kind: "routine", id, label: preview.name },
+  };
+}
+
+/** A routine the user asked for, set up: its card already settled, with nothing to answer. */
+export function routineConfirmationBlock(effectId: string, routine: CreatedRoutine): AskBlock {
+  return {
+    ...routineAsk(effectId, routine, routine.schedule),
+    status: "answered",
+    ...settledOn(routine),
     confirms: "created",
   };
+}
+
+/** The approval card the user allowed for a routine, settled on the routine it created. */
+export function settleRoutineAsk(card: AskBlock, routine: CreatedRoutine): AskBlock {
+  return { ...card, ...settledOn(routine) };
 }

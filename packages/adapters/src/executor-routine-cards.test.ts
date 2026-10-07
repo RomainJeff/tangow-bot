@@ -452,7 +452,7 @@ describe("a routine the user asks for", () => {
     expect(f.posted()).toEqual([]);
   });
 
-  it("links the approval card the user allowed to the routine, with no second card", async () => {
+  it("settles the approval card the user allowed on the routine, with no second card", async () => {
     const f = fixture({ trigger: "webhook", routineId: "routine-wake", routines: [inbox] });
     await f.play([[routine]]);
     const card = f.askBlock() as Row;
@@ -476,6 +476,8 @@ describe("a routine the user asks for", () => {
     ).toMatchObject({
       approvalEffectId: "effect-1",
       answer: "allow",
+      text: "Every hour UTC",
+      routine: confirmation.routine,
       created: { kind: "routine", id: "routine-new", label: "Stretch" },
     });
   });
