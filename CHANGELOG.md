@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Routines can no longer be created from a messaging channel.
 - A bot now changes or deletes only the skills it wrote and you have neither edited nor shared, and saves a skill only in a conversation you started.
 - A skill a bot saves from a folder of its workspace now waits for your confirmation when the folder holds a file the conversation did not write or the conversation read outside content, and a skill holding one of your credentials or hidden characters is refused.
+- On web and desktop, the cards where you validate an action (tool approvals, new bot, new space, secrets, questions) now keep their buttons on the right with the main action last, while lists of answers stay on the left.
 
 ### 2026-10-06
 

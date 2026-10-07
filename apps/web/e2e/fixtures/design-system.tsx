@@ -170,18 +170,31 @@ function Kitchen() {
           consequence="They will see the last 12 messages of this thread."
           actions={
             <>
-              <Button consequential variant="capsule" size="capsule">
-                Allow once
+              <Button variant="tertiary" size="capsule">
+                Deny
               </Button>
               <Button variant="capsuleSecondary" size="capsule">
                 Always allow this tool
               </Button>
-              <Button variant="tertiary" size="capsule">
-                Deny
+              <Button consequential variant="capsule" size="capsule">
+                Allow once
               </Button>
             </>
           }
         />
+        <FramedBlock
+          question="Which room should I hold?"
+          actionsAlign="start"
+          actions={
+            <Button variant="tertiary" size="capsule">
+              Other answer…
+            </Button>
+          }
+        >
+          <Button variant="quickReply" size="quickReply">
+            The roof terrace
+          </Button>
+        </FramedBlock>
         {/* Once answered the block drops its controls and its actions, even
             though both are still passed. */}
         <FramedBlock

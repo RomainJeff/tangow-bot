@@ -239,10 +239,11 @@ The only framed element of the thread: a decision or a question the bot cannot
 settle alone.
 
 Props: `header?: { who, dot? }`, `question`, `consequence?`, `children?`,
-`actions?`, `answered?`. Anatomy: `bg-surface rounded-block shadow-card`, every
-line inset by 14 (`px-3.5`) so its text starts where a bubble's text does; an
-optional header line with a 6 px ink dot and `text-block-header`; the question
-in `text-question`; the consequence in `text-meta`; `children` for controls; the
+`actions?`, `actionsAlign?: "end" | "start"` (default `end`), `answered?`.
+Anatomy: `bg-surface rounded-block shadow-card`, every line inset by 14
+(`px-3.5`) so its text starts where a bubble's text does; an optional header
+line with a 6 px ink dot and `text-block-header`; the question in
+`text-question`; the consequence in `text-meta`; `children` for controls; the
 actions wrapped in a row of capsules. States: open (controls and actions) and
 **answered** — setting `answered` settles the block: the controls and the
 actions are dropped whether or not they are still passed, one `text-meta` line
@@ -256,6 +257,16 @@ is asking, so the card repeats that only for a
 consequential approval, name-less ("Needs your call"); a plain question,
 `ask_user` question, or `choice` passes no `header` at all and opens straight
 on the question.
+
+Alignment. On web and desktop the actions of a decision sit on the right
+(`actionsAlign="end"`), ordered dismiss, then Edit or the secondary approval,
+then the primary last: "Not now" or "Deny", "Edit", "Allow once". The
+onboarding focus card follows the same rule: its "Dismiss" moves right while its
+options stay left. A list of answers to a question (`ask_user`, `choice`, a
+stepper's options) is content to read, not a validation: it stays in `children`
+and left-aligned, and an action that only belongs to that list passes
+`actionsAlign="start"`. iOS is unchanged: full-width stacked capsules, primary
+on top.
 
 Do: one open block per thread. Don't: frame an ordinary message, or stack a
 second shadow inside it.
