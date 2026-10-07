@@ -520,7 +520,7 @@ export function RoutineEditor({
                 <DropdownMenuItem disabled>
                   <span
                     aria-hidden
-                    className="inline-block size-3.5 rounded-[4px]"
+                    className="size-3.5 shrink-0 rounded-[4px]"
                     style={{ background: comingSoonColor(item.id), opacity: 0.55 }}
                   />
                   {item.label()}
