@@ -157,6 +157,17 @@ export const MessageBlock = z.discriminatedUnion("kind", [
         ownerUserId: z.string().optional(),
       })
       .optional(),
+    /** A routine card: what was set up, the schedule as the server resolved it. */
+    routine: z
+      .object({ name: z.string(), schedule: z.string(), prompt: z.string(), notify: z.boolean() })
+      .optional(),
+    /** Written once the routine exists: the card links to it. */
+    created: z.object({ kind: z.literal("routine"), id: z.string(), label: z.string() }).optional(),
+    /**
+     * The card confirms a routine the user asked for: nobody answered it, so nothing the user
+     * typed in the app is in it.
+     */
+    confirms: z.literal("created").optional(),
   }),
   z.object({
     kind: z.literal("choice"),
