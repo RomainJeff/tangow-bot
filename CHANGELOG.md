@@ -8,9 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-08
 
-#### Changed
+#### Added
 
-- A routine you ask a bot for now shows a card with when it runs and a link to open it, on web, desktop and iPhone.
+- **A routine a bot sets up for you now shows a card.** On web, desktop and iPhone, the card says when the routine runs, in its time zone, and links to the routine; a bot can no longer set one up in a time zone that does not exist.
 
 ### 2026-10-07
 
