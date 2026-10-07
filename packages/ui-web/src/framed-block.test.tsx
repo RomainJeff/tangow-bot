@@ -74,4 +74,36 @@ describe("FramedBlock", () => {
     expect(html).toContain("max-w-thread");
     expect(html).toContain('data-testid="secret-ask-card"');
   });
+
+  it("puts the actions on the right by default and keeps their order", () => {
+    const html = renderToString(
+      <FramedBlock
+        question="Send the recap?"
+        actions={
+          <>
+            <button type="button">Not now</button>
+            <button type="button">Revise</button>
+            <button type="button">Send</button>
+          </>
+        }
+      />,
+    );
+    expect(html).toContain('data-slot="framed-block-actions" data-align="end"');
+    expect(html).toContain("justify-end");
+    expect(html.indexOf("Not now")).toBeLessThan(html.indexOf("Revise"));
+    expect(html.indexOf("Revise")).toBeLessThan(html.indexOf("Send<"));
+  });
+
+  it("keeps a list of answers on the left", () => {
+    const html = renderToString(
+      <FramedBlock
+        question="Which room?"
+        actionsAlign="start"
+        actions={<button type="button">Other answer…</button>}
+      />,
+    );
+    expect(html).toContain('data-align="start"');
+    expect(html).toContain("justify-start");
+    expect(html).not.toContain("justify-end");
+  });
 });

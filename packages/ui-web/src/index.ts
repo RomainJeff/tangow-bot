@@ -37,6 +37,7 @@ export { ComposerShell, type ComposerShellProps, type ComposerState } from "./co
 export { formatElapsed, formatShortDuration } from "./format-elapsed.js";
 export {
   FramedBlock,
+  type FramedBlockActionsAlign,
   type FramedBlockHeader,
   type FramedBlockProps,
 } from "./framed-block.js";

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-07
+
+#### Changed
+
+- On web and desktop, the cards where you validate an action (tool approvals, new bot, new space, secrets, questions) now keep their buttons on the right with the main action last, while lists of answers stay on the left.
+
 ### 2026-10-06
 
 #### Added
