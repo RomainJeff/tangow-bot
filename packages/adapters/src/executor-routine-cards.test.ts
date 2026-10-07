@@ -652,6 +652,20 @@ describe("a routine the user asks to change", () => {
     ]);
   });
 
+  it("names the trigger of a routine a webhook wakes on its card", async () => {
+    const hook = { ...stored, crons: [], webhookEnabled: true, nextRunAt: null };
+    const f = fixture({ routines: [hook] });
+    await f.play([[change({ prompt: "Sort what arrives" })]]);
+    expect(f.routines[0]).toMatchObject({
+      crons: [],
+      webhookEnabled: true,
+      prompt: "Sort what arrives",
+    });
+    expect(f.posted()).toEqual([
+      [expect.objectContaining({ text: "When a webhook fires", confirms: "updated" })],
+    ]);
+  });
+
   it("moves every schedule of a routine to a new zone, and leaves several schedules to the app", () =>
     at("2026-10-07T10:00:00Z", async () => {
       const twice = { ...stored, crons: ["0 9 * * 1-5", "0 10 * * 0,6"] };
