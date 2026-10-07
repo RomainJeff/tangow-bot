@@ -19,6 +19,8 @@ import { MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { computerUpdates } from "../lib/computer-updates";
 import { rpc } from "../lib/rpc";
+import { useMediaQuery } from "../lib/use-media-query";
+import type { TeachMenuAction } from "./teach/TeachComputerOverlay";
 
 type Action = "recover" | "reset" | "update";
 
@@ -26,29 +28,32 @@ export function ComputerMaintenanceActions({
   botId,
   computer,
   onChanged,
+  teach = null,
 }: {
   botId: string;
   computer: ComputerStatus | null;
   onChanged: () => Promise<void>;
+  /** Teach a task, offered here only below the sm breakpoint where the chrome hides its button. */
+  teach?: TeachMenuAction | null;
 }) {
   const { t } = useLingui();
+  // The chrome hides its Teach a task button below Tailwind's sm breakpoint (40rem).
+  const teachInMenu = useMediaQuery("(min-width: 40rem)") ? null : teach;
   const [menuOpen, setMenuOpen] = useState(false);
   const [pending, setPending] = useState<Action | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!computer) return null;
-
-  const busy = Boolean(computer.busyBotName) || computer.state === "booting";
+  const busy = Boolean(computer?.busyBotName) || computer?.state === "booting";
   const showRecover =
-    computer.state === "error" ||
-    computer.state === "running" ||
-    computer.state === "suspended" ||
-    computer.state === "stopped";
+    computer?.state === "error" ||
+    computer?.state === "running" ||
+    computer?.state === "suspended" ||
+    computer?.state === "stopped";
   const showReset = showRecover;
-  const showUpdate = computer.canUpdate;
-  const hasActions = showRecover || showReset || showUpdate;
-  if (!hasActions) return null;
+  const showUpdate = Boolean(computer?.canUpdate);
+  const hasMaintenance = showRecover || showReset || showUpdate;
+  if (!hasMaintenance && !teachInMenu) return null;
 
   async function run(action: Action) {
     setPending(action);
@@ -126,6 +131,11 @@ export function ComputerMaintenanceActions({
           data-testid="computer-more-menu"
           className="w-auto min-w-44"
         >
+          {teachInMenu ? (
+            <DropdownMenuItem disabled={teachInMenu.disabled} onClick={teachInMenu.onSelect}>
+              <Trans>Teach a task</Trans>
+            </DropdownMenuItem>
+          ) : null}
           {showRecover ? (
             <DropdownMenuItem
               closeOnClick={false}

@@ -652,31 +652,36 @@ export function ComputerOverlay({
               size={28}
               status={active.status}
             />
-            {recordingSkill ? (
-              <TeachRecordingChrome
-                recording={recordingSkill}
-                busy={teachBusy}
-                onStop={stopTeaching}
-                variant="overlay"
-              />
-            ) : (
-              <span className="truncate text-working font-medium text-foreground" dir="auto">
-                {computerLabel(computer?.mode, active.name)}
-              </span>
-            )}
-            {!recordingSkill && hasControl ? (
-              computer?.takeoverRequested ? (
-                <span className="rounded-full bg-warning/15 px-3 py-1 text-meta text-warning">
-                  <Trans>Needs you</Trans>
-                </span>
+            <div className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3">
+              {recordingSkill ? (
+                <TeachRecordingChrome
+                  recording={recordingSkill}
+                  busy={teachBusy}
+                  onStop={stopTeaching}
+                  variant="overlay"
+                />
               ) : (
-                <span className="rounded-full bg-success/15 px-3 py-1 text-meta text-success">
-                  <Trans>You have control</Trans>
+                <span
+                  className="max-w-full truncate text-working font-medium text-foreground"
+                  dir="auto"
+                >
+                  {computerLabel(computer?.mode, active.name)}
                 </span>
-              )
-            ) : null}
+              )}
+              {!recordingSkill && hasControl ? (
+                computer?.takeoverRequested ? (
+                  <span className="max-w-full truncate rounded-full bg-warning/15 px-3 py-1 text-meta text-warning sm:shrink-0">
+                    <Trans>Needs you</Trans>
+                  </span>
+                ) : (
+                  <span className="max-w-full truncate rounded-full bg-success/15 px-3 py-1 text-meta text-success sm:shrink-0">
+                    <Trans>You have control</Trans>
+                  </span>
+                )
+              ) : null}
+            </div>
           </div>
-          <div className="app-no-drag flex items-center gap-3">
+          <div className="app-no-drag relative flex shrink-0 items-center gap-2 sm:gap-3">
             {composerRunning ? (
               <Button
                 type="button"
@@ -705,16 +710,18 @@ export function ComputerOverlay({
                 computer={computer}
                 busy={teachBusy}
                 onRefresh={refreshActiveTeaching}
-              />
-            ) : null}
-            {active && !recordingSkill ? (
-              <ComputerMaintenanceActions
-                botId={active.id}
-                computer={computer}
-                onChanged={async () => {
-                  await refreshThread(active.id);
-                }}
-              />
+              >
+                {(teach) => (
+                  <ComputerMaintenanceActions
+                    botId={active.id}
+                    computer={computer}
+                    teach={teach}
+                    onChanged={async () => {
+                      await refreshThread(active.id);
+                    }}
+                  />
+                )}
+              </TeachComputerOverlayControl>
             ) : null}
             <Button
               variant="ghost"

@@ -1,8 +1,12 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { ComputerStatus } from "@rakazo/contracts";
 import { Button, Label, Popover, PopoverContent, PopoverTrigger, Textarea } from "@rakazo/ui-web";
+import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
+
+/** What the overflow menu needs to offer the same action as the chrome button. */
+export type TeachMenuAction = { disabled: boolean; onSelect: () => void };
 
 /**
  * Compact Teach a task control for the computer chrome bar above the screen
@@ -11,17 +15,22 @@ import { rpc } from "../../lib/rpc";
  * Mount with key={botId} from Shell so a bot switch remounts clean state.
  * Async completions still check botIdRef so a late response from bot A cannot
  * mutate bot B if the instance is reused.
+ *
+ * Below the sm breakpoint the button is hidden and the same action is handed to
+ * `children` for the overflow menu. The hidden button stays mounted as the anchor.
  */
 export function TeachComputerOverlayControl({
   botId,
   computer,
   busy: busyProp,
   onRefresh,
+  children,
 }: {
   botId: string;
   computer: ComputerStatus | null;
   busy?: boolean;
   onRefresh: () => Promise<void>;
+  children?: (teach: TeachMenuAction | null) => ReactNode;
 }) {
   const { t } = useLingui();
   const [goalOpen, setGoalOpen] = useState(false);
@@ -94,7 +103,7 @@ export function TeachComputerOverlayControl({
   }, [botId, onRefresh]); // t omitted: identity churn must not re-lock Start
 
   // Hide only for desktop-host bots. Null computer still shows the control so teaching can boot.
-  if (computer?.kind === "desktop") return null;
+  if (computer?.kind === "desktop") return <>{children?.(null)}</>;
 
   async function refreshView() {
     const requestBotId = botId;
@@ -181,102 +190,115 @@ export function TeachComputerOverlayControl({
     setError(null);
   }
 
+  function openGoal() {
+    if (syncingRecording) return;
+    if (needsRefresh) {
+      // Keep Start recording locked; only reopen refresh recovery.
+      setRecoveryOpen(true);
+      return;
+    }
+    setError(null);
+    setGoalOpen(true);
+  }
+
   return (
-    <Popover
-      open={goalOpen || recoveryVisible}
-      onOpenChange={(open) => {
-        if (!open) {
-          if (goalOpen) closeGoal();
-          else setRecoveryOpen(false);
-          return;
-        }
-        if (syncingRecording) return;
-        if (needsRefresh) {
-          // Keep Start recording locked; only reopen refresh recovery.
-          setRecoveryOpen(true);
-          return;
-        }
-        setError(null);
-        setGoalOpen(true);
-      }}
-    >
-      <PopoverTrigger
-        data-testid="teach-start-button"
-        aria-label={t`Teach a task`}
-        disabled={busy || syncingRecording}
-        render={<Button variant="outline" size="sm" />}
+    <>
+      <Popover
+        open={goalOpen || recoveryVisible}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (goalOpen) closeGoal();
+            else setRecoveryOpen(false);
+            return;
+          }
+          openGoal();
+        }}
       >
-        <span
-          aria-hidden
-          className="inline-block h-2 w-2 shrink-0 rounded-full border border-foreground"
-        />
-        <Trans>Teach a task</Trans>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        sideOffset={8}
-        data-testid={goalOpen ? "teach-chrome-popover" : "teach-refresh-recovery"}
-        className="w-[min(360px,calc(100vw-2rem))]"
-      >
-        {goalOpen ? (
-          <>
-            <Label
-              htmlFor="teach-goal-input"
-              className="text-[13px] font-normal text-muted-foreground"
-            >
-              <Trans>What result will you demonstrate?</Trans>
-            </Label>
-            <Textarea
-              id="teach-goal-input"
-              data-testid="teach-goal-input"
-              value={goal}
-              onChange={(event) => setGoal(event.target.value)}
-              rows={3}
-              placeholder={t`Export this week's list from the CRM and drop it in the shared folder`}
+        <PopoverTrigger
+          data-testid="teach-start-button"
+          aria-label={t`Teach a task`}
+          disabled={busy || syncingRecording}
+          render={
+            <Button
+              variant="outline"
+              size="sm"
+              className="max-sm:invisible max-sm:absolute max-sm:end-0 max-sm:bottom-0"
             />
-            {error ? (
-              <div role="alert" className="text-[13px] text-destructive">
-                {error}
-              </div>
-            ) : null}
-            <div className="flex gap-2">
-              <Button
-                disabled={busy || startLocked || !goal.trim()}
-                onClick={() => void startTeaching()}
+          }
+        >
+          <span
+            aria-hidden
+            className="h-2 w-2 shrink-0 rounded-full border border-foreground"
+          />
+          <Trans>Teach a task</Trans>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          sideOffset={8}
+          data-testid={goalOpen ? "teach-chrome-popover" : "teach-refresh-recovery"}
+          className="w-[min(360px,calc(100vw-2rem))]"
+        >
+          {goalOpen ? (
+            <>
+              <Label
+                htmlFor="teach-goal-input"
+                className="text-[13px] font-normal text-muted-foreground"
               >
-                {busy || syncingRecording ? (
-                  <Trans>Starting…</Trans>
-                ) : (
-                  <Trans>Start recording</Trans>
-                )}
-              </Button>
-              <Button variant="outline" onClick={closeGoal}>
-                <Trans>Cancel</Trans>
-              </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            {error ? (
-              <div role="alert" className="text-[13px] text-destructive">
-                {error}
+                <Trans>What result will you demonstrate?</Trans>
+              </Label>
+              <Textarea
+                id="teach-goal-input"
+                data-testid="teach-goal-input"
+                value={goal}
+                onChange={(event) => setGoal(event.target.value)}
+                rows={3}
+                placeholder={t`Export this week's list from the CRM and drop it in the shared folder`}
+              />
+              {error ? (
+                <div role="alert" className="text-[13px] text-destructive">
+                  {error}
+                </div>
+              ) : null}
+              <div className="flex gap-2">
+                <Button
+                  disabled={busy || startLocked || !goal.trim()}
+                  onClick={() => void startTeaching()}
+                >
+                  {busy || syncingRecording ? (
+                    <Trans>Starting…</Trans>
+                  ) : (
+                    <Trans>Start recording</Trans>
+                  )}
+                </Button>
+                <Button variant="outline" onClick={closeGoal}>
+                  <Trans>Cancel</Trans>
+                </Button>
               </div>
-            ) : (
-              <p className="text-[13px] text-muted-foreground">
-                <Trans>Recording started. Refresh the view to continue.</Trans>
-              </p>
-            )}
-            <div className="flex gap-2">
-              <Button disabled={busy} onClick={() => void refreshView()}>
-                {busy ? <Trans>Refreshing…</Trans> : <Trans>Refresh view</Trans>}
-              </Button>
-              <Button variant="outline" onClick={() => setRecoveryOpen(false)}>
-                <Trans>Dismiss</Trans>
-              </Button>
-            </div>
-          </>
-        )}
-      </PopoverContent>
-    </Popover>
+            </>
+          ) : (
+            <>
+              {error ? (
+                <div role="alert" className="text-[13px] text-destructive">
+                  {error}
+                </div>
+              ) : (
+                <p className="text-[13px] text-muted-foreground">
+                  <Trans>Recording started. Refresh the view to continue.</Trans>
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button disabled={busy} onClick={() => void refreshView()}>
+                  {busy ? <Trans>Refreshing…</Trans> : <Trans>Refresh view</Trans>}
+                </Button>
+                <Button variant="outline" onClick={() => setRecoveryOpen(false)}>
+                  <Trans>Dismiss</Trans>
+                </Button>
+              </div>
+            </>
+          )}
+        </PopoverContent>
+      </Popover>
+      {children?.({ disabled: busy || syncingRecording, onSelect: openGoal })}
+    </>
   );
 }

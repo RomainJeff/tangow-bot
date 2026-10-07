@@ -284,7 +284,7 @@ export function PasswordResetPage() {
           <p className="text-lg">
             <Trans>Password updated</Trans>
           </p>
-          <Link to="/sign-in" className="mt-6 inline-block font-medium">
+          <Link to="/sign-in" className="mt-6 inline-flex font-medium">
             <Trans>Sign in</Trans>
           </Link>
         </div>

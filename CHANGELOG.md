@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - On web and desktop, the cards where you validate an action (tool approvals, new bot, new space, secrets, questions) now keep their buttons on the right with the main action last, while lists of answers stay on the left.
 
+#### Fixed
+
+- On a phone browser, the top bar of a bot's screen now fits: the control badge sits under the bot's name and Teach a task moves into the … menu.
+
 ### 2026-10-06
 
 #### Added
