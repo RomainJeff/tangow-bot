@@ -51,12 +51,14 @@ function formatAnsweredState(
   return t`Answered: ${answer}`;
 }
 
-/** What became of a routine card: a link to the routine. */
-function RoutineSettled({ block }: { block: AskBlock }) {
-  if (!block.created) return t`Answered`;
+function RoutineSettled({ block, botId }: { block: AskBlock; botId?: string }) {
+  if (!block.created || !botId) return t`Answered`;
   return (
     <Link
-      to={{ search: `?routine=${encodeURIComponent(block.created.id)}` }}
+      to={{
+        pathname: `/app/${botId}`,
+        search: `?routine=${encodeURIComponent(block.created.id)}`,
+      }}
       className="inline-flex items-center gap-1 duration-(--duration-hover) ease-quiet hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {block.confirms === "updated" ? t`Routine updated` : t`Routine created`} ·{" "}
@@ -125,6 +127,7 @@ export function AskCard({
   viewerUserId,
   onAnswer,
   messageId,
+  botId,
 }: {
   block: AskBlock;
   canAnswer: boolean;
@@ -132,6 +135,8 @@ export function AskCard({
   viewerUserId?: string;
   onAnswer: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   messageId: string;
+  /** The bot that posted the card, whose page a routine card links to. */
+  botId?: string;
 }) {
   const { t } = useLingui();
   const fieldId = useId();
@@ -197,7 +202,7 @@ export function AskCard({
   const answered: ReactNode =
     block.status === "answered" ? (
       routineCard ? (
-        <RoutineSettled block={block} />
+        <RoutineSettled block={block} botId={botId} />
       ) : (
         formatAnsweredState(
           block.answer,
@@ -537,6 +542,8 @@ function MultiQuestionAsk({
   canAnswer: boolean;
   onAnswer: (text: string) => Promise<void>;
   messageId: string;
+  /** The bot that posted the card, whose page a routine card links to. */
+  botId?: string;
 }) {
   const { t } = useLingui();
   const questions = (block.questions ?? []) as AskQuestionBlock[];

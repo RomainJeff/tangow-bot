@@ -7,10 +7,7 @@ export type RoutineCadence =
   | { kind: "scheduled"; nextRunAt: string | null }
   | { kind: "inbound"; sources: Array<"webhook" | "github" | "message"> };
 
-/**
- * The routine's cadence as data, so each app words it in its own language. A schedule wins over
- * inbound sources when both exist, since it is the one with a next run.
- */
+// A schedule wins over inbound sources when both exist, since it is the one with a next run.
 export function routineCadence(
   routine: Pick<
     Routine,

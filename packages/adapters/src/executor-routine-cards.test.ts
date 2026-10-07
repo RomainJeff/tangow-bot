@@ -366,9 +366,8 @@ function fixture(
       ),
     askBlock,
     messageUpdate,
-    /** The cards the run posted outside a pause, in order, with their nonces. */
+    /** The cards the run posted outside a pause, in order. */
     posted: () => postedCards().map((data) => data.blocks),
-    nonces: () => postedCards().map((data) => data.clientNonce),
     async play(next: ToolCall[][], workerId = "worker-1", ends: "ok" | "failed" = "ok") {
       batches = next;
       run.status = "queued";
@@ -432,19 +431,18 @@ describe("a routine the user asks for", () => {
       expect(f.routineCreate).toHaveBeenCalledOnce();
       expect(f.askBlock()).toBeUndefined();
       expect(f.posted()).toEqual([[expect.objectContaining(confirmation)]]);
-      expect(f.nonces()).toEqual(["routine-confirmation:effect-1"]);
       expect(f.results).toEqual([
         expect.objectContaining({ ok: true, routineId: "routine-new", schedule: "Every hour UTC" }),
       ]);
     },
   );
 
-  it("posts its card once when the run is retried", async () => {
+  it("replays the routine already set up when the run repeats the call, with no second card", async () => {
     const f = fixture();
     await f.play([[routine]]);
     await f.play([[routine]], "worker-2");
     expect(f.routineCreate).toHaveBeenCalledOnce();
-    expect(f.nonces()).toEqual(["routine-confirmation:effect-1"]);
+    expect(f.posted()).toEqual([[expect.objectContaining(confirmation)]]);
     expect(f.results).toEqual([
       expect.objectContaining({ ok: true, routineId: "routine-new" }),
       expect.objectContaining({ ok: true, routineId: "routine-new" }),
@@ -486,7 +484,7 @@ describe("a routine the user asks for", () => {
     expect(f.posted()).toEqual([]);
   });
 
-  it("links the approval card the user allowed to the routine, with no second card", async () => {
+  it("settles the approval card the user allowed on the routine, with no second card", async () => {
     const f = fixture({ trigger: "webhook", routineId: "routine-wake", routines: [inbox] });
     await f.play([[routine]]);
     const card = f.askBlock() as Row;
@@ -510,6 +508,8 @@ describe("a routine the user asks for", () => {
     ).toMatchObject({
       approvalEffectId: "effect-1",
       answer: "allow",
+      text: "Every hour UTC",
+      routine: confirmation.routine,
       created: { kind: "routine", id: "routine-new", label: "Stretch" },
     });
   });

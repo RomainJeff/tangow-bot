@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { routineConfirmationBlock, selectedAskActionLabel } from "@rakazo/core";
+import { routineConfirmationBlock, selectedAskActionLabel, settleRoutineAsk } from "@rakazo/core";
 import { act } from "react";
 import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
@@ -597,10 +597,23 @@ describe("AskCard stepper navigation", () => {
 describe("AskCard routine confirmation", () => {
   const render = (block: AskBlock) =>
     renderToStaticMarkup(
-      <MemoryRouter initialEntries={["/app/bot-1"]}>
-        <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId="msg-routine" />
+      <MemoryRouter initialEntries={["/app/g/group-1"]}>
+        <AskCard
+          block={block}
+          canAnswer={true}
+          onAnswer={async () => {}}
+          messageId="msg-routine"
+          botId="bot-1"
+        />
       </MemoryRouter>,
     );
+  const stretch = {
+    id: "routine-1",
+    name: "Stretch",
+    schedule: "Every hour UTC",
+    prompt: "Remind me to stretch",
+    notify: false,
+  };
   const answeredLine = (html: string) => {
     const start = html.indexOf('data-slot="framed-block-answered"');
     return start < 0
@@ -608,7 +621,7 @@ describe("AskCard routine confirmation", () => {
       : html.slice(html.indexOf(">", start) + 1, html.indexOf("</div>", start));
   };
 
-  it("confirms a routine the user asked for, settled, with nothing to answer", () => {
+  it("confirms a routine the user asked for, settled, linking to its bot's page from a group", () => {
     const html = render(
       routineConfirmationBlock(
         "effect-1",
@@ -650,5 +663,26 @@ describe("AskCard routine confirmation", () => {
     expect(answeredLine(html)?.replace(/<[^>]+>/g, "")).toBe(
       "Routine updated · Offres de la semaine",
     );
+  });
+
+  it("settles the approval card the user allowed for a routine on that routine", () => {
+    const allowed: AskBlock = {
+      kind: "ask",
+      approvalEffectId: "effect-1",
+      text: "Review before schedule_create",
+      status: "answered",
+      answer: "allow",
+      actions: [
+        { id: "allow", label: "Allow once" },
+        { id: "always", label: "Always allow this tool" },
+        { id: "deny", label: "Deny" },
+      ],
+    };
+    const html = render(settleRoutineAsk(allowed, stretch));
+    expect(html).toContain("Every hour UTC");
+    expect(html).not.toContain("Review before schedule_create");
+    expect(html).toContain('href="/app/bot-1?routine=routine-1"');
+    expect(answeredLine(html)?.replace(/<[^>]+>/g, "")).toBe("Routine created · Stretch");
+    expect(html).not.toContain("Needs your call");
   });
 });

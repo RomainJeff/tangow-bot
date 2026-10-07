@@ -561,6 +561,7 @@ export const MessageView = memo(function MessageView({
             viewerUserId={viewerUserId}
             onAnswer={(text, edits) => onAnswer(message, text, edits)}
             messageId={message.id}
+            botId={message.botId}
           />
         );
       }

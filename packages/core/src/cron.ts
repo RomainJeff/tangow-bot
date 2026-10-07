@@ -131,7 +131,6 @@ export function presetFromCron(cron: string): CronPreset {
   return { ...base, freq: "Advanced", cron: trimmed };
 }
 
-/** A time of day a schedule runs at, on a 24-hour clock. */
 export type CronTime = { hour: number; minute: number };
 
 /**
@@ -305,9 +304,7 @@ export function nextCronDateAcrossStrict(
   return earliest;
 }
 
-/** An IANA zone name the runtime can schedule in, such as Europe/Paris or UTC. */
 export function isValidTimezone(timezone: string): boolean {
-  if (!timezone.trim()) return false;
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
     return true;
@@ -416,12 +413,7 @@ export function routineScheduleLabel(
 }
 
 function validTimezoneOrUtc(timezone: string): string {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
-    return timezone;
-  } catch {
-    return "UTC";
-  }
+  return isValidTimezone(timezone) ? timezone : "UTC";
 }
 
 function parseClock(time: string): { hour: number; minute: number } {
