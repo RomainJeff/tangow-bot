@@ -4,7 +4,15 @@ import type { MessageBlock, RunTrigger } from "@rakazo/contracts";
  * Why a run may have read content nobody in the conversation wrote. A run that is exposed stays
  * exposed: the marker is stored on the run and never cleared.
  */
-export const EXPOSURE_REASONS = ["trigger", "attachment", "skill", "history", "tool"] as const;
+export const EXPOSURE_REASONS = [
+  "trigger",
+  "attachment",
+  "skill",
+  "history",
+  "tool",
+  /** A skill saved from a workspace folder, which an exposed run may have written. */
+  "workspace",
+] as const;
 export type ExposureReason = (typeof EXPOSURE_REASONS)[number];
 
 /**

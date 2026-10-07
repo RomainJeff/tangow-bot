@@ -164,6 +164,7 @@ function fixture(
     steering?: { item: Row; message: Row }[];
     /** Files of the bot's workspace by path, as the sandbox lists and reads them. */
     workspace?: Map<string, { bytes: Uint8Array; executable: boolean }>;
+    secrets?: string[];
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
@@ -378,7 +379,7 @@ function fixture(
       claimSteering: vi.fn(async () => steering.splice(0).map((sent) => sent.item)),
     },
     jobs: { enqueue: vi.fn(async () => undefined) },
-    secrets: [],
+    secrets: options.secrets ?? [],
     dataDir,
   } as unknown as Parameters<typeof createRunExecutor>[0]);
 
@@ -882,6 +883,17 @@ describe("a skill saved after reading outside content", () => {
     ]);
   });
 
+  it("is refused when it holds one of the run's credentials, even in a clean conversation", async () => {
+    const f = fixture({ secrets: ["sk-test-123"] });
+    await f.play([
+      [{ name: "skill_create", args: { ...coffee.args, body: "Pay with sk-test-123" } }],
+    ]);
+    expect(f.results).toEqual([
+      { error: "Skill files must not contain credentials; use the connection instead." },
+    ]);
+    expect(await savedSkill()).toBeUndefined();
+  });
+
   it("is refused in a run the user did not start", async () => {
     const f = fixture({ trigger: "webhook" });
     await f.play([[coffee]]);
@@ -917,34 +929,51 @@ describe("a skill saved from a workspace folder", () => {
       path.join(userSkillsRoot(dataDir, { spaceId: "space-1", userId: "user-1" }), "deploy", file),
     ).catch(() => undefined);
 
-  it("is saved directly in a clean conversation and marked as this bot's", async () => {
+  const folderCard = [
+    'File: "SKILL.md"',
+    "  ---",
+    "  name: Deploy",
+    "  description: Ship it",
+    "  ---",
+    "  ",
+    "  1. Run scripts/run.sh",
+    'File: "scripts/run.sh", executable',
+    "  echo hi",
+    'File: "assets/logo.png", binary, 6 bytes',
+  ].join("\n");
+
+  it.each([
+    ["announced with its turn", true],
+    ["run on its own", false],
+  ])(
+    "asks first in a clean conversation, %s, since another run may have written it",
+    async (_c, prepareBatches) => {
+      const f = fixture({ workspace: draft(), prepareBatches });
+      await f.play([[saveFolder]]);
+      expect(f.run.exposureReason).toBe("workspace");
+      expect(f.askBlock()).toMatchObject({ text: "Save skill?", detail: folderCard });
+      expect(await saved("SKILL.md")).toBeUndefined();
+    },
+  );
+
+  it("asks first for a skill passed as text in the same turn as a folder", async () => {
     const f = fixture({ workspace: draft() });
-    await f.play([[saveFolder]]);
-    expect(f.askBlock()).toBeUndefined();
-    expect(String(await saved("scripts/run.sh"))).toBe("echo hi");
-    expect(await f.skillSetting.findMany()).toEqual([
-      expect.objectContaining({ skillKey: "user:deploy", createdByBotId: "bot-1" }),
+    await f.play([
+      [{ name: "skill_create", args: { name: "Tea", description: "Brew", body: "x" } }, saveFolder],
+    ]);
+    expect(f.run.exposureReason).toBe("workspace");
+    expect(
+      f.effects.map((effect) => [effect.kind, effect.status, (effect.request as Row).name]).sort(),
+    ).toEqual([
+      ["skill_save", "intended", "Deploy"],
+      ["skill_save", "intended", "Tea"],
     ]);
   });
 
   it("shows every file on a card after outside content, and keeps what it showed", async () => {
     const f = fixture({ exposedAt: new Date(), workspace: draft() });
     await f.play([[saveFolder]]);
-    expect(f.askBlock()).toMatchObject({
-      text: "Save skill?",
-      detail: [
-        "SKILL.md",
-        "  ---",
-        "  name: Deploy",
-        "  description: Ship it",
-        "  ---",
-        "  ",
-        "  1. Run scripts/run.sh",
-        "scripts/run.sh (executable)",
-        "  echo hi",
-        "assets/logo.png (binary, 6 bytes)",
-      ].join("\n"),
-    });
+    expect(f.askBlock()).toMatchObject({ text: "Save skill?", detail: folderCard });
     expect(f.effects.at(-1)).toMatchObject({
       kind: "skill_save",
       status: "intended",
@@ -989,7 +1018,7 @@ describe("a skill saved from a workspace folder", () => {
     expect(f.results).toEqual([
       {
         error:
-          "This skill folder is too large to show the user for approval (at most 20 files, 64 KB of text and 1 MB in all). It can be saved directly in a conversation that has not read outside content.",
+          "This skill folder is too large to show the user for approval (at most 20 files, 64 KB of text and 1 MB in all).",
       },
     ]);
     expect(f.askBlock()).toBeUndefined();
@@ -1016,5 +1045,80 @@ describe("a skill saved from a workspace folder", () => {
     expect(String(await saved("SKILL.md"))).toBe(
       "---\nname: Deploy\ndescription: Mine\n---\n\nMy steps",
     );
+  });
+
+  it.each([
+    [
+      "a file hiding text",
+      "drafts/deploy/scripts/run.sh",
+      { bytes: encode("echo hi\u001b[2K"), executable: true },
+      'Skill file "scripts/run.sh" must not contain invisible or control characters.',
+    ],
+    [
+      "a file name padded with a space",
+      "drafts/deploy/scripts/run.sh ",
+      { bytes: encode("echo hi"), executable: false },
+      'Skill file "scripts/run.sh " must not contain invisible or control characters.',
+    ],
+    [
+      "a file name with a no-break space",
+      "drafts/deploy/scripts/run\u00a0x.sh",
+      { bytes: encode("echo hi"), executable: false },
+      'Skill file "scripts/run\u00a0x.sh" must not contain invisible or control characters.',
+    ],
+    [
+      "a binary executable",
+      "drafts/deploy/bin/tool",
+      { bytes: new Uint8Array([0x7f, 0x45, 0x4c, 0x46, 0x00]), executable: true },
+      "Executable skill files must be UTF-8 text.",
+    ],
+    [
+      "a script that is not UTF-8",
+      "drafts/deploy/scripts/setup.py",
+      { bytes: new Uint8Array([0x70, 0xff, 0x70]), executable: false },
+      'Skill file "scripts/setup.py" must be UTF-8 text.',
+    ],
+    [
+      "a credential",
+      "drafts/deploy/scripts/token.sh",
+      { bytes: encode("curl -H 'Authorization: sk-test-123'"), executable: false },
+      "Skill files must not contain credentials; use the connection instead.",
+    ],
+  ])("is refused before any card for %s", async (_case, file, entry, error) => {
+    const workspace = draft();
+    workspace.set(file, entry);
+    const f = fixture({ workspace, secrets: ["sk-test-123"] });
+    await f.play([[saveFolder]]);
+    expect(f.results).toEqual([{ error }]);
+    expect(f.askBlock()).toBeUndefined();
+    expect(await saved("SKILL.md")).toBeUndefined();
+  });
+
+  it("refuses an approved snapshot whose file hides text, when it is written", async () => {
+    const tampered = {
+      ...snapshot,
+      files: [{ path: "scripts/run.sh", executable: true, text: "echo hi\u0007" }],
+    };
+    const f = fixture({
+      exposedAt: new Date(),
+      workspace: draft(),
+      effects: [
+        {
+          id: "effect-approved",
+          runId: "run-1",
+          kind: "skill_save",
+          idempotencyKey: approvalEffectKey("run-1", "skill_save", tampered),
+          status: "approved",
+          request: tampered,
+        },
+      ],
+    });
+    await f.play([[saveFolder]]);
+    expect(f.results).toEqual([
+      {
+        error: 'Skill file "scripts/run.sh" must not contain invisible or control characters.',
+      },
+    ]);
+    expect(await saved("SKILL.md")).toBeUndefined();
   });
 });

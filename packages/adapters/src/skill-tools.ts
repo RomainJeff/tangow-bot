@@ -8,6 +8,7 @@ import type { SkillFolderFile, SkillSaveRequest } from "@rakazo/core";
 import {
   asSkillAvailability,
   buildSkillMd,
+  containsSecret,
   defaultSkillAvailability,
   findSkillByName,
   hasHiddenText,
@@ -54,6 +55,8 @@ type SkillOwner = {
   userId: string;
   /** When set, list/read/update/delete only see skills visible to this bot. */
   botId?: string;
+  /** The run's secrets, which no saved skill file may hold. */
+  secrets?: string[];
 };
 
 export type SkillToolDeps = { prisma: PrismaClient; dataDir: string };
@@ -202,7 +205,7 @@ export async function readSkillDraft(
   dir: string,
   context: AdapterContext,
 ): Promise<SkillTreeFile[] | { error: string }> {
-  const found: Array<{ source: string; path: string; executable: boolean }> = [];
+  const found: Array<{ source: string; path: string; size: number; executable: boolean }> = [];
   let entries = 0;
   let bytes = 0;
   const tooBig = () =>
@@ -220,7 +223,12 @@ export async function readSkillDraft(
       entries += 1;
       if (entry.kind === "file") {
         bytes += entry.size;
-        found.push({ source: entry.path, path: child, executable: entry.executable === true });
+        found.push({
+          source: entry.path,
+          path: child,
+          size: entry.size,
+          executable: entry.executable === true,
+        });
       }
       const failure =
         tooBig() ?? (entry.kind === "dir" ? await walk(entry.path, child) : undefined);
@@ -239,15 +247,21 @@ export async function readSkillDraft(
     return { error: "No SKILL.md at the root of the skill folder." };
   }
   const files: SkillTreeFile[] = [];
+  let read = 0;
   for (const file of found) {
+    let content: Uint8Array;
     try {
-      const content = await sandbox.readFile(computer, file.source, context, {
-        maxBytes: SKILL_BUNDLE_MAX_BYTES,
+      content = await sandbox.readFile(computer, file.source, context, {
+        maxBytes: SKILL_BUNDLE_MAX_BYTES - read,
       });
-      files.push({ path: file.path, bytes: content, executable: file.executable });
     } catch {
       return { error: `Could not read ${file.path} from the skill folder.` };
     }
+    if (content.byteLength !== file.size) {
+      return { error: `Skill file ${JSON.stringify(file.path)} changed while it was read.` };
+    }
+    read += content.byteLength;
+    files.push({ path: file.path, bytes: content, executable: file.executable });
   }
   return files;
 }
@@ -283,13 +297,57 @@ function treeFile(file: SkillFolderFile): SkillTreeFile {
   return { path: file.path, bytes: new Uint8Array(bytes), executable: file.executable };
 }
 
-/** The folder's other files, or the error for a file name that could forge a card line. */
-function folderFiles(files: SkillTreeFile[]): SkillFolderFile[] | { error: string } {
-  const unreadable = files.find((file) => hasHiddenText(file.path));
-  if (unreadable) {
-    return { error: `Skill file name ${JSON.stringify(unreadable.path)} must be visible text.` };
+/** The folder's files besides SKILL.md, which a save writes from its own content. */
+const folderFiles = (files: SkillTreeFile[]) =>
+  files.filter((file) => file.path !== "SKILL.md").map(snapshotFile);
+
+const TEXT_EXTENSIONS = /\.(?:sh|py|js|ts|mjs|cjs|rb|md|txt|json|ya?ml|toml)$/i;
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+/** Any space but U+0020 can pass for one on the card, or for nothing. */
+const UNUSUAL_SPACE = /(?! )\p{Z}/u;
+
+export const SKILL_CHANGE_UNREADABLE = "This skill change could not be read. Ask the user again.";
+const SKILL_CREDENTIALS_ERROR =
+  "Skill files must not contain credentials; use the connection instead.";
+
+/**
+ * Why a folder file cannot be saved as the card shows it: a name or text that hides characters,
+ * an executable or a script that the card could only show by size.
+ */
+function folderFileError(file: SkillFolderFile): string | undefined {
+  const name = JSON.stringify(file.path);
+  if (
+    hasHiddenText(file.path) ||
+    file.path !== file.path.trim() ||
+    UNUSUAL_SPACE.test(file.path) ||
+    ("text" in file && hasHiddenText(file.text, "file"))
+  ) {
+    return `Skill file ${name} must not contain invisible or control characters.`;
   }
-  return files.filter((file) => file.path !== "SKILL.md").map(snapshotFile);
+  if ("text" in file) return undefined;
+  if (!BASE64.test(file.base64)) return SKILL_CHANGE_UNREADABLE;
+  if (file.executable) return "Executable skill files must be UTF-8 text.";
+  return TEXT_EXTENSIONS.test(file.path) ? `Skill file ${name} must be UTF-8 text.` : undefined;
+}
+
+/** What a request would write, binary files decoded, for the credential check. */
+function writtenText(request: SkillSaveRequest): string[] {
+  return [
+    request.name,
+    request.content,
+    ...(request.files ?? []).flatMap((file) => [
+      file.path,
+      "text" in file ? file.text : new TextDecoder().decode(Buffer.from(file.base64, "base64")),
+    ]),
+  ];
+}
+
+function folderError(files: SkillFolderFile[]): string | undefined {
+  const paths = files.map((file) => file.path);
+  if (paths.includes("SKILL.md") || new Set(paths).size !== paths.length) {
+    return SKILL_CHANGE_UNREADABLE;
+  }
+  return files.map(folderFileError).find((error) => error !== undefined);
 }
 
 const BOTH_CREATE_INPUTS = "Pass either path or name/description/body/content, not both.";
@@ -332,12 +390,18 @@ type SkillSaveInput = {
   files?: SkillTreeFile[];
 };
 
-/** The SKILL.md rules a saved request must meet, checked again when an approval writes it. */
+/** The rules a saved request must meet, checked again when an approval writes it. */
 function validSkillSave(
   owner: SkillOwner,
   request: SkillSaveRequest,
 ): SkillSaveRequest | { error: string } {
-  const invalid = rejectOversizedContent(request.content) ?? botSkillError(owner, request.content);
+  const invalid =
+    rejectOversizedContent(request.content) ??
+    botSkillError(owner, request.content) ??
+    folderError(request.files ?? []) ??
+    (containsSecret(writtenText(request), owner.secrets ?? [])
+      ? SKILL_CREDENTIALS_ERROR
+      : undefined);
   return invalid ? { error: invalid } : request;
 }
 
@@ -404,9 +468,12 @@ function shapeCreate(input: SkillSaveInput): SkillSaveRequest | { error: string 
     if ("error" in parsed) return { error: parsed.error };
     const invalid = rejectInvalidSkillFields(parsed.name, parsed.description);
     if (invalid) return { error: invalid };
-    const files = folderFiles(input.files);
-    if ("error" in files) return files;
-    return { change: "created", name: parsed.name, content: buildSkillMd(parsed), files };
+    return {
+      change: "created",
+      name: parsed.name,
+      content: buildSkillMd(parsed),
+      files: folderFiles(input.files),
+    };
   }
   if (input.content?.trim()) {
     const parsed = parseSkillMd(input.content);
@@ -453,9 +520,7 @@ async function shapeUpdate(
     nextName = parsed.name;
     nextDescription = parsed.description;
     nextContent = buildSkillMd(parsed);
-    const kept = folderFiles(input.files);
-    if ("error" in kept) return kept;
-    files = kept;
+    files = folderFiles(input.files);
   } else if (input.content?.trim()) {
     const parsed = parseSkillMd(input.content);
     if ("error" in parsed) return { error: parsed.error };

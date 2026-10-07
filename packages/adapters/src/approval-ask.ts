@@ -66,9 +66,10 @@ export function buildApprovalAskBlock(
   };
 }
 
+/** A file's lone CR breaks a line on some screens, so it starts an indented line too. */
 function indent(value: string): string {
   return value
-    .split("\n")
+    .split(/\r\n?|\n/)
     .map((line) => `  ${line}`)
     .join("\n");
 }
@@ -87,12 +88,13 @@ const SCHEDULE_DETAIL_KEYS = [
 
 type CreationCard = { title: string; detail: (args: Record<string, unknown>) => string };
 
+/** The name is quoted, so nothing in it can pass for the notes that follow the closing quote. */
 function folderFileLabel(file: SkillFolderFile): string {
-  const notes = [
+  return [
+    `File: ${JSON.stringify(file.path)}`,
     ...(file.executable ? ["executable"] : []),
     ...("text" in file ? [] : ["binary", `${skillFolderFileBytes(file)} bytes`]),
-  ];
-  return notes.length > 0 ? `${file.path} (${notes.join(", ")})` : file.path;
+  ].join(", ");
 }
 
 /** A folder lists every file under its own label: text in full, anything else by size. */
@@ -102,7 +104,7 @@ const skillCard: CreationCard = {
     const save = asSkillSaveRequest(args);
     if (!save?.files) return String(args.content ?? "");
     return [
-      "SKILL.md",
+      folderFileLabel({ path: "SKILL.md", executable: false, text: save.content }),
       indent(save.content),
       ...save.files.flatMap((file) =>
         "text" in file ? [folderFileLabel(file), indent(file.text)] : [folderFileLabel(file)],

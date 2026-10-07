@@ -117,7 +117,7 @@ export function validateBotSkill(skill: ParsedSkillMd, content: string): string 
   if (extraKeys.length > 0) {
     return `Skill frontmatter may only hold name and description, not ${extraKeys.join(", ")}.`;
   }
-  if (hasHiddenText(content, true)) {
+  if (hasHiddenText(content, "lines")) {
     return "Skill content must not contain invisible or control characters.";
   }
   return undefined;

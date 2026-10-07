@@ -715,6 +715,37 @@ describe("skill drafts", () => {
     expect(readFile.mock.calls).toEqual([]);
   });
 
+  it("refuses a file whose size changed after the folder was listed", async () => {
+    const { sandbox, computer } = await draftBox({ "d/SKILL.md": "md", "d/notes.md": "notes" });
+    const listFiles = sandbox.listFiles.bind(sandbox);
+    vi.spyOn(sandbox, "listFiles").mockImplementation(async (...args) =>
+      (await listFiles(...args)).map((entry) =>
+        entry.path === "d/notes.md" ? { ...entry, size: 1 } : entry,
+      ),
+    );
+    expect(await readSkillDraft(sandbox, computer, "d", context)).toEqual({
+      error: 'Skill file "notes.md" changed while it was read.',
+    });
+  });
+
+  it("reads each file within what is left of the folder's byte budget", async () => {
+    const mb = 1024 * 1024;
+    const { sandbox, computer } = await draftBox({
+      "d/a.txt": "a".repeat(6 * mb),
+      "d/b.txt": "b".repeat(5 * mb),
+      "d/SKILL.md": "md",
+    });
+    const listFiles = sandbox.listFiles.bind(sandbox);
+    vi.spyOn(sandbox, "listFiles").mockImplementation(async (...args) =>
+      (await listFiles(...args)).map((entry) =>
+        entry.path === "d/b.txt" ? { ...entry, size: 1 } : entry,
+      ),
+    );
+    expect(await readSkillDraft(sandbox, computer, "d", context)).toEqual({
+      error: "Could not read b.txt from the skill folder.",
+    });
+  });
+
   it("asks for a SKILL.md when the folder is missing or has none", async () => {
     const { sandbox, computer } = await draftBox({ "d/notes.md": "n" });
     const error = { error: "No SKILL.md at the root of the skill folder." };
@@ -877,14 +908,20 @@ describe("skill drafts", () => {
         await skillCreateFromTool(deps, creator, {
           files: [...draft, { path: "a\nSKILL.md", bytes: text("x"), executable: false }],
         }),
-      ).toEqual({ error: 'Skill file name "a\\nSKILL.md" must be visible text.' });
+      ).toEqual({
+        error: 'Skill file "a\\nSKILL.md" must not contain invisible or control characters.',
+      });
       expect(await listUserSkills(userSkillsRoot(dataDir, creator))).toEqual([]);
     });
 
     it("snapshots a folder and writes the snapshot byte for byte", async () => {
       const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff]);
       const shaped = await shapeSkillSave(deps, creator, "skill_create", {
-        files: [...draft, { path: "assets/logo.png", bytes: png, executable: false }],
+        files: [
+          ...draft,
+          { path: "assets/logo.png", bytes: png, executable: false },
+          { path: "notes/windows.txt", bytes: text("a\r\n\tb"), executable: false },
+        ],
       });
       expect(shaped).toEqual({
         change: "created",
@@ -893,6 +930,7 @@ describe("skill drafts", () => {
         files: [
           { path: "scripts/run.sh", executable: true, text: "echo hi" },
           { path: "assets/logo.png", executable: false, base64: "iVBORwD/" },
+          { path: "notes/windows.txt", executable: false, text: "a\r\n\tb" },
         ],
       });
       if ("error" in shaped) throw new Error(shaped.error);
@@ -904,6 +942,30 @@ describe("skill drafts", () => {
       expect([...(await readFile(path.join(dir, "assets/logo.png")))]).toEqual([...png]);
       expect(await readFile(path.join(dir, "scripts/run.sh"), "utf8")).toBe("echo hi");
       expect((await stat(path.join(dir, "scripts/run.sh"))).mode & 0o111).toBe(0o111);
+    });
+
+    it("refuses a stored snapshot that is not what a card could have shown", async () => {
+      const save = (files: unknown[]) =>
+        saveSkillFromTool(deps, creator, {
+          change: "created",
+          name: "Deploy",
+          content: skillMd,
+          files: files as never,
+        });
+      const unreadable = { error: "This skill change could not be read. Ask the user again." };
+      expect(await save([{ path: "SKILL.md", executable: false, text: "other" }])).toEqual(
+        unreadable,
+      );
+      expect(
+        await save([
+          { path: "a.txt", executable: false, text: "x" },
+          { path: "a.txt", executable: false, text: "y" },
+        ]),
+      ).toEqual(unreadable);
+      expect(await save([{ path: "a.bin", executable: false, base64: "not base64!" }])).toEqual(
+        unreadable,
+      );
+      expect(await listUserSkills(userSkillsRoot(dataDir, creator))).toEqual([]);
     });
   });
 });

@@ -30,4 +30,4 @@ A skill folder holds:
 
 To change only SKILL.md, skill_update with name plus description, body, or content is enough, with no draft.
 
-Limits: 200 files and folders, 10 MB per skill. Symlinks are skipped.
+The user confirms every file of a folder before it is saved, so a folder holds at most 20 files, 64 KB of text and 1 MB in all. Scripts are UTF-8 text and never hold credentials. Symlinks are skipped.

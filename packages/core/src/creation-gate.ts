@@ -130,7 +130,7 @@ export const CARD_SKILL_FOLDER_MAX_FILES = 20;
 export const CARD_SKILL_FOLDER_MAX_TEXT_BYTES = 64 * 1024;
 export const CARD_SKILL_FOLDER_MAX_BYTES = 1024 * 1024;
 
-export const SKILL_FOLDER_TOO_LARGE_ERROR = `This skill folder is too large to show the user for approval (at most ${CARD_SKILL_FOLDER_MAX_FILES} files, ${CARD_SKILL_FOLDER_MAX_TEXT_BYTES / 1024} KB of text and ${CARD_SKILL_FOLDER_MAX_BYTES / 1024 / 1024} MB in all). It can be saved directly in a conversation that has not read outside content.`;
+export const SKILL_FOLDER_TOO_LARGE_ERROR = `This skill folder is too large to show the user for approval (at most ${CARD_SKILL_FOLDER_MAX_FILES} files, ${CARD_SKILL_FOLDER_MAX_TEXT_BYTES / 1024} KB of text and ${CARD_SKILL_FOLDER_MAX_BYTES / 1024 / 1024} MB in all).`;
 
 function skillFolderCardError(skillMd: string, files: readonly unknown[]): string | undefined {
   const parsed = files.map(asSkillFolderFile);

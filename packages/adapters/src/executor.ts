@@ -336,14 +336,13 @@ import {
   checkSkillSave,
   listAgentSkillRecords,
   readSkillDraft,
+  SKILL_CHANGE_UNREADABLE,
   sandboxSkillDir,
   saveSkillFromTool,
   shapeSkillSave,
-  skillCreateFromTool,
   skillDeleteFromTool,
   skillReadFromTool,
   skillSearchFromTool,
-  skillUpdateFromTool,
 } from "./skill-tools.js";
 import {
   continueRunClaimFence,
@@ -395,6 +394,12 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "list_secrets",
 ]);
 const MAX_MODEL_FILE_BYTES = 250_000;
+
+/** The workspace folder a skill_create or skill_update call saves, or "" for text fields. */
+function skillDraftPath(name: string, args: Record<string, unknown>): string {
+  if (name !== "skill_create" && name !== "skill_update") return "";
+  return typeof args.path === "string" ? args.path.trim() : "";
+}
 
 /** The text fields of a skill_create or skill_update call; a folder comes by path. */
 function skillSaveFields(args: Record<string, unknown>) {
@@ -1988,7 +1993,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           exposed = true;
         };
-        const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+        const skillOwner = {
+          spaceId: run.spaceId,
+          userId: run.userId,
+          botId: run.botId,
+          secrets: runSecrets,
+        };
         const readSkill = (args: Record<string, unknown>) =>
           skillReadFromTool(skillDeps, skillOwner, {
             name: args.name ? String(args.name) : undefined,
@@ -2141,6 +2151,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // hit the already-approved effect instead of creating a second approval card.
           const nextApprovedTool = approvedEffectReplays.nextToolName();
           const nextApprovedRequest = approvedEffectReplays.nextRequest();
+          // A draft folder may hold what an exposed run wrote, in this thread or before a
+          // compaction, so saving one always asks the user.
+          const draftPath = viaConnector ? "" : skillDraftPath(name, args);
+          if (draftPath) {
+            try {
+              await exposeRun("workspace");
+            } catch {
+              return { error: RUN_STATE_UNSAVED_ERROR };
+            }
+          }
           // Decided on the run as it stood before this call. A request the user already
           // approved replays as approved, whatever the gate says now.
           const gate = viaConnector
@@ -2239,30 +2259,26 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
           }
           // The exact skill to write, keyed and shown on a card as is; an approval replays it as
-          // stored. A folder saved directly is read when it is written; one shown on a card is
-          // read now, and that snapshot is what the approval writes.
+          // stored. A folder is read once, here, and that snapshot is what the approval writes.
           let skillSave: SkillSaveRequest | undefined;
           if ((name === "skill_create" || name === "skill_update") && !approvedReplayConsumed) {
-            const draftPath = typeof args.path === "string" ? args.path.trim() : "";
-            if (!draftPath || gate?.kind === "card") {
-              const files = draftPath
-                ? await readSkillDraft(
-                    deps.sandbox,
-                    computer,
-                    resolveBotWorkspacePath(computerMode, bot.id, draftPath),
-                    context,
-                  )
-                : undefined;
-              if (files && "error" in files) return files;
-              const shaped = await shapeSkillSave(skillDeps, skillOwner, name, {
-                ...skillSaveFields(args),
-                files,
-              });
-              if ("error" in shaped) return shaped;
-              skillSave = shaped;
-              args = { ...shaped };
-              effectRequest = args;
-            }
+            const files = draftPath
+              ? await readSkillDraft(
+                  deps.sandbox,
+                  computer,
+                  resolveBotWorkspacePath(computerMode, bot.id, draftPath),
+                  context,
+                )
+              : undefined;
+            if (files && "error" in files) return files;
+            const shaped = await shapeSkillSave(skillDeps, skillOwner, name, {
+              ...skillSaveFields(args),
+              files,
+            });
+            if ("error" in shaped) return shaped;
+            skillSave = shaped;
+            args = { ...shaped };
+            effectRequest = args;
           }
           const requiresUnattendedApproval = unattendedTriggerToolRequiresApproval(
             run,
@@ -3175,21 +3191,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "skill_create" || name === "skill_update") {
             const save = asSkillSaveRequest(args);
-            if (save) return finish(await saveSkillFromTool(skillDeps, skillOwner, save));
-            // Only a folder saved directly reaches here unshaped: it is read as it is written.
-            const draftPath = typeof args.path === "string" ? args.path.trim() : "";
-            if (!draftPath) {
-              return finish({ error: "This skill change could not be read. Ask the user again." });
-            }
-            const files = await readSkillDraft(
-              deps.sandbox,
-              computer,
-              resolveBotWorkspacePath(computerMode, bot.id, draftPath),
-              context,
+            return finish(
+              save
+                ? await saveSkillFromTool(skillDeps, skillOwner, save)
+                : { error: SKILL_CHANGE_UNREADABLE },
             );
-            if ("error" in files) return finish(files);
-            const write = name === "skill_create" ? skillCreateFromTool : skillUpdateFromTool;
-            return finish(await write(skillDeps, skillOwner, { ...skillSaveFields(args), files }));
           }
           if (name === "skill_delete") {
             return finish(
@@ -4198,6 +4204,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     ),
               prepareToolBatch: async (calls) => {
                 if (exposed) return;
+                if (
+                  calls.some(
+                    (call) =>
+                      call.args &&
+                      typeof call.args === "object" &&
+                      skillDraftPath(call.name, call.args as Record<string, unknown>),
+                  )
+                ) {
+                  return exposeRun("workspace");
+                }
                 if (
                   calls.some((call) =>
                     toolExposesRun(call.name, !BUILTIN_AGENT_TOOL_NAMES.has(call.name)),

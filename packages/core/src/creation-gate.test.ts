@@ -161,7 +161,7 @@ describe("creationCardError", () => {
         text,
       }));
     const tooLarge =
-      "This skill folder is too large to show the user for approval (at most 20 files, 64 KB of text and 1 MB in all). It can be saved directly in a conversation that has not read outside content.";
+      "This skill folder is too large to show the user for approval (at most 20 files, 64 KB of text and 1 MB in all).";
     expect(creationCardError("skill_create", { content: "---", files: files(19) })).toBe(undefined);
     expect(creationCardError("skill_create", { content: "---", files: files(20) })).toBe(tooLarge);
     expect(

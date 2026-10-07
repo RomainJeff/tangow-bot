@@ -178,14 +178,16 @@ const HIDDEN_TEXT = new RegExp(
   ].join("|"),
   "u",
 );
-const SINGLE_LINE_CONTROLS = /\p{Cc}/u;
-const MULTI_LINE_CONTROLS = /(?![\n\t])\p{Cc}/u;
+/** The control characters each kind of text may keep: none, line breaks and tabs, or a file's CR. */
+const CONTROLS = {
+  line: /\p{Cc}/u,
+  lines: /(?![\n\t])\p{Cc}/u,
+  file: /(?![\n\t\r])\p{Cc}/u,
+};
 
 /** True when the text holds characters the person reading the card would not see. */
-export function hasHiddenText(text: string, multiLine = false): boolean {
-  return (
-    HIDDEN_TEXT.test(text) || (multiLine ? MULTI_LINE_CONTROLS : SINGLE_LINE_CONTROLS).test(text)
-  );
+export function hasHiddenText(text: string, kind: keyof typeof CONTROLS = "line"): boolean {
+  return HIDDEN_TEXT.test(text) || CONTROLS[kind].test(text);
 }
 
 /** The card renders the name as text; a name shaped like a link or markup could pass for one. */
@@ -247,10 +249,10 @@ export function validateSpawnBotArgs(
   if (hasHiddenText(args.title)) {
     return "title must be a single line of visible text, without invisible or control characters.";
   }
-  if (hasHiddenText(args.instructions, true)) {
+  if (hasHiddenText(args.instructions, "lines")) {
     return "instructions must not contain invisible or control characters.";
   }
-  if (hasHiddenText(args.prompt, true)) {
+  if (hasHiddenText(args.prompt, "lines")) {
     return "prompt must not contain invisible or control characters.";
   }
   if (args.computerMode && args.computerMode !== "team" && args.computerMode !== "dedicated") {

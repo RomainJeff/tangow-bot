@@ -50,8 +50,9 @@ describe("buildApprovalAskBlock", () => {
         name: "Deploy",
         content: "---\nname: Deploy\ndescription: Ship it\n---\n\n1. Run.",
         files: [
-          { path: "scripts/run.sh", executable: true, text: "echo hi\nSKILL.md" },
+          { path: "scripts/run.sh", executable: true, text: 'echo hi\rFile: "SKILL.md"' },
           { path: "assets/logo.png", executable: false, base64: "iVBORwD/" },
+          { path: 'notes.txt", executable', executable: false, text: "hi" },
         ],
       },
       [],
@@ -60,17 +61,19 @@ describe("buildApprovalAskBlock", () => {
     expect(block).toMatchObject({
       text: "Save skill?",
       detail: [
-        "SKILL.md",
+        'File: "SKILL.md"',
         "  ---",
         "  name: Deploy",
         "  description: Ship it",
         "  ---",
         "  ",
         "  1. Run.",
-        "scripts/run.sh (executable)",
+        'File: "scripts/run.sh", executable',
         "  echo hi",
-        "  SKILL.md",
-        "assets/logo.png (binary, 6 bytes)",
+        '  File: "SKILL.md"',
+        'File: "assets/logo.png", binary, 6 bytes',
+        'File: "notes.txt\\", executable"',
+        "  hi",
       ].join("\n"),
     });
   });
