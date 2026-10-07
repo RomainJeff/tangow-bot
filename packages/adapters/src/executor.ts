@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type {
   AdapterContext,
   AgentHomeStore,
@@ -229,6 +229,7 @@ import {
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
   displayBotWorkspacePath,
+  normalizeWorkspacePath,
   resolveBotWorkspaceCwd,
   resolveBotWorkspacePath,
   teamBotWorkspaceDirectory,
@@ -332,6 +333,7 @@ import {
 } from "./scratchpad-tools.js";
 import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
+import type { SkillTreeFile } from "./skill-store.js";
 import {
   checkSkillSave,
   listAgentSkillRecords,
@@ -1993,6 +1995,48 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           exposed = true;
         };
+        const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+        const workspaceWrites = async () =>
+          new Map(
+            (
+              await deps.prisma.runWorkspaceWrite.findMany({
+                where: { runId },
+                select: { path: true, sha256: true },
+              })
+            ).map((write) => [write.path, write.sha256]),
+          );
+        /**
+         * Records what a clean run is about to write, before it writes: an exposed run's files are
+         * never its own, and a write whose record failed must not happen.
+         */
+        const recordWorkspaceWrite = async (path: string, bytes: Uint8Array) => {
+          if (exposed) return;
+          await deps.prisma.runWorkspaceWrite.upsert({
+            where: { runId_path: { runId, path } },
+            create: { runId, path, sha256: sha256(bytes) },
+            update: { sha256: sha256(bytes) },
+          });
+        };
+        /**
+         * A draft folder, read once, and whether it is this clean run's own: every file holds what
+         * this run last wrote there with write_file or edit_file, and none was made executable
+         * since. Anything else, or a record that cannot be read, may come from outside.
+         */
+        const readDraft = async (
+          draftPath: string,
+        ): Promise<{ files: SkillTreeFile[]; own: boolean } | { error: string }> => {
+          const dir = resolveBotWorkspacePath(computerMode, bot.id, draftPath);
+          const files = await readSkillDraft(deps.sandbox, computer, dir, context);
+          if ("error" in files) return files;
+          if (exposed) return { files, own: false };
+          const writes = await workspaceWrites().catch(() => new Map<string, string>());
+          const own = files.every(
+            (file) =>
+              !file.executable &&
+              writes.get(normalizeWorkspacePath(`${dir}/${file.path}`)) === sha256(file.bytes),
+          );
+          return { files, own };
+        };
         const skillOwner = {
           spaceId: run.spaceId,
           userId: run.userId,
@@ -2151,14 +2195,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // hit the already-approved effect instead of creating a second approval card.
           const nextApprovedTool = approvedEffectReplays.nextToolName();
           const nextApprovedRequest = approvedEffectReplays.nextRequest();
-          // A draft folder may hold what an exposed run wrote, in this thread or before a
-          // compaction, so saving one always asks the user.
-          const draftPath = viaConnector ? "" : skillDraftPath(name, args);
+          const replaysApproval = nextApprovedTool === name;
+          // A folder is read once, here, and that snapshot is what is saved or shown. A file this
+          // run did not write may hold what an exposed run wrote, so saving it asks the user.
+          const draftPath = viaConnector || replaysApproval ? "" : skillDraftPath(name, args);
+          let draftFiles: SkillTreeFile[] | undefined;
           if (draftPath) {
-            try {
-              await exposeRun("workspace");
-            } catch {
-              return { error: RUN_STATE_UNSAVED_ERROR };
+            const draft = await readDraft(draftPath);
+            if ("error" in draft) return draft;
+            draftFiles = draft.files;
+            if (!draft.own) {
+              try {
+                await exposeRun("workspace");
+              } catch {
+                return { error: RUN_STATE_UNSAVED_ERROR };
+              }
             }
           }
           // Decided on the run as it stood before this call. A request the user already
@@ -2166,7 +2217,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const gate = viaConnector
             ? undefined
             : creationGate(name, runStance({ trigger: run.trigger, sourceRole, exposed }));
-          const replaysApproval = nextApprovedTool === name;
           if (gate?.kind === "refuse" && !replaysApproval) return { error: gate.error };
           const effectName = gate?.kind === "card" && !replaysApproval ? gate.effectKind : name;
           const liveRoute =
@@ -2259,21 +2309,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
           }
           // The exact skill to write, keyed and shown on a card as is; an approval replays it as
-          // stored. A folder is read once, here, and that snapshot is what the approval writes.
+          // stored.
           let skillSave: SkillSaveRequest | undefined;
           if ((name === "skill_create" || name === "skill_update") && !approvedReplayConsumed) {
-            const files = draftPath
-              ? await readSkillDraft(
-                  deps.sandbox,
-                  computer,
-                  resolveBotWorkspacePath(computerMode, bot.id, draftPath),
-                  context,
-                )
-              : undefined;
-            if (files && "error" in files) return files;
             const shaped = await shapeSkillSave(skillDeps, skillOwner, name, {
               ...skillSaveFields(args),
-              files,
+              files: draftFiles,
             });
             if ("error" in shaped) return shaped;
             skillSave = shaped;
@@ -2739,15 +2780,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             ) {
               return { error: WRITE_FILE_EXISTS_ERROR, path: filePath };
             }
+            const bytes = new TextEncoder().encode(content);
+            const key = normalizeWorkspacePath(storedPath);
+            try {
+              await recordWorkspaceWrite(key, bytes);
+            } catch {
+              return { error: RUN_STATE_UNSAVED_ERROR };
+            }
             workspaceCheckpoint.markDirty();
-            await deps.sandbox.writeFile(
-              computer,
-              {
-                path: storedPath,
-                content: new TextEncoder().encode(content),
-              },
-              context,
-            );
+            await deps.sandbox.writeFile(computer, { path: storedPath, content: bytes }, context);
             return finish({ ok: true, path: filePath });
           }
           if (name === "edit_file") {
@@ -2782,12 +2823,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 ...(edit.matches === undefined ? {} : { matches: edit.matches }),
               };
             }
+            const edited = new TextEncoder().encode(edit.content);
+            // The edited file stays this run's own only if it held what this run wrote.
+            const key = normalizeWorkspacePath(storedPath);
+            try {
+              if (!exposed && (await workspaceWrites()).get(key) === sha256(bytes)) {
+                await recordWorkspaceWrite(key, edited);
+              }
+            } catch {
+              return { error: RUN_STATE_UNSAVED_ERROR };
+            }
             workspaceCheckpoint.markDirty();
-            await deps.sandbox.writeFile(
-              computer,
-              { path: storedPath, content: new TextEncoder().encode(edit.content) },
-              context,
-            );
+            await deps.sandbox.writeFile(computer, { path: storedPath, content: edited }, context);
             return finish({ ok: true, path: filePath, replacements: edit.replacements });
           }
           if (name === "render_plot") {
@@ -4204,15 +4251,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     ),
               prepareToolBatch: async (calls) => {
                 if (exposed) return;
-                if (
-                  calls.some(
-                    (call) =>
-                      call.args &&
-                      typeof call.args === "object" &&
-                      skillDraftPath(call.name, call.args as Record<string, unknown>),
-                  )
-                ) {
-                  return exposeRun("workspace");
+                for (const call of calls) {
+                  const draftPath =
+                    call.args && typeof call.args === "object"
+                      ? skillDraftPath(call.name, call.args as Record<string, unknown>)
+                      : "";
+                  const draft = draftPath ? await readDraft(draftPath) : undefined;
+                  if (draft && !("error" in draft) && !draft.own) return exposeRun("workspace");
                 }
                 if (
                   calls.some((call) =>

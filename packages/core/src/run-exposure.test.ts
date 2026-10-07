@@ -25,6 +25,8 @@ describe("toolExposesRun", () => {
     expect(toolExposesRun("schedule_create", false)).toBe(false);
     expect(toolExposesRun("web_fetch", false)).toBe(true);
     expect(toolExposesRun("shell", false)).toBe(true);
+    expect(toolExposesRun("write_file", false)).toBe(false);
+    expect(toolExposesRun("read_file", false)).toBe(true);
     expect(toolExposesRun("mcp__notion__search", false)).toBe(true);
     expect(toolExposesRun("remember", true)).toBe(true);
   });

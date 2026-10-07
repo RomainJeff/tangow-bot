@@ -10,7 +10,7 @@ export const EXPOSURE_REASONS = [
   "skill",
   "history",
   "tool",
-  /** A skill saved from a workspace folder, which an exposed run may have written. */
+  /** A skill saved from a workspace folder holding a file this run did not write. */
   "workspace",
 ] as const;
 export type ExposureReason = (typeof EXPOSURE_REASONS)[number];
@@ -18,9 +18,12 @@ export type ExposureReason = (typeof EXPOSURE_REASONS)[number];
 /**
  * Built-in tools whose result is the bot's own data, never content from outside. Closed: any
  * other tool, a connector tool or an unknown name exposes the run. `skill_read` depends on the
- * skill it returns (skillExposesRun).
+ * skill it returns (skillExposesRun). write_file and edit_file return no file text, only the
+ * path, a replacement count or an error.
  */
 const CONTENT_FREE_TOOLS = new Set([
+  "write_file",
+  "edit_file",
   "remember",
   "recall_memory",
   "save_memory",

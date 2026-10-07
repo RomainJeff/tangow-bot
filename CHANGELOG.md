@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A routine or a skill a bot creates after reading a web page, a mail, an attachment, another bot's message or a routine's report now waits for your confirmation on a card that shows the whole routine, or every file of the skill.
 - Routines can no longer be created from a messaging channel.
 - A bot now changes or deletes only the skills it wrote and you have neither edited nor shared, and saves a skill only in a conversation you started.
-- A skill a bot saves from a folder of its workspace now always waits for your confirmation, and a skill holding one of your credentials or hidden characters is refused.
+- A skill a bot saves from a folder of its workspace now waits for your confirmation when the folder holds a file the conversation did not write or the conversation read outside content, and a skill holding one of your credentials or hidden characters is refused.
 
 ### 2026-10-06
 

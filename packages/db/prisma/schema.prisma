@@ -605,6 +605,7 @@ model Run {
   effects              ExternalEffect[]
   usageRecords         UsageRecord[]
   steeringMessages     SteeringMessage[]
+  workspaceWrites      RunWorkspaceWrite[]
   externalMessage      ExternalMessage?
 
   @@unique([spaceId, clientNonce])
@@ -618,6 +619,19 @@ model Run {
   @@index([threadId, status, createdAt])
   @@index([routineId])
   @@map("runs")
+}
+
+/// A workspace file a clean run wrote with write_file or edit_file, by the path the sandbox writes
+/// to, and the SHA-256 of the bytes it wrote. A skill folder saves without asking only when every
+/// file still holds what this run wrote there.
+model RunWorkspaceWrite {
+  runId  String
+  run    Run    @relation(fields: [runId], references: [id], onDelete: Cascade)
+  path   String
+  sha256 String
+
+  @@id([runId, path])
+  @@map("run_workspace_writes")
 }
 
 model SteeringMessage {

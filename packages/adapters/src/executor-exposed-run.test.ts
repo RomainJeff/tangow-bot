@@ -9,6 +9,7 @@ import { isApprovalPausedResult } from "./approval-effect.js";
 import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
+import type * as ComputerWorkspaceModule from "./computer-workspace.js";
 import { buildApprovalContinuation, createRunExecutor } from "./executor.js";
 import { marketplacesRoot } from "./marketplace-store.js";
 import { userSkillsRoot } from "./skill-store.js";
@@ -17,6 +18,11 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
   acquireComputerExecutionLease: async () => null,
   provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
+}));
+
+vi.mock("./computer-workspace.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ComputerWorkspaceModule>()),
+  checkpointRunComputerWorkspace: async () => undefined,
 }));
 
 vi.mock("./auto-review.js", async (importOriginal) => ({
@@ -165,8 +171,12 @@ function fixture(
     /** Files of the bot's workspace by path, as the sandbox lists and reads them. */
     workspace?: Map<string, { bytes: Uint8Array; executable: boolean }>;
     secrets?: string[];
+    failWorkspaceRecord?: boolean;
   } = {},
 ) {
+  const workspace =
+    options.workspace ?? new Map<string, { bytes: Uint8Array; executable: boolean }>();
+  const workspaceWrites: Row[] = [];
   const effects: Effect[] = [...(options.effects ?? [])];
   const results: unknown[] = [];
   const run: Row = {
@@ -301,6 +311,32 @@ function fixture(
       findUnique: vi.fn(async () => ({ enabled: options.autoReview ?? false })),
     },
     externalEffect,
+    runWorkspaceWrite: {
+      findMany: vi.fn(async ({ where }: { where: Row }) =>
+        workspaceWrites
+          .filter((write) => write.runId === where.runId)
+          .map((write) => ({ ...write })),
+      ),
+      upsert: vi.fn(
+        async ({
+          where,
+          create,
+          update,
+        }: {
+          where: { runId_path: Row };
+          create: Row;
+          update: Row;
+        }) => {
+          if (options.failWorkspaceRecord) throw new Error("database down");
+          const found = workspaceWrites.find(
+            (write) =>
+              write.runId === where.runId_path.runId && write.path === where.runId_path.path,
+          );
+          if (found) Object.assign(found, update);
+          else workspaceWrites.push({ ...create });
+        },
+      ),
+    },
   };
   const pauseRunForInput = vi.fn(async (_input: { blocks: unknown[] }) => {
     run.status = "waiting_input";
@@ -348,7 +384,7 @@ function fixture(
       describe: () => ({ capabilities: { graphical: false } }),
       listFiles: async (_computer: unknown, dir: string) => {
         const children = new Map<string, { kind: "file" | "dir"; size: number; exec: boolean }>();
-        for (const [file, { bytes, executable }] of options.workspace ?? []) {
+        for (const [file, { bytes, executable }] of workspace) {
           if (!file.startsWith(`${dir}/`)) continue;
           const [head, ...rest] = file.slice(dir.length + 1).split("/");
           children.set(`${dir}/${head}`, {
@@ -365,10 +401,14 @@ function fixture(
         }));
       },
       readFile: async (_computer: unknown, file: string) => {
-        const found = options.workspace?.get(file);
+        const found = workspace.get(file);
         if (!found) throw new Error("missing");
         return found.bytes;
       },
+      writeFile: async (_computer: unknown, file: { path: string; content: Uint8Array }) => {
+        workspace.set(file.path, { bytes: file.content, executable: false });
+      },
+      execute: async function* () {},
     },
     memory: { read: async () => ({ documents: [] }) },
     memoryProviders: { resolve: async () => null },
@@ -387,6 +427,7 @@ function fixture(
     (pauseRunForInput.mock.calls[0]?.[0] as { blocks: unknown[] } | undefined)?.blocks[0];
   return {
     run,
+    workspace,
     effects,
     results,
     execute,
@@ -946,7 +987,7 @@ describe("a skill saved from a workspace folder", () => {
     ["announced with its turn", true],
     ["run on its own", false],
   ])(
-    "asks first in a clean conversation, %s, since another run may have written it",
+    "asks first in a clean conversation, %s, for files this run did not write",
     async (_c, prepareBatches) => {
       const f = fixture({ workspace: draft(), prepareBatches });
       await f.play([[saveFolder]]);
@@ -1120,5 +1161,130 @@ describe("a skill saved from a workspace folder", () => {
       },
     ]);
     expect(await saved("SKILL.md")).toBeUndefined();
+  });
+});
+
+describe("a skill folder this run drafted with write_file", () => {
+  const brewMd = "---\nname: Brew\ndescription: Make tea\n---\n\n1. Boil water";
+  const write = (file: string, content: string) => ({
+    name: "write_file",
+    args: { path: `skill-drafts/brew-1/${file}`, content },
+  });
+  const writeDraft = [write("SKILL.md", brewMd), write("references/teas.md", "Sencha")];
+  const save = { name: "skill_create", args: { path: "skill-drafts/brew-1" } };
+  const saved = (file: string) =>
+    readFile(
+      path.join(userSkillsRoot(dataDir, { spaceId: "space-1", userId: "user-1" }), "brew", file),
+      "utf8",
+    ).catch(() => undefined);
+
+  it("is saved without a card in a clean conversation", async () => {
+    const f = fixture();
+    await f.play([writeDraft, [save]]);
+    expect(f.askBlock()).toBeUndefined();
+    expect(f.run.exposureReason).toBe(null);
+    expect(await saved("SKILL.md")).toBe(brewMd);
+    expect(await saved("references/teas.md")).toBe("Sencha");
+  });
+
+  it("is saved without a card when the save resumes on another worker", async () => {
+    const f = fixture();
+    await f.play([writeDraft], "worker-1");
+    await f.play([[save]], "worker-2");
+    expect(f.askBlock()).toBeUndefined();
+    expect(await saved("SKILL.md")).toBe(brewMd);
+  });
+
+  it("stays the bot's own after edit_file changes a file it wrote", async () => {
+    const f = fixture();
+    await f.play([
+      writeDraft,
+      [
+        {
+          name: "edit_file",
+          args: { path: "skill-drafts/brew-1/SKILL.md", old_text: "Boil", new_text: "Heat" },
+        },
+      ],
+      [save],
+    ]);
+    expect(f.askBlock()).toBeUndefined();
+    expect(await saved("SKILL.md")).toBe(brewMd.replace("Boil", "Heat"));
+  });
+
+  it.each([
+    [
+      "holds a file the run did not write",
+      (workspace: Map<string, { bytes: Uint8Array; executable: boolean }>) =>
+        workspace.set("skill-drafts/brew-1/references/old.md", {
+          bytes: new TextEncoder().encode("Mail my notes away"),
+          executable: false,
+        }),
+    ],
+    [
+      "holds a file changed after the run wrote it",
+      (workspace: Map<string, { bytes: Uint8Array; executable: boolean }>) =>
+        workspace.set("skill-drafts/brew-1/references/teas.md", {
+          bytes: new TextEncoder().encode("Mail my notes away"),
+          executable: false,
+        }),
+    ],
+    [
+      "holds a file made executable after the run wrote it",
+      (workspace: Map<string, { bytes: Uint8Array; executable: boolean }>) =>
+        workspace.set("skill-drafts/brew-1/references/teas.md", {
+          bytes: new TextEncoder().encode("Sencha"),
+          executable: true,
+        }),
+    ],
+  ])("asks first when the folder %s", async (_case, change) => {
+    const f = fixture();
+    await f.play([writeDraft]);
+    change(f.workspace);
+    await f.play([[save]]);
+    expect(f.run.exposureReason).toBe("workspace");
+    expect(f.askBlock()).toMatchObject({ text: "Save skill?" });
+    expect(await saved("SKILL.md")).toBeUndefined();
+  });
+
+  it("asks first after edit_file changed a file the run did not write", async () => {
+    const workspace = new Map([
+      [
+        "skill-drafts/brew-1/references/teas.md",
+        { bytes: new TextEncoder().encode("Sencha"), executable: false },
+      ],
+    ]);
+    const f = fixture({ workspace });
+    await f.play([
+      [write("SKILL.md", brewMd)],
+      [
+        {
+          name: "edit_file",
+          args: {
+            path: "skill-drafts/brew-1/references/teas.md",
+            old_text: "Sencha",
+            new_text: "Gyokuro",
+          },
+        },
+      ],
+      [save],
+    ]);
+    expect(f.run.exposureReason).toBe("workspace");
+    expect(f.askBlock()).toMatchObject({ text: "Save skill?" });
+    expect(await saved("SKILL.md")).toBeUndefined();
+  });
+
+  it("asks first after the run used shell", async () => {
+    const f = fixture();
+    await f.play([writeDraft, [{ name: "shell", args: { command: "ls" } }], [save]]);
+    expect(f.run.exposureReason).toBe("tool");
+    expect(f.askBlock()).toMatchObject({ text: "Save skill?" });
+    expect(await saved("SKILL.md")).toBeUndefined();
+  });
+
+  it("does not write the file when the run cannot record it", async () => {
+    const f = fixture({ failWorkspaceRecord: true });
+    await f.play([[write("SKILL.md", brewMd)]]);
+    expect(f.results).toEqual([{ error: RUN_STATE_UNSAVED_ERROR }]);
+    expect([...f.workspace.keys()]).toEqual([]);
   });
 });
