@@ -80,7 +80,9 @@ describe("window chrome", () => {
     expect(panel).toContain(
       'className="app-drag flex items-center justify-between gap-4 border-b border-sidebar-border px-4.5 py-3.5"',
     );
-    expect(panel).toContain('<div className="app-no-drag flex items-center gap-3">');
+    expect(panel).toContain(
+      '<div className="app-no-drag relative flex shrink-0 items-center gap-2 sm:gap-3">',
+    );
   });
 
   it("keeps conversation header controls clickable", () => {
