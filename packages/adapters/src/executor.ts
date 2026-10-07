@@ -3014,6 +3014,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId },
                 applied.effect.id,
                 routine,
+                change,
               );
             } else {
               await confirmRoutine(applied.effect.id, routine, change);
@@ -5690,6 +5691,7 @@ async function settleRoutineCard(
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   effectId: string,
   routine: CreatedRoutine,
+  change: "created" | "updated",
 ): Promise<void> {
   const committed = await deps.prisma
     .$transaction(async (tx) => {
@@ -5713,6 +5715,7 @@ async function settleRoutineCard(
           ? (settleRoutineAsk(
               block as Extract<MessageBlock, { kind: "ask" }>,
               routine,
+              change,
             ) as Prisma.InputJsonValue)
           : block,
       );

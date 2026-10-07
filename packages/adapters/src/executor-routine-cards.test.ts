@@ -511,6 +511,7 @@ describe("a routine the user asks for", () => {
       text: "Every hour UTC",
       routine: confirmation.routine,
       created: { kind: "routine", id: "routine-new", label: "Stretch" },
+      confirms: "created",
     });
   });
 });
@@ -650,6 +651,40 @@ describe("a routine the user asks to change", () => {
     expect(f.posted()).toEqual([
       [expect.objectContaining({ text: "Every day at 09:00 UTC · paused" })],
     ]);
+  });
+
+  it("settles the approval card the user allowed on the routine it changed", async () => {
+    const wake = {
+      ...stored,
+      id: "routine-wake",
+      crons: [],
+      webhookEnabled: true,
+      nextRunAt: null,
+    };
+    const f = fixture({ trigger: "webhook", routineId: "routine-wake", routines: [wake, stored] });
+    await f.play([[change({ notify: true })]]);
+    const card = f.askBlock() as Row;
+    expect(card).toMatchObject({ kind: "ask", approvalEffectId: "effect-1" });
+    f.messages.push({
+      id: "m-card",
+      threadId: "thread-1",
+      seq: 2,
+      role: "bot",
+      runId: "run-1",
+      botId: "bot-1",
+      blocks: [{ ...card, status: "answered", answer: "allow" }],
+    });
+    f.effects[0]!.status = "approved";
+    await f.play([[change({ notify: true })]]);
+    expect(f.posted()).toEqual([]);
+    expect(
+      (f.messageUpdate.mock.calls[0] as unknown as [{ data: { blocks: Row[] } }])[0].data.blocks[0],
+    ).toMatchObject({
+      answer: "allow",
+      text: "Every hour UTC",
+      created: { kind: "routine", id: "routine-1", label: "Stretch" },
+      confirms: "updated",
+    });
   });
 
   it("names the trigger of a routine a webhook wakes on its card", async () => {

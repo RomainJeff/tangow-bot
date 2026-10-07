@@ -1,5 +1,5 @@
 import type { AdapterContext, MessagingSurface } from "@rakazo/adapter-kit";
-import { routineConfirmationBlock } from "@rakazo/core";
+import { routineConfirmationBlock, settleRoutineAsk } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -793,6 +793,39 @@ describe("deliverMessagingOutbound channel runs", () => {
       context,
     );
     expect(deps.sendToThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a run out of the group once the user answered its routine card in the app", async () => {
+    const allowed = settleRoutineAsk(
+      {
+        kind: "ask",
+        approvalEffectId: "effect-1",
+        text: "Review before schedule_create",
+        status: "answered",
+        answer: "allow",
+        actions: [
+          { id: "allow", label: "Allow once" },
+          { id: "deny", label: "Deny" },
+        ],
+      },
+      {
+        id: "routine-1",
+        name: "Stretch",
+        schedule: "Every hour UTC",
+        prompt: "Remind me to stretch",
+        notify: false,
+      },
+      "updated",
+    );
+    const deps = createChannelDeps({
+      messages: [
+        { id: "card-1", blocks: [allowed] },
+        { id: "reply-1", blocks: [{ kind: "text", text: "Done, every hour." }] },
+      ],
+    });
+    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
+    expect(deps.sendToThread).not.toHaveBeenCalled();
+    expect(deps.rows).toEqual([]);
   });
 
   it("can still publish a group reply alongside an unanswered ask", async () => {

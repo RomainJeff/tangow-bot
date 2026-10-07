@@ -64,7 +64,11 @@ export function routineConfirmationBlock(
   };
 }
 
-/** The approval card the user allowed for a routine, settled on the routine it created. */
-export function settleRoutineAsk(card: AskBlock, routine: CreatedRoutine): AskBlock {
-  return { ...card, ...settledOn(routine) };
+/** The approval card the user allowed for a routine, settled on the routine it set up or changed. */
+export function settleRoutineAsk(
+  card: AskBlock,
+  routine: CreatedRoutine,
+  change: "created" | "updated",
+): AskBlock {
+  return { ...card, ...settledOn(routine), confirms: change };
 }

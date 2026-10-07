@@ -153,7 +153,10 @@ async function mirrorChannelRun(
   if (
     replies.some((message) =>
       (message.blocks as MessageBlock[]).some(
-        (block) => block.kind === "ask" && block.status === "answered" && !block.confirms,
+        (block) =>
+          block.kind === "ask" &&
+          block.status === "answered" &&
+          (block.answer !== undefined || !block.confirms),
       ),
     )
   )

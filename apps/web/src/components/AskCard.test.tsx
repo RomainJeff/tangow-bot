@@ -678,11 +678,14 @@ describe("AskCard routine confirmation", () => {
         { id: "deny", label: "Deny" },
       ],
     };
-    const html = render(settleRoutineAsk(allowed, stretch));
+    const html = render(settleRoutineAsk(allowed, stretch, "created"));
     expect(html).toContain("Every hour UTC");
     expect(html).not.toContain("Review before schedule_create");
     expect(html).toContain('href="/app/bot-1?routine=routine-1"');
     expect(answeredLine(html)?.replace(/<[^>]+>/g, "")).toBe("Routine created · Stretch");
     expect(html).not.toContain("Needs your call");
+    expect(
+      answeredLine(render(settleRoutineAsk(allowed, stretch, "updated")))?.replace(/<[^>]+>/g, ""),
+    ).toBe("Routine updated · Stretch");
   });
 });

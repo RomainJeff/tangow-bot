@@ -164,8 +164,8 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     /** Written once the routine exists: the card links to it. */
     created: z.object({ kind: z.literal("routine"), id: z.string(), label: z.string() }).optional(),
     /**
-     * The card confirms a routine the user asked for, created or changed: nobody answered it, so
-     * nothing the user typed in the app is in it.
+     * What became of the routine the card is about. A confirmation the server settled has no
+     * `answer`, so nothing the user typed in the app is in it.
      */
     confirms: z.enum(["created", "updated"]).optional(),
   }),
