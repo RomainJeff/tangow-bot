@@ -133,6 +133,10 @@ export interface ComputerFileEntry {
   path: string;
   kind: "file" | "dir";
   size: number;
+  /**
+   * A regular file with an execute bit; missing means not executable. Providers must not report a
+   * symlink as an executable file: a saved skill would keep its target as an executable script.
+   */
   executable?: boolean;
 }
 
