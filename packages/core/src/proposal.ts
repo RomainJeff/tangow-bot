@@ -43,12 +43,13 @@ function routineAsk(effectId: string, routine: RoutinePreview, text: string): As
 export function routineConfirmationBlock(
   effectId: string,
   routine: RoutinePreview & { id: string },
+  change: "created" | "updated",
 ): AskBlock {
   const { id, ...preview } = routine;
   return {
     ...routineAsk(effectId, preview, preview.schedule),
     status: "answered",
     created: { kind: "routine", id, label: preview.name },
-    confirms: "created",
+    confirms: change,
   };
 }

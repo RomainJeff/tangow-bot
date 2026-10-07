@@ -3510,6 +3510,10 @@ msgstr "자동 실행"
 msgid "Routine created"
 msgstr "자동 실행 생성됨"
 
+#: src/components/AskCard.tsx:62
+msgid "Routine updated"
+msgstr "자동 실행 업데이트됨"
+
 #: src/pages/RoutineEditor.tsx:124
 msgid "Routines"
 msgstr "자동 실행"

@@ -308,6 +308,7 @@ import {
   filterBuiltinToolsForRun,
   filterBuiltinToolsForThread,
   listSchedulesFromTool,
+  updateScheduleFromTool,
 } from "./schedule-tools.js";
 import { loadAgentScratchpadContext } from "./scratchpad-context.js";
 import {
@@ -1959,6 +1960,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             prompt: string;
             notify: boolean;
           },
+          change: "created" | "updated",
         ) => {
           const { routineId: id, name, schedule, prompt, notify } = routine;
           try {
@@ -1967,7 +1969,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               deps,
               run,
               "bot",
-              [routineConfirmationBlock(effectId, { id, name, schedule, prompt, notify })],
+              [routineConfirmationBlock(effectId, { id, name, schedule, prompt, notify }, change)],
               undefined,
               `routine-confirmation:${effectId}`,
             );
@@ -3005,6 +3007,50 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
             return finish(removed);
           }
+          const showRoutine = async (
+            result: Awaited<ReturnType<typeof createScheduleFromTool>>,
+            change: "created" | "updated",
+          ) => {
+            if (!applied || !("ok" in result)) return;
+            // A routine the user approved on a card links that card to it instead of a second one.
+            if (approvedReplayConsumed) {
+              await settleRoutineCard(
+                deps,
+                { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId },
+                applied.effect.id,
+                { kind: "routine", id: result.routineId, label: result.name },
+              );
+            } else {
+              await confirmRoutine(applied.effect.id, result, change);
+            }
+          };
+          if (name === "schedule_create" && args.routineId !== undefined) {
+            const updated = await updateScheduleFromTool(deps, {
+              spaceId: run.spaceId,
+              botId: bot.id,
+              userId: run.userId,
+              threadId: thread.id,
+              inGroup: Boolean(thread.groupId),
+              startedByUser: isUserOpenedTrigger(run.trigger),
+              currentHop: await resolveRunHop(deps.prisma, run),
+              routineId: String(args.routineId),
+              name: args.name === undefined ? undefined : String(args.name),
+              prompt: args.prompt === undefined ? undefined : String(args.prompt),
+              timezone: args.timezone ? String(args.timezone) : undefined,
+              notify: typeof args.notify === "boolean" ? args.notify : undefined,
+              schedule: {
+                cron: args.cron,
+                every: args.every,
+                unit: args.unit,
+                runAt: args.runAt,
+                delayMinutes: args.delayMinutes,
+                delaySeconds: args.delaySeconds,
+              },
+            });
+            const settled = await finish(updated);
+            await showRoutine(updated, "updated");
+            return settled;
+          }
           if (name === "schedule_create") {
             const created = await createScheduleFromTool(deps, {
               spaceId: run.spaceId,
@@ -3026,19 +3072,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
             });
             const settled = await finish(created);
-            if (applied && "ok" in created) {
-              // A routine the user approved on a card links that card to it instead of a second one.
-              if (approvedReplayConsumed) {
-                await settleRoutineCard(
-                  deps,
-                  { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId },
-                  applied.effect.id,
-                  { kind: "routine", id: created.routineId, label: created.name },
-                );
-              } else {
-                await confirmRoutine(applied.effect.id, created);
-              }
-            }
+            await showRoutine(created, "created");
             return settled;
           }
           if (name === "schedule_list") {

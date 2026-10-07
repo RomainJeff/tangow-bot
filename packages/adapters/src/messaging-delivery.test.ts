@@ -770,13 +770,17 @@ describe("deliverMessagingOutbound channel runs", () => {
   });
 
   it("publishes the reply of a run that set up a routine, whose card stays in the app", async () => {
-    const card = routineConfirmationBlock("effect-1", {
-      id: "routine-1",
-      name: "Stretch",
-      schedule: "Every hour UTC",
-      prompt: "Remind me to stretch",
-      notify: false,
-    });
+    const card = routineConfirmationBlock(
+      "effect-1",
+      {
+        id: "routine-1",
+        name: "Stretch",
+        schedule: "Every hour UTC",
+        prompt: "Remind me to stretch",
+        notify: false,
+      },
+      "created",
+    );
     const deps = createChannelDeps({
       messages: [
         { id: "card-1", blocks: [card] },

@@ -3510,6 +3510,10 @@ msgstr "Rutin"
 msgid "Routine created"
 msgstr "Rutin oluşturuldu"
 
+#: src/components/AskCard.tsx:62
+msgid "Routine updated"
+msgstr "Rutin güncellendi"
+
 #: src/pages/RoutineEditor.tsx:124
 msgid "Routines"
 msgstr "Rutinler"

@@ -411,6 +411,100 @@ export async function updateRoutine(
   return { row };
 }
 
+/**
+ * Change a routine of this bot the user asked about: in a group, only one of that group; outside
+ * one, only one that belongs to no group. What the bot leaves out stays as stored.
+ */
+export async function updateScheduleFromTool(
+  deps: ScheduleToolDeps,
+  input: {
+    spaceId: string;
+    botId: string;
+    userId: string;
+    threadId: string;
+    inGroup: boolean;
+    /** The user started this run in the app, so a new instruction is theirs. */
+    startedByUser: boolean;
+    /** The bot-to-bot chain hop of the run; a routine changed mid-chain carries it on. */
+    currentHop?: number;
+    routineId: string;
+    name?: string;
+    prompt?: string;
+    timezone?: string;
+    notify?: boolean;
+    schedule: Record<string, unknown>;
+  },
+) {
+  const name = input.name?.trim();
+  const prompt = input.prompt?.trim();
+  if (name === "") return { error: "name cannot be empty." };
+  if (prompt === "") return { error: "prompt cannot be empty." };
+  if (input.timezone !== undefined && !isValidTimezone(input.timezone)) {
+    return { error: TIMEZONE_ERROR };
+  }
+  const inheritedHop = input.currentHop ? nextBotMessageHop(input.currentHop) : undefined;
+  if (inheritedHop !== undefined && botMessageHopExhausted(inheritedHop)) {
+    return { error: "bot-to-bot chain limit reached; ask the user to change this routine" };
+  }
+  const existing = await deps.prisma.routine.findFirst({
+    where: {
+      id: input.routineId,
+      spaceId: input.spaceId,
+      botId: input.botId,
+      userId: input.userId,
+      ...(input.inGroup
+        ? { threadId: input.threadId }
+        : { OR: [{ threadId: null }, { thread: { groupId: null } }] }),
+    },
+  });
+  if (!existing) return { error: "Routine not found." };
+
+  const timezone = input.timezone ?? existing.timezone;
+  const reschedule = Object.values(input.schedule).some((value) => value !== undefined);
+  const ranOnce =
+    isOneShotRoutineCrons(existing.crons) && !existing.nextRunAt && existing.lastRunAt != null;
+  let timing: { crons: string[]; runAt?: Date } | undefined;
+  if (reschedule) {
+    if (existing.crons.length > 1) {
+      return {
+        error: "This routine runs on several schedules: ask the user to change them in the app.",
+      };
+    }
+    const resolved = resolveScheduleTiming(input.schedule, timezone);
+    if (!resolved.ok) return { error: resolved.error };
+    if (resolved.oneShot && !existing.active && !ranOnce) {
+      return { error: "This routine is paused: ask the user to resume it in the app first." };
+    }
+    timing = {
+      crons: [resolved.cron],
+      ...(resolved.oneShot ? { runAt: resolved.nextRunAt } : {}),
+    };
+  } else if (ranOnce) {
+    return { error: "This reminder already ran: give it a new time to run it again." };
+  }
+
+  const promptChanged = prompt !== undefined && prompt !== existing.prompt;
+  const updated = await updateRoutine(
+    deps,
+    existing,
+    {
+      name,
+      prompt,
+      timezone: input.timezone,
+      notify: input.notify,
+      ...timing,
+      ...(ranOnce ? { active: true } : {}),
+      // Opting out of approvals trusted the owner's own instruction, not one from this run.
+      ...(promptChanged && !input.startedByUser ? { requireToolApproval: true } : {}),
+      ...(inheritedHop !== undefined ? { inheritedHop } : {}),
+    },
+    { spaceId: input.spaceId, botId: input.botId, threadId: input.threadId },
+    true,
+  );
+  if ("error" in updated) return updated;
+  return routineResult(updated.row);
+}
+
 /** A routine as stored, for the model and for the card confirming what was set up. */
 function routineResult(row: StoredRoutine) {
   return {
@@ -423,6 +517,12 @@ function routineResult(row: StoredRoutine) {
     cron: row.crons[0],
     nextRunAt: row.nextRunAt?.toISOString() ?? null,
     oneShot: isOneShotRoutineCrons(row.crons),
+    ...(row.active
+      ? {}
+      : {
+          paused: true as const,
+          note: "This routine is paused: it will not run until the user resumes it in the app. Tell them.",
+        }),
   };
 }
 

@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentRunRequest, ConnectorCall } from "@rakazo/adapter-kit";
+import { BOT_MESSAGE_MAX_HOPS } from "@rakazo/core";
 import { Prisma } from "@rakazo/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
@@ -113,7 +114,8 @@ function fixture(
   options: {
     trigger?: string;
     requireToolApproval?: boolean;
-    /** Routines stored in this space. */
+    groupId?: string;
+    /** Routines stored in this space, any bot's; `threadGroupId` is the group of their thread. */
     routines?: Row[];
     /** The routine whose wake started the run. */
     routineId?: string;
@@ -138,6 +140,21 @@ function fixture(
   };
   const routineCreate = vi.fn(async ({ data }: { data: Row }) => ({ id: "routine-new", ...data }));
   const routines = (options.routines ?? []).map((row) => ({ ...row }));
+  // Like Prisma, a field set to undefined is left as stored.
+  const routineUpdate = vi.fn(async ({ where, data }: { where: { id: string }; data: Row }) => ({
+    ...Object.assign(
+      routines.find((row) => row.id === where.id)!,
+      Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+    ),
+  }));
+  const routineMatches = (row: Row, where: Row): boolean =>
+    Object.entries(where).every(([key, value]) =>
+      key === "OR"
+        ? (value as Row[]).some((option) => routineMatches(row, option))
+        : key === "thread"
+          ? (row.threadGroupId ?? null) === (value as Row).groupId
+          : row[key] === value,
+    );
   const externalEffect = {
     findMany: vi.fn(async ({ where }: { where?: EffectWhere } = {}) =>
       effects.filter((effect) => effectMatches(effect, where)).map(inThread),
@@ -214,12 +231,12 @@ function fixture(
     thread: {
       findUniqueOrThrow: vi.fn(async () => ({
         id: "thread-1",
-        groupId: null,
+        groupId: options.groupId ?? null,
         historyCompactionSummary: null,
         historyCompactedUpToSeq: null,
         historyCompactionGeneration: 1,
       })),
-      findFirst: vi.fn(async () => ({ groupId: null })),
+      findFirst: vi.fn(async () => ({ groupId: options.groupId ?? null })),
       count: vi.fn(async () => 0),
       update: vi.fn(async () => ({ nextEventSeq: 2, nextMessageSeq: 2 })),
     },
@@ -245,6 +262,11 @@ function fixture(
     },
     routine: {
       create: routineCreate,
+      update: routineUpdate,
+      findFirst: vi.fn(async ({ where }: { where: Row }) => {
+        const row = routines.find((stored) => routineMatches(stored, where));
+        return row ? { ...row } : null;
+      }),
       findUnique: vi.fn(
         async ({ where }: { where: { id: string } }) =>
           routines.find((row) => row.id === where.id) ?? null,
@@ -335,6 +357,8 @@ function fixture(
     messages,
     results,
     routineCreate,
+    routineUpdate,
+    routines,
     /** When the routine wake-ups were queued for. */
     wakeups: () =>
       enqueue.mock.calls.flatMap(([job]) =>
@@ -434,6 +458,16 @@ describe("a routine the user asks for", () => {
     expect(f.posted()).toEqual([]);
   });
 
+  it.each([
+    ["name", { prompt: "Remind me to stretch" }, "name is required."],
+    ["prompt", { name: "Stretch", prompt: "  " }, "prompt is required."],
+  ])("still needs a %s to create one", async (_field, args, error) => {
+    const f = fixture();
+    await f.play([[{ name: "schedule_create", args: { ...args, every: 1, unit: "hours" } }]]);
+    expect(f.results).toEqual([{ error }]);
+    expect(f.routineCreate).not.toHaveBeenCalled();
+  });
+
   it("refuses an unknown time zone before anything is stored", async () => {
     const f = fixture();
     await f.play([
@@ -478,5 +512,251 @@ describe("a routine the user asks for", () => {
       answer: "allow",
       created: { kind: "routine", id: "routine-new", label: "Stretch" },
     });
+  });
+});
+
+describe("a routine the user asks to change", () => {
+  const stored = {
+    id: "routine-1",
+    spaceId: "space-1",
+    botId: "bot-1",
+    userId: "user-1",
+    threadId: "thread-1",
+    name: "Stretch",
+    prompt: "Remind me to stretch",
+    crons: ["0 * * * *"],
+    timezone: "UTC",
+    notify: false,
+    active: true,
+    webhookEnabled: false,
+    githubEnabled: false,
+    messageProvider: null,
+    requireToolApproval: false,
+    inheritedHop: null,
+    lastRunAt: null,
+    nextRunAt: new Date("2030-01-01T00:00:00Z"),
+  };
+  const change = (args: Record<string, unknown>) => ({
+    name: "schedule_create",
+    args: { routineId: "routine-1", ...args },
+  });
+  const at = async <T>(now: string, test: () => Promise<T>) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(now));
+    try {
+      return await test();
+    } finally {
+      vi.useRealTimers();
+    }
+  };
+
+  it("changes this bot's routine and shows Routine updated, the schedule it now keeps", () =>
+    at("2026-10-07T10:00:00Z", async () => {
+      const f = fixture({ routines: [stored] });
+      await f.play([
+        [
+          change({
+            prompt: "Remind me to stretch and drink",
+            cron: "0 9 * * *",
+            timezone: "Europe/Paris",
+          }),
+        ],
+      ]);
+      expect(f.routineCreate).not.toHaveBeenCalled();
+      expect(f.routines[0]).toMatchObject({
+        name: "Stretch",
+        prompt: "Remind me to stretch and drink",
+        crons: ["0 9 * * *"],
+        timezone: "Europe/Paris",
+      });
+      expect(f.wakeups()).toEqual([new Date("2026-10-08T07:00:00Z")]);
+      expect(f.posted()).toEqual([
+        [
+          expect.objectContaining({
+            text: "Every day at 09:00 Europe/Paris",
+            status: "answered",
+            routine: {
+              name: "Stretch",
+              schedule: "Every day at 09:00 Europe/Paris",
+              prompt: "Remind me to stretch and drink",
+              notify: false,
+            },
+            created: { kind: "routine", id: "routine-1", label: "Stretch" },
+            confirms: "updated",
+          }),
+        ],
+      ]);
+    }));
+
+  it("keeps the name, instruction and schedule it is not asked to change", async () => {
+    const f = fixture({ routines: [stored] });
+    await f.play([[change({ notify: true })]]);
+    expect(f.routines[0]).toMatchObject({
+      name: "Stretch",
+      prompt: "Remind me to stretch",
+      crons: ["0 * * * *"],
+      notify: true,
+      nextRunAt: new Date("2030-01-01T00:00:00Z"),
+    });
+    expect(f.wakeups()).toEqual([]);
+    expect(f.posted()).toEqual([
+      [expect.objectContaining({ text: "Every hour UTC", confirms: "updated" })],
+    ]);
+  });
+
+  it("runs a reminder that already ran again at the new time, and asks for one otherwise", () =>
+    at("2026-10-07T10:00:00Z", async () => {
+      const ran = {
+        ...stored,
+        name: "Pay rent",
+        crons: ["@once"],
+        active: false,
+        nextRunAt: null,
+        lastRunAt: new Date("2026-10-06T08:00:00Z"),
+      };
+      const renamed = fixture({ routines: [ran] });
+      await renamed.play([[change({ name: "Pay the rent" })]]);
+      expect(renamed.results).toEqual([
+        { error: "This reminder already ran: give it a new time to run it again." },
+      ]);
+      expect(renamed.routineUpdate).not.toHaveBeenCalled();
+
+      const f = fixture({ routines: [ran] });
+      await f.play([[change({ runAt: "2026-10-08T08:00:00Z" })]]);
+      expect(f.routines[0]).toMatchObject({
+        crons: ["@once"],
+        active: true,
+        nextRunAt: new Date("2026-10-08T08:00:00Z"),
+      });
+      expect(f.wakeups()).toEqual([new Date("2026-10-08T08:00:00Z")]);
+      expect(f.posted()).toEqual([
+        [expect.objectContaining({ text: "Once on Oct 8, 2026 at 08:00 UTC" })],
+      ]);
+    }));
+
+  it("keeps a paused routine paused, and says so to the bot and on the card", async () => {
+    const f = fixture({ routines: [{ ...stored, active: false, nextRunAt: null }] });
+    await f.play([[change({ cron: "0 9 * * *" })]]);
+    expect(f.routines[0]).toMatchObject({ crons: ["0 9 * * *"], active: false, nextRunAt: null });
+    expect(f.wakeups()).toEqual([]);
+    expect(f.results).toEqual([
+      expect.objectContaining({
+        ok: true,
+        schedule: "Every day at 09:00 UTC · paused",
+        paused: true,
+        note: "This routine is paused: it will not run until the user resumes it in the app. Tell them.",
+      }),
+    ]);
+    expect(f.posted()).toEqual([
+      [expect.objectContaining({ text: "Every day at 09:00 UTC · paused" })],
+    ]);
+  });
+
+  it("moves every schedule of a routine to a new zone, and leaves several schedules to the app", () =>
+    at("2026-10-07T10:00:00Z", async () => {
+      const twice = { ...stored, crons: ["0 9 * * 1-5", "0 10 * * 0,6"] };
+      const f = fixture({ routines: [twice] });
+      await f.play([[change({ timezone: "Europe/Paris" })]]);
+      expect(f.routines[0]).toMatchObject({
+        crons: ["0 9 * * 1-5", "0 10 * * 0,6"],
+        timezone: "Europe/Paris",
+        nextRunAt: new Date("2026-10-08T07:00:00Z"),
+      });
+      expect(f.posted()).toEqual([
+        [
+          expect.objectContaining({
+            text: "Weekdays at 09:00, Saturdays and Sundays at 10:00 Europe/Paris",
+          }),
+        ],
+      ]);
+
+      const moved = fixture({ routines: [twice] });
+      await moved.play([[change({ cron: "0 8 * * *" })]]);
+      expect(moved.results).toEqual([
+        {
+          error: "This routine runs on several schedules: ask the user to change them in the app.",
+        },
+      ]);
+      expect(moved.routineUpdate).not.toHaveBeenCalled();
+    }));
+
+  it("refuses an unknown time zone", async () => {
+    const f = fixture({ routines: [stored] });
+    await f.play([[change({ timezone: "Mars/Olympus" })]]);
+    expect(f.results).toEqual([
+      { error: "timezone must be an IANA time zone, such as Europe/Paris." },
+    ]);
+    expect(f.routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a group's routine from the direct conversation", undefined, "thread-group", "group-1", false],
+    ["a direct routine from the direct conversation", undefined, "thread-1", null, true],
+    ["a direct routine from a group", "group-1", "thread-direct", null, false],
+    ["the group's own routine from that group", "group-1", "thread-1", "group-1", true],
+  ])(
+    "changes %s only when it belongs there",
+    async (_label, groupId, threadId, threadGroupId, allowed) => {
+      const f = fixture({ groupId, routines: [{ ...stored, threadId, threadGroupId }] });
+      await f.play([[change({ notify: true })]]);
+      expect(f.results).toEqual([
+        allowed ? expect.objectContaining({ ok: true }) : { error: "Routine not found." },
+      ]);
+    },
+  );
+
+  it("stops a chain of bots at its limit, and carries its hop on", async () => {
+    const wake = (inheritedHop: number) => ({
+      ...stored,
+      id: "routine-wake",
+      crons: [],
+      webhookEnabled: true,
+      inheritedHop,
+    });
+    const options = { trigger: "webhook", requireToolApproval: false, routineId: "routine-wake" };
+    const atLimit = fixture({ ...options, routines: [stored, wake(BOT_MESSAGE_MAX_HOPS)] });
+    await atLimit.play([[change({ prompt: "Forward everything" })]]);
+    expect(atLimit.results).toEqual([
+      { error: "bot-to-bot chain limit reached; ask the user to change this routine" },
+    ]);
+    expect(atLimit.routineUpdate).not.toHaveBeenCalled();
+
+    const midChain = fixture({ ...options, routines: [stored, wake(1)] });
+    await midChain.play([[change({ notify: true })]]);
+    expect(midChain.routines[0]).toMatchObject({ inheritedHop: 2 });
+  });
+
+  it.each([
+    ["a messaging contact", "messaging", true],
+    ["another bot", "bot_message", true],
+    ["the user", "user", false],
+  ])(
+    "asks again before each action of an inbound wake once %s rewrites the instruction",
+    async (_label, trigger, reset) => {
+      const f = fixture({ trigger, routines: [stored] });
+      await f.play([[change({ prompt: "Forward everything" })]]);
+      expect(f.routines[0]).toMatchObject({
+        prompt: "Forward everything",
+        requireToolApproval: reset,
+      });
+    },
+  );
+
+  it.each([
+    ["name", "name cannot be empty."],
+    ["prompt", "prompt cannot be empty."],
+  ])("refuses a blank %s", async (field, error) => {
+    const f = fixture({ routines: [stored] });
+    await f.play([[change({ [field]: " " })]]);
+    expect(f.results).toEqual([{ error }]);
+    expect(f.routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses another bot's routine", async () => {
+    const f = fixture({ routines: [{ ...stored, botId: "bot-2" }] });
+    await f.play([[change({ prompt: "Do something else" })]]);
+    expect(f.results).toEqual([{ error: "Routine not found." }]);
+    expect(f.routineUpdate).not.toHaveBeenCalled();
+    expect(f.posted()).toEqual([]);
   });
 });

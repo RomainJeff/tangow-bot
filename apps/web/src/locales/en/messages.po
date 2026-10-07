@@ -3510,6 +3510,10 @@ msgstr "Routine"
 msgid "Routine created"
 msgstr "Routine created"
 
+#: src/components/AskCard.tsx:62
+msgid "Routine updated"
+msgstr "Routine updated"
+
 #: src/pages/RoutineEditor.tsx:124
 msgid "Routines"
 msgstr "Routines"

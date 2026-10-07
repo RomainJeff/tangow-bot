@@ -3721,7 +3721,7 @@ const MessageBubble = memo(function MessageBubble({
           style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}
         >
           <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-            {t("Routine created")} ·{" "}
+            {askBlock.confirms === "updated" ? t("Routine updated") : t("Routine created")} ·{" "}
             <Text style={{ color: tokens.foreground, fontWeight: "600" }}>{created.label}</Text>
           </Text>
           <NativeSymbol

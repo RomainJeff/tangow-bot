@@ -11,7 +11,7 @@ describe("routineConfirmationBlock", () => {
   };
 
   it("settles the card on the routine set up, opening on when it runs", () => {
-    expect(routineConfirmationBlock("effect-1", routine)).toEqual({
+    expect(routineConfirmationBlock("effect-1", routine, "created")).toEqual({
       kind: "ask",
       approvalEffectId: "effect-1",
       text: "Mondays at 09:00 Europe/Paris",
@@ -35,6 +35,13 @@ describe("routineConfirmationBlock", () => {
       },
       created: { kind: "routine", id: "routine-1", label: "Weekly offers" },
       confirms: "created",
+    });
+  });
+
+  it("marks a change to an existing routine as updated", () => {
+    expect(routineConfirmationBlock("effect-1", routine, "updated")).toMatchObject({
+      created: { kind: "routine", id: "routine-1", label: "Weekly offers" },
+      confirms: "updated",
     });
   });
 });

@@ -607,7 +607,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "schedule_create",
     description:
-      'Create a reminder or recurring job for this bot. Use for "remind me in 10 minutes" or "every morning send a joke". Repeats: cron or every/unit (min 1 minute). One-shot: runAt, delayMinutes, or delaySeconds.',
+      'Create a reminder or recurring job for this bot. Use for "remind me in 10 minutes" or "every morning send a joke". Repeats: cron or every/unit (min 1 minute). One-shot: runAt, delayMinutes, or delaySeconds. Pass routineId to change one of your routines instead.',
     inputSchema: {
       type: "object",
       properties: {
@@ -642,8 +642,12 @@ export const builtinAgentTools: ConnectorTool[] = [
           description:
             "Page the user on every run (e.g. they asked to be told each time). Default false: the run stays a silent, browsable card in this thread.",
         },
+        routineId: {
+          type: "string",
+          description:
+            "A routine of yours from schedule_list to change, when the user asks: give only what changes; what you leave out stays, and name and prompt are then optional.",
+        },
       },
-      required: ["name", "prompt"],
     },
   },
   {

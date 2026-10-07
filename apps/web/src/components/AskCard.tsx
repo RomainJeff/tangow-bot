@@ -59,7 +59,7 @@ function RoutineSettled({ block }: { block: AskBlock }) {
       to={{ search: `?routine=${encodeURIComponent(block.created.id)}` }}
       className="inline-flex items-center gap-1 duration-(--duration-hover) ease-quiet hover:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      {t`Routine created`} ·{" "}
+      {block.confirms === "updated" ? t`Routine updated` : t`Routine created`} ·{" "}
       <span className="font-medium text-foreground">{block.created.label}</span>
       <ChevronRight className="size-3 shrink-0" aria-hidden />
     </Link>

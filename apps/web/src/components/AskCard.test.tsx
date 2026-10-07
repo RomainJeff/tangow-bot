@@ -610,13 +610,17 @@ describe("AskCard routine confirmation", () => {
 
   it("confirms a routine the user asked for, settled, with nothing to answer", () => {
     const html = render(
-      routineConfirmationBlock("effect-1", {
-        id: "routine-1",
-        name: "Offres de la semaine",
-        schedule: "Every hour UTC",
-        prompt: "Résume les nouvelles offres. **Vite**",
-        notify: false,
-      }),
+      routineConfirmationBlock(
+        "effect-1",
+        {
+          id: "routine-1",
+          name: "Offres de la semaine",
+          schedule: "Every hour UTC",
+          prompt: "Résume les nouvelles offres. **Vite**",
+          notify: false,
+        },
+        "created",
+      ),
     );
     expect(html).toContain("Every hour UTC");
     expect(html).toContain('href="/app/bot-1?routine=routine-1"');
@@ -626,5 +630,25 @@ describe("AskCard routine confirmation", () => {
     expect(html).not.toContain("<button");
     expect(html).not.toContain("<pre");
     expect(html).not.toContain("Needs your call");
+  });
+
+  it("confirms a change the user asked for as Routine updated", () => {
+    const html = render(
+      routineConfirmationBlock(
+        "effect-1",
+        {
+          id: "routine-1",
+          name: "Offres de la semaine",
+          schedule: "Every hour UTC",
+          prompt: "Résume les nouvelles offres.",
+          notify: false,
+        },
+        "updated",
+      ),
+    );
+    expect(html).toContain('href="/app/bot-1?routine=routine-1"');
+    expect(answeredLine(html)?.replace(/<[^>]+>/g, "")).toBe(
+      "Routine updated · Offres de la semaine",
+    );
   });
 });
