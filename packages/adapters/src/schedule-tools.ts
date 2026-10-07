@@ -3,11 +3,13 @@ import { routineJobKey, routineWakeupJob } from "@rakazo/adapter-kit";
 import {
   botMessageHopExhausted,
   cronFromPreset,
+  hasMixedOneShotSchedule,
   isOneShotRoutineCron,
   isOneShotRoutineCrons,
   isValidTimezone,
   nextBotMessageHop,
   nextCronDate,
+  nextCronDateAcrossStrict,
   ONCE_ROUTINE_CRON,
   routineCardSchedule,
 } from "@rakazo/core";
@@ -272,6 +274,142 @@ type StoredRoutine = {
   lastRunAt: Date | null;
   nextRunAt: Date | null;
 };
+
+type RoutineRow = Awaited<ReturnType<PrismaClient["routine"]["update"]>>;
+
+/** What a routine update may change; a field left out stays as stored. */
+export type RoutineChange = {
+  name?: string;
+  prompt?: string;
+  crons?: string[];
+  timezone?: string;
+  active?: boolean;
+  notify?: boolean;
+  webhookEnabled?: boolean;
+  githubEnabled?: boolean;
+  messageProvider?: string | null;
+  requireToolApproval?: boolean;
+  inheritedHop?: number;
+  /** When an active one-shot runs: arms it, moves it, or runs one that already ran again. */
+  runAt?: string | Date;
+};
+
+/**
+ * The one set of rules for changing a routine, whoever asks (the routine editor or a bot): it
+ * validates the change, stores it with the next run it implies, keeps the wake-up job in step and
+ * tells the thread. A paused routine stays paused unless the change resumes it. Only a bot may
+ * `retime` a one-shot: convert a routine to one, move an armed one, or run one that already ran.
+ */
+export async function updateRoutine(
+  deps: ScheduleToolDeps,
+  existing: StoredRoutine,
+  change: RoutineChange,
+  signal: { spaceId: string; botId: string; threadId: string | null },
+  retime = false,
+): Promise<{ row: RoutineRow } | { error: string }> {
+  const active = change.active ?? existing.active;
+  const crons = change.crons ?? existing.crons;
+  const timezone = change.timezone ?? existing.timezone;
+  if (!isValidTimezone(timezone)) return { error: TIMEZONE_ERROR };
+  const webhookEnabled = change.webhookEnabled ?? existing.webhookEnabled;
+  const githubEnabled = change.githubEnabled ?? existing.githubEnabled;
+  const messageProvider =
+    change.messageProvider === undefined ? existing.messageProvider : change.messageProvider;
+  if (crons.length === 0 && !webhookEnabled && !githubEnabled && !messageProvider) {
+    return { error: "Add a schedule, webhook, GitHub, or message trigger" };
+  }
+  if (hasMixedOneShotSchedule(crons)) {
+    return { error: "A one-time schedule can't be combined with other schedules." };
+  }
+  const oneShot = isOneShotRoutineCrons(crons);
+  const wasOneShot = isOneShotRoutineCrons(existing.crons);
+  if (change.runAt !== undefined && !(active && oneShot)) {
+    return { error: "A run time is only for one-shots that have not run yet." };
+  }
+  const scheduleChanged =
+    (!existing.active && active) ||
+    JSON.stringify(crons) !== JSON.stringify(existing.crons) ||
+    timezone !== existing.timezone;
+  let nextRunAt: Date | null = null;
+  if (active && oneShot) {
+    if (change.runAt !== undefined) {
+      if (!retime && !wasOneShot) return { error: "One-shot schedules must be created from chat." };
+      if (!retime && !existing.nextRunAt && existing.lastRunAt) {
+        return { error: "This one-shot already ran." };
+      }
+      if (!retime && existing.nextRunAt) {
+        return { error: "A run time is only for one-shots that have not run yet." };
+      }
+      const at = new Date(change.runAt);
+      if (!Number.isFinite(at.getTime()) || at.getTime() <= Date.now()) {
+        return { error: "Run time must be in the future." };
+      }
+      nextRunAt = at;
+    } else if (!wasOneShot) {
+      return { error: "One-shot schedules must be created from chat." };
+    } else if (existing.nextRunAt) {
+      nextRunAt = existing.nextRunAt;
+    } else {
+      return {
+        error: existing.lastRunAt
+          ? "This one-shot already ran."
+          : "Add a run time for this one-shot.",
+      };
+    }
+  } else if (active && crons.length > 0) {
+    try {
+      nextRunAt =
+        scheduleChanged || !existing.nextRunAt
+          ? nextCronDateAcrossStrict(crons, new Date(), timezone)
+          : existing.nextRunAt;
+    } catch {
+      nextRunAt = null;
+    }
+    if (!nextRunAt) return { error: "Enter a valid cron expression." };
+  }
+
+  const row = await deps.prisma.routine.update({
+    where: { id: existing.id },
+    data: {
+      name: change.name,
+      prompt: change.prompt,
+      crons: change.crons,
+      timezone: change.timezone,
+      active: change.active,
+      notify: change.notify,
+      webhookEnabled: change.webhookEnabled,
+      githubEnabled: change.githubEnabled,
+      messageProvider: change.messageProvider,
+      requireToolApproval: change.requireToolApproval,
+      inheritedHop: change.inheritedHop,
+      nextRunAt,
+    },
+  });
+  if (
+    existing.active !== row.active ||
+    existing.nextRunAt?.getTime() !== row.nextRunAt?.getTime()
+  ) {
+    if (row.active && row.nextRunAt) {
+      await deps.jobs.enqueue(routineWakeupJob(row.id, row.nextRunAt));
+    } else {
+      await deps.jobs.cancel(routineJobKey(row.id));
+    }
+  }
+  if (signal.threadId) {
+    try {
+      await deps.events.append({
+        spaceId: signal.spaceId,
+        threadId: signal.threadId,
+        botId: signal.botId,
+        type: "routine.updated",
+        payload: { routineId: row.id, active: row.active },
+      });
+    } catch {
+      // The change is saved even if the thread signal fails.
+    }
+  }
+  return { row };
+}
 
 /** A routine as stored, for the model and for the card confirming what was set up. */
 function routineResult(row: StoredRoutine) {

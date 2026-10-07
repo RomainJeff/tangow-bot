@@ -81,6 +81,7 @@ import {
   takeoverLeaseMs,
   toComputerRef,
   touchRunningComputer,
+  updateRoutine,
   verifyMcpInstall,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
@@ -2502,109 +2503,15 @@ export function createRouter(deps: RouterDeps) {
           },
         });
         if (!existing) throw new IsolationError();
-        const active = input.active ?? existing.active;
-        const crons = input.crons ?? existing.crons;
-        const timezone = input.timezone ?? existing.timezone;
-        const webhookEnabled = input.webhookEnabled ?? existing.webhookEnabled;
-        const githubEnabled = input.githubEnabled ?? existing.githubEnabled;
-        const messageProvider =
-          input.messageProvider === undefined ? existing.messageProvider : input.messageProvider;
-        if (crons.length === 0 && !webhookEnabled && !githubEnabled && !messageProvider) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "Add a schedule, webhook, GitHub, or message trigger",
-          });
-        }
-        if (hasMixedOneShotSchedule(crons)) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "A one-time schedule can't be combined with other schedules.",
-          });
-        }
-        if (active && isOneShotRoutineCrons(crons)) {
-          if (!isOneShotRoutineCrons(existing.crons)) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: "One-shot schedules must be created from chat.",
-            });
-          }
-          if (!existing.nextRunAt && existing.lastRunAt) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: "This one-shot already ran.",
-            });
-          }
-        }
-        const scheduleChanged =
-          (!existing.active && active) ||
-          (input.crons !== undefined &&
-            JSON.stringify(input.crons) !== JSON.stringify(existing.crons)) ||
-          (input.timezone !== undefined && input.timezone !== existing.timezone);
-        const recalculatedNextRunAt =
-          crons.length > 0 &&
-          !isOneShotRoutineCrons(crons) &&
-          (scheduleChanged || (active && !existing.nextRunAt))
-            ? nextRoutineDate(crons, timezone)
-            : null;
-        let armedOneShotAt: Date | null = null;
-        if (active && isOneShotRoutineCrons(crons) && !existing.nextRunAt && !existing.lastRunAt) {
-          if (!input.runAt) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: "Add a run time for this one-shot.",
-            });
-          }
-          const parsed = new Date(input.runAt);
-          if (!Number.isFinite(parsed.getTime()) || parsed.getTime() <= Date.now()) {
-            throw new ORPCError("BAD_REQUEST", {
-              message: "Run time must be in the future.",
-            });
-          }
-          armedOneShotAt = parsed;
-        } else if (input.runAt !== undefined) {
-          throw new ORPCError("BAD_REQUEST", {
-            message: "A run time is only for one-shots that have not run yet.",
-          });
-        }
-        const nextRunAt = !active
-          ? null
-          : crons.length === 0
-            ? null
-            : isOneShotRoutineCrons(crons)
-              ? (armedOneShotAt ?? existing.nextRunAt)
-              : (recalculatedNextRunAt ?? existing.nextRunAt);
-        const row = await deps.prisma.routine.update({
-          where: { id: existing.id },
-          data: {
-            name: input.name,
-            prompt: input.prompt,
-            crons: input.crons,
-            timezone: input.timezone,
-            active: input.active,
-            notify: input.notify,
-            webhookEnabled: input.webhookEnabled,
-            githubEnabled: input.githubEnabled,
-            messageProvider: input.messageProvider,
-            requireToolApproval: input.requireToolApproval,
-            nextRunAt,
-          },
+        const bot = await repos.getBot(context.actor, existing.botId);
+        const { routineId: _routineId, ...change } = input;
+        const updated = await updateRoutine(deps, existing, change, {
+          spaceId: context.actor.spaceId,
+          botId: bot.id,
+          threadId: bot.thread?.id ?? null,
         });
-        const bot = await repos.getBot(context.actor, row.botId);
-        if (bot.thread) {
-          await deps.events.append({
-            spaceId: context.actor.spaceId,
-            threadId: bot.thread.id,
-            botId: bot.id,
-            type: "routine.updated",
-            payload: { routineId: row.id, active: row.active },
-          });
-        }
-        const scheduleNeedsSync =
-          existing.active !== row.active ||
-          scheduleChanged ||
-          (!existing.nextRunAt && !!row.nextRunAt);
-        if (scheduleNeedsSync) {
-          if (row.active && row.nextRunAt) {
-            await deps.jobs.enqueue(routineWakeupJob(row.id, row.nextRunAt));
-          } else {
-            await deps.jobs.cancel(routineJobKey(row.id));
-          }
-        }
+        if ("error" in updated) throw new ORPCError("BAD_REQUEST", { message: updated.error });
+        const row = updated.row;
         return mapRoutine(row);
       }),
       remove: authed.routines.remove.handler(async ({ context, input }) => {

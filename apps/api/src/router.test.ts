@@ -1070,3 +1070,166 @@ describe("interrupted computer reservation release", () => {
     expect(order).toEqual(["operation", "computer"]);
   });
 });
+
+describe("routine update triggers", () => {
+  const NO_TRIGGER_MESSAGE = "Add a schedule, webhook, GitHub, or message trigger";
+
+  function updateDeps(existing: Record<string, unknown>) {
+    const row = {
+      id: "routine-1",
+      botId: "bot-1",
+      name: "Digest",
+      prompt: "Check",
+      crons: ["0 9 * * *"],
+      timezone: "UTC",
+      active: true,
+      notify: false,
+      webhookEnabled: false,
+      githubEnabled: false,
+      messageProvider: null,
+      requireToolApproval: true,
+      lastRunAt: null,
+      nextRunAt: new Date("2026-10-07T09:00:00.000Z"),
+      createdAt: new Date("2026-10-01T09:00:00.000Z"),
+      ...existing,
+    };
+    const routineUpdate = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...row,
+      ...Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+    }));
+    const prisma = {
+      routine: { findFirst: vi.fn().mockResolvedValue(row), update: routineUpdate },
+      bot: { findFirst: vi.fn().mockResolvedValue({ id: "bot-1", thread: null }) },
+    } as unknown as PrismaClient;
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const deps = {
+      prisma,
+      jobs: { enqueue, cancel: vi.fn().mockResolvedValue(undefined) },
+      events: { append: vi.fn().mockResolvedValue(undefined) },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      dataDir: "/tmp/rakazo-router-test",
+    } as unknown as RouterDeps;
+    const actor = {
+      spaceId: "workspace-1",
+      userId: "user-1",
+      email: "user@rakazo.test",
+      isDeploymentOwner: true,
+    } satisfies Actor;
+    const handler = new RPCHandler(createRouter(deps));
+    const update = async (patch: Record<string, unknown>) => {
+      const { response } = await handler.handle(
+        new Request("http://127.0.0.1/rpc/routines/update", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ json: { routineId: "routine-1", ...patch } }),
+        }),
+        { prefix: "/rpc", context: { actor } },
+      );
+      return response;
+    };
+    return { routineUpdate, update, enqueue };
+  }
+
+  async function refusal(response: Response) {
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { json: { code: string; message: string } };
+    return body.json;
+  }
+
+  it("refuses to clear the only schedule", async () => {
+    const { routineUpdate, update } = updateDeps({});
+
+    const error = await refusal(await update({ crons: [] }));
+
+    expect(error).toMatchObject({ code: "BAD_REQUEST", message: NO_TRIGGER_MESSAGE });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("arms a one-shot that never ran at the time the editor gives", async () => {
+    const { update, enqueue } = updateDeps({ crons: ["@once"], nextRunAt: null });
+
+    const response = await update({ runAt: "2999-01-01T09:00:00.000Z" });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { json: { nextRunAt: string | null } };
+    expect(body.json.nextRunAt).toBe("2999-01-01T09:00:00.000Z");
+    expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+      new Date("2999-01-01T09:00:00.000Z"),
+    ]);
+  });
+
+  it("keeps a reminder that already ran from resuming without a new time", async () => {
+    const { routineUpdate, update } = updateDeps({
+      crons: ["@once"],
+      active: false,
+      nextRunAt: null,
+      lastRunAt: new Date("2026-10-06T08:00:00.000Z"),
+    });
+
+    const error = await refusal(await update({ active: true }));
+
+    expect(error).toMatchObject({ code: "BAD_REQUEST", message: "This one-shot already ran." });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses to turn a recurring routine into a one-shot from the app", async () => {
+    const { routineUpdate, update } = updateDeps({});
+
+    const error = await refusal(
+      await update({ crons: ["@once"], runAt: "2999-01-01T09:00:00.000Z" }),
+    );
+
+    expect(error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "One-shot schedules must be created from chat.",
+    });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses to move an armed one-shot from the app", async () => {
+    const { routineUpdate, update } = updateDeps({
+      crons: ["@once"],
+      nextRunAt: new Date("2999-01-01T08:00:00.000Z"),
+    });
+
+    const error = await refusal(await update({ runAt: "2999-01-02T09:00:00.000Z" }));
+
+    expect(error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A run time is only for one-shots that have not run yet.",
+    });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses to re-arm a one-shot that already ran from the app", async () => {
+    const { routineUpdate, update } = updateDeps({
+      crons: ["@once"],
+      active: false,
+      nextRunAt: null,
+      lastRunAt: new Date("2026-10-06T08:00:00.000Z"),
+    });
+
+    const error = await refusal(await update({ active: true, runAt: "2999-01-01T09:00:00.000Z" }));
+
+    expect(error).toMatchObject({ code: "BAD_REQUEST", message: "This one-shot already ran." });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unknown time zone", async () => {
+    const { routineUpdate, update } = updateDeps({});
+
+    const error = await refusal(await update({ timezone: "Mars/Olympus" }));
+
+    expect(error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "timezone must be an IANA time zone, such as Europe/Paris.",
+    });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+});
