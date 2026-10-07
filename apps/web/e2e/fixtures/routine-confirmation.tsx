@@ -34,11 +34,17 @@ const CARDS: Array<[string, AskBlock]> = [
 
 createRoot(document.getElementById("root")!).render(
   <I18nProvider i18n={i18n}>
-    <MemoryRouter initialEntries={["/app/bot-1"]}>
+    <MemoryRouter initialEntries={["/app/g/group-1"]}>
       <main className="mx-auto flex max-w-xl flex-col gap-4 bg-background p-4">
         {CARDS.map(([state, block]) => (
           <div key={state} data-testid={`routine-confirmation-${state}`}>
-            <AskCard block={block} canAnswer={true} onAnswer={async () => {}} messageId={state} />
+            <AskCard
+              block={block}
+              canAnswer={true}
+              onAnswer={async () => {}}
+              messageId={state}
+              botId="bot-1"
+            />
           </div>
         ))}
       </main>
