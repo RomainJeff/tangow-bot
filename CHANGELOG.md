@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-08
 
+#### Added
+
+- **You can now ask a bot to change one of its routines.** Ask it to move, rename or rewrite a routine in the conversation and it changes that routine in place, then shows a "Routine updated" card that opens it, on web, desktop and iPhone.
+
 #### Changed
 
 - A routine you ask a bot for now shows a card with when it runs and a link to open it, on web, desktop and iPhone.
