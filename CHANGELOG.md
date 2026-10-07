@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-08
+
+#### Changed
+
+- A routine you ask a bot for now shows a card with when it runs and a link to open it, on web, desktop and iPhone.
+
 ### 2026-10-07
 
 #### Changed
