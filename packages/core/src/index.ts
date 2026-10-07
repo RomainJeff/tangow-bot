@@ -36,6 +36,7 @@ export * from "./model-probe.js";
 export * from "./model-providers.js";
 export * from "./peer-messages.js";
 export * from "./response-bytes.js";
+export * from "./routine-draft.js";
 export * from "./routine-groups.js";
 export * from "./run-state.js";
 export * from "./sandbox-command.js";

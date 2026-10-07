@@ -131,6 +131,82 @@ export function presetFromCron(cron: string): CronPreset {
   return { ...base, freq: "Advanced", cron: trimmed };
 }
 
+/** A time of day a schedule runs at, on a 24-hour clock. */
+export type CronTime = { hour: number; minute: number };
+
+/**
+ * A schedule as data, for each app and the server to word in its own language. It is the one
+ * reading of a cron for words; anything it cannot say for sure stays a raw expression.
+ */
+export type CronSchedule =
+  | { kind: "once" }
+  /**
+   * `exact` is false when the step does not divide its cycle: a 45-minute step runs at :00 and
+   * :45, and a step over days restarts each month. The editor offers such steps, so the apps
+   * still word them as it does; the server does not.
+   */
+  | { kind: "every"; n: number; unit: CronUnit; exact: boolean }
+  | { kind: "daily"; times: CronTime[] }
+  /** `weekdays` 0 is Sunday, listed Monday first. */
+  | { kind: "weekly"; weekdays: number[]; times: CronTime[] }
+  | { kind: "monthly"; day: number; times: CronTime[] }
+  /** `month` 1 is January. */
+  | { kind: "yearly"; month: number; day: number; times: CronTime[] }
+  | { kind: "cron"; expression: string };
+
+// February keeps its 29th: a leap-day schedule still runs.
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+export function cronSchedule(cron: string): CronSchedule {
+  const expression = cron.trim();
+  if (isOneShotRoutineCron(expression)) return { kind: "once" };
+  const raw = { kind: "cron", expression } as const;
+  const parts = expression.split(/\s+/);
+  if (parts.length !== 5) return raw;
+  const [minute, hour, day, month, dow] = parts as [string, string, string, string, string];
+  if (month === "*" && dow === "*") {
+    const every = everyStep(minute, hour, day);
+    if (every) return { kind: "every", ...every };
+  }
+  const times = clockTimes(minute, hour);
+  if (!times) return raw;
+  if (day === "*" && month === "*") {
+    if (dow === "*") return { kind: "daily", times };
+    const days = weekdays(dow);
+    if (!days) return raw;
+    return days.length === 7 ? { kind: "daily", times } : { kind: "weekly", weekdays: days, times };
+  }
+  if (dow !== "*" || !inRange(day, 1, 31)) return raw;
+  if (month === "*") return { kind: "monthly", day: Number(day), times };
+  if (inRange(month, 1, 12) && Number(day) <= DAYS_IN_MONTH[Number(month) - 1]!) {
+    return { kind: "yearly", month: Number(month), day: Number(day), times };
+  }
+  return raw;
+}
+
+/** An "every N" step over minutes, hours or days, with the rest of the fields left free. */
+function everyStep(
+  minute: string,
+  hour: string,
+  day: string,
+): { n: number; unit: CronUnit; exact: boolean } | null {
+  const minuteStep = stepValue(minute);
+  if (minuteStep && minuteStep < 60 && hour === "*" && day === "*") {
+    return { n: minuteStep, unit: "minutes", exact: 60 % minuteStep === 0 };
+  }
+  if (minute !== "0") return null;
+  if (hour === "*" && day === "*") return { n: 1, unit: "hours", exact: true };
+  const hourStep = stepValue(hour);
+  if (hourStep && hourStep < 24 && day === "*") {
+    return { n: hourStep, unit: "hours", exact: 24 % hourStep === 0 };
+  }
+  const dayStep = stepValue(day);
+  if (hour === "0" && dayStep && dayStep <= 31) {
+    return { n: dayStep, unit: "days", exact: dayStep === 1 };
+  }
+  return null;
+}
+
 export function describeCronPreset(preset: CronPreset): { lead: string; detail: string } {
   if (preset.freq === "Interval") {
     return { lead: "Every", detail: `${preset.n} ${preset.unit}` };
@@ -229,6 +305,116 @@ export function nextCronDateAcrossStrict(
   return earliest;
 }
 
+/** An IANA zone name the runtime can schedule in, such as Europe/Paris or UTC. */
+export function isValidTimezone(timezone: string): boolean {
+  if (!timezone.trim()) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const DAY_NAMES = [
+  "Sundays",
+  "Mondays",
+  "Tuesdays",
+  "Wednesdays",
+  "Thursdays",
+  "Fridays",
+  "Saturdays",
+];
+
+function joinNames(names: readonly string[]): string {
+  return names.length < 2
+    ? (names[0] ?? "")
+    : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+/** "1-5" → [1..5], "1,4" → [1, 4]; null when the field is not plain days. 7 is Sunday too. */
+function weekdays(field: string): number[] | null {
+  const days = new Set<number>();
+  for (const part of field.split(",")) {
+    const range = /^(\d)(?:-(\d))?$/.exec(part);
+    if (!range) return null;
+    const start = Number(range[1]);
+    const end = Number(range[2] ?? range[1]);
+    if (start > end || end > 7) return null;
+    for (let day = start; day <= end; day += 1) days.add(day % 7);
+  }
+  return [...days].sort((left, right) => ((left + 6) % 7) - ((right + 6) % 7));
+}
+
+/** "30", "9,17" → 09:30 and 17:30; null unless a valid minute and plain hours. */
+function clockTimes(minute: string, hour: string): CronTime[] | null {
+  const hours = hour.split(",");
+  if (!inRange(minute, 0, 59) || !hours.every((value) => inRange(value, 0, 23))) return null;
+  return [...new Set(hours.map(Number))]
+    .sort((left, right) => left - right)
+    .map((value) => ({ hour: value, minute: Number(minute) }));
+}
+
+function clock24({ hour, minute }: CronTime): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+/** The schedule in English for the server's routine card; exact steps and plain times only. */
+function cadence(cron: string): string | null {
+  const schedule = cronSchedule(cron);
+  switch (schedule.kind) {
+    case "every": {
+      if (!schedule.exact || schedule.unit === "days") return null;
+      const unit = schedule.unit === "minutes" ? "minute" : "hour";
+      return schedule.n === 1 ? `Every ${unit}` : `Every ${schedule.n} ${unit}s`;
+    }
+    case "daily":
+      return `Every day at ${joinNames(schedule.times.map(clock24))}`;
+    case "weekly": {
+      const at = joinNames(schedule.times.map(clock24));
+      if (schedule.weekdays.join(",") === "1,2,3,4,5") return `Weekdays at ${at}`;
+      return `${joinNames(schedule.weekdays.map((index) => DAY_NAMES[index]!))} at ${at}`;
+    }
+    case "monthly":
+      return `Monthly on day ${schedule.day} at ${joinNames(schedule.times.map(clock24))}`;
+    default:
+      return null;
+  }
+}
+
+function onceLabel(at: Date, timezone: string): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(at)
+      .map((part) => [part.type, part.value]),
+  );
+  return `Once on ${parts.month} ${parts.day}, ${parts.year} at ${parts.hour}:${parts.minute}`;
+}
+
+/**
+ * What a routine card says about when it runs, always with its zone: computed from the schedule
+ * the server resolved and will store, never from the model's words.
+ */
+export function routineScheduleLabel(
+  schedule: { crons: string[]; nextRunAt: Date | null },
+  timezone: string,
+): string {
+  const when = isOneShotRoutineCrons(schedule.crons)
+    ? schedule.nextRunAt
+      ? onceLabel(schedule.nextRunAt, timezone)
+      : "Once"
+    : schedule.crons.map((cron) => cadence(cron) ?? `On the schedule ${cron}`).join(", ");
+  return `${when} ${timezone}`;
+}
+
 function validTimezoneOrUtc(timezone: string): string {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
@@ -262,4 +448,8 @@ function stepValue(expr: string): number | null {
 
 function isInt(expr: string): boolean {
   return /^\d+$/.test(expr);
+}
+
+function inRange(expr: string, min: number, max: number): boolean {
+  return isInt(expr) && Number(expr) >= min && Number(expr) <= max;
 }
