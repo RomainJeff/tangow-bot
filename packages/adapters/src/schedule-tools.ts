@@ -176,9 +176,9 @@ export interface ScheduleToolDeps {
   jobs: JobPublisher;
 }
 
-/** Persist and enqueue a bot routine that wakes in the originating thread. */
 const TIMEZONE_ERROR = "timezone must be an IANA time zone, such as Europe/Paris.";
 
+/** Persist and enqueue a bot routine that wakes in the originating thread. */
 export async function createScheduleFromTool(
   deps: ScheduleToolDeps,
   input: {
