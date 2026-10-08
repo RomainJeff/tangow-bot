@@ -212,10 +212,12 @@ const PROPOSAL_KEY_MAX_LENGTH = 40;
 
 /**
  * The name a proposal is remembered by: what "the same proposal" means, whatever its case,
- * width, spacing or markup.
+ * width, accents, spacing or markup.
  */
 export function proposalKey(name: string): string {
   return botNameKey(name)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]+/g, "")
     .replace(/[^\p{L}\p{N} '_.-]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim()
