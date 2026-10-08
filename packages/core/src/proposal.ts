@@ -276,11 +276,16 @@ export type ProposalRefusal = { error: string } | { result: unknown };
 
 export const PROPOSAL_PENDING_ERROR =
   "Another card is already waiting for the user's answer in this conversation. Do not propose anything until they answer.";
+export const PROPOSAL_REPEAT_ERROR =
+  "You already proposed this in the last day. Do not propose it again today.";
 export const PROPOSAL_DAILY_ERROR =
   "You already proposed five things to the user in the last day. Do not propose again today.";
 export const PROPOSAL_RUN_ERROR =
   "You already proposed two things to the user in this run. Do not propose again.";
-/** How long a shown proposal counts against the caps, and a Not now holds its proposal back. */
+/**
+ * How long a shown proposal counts against the caps and keeps its topic from being proposed again,
+ * and a Not now holds its proposal back.
+ */
 export const PROPOSAL_WINDOW_MS = 24 * 60 * 60 * 1000;
 const PROPOSALS_PER_DAY = 5;
 const PROPOSALS_PER_RUN = 2;
@@ -295,7 +300,8 @@ const corrects = (previous: ProposalRecord | undefined, next: { kind: string; ru
   previous?.kind === next.kind && previous.runId === next.runId && previous.dismissed;
 
 /**
- * What the guards weigh: whether the card asked for is a correction, and the chains shown so far.
+ * What the guards weigh: whether the card asked for is a correction, the cards shown in the last
+ * day, and the chains among them.
  * A chain starts with a first proposal, its head, and continues for as long as the user answers
  * by typing and the bot proposes again in that run, with no other card between. Only heads count
  * against the caps, so a user can correct as often as they like.
@@ -303,10 +309,13 @@ const corrects = (previous: ProposalRecord | undefined, next: { kind: string; ru
 type ProposalSituation = {
   input: ProposalGuardInput;
   correction: boolean;
+  shown: readonly ProposalRecord[];
   heads: readonly ProposalRecord[];
 };
 
 function situationOf(input: ProposalGuardInput): ProposalSituation {
+  const inWindow = (r: ProposalRecord) =>
+    input.now.getTime() - r.createdAt.getTime() < PROPOSAL_WINDOW_MS;
   const thread = new Map<string, ProposalRecord>();
   const heads: ProposalRecord[] = [];
   const cards = input.records
@@ -319,7 +328,8 @@ function situationOf(input: ProposalGuardInput): ProposalSituation {
   return {
     input,
     correction: corrects(thread.get(input.threadId), input),
-    heads: heads.filter((r) => input.now.getTime() - r.createdAt.getTime() < PROPOSAL_WINDOW_MS),
+    shown: cards.filter(inWindow),
+    heads: heads.filter(inWindow),
   };
 }
 
@@ -355,6 +365,15 @@ const PROPOSAL_GUARDS: ReadonlyArray<{
           input.now.getTime() - (r.answeredAt ?? r.createdAt).getTime() < PROPOSAL_WINDOW_MS,
       )
         ? { error: PROPOSAL_EFFECTS[input.kind].declinedBefore }
+        : undefined;
+    },
+  },
+  {
+    appliesToCorrections: false,
+    check: ({ input, shown }) => {
+      const key = proposalKey(input.name);
+      return shown.some((r) => r.kind === input.kind && proposalKey(r.name) === key)
+        ? { error: PROPOSAL_REPEAT_ERROR }
         : undefined;
     },
   },

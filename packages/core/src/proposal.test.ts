@@ -183,7 +183,10 @@ describe("proposalRefusal", () => {
     expect(guard([record()], { name: "Daily digest" })).toBeUndefined();
   });
 
-  describe("caps", () => {
+  describe("topics and caps", () => {
+    const repeat = {
+      error: "You already proposed this in the last day. Do not propose it again today.",
+    };
     const daily = {
       error:
         "You already proposed five things to the user in the last day. Do not propose again today.",
@@ -196,9 +199,16 @@ describe("proposalRefusal", () => {
     const fiveTopics = ["Alpha", "Bravo", "Charlie", "Delta", "Echo"].map((name) => shown(name));
 
     it.each([
-      ["two proposals the same day", [shown("Daily digest")], "Morning quote", undefined],
+      ["two unrelated topics the same day", [shown("Daily digest")], "Morning quote", undefined],
+      ["the same topic within a day", [shown("Morning  QUOTE")], "Morning quote", repeat],
       [
-        "the same routine a day after the user said Not now to it",
+        "the same topic after a day",
+        [shown("Morning quote", { createdAt: hoursAgo(25) })],
+        "Morning quote",
+        undefined,
+      ],
+      [
+        "the same topic a day after the user said Not now to it",
         [
           shown("Morning quote", {
             status: "denied",
@@ -210,7 +220,7 @@ describe("proposalRefusal", () => {
         undefined,
       ],
       [
-        "the same routine shown more than a day ago, Not now said since",
+        "the same topic shown more than a day ago, Not now said since",
         [
           shown("Morning quote", {
             status: "denied",
@@ -236,7 +246,7 @@ describe("proposalRefusal", () => {
       expect(guard(records, { name })).toEqual(expected);
     });
 
-    it("refuses a third card in one run, whatever its name", () => {
+    it("refuses a third card in one run, whatever its topic", () => {
       const inRun = (name: string) => shown(name, { runId: "run-1", createdAt: hoursAgo(1) });
       expect(guard([inRun("Alpha")])).toBeUndefined();
       expect(guard([inRun("Alpha"), inRun("Bravo")])).toEqual(perRun);
@@ -245,6 +255,9 @@ describe("proposalRefusal", () => {
   });
 
   describe("corrections", () => {
+    const repeat = {
+      error: "You already proposed this in the last day. Do not propose it again today.",
+    };
     const daily = {
       error:
         "You already proposed five things to the user in the last day. Do not propose again today.",
@@ -297,10 +310,16 @@ describe("proposalRefusal", () => {
       expect(guard([...chain, ...otherHeads(4)], fresh)).toEqual(daily);
     });
 
-    it("lets a correction repeat the dismissed name", () => {
+    it("lets a correction repeat the dismissed name, but not a new proposal repeat a shown one", () => {
       expect(
         guard([typed(1, { name: "Morning quote" })], { name: "Morning quote" }),
       ).toBeUndefined();
+      expect(
+        guard([typed(1, { name: "Morning quote", runId: "run-0" })], { name: "Morning quote" }),
+      ).toEqual(repeat);
+      expect(guard([card(1, { name: "Morning quote" })], { name: "Morning quote" })).toEqual(
+        repeat,
+      );
     });
 
     it("still waits for the card that is already waiting on the user", () => {
