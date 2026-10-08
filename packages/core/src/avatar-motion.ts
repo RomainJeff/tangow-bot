@@ -22,6 +22,10 @@ export const WORKING_MOODS: readonly ExpressionId[] = [
   "blase",
 ];
 
+/** The head's comfortable range, in degrees: a glance and a pointer follow both stay inside it. */
+export const LOOK_YAW_DEG = 26;
+export const LOOK_PITCH_DEG = { min: -8, max: 18 } as const;
+
 /** Seconds the look takes to reach a new target — slower than a saccade, on purpose. */
 export const GLANCE_MORPH = 0.35;
 
@@ -38,8 +42,8 @@ const rand = (random: () => number, min: number, max: number) => min + random() 
 export function nextWorkingGlance(random: () => number = Math.random): Glance {
   return {
     look: {
-      yaw: rand(random, -26, 26),
-      pitch: rand(random, -8, 18),
+      yaw: rand(random, -LOOK_YAW_DEG, LOOK_YAW_DEG),
+      pitch: rand(random, LOOK_PITCH_DEG.min, LOOK_PITCH_DEG.max),
       mix: 1,
       spin: 0,
       wander: 0.3,

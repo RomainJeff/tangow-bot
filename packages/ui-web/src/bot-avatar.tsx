@@ -9,6 +9,8 @@ import {
   mixHex,
   NOTIF_BLUE,
   nextWorkingGlance,
+  pointerGaze,
+  pointerLook,
   RAYON,
   SHAPES,
 } from "@rakazo/core";
@@ -27,6 +29,12 @@ export interface BotAvatarProps {
   identity?: string;
   /** Picked organic shape; falls back to a shape derived from `identity`. */
   shapeSeed?: number | null;
+  /**
+   * The organic avatar looks toward a fine pointer (a mouse) wherever it is on
+   * the page, and back to rest when the pointer leaves the window. A working
+   * bot keeps its own glances, reduced motion turns it off, the robot ignores it.
+   */
+  followPointer?: boolean;
   className?: string;
 }
 
@@ -37,6 +45,7 @@ export const BotAvatar = memo(function BotAvatar({
   variant,
   identity,
   shapeSeed,
+  followPointer,
   className,
 }: BotAvatarProps) {
   const isWorking = ACTIVE_RUN_STATUSES.some((activeStatus) => activeStatus === status);
@@ -50,6 +59,7 @@ export const BotAvatar = memo(function BotAvatar({
         shapeSeed={shapeSeed}
         size={size}
         isWorking={isWorking}
+        followPointer={followPointer}
         className={className}
       />
     );
@@ -188,6 +198,7 @@ function BloubAvatar({
   shapeSeed,
   size,
   isWorking,
+  followPointer,
   className,
 }: {
   color: string;
@@ -195,6 +206,7 @@ function BloubAvatar({
   shapeSeed?: number | null;
   size: number;
   isWorking: boolean;
+  followPointer?: boolean;
   className?: string;
 }) {
   const reducedMotion = usePrefersReducedMotion();
@@ -203,6 +215,7 @@ function BloubAvatar({
   const uid = useId().replace(/[^a-zA-Z0-9-_]/g, "");
   const [engine] = useState(() => new BotEngine(RAYON, "idle", shape.radii));
   const clock = useRef(0);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [frame, setFrame] = useState<BotFrame>(() => engine.sample(0));
 
   useEffect(() => {
@@ -239,6 +252,26 @@ function BloubAvatar({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [engine, shape, isWorking, reducedMotion]);
+
+  useEffect(() => {
+    if (!followPointer || isWorking || reducedMotion) return;
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    const onMove = (event: PointerEvent) => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect || event.pointerType === "touch") return;
+      const look = pointerLook({ x: event.clientX, y: event.clientY }, rect);
+      engine.setLook(pointerGaze(look), clock.current);
+    };
+    const onLeave = () => engine.setLook(null, clock.current);
+    const root = document.documentElement;
+    window.addEventListener("pointermove", onMove);
+    root.addEventListener("pointerleave", onLeave);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      root.removeEventListener("pointerleave", onLeave);
+      engine.setLook(null, clock.current);
+    };
+  }, [engine, followPointer, isWorking, reducedMotion]);
 
   // Same eye rule as before: the eyes show the "paper" behind the ink, so pick it
   // from the body luminance, and ink a pale body's outline so it stays visible.
@@ -280,6 +313,7 @@ function BloubAvatar({
 
   return (
     <svg
+      ref={svgRef}
       viewBox={`${-VB} ${-VB} ${VB * 2} ${VB * 2}`}
       aria-hidden="true"
       className={cn("rakazo-organic-avatar overflow-visible select-none", className)}
