@@ -74,6 +74,14 @@ describe("Button — Quiet variants", () => {
     ).toContain("size-call-button");
   });
 
+  it("fills the secondary round icon button instead of leaving it transparent", () => {
+    const html = renderToString(
+      <Button variant="roundIconSecondary" size="roundIconSm" aria-label="New routine" />,
+    );
+    expect(html).toContain("bg-secondary");
+    expect(html).not.toContain("bg-transparent");
+  });
+
   it("locks a consequential action before it is pressed", () => {
     const html = renderToString(
       <Button consequential variant="capsule" size="capsule">

@@ -189,6 +189,8 @@ export const space = {
   thread: 800,
   header: 56,
   panel: 384,
+  /** The bot page: `w-panel-wide`, and `pe-panel-wide` on the thread beside it. */
+  panelWide: 640,
   /** A framed block standing alone in the thread: `max-w-block`. */
   block: 520,
   /** Web/desktop composer field: `max-h-composer-field` before it scrolls internally. */

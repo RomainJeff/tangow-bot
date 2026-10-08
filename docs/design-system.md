@@ -109,9 +109,11 @@ ticks.
 
 ### Space
 
-Layout, in px: `sidebar 280`, `thread 800`, `header 56`, `panel 384`, `block
-520` — `w-sidebar`, `max-w-thread`, `h-header`, `w-panel`, `max-w-block` (a
-framed block standing alone in the thread, §3.3); `composerField 220` —
+Layout, in px: `sidebar 280`, `thread 800`, `header 56`, `panel 384`,
+`panelWide 640`, `block 520` — `w-sidebar`, `max-w-thread`, `h-header`,
+`w-panel`, `w-panel-wide` (the bot page; `pe-panel-wide` on the thread beside
+it), `max-w-block` (a framed block standing alone in the thread, §3.3);
+`composerField 220` —
 `max-h-composer-field`, the web/desktop composer field before it scrolls
 internally. Gaps use the native Tailwind scale, which accepts any
 multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22, `gap-7` is 28. Never
@@ -211,6 +213,7 @@ size carries the height or the square.
 | `tertiary` | transparent, `text-muted-foreground`, ink on hover |
 | `quickReply` | transparent inside a `border-outline` hairline, `bg-accent` on hover |
 | `roundIcon` | transparent circle, `text-muted-foreground`, `bg-accent` on hover |
+| `roundIconSecondary` | `bg-secondary` circle on ink, hover to 85% opacity; an add control that must read as one |
 
 | Size | px | Utility |
 | --- | --- | --- |
@@ -682,6 +685,61 @@ Used by: the `steps` block of a message.
 A light sweep across a label that is still being written, as the `rk-shimmer`
 class. Ported from beautifului.dev
 (github.com/TurboKach/ai-native-react-components, MIT © 2026 Turbo).
+
+### BotAvatar — followPointer
+
+`followPointer` lets the organic avatar look toward a fine pointer (a mouse)
+anywhere on the page: the pointer's position against the avatar's own box
+(`pointerLook` in `@rakazo/core`, zero at the centre, ±1 at the edges, held
+beyond) is mapped onto the range the working glances already use (yaw ±26°,
+pitch -8° to 18°) and eased by the engine's `LOOK_MORPH`. It returns to rest
+when the pointer leaves the window. A working bot keeps its own glances and no
+listener is attached then; under reduced motion or on a touch screen none is
+attached either; the robot avatar ignores it. Only the avatar at the top of the
+bot page sets it, never a sidebar row.
+
+### SettingRow
+
+One line of a settings list: `text-row-name` label, an optional `text-row-status`
+sub-line, then on the trailing side a `meta` slot (a `SaveMeta`), a control or a
+value, and an optional chevron. Static by default; `href` makes it a link and
+`onClick` a button, both with a hover fill and a focus ring. A link or button
+row carries a value and a chevron, never a control or a `SaveMeta`, which would
+nest an interactive element inside another.
+
+Props: `label`, `subline?`, `meta?`, `children?` (the trailing control or
+value), `chevron?`.
+
+### SaveMeta
+
+The only proof an automatic save happened: "Saving…" while the call runs,
+"Saved 14:02" for the three seconds the save store keeps that state (the time
+through `Intl.DateTimeFormat`, hour and minute in the device locale), and
+"Could not save · Retry" until a save succeeds. At rest it is empty, never
+permanent chrome. The root is always mounted as an `aria-live="polite"` region
+so each change is announced.
+
+Props: `state` (a `FieldSaveState` from `@rakazo/core`), `labels` (`saving`,
+`saved`, `failed`, `retry`, already translated), `onRetry?`, `locale?`.
+
+### TextSettingField
+
+A text setting that saves itself, over `useFieldSave` and the `SaveStore` that
+`SaveStoreProvider` hands down (created once at the composition root, in
+memory only: nothing here reaches `localStorage`, `sessionStorage` or
+IndexedDB). Typing is local. Leaving the field commits the trimmed text
+through the hook when it changed; Escape drops the edit and keeps focus (and
+reaches the panel only when there was no edit to drop); Enter leaves a
+single-line field. An emptied `required` field puts its old value back, and an
+emptied field with an `onConfirmClear` callback asks first. `keepDraft` keeps
+unsaved text in the store for the session; when the server value moved under
+it, the field shows the server value and offers `labels.restore`. A failed save
+keeps the typed text and shows "Could not save · Retry".
+
+Props: `label`, `field` (from `useFieldSave`), `labels` (the `SaveMetaLabels`
+plus `restore?`), `multiline?`, `rows?`, `required?`, `onConfirmClear?`,
+`keepDraft?`, `locale?`. `className` styles the wrapper; the other native props
+land on the input or textarea.
 
 ## Motion rules
 

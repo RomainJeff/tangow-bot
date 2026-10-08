@@ -67,6 +67,7 @@
   --spacing-thread: var(--space-thread);
   --spacing-header: var(--space-header);
   --spacing-panel: var(--space-panel);
+  --spacing-panel-wide: var(--space-panel-wide);
   --spacing-block: var(--space-block);
   --spacing-composer-field: var(--space-composer-field);
 
