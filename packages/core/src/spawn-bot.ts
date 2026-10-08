@@ -189,7 +189,7 @@ export function hasHiddenText(text: string, multiLine = false): boolean {
 }
 
 /** The card renders the name as text; a name shaped like a link or markup could pass for one. */
-const LINK_LIKE_NAME = /[[\]<>]|:\/\/|www\./i;
+export const LINK_LIKE_NAME = /[[\]<>]|:\/\/|www\./i;
 
 /** Same bot name, whatever the case, width, spacing or invisible characters. */
 export function botNameKey(name: string): string {

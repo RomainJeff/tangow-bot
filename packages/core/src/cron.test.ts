@@ -15,6 +15,7 @@ import {
   presetFromCron,
   resolveRoutineNextRunAt,
   routineScheduleLabel,
+  shortestCronGapMs,
 } from "./cron.js";
 
 function preset(partial: Partial<CronPreset> & Pick<CronPreset, "freq">): CronPreset {
@@ -394,5 +395,13 @@ describe("isValidTimezone", () => {
     expect(isValidTimezone("UTC")).toBe(true);
     expect(isValidTimezone("Mars/Olympus")).toBe(false);
     expect(isValidTimezone("")).toBe(false);
+  });
+});
+
+describe("shortestCronGapMs", () => {
+  it("finds the shortest wait between runs, even within a busy hour", () => {
+    const from = new Date("2026-10-06T10:00:00Z");
+    expect(shortestCronGapMs("0 9 * * *", from)).toBe(24 * 60 * 60 * 1000);
+    expect(shortestCronGapMs("0,30 9 * * *", from)).toBe(30 * 60 * 1000);
   });
 });
