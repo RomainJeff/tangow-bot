@@ -7,13 +7,14 @@ import {
   canEditSpawnBotCard,
   isApprovalAskBlock,
   isSecretAskBlock,
+  routineCardSettlement,
   selectedAskActionLabel,
   spawnBotEdits,
   spawnBotReadOnlyDetail,
 } from "@rakazo/core";
 import type { FramedBlockActionsAlign } from "@rakazo/ui-web";
-import { Button, FramedBlock, Input, Textarea } from "@rakazo/ui-web";
-import { ChevronRight } from "lucide-react";
+import { Button, FramedBlock, Input, Surface, Textarea } from "@rakazo/ui-web";
+import { ChevronRight, Repeat } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Fragment, useEffect, useId, useState } from "react";
 import { Link } from "react-router-dom";
@@ -51,8 +52,20 @@ function formatAnsweredState(
   return t`Answered: ${answer}`;
 }
 
+/** What became of a routine card: a link to the routine, or why there is none. */
 function RoutineSettled({ block, botId }: { block: AskBlock; botId?: string }) {
-  if (!block.created || !botId) return t`Answered`;
+  if (!block.created || !botId) {
+    switch (routineCardSettlement(block)) {
+      case "failed":
+        return t`Couldn't create`;
+      case "not_now":
+        return t`Not now`;
+      case "creating":
+        return t`Creating…`;
+      default:
+        return t`Answered`;
+    }
+  }
   return (
     <Link
       to={{
@@ -65,6 +78,25 @@ function RoutineSettled({ block, botId }: { block: AskBlock; botId?: string }) {
       <span className="font-medium text-foreground">{block.created.label}</span>
       <ChevronRight className="size-3 shrink-0" aria-hidden />
     </Link>
+  );
+}
+
+/** What a routine card creates, as plain text: the name, when it runs, what it does. */
+function RoutinePreview({ routine }: { routine: NonNullable<AskBlock["routine"]> }) {
+  return (
+    <Surface data-testid="routine-preview" className="flex flex-col gap-1 px-3.5 py-3">
+      <span className="flex items-center gap-1.5 text-label text-foreground">
+        <Repeat className="size-3.5 shrink-0" aria-hidden />
+        <span className="min-w-0 break-words">{routine.name}</span>
+      </span>
+      <span className="text-meta text-muted-foreground">{routine.schedule}</span>
+      <p className="mt-1 whitespace-pre-wrap break-words text-meta text-foreground">
+        {routine.prompt}
+      </p>
+      {routine.notify ? (
+        <span className="mt-1 text-meta text-muted-foreground">{t`Notifies you each run`}</span>
+      ) : null}
+    </Surface>
   );
 }
 
@@ -186,7 +218,8 @@ export function AskCard({
     );
   }
 
-  // A routine card shows what it set up instead of the plain-text detail.
+  // A routine card, proposed by the bot or confirming one set up, shows what it creates instead
+  // of the plain-text detail.
   const routineCard = approval ? block.routine : undefined;
   // The row above already names the bot; the card only repeats itself for a consequential
   // approval, name-less. A plain question or a routine card opens with no header.
@@ -254,7 +287,7 @@ export function AskCard({
           <Button
             variant={approvalActionVariant(action.id)}
             size="capsule"
-            consequential={action.id === "allow"}
+            consequential={action.id === "allow" && !routineCard}
             disabled={submitting || (action.id === "allow" && botEditing && !draft?.name.trim())}
             onClick={() => submitApproval(action.id)}
           >
@@ -287,6 +320,7 @@ export function AskCard({
       actions = ranked
         .sort((a, b) => a.rank - b.rank)
         .map(({ key, node }) => <Fragment key={key}>{node}</Fragment>);
+      if (routineCard) children = <RoutinePreview routine={routineCard} />;
       if (spawnBot && draft) {
         const readOnly = spawnBotReadOnlyDetail(spawnBot);
         const invalid = invalidBotFields(error);
