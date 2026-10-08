@@ -287,14 +287,17 @@ const PROPOSALS_PER_RUN = 2;
 
 const said = (record: ProposalRecord) => record.status === "denied" && !record.dismissed;
 
-/** A card shown right after one of its kind in its thread was put away by typing. */
-const corrects = (previous: ProposalRecord | undefined, kind: string) =>
-  previous?.kind === kind && previous.dismissed;
+/**
+ * A card shown right after one of its kind in its thread was put away by typing. Typing over a
+ * card resumes the run that showed it, so a correction always comes from that same run.
+ */
+const corrects = (previous: ProposalRecord | undefined, next: { kind: string; runId: string }) =>
+  previous?.kind === next.kind && previous.runId === next.runId && previous.dismissed;
 
 /**
  * What the guards weigh: whether the card asked for is a correction, and the chains shown so far.
  * A chain starts with a first proposal, its head, and continues for as long as the user answers
- * by typing and the bot proposes again, with no other card between. Only heads count against the
+ * by typing and the bot proposes again in that run, with no other card between. Only heads count against the
  * caps, so a user can correct as often as they like.
  */
 type ProposalSituation = {
@@ -310,12 +313,12 @@ function situationOf(input: ProposalGuardInput): ProposalSituation {
     .filter((r) => r.shown)
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   for (const card of cards) {
-    if (!corrects(thread.get(card.threadId), card.kind)) heads.push(card);
+    if (!corrects(thread.get(card.threadId), card)) heads.push(card);
     thread.set(card.threadId, card);
   }
   return {
     input,
-    correction: corrects(thread.get(input.threadId), input.kind),
+    correction: corrects(thread.get(input.threadId), input),
     heads: heads.filter((r) => input.now.getTime() - r.createdAt.getTime() < PROPOSAL_WINDOW_MS),
   };
 }

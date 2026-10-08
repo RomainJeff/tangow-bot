@@ -359,9 +359,16 @@ describe("proposalRefusal", () => {
       expect(guard([otherThread, ...heads], { name: "Alpha on Tuesday" })).toEqual(daily);
     });
 
-    it("lets a correction follow a dismissal made more than a day ago", () => {
-      const old = typed(30, { name: "Alpha" });
-      expect(guard([old, ...otherHeads(5)], { name: "Alpha on Tuesday" })).toBeUndefined();
+    it("skips the caps only for a correction from the run the user typed into", () => {
+      const sameRun = typed(1, { name: "Alpha" });
+      expect(guard([sameRun, ...otherHeads(5)], { name: "Alpha on Tuesday" })).toBeUndefined();
+      const daysAgo = typed(72, { name: "Alpha", runId: "run-0" });
+      expect(guard([daysAgo, ...otherHeads(5)], { name: "Daily digest" })).toEqual(daily);
+      const twoInRun = [
+        card(3, { name: "Bravo", runId: "run-1", threadId: "thread-1" }),
+        card(2, { name: "Charlie", runId: "run-1", threadId: "thread-2" }),
+      ];
+      expect(guard([daysAgo, ...twoInRun], { name: "Daily digest" })).toEqual(perRun);
     });
   });
 
