@@ -3030,8 +3030,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               startedByUser: isUserOpenedTrigger(run.trigger),
               currentHop: await resolveRunHop(deps.prisma, run),
               routineId: String(args.routineId),
-              name: args.name === undefined ? undefined : String(args.name),
-              prompt: args.prompt === undefined ? undefined : String(args.prompt),
+              name: typeof args.name === "string" ? args.name : undefined,
+              prompt: typeof args.prompt === "string" ? args.prompt : undefined,
               timezone: args.timezone ? String(args.timezone) : undefined,
               notify: typeof args.notify === "boolean" ? args.notify : undefined,
               schedule: {
