@@ -297,8 +297,8 @@ const corrects = (previous: ProposalRecord | undefined, next: { kind: string; ru
 /**
  * What the guards weigh: whether the card asked for is a correction, and the chains shown so far.
  * A chain starts with a first proposal, its head, and continues for as long as the user answers
- * by typing and the bot proposes again in that run, with no other card between. Only heads count against the
- * caps, so a user can correct as often as they like.
+ * by typing and the bot proposes again in that run, with no other card between. Only heads count
+ * against the caps, so a user can correct as often as they like.
  */
 type ProposalSituation = {
   input: ProposalGuardInput;
