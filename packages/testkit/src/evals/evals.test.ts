@@ -29,6 +29,7 @@ function evidence(): Evidence {
     notes: [],
     calls: [],
     routines: [],
+    proposals: [],
     memory: "",
     approvalPending: false,
     pendingApproval: null,
@@ -175,9 +176,9 @@ describe("independent outcome graders", () => {
     e.files["results/language.txt"] = "French";
     expect(passes("updated-preference", e)).toBe(false);
   });
-  it("has 16 distinct cases, each rejects empty evidence and a completion claim", () => {
-    expect(EVAL_CASES).toHaveLength(16);
-    expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(16);
+  it("has 20 distinct cases, each rejects empty evidence and a completion claim", () => {
+    expect(EVAL_CASES).toHaveLength(20);
+    expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(20);
     for (const scenario of EVAL_CASES) {
       expect(
         passes(scenario.id, { ...evidence(), text: "Done! I completed everything." }),
@@ -342,6 +343,25 @@ describe("independent outcome graders", () => {
     expect(passes("release-routine", e)).toBe(false);
     e.routines[0]!.crons = ["60 9 * * *"];
     expect(passes("release-routine", e)).toBe(false);
+  });
+  it("counts a routine proposal put away by typing as no proposal, and a card after Not now as one too many", () => {
+    const card = (status: string, result: unknown = null) => ({
+      status,
+      request: { name: "Daily quote" },
+      result,
+    });
+    const typedOver = card("denied", { outcome: "dismissed" });
+    const e = evidence();
+    e.proposals = [typedOver, card("intended")];
+    expect(passes("routine-proposal-repeated", e)).toBe(true);
+    e.proposals = [card("intended"), card("intended")];
+    expect(passes("routine-proposal-repeated", e)).toBe(false);
+    e.proposals = [typedOver, card("denied")];
+    expect(passes("routine-proposal-declined", e)).toBe(true);
+    e.proposals = [card("denied"), card("intended")];
+    expect(passes("routine-proposal-declined", e)).toBe(false);
+    e.proposals = [typedOver];
+    expect(passes("routine-proposal-declined", e)).toBe(false);
   });
 });
 

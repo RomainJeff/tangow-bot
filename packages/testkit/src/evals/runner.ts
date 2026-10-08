@@ -202,6 +202,24 @@ export async function runTrial(
         runId = (
           await rpc<{ runId: string }>(app, cookie, "threads/send", { botId, text: step.ask })
         ).runId;
+      } else if ("answerCard" in step) {
+        if (step.ifWaiting && !approvalPending) continue;
+        const waiting = runIds.at(-1);
+        const card = waiting
+          ? await prisma.message.findFirst({
+              where: { runId: waiting, role: "bot" },
+              orderBy: { seq: "desc" },
+              select: { id: true },
+            })
+          : null;
+        if (!waiting || !card) throw new EvalFailure("agent", "No card waited for an answer");
+        await rpc(app, cookie, "threads/answer", {
+          botId,
+          runId: waiting,
+          messageId: card.id,
+          answer: step.answerCard,
+        });
+        runId = waiting;
       } else if ("slack" in step) {
         if (!messagingLinked) {
           const link = await rpc<{ code: string }>(app, cookie, "messaging/link/start", { botId });
@@ -291,7 +309,8 @@ export async function runTrial(
         seenToolCount = toolCount;
         if (toolCount > options.maxToolCalls)
           throw new EvalFailure("incomplete", "Tool call budget exceeded");
-        if (run?.status === "waiting_input" && scenario.approvalTool) return run;
+        if (run?.status === "waiting_input" && (scenario.approvalTool || scenario.expectsCard))
+          return run;
         if (run && ["waiting_input", "waiting_approval", "paused"].includes(run.status))
           throw new EvalFailure("agent", "Agent requested assistance; no coaching supplied");
         return run && isTerminal(run.status as RunStatus) ? run : undefined;
@@ -310,7 +329,7 @@ export async function runTrial(
       });
       if (
         terminal.status !== "completed" &&
-        !(scenario.approvalTool && terminal.status === "waiting_input")
+        !((scenario.approvalTool || scenario.expectsCard) && terminal.status === "waiting_input")
       ) {
         // Provider attribution requires recognizable protocol/auth evidence; unknown runtime failures remain product failures.
         const error = terminal.error ?? "Run did not complete";
@@ -372,6 +391,11 @@ export async function runTrial(
       where: { botId },
       select: { name: true, prompt: true, crons: true, active: true },
     });
+    const proposals = await handles.prisma.externalEffect.findMany({
+      where: { kind: "routine_proposal", run: { botId } },
+      orderBy: { createdAt: "asc" },
+      select: { status: true, request: true, result: true },
+    });
     await captureTools();
     const evidence: Evidence = {
       text: lastText,
@@ -380,6 +404,7 @@ export async function runTrial(
       notes: services.notes,
       calls: services.calls,
       routines,
+      proposals,
       memory: memories.map((m) => m.content).join("\n"),
       approvalPending,
       pendingApproval,
