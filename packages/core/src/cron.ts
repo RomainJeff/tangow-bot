@@ -313,6 +313,83 @@ export function isValidTimezone(timezone: string): boolean {
   }
 }
 
+const ISO_DATETIME =
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:(Z)|([+-])(\d{2}):?(\d{2}))?$/i;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** How far `timezone`'s wall clock is ahead of UTC at `instant`, in milliseconds. */
+function zoneOffsetMs(instant: number, timezone: string): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hourCycle: "h23",
+    })
+      .formatToParts(instant)
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const wall = Date.UTC(
+    parts.year!,
+    parts.month! - 1,
+    parts.day!,
+    parts.hour!,
+    parts.minute!,
+    parts.second!,
+  );
+  return wall - Math.floor(instant / 1000) * 1000;
+}
+
+/**
+ * The instant a wall-clock time names in `timezone`. A time the clocks skip in spring moves
+ * forward by the gap; a time they repeat in autumn is the first of the two.
+ */
+function zonedInstant(wall: number, timezone: string): number {
+  const before = zoneOffsetMs(wall - DAY_MS, timezone);
+  const after = zoneOffsetMs(wall + DAY_MS, timezone);
+  const first = wall - before;
+  if (zoneOffsetMs(first, timezone) === before) return first;
+  const second = wall - after;
+  return zoneOffsetMs(second, timezone) === after ? second : first;
+}
+
+/**
+ * A one-shot run time: an ISO datetime with an offset or Z is taken as given, one without is a
+ * wall-clock time in `timezone`, which the caller has checked. Null when it names no real time.
+ */
+export function parseRunAt(value: string, timezone: string): Date | null {
+  const match = ISO_DATETIME.exec(value.trim());
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second = "00", fraction = "", z, sign, offH, offM] =
+    match;
+  const wall = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+    Number(fraction.padEnd(3, "0").slice(0, 3)),
+  );
+  if (
+    Number.isNaN(wall) ||
+    new Date(wall).toISOString().slice(0, 19) !==
+      `${year}-${month}-${day}T${hour}:${minute}:${second}`
+  ) {
+    return null;
+  }
+  if (z) return new Date(wall);
+  if (sign) {
+    const offsetMs = (Number(offH) * 60 + Number(offM)) * 60_000 * (sign === "+" ? 1 : -1);
+    return new Date(wall - offsetMs);
+  }
+  return new Date(zonedInstant(wall, timezone));
+}
+
 /** The shortest wait between two of the next runs, to tell how often a schedule fires. */
 export function shortestCronGapMs(cron: string, from: Date, timezone = "UTC", runs = 48): number {
   const times = new Cron(cron, { paused: true, timezone: validTimezoneOrUtc(timezone) })
