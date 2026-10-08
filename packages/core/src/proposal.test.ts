@@ -95,7 +95,7 @@ describe("parseProposed", () => {
 });
 
 describe("parseCardQuestion", () => {
-  it("keeps one short visible line as the question, and refuses anything else (CA37)", () => {
+  it("keeps one short visible line as the question, and refuses anything else", () => {
     expect(parseCardQuestion(" On le fait chaque lundi ? ")).toEqual({
       question: "On le fait chaque lundi ?",
     });
@@ -147,14 +147,14 @@ describe("proposalRefusal", () => {
     expect(guard([])).toBeUndefined();
   });
 
-  it("waits while another card waits in the conversation (§4.4)", () => {
+  it("waits while another card waits in the conversation", () => {
     expect(guard([], { pendingCard: true })).toEqual({
       error:
         "Another card is already waiting for the user's answer in this conversation. Do not propose anything until they answer.",
     });
   });
 
-  it("stops the run on a declined result after a Not now in the same run (CA-S8)", () => {
+  it("stops the run on a declined result after a Not now in the same run", () => {
     const refusal = guard([record({ runId: "run-1", createdAt: hoursAgo(1) })]);
     expect(refusal).toEqual({
       result: {
@@ -165,7 +165,7 @@ describe("proposalRefusal", () => {
     });
   });
 
-  it("keeps a routine the user said Not now to away for a day, but forgets a dismissal (§4.5)", () => {
+  it("keeps a routine the user said Not now to away for a day, but forgets a dismissal", () => {
     const declinedBefore = {
       error:
         "The user said Not now to this routine in the last day. Do not propose it again today unless they ask.",
