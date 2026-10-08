@@ -37,6 +37,7 @@ import {
   type RoutineGroupRun,
   type RoutineRowRole,
   resolveComposerSendPlan,
+  routineCardSettlement,
   SLASH_ACTIONS,
   type SlashActionId,
   selectedAskActionLabel,
@@ -131,6 +132,7 @@ import { MessageRow } from "../components/message-row";
 import { NativeSymbol } from "../components/native-symbol";
 import { PreviewSheet } from "../components/preview-sheet";
 import { ReactionPill } from "../components/reaction-pill";
+import { RoutineCardPreview } from "../components/routine-card-preview";
 import { ShimmerText } from "../components/shimmer-text";
 import { StackedAvatars } from "../components/stacked-avatars";
 import { StopContour } from "../components/stop-contour";
@@ -3696,7 +3698,8 @@ const MessageBubble = memo(function MessageBubble({
   );
   if (askBlock?.kind === "ask" && askBlock.actions?.length) {
     const approval = isApprovalAskBlock(askBlock);
-    // A routine card shows what it set up instead of the plain-text detail.
+    // A routine card, proposed by the bot or confirming one set up, shows what it creates
+    // instead of the plain-text detail.
     const routineCard = approval ? askBlock.routine : undefined;
     // The row above already names the bot; the card only repeats itself for a
     // consequential approval, name-less. A question with fixed options or a
@@ -3704,7 +3707,18 @@ const MessageBubble = memo(function MessageBubble({
     const header = approval && !routineCard ? { who: t("Needs your call") } : undefined;
     const created = askBlock.created;
     const routineSettled = (): ReactNode => {
-      if (!created) return t("Answered");
+      if (!created) {
+        switch (routineCardSettlement(askBlock)) {
+          case "failed":
+            return t("Couldn't create");
+          case "not_now":
+            return t("Not now");
+          case "creating":
+            return t("Creating…");
+          default:
+            return t("Answered");
+        }
+      }
       return (
         <Pressable
           accessibilityRole="link"
@@ -3753,6 +3767,7 @@ const MessageBubble = memo(function MessageBubble({
               <AskActions
                 actions={askBlock.actions}
                 approval={approval}
+                consequential={!routineCard}
                 allowFreeText={!approval}
                 accessibilityActions={actionProps.accessibilityActions}
                 onAccessibilityAction={actionProps.onAccessibilityAction}
@@ -3772,7 +3787,11 @@ const MessageBubble = memo(function MessageBubble({
               />
             ) : undefined
           }
-        />
+        >
+          {routineCard && answeredLine === undefined ? (
+            <RoutineCardPreview routine={routineCard} />
+          ) : null}
+        </FramedBlock>
         {appConnectBlocks.map((block, index) => (
           <AppConnectCard
             key={`${block.provider}-${index}`}

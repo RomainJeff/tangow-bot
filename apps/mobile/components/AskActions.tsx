@@ -221,6 +221,7 @@ export function AskActions({
   disabled,
   onAnswer,
   onEdit,
+  consequential = true,
   allowFreeText,
   accessibilityActions,
   onAccessibilityAction,
@@ -233,6 +234,8 @@ export function AskActions({
   onAnswer: (answer: string) => Promise<void>;
   /** A spawn_bot approval can be edited before it is created: a tertiary capsule after Allow. */
   onEdit?: () => void;
+  /** The primary action carries a lock; a routine card does not. */
+  consequential?: boolean;
   allowFreeText?: boolean;
   accessibilityActions?: ViewProps["accessibilityActions"];
   onAccessibilityAction?: ViewProps["onAccessibilityAction"];
@@ -279,7 +282,7 @@ export function AskActions({
                   accessibilityActions={accessibilityActions}
                   onAccessibilityAction={onAccessibilityAction}
                   icon={
-                    isAllow ? (
+                    isAllow && consequential ? (
                       <NativeSymbol
                         ios="lock.fill"
                         android="lock-closed"
