@@ -1064,6 +1064,7 @@ function groupTarget() {
 describe("sendThreadMessage", () => {
   it("rejects a new bot message while a run is waiting on an approval ask", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi.fn().mockResolvedValue({ nextMessageSeq: 2 }),
       },
@@ -1281,6 +1282,7 @@ describe("sendThreadMessage", () => {
 
   it("rejects a new bot message while a run is waiting on a secret ask", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi.fn().mockResolvedValue({ nextMessageSeq: 2 }),
       },
@@ -1354,6 +1356,7 @@ describe("sendThreadMessage", () => {
 
   it("resolves a pending ask_user with the composer text instead of refusing the message", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi
           .fn()
@@ -1447,6 +1450,7 @@ describe("sendThreadMessage", () => {
 
   it("rejects the send when the bot has another active run beside the pending ask_user", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi.fn().mockResolvedValue({ nextMessageSeq: 2 }),
       },
@@ -1518,6 +1522,7 @@ describe("sendThreadMessage", () => {
     let messageSeq = 0;
     let eventSeq = 0;
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi.fn(async ({ data }: { data: { nextMessageSeq?: unknown } }) =>
           data.nextMessageSeq ? { nextMessageSeq: ++messageSeq } : { nextEventSeq: ++eventSeq },
@@ -2623,5 +2628,123 @@ describe("stopThreadRuns", () => {
       expect.anything(),
       expect.objectContaining({ runId: "run-b" }),
     );
+  });
+});
+
+describe("sendThreadMessage while a proposal card waits", () => {
+  const card = {
+    kind: "ask",
+    approvalEffectId: "effect-1",
+    proposal: "routine",
+    text: "Je m'en occupe chaque lundi ?",
+    detail: "name: Weekly offers",
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Create routine", outcome: "created" },
+      { id: "deny", label: "Not now", outcome: "cancelled" },
+    ],
+  };
+  function proposalTx(options: { kind?: string; runStatus?: string } = {}) {
+    return {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      thread: {
+        update: vi.fn().mockResolvedValue({ nextMessageSeq: 2, nextEventSeq: 3 }),
+      },
+      message: {
+        create: vi.fn().mockResolvedValue({
+          id: "msg-1",
+          threadId: "thread-1",
+          seq: 1,
+          role: "user",
+          blocks: [{ kind: "text", text: "Plutôt le mardi" }],
+          botId: null,
+          replyToMessageId: null,
+          runId: null,
+          createdAt: new Date(),
+        }),
+        update: vi.fn().mockResolvedValue({ id: "msg-1" }),
+        findFirst: vi.fn().mockResolvedValue({ id: "card-msg", blocks: [card] }),
+      },
+      run: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: "run-waiting", taskId: "task-1", status: "waiting_input" }]),
+        findFirst: vi.fn().mockResolvedValue({
+          botId: "bot-1",
+          userId: "user-1",
+          status: options.runStatus ?? "waiting_input",
+        }),
+        findUnique: vi.fn().mockResolvedValue({ status: "queued", startedAt: new Date() }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      externalEffect: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "effect-1",
+          kind: options.kind ?? "routine_proposal",
+          status: "intended",
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      steeringMessage: { create: vi.fn() },
+      event: { create: vi.fn().mockResolvedValue({ seq: 2, threadId: "thread-1" }) },
+      task: { create: vi.fn(), updateMany: vi.fn() },
+    };
+  }
+  const send = (tx: ReturnType<typeof proposalTx>) =>
+    sendThreadMessage(
+      {
+        prisma: {
+          message: { findUnique: vi.fn().mockResolvedValue(null) },
+          $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+        } as unknown as PrismaClient,
+        events: { notify: vi.fn().mockResolvedValue(undefined) } as never,
+        jobs: { enqueue: vi.fn().mockResolvedValue(undefined) } as never,
+      },
+      { spaceId: "workspace-1", userId: "user-1" } as Actor,
+      {
+        kind: "bot",
+        botId: "bot-1",
+        threadId: "thread-1",
+        bot: { computer: null },
+      } as ThreadTarget,
+      { text: "Plutôt le mardi", clientNonce: "nonce-dismiss" },
+    );
+
+  it("puts the card away and steers the reply into the run it resumes", async () => {
+    const tx = proposalTx();
+    await expect(send(tx)).resolves.toMatchObject({
+      runId: "run-waiting",
+      runIds: ["run-waiting"],
+    });
+    expect(tx.externalEffect.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "denied" }) }),
+    );
+    expect(tx.steeringMessage.create).toHaveBeenCalledWith({
+      data: { messageId: "msg-1", botId: "bot-1", userId: "user-1", runId: "run-waiting" },
+    });
+    expect(tx.message.update).toHaveBeenCalledWith({
+      where: { id: "msg-1" },
+      data: { runId: "run-waiting" },
+    });
+    expect(tx.task.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("steers the reply when a Create tap resumed the run first", async () => {
+    const tx = proposalTx({ runStatus: "queued" });
+    await expect(send(tx)).resolves.toMatchObject({ runIds: ["run-waiting"] });
+    expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
+    expect(tx.steeringMessage.create).toHaveBeenCalledWith({
+      data: { messageId: "msg-1", botId: "bot-1", userId: "user-1", runId: "run-waiting" },
+    });
+  });
+
+  it("still asks to answer a Create bot card first", async () => {
+    const tx = proposalTx({ kind: "spawn_bot" });
+    await expect(send(tx)).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "Answer the pending ask first.",
+    });
+    expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
+    expect(tx.steeringMessage.create).not.toHaveBeenCalled();
   });
 });
