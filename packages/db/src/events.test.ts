@@ -10,6 +10,7 @@ import {
   clearThread,
   completedRunBlocks,
   conversationRunFilter,
+  dismissProposalWithTextInTransaction,
   finalizeComputerControlRelease,
   finalizeRun,
   followThreadEvents,
@@ -1368,7 +1369,7 @@ describe("answerRunInput", () => {
     });
     expect(tx.externalEffect.update).toHaveBeenCalledWith({
       where: { id: "effect-1" },
-      data: { status: "approved" },
+      data: { status: "approved", answeredAt: expect.any(Date) },
     });
   });
 
@@ -1440,7 +1441,7 @@ describe("answerRunInput", () => {
     expect(tx.task.updateMany).not.toHaveBeenCalled();
     expect(tx.externalEffect.update).toHaveBeenCalledWith({
       where: { id: "effect-1" },
-      data: { status: "approved" },
+      data: { status: "approved", answeredAt: expect.any(Date) },
     });
     expect(tx.actionApprovalRule.upsert).toHaveBeenCalledWith({
       where: {
@@ -2448,6 +2449,68 @@ describe("claimSteering", () => {
   });
 });
 
+describe("a reply steered into a run put back in the queue", () => {
+  it("reaches the run once it runs again, and no other run", async () => {
+    const run = { id: "run-1", threadId: "thread-1", botId: "bot-1", status: "queued" };
+    const steering = [
+      // As sendThreadMessage writes it when a reply puts a proposal card away.
+      {
+        id: "steer-1",
+        messageId: "message-1",
+        botId: "bot-1",
+        runId: "run-1",
+        claimedAt: null as Date | null,
+        message: { threadId: "thread-1", seq: 7, blocks: [{ kind: "text", text: "Tuesdays" }] },
+      },
+    ];
+    const tx = {
+      $queryRaw: vi.fn(),
+      run: {
+        findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
+          where.id === run.id && where.status === run.status
+            ? { id: run.id, trigger: "user" }
+            : null,
+        ),
+      },
+      steeringMessage: {
+        findMany: vi.fn(
+          async ({ where }: { where: { botId: string; OR: { runId: string | null }[] } }) =>
+            steering.filter(
+              (item) =>
+                item.botId === where.botId &&
+                where.OR.some((option) => option.runId === item.runId),
+            ),
+        ),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+    const claim = (runId: string) =>
+      claimSteering(prisma, {
+        threadId: "thread-1",
+        botId: "bot-1",
+        runId,
+        leaseOwner: "worker-1",
+        leaseFence: 1,
+        seenIds: [],
+      });
+
+    await expect(claim("run-1")).resolves.toEqual([]);
+    run.status = "running";
+    await expect(claim("run-2")).resolves.toEqual([]);
+    await expect(claim("run-1")).resolves.toEqual([
+      {
+        id: "steer-1",
+        messageId: "message-1",
+        text: "Tuesdays",
+        blocks: [{ kind: "text", text: "Tuesdays" }],
+      },
+    ]);
+  });
+});
+
 describe("clearThread", () => {
   it("releases the computer execution lease without dropping the computer", async () => {
     const fanout = new TestFanout();
@@ -2989,7 +3052,7 @@ describe("answerRunInput on a Create bot card with edits", () => {
 
     expect(w.effectUpdate).toHaveBeenCalledWith({
       where: { id: "effect-1" },
-      data: { status: "approved" },
+      data: { status: "approved", answeredAt: expect.any(Date) },
     });
     expect(w.effectUpdateMany).not.toHaveBeenCalled();
     expect(w.botFindMany).not.toHaveBeenCalled();
@@ -3033,6 +3096,7 @@ describe("answerRunInput on a Create bot card with edits", () => {
         request: approved,
         idempotencyKey: approvalEffectKey("run-1", "spawn_bot", approved),
         status: "approved",
+        answeredAt: expect.any(Date),
       },
     });
     const answered = w.state.blocks[0] as Record<string, unknown>;
@@ -3297,5 +3361,138 @@ describe("answerRunInput on a Create bot card with edits", () => {
     expect(w.state.effect.idempotencyKey).toBe(
       approvalEffectKey("run-1", "spawn_bot", w.state.effect.request),
     );
+  });
+});
+
+describe("dismissProposalWithTextInTransaction", () => {
+  const proposalCard = {
+    kind: "ask",
+    approvalEffectId: "effect-1",
+    proposal: "routine",
+    text: "Je m'en occupe chaque lundi ?",
+    detail: "name: Weekly offers",
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Create routine", outcome: "created" },
+      { id: "deny", label: "Not now", outcome: "cancelled" },
+    ],
+  };
+  function proposalTx(
+    options: {
+      kind?: string;
+      runStatus?: string;
+      runUserId?: string;
+      block?: Record<string, unknown>;
+      effectUpdates?: number;
+      runUpdates?: number;
+    } = {},
+  ) {
+    return {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      run: {
+        findFirst: vi.fn().mockResolvedValue({
+          botId: "bot-1",
+          userId: options.runUserId ?? "user-1",
+          status: options.runStatus ?? "waiting_input",
+        }),
+        findUnique: vi.fn().mockResolvedValue({ status: "queued", startedAt: new Date() }),
+        updateMany: vi.fn().mockResolvedValue({ count: options.runUpdates ?? 1 }),
+      },
+      message: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "card-msg",
+          blocks: [{ kind: "text", text: "You ask every Monday." }, options.block ?? proposalCard],
+        }),
+        update: vi.fn().mockResolvedValue({ id: "card-msg" }),
+      },
+      externalEffect: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "effect-1",
+          kind: options.kind ?? "routine_proposal",
+          status: "intended",
+        }),
+        updateMany: vi.fn().mockResolvedValue({ count: options.effectUpdates ?? 1 }),
+      },
+      thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 5 }) },
+      event: {
+        create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({
+          ...event(data.seq),
+          type: data.type,
+        })),
+      },
+    };
+  }
+  const input = { spaceId: "workspace-1", threadId: "thread-1", runId: "run-1", userId: "user-1" };
+
+  it("puts the card away as dismissed and queues the run on its checkpoint", async () => {
+    const tx = proposalTx();
+    await expect(dismissProposalWithTextInTransaction(tx as never, input)).resolves.toEqual({
+      outcome: "dismissed",
+      status: "queued",
+    });
+    expect(tx.$queryRaw).toHaveBeenCalledBefore(tx.run.findFirst);
+    expect(tx.externalEffect.updateMany).toHaveBeenCalledWith({
+      where: { id: "effect-1", status: "intended", kind: { in: ["routine_proposal"] } },
+      data: { status: "denied", answeredAt: expect.any(Date), result: { outcome: "dismissed" } },
+    });
+    expect(tx.run.updateMany).toHaveBeenCalledWith({
+      where: { id: "run-1", spaceId: "workspace-1", threadId: "thread-1", status: "waiting_input" },
+      data: { status: "queued" },
+    });
+    expect(tx.message.update).toHaveBeenCalledWith({
+      where: { id: "card-msg" },
+      data: {
+        blocks: [
+          { kind: "text", text: "You ask every Monday." },
+          { ...proposalCard, status: "answered", answer: "dismissed" },
+        ],
+      },
+    });
+  });
+
+  it.each([
+    ["a Create bot card dressed as a proposal", { kind: "spawn_bot" }],
+    ["a create_space card", { kind: "create_space" }],
+    ["a sensitive tool approval", { kind: "gmail_send" }],
+    ["a reply from someone else than the run's user", { runUserId: "user-2" }],
+    [
+      "an ask_user question",
+      { block: { kind: "ask", text: "Which city?", status: "pending", input: "text" } },
+    ],
+    ["a cancelled run", { runStatus: "cancelled" }],
+  ])("keeps %s as it is, writing nothing", async (_label, options) => {
+    const tx = proposalTx(options);
+    await expect(dismissProposalWithTextInTransaction(tx as never, input)).resolves.toEqual({
+      outcome: "keep",
+    });
+    expect(tx.externalEffect.updateMany).not.toHaveBeenCalled();
+    expect(tx.run.updateMany).not.toHaveBeenCalled();
+    expect(tx.message.update).not.toHaveBeenCalled();
+  });
+
+  it("lets a Create tap that came first win, and the reply steer the run", async () => {
+    const tapped = proposalTx({ runStatus: "queued" });
+    await expect(dismissProposalWithTextInTransaction(tapped as never, input)).resolves.toEqual({
+      outcome: "settled",
+      status: "queued",
+    });
+    expect(tapped.externalEffect.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("never steers into a run still waiting on a card that was answered", async () => {
+    const answered = proposalTx({ effectUpdates: 0 });
+    await expect(dismissProposalWithTextInTransaction(answered as never, input)).resolves.toEqual({
+      outcome: "keep",
+    });
+    expect(answered.run.updateMany).not.toHaveBeenCalled();
+    expect(answered.message.update).not.toHaveBeenCalled();
+  });
+
+  it("rolls back when the run moved without the card", async () => {
+    const tx = proposalTx({ runUpdates: 0 });
+    await expect(dismissProposalWithTextInTransaction(tx as never, input)).rejects.toThrow(
+      "The run changed while its card was put away",
+    );
+    expect(tx.message.update).not.toHaveBeenCalled();
   });
 });
