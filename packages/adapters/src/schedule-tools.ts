@@ -309,8 +309,10 @@ export async function updateRoutine(
 ): Promise<{ row: RoutineRow } | { error: string }> {
   const active = change.active ?? existing.active;
   const crons = change.crons ?? existing.crons;
+  if (change.timezone !== undefined && !isValidTimezone(change.timezone)) {
+    return { error: TIMEZONE_ERROR };
+  }
   const timezone = change.timezone ?? existing.timezone;
-  if (!isValidTimezone(timezone)) return { error: TIMEZONE_ERROR };
   const webhookEnabled = change.webhookEnabled ?? existing.webhookEnabled;
   const githubEnabled = change.githubEnabled ?? existing.githubEnabled;
   const messageProvider =
