@@ -1285,6 +1285,27 @@ describe("routine update triggers", () => {
     return body.json;
   }
 
+  it("arms a never-run one-shot at a time with an offset, and refuses one without", async () => {
+    const { routineUpdate, update } = updateDeps({
+      crons: ["@once"],
+      timezone: "Europe/Paris",
+      active: false,
+      nextRunAt: null,
+    });
+
+    const unzoned = await update({ active: true, runAt: "2999-01-01T09:00:00" });
+    expect(unzoned.status).toBe(400);
+    expect(routineUpdate).not.toHaveBeenCalled();
+
+    const armed = await update({ active: true, runAt: "2999-01-01T09:00:00+01:00" });
+    expect(armed.status).toBe(200);
+    expect(routineUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ nextRunAt: new Date("2999-01-01T08:00:00.000Z") }),
+      }),
+    );
+  });
+
   it("refuses to clear the only schedule", async () => {
     const { routineUpdate, update } = updateDeps({});
 
