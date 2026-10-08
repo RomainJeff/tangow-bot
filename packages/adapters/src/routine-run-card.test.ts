@@ -2,7 +2,7 @@ import type { AgentRunRequest } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
-import { cancelRoutineRunCards, createRunExecutor } from "./executor.js";
+import { createRunExecutor, settleCancelledRunCards } from "./executor.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -328,7 +328,7 @@ describe("inbound routine run card", () => {
 /**
  * A cancelled run has no worker left to settle its card: the executor simply returns when it
  * notices the cancellation (and may not be running at all, e.g. the run was parked on an ask).
- * The API's thread stop calls `cancelRoutineRunCards` instead.
+ * The API's thread stop calls `settleCancelledRunCards` instead.
  */
 function cancelFixture({
   runStatus = "cancelled",
@@ -376,6 +376,7 @@ function cancelFixture({
     thread: {
       update: vi.fn(async () => ({ nextEventSeq: ++nextEventSeq })),
     },
+    externalEffect: { findMany: vi.fn(async () => []) },
     event: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         events.push(data);
@@ -392,15 +393,15 @@ function cancelFixture({
     events,
     notify,
     async cancel(runIds: string[] = ["run-1"]) {
-      await cancelRoutineRunCards(
-        { prisma, events: { notify } } as unknown as Parameters<typeof cancelRoutineRunCards>[0],
+      await settleCancelledRunCards(
+        { prisma, events: { notify } } as unknown as Parameters<typeof settleCancelledRunCards>[0],
         runIds,
       );
     },
   };
 }
 
-describe("cancelRoutineRunCards", () => {
+describe("settleCancelledRunCards", () => {
   it("flips a running card to cancelled so the elapsed timer stops", async () => {
     const f = cancelFixture();
     await f.cancel();

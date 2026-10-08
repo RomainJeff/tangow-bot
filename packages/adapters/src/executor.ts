@@ -5662,16 +5662,18 @@ async function finalizeRoutineRunCard(
 }
 
 /**
- * Settles the routine-run cards of runs that were just cancelled. The executor never does this
- * itself: when it notices the cancellation it simply returns, so without this the card would
- * stay on "running" with a live elapsed timer forever. Cancellation is also the only terminal
- * status written outside the executor, which is why this is called from the API's thread stop —
- * the other cancel paths (clear, rewind, archive) drop the thread or the card with it.
+ * Settles the cards of runs that were just cancelled: a routine-run card stops on "cancelled", and
+ * a routine card the user approved but the run never created reads as failed. The executor never
+ * does this itself: when it notices the cancellation it simply returns, so without this the card
+ * would stay on "running" or "Creating…" forever. Cancellation is also the only terminal status
+ * written outside the executor, which is why this is called from the API's thread stop — the
+ * other cancel paths (clear, rewind, archive) drop the thread or the card with it.
  *
- * Idempotent: only a card still in `running` is touched, and the run must actually be cancelled,
- * so a run that completed between the caller's snapshot and this call keeps its real outcome.
+ * Idempotent: only a card still in `running` or an effect still `approved` is touched, and the
+ * run must actually be cancelled, so a run that completed between the caller's snapshot and this
+ * call keeps its real outcome.
  */
-export async function cancelRoutineRunCards(
+export async function settleCancelledRunCards(
   deps: Pick<ExecutorDeps, "prisma" | "events">,
   runIds: readonly string[],
 ): Promise<void> {
@@ -5682,6 +5684,7 @@ export async function cancelRoutineRunCards(
   });
   const endedAt = new Date().toISOString();
   for (const { id, ...target } of cancelled) {
+    await failStrandedRoutineCards(deps, { ...target, runId: id });
     const card = await deps.prisma.message.findUnique({
       where: {
         threadId_clientNonce: {
@@ -5981,6 +5984,10 @@ async function settleRoutineCard(
   const committed = await deps.prisma
     .$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
+      const run = await tx.run.findUnique({
+        where: { id: target.runId },
+        select: { status: true },
+      });
       const messages = await tx.message.findMany({
         where: { threadId: target.threadId, runId: target.runId, role: "bot" },
         orderBy: { seq: "desc" },
@@ -6004,7 +6011,8 @@ async function settleRoutineCard(
         threadId: target.threadId,
         botId: target.botId,
         type: "thread.message.updated",
-        runId: target.runId,
+        // A cancelled run may not write thread history: its card still settles, unattributed.
+        ...(run?.status === "cancelled" ? {} : { runId: target.runId }),
         payload: { messageId: message.id, role: "bot", blocks },
       });
       return event.seq;
