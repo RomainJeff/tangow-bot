@@ -769,63 +769,47 @@ describe("deliverMessagingOutbound channel runs", () => {
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
   });
 
-  it("publishes the reply of a run that set up a routine, whose card stays in the app", async () => {
-    const card = routineConfirmationBlock(
-      "effect-1",
-      {
-        id: "routine-1",
-        name: "Stretch",
-        schedule: "Every hour UTC",
-        prompt: "Remind me to stretch",
-        notify: false,
-      },
-      "created",
-    );
-    const deps = createChannelDeps({
+  it("publishes a run's reply beside the routine card it settled, not beside one the user answered", async () => {
+    const routine = {
+      id: "routine-1",
+      name: "Stretch",
+      schedule: "Every hour UTC",
+      prompt: "Remind me to stretch",
+      notify: false,
+    };
+    const answeredAsk = {
+      kind: "ask" as const,
+      approvalEffectId: "effect-1",
+      text: "Review before schedule_create",
+      status: "answered" as const,
+      answer: "allow",
+      actions: [
+        { id: "allow", label: "Allow once" },
+        { id: "deny", label: "Deny" },
+      ],
+    };
+    const reply = { id: "reply-1", blocks: [{ kind: "text", text: "Done, every hour." }] };
+    const settled = createChannelDeps({
       messages: [
-        { id: "card-1", blocks: [card] },
-        { id: "reply-1", blocks: [{ kind: "text", text: "Done, every hour." }] },
+        { id: "card-1", blocks: [routineConfirmationBlock("effect-1", routine, "created")] },
+        reply,
       ],
     });
-    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
-    expect(deps.sendToThread).toHaveBeenCalledWith(
-      { threadId: "sendblue:grp-1", body: "Alice's agent: Done, every hour." },
-      context,
-    );
-    expect(deps.sendToThread).toHaveBeenCalledTimes(1);
-  });
+    const answered = createChannelDeps({
+      messages: [
+        { id: "card-1", blocks: [settleRoutineAsk(answeredAsk, routine, "updated")] },
+        reply,
+      ],
+    });
 
-  it("keeps a run out of the group once the user answered its routine card in the app", async () => {
-    const allowed = settleRoutineAsk(
-      {
-        kind: "ask",
-        approvalEffectId: "effect-1",
-        text: "Review before schedule_create",
-        status: "answered",
-        answer: "allow",
-        actions: [
-          { id: "allow", label: "Allow once" },
-          { id: "deny", label: "Deny" },
-        ],
-      },
-      {
-        id: "routine-1",
-        name: "Stretch",
-        schedule: "Every hour UTC",
-        prompt: "Remind me to stretch",
-        notify: false,
-      },
-      "updated",
-    );
-    const deps = createChannelDeps({
-      messages: [
-        { id: "card-1", blocks: [allowed] },
-        { id: "reply-1", blocks: [{ kind: "text", text: "Done, every hour." }] },
-      ],
-    });
-    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
-    expect(deps.sendToThread).not.toHaveBeenCalled();
-    expect(deps.rows).toEqual([]);
+    await deliverMessagingOutbound(settled, { runId: "run-1" }, context);
+    await deliverMessagingOutbound(answered, { runId: "run-1" }, context);
+
+    expect(settled.sendToThread.mock.calls).toEqual([
+      [{ threadId: "sendblue:grp-1", body: "Alice's agent: Done, every hour." }, context],
+    ]);
+    expect(answered.sendToThread.mock.calls).toEqual([]);
+    expect(answered.rows).toEqual([]);
   });
 
   it("can still publish a group reply alongside an unanswered ask", async () => {
