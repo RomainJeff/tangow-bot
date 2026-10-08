@@ -39,17 +39,24 @@ import {
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
 } from "@rakazo/contracts";
-import type { CreatedRoutine } from "@rakazo/core";
+import type {
+  CreatedRoutine,
+  ProposalEffectKind,
+  ProposalRefusal,
+  RoutineCard,
+} from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
   type ActionApprovalRule,
   appendTextSegment,
   appendToolCallSegment,
   applyJudgeDecision,
+  approvedReplayCall,
   assertTransition,
   avatarIdentitySeed,
   BOT_DELEGATION_GUIDANCE,
   BOT_OFFER_DEDICATED_BOT,
+  BOT_OFFER_PROPOSALS,
   botMessageAllowsSilence,
   botMessageContext,
   botMessageRelaysToUser,
@@ -63,6 +70,7 @@ import {
   hasHiddenText,
   humanizeToolName,
   inferAttachmentMimeType,
+  isDismissedEffectResult,
   isMessagingChannelRun,
   isOneShotRoutineCrons,
   isTerminal,
@@ -73,11 +81,23 @@ import {
   nextCronDateAcross,
   nextFence,
   normalizeSpawnBotArgs,
+  PENDING_CARD_EFFECT_KINDS,
+  PROPOSAL_EFFECT_KINDS,
+  PROPOSAL_KEY_FIELD,
+  PROPOSAL_PENDING_ERROR,
+  PROPOSAL_WINDOW_MS,
+  PROPOSE_CHANGE_ERROR,
+  parseCardQuestion,
+  parseProposed,
   planActionGate,
   promptInvokesSkill,
+  proposalKey,
+  proposalPlaceError,
+  proposalRefusal,
   redactSecrets,
   renderBotDirectory,
   resolveActionApprovalDetail,
+  routineCardSizeError,
   routineConfirmationBlock,
   SHAPES,
   sandboxCommandTimeoutMs,
@@ -91,6 +111,7 @@ import {
   userTurnBlocksForRun,
   validateBotNameText,
   validateSpawnBotArgs,
+  withProposalKey,
 } from "@rakazo/core";
 import {
   approvalEffectKey,
@@ -111,7 +132,7 @@ import {
   isTooManyDatabaseConnections,
   loadRunHistoryMessages,
   type McpServer,
-  type Prisma,
+  Prisma,
   type PrismaClient,
   parseComputerMode,
   SpaceLimitError,
@@ -310,6 +331,7 @@ import {
   filterBuiltinToolsForRun,
   filterBuiltinToolsForThread,
   listSchedulesFromTool,
+  prepareRoutineCard,
   updateScheduleFromTool,
 } from "./schedule-tools.js";
 import { loadAgentScratchpadContext } from "./scratchpad-context.js";
@@ -856,7 +878,8 @@ export function buildApprovalContinuation(
         }
         return `${uniquified ?? effect.kind}: ${formatRequest(bound.args)}`;
       }
-      return `${effect.kind}: ${formatRequest(effect.request)}`;
+      const replay = approvedReplayCall(effect.kind, effect.request);
+      return `${replay.tool}: ${formatRequest(replay.args)}`;
     }),
   ].join("\n");
 }
@@ -882,6 +905,8 @@ export type SystemInstructionParts = {
   botDirectory?: string;
   /** The user opened this turn in the app (see isUserOpenedTrigger). */
   userTurn?: boolean;
+  /** A user turn in the bot's direct conversation: the bot may propose a routine. */
+  offerProposals?: boolean;
 };
 
 /**
@@ -951,6 +976,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     CHAT_VOICE_INSTRUCTIONS,
     // Last in the stable part: it flips between user turns and automatic wakes of the same thread.
     parts.userTurn ? BOT_OFFER_DEDICATED_BOT : undefined,
+    parts.offerProposals ? BOT_OFFER_PROPOSALS : undefined,
     // Fragments below move on their own between turns; everything above is the cacheable prefix.
     parts.memoryContext,
     parts.scratchpadContext,
@@ -1312,14 +1338,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
 
       const runSecrets = [...deps.secrets];
       try {
+        // A follow_up's source message tells whether the user or another bot started it.
+        const sourceMessage =
+          (run.trigger === "messaging" || run.trigger === "follow_up") && run.sourceMessageId
+            ? await deps.prisma.message.findUnique({
+                where: { id: run.sourceMessageId },
+                select: { role: true, blocks: true },
+              })
+            : null;
+        const sourceRole = sourceMessage?.role;
         const sourceBlocks =
-          run.trigger === "messaging" && run.sourceMessageId
-            ? ((
-                await deps.prisma.message.findUnique({
-                  where: { id: run.sourceMessageId },
-                  select: { blocks: true },
-                })
-              )?.blocks as MessageBlock[] | undefined)
+          run.trigger === "messaging"
+            ? (sourceMessage?.blocks as MessageBlock[] | undefined)
             : undefined;
         const channelId = messagingChannelId(sourceBlocks);
         const messagingChannelRun = isMessagingChannelRun(run.trigger, sourceBlocks);
@@ -1471,6 +1501,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Non-terminal pauses (ask -> waiting_input, takeover -> waiting_takeover) and lease
         // loss deliberately leave the card on "running": the run is not over, and the retry
         // reuses this very card via its stable clientNonce.
+        const settleStrandedCards = () =>
+          failStrandedRoutineCards(deps, {
+            spaceId: run.spaceId,
+            threadId: thread.id,
+            botId: bot.id,
+            runId,
+          }).catch((error) => getLogger().error("stranded routine cards", error));
         const settleRoutineRunCard = async (state: "completed" | "failed", digest: string) => {
           if (!routineForCard || !routineRunCardMessageId) return;
           await finalizeRoutineRunCard(
@@ -1622,6 +1659,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!failed) return;
           await settleRoutineRunCard("failed", MISSING_MODEL_MESSAGE);
+          await settleStrandedCards();
           if (failed.continuationRunId) {
             await deps.jobs
               .enqueue(runContinueJob(failed.continuationRunId))
@@ -1792,7 +1830,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const approvedEffects = await deps.prisma.externalEffect.findMany({
           where: { runId, status: "approved" },
           orderBy: APPROVED_EFFECT_REPLAY_ORDER,
-          select: { kind: true, request: true },
+          select: { kind: true, request: true, idempotencyKey: true },
         });
         const approvedEffectReplays = createApprovedEffectReplayQueue(approvedEffects);
         const computerInstruction = heldForTakeover
@@ -2088,6 +2126,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // hit the already-approved effect instead of creating a second approval card.
           const nextApprovedTool = approvedEffectReplays.nextToolName();
           const nextApprovedRequest = approvedEffectReplays.nextRequest();
+          const nextApprovedKey = approvedEffectReplays.nextKey();
+          const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name);
+          const proposed =
+            !viaConnector && name === "schedule_create" ? parseProposed(args) : false;
+          if (typeof proposed === "object") return proposed;
+          const replaysApproval =
+            nextApprovedTool !== undefined &&
+            approvedReplayCall(nextApprovedTool, nextApprovedRequest).tool === name;
+          const proposal = proposed && !replaysApproval;
+          if (proposal) {
+            if (args.routineId !== undefined) return { error: PROPOSE_CHANGE_ERROR };
+            const placeError = proposalPlaceError(
+              { trigger: run.trigger, sourceRole },
+              Boolean(thread.groupId),
+            );
+            if (placeError) return { error: placeError };
+          }
+          const effectName = replaysApproval
+            ? nextApprovedTool
+            : proposal
+              ? ("routine_proposal" satisfies ProposalEffectKind)
+              : name;
           const liveRoute =
             connectorCall.route?.resourceId &&
             connectorCall.route.connectorId &&
@@ -2112,7 +2172,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
           if (
             nextApprovedTool &&
-            nextApprovedTool !== name &&
+            nextApprovedTool !== effectName &&
             !sameBoundResource &&
             !sameCatalogTarget
           ) {
@@ -2122,13 +2182,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           // Drain FIFO only when the pending approval matches this path (catalog vs direct).
           const replayEffectToolName = approvalReplayEffectToolName(
-            name,
+            effectName,
             nextApprovedTool,
             sameBoundResource || sameCatalogTarget,
           );
           if (
             nextApprovedTool &&
-            (nextApprovedTool === name || sameBoundResource || sameCatalogTarget)
+            (nextApprovedTool === effectName || sameBoundResource || sameCatalogTarget)
           ) {
             const pathError = approvalReplayPathError(
               name,
@@ -2159,7 +2219,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else {
               // Catalog wrappers keep resolveCall's parsed args so Zod stripping/coercion
               // still matches the first-approval effect key and execute payload.
-              args = approvedReplayArgs(approvedRequest, args, CATALOG_APPROVAL_TOOL);
+              args = approvedReplayArgs(
+                approvedReplayCall(nextApprovedTool, approvedRequest).args,
+                args,
+                CATALOG_APPROVAL_TOOL,
+              );
             }
             // Bound / shrink-direct approvals may skip catalog parse — reject before execute
             // if they no longer match the live schema.
@@ -2177,16 +2241,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
             }
           }
-          const viaConnector = !BUILTIN_AGENT_TOOL_NAMES.has(name);
           const requiresUnattendedApproval = unattendedTriggerToolRequiresApproval(
             run,
             name,
             viaConnector,
           );
           const requiresApprovalByDefault =
-            requiresUnattendedApproval || toolRequiresApproval(name, viaConnector);
+            proposal || requiresUnattendedApproval || toolRequiresApproval(name, viaConnector);
           const requiresMandatoryApproval =
-            requiresUnattendedApproval || toolRequiresExplicitApproval(name);
+            proposal || requiresUnattendedApproval || toolRequiresExplicitApproval(name);
           const connectorKind = connectorKindFromToolName(
             name,
             connectedPlugins.map((plugin) => plugin.provider),
@@ -2238,15 +2301,52 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ? 0
               : nextMutatingEffectOccurrence(replayEffectToolName, args);
           const effectKey =
-            usesApprovalKey && occurrence === 0
-              ? approvalEffectKey(runId, replayEffectToolName, args)
-              : toolEffectIdempotencyKey(runId, replayEffectToolName, args, occurrence);
+            approvedReplayConsumed && nextApprovedKey
+              ? nextApprovedKey
+              : usesApprovalKey && occurrence === 0
+                ? approvalEffectKey(runId, replayEffectToolName, args)
+                : toolEffectIdempotencyKey(runId, replayEffectToolName, args, occurrence);
           // A first call is validated and rate-limited before it can record an effect or show a
           // card. A resumed approval, or an effect that already exists for this key, returns its
           // stored outcome instead: it must never trip over a name it took itself.
           if (name === "spawn_bot" && !approvedReplayConsumed) {
             const refusal = await spawnBotPreflight(deps, run, effectKey, args);
             if (refusal) return refusal;
+          }
+          // A card is keyed on the call as the bot wrote it, so a resumed call finds the card the
+          // user answered before anything about it is checked again. Only a first card goes
+          // through the guards; what a routine card shows is resolved once, when it first shows.
+          const existingCard = proposal
+            ? await deps.prisma.externalEffect.findUnique({
+                where: { idempotencyKey: effectKey },
+                select: { status: true, request: true },
+              })
+            : undefined;
+          const firstCard = proposal && !existingCard;
+          if (firstCard) {
+            const tooLarge = routineCardSizeError(args);
+            if (tooLarge) return { error: tooLarge };
+          }
+          let routineCard: RoutineCard | undefined;
+          if (proposal && (!existingCard || existingCard.status === "intended")) {
+            const question = parseCardQuestion(args.question);
+            if ("error" in question) return question;
+            const prepared = prepareRoutineCard(
+              existingCard ? (existingCard.request as Record<string, unknown>) : args,
+              new Date(),
+            );
+            if ("error" in prepared) return prepared;
+            args = prepared.args;
+            effectRequest = withProposalKey(prepared.args, prepared.routine.name);
+            routineCard = { routine: prepared.routine, ...question };
+          }
+          if (firstCard && routineCard) {
+            const refusal = await proposalPreflight(deps, run, {
+              kind: "routine_proposal",
+              name: routineCard.routine.name,
+              effectKey,
+            });
+            if (refusal) return "error" in refusal ? refusal : refusal.result;
           }
           // Connector read-only hints must not bypass approval, review, or replay decisions.
           const applied = READ_ONLY_AGENT_TOOLS.has(name)
@@ -2262,6 +2362,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               );
           if (name === "spawn_bot" && applied && !applied.duplicate) {
             const lost = await spawnBotRaceLoss(deps, run, applied.effect.id);
+            if (lost) return lost;
+          }
+          if (routineCard && applied && !applied.duplicate) {
+            const lost = await proposalRaceLoss(deps, run, applied.effect.id);
             if (lost) return lost;
           }
 
@@ -2411,6 +2515,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               blocks: [
                 buildApprovalAskBlock(applied!.effect.id, name, args, runSecrets, {
                   reviewReason,
+                  routineCard,
                   runUserId: run.userId,
                 }),
               ],
@@ -2421,13 +2526,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (!paused) {
               throw new Error("Could not pause this run for approval; try sending again.");
             }
-            await notifyRun(deps, run, {
-              kind: "help",
-              title: `${bot.name} needs approval`,
-              body: `Review before ${name}`,
-              botId: bot.id,
-              threadId: thread.id,
-            });
+            // The user just wrote: a card the bot proposes on its own waits without a push.
+            if (!routineCard) {
+              await notifyRun(deps, run, {
+                kind: "help",
+                title: `${bot.name} needs approval`,
+                body: `Review before ${name}`,
+                botId: bot.id,
+                threadId: thread.id,
+              });
+            }
             return pauseForApproval();
           };
 
@@ -3001,20 +3109,26 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
             return finish(removed);
           }
+          const cardTarget = { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId };
           const showRoutine = async (
             result: Awaited<ReturnType<typeof createScheduleFromTool>>,
             change: "created" | "updated",
           ) => {
-            if (!applied || !("ok" in result)) return;
+            if (!applied) return;
+            if (!("ok" in result)) {
+              if (approvedReplayConsumed) {
+                await settleRoutineCard(deps, cardTarget, applied.effect.id, (card) => ({
+                  ...card,
+                  failed: true,
+                }));
+              }
+              return;
+            }
             const { routineId: id, name, schedule, prompt, notify } = result;
             const routine = { id, name, schedule, prompt, notify };
             if (approvedReplayConsumed) {
-              await settleRoutineCard(
-                deps,
-                { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId },
-                applied.effect.id,
-                routine,
-                change,
+              await settleRoutineCard(deps, cardTarget, applied.effect.id, (card) =>
+                settleRoutineAsk(card, routine, change),
               );
             } else {
               await confirmRoutine(applied.effect.id, routine, change);
@@ -4024,6 +4138,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : undefined,
             botDirectory,
             userTurn: isUserOpenedTrigger(run.trigger),
+            offerProposals: isUserOpenedTrigger(run.trigger) && !thread.groupId,
           });
           const instructionTokens = estimateTextTokens(instructions);
           const toolSchemaTokens = estimateToolSchemaTokens(tools);
@@ -4683,6 +4798,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               .catch((error) => getLogger().error("link.preview enqueue", error));
           }
           await settleRoutineRunCard("completed", text);
+          await settleStrandedCards();
           if (completed.continuationRunId) {
             await deps.jobs
               .enqueue(runContinueJob(completed.continuationRunId))
@@ -4777,6 +4893,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!failed) return;
           await settleRoutineRunCard("failed", message);
+          await settleStrandedCards();
           if (failed.continuationRunId) {
             await deps.jobs
               .enqueue(runContinueJob(failed.continuationRunId))
@@ -5584,6 +5701,7 @@ export async function cancelRoutineRunCards(
 const BOT_TEXT_ARGS: Record<string, readonly string[]> = {
   spawn_bot: ["name", "title", "instructions", "prompt"],
   update_bot: ["name", "title", "description"],
+  schedule_create: ["name", "prompt", "question"],
 };
 
 function redactBotToolArgs(
@@ -5682,16 +5800,183 @@ async function personWokeRun(
   return source?.role === "user" && !botMessageContext(blocks);
 }
 
+type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
+
 /**
- * Links an approved routine card to the routine it created. Logged, never thrown: the creation
- * already happened and the model has its result.
+ * The cards of the day the caps read. Corrections do not count, so the day holds more cards than
+ * the caps allow: this bounds the read, and a day past it only makes the caps count fewer cards.
+ */
+const PROPOSAL_RECENT_LIMIT = 50;
+
+/** The latest cards of this conversation, among which the one a new card may correct is found. */
+const PROPOSAL_THREAD_LIMIT = 5;
+
+/** Not now tapped on a card: a card put away by typing is denied too, but carries a marker. */
+const SAID_NOT_NOW = { status: "denied", result: { equals: Prisma.AnyNull } } as const;
+
+function isErrorResult(result: unknown): boolean {
+  return Boolean(result) && typeof result === "object" && "error" in (result as object);
+}
+
+/**
+ * Runs only before a first proposal card: what the user already sees or said decides whether the
+ * bot may show one (proposalRefusal). Reads a Not now in this run, a Not now to the same proposal in
+ * the last day, the cards of the day, and the latest cards of this conversation to tell a correction
+ * from a new proposal.
+ */
+async function proposalPreflight(
+  deps: ExecutorDeps,
+  run: { id: string; botId: string; threadId: string },
+  card: { kind: ProposalEffectKind; name: string; effectKey: string },
+): Promise<ProposalRefusal | undefined> {
+  const now = new Date();
+  const select = {
+    id: true,
+    kind: true,
+    runId: true,
+    request: true,
+    status: true,
+    result: true,
+    answeredAt: true,
+    createdAt: true,
+    run: { select: { threadId: true } },
+  } as const;
+  const [pendingEffect, waitingRun, refusedHere, refusedBefore, recent, inThread] =
+    await Promise.all([
+      deps.prisma.externalEffect.findFirst({
+        where: {
+          kind: { in: [...PENDING_CARD_EFFECT_KINDS] },
+          status: "intended",
+          idempotencyKey: { not: card.effectKey },
+          run: { threadId: run.threadId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+        },
+        select: { id: true },
+      }),
+      deps.prisma.run.findFirst({
+        where: { threadId: run.threadId, status: "waiting_input", id: { not: run.id } },
+        select: { id: true },
+      }),
+      deps.prisma.externalEffect.findFirst({
+        where: { kind: card.kind, runId: run.id, ...SAID_NOT_NOW },
+        select,
+      }),
+      deps.prisma.externalEffect.findFirst({
+        where: {
+          kind: card.kind,
+          run: { botId: run.botId },
+          request: { path: [PROPOSAL_KEY_FIELD], equals: proposalKey(card.name) },
+          answeredAt: { gte: new Date(now.getTime() - PROPOSAL_WINDOW_MS) },
+          ...SAID_NOT_NOW,
+        },
+        select,
+      }),
+      deps.prisma.externalEffect.findMany({
+        where: {
+          kind: { in: PROPOSAL_EFFECT_KINDS },
+          run: { botId: run.botId },
+          createdAt: { gte: new Date(now.getTime() - PROPOSAL_WINDOW_MS) },
+        },
+        orderBy: { createdAt: "desc" },
+        take: PROPOSAL_RECENT_LIMIT,
+        select,
+      }),
+      deps.prisma.externalEffect.findMany({
+        where: { kind: { in: PROPOSAL_EFFECT_KINDS }, run: { threadId: run.threadId } },
+        orderBy: { createdAt: "desc" },
+        take: PROPOSAL_THREAD_LIMIT,
+        select,
+      }),
+    ]);
+  const rows = new Map(
+    [refusedHere, refusedBefore, ...recent, ...inThread].flatMap((row) =>
+      row ? [[row.id, row]] : [],
+    ),
+  );
+  return proposalRefusal({
+    kind: card.kind,
+    name: card.name,
+    runId: run.id,
+    threadId: run.threadId,
+    now,
+    pendingCard: Boolean(pendingEffect || waitingRun),
+    records: [...rows.values()].map((row) => ({
+      kind: row.kind,
+      runId: row.runId,
+      name: requestName(row.request),
+      threadId: row.run.threadId,
+      status: row.status,
+      dismissed: isDismissedEffectResult(row.result),
+      // A card that could not create its routine is not a proposal the user weighed.
+      shown: (row.status === "intended" || row.answeredAt != null) && !isErrorResult(row.result),
+      createdAt: row.createdAt,
+      answeredAt: row.answeredAt,
+    })),
+  });
+}
+
+function requestName(request: unknown): string {
+  const name = request && typeof request === "object" ? (request as { name?: unknown }).name : "";
+  return typeof name === "string" ? name : "";
+}
+
+/**
+ * Two cards of one batch can pass the pre-check together: after inserting, the oldest card
+ * waiting in this conversation keeps its place, and this proposal settles with an error.
+ */
+async function proposalRaceLoss(
+  deps: ExecutorDeps,
+  run: { threadId: string },
+  effectId: string,
+): Promise<{ error: string } | undefined> {
+  const [first] = await deps.prisma.externalEffect.findMany({
+    where: {
+      kind: { in: [...PENDING_CARD_EFFECT_KINDS] },
+      status: "intended",
+      run: { threadId: run.threadId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: 1,
+    select: { id: true },
+  });
+  if (!first || first.id === effectId) return undefined;
+  const result = { error: PROPOSAL_PENDING_ERROR };
+  await completeEffect(deps, effectId, "intended", result);
+  return result;
+}
+
+/** What the model and the guards read for a routine card approved but never created. */
+const ROUTINE_NOT_CREATED_RESULT = {
+  error: "The run ended before this routine was created.",
+} as const;
+
+/**
+ * A run that ends with a routine card the user approved but never created settles it as failed:
+ * only this run ever replays that approval, so the card would otherwise wait forever.
+ */
+async function failStrandedRoutineCards(
+  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  target: { spaceId: string; threadId: string; botId: string; runId: string },
+): Promise<void> {
+  const stranded = await deps.prisma.externalEffect.findMany({
+    where: { runId: target.runId, kind: { in: PROPOSAL_EFFECT_KINDS }, status: "approved" },
+    select: { id: true },
+  });
+  for (const { id } of stranded) {
+    if (await completeExternalEffect(deps.prisma, id, "approved", ROUTINE_NOT_CREATED_RESULT)) {
+      await settleRoutineCard(deps, target, id, (card) => ({ ...card, failed: true }));
+    }
+  }
+}
+
+/**
+ * Freezes an approved routine card on what came of it: the routine it links to, or the failure.
+ * Logged, never thrown: the creation already happened and the model has its result.
  */
 async function settleRoutineCard(
   deps: Pick<ExecutorDeps, "prisma" | "events">,
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   effectId: string,
-  routine: CreatedRoutine,
-  change: "created" | "updated",
+  settle: (card: AskBlock) => AskBlock,
 ): Promise<void> {
   const committed = await deps.prisma
     .$transaction(async (tx) => {
@@ -5711,13 +5996,7 @@ async function settleRoutineCard(
       );
       if (!message) return null;
       const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block) =>
-        isCard(block)
-          ? (settleRoutineAsk(
-              block as Extract<MessageBlock, { kind: "ask" }>,
-              routine,
-              change,
-            ) as Prisma.InputJsonValue)
-          : block,
+        isCard(block) ? (settle(block as AskBlock) as Prisma.InputJsonValue) : block,
       );
       await tx.message.update({ where: { id: message.id }, data: { blocks } });
       const event = await appendEventInTransaction(tx, {
