@@ -1252,6 +1252,43 @@ describe("routine update triggers", () => {
     expect(routineUpdate).not.toHaveBeenCalled();
   });
 
+  it("moves the next run and its wake-up when the editor changes the schedule", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue, cancel } = updateDeps({});
+
+      const saved = await savedRoutine(await update({ ...editorForm, crons: ["30 7 * * *"] }));
+
+      expect(saved.nextRunAt).toBe("2026-10-08T07:30:00.000Z");
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2026-10-08T07:30:00.000Z"),
+      ]);
+      expect(cancel.mock.calls).toEqual([]);
+    }));
+
+  it("clears the next run and cancels its wake-up when the editor pauses a routine", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue, cancel } = updateDeps({});
+
+      const saved = await savedRoutine(await update({ ...editorForm, active: false }));
+
+      expect(saved).toMatchObject({ active: false, nextRunAt: null });
+      expect(cancel.mock.calls).toEqual([["routine:routine-1"]]);
+      expect(enqueue.mock.calls).toEqual([]);
+    }));
+
+  it("schedules the next run when the editor resumes a paused routine", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue, cancel } = updateDeps({ active: false, nextRunAt: null });
+
+      const saved = await savedRoutine(await update(editorForm));
+
+      expect(saved).toMatchObject({ active: true, nextRunAt: "2026-10-08T09:00:00.000Z" });
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2026-10-08T09:00:00.000Z"),
+      ]);
+      expect(cancel.mock.calls).toEqual([]);
+    }));
+
   it("still renames, pauses and resumes a routine stored with an old time zone, on UTC", () =>
     at("2026-10-07T10:00:00.000Z", async () => {
       const legacy = { timezone: "Paris" };
