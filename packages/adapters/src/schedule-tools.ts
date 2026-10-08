@@ -14,6 +14,7 @@ import {
   nextCronDateAcrossStrict,
   ONCE_ROUTINE_CRON,
   PROPOSAL_EFFECT_KINDS,
+  parseRunAt,
   routineCardSchedule,
   routineCardTextError,
   routineScheduleLabel,
@@ -108,10 +109,8 @@ export function resolveScheduleTiming(
       }
       nextRunAt = new Date(Date.now() + delayMinutes * 60_000);
     } else {
-      const parsed = new Date(String(input.runAt ?? ""));
-      if (!Number.isFinite(parsed.getTime())) {
-        return { ok: false, error: "runAt must be a valid ISO datetime." };
-      }
+      const parsed = typeof input.runAt === "string" ? parseRunAt(input.runAt, timezone) : null;
+      if (!parsed) return { ok: false, error: "runAt must be a valid ISO datetime." };
       nextRunAt = parsed;
     }
     if (nextRunAt.getTime() <= Date.now()) {
@@ -405,8 +404,9 @@ export async function updateRoutine(
       if (!retime && existing.nextRunAt) {
         return { error: "A run time is only for one-shots that have not run yet." };
       }
-      const at = new Date(change.runAt);
-      if (!Number.isFinite(at.getTime()) || at.getTime() <= Date.now()) {
+      const at =
+        typeof change.runAt === "string" ? parseRunAt(change.runAt, timezone) : change.runAt;
+      if (!at || at.getTime() <= Date.now()) {
         return { error: "Run time must be in the future." };
       }
       nextRunAt = at;
@@ -615,16 +615,12 @@ function proposalSchedule(request: Record<string, unknown>): string {
     typeof request.timezone === "string" && isValidTimezone(request.timezone)
       ? request.timezone
       : "UTC";
-  const timing =
-    request.runAt === undefined
-      ? resolveScheduleTiming(scheduleOf(request), timezone)
-      : {
-          ok: true as const,
-          cron: ONCE_ROUTINE_CRON,
-          nextRunAt: new Date(String(request.runAt)),
-          oneShot: true,
-        };
-  return timing.ok && !Number.isNaN(timing.nextRunAt.getTime())
+  if (request.runAt !== undefined) {
+    const at = parseRunAt(String(request.runAt), timezone);
+    return at ? routineScheduleLabel({ crons: [ONCE_ROUTINE_CRON], nextRunAt: at }, timezone) : "";
+  }
+  const timing = resolveScheduleTiming(scheduleOf(request), timezone);
+  return timing.ok
     ? routineScheduleLabel({ crons: [timing.cron], nextRunAt: timing.nextRunAt }, timezone)
     : "";
 }

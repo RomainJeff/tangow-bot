@@ -626,7 +626,8 @@ export const builtinAgentTools: ConnectorTool[] = [
         },
         runAt: {
           type: "string",
-          description: "ISO datetime for a one-shot schedule.",
+          description:
+            "ISO datetime for a one-shot schedule, read in timezone when it has no offset.",
         },
         delayMinutes: {
           type: "number",
