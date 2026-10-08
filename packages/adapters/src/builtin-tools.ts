@@ -662,7 +662,8 @@ export const builtinAgentTools: ConnectorTool[] = [
   },
   {
     name: "schedule_list",
-    description: "List this bot's active and inactive schedules (routines).",
+    description:
+      "List this bot's active and inactive schedules (routines), and the routines it proposed in the last 30 days.",
     inputSchema: { type: "object", properties: {} },
   },
   {
