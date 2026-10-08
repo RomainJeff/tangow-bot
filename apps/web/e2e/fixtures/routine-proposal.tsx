@@ -1,5 +1,6 @@
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
+import { settleRoutineAsk } from "@rakazo/core";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import type { AskBlock } from "../../src/components/AskCard";
@@ -31,12 +32,11 @@ const CARDS: Array<[string, AskBlock]> = [
   ["pending", pending],
   [
     "created",
-    {
-      ...pending,
-      status: "answered",
-      answer: "allow",
-      created: { kind: "routine", id: "routine-1", label: "Offres de la semaine" },
-    },
+    settleRoutineAsk(
+      { ...pending, status: "answered", answer: "allow" },
+      { ...pending.routine!, id: "routine-1" },
+      "created",
+    ),
   ],
   ["not-now", { ...pending, status: "answered", answer: "deny" }],
   ["dismissed", { ...pending, status: "answered", answer: "dismissed" }],
