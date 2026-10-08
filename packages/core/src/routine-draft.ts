@@ -34,10 +34,7 @@ const INBOUND_CARD_LABELS: Record<string, string> = {
   teams: "Teams message",
 };
 
-/**
- * When a stored routine runs, as its card says it, in English like the rest of the card: the
- * words the routine list uses, read from the same cadence. Never empty.
- */
+/** When a stored routine runs, as its card says it, in English like the rest of the card. */
 export function routineCardSchedule(
   routine: Pick<
     Routine,

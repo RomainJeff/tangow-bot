@@ -1170,6 +1170,16 @@ describe("a routine the user asks to change", () => {
     ]);
   });
 
+  it("keeps the stored name and prompt when the model sends null for them", async () => {
+    const f = fixture({ routines: [stored] });
+    await f.play([[change({ name: null, prompt: null, notify: true })]]);
+    expect(f.routines[0]).toMatchObject({
+      name: "Stretch",
+      prompt: "Remind me to stretch",
+      notify: true,
+    });
+  });
+
   it("moves every schedule of a routine to a new zone, and leaves several schedules to the app", () =>
     at("2026-10-07T10:00:00Z", async () => {
       const twice = { ...stored, crons: ["0 9 * * 1-5", "0 10 * * 0,6"] };

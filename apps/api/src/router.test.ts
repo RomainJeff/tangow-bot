@@ -1102,9 +1102,10 @@ describe("routine update triggers", () => {
       bot: { findFirst: vi.fn().mockResolvedValue({ id: "bot-1", thread: null }) },
     } as unknown as PrismaClient;
     const enqueue = vi.fn().mockResolvedValue(undefined);
+    const cancel = vi.fn().mockResolvedValue(undefined);
     const deps = {
       prisma,
-      jobs: { enqueue, cancel: vi.fn().mockResolvedValue(undefined) },
+      jobs: { enqueue, cancel },
       events: { append: vi.fn().mockResolvedValue(undefined) },
       env: {
         defaultProvider: "fake",
@@ -1133,8 +1134,38 @@ describe("routine update triggers", () => {
       );
       return response;
     };
-    return { routineUpdate, update, enqueue };
+    return { routineUpdate, update, enqueue, cancel };
   }
+
+  const editorForm = {
+    name: "Digest",
+    prompt: "Check",
+    crons: ["0 9 * * *"],
+    active: true,
+    notify: false,
+    webhookEnabled: false,
+    githubEnabled: false,
+    messageProvider: null,
+    requireToolApproval: true,
+  };
+
+  async function savedRoutine(response: Response) {
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      json: { name: string; active: boolean; nextRunAt: string | null };
+    };
+    return body.json;
+  }
+
+  const at = async (now: string, test: () => Promise<void>) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(now));
+    try {
+      await test();
+    } finally {
+      vi.useRealTimers();
+    }
+  };
 
   async function refusal(response: Response) {
     expect(response.status).toBe(400);
@@ -1221,10 +1252,70 @@ describe("routine update triggers", () => {
     expect(routineUpdate).not.toHaveBeenCalled();
   });
 
-  it("refuses an unknown time zone", async () => {
-    const { routineUpdate, update } = updateDeps({});
+  it("moves the next run and its wake-up when the editor changes the schedule", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue, cancel } = updateDeps({});
 
-    const error = await refusal(await update({ timezone: "Mars/Olympus" }));
+      const saved = await savedRoutine(await update({ ...editorForm, crons: ["30 7 * * *"] }));
+
+      expect(saved.nextRunAt).toBe("2026-10-08T07:30:00.000Z");
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2026-10-08T07:30:00.000Z"),
+      ]);
+      expect(cancel.mock.calls).toEqual([]);
+    }));
+
+  it("clears the next run and cancels its wake-up when the editor pauses a routine", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue, cancel } = updateDeps({});
+
+      const saved = await savedRoutine(await update({ ...editorForm, active: false }));
+
+      expect(saved).toMatchObject({ active: false, nextRunAt: null });
+      expect(cancel.mock.calls).toEqual([["routine:routine-1"]]);
+      expect(enqueue.mock.calls).toEqual([]);
+    }));
+
+  it("schedules the next run when the editor resumes a paused routine", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue, cancel } = updateDeps({ active: false, nextRunAt: null });
+
+      const saved = await savedRoutine(await update(editorForm));
+
+      expect(saved).toMatchObject({ active: true, nextRunAt: "2026-10-08T09:00:00.000Z" });
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2026-10-08T09:00:00.000Z"),
+      ]);
+      expect(cancel.mock.calls).toEqual([]);
+    }));
+
+  it("still renames, pauses and resumes a routine stored with an old time zone, on UTC", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const legacy = { timezone: "Paris" };
+
+      const renamed = await savedRoutine(
+        await updateDeps(legacy).update({ ...editorForm, name: "Morning digest" }),
+      );
+      const paused = await savedRoutine(
+        await updateDeps(legacy).update({ ...editorForm, active: false }),
+      );
+      const resumed = await savedRoutine(
+        await updateDeps({ ...legacy, active: false, nextRunAt: null }).update(editorForm),
+      );
+
+      expect(renamed).toMatchObject({
+        name: "Morning digest",
+        active: true,
+        nextRunAt: "2026-10-07T09:00:00.000Z",
+      });
+      expect(paused).toMatchObject({ active: false, nextRunAt: null });
+      expect(resumed).toMatchObject({ active: true, nextRunAt: "2026-10-08T09:00:00.000Z" });
+    }));
+
+  it("refuses a time zone sent in an old format, even the one already stored", async () => {
+    const { routineUpdate, update } = updateDeps({ timezone: "Paris" });
+
+    const error = await refusal(await update({ ...editorForm, timezone: "Paris" }));
 
     expect(error).toMatchObject({
       code: "BAD_REQUEST",
