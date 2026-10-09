@@ -109,9 +109,11 @@ ticks.
 
 ### Space
 
-Layout, in px: `sidebar 280`, `thread 800`, `header 56`, `panel 384`, `block
-520` — `w-sidebar`, `max-w-thread`, `h-header`, `w-panel`, `max-w-block` (a
-framed block standing alone in the thread, §3.3); `composerField 220` —
+Layout, in px: `sidebar 280`, `thread 800`, `header 56`, `panel 384`,
+`panelWide 640`, `block 520` — `w-sidebar`, `max-w-thread`, `h-header`,
+`w-panel`, `w-panel-wide` (the bot page while it edits a long text;
+`pe-panel-wide` on the thread beside it), `max-w-block` (a framed block standing
+alone in the thread, §3.3); `composerField 220` —
 `max-h-composer-field`, the web/desktop composer field before it scrolls
 internally. Gaps use the native Tailwind scale, which accepts any
 multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22, `gap-7` is 28. Never
@@ -682,6 +684,48 @@ Used by: the `steps` block of a message.
 A light sweep across a label that is still being written, as the `rk-shimmer`
 class. Ported from beautifului.dev
 (github.com/TurboKach/ai-native-react-components, MIT © 2026 Turbo).
+
+### SettingRow
+
+One line of a settings list: `text-row-name` label, an optional `text-row-status`
+sub-line, then on the trailing side a `meta` slot (a `SaveMeta`), a control or a
+value, and an optional chevron. Static by default; `onClick` makes it a button
+with a hover fill and a focus ring, which carries a value and a chevron, never a
+control or a `SaveMeta`, which would nest an interactive element inside another.
+
+Props: `label`, `subline?`, `meta?`, `children?` (the trailing control or
+value), `chevron?`.
+
+### SaveMeta
+
+The only proof an automatic save happened: "Saving…" while the call runs,
+"Saved 14:02" for the three seconds the save store keeps that state (the time
+through `Intl.DateTimeFormat`, hour and minute in the device locale), and
+"Could not save · Retry" until a save succeeds. At rest it is empty, never
+permanent chrome. The root is always mounted as an `aria-live="polite"` region
+so each change is announced.
+
+Props: `state` (a `FieldSaveState` from `@rakazo/core`), `labels` (`saving`,
+`saved`, `failed`, `retry`, already translated), `onRetry?`, `locale?`.
+
+### TextSettingField
+
+A text setting that saves itself, over `useFieldSave` and the `SaveStore` that
+`SaveStoreProvider` hands down (created once at the composition root, in
+memory only: nothing here reaches `localStorage`, `sessionStorage` or
+IndexedDB). Typing is local. Leaving the field commits the trimmed text
+through the hook when it changed; Escape drops the edit and keeps focus (and
+reaches the panel only when there was no edit to drop); Enter leaves a
+single-line field. An emptied `required` field puts its old value back, and an
+emptied field with an `onConfirmClear` callback asks first. `keepDraft` keeps
+unsaved text in the store for the session; when the server value moved under
+it, the field shows the server value and offers `labels.restore`. A failed save
+keeps the typed text and shows "Could not save · Retry".
+
+Props: `label`, `field` (from `useFieldSave`), `labels` (the `SaveMetaLabels`
+plus `restore?`), `multiline?`, `rows?`, `required?`, `onConfirmClear?`,
+`keepDraft?`, `locale?`. `className` styles the wrapper; the other native props
+land on the input or textarea.
 
 ## Motion rules
 
