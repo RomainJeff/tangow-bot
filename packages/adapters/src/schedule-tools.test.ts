@@ -516,6 +516,7 @@ describe("schedule_list proposals", () => {
     result?: unknown;
     request: Record<string, unknown>;
     createdAt: Date;
+    answeredAt?: Date;
     spaceId: string;
     run: { botId: string; userId: string };
   };
@@ -556,7 +557,7 @@ describe("schedule_list proposals", () => {
         )
         .sort((a, b) => direction * (a.createdAt.getTime() - b.createdAt.getTime()))
         .slice(0, take)
-        .map((e) => ({ ...e, result: e.result ?? null }));
+        .map((e) => ({ ...e, result: e.result ?? null, answeredAt: e.answeredAt ?? null }));
     };
     const deps = {
       prisma: { routine: { findMany: async () => [] }, externalEffect: { findMany } },
@@ -577,17 +578,24 @@ describe("schedule_list proposals", () => {
   it("returns what the bot proposed in the last 30 days, newest first, with what became of each", async () => {
     const result = await list([
       stored("Waiting", { createdAt: daysAgo(1) }),
-      stored("Created", { status: "completed", result: { ok: true }, createdAt: daysAgo(2) }),
-      stored("Declined", { status: "denied", createdAt: daysAgo(3) }),
+      stored("Created", {
+        status: "completed",
+        result: { ok: true },
+        createdAt: daysAgo(2),
+        answeredAt: daysAgo(2),
+      }),
+      stored("Declined", { status: "denied", createdAt: daysAgo(3), answeredAt: daysAgo(3) }),
       stored("Set aside", {
         status: "denied",
         result: { outcome: "dismissed" },
         createdAt: daysAgo(4),
+        answeredAt: daysAgo(4),
       }),
       stored("Failed", {
         status: "completed",
         result: { error: "One-shot schedules must run in the future." },
         createdAt: daysAgo(5),
+        answeredAt: daysAgo(5),
       }),
       stored("Too old", { createdAt: daysAgo(31) }),
       stored("Another kind", { kind: "schedule_create", createdAt: daysAgo(1) }),
@@ -610,23 +618,43 @@ describe("schedule_list proposals", () => {
     });
   });
 
-  it("says couldn't create for a cancelled or failed proposal, never waiting", async () => {
+  it("says creating for a tapped card still creating, couldn't create once it failed, never waiting", async () => {
     const { proposals } = (
       await list([
-        stored("Cancelled", { status: "cancelled", createdAt: daysAgo(1) }),
-        stored("Errored", { status: "failed", createdAt: daysAgo(2) }),
+        stored("Creating", { status: "approved", createdAt: daysAgo(1), answeredAt: daysAgo(1) }),
+        stored("Cancelled", { status: "cancelled", createdAt: daysAgo(2), answeredAt: daysAgo(2) }),
+        stored("Errored", { status: "failed", createdAt: daysAgo(3), answeredAt: daysAgo(3) }),
         stored("Stranded", {
           status: "completed",
           result: { error: "The run ended before this routine was created." },
-          createdAt: daysAgo(3),
+          createdAt: daysAgo(4),
+          answeredAt: daysAgo(4),
         }),
       ])
     ).earlierProposals!;
     expect(proposals.map((p) => [p.name, p.status])).toEqual([
+      ["Creating", "creating"],
       ["Cancelled", "couldn't create"],
       ["Errored", "couldn't create"],
       ["Stranded", "couldn't create"],
     ]);
+  });
+
+  it("leaves out a card that lost the race to another and never showed", async () => {
+    const { proposals } = (
+      await list([
+        stored("Shown", { createdAt: daysAgo(1) }),
+        stored("Never shown", {
+          status: "completed",
+          result: {
+            error:
+              "Another card is already waiting for the user's answer in this conversation. Do not propose anything until they answer.",
+          },
+          createdAt: daysAgo(1),
+        }),
+      ])
+    ).earlierProposals!;
+    expect(proposals.map((p) => [p.name, p.status])).toEqual([["Shown", "waiting"]]);
   });
 
   it("returns only this bot's proposals for this user in this space", async () => {

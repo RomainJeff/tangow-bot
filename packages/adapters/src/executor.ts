@@ -94,6 +94,7 @@ import {
   proposalKey,
   proposalPlaceError,
   proposalRefusal,
+  proposalShown,
   redactSecrets,
   renderBotDirectory,
   resolveActionApprovalDetail,
@@ -5909,7 +5910,7 @@ async function proposalPreflight(
       status: row.status,
       dismissed: isDismissedEffectResult(row.result),
       // A card that could not create its routine is not a proposal the user weighed.
-      shown: (row.status === "intended" || row.answeredAt != null) && !isErrorResult(row.result),
+      shown: proposalShown(row) && !isErrorResult(row.result),
       createdAt: row.createdAt,
       answeredAt: row.answeredAt,
     })),

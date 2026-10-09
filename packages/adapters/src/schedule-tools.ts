@@ -14,6 +14,7 @@ import {
   nextCronDateAcrossStrict,
   ONCE_ROUTINE_CRON,
   PROPOSAL_EFFECT_KINDS,
+  proposalShown,
   routineCardSchedule,
   routineCardTextError,
   routineScheduleLabel,
@@ -619,6 +620,7 @@ const singleLine = (text: string) => text.replace(/\s+/g, " ").trim();
 
 function proposalStatus(effect: { status: string; result: unknown }) {
   if (effect.status === "intended") return "waiting";
+  if (effect.status === "approved") return "creating";
   if (effect.status === "denied") {
     return isDismissedEffectResult(effect.result) ? "set aside" : "declined";
   }
@@ -663,9 +665,9 @@ async function listProposals(
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: PROPOSAL_HISTORY_LIMIT,
-    select: { request: true, status: true, result: true, createdAt: true },
+    select: { request: true, status: true, result: true, createdAt: true, answeredAt: true },
   });
-  return rows.map((row) => {
+  return rows.filter(proposalShown).map((row) => {
     const request = (row.request ?? {}) as Record<string, unknown>;
     return {
       name: singleLine(String(request.name ?? "")),

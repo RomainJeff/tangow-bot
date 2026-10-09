@@ -244,6 +244,14 @@ export function withoutProposalKey(request: unknown): unknown {
   return rest;
 }
 
+/**
+ * The user saw the proposal card: it waits, or it was answered. A card that lost the race to
+ * another in its batch was settled before it ever showed.
+ */
+export function proposalShown(effect: { status: string; answeredAt: Date | null }): boolean {
+  return effect.status === "intended" || effect.answeredAt !== null;
+}
+
 /** A proposal card this bot recorded, as the guards read it from the stored effects. */
 export type ProposalRecord = {
   kind: string;
