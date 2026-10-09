@@ -38,6 +38,7 @@ export function BotContextMenu({
   onCreateSection,
   onRenameSection,
   onToggleUnread,
+  editLabel,
   onEdit,
   onDuplicate,
   onClear,
@@ -53,6 +54,7 @@ export function BotContextMenu({
   onCreateSection: () => void;
   onRenameSection?: (sectionId: string) => void;
   onToggleUnread: () => void;
+  editLabel: string;
   onEdit: () => void;
   onDuplicate: () => void;
   onClear: () => void;
@@ -128,7 +130,7 @@ export function BotContextMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onEdit}>
           <Pencil />
-          {t`Edit Profile`}
+          {editLabel}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onDuplicate}>
           <Copy />

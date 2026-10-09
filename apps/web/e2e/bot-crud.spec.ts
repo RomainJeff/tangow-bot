@@ -3,7 +3,9 @@ import {
   captureScreenshot,
   completeOnboarding,
   createBotFromPicker,
+  openBotPage,
   openNewBot,
+  saveField,
   signup,
 } from "./helpers";
 
@@ -63,53 +65,92 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await captureScreenshot(page, testInfo, "27-created-bot");
 
   await page.locator("main").getByRole("button", { name: "New Bot", exact: true }).click();
-  await expect(page.getByText("Settings", { exact: true })).toBeVisible();
-  const nameInput = page.locator("label:has-text('Name') input");
-  const titleInput = page.locator("label:has-text('Title') input");
-  const descriptionInput = page.locator("label:has-text('Description') textarea");
+  const sidePanel = page.getByTestId("side-panel");
+  const botPage = await openBotPage(page);
+  // A bot that has never run opens on its first-bot state: who it is, and two ways in.
+  await expect(botPage.getByText("Not awake yet")).toBeVisible();
+  await expect(botPage.getByRole("tablist")).toHaveCount(0);
+  await expect(botPage.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  const nameInput = botPage.getByLabel("Name", { exact: true });
+  const titleInput = botPage.getByLabel("Title", { exact: true });
+  await expect(titleInput).toHaveAttribute("placeholder", "What it does, in one line");
   const longTitle = `Market researcher ${"and source verifier ".repeat(9)}`;
   const normalizedLongTitle = longTitle.trim();
   expect(longTitle.length).toBeGreaterThan(160);
-  await nameInput.fill("Researcher");
-  await titleInput.fill(longTitle);
-  await descriptionInput.fill("Finds reliable sources and turns them into concise briefs.");
-  await page.getByRole("radio", { name: "Color 7" }).click();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await saveField(page, nameInput, "Researcher");
+  await saveField(page, titleInput, longTitle);
+  await expect(titleInput).toHaveValue(normalizedLongTitle);
   await expect(botList.getByRole("button", { name: /^Researcher/ })).toBeVisible();
   await expect(page.getByPlaceholder("Message Researcher")).toBeVisible();
-
-  await page.locator("main").getByRole("button", { name: "Researcher", exact: true }).click();
+  // An emptied name puts the old one back instead of saving.
+  await nameInput.fill(" ");
+  await nameInput.blur();
   await expect(nameInput).toHaveValue("Researcher");
-  await expect(titleInput).toHaveValue(normalizedLongTitle);
-  await expect(descriptionInput).toHaveValue(
-    "Finds reliable sources and turns them into concise briefs.",
+
+  await botPage.getByTestId("bot-appearance-trigger").click();
+  const picker = page.getByTestId("bot-appearance-picker");
+  const colorSaved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/update") && response.ok(),
   );
-  const settings = page.getByTestId("bot-settings");
-  const instructionsInput = settings.getByTestId("bot-instructions");
-  // Creation seeds instructions from the description; editing them is independent after that.
-  await expect(instructionsInput).toHaveValue(
-    "Finds reliable sources and turns them into concise briefs.",
+  await picker.getByRole("button", { name: "Color 7" }).click();
+  await colorSaved;
+  await expect(picker.getByRole("button", { name: "Color 7" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
   );
-  await expect(settings.getByRole("radio", { name: "Color 7" })).toBeChecked();
-  const modelSelect = settings.locator("label:has-text('Model') select");
-  const teamComputer = settings.getByRole("button", { name: "Team" });
-  const openWork = settings.getByTestId("bot-scratchpad");
-  await expect(teamComputer).toBeHidden();
-  await expect(modelSelect).toBeHidden();
-  await expect(openWork).toBeHidden();
-  await expect(settings.getByRole("button", { name: "Save", exact: true })).toBeVisible();
+  await botPage.getByTestId("bot-appearance-trigger").click();
+  await expect(picker).toBeHidden();
+  await captureScreenshot(page, testInfo, "27a-first-bot");
+
+  // Writing instructions opens the wide editor; once saved, the full page appears.
+  await botPage.getByRole("button", { name: "Write", exact: true }).click();
+  await expect(sidePanel).toHaveAttribute("data-detail", "instructions");
+  await expect(sidePanel).toHaveAttribute("data-size", "wide");
+  const instructionsInput = botPage.getByTestId("bot-instructions");
+  await instructionsInput.fill("Always cite two independent sources before answering.");
+  const instructionsSaved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/update") && response.ok(),
+  );
+  await botPage.getByRole("button", { name: "Settings", exact: true }).click();
+  await instructionsSaved;
+  await expect(sidePanel).toHaveAttribute("data-size", "default");
+  await expect(botPage.getByRole("tab", { name: "Settings" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const settings = botPage.getByTestId("bot-settings");
+  await expect(settings.getByRole("button", { name: /^Instructions/ })).toContainText(
+    "Always cite two independent sources",
+  );
+
+  await settings.getByRole("button", { name: /^Description/ }).click();
+  const descriptionInput = botPage.getByTestId("bot-description");
+  await descriptionInput.fill("Finds reliable sources and turns them into concise briefs.");
+  const descriptionSaved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/update") && response.ok(),
+  );
+  await botPage.getByRole("button", { name: "Settings", exact: true }).click();
+  await descriptionSaved;
+  await expect(settings.getByRole("button", { name: /^Description/ })).toContainText(
+    "Finds reliable sources",
+  );
+  await expect(settings.getByRole("button", { name: "Team" })).toBeVisible();
   await expect(settings.getByRole("button", { name: "Recover computer" })).toHaveCount(0);
   await expect(settings.getByRole("button", { name: "Reset computer" })).toHaveCount(0);
   await expect(settings.getByRole("button", { name: "Update computer" })).toHaveCount(0);
-  await captureScreenshot(page, testInfo, "27a-settings-panel");
-  await settings.getByText("Advanced", { exact: true }).click();
-  await expect(teamComputer).toBeVisible();
-  await expect(openWork).toBeVisible();
-  await expect(modelSelect).toBeVisible();
-  await expect(modelSelect).toContainText("Space default");
-  await captureScreenshot(page, testInfo, "27a-bot-settings-model");
+  await captureScreenshot(page, testInfo, "27b-settings-tab");
+  await settings.getByRole("button", { name: /^Model/ }).click();
+  await expect(botPage.getByRole("combobox", { name: "Model", exact: true })).toContainText(
+    "Space default",
+  );
+  await captureScreenshot(page, testInfo, "27c-bot-settings-model");
+  // Escape outside a field goes back to the tab, and focus lands on the row that opened it.
+  await page.keyboard.press("Escape");
+  await expect(sidePanel).toHaveAttribute("data-panel", "bot");
+  await expect(sidePanel).not.toHaveAttribute("data-detail", "model");
+  await expect(settings.getByRole("button", { name: /^Model/ })).toBeFocused();
+
   await page.getByTestId("open-computer-panel").click();
-  const sidePanel = page.getByTestId("side-panel");
   await expect(sidePanel).toHaveAttribute("data-panel", "computer");
   await expect(page.getByTestId("open-settings-panel")).toBeVisible();
   // Overlay may flash during boot or never appear (already ready/asleep/stopped). Assert panel
@@ -124,14 +165,11 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await expect(sidePanel.getByRole("button", { name: "Update computer" })).toHaveCount(0);
   await expect(sidePanel.getByRole("button", { name: "Take control" })).toHaveCount(0);
   await expect(sidePanel.getByTestId("computer-more-button")).toHaveCount(0);
-  await captureScreenshot(page, testInfo, "27b-computer-panel");
-  await page.getByTestId("open-settings-panel").click();
+  await captureScreenshot(page, testInfo, "27d-computer-panel");
 
-  await nameInput.fill("Atlas");
-  await titleInput.fill("Research lead");
-  await descriptionInput.fill("Builds durable, source-backed research briefs.");
-  await instructionsInput.fill("Always cite two independent sources before answering.");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await openBotPage(page);
+  await saveField(page, nameInput, "Atlas");
+  await saveField(page, titleInput, "Research lead");
   await expect(botList.getByRole("button", { name: /^Atlas/ })).toBeVisible();
   await expect(page.getByPlaceholder("Message Atlas")).toBeVisible();
   await captureScreenshot(page, testInfo, "28-edited-bot-profile");
@@ -142,17 +180,27 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await page.locator("main").getByRole("button", { name: "Atlas", exact: true }).click();
   await expect(nameInput).toHaveValue("Atlas");
   await expect(titleInput).toHaveValue("Research lead");
-  await expect(descriptionInput).toHaveValue("Builds durable, source-backed research briefs.");
-  await expect(instructionsInput).toHaveValue(
-    "Always cite two independent sources before answering.",
+  // The colour picked before the reload is the one the server kept.
+  await botPage.getByTestId("bot-appearance-trigger").click();
+  await expect(picker.getByRole("button", { name: "Color 7" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await botPage.getByTestId("bot-appearance-trigger").click();
+  await expect(picker).toBeHidden();
+  await botPage.getByRole("tab", { name: "Settings" }).click();
+  await expect(settings.getByRole("button", { name: /^Description/ })).toContainText(
+    "Finds reliable sources",
+  );
+  await expect(settings.getByRole("button", { name: /^Instructions/ })).toContainText(
+    "Always cite two independent sources",
   );
   await captureScreenshot(page, testInfo, "29-reloaded-bot-profile");
 
   // Wrap in the narrow dialog without pushing Delete below the Playwright viewport.
   const longUnbrokenName = "A".repeat(48);
   expect(longUnbrokenName.length).toBe(48);
-  await nameInput.fill(longUnbrokenName);
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await saveField(page, nameInput, longUnbrokenName);
   const longNameBot = botList.getByRole("button", {
     name: new RegExp(`^${longUnbrokenName}`),
   });

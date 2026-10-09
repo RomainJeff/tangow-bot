@@ -78,7 +78,7 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close voice settings" }).click();
 
-  // The computer & routines panel sits above the call view; starting a call
+  // The screen panel sits above the call view; starting a call
   // must close it so it can never hide Mute/End call behind it.
   await page.getByTestId("open-computer-panel").click();
   await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "computer");

@@ -185,6 +185,9 @@ msgstr "{workingBotName} работает"
 msgid "@{0}"
 msgstr "@{0}"
 
+msgid "A first routine"
+msgstr "Первая задача"
+
 #: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr ""
@@ -652,6 +655,10 @@ msgstr ""
 msgid "Available after the routine is saved"
 msgstr "Доступно после сохранения задачи"
 
+#. placeholder {0}: bot.name
+msgid "Available when {0} is idle"
+msgstr "Доступно, когда {0} свободен"
+
 #: src/pages/AccountSettingsOverlay.tsx:154
 msgid "Avatars"
 msgstr "Аватары"
@@ -879,6 +886,12 @@ msgstr "Очистить диалог {0}?"
 #: src/pages/shell/bot-panel.tsx:692
 msgid "Clear conversation"
 msgstr "Очистить диалог"
+
+msgid "Clear description?"
+msgstr "Очистить описание?"
+
+msgid "Clear instructions?"
+msgstr "Очистить инструкции?"
 
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clearing…"
@@ -2226,6 +2239,12 @@ msgstr "час"
 msgid "hours"
 msgstr "часы"
 
+msgid "How it behaves"
+msgstr "Как он себя ведёт"
+
+msgid "How it runs"
+msgstr "Как он работает"
+
 #: src/pages/RoutineSchedule.tsx:241
 msgid "How often"
 msgstr "Как часто"
@@ -2921,6 +2940,9 @@ msgstr "Нет триггера"
 msgid "None yet"
 msgstr "Пока нет"
 
+msgid "Not awake yet"
+msgstr "Ещё не проснулся"
+
 #: src/pages/ModelSettingsOverlay.tsx:638
 msgid "Not connected"
 msgstr "Не подключено"
@@ -3477,9 +3499,15 @@ msgstr "Восстановить"
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "Восстановите последнее сохраненное рабочее пространство. Несохраненная работа на компьютере теряется."
 
+msgid "Restore unsaved text"
+msgstr "Восстановить несохранённый текст"
+
 #: src/components/ComputerUpdateProgress.tsx:53
 msgid "Restoring your workspace"
 msgstr "Восстановление вашего рабочего пространства"
+
+msgid "Retry"
+msgstr "Повторить"
 
 #: src/App.tsx:171
 #: src/pages/PeerMessagesOverlay.tsx:153
@@ -3616,6 +3644,9 @@ msgstr "Сохранение…"
 #: src/pages/CallView.tsx:65
 msgid "Say yes or no, or answer in a sentence."
 msgstr "Скажите «да» или «нет» или ответьте предложением."
+
+msgid "Screen"
+msgstr "Экран"
 
 #: src/pages/ModelSettingsOverlay.tsx:1082
 #: src/pages/PluginsOverlay.tsx:941
@@ -4260,6 +4291,9 @@ msgstr "Проверка…"
 msgid "Voice"
 msgstr "Голос"
 
+msgid "Voice and replies"
+msgstr "Голос и ответы"
+
 #: src/pages/ModelSettingsOverlay.tsx:692
 #: src/pages/ModelSettingsOverlay.tsx:714
 #: src/pages/Onboarding.tsx:592
@@ -4288,6 +4322,9 @@ msgstr "Будни"
 #: src/pages/shell/dialogs.tsx:357
 msgid "What about its memories?"
 msgstr "Что делать с его памятью?"
+
+msgid "What it does, in one line"
+msgstr "Чем он занят, одной строкой"
 
 #: src/components/teach/TeachComputerOverlay.tsx:247
 msgid "What result will you demonstrate?"
@@ -4336,6 +4373,9 @@ msgstr "Выполняется…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr ""
+
+msgid "Write"
+msgstr "Написать"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

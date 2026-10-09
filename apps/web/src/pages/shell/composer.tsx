@@ -556,7 +556,13 @@ export const Composer = memo(function Composer({
   const slashActionOptions = useMemo(() => {
     if (slashQuery === null) return [];
     const query = slashQuery.trim().toLowerCase();
-    return SLASH_ACTIONS.filter((action) => !query || action.label.toLowerCase().includes(query));
+    // The picker shows each action under its own label, so a search matches that label too.
+    return SLASH_ACTIONS.filter(
+      (action) =>
+        !query ||
+        action.label.toLowerCase().includes(query) ||
+        slashActionLabel(action.id).toLowerCase().includes(query),
+    );
   }, [slashQuery]);
 
   const showSlashPicker =
@@ -1169,7 +1175,7 @@ export const Composer = memo(function Composer({
 function slashActionLabel(id: SlashActionId) {
   switch (id) {
     case "chat-settings":
-      return t`Chat Settings`;
+      return t`Bot settings`;
     case "settings-general":
       return t`Settings: General`;
     case "settings-usage":

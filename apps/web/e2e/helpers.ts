@@ -1,4 +1,4 @@
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 export function isRealSandboxProvider(provider = process.env.SANDBOX_PROVIDER) {
   return provider === "e2b" || provider === "daytona" || provider === "box";
@@ -122,6 +122,80 @@ export async function createBotFromPicker(
   await form.getByRole("button", { name: "Create", exact: true }).click();
   await page.waitForURL(/\/app\/[^/]+$/);
   await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "closed");
+}
+
+export type BotTab = "Routines" | "Knowledge" | "Settings";
+
+/** Open the open bot's page, once it knows whether the bot is new. */
+export async function openBotPage(page: Page) {
+  const panel = page.getByTestId("side-panel");
+  if ((await panel.getAttribute("data-panel")) !== "bot") {
+    await page.getByTestId("open-settings-panel").click();
+  }
+  await expect(panel).toHaveAttribute("data-panel", "bot");
+  const botPage = panel.getByTestId("bot-page");
+  await expect(botPage).toBeVisible();
+  await expect(botPage).not.toHaveAttribute("aria-busy", "true");
+  return botPage;
+}
+
+/** Fill a bot setting, leave the field, and wait for its autosave. */
+export async function saveField(page: Page, field: Locator, value: string) {
+  const saved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/update") && response.ok(),
+  );
+  await field.fill(value);
+  await field.blur();
+  await saved;
+}
+
+/**
+ * Open one tab of the bot page. A bot with no instructions, routines or conversation shows no
+ * tabs: a test on such a bot calls `writeFirstInstructions` first.
+ */
+export async function openBotTab(page: Page, tab: BotTab) {
+  const botPage = await openBotPage(page);
+  const trigger = botPage.getByRole("tab", { name: tab, exact: true });
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-selected", "true");
+  return botPage;
+}
+
+/** Leave the first-bot state the way a person does: write instructions from its "Write" row. */
+export async function writeFirstInstructions(page: Page, instructions: string) {
+  const botPage = await openBotPage(page);
+  await expect(botPage.getByText("Not awake yet")).toBeVisible();
+  await botPage.getByRole("button", { name: "Write", exact: true }).click();
+  const saved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/update") && response.ok(),
+  );
+  await botPage.getByTestId("bot-instructions").fill(instructions);
+  await botPage.getByRole("button", { name: "Settings", exact: true }).click();
+  await saved;
+  await expect(botPage.getByRole("tablist")).toBeVisible();
+}
+
+/** The Settings tab of the open bot's page. */
+export async function openBotSettings(page: Page) {
+  const botPage = await openBotTab(page, "Settings");
+  return botPage.getByTestId("bot-settings");
+}
+
+/** The open bot's routine list. */
+export async function openRoutines(page: Page) {
+  return openBotTab(page, "Routines");
+}
+
+/**
+ * The routine editor for a new routine: the first-bot "Add", or the Routines tab's create button.
+ * Both carry the same test id, so this works in any interface language.
+ */
+export async function openRoutineCreate(page: Page) {
+  const botPage = await openBotPage(page);
+  const add = botPage.getByTestId("routine-create-button");
+  if (!(await add.isVisible())) await botPage.getByRole("tab").first().click();
+  await add.click();
+  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "routine");
 }
 
 /** Open the user Settings overlay, optionally switching to a sidebar section. */

@@ -65,6 +65,15 @@ export {
   ReasoningDisclosure,
   type ReasoningDisclosureProps,
 } from "./reasoning-disclosure.js";
+export { SaveMeta, type SaveMetaLabels, type SaveMetaProps } from "./save-meta.js";
+export {
+  type FieldSave,
+  SaveStoreProvider,
+  type UseFieldSaveOptions,
+  useFieldSave,
+} from "./save-store.js";
+export { SegmentedControl, type SegmentedControlProps } from "./segmented-control.js";
+export { SettingRow, type SettingRowProps } from "./setting-row.js";
 export { Shimmer, type ShimmerProps } from "./shimmer.js";
 export {
   type StackedAvatarItem,
@@ -74,6 +83,7 @@ export {
 } from "./stacked-avatars.js";
 export { StopContour, type StopContourProps } from "./stop-contour.js";
 export { Surface, type SurfaceProps, type SurfaceRadius } from "./surface.js";
+export { TextSettingField, type TextSettingFieldProps } from "./text-setting-field.js";
 export { useElapsed } from "./use-elapsed.js";
 export { UserBubble, type UserBubbleProps } from "./user-bubble.js";
 export { WorkingLine, type WorkingLineProps } from "./working-line.js";

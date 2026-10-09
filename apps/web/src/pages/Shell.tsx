@@ -111,6 +111,8 @@ import { HostComputerPrompt } from "./HostComputerPrompt";
 import type { RoutineDraftState } from "./RoutineEditor";
 import { draftFromRoutine, emptyRoutineDraft } from "./RoutineEditor";
 import type { SettingsSection } from "./SettingsOverlay";
+import type { BotAction } from "./shell/bot-commands";
+import { downloadBotExport, useBotCommands } from "./shell/bot-commands";
 import { CommandPalette, isCommandPaletteHotkey } from "./shell/command-palette";
 import { Composer } from "./shell/composer";
 import {
@@ -122,8 +124,14 @@ import {
   PickerInfoDialog,
   RenameBotSectionDialog,
 } from "./shell/dialogs";
-import type { Panel, PendingAttachment } from "./shell/layout";
-import { FALLBACK_BOT_COLOR, firstThreadRoute, panelIsOpen } from "./shell/layout";
+import type { BotPageView, BotTab, Panel, PendingAttachment } from "./shell/layout";
+import {
+  FALLBACK_BOT_COLOR,
+  firstThreadRoute,
+  neverRan,
+  panelIsOpen,
+  panelSizeFor,
+} from "./shell/layout";
 import type { ScreenLinkHandlers } from "./shell/screen-frame";
 import { ComputerOverlay, SidePanel } from "./shell/side-panel";
 import { BotsSidebar } from "./shell/sidebar";
@@ -251,6 +259,15 @@ export function ShellPage() {
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState<Panel>(null);
+  const [botPage, setBotPage] = useState<BotPageView>({ tab: "settings", detail: null });
+  const showBotPage = useCallback((view: BotPageView) => {
+    setBotPage(view);
+    setPanel("bot");
+  }, []);
+  const openBotPage = useCallback(
+    (tab: BotTab) => showBotPage({ tab, detail: null }),
+    [showBotPage],
+  );
   const [peerConversation, setPeerConversation] = useState<{
     peerBotId: string;
     peerBotName: string;
@@ -540,7 +557,7 @@ export function ShellPage() {
     () => attachmentsForThread(pendingAttachments, inGroup ? groupId : active?.id),
     [active?.id, groupId, inGroup, pendingAttachments],
   );
-  const activeRoutines = !inGroup && routinesBotId === active?.id ? routines : [];
+  const activeRoutines = !inGroup && routinesBotId === active?.id ? routines : null;
   const activeTaughtSkills = taughtSkillsBotId === active?.id ? taughtSkills : [];
   const recordingSkill = activeTaughtSkills.find((skill) => skill.status === "recording") ?? null;
   const routeBotId = useRef<string | undefined>(botId);
@@ -1040,6 +1057,12 @@ export function ShellPage() {
   // silently re-target the mic and speaker at the new one instead of ending it.
   useEffect(() => {
     setCallOpen(false);
+  }, [active?.id]);
+
+  // An open editor belongs to the bot it was opened on; the next bot's page
+  // opens on its tab instead of widening the panel and taking focus.
+  useEffect(() => {
+    setBotPage((view) => (view.detail ? { ...view, detail: null } : view));
   }, [active?.id]);
 
   // The call view sits above the side panel (z-20 inside main vs. the panel's
@@ -1576,7 +1599,7 @@ export function ShellPage() {
         setEditingRoutine(routine);
         setPanel("routine");
       } else {
-        setPanel("computer");
+        openBotPage("routines");
       }
       const next = new URLSearchParams(searchParams);
       next.delete("routine");
@@ -1589,7 +1612,16 @@ export function ShellPage() {
         setSearchParams(next, { replace: true });
       });
     }
-  }, [active?.id, groupId, inGroup, routines, routinesBotId, searchParams, setSearchParams]);
+  }, [
+    active?.id,
+    groupId,
+    inGroup,
+    routines,
+    routinesBotId,
+    searchParams,
+    setSearchParams,
+    openBotPage,
+  ]);
   const activeSnapshot = inGroup
     ? snapshot?.groupId === groupId
       ? snapshot
@@ -2561,11 +2593,50 @@ export function ShellPage() {
   const sessionUserImage = session.data?.user.image ?? null;
   const userImage = sessionUserImage !== failedUserImage ? sessionUserImage : null;
 
+  // The sidebar menu and the bot page's own menu run the same handlers.
+  function runBotAction(botId: string, action: BotAction) {
+    const bot = bots.find((item) => item.id === botId);
+    switch (action) {
+      case "duplicate":
+        void rpc.bots.duplicate({ botId }).then(async (copy) => {
+          await refreshBots();
+          navigate(`/app/${copy.id}`);
+        });
+        return;
+      case "export":
+        void downloadBotExport(botId, bot?.name ?? "bot");
+        return;
+      case "clear":
+        if (bot) setClearTarget({ kind: "bot", chat: bot });
+        return;
+      case "archive":
+        // The page of a bot that just left the roster would show the next bot instead.
+        if (panel === "bot" && active?.id === botId) setPanel(null);
+        void rpc.bots.archive({ botId }).then(() => refreshBots(true));
+        return;
+      case "delete":
+        if (bot) setDeleteTarget(bot);
+        return;
+    }
+  }
+  const botCommands = useBotCommands({
+    setBots,
+    supersedeBotsRefresh: () => {
+      if (botsRefreshInFlight.current > 0) void refreshBots().catch(() => undefined);
+    },
+    botAction: runBotAction,
+  });
+
   // Below `lg` the panel is full width over the thread instead of reflowing
   // beside it (see `lg:pe-panel` below), so it also covers the header and
   // composer without removing them from the tab order unless we do it here.
   const isDesktopWidth = useMediaQuery("(min-width: 1024px)");
-  const panelCoversColumn = panelIsOpen(panel, active, activeGroup) && !isDesktopWidth;
+  // The wide panel only sits beside the thread from `xl`; narrower, it lies over it.
+  const isWideDesktopWidth = useMediaQuery("(min-width: 1280px)");
+  const panelOpen = panelIsOpen(panel, active, activeGroup);
+  const panelSize = panelSizeFor(panel, botPage);
+  const panelCoversColumn =
+    panelOpen && (!isDesktopWidth || (panelSize === "wide" && !isWideDesktopWidth));
 
   const shell = (
     <div
@@ -2704,7 +2775,7 @@ export function ShellPage() {
         // button and the composer stay reachable. Narrower than that the panel
         // covers the thread instead, and closes with Escape or its X.
         className={`relative flex min-w-0 flex-1 flex-col bg-background ${
-          panelIsOpen(panel, active, activeGroup) ? "lg:pe-panel" : ""
+          panelOpen ? (panelSize === "wide" ? "lg:pe-panel xl:pe-panel-wide" : "lg:pe-panel") : ""
         }`}
       >
         {callOpen && active ? (
@@ -2745,6 +2816,7 @@ export function ShellPage() {
             activeSnapshot={activeSnapshot}
             panel={panel}
             setPanel={setPanel}
+            onOpenBotPage={openBotPage}
             refreshThread={refreshThread}
             disabled={Boolean(recordingSkill)}
             onVoice={
@@ -2854,7 +2926,8 @@ export function ShellPage() {
                 onSlashOpen={refreshAgentSkills}
                 onSlashAction={(action) => {
                   if (action === "chat-settings") {
-                    setPanel(inGroup ? "group-settings" : "settings");
+                    if (inGroup) setPanel("group-settings");
+                    else openBotPage("settings");
                     return;
                   }
                   if (action === "settings-general") {
@@ -2878,6 +2951,12 @@ export function ShellPage() {
       <SidePanel
         panel={panel}
         setPanel={setPanel}
+        size={panelSize}
+        botPage={botPage}
+        onBotPage={showBotPage}
+        commands={botCommands}
+        userId={userId ?? ""}
+        neverRan={activeSnapshot ? neverRan(activeSnapshot) : null}
         active={active}
         activeGroup={activeGroup}
         computer={computer}
@@ -2921,7 +3000,6 @@ export function ShellPage() {
         navigate={navigate}
         createGroup={createGroup}
         createBot={createBot}
-        setClearTarget={setClearTarget}
       />
 
       <Suspense fallback={null}>
@@ -2984,40 +3062,45 @@ export function ShellPage() {
               if (section && spaceId) setRenameSectionTarget({ section, spaceId });
               setBotMenu(null);
             }}
+            editLabel={contextBot ? t`Bot settings` : t`Edit Profile`}
             onEdit={() => {
-              navigate(contextBot ? `/app/${contextBot.id}` : `/app/g/${contextGroup!.id}`);
-              setPanel(contextBot ? "settings" : "group-settings");
               setBotMenu(null);
+              if (contextBot) {
+                navigate(`/app/${contextBot.id}`);
+                openBotPage("settings");
+                return;
+              }
+              navigate(`/app/g/${contextGroup!.id}`);
+              setPanel("group-settings");
             }}
             onDuplicate={() => {
               setBotMenu(null);
-              const request = contextBot
-                ? rpc.bots.duplicate({ botId: contextBot.id })
-                : rpc.groups.duplicate({ groupId: contextGroup!.id });
-              void request.then(async (chat) => {
+              if (contextBot) {
+                runBotAction(contextBot.id, "duplicate");
+                return;
+              }
+              void rpc.groups.duplicate({ groupId: contextGroup!.id }).then(async (chat) => {
                 await refreshBots();
-                navigate(contextBot ? `/app/${chat.id}` : `/app/g/${chat.id}`);
+                navigate(`/app/g/${chat.id}`);
               });
             }}
             onClear={() => {
-              setClearTarget(
-                contextBot
-                  ? { kind: "bot", chat: contextBot }
-                  : { kind: "group", chat: contextGroup! },
-              );
               setBotMenu(null);
+              if (contextBot) runBotAction(contextBot.id, "clear");
+              else setClearTarget({ kind: "group", chat: contextGroup! });
             }}
             onArchive={() => {
               setBotMenu(null);
-              const request = contextBot
-                ? rpc.bots.archive({ botId: contextBot.id })
-                : rpc.groups.archive({ groupId: contextGroup!.id });
-              void request.then(() => refreshBots(true));
+              if (contextBot) {
+                runBotAction(contextBot.id, "archive");
+                return;
+              }
+              void rpc.groups.archive({ groupId: contextGroup!.id }).then(() => refreshBots(true));
             }}
             onDelete={() => {
-              if (contextBot) setDeleteTarget(contextBot);
-              else setDeleteGroupTarget(contextGroup!);
               setBotMenu(null);
+              if (contextBot) runBotAction(contextBot.id, "delete");
+              else setDeleteGroupTarget(contextGroup!);
             }}
           />
         ) : null}
@@ -3257,7 +3340,7 @@ export function ShellPage() {
               setEditingRoutine((current) => (current?.id === target.id ? null : current));
               if (activeBotId.current !== target.botId) return;
               await refreshThread(target.botId);
-              if (activeBotId.current === target.botId) setPanel("computer");
+              if (activeBotId.current === target.botId) openBotPage("routines");
             }}
           />
         ) : null}

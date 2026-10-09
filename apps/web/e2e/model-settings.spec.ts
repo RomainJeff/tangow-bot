@@ -1,7 +1,15 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, openUserSettings, rpc, signup } from "./helpers";
+import {
+  captureScreenshot,
+  completeOnboarding,
+  openBotSettings,
+  openUserSettings,
+  rpc,
+  signup,
+  writeFirstInstructions,
+} from "./helpers";
 
 const LOCAL_MODEL_ID = "rakazo-e2e-local";
 const LOCAL_MODEL_REPLY = "OpenAI-compatible endpoint verified end to end.";
@@ -78,37 +86,34 @@ test("custom connections persist reasoning support and bot thinking", async ({
     clearedCredentials.find((entry) => entry.modelId === "arbitrary-model")?.maxImagesPerPrompt,
   ).toBeUndefined();
   await page.getByRole("button", { name: "Close model settings" }).click();
-  await page.locator("main").getByRole("button", { name: "Chief", exact: true }).click();
-  const settings = page.getByTestId("bot-settings");
-  await expect(settings).toBeVisible();
-  const advanced = settings.getByTestId("bot-settings-advanced");
-  await advanced.evaluate((element) => {
-    (element as HTMLDetailsElement).open = true;
-  });
-  // NativeSelect sits inside a wrapping <label>, so label text includes option
-  // copy and getByLabel(..., { exact: true }) misses the control. Use the
-  // combobox accessible name, matching other model E2E tests.
-  const model = settings.getByRole("combobox", { name: "Model", exact: true });
+  // Chief has never run: its page shows tabs once it has instructions.
+  await writeFirstInstructions(page, "Answer briefly.");
+  const settings = await openBotSettings(page);
+  await settings.getByRole("button", { name: /^Model/ }).click();
+  const botPage = page.getByTestId("bot-page");
+  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-detail", "model");
+  const model = botPage.getByRole("combobox", { name: "Model", exact: true });
   await expect(model).toBeVisible();
   await expect(model).toContainText("arbitrary-model");
-  // Value key — not a /arbitrary-model/ label match, which also hits "Space default (arbitrary-model)".
-  await model.selectOption("openai-compatible::arbitrary-model");
-  const thinking = settings.getByRole("combobox", { name: "Thinking", exact: true });
-  await expect(thinking).toBeVisible();
-  await thinking.selectOption("low");
-  await thinking.scrollIntoViewIfNeeded();
-  await captureScreenshot(page, testInfo, "openai-compatible-thinking");
-  const saved = page.waitForResponse(
+  // Each choice saves on its own the moment it changes; there is no Save button.
+  const modelSaved = page.waitForResponse(
     (response) => response.url().includes("/rpc/bots/update") && response.ok(),
   );
-  await settings.getByRole("button", { name: "Save", exact: true }).click();
-  await saved;
+  // Value key — not a /arbitrary-model/ label match, which also hits "Space default (arbitrary-model)".
+  await model.selectOption("openai-compatible::arbitrary-model");
+  await modelSaved;
+  const thinking = botPage.getByRole("combobox", { name: "Thinking", exact: true });
+  await expect(thinking).toBeVisible();
+  const thinkingSaved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/bots/update") && response.ok(),
+  );
+  await thinking.selectOption("low");
+  await thinkingSaved;
+  await expect(botPage.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "openai-compatible-thinking");
   await page.reload();
-  await page.locator("main").getByRole("button", { name: "Chief", exact: true }).click();
-  await expect(settings).toBeVisible();
-  await advanced.evaluate((element) => {
-    (element as HTMLDetailsElement).open = true;
-  });
+  const reloaded = await openBotSettings(page);
+  await reloaded.getByRole("button", { name: /^Model/ }).click();
   await expect(thinking).toHaveValue("low");
 });
 

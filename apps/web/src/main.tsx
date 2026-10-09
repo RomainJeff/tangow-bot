@@ -1,3 +1,4 @@
+import { SaveStoreProvider } from "@rakazo/ui-web";
 import { StrictMode, useEffect, useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -7,6 +8,7 @@ import { I18nBootstrap } from "./components/I18nBootstrap";
 import { applyUiDirection } from "./lib/apply-ui-direction";
 import { markAfterPaint, markOnce } from "./lib/performance";
 import { installPreloadRecovery } from "./lib/preload-recovery";
+import { saveStore } from "./lib/save-store";
 import { applyUiAppearance, watchSystemAppearance } from "./lib/ui-appearance";
 import { resolveUiLocale } from "./lib/ui-locale";
 import "./styles.css";
@@ -36,7 +38,9 @@ createRoot(document.getElementById("root")!).render(
     <I18nBootstrap>
       <BrowserRouter>
         <DesktopUpdatesProvider>
-          <App />
+          <SaveStoreProvider store={saveStore}>
+            <App />
+          </SaveStoreProvider>
         </DesktopUpdatesProvider>
       </BrowserRouter>
     </I18nBootstrap>

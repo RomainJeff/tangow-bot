@@ -109,9 +109,11 @@ ticks.
 
 ### Space
 
-Layout, in px: `sidebar 280`, `thread 800`, `header 56`, `panel 384`, `block
-520` — `w-sidebar`, `max-w-thread`, `h-header`, `w-panel`, `max-w-block` (a
-framed block standing alone in the thread, §3.3); `composerField 220` —
+Layout, in px: `sidebar 280`, `thread 800`, `header 56`, `panel 384`,
+`panelWide 640`, `block 520` — `w-sidebar`, `max-w-thread`, `h-header`,
+`w-panel`, `w-panel-wide` (the bot page while it edits a long text;
+`pe-panel-wide` on the thread beside it), `max-w-block` (a framed block standing
+alone in the thread, §3.3); `composerField 220` —
 `max-h-composer-field`, the web/desktop composer field before it scrolls
 internally. Gaps use the native Tailwind scale, which accepts any
 multiple of 0.25 rem: `gap-3.5` is 14, `gap-5.5` is 22, `gap-7` is 28. Never
@@ -682,6 +684,64 @@ Used by: the `steps` block of a message.
 A light sweep across a label that is still being written, as the `rk-shimmer`
 class. Ported from beautifului.dev
 (github.com/TurboKach/ai-native-react-components, MIT © 2026 Turbo).
+
+### SettingRow
+
+One line of a settings list: `text-row-name` label, an optional `text-row-status`
+sub-line, then on the trailing side a `meta` slot (a `SaveMeta`), a control or a
+value, and an optional chevron. It is sized and inset for a settings group (at
+least 50px tall, its label in line with the group's hairlines), so a caller passes
+no row classes. Static by default; `onClick` makes it a button
+with a hover fill and a focus ring, which carries a sub-line and a chevron, never a
+control or a `SaveMeta`, which would nest an interactive element inside another.
+
+Props: `label`, `subline?`, `meta?`, `children?` (the trailing control or
+value; neither on a pressable row, which the type refuses), `chevron?`.
+
+### SegmentedControl
+
+A choice of one value among a few, side by side on a `muted` pill track; the
+chosen segment sits raised on `surface` with `shadow-row`. Choosing the current
+value again does nothing. Segmented tabs use the same look through
+`<TabsList variant="segmented">`, so a tab bar and a setting choice never draw
+the pill by hand.
+
+Props: `value`, `options` (`{ value, label }`), `onValueChange`, `disabled?`,
+`aria-label?`.
+
+### SaveMeta
+
+The only proof an automatic save happened: "Saving…" while the call runs,
+"Saved 14:02" for the three seconds the save store keeps that state (the time
+through `Intl.DateTimeFormat`, hour and minute in the device locale), and
+"Could not save · Retry" until a save succeeds. At rest it is empty, never
+permanent chrome. The root is always mounted as an `aria-live="polite"` region
+so each change is announced.
+
+Props: `state` (a `FieldSaveState` from `@rakazo/core`), `labels` (`saving`,
+`saved`, `failed`, `retry`, already translated), `onRetry?`, `locale?`.
+
+### TextSettingField
+
+A text setting that saves itself, over `useFieldSave` and the `SaveStore` that
+`SaveStoreProvider` hands down (created once at the composition root, in
+memory only: nothing here reaches `localStorage`, `sessionStorage` or
+IndexedDB). Typing is local. Leaving the field commits the trimmed text
+through the hook when it changed; Escape drops the edit and keeps focus (and
+reaches the panel only when there was no edit to drop); Enter leaves a
+single-line field. An emptied `required` field puts its old value back, and an
+emptied field with an `onConfirmClear` callback asks first. `keepDraft` keeps
+unsaved text in the store for the session; when the server value moved under
+it, the field shows the server value and offers `labels.restore`. A failed save
+keeps the typed text and shows "Could not save · Retry".
+
+Props: `label`, `field` (from `useFieldSave`), `labels` (the `SaveMetaLabels`
+plus `restore?`), `multiline?`, `rows?`, `required?`, `onConfirmClear?`,
+`keepDraft?`, `locale?`, `counter?` ("n / max" beside the meta; needs
+`maxLength`), `meta?` (false when the caller shows the `SaveMeta` elsewhere).
+`className` styles the wrapper, `controlClassName` the input or textarea and
+`labelClassName` the row that holds the label and the meta; the other native
+props land on the input or textarea.
 
 ## Motion rules
 

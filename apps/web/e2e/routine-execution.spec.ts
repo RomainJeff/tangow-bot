@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 import type { Routine } from "@rakazo/contracts";
-import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import {
+  activeBotId,
+  captureScreenshot,
+  completeOnboarding,
+  openRoutineCreate,
+  openRoutines,
+  rpc,
+  signup,
+} from "./helpers";
 
 test("Slack message trigger uses the mounted messaging provider and persists", async ({
   page,
@@ -18,8 +26,7 @@ test("Slack message trigger uses the mounted messaging provider and persists", a
   await completeOnboarding(page);
   const botId = activeBotId(page);
 
-  await page.getByTestId("open-computer-panel").click();
-  await page.getByRole("button", { name: "Create Routine" }).click();
+  await openRoutineCreate(page);
   await page.getByPlaceholder("Name this routine").fill("Triage Slack updates");
   await page
     .getByPlaceholder("What should this routine do each time it runs?")
@@ -57,8 +64,7 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
   await completeOnboarding(page);
   const botId = activeBotId(page);
 
-  await page.getByTestId("open-computer-panel").click();
-  await page.getByRole("button", { name: "Create Routine" }).click();
+  await openRoutineCreate(page);
   await page.getByPlaceholder("Name this routine").fill("Review repository events");
   await page
     .getByPlaceholder("What should this routine do each time it runs?")
@@ -128,9 +134,8 @@ test("routine test-run completes and survives reload", async ({ page }, testInfo
   await signup(page, `routine-${stamp}@rakazo.test`, "password12", "Routine");
   await completeOnboarding(page);
 
-  await page.getByTestId("open-computer-panel").click();
   await expect(page.getByRole("button", { name: "Test run" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Create Routine" }).click();
+  await openRoutineCreate(page);
   await page.locator("label:has-text('Name') input").fill("Daily verification");
   await page
     .locator("label:has-text('Instruction') textarea")
@@ -162,7 +167,7 @@ test("routine test-run completes and survives reload", async ({ page }, testInfo
 
   await page.reload();
   await expect(page.getByText(/routine-run-now-ok/i).first()).toBeVisible();
-  await page.getByTestId("open-computer-panel").click();
+  await openRoutines(page);
   await expect(page.getByRole("button", { name: /Daily verification/ })).toContainText(
     "Weekdays at 9:00 AM",
   );

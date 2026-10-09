@@ -4,6 +4,7 @@ import {
   captureScreenshot,
   completeOnboarding,
   createNamedBot,
+  openBotSettings,
   realSandboxTimeout,
   rpc,
   signup,
@@ -241,16 +242,14 @@ async function setComputerMode(
   mode: "team" | "dedicated",
 ) {
   await page.getByRole("button", { name: botName, exact: true }).last().click();
-  const settings = page.getByTestId("bot-settings");
-  await expect(settings.locator("label:has-text('Name') input")).toHaveValue(botName);
-  const advanced = settings.getByTestId("bot-settings-advanced");
-  await advanced.evaluate((element) => {
-    (element as HTMLDetailsElement).open = true;
-  });
+  const settings = await openBotSettings(page);
+  await expect(page.getByTestId("bot-page").getByLabel("Name", { exact: true })).toHaveValue(
+    botName,
+  );
+  // The computer applies on its own call the moment it is picked.
   await settings
     .getByRole("button", { name: mode === "team" ? "Team" : "Private", exact: true })
     .click();
-  await settings.getByRole("button", { name: "Save", exact: true }).click();
   await expect
     .poll(async () => {
       const bots = await rpc<Array<{ id: string; computerMode: string }>>(page, "bots/list", {});

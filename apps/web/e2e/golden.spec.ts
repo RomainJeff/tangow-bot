@@ -3,6 +3,8 @@ import {
   activeBotId,
   captureScreenshot,
   completeOnboarding,
+  openBotPage,
+  openRoutineCreate,
   realSandboxTimeout,
   rpc,
   signup,
@@ -119,7 +121,7 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   });
   await captureScreenshot(page, testInfo, "09a-computer-takeover-skipped");
 
-  await page.getByRole("button", { name: "Create Routine" }).click();
+  await openRoutineCreate(page);
   await page.locator("label:has-text('Name') input").fill("Monday briefing");
   await page
     .locator("label:has-text('Instruction') textarea")
@@ -324,14 +326,15 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await page.getByRole("button", { name: "Close integrations" }).click();
 
   await page.getByText("Chief").first().click();
-  await page.getByTestId("open-settings-panel").click();
+  const botPage = await openBotPage(page);
+  // Lifecycle actions live in the page's menu, not as buttons on the page.
+  await expect(botPage.getByRole("button", { name: "Archive" })).toHaveCount(0);
+  await expect(botPage.getByRole("button", { name: "Delete" })).toHaveCount(0);
+  await botPage.getByRole("button", { name: "Actions for Chief" }).click();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export" }).click();
+  await page.getByRole("menuitem", { name: "Export" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/chief-export\.json/i);
-  const settings = page.getByTestId("bot-settings");
-  await expect(settings.getByRole("button", { name: "Archive bot" })).toHaveCount(0);
-  await expect(settings.getByRole("button", { name: "Delete bot" })).toHaveCount(0);
   await page.getByRole("button", { name: "Close panel" }).click();
 
   await page.locator("aside").first().getByRole("button", { name: /Chief/ }).first().click({
@@ -467,7 +470,7 @@ test("bot context menu pins, duplicates, edits, and confirms deletion", async ({
   const chief = page.getByRole("button", { name: /Chief/ }).first();
   await chief.click({ button: "right" });
   await expect(page.getByRole("menu", { name: "Actions for Chief" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "Edit Profile" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Bot settings" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Duplicate" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible();
   await captureScreenshot(page, testInfo, "16-bot-context-menu");
@@ -496,8 +499,10 @@ test("bot context menu pins, duplicates, edits, and confirms deletion", async ({
   await page.getByRole("button", { name: "Cancel" }).click();
 
   await chief.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Edit Profile" }).click();
-  await expect(page.locator("label:has-text('Name') input")).toHaveValue("Chief");
+  await page.getByRole("menuitem", { name: "Bot settings" }).click();
+  await expect(page.getByTestId("bot-page").getByLabel("Name", { exact: true })).toHaveValue(
+    "Chief",
+  );
   await captureScreenshot(page, testInfo, "19-edit-profile");
 });
 

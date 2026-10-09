@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import {
+  captureScreenshot,
+  completeOnboarding,
+  openBotPage,
+  openBotTab,
+  signup,
+  writeFirstInstructions,
+} from "./helpers";
 
 /** Documents the two-pane shell: sidebar, thread header, empty thread, light and dark. */
 test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) => {
@@ -31,8 +38,8 @@ test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) =
     (mainBox?.x ?? 0) + (mainBox?.width ?? 0) - ((columnBox?.x ?? 0) + (columnBox?.width ?? 0));
   expect(Math.abs(leading - trailing)).toBeLessThanOrEqual(2);
 
-  // One header button opens the computer and routines over the thread; Escape closes it.
-  const openPanel = page.getByRole("button", { name: "Computer & routines" });
+  // One header button opens the bot's screen over the thread; Escape closes it.
+  const openPanel = page.getByRole("button", { name: "Screen" });
   await expect(openPanel).toHaveAttribute("data-testid", "open-computer-panel");
   const panel = page.getByTestId("side-panel");
   await openPanel.click();
@@ -91,38 +98,68 @@ test("an open panel makes the conversation column inert below lg, not above", as
   await expect(column).toHaveJSProperty("inert", false);
 });
 
-/** The header carries two icon toggles (computer + settings) instead of a text
- * label, and the bot settings actions ride a pinned footer so Save never hides
- * below a long form. */
-test("header icons toggle computer and settings; settings actions stay pinned", async ({
+/** The header carries two icon toggles (screen + bot page) instead of a text
+ * label. The bot page saves as you go, so it has no Save button, and its panel
+ * widens for long text without covering the thread from `xl` up. */
+test("header icons toggle the screen and the bot page; the page widens for long text", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
   await signup(page, `panel-header-${stamp}@rakazo.test`, "password12", "Panel Header");
   await completeOnboarding(page);
   await page.waitForURL(/\/app\/[^/]+$/);
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   const panel = page.getByTestId("side-panel");
   const computer = page.getByTestId("open-computer-panel");
   const settings = page.getByTestId("open-settings-panel");
+  const column = page.getByTestId("conversation-column");
+  // Chief has never run: its page shows tabs once it has instructions.
+  await writeFirstInstructions(page, "Answer briefly.");
+  await page.getByRole("button", { name: "Close panel" }).click();
+  await expect(panel).toHaveAttribute("data-panel", "closed");
 
   // No verbose label: both controls are icon-only, named for screen readers.
   await expect(computer).toBeVisible();
   await expect(settings).toBeVisible();
-  await expect(computer).toHaveAccessibleName("Computer & routines");
+  await expect(computer).toHaveAccessibleName("Screen");
   await expect(settings).toHaveAccessibleName("Bot settings");
 
-  // The gear opens settings and reads as pressed; the computer icon does not.
-  await settings.click();
-  await expect(panel).toHaveAttribute("data-panel", "settings");
+  // The gear opens the bot page and reads as pressed; the screen icon does not.
+  const botPage = await openBotPage(page);
   await expect(settings).toHaveAttribute("aria-pressed", "true");
   await expect(computer).toHaveAttribute("aria-pressed", "false");
+  await expect(panel).toHaveAttribute("data-size", "default");
+  await expect(panel).toHaveCSS("width", "384px");
+  await expect(botPage.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "bot-page-light");
 
-  // Save is reachable straight away: it rides a footer pinned to the bottom of
-  // the panel, not the end of the scrolling form.
-  const save = page.getByRole("button", { name: "Save", exact: true });
-  await expect(save).toBeInViewport();
-  await captureScreenshot(page, testInfo, "bot-panel-settings-light");
+  // Instructions open wide beside the thread; Escape brings the default width back.
+  await openBotTab(page, "Settings");
+  await botPage
+    .getByTestId("bot-settings")
+    .getByRole("button", { name: /^Instructions/ })
+    .click();
+  await expect(panel).toHaveAttribute("data-detail", "instructions");
+  await expect(panel).toHaveAttribute("data-size", "wide");
+  await expect(panel).toHaveCSS("width", "640px");
+  await expect(column).not.toHaveAttribute("aria-hidden", "true");
+  await captureScreenshot(page, testInfo, "bot-page-instructions-wide");
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveAttribute("data-size", "default");
+  await expect(panel).toHaveCSS("width", "384px");
+
+  // Below `xl` the wide panel lies over the thread, which stops being reachable.
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await botPage
+    .getByTestId("bot-settings")
+    .getByRole("button", { name: /^Instructions/ })
+    .click();
+  await expect(panel).toHaveAttribute("data-size", "wide");
+  await expect(column).toHaveJSProperty("inert", true);
+  await page.keyboard.press("Escape");
+  await expect(column).toHaveJSProperty("inert", false);
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // The two icons switch panels between themselves; no in-panel gear is needed.
   await computer.click();
@@ -130,14 +167,14 @@ test("header icons toggle computer and settings; settings actions stay pinned", 
   await expect(computer).toHaveAttribute("aria-pressed", "true");
   await expect(settings).toHaveAttribute("aria-pressed", "false");
   await settings.click();
-  await expect(panel).toHaveAttribute("data-panel", "settings");
+  await expect(panel).toHaveAttribute("data-panel", "bot");
   await settings.click();
   await expect(panel).toHaveAttribute("data-panel", "closed");
 
-  // Mobile-first: at phone width the pinned footer keeps Save on screen.
+  // At phone width the page covers the thread and still closes from its own X.
   await page.setViewportSize({ width: 375, height: 720 });
   await settings.click();
-  await expect(panel).toHaveAttribute("data-panel", "settings");
-  await expect(save).toBeInViewport();
-  await captureScreenshot(page, testInfo, "bot-panel-settings-mobile");
+  await expect(panel).toHaveAttribute("data-panel", "bot");
+  await expect(botPage.getByRole("button", { name: "Close panel" })).toBeInViewport();
+  await captureScreenshot(page, testInfo, "bot-page-mobile");
 });

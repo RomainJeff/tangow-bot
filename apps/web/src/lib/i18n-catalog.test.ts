@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { getCatalogs } from "@lingui/cli/api";
+import { getConfig } from "@lingui/conf";
 import { i18n } from "@lingui/core";
 import { beforeEach, describe, expect, it } from "vitest";
 import de from "../../scripts/translations-de.json";
@@ -227,5 +229,27 @@ describe("lingui catalogs", () => {
     expect(catalog).toContain(
       'msgstr "{0, plural, one {# модель} few {# модели} many {# моделей} other {# модели}}"',
     );
+  });
+
+  // Production strips each message down to its id: one missing from the catalogs renders as that id.
+  it("has every message the web source uses in the English catalog", {
+    timeout: 120_000,
+  }, async () => {
+    const root = fileURLToPath(new URL("../..", import.meta.url));
+    const config = getConfig({ cwd: root });
+    // The CLI globs `include` from the working directory; tests run from the repo root.
+    const catalogs = config.catalogs.map((entry) => ({
+      ...entry,
+      include: entry.include.map((path) => `${root}${path}`),
+      exclude: entry.exclude ?? [],
+    }));
+    const [catalog] = await getCatalogs({ ...config, catalogs });
+    const used = (await catalog?.collect()) ?? {};
+    const english = (await catalog?.read("en")) ?? {};
+    const missing = Object.entries(used)
+      .filter(([id]) => !(id in english))
+      .map(([, message]) => message.message ?? "");
+    expect(Object.keys(used).length).toBeGreaterThan(500);
+    expect(missing).toEqual([]);
   });
 });

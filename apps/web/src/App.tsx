@@ -6,6 +6,7 @@ import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { LoadingState } from "./components/ai/primitives";
 import { authClient } from "./lib/auth";
 import { markAfterPaint, markOnce } from "./lib/performance";
+import { saveStore } from "./lib/save-store";
 import {
   holdUnreachableGate,
   sessionGate,
@@ -41,6 +42,14 @@ function SessionApp() {
     searchParams.get("next") === "/integrations/setup" ? "/integrations/setup" : "/app";
   const session = authClient.useSession();
   const gate = sessionGate(session);
+  const userId = session.data?.user.id;
+  const saveOwner = useRef(userId);
+  useEffect(() => {
+    // Unsaved drafts and saves belong to the person who made them.
+    if (saveOwner.current === userId) return;
+    saveOwner.current = userId;
+    saveStore.reset();
+  }, [userId]);
   const [holdingUnreachable, setHoldingUnreachable] = useState(false);
   const nextHolding = holdUnreachableGate(gate, holdingUnreachable);
   if (nextHolding !== holdingUnreachable) setHoldingUnreachable(nextHolding);
