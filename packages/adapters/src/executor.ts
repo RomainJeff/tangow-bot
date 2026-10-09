@@ -310,6 +310,7 @@ import {
   filterBuiltinToolsForRun,
   filterBuiltinToolsForThread,
   listSchedulesFromTool,
+  scheduleCreateArgs,
   updateScheduleFromTool,
 } from "./schedule-tools.js";
 import { loadAgentScratchpadContext } from "./scratchpad-context.js";
@@ -1999,6 +2000,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const normalized = normalizeSpawnBotArgs(args);
             if (!("error" in normalized)) args = spawnBotToolArgs(normalized);
           }
+          if (name === "schedule_create") args = scheduleCreateArgs(args);
           if (PAGE_BROWSER_TOOL_NAMES.has(name) && !pageBrowserAllowed) {
             return { error: "Page browser is unavailable on this computer." };
           }
@@ -3022,17 +3024,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
           };
           if (name === "schedule_create") {
             const schedule = {
-              cron: args.cron ?? undefined,
-              every: args.every ?? undefined,
-              unit: args.unit ?? undefined,
-              runAt: args.runAt ?? undefined,
-              delayMinutes: args.delayMinutes ?? undefined,
-              delaySeconds: args.delaySeconds ?? undefined,
+              cron: args.cron,
+              every: args.every,
+              unit: args.unit,
+              runAt: args.runAt,
+              delayMinutes: args.delayMinutes,
+              delaySeconds: args.delaySeconds,
             };
             const timezone = args.timezone ? String(args.timezone) : undefined;
             const notify = typeof args.notify === "boolean" ? args.notify : undefined;
             const currentHop = await resolveRunHop(deps.prisma, run);
-            if (typeof args.routineId === "string" && args.routineId.trim() !== "") {
+            if (typeof args.routineId === "string") {
               const updated = await updateScheduleFromTool(deps, {
                 spaceId: run.spaceId,
                 botId: bot.id,

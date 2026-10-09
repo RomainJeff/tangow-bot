@@ -47,6 +47,20 @@ export type ResolvedSchedule =
   | { ok: true; cron: string; nextRunAt: Date; oneShot: boolean }
   | { ok: false; error: string };
 
+/**
+ * A schedule_create call as the tool reads it: a model sends null for a field it means to leave
+ * out, so a null field is dropped, and a routineId that is not a non-blank string is too.
+ */
+export function scheduleCreateArgs(args: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(args).filter(
+      ([key, value]) =>
+        value !== null &&
+        (key !== "routineId" || (typeof value === "string" && value.trim() !== "")),
+    ),
+  );
+}
+
 export function resolveScheduleTiming(
   input: {
     cron?: unknown;
