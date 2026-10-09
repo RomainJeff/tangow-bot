@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **Each bot has one page in the side panel, and its settings save as you change them.** On web and desktop, the bot's name in the thread header, the gear, "Bot settings" in the sidebar menu and the "/ Bot settings" command open its avatar, name and title above Routines, Knowledge and Settings tabs, and the computer panel becomes Screen. Settings is split into how the bot behaves and how it runs, instructions and the description open a wider editor, clearing either asks first, and the single Save button is gone.
+- **On web and desktop, a bot's routines now live in its page and save as you change them.** Each row of the Routines tab shows when the routine runs next or how its last run failed ("Failed yesterday · Model error") and has its own Active switch; a routine opens in the wider panel, where its name and instruction save when you leave them, each trigger is edited in its own dialog, and a new routine has a Create button. It replaces the routine editor and its Save button, and routine links in the conversation open the routine there.
 
 #### Fixed
 
