@@ -29,6 +29,8 @@ const buttonVariants = cva(
           "rounded-full border-outline bg-transparent px-3.5 text-capsule font-normal text-foreground duration-(--duration-hover) ease-quiet hover:border-ring/40 hover:bg-accent",
         roundIcon:
           "rounded-full bg-transparent p-0 text-muted-foreground duration-(--duration-hover) ease-quiet hover:bg-accent hover:text-foreground",
+        roundIconSecondary:
+          "rounded-full bg-secondary p-0 text-foreground duration-(--duration-hover) ease-quiet hover:opacity-85",
       },
       size: {
         default:

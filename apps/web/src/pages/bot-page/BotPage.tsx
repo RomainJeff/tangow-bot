@@ -22,11 +22,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
-import type { BotPageView, BotTab } from "../shell/layout";
+import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
 import { BotHero } from "./BotHero";
 import { type BotPageContext, useConfirm } from "./page-kit";
+import { RoutineCreateForm } from "./RoutineCreateForm";
+import { RoutineDetail } from "./RoutineDetail";
 import { RoutinesTab } from "./RoutinesTab";
 import { ModelDetail, TextDetail, VoiceDetail } from "./SettingDetails";
 import { SettingsTab } from "./SettingsTab";
@@ -40,16 +42,13 @@ export interface BotPageProps {
   userId: string;
   /** `null` until this bot's routines are read. */
   routines: Routine[] | null;
-  /** The routine whose run is under way, if any. */
-  runningRoutineId: string | null;
   memoryProviderConfigured: boolean;
   view: BotPageView;
   onView: (view: BotPageView) => void;
   onClose: () => void;
-  /** Opens a routine in the routine editor; `null` writes a new one. */
-  onOpenRoutine: (routine: Routine | null) => void;
-  onStopRun: () => void;
   commands: BotCommands;
+  /** Message integrations a routine can be triggered from. */
+  messagingProviders: string[];
 }
 
 /**
@@ -61,26 +60,36 @@ export function BotPage({
   bot,
   userId,
   routines,
-  runningRoutineId,
   memoryProviderConfigured,
   view,
   onView,
   onClose,
-  onOpenRoutine,
-  onStopRun,
   commands,
+  messagingProviders,
 }: BotPageProps) {
   const { t } = useLingui();
   const { confirm, dialog } = useConfirm();
   const root = useRef<HTMLDivElement>(null);
   const page: BotPageContext = { bot, userId, commands };
   const detail = view.detail;
+  const routine =
+    detail?.kind === "routine" ? routines?.find((item) => item.id === detail.routineId) : undefined;
+  // A key minted for this bot's inbound triggers is shown once, wherever it was minted.
+  const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
   const tabLabels: Record<BotTab, string> = {
     routines: t`Routines`,
     knowledge: t`Knowledge`,
     settings: t`Settings`,
   };
+  const open = (next: BotDetail) => onView({ tab: view.tab, detail: next });
   const back = () => onView({ tab: view.tab, detail: null });
+  const toRoutines = () => onView({ tab: "routines", detail: null });
+
+  // A routine that is gone (deleted here or elsewhere) leaves its tab showing.
+  const missingRoutine = detail?.kind === "routine" && routines !== null && !routine;
+  useEffect(() => {
+    if (missingRoutine) onView({ tab: "routines", detail: null });
+  }, [missingRoutine, onView]);
 
   // Focus follows the editor: into it when it opens (a text editor focuses its
   // own field), back to the row that opened it when it closes.
@@ -91,7 +100,7 @@ export function BotPage({
     lastDetail.current = detail;
     if (detail?.kind === "model" || detail?.kind === "voice") backButton.current?.focus();
     if (detail || !closed) return;
-    root.current?.querySelector<HTMLElement>(`[data-opens="${closed.kind}"]`)?.focus();
+    root.current?.querySelector<HTMLElement>(`[data-opens="${detailOpener(closed)}"]`)?.focus();
   }, [detail]);
 
   return (
@@ -133,6 +142,35 @@ export function BotPage({
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto">
           <VoiceDetail page={page} />
         </div>
+      ) : detail?.kind === "routine" ? (
+        <div className="rk-scroll min-h-0 flex-1 overflow-y-auto">
+          {routine ? (
+            <RoutineDetail
+              key={routine.id}
+              page={page}
+              routine={routine}
+              messageProviders={messagingProviders}
+              webhookSecret={webhookSecret}
+              onWebhookSecret={setWebhookSecret}
+              confirm={confirm}
+              onDeleted={toRoutines}
+            />
+          ) : null}
+        </div>
+      ) : detail?.kind === "routine-new" ? (
+        <div className="rk-scroll min-h-0 flex-1 overflow-y-auto">
+          <RoutineCreateForm
+            page={page}
+            seed={detail.seed}
+            messageProviders={messagingProviders}
+            webhookSecret={webhookSecret}
+            onWebhookSecret={setWebhookSecret}
+            confirm={confirm}
+            onCreated={(created) =>
+              onView({ tab: "routines", detail: { kind: "routine", routineId: created.id } })
+            }
+          />
+        </div>
       ) : (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto pb-4">
           <BotHero page={page} />
@@ -151,12 +189,7 @@ export function BotPage({
               </TabsList>
             </div>
             <TabsContent value="routines" className="px-4">
-              <RoutinesTab
-                routines={routines ?? []}
-                runningRoutineId={runningRoutineId}
-                onOpen={onOpenRoutine}
-                onStop={onStopRun}
-              />
+              <RoutinesTab page={page} routines={routines} onOpen={open} />
             </TabsContent>
             <TabsContent value="knowledge" className="px-4">
               <Suspense fallback={null}>
@@ -164,7 +197,7 @@ export function BotPage({
               </Suspense>
             </TabsContent>
             <TabsContent value="settings" className="px-4">
-              <SettingsTab page={page} onOpen={(next) => onView({ tab: view.tab, detail: next })} />
+              <SettingsTab page={page} onOpen={open} />
             </TabsContent>
           </Tabs>
         </div>

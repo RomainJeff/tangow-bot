@@ -80,11 +80,11 @@ afterEach(() => {
 });
 
 async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[] | null } = {}) {
-  const commands: BotCommands = {
+  const commands = {
     updateBot: updateBot as BotCommands["updateBot"],
     setComputer: vi.fn(),
     botAction: vi.fn(),
-  };
+  } as Partial<BotCommands> as BotCommands;
   await act(async () => {
     root.render(
       <SaveStoreProvider store={store}>
@@ -92,14 +92,12 @@ async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[]
           bot={bot}
           userId="user-1"
           routines={routines}
-          runningRoutineId={null}
           memoryProviderConfigured={false}
           view={view}
           onView={vi.fn()}
           onClose={vi.fn()}
-          onOpenRoutine={vi.fn()}
-          onStopRun={vi.fn()}
           commands={commands}
+          messagingProviders={[]}
         />
       </SaveStoreProvider>,
     );

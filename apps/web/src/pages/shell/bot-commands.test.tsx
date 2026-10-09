@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import type { Bot } from "@rakazo/contracts";
+import type { Bot, Routine } from "@rakazo/contracts";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   bots: { update: vi.fn(), setComputer: vi.fn() },
+  routines: { create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 vi.mock("../../lib/rpc", () => ({ rpc: api }));
 
@@ -23,13 +24,27 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-let view: { bots: Bot[]; commands: BotCommands };
+function routine(id: string, name: string, botId = "a"): Routine {
+  return { id, botId, name } as Routine;
+}
+
+let view: { bots: Bot[]; routines: Routine[]; commands: BotCommands };
 const supersedeBotsRefresh = vi.fn();
+const activeBotId = { current: "a" as string | undefined };
 
 function Harness() {
   const [bots, setBots] = useState([bot("a", "Ada"), bot("b", "Bea")]);
-  const commands = useBotCommands({ setBots, supersedeBotsRefresh, botAction: vi.fn() });
-  view = { bots, commands };
+  const [routines, setRoutines] = useState([routine("r-1", "Morning"), routine("r-2", "Evening")]);
+  const commands = useBotCommands({
+    setBots,
+    setRoutines,
+    activeBotId,
+    supersedeBotsRefresh,
+    botAction: vi.fn(),
+    ensureWebhookSecret: vi.fn(),
+    refreshThread: vi.fn(async () => undefined),
+  });
+  view = { bots, routines, commands };
   return null;
 }
 
@@ -38,6 +53,7 @@ let root: Root;
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  activeBotId.current = "a";
   container = document.createElement("div");
   root = createRoot(container);
   act(() => root.render(<Harness />));
@@ -110,4 +126,80 @@ it("sends the computer on its own call and merges what it returns", async () => 
   expect(api.bots.setComputer).toHaveBeenCalledWith({ botId: "a", mode: "dedicated" });
   expect(api.bots.update).not.toHaveBeenCalled();
   expect(view.bots[0]).toMatchObject({ computerMode: "dedicated" });
+});
+
+const routineNames = () => view.routines.map((item) => item.name);
+
+it("merges the routine a write returns into the open bot's routines by id", async () => {
+  const evening = view.routines[1];
+  api.routines.update.mockResolvedValueOnce(routine("r-1", "Dawn"));
+
+  await act(() => view.commands.updateRoutine("a", "r-1", { name: "Dawn" }));
+
+  expect(api.routines.update).toHaveBeenCalledWith({ routineId: "r-1", name: "Dawn" });
+  expect(routineNames()).toEqual(["Dawn", "Evening"]);
+  expect(view.routines[1]).toBe(evening);
+});
+
+it("never lets an older routine answer overwrite a newer one", async () => {
+  const slow = deferred<Routine>();
+  api.routines.update
+    .mockReturnValueOnce(slow.promise)
+    .mockResolvedValueOnce(routine("r-1", "Second"));
+
+  const first = view.commands.updateRoutine("a", "r-1", { name: "First" });
+  await act(() => view.commands.updateRoutine("a", "r-1", { name: "Second" }));
+  slow.resolve(routine("r-1", "First"));
+  await act(() => first);
+
+  expect(routineNames()).toEqual(["Second", "Evening"]);
+});
+
+it("leaves the routines alone when the answer comes after a switch to another bot", async () => {
+  const slow = deferred<Routine>();
+  api.routines.update.mockReturnValueOnce(slow.promise);
+
+  const write = view.commands.updateRoutine("a", "r-1", { name: "Late" });
+  activeBotId.current = "b";
+  slow.resolve(routine("r-1", "Late"));
+  await act(() => write);
+
+  expect(routineNames()).toEqual(["Morning", "Evening"]);
+});
+
+it("does not bring back a removed routine when an earlier write lands after", async () => {
+  const slow = deferred<Routine>();
+  api.routines.update.mockReturnValueOnce(slow.promise);
+  api.routines.remove.mockResolvedValueOnce({ ok: true });
+
+  const write = view.commands.updateRoutine("a", "r-1", { name: "Late" });
+  await act(() => view.commands.removeRoutine("a", "r-1"));
+  slow.resolve(routine("r-1", "Late"));
+  await act(() => write);
+
+  expect(routineNames()).toEqual(["Evening"]);
+});
+
+it("creates a routine in the device's timezone and lists it last", async () => {
+  api.routines.create.mockResolvedValueOnce(routine("r-3", "Weekly"));
+  const payload = {
+    name: "Weekly",
+    prompt: "Sum up the week.",
+    crons: ["0 9 * * 1"],
+    active: true,
+    notify: false,
+    webhookEnabled: false,
+    githubEnabled: false,
+    messageProvider: null,
+    requireToolApproval: true,
+  };
+
+  await act(() => view.commands.createRoutine("a", payload));
+
+  expect(api.routines.create).toHaveBeenCalledWith({
+    botId: "a",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    ...payload,
+  });
+  expect(routineNames()).toEqual(["Morning", "Evening", "Weekly"]);
 });

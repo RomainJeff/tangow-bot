@@ -26,6 +26,10 @@ msgstr "(boş)"
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# model} other {# model}}"
 
+#. placeholder {0}: routines.length
+msgid "{0, plural, one {# routine} other {# routines}}"
+msgstr "{0, plural, one {# rutin} other {# rutin}}"
+
 #. placeholder {0}: runs.length
 #: src/pages/shell/routine-run-line.tsx:335
 msgid "{0, plural, one {# run} other {# runs}}"
@@ -120,6 +124,9 @@ msgstr "{botName} adlı botun bilgisayarı"
 msgid "{cancelledCount, plural, one {# cancelled} other {# cancelled}}"
 msgstr ""
 
+msgid "{count} · next {next}"
+msgstr "{count} · sonraki {next}"
+
 #: src/pages/ActivityList.tsx:140
 msgid "{days}d ago"
 msgstr "{days} g önce"
@@ -156,6 +163,9 @@ msgstr "{name} durduruldu"
 msgid "{remaining} left · bot is watching, not acting"
 msgstr "{remaining} kaldı · bot yalnızca izliyor"
 
+msgid "{schedules} · next {next}"
+msgstr "{schedules} · sonraki {next}"
+
 #: src/components/ArtifactFileCard.tsx:220
 msgid "{size} B"
 msgstr "{size} B"
@@ -175,6 +185,9 @@ msgstr "{title}, {label}"
 #: src/pages/PluginsOverlay.tsx:645
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
+
+msgid "{what} · paused"
+msgstr "{what} · duraklatıldı"
 
 #: src/pages/shell/transcript.tsx:234
 msgid "{workingBotName} is working"
@@ -248,6 +261,10 @@ msgstr "Etkin"
 #: src/pages/ModelSettingsOverlay.tsx:390
 msgid "Active model"
 msgstr "Etkin model"
+
+#. placeholder {0}: routine.name
+msgid "Active: {0}"
+msgstr "Etkin: {0}"
 
 #: src/pages/shell/sidebar.tsx:212
 #: src/pages/shell/sidebar.tsx:214
@@ -1039,6 +1056,9 @@ msgstr "Bilgisayar uykuda. Uyandırmak için açın."
 msgid "Computer is stopped"
 msgstr "Bilgisayar durduruldu"
 
+msgid "Computer unavailable"
+msgstr "Bilgisayar kullanılamıyor"
+
 #: src/pages/AccountSettingsOverlay.tsx:249
 msgid "Computers"
 msgstr "Bilgisayarlar"
@@ -1691,6 +1711,9 @@ msgstr "Kimlik bilgileri şifrelenir ve modele asla gönderilmez."
 msgid "Cron"
 msgstr "Cron"
 
+msgid "Cron {expression}"
+msgstr "Cron {expression}"
+
 #: src/pages/RoutineSchedule.tsx:273
 msgid "Cron expression"
 msgstr "Cron ifadesi"
@@ -1775,6 +1798,9 @@ msgstr "Grubu sil"
 #: src/pages/shell/dialogs.tsx:384
 msgid "Delete memories too"
 msgstr "Hafızayı da sil"
+
+msgid "Delete routine"
+msgstr "Rutini sil"
 
 #: src/pages/Shell.tsx:3059
 msgid "Delete space"
@@ -2060,6 +2086,9 @@ msgstr "Çok yüksek"
 #: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
 msgstr "Başarısız"
+
+msgid "Failed {when}"
+msgstr "{when} başarısız oldu"
 
 #: src/pages/Shell.tsx:2088
 #: src/pages/Shell.tsx:2090
@@ -2389,6 +2418,9 @@ msgstr "Bilgi"
 msgid "Language"
 msgstr "Dil"
 
+msgid "Last run failed"
+msgstr "Son çalışma başarısız oldu"
+
 #: src/components/DesktopUpdates.tsx:114
 msgid "Later"
 msgstr ""
@@ -2679,6 +2711,9 @@ msgstr "dakika"
 msgid "Model"
 msgstr "Model"
 
+msgid "Model error"
+msgstr "Model hatası"
+
 #: src/pages/ModelSettingsOverlay.tsx:531
 #: src/pages/Onboarding.tsx:471
 msgid "Model id"
@@ -2714,6 +2749,9 @@ msgstr "Sunucudan gelen modeller"
 #: src/pages/RoutineSchedule.tsx:161
 msgid "Monthly"
 msgstr "Aylık"
+
+msgid "Monthly on day {day} at {time}"
+msgstr "Her ayın {day}. günü {time}"
 
 #: src/components/ComputerMaintenanceActions.tsx:123
 msgid "More computer actions"
@@ -2789,6 +2827,9 @@ msgstr "Yeni açık iş öğesi"
 #: src/pages/Auth.tsx:295
 msgid "New password"
 msgstr "Yeni parola"
+
+msgid "New routine"
+msgstr "Yeni rutin"
 
 #: src/pages/BotContextMenu.tsx:114
 #: src/pages/shell/dialogs.tsx:180
@@ -2884,6 +2925,9 @@ msgstr "{peerBotName} ile henüz mesaj yok."
 msgid "No model catalog is available."
 msgstr "Kullanılabilir model kataloğu yok."
 
+msgid "No model connected"
+msgstr "Bağlı model yok"
+
 #: src/pages/SkillsOverlay.tsx:515
 msgid "No plugins in this marketplace."
 msgstr "Bu pazar yerinde eklenti yok."
@@ -2973,6 +3017,9 @@ msgstr ""
 msgid "Notifies you each run"
 msgstr "Her çalıştığında sana bildirir"
 
+msgid "Notify me"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx:330
 msgid "Notify me on every run"
 msgstr ""
@@ -3018,6 +3065,9 @@ msgstr "Zamanlamaya göre"
 #: src/pages/RoutineSchedule.tsx:161
 msgid "on the 1st at {0}"
 msgstr "her ayın 1'inde saat {0}"
+
+msgid "One-time"
+msgstr "Tek seferlik"
 
 #: src/pages/Shell.tsx:3097
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
@@ -3360,6 +3410,9 @@ msgstr "Kaldır"
 #: src/pages/shell/composer.tsx:845
 msgid "Remove {0}"
 msgstr "{0} kaldır"
+
+msgid "Remove {title}?"
+msgstr "{title} kaldırılsın mı?"
 
 #: src/pages/RoutineEditor.tsx:654
 msgid "Remove Git event"
@@ -4313,6 +4366,9 @@ msgstr "Webhook"
 msgid "Weekdays"
 msgstr "Hafta içi"
 
+msgid "Weekly on {weekday} at {time}"
+msgstr "Her hafta {weekday} {time}"
+
 #: src/pages/shell/dialogs.tsx:357
 msgid "What about its memories?"
 msgstr "Hafızası ne olsun?"
@@ -4367,6 +4423,9 @@ msgstr "Çalışıyor…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "Çalışma alanı kökü"
+
+msgid "Yearly on {date} at {time}"
+msgstr "Her yıl {date} {time}"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

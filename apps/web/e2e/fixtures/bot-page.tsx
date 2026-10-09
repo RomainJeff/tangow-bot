@@ -16,7 +16,8 @@ import "../../src/styles.css";
 
 /*
  * The bot page without a server. Query parameters pick what it shows:
- *   tab=routines|knowledge|settings   detail=instructions|description|model|voice
+ *   tab=routines|knowledge|settings
+ *   detail=instructions|description|model|voice|routine|routine-new   routine=<id>
  *   busy=1 (the bot is working)
  *   fail=1 (every save fails)   refuse=1 (the server refuses a computer change)   theme=dark
  * Writes go through in-memory commands that answer after 400 ms; reads are
@@ -68,6 +69,9 @@ const BOT: Bot = {
   spawnKey: null,
 };
 
+const HOUR = 60 * 60 * 1000;
+const at = (offset: number) => new Date(Date.now() + offset).toISOString();
+
 function routine(id: string, name: string, extra: Partial<Routine> = {}): Routine {
   return {
     id,
@@ -82,10 +86,10 @@ function routine(id: string, name: string, extra: Partial<Routine> = {}): Routin
     githubEnabled: false,
     messageProvider: null,
     requireToolApproval: false,
-    lastRunAt: null,
-    lastRunStatus: null,
+    lastRunAt: at(-10 * HOUR),
+    lastRunStatus: "succeeded",
     lastRunFailureKind: null,
-    nextRunAt: null,
+    nextRunAt: at(14 * HOUR),
     createdAt: "2026-09-01T08:00:00.000Z",
     ...extra,
   };
@@ -93,8 +97,21 @@ function routine(id: string, name: string, extra: Partial<Routine> = {}): Routin
 
 const ROUTINES: Routine[] = [
   routine("routine-1", "Morning digest"),
-  routine("routine-2", "Weekly digest", { crons: ["0 9 * * 1"] }),
-  routine("routine-3", "Invoice watch", { crons: [], webhookEnabled: true, active: false }),
+  routine("routine-2", "Weekly digest", {
+    crons: ["0 9 * * 1"],
+    prompt:
+      "Every Monday morning, sum up last week's inbox for the team: what was decided, what is still waiting, and what arrives next week. Five lines at most.",
+    lastRunAt: at(-26 * HOUR),
+    lastRunStatus: "failed",
+    lastRunFailureKind: "provider",
+    messageProvider: "slack",
+  }),
+  routine("routine-3", "Invoice watch", {
+    crons: [],
+    webhookEnabled: true,
+    active: false,
+    nextRunAt: null,
+  }),
 ];
 
 const READS: Record<string, unknown> = {
@@ -197,6 +214,10 @@ function isTab(value: string | null): value is BotTab {
 }
 
 function initialDetail(value: string | null): BotDetail | null {
+  if (value === "routine") {
+    return { kind: "routine", routineId: params.get("routine") ?? "routine-2" };
+  }
+  if (value === "routine-new") return { kind: "routine-new" };
   if (
     value === "instructions" ||
     value === "description" ||
@@ -212,6 +233,9 @@ function Fixture() {
   const [bot, setBot] = useState(BOT);
   const botRef = useRef(bot);
   botRef.current = bot;
+  const [routines, setRoutines] = useState(ROUTINES);
+  const routinesRef = useRef(routines);
+  routinesRef.current = routines;
   const [fail, setFail] = useState(params.get("fail") === "1");
   const failRef = useRef(fail);
   failRef.current = fail;
@@ -239,6 +263,39 @@ function Fixture() {
             ? null
             : "Wait for this bot to finish before changing its computer.",
         ),
+      async createRoutine(_botId, payload) {
+        await delay(SAVE_DELAY);
+        if (failRef.current) throw new Error("The server did not answer.");
+        const created = routine(`routine-${Date.now()}`, payload.name, {
+          ...payload,
+          lastRunAt: null,
+          lastRunStatus: null,
+          nextRunAt: payload.crons.length > 0 ? at(20 * HOUR) : null,
+        });
+        setRoutines((list) => [...list, created]);
+        return created;
+      },
+      async updateRoutine(_botId, routineId, patch) {
+        await delay(SAVE_DELAY);
+        if (failRef.current) throw new Error("The server did not answer.");
+        const current = routinesRef.current.find((item) => item.id === routineId);
+        if (!current) throw new ORPCError("NOT_FOUND", { message: "That routine is gone." });
+        const { runAt: _runAt, ...fields } = patch;
+        const updated = { ...current, ...fields };
+        setRoutines((list) => list.map((item) => (item.id === routineId ? updated : item)));
+        return updated;
+      },
+      async removeRoutine(_botId, routineId) {
+        await delay(SAVE_DELAY);
+        setRoutines((list) => list.filter((item) => item.id !== routineId));
+      },
+      testRun: async () => {
+        await delay(SAVE_DELAY);
+      },
+      revealWebhookSecret: async () => {
+        await delay(SAVE_DELAY);
+        return "whsec_fixture_0000";
+      },
       botAction: (_botId, action) => console.info(`bot action: ${action}`),
     };
   }, []);
@@ -273,15 +330,13 @@ function Fixture() {
         <BotPage
           bot={bot}
           userId="user-1"
-          routines={ROUTINES}
-          runningRoutineId={null}
+          routines={routines}
           memoryProviderConfigured={false}
           view={view}
           onView={setView}
           onClose={closePanel}
-          onOpenRoutine={(item) => console.info(`open routine: ${item?.id ?? "new"}`)}
-          onStopRun={() => console.info("stop run")}
           commands={commands}
+          messagingProviders={["slack"]}
         />
       </aside>
     </div>

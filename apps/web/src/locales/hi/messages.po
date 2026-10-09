@@ -26,6 +26,10 @@ msgstr "(खाली)"
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# मॉडल} other {# मॉडल}}"
 
+#. placeholder {0}: routines.length
+msgid "{0, plural, one {# routine} other {# routines}}"
+msgstr "{0, plural, one {# रूटीन} other {# रूटीन}}"
+
 #. placeholder {0}: runs.length
 #: src/pages/shell/routine-run-line.tsx:335
 msgid "{0, plural, one {# run} other {# runs}}"
@@ -120,6 +124,9 @@ msgstr "{botName} का कंप्यूटर"
 msgid "{cancelledCount, plural, one {# cancelled} other {# cancelled}}"
 msgstr ""
 
+msgid "{count} · next {next}"
+msgstr "{count} · अगला {next}"
+
 #: src/pages/ActivityList.tsx:140
 msgid "{days}d ago"
 msgstr "{days} दिन पहले"
@@ -156,6 +163,9 @@ msgstr "{name} रोक दिया गया"
 msgid "{remaining} left · bot is watching, not acting"
 msgstr "{remaining} शेष · बॉट देख रहा है, कार्रवाई नहीं कर रहा"
 
+msgid "{schedules} · next {next}"
+msgstr "{schedules} · अगला {next}"
+
 #: src/components/ArtifactFileCard.tsx:220
 msgid "{size} B"
 msgstr "{size} B"
@@ -175,6 +185,9 @@ msgstr "{title}, {label}"
 #: src/pages/PluginsOverlay.tsx:645
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
+
+msgid "{what} · paused"
+msgstr "{what} · रोका गया"
 
 #: src/pages/shell/transcript.tsx:234
 msgid "{workingBotName} is working"
@@ -248,6 +261,10 @@ msgstr "सक्रिय"
 #: src/pages/ModelSettingsOverlay.tsx:390
 msgid "Active model"
 msgstr "सक्रिय मॉडल"
+
+#. placeholder {0}: routine.name
+msgid "Active: {0}"
+msgstr "सक्रिय: {0}"
 
 #: src/pages/shell/sidebar.tsx:212
 #: src/pages/shell/sidebar.tsx:214
@@ -1039,6 +1056,9 @@ msgstr "कंप्यूटर निष्क्रिय है। जगा
 msgid "Computer is stopped"
 msgstr "कंप्यूटर रुका हुआ है"
 
+msgid "Computer unavailable"
+msgstr "कंप्यूटर उपलब्ध नहीं"
+
 #: src/pages/AccountSettingsOverlay.tsx:249
 msgid "Computers"
 msgstr "कंप्यूटर"
@@ -1691,6 +1711,9 @@ msgstr "क्रेडेंशियल एन्क्रिप्टेड �
 msgid "Cron"
 msgstr "Cron"
 
+msgid "Cron {expression}"
+msgstr "Cron {expression}"
+
 #: src/pages/RoutineSchedule.tsx:273
 msgid "Cron expression"
 msgstr "Cron एक्सप्रेशन"
@@ -1775,6 +1798,9 @@ msgstr "समूह डिलीट करें"
 #: src/pages/shell/dialogs.tsx:384
 msgid "Delete memories too"
 msgstr "मेमोरी भी डिलीट करें"
+
+msgid "Delete routine"
+msgstr "रूटीन डिलीट करें"
 
 #: src/pages/Shell.tsx:3059
 msgid "Delete space"
@@ -2060,6 +2086,9 @@ msgstr "अतिरिक्त उच्च"
 #: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
 msgstr "विफल"
+
+msgid "Failed {when}"
+msgstr "{when} विफल"
 
 #: src/pages/Shell.tsx:2088
 #: src/pages/Shell.tsx:2090
@@ -2389,6 +2418,9 @@ msgstr "ज्ञान"
 msgid "Language"
 msgstr "भाषा"
 
+msgid "Last run failed"
+msgstr "पिछला रन विफल रहा"
+
 #: src/components/DesktopUpdates.tsx:114
 msgid "Later"
 msgstr ""
@@ -2679,6 +2711,9 @@ msgstr "मिनट"
 msgid "Model"
 msgstr "मॉडल"
 
+msgid "Model error"
+msgstr "मॉडल त्रुटि"
+
 #: src/pages/ModelSettingsOverlay.tsx:531
 #: src/pages/Onboarding.tsx:471
 msgid "Model id"
@@ -2714,6 +2749,9 @@ msgstr "सर्वर से मॉडल"
 #: src/pages/RoutineSchedule.tsx:161
 msgid "Monthly"
 msgstr "मासिक"
+
+msgid "Monthly on day {day} at {time}"
+msgstr "हर महीने की {day} तारीख को {time} बजे"
 
 #: src/components/ComputerMaintenanceActions.tsx:123
 msgid "More computer actions"
@@ -2789,6 +2827,9 @@ msgstr "नया खुला-कार्य आइटम"
 #: src/pages/Auth.tsx:295
 msgid "New password"
 msgstr "नया पासवर्ड"
+
+msgid "New routine"
+msgstr "नया रूटीन"
 
 #: src/pages/BotContextMenu.tsx:114
 #: src/pages/shell/dialogs.tsx:180
@@ -2884,6 +2925,9 @@ msgstr "{peerBotName} के साथ अभी कोई संदेश न�
 msgid "No model catalog is available."
 msgstr "कोई मॉडल कैटलॉग उपलब्ध नहीं है।"
 
+msgid "No model connected"
+msgstr "कोई मॉडल कनेक्ट नहीं"
+
 #: src/pages/SkillsOverlay.tsx:515
 msgid "No plugins in this marketplace."
 msgstr "इस मार्केटप्लेस में कोई प्लगइन नहीं।"
@@ -2973,6 +3017,9 @@ msgstr ""
 msgid "Notifies you each run"
 msgstr "हर बार चलने पर आपको सूचित करता है"
 
+msgid "Notify me"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx:330
 msgid "Notify me on every run"
 msgstr ""
@@ -3018,6 +3065,9 @@ msgstr "शेड्यूल पर"
 #: src/pages/RoutineSchedule.tsx:161
 msgid "on the 1st at {0}"
 msgstr "1 तारीख को {0} बजे"
+
+msgid "One-time"
+msgstr "एक बार"
 
 #: src/pages/Shell.tsx:3097
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
@@ -3360,6 +3410,9 @@ msgstr "हटाएं"
 #: src/pages/shell/composer.tsx:845
 msgid "Remove {0}"
 msgstr "{0} हटाएं"
+
+msgid "Remove {title}?"
+msgstr "{title} हटाएं?"
 
 #: src/pages/RoutineEditor.tsx:654
 msgid "Remove Git event"
@@ -4313,6 +4366,9 @@ msgstr "वेबहुक"
 msgid "Weekdays"
 msgstr "कार्यदिवस"
 
+msgid "Weekly on {weekday} at {time}"
+msgstr "हर सप्ताह {weekday} को {time} बजे"
+
 #: src/pages/shell/dialogs.tsx:357
 msgid "What about its memories?"
 msgstr "इसकी मेमोरी का क्या करें?"
@@ -4367,6 +4423,9 @@ msgstr "काम चल रहा है…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "वर्कस्पेस रूट"
+
+msgid "Yearly on {date} at {time}"
+msgstr "हर साल {date} को {time} बजे"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

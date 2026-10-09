@@ -6,6 +6,9 @@ import {
   type CronPreset,
   type CronUnit,
   cronFromPreset,
+  cronSchedule,
+  cronSchedulePreset,
+  cronScheduleTime,
 } from "@rakazo/core";
 import { Input, NativeSelect, NativeSelectOption } from "@rakazo/ui-web";
 import { Clock } from "lucide-react";
@@ -161,6 +164,41 @@ function describeCronPresetLocalized(
     return { lead: t`Monthly`, detail: t`on the 1st at ${preset.time}` };
   }
   return { lead: t`Every day`, detail: t`at ${preset.time}` };
+}
+
+/** One schedule as a short phrase in the reader's language ("Weekdays at 9:00 AM"). */
+export function describeSchedule(cron: string, locale: string): string {
+  const schedule = cronSchedule(cron);
+  if (schedule.kind === "once") return t`One-time`;
+  const preset = cronSchedulePreset(schedule);
+  if (preset) {
+    const { lead, detail } = describeCronPresetLocalized(preset, locale);
+    return [lead, detail].filter(Boolean).join(" ");
+  }
+  const time =
+    schedule.kind === "weekly" || schedule.kind === "monthly" || schedule.kind === "yearly"
+      ? cronScheduleTime(schedule.times)
+      : null;
+  if (time && schedule.kind === "weekly" && schedule.weekdays.length === 1) {
+    // 2026-01-04 is a Sunday, weekday 0.
+    const weekday = new Intl.DateTimeFormat(locale, { weekday: "long" }).format(
+      new Date(2026, 0, 4 + schedule.weekdays[0]!, 12),
+    );
+    return t`Weekly on ${weekday} at ${time}`;
+  }
+  if (time && schedule.kind === "monthly") {
+    const day = schedule.day;
+    return t`Monthly on day ${day} at ${time}`;
+  }
+  if (time && schedule.kind === "yearly") {
+    // A leap year, so a 29 February schedule keeps its date.
+    const date = new Intl.DateTimeFormat(locale, { month: "long", day: "numeric" }).format(
+      new Date(2024, schedule.month - 1, schedule.day, 12),
+    );
+    return t`Yearly on ${date} at ${time}`;
+  }
+  const expression = cron.trim();
+  return t`Cron ${expression}`;
 }
 
 /** Render schedule selectors and the localized summary for a routine. */

@@ -26,6 +26,10 @@ msgstr "(leer)"
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# Modell} other {# Modelle}}"
 
+#. placeholder {0}: routines.length
+msgid "{0, plural, one {# routine} other {# routines}}"
+msgstr "{0, plural, one {# Routine} other {# Routinen}}"
+
 #. placeholder {0}: runs.length
 #: src/pages/shell/routine-run-line.tsx:335
 msgid "{0, plural, one {# run} other {# runs}}"
@@ -120,6 +124,9 @@ msgstr "Computer von {botName}"
 msgid "{cancelledCount, plural, one {# cancelled} other {# cancelled}}"
 msgstr ""
 
+msgid "{count} · next {next}"
+msgstr "{count} · nächste {next}"
+
 #: src/pages/ActivityList.tsx:140
 msgid "{days}d ago"
 msgstr "vor {days} T."
@@ -156,6 +163,9 @@ msgstr "{name} wurde gestoppt"
 msgid "{remaining} left · bot is watching, not acting"
 msgstr "Noch {remaining} · Bot beobachtet nur"
 
+msgid "{schedules} · next {next}"
+msgstr "{schedules} · nächste {next}"
+
 #: src/components/ArtifactFileCard.tsx:220
 msgid "{size} B"
 msgstr "{size} B"
@@ -175,6 +185,9 @@ msgstr "{title}, {label}"
 #: src/pages/PluginsOverlay.tsx:645
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
+
+msgid "{what} · paused"
+msgstr "{what} · pausiert"
 
 #: src/pages/shell/transcript.tsx:234
 msgid "{workingBotName} is working"
@@ -248,6 +261,10 @@ msgstr "Aktiv"
 #: src/pages/ModelSettingsOverlay.tsx:390
 msgid "Active model"
 msgstr "Aktives Modell"
+
+#. placeholder {0}: routine.name
+msgid "Active: {0}"
+msgstr "Aktiv: {0}"
 
 #: src/pages/shell/sidebar.tsx:212
 #: src/pages/shell/sidebar.tsx:214
@@ -1039,6 +1056,9 @@ msgstr "Der Computer schläft. Öffne ihn, um ihn aufzuwecken."
 msgid "Computer is stopped"
 msgstr "Computer ist gestoppt"
 
+msgid "Computer unavailable"
+msgstr "Computer nicht verfügbar"
+
 #: src/pages/AccountSettingsOverlay.tsx:249
 msgid "Computers"
 msgstr "Computer"
@@ -1691,6 +1711,9 @@ msgstr "Zugangsdaten werden verschlüsselt und dem Modell nie gesendet."
 msgid "Cron"
 msgstr "Cron"
 
+msgid "Cron {expression}"
+msgstr "Cron {expression}"
+
 #: src/pages/RoutineSchedule.tsx:273
 msgid "Cron expression"
 msgstr "Cron-Ausdruck"
@@ -1775,6 +1798,9 @@ msgstr "Gruppe löschen"
 #: src/pages/shell/dialogs.tsx:384
 msgid "Delete memories too"
 msgstr "Erinnerungen ebenfalls löschen"
+
+msgid "Delete routine"
+msgstr "Routine löschen"
 
 #: src/pages/Shell.tsx:3059
 msgid "Delete space"
@@ -2060,6 +2086,9 @@ msgstr "Sehr hoch"
 #: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
 msgstr "Fehlgeschlagen"
+
+msgid "Failed {when}"
+msgstr "Fehlgeschlagen {when}"
 
 #: src/pages/Shell.tsx:2088
 #: src/pages/Shell.tsx:2090
@@ -2389,6 +2418,9 @@ msgstr "Wissen"
 msgid "Language"
 msgstr "Sprache"
 
+msgid "Last run failed"
+msgstr "Letzter Lauf fehlgeschlagen"
+
 #: src/components/DesktopUpdates.tsx:114
 msgid "Later"
 msgstr ""
@@ -2679,6 +2711,9 @@ msgstr "Minuten"
 msgid "Model"
 msgstr "Modell"
 
+msgid "Model error"
+msgstr "Modellfehler"
+
 #: src/pages/ModelSettingsOverlay.tsx:531
 #: src/pages/Onboarding.tsx:471
 msgid "Model id"
@@ -2714,6 +2749,9 @@ msgstr "Modelle vom Server"
 #: src/pages/RoutineSchedule.tsx:161
 msgid "Monthly"
 msgstr "Monatlich"
+
+msgid "Monthly on day {day} at {time}"
+msgstr "Monatlich am {day}. um {time}"
 
 #: src/components/ComputerMaintenanceActions.tsx:123
 msgid "More computer actions"
@@ -2789,6 +2827,9 @@ msgstr "Neuer offener Arbeitspunkt"
 #: src/pages/Auth.tsx:295
 msgid "New password"
 msgstr "Neues Passwort"
+
+msgid "New routine"
+msgstr "Neue Routine"
 
 #: src/pages/BotContextMenu.tsx:114
 #: src/pages/shell/dialogs.tsx:180
@@ -2884,6 +2925,9 @@ msgstr "Noch keine Nachrichten mit {peerBotName}."
 msgid "No model catalog is available."
 msgstr "Kein Modellkatalog verfügbar."
 
+msgid "No model connected"
+msgstr "Kein Modell verbunden"
+
 #: src/pages/SkillsOverlay.tsx:515
 msgid "No plugins in this marketplace."
 msgstr "Keine Plugins auf diesem Marktplatz."
@@ -2973,6 +3017,9 @@ msgstr ""
 msgid "Notifies you each run"
 msgstr "Benachrichtigt dich bei jedem Lauf"
 
+msgid "Notify me"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx:330
 msgid "Notify me on every run"
 msgstr ""
@@ -3018,6 +3065,9 @@ msgstr "Nach Zeitplan"
 #: src/pages/RoutineSchedule.tsx:161
 msgid "on the 1st at {0}"
 msgstr "am 1. um {0}"
+
+msgid "One-time"
+msgstr "Einmalig"
 
 #: src/pages/Shell.tsx:3097
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
@@ -3360,6 +3410,9 @@ msgstr "Entfernen"
 #: src/pages/shell/composer.tsx:845
 msgid "Remove {0}"
 msgstr "{0} entfernen"
+
+msgid "Remove {title}?"
+msgstr "{title} entfernen?"
 
 #: src/pages/RoutineEditor.tsx:654
 msgid "Remove Git event"
@@ -4313,6 +4366,9 @@ msgstr "Webhook"
 msgid "Weekdays"
 msgstr "Wochentage"
 
+msgid "Weekly on {weekday} at {time}"
+msgstr "Wöchentlich am {weekday} um {time}"
+
 #: src/pages/shell/dialogs.tsx:357
 msgid "What about its memories?"
 msgstr "Was soll mit seinen Erinnerungen geschehen?"
@@ -4367,6 +4423,9 @@ msgstr "Wird verarbeitet…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "Arbeitsbereich-Stammverzeichnis"
+
+msgid "Yearly on {date} at {time}"
+msgstr "Jährlich am {date} um {time}"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

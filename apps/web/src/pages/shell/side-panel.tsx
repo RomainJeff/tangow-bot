@@ -12,10 +12,9 @@ import type {
   TaughtSkill,
   ThreadSnapshot,
 } from "@rakazo/contracts";
-import { cronFromPreset, isActive } from "@rakazo/core";
 import { BotAvatar, Button } from "@rakazo/ui-web";
 import { Maximize2, X } from "lucide-react";
-import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useCallback } from "react";
 import { ComputerMaintenanceActions } from "../../components/ComputerMaintenanceActions";
 import {
@@ -26,18 +25,10 @@ import { TeachCaptureOverlay } from "../../components/teach/TeachCaptureOverlay"
 import { TeachComputerOverlayControl } from "../../components/teach/TeachComputerOverlay";
 import { TeachRecordingChrome, TeachStopButton } from "../../components/teach/TeachRecordingChrome";
 import { desktopBridge } from "../../lib/desktop";
-import { localTimezone } from "../../lib/local-timezone";
 import { rpc } from "../../lib/rpc";
 import { computerPanelNeedsMaintenance } from "../../lib/thread-events";
 import { BotPage } from "../bot-page/BotPage";
 import { CreateGroupForm, GroupSettings } from "../GroupPanel";
-import type { RoutineDraftState } from "../RoutineEditor";
-import {
-  draftFromRoutine,
-  emptyRoutineDraft,
-  RoutineEditor,
-  routineNeedsOneShotArm,
-} from "../RoutineEditor";
 import { WindowChrome } from "../WindowChrome";
 import type { BotCommands } from "./bot-commands";
 import { CreateBotForm } from "./bot-panel";
@@ -70,26 +61,6 @@ export function SidePanel({
   refreshGroupThread,
   refreshBots,
   activeRoutines,
-  snapshot,
-  stopRun,
-  routineDraft,
-  setRoutineDraft,
-  editingRoutine,
-  setEditingRoutine,
-  routineWebhookSecret,
-  setRoutineWebhookSecret,
-  routineError,
-  setRoutineError,
-  savingRoutine,
-  setSavingRoutine,
-  runningRoutine,
-  setRunningRoutine,
-  setDeleteRoutineTarget,
-  ensureWebhookSecret,
-  routineSavePending,
-  routineSaveRequest,
-  routineRunPending,
-  activeBotId,
   messagingProviders,
   memoryProviderConfig,
   bots,
@@ -124,26 +95,6 @@ export function SidePanel({
   refreshBots: (includeArchived?: boolean, replaceBotOrder?: boolean) => Promise<void>;
   /** `null` until the open bot's routines are read. */
   activeRoutines: Routine[] | null;
-  snapshot: ThreadSnapshot | null;
-  stopRun: () => Promise<void>;
-  routineDraft: RoutineDraftState;
-  setRoutineDraft: Dispatch<SetStateAction<RoutineDraftState>>;
-  editingRoutine: Routine | null;
-  setEditingRoutine: Dispatch<SetStateAction<Routine | null>>;
-  routineWebhookSecret: string | null;
-  setRoutineWebhookSecret: Dispatch<SetStateAction<string | null>>;
-  routineError: string | null;
-  setRoutineError: Dispatch<SetStateAction<string | null>>;
-  savingRoutine: boolean;
-  setSavingRoutine: Dispatch<SetStateAction<boolean>>;
-  runningRoutine: boolean;
-  setRunningRoutine: Dispatch<SetStateAction<boolean>>;
-  setDeleteRoutineTarget: Dispatch<SetStateAction<Routine | null>>;
-  ensureWebhookSecret: (botId: string) => Promise<string>;
-  routineSavePending: RefObject<boolean>;
-  routineSaveRequest: RefObject<number>;
-  routineRunPending: RefObject<boolean>;
-  activeBotId: RefObject<string | undefined>;
   messagingProviders: string[];
   memoryProviderConfig: SpaceMemoryConfig | null | undefined;
   bots: Bot[];
@@ -171,14 +122,6 @@ export function SidePanel({
     closeEditor,
     closePanel,
   });
-  const openRoutine = (routine: Routine | null) => {
-    setRoutineDraft(routine ? draftFromRoutine(routine) : emptyRoutineDraft());
-    setRoutineWebhookSecret(null);
-    setEditingRoutine(routine);
-    setRoutineError(null);
-    setPanel("routine");
-  };
-  const backToRoutines = () => onBotPage({ tab: "routines", detail: null });
   return (
     <aside
       data-testid="side-panel"
@@ -198,18 +141,12 @@ export function SidePanel({
             bot={active}
             userId={userId}
             routines={activeRoutines}
-            runningRoutineId={
-              snapshot?.run?.routineId && isActive(snapshot.run.status)
-                ? snapshot.run.routineId
-                : null
-            }
             memoryProviderConfigured={memoryProviderConfig != null}
             view={botPage}
             onView={onBotPage}
             onClose={() => setPanel(null)}
-            onOpenRoutine={openRoutine}
-            onStopRun={() => void stopRun()}
             commands={commands}
+            messagingProviders={messagingProviders}
           />
         ) : (
           <>
@@ -330,169 +267,6 @@ export function SidePanel({
                 <CreateBotForm
                   onCancel={() => setPanel(null)}
                   onCreate={(input) => createBot(input)}
-                />
-              ) : null}
-              {panel === "routine" && active ? (
-                <RoutineEditor
-                  draft={routineDraft}
-                  onChange={setRoutineDraft}
-                  editing={editingRoutine}
-                  timezone={editingRoutine?.timezone ?? localTimezone()}
-                  webhook={{
-                    path:
-                      typeof window !== "undefined"
-                        ? `${window.location.origin}/api/v1/bots/${active.id}/webhook`
-                        : `/api/v1/bots/${active.id}/webhook`,
-                    secret: routineWebhookSecret,
-                    configured: active.webhookConfigured || Boolean(routineWebhookSecret),
-                  }}
-                  githubPath={
-                    typeof window !== "undefined"
-                      ? `${window.location.origin}/api/v1/bots/${active.id}/github`
-                      : `/api/v1/bots/${active.id}/github`
-                  }
-                  messageProviders={messagingProviders}
-                  saving={savingRoutine}
-                  running={runningRoutine}
-                  error={routineError}
-                  onBack={backToRoutines}
-                  onClose={() => setPanel(null)}
-                  onEnsureWebhook={async () => {
-                    await ensureWebhookSecret(active.id);
-                  }}
-                  onSave={async () => {
-                    if (routineSavePending.current) return;
-                    const targetBotId = active.id;
-                    const targetRoutine = editingRoutine;
-                    if (targetRoutine && targetRoutine.botId !== targetBotId) return;
-                    if (
-                      !routineDraft.schedules.length &&
-                      !routineDraft.webhookEnabled &&
-                      !routineDraft.githubEnabled &&
-                      !routineDraft.messageProvider
-                    ) {
-                      setRoutineError(t`Add a schedule, webhook, GitHub, or message trigger`);
-                      return;
-                    }
-                    const saveRequest = ++routineSaveRequest.current;
-                    routineSavePending.current = true;
-                    setSavingRoutine(true);
-                    setRoutineError(null);
-                    try {
-                      if (
-                        (routineDraft.webhookEnabled || routineDraft.githubEnabled) &&
-                        !active.webhookConfigured &&
-                        !routineWebhookSecret
-                      ) {
-                        await ensureWebhookSecret(targetBotId);
-                      }
-                      const crons = routineDraft.schedules.map(cronFromPreset);
-                      let saved: Routine;
-                      if (targetRoutine) {
-                        const armOneShot = routineNeedsOneShotArm(targetRoutine, crons);
-                        let runAt: string | undefined;
-                        if (armOneShot) {
-                          if (!routineDraft.runAtLocal) {
-                            setRoutineError(t`Add a run time for this one-shot.`);
-                            return;
-                          }
-                          const parsed = new Date(routineDraft.runAtLocal);
-                          if (
-                            !Number.isFinite(parsed.getTime()) ||
-                            parsed.getTime() <= Date.now()
-                          ) {
-                            setRoutineError(t`Run time must be in the future.`);
-                            return;
-                          }
-                          runAt = parsed.toISOString();
-                        }
-                        saved = await rpc.routines.update({
-                          routineId: targetRoutine.id,
-                          name: routineDraft.name || t`Routine`,
-                          prompt: routineDraft.prompt || t`Check in.`,
-                          crons,
-                          active: armOneShot ? true : routineDraft.active,
-                          notify: routineDraft.notify,
-                          webhookEnabled: routineDraft.webhookEnabled,
-                          githubEnabled: routineDraft.githubEnabled,
-                          messageProvider: routineDraft.messageProvider,
-                          requireToolApproval: routineDraft.requireToolApproval,
-                          ...(runAt ? { runAt } : {}),
-                        });
-                      } else {
-                        saved = await rpc.routines.create({
-                          botId: targetBotId,
-                          name: routineDraft.name || t`Routine`,
-                          prompt: routineDraft.prompt || t`Check in.`,
-                          crons,
-                          timezone: localTimezone(),
-                          active: routineDraft.active,
-                          notify: routineDraft.notify,
-                          webhookEnabled: routineDraft.webhookEnabled,
-                          githubEnabled: routineDraft.githubEnabled,
-                          messageProvider: routineDraft.messageProvider,
-                          requireToolApproval: routineDraft.requireToolApproval,
-                        });
-                      }
-                      if (
-                        routineSaveRequest.current === saveRequest &&
-                        activeBotId.current === targetBotId
-                      ) {
-                        setEditingRoutine(saved);
-                        setRoutineDraft(draftFromRoutine(saved));
-                      }
-                    } catch (error) {
-                      if (
-                        routineSaveRequest.current !== saveRequest ||
-                        activeBotId.current !== targetBotId
-                      ) {
-                        return;
-                      }
-                      setRoutineError(
-                        error instanceof Error ? error.message : t`Could not save routine`,
-                      );
-                      return;
-                    } finally {
-                      routineSavePending.current = false;
-                      setSavingRoutine(false);
-                    }
-                    if (
-                      routineSaveRequest.current !== saveRequest ||
-                      activeBotId.current !== targetBotId
-                    ) {
-                      return;
-                    }
-                    await refreshThread(targetBotId).catch(() => undefined);
-                  }}
-                  onTestRun={async () => {
-                    if (routineRunPending.current) return;
-                    const targetBotId = active.id;
-                    const targetRoutine = editingRoutine;
-                    if (!targetRoutine) return;
-                    routineRunPending.current = true;
-                    setRunningRoutine(true);
-                    setRoutineError(null);
-                    try {
-                      await rpc.routines.testRun({ routineId: targetRoutine.id });
-                      await refreshThread(targetBotId);
-                    } catch (error) {
-                      if (activeBotId.current === targetBotId) {
-                        setRoutineError(
-                          error instanceof Error ? error.message : t`Could not run routine`,
-                        );
-                      }
-                    } finally {
-                      routineRunPending.current = false;
-                      setRunningRoutine(false);
-                    }
-                  }}
-                  onDelete={() => {
-                    if (editingRoutine) {
-                      setDeleteRoutineTarget(editingRoutine);
-                      return;
-                    }
-                    backToRoutines();
-                  }}
                 />
               ) : null}
             </div>

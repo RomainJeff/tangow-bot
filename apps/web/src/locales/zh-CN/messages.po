@@ -26,6 +26,10 @@ msgstr "（空）"
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# 个模型} other {# 个模型}}"
 
+#. placeholder {0}: routines.length
+msgid "{0, plural, one {# routine} other {# routines}}"
+msgstr "{0, plural, one {# 个例行任务} other {# 个例行任务}}"
+
 #. placeholder {0}: runs.length
 #: src/pages/shell/routine-run-line.tsx:335
 msgid "{0, plural, one {# run} other {# runs}}"
@@ -120,6 +124,9 @@ msgstr "{botName} 的电脑"
 msgid "{cancelledCount, plural, one {# cancelled} other {# cancelled}}"
 msgstr ""
 
+msgid "{count} · next {next}"
+msgstr "{count} · 下次{next}"
+
 #: src/pages/ActivityList.tsx:140
 msgid "{days}d ago"
 msgstr "{days} 天前"
@@ -156,6 +163,9 @@ msgstr "{name} 已停止"
 msgid "{remaining} left · bot is watching, not acting"
 msgstr "剩余 {remaining} · Bot 只看不操作"
 
+msgid "{schedules} · next {next}"
+msgstr "{schedules} · 下次{next}"
+
 #: src/components/ArtifactFileCard.tsx:220
 msgid "{size} B"
 msgstr "{size} B"
@@ -175,6 +185,9 @@ msgstr "{title}，{label}"
 #: src/pages/PluginsOverlay.tsx:645
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
+
+msgid "{what} · paused"
+msgstr "{what} · 已暂停"
 
 #: src/pages/shell/transcript.tsx:234
 msgid "{workingBotName} is working"
@@ -248,6 +261,10 @@ msgstr "启用"
 #: src/pages/ModelSettingsOverlay.tsx:390
 msgid "Active model"
 msgstr "当前模型"
+
+#. placeholder {0}: routine.name
+msgid "Active: {0}"
+msgstr "启用：{0}"
 
 #: src/pages/shell/sidebar.tsx:212
 #: src/pages/shell/sidebar.tsx:214
@@ -1039,6 +1056,9 @@ msgstr "电脑处于睡眠状态。打开以唤醒。"
 msgid "Computer is stopped"
 msgstr "电脑已停止"
 
+msgid "Computer unavailable"
+msgstr "电脑不可用"
+
 #: src/pages/AccountSettingsOverlay.tsx:249
 msgid "Computers"
 msgstr "电脑"
@@ -1691,6 +1711,9 @@ msgstr "凭据已加密，不会发送给模型。"
 msgid "Cron"
 msgstr "Cron"
 
+msgid "Cron {expression}"
+msgstr "Cron {expression}"
+
 #: src/pages/RoutineSchedule.tsx:273
 msgid "Cron expression"
 msgstr "Cron 表达式"
@@ -1775,6 +1798,9 @@ msgstr "删除群组"
 #: src/pages/shell/dialogs.tsx:384
 msgid "Delete memories too"
 msgstr "同时删除记忆"
+
+msgid "Delete routine"
+msgstr "删除例行任务"
 
 #: src/pages/Shell.tsx:3059
 msgid "Delete space"
@@ -2060,6 +2086,9 @@ msgstr "极高"
 #: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
 msgstr "失败"
+
+msgid "Failed {when}"
+msgstr "{when}失败"
 
 #: src/pages/Shell.tsx:2088
 #: src/pages/Shell.tsx:2090
@@ -2389,6 +2418,9 @@ msgstr "知识"
 msgid "Language"
 msgstr "语言"
 
+msgid "Last run failed"
+msgstr "上次运行失败"
+
 #: src/components/DesktopUpdates.tsx:114
 msgid "Later"
 msgstr ""
@@ -2679,6 +2711,9 @@ msgstr "分钟"
 msgid "Model"
 msgstr "模型"
 
+msgid "Model error"
+msgstr "模型错误"
+
 #: src/pages/ModelSettingsOverlay.tsx:531
 #: src/pages/Onboarding.tsx:471
 msgid "Model id"
@@ -2714,6 +2749,9 @@ msgstr "来自服务器的模型"
 #: src/pages/RoutineSchedule.tsx:161
 msgid "Monthly"
 msgstr "每月"
+
+msgid "Monthly on day {day} at {time}"
+msgstr "每月 {day} 日 {time}"
 
 #: src/components/ComputerMaintenanceActions.tsx:123
 msgid "More computer actions"
@@ -2789,6 +2827,9 @@ msgstr "新的待办"
 #: src/pages/Auth.tsx:295
 msgid "New password"
 msgstr "新密码"
+
+msgid "New routine"
+msgstr "新建例行任务"
 
 #: src/pages/BotContextMenu.tsx:114
 #: src/pages/shell/dialogs.tsx:180
@@ -2884,6 +2925,9 @@ msgstr "还没有与 {peerBotName} 的消息。"
 msgid "No model catalog is available."
 msgstr "没有可用的模型目录。"
 
+msgid "No model connected"
+msgstr "未连接模型"
+
 #: src/pages/SkillsOverlay.tsx:515
 msgid "No plugins in this marketplace."
 msgstr "此市场中没有插件。"
@@ -2973,6 +3017,9 @@ msgstr ""
 msgid "Notifies you each run"
 msgstr "每次运行都会通知你"
 
+msgid "Notify me"
+msgstr ""
+
 #: src/pages/RoutineEditor.tsx:330
 msgid "Notify me on every run"
 msgstr ""
@@ -3018,6 +3065,9 @@ msgstr "按计划"
 #: src/pages/RoutineSchedule.tsx:161
 msgid "on the 1st at {0}"
 msgstr "每月 1 日 {0}"
+
+msgid "One-time"
+msgstr "一次性"
 
 #: src/pages/Shell.tsx:3097
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
@@ -3360,6 +3410,9 @@ msgstr "移除"
 #: src/pages/shell/composer.tsx:845
 msgid "Remove {0}"
 msgstr "移除 {0}"
+
+msgid "Remove {title}?"
+msgstr "移除{title}？"
 
 #: src/pages/RoutineEditor.tsx:654
 msgid "Remove Git event"
@@ -4313,6 +4366,9 @@ msgstr "Webhook"
 msgid "Weekdays"
 msgstr "工作日"
 
+msgid "Weekly on {weekday} at {time}"
+msgstr "每周{weekday} {time}"
+
 #: src/pages/shell/dialogs.tsx:357
 msgid "What about its memories?"
 msgstr "它的记忆怎么处理？"
@@ -4367,6 +4423,9 @@ msgstr "处理中…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "工作区根目录"
+
+msgid "Yearly on {date} at {time}"
+msgstr "每年{date} {time}"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

@@ -69,17 +69,18 @@ export function SettingsGroup({ label, children }: { label?: ReactNode; children
   );
 }
 
-export type Confirm = (title: string) => Promise<boolean>;
+export type Confirm = (title: string, action?: string) => Promise<boolean>;
 
-/** A destructive yes/no asked in place, answered as a promise. */
+/** A destructive yes/no asked in place, answered as a promise. The action defaults to "Clear". */
 export function useConfirm(): { confirm: Confirm; dialog: ReactNode } {
   const { t } = useLingui();
   const [pending, setPending] = useState<{
     title: string;
+    action: string | undefined;
     resolve: (confirmed: boolean) => void;
   } | null>(null);
   const confirm = useCallback<Confirm>(
-    (title) => new Promise<boolean>((resolve) => setPending({ title, resolve })),
+    (title, action) => new Promise<boolean>((resolve) => setPending({ title, action, resolve })),
     [],
   );
   const answer = (confirmed: boolean) => {
@@ -100,7 +101,7 @@ export function useConfirm(): { confirm: Confirm; dialog: ReactNode } {
         <AlertDialogFooter>
           <AlertDialogCancel>{t`Cancel`}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={() => answer(true)}>
-            {t`Clear`}
+            {pending.action ?? t`Clear`}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
