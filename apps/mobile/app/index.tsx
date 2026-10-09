@@ -473,7 +473,8 @@ export default function Home() {
       });
       void refreshBots().catch(() => undefined);
       allowFocusPrompt(bot.id);
-      router.replace({ pathname: "/thread", params: { botId: bot.id, name: bot.name } });
+      // Push, not replace: the inbox is the stack root, so replacing it left the thread with no way back.
+      router.push({ pathname: "/thread", params: { botId: bot.id, name: bot.name } });
       void (async () => {
         const started = await rpc("onboarding/start", { botId: bot.id })
           .then(() => true)
