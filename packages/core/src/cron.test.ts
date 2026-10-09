@@ -329,6 +329,14 @@ describe("parseRunAt", () => {
     expect(at("2026-10-08T09:00:00", "Europe/Paris")).toBe("2026-10-08T07:00:00.000Z");
   });
 
+  it("refuses an offset beyond 14 hours or with 60 minutes or more", () => {
+    expect(at("2026-10-08T09:00:00+25:99")).toBeUndefined();
+    expect(at("2026-10-08T09:00:00+14:30")).toBeUndefined();
+    expect(at("2026-10-08T09:00:00-05:60")).toBeUndefined();
+    expect(at("2026-10-08T09:00:00+14:00")).toBe("2026-10-07T19:00:00.000Z");
+    expect(at("2026-10-08T09:00:00-12:00")).toBe("2026-10-08T21:00:00.000Z");
+  });
+
   it("reads a time with no offset in UTC when its zone does not exist", () => {
     expect(at("2026-10-08T09:00:00", "Mars/Base")).toBe("2026-10-08T09:00:00.000Z");
   });

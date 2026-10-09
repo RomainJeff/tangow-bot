@@ -316,6 +316,7 @@ export function isValidTimezone(timezone: string): boolean {
 const ISO_DATETIME =
   /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:(Z)|([+-])(\d{2}):?(\d{2}))?$/i;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_OFFSET_MINUTES = 14 * 60;
 
 /** How far `timezone`'s wall clock is ahead of UTC at `instant`, in milliseconds. */
 function zoneOffsetMs(instant: number, timezone: string): number {
@@ -360,7 +361,7 @@ function zonedInstant(wall: number, timezone: string): number {
 /**
  * A one-shot run time: an ISO datetime with an offset or Z is taken as given, one without is a
  * wall-clock time in `timezone`, or in UTC when that zone does not exist. Null when it names no
- * real time.
+ * real time or an offset no zone uses.
  */
 export function parseRunAt(value: string, timezone: string): Date | null {
   const match = ISO_DATETIME.exec(value.trim());
@@ -385,8 +386,9 @@ export function parseRunAt(value: string, timezone: string): Date | null {
   }
   if (z) return new Date(wall);
   if (sign) {
-    const offsetMs = (Number(offH) * 60 + Number(offM)) * 60_000 * (sign === "+" ? 1 : -1);
-    return new Date(wall - offsetMs);
+    const offsetMinutes = Number(offH) * 60 + Number(offM);
+    if (Number(offM) >= 60 || offsetMinutes > MAX_OFFSET_MINUTES) return null;
+    return new Date(wall - offsetMinutes * 60_000 * (sign === "+" ? 1 : -1));
   }
   return new Date(zonedInstant(wall, validTimezoneOrUtc(timezone)));
 }
