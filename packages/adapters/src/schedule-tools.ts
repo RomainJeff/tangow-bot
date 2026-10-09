@@ -413,7 +413,8 @@ export async function updateRoutine(
     (!existing.active && active) ||
     JSON.stringify(crons) !== JSON.stringify(existing.crons) ||
     timezone !== existing.timezone;
-  let nextRunAt: Date | null = null;
+  // Left undefined, the stored next run stays: a wake-up may have moved it since `existing` was read.
+  let nextRunAt: Date | null | undefined = null;
   if (active && oneShot) {
     if (change.runAt !== undefined) {
       if (!retime && !wasOneShot) return { error: "One-shot schedules must be created from chat." };
@@ -431,7 +432,7 @@ export async function updateRoutine(
     } else if (!wasOneShot) {
       return { error: "One-shot schedules must be created from chat." };
     } else if (existing.nextRunAt && timezone === existing.timezone) {
-      nextRunAt = existing.nextRunAt;
+      nextRunAt = undefined;
     } else if (existing.nextRunAt) {
       nextRunAt = sameWallClockIn(existing.nextRunAt, existing.timezone, timezone);
       if (nextRunAt.getTime() <= Date.now()) return { error: "Run time must be in the future." };
@@ -443,15 +444,16 @@ export async function updateRoutine(
       };
     }
   } else if (active && crons.length > 0) {
-    try {
-      nextRunAt =
-        scheduleChanged || !existing.nextRunAt
-          ? nextCronDateAcrossStrict(crons, new Date(), timezone)
-          : existing.nextRunAt;
-    } catch {
-      nextRunAt = null;
+    if (scheduleChanged || !existing.nextRunAt) {
+      try {
+        nextRunAt = nextCronDateAcrossStrict(crons, new Date(), timezone);
+      } catch {
+        nextRunAt = null;
+      }
+      if (!nextRunAt) return { error: "Enter a valid cron expression." };
+    } else {
+      nextRunAt = undefined;
     }
-    if (!nextRunAt) return { error: "Enter a valid cron expression." };
   }
 
   const row = await deps.prisma.routine.update({

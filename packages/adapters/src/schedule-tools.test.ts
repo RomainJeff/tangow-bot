@@ -568,4 +568,70 @@ describe("changing a routine", () => {
       vi.useRealTimers();
     }
   });
+
+  it("keeps the next run a wake-up claimed while a rename was in flight", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-07T11:00:01Z"));
+    try {
+      const stored = {
+        id: "routine-1",
+        name: "Stretch",
+        prompt: "Remind me to stretch",
+        notify: false,
+        timezone: "UTC",
+        crons: ["0 * * * *"],
+        active: true,
+        webhookEnabled: false,
+        githubEnabled: false,
+        messageProvider: null,
+        lastRunAt: null as Date | null,
+        nextRunAt: new Date("2026-10-07T11:00:00Z") as Date | null,
+      };
+      const readByRename = { ...stored };
+      stored.lastRunAt = new Date("2026-10-07T11:00:01Z");
+      stored.nextRunAt = new Date("2026-10-07T12:00:00Z");
+      const queued: unknown[] = [];
+      const deps = {
+        prisma: {
+          routine: {
+            update: async ({ data }: { data: Record<string, unknown> }) =>
+              Object.assign(
+                stored,
+                Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+              ),
+          },
+        },
+        events: { append: async () => undefined },
+        jobs: {
+          enqueue: async (job: unknown) => {
+            queued.push(job);
+          },
+          cancel: async () => undefined,
+        },
+      } as unknown as Parameters<typeof updateRoutine>[0];
+
+      await updateRoutine(
+        deps,
+        readByRename,
+        { name: "Stretch more" },
+        {
+          spaceId: "ws-1",
+          botId: "bot-1",
+          threadId: null,
+        },
+      );
+
+      expect(stored.nextRunAt).toEqual(new Date("2026-10-07T12:00:00Z"));
+      expect(queued).toEqual([
+        {
+          name: "routine.wakeup",
+          payload: { routineId: "routine-1", scheduledFor: "2026-10-07T12:00:00.000Z" },
+          availableAt: new Date("2026-10-07T12:00:00Z"),
+          replaceKey: "routine:routine-1",
+        },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
