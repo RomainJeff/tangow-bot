@@ -38,9 +38,7 @@ describe("SettingRow", () => {
 
   it("is a button with a chevron when it opens something", () => {
     const html = renderToString(
-      <SettingRow label="Model" onClick={() => {}} chevron>
-        Auto
-      </SettingRow>,
+      <SettingRow label="Model" subline="Auto" onClick={() => {}} chevron />,
     );
     expect(html).toMatch(/^<button type="button" data-slot="setting-row"/);
     expect(html).toContain("hover:bg-accent");

@@ -690,11 +690,11 @@ class. Ported from beautifului.dev
 One line of a settings list: `text-row-name` label, an optional `text-row-status`
 sub-line, then on the trailing side a `meta` slot (a `SaveMeta`), a control or a
 value, and an optional chevron. Static by default; `onClick` makes it a button
-with a hover fill and a focus ring, which carries a value and a chevron, never a
+with a hover fill and a focus ring, which carries a sub-line and a chevron, never a
 control or a `SaveMeta`, which would nest an interactive element inside another.
 
 Props: `label`, `subline?`, `meta?`, `children?` (the trailing control or
-value), `chevron?`.
+value; neither on a pressable row, which the type refuses), `chevron?`.
 
 ### SaveMeta
 

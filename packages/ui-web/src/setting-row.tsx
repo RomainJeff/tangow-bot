@@ -6,20 +6,27 @@ interface SettingRowContent {
   label: ReactNode;
   /** One quiet line under the label. */
   subline?: ReactNode;
-  /** A `SaveMeta`, shown ahead of the trailing control. */
-  meta?: ReactNode;
-  /** The trailing control or value: a switch, a select, the current choice. */
-  children?: ReactNode;
   /** Marks a row that opens something. */
   chevron?: boolean;
 }
 
-type Omitted<P> = Omit<P, keyof SettingRowContent>;
+interface SettingRowTrailing {
+  /** A `SaveMeta`, shown ahead of the trailing control. */
+  meta?: ReactNode;
+  /** The trailing control or value: a switch, a select, the current choice. */
+  children?: ReactNode;
+}
+
+type Omitted<P> = Omit<P, keyof SettingRowContent | keyof SettingRowTrailing>;
 
 export type SettingRowProps = SettingRowContent &
   (
-    | (Omitted<ComponentPropsWithoutRef<"button">> & { onClick: () => void })
-    | (Omitted<ComponentPropsWithoutRef<"div">> & { onClick?: undefined })
+    | (Omitted<ComponentPropsWithoutRef<"button">> & {
+        onClick: () => void;
+        meta?: never;
+        children?: never;
+      })
+    | (Omitted<ComponentPropsWithoutRef<"div">> & SettingRowTrailing & { onClick?: undefined })
   );
 
 const rowClass = "flex w-full items-center gap-3 rounded-row px-3 py-2.5 text-start";
@@ -29,7 +36,7 @@ const pressableClass =
 /**
  * One line of a settings list: a label, an optional sub-line, and on the
  * trailing side a control, a value, or a chevron. Static by default; with
- * `onClick` it is a button, which carries a value and a chevron, never a
+ * `onClick` it is a button, which carries a sub-line and a chevron, never a
  * control or a `SaveMeta`: those would nest an interactive element inside another.
  */
 export function SettingRow({
