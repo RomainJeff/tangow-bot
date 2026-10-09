@@ -724,8 +724,11 @@ keeps the typed text and shows "Could not save · Retry".
 
 Props: `label`, `field` (from `useFieldSave`), `labels` (the `SaveMetaLabels`
 plus `restore?`), `multiline?`, `rows?`, `required?`, `onConfirmClear?`,
-`keepDraft?`, `locale?`. `className` styles the wrapper; the other native props
-land on the input or textarea.
+`keepDraft?`, `locale?`, `counter?` ("n / max" beside the meta; needs
+`maxLength`), `meta?` (false when the caller shows the `SaveMeta` elsewhere).
+`className` styles the wrapper, `controlClassName` the input or textarea and
+`labelClassName` the row that holds the label and the meta; the other native
+props land on the input or textarea.
 
 ## Motion rules
 
