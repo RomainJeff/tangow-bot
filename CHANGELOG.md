@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-10
+
+#### Fixed
+
+- Notifications on iPhone, web and desktop now show a bot's message as plain words, cut on a whole word, instead of its raw formatting symbols such as asterisks, hashes and bracketed links.
+
 ### 2026-10-09
 
 #### Added
