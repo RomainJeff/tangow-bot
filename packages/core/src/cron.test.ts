@@ -3,6 +3,8 @@ import {
   type CronPreset,
   cronFromPreset,
   cronSchedule,
+  cronSchedulePreset,
+  cronScheduleTime,
   describeCronPreset,
   formatCron,
   hasMixedOneShotSchedule,
@@ -125,6 +127,27 @@ describe("cronSchedule", () => {
     ]) {
       expect(cronSchedule(cron)).toEqual({ kind: "cron", expression: cron });
     }
+  });
+
+  it("names the editor preset a schedule words as, and none for the rest", () => {
+    expect(cronSchedulePreset(cronSchedule("0 8 * * 1-5"))).toEqual(
+      preset({ freq: "Weekdays", time: "8:00 AM" }),
+    );
+    expect(cronSchedulePreset(cronSchedule("*/45 * * * *"))).toEqual(
+      preset({ freq: "Interval", n: 45, unit: "minutes" }),
+    );
+    expect(cronSchedulePreset(cronSchedule("0 10 * * 6"))).toBeNull();
+    expect(cronSchedulePreset(cronSchedule("0 9,18 * * *"))).toBeNull();
+  });
+
+  it("gives the one time a schedule runs at, and none for several", () => {
+    expect(cronScheduleTime([{ hour: 14, minute: 5 }])).toBe("2:05 PM");
+    expect(
+      cronScheduleTime([
+        { hour: 9, minute: 0 },
+        { hour: 18, minute: 0 },
+      ]),
+    ).toBeNull();
   });
 });
 
