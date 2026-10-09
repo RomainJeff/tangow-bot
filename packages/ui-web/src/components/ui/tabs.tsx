@@ -1,6 +1,8 @@
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 import { cn } from "@rakazo/ui-web/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
+import { createContext, useContext } from "react";
+import { segmentedItemClass, segmentedTrackClass } from "../../segmented-control.js";
 
 function Tabs({ className, orientation = "horizontal", ...props }: TabsPrimitive.Root.Props) {
   return (
@@ -21,6 +23,7 @@ const tabsListVariants = cva(
       variant: {
         default: "bg-muted",
         line: "gap-1 bg-transparent",
+        segmented: `${segmentedTrackClass} group-data-horizontal/tabs:h-auto`,
       },
     },
     defaultVariants: {
@@ -29,22 +32,39 @@ const tabsListVariants = cva(
   },
 );
 
+type TabsListVariant = NonNullable<VariantProps<typeof tabsListVariants>["variant"]>;
+
+const TabsListVariantContext = createContext<TabsListVariant>("default");
+
 function TabsList({
   className,
   variant = "default",
   ...props
 }: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
+  const listVariant = variant ?? "default";
   return (
-    <TabsPrimitive.List
-      data-slot="tabs-list"
-      data-variant={variant}
-      className={cn(tabsListVariants({ variant }), className)}
-      {...props}
-    />
+    <TabsListVariantContext.Provider value={listVariant}>
+      <TabsPrimitive.List
+        data-slot="tabs-list"
+        data-variant={listVariant}
+        className={cn(tabsListVariants({ variant: listVariant }), className)}
+        {...props}
+      />
+    </TabsListVariantContext.Provider>
   );
 }
 
 function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
+  const variant = useContext(TabsListVariantContext);
+  if (variant === "segmented") {
+    return (
+      <TabsPrimitive.Tab
+        data-slot="tabs-trigger"
+        className={cn(segmentedItemClass, className)}
+        {...props}
+      />
+    );
+  }
   return (
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"

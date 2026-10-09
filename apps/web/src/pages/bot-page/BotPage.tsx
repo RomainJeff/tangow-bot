@@ -178,13 +178,9 @@ export function BotPage({
               className="gap-0"
             >
               <div className="px-4 pt-5 pb-4">
-                <TabsList className="h-auto w-full gap-0.5 rounded-full bg-muted p-0.75">
+                <TabsList variant="segmented" className="w-full">
                   {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
-                    <TabsTrigger
-                      key={tab}
-                      value={tab}
-                      className="h-7 rounded-full px-2 text-label font-normal text-muted-foreground data-active:bg-surface data-active:font-medium data-active:text-foreground data-active:shadow-row dark:text-muted-foreground dark:data-active:border-transparent dark:data-active:bg-surface"
-                    >
+                    <TabsTrigger key={tab} value={tab}>
                       {tabLabels[tab]}
                     </TabsTrigger>
                   ))}

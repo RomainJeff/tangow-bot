@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import type { ComputerMode } from "@rakazo/contracts";
 import { saveKey } from "@rakazo/core";
-import { SaveMeta, SettingRow, Switch, Toggle, useFieldSave } from "@rakazo/ui-web";
+import { SaveMeta, SegmentedControl, SettingRow, Switch, useFieldSave } from "@rakazo/ui-web";
 import type { BotDetail } from "../shell/layout";
 import { botModelKey, modelSummary, useModelCatalog, useVoices } from "./model-options";
 import { type BotPageContext, SettingsGroup, useBotField, useSaveLabels } from "./page-kit";
@@ -120,22 +120,16 @@ function ComputerRow({ page }: { page: BotPageContext }) {
       }
       className={ROW}
     >
-      <span className="flex rounded-full bg-muted p-0.5">
-        {(["team", "dedicated"] as const).map((mode) => (
-          <Toggle
-            key={mode}
-            size="sm"
-            pressed={computer.value === mode}
-            disabled={busy || computer.state.kind === "saving"}
-            onPressedChange={(pressed) => {
-              if (pressed && mode !== computer.value) void computer.save(mode);
-            }}
-            className="h-7 rounded-full px-3 text-label text-muted-foreground aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-row"
-          >
-            {mode === "team" ? t`Team` : t`Private`}
-          </Toggle>
-        ))}
-      </span>
+      <SegmentedControl
+        aria-label={t`Computer`}
+        value={computer.value}
+        options={[
+          { value: "team", label: t`Team` },
+          { value: "dedicated", label: t`Private` },
+        ]}
+        disabled={busy || computer.state.kind === "saving"}
+        onValueChange={(mode) => void computer.save(mode)}
+      />
     </SettingRow>
   );
 }

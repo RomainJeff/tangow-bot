@@ -696,6 +696,17 @@ control or a `SaveMeta`, which would nest an interactive element inside another.
 Props: `label`, `subline?`, `meta?`, `children?` (the trailing control or
 value; neither on a pressable row, which the type refuses), `chevron?`.
 
+### SegmentedControl
+
+A choice of one value among a few, side by side on a `muted` pill track; the
+chosen segment sits raised on `surface` with `shadow-row`. Choosing the current
+value again does nothing. Segmented tabs use the same look through
+`<TabsList variant="segmented">`, so a tab bar and a setting choice never draw
+the pill by hand.
+
+Props: `value`, `options` (`{ value, label }`), `onValueChange`, `disabled?`,
+`aria-label?`.
+
 ### SaveMeta
 
 The only proof an automatic save happened: "Saving…" while the call runs,
