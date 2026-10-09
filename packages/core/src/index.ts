@@ -37,6 +37,7 @@ export * from "./model-oauth.js";
 export * from "./model-probe.js";
 export * from "./model-providers.js";
 export * from "./peer-messages.js";
+export * from "./plain-text.js";
 export * from "./proposal.js";
 export * from "./response-bytes.js";
 export * from "./routine-draft.js";
