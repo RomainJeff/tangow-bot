@@ -185,9 +185,6 @@ msgstr "{workingBotName} काम कर रहा है"
 msgid "@{0}"
 msgstr "@{0}"
 
-msgid "A first routine"
-msgstr "पहला रूटीन"
-
 #: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "एक प्लगइन मार्केटप्लेस (.claude-plugin/marketplace.json) या स्किल्स की रिपॉजिटरी (SKILL.md फ़ाइलें)। फ़ॉर्मेट अपने आप पहचाना जाता है।"
@@ -2940,9 +2937,6 @@ msgstr "कोई ट्रिगर नहीं"
 msgid "None yet"
 msgstr "अभी तक कोई नहीं"
 
-msgid "Not awake yet"
-msgstr "अभी जागा नहीं"
-
 #: src/pages/ModelSettingsOverlay.tsx:638
 msgid "Not connected"
 msgstr "कनेक्टेड नहीं"
@@ -4373,9 +4367,6 @@ msgstr "काम चल रहा है…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "वर्कस्पेस रूट"
-
-msgid "Write"
-msgstr "लिखें"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

@@ -79,10 +79,7 @@ afterEach(() => {
   store.reset();
 });
 
-async function render(
-  view: BotPageView,
-  { bot = BOT, routines = [] as Routine[], neverRan = false as boolean | null } = {},
-) {
+async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[] | null } = {}) {
   const commands: BotCommands = {
     updateBot: updateBot as BotCommands["updateBot"],
     setComputer: vi.fn(),
@@ -96,7 +93,6 @@ async function render(
           userId="user-1"
           routines={routines}
           runningRoutineId={null}
-          neverRan={neverRan}
           memoryProviderConfigured={false}
           view={view}
           onView={vi.fn()}
@@ -153,34 +149,18 @@ it("saves the notifications switch as soon as it changes", async () => {
   expect(updateBot.mock.calls).toEqual([["bot-1", { notifyOnFinish: false }]]);
 });
 
-it("shows the first-bot state only for a bot with no instructions, routines or runs", async () => {
-  const fresh = { ...BOT, instructions: "" };
-  const tabs = () => container.querySelector('[role="tablist"]');
+it("opens a new bot on its tabs, like any bot", async () => {
+  await render({ tab: "settings", detail: null }, { bot: { ...BOT, instructions: "" } });
 
-  await render({ tab: "settings", detail: null }, { bot: fresh, neverRan: true });
-  expect(container.textContent).toContain("Not awake yet");
-  expect(tabs()).toBeNull();
-
-  await render({ tab: "settings", detail: null }, { bot: fresh, neverRan: false });
-  expect(container.textContent).not.toContain("Not awake yet");
-  expect(tabs()).not.toBeNull();
-
-  await render(
-    { tab: "settings", detail: null },
-    { bot: fresh, neverRan: true, routines: [{ id: "routine-1" } as Routine] },
-  );
-  expect(tabs()).not.toBeNull();
-
-  await render({ tab: "settings", detail: null }, { bot: BOT, neverRan: true });
-  expect(tabs()).not.toBeNull();
+  const tabs = [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+  expect(tabs).toEqual(["Routines", "Knowledge", "Settings"]);
 });
 
-it("is busy, and shows no first-bot state, until the conversation is read", async () => {
-  await render(
-    { tab: "settings", detail: null },
-    { bot: { ...BOT, instructions: "" }, neverRan: null },
-  );
-  const page = container.querySelector('[data-testid="bot-page"]');
-  expect(page?.getAttribute("aria-busy")).toBe("true");
-  expect(container.textContent).not.toContain("Not awake yet");
+it("is busy until the bot's routines are read", async () => {
+  await render({ tab: "settings", detail: null }, { routines: null });
+  const page = () => container.querySelector('[data-testid="bot-page"]');
+  expect(page()?.getAttribute("aria-busy")).toBe("true");
+
+  await render({ tab: "settings", detail: null });
+  expect(page()?.hasAttribute("aria-busy")).toBe(false);
 });

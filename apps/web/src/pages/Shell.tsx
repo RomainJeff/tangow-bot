@@ -125,13 +125,7 @@ import {
   RenameBotSectionDialog,
 } from "./shell/dialogs";
 import type { BotPageView, BotTab, Panel, PendingAttachment } from "./shell/layout";
-import {
-  FALLBACK_BOT_COLOR,
-  firstThreadRoute,
-  neverRan,
-  panelIsOpen,
-  panelSizeFor,
-} from "./shell/layout";
+import { FALLBACK_BOT_COLOR, firstThreadRoute, panelIsOpen, panelSizeFor } from "./shell/layout";
 import type { ScreenLinkHandlers } from "./shell/screen-frame";
 import { ComputerOverlay, SidePanel } from "./shell/side-panel";
 import { BotsSidebar } from "./shell/sidebar";
@@ -2956,7 +2950,6 @@ export function ShellPage() {
         onBotPage={showBotPage}
         commands={botCommands}
         userId={userId ?? ""}
-        neverRan={activeSnapshot ? neverRan(activeSnapshot) : null}
         active={active}
         activeGroup={activeGroup}
         computer={computer}

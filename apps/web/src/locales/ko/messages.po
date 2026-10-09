@@ -185,9 +185,6 @@ msgstr "{workingBotName} 작업 중"
 msgid "@{0}"
 msgstr "@{0}"
 
-msgid "A first routine"
-msgstr "첫 자동 실행"
-
 #: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "플러그인 마켓플레이스(.claude-plugin/marketplace.json) 또는 스킬 저장소(SKILL.md 파일). 형식은 자동으로 감지됩니다."
@@ -2940,9 +2937,6 @@ msgstr "트리거 없음"
 msgid "None yet"
 msgstr "아직 없음"
 
-msgid "Not awake yet"
-msgstr "아직 깨어나지 않음"
-
 #: src/pages/ModelSettingsOverlay.tsx:638
 msgid "Not connected"
 msgstr "연결되지 않음"
@@ -4373,9 +4367,6 @@ msgstr "처리 중…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "작업 공간 루트"
-
-msgid "Write"
-msgstr "작성"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

@@ -7,7 +7,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  SettingRow,
   Tabs,
   TabsContent,
   TabsList,
@@ -27,7 +26,7 @@ import { lazy, Suspense, useEffect, useRef } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import type { BotPageView, BotTab } from "../shell/layout";
 import { BotHero } from "./BotHero";
-import { type BotPageContext, SettingsGroup, useBotField, useConfirm } from "./page-kit";
+import { type BotPageContext, useConfirm } from "./page-kit";
 import { RoutinesTab } from "./RoutinesTab";
 import { ModelDetail, TextDetail, VoiceDetail } from "./SettingDetails";
 import { SettingsTab } from "./SettingsTab";
@@ -43,8 +42,6 @@ export interface BotPageProps {
   routines: Routine[] | null;
   /** The routine whose run is under way, if any. */
   runningRoutineId: string | null;
-  /** Whether the bot has never run, `null` until its conversation is read. */
-  neverRan: boolean | null;
   memoryProviderConfigured: boolean;
   view: BotPageView;
   onView: (view: BotPageView) => void;
@@ -65,7 +62,6 @@ export function BotPage({
   userId,
   routines,
   runningRoutineId,
-  neverRan,
   memoryProviderConfigured,
   view,
   onView,
@@ -78,12 +74,6 @@ export function BotPage({
   const { confirm, dialog } = useConfirm();
   const root = useRef<HTMLDivElement>(null);
   const page: BotPageContext = { bot, userId, commands };
-  // Instructions being saved already count, so leaving the editor shows the full page at once.
-  const instructions = useBotField(page, "instructions", bot.instructions, (value) => ({
-    instructions: value,
-  }));
-  const first =
-    !instructions.value && routines?.length === 0 && bot.status === "idle" && neverRan === true;
   const detail = view.detail;
   const tabLabels: Record<BotTab, string> = {
     routines: t`Routines`,
@@ -108,7 +98,7 @@ export function BotPage({
     <div
       ref={root}
       data-testid="bot-page"
-      aria-busy={neverRan === null || routines === null || undefined}
+      aria-busy={routines === null || undefined}
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
@@ -145,68 +135,38 @@ export function BotPage({
         </div>
       ) : (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto pb-4">
-          <BotHero page={page} first={first} />
-          {first ? (
-            <div className="px-4 pt-5">
-              <SettingsGroup>
-                <SettingRow label={t`Instructions`} className="min-h-14.5">
-                  <Button
-                    variant="capsule"
-                    size="capsule"
-                    data-opens="instructions"
-                    onClick={() => onView({ tab: "settings", detail: { kind: "instructions" } })}
-                  >
-                    {t`Write`}
-                  </Button>
-                </SettingRow>
-                <SettingRow label={t`A first routine`} className="min-h-14.5">
-                  <Button
-                    variant="capsuleSecondary"
-                    size="capsule"
-                    data-testid="routine-create-button"
-                    onClick={() => onOpenRoutine(null)}
-                  >
-                    {t`Add`}
-                  </Button>
-                </SettingRow>
-              </SettingsGroup>
+          <BotHero page={page} />
+          <Tabs
+            value={view.tab}
+            onValueChange={(tab) => onView({ tab: tab as BotTab, detail: null })}
+            className="gap-0"
+          >
+            <div className="px-4 pt-5 pb-4">
+              <TabsList variant="segmented" className="w-full">
+                {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
+                  <TabsTrigger key={tab} value={tab}>
+                    {tabLabels[tab]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
             </div>
-          ) : (
-            <Tabs
-              value={view.tab}
-              onValueChange={(tab) => onView({ tab: tab as BotTab, detail: null })}
-              className="gap-0"
-            >
-              <div className="px-4 pt-5 pb-4">
-                <TabsList variant="segmented" className="w-full">
-                  {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
-                    <TabsTrigger key={tab} value={tab}>
-                      {tabLabels[tab]}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </div>
-              <TabsContent value="routines" className="px-4">
-                <RoutinesTab
-                  routines={routines ?? []}
-                  runningRoutineId={runningRoutineId}
-                  onOpen={onOpenRoutine}
-                  onStop={onStopRun}
-                />
-              </TabsContent>
-              <TabsContent value="knowledge" className="px-4">
-                <Suspense fallback={null}>
-                  <KnowledgeTab page={page} memoryProviderConfigured={memoryProviderConfigured} />
-                </Suspense>
-              </TabsContent>
-              <TabsContent value="settings" className="px-4">
-                <SettingsTab
-                  page={page}
-                  onOpen={(next) => onView({ tab: view.tab, detail: next })}
-                />
-              </TabsContent>
-            </Tabs>
-          )}
+            <TabsContent value="routines" className="px-4">
+              <RoutinesTab
+                routines={routines ?? []}
+                runningRoutineId={runningRoutineId}
+                onOpen={onOpenRoutine}
+                onStop={onStopRun}
+              />
+            </TabsContent>
+            <TabsContent value="knowledge" className="px-4">
+              <Suspense fallback={null}>
+                <KnowledgeTab page={page} memoryProviderConfigured={memoryProviderConfigured} />
+              </Suspense>
+            </TabsContent>
+            <TabsContent value="settings" className="px-4">
+              <SettingsTab page={page} onOpen={(next) => onView({ tab: view.tab, detail: next })} />
+            </TabsContent>
+          </Tabs>
         </div>
       )}
       {dialog}

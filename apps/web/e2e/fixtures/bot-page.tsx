@@ -17,14 +17,13 @@ import "../../src/styles.css";
 /*
  * The bot page without a server. Query parameters pick what it shows:
  *   tab=routines|knowledge|settings   detail=instructions|description|model|voice
- *   first=1 (a bot with nothing set up yet)   busy=1 (the bot is working)
+ *   busy=1 (the bot is working)
  *   fail=1 (every save fails)   refuse=1 (the server refuses a computer change)   theme=dark
  * Writes go through in-memory commands that answer after 400 ms; reads are
  * answered by a stubbed fetch with fixed data. A refusal carries the server's
  * reason like a real RPC error; fail=1 fails like a dropped connection.
  */
 const params = new URLSearchParams(window.location.search);
-const FIRST = params.get("first") === "1";
 const BUSY = params.get("busy") === "1";
 const REFUSE = params.get("refuse") === "1";
 const SAVE_DELAY = 400;
@@ -37,13 +36,12 @@ i18n.loadAndActivate({ locale: "en", messages: {} });
 const BOT: Bot = {
   id: "bot-scout",
   spaceId: "space-1",
-  name: FIRST ? "Ledger" : "Scout",
-  title: FIRST ? "" : "Watches the inbox and flags what needs you",
-  description: FIRST ? "" : "Keeps the shared inbox down to what needs a person.",
-  instructions: FIRST
-    ? ""
-    : "You watch the shared inbox for the team and surface only what needs a person. You never reply to a sender yourself.\n\nEvery weekday morning, group what arrived overnight into three buckets: needs a decision, needs a reply, can wait.",
-  color: FIRST ? "#2E8CF0" : "#3BC9A0",
+  name: "Scout",
+  title: "Watches the inbox and flags what needs you",
+  description: "Keeps the shared inbox down to what needs a person.",
+  instructions:
+    "You watch the shared inbox for the team and surface only what needs a person. You never reply to a sender yourself.\n\nEvery weekday morning, group what arrived overnight into three buckets: needs a decision, needs a reply, can wait.",
+  color: "#3BC9A0",
   shapeSeed: null,
   notifyOnFinish: true,
   pinned: false,
@@ -91,13 +89,11 @@ function routine(id: string, name: string, extra: Partial<Routine> = {}): Routin
   };
 }
 
-const ROUTINES: Routine[] = FIRST
-  ? []
-  : [
-      routine("routine-1", "Morning digest"),
-      routine("routine-2", "Weekly digest", { crons: ["0 9 * * 1"] }),
-      routine("routine-3", "Invoice watch", { crons: [], webhookEnabled: true, active: false }),
-    ];
+const ROUTINES: Routine[] = [
+  routine("routine-1", "Morning digest"),
+  routine("routine-2", "Weekly digest", { crons: ["0 9 * * 1"] }),
+  routine("routine-3", "Invoice watch", { crons: [], webhookEnabled: true, active: false }),
+];
 
 const READS: Record<string, unknown> = {
   "models/credentials": [
@@ -145,19 +141,17 @@ const READS: Record<string, unknown> = {
     { id: "warm", label: "Warm" },
     { id: "bright", label: "Bright" },
   ],
-  "memory/list": FIRST
-    ? []
-    : [
-        {
-          id: "memory-1",
-          scope: "bot",
-          botId: BOT.id,
-          path: "MEMORY.md",
-          content: "# Scout\n\nCounsel prefers a reply before 10:00.",
-          revision: 4,
-          updatedAt: "2026-10-05T08:00:00.000Z",
-        },
-      ],
+  "memory/list": [
+    {
+      id: "memory-1",
+      scope: "bot",
+      botId: BOT.id,
+      path: "MEMORY.md",
+      content: "# Scout\n\nCounsel prefers a reply before 10:00.",
+      revision: 4,
+      updatedAt: "2026-10-05T08:00:00.000Z",
+    },
+  ],
   "agentSkills/list": [
     {
       id: "skill-1",
@@ -170,13 +164,11 @@ const READS: Record<string, unknown> = {
     },
   ],
   "scratchpad/list": [],
-  "computer/files": FIRST
-    ? []
-    : [
-        { path: "notes", kind: "dir", size: 0 },
-        { path: "inbox-report.md", kind: "file", size: 3_200 },
-        { path: "q3-forecast.csv", kind: "file", size: 12_400 },
-      ],
+  "computer/files": [
+    { path: "notes", kind: "dir", size: 0 },
+    { path: "inbox-report.md", kind: "file", size: 3_200 },
+    { path: "q3-forecast.csv", kind: "file", size: 12_400 },
+  ],
   "bots/list": [],
 };
 
@@ -281,7 +273,6 @@ function Fixture() {
           userId="user-1"
           routines={ROUTINES}
           runningRoutineId={null}
-          neverRan={FIRST}
           memoryProviderConfigured={false}
           view={view}
           onView={setView}

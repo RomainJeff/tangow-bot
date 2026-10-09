@@ -24,7 +24,7 @@ const HERO_INPUT =
   "h-auto border-transparent bg-transparent px-2 py-0.5 text-center dark:bg-transparent";
 
 /** The avatar, name and title at the top of the page, each saving on its own. */
-export function BotHero({ page, first }: { page: BotPageContext; first: boolean }) {
+export function BotHero({ page }: { page: BotPageContext }) {
   const { t } = useLingui();
   const labels = useSaveLabels();
   const { bot } = page;
@@ -65,12 +65,6 @@ export function BotHero({ page, first }: { page: BotPageContext; first: boolean 
         className="w-full gap-0"
         controlClassName={`${HERO_INPUT} text-meta text-muted-foreground md:text-meta`}
       />
-      {first ? (
-        <span className="mt-1 inline-flex items-center gap-2 text-row-status text-muted-foreground">
-          <span aria-hidden className="size-1.5 rounded-full bg-input" />
-          {t`Not awake yet`}
-        </span>
-      ) : null}
       <SaveMeta
         state={meta?.state ?? IDLE}
         labels={labels}

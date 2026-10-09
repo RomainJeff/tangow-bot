@@ -8,7 +8,6 @@ import {
   openUserSettings,
   rpc,
   signup,
-  writeFirstInstructions,
 } from "./helpers";
 
 const LOCAL_MODEL_ID = "rakazo-e2e-local";
@@ -86,8 +85,6 @@ test("custom connections persist reasoning support and bot thinking", async ({
     clearedCredentials.find((entry) => entry.modelId === "arbitrary-model")?.maxImagesPerPrompt,
   ).toBeUndefined();
   await page.getByRole("button", { name: "Close model settings" }).click();
-  // Chief has never run: its page shows tabs once it has instructions.
-  await writeFirstInstructions(page, "Answer briefly.");
   const settings = await openBotSettings(page);
   await settings.getByRole("button", { name: /^Model/ }).click();
   const botPage = page.getByTestId("bot-page");

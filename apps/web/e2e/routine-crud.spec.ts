@@ -4,7 +4,6 @@ import {
   activeBotId,
   captureScreenshot,
   completeOnboarding,
-  openBotPage,
   openRoutineCreate,
   openRoutines,
   rpc,
@@ -173,10 +172,9 @@ test("routine editing updates in place, preserves timezone, and deletion persist
   await expect(updatedButton).toHaveCount(0);
   expect(await rpc<Routine[]>(page, "routines/list", { botId })).toEqual([]);
 
-  // With its only routine gone, Chief has nothing set up again: its page offers a first routine.
+  // The deleted routine stays gone after a reload.
   await page.reload();
-  const botPage = await openBotPage(page);
-  await expect(botPage.getByText("Not awake yet")).toBeVisible();
+  await openRoutines(page);
   await expect(updatedButton).toHaveCount(0);
 });
 
