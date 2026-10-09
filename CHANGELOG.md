@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-09
+
+#### Fixed
+
+- A bot can again change a reminder whose time zone was saved in an old format, and its card now gives the time in UTC, the zone it actually goes off in.
+
 ### 2026-10-08
 
 #### Added

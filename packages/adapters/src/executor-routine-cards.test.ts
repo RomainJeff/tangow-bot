@@ -1178,6 +1178,25 @@ describe("a routine the user asks to change", () => {
       ]);
     }));
 
+  it("moves a reminder stored with an old zone and words it in UTC", () =>
+    at("2026-10-07T10:00:00Z", async () => {
+      const legacy = {
+        ...stored,
+        crons: ["@once"],
+        timezone: "Paris",
+        nextRunAt: new Date("2026-10-08T08:00:00Z"),
+      };
+      const f = fixture({ routines: [legacy] });
+      await f.play([[change({ runAt: "2026-10-08T09:00:00" })]]);
+      expect(f.results).toEqual([
+        expect.objectContaining({ ok: true, schedule: "Once on Oct 8, 2026 at 09:00 UTC" }),
+      ]);
+      expect(f.routines[0]).toMatchObject({ nextRunAt: new Date("2026-10-08T09:00:00Z") });
+      expect(f.posted()).toEqual([
+        [expect.objectContaining({ text: "Once on Oct 8, 2026 at 09:00 UTC" })],
+      ]);
+    }));
+
   it("refuses to move a reminder more than 5 years ahead", () =>
     at("2026-10-07T10:00:00Z", async () => {
       const reminder = { ...stored, crons: ["@once"], nextRunAt: new Date("2026-10-08T08:00:00Z") };
