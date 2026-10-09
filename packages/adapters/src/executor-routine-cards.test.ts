@@ -489,6 +489,12 @@ describe("a routine the bot proposes on its own", () => {
       oneShot,
     ],
     [
+      "a delay of millions of years",
+      { delayMinutes: 1e12 },
+      "One-shot schedules must run within 5 years.",
+      oneShot,
+    ],
+    [
       "a question on two lines",
       { question: "Chaque lundi ?\nOu mardi ?" },
       "question must be a single line of visible text, without invisible or control characters.",

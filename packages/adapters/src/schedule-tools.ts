@@ -65,6 +65,8 @@ export function scheduleCreateArgs(args: Record<string, unknown>): Record<string
   );
 }
 
+const ONE_SHOT_MAX_AHEAD_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+
 export function resolveScheduleTiming(
   input: {
     cron?: unknown;
@@ -129,6 +131,9 @@ export function resolveScheduleTiming(
     }
     if (nextRunAt.getTime() <= Date.now()) {
       return { ok: false, error: "One-shot schedules must run in the future." };
+    }
+    if (!(nextRunAt.getTime() <= Date.now() + ONE_SHOT_MAX_AHEAD_MS)) {
+      return { ok: false, error: "One-shot schedules must run within 5 years." };
     }
     return { ok: true, cron: ONCE_ROUTINE_CRON, nextRunAt, oneShot: true };
   }
