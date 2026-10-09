@@ -732,6 +732,33 @@ describe("a routine the user asks to change", () => {
     });
   });
 
+  it("moves an armed reminder to the same time in a new zone, and refuses one that has passed there", () =>
+    at("2026-10-07T10:00:00Z", async () => {
+      const reminder = {
+        ...stored,
+        name: "Call mum",
+        crons: ["@once"],
+        timezone: "Europe/Paris",
+        nextRunAt: new Date("2026-10-08T06:00:00Z"),
+      };
+      const f = fixture({ routines: [reminder] });
+      await f.play([[change({ timezone: "America/New_York" })]]);
+      expect(f.routines[0]).toMatchObject({
+        timezone: "America/New_York",
+        nextRunAt: new Date("2026-10-08T12:00:00Z"),
+      });
+      expect(f.wakeups()).toEqual([new Date("2026-10-08T12:00:00Z")]);
+      expect(f.posted()).toEqual([
+        [expect.objectContaining({ text: "Once on Oct 8, 2026 at 08:00 America/New_York" })],
+      ]);
+
+      const soon = { ...reminder, nextRunAt: new Date("2026-10-07T10:30:00Z") };
+      const passed = fixture({ routines: [soon] });
+      await passed.play([[change({ timezone: "Asia/Tokyo" })]]);
+      expect(passed.results).toEqual([{ error: "Run time must be in the future." }]);
+      expect(passed.routineUpdate).not.toHaveBeenCalled();
+    }));
+
   it("moves every schedule of a routine to a new zone, and leaves several schedules to the app", () =>
     at("2026-10-07T10:00:00Z", async () => {
       const twice = { ...stored, crons: ["0 9 * * 1-5", "0 10 * * 0,6"] };

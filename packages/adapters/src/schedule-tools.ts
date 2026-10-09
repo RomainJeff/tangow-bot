@@ -12,6 +12,7 @@ import {
   nextCronDateAcrossStrict,
   ONCE_ROUTINE_CRON,
   routineCardSchedule,
+  sameWallClockIn,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 
@@ -349,8 +350,11 @@ export async function updateRoutine(
       nextRunAt = at;
     } else if (!wasOneShot) {
       return { error: "One-shot schedules must be created from chat." };
-    } else if (existing.nextRunAt) {
+    } else if (existing.nextRunAt && timezone === existing.timezone) {
       nextRunAt = existing.nextRunAt;
+    } else if (existing.nextRunAt) {
+      nextRunAt = sameWallClockIn(existing.nextRunAt, existing.timezone, timezone);
+      if (nextRunAt.getTime() <= Date.now()) return { error: "Run time must be in the future." };
     } else {
       return {
         error: existing.lastRunAt
