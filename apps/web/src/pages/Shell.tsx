@@ -2615,8 +2615,8 @@ export function ShellPage() {
   }
   const botCommands = useBotCommands({
     setBots,
-    invalidateBotsRefresh: () => {
-      botsRefreshEpoch.current += 1;
+    supersedeBotsRefresh: () => {
+      if (botsRefreshInFlight.current > 0) void refreshBots().catch(() => undefined);
     },
     botAction: runBotAction,
   });

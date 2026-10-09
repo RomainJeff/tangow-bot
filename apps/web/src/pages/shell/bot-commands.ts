@@ -20,8 +20,11 @@ export interface BotCommands {
 
 export interface BotCommandDeps {
   setBots: Dispatch<SetStateAction<Bot[]>>;
-  /** Drops a roster refresh already in flight, which would carry the bot as it was before a write. */
-  invalidateBotsRefresh: () => void;
+  /**
+   * Replaces a roster refresh already in flight, which would carry the bot as it
+   * was before a write, with one started after it.
+   */
+  supersedeBotsRefresh: () => void;
   botAction: BotCommands["botAction"];
 }
 
@@ -41,7 +44,7 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
       const bot = await write();
       const merge = order.write(botId, request, sent, bot);
       if (merge) {
-        depsRef.current.invalidateBotsRefresh();
+        depsRef.current.supersedeBotsRefresh();
         depsRef.current.setBots((list) =>
           list.map((item) => (item.id === botId ? merge(item) : item)),
         );

@@ -24,11 +24,11 @@ function deferred<T>() {
 }
 
 let view: { bots: Bot[]; commands: BotCommands };
-const invalidateBotsRefresh = vi.fn();
+const supersedeBotsRefresh = vi.fn();
 
 function Harness() {
   const [bots, setBots] = useState([bot("a", "Ada"), bot("b", "Bea")]);
-  const commands = useBotCommands({ setBots, invalidateBotsRefresh, botAction: vi.fn() });
+  const commands = useBotCommands({ setBots, supersedeBotsRefresh, botAction: vi.fn() });
   view = { bots, commands };
   return null;
 }
@@ -60,7 +60,7 @@ it("merges the bot a write returns into the roster by id, leaving the others alo
   expect(api.bots.update).toHaveBeenCalledWith({ botId: "a", name: "Ada Lovelace" });
   expect(names()).toEqual(["Ada Lovelace", "Bea"]);
   expect(view.bots[1]).toBe(bea);
-  expect(invalidateBotsRefresh).toHaveBeenCalledTimes(1);
+  expect(supersedeBotsRefresh).toHaveBeenCalledTimes(1);
 });
 
 it("never lets an older answer for a bot overwrite a newer one", async () => {
