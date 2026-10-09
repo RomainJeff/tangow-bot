@@ -1059,6 +1059,12 @@ export function ShellPage() {
     setCallOpen(false);
   }, [active?.id]);
 
+  // An open editor belongs to the bot it was opened on; the next bot's page
+  // opens on its tab instead of widening the panel and taking focus.
+  useEffect(() => {
+    setBotPage((view) => (view.detail ? { ...view, detail: null } : view));
+  }, [active?.id]);
+
   // The call view sits above the side panel (z-20 inside main vs. the panel's
   // z-30), so an open panel would otherwise paint over Mute/End call. Closing
   // it here also makes the header button that opens it inert along with the
