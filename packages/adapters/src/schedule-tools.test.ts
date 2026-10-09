@@ -9,6 +9,7 @@ import {
   listSchedulesFromTool,
   resolveScheduleTiming,
   SCHEDULE_TOOL_NAMES,
+  updateRoutine,
 } from "./schedule-tools.js";
 
 describe("resolveScheduleTiming", () => {
@@ -59,6 +60,27 @@ describe("resolveScheduleTiming", () => {
       ok: false,
       error: "One-shot schedules must run in the future.",
     });
+  });
+
+  it("rejects one-shot schedules more than 5 years ahead", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-09T10:00:00Z"));
+    try {
+      expect(resolveScheduleTiming({ runAt: "2031-10-08T10:00:00Z" })).toMatchObject({
+        ok: true,
+        nextRunAt: new Date("2031-10-08T10:00:00Z"),
+      });
+      expect(resolveScheduleTiming({ runAt: "2031-10-09T10:00:00Z" })).toEqual({
+        ok: false,
+        error: "One-shot schedules must run within 5 years.",
+      });
+      expect(resolveScheduleTiming({ delayMinutes: 1e9 })).toEqual({
+        ok: false,
+        error: "One-shot schedules must run within 5 years.",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects fractional repeat intervals", () => {
@@ -646,5 +668,69 @@ describe("schedule_list proposals", () => {
     expect(await list([stored("Waiting")], { threadId: "group-thread-1" })).toEqual({
       routines: [],
     });
+  });
+});
+
+describe("changing a routine", () => {
+  it("queues its wake-up when a retry finds the new time already stored", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-07T10:00:00Z"));
+    try {
+      const stored = {
+        id: "routine-1",
+        name: "Stretch",
+        prompt: "Remind me to stretch",
+        notify: false,
+        timezone: "UTC",
+        crons: ["0 * * * *"],
+        active: true,
+        webhookEnabled: false,
+        githubEnabled: false,
+        messageProvider: null,
+        lastRunAt: null,
+        nextRunAt: new Date("2026-10-07T11:00:00Z"),
+      };
+      const queued: unknown[] = [];
+      let queueDown = true;
+      const deps = {
+        prisma: {
+          routine: {
+            update: async ({ data }: { data: Record<string, unknown> }) =>
+              Object.assign(
+                stored,
+                Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+              ),
+          },
+        },
+        events: { append: async () => undefined },
+        jobs: {
+          enqueue: async (job: unknown) => {
+            if (queueDown) {
+              queueDown = false;
+              throw new Error("queue down");
+            }
+            queued.push(job);
+          },
+          cancel: async () => undefined,
+        },
+      } as unknown as Parameters<typeof updateRoutine>[0];
+      const signal = { spaceId: "ws-1", botId: "bot-1", threadId: null };
+
+      await expect(
+        updateRoutine(deps, { ...stored }, { crons: ["0 9 * * *"] }, signal),
+      ).rejects.toThrow("queue down");
+      await updateRoutine(deps, { ...stored }, { crons: ["0 9 * * *"] }, signal);
+
+      expect(queued).toEqual([
+        {
+          name: "routine.wakeup",
+          payload: { routineId: "routine-1", scheduledFor: "2026-10-08T09:00:00.000Z" },
+          availableAt: new Date("2026-10-08T09:00:00Z"),
+          replaceKey: "routine:routine-1",
+        },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

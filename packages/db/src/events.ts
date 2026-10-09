@@ -1322,9 +1322,9 @@ export interface DismissProposalWithTextInput {
 }
 
 /**
- * `dismissed`: the card is put away and the run queued again on its checkpoint. `settled`: the card
- * was answered first, the run goes on, and the caller steers the message into it. `keep`: not a
- * card a reply puts away; the caller applies the usual rule.
+ * `dismissed`: the card is put away and the run queued again on its checkpoint. `settled`: a tap
+ * answered the proposal card first, the run goes on, and the caller steers the message into it.
+ * `keep`: not a card a reply puts away; the caller applies the usual rule.
  */
 export type DismissProposalWithTextResult =
   | { outcome: "dismissed"; status: "queued" }
@@ -1352,18 +1352,16 @@ export async function dismissProposalWithTextInTransaction(
     select: { botId: true, userId: true, status: true },
   });
   if (!run || run.userId !== input.userId) return { outcome: "keep" };
-  if (run.status !== "waiting_input") {
-    return STEERABLE_AFTER_ANSWER.has(run.status)
-      ? { outcome: "settled", status: run.status }
-      : { outcome: "keep" };
-  }
+  const waiting = run.status === "waiting_input";
   const message = await tx.message.findFirst({
     where: { threadId: input.threadId, runId: input.runId, role: "bot" },
     orderBy: { seq: "desc" },
   });
-  const pending = parseKnownMessageBlocks(message?.blocks).find(
-    ({ block }) => block.kind === "ask" && block.status !== "answered",
-  );
+  const asks = parseKnownMessageBlocks(message?.blocks).filter(({ block }) => block.kind === "ask");
+  // A tap that came first answered the card: the reply steers its run only if it was a proposal.
+  const pending = waiting
+    ? asks.find(({ block }) => block.kind === "ask" && block.status !== "answered")
+    : asks.at(-1);
   if (!message || pending?.block.kind !== "ask" || !isApprovalAskBlock(pending.block)) {
     return { outcome: "keep" };
   }
@@ -1373,6 +1371,11 @@ export async function dismissProposalWithTextInTransaction(
     select: { id: true, kind: true, status: true },
   });
   if (!effect || !DISMISSABLE_EFFECT_KINDS.has(effect.kind)) return { outcome: "keep" };
+  if (!waiting) {
+    return STEERABLE_AFTER_ANSWER.has(run.status)
+      ? { outcome: "settled", status: run.status }
+      : { outcome: "keep" };
+  }
   const dismissed = await tx.externalEffect.updateMany({
     where: { id: effect.id, status: "intended", kind: { in: [...DISMISSABLE_EFFECT_KINDS] } },
     data: { status: "denied", answeredAt: new Date(), result: DISMISSED_EFFECT_RESULT },
