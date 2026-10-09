@@ -420,6 +420,18 @@ describe("routineScheduleLabel", () => {
     ).toBe("Once on Oct 7, 2026 at 14:10 Europe/Paris");
   });
 
+  it("words a schedule in UTC when its stored zone does not exist", () => {
+    expect(
+      routineScheduleLabel(
+        { crons: [ONCE_ROUTINE_CRON], nextRunAt: new Date("2026-10-07T12:10:00Z") },
+        "Paris",
+      ),
+    ).toBe("Once on Oct 7, 2026 at 12:10 UTC");
+    expect(routineScheduleLabel({ crons: ["0 9 * * *"], nextRunAt: null }, "Paris")).toBe(
+      "Every day at 09:00 UTC",
+    );
+  });
+
   it("names every schedule of a routine that has several, and a one-shot with no time left", () => {
     expect(
       routineScheduleLabel({ crons: ["0 9 * * 1-5", "0 10 * * 0,6"], nextRunAt: null }, "UTC"),
