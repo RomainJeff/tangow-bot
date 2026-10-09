@@ -58,8 +58,9 @@ export function webhookInfo(botId: string, secret: string | null, configured: bo
 
 /**
  * "When to run": one row per trigger, each opening its editor, and the menu that
- * adds one. `onSave` receives the whole draft with the change and answers with
- * an error to show in the editor, or null once it is applied.
+ * adds one. `onSave` receives the whole draft with the change, and whether the
+ * editor asked when a one-shot runs, and answers with an error to show in the
+ * editor, or null once it is applied.
  */
 export function WhenToRun({
   draft,
@@ -79,7 +80,7 @@ export function WhenToRun({
   messageProviders: string[];
   disabled?: boolean;
   confirm: Confirm;
-  onSave: (next: RoutineDraft) => Promise<string | null>;
+  onSave: (next: RoutineDraft, armOneShot: boolean) => Promise<string | null>;
   onRotate: () => void;
 }) {
   const { t } = useLingui();
@@ -202,7 +203,7 @@ function TriggerDialog({
   existing: Routine | null;
   webhook: WebhookInfo;
   confirm: Confirm;
-  onSave: (next: RoutineDraft) => Promise<string | null>;
+  onSave: (next: RoutineDraft, armOneShot: boolean) => Promise<string | null>;
   onRotate: () => void;
   onClose: () => void;
 }) {
@@ -224,11 +225,11 @@ function TriggerDialog({
           ? t`Git event`
           : t`When a webhook fires`;
 
-  const save = async (value: RoutineDraft) => {
+  const save = async (value: RoutineDraft, arm: boolean) => {
     setBusy(true);
     setError(null);
     try {
-      const failure = await onSave(value);
+      const failure = await onSave(value, arm);
       if (failure) setError(failure);
       else onClose();
     } finally {
@@ -244,7 +245,7 @@ function TriggerDialog({
       return;
     }
     if (effect === "confirm" && !(await confirm(t`Remove ${title}?`, t`Remove`))) return;
-    await save(withoutTrigger(draft, ref));
+    await save(withoutTrigger(draft, ref), false);
   };
 
   return (
@@ -309,7 +310,12 @@ function TriggerDialog({
           <Button variant="capsuleSecondary" size="capsule" disabled={busy} onClick={onClose}>
             {t`Cancel`}
           </Button>
-          <Button variant="capsule" size="capsule" disabled={busy} onClick={() => void save(next)}>
+          <Button
+            variant="capsule"
+            size="capsule"
+            disabled={busy}
+            onClick={() => void save(next, armOneShot)}
+          >
             {t`Done`}
           </Button>
         </div>

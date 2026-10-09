@@ -73,8 +73,8 @@ export function RoutineDetail({
 
   const reveal = async () => onWebhookSecret(await commands.revealWebhookSecret(bot.id));
 
-  const saveTriggers = async (next: typeof draft): Promise<string | null> => {
-    const checked = triggerSave(routine, next, () => new Date());
+  const saveTriggers = async (next: typeof draft, armOneShot: boolean): Promise<string | null> => {
+    const checked = triggerSave(routine, next, () => new Date(), armOneShot);
     if (!checked.ok) return copy.draftError(checked.error);
     const { patch } = checked;
     if (Object.keys(patch).length === 0) return null;

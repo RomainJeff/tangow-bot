@@ -501,7 +501,7 @@ describe("a trigger editor's Done on a saved routine", () => {
       ...edit,
       preset: { ...edit.preset, freq: "Weekdays", time: "7:30 AM" },
     });
-    expect(triggerSave(saved, next, now)).toEqual({
+    expect(triggerSave(saved, next, now, false)).toEqual({
       ok: true,
       patch: { crons: ["30 7 * * 1-5"] },
       needsWebhookKey: false,
@@ -510,7 +510,7 @@ describe("a trigger editor's Done on a saved routine", () => {
 
   it("appends a new schedule of the chosen frequency", () => {
     const next = applyTriggerEdit(savedDraft(), newScheduleEdit(savedDraft(), "Every hour"));
-    expect(triggerSave(saved, next, now)).toEqual({
+    expect(triggerSave(saved, next, now, false)).toEqual({
       ok: true,
       patch: { crons: ["0 9 * * *", "0 * * * *"] },
       needsWebhookKey: false,
@@ -519,7 +519,7 @@ describe("a trigger editor's Done on a saved routine", () => {
 
   it("turns a webhook on and says it needs the bot's key", () => {
     const next = applyTriggerEdit(savedDraft(), { kind: "webhook", adding: true });
-    expect(triggerSave(saved, next, now)).toEqual({
+    expect(triggerSave(saved, next, now, false)).toEqual({
       ok: true,
       patch: { webhookEnabled: true },
       needsWebhookKey: true,
@@ -532,7 +532,7 @@ describe("a trigger editor's Done on a saved routine", () => {
       provider: "slack",
       adding: true,
     });
-    expect(triggerSave(saved, next, now)).toEqual({
+    expect(triggerSave(saved, next, now, false)).toEqual({
       ok: true,
       patch: { messageProvider: "slack" },
       needsWebhookKey: false,
@@ -545,19 +545,36 @@ describe("a trigger editor's Done on a saved routine", () => {
     expect(triggerEditArmsOneShot(oneShotDraft, edit, unarmedOneShot)).toBe(true);
     if (edit.kind !== "schedule") throw new Error("schedule editor expected");
     const missing = applyTriggerEdit(oneShotDraft, { ...edit, runAtLocal: "" });
-    expect(triggerSave(unarmedOneShot, missing, now)).toEqual({
+    expect(triggerSave(unarmedOneShot, missing, now, true)).toEqual({
       ok: false,
       error: { code: "run_at_missing" },
     });
     const past = applyTriggerEdit(oneShotDraft, { ...edit, runAtLocal: "2026-10-06T09:00" });
-    expect(triggerSave(unarmedOneShot, past, now)).toEqual({
+    expect(triggerSave(unarmedOneShot, past, now, true)).toEqual({
       ok: false,
       error: { code: "run_at_past" },
     });
     const later = applyTriggerEdit(oneShotDraft, { ...edit, runAtLocal: "2026-10-06T12:00" });
-    expect(triggerSave(unarmedOneShot, later, now)).toEqual({
+    expect(triggerSave(unarmedOneShot, later, now, true)).toEqual({
       ok: true,
       patch: { active: true, runAt: new Date(2026, 9, 6, 12, 0).toISOString() },
+      needsWebhookKey: false,
+    });
+  });
+
+  it("adds or removes an inbound trigger on a never-run one-shot without arming it", () => {
+    const oneShotDraft = draftFromRoutine(unarmedOneShot, now);
+    const added = applyTriggerEdit(oneShotDraft, { kind: "webhook", adding: true });
+    expect(triggerSave(unarmedOneShot, added, now, false)).toEqual({
+      ok: true,
+      patch: { webhookEnabled: true },
+      needsWebhookKey: true,
+    });
+    const withMessage = { ...unarmedOneShot, messageProvider: "slack" };
+    const removed = withoutTrigger(draftFromRoutine(withMessage, now), { kind: "message" });
+    expect(triggerSave(withMessage, removed, now, false)).toEqual({
+      ok: true,
+      patch: { messageProvider: null },
       needsWebhookKey: false,
     });
   });

@@ -178,8 +178,10 @@ export function triggerPatch(
 
 /**
  * Saving a draft whose triggers changed on a routine that exists: the draft checked like a
- * create, then only the trigger fields that moved. `needsWebhookKey` is true when the routine
- * would listen for a webhook or a GitHub event, which sign with the bot's key.
+ * create, then only the trigger fields that moved. `armOneShot` is what `triggerEditArmsOneShot`
+ * said for the edit: only a schedule editor that asked for the run time arms a one-shot.
+ * `needsWebhookKey` is true when the routine would listen for a webhook or a GitHub event,
+ * which sign with the bot's key.
  */
 export function triggerSave(
   routine: Pick<
@@ -195,10 +197,11 @@ export function triggerSave(
   >,
   next: RoutineDraft,
   now: () => Date,
+  armOneShot: boolean,
 ):
   | { ok: true; patch: TriggerPatch; needsWebhookKey: boolean }
   | { ok: false; error: RoutineDraftError } {
-  const checked = validateRoutineDraft(next, routine, now, {
+  const checked = validateRoutineDraft(next, armOneShot ? routine : null, now, {
     name: routine.name,
     prompt: routine.prompt,
   });
