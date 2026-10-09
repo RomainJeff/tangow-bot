@@ -328,6 +328,14 @@ describe("proposalRefusal", () => {
       );
     });
 
+    it("lets a correction reuse only the names of the cards it corrects", () => {
+      const news = card(6, { name: "Daily news", runId: "run-0", threadId: "thread-1" });
+      expect(guard([news, typed(1, { name: "Weather" })], { name: "Daily news" })).toEqual(repeat);
+      expect(guard([news, typed(1, { name: "Weather" })], { name: "Weather" })).toBeUndefined();
+      const chain = [typed(2, { name: "Weather" }), typed(1, { name: "Weather on Tuesday" })];
+      expect(guard([news, ...chain], { name: "Weather" })).toBeUndefined();
+    });
+
     it("still waits for the card that is already waiting on the user", () => {
       expect(guard([typed(1)], { pendingCard: true })).toEqual({
         error:
