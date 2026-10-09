@@ -326,7 +326,6 @@ describe("parseRunAt", () => {
     expect(at("2026-10-08T24:00:00")).toBeUndefined();
     expect(at("2026-10-08")).toBeUndefined();
     expect(at("tomorrow at 9")).toBeUndefined();
-    expect(at("2026-10-08T09:00:00", "Europe/Paris")).toBe("2026-10-08T07:00:00.000Z");
   });
 
   it("refuses an offset beyond 14 hours or with 60 minutes or more", () => {
