@@ -29,7 +29,7 @@ export type SettingRowProps = SettingRowContent &
     | (Omitted<ComponentPropsWithoutRef<"div">> & SettingRowTrailing & { onClick?: undefined })
   );
 
-const rowClass = "flex w-full items-center gap-3 rounded-row px-3 py-2.5 text-start";
+const rowClass = "flex min-h-12.5 w-full items-center gap-3 py-2.5 ps-3.5 pe-3 text-start";
 const pressableClass =
   "outline-none duration-(--duration-hover) ease-quiet hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50";
 

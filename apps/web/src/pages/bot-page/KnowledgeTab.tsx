@@ -75,7 +75,6 @@ function MemoryScopeRow({ page }: { page: BotPageContext }) {
     <SettingRow
       label={t`Memory scope`}
       meta={<SaveMeta state={scope.state} labels={labels} onRetry={scope.retry} />}
-      className="min-h-12.5 rounded-none ps-3.5"
     >
       <NativeSelect
         aria-label={t`Memory scope`}

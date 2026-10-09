@@ -149,7 +149,7 @@ export function BotPage({
           {first ? (
             <div className="px-4 pt-5">
               <SettingsGroup>
-                <SettingRow label={t`Instructions`} className="min-h-14.5 rounded-none ps-3.5">
+                <SettingRow label={t`Instructions`} className="min-h-14.5">
                   <Button
                     variant="capsule"
                     size="capsule"
@@ -159,7 +159,7 @@ export function BotPage({
                     {t`Write`}
                   </Button>
                 </SettingRow>
-                <SettingRow label={t`A first routine`} className="min-h-14.5 rounded-none ps-3.5">
+                <SettingRow label={t`A first routine`} className="min-h-14.5">
                   <Button
                     variant="capsuleSecondary"
                     size="capsule"

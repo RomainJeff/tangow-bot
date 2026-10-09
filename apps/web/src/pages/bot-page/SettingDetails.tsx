@@ -176,8 +176,6 @@ export function VoiceDetail({ page }: { page: BotPageContext }) {
   const chatty = useBotField(page, "chattyReplies", bot.chattyReplies, (value) => ({
     chattyReplies: value,
   }));
-  const row = "min-h-12.5 rounded-none ps-3.5";
-
   return (
     <div className="flex flex-col gap-5 px-6 pt-1 pb-4">
       <h2 className="text-title text-foreground">{t`Voice and replies`}</h2>
@@ -186,7 +184,6 @@ export function VoiceDetail({ page }: { page: BotPageContext }) {
           <SettingRow
             label={t`Voice`}
             meta={<SaveMeta state={voice.state} labels={labels} onRetry={voice.retry} />}
-            className={row}
           >
             <NativeSelect
               aria-label={t`Voice`}
@@ -206,7 +203,6 @@ export function VoiceDetail({ page }: { page: BotPageContext }) {
         <SettingRow
           label={t`Read replies aloud`}
           meta={<SaveMeta state={autoSpeak.state} labels={labels} onRetry={autoSpeak.retry} />}
-          className={row}
         >
           <Switch
             aria-label={t`Read replies aloud`}
@@ -217,7 +213,6 @@ export function VoiceDetail({ page }: { page: BotPageContext }) {
         <SettingRow
           label={t`Reply in several short messages`}
           meta={<SaveMeta state={chatty.state} labels={labels} onRetry={chatty.retry} />}
-          className={row}
         >
           <Switch
             aria-label={t`Reply in several short messages`}

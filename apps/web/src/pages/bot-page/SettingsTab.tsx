@@ -31,7 +31,6 @@ export function SettingsTab({
           chevron
           data-opens="model"
           onClick={() => onOpen({ kind: "model" })}
-          className={ROW}
         />
         <SettingRow
           label={t`Voice and replies`}
@@ -39,7 +38,6 @@ export function SettingsTab({
           chevron
           data-opens="voice"
           onClick={() => onOpen({ kind: "voice" })}
-          className={ROW}
         />
       </SettingsGroup>
       <SettingsGroup label={t`How it runs`}>
@@ -49,8 +47,6 @@ export function SettingsTab({
     </div>
   );
 }
-
-const ROW = "min-h-12.5 rounded-none ps-3.5";
 
 /**
  * A long text opened in its own editor. The row previews it, and says when its
@@ -85,7 +81,6 @@ function TextRow({
       chevron
       data-opens={opens}
       onClick={() => onOpen({ kind: opens })}
-      className={ROW}
     />
   );
 }
@@ -118,7 +113,6 @@ function ComputerRow({ page }: { page: BotPageContext }) {
           <SaveMeta state={computer.state} labels={labels} onRetry={computer.retry} />
         )
       }
-      className={ROW}
     >
       <SegmentedControl
         aria-label={t`Computer`}
@@ -144,7 +138,6 @@ function NotificationsRow({ page }: { page: BotPageContext }) {
     <SettingRow
       label={t`Notifications`}
       meta={<SaveMeta state={notify.state} labels={labels} onRetry={notify.retry} />}
-      className={ROW}
     >
       <Switch
         aria-label={t`Notifications`}
