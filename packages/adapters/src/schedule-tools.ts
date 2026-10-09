@@ -15,6 +15,7 @@ import {
   routineCardSchedule,
   routineCardTextError,
   routineScheduleLabel,
+  sameWallClockIn,
   shortestCronGapMs,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
@@ -49,6 +50,20 @@ type ScheduleUnit = "minutes" | "hours" | "days" | "seconds";
 export type ResolvedSchedule =
   | { ok: true; cron: string; nextRunAt: Date; oneShot: boolean }
   | { ok: false; error: string };
+
+/**
+ * A schedule_create call as the tool reads it: a model sends null for a field it means to leave
+ * out, so a null field is dropped, and a routineId that is not a non-blank string is too.
+ */
+export function scheduleCreateArgs(args: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(args).filter(
+      ([key, value]) =>
+        value !== null &&
+        (key !== "routineId" || (typeof value === "string" && value.trim() !== "")),
+    ),
+  );
+}
 
 export function resolveScheduleTiming(
   input: {
@@ -410,8 +425,11 @@ export async function updateRoutine(
       nextRunAt = at;
     } else if (!wasOneShot) {
       return { error: "One-shot schedules must be created from chat." };
-    } else if (existing.nextRunAt) {
+    } else if (existing.nextRunAt && timezone === existing.timezone) {
       nextRunAt = existing.nextRunAt;
+    } else if (existing.nextRunAt) {
+      nextRunAt = sameWallClockIn(existing.nextRunAt, existing.timezone, timezone);
+      if (nextRunAt.getTime() <= Date.now()) return { error: "Run time must be in the future." };
     } else {
       return {
         error: existing.lastRunAt
@@ -448,15 +466,10 @@ export async function updateRoutine(
       nextRunAt,
     },
   });
-  if (
-    existing.active !== row.active ||
-    existing.nextRunAt?.getTime() !== row.nextRunAt?.getTime()
-  ) {
-    if (row.active && row.nextRunAt) {
-      await deps.jobs.enqueue(routineWakeupJob(row.id, row.nextRunAt));
-    } else {
-      await deps.jobs.cancel(routineJobKey(row.id));
-    }
+  if (row.active && row.nextRunAt) {
+    await deps.jobs.enqueue(routineWakeupJob(row.id, row.nextRunAt));
+  } else {
+    await deps.jobs.cancel(routineJobKey(row.id));
   }
   if (signal.threadId) {
     try {
@@ -515,12 +528,14 @@ export async function updateScheduleFromTool(
       spaceId: input.spaceId,
       botId: input.botId,
       userId: input.userId,
-      ...(input.inGroup
-        ? { threadId: input.threadId }
-        : { OR: [{ threadId: null }, { thread: { groupId: null } }] }),
+      ...(input.inGroup ? { threadId: input.threadId } : {}),
     },
+    include: { thread: { select: { groupId: true } } },
   });
   if (!existing) return { error: "Routine not found." };
+  if (!input.inGroup && existing.thread?.groupId) {
+    return { error: "This routine belongs to a group: change it from that group." };
+  }
 
   const timezone = input.timezone ?? existing.timezone;
   const reschedule = Object.values(input.schedule).some((value) => value !== undefined);

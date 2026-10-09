@@ -165,13 +165,7 @@ function fixture(
     ),
   }));
   const routineMatches = (row: Row, where: Row): boolean =>
-    Object.entries(where).every(([key, value]) =>
-      key === "OR"
-        ? (value as Row[]).some((option) => routineMatches(row, option))
-        : key === "thread"
-          ? (row.threadGroupId ?? null) === (value as Row).groupId
-          : row[key] === value,
-    );
+    Object.entries(where).every(([key, value]) => row[key] === value);
   const externalEffect = {
     findMany: vi.fn(async ({ where }: { where?: EffectWhere } = {}) =>
       effects.filter((effect) => effectMatches(effect, where)).map(inThread),
@@ -285,7 +279,7 @@ function fixture(
       update: routineUpdate,
       findFirst: vi.fn(async ({ where }: { where: Row }) => {
         const row = routines.find((stored) => routineMatches(stored, where));
-        return row ? { ...row } : null;
+        return row ? { ...row, thread: { groupId: row.threadGroupId ?? null } } : null;
       }),
       findUnique: vi.fn(
         async ({ where }: { where: { id: string } }) =>
@@ -935,6 +929,15 @@ describe("a routine the user asks for", () => {
     expect(f.routineCreate).not.toHaveBeenCalled();
   });
 
+  it.each([null, ""])("is set up when the model sends %j as its routineId", async (routineId) => {
+    const f = fixture();
+    await f.play([[{ ...routine, args: { ...routine.args, routineId, runAt: null } }]]);
+    expect(f.routineCreate).toHaveBeenCalledOnce();
+    expect(f.results).toEqual([
+      expect.objectContaining({ ok: true, routineId: "routine-new", schedule: "Every hour UTC" }),
+    ]);
+  });
+
   it("refuses an unknown time zone before anything is stored", async () => {
     const f = fixture();
     await f.play([
@@ -1068,7 +1071,7 @@ describe("a routine the user asks to change", () => {
       notify: true,
       nextRunAt: new Date("2030-01-01T00:00:00Z"),
     });
-    expect(f.wakeups()).toEqual([]);
+    expect(f.wakeups()).toEqual([new Date("2030-01-01T00:00:00Z")]);
     expect(f.posted()).toEqual([
       [expect.objectContaining({ text: "Every hour UTC", confirms: "updated" })],
     ]);
@@ -1170,15 +1173,60 @@ describe("a routine the user asks to change", () => {
     ]);
   });
 
-  it("keeps the stored name and prompt when the model sends null for them", async () => {
+  it("keeps every field the model sends as null as stored", async () => {
     const f = fixture({ routines: [stored] });
-    await f.play([[change({ name: null, prompt: null, notify: true })]]);
+    await f.play([
+      [
+        change({
+          name: "Stretch more",
+          prompt: null,
+          cron: null,
+          every: null,
+          unit: null,
+          runAt: null,
+          delayMinutes: null,
+          delaySeconds: null,
+          timezone: null,
+          notify: null,
+        }),
+      ],
+    ]);
+    expect(f.results).toEqual([expect.objectContaining({ ok: true, name: "Stretch more" })]);
     expect(f.routines[0]).toMatchObject({
-      name: "Stretch",
+      name: "Stretch more",
       prompt: "Remind me to stretch",
-      notify: true,
+      crons: ["0 * * * *"],
+      timezone: "UTC",
+      notify: false,
     });
   });
+
+  it("moves an armed reminder to the same time in a new zone, and refuses one that has passed there", () =>
+    at("2026-10-07T10:00:00Z", async () => {
+      const reminder = {
+        ...stored,
+        name: "Call mum",
+        crons: ["@once"],
+        timezone: "Europe/Paris",
+        nextRunAt: new Date("2026-10-08T06:00:00Z"),
+      };
+      const f = fixture({ routines: [reminder] });
+      await f.play([[change({ timezone: "America/New_York" })]]);
+      expect(f.routines[0]).toMatchObject({
+        timezone: "America/New_York",
+        nextRunAt: new Date("2026-10-08T12:00:00Z"),
+      });
+      expect(f.wakeups()).toEqual([new Date("2026-10-08T12:00:00Z")]);
+      expect(f.posted()).toEqual([
+        [expect.objectContaining({ text: "Once on Oct 8, 2026 at 08:00 America/New_York" })],
+      ]);
+
+      const soon = { ...reminder, nextRunAt: new Date("2026-10-07T10:30:00Z") };
+      const passed = fixture({ routines: [soon] });
+      await passed.play([[change({ timezone: "Asia/Tokyo" })]]);
+      expect(passed.results).toEqual([{ error: "Run time must be in the future." }]);
+      expect(passed.routineUpdate).not.toHaveBeenCalled();
+    }));
 
   it("moves every schedule of a routine to a new zone, and leaves several schedules to the app", () =>
     at("2026-10-07T10:00:00Z", async () => {
@@ -1217,19 +1265,30 @@ describe("a routine the user asks to change", () => {
     expect(f.routineUpdate).not.toHaveBeenCalled();
   });
 
+  const changed = expect.objectContaining({ ok: true });
   it.each([
-    ["a group's routine from the direct conversation", undefined, "thread-group", "group-1", false],
-    ["a direct routine from the direct conversation", undefined, "thread-1", null, true],
-    ["a direct routine from a group", "group-1", "thread-direct", null, false],
-    ["the group's own routine from that group", "group-1", "thread-1", "group-1", true],
+    [
+      "a group's routine from the direct conversation",
+      undefined,
+      "thread-group",
+      "group-1",
+      { error: "This routine belongs to a group: change it from that group." },
+    ],
+    ["a direct routine from the direct conversation", undefined, "thread-1", null, changed],
+    [
+      "a direct routine from a group",
+      "group-1",
+      "thread-direct",
+      null,
+      { error: "Routine not found." },
+    ],
+    ["the group's own routine from that group", "group-1", "thread-1", "group-1", changed],
   ])(
     "changes %s only when it belongs there",
-    async (_label, groupId, threadId, threadGroupId, allowed) => {
+    async (_label, groupId, threadId, threadGroupId, result) => {
       const f = fixture({ groupId, routines: [{ ...stored, threadId, threadGroupId }] });
       await f.play([[change({ notify: true })]]);
-      expect(f.results).toEqual([
-        allowed ? expect.objectContaining({ ok: true }) : { error: "Routine not found." },
-      ]);
+      expect(f.results).toEqual([result]);
     },
   );
 
