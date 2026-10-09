@@ -3,7 +3,7 @@ import { I18nProvider } from "@lingui/react";
 import { ORPCError } from "@orpc/client";
 import type { Bot, Routine } from "@rakazo/contracts";
 import { SaveStoreProvider } from "@rakazo/ui-web";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { saveStore as store } from "../../src/lib/save-store";
 import { applyResolvedAppearance } from "../../src/lib/ui-appearance";
@@ -11,6 +11,7 @@ import { BotPage } from "../../src/pages/bot-page/BotPage";
 import type { BotCommands, UpdateBotPatch } from "../../src/pages/shell/bot-commands";
 import type { BotDetail, BotPageView, BotTab } from "../../src/pages/shell/layout";
 import { panelSizeFor } from "../../src/pages/shell/layout";
+import { usePanelEscape } from "../../src/pages/shell/panel-escape";
 import "../../src/styles.css";
 
 /*
@@ -248,6 +249,10 @@ function Fixture() {
     };
   }, []);
 
+  const closeEditor = useCallback(() => setView((current) => ({ ...current, detail: null })), []);
+  const closePanel = useCallback(() => console.info("close panel"), []);
+  usePanelEscape({ enabled: true, editorOpen: view.detail !== null, closeEditor, closePanel });
+
   const size = panelSizeFor("bot", view);
   return (
     <div className="flex h-dvh bg-background text-foreground">
@@ -280,7 +285,7 @@ function Fixture() {
           memoryProviderConfigured={false}
           view={view}
           onView={setView}
-          onClose={() => console.info("close panel")}
+          onClose={closePanel}
           onOpenRoutine={(item) => console.info(`open routine: ${item?.id ?? "new"}`)}
           onStopRun={() => console.info("stop run")}
           commands={commands}

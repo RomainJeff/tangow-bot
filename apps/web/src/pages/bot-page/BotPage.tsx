@@ -23,7 +23,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { type KeyboardEvent, lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import type { BotPageView, BotTab } from "../shell/layout";
 import { BotHero } from "./BotHero";
@@ -104,21 +104,12 @@ export function BotPage({
     root.current?.querySelector<HTMLElement>(`[data-opens="${closed.kind}"]`)?.focus();
   }, [detail]);
 
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "Escape" || !detail || event.defaultPrevented) return;
-    if (!event.currentTarget.contains(event.target as Node)) return;
-    event.preventDefault();
-    back();
-  };
-
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: Escape from anywhere in the page closes the open editor.
     <div
       ref={root}
       data-testid="bot-page"
       aria-busy={neverRan === null || routines === null || undefined}
       className="flex min-h-0 flex-1 flex-col"
-      onKeyDown={onKeyDown}
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
         {detail ? (

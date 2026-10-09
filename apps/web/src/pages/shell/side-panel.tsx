@@ -16,7 +16,7 @@ import { cronFromPreset, isActive } from "@rakazo/core";
 import { BotAvatar, Button } from "@rakazo/ui-web";
 import { Maximize2, X } from "lucide-react";
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
-import { useEffect } from "react";
+import { useCallback } from "react";
 import { ComputerMaintenanceActions } from "../../components/ComputerMaintenanceActions";
 import {
   ComputersUnavailableHint,
@@ -43,6 +43,7 @@ import type { BotCommands } from "./bot-commands";
 import { CreateBotForm } from "./bot-panel";
 import type { BotPageView, Panel, PanelSize } from "./layout";
 import { firstThreadRoute, panelIsOpen } from "./layout";
+import { usePanelEscape } from "./panel-escape";
 import type { ScreenLinkHandlers } from "./screen-frame";
 import { ScreenFrame } from "./screen-frame";
 
@@ -162,21 +163,17 @@ export function SidePanel({
 }) {
   const { t } = useLingui();
   const open = panelIsOpen(panel, active, activeGroup);
-  // The panel lies over the thread, which stays live behind it: Escape and the X
-  // close it, a click outside does not. On the bot page Escape first closes an
-  // open editor. A full-screen overlay or a call owns Escape while it is up, so
-  // the panel leaves the key alone then.
-  const editorOpen = panel === "bot" && botPage.detail !== null;
-  useEffect(() => {
-    if (!open || !escapeCloses) return;
-    function close(event: KeyboardEvent) {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (editorOpen) onBotPage({ tab: botPage.tab, detail: null });
-      else setPanel(null);
-    }
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, [open, escapeCloses, setPanel, editorOpen, onBotPage, botPage.tab]);
+  const closeEditor = useCallback(
+    () => onBotPage({ tab: botPage.tab, detail: null }),
+    [onBotPage, botPage.tab],
+  );
+  const closePanel = useCallback(() => setPanel(null), [setPanel]);
+  usePanelEscape({
+    enabled: open && escapeCloses,
+    editorOpen: panel === "bot" && botPage.detail !== null,
+    closeEditor,
+    closePanel,
+  });
   const openRoutine = (routine: Routine | null) => {
     setRoutineDraft(routine ? draftFromRoutine(routine) : emptyRoutineDraft());
     setRoutineWebhookSecret(null);
