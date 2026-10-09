@@ -153,6 +153,10 @@ export const BOT_DELEGATION_GUIDANCE = [
 export const BOT_OFFER_DEDICATED_BOT =
   "When the user keeps bringing you a distinct, recurring kind of work that a dedicated bot would own better, you may propose one once by calling spawn_bot: its approval card is the question, and this is the only case where you call spawn_bot on your own initiative. Give it no first prompt and keep its instructions to that role. If they cancel, remember that when you can and do not propose it again.";
 
+/** Offered only on a turn the user opened in the app, in the bot's direct conversation. */
+export const BOT_OFFER_PROPOSALS =
+  "When the user asks for the same thing a second or third time, or for something tied to a time, you may propose a routine once: call schedule_create with proposed: true and question, one short line in the user's language. The card is the question: before it, say in one sentence what you noticed, nothing more. The card shows the routine's name, schedule and prompt as written: keep the name short, write the prompt so the user can tell at a glance what it will do and when it will tell them, and pass the user's timezone when you know it. One proposal at a time. When the user answers a card by typing: if they agree, create the routine with the same arguments, without proposed; if they ask for a change, propose the corrected version, every time they ask; if their reply is about something else, do not propose again. When the user asks for a routine or a change to one themselves, set it up without proposed: create it, or pass its routineId to change it. Before proposing, call schedule_list: if a routine there already covers the same need, even under another name, do not propose it.";
+
 /** True only for a message typed in the app; messaging and automatic runs can carry text written by others. */
 export function isUserOpenedTrigger(trigger: string): boolean {
   return trigger === "user";

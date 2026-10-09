@@ -15,12 +15,12 @@ export function canAnswerAskByVoice(block: AskBlock): boolean {
 }
 
 /**
- * A Create bot card carries instructions and a first message that must be read
- * before approving, so the call never offers to approve it. The person approves
- * in the thread, where the full card is.
+ * A Create bot card carries instructions and a first message, and a routine card the
+ * instruction the routine will follow, that must be read before approving, so the call
+ * never offers to approve them. The person approves in the thread, where the full card is.
  */
 export function isScreenOnlyApproval(block: AskBlock): boolean {
-  return isApprovalAskBlock(block) && Boolean(block.spawnBot);
+  return isApprovalAskBlock(block) && Boolean(block.spawnBot || block.proposal || block.routine);
 }
 
 /** The actions the call offers for an ask: only `deny` for a screen-only approval. */

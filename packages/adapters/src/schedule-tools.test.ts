@@ -62,6 +62,27 @@ describe("resolveScheduleTiming", () => {
     });
   });
 
+  it("rejects one-shot schedules more than 5 years ahead", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-09T10:00:00Z"));
+    try {
+      expect(resolveScheduleTiming({ runAt: "2031-10-08T10:00:00Z" })).toMatchObject({
+        ok: true,
+        nextRunAt: new Date("2031-10-08T10:00:00Z"),
+      });
+      expect(resolveScheduleTiming({ runAt: "2031-10-09T10:00:00Z" })).toEqual({
+        ok: false,
+        error: "One-shot schedules must run within 5 years.",
+      });
+      expect(resolveScheduleTiming({ delayMinutes: 1e9 })).toEqual({
+        ok: false,
+        error: "One-shot schedules must run within 5 years.",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects fractional repeat intervals", () => {
     expect(resolveScheduleTiming({ every: 1.5, unit: "minutes" })).toEqual({
       ok: false,

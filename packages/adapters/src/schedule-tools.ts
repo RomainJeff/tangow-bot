@@ -1,5 +1,6 @@
 import type { JobPublisher } from "@rakazo/adapter-kit";
 import { routineJobKey, routineWakeupJob } from "@rakazo/adapter-kit";
+import type { RoutinePreview } from "@rakazo/core";
 import {
   botMessageHopExhausted,
   cronFromPreset,
@@ -12,7 +13,10 @@ import {
   nextCronDateAcrossStrict,
   ONCE_ROUTINE_CRON,
   routineCardSchedule,
+  routineCardTextError,
+  routineScheduleLabel,
   sameWallClockIn,
+  shortestCronGapMs,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 
@@ -60,6 +64,9 @@ export function scheduleCreateArgs(args: Record<string, unknown>): Record<string
     ),
   );
 }
+
+const ONE_SHOT_MAX_AHEAD_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+const ONE_SHOT_TOO_FAR = "One-shot schedules must run within 5 years.";
 
 export function resolveScheduleTiming(
   input: {
@@ -126,6 +133,9 @@ export function resolveScheduleTiming(
     if (nextRunAt.getTime() <= Date.now()) {
       return { ok: false, error: "One-shot schedules must run in the future." };
     }
+    if (!(nextRunAt.getTime() <= Date.now() + ONE_SHOT_MAX_AHEAD_MS)) {
+      return { ok: false, error: ONE_SHOT_TOO_FAR };
+    }
     return { ok: true, cron: ONCE_ROUTINE_CRON, nextRunAt, oneShot: true };
   }
 
@@ -173,6 +183,65 @@ export function resolveScheduleTiming(
   }
 }
 
+function scheduleOf(args: Record<string, unknown>) {
+  const { cron, every, unit, runAt, delayMinutes, delaySeconds } = args;
+  return { cron, every, unit, runAt, delayMinutes, delaySeconds };
+}
+
+const PROPOSED_ROUTINE_MIN_GAP_MS = 60 * 60 * 1000;
+
+const TIMEZONE_ERROR = "timezone must be an IANA time zone, such as Europe/Paris.";
+
+/**
+ * A routine the bot proposes, checked and fixed before its card: the zone must be a real one, a
+ * delay becomes the time it points to now so a late tap cannot move it, the routine runs at most
+ * once an hour, and the schedule line is written from what will be stored.
+ */
+export function prepareRoutineCard(
+  args: Record<string, unknown>,
+  now: Date,
+): { args: Record<string, unknown>; routine: RoutinePreview } | { error: string } {
+  const timezone = args.timezone ?? "UTC";
+  if (typeof timezone !== "string" || !isValidTimezone(timezone)) return { error: TIMEZONE_ERROR };
+  const name = String(args.name ?? "").trim();
+  const prompt = String(args.prompt ?? "").trim();
+  if (!name) return { error: "name is required." };
+  if (!prompt) return { error: "prompt is required." };
+  const textError = routineCardTextError(name, prompt);
+  if (textError) return { error: textError };
+  const asked = resolveScheduleTiming(scheduleOf(args), timezone);
+  if (!asked.ok) return { error: asked.error };
+
+  const delayMs =
+    args.delayMinutes !== undefined
+      ? Number(args.delayMinutes) * 60_000
+      : args.delaySeconds !== undefined
+        ? Number(args.delaySeconds) * 1_000
+        : undefined;
+  const { delayMinutes: _minutes, delaySeconds: _seconds, ...absolute } = args;
+  const fixed =
+    delayMs === undefined
+      ? args
+      : { ...absolute, runAt: new Date(now.getTime() + delayMs).toISOString() };
+  const resolved = resolveScheduleTiming(scheduleOf(fixed), timezone);
+  if (!resolved.ok) return { error: resolved.error };
+  if (
+    !resolved.oneShot &&
+    shortestCronGapMs(resolved.cron, now, timezone) < PROPOSED_ROUTINE_MIN_GAP_MS
+  ) {
+    return { error: "A routine you propose must run at most once an hour." };
+  }
+  return {
+    args: fixed,
+    routine: {
+      name,
+      schedule: routineScheduleLabel({ crons: [resolved.cron], ...resolved }, timezone),
+      prompt,
+      notify: args.notify === true,
+    },
+  };
+}
+
 function validateRepeatingCron(cron: string): string | null {
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 5) return "cron must be a 5-field cron expression.";
@@ -192,8 +261,6 @@ export interface ScheduleToolDeps {
   events: ThreadEvents;
   jobs: JobPublisher;
 }
-
-const TIMEZONE_ERROR = "timezone must be an IANA time zone, such as Europe/Paris.";
 
 /** Persist and enqueue a bot routine that wakes in the originating thread. */
 export async function createScheduleFromTool(
@@ -362,6 +429,7 @@ export async function updateRoutine(
       if (!Number.isFinite(at.getTime()) || at.getTime() <= Date.now()) {
         return { error: "Run time must be in the future." };
       }
+      if (at.getTime() > Date.now() + ONE_SHOT_MAX_AHEAD_MS) return { error: ONE_SHOT_TOO_FAR };
       nextRunAt = at;
     } else if (!wasOneShot) {
       return { error: "One-shot schedules must be created from chat." };

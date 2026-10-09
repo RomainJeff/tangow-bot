@@ -1,5 +1,6 @@
 import type { MessageBlock } from "@rakazo/contracts";
-import { redactSecrets, spawnBotApprovalBlock } from "@rakazo/core";
+import type { RoutineCard } from "@rakazo/core";
+import { redactSecrets, routineCardBlock, spawnBotApprovalBlock } from "@rakazo/core";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
@@ -9,13 +10,17 @@ export function buildApprovalAskBlock(
   toolName: string,
   args: Record<string, unknown>,
   secrets: string[],
-  options?: { reviewReason?: string; runUserId?: string },
+  options?: {
+    reviewReason?: string;
+    /** A routine proposal card, as resolved before it shows. */
+    routineCard?: RoutineCard;
+    runUserId?: string;
+  },
 ): MessageBlock {
-  // spawn_bot arguments are redacted before they become the effect request, so the card
-  // shows exactly what will be created; a second pass would only inflate short secrets.
-  if (toolName === "spawn_bot") {
-    return spawnBotApprovalBlock(effectId, args, options?.runUserId);
-  }
+  // spawn_bot and schedule_create arguments are redacted before they become the effect request,
+  // so the card shows exactly what will be created; a second pass would only inflate short secrets.
+  if (toolName === "spawn_bot") return spawnBotApprovalBlock(effectId, args, options?.runUserId);
+  if (options?.routineCard) return routineCardBlock(effectId, options.routineCard);
   const summary = describeApprovalAction(toolName, args);
   const detail = formatApprovalDetail(toolName, args, options?.reviewReason);
   const safeDetail = detail ? redactSecrets(detail, secrets) : undefined;

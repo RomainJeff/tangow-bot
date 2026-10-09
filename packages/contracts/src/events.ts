@@ -115,6 +115,17 @@ export const AskAnswer = z.object({
 export const AskAnswers = z.record(z.string(), AskAnswer);
 export type AskAnswers = z.infer<typeof AskAnswers>;
 
+/** What a card's action does once tapped. */
+export const AskActionOutcome = z.enum(["created", "cancelled"]);
+/** How a card was settled: its tapped action's outcome, or put away by a typed reply. */
+export const AskOutcome = z.enum([...AskActionOutcome.options, "dismissed"]);
+export type AskOutcome = z.infer<typeof AskOutcome>;
+/** The `answer` of a proposal card the user put away by typing instead of tapping. */
+export const ASK_DISMISSED_ANSWER = "dismissed";
+/** What a card a bot shows on its own initiative proposes to create. */
+export const ProposalKind = z.enum(["routine"]);
+export type ProposalKind = z.infer<typeof ProposalKind>;
+
 export const MessageBlock = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string() }),
   z.object({
@@ -137,7 +148,7 @@ export const MessageBlock = z.discriminatedUnion("kind", [
         z.object({
           id: z.string(),
           label: z.string(),
-          outcome: z.enum(["created", "cancelled"]).optional(),
+          outcome: AskActionOutcome.optional(),
         }),
       )
       .optional(),
@@ -157,12 +168,15 @@ export const MessageBlock = z.discriminatedUnion("kind", [
         ownerUserId: z.string().optional(),
       })
       .optional(),
-    /** A routine card: what was set up, the schedule as the server resolved it. */
+    proposal: ProposalKind.optional(),
+    /** A routine card: what it sets up, the schedule as the server resolved it. */
     routine: z
       .object({ name: z.string(), schedule: z.string(), prompt: z.string(), notify: z.boolean() })
       .optional(),
     /** Written once the routine exists: the card links to it. */
-    created: z.object({ kind: z.literal("routine"), id: z.string(), label: z.string() }).optional(),
+    created: z.object({ kind: ProposalKind, id: z.string(), label: z.string() }).optional(),
+    /** The proposal was approved but could not be created. */
+    failed: z.literal(true).optional(),
     /**
      * What became of the routine the card is about. A confirmation the server settled has no
      * `answer`, so nothing the user typed in the app is in it.

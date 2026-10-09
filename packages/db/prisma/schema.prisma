@@ -662,11 +662,14 @@ model ExternalEffect {
   reviewDecision String?
   reviewReason   String?
   reviewModel    String?
+  // When the user allowed or denied the card: a proposal the user saw counts from it.
+  answeredAt     DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([idempotencyKey])
   @@index([runId, status])
+  @@index([kind, status, runId])
   @@map("external_effects")
 }
 

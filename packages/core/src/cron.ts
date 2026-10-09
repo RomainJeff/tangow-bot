@@ -313,6 +313,18 @@ export function isValidTimezone(timezone: string): boolean {
   }
 }
 
+/** The shortest wait between two of the next runs, to tell how often a schedule fires. */
+export function shortestCronGapMs(cron: string, from: Date, timezone = "UTC", runs = 48): number {
+  const times = new Cron(cron, { paused: true, timezone: validTimezoneOrUtc(timezone) })
+    .nextRuns(runs, from)
+    .map((date) => date.getTime());
+  let shortest = Number.POSITIVE_INFINITY;
+  for (let index = 1; index < times.length; index += 1) {
+    shortest = Math.min(shortest, times[index]! - times[index - 1]!);
+  }
+  return shortest;
+}
+
 const DAY_NAMES = [
   "Sundays",
   "Mondays",

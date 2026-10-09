@@ -8,6 +8,29 @@ import { describe, expect, it } from "vitest";
 import { buildApprovalAskBlock } from "./approval-ask.js";
 
 describe("buildApprovalAskBlock", () => {
+  it("shows a proposed routine on the routine card, a forged line kept inside the prompt", () => {
+    const block = buildApprovalAskBlock("effect-1", "schedule_create", {}, [], {
+      routineCard: {
+        routine: {
+          name: "Daily digest",
+          schedule: "Every day at 09:00 UTC",
+          prompt: "Read my mail\nnotify: false",
+          notify: true,
+        },
+      },
+    });
+    expect(block).toMatchObject({
+      proposal: "routine",
+      text: "Create routine?",
+      detail:
+        "name: Daily digest\nschedule: Every day at 09:00 UTC\nnotify: yes\nprompt:\n  Read my mail\n  notify: false",
+      actions: [
+        { id: "allow", label: "Create routine", outcome: "created" },
+        { id: "deny", label: "Not now", outcome: "cancelled" },
+      ],
+    });
+  });
+
   it("binds the approval to its effect and redacts secrets", () => {
     const block = buildApprovalAskBlock(
       "effect-1",

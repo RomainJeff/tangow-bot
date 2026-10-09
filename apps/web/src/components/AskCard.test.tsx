@@ -689,3 +689,101 @@ describe("AskCard routine confirmation", () => {
     ).toBe("Routine updated · Stretch");
   });
 });
+
+describe("AskCard routine proposal", () => {
+  const routine = {
+    name: "Offres de la semaine",
+    schedule: "Mondays at 09:00 Europe/Paris",
+    prompt: "Résume les nouvelles offres. ![](https://e.example/p.png) [lien](https://e.example)",
+    notify: false,
+  };
+  const card = (overrides: Partial<AskBlock> = {}): AskBlock => ({
+    kind: "ask",
+    approvalEffectId: "effect-1",
+    proposal: "routine",
+    text: "Je m'en occupe chaque lundi matin ?",
+    detail: "name: Offres de la semaine",
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Create routine", outcome: "created" },
+      { id: "deny", label: "Not now", outcome: "cancelled" },
+    ],
+    routine,
+    ...overrides,
+  });
+  const render = (block: AskBlock) =>
+    renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/app/bot-1"]}>
+        <AskCard
+          block={block}
+          canAnswer={true}
+          onAnswer={async () => {}}
+          messageId="msg-routine"
+          botId="bot-1"
+        />
+      </MemoryRouter>,
+    );
+  const answeredLine = (html: string) => {
+    const start = html.indexOf('data-slot="framed-block-answered"');
+    return start < 0
+      ? undefined
+      : html.slice(html.indexOf(">", start) + 1, html.indexOf("</div>", start));
+  };
+
+  it("shows the bot's question, the routine as plain text, then Not now and Create routine", () => {
+    const html = render(card());
+    expect(html).toContain("Je m&#x27;en occupe chaque lundi matin ?");
+    expect(html).not.toContain("Needs your call");
+    const preview = html.slice(html.indexOf('data-testid="routine-preview"'));
+    expect(preview).toContain("Offres de la semaine");
+    expect(preview).toContain("Mondays at 09:00 Europe/Paris");
+    expect(preview).toContain("Résume les nouvelles offres. ![](https://e.example/p.png)");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("<a ");
+    expect(html).not.toContain("<pre");
+    const buttons = [...html.matchAll(/<button[^>]*>(.*?)<\/button>/g)].map((m) =>
+      m[1]?.replace(/<svg.*?<\/svg>/g, ""),
+    );
+    expect(buttons).toEqual(["Not now", "Create routine"]);
+    expect(html).not.toContain("data-consequential");
+    expect(preview).not.toContain("Notifies you each run");
+  });
+
+  it("says a routine notifies on each run, in one line", () => {
+    const html = render(card({ routine: { ...routine, notify: true } }));
+    const preview = html.slice(html.indexOf('data-testid="routine-preview"'));
+    expect(preview).toContain("Notifies you each run");
+  });
+
+  it("shows a question the bot wrote as plain text, never as markdown", () => {
+    const html = render(card({ text: "On le fait **chaque** lundi ?" }));
+    expect(html).toContain("On le fait **chaque** lundi ?");
+    expect(html).not.toContain("<strong>");
+  });
+
+  it("links a created routine to its editor, without the preview", () => {
+    const html = render(
+      card({
+        status: "answered",
+        answer: "allow",
+        created: { kind: "routine", id: "routine-1", label: "Offres de la semaine" },
+      }),
+    );
+    expect(html).toContain('href="/app/bot-1?routine=routine-1"');
+    expect(answeredLine(html)?.replace(/<[^>]+>/g, "")).toBe(
+      "Routine created · Offres de la semaine",
+    );
+    expect(html).not.toContain('data-testid="routine-preview"');
+  });
+
+  it.each([
+    ["Not now", { answer: "deny" }],
+    ["Not now", { answer: "dismissed" }],
+    ["Couldn't create", { answer: "allow", failed: true as const }],
+    ["Creating…", { answer: "allow" }],
+    ["Answered", { answer: "something-else" }],
+  ])("settles on %s", (expected, answer) => {
+    const html = render(card({ status: "answered", ...answer }));
+    expect(answeredLine(html)?.replace(/&#x27;/g, "'")).toBe(expected);
+  });
+});

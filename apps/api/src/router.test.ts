@@ -921,6 +921,118 @@ describe("thread rewind", () => {
   });
 });
 
+describe("thread stop", () => {
+  it("settles a routine card the user approved but the stopped run never created", async () => {
+    const run = { id: "run-1", spaceId: "workspace-1", threadId: "thread-1", botId: "bot-1" };
+    // A run the user started: no routine woke it.
+    const matchesRun = (where: { status: unknown; routineId?: unknown }) =>
+      where.routineId === undefined && (where.status !== "cancelled" || runStatus === "cancelled");
+    let runStatus = "running";
+    const effects = [{ id: "effect-1", status: "approved", result: null as unknown }];
+    const card = {
+      id: "message-2",
+      blocks: [{ kind: "ask", approvalEffectId: "effect-1", status: "answered", answer: "allow" }],
+    };
+    const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      bot: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "bot-1",
+          thread: { id: "thread-1" },
+          computer: null,
+        }),
+      },
+      run: {
+        findMany: vi.fn(async ({ where }: { where: { status: unknown; routineId?: unknown } }) =>
+          matchesRun(where) ? [run] : [],
+        ),
+        updateManyAndReturn: vi.fn(async () => {
+          runStatus = "cancelled";
+          return [{ id: run.id }];
+        }),
+        findUnique: vi.fn(async () => ({ status: runStatus, startedAt: null })),
+      },
+      steeringMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      computerExecutionLease: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      computer: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      externalEffect: {
+        findMany: vi.fn(async () => effects.filter((effect) => effect.status === "approved")),
+        updateMany: vi.fn(
+          async ({ where, data }: { where: { status: string }; data: { result: unknown } }) => {
+            if (effects[0]!.status !== where.status) return { count: 0 };
+            Object.assign(effects[0]!, data);
+            return { count: 1 };
+          },
+        ),
+      },
+      message: {
+        findMany: vi.fn(async () => [card]),
+        findUnique: vi.fn().mockResolvedValue(null),
+        update: vi.fn(async ({ data }: { data: { blocks: typeof card.blocks } }) => {
+          card.blocks = data.blocks;
+        }),
+      },
+      thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }) },
+      event: {
+        create: vi.fn(async ({ data }: { data: { seq: number } }) => data),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    (prisma as unknown as { $transaction: unknown }).$transaction = vi.fn(
+      async (fn: (tx: typeof prisma) => unknown) => fn(prisma),
+    );
+    const notify = vi.fn().mockResolvedValue(undefined);
+    const deps = {
+      prisma,
+      events: { notify },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      dataDir: "/tmp/rakazo-router-test",
+    } as unknown as RouterDeps;
+    const actor = {
+      spaceId: "workspace-1",
+      userId: "user-1",
+      email: "user@rakazo.test",
+      isDeploymentOwner: true,
+    } satisfies Actor;
+
+    const { response } = await new RPCHandler(createRouter(deps)).handle(
+      new Request("http://127.0.0.1/rpc/threads/stop", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ json: { botId: "bot-1" } }),
+      }),
+      { prefix: "/rpc", context: { actor } },
+    );
+
+    expect(response.status).toBe(200);
+    expect(card.blocks[0]).toEqual({
+      kind: "ask",
+      approvalEffectId: "effect-1",
+      status: "answered",
+      answer: "allow",
+      failed: true,
+    });
+    expect(effects[0]).toEqual({
+      id: "effect-1",
+      status: "completed",
+      result: { error: "The run ended before this routine was created." },
+    });
+    expect(notify).toHaveBeenCalledWith("thread-1", 7);
+  });
+});
+
 describe("integration setup authorization", () => {
   it.each([
     { owner: false, configured: false, needsSetup: false },
@@ -1182,18 +1294,30 @@ describe("routine update triggers", () => {
     expect(routineUpdate).not.toHaveBeenCalled();
   });
 
-  it("arms a one-shot that never ran at the time the editor gives", async () => {
-    const { update, enqueue } = updateDeps({ crons: ["@once"], nextRunAt: null });
+  it("arms a one-shot that never ran at the time the editor gives", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue } = updateDeps({ crons: ["@once"], nextRunAt: null });
 
-    const response = await update({ runAt: "2999-01-01T09:00:00.000Z" });
+      const saved = await savedRoutine(await update({ runAt: "2027-01-01T09:00:00.000Z" }));
 
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { json: { nextRunAt: string | null } };
-    expect(body.json.nextRunAt).toBe("2999-01-01T09:00:00.000Z");
-    expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
-      new Date("2999-01-01T09:00:00.000Z"),
-    ]);
-  });
+      expect(saved.nextRunAt).toBe("2027-01-01T09:00:00.000Z");
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2027-01-01T09:00:00.000Z"),
+      ]);
+    }));
+
+  it("refuses to arm a one-shot more than 5 years ahead", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { routineUpdate, update } = updateDeps({ crons: ["@once"], nextRunAt: null });
+
+      const error = await refusal(await update({ runAt: "2031-10-08T09:00:00.000Z" }));
+
+      expect(error).toMatchObject({
+        code: "BAD_REQUEST",
+        message: "One-shot schedules must run within 5 years.",
+      });
+      expect(routineUpdate).not.toHaveBeenCalled();
+    }));
 
   it("keeps a reminder that already ran from resuming without a new time", async () => {
     const { routineUpdate, update } = updateDeps({

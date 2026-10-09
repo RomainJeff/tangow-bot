@@ -35,6 +35,7 @@ import {
   createGroupRepos,
   createRepos,
   createThreadMessageInTransaction,
+  dismissProposalWithTextInTransaction,
   expireComputerExecutionLeases,
   IsolationError,
   lockOwnedGroup,
@@ -797,6 +798,46 @@ export async function sendThreadMessage(
         // otherwise the other run is neither steered nor rejected.
         const soleActiveRun = activeRuns.length === 1 ? activeRuns[0] : undefined;
         const waitingRun = soleActiveRun?.status === "waiting_input" ? soleActiveRun : undefined;
+        // A card the bot proposed on its own is put away by the reply, which then steers the run;
+        // when a tap answered it first, the reply steers the run that tap resumed.
+        const dismissal =
+          waitingRun &&
+          (await dismissProposalWithTextInTransaction(tx, {
+            spaceId: actor.spaceId,
+            threadId: target.threadId,
+            runId: waitingRun.id,
+            userId: actor.userId,
+          }));
+        if (waitingRun && dismissal && dismissal.outcome !== "keep") {
+          await tx.steeringMessage.create({
+            data: {
+              messageId: message.id,
+              botId: target.botId,
+              userId: actor.userId,
+              runId: waitingRun.id,
+            },
+          });
+          await tx.message.update({ where: { id: message.id }, data: { runId: waitingRun.id } });
+          const event = await appendEventInTransaction(tx, {
+            spaceId: actor.spaceId,
+            threadId: target.threadId,
+            botId: target.botId,
+            type: "thread.message.created",
+            runId: waitingRun.id,
+            payload: {
+              messageId: message.id,
+              role: "user",
+              blocks,
+              replyToMessageId: input.replyToMessageId,
+              replyQuote,
+            },
+          });
+          return {
+            message,
+            runs: [{ id: waitingRun.id, taskId: waitingRun.taskId, status: dismissal.status }],
+            eventSeq: event.seq,
+          };
+        }
         if (waitingRun) {
           const resolution = await resumeAskWithComposerTextInTransaction(tx, {
             spaceId: actor.spaceId,

@@ -14,6 +14,12 @@ describe("askActionLabel", () => {
     expect(askActionLabel({ id: "deny", label: "Cancel", outcome: "cancelled" }, shout)).toBe(
       "CANCEL",
     );
+    expect(
+      askActionLabel({ id: "allow", label: "Create routine", outcome: "created" }, shout),
+    ).toBe("CREATE ROUTINE");
+    expect(askActionLabel({ id: "deny", label: "Not now", outcome: "cancelled" }, shout)).toBe(
+      "NOT NOW",
+    );
   });
 
   it("shows an unknown server label on an outcome card as sent", () => {

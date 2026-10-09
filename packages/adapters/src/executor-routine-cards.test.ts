@@ -2,7 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentRunRequest, ConnectorCall } from "@rakazo/adapter-kit";
-import { BOT_MESSAGE_MAX_HOPS } from "@rakazo/core";
+import { BOT_MESSAGE_MAX_HOPS, BOT_OFFER_PROPOSALS, withProposalKey } from "@rakazo/core";
+import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { Prisma } from "@rakazo/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
@@ -78,6 +79,18 @@ const routine = {
   args: { name: "Stretch", prompt: "Remind me to stretch", every: 1, unit: "hours" },
 };
 
+const userText = (id: string, seq: number, text: string) => ({
+  id,
+  threadId: "thread-1",
+  seq,
+  role: "user",
+  runId: null,
+  botId: null,
+  blocks: [{ kind: "text", text }],
+  replyToMessageId: null,
+  replyQuote: null,
+  replyTo: null,
+});
 let dataDir: string;
 
 beforeEach(async () => {
@@ -114,14 +127,18 @@ function fixture(
   options: {
     trigger?: string;
     requireToolApproval?: boolean;
+    messages?: Row[];
+    effects?: Effect[];
     groupId?: string;
     /** Routines stored in this space, any bot's; `threadGroupId` is the group of their thread. */
     routines?: Row[];
     /** The routine whose wake started the run. */
     routineId?: string;
+    /** Another run of this conversation waits on a card. */
+    otherRunWaiting?: boolean;
   } = {},
 ) {
-  const effects: Effect[] = [];
+  const effects: Effect[] = [...(options.effects ?? [])];
   const results: unknown[] = [];
   const run: Row = {
     id: "run-1",
@@ -182,7 +199,9 @@ function fixture(
       },
     ),
   };
-  const messages: Row[] = [];
+  const messages = [...(options.messages ?? [])].sort(
+    (left, right) => Number(right.seq) - Number(left.seq),
+  );
   const skillSetting = table([]);
   const botSkill = table([]);
   const messageUpdate = vi.fn(async () => undefined);
@@ -197,7 +216,8 @@ function fixture(
       findUnique: vi.fn(async () => run),
       // The waiting run a proposal checks for, or the notification source of a push.
       findFirst: vi.fn(async ({ where, select }: { where: Row; select: Row }) => {
-        if (where.status === "waiting_input") return null;
+        if (where.status === "waiting_input")
+          return options.otherRunWaiting ? { id: "run-other" } : null;
         return select.bot ? { bot: { notifyOnFinish: true }, thread: { groupId: null } } : null;
       }),
       findUniqueOrThrow: vi.fn(async () => run),
@@ -362,6 +382,9 @@ function fixture(
     messageUpdate,
     /** The cards the run posted outside a pause, in order. */
     posted: () => postedCards().map((data) => data.blocks),
+    send,
+    instructions: () =>
+      (runtimeRun.mock.calls[0]?.[0] as AgentRunRequest | undefined)?.instructions,
     async play(next: ToolCall[][], workerId = "worker-1", ends: "ok" | "failed" = "ok") {
       batches = next;
       run.status = "queued";
@@ -373,6 +396,479 @@ function fixture(
     },
   };
 }
+
+describe("a routine the bot proposes on its own", () => {
+  const offers = {
+    name: "Weekly offers",
+    prompt: "Summarize the new offers. Message me only if there is one.",
+    cron: "0 9 * * 1",
+    timezone: "Europe/Paris",
+    proposed: true,
+    question: "Je m'en occupe chaque lundi matin ?",
+  };
+  const { cron: _cron, ...oneShot } = offers;
+  const propose = (args: Record<string, unknown> = {}, base: Record<string, unknown> = offers) => ({
+    name: "schedule_create",
+    args: { ...base, ...args },
+  });
+  const proposalCard = {
+    kind: "ask",
+    proposal: "routine",
+    text: "Je m'en occupe chaque lundi matin ?",
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Create routine", outcome: "created" },
+      { id: "deny", label: "Not now", outcome: "cancelled" },
+    ],
+    routine: {
+      name: "Weekly offers",
+      schedule: "Mondays at 09:00 Europe/Paris",
+      prompt: "Summarize the new offers. Message me only if there is one.",
+      notify: false,
+    },
+  };
+  const proposalEffect = (overrides: Partial<Effect>): Effect => ({
+    id: "effect-earlier",
+    runId: "run-0",
+    kind: "routine_proposal",
+    idempotencyKey: "earlier-key",
+    status: "denied",
+    request: offers,
+    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+    answeredAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+    ...overrides,
+  });
+
+  it("shows a Create routine card with the resolved schedule, creates nothing and sends no push", async () => {
+    const f = fixture({ messages: [userText("m1", 1, "Any new offers this week?")] });
+    await f.play([[propose()]]);
+    expect(f.askBlock()).toEqual({
+      ...proposalCard,
+      approvalEffectId: "effect-1",
+      detail: [
+        "name: Weekly offers",
+        "schedule: Mondays at 09:00 Europe/Paris",
+        "notify: no",
+        "prompt:",
+        "  Summarize the new offers. Message me only if there is one.",
+      ].join("\n"),
+    });
+    expect(f.effects.map(({ kind, status }) => ({ kind, status }))).toEqual([
+      { kind: "routine_proposal", status: "intended" },
+    ]);
+    expect(f.routineCreate).not.toHaveBeenCalled();
+    expect(f.send).not.toHaveBeenCalled();
+  });
+
+  it("still pushes the card a run nobody started must show", async () => {
+    const f = fixture({ trigger: "webhook" });
+    await f.play([[routine]]);
+    expect(f.send).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Assistant needs approval" }),
+      expect.anything(),
+    );
+  });
+
+  it.each([
+    ["proposed that is not a boolean", { proposed: "true" }, "proposed must be true or false."],
+    [
+      "a time already past",
+      { runAt: "2020-01-01T09:00:00Z" },
+      "One-shot schedules must run in the future.",
+      oneShot,
+    ],
+    [
+      "a zone that does not exist",
+      { timezone: "Mars/Olympus" },
+      "timezone must be an IANA time zone, such as Europe/Paris.",
+    ],
+    [
+      "a schedule more often than hourly",
+      { every: 30, unit: "minutes" },
+      "A routine you propose must run at most once an hour.",
+      oneShot,
+    ],
+    [
+      "a delay of millions of years",
+      { delayMinutes: 1e12 },
+      "One-shot schedules must run within 5 years.",
+      oneShot,
+    ],
+    [
+      "a question on two lines",
+      { question: "Chaque lundi ?\nOu mardi ?" },
+      "question must be a single line of visible text, without invisible or control characters.",
+    ],
+    [
+      "a name shaped like a link",
+      { name: "[Offers](https://example.test)" },
+      "name cannot contain [, ], <, > or a web address (://, www.).",
+    ],
+  ] as const)("refuses %s before any card", async (_label, patch, error, base = offers) => {
+    const f = fixture();
+    await f.play([[propose(patch, base)]]);
+    expect(f.results).toEqual([{ error }]);
+    expect(f.askBlock()).toBeUndefined();
+    expect(f.effects).toEqual([]);
+  });
+
+  it("turns a delay into the time it points to when the card shows, not when the run began", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-06T10:00:00Z"));
+    try {
+      const f = fixture();
+      f.run.createdAt = new Date("2026-10-06T08:00:00Z");
+      await f.play([[propose({ delayMinutes: 90 }, oneShot)]]);
+      expect(f.effects[0]?.request).toEqual({
+        ...oneShot,
+        runAt: "2026-10-06T11:30:00.000Z",
+        proposalKey: "weekly offers",
+      });
+      expect(f.askBlock()).toMatchObject({
+        routine: { schedule: "Once on Oct 6, 2026 at 13:30 Europe/Paris" },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ["a time that passed since the card", { runAt: "2020-01-01T09:00:00Z" }, oneShot],
+    ["a delay counted again", { delayMinutes: 10 }, oneShot],
+  ])(
+    "answers a resumed call after Not now with the refusal, whatever %s",
+    async (_l, patch, base) => {
+      const args = propose(patch, base).args;
+      const f = fixture({
+        effects: [
+          proposalEffect({
+            runId: "run-1",
+            idempotencyKey: approvalEffectKey("run-1", "routine_proposal", args),
+            request: { ...args, runAt: "2026-01-01T09:00:00.000Z" },
+          }),
+        ],
+      });
+      await f.play([[propose(patch, base)]]);
+      expect(f.results).toEqual([
+        {
+          ok: false,
+          declined: true,
+          note: "The user declined this routine. Do not propose it again within a day.",
+        },
+      ]);
+      expect(f.askBlock()).toBeUndefined();
+    },
+  );
+
+  it("checks the question only on a card", async () => {
+    const direct = fixture();
+    await direct.play([[{ ...routine, args: { ...routine.args, question: "Two\nlines" } }]]);
+    expect(direct.routineCreate).toHaveBeenCalled();
+    expect(direct.askBlock()).toBeUndefined();
+  });
+
+  it.each([
+    ["in a group", { groupId: "group-1" }],
+    ["in a run nobody started", { trigger: "webhook" }],
+  ])("is refused %s", async (_label, options) => {
+    const f = fixture(options);
+    await f.play([[propose()]]);
+    expect(f.results).toEqual([
+      {
+        error:
+          "Propose a routine only in your direct conversation with the user, while they are in it.",
+      },
+    ]);
+    expect(f.askBlock()).toBeUndefined();
+  });
+
+  it("waits while another card waits in the conversation", async () => {
+    const f = fixture({ otherRunWaiting: true });
+    await f.play([[propose()]]);
+    expect(f.results).toEqual([
+      {
+        error:
+          "Another card is already waiting for the user's answer in this conversation. Do not propose anything until they answer.",
+      },
+    ]);
+    expect(f.askBlock()).toBeUndefined();
+  });
+
+  it("keeps one card when one batch proposes twice", async () => {
+    const f = fixture();
+    await f.play([[propose(), propose({ name: "Daily offers", cron: "0 9 * * *" })]]);
+    expect(f.askBlock()).toMatchObject({ approvalEffectId: "effect-1" });
+    expect(f.effects.map(({ kind, status }) => ({ kind, status }))).toEqual([
+      { kind: "routine_proposal", status: "intended" },
+      { kind: "routine_proposal", status: "completed" },
+    ]);
+    expect(f.effects[1]?.result).toEqual({
+      error:
+        "Another card is already waiting for the user's answer in this conversation. Do not propose anything until they answer.",
+    });
+  });
+
+  it("keeps a routine the user said Not now to away for a day from when they said it", async () => {
+    const saidHoursAgo = async (hours: number) => {
+      const said = new Date(Date.now() - hours * 60 * 60 * 1000);
+      const f = fixture({
+        effects: [
+          proposalEffect({
+            request: withProposalKey({ ...offers, name: "weekly OFFERS" }, "weekly OFFERS"),
+            createdAt: said,
+            answeredAt: said,
+          }),
+        ],
+      });
+      await f.play([[propose()]]);
+      return f;
+    };
+    const recent = await saidHoursAgo(23);
+    expect(recent.results).toEqual([
+      {
+        error:
+          "The user said Not now to this routine in the last day. Do not propose it again today unless they ask.",
+      },
+    ]);
+    expect(recent.askBlock()).toBeUndefined();
+    const past = await saidHoursAgo(25);
+    expect(past.askBlock()).toMatchObject({
+      proposal: "routine",
+      routine: { name: "Weekly offers" },
+    });
+  });
+
+  it("proposes another routine the same day, and corrects a card the user answered by typing", async () => {
+    const recent = { createdAt: new Date(Date.now() - 60 * 60 * 1000), answeredAt: new Date() };
+    const unrelated = fixture({
+      effects: [proposalEffect({ ...recent, status: "completed", request: { name: "Other" } })],
+    });
+    await unrelated.play([[propose()]]);
+    expect(unrelated.askBlock()).toMatchObject({ routine: { name: "Weekly offers" } });
+
+    const corrected = fixture({
+      effects: [proposalEffect({ ...recent, runId: "run-1", result: { outcome: "dismissed" } })],
+    });
+    await corrected.play([[propose({ cron: "0 9 * * 2" })]]);
+    expect(corrected.askBlock()).toMatchObject({
+      routine: { schedule: "Tuesdays at 09:00 Europe/Paris" },
+    });
+  });
+
+  it("corrects as many times as the user asks, and stops at a Not now", async () => {
+    const typed = (id: string, hoursAgo: number, overrides: Partial<Effect> = {}) =>
+      proposalEffect({
+        id,
+        idempotencyKey: id,
+        runId: "run-1",
+        result: { outcome: "dismissed" },
+        createdAt: new Date(Date.now() - hoursAgo * 60 * 60 * 1000),
+        answeredAt: new Date(),
+        ...overrides,
+      });
+    const chain = [typed("e1", 4), typed("e2", 3), typed("e3", 2), typed("e4", 1)];
+    const fifth = fixture({ effects: chain });
+    await fifth.play([[propose({ cron: "0 9 * * 2" })]]);
+    expect(fifth.askBlock()).toMatchObject({
+      routine: { schedule: "Tuesdays at 09:00 Europe/Paris" },
+    });
+
+    const stopped = fixture({
+      effects: [...chain, typed("e5", 0.5, { result: undefined })],
+    });
+    await stopped.play([[propose({ cron: "0 9 * * 2" })]]);
+    expect(stopped.results).toEqual([
+      {
+        ok: false,
+        declined: true,
+        note: "The user declined this routine. Do not propose it again within a day.",
+      },
+    ]);
+  });
+
+  const answered = (result?: unknown) => {
+    const args = propose().args;
+    return proposalEffect({
+      runId: "run-1",
+      idempotencyKey: approvalEffectKey("run-1", "routine_proposal", args),
+      request: args,
+      result,
+    });
+  };
+
+  it("tells the resumed model the card was answered by Not now", async () => {
+    const f = fixture({ effects: [answered()] });
+    await f.play([[propose()]]);
+    expect(f.results).toEqual([
+      {
+        ok: false,
+        declined: true,
+        note: "The user declined this routine. Do not propose it again within a day.",
+      },
+    ]);
+    expect(f.askBlock()).toBeUndefined();
+  });
+
+  it("tells the resumed model to create what a typed yes agreed to, and creates it with its card", async () => {
+    const f = fixture({ effects: [answered({ outcome: "dismissed" })] });
+    const { proposed: _proposed, ...agreed } = offers;
+    await f.play([[propose()], [{ name: "schedule_create", args: agreed }]]);
+    expect(f.results).toEqual([
+      {
+        ok: false,
+        dismissed: true,
+        note: "The user typed a reply instead of tapping the card. If they agreed to it, create the routine now: call schedule_create with the same arguments, without proposed. If they asked for a change, propose the corrected version now, however many times they ask. If the reply was about something else, do not propose again.",
+      },
+      expect.objectContaining({
+        ok: true,
+        routineId: "routine-new",
+        schedule: "Mondays at 09:00 Europe/Paris",
+      }),
+    ]);
+    expect(f.routineCreate).toHaveBeenCalledOnce();
+    expect(f.askBlock()).toBeUndefined();
+    expect(f.posted()).toEqual([
+      [
+        expect.objectContaining({
+          status: "answered",
+          text: "Mondays at 09:00 Europe/Paris",
+          created: { kind: "routine", id: "routine-new", label: "Weekly offers" },
+          confirms: "created",
+        }),
+      ],
+    ]);
+  });
+
+  describe("once the user tapped Create routine", () => {
+    const card = {
+      id: "m2",
+      threadId: "thread-1",
+      seq: 2,
+      role: "bot",
+      runId: "run-1",
+      botId: "bot-1",
+      blocks: [
+        { kind: "text", text: "You ask every Monday." },
+        {
+          ...proposalCard,
+          approvalEffectId: "effect-approved",
+          status: "answered",
+          answer: "allow",
+        },
+      ],
+    };
+    const approved = (request: Record<string, unknown>): Effect => ({
+      id: "effect-approved",
+      runId: "run-1",
+      kind: "routine_proposal",
+      idempotencyKey: approvalEffectKey("run-1", "routine_proposal", request),
+      status: "approved",
+      request,
+      createdAt: new Date(),
+      answeredAt: new Date(),
+    });
+    const writtenCard = (f: ReturnType<typeof fixture>) =>
+      (f.messageUpdate.mock.calls[0] as unknown as [{ data: { blocks: Row[] } }] | undefined)?.[0]
+        .data.blocks[1];
+
+    it("creates exactly the routine shown, past every guard, and links the card to it", async () => {
+      const f = fixture({
+        messages: [card],
+        effects: [proposalEffect({}), approved(offers)],
+        otherRunWaiting: true,
+      });
+      await f.play([[propose({ name: "Something else", prompt: "Rewritten" })]]);
+      expect(f.routineCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: "Weekly offers",
+          prompt: "Summarize the new offers. Message me only if there is one.",
+          crons: ["0 9 * * 1"],
+          timezone: "Europe/Paris",
+        }),
+      });
+      expect(writtenCard(f)).toMatchObject({
+        status: "answered",
+        created: { kind: "routine", id: "routine-new", label: "Weekly offers" },
+      });
+      expect(f.posted()).toEqual([]);
+    });
+
+    it("creates the one-shot routine at the time its card showed", async () => {
+      const asked = propose({ delayMinutes: 90 }, oneShot).args;
+      const runAt = new Date(Date.now() + 60 * 60_000).toISOString();
+      const f = fixture({
+        messages: [card],
+        effects: [
+          {
+            ...approved({ ...oneShot, runAt, proposalKey: "weekly offers" }),
+            idempotencyKey: approvalEffectKey("run-1", "routine_proposal", asked),
+          },
+        ],
+      });
+      await f.play([[propose({ delayMinutes: 90 }, oneShot)]]);
+      expect(f.routineCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ nextRunAt: new Date(runAt) }),
+      });
+      expect(writtenCard(f)).toMatchObject({
+        created: { kind: "routine", id: "routine-new", label: "Weekly offers" },
+      });
+    });
+
+    it("marks the card Couldn't create when the run ends before creating it", async () => {
+      const f = fixture({ messages: [card], effects: [approved(offers)] });
+      await f.play([], "worker-1", "failed");
+      expect(f.routineCreate).not.toHaveBeenCalled();
+      expect(writtenCard(f)).toMatchObject({ status: "answered", failed: true });
+      expect(f.effects[0]).toMatchObject({
+        status: "completed",
+        result: { error: "The run ended before this routine was created." },
+      });
+    });
+
+    it("lets the bot propose again the same day once a card could not create its routine", async () => {
+      const f = fixture({
+        effects: [
+          proposalEffect({
+            status: "completed",
+            createdAt: new Date(Date.now() - 60 * 60 * 1000),
+            answeredAt: new Date(),
+            result: { error: "One-shot schedules must run in the future." },
+          }),
+        ],
+      });
+      await f.play([[propose({ name: "Monday offers" })]]);
+      expect(f.askBlock()).toMatchObject({ routine: { name: "Monday offers" } });
+    });
+
+    it("marks the card Couldn't create when the time passed before the tap", async () => {
+      const past = { ...oneShot, runAt: "2020-01-01T09:00:00Z" };
+      const f = fixture({ messages: [card], effects: [approved(past)] });
+      await f.play([[propose({}, past)]]);
+      expect(f.routineCreate).not.toHaveBeenCalled();
+      expect(f.results).toEqual([{ error: "One-shot schedules must run in the future." }]);
+      expect(writtenCard(f)).toMatchObject({ status: "answered", failed: true });
+    });
+  });
+});
+
+describe("what the bot is told about proposing", () => {
+  it.each([
+    ["in a group", { groupId: "group-1" }],
+    ["in a run nobody started", { trigger: "webhook" }],
+  ])("says nothing of proposals %s", async (_label, options) => {
+    const f = fixture(options);
+    await f.play([]);
+    expect(f.instructions()).not.toContain(BOT_OFFER_PROPOSALS);
+  });
+
+  it("creates a routine asked for plainly in a clean conversation, with no card, while proposals are offered", async () => {
+    const f = fixture({ messages: [userText("m1", 1, "Every hour, remind me to stretch")] });
+    await f.play([[routine]]);
+    expect(f.instructions()).toContain(BOT_OFFER_PROPOSALS);
+    expect(f.routineCreate).toHaveBeenCalledOnce();
+    expect(f.askBlock()).toBeUndefined();
+  });
+});
 
 describe("a routine the user asks for", () => {
   const confirmation = {
@@ -638,6 +1134,15 @@ describe("a routine the user asks to change", () => {
       ]);
     }));
 
+  it("refuses to move a reminder more than 5 years ahead", () =>
+    at("2026-10-07T10:00:00Z", async () => {
+      const reminder = { ...stored, crons: ["@once"], nextRunAt: new Date("2026-10-08T08:00:00Z") };
+      const f = fixture({ routines: [reminder] });
+      await f.play([[change({ runAt: "2031-10-08T08:00:00Z" })]]);
+      expect(f.results).toEqual([{ error: "One-shot schedules must run within 5 years." }]);
+      expect(f.routines[0]).toMatchObject({ nextRunAt: new Date("2026-10-08T08:00:00Z") });
+    }));
+
   it("keeps a paused routine paused, and says so to the bot and on the card", async () => {
     const f = fixture({ routines: [{ ...stored, active: false, nextRunAt: null }] });
     await f.play([[change({ cron: "0 9 * * *" })]]);
@@ -876,5 +1381,13 @@ describe("a routine the user asks to change", () => {
     expect(f.results).toEqual([{ error: "Routine not found." }]);
     expect(f.routineUpdate).not.toHaveBeenCalled();
     expect(f.posted()).toEqual([]);
+  });
+
+  it("refuses a proposed change", async () => {
+    const f = fixture({ routines: [stored] });
+    await f.play([[change({ proposed: true, cron: "0 9 * * *" })]]);
+    expect(f.results).toEqual([{ error: "Proposing a change to a routine is not available yet." }]);
+    expect(f.askBlock()).toBeUndefined();
+    expect(f.routineUpdate).not.toHaveBeenCalled();
   });
 });

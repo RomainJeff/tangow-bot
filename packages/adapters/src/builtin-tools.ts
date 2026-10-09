@@ -647,6 +647,16 @@ export const builtinAgentTools: ConnectorTool[] = [
           description:
             "A routine of yours from schedule_list to change, when the user asks: give only what changes; what you leave out stays, and name and prompt are then optional.",
         },
+        proposed: {
+          type: "boolean",
+          description:
+            "true when you propose this routine on your own: the user approves it on a card first.",
+        },
+        question: {
+          type: "string",
+          description:
+            "With proposed: true, the card's question, one short line in the user's language (at most 120 characters, no link).",
+        },
       },
     },
   },

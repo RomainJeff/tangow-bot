@@ -1,5 +1,6 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
 import {
+  ASK_DISMISSED_ANSWER,
   type AskQuestion,
   type BotSecretDestination,
   type MessageBlock,
@@ -9,6 +10,8 @@ import {
 import {
   ACTIVE_RUN_STATUSES,
   blocksToAgentHistoryText,
+  DISMISSABLE_EFFECT_KINDS,
+  DISMISSED_EFFECT_RESULT,
   isApprovalAskBlock,
   isSecretAskBlock,
   messagingChannelId,
@@ -1057,13 +1060,14 @@ export async function answerRunInputInTransaction(
             request: spawnBotEdit.approved,
             idempotencyKey: spawnBotEdit.key,
             status: "approved",
+            answeredAt: new Date(),
           },
         });
         if (rewritten.count !== 1) throw new Error("Bot creation changed while it was edited");
       } else {
         await tx.externalEffect.update({
           where: { id: approvalEffect!.id },
-          data: { status: allowed ? "approved" : "denied" },
+          data: { status: allowed ? "approved" : "denied", answeredAt: new Date() },
         });
       }
       if (input.answer === "always") {
@@ -1307,6 +1311,105 @@ export async function resumeAskWithComposerTextInTransaction(
     blocks,
     eventSeq: updated.seq,
   };
+}
+
+export interface DismissProposalWithTextInput {
+  spaceId: string;
+  threadId: string;
+  runId: string;
+  /** Who typed: only the run's own user puts its card away. */
+  userId: string;
+}
+
+/**
+ * `dismissed`: the card is put away and the run queued again on its checkpoint. `settled`: a tap
+ * answered the proposal card first, the run goes on, and the caller steers the message into it.
+ * `keep`: not a card a reply puts away; the caller applies the usual rule.
+ */
+export type DismissProposalWithTextResult =
+  | { outcome: "dismissed"; status: "queued" }
+  | { outcome: "settled"; status: string }
+  | { outcome: "keep" };
+
+const STEERABLE_AFTER_ANSWER = new Set(["queued", "leased", "running"]);
+
+/**
+ * Puts away a proposal card the user answered by typing instead of tapping. Separate
+ * from resumeAskWithComposerTextInTransaction, which never writes an effect. The card's kind is
+ * read from the stored effect, never from the block; the only transition written is
+ * intended → denied, marked dismissed so no guard counts it as a no. The run keeps its checkpoint:
+ * the pending call resumes and reads that it was dismissed, then the typed message steers it.
+ */
+export async function dismissProposalWithTextInTransaction(
+  tx: Prisma.TransactionClient,
+  input: DismissProposalWithTextInput,
+): Promise<DismissProposalWithTextResult> {
+  // Thread row first, then run rows: the order answerRunInputInTransaction takes, so a tap on the
+  // card and this reply run one after the other.
+  await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
+  const run = await tx.run.findFirst({
+    where: { id: input.runId, spaceId: input.spaceId, threadId: input.threadId },
+    select: { botId: true, userId: true, status: true },
+  });
+  if (!run || run.userId !== input.userId) return { outcome: "keep" };
+  const waiting = run.status === "waiting_input";
+  const message = await tx.message.findFirst({
+    where: { threadId: input.threadId, runId: input.runId, role: "bot" },
+    orderBy: { seq: "desc" },
+  });
+  const asks = parseKnownMessageBlocks(message?.blocks).filter(({ block }) => block.kind === "ask");
+  // A tap that came first answered the card: the reply steers its run only if it was a proposal.
+  const pending = waiting
+    ? asks.find(({ block }) => block.kind === "ask" && block.status !== "answered")
+    : asks.at(-1);
+  if (!message || pending?.block.kind !== "ask" || !isApprovalAskBlock(pending.block)) {
+    return { outcome: "keep" };
+  }
+  const pendingAsk = pending.block;
+  const effect = await tx.externalEffect.findFirst({
+    where: { id: pendingAsk.approvalEffectId, spaceId: input.spaceId, runId: input.runId },
+    select: { id: true, kind: true, status: true },
+  });
+  if (!effect || !DISMISSABLE_EFFECT_KINDS.has(effect.kind)) return { outcome: "keep" };
+  if (!waiting) {
+    return STEERABLE_AFTER_ANSWER.has(run.status)
+      ? { outcome: "settled", status: run.status }
+      : { outcome: "keep" };
+  }
+  const dismissed = await tx.externalEffect.updateMany({
+    where: { id: effect.id, status: "intended", kind: { in: [...DISMISSABLE_EFFECT_KINDS] } },
+    data: { status: "denied", answeredAt: new Date(), result: DISMISSED_EFFECT_RESULT },
+  });
+  // Answered while the run still waits: steering into it would reach a run that never wakes, so
+  // the caller keeps the usual pending-card rule.
+  if (dismissed.count !== 1) return { outcome: "keep" };
+  const queued = await tx.run.updateMany({
+    where: {
+      id: input.runId,
+      spaceId: input.spaceId,
+      threadId: input.threadId,
+      status: "waiting_input",
+    },
+    data: { status: "queued" },
+  });
+  // Under the thread lock both rows move together; anything else rolls the effect back too.
+  if (queued.count !== 1) throw new Error("The run changed while its card was put away");
+
+  const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block, index) =>
+    index === pending.index
+      ? { ...pendingAsk, status: "answered" as const, answer: ASK_DISMISSED_ANSWER }
+      : block,
+  );
+  await tx.message.update({ where: { id: message.id }, data: { blocks } });
+  await appendEventInTransaction(tx, {
+    spaceId: input.spaceId,
+    threadId: input.threadId,
+    botId: run.botId,
+    type: "thread.message.updated",
+    runId: input.runId,
+    payload: { messageId: message.id, role: "bot", blocks },
+  });
+  return { outcome: "dismissed", status: "queued" };
 }
 
 export async function pauseRunForInput(

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ASK_DISMISSED_ANSWER,
   appContract,
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_INSTRUCTIONS_MAX_LENGTH,
@@ -520,5 +521,47 @@ describe("editable Create bot card contract", () => {
         payload: { effectId: "effect-1", proposed: { name: "A" }, approved: { name: "B" } },
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("routine proposal card contract", () => {
+  const card = {
+    kind: "ask",
+    approvalEffectId: "effect-1",
+    text: "Je m'en occupe chaque lundi matin ?",
+    detail: "name: Weekly offers",
+    status: "pending",
+    proposal: "routine",
+    routine: {
+      name: "Weekly offers",
+      schedule: "Mondays at 09:00 Europe/Paris",
+      prompt: "Summarize the new offers.",
+      notify: false,
+    },
+    actions: [
+      { id: "allow", label: "Create routine", outcome: "created" },
+      { id: "deny", label: "Not now", outcome: "cancelled" },
+    ],
+  } as const;
+
+  it("accepts a pending proposal, a created one, a failed one and one put away by typing", () => {
+    const created = {
+      ...card,
+      status: "answered",
+      answer: "allow",
+      created: { kind: "routine", id: "routine-1", label: "Weekly offers" },
+    } as const;
+    const failed = { ...card, status: "answered", answer: "allow", failed: true } as const;
+    const dismissed = { ...card, status: "answered", answer: ASK_DISMISSED_ANSWER } as const;
+    for (const block of [card, created, failed, dismissed]) {
+      expect(MessageBlock.parse(block)).toEqual(block);
+    }
+  });
+
+  it("refuses an unknown proposal kind or a routine without its schedule", () => {
+    expect(MessageBlock.safeParse({ ...card, proposal: "bot" }).success).toBe(false);
+    const { schedule: _schedule, ...routine } = card.routine;
+    expect(MessageBlock.safeParse({ ...card, routine }).success).toBe(false);
+    expect(MessageBlock.safeParse({ ...card, failed: false }).success).toBe(false);
   });
 });

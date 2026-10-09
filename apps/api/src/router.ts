@@ -35,7 +35,6 @@ import {
   buildModelConnectPlaintext,
   ComputerBusyError,
   cancelComputerRunWork,
-  cancelRoutineRunCards,
   checkpointAndRecordComputerWorkspace,
   clearInactiveUserComputerControl,
   computerSupportsUpdate,
@@ -77,6 +76,7 @@ import {
   screenLeaseIdForRun,
   scriptedCatalogEntry,
   serializeModelSecret,
+  settleCancelledRunCards,
   sweepOrphanPreviewArtifacts,
   takeoverLeaseMs,
   toComputerRef,
@@ -1528,22 +1528,19 @@ export function createRouter(deps: RouterDeps) {
       }),
       stop: authed.threads.stop.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        // Snapshot the routine runs Stop is about to cancel: once they are cancelled there is
-        // no worker left to settle their run cards, and the card would tick on "running"
-        // forever. Taken before the cancel so a waiting_input / queued run is included too.
+        // Snapshot the runs Stop is about to cancel: once they are cancelled there is no worker
+        // left to settle their cards, and a routine-run card would tick on "running" or an
+        // approved routine card stay on "Creating…" forever. Taken before the cancel so a
+        // waiting_input / queued run is included too.
         const stopping = await deps.prisma.run.findMany({
-          where: {
-            threadId: target.threadId,
-            routineId: { not: null },
-            status: { in: [...ACTIVE_RUN_STATUSES] },
-          },
+          where: { threadId: target.threadId, status: { in: [...ACTIVE_RUN_STATUSES] } },
           select: { id: true },
         });
         await stopThreadRuns(deps, context.actor, target);
-        await cancelRoutineRunCards(
+        await settleCancelledRunCards(
           deps,
           stopping.map((run) => run.id),
-        ).catch((error) => getLogger().error("routine run card cancel", error));
+        ).catch((error) => getLogger().error("cancelled run cards", error));
         return { ok: true as const };
       }),
       clear: authed.threads.clear.handler(async ({ context, input }) => {

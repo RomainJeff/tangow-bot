@@ -12,6 +12,10 @@ function serverLabel(label: string): string {
       return t`Create bot`;
     case "Cancel":
       return t`Cancel`;
+    case "Create routine":
+      return t`Create routine`;
+    case "Not now":
+      return t`Not now`;
     default:
       return label;
   }

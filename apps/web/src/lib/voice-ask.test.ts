@@ -102,3 +102,25 @@ describe("voice call approvals", () => {
     expect(spokenAskAnswer(ask({ text: "Which city?" }), "Seoul please")).toBe("Seoul please");
   });
 });
+
+describe("a routine proposal on a call", () => {
+  const proposal = {
+    kind: "ask",
+    approvalEffectId: "effect-1",
+    proposal: "routine",
+    text: "Je m'en occupe chaque lundi ?",
+    detail: "name: Weekly offers",
+    status: "pending",
+    actions: [
+      { id: "allow", label: "Create routine", outcome: "created" },
+      { id: "deny", label: "Not now", outcome: "cancelled" },
+    ],
+  } as const satisfies AskBlock;
+
+  it("can only be refused by voice, never approved", () => {
+    expect(callAskActions(proposal)).toEqual([
+      { id: "deny", label: "Not now", outcome: "cancelled" },
+    ]);
+    expect(spokenAskAnswer(proposal, "oui")).toBeNull();
+  });
+});

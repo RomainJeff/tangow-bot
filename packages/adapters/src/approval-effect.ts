@@ -1,15 +1,19 @@
 import type { AgentToolExecutionResult } from "@rakazo/adapter-kit";
+import { refusedProposalResult } from "@rakazo/core";
 
 export type ApprovalPausedToolResult = AgentToolExecutionResult & { terminate: true };
 
 export interface ApprovedEffectReplay {
   kind: string;
   request: unknown;
+  idempotencyKey?: string;
 }
 
 export interface ApprovedEffectReplayQueue {
   nextToolName(): string | undefined;
   nextRequest(): unknown;
+  /** The approved effect's own key: a replay finds the row the user answered, whatever its args. */
+  nextKey(): string | undefined;
   take(toolName: string): unknown;
   assertDrained(): void;
 }
@@ -25,6 +29,9 @@ export function createApprovedEffectReplayQueue(
     },
     nextRequest() {
       return pending[0]?.request;
+    },
+    nextKey() {
+      return pending[0]?.idempotencyKey;
     },
     take(toolName) {
       const next = pending[0];
@@ -349,7 +356,7 @@ export const SPAWN_BOT_CANCELLED_RESULT = {
 } as const;
 
 export function resolveDuplicateEffectGate(
-  effect: { status: string; result?: unknown },
+  effect: { status: string; result?: unknown; kind?: string },
   toolName: string,
 ): DuplicateEffectGate {
   if (effect.status === "completed") {
@@ -359,9 +366,10 @@ export function resolveDuplicateEffectGate(
     return {
       action: "return",
       result:
-        toolName === "spawn_bot"
+        (effect.kind && refusedProposalResult(effect.kind, effect.result)) ??
+        (toolName === "spawn_bot"
           ? { ...SPAWN_BOT_CANCELLED_RESULT }
-          : { error: "User denied this action." },
+          : { error: "User denied this action." }),
     };
   }
   if (effect.status === "executing") {
@@ -448,7 +456,7 @@ export async function completeExternalEffect(
     };
   },
   effectId: string,
-  expectedStatus: "intended" | "executing",
+  expectedStatus: "intended" | "executing" | "approved",
   result: unknown,
 ): Promise<boolean> {
   const completed = await store.externalEffect.updateMany({
