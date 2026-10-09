@@ -220,10 +220,7 @@ export function SidePanel({
           />
         ) : (
           <>
-            <div className="flex shrink-0 items-center justify-between px-5 pt-4 pb-3">
-              <span className="text-meta text-muted-foreground">
-                {panel === "computer" ? <Trans>Screen</Trans> : null}
-              </span>
+            <div className="flex shrink-0 items-center justify-end px-5 pt-4 pb-3">
               <div className="flex gap-1">
                 {active &&
                 panel === "computer" &&
