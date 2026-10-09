@@ -1265,6 +1265,18 @@ describe("routine update triggers", () => {
       expect(cancel.mock.calls).toEqual([]);
     }));
 
+  it("keeps a recurring routine at its time of day when the editor changes only its zone", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue } = updateDeps({});
+
+      const saved = await savedRoutine(await update({ ...editorForm, timezone: "Europe/Paris" }));
+
+      expect(saved.nextRunAt).toBe("2026-10-08T07:00:00.000Z");
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2026-10-08T07:00:00.000Z"),
+      ]);
+    }));
+
   it("clears the next run and cancels its wake-up when the editor pauses a routine", () =>
     at("2026-10-07T10:00:00.000Z", async () => {
       const { update, enqueue, cancel } = updateDeps({});
