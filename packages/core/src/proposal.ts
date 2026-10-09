@@ -208,20 +208,18 @@ export function parseCardQuestion(value: unknown): { question?: string } | { err
   return typeof value === "string" ? { question: value.trim() } : {};
 }
 
-const PROPOSAL_KEY_MAX_LENGTH = 40;
-
 /**
  * The name a proposal is remembered by: what "the same proposal" means, whatever its case,
- * width, accents, spacing or markup.
+ * width, accents on Latin letters, spacing or markup. Letters, marks and digits of every script
+ * are kept, so two names apart by a vowel sign stay apart.
  */
 export function proposalKey(name: string): string {
   return botNameKey(name)
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]+/g, "")
-    .replace(/[^\p{L}\p{N} '_.-]+/gu, " ")
+    .replace(/(\p{Script=Latin})\p{M}+/gu, "$1")
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{M}\p{N} '_.-]+/gu, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, PROPOSAL_KEY_MAX_LENGTH)
     .trim();
 }
 
