@@ -3470,14 +3470,26 @@ describe("dismissProposalWithTextInTransaction", () => {
     expect(tx.message.update).not.toHaveBeenCalled();
   });
 
-  it("lets a Create tap that came first win, and the reply steer the run", async () => {
-    const tapped = proposalTx({ runStatus: "queued" });
-    await expect(dismissProposalWithTextInTransaction(tapped as never, input)).resolves.toEqual({
-      outcome: "settled",
-      status: "queued",
-    });
-    expect(tapped.externalEffect.updateMany).not.toHaveBeenCalled();
-  });
+  const tappedCard = { ...proposalCard, status: "answered", answer: "allow" };
+  it.each([
+    ["a proposal", {}, { outcome: "settled", status: "queued" }],
+    ["a Create bot card", { kind: "spawn_bot" }, { outcome: "keep" }],
+    ["a connector approval", { kind: "gmail_send" }, { outcome: "keep" }],
+    [
+      "an ask_user question",
+      { block: { kind: "ask", text: "Which city?", status: "answered", input: "text" } },
+      { outcome: "keep" },
+    ],
+  ])(
+    "lets a tap on %s that came first win, and steers the reply only into a proposal's run",
+    async (_label, options, outcome) => {
+      const tapped = proposalTx({ runStatus: "queued", block: tappedCard, ...options });
+      await expect(dismissProposalWithTextInTransaction(tapped as never, input)).resolves.toEqual(
+        outcome,
+      );
+      expect(tapped.externalEffect.updateMany).not.toHaveBeenCalled();
+    },
+  );
 
   it("never steers into a run still waiting on a card that was answered", async () => {
     const answered = proposalTx({ effectUpdates: 0 });
