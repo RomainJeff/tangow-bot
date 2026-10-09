@@ -1,13 +1,45 @@
-import type { Bot, Group, SpaceBot, SpaceGroup } from "@rakazo/contracts";
+import type { Bot, Group, SpaceBot, SpaceGroup, ThreadSnapshot } from "@rakazo/contracts";
 
 export type Panel =
   | "computer"
-  | "settings"
+  | "bot"
   | "routine"
   | "create"
   | "create-group"
   | "group-settings"
   | null;
+
+export type BotTab = "routines" | "knowledge" | "settings";
+
+/** What the bot page shows over its tab: an editor reached from a row. */
+export type BotDetail =
+  | { kind: "instructions" }
+  | { kind: "description" }
+  | { kind: "model" }
+  | { kind: "voice" };
+
+export type BotPageView = { tab: BotTab; detail: BotDetail | null };
+
+export type PanelSize = "default" | "wide";
+
+/** The panel widens to edit a long text; its width is never stored. */
+export function panelSizeFor(panel: Panel, view: BotPageView): PanelSize {
+  const kind = panel === "bot" ? view.detail?.kind : undefined;
+  return kind === "instructions" || kind === "description" ? "wide" : "default";
+}
+
+/**
+ * Whether the bot has never run, read from its conversation: no run under way and no message a
+ * run wrote. A message seeded without a run (the onboarding question) does not count. Older
+ * history that is not loaded may hold a run, so it counts as having run.
+ */
+export function neverRan(snapshot: Pick<ThreadSnapshot, "messages" | "olderCursor" | "run">) {
+  return (
+    !snapshot.run &&
+    snapshot.olderCursor === null &&
+    snapshot.messages.every((message) => !message.runId)
+  );
+}
 
 export type PendingAttachment = {
   id: string;

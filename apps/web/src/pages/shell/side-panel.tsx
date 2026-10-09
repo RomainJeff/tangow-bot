@@ -29,19 +29,19 @@ import { desktopBridge } from "../../lib/desktop";
 import { localTimezone } from "../../lib/local-timezone";
 import { rpc } from "../../lib/rpc";
 import { computerPanelNeedsMaintenance } from "../../lib/thread-events";
+import { BotPage } from "../bot-page/BotPage";
 import { CreateGroupForm, GroupSettings } from "../GroupPanel";
 import type { RoutineDraftState } from "../RoutineEditor";
 import {
   draftFromRoutine,
   emptyRoutineDraft,
   RoutineEditor,
-  RoutineListHeader,
-  RoutineListRow,
   routineNeedsOneShotArm,
 } from "../RoutineEditor";
 import { WindowChrome } from "../WindowChrome";
-import { BotSettings, CreateBotForm } from "./bot-panel";
-import type { Panel } from "./layout";
+import type { BotCommands } from "./bot-commands";
+import { CreateBotForm } from "./bot-panel";
+import type { BotPageView, Panel, PanelSize } from "./layout";
 import { firstThreadRoute, panelIsOpen } from "./layout";
 import type { ScreenLinkHandlers } from "./screen-frame";
 import { ScreenFrame } from "./screen-frame";
@@ -49,6 +49,12 @@ import { ScreenFrame } from "./screen-frame";
 export function SidePanel({
   panel,
   setPanel,
+  size,
+  botPage,
+  onBotPage,
+  commands,
+  userId,
+  neverRan,
   active,
   activeGroup,
   computer,
@@ -92,10 +98,17 @@ export function SidePanel({
   navigate,
   createGroup,
   createBot,
-  setClearTarget,
 }: {
   panel: Panel;
   setPanel: Dispatch<SetStateAction<Panel>>;
+  size: PanelSize;
+  botPage: BotPageView;
+  /** Shows the bot page on this view, opening the panel when it is closed. */
+  onBotPage: (view: BotPageView) => void;
+  commands: BotCommands;
+  userId: string;
+  /** Whether the open bot has never run, `null` until its conversation is read. */
+  neverRan: boolean | null;
   active: Bot | undefined;
   activeGroup: Group | undefined;
   computer: ComputerStatus | null;
@@ -111,7 +124,8 @@ export function SidePanel({
   refreshThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
   refreshGroupThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
   refreshBots: (includeArchived?: boolean, replaceBotOrder?: boolean) => Promise<void>;
-  activeRoutines: Routine[];
+  /** `null` until the open bot's routines are read. */
+  activeRoutines: Routine[] | null;
   snapshot: ThreadSnapshot | null;
   stopRun: () => Promise<void>;
   routineDraft: RoutineDraftState;
@@ -145,92 +159,70 @@ export function SidePanel({
     description: string;
     computerMode: ComputerMode;
   }) => Promise<void>;
-  setClearTarget: Dispatch<
-    SetStateAction<{ kind: "bot"; chat: Bot } | { kind: "group"; chat: Group } | null>
-  >;
 }) {
   const { t } = useLingui();
   const open = panelIsOpen(panel, active, activeGroup);
   // The panel lies over the thread, which stays live behind it: Escape and the X
-  // close it, a click outside does not. A full-screen overlay or a call owns
-  // Escape while it is up, so the panel leaves the key alone then.
+  // close it, a click outside does not. On the bot page Escape first closes an
+  // open editor. A full-screen overlay or a call owns Escape while it is up, so
+  // the panel leaves the key alone then.
+  const editorOpen = panel === "bot" && botPage.detail !== null;
   useEffect(() => {
     if (!open || !escapeCloses) return;
     function close(event: KeyboardEvent) {
       if (event.key !== "Escape" || event.defaultPrevented) return;
-      setPanel(null);
+      if (editorOpen) onBotPage({ tab: botPage.tab, detail: null });
+      else setPanel(null);
     }
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
-  }, [open, escapeCloses, setPanel]);
-  // Every panel closes from the same place; only some of them carry a status
-  // line and the settings toggle beside it.
-  const statusHeader =
-    panel !== "routine" &&
-    panel !== "create" &&
-    panel !== "create-group" &&
-    panel !== "group-settings";
+  }, [open, escapeCloses, setPanel, editorOpen, onBotPage, botPage.tab]);
+  const openRoutine = (routine: Routine | null) => {
+    setRoutineDraft(routine ? draftFromRoutine(routine) : emptyRoutineDraft());
+    setRoutineWebhookSecret(null);
+    setEditingRoutine(routine);
+    setRoutineError(null);
+    setPanel("routine");
+  };
+  const backToRoutines = () => onBotPage({ tab: "routines", detail: null });
   return (
     <aside
       data-testid="side-panel"
       data-panel={panel ?? "closed"}
+      data-detail={panel === "bot" ? botPage.detail?.kind : undefined}
+      data-size={size}
       className={`absolute inset-y-0 end-0 z-30 flex min-h-0 shrink-0 flex-col overflow-hidden bg-surface ${
-        open ? "w-full border-s border-border shadow-card lg:w-panel" : "pointer-events-none w-0"
+        open
+          ? `w-full border-s border-border shadow-card ${size === "wide" ? "lg:w-panel-wide" : "lg:w-panel"}`
+          : "pointer-events-none w-0"
       }`}
     >
       {open ? (
-        panel === "settings" && active ? (
-          <>
-            <div className="flex shrink-0 items-center justify-between px-5 pt-4 pb-3">
-              <span className="text-meta text-muted-foreground">
-                <Trans>Settings</Trans>
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t`Close panel`}
-                onClick={() => setPanel(null)}
-              >
-                <X size={16} strokeWidth={1.8} />
-              </Button>
-            </div>
-            <BotSettings
-              key={active.id}
-              bot={active}
-              memoryProviderConfigured={memoryProviderConfig != null}
-              onSave={async ({ computerMode, ...patch }) => {
-                if (computerMode !== active.computerMode) {
-                  await rpc.bots.setComputer({ botId: active.id, mode: computerMode });
-                }
-                await rpc.bots.update({ botId: active.id, ...patch });
-                await refreshBots();
-              }}
-              onExport={async () => {
-                const manifest = await rpc.export.bot({ botId: active.id });
-                const blob = new Blob([JSON.stringify(manifest, null, 2)], {
-                  type: "application/json",
-                });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${active.name.toLowerCase().replace(/\s+/g, "-")}-export.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              onClear={() => setClearTarget({ kind: "bot", chat: active })}
-            />
-          </>
+        panel === "bot" && active ? (
+          <BotPage
+            key={active.id}
+            bot={active}
+            userId={userId}
+            routines={activeRoutines}
+            runningRoutineId={
+              snapshot?.run?.routineId && isActive(snapshot.run.status)
+                ? snapshot.run.routineId
+                : null
+            }
+            neverRan={neverRan}
+            memoryProviderConfigured={memoryProviderConfig != null}
+            view={botPage}
+            onView={onBotPage}
+            onClose={() => setPanel(null)}
+            onOpenRoutine={openRoutine}
+            onStopRun={() => void stopRun()}
+            commands={commands}
+          />
         ) : (
           <>
             <div className="flex shrink-0 items-center justify-between px-5 pt-4 pb-3">
               <span className="text-meta text-muted-foreground">
-                {!statusHeader ? null : panel === "settings" ? (
-                  <Trans>Settings</Trans>
-                ) : active ? (
-                  (computer?.state ?? active.status)
-                ) : (
-                  <Trans>Group</Trans>
-                )}
+                {panel === "computer" ? <Trans>Screen</Trans> : null}
               </span>
               <div className="flex gap-1">
                 {active &&
@@ -310,34 +302,6 @@ export function SidePanel({
                   <p className="mt-2 truncate text-reasoning text-muted-foreground" dir="auto">
                     {t`${active.name}'s screen`}
                   </p>
-                  <RoutineListHeader
-                    onCreate={() => {
-                      setRoutineDraft(emptyRoutineDraft());
-                      setRoutineWebhookSecret(null);
-                      setEditingRoutine(null);
-                      setRoutineError(null);
-                      setPanel("routine");
-                    }}
-                  />
-                  {activeRoutines.map((routine) => {
-                    const routineRunning =
-                      snapshot?.run?.routineId === routine.id && isActive(snapshot.run.status);
-                    return (
-                      <RoutineListRow
-                        key={routine.id}
-                        routine={routine}
-                        running={routineRunning}
-                        onOpen={() => {
-                          setRoutineDraft(draftFromRoutine(routine));
-                          setRoutineWebhookSecret(null);
-                          setEditingRoutine(routine);
-                          setRoutineError(null);
-                          setPanel("routine");
-                        }}
-                        onStop={() => void stopRun()}
-                      />
-                    );
-                  })}
                 </div>
               ) : null}
               {panel === "create-group" ? (
@@ -401,7 +365,7 @@ export function SidePanel({
                   saving={savingRoutine}
                   running={runningRoutine}
                   error={routineError}
-                  onBack={() => setPanel("computer")}
+                  onBack={backToRoutines}
                   onClose={() => setPanel(null)}
                   onEnsureWebhook={async () => {
                     await ensureWebhookSecret(active.id);
@@ -537,7 +501,7 @@ export function SidePanel({
                       setDeleteRoutineTarget(editingRoutine);
                       return;
                     }
-                    setPanel("computer");
+                    backToRoutines();
                   }}
                 />
               ) : null}

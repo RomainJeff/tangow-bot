@@ -185,6 +185,9 @@ msgstr "{workingBotName} está trabalhando"
 msgid "@{0}"
 msgstr "@{0}"
 
+msgid "A first routine"
+msgstr "Uma primeira rotina"
+
 #: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "Um marketplace de plugins (.claude-plugin/marketplace.json) ou um repositório de skills (arquivos SKILL.md). O formato é detectado automaticamente."
@@ -652,6 +655,10 @@ msgstr "Forma automática"
 msgid "Available after the routine is saved"
 msgstr "Disponível depois que a rotina for salva"
 
+#. placeholder {0}: bot.name
+msgid "Available when {0} is idle"
+msgstr "Disponível quando {0} estiver livre"
+
 #: src/pages/AccountSettingsOverlay.tsx:154
 msgid "Avatars"
 msgstr "Avatares"
@@ -879,6 +886,12 @@ msgstr "Limpar a conversa do {0}?"
 #: src/pages/shell/bot-panel.tsx:692
 msgid "Clear conversation"
 msgstr "Limpar conversa"
+
+msgid "Clear description?"
+msgstr "Limpar a descrição?"
+
+msgid "Clear instructions?"
+msgstr "Limpar as instruções?"
 
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clearing…"
@@ -2226,6 +2239,12 @@ msgstr "hora"
 msgid "hours"
 msgstr "horas"
 
+msgid "How it behaves"
+msgstr "Como ele se comporta"
+
+msgid "How it runs"
+msgstr "Como ele roda"
+
 #: src/pages/RoutineSchedule.tsx:241
 msgid "How often"
 msgstr "Com que frequência"
@@ -2921,6 +2940,9 @@ msgstr "Sem gatilho"
 msgid "None yet"
 msgstr "Nenhuma ainda"
 
+msgid "Not awake yet"
+msgstr "Ainda não acordou"
+
 #: src/pages/ModelSettingsOverlay.tsx:638
 msgid "Not connected"
 msgstr "Não Conectado"
@@ -3477,9 +3499,15 @@ msgstr "Restaurar"
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "Restaure o último espaço de trabalho salvo. O trabalho não salvo no computador será perdido."
 
+msgid "Restore unsaved text"
+msgstr "Restaurar texto não salvo"
+
 #: src/components/ComputerUpdateProgress.tsx:53
 msgid "Restoring your workspace"
 msgstr ""
+
+msgid "Retry"
+msgstr "Tentar novamente"
 
 #: src/App.tsx:171
 #: src/pages/PeerMessagesOverlay.tsx:153
@@ -3616,6 +3644,9 @@ msgstr "Salvando..."
 #: src/pages/CallView.tsx:65
 msgid "Say yes or no, or answer in a sentence."
 msgstr "Diga sim ou não, ou responda em uma frase."
+
+msgid "Screen"
+msgstr "Tela"
 
 #: src/pages/ModelSettingsOverlay.tsx:1082
 #: src/pages/PluginsOverlay.tsx:941
@@ -4260,6 +4291,9 @@ msgstr "Verificando…"
 msgid "Voice"
 msgstr "Voz"
 
+msgid "Voice and replies"
+msgstr "Voz e respostas"
+
 #: src/pages/ModelSettingsOverlay.tsx:692
 #: src/pages/ModelSettingsOverlay.tsx:714
 #: src/pages/Onboarding.tsx:592
@@ -4288,6 +4322,9 @@ msgstr "Dias da semana"
 #: src/pages/shell/dialogs.tsx:357
 msgid "What about its memories?"
 msgstr "E suas memórias?"
+
+msgid "What it does, in one line"
+msgstr "O que ele faz, em uma linha"
 
 #: src/components/teach/TeachComputerOverlay.tsx:247
 msgid "What result will you demonstrate?"
@@ -4336,6 +4373,9 @@ msgstr "Funcionando"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "Raiz do espaço de trabalho"
+
+msgid "Write"
+msgstr "Escrever"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

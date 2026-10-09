@@ -28,66 +28,6 @@ function rowClass(open: boolean): string {
   return `w-full rounded-[11px] px-2.5 py-2.5 text-start ${open ? "bg-muted" : "hover:bg-muted"}`;
 }
 
-type KnowledgeTab = "memory" | "files";
-
-/**
- * What the agent knows, editable: its own memory document and its working
- * files. Space-wide memory lives in the Memory settings overlay; skills sit
- * in their own section. Rides entirely on the existing memory.* RPCs.
- */
-export function KnowledgeSection({ botId }: { botId: string }) {
-  const [tab, setTab] = useState<KnowledgeTab>("memory");
-  return (
-    <div className="mt-6" data-testid="bot-knowledge">
-      <div className="mb-3 text-[14px] text-muted-foreground">
-        <Trans>Knowledge</Trans>
-      </div>
-      <div className="mb-3 flex items-center gap-2 text-[14px]">
-        {(
-          [
-            { value: "memory", label: <Trans>Memory</Trans> },
-            { value: "files", label: <Trans>Files</Trans> },
-          ] satisfies Array<{ value: KnowledgeTab; label: ReactNode }>
-        ).map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={tab === option.value}
-            onClick={() => setTab(option.value)}
-            className={`rounded-lg px-2.5 py-1 ${
-              tab === option.value ? "bg-muted text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      {tab === "memory" ? (
-        <MemoryDocumentList
-          key={botId}
-          load={() => rpc.memory.list({ botId, scope: "bot" })}
-          exportFilename="memory.md"
-          emptyLabel={<Trans>Nothing remembered yet</Trans>}
-          testId="bot-knowledge-memory"
-        />
-      ) : null}
-      {tab === "files" ? <AgentFiles key={botId} botId={botId} /> : null}
-    </div>
-  );
-}
-
-/** The agent's own skills section, sibling to Knowledge in the settings panel. */
-export function BotSkillsSection({ botId }: { botId: string }) {
-  return (
-    <div className="mt-6" data-testid="bot-skills">
-      <div className="mb-3 text-[14px] text-muted-foreground">
-        <Trans>Skills</Trans>
-      </div>
-      <AgentSkills botId={botId} />
-    </div>
-  );
-}
-
 /** The space's shared memory documents, mounted in the Memory settings overlay. */
 export function SpaceMemorySection() {
   return (
@@ -105,7 +45,7 @@ export function SpaceMemorySection() {
   );
 }
 
-function MemoryDocumentList({
+export function MemoryDocumentList({
   load,
   exportFilename,
   emptyLabel,
@@ -708,7 +648,7 @@ function sortEntries(entries: WorkspaceEntry[]): WorkspaceEntry[] {
  * otherwise the last checkpoint. Rides on the existing computer.files and
  * computer.readFile RPCs, which already scope paths to this bot's home.
  */
-function AgentFiles({ botId }: { botId: string }) {
+export function AgentFiles({ botId }: { botId: string }) {
   const { t } = useLingui();
   const [dir, setDir] = useState("");
   const [entries, setEntries] = useState<WorkspaceEntry[]>([]);

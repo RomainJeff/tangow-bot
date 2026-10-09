@@ -185,6 +185,9 @@ msgstr "{workingBotName} काम कर रहा है"
 msgid "@{0}"
 msgstr "@{0}"
 
+msgid "A first routine"
+msgstr "पहला रूटीन"
+
 #: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "एक प्लगइन मार्केटप्लेस (.claude-plugin/marketplace.json) या स्किल्स की रिपॉजिटरी (SKILL.md फ़ाइलें)। फ़ॉर्मेट अपने आप पहचाना जाता है।"
@@ -652,6 +655,10 @@ msgstr "स्वचालित आकार"
 msgid "Available after the routine is saved"
 msgstr "रूटीन सहेजने के बाद उपलब्ध"
 
+#. placeholder {0}: bot.name
+msgid "Available when {0} is idle"
+msgstr "{0} के खाली होने पर उपलब्ध"
+
 #: src/pages/AccountSettingsOverlay.tsx:154
 msgid "Avatars"
 msgstr "अवतार"
@@ -879,6 +886,12 @@ msgstr "{0} की बातचीत साफ़ करें?"
 #: src/pages/shell/bot-panel.tsx:692
 msgid "Clear conversation"
 msgstr "बातचीत साफ़ करें"
+
+msgid "Clear description?"
+msgstr "विवरण साफ़ करें?"
+
+msgid "Clear instructions?"
+msgstr "निर्देश साफ़ करें?"
 
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clearing…"
@@ -2226,6 +2239,12 @@ msgstr "घंटा"
 msgid "hours"
 msgstr "घंटे"
 
+msgid "How it behaves"
+msgstr "यह कैसे व्यवहार करता है"
+
+msgid "How it runs"
+msgstr "यह कैसे चलता है"
+
 #: src/pages/RoutineSchedule.tsx:241
 msgid "How often"
 msgstr "कितनी बार"
@@ -2921,6 +2940,9 @@ msgstr "कोई ट्रिगर नहीं"
 msgid "None yet"
 msgstr "अभी तक कोई नहीं"
 
+msgid "Not awake yet"
+msgstr "अभी जागा नहीं"
+
 #: src/pages/ModelSettingsOverlay.tsx:638
 msgid "Not connected"
 msgstr "कनेक्टेड नहीं"
@@ -3477,9 +3499,15 @@ msgstr "बहाल करें"
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "अंतिम सहेजे गए वर्कस्पेस को बहाल करें। कंप्यूटर पर बिना सहेजा काम खो जाएगा।"
 
+msgid "Restore unsaved text"
+msgstr "बिना सहेजा टेक्स्ट बहाल करें"
+
 #: src/components/ComputerUpdateProgress.tsx:53
 msgid "Restoring your workspace"
 msgstr ""
+
+msgid "Retry"
+msgstr "फिर से कोशिश करें"
 
 #: src/App.tsx:171
 #: src/pages/PeerMessagesOverlay.tsx:153
@@ -3616,6 +3644,9 @@ msgstr "सहेजा जा रहा है…"
 #: src/pages/CallView.tsx:65
 msgid "Say yes or no, or answer in a sentence."
 msgstr "हां या ना कहें, या एक वाक्य में उत्तर दें।"
+
+msgid "Screen"
+msgstr "स्क्रीन"
 
 #: src/pages/ModelSettingsOverlay.tsx:1082
 #: src/pages/PluginsOverlay.tsx:941
@@ -4260,6 +4291,9 @@ msgstr "पुष्टि की जा रही है…"
 msgid "Voice"
 msgstr "आवाज़"
 
+msgid "Voice and replies"
+msgstr "आवाज़ और जवाब"
+
 #: src/pages/ModelSettingsOverlay.tsx:692
 #: src/pages/ModelSettingsOverlay.tsx:714
 #: src/pages/Onboarding.tsx:592
@@ -4288,6 +4322,9 @@ msgstr "कार्यदिवस"
 #: src/pages/shell/dialogs.tsx:357
 msgid "What about its memories?"
 msgstr "इसकी मेमोरी का क्या करें?"
+
+msgid "What it does, in one line"
+msgstr "यह क्या करता है, एक पंक्ति में"
 
 #: src/components/teach/TeachComputerOverlay.tsx:247
 msgid "What result will you demonstrate?"
@@ -4336,6 +4373,9 @@ msgstr "काम चल रहा है…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "वर्कस्पेस रूट"
+
+msgid "Write"
+msgstr "लिखें"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

@@ -6,7 +6,7 @@ import { Menu, Monitor, PanelLeftOpen, Phone, Settings } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { desktopBridge } from "../../lib/desktop";
 import { WindowChrome } from "../WindowChrome";
-import type { Panel } from "./layout";
+import type { BotTab, Panel } from "./layout";
 
 export function ThreadHeader({
   botsSidebarCollapsed,
@@ -18,6 +18,7 @@ export function ThreadHeader({
   activeSnapshot,
   panel,
   setPanel,
+  onOpenBotPage,
   refreshThread,
   onVoice,
   voiceButtonRef,
@@ -32,6 +33,7 @@ export function ThreadHeader({
   activeSnapshot: ThreadSnapshot | null;
   panel: Panel;
   setPanel: Dispatch<SetStateAction<Panel>>;
+  onOpenBotPage: (tab: BotTab) => void;
   refreshThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
   /** 1:1 conversations only — a group has no call, only the composer's dictation. */
   onVoice?: () => void;
@@ -71,7 +73,7 @@ export function ThreadHeader({
         <button
           type="button"
           data-testid="bot-settings-trigger"
-          onClick={() => setPanel(inGroup ? "group-settings" : "settings")}
+          onClick={() => (inGroup ? setPanel("group-settings") : onOpenBotPage("settings"))}
           className="app-no-drag -mx-2 flex min-w-0 items-center gap-3 rounded-lg px-2 py-1 transition-colors hover:bg-muted"
         >
           {/* D2-a: a mono (single-bot) thread carries the bot's identity here
@@ -127,8 +129,8 @@ export function ThreadHeader({
               variant="tertiary"
               size="capsule"
               data-testid="open-computer-panel"
-              aria-label={t`Computer & routines`}
-              title={t`Computer & routines`}
+              aria-label={t`Screen`}
+              title={t`Screen`}
               onClick={() => {
                 const next = panel === "computer" ? null : "computer";
                 setPanel(next);
@@ -148,8 +150,8 @@ export function ThreadHeader({
               data-testid="open-settings-panel"
               aria-label={t`Bot settings`}
               title={t`Bot settings`}
-              onClick={() => setPanel(panel === "settings" ? null : "settings")}
-              aria-pressed={panel === "settings"}
+              onClick={() => (panel === "bot" ? setPanel(null) : onOpenBotPage("settings"))}
+              aria-pressed={panel === "bot"}
               className="app-no-drag"
             >
               <Settings size={17} strokeWidth={1.6} aria-hidden="true" />

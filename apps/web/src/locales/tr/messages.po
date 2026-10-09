@@ -185,6 +185,9 @@ msgstr "{workingBotName} çalışıyor"
 msgid "@{0}"
 msgstr "@{0}"
 
+msgid "A first routine"
+msgstr "İlk rutin"
+
 #: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "Bir eklenti pazar yeri (.claude-plugin/marketplace.json) veya beceri deposu (SKILL.md dosyaları). Biçim otomatik olarak algılanır."
@@ -652,6 +655,10 @@ msgstr "Otomatik şekil"
 msgid "Available after the routine is saved"
 msgstr "Rutin kaydedildikten sonra kullanılabilir"
 
+#. placeholder {0}: bot.name
+msgid "Available when {0} is idle"
+msgstr "{0} boştayken kullanılabilir"
+
 #: src/pages/AccountSettingsOverlay.tsx:154
 msgid "Avatars"
 msgstr "Avatarlar"
@@ -879,6 +886,12 @@ msgstr "{0} sohbeti temizlensin mi?"
 #: src/pages/shell/bot-panel.tsx:692
 msgid "Clear conversation"
 msgstr "Sohbeti temizle"
+
+msgid "Clear description?"
+msgstr "Açıklama temizlensin mi?"
+
+msgid "Clear instructions?"
+msgstr "Yönergeler temizlensin mi?"
 
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clearing…"
@@ -2226,6 +2239,12 @@ msgstr "saat"
 msgid "hours"
 msgstr "saat"
 
+msgid "How it behaves"
+msgstr "Nasıl davranır"
+
+msgid "How it runs"
+msgstr "Nasıl çalışır"
+
 #: src/pages/RoutineSchedule.tsx:241
 msgid "How often"
 msgstr "Ne sıklıkla"
@@ -2921,6 +2940,9 @@ msgstr "Tetikleyici yok"
 msgid "None yet"
 msgstr "Henüz yok"
 
+msgid "Not awake yet"
+msgstr "Henüz uyanmadı"
+
 #: src/pages/ModelSettingsOverlay.tsx:638
 msgid "Not connected"
 msgstr "Bağlı değil"
@@ -3477,9 +3499,15 @@ msgstr "Geri yükle"
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "Son kaydedilen çalışma alanını geri yükler. Bilgisayardaki kaydedilmemiş çalışmalar kaybolur."
 
+msgid "Restore unsaved text"
+msgstr "Kaydedilmemiş metni geri yükle"
+
 #: src/components/ComputerUpdateProgress.tsx:53
 msgid "Restoring your workspace"
 msgstr ""
+
+msgid "Retry"
+msgstr "Tekrar dene"
 
 #: src/App.tsx:171
 #: src/pages/PeerMessagesOverlay.tsx:153
@@ -3616,6 +3644,9 @@ msgstr "Kaydediliyor…"
 #: src/pages/CallView.tsx:65
 msgid "Say yes or no, or answer in a sentence."
 msgstr "Evet ya da hayır de veya bir cümleyle yanıtla."
+
+msgid "Screen"
+msgstr "Ekran"
 
 #: src/pages/ModelSettingsOverlay.tsx:1082
 #: src/pages/PluginsOverlay.tsx:941
@@ -4260,6 +4291,9 @@ msgstr "Doğrulanıyor…"
 msgid "Voice"
 msgstr "Ses"
 
+msgid "Voice and replies"
+msgstr "Ses ve yanıtlar"
+
 #: src/pages/ModelSettingsOverlay.tsx:692
 #: src/pages/ModelSettingsOverlay.tsx:714
 #: src/pages/Onboarding.tsx:592
@@ -4288,6 +4322,9 @@ msgstr "Hafta içi"
 #: src/pages/shell/dialogs.tsx:357
 msgid "What about its memories?"
 msgstr "Hafızası ne olsun?"
+
+msgid "What it does, in one line"
+msgstr "Ne yaptığı, tek satırda"
 
 #: src/components/teach/TeachComputerOverlay.tsx:247
 msgid "What result will you demonstrate?"
@@ -4336,6 +4373,9 @@ msgstr "Çalışıyor…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "Çalışma alanı kökü"
+
+msgid "Write"
+msgstr "Yaz"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402
