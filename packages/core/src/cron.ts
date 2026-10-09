@@ -495,19 +495,21 @@ function onceLabel(at: Date, timezone: string): string {
 }
 
 /**
- * What a routine card says about when it runs, always with its zone: computed from the schedule
- * the server resolved and will store, never from the model's words.
+ * What a routine card says about when it runs, always with its zone (UTC for a stored zone that
+ * does not exist, as the scheduler runs it): computed from the schedule the server resolved and
+ * will store, never from the model's words.
  */
 export function routineScheduleLabel(
   schedule: { crons: string[]; nextRunAt: Date | null },
   timezone: string,
 ): string {
+  const zone = validTimezoneOrUtc(timezone);
   const when = isOneShotRoutineCrons(schedule.crons)
     ? schedule.nextRunAt
-      ? onceLabel(schedule.nextRunAt, timezone)
+      ? onceLabel(schedule.nextRunAt, zone)
       : "Once"
     : schedule.crons.map((cron) => cadence(cron) ?? `On the schedule ${cron}`).join(", ");
-  return `${when} ${timezone}`;
+  return `${when} ${zone}`;
 }
 
 function validTimezoneOrUtc(timezone: string): string {

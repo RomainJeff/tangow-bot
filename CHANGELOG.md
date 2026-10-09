@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Each bot has one page in the side panel, and its settings save as you change them.** On web and desktop, the bot's name in the thread header, the gear, "Bot settings" in the sidebar menu and the "/ Bot settings" command open its avatar, name and title above Routines, Knowledge and Settings tabs, and the computer panel becomes Screen. Settings is split into how the bot behaves and how it runs, instructions and the description open a wider editor, clearing either asks first, and the single Save button is gone.
 
+#### Fixed
+
+- A bot can again change a reminder whose time zone was saved in an old format, and its card now gives the time in UTC, the zone it actually goes off in.
+
 ### 2026-10-08
 
 #### Added
