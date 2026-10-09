@@ -454,12 +454,14 @@ export async function updateScheduleFromTool(
       spaceId: input.spaceId,
       botId: input.botId,
       userId: input.userId,
-      ...(input.inGroup
-        ? { threadId: input.threadId }
-        : { OR: [{ threadId: null }, { thread: { groupId: null } }] }),
+      ...(input.inGroup ? { threadId: input.threadId } : {}),
     },
+    include: { thread: { select: { groupId: true } } },
   });
   if (!existing) return { error: "Routine not found." };
+  if (!input.inGroup && existing.thread?.groupId) {
+    return { error: "This routine belongs to a group: change it from that group." };
+  }
 
   const timezone = input.timezone ?? existing.timezone;
   const reschedule = Object.values(input.schedule).some((value) => value !== undefined);

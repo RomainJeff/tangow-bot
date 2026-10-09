@@ -148,13 +148,7 @@ function fixture(
     ),
   }));
   const routineMatches = (row: Row, where: Row): boolean =>
-    Object.entries(where).every(([key, value]) =>
-      key === "OR"
-        ? (value as Row[]).some((option) => routineMatches(row, option))
-        : key === "thread"
-          ? (row.threadGroupId ?? null) === (value as Row).groupId
-          : row[key] === value,
-    );
+    Object.entries(where).every(([key, value]) => row[key] === value);
   const externalEffect = {
     findMany: vi.fn(async ({ where }: { where?: EffectWhere } = {}) =>
       effects.filter((effect) => effectMatches(effect, where)).map(inThread),
@@ -265,7 +259,7 @@ function fixture(
       update: routineUpdate,
       findFirst: vi.fn(async ({ where }: { where: Row }) => {
         const row = routines.find((stored) => routineMatches(stored, where));
-        return row ? { ...row } : null;
+        return row ? { ...row, thread: { groupId: row.threadGroupId ?? null } } : null;
       }),
       findUnique: vi.fn(
         async ({ where }: { where: { id: string } }) =>
@@ -775,19 +769,30 @@ describe("a routine the user asks to change", () => {
     expect(f.routineUpdate).not.toHaveBeenCalled();
   });
 
+  const changed = expect.objectContaining({ ok: true });
   it.each([
-    ["a group's routine from the direct conversation", undefined, "thread-group", "group-1", false],
-    ["a direct routine from the direct conversation", undefined, "thread-1", null, true],
-    ["a direct routine from a group", "group-1", "thread-direct", null, false],
-    ["the group's own routine from that group", "group-1", "thread-1", "group-1", true],
+    [
+      "a group's routine from the direct conversation",
+      undefined,
+      "thread-group",
+      "group-1",
+      { error: "This routine belongs to a group: change it from that group." },
+    ],
+    ["a direct routine from the direct conversation", undefined, "thread-1", null, changed],
+    [
+      "a direct routine from a group",
+      "group-1",
+      "thread-direct",
+      null,
+      { error: "Routine not found." },
+    ],
+    ["the group's own routine from that group", "group-1", "thread-1", "group-1", changed],
   ])(
     "changes %s only when it belongs there",
-    async (_label, groupId, threadId, threadGroupId, allowed) => {
+    async (_label, groupId, threadId, threadGroupId, result) => {
       const f = fixture({ groupId, routines: [{ ...stored, threadId, threadGroupId }] });
       await f.play([[change({ notify: true })]]);
-      expect(f.results).toEqual([
-        allowed ? expect.objectContaining({ ok: true }) : { error: "Routine not found." },
-      ]);
+      expect(f.results).toEqual([result]);
     },
   );
 
