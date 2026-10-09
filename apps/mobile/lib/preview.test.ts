@@ -29,6 +29,10 @@ describe("previewSnippet", () => {
     );
   });
 
+  it("keeps a greater-than sign that does not open a quote", () => {
+    expect(previewSnippet("Signed up\n>100 users today")).toBe("Signed up >100 users today");
+  });
+
   it("returns an empty snippet when there is no message text", () => {
     expect(previewSnippet("")).toBe("");
     expect(previewSnippet("   **  **   ")).toBe("");
