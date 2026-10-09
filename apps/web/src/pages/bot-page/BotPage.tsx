@@ -160,6 +160,7 @@ export function BotPage({
       ) : detail?.kind === "routine-new" ? (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto">
           <RoutineCreateForm
+            key={detail.seed ? `${detail.seed.name}\n${detail.seed.prompt}` : ""}
             page={page}
             seed={detail.seed}
             messageProviders={messagingProviders}
