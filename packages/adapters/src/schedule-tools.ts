@@ -66,6 +66,7 @@ export function scheduleCreateArgs(args: Record<string, unknown>): Record<string
 }
 
 const ONE_SHOT_MAX_AHEAD_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+const ONE_SHOT_TOO_FAR = "One-shot schedules must run within 5 years.";
 
 export function resolveScheduleTiming(
   input: {
@@ -133,7 +134,7 @@ export function resolveScheduleTiming(
       return { ok: false, error: "One-shot schedules must run in the future." };
     }
     if (!(nextRunAt.getTime() <= Date.now() + ONE_SHOT_MAX_AHEAD_MS)) {
-      return { ok: false, error: "One-shot schedules must run within 5 years." };
+      return { ok: false, error: ONE_SHOT_TOO_FAR };
     }
     return { ok: true, cron: ONCE_ROUTINE_CRON, nextRunAt, oneShot: true };
   }
@@ -428,6 +429,7 @@ export async function updateRoutine(
       if (!Number.isFinite(at.getTime()) || at.getTime() <= Date.now()) {
         return { error: "Run time must be in the future." };
       }
+      if (at.getTime() > Date.now() + ONE_SHOT_MAX_AHEAD_MS) return { error: ONE_SHOT_TOO_FAR };
       nextRunAt = at;
     } else if (!wasOneShot) {
       return { error: "One-shot schedules must be created from chat." };
