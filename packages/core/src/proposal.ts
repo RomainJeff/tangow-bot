@@ -159,7 +159,7 @@ export function routineCardSettlement(block: {
 export const DISMISSED_PROPOSAL_RESULT = {
   ok: false,
   dismissed: true,
-  note: "The user replied instead of answering. If they asked for a change, propose the corrected version now, however many times they ask; if the reply was about something else, do not propose again.",
+  note: "The user typed a reply instead of tapping the card. If they agreed to it, create the routine now: call schedule_create with the same arguments, without proposed. If they asked for a change, propose the corrected version now, however many times they ask. If the reply was about something else, do not propose again.",
 } as const;
 
 /** The non-error result a resumed call gets for a refused or put-away proposal card. */

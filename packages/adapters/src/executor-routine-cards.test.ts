@@ -680,36 +680,57 @@ describe("a routine the bot proposes on its own", () => {
     ]);
   });
 
-  it.each([
-    [
-      "Not now",
-      undefined,
+  const answered = (result?: unknown) => {
+    const args = propose().args;
+    return proposalEffect({
+      runId: "run-1",
+      idempotencyKey: approvalEffectKey("run-1", "routine_proposal", args),
+      request: args,
+      result,
+    });
+  };
+
+  it("tells the resumed model the card was answered by Not now", async () => {
+    const f = fixture({ effects: [answered()] });
+    await f.play([[propose()]]);
+    expect(f.results).toEqual([
       {
         ok: false,
         declined: true,
         note: "The user declined this routine. Do not propose it again within a day.",
       },
-    ],
-    [
-      "a typed reply",
-      { outcome: "dismissed" },
-      { ok: false, dismissed: true, note: expect.any(String) },
-    ],
-  ])("tells the resumed model the card was answered by %s", async (_label, result, expected) => {
-    const args = propose().args;
-    const f = fixture({
-      effects: [
-        proposalEffect({
-          runId: "run-1",
-          idempotencyKey: approvalEffectKey("run-1", "routine_proposal", args),
-          request: args,
-          result,
+    ]);
+    expect(f.askBlock()).toBeUndefined();
+  });
+
+  it("tells the resumed model to create what a typed yes agreed to, and creates it with its card", async () => {
+    const f = fixture({ effects: [answered({ outcome: "dismissed" })] });
+    const { proposed: _proposed, ...agreed } = offers;
+    await f.play([[propose()], [{ name: "schedule_create", args: agreed }]]);
+    expect(f.results).toEqual([
+      {
+        ok: false,
+        dismissed: true,
+        note: "The user typed a reply instead of tapping the card. If they agreed to it, create the routine now: call schedule_create with the same arguments, without proposed. If they asked for a change, propose the corrected version now, however many times they ask. If the reply was about something else, do not propose again.",
+      },
+      expect.objectContaining({
+        ok: true,
+        routineId: "routine-new",
+        schedule: "Mondays at 09:00 Europe/Paris",
+      }),
+    ]);
+    expect(f.routineCreate).toHaveBeenCalledOnce();
+    expect(f.askBlock()).toBeUndefined();
+    expect(f.posted()).toEqual([
+      [
+        expect.objectContaining({
+          status: "answered",
+          text: "Mondays at 09:00 Europe/Paris",
+          created: { kind: "routine", id: "routine-new", label: "Weekly offers" },
+          confirms: "created",
         }),
       ],
-    });
-    await f.play([[propose()]]);
-    expect(f.results).toEqual([expected]);
-    expect(f.askBlock()).toBeUndefined();
+    ]);
   });
 
   describe("once the user tapped Create routine", () => {
