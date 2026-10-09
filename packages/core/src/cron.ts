@@ -359,7 +359,8 @@ function zonedInstant(wall: number, timezone: string): number {
 
 /**
  * A one-shot run time: an ISO datetime with an offset or Z is taken as given, one without is a
- * wall-clock time in `timezone`, which the caller has checked. Null when it names no real time.
+ * wall-clock time in `timezone`, or in UTC when that zone does not exist. Null when it names no
+ * real time.
  */
 export function parseRunAt(value: string, timezone: string): Date | null {
   const match = ISO_DATETIME.exec(value.trim());
@@ -387,7 +388,7 @@ export function parseRunAt(value: string, timezone: string): Date | null {
     const offsetMs = (Number(offH) * 60 + Number(offM)) * 60_000 * (sign === "+" ? 1 : -1);
     return new Date(wall - offsetMs);
   }
-  return new Date(zonedInstant(wall, timezone));
+  return new Date(zonedInstant(wall, validTimezoneOrUtc(timezone)));
 }
 
 /** The shortest wait between two of the next runs, to tell how often a schedule fires. */

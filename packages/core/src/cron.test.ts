@@ -328,6 +328,10 @@ describe("parseRunAt", () => {
     expect(at("tomorrow at 9")).toBeUndefined();
     expect(at("2026-10-08T09:00:00", "Europe/Paris")).toBe("2026-10-08T07:00:00.000Z");
   });
+
+  it("reads a time with no offset in UTC when its zone does not exist", () => {
+    expect(at("2026-10-08T09:00:00", "Mars/Base")).toBe("2026-10-08T09:00:00.000Z");
+  });
 });
 
 describe("hasMixedOneShotSchedule", () => {
