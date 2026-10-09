@@ -421,6 +421,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   Robot: "机器人",
   Routine: "例行任务",
   "Routine created": "例行任务已创建",
+  "Routine updated": "例行任务已更新",
   "Routine link is incomplete": "例行任务链接不完整",
   Running: "运行中",
   Save: "保存",

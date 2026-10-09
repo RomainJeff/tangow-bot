@@ -417,6 +417,7 @@ export const RU_MESSAGES: Record<string, string> = {
   Robot: "Робот",
   Routine: "Задача",
   "Routine created": "Задача создана",
+  "Routine updated": "Задача обновлена",
   "Routine link is incomplete": "Ссылка на задачу неполная",
   Running: "Выполняется",
   Save: "Сохранить",

@@ -310,6 +310,8 @@ import {
   filterBuiltinToolsForRun,
   filterBuiltinToolsForThread,
   listSchedulesFromTool,
+  scheduleCreateArgs,
+  updateScheduleFromTool,
 } from "./schedule-tools.js";
 import { loadAgentScratchpadContext } from "./scratchpad-context.js";
 import {
@@ -1951,14 +1953,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
          * Keyed on the effect, so a retried call cannot post it twice. Logged, never thrown: the
          * routine exists and the model has its result.
          */
-        const confirmRoutine = async (effectId: string, routine: CreatedRoutine) => {
+        const confirmRoutine = async (
+          effectId: string,
+          routine: CreatedRoutine,
+          change: "created" | "updated",
+        ) => {
           try {
             await publishMidTurnNarration();
             await publishMessage(
               deps,
               run,
               "bot",
-              [routineConfirmationBlock(effectId, routine)],
+              [routineConfirmationBlock(effectId, routine, change)],
               undefined,
               `routine-confirmation:${effectId}`,
             );
@@ -1994,6 +2000,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const normalized = normalizeSpawnBotArgs(args);
             if (!("error" in normalized)) args = spawnBotToolArgs(normalized);
           }
+          if (name === "schedule_create") args = scheduleCreateArgs(args);
           if (PAGE_BROWSER_TOOL_NAMES.has(name) && !pageBrowserAllowed) {
             return { error: "Page browser is unavailable on this computer." };
           }
@@ -2996,7 +3003,57 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
             return finish(removed);
           }
+          const showRoutine = async (
+            result: Awaited<ReturnType<typeof createScheduleFromTool>>,
+            change: "created" | "updated",
+          ) => {
+            if (!applied || !("ok" in result)) return;
+            const { routineId: id, name, schedule, prompt, notify } = result;
+            const routine = { id, name, schedule, prompt, notify };
+            if (approvedReplayConsumed) {
+              await settleRoutineCard(
+                deps,
+                { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId },
+                applied.effect.id,
+                routine,
+                change,
+              );
+            } else {
+              await confirmRoutine(applied.effect.id, routine, change);
+            }
+          };
           if (name === "schedule_create") {
+            const schedule = {
+              cron: args.cron,
+              every: args.every,
+              unit: args.unit,
+              runAt: args.runAt,
+              delayMinutes: args.delayMinutes,
+              delaySeconds: args.delaySeconds,
+            };
+            const timezone = args.timezone ? String(args.timezone) : undefined;
+            const notify = typeof args.notify === "boolean" ? args.notify : undefined;
+            const currentHop = await resolveRunHop(deps.prisma, run);
+            if (typeof args.routineId === "string") {
+              const updated = await updateScheduleFromTool(deps, {
+                spaceId: run.spaceId,
+                botId: bot.id,
+                userId: run.userId,
+                threadId: thread.id,
+                inGroup: Boolean(thread.groupId),
+                startedByUser: isUserOpenedTrigger(run.trigger),
+                currentHop,
+                routineId: args.routineId,
+                name: typeof args.name === "string" ? args.name : undefined,
+                prompt: typeof args.prompt === "string" ? args.prompt : undefined,
+                timezone,
+                notify,
+                schedule,
+              });
+              const settled = await finish(updated);
+              await showRoutine(updated, "updated");
+              return settled;
+            }
             const created = await createScheduleFromTool(deps, {
               spaceId: run.spaceId,
               botId: bot.id,
@@ -3004,33 +3061,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
               threadId: thread.id,
               name: String(args.name ?? ""),
               prompt: String(args.prompt ?? ""),
-              timezone: args.timezone ? String(args.timezone) : undefined,
-              notify: typeof args.notify === "boolean" ? args.notify : undefined,
-              currentHop: await resolveRunHop(deps.prisma, run),
-              schedule: {
-                cron: args.cron,
-                every: args.every,
-                unit: args.unit,
-                runAt: args.runAt,
-                delayMinutes: args.delayMinutes,
-                delaySeconds: args.delaySeconds,
-              },
+              timezone,
+              notify,
+              currentHop,
+              schedule,
             });
             const settled = await finish(created);
-            if (applied && "ok" in created) {
-              const { routineId: id, name, schedule, prompt, notify } = created;
-              const routine = { id, name, schedule, prompt, notify };
-              if (approvedReplayConsumed) {
-                await settleRoutineCard(
-                  deps,
-                  { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId },
-                  applied.effect.id,
-                  routine,
-                );
-              } else {
-                await confirmRoutine(applied.effect.id, routine);
-              }
-            }
+            await showRoutine(created, "created");
             return settled;
           }
           if (name === "schedule_list") {
@@ -5653,6 +5690,7 @@ async function settleRoutineCard(
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   effectId: string,
   routine: CreatedRoutine,
+  change: "created" | "updated",
 ): Promise<void> {
   const committed = await deps.prisma
     .$transaction(async (tx) => {
@@ -5676,6 +5714,7 @@ async function settleRoutineCard(
           ? (settleRoutineAsk(
               block as Extract<MessageBlock, { kind: "ask" }>,
               routine,
+              change,
             ) as Prisma.InputJsonValue)
           : block,
       );

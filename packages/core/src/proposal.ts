@@ -50,17 +50,25 @@ function settledOn({
   };
 }
 
-/** A routine the user asked for, set up: its card already settled, with nothing to answer. */
-export function routineConfirmationBlock(effectId: string, routine: CreatedRoutine): AskBlock {
+/** A routine the user asked for, set up or changed: its card already settled, with nothing to answer. */
+export function routineConfirmationBlock(
+  effectId: string,
+  routine: CreatedRoutine,
+  change: "created" | "updated",
+): AskBlock {
   return {
     ...routineAsk(effectId, routine, routine.schedule),
     status: "answered",
     ...settledOn(routine),
-    confirms: "created",
+    confirms: change,
   };
 }
 
-/** The approval card the user allowed for a routine, settled on the routine it created. */
-export function settleRoutineAsk(card: AskBlock, routine: CreatedRoutine): AskBlock {
-  return { ...card, ...settledOn(routine) };
+/** The approval card the user allowed for a routine, settled on the routine it set up or changed. */
+export function settleRoutineAsk(
+  card: AskBlock,
+  routine: CreatedRoutine,
+  change: "created" | "updated",
+): AskBlock {
+  return { ...card, ...settledOn(routine), confirms: change };
 }

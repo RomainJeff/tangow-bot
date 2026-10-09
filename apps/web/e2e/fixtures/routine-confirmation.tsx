@@ -12,23 +12,45 @@ i18n.loadAndActivate({ locale: "en", messages: {} });
 const CARDS: Array<[string, AskBlock]> = [
   [
     "weekly",
-    routineConfirmationBlock("effect-1", {
-      id: "routine-1",
-      name: "Offres de la semaine",
-      schedule: "Mondays at 09:00 Europe/Paris",
-      prompt: "Résume les nouvelles offres de la semaine.",
-      notify: false,
-    }),
+    routineConfirmationBlock(
+      "effect-1",
+      {
+        id: "routine-1",
+        name: "Offres de la semaine",
+        schedule: "Mondays at 09:00 Europe/Paris",
+        prompt: "Résume les nouvelles offres de la semaine.",
+        notify: false,
+      },
+      "created",
+    ),
   ],
   [
     "once",
-    routineConfirmationBlock("effect-2", {
-      id: "routine-2",
-      name: "Tea",
-      schedule: "Once on Oct 7, 2026 at 17:00 Europe/Paris",
-      prompt: "Remind me the tea is ready.",
-      notify: true,
-    }),
+    routineConfirmationBlock(
+      "effect-2",
+      {
+        id: "routine-2",
+        name: "Tea",
+        schedule: "Once on Oct 7, 2026 at 17:00 Europe/Paris",
+        prompt: "Remind me the tea is ready.",
+        notify: true,
+      },
+      "created",
+    ),
+  ],
+  [
+    "updated",
+    routineConfirmationBlock(
+      "effect-3",
+      {
+        id: "routine-1",
+        name: "Offres de la semaine",
+        schedule: "Mondays at 08:00 Europe/Paris",
+        prompt: "Résume les nouvelles offres de la semaine.",
+        notify: false,
+      },
+      "updated",
+    ),
   ],
 ];
 

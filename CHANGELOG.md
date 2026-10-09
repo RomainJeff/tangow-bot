@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
+- **You can now ask a bot to change one of its routines.** Ask it to move, rename or rewrite a routine in the conversation and it changes that routine in place, then shows a "Routine updated" card that opens it, on web, desktop and iPhone.
 - **A routine a bot sets up for you now shows a card.** On web, desktop and iPhone, the card says when the routine runs, in its time zone, and links to the routine; a bot can no longer set one up in a time zone that does not exist.
 
 ### 2026-10-07

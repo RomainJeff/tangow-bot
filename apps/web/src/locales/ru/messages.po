@@ -3510,6 +3510,10 @@ msgstr "Задача"
 msgid "Routine created"
 msgstr "Задача создана"
 
+#: src/components/AskCard.tsx:62
+msgid "Routine updated"
+msgstr "Задача обновлена"
+
 #: src/pages/RoutineEditor.tsx:124
 msgid "Routines"
 msgstr "Задачи"

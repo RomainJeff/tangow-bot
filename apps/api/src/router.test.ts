@@ -1070,3 +1070,269 @@ describe("interrupted computer reservation release", () => {
     expect(order).toEqual(["operation", "computer"]);
   });
 });
+
+describe("routine update triggers", () => {
+  const NO_TRIGGER_MESSAGE = "Add a schedule, webhook, GitHub, or message trigger";
+
+  function updateDeps(existing: Record<string, unknown>) {
+    const row = {
+      id: "routine-1",
+      botId: "bot-1",
+      name: "Digest",
+      prompt: "Check",
+      crons: ["0 9 * * *"],
+      timezone: "UTC",
+      active: true,
+      notify: false,
+      webhookEnabled: false,
+      githubEnabled: false,
+      messageProvider: null,
+      requireToolApproval: true,
+      lastRunAt: null,
+      nextRunAt: new Date("2026-10-07T09:00:00.000Z"),
+      createdAt: new Date("2026-10-01T09:00:00.000Z"),
+      ...existing,
+    };
+    const routineUpdate = vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+      ...row,
+      ...Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+    }));
+    const prisma = {
+      routine: { findFirst: vi.fn().mockResolvedValue(row), update: routineUpdate },
+      bot: { findFirst: vi.fn().mockResolvedValue({ id: "bot-1", thread: null }) },
+    } as unknown as PrismaClient;
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const deps = {
+      prisma,
+      jobs: { enqueue, cancel },
+      events: { append: vi.fn().mockResolvedValue(undefined) },
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      dataDir: "/tmp/rakazo-router-test",
+    } as unknown as RouterDeps;
+    const actor = {
+      spaceId: "workspace-1",
+      userId: "user-1",
+      email: "user@rakazo.test",
+      isDeploymentOwner: true,
+    } satisfies Actor;
+    const handler = new RPCHandler(createRouter(deps));
+    const update = async (patch: Record<string, unknown>) => {
+      const { response } = await handler.handle(
+        new Request("http://127.0.0.1/rpc/routines/update", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ json: { routineId: "routine-1", ...patch } }),
+        }),
+        { prefix: "/rpc", context: { actor } },
+      );
+      return response;
+    };
+    return { routineUpdate, update, enqueue, cancel };
+  }
+
+  const editorForm = {
+    name: "Digest",
+    prompt: "Check",
+    crons: ["0 9 * * *"],
+    active: true,
+    notify: false,
+    webhookEnabled: false,
+    githubEnabled: false,
+    messageProvider: null,
+    requireToolApproval: true,
+  };
+
+  async function savedRoutine(response: Response) {
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      json: { name: string; active: boolean; nextRunAt: string | null };
+    };
+    return body.json;
+  }
+
+  const at = async (now: string, test: () => Promise<void>) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(now));
+    try {
+      await test();
+    } finally {
+      vi.useRealTimers();
+    }
+  };
+
+  async function refusal(response: Response) {
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { json: { code: string; message: string } };
+    return body.json;
+  }
+
+  it("refuses to clear the only schedule", async () => {
+    const { routineUpdate, update } = updateDeps({});
+
+    const error = await refusal(await update({ crons: [] }));
+
+    expect(error).toMatchObject({ code: "BAD_REQUEST", message: NO_TRIGGER_MESSAGE });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("arms a one-shot that never ran at the time the editor gives", async () => {
+    const { update, enqueue } = updateDeps({ crons: ["@once"], nextRunAt: null });
+
+    const response = await update({ runAt: "2999-01-01T09:00:00.000Z" });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { json: { nextRunAt: string | null } };
+    expect(body.json.nextRunAt).toBe("2999-01-01T09:00:00.000Z");
+    expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+      new Date("2999-01-01T09:00:00.000Z"),
+    ]);
+  });
+
+  it("keeps a reminder that already ran from resuming without a new time", async () => {
+    const { routineUpdate, update } = updateDeps({
+      crons: ["@once"],
+      active: false,
+      nextRunAt: null,
+      lastRunAt: new Date("2026-10-06T08:00:00.000Z"),
+    });
+
+    const error = await refusal(await update({ active: true }));
+
+    expect(error).toMatchObject({ code: "BAD_REQUEST", message: "This one-shot already ran." });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses to turn a recurring routine into a one-shot from the app", async () => {
+    const { routineUpdate, update } = updateDeps({});
+
+    const error = await refusal(
+      await update({ crons: ["@once"], runAt: "2999-01-01T09:00:00.000Z" }),
+    );
+
+    expect(error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "One-shot schedules must be created from chat.",
+    });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses to move an armed one-shot from the app", async () => {
+    const { routineUpdate, update } = updateDeps({
+      crons: ["@once"],
+      nextRunAt: new Date("2999-01-01T08:00:00.000Z"),
+    });
+
+    const error = await refusal(await update({ runAt: "2999-01-02T09:00:00.000Z" }));
+
+    expect(error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A run time is only for one-shots that have not run yet.",
+    });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses to re-arm a one-shot that already ran from the app", async () => {
+    const { routineUpdate, update } = updateDeps({
+      crons: ["@once"],
+      active: false,
+      nextRunAt: null,
+      lastRunAt: new Date("2026-10-06T08:00:00.000Z"),
+    });
+
+    const error = await refusal(await update({ active: true, runAt: "2999-01-01T09:00:00.000Z" }));
+
+    expect(error).toMatchObject({ code: "BAD_REQUEST", message: "This one-shot already ran." });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+
+  it("moves the next run and its wake-up when the editor changes the schedule", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue, cancel } = updateDeps({});
+
+      const saved = await savedRoutine(await update({ ...editorForm, crons: ["30 7 * * *"] }));
+
+      expect(saved.nextRunAt).toBe("2026-10-08T07:30:00.000Z");
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2026-10-08T07:30:00.000Z"),
+      ]);
+      expect(cancel.mock.calls).toEqual([]);
+    }));
+
+  it("keeps a recurring routine at its time of day when the editor changes only its zone", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue } = updateDeps({});
+
+      const saved = await savedRoutine(await update({ ...editorForm, timezone: "Europe/Paris" }));
+
+      expect(saved.nextRunAt).toBe("2026-10-08T07:00:00.000Z");
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2026-10-08T07:00:00.000Z"),
+      ]);
+    }));
+
+  it("clears the next run and cancels its wake-up when the editor pauses a routine", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue, cancel } = updateDeps({});
+
+      const saved = await savedRoutine(await update({ ...editorForm, active: false }));
+
+      expect(saved).toMatchObject({ active: false, nextRunAt: null });
+      expect(cancel.mock.calls).toEqual([["routine:routine-1"]]);
+      expect(enqueue.mock.calls).toEqual([]);
+    }));
+
+  it("schedules the next run when the editor resumes a paused routine", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue, cancel } = updateDeps({ active: false, nextRunAt: null });
+
+      const saved = await savedRoutine(await update(editorForm));
+
+      expect(saved).toMatchObject({ active: true, nextRunAt: "2026-10-08T09:00:00.000Z" });
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2026-10-08T09:00:00.000Z"),
+      ]);
+      expect(cancel.mock.calls).toEqual([]);
+    }));
+
+  it("still renames, pauses and resumes a routine stored with an old time zone, on UTC", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const legacy = { timezone: "Paris" };
+
+      const renamed = await savedRoutine(
+        await updateDeps(legacy).update({ ...editorForm, name: "Morning digest" }),
+      );
+      const paused = await savedRoutine(
+        await updateDeps(legacy).update({ ...editorForm, active: false }),
+      );
+      const resumed = await savedRoutine(
+        await updateDeps({ ...legacy, active: false, nextRunAt: null }).update(editorForm),
+      );
+
+      expect(renamed).toMatchObject({
+        name: "Morning digest",
+        active: true,
+        nextRunAt: "2026-10-07T09:00:00.000Z",
+      });
+      expect(paused).toMatchObject({ active: false, nextRunAt: null });
+      expect(resumed).toMatchObject({ active: true, nextRunAt: "2026-10-08T09:00:00.000Z" });
+    }));
+
+  it("refuses a time zone sent in an old format, even the one already stored", async () => {
+    const { routineUpdate, update } = updateDeps({ timezone: "Paris" });
+
+    const error = await refusal(await update({ ...editorForm, timezone: "Paris" }));
+
+    expect(error).toMatchObject({
+      code: "BAD_REQUEST",
+      message: "timezone must be an IANA time zone, such as Europe/Paris.",
+    });
+    expect(routineUpdate).not.toHaveBeenCalled();
+  });
+});

@@ -323,6 +323,54 @@ const DAY_NAMES = [
   "Saturdays",
 ];
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** How far `timezone`'s wall clock is ahead of UTC at `instant`, in milliseconds. */
+function zoneOffsetMs(instant: number, timezone: string): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hourCycle: "h23",
+    })
+      .formatToParts(instant)
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const wall = Date.UTC(
+    parts.year!,
+    parts.month! - 1,
+    parts.day!,
+    parts.hour!,
+    parts.minute!,
+    parts.second!,
+  );
+  return wall - Math.floor(instant / 1000) * 1000;
+}
+
+/**
+ * The instant a wall-clock time names in `timezone`. A time the clocks skip in spring moves
+ * forward by the gap; a time they repeat in autumn is the first of the two.
+ */
+function zonedInstant(wall: number, timezone: string): number {
+  const before = zoneOffsetMs(wall - DAY_MS, timezone);
+  const after = zoneOffsetMs(wall + DAY_MS, timezone);
+  const first = wall - before;
+  if (zoneOffsetMs(first, timezone) === before) return first;
+  const second = wall - after;
+  return zoneOffsetMs(second, timezone) === after ? second : first;
+}
+
+/** The instant in `to` that shows the wall-clock time `at` shows in `from`. */
+export function sameWallClockIn(at: Date, from: string, to: string): Date {
+  const wall = at.getTime() + zoneOffsetMs(at.getTime(), validTimezoneOrUtc(from));
+  return new Date(zonedInstant(wall, validTimezoneOrUtc(to)));
+}
+
 function joinNames(names: readonly string[]): string {
   return names.length < 2
     ? (names[0] ?? "")
