@@ -1,6 +1,14 @@
 import * as z from "zod";
 import { ThreadMessageSchema } from "./events.js";
-import { AVATAR_SHAPE_COUNT, Id, MemoryScope, RunStatus, SandboxKind } from "./ids.js";
+import {
+  AVATAR_SHAPE_COUNT,
+  Id,
+  MemoryScope,
+  RoutineRunStatus,
+  RunFailureKind,
+  RunStatus,
+  SandboxKind,
+} from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
 
 export const ComputerModeSchema = z.enum(["team", "dedicated"]);
@@ -388,6 +396,8 @@ export const RoutineSchema = z.object({
     .nullable(),
   requireToolApproval: z.boolean(),
   lastRunAt: z.string().nullable(),
+  lastRunStatus: RoutineRunStatus.nullable(),
+  lastRunFailureKind: RunFailureKind.nullable(),
   nextRunAt: z.string().nullable(),
   createdAt: z.string(),
 });

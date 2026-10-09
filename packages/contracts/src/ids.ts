@@ -57,6 +57,14 @@ export const RunTrigger = z.enum([
 ]);
 export type RunTrigger = z.infer<typeof RunTrigger>;
 
+/** Why a run failed, as a code the client translates; the raw error text never leaves the server. */
+export const RunFailureKind = z.enum(["missing_model", "computer", "provider", "other"]);
+export type RunFailureKind = z.infer<typeof RunFailureKind>;
+
+/** How a routine's most recent finished run ended; a completed run reads as succeeded. */
+export const RoutineRunStatus = z.enum(["succeeded", "failed", "cancelled"]);
+export type RoutineRunStatus = z.infer<typeof RoutineRunStatus>;
+
 export const EffectStatus = z.enum(["intended", "completed", "failed", "ambiguous", "reconciled"]);
 export type EffectStatus = z.infer<typeof EffectStatus>;
 

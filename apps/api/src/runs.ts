@@ -1,6 +1,12 @@
-import { type Actor, MessageBlock, type RunActivityRow } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, botMessageContext } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import {
+  type Actor,
+  MessageBlock,
+  type Routine,
+  type RunActivityRow,
+  type RunStatus,
+} from "@rakazo/contracts";
+import { ACTIVE_RUN_STATUSES, botMessageContext, classifyRunFailure } from "@rakazo/core";
+import { Prisma, type PrismaClient } from "@rakazo/db";
 
 const RECENT_LIMIT = 20;
 const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
@@ -86,4 +92,42 @@ export async function listSpaceRuns(
       : row.updatedAt
     ).toISOString(),
   }));
+}
+
+export type RoutineLastRun = Pick<Routine, "lastRunStatus" | "lastRunFailureKind">;
+
+export const NO_LAST_RUN: RoutineLastRun = { lastRunStatus: null, lastRunFailureKind: null };
+
+const ROUTINE_RUN_STATUS = {
+  completed: "succeeded",
+  failed: "failed",
+  cancelled: "cancelled",
+} as const;
+
+/** How each routine's most recent finished run ended, in one query. Routines never run are absent. */
+export async function lastRunsByRoutine(
+  prisma: PrismaClient,
+  spaceId: string,
+  routineIds: readonly string[],
+): Promise<Map<string, RoutineLastRun>> {
+  const lastRuns = new Map<string, RoutineLastRun>();
+  if (routineIds.length === 0) return lastRuns;
+  // DISTINCT ON keeps one row per routine in Postgres; Prisma's `distinct` may dedupe in memory.
+  const rows = await prisma.$queryRaw<
+    Array<{ routineId: string; status: (typeof TERMINAL_STATUSES)[number]; error: string | null }>
+  >(Prisma.sql`
+    SELECT DISTINCT ON (r."routineId") r."routineId", r.status, r.error
+    FROM runs r
+    WHERE r."spaceId" = ${spaceId}
+      AND r."routineId" IN (${Prisma.join(routineIds)})
+      AND r.status IN (${Prisma.join(TERMINAL_STATUSES)})
+    ORDER BY r."routineId", r."completedAt" DESC NULLS LAST, r.id DESC
+  `);
+  for (const row of rows) {
+    lastRuns.set(row.routineId, {
+      lastRunStatus: ROUTINE_RUN_STATUS[row.status],
+      lastRunFailureKind: classifyRunFailure(row.status as RunStatus, row.error),
+    });
+  }
+  return lastRuns;
 }

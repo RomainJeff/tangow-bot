@@ -1212,6 +1212,7 @@ describe("routine update triggers", () => {
     const prisma = {
       routine: { findFirst: vi.fn().mockResolvedValue(row), update: routineUpdate },
       bot: { findFirst: vi.fn().mockResolvedValue({ id: "bot-1", thread: null }) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
     } as unknown as PrismaClient;
     const enqueue = vi.fn().mockResolvedValue(undefined);
     const cancel = vi.fn().mockResolvedValue(undefined);

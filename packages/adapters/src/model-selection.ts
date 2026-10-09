@@ -1,5 +1,6 @@
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
 import type { Actor } from "@rakazo/contracts";
+import { MODEL_PROVIDER_NOT_CONNECTED_MESSAGE, UNKNOWN_MODEL_MESSAGE } from "@rakazo/core";
 import {
   type findDefaultModelCredential,
   findModelCredential,
@@ -23,11 +24,11 @@ export async function validateConnectedModelChoice(
   modelId: string,
 ) {
   const credential = await findModelCredential(prisma, actor, provider);
-  if (!credential) return "Connect that model provider first";
+  if (!credential) return MODEL_PROVIDER_NOT_CONNECTED_MESSAGE;
   if (isCatalogModelChoice(provider, modelId)) return undefined;
   // Free-form saved IDs only resolve at runtime for openai-compatible connections.
   if (provider !== OPENAI_COMPATIBLE_PROVIDER_ID) {
-    return "Unknown model for that provider";
+    return UNKNOWN_MODEL_MESSAGE;
   }
   const savedChoice = await prisma.spaceModelPreference.findFirst({
     where: {
@@ -38,7 +39,7 @@ export async function validateConnectedModelChoice(
     },
     select: { id: true },
   });
-  return savedChoice ? undefined : "Unknown model for that provider";
+  return savedChoice ? undefined : UNKNOWN_MODEL_MESSAGE;
 }
 
 /** Select configuration without loading secrets or applying a runtime-specific fallback. */

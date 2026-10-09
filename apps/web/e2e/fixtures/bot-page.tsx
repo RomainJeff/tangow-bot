@@ -83,6 +83,8 @@ function routine(id: string, name: string, extra: Partial<Routine> = {}): Routin
     messageProvider: null,
     requireToolApproval: false,
     lastRunAt: null,
+    lastRunStatus: null,
+    lastRunFailureKind: null,
     nextRunAt: null,
     createdAt: "2026-09-01T08:00:00.000Z",
     ...extra,

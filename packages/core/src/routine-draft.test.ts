@@ -17,6 +17,8 @@ function routine(partial: Partial<Routine> = {}): Routine {
     messageProvider: null,
     requireToolApproval: true,
     lastRunAt: null,
+    lastRunStatus: null,
+    lastRunFailureKind: null,
     nextRunAt: "2026-10-07T09:00:00.000Z",
     createdAt: "2026-10-01T09:00:00.000Z",
     ...partial,
