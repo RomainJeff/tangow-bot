@@ -387,15 +387,10 @@ export async function updateRoutine(
       nextRunAt,
     },
   });
-  if (
-    existing.active !== row.active ||
-    existing.nextRunAt?.getTime() !== row.nextRunAt?.getTime()
-  ) {
-    if (row.active && row.nextRunAt) {
-      await deps.jobs.enqueue(routineWakeupJob(row.id, row.nextRunAt));
-    } else {
-      await deps.jobs.cancel(routineJobKey(row.id));
-    }
+  if (row.active && row.nextRunAt) {
+    await deps.jobs.enqueue(routineWakeupJob(row.id, row.nextRunAt));
+  } else {
+    await deps.jobs.cancel(routineJobKey(row.id));
   }
   if (signal.threadId) {
     try {

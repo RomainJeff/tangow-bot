@@ -602,7 +602,7 @@ describe("a routine the user asks to change", () => {
       notify: true,
       nextRunAt: new Date("2030-01-01T00:00:00Z"),
     });
-    expect(f.wakeups()).toEqual([]);
+    expect(f.wakeups()).toEqual([new Date("2030-01-01T00:00:00Z")]);
     expect(f.posted()).toEqual([
       [expect.objectContaining({ text: "Every hour UTC", confirms: "updated" })],
     ]);
