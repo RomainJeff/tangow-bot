@@ -5,6 +5,7 @@ import {
   activeBotId,
   captureScreenshot,
   completeOnboarding,
+  openBotTab,
   openUserSettings,
   realSandboxTimeout,
   rpc,
@@ -86,27 +87,19 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await page.getByLabel("Close memory settings").click();
   await expect(page.getByLabel("Close memory settings")).toHaveCount(0);
 
-  // The bot's Knowledge section lives under Advanced in its settings panel.
+  // The bot's memory, files and skills live on the Knowledge tab of its page.
   await page
     .locator("main")
     .getByRole("button", { name: /^Chief/ })
     .click();
-  const settings = page.getByTestId("bot-settings");
-  await expect(settings.getByRole("button", { name: "Save", exact: true })).toBeVisible();
-  await settings.getByText("Advanced", { exact: true }).click();
-  /** Remount the settings panel so its sections refetch after an out-of-band RPC. */
-  const reopenAdvanced = async () => {
+  const botPage = await openBotTab(page, "Knowledge");
+  /** Remount the bot page so its sections refetch after an out-of-band RPC. */
+  const reopenKnowledge = async () => {
     await page.reload();
-    await page
-      .locator("main")
-      .getByRole("button", { name: /^Chief/ })
-      .click();
-    await expect(settings.getByRole("button", { name: "Save", exact: true })).toBeVisible();
-    await settings.getByText("Advanced", { exact: true }).click();
+    await openBotTab(page, "Knowledge");
   };
-  const knowledge = settings.getByTestId("bot-knowledge");
+  const knowledge = botPage.getByTestId("bot-knowledge");
   await expect(knowledge).toBeVisible();
-  await expect(knowledge.getByText("Knowledge", { exact: true })).toBeVisible();
 
   // Bot creation seeds MEMORY.md (`# Chief`); edit it and assert the revision bumps.
   const botMemory = knowledge.getByTestId("bot-knowledge-memory");
@@ -127,10 +120,10 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await expect(botDocEditor).toHaveValue(new RegExp(botMarker));
   await botMemory.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  // Skills: its own section next to Knowledge. Create one through the editor,
+  // Skills: its own section on the Knowledge tab. Create one through the editor,
   // reopen it, edit, then delete it. Builtin catalog is currently empty; user
   // skills still cover create/edit/delete.
-  const skillsSection = settings.getByTestId("bot-skills");
+  const skillsSection = botPage.getByTestId("bot-skills");
   await expect(skillsSection.getByText("Skills", { exact: true })).toBeVisible();
   await skillsSection.getByRole("button", { name: "New skill", exact: true }).click();
   const editor = skillsSection.locator("textarea");
@@ -202,10 +195,10 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     skillId: before?.id,
     availability: "disabled",
   });
-  await reopenAdvanced();
+  await reopenKnowledge();
   await expect(skillCard).toHaveCount(0);
   await rpc(page, "agentSkills/setAccess", { skillId: before?.id, availability: "all" });
-  await reopenAdvanced();
+  await reopenKnowledge();
   await expect(skillCard).toHaveCount(1);
 
   // A provider-owned skill uses the same viewer without mutation controls.
@@ -289,7 +282,6 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     )
     .toBe(true);
 
-  await knowledge.getByRole("button", { name: "Files", exact: true }).click();
   const files = knowledge.getByTestId("bot-knowledge-files");
   const notesRow = files.getByRole("button", { name: "notes/", exact: true });
   await expect(notesRow).toBeVisible();

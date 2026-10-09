@@ -23,7 +23,7 @@ test("composer / picker lists skills above actions", async ({ page }, testInfo) 
   const picker = page.getByTestId("slash-picker");
   await expect(picker).toBeVisible();
   const skillButton = picker.getByRole("button", { name: "Skill Daily standup" });
-  const chatSettings = picker.getByRole("button", { name: "Chat Settings" });
+  const chatSettings = picker.getByRole("button", { name: "Bot settings" });
   await expect(skillButton).toBeVisible();
   await expect(chatSettings).toBeVisible();
   await expect(picker.getByRole("button", { name: "Settings: General" })).toBeVisible();

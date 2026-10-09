@@ -63,7 +63,7 @@ test("per-bot skill access via agentSkills.setAccess", async ({ page }) => {
   await composer.fill("/");
   const picker = page.getByTestId("slash-picker");
   await expect(picker).toBeVisible();
-  await expect(picker.getByRole("button", { name: "Chat Settings" })).toBeVisible();
+  await expect(picker.getByRole("button", { name: "Bot settings" })).toBeVisible();
   await expect(picker.getByRole("button", { name: "Skill Daily standup" })).toHaveCount(0);
   await composer.fill("");
 
@@ -98,7 +98,7 @@ test("per-bot skill access via agentSkills.setAccess", async ({ page }) => {
   expect(has(await listFor(clone.id))).toBe(false);
   expect(has(await listFor())).toBe(true);
   await composer.fill("/");
-  await expect(picker.getByRole("button", { name: "Chat Settings" })).toBeVisible();
+  await expect(picker.getByRole("button", { name: "Bot settings" })).toBeVisible();
   await expect(picker.getByRole("button", { name: "Skill Daily standup" })).toHaveCount(0);
   await composer.fill("");
 

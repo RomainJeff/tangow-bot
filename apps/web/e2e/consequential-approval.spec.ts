@@ -22,8 +22,8 @@ test("actions run by default while optional confirmations live in advanced user 
   await captureScreenshot(page, testInfo, "50-actions-run-without-confirmation");
 
   await page.getByTestId("bot-settings-trigger").click();
-  await expect(page.getByTestId("bot-settings")).toBeVisible();
-  await expect(page.getByTestId("bot-settings").getByText("Action confirmations")).toHaveCount(0);
+  await expect(page.getByTestId("bot-page")).toBeVisible();
+  await expect(page.getByTestId("bot-page").getByText("Action confirmations")).toHaveCount(0);
   await page.getByRole("button", { name: "Close panel" }).click();
 
   const settings = await openUserSettings(page);
