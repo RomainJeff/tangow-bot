@@ -412,6 +412,12 @@ const DAY_NAMES = [
   "Saturdays",
 ];
 
+/** The instant in `to` that shows the wall-clock time `at` shows in `from`. */
+export function sameWallClockIn(at: Date, from: string, to: string): Date {
+  const wall = at.getTime() + zoneOffsetMs(at.getTime(), validTimezoneOrUtc(from));
+  return new Date(zonedInstant(wall, validTimezoneOrUtc(to)));
+}
+
 function joinNames(names: readonly string[]): string {
   return names.length < 2
     ? (names[0] ?? "")

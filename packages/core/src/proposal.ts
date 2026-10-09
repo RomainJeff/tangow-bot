@@ -159,7 +159,7 @@ export function routineCardSettlement(block: {
 export const DISMISSED_PROPOSAL_RESULT = {
   ok: false,
   dismissed: true,
-  note: "The user replied instead of answering. If they asked for a change, propose the corrected version now, however many times they ask; if the reply was about something else, do not propose again.",
+  note: "The user typed a reply instead of tapping the card. If they agreed to it, create the routine now: call schedule_create with the same arguments, without proposed. If they asked for a change, propose the corrected version now, however many times they ask. If the reply was about something else, do not propose again.",
 } as const;
 
 /** The non-error result a resumed call gets for a refused or put-away proposal card. */
@@ -208,20 +208,18 @@ export function parseCardQuestion(value: unknown): { question?: string } | { err
   return typeof value === "string" ? { question: value.trim() } : {};
 }
 
-const PROPOSAL_KEY_MAX_LENGTH = 40;
-
 /**
  * The name a proposal is remembered by: what "the same proposal" means, whatever its case,
- * width, accents, spacing or markup.
+ * width, accents on Latin letters, spacing or markup. Letters, marks and digits of every script
+ * are kept, so two names apart by a vowel sign stay apart.
  */
 export function proposalKey(name: string): string {
   return botNameKey(name)
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]+/g, "")
-    .replace(/[^\p{L}\p{N} '_.-]+/gu, " ")
+    .replace(/(\p{Script=Latin})\p{M}+/gu, "$1")
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{M}\p{N} '_.-]+/gu, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, PROPOSAL_KEY_MAX_LENGTH)
     .trim();
 }
 
@@ -242,6 +240,14 @@ export function withoutProposalKey(request: unknown): unknown {
   if (!request || typeof request !== "object" || Array.isArray(request)) return request;
   const { [PROPOSAL_KEY_FIELD]: _key, ...rest } = request as Record<string, unknown>;
   return rest;
+}
+
+/**
+ * The user saw the proposal card: it waits, or it was answered. A card that lost the race to
+ * another in its batch was settled before it ever showed.
+ */
+export function proposalShown(effect: { status: string; answeredAt: Date | null }): boolean {
+  return effect.status === "intended" || effect.answeredAt !== null;
 }
 
 /** A proposal card this bot recorded, as the guards read it from the stored effects. */
@@ -302,15 +308,15 @@ const corrects = (previous: ProposalRecord | undefined, next: { kind: string; ru
   previous?.kind === next.kind && previous.runId === next.runId && previous.dismissed;
 
 /**
- * What the guards weigh: whether the card asked for is a correction, the cards shown in the last
- * day, and the chains among them.
+ * What the guards weigh: the chain the card asked for corrects (empty when it is no correction),
+ * the cards shown in the last day, and the heads of the chains among them.
  * A chain starts with a first proposal, its head, and continues for as long as the user answers
  * by typing and the bot proposes again in that run, with no other card between. Only heads count
  * against the caps, so a user can correct as often as they like.
  */
 type ProposalSituation = {
   input: ProposalGuardInput;
-  correction: boolean;
+  corrected: readonly ProposalRecord[];
   shown: readonly ProposalRecord[];
   heads: readonly ProposalRecord[];
 };
@@ -323,13 +329,21 @@ function situationOf(input: ProposalGuardInput): ProposalSituation {
   const cards = input.records
     .filter((r) => r.shown)
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const chainOf = new Map<ProposalRecord, ProposalRecord[]>();
+  const chainBefore = (next: { threadId: string; kind: string; runId: string }) => {
+    const previous = thread.get(next.threadId);
+    return previous && corrects(previous, next) ? chainOf.get(previous)! : undefined;
+  };
   for (const card of cards) {
-    if (!corrects(thread.get(card.threadId), card)) heads.push(card);
+    const chain = chainBefore(card) ?? [];
+    if (chain.length === 0) heads.push(card);
+    chain.push(card);
+    chainOf.set(card, chain);
     thread.set(card.threadId, card);
   }
   return {
     input,
-    correction: corrects(thread.get(input.threadId), input),
+    corrected: chainBefore(input) ?? [],
     shown: cards.filter(inWindow),
     heads: heads.filter(inWindow),
   };
@@ -338,7 +352,7 @@ function situationOf(input: ProposalGuardInput): ProposalSituation {
 /**
  * Checked in order before a proposal card shows; the first that answers wins. A card put away by
  * typing is no refusal, and the card that follows it is a correction: it skips the guards that
- * ration first proposals.
+ * ration first proposals, and may repeat only the names of the cards it corrects.
  */
 const PROPOSAL_GUARDS: ReadonlyArray<{
   appliesToCorrections: boolean;
@@ -371,10 +385,12 @@ const PROPOSAL_GUARDS: ReadonlyArray<{
     },
   },
   {
-    appliesToCorrections: false,
-    check: ({ input, shown }) => {
+    appliesToCorrections: true,
+    check: ({ input, shown, corrected }) => {
       const key = proposalKey(input.name);
-      return shown.some((r) => r.kind === input.kind && proposalKey(r.name) === key)
+      return shown.some(
+        (r) => r.kind === input.kind && !corrected.includes(r) && proposalKey(r.name) === key,
+      )
         ? { error: PROPOSAL_REPEAT_ERROR }
         : undefined;
     },
@@ -396,7 +412,7 @@ const PROPOSAL_GUARDS: ReadonlyArray<{
 export function proposalRefusal(input: ProposalGuardInput): ProposalRefusal | undefined {
   const situation = situationOf(input);
   for (const guard of PROPOSAL_GUARDS) {
-    if (situation.correction && !guard.appliesToCorrections) continue;
+    if (situation.corrected.length > 0 && !guard.appliesToCorrections) continue;
     const refusal = guard.check(situation);
     if (refusal) return refusal;
   }
