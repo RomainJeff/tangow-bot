@@ -6,7 +6,13 @@ import {
   type SaveKey,
   type SaveStore,
 } from "@rakazo/core";
-import { createContext, type ReactNode, useContext, useSyncExternalStore } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useSyncExternalStore,
+} from "react";
 
 const SaveStoreContext = createContext<SaveStore | null>(null);
 
@@ -54,7 +60,10 @@ export function useFieldSave<V>({
 }: UseFieldSaveOptions<V>): FieldSave<V> {
   const store = useContext(SaveStoreContext);
   if (!store) throw new Error("useFieldSave needs a SaveStoreProvider above it");
-  const subscribe = (listener: () => void) => store.subscribe(key, listener);
+  const subscribe = useCallback(
+    (listener: () => void) => store.subscribe(key, listener),
+    [store, key],
+  );
   const readState = () => store.state<V>(key);
   const readDraft = () => store.draft<V>(key);
   const state = useSyncExternalStore(subscribe, readState, readState);

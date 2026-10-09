@@ -97,4 +97,28 @@ describe("useFieldSave on a switch", () => {
     expect(button.getAttribute("aria-pressed")).toBe("true");
     act(() => root.unmount());
   });
+
+  it("subscribes once per field, not again on every render", () => {
+    const store = createSaveStore();
+    const subscribe = store.subscribe;
+    let subscriptions = 0;
+    store.subscribe = (...args) => {
+      subscriptions += 1;
+      return subscribe(...args);
+    };
+    const root = createRoot(container);
+    const render = (serverValue: boolean) =>
+      act(() =>
+        root.render(
+          <SaveStoreProvider store={store}>
+            <Toggle serverValue={serverValue} commit={async () => {}} />
+          </SaveStoreProvider>,
+        ),
+      );
+    render(false);
+    render(true);
+    render(false);
+    expect(subscriptions).toBe(2);
+    act(() => root.unmount());
+  });
 });
