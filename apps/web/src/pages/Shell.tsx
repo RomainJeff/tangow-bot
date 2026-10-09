@@ -494,6 +494,7 @@ export function ShellPage() {
     });
   const routineSaveRequest = useRef(0);
   const routineRunPending = useRef(false);
+  const routineRefetched = useRef(new Set<string>());
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
   const historyEpoch = useRef(0);
@@ -1555,6 +1556,20 @@ export function ShellPage() {
     if (!active) return;
     if (routineId && routinesBotId === active.id) {
       const routine = routines.find((item) => item.id === routineId);
+      // A routine the bot just created may be newer than the list: fetch it once before giving up.
+      if (!routine && !routineRefetched.current.has(routineId)) {
+        routineRefetched.current.add(routineId);
+        const botId = active.id;
+        void rpc.routines
+          .list({ botId })
+          .then((rows) => {
+            if (activeBotId.current !== botId) return;
+            setRoutines(rows);
+            setRoutinesBotId(botId);
+          })
+          .catch(() => undefined);
+        return;
+      }
       if (routine) {
         setRoutineDraft(draftFromRoutine(routine));
         setRoutineWebhookSecret(null);

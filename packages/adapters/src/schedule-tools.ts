@@ -5,9 +5,11 @@ import {
   cronFromPreset,
   isOneShotRoutineCron,
   isOneShotRoutineCrons,
+  isValidTimezone,
   nextBotMessageHop,
   nextCronDate,
   ONCE_ROUTINE_CRON,
+  routineScheduleLabel,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 
@@ -174,6 +176,8 @@ export interface ScheduleToolDeps {
   jobs: JobPublisher;
 }
 
+const TIMEZONE_ERROR = "timezone must be an IANA time zone, such as Europe/Paris.";
+
 /** Persist and enqueue a bot routine that wakes in the originating thread. */
 export async function createScheduleFromTool(
   deps: ScheduleToolDeps,
@@ -202,7 +206,8 @@ export async function createScheduleFromTool(
     return { error: "bot-to-bot chain limit reached; ask the user to set up this routine" };
   }
 
-  const timezone = String(input.timezone ?? "UTC");
+  const timezone = input.timezone ?? "UTC";
+  if (!isValidTimezone(timezone)) return { error: TIMEZONE_ERROR };
   const resolved = resolveScheduleTiming(input.schedule, timezone);
   if (!resolved.ok) return { error: resolved.error };
 
@@ -250,13 +255,31 @@ export async function createScheduleFromTool(
     // Match routines.create: the reminder is live even if the thread signal fails.
   }
 
+  return routineResult(row);
+}
+
+type StoredRoutine = {
+  id: string;
+  name: string;
+  prompt: string;
+  notify: boolean;
+  timezone: string;
+  crons: string[];
+  nextRunAt: Date | null;
+};
+
+/** A routine as stored, for the model and for the card confirming what was set up. */
+function routineResult(row: StoredRoutine) {
   return {
     ok: true as const,
     routineId: row.id,
     name: row.name,
+    prompt: row.prompt,
+    schedule: routineScheduleLabel(row, row.timezone),
+    notify: row.notify,
     cron: row.crons[0],
     nextRunAt: row.nextRunAt?.toISOString() ?? null,
-    oneShot: resolved.oneShot,
+    oneShot: isOneShotRoutineCrons(row.crons),
   };
 }
 

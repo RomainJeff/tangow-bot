@@ -149,10 +149,11 @@ async function mirrorChannelRun(
   });
   // Ask answers are entered privately in the app. Check the same snapshot as
   // the replies so a resumed run cannot publish an answer-influenced response.
+  // A routine confirmation is settled by the server, not answered by anyone.
   if (
     replies.some((message) =>
       (message.blocks as MessageBlock[]).some(
-        (block) => block.kind === "ask" && block.status === "answered",
+        (block) => block.kind === "ask" && block.status === "answered" && !block.confirms,
       ),
     )
   )

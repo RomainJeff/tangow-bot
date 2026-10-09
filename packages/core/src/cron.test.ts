@@ -2,16 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   type CronPreset,
   cronFromPreset,
+  cronSchedule,
   describeCronPreset,
   formatCron,
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
+  isValidTimezone,
   nextCronDate,
   nextCronDateAcross,
   nextCronDateAcrossStrict,
   ONCE_ROUTINE_CRON,
   presetFromCron,
   resolveRoutineNextRunAt,
+  routineScheduleLabel,
 } from "./cron.js";
 
 function preset(partial: Partial<CronPreset> & Pick<CronPreset, "freq">): CronPreset {
@@ -49,6 +52,77 @@ describe("cronFromPreset", () => {
     expect(cronFromPreset(preset({ freq: "Advanced", cron: ONCE_ROUTINE_CRON }))).toBe(
       ONCE_ROUTINE_CRON,
     );
+  });
+});
+
+describe("cronSchedule", () => {
+  const at = (hour: number, minute = 0) => ({ hour, minute });
+
+  it("reads steps, keeping a step that restarts each hour or month as not exact", () => {
+    expect(cronSchedule("*/15 * * * *")).toEqual({
+      kind: "every",
+      n: 15,
+      unit: "minutes",
+      exact: true,
+    });
+    expect(cronSchedule("*/45 * * * *")).toEqual({
+      kind: "every",
+      n: 45,
+      unit: "minutes",
+      exact: false,
+    });
+    expect(cronSchedule("0 * * * *")).toEqual({ kind: "every", n: 1, unit: "hours", exact: true });
+    expect(cronSchedule("0 0 */3 * *")).toEqual({
+      kind: "every",
+      n: 3,
+      unit: "days",
+      exact: false,
+    });
+    expect(cronSchedule(ONCE_ROUTINE_CRON)).toEqual({ kind: "once" });
+  });
+
+  it("reads days, weekdays Monday first with Sunday as 0 or 7, and several hours", () => {
+    expect(cronSchedule("0 9,18 * * *")).toEqual({ kind: "daily", times: [at(9), at(18)] });
+    expect(cronSchedule("0 10 * * 6")).toEqual({ kind: "weekly", weekdays: [6], times: [at(10)] });
+    expect(cronSchedule("30 18 * * 7,1")).toEqual({
+      kind: "weekly",
+      weekdays: [1, 0],
+      times: [at(18, 30)],
+    });
+    expect(cronSchedule("0 8 * * 0-6")).toEqual({ kind: "daily", times: [at(8)] });
+  });
+
+  it("reads a date of the month and a date of the year", () => {
+    expect(cronSchedule("0 10 15 * *")).toEqual({ kind: "monthly", day: 15, times: [at(10)] });
+    expect(cronSchedule("0 9 6 10 *")).toEqual({
+      kind: "yearly",
+      month: 10,
+      day: 6,
+      times: [at(9)],
+    });
+    expect(cronSchedule("0 9 29 2 *")).toEqual({
+      kind: "yearly",
+      month: 2,
+      day: 29,
+      times: [at(9)],
+    });
+  });
+
+  it("keeps the expression when the words would be ambiguous or wrong", () => {
+    for (const cron of [
+      "0 10 15 * 6",
+      "0 10 1 * 6",
+      "0 10 * 3 6",
+      "0 9 31 2 *",
+      "0 9 31 4 *",
+      "0 9 * 10 *",
+      "0 24 * * *",
+      "60 9 * * 1",
+      "0 10 * * 6 2027",
+      "0 9 * * SAT",
+    ]) {
+      expect(cronSchedule(cron)).toEqual({ kind: "cron", expression: cron });
+    }
   });
 });
 
@@ -266,5 +340,59 @@ describe("nextCronDateAcrossStrict", () => {
     const from = new Date("2026-08-24T00:00:00.000Z");
     expect(nextCronDateAcrossStrict([ONCE_ROUTINE_CRON], from, "UTC")).toBeNull();
     expect(nextCronDateAcrossStrict([], from, "UTC")).toBeNull();
+  });
+});
+
+describe("routineScheduleLabel", () => {
+  const from = new Date("2026-10-06T10:00:00Z");
+  const label = (cron: string, timezone = "UTC") =>
+    routineScheduleLabel(
+      { crons: [cron], nextRunAt: nextCronDate(cron, from, timezone) },
+      timezone,
+    );
+
+  it.each([
+    ["0 9 * * 1", "Europe/Paris", "Mondays at 09:00 Europe/Paris"],
+    ["30 7 * * 1,4", "UTC", "Mondays and Thursdays at 07:30 UTC"],
+    ["0 9 * * 1-5", "UTC", "Weekdays at 09:00 UTC"],
+    ["0 18 * * 0,6", "UTC", "Saturdays and Sundays at 18:00 UTC"],
+    ["0 9,18 * * *", "UTC", "Every day at 09:00 and 18:00 UTC"],
+    ["0 8 15 * *", "UTC", "Monthly on day 15 at 08:00 UTC"],
+    ["0 */2 * * *", "UTC", "Every 2 hours UTC"],
+    ["*/30 * * * *", "UTC", "Every 30 minutes UTC"],
+    ["0 9 * 1 *", "UTC", "On the schedule 0 9 * 1 * UTC"],
+    ["0 */6 * * *", "UTC", "Every 6 hours UTC"],
+    ["0 */5 * * *", "UTC", "On the schedule 0 */5 * * * UTC"],
+    ["0 9 */2 * *", "Europe/Paris", "On the schedule 0 9 */2 * * Europe/Paris"],
+    ["*/7 * * * *", "UTC", "On the schedule */7 * * * * UTC"],
+  ])("says %s in %s as %s", (cron, timezone, expected) => {
+    expect(label(cron, timezone)).toBe(expected);
+  });
+
+  it("dates a one-shot routine in its zone", () => {
+    expect(
+      routineScheduleLabel(
+        { crons: [ONCE_ROUTINE_CRON], nextRunAt: new Date("2026-10-07T12:10:00Z") },
+        "Europe/Paris",
+      ),
+    ).toBe("Once on Oct 7, 2026 at 14:10 Europe/Paris");
+  });
+
+  it("names every schedule of a routine that has several, and a one-shot with no time left", () => {
+    expect(
+      routineScheduleLabel({ crons: ["0 9 * * 1-5", "0 10 * * 0,6"], nextRunAt: null }, "UTC"),
+    ).toBe("Weekdays at 09:00, Saturdays and Sundays at 10:00 UTC");
+    expect(routineScheduleLabel({ crons: [ONCE_ROUTINE_CRON], nextRunAt: null }, "UTC")).toBe(
+      "Once UTC",
+    );
+  });
+});
+
+describe("isValidTimezone", () => {
+  it("accepts IANA zones and refuses anything else", () => {
+    expect(isValidTimezone("Europe/Paris")).toBe(true);
+    expect(isValidTimezone("UTC")).toBe(true);
+    expect(isValidTimezone("Mars/Olympus")).toBe(false);
+    expect(isValidTimezone("")).toBe(false);
   });
 });

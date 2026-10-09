@@ -39,6 +39,7 @@ import {
   isAttachmentImageMimeType,
   OPENAI_COMPATIBLE_PROVIDER_ID,
 } from "@rakazo/contracts";
+import type { CreatedRoutine } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
   type ActionApprovalRule,
@@ -77,8 +78,10 @@ import {
   redactSecrets,
   renderBotDirectory,
   resolveActionApprovalDetail,
+  routineConfirmationBlock,
   SHAPES,
   sandboxCommandTimeoutMs,
+  settleRoutineAsk,
   spawnBotToolArgs,
   type ToolCallDetail,
   type ToolCallStreak,
@@ -1944,6 +1947,27 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return secretPausedToolResult();
         };
 
+        /**
+         * Keyed on the effect, so a retried call cannot post it twice. Logged, never thrown: the
+         * routine exists and the model has its result.
+         */
+        const confirmRoutine = async (effectId: string, routine: CreatedRoutine) => {
+          try {
+            await publishMidTurnNarration();
+            await publishMessage(
+              deps,
+              run,
+              "bot",
+              [routineConfirmationBlock(effectId, routine)],
+              undefined,
+              `routine-confirmation:${effectId}`,
+            );
+          } catch (error) {
+            if ((error as { code?: string }).code === "P2002") return;
+            getLogger().error("routine confirmation card", error);
+          }
+        };
+
         const mutatingEffectOccurrences = new Map<string, number>();
         const consumedEffectIds = new Set<string>();
         const nextMutatingEffectOccurrence = (toolName: string, args: Record<string, unknown>) => {
@@ -2992,7 +3016,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 delaySeconds: args.delaySeconds,
               },
             });
-            return finish(created);
+            const settled = await finish(created);
+            if (applied && "ok" in created) {
+              const { routineId: id, name, schedule, prompt, notify } = created;
+              const routine = { id, name, schedule, prompt, notify };
+              if (approvedReplayConsumed) {
+                await settleRoutineCard(
+                  deps,
+                  { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId },
+                  applied.effect.id,
+                  routine,
+                );
+              } else {
+                await confirmRoutine(applied.effect.id, routine);
+              }
+            }
+            return settled;
           }
           if (name === "schedule_list") {
             return listSchedulesFromTool(deps, {
@@ -5603,6 +5642,62 @@ async function personWokeRun(
   });
   const blocks = Array.isArray(source?.blocks) ? (source.blocks as MessageBlock[]) : [];
   return source?.role === "user" && !botMessageContext(blocks);
+}
+
+/**
+ * Links an approved routine card to the routine it created. Logged, never thrown: the creation
+ * already happened and the model has its result.
+ */
+async function settleRoutineCard(
+  deps: Pick<ExecutorDeps, "prisma" | "events">,
+  target: { spaceId: string; threadId: string; botId: string; runId: string },
+  effectId: string,
+  routine: CreatedRoutine,
+): Promise<void> {
+  const committed = await deps.prisma
+    .$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
+      const messages = await tx.message.findMany({
+        where: { threadId: target.threadId, runId: target.runId, role: "bot" },
+        orderBy: { seq: "desc" },
+        select: { id: true, blocks: true },
+      });
+      const isCard = (block: unknown) =>
+        Boolean(block) &&
+        typeof block === "object" &&
+        (block as { kind?: unknown }).kind === "ask" &&
+        (block as { approvalEffectId?: unknown }).approvalEffectId === effectId;
+      const message = messages.find(
+        (row) => Array.isArray(row.blocks) && (row.blocks as unknown[]).some(isCard),
+      );
+      if (!message) return null;
+      const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block) =>
+        isCard(block)
+          ? (settleRoutineAsk(
+              block as Extract<MessageBlock, { kind: "ask" }>,
+              routine,
+            ) as Prisma.InputJsonValue)
+          : block,
+      );
+      await tx.message.update({ where: { id: message.id }, data: { blocks } });
+      const event = await appendEventInTransaction(tx, {
+        spaceId: target.spaceId,
+        threadId: target.threadId,
+        botId: target.botId,
+        type: "thread.message.updated",
+        runId: target.runId,
+        payload: { messageId: message.id, role: "bot", blocks },
+      });
+      return event.seq;
+    })
+    .catch((error) => {
+      getLogger().error("routine card update", error);
+      return null;
+    });
+  if (committed === null) return;
+  await deps.events.notify(target.threadId, committed).catch((error) => {
+    getLogger().error("routine card realtime notification", error);
+  });
 }
 
 /**

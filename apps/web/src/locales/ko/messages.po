@@ -32,12 +32,12 @@ msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1883
+#: src/pages/Shell.tsx:1903
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0} (첨부 파일 최대 {ATTACHMENT_MAX_COUNT}개)"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1887
+#: src/pages/Shell.tsx:1907
 msgid "{0} (over 10 MiB)"
 msgstr "{0} (10 MiB 초과)"
 
@@ -108,7 +108,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0}의 화면"
 
-#: src/pages/CallView.tsx:355
+#: src/pages/CallView.tsx:367
 msgid "{botName} is speaking"
 msgstr ""
 
@@ -124,7 +124,7 @@ msgstr ""
 msgid "{days}d ago"
 msgstr "{days}일 전"
 
-#: src/pages/shell/message-view.tsx:320
+#: src/pages/shell/message-view.tsx:323
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -176,7 +176,7 @@ msgstr "{title}, {label}"
 msgid "{toolCount, plural, one {# tool} other {# tools}}"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:231
+#: src/pages/shell/transcript.tsx:234
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} 작업 중"
 
@@ -231,12 +231,12 @@ msgstr "작업 실행 전 확인"
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/BotContextMenu.tsx:84
-#: src/pages/Shell.tsx:3150
+#: src/pages/Shell.tsx:3171
 #: src/pages/shell/sidebar.tsx:405
 msgid "Actions for {0}"
 msgstr "{0} 작업 메뉴"
 
-#: src/pages/Shell.tsx:3024
+#: src/pages/Shell.tsx:3045
 msgid "Actions for space"
 msgstr ""
 
@@ -367,7 +367,7 @@ msgid "Adding…"
 msgstr "추가 중…"
 
 #: src/pages/AccountSettingsOverlay.tsx:193
-#: src/pages/DecisionModelSettingsPanel.tsx:125
+#: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:342
 #: src/pages/ModelSettingsOverlay.tsx:556
 #: src/pages/Onboarding.tsx:496
@@ -421,8 +421,7 @@ msgstr "확인 없이 {0} 허용"
 msgid "Allow email actions without asking"
 msgstr "확인 없이 이메일 동작 허용"
 
-#: src/components/AskCard.tsx:37
-#: src/pages/CallView.tsx:422
+#: src/lib/approval-labels.ts:23
 msgid "Allow once"
 msgstr "한 번 허용"
 
@@ -434,7 +433,7 @@ msgstr "확인 없이 결제 동작 허용"
 msgid "Allow writing"
 msgstr ""
 
-#: src/components/AskCard.tsx:24
+#: src/components/AskCard.tsx:48
 msgid "Allowed once"
 msgstr "한 번 허용됨"
 
@@ -446,38 +445,38 @@ msgstr "이미 계정이 있나요?"
 msgid "Always act"
 msgstr ""
 
-#: src/components/AskCard.tsx:38
-#: src/pages/CallView.tsx:423
+#: src/lib/approval-labels.ts:24
 msgid "Always allow this tool"
 msgstr "이 도구 항상 허용"
 
-#: src/components/AskCard.tsx:25
+#: src/components/AskCard.tsx:49
 msgid "Always allowed"
 msgstr "항상 허용됨"
 
-#: src/components/AskCard.tsx:299
+#: src/components/AskCard.tsx:430
 msgid "Answer"
 msgstr "답변"
 
-#: src/pages/CallView.tsx:386
+#: src/pages/CallView.tsx:398
 msgid "Answer in text"
 msgstr ""
 
-#: src/components/AskCard.tsx:20
-#: src/components/AskCard.tsx:527
-#: src/components/AskCard.tsx:530
-#: src/components/AskCard.tsx:544
+#: src/components/AskCard.tsx:44
+#: src/components/AskCard.tsx:56
+#: src/components/AskCard.tsx:664
+#: src/components/AskCard.tsx:667
+#: src/components/AskCard.tsx:681
 msgid "Answered"
 msgstr "응답함"
 
 #. placeholder {0}: answeredOption?.label ?? block.answerId
 #. placeholder {0}: selectedAskActionLabel(answer, actions)
-#: src/components/AskCard.tsx:21
+#: src/components/AskCard.tsx:45
 #: src/pages/shell/message-cards.tsx:76
 msgid "Answered: {0}"
 msgstr "응답: {0}"
 
-#: src/components/AskCard.tsx:27
+#: src/components/AskCard.tsx:51
 msgid "Answered: {answer}"
 msgstr "응답: {answer}"
 
@@ -485,7 +484,7 @@ msgstr "응답: {answer}"
 msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "API가 다시 작동하지만 업데이트가 완료되지 않았습니다. 호스트 로그를 확인하세요."
 
-#: src/components/AskCard.tsx:51
+#: src/components/AskCard.tsx:85
 #: src/components/integrations/IntegrationSetup.tsx:194
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/ModelSettingsOverlay.tsx:742
@@ -528,6 +527,11 @@ msgstr "승인이 필요한 범위"
 msgid "Approve"
 msgstr "승인"
 
+#: src/pages/CallView.tsx:68
+#: src/pages/CallView.tsx:69
+msgid "Approve it in the chat, or say no to cancel."
+msgstr "채팅에서 승인하거나, 취소하려면 아니요라고 말해 주세요."
+
 #: src/pages/shell/message-cards.tsx:358
 msgid "Approve this server to let your agent use its tools."
 msgstr "이 서버를 승인하면 Bot이 제공되는 도구를 사용할 수 있습니다."
@@ -536,7 +540,7 @@ msgstr "이 서버를 승인하면 Bot이 제공되는 도구를 사용할 수 �
 msgid "Archive"
 msgstr "보관"
 
-#: src/pages/shell/message-view.tsx:410
+#: src/pages/shell/message-view.tsx:413
 msgid "archived"
 msgstr "보관됨"
 
@@ -544,7 +548,7 @@ msgstr "보관됨"
 msgid "Archived"
 msgstr "보관됨"
 
-#: src/pages/shell/message-view.tsx:421
+#: src/pages/shell/message-view.tsx:424
 msgid "Archived. Chat, memory, and files kept."
 msgstr "보관되었습니다. 대화, 기억, 파일은 유지됩니다."
 
@@ -606,7 +610,7 @@ msgstr "{timeSelect}에"
 msgid "Attach file"
 msgstr "파일 첨부"
 
-#: src/pages/shell/message-view.tsx:104
+#: src/pages/shell/message-view.tsx:105
 msgid "Attachment"
 msgstr "첨부 파일"
 
@@ -652,7 +656,7 @@ msgstr "루틴을 저장한 후 사용할 수 있습니다"
 msgid "Avatars"
 msgstr "아바타"
 
-#: src/components/AskCard.tsx:578
+#: src/components/AskCard.tsx:713
 #: src/pages/PluginsOverlay.tsx:554
 #: src/pages/RoutineEditor.tsx:270
 msgid "Back"
@@ -664,7 +668,7 @@ msgstr "뒤로"
 msgid "Back to sign in"
 msgstr "로그인으로 돌아가기"
 
-#: src/pages/DecisionModelSettingsPanel.tsx:137
+#: src/pages/DecisionModelSettingsPanel.tsx:144
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:47
 msgid "Base URL"
 msgstr "서버 주소"
@@ -683,15 +687,15 @@ msgstr "라이브 데스크톱 시작 중…"
 msgid "Booting up {0}’s computer"
 msgstr "{0}의 컴퓨터를 켜는 중"
 
-#: src/pages/shell/message-view.tsx:308
-#: src/pages/shell/message-view.tsx:309
-#: src/pages/shell/message-view.tsx:414
+#: src/pages/shell/message-view.tsx:311
+#: src/pages/shell/message-view.tsx:312
+#: src/pages/shell/message-view.tsx:417
 msgid "bot"
 msgstr "Bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/Shell.tsx:1656
-#: src/pages/shell/message-view.tsx:211
+#: src/pages/Shell.tsx:1672
+#: src/pages/shell/message-view.tsx:214
 msgid "Bot"
 msgstr "봇"
 
@@ -700,7 +704,7 @@ msgstr "봇"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:745
+#: src/pages/shell/side-panel.tsx:752
 msgid "Bot screen"
 msgstr "Bot 화면"
 
@@ -721,7 +725,7 @@ msgstr "연결할 Bot"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bot은 기본적으로 묻지 않고 작업합니다. 먼저 확인하고 싶은 작업만 예외로 추가하세요."
 
-#: src/pages/shell/transcript.tsx:232
+#: src/pages/shell/transcript.tsx:235
 msgid "Bots are working"
 msgstr "봇 작업 중"
 
@@ -741,13 +745,12 @@ msgstr ""
 msgid "Can't reach the server."
 msgstr "서버에 연결할 수 없습니다."
 
-#: src/components/AskCard.tsx:36
-#: src/components/AskCard.tsx:270
-#: src/components/AskCard.tsx:321
-#: src/components/ComputerMaintenanceActions.tsx:97
+#: src/components/AskCard.tsx:404
+#: src/components/AskCard.tsx:451
+#: src/components/ComputerMaintenanceActions.tsx:102
 #: src/components/ComputerUpdateProgress.tsx:233
-#: src/components/teach/TeachComputerOverlay.tsx:254
-#: src/pages/CallView.tsx:421
+#: src/components/teach/TeachComputerOverlay.tsx:274
+#: src/lib/approval-labels.ts:14
 #: src/pages/KnowledgeSection.tsx:235
 #: src/pages/KnowledgeSection.tsx:670
 #: src/pages/PluginsOverlay.tsx:1168
@@ -780,7 +783,7 @@ msgstr "새 그룹 만들기 취소"
 msgid "Cancel reply"
 msgstr "답장 취소"
 
-#: src/components/AskCard.tsx:23
+#: src/components/AskCard.tsx:47
 #: src/pages/ActivityList.tsx:162
 #: src/pages/shell/routine-run-line.tsx:161
 msgid "Cancelled"
@@ -904,7 +907,7 @@ msgstr "닫기"
 msgid "Close chart"
 msgstr "차트 닫기"
 
-#: src/pages/shell/side-panel.tsx:723
+#: src/pages/shell/side-panel.tsx:730
 msgid "Close computer"
 msgstr "컴퓨터 닫기"
 
@@ -934,7 +937,7 @@ msgstr "메시징 설정 닫기"
 msgid "Close model settings"
 msgstr "AI 모델 설정 닫기"
 
-#: src/pages/Shell.tsx:2608
+#: src/pages/Shell.tsx:2628
 msgid "Close navigation"
 msgstr "메뉴 닫기"
 
@@ -968,7 +971,7 @@ msgstr "음성 설정 닫기"
 msgid "Cloud"
 msgstr "클라우드"
 
-#: src/components/AskCard.tsx:52
+#: src/components/AskCard.tsx:86
 msgid "Code"
 msgstr "코드"
 
@@ -1001,7 +1004,7 @@ msgstr ""
 
 #: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:64
-#: src/pages/shell/message-view.tsx:575
+#: src/pages/shell/message-view.tsx:579
 msgid "Computer"
 msgstr "컴퓨터"
 
@@ -1014,7 +1017,7 @@ msgstr ""
 msgid "Computer failed to boot"
 msgstr "컴퓨터를 시작하지 못했습니다"
 
-#: src/pages/shell/side-panel.tsx:764
+#: src/pages/shell/side-panel.tsx:771
 msgid "Computer is asleep"
 msgstr "컴퓨터가 절전 상태입니다"
 
@@ -1056,7 +1059,7 @@ msgstr "비밀번호 확인"
 #: src/components/integrations/IntegrationSetup.tsx:267
 #: src/components/integrations/IntegrationSetup.tsx:291
 #: src/components/integrations/IntegrationSetup.tsx:324
-#: src/pages/DecisionModelSettingsPanel.tsx:169
+#: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
 #: src/pages/VoiceSettingsOverlay.tsx:269
@@ -1093,7 +1096,7 @@ msgstr "Treg 연결"
 
 #: src/components/integrations/IntegrationSetup.tsx:164
 #: src/components/integrations/IntegrationSetup.tsx:267
-#: src/pages/DecisionModelSettingsPanel.tsx:91
+#: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
 #: src/pages/ModelSettingsOverlay.tsx:442
@@ -1125,7 +1128,7 @@ msgstr "연결되었습니다. 다음 메시지부터 이 도구를 사용할 �
 
 #: src/components/integrations/IntegrationSetup.tsx:222
 #: src/components/integrations/IntegrationSetup.tsx:361
-#: src/pages/DecisionModelSettingsPanel.tsx:169
+#: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1200,7 +1203,7 @@ msgstr "기본 모델을 변경하지 못했습니다."
 msgid "Could not check for updates"
 msgstr "업데이트를 확인하지 못했습니다"
 
-#: src/components/teach/TeachComputerOverlay.tsx:85
+#: src/components/teach/TeachComputerOverlay.tsx:94
 msgid "Could not check teaching status. Refresh the view to continue."
 msgstr "가르치기 상태를 확인하지 못했습니다. 화면을 새로고침한 뒤 이어가세요."
 
@@ -1230,7 +1233,7 @@ msgstr "연결하지 못했습니다."
 msgid "Could not connect {0}"
 msgstr "{0}에 연결하지 못했습니다."
 
-#: src/pages/DecisionModelSettingsPanel.tsx:62
+#: src/pages/DecisionModelSettingsPanel.tsx:66
 msgid "Could not connect OpenRouter"
 msgstr ""
 
@@ -1242,13 +1245,13 @@ msgstr "AI 서비스에 연결하지 못했습니다."
 msgid "Could not connect this voice provider"
 msgstr "음성 서비스에 연결하지 못했습니다."
 
-#: src/pages/Shell.tsx:853
-#: src/pages/Shell.tsx:2503
+#: src/pages/Shell.tsx:855
+#: src/pages/Shell.tsx:2523
 msgid "Could not connect to the computer screen"
 msgstr "컴퓨터 화면에 연결하지 못했습니다"
 
 #: src/pages/Auth.tsx:99
-#: src/pages/Shell.tsx:2477
+#: src/pages/Shell.tsx:2497
 msgid "Could not continue"
 msgstr "계속 진행하지 못했습니다."
 
@@ -1304,7 +1307,7 @@ msgstr "기억 서비스 연결을 해제하지 못했습니다."
 msgid "Could not disconnect OAuth"
 msgstr "OAuth 연결을 해제하지 못했습니다."
 
-#: src/pages/DecisionModelSettingsPanel.tsx:75
+#: src/pages/DecisionModelSettingsPanel.tsx:79
 msgid "Could not disconnect OpenRouter"
 msgstr ""
 
@@ -1355,7 +1358,7 @@ msgstr "확인 규칙을 불러오지 못했습니다."
 msgid "Could not load bots. Reload to try again."
 msgstr ""
 
-#: src/pages/DecisionModelSettingsPanel.tsx:33
+#: src/pages/DecisionModelSettingsPanel.tsx:37
 msgid "Could not load decision model settings"
 msgstr ""
 
@@ -1521,8 +1524,8 @@ msgstr ""
 msgid "Could not send reset email"
 msgstr "재설정 이메일을 보낼 수 없습니다"
 
-#: src/pages/CallView.tsx:171
-#: src/pages/CallView.tsx:183
+#: src/pages/CallView.tsx:179
+#: src/pages/CallView.tsx:193
 msgid "Could not send that"
 msgstr "메시지를 보내지 못했습니다."
 
@@ -1530,19 +1533,19 @@ msgstr "메시지를 보내지 못했습니다."
 msgid "Could not start OAuth"
 msgstr "OAuth 인증을 시작하지 못했습니다."
 
-#: src/components/teach/TeachComputerOverlay.tsx:166
+#: src/components/teach/TeachComputerOverlay.tsx:175
 msgid "Could not start teaching"
 msgstr "가르치기를 시작하지 못했습니다."
 
-#: src/components/AskCard.tsx:475
+#: src/components/AskCard.tsx:612
 msgid "Could not submit these answers"
 msgstr ""
 
-#: src/components/AskCard.tsx:132
+#: src/components/AskCard.tsx:166
 msgid "Could not submit this answer"
 msgstr "답변을 보내지 못했습니다."
 
-#: src/pages/Shell.tsx:2322
+#: src/pages/Shell.tsx:2342
 msgid "Could not take control"
 msgstr "직접 조작으로 전환하지 못했습니다."
 
@@ -1555,7 +1558,7 @@ msgstr "업데이트하지 못했습니다."
 msgid "Could not update agent access"
 msgstr "Bot의 서버 사용 권한을 변경하지 못했습니다."
 
-#: src/components/ComputerMaintenanceActions.tsx:64
+#: src/components/ComputerMaintenanceActions.tsx:69
 msgid "Could not update computer"
 msgstr "컴퓨터를 업데이트할 수 없습니다"
 
@@ -1563,7 +1566,7 @@ msgstr "컴퓨터를 업데이트할 수 없습니다"
 msgid "Could not update plugin"
 msgstr "플러그인을 업데이트하지 못했습니다"
 
-#: src/pages/Shell.tsx:1869
+#: src/pages/Shell.tsx:1889
 msgid "Could not update reaction"
 msgstr "반응을 업데이트할 수 없습니다"
 
@@ -1602,11 +1605,19 @@ msgstr "새 섹션을 만들고 {0}을 옮깁니다."
 msgid "Create account"
 msgstr "계정 만들기"
 
+#: src/lib/approval-labels.ts:12
+msgid "Create bot"
+msgstr "Bot 만들기"
+
+#: src/components/AskCard.tsx:499
+msgid "Create bot?"
+msgstr "Bot을 만들까요?"
+
 #: src/pages/GroupPanel.tsx:170
 msgid "Create group"
 msgstr "그룹 만들기"
 
-#: src/pages/Shell.tsx:2753
+#: src/pages/Shell.tsx:2773
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "새 Bot 만들기"
@@ -1624,20 +1635,7 @@ msgstr "새 스페이스 만들기"
 msgid "Create Routine"
 msgstr "자동 실행 만들기"
 
-#: src/lib/approval-labels.ts:11
-msgid "Create bot"
-msgstr "Bot 만들기"
-
-#: src/components/AskCard.tsx:243
-msgid "Edit"
-msgstr "수정"
-
-#: src/components/AskCard.tsx:474
-msgid "Create bot?"
-msgstr "Bot을 만들까요?"
-
-#: src/components/AskCard.tsx:35
-#: src/pages/CallView.tsx:420
+#: src/lib/approval-labels.ts:10
 #: src/pages/shell/dialogs.tsx:91
 msgid "Create space"
 msgstr "스페이스 만들기"
@@ -1646,7 +1644,7 @@ msgstr "스페이스 만들기"
 msgid "Create your Rakazo"
 msgstr "Rakazo 계정 만들기"
 
-#: src/components/AskCard.tsx:22
+#: src/components/AskCard.tsx:46
 msgid "Created"
 msgstr "생성됨"
 
@@ -1759,11 +1757,11 @@ msgstr "그룹 삭제"
 msgid "Delete memories too"
 msgstr "기억도 함께 삭제"
 
-#: src/pages/Shell.tsx:3038
+#: src/pages/Shell.tsx:3059
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:412
+#: src/pages/shell/message-view.tsx:415
 msgid "deleted"
 msgstr "삭제됨"
 
@@ -1773,12 +1771,11 @@ msgstr "삭제됨"
 msgid "Deleting…"
 msgstr "삭제 중…"
 
-#: src/components/AskCard.tsx:26
+#: src/components/AskCard.tsx:50
 msgid "Denied"
 msgstr "거부됨"
 
-#: src/components/AskCard.tsx:39
-#: src/pages/CallView.tsx:424
+#: src/lib/approval-labels.ts:25
 msgid "Deny"
 msgstr "거부"
 
@@ -1822,21 +1819,21 @@ msgstr ""
 msgid "Disabled"
 msgstr "비활성"
 
-#: src/pages/DecisionModelSettingsPanel.tsx:104
+#: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/McpServersOverlay.tsx:493
 #: src/pages/MemorySettingsOverlay.tsx:211
 #: src/pages/VoiceSettingsOverlay.tsx:284
 msgid "Disconnect"
 msgstr "연결 해제"
 
-#: src/pages/DecisionModelSettingsPanel.tsx:104
+#: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/MemorySettingsOverlay.tsx:211
 #: src/pages/VoiceSettingsOverlay.tsx:282
 msgid "Disconnecting…"
 msgstr "연결 해제 중…"
 
 #: src/components/ComputerUpdateProgress.tsx:190
-#: src/components/teach/TeachComputerOverlay.tsx:274
+#: src/components/teach/TeachComputerOverlay.tsx:294
 #: src/pages/shell/message-cards.tsx:87
 msgid "Dismiss"
 msgstr "닫기"
@@ -1914,16 +1911,20 @@ msgstr "작업 기술 초안"
 msgid "Duplicate"
 msgstr "복제"
 
-#: src/pages/shell/message-view.tsx:186
+#: src/pages/shell/message-view.tsx:189
 msgid "Earlier message"
 msgstr "이전 메시지"
+
+#: src/components/AskCard.tsx:277
+msgid "Edit"
+msgstr "수정"
 
 #: src/pages/shell/message-actions-sheet.tsx:104
 #: src/pages/shell/message-hover-actions.tsx:154
 msgid "Edit and resend"
 msgstr "편집 후 다시 보내기"
 
-#: src/components/AskCard.tsx:346
+#: src/components/AskCard.tsx:472
 msgid "Edit first"
 msgstr "수정 후 보내기"
 
@@ -1940,7 +1941,7 @@ msgstr "{rewindTime}의 메시지를 편집 중 · 이후 메시지 {0}개가 �
 msgid "Email"
 msgstr "이메일"
 
-#: src/pages/CallView.tsx:408
+#: src/pages/CallView.tsx:420
 msgid "End call"
 msgstr ""
 
@@ -2021,7 +2022,7 @@ msgstr "{0} 펼치기"
 msgid "Export"
 msgstr "내보내기"
 
-#: src/components/teach/TeachComputerOverlay.tsx:235
+#: src/components/teach/TeachComputerOverlay.tsx:255
 msgid "Export this week's list from the CRM and drop it in the shared folder"
 msgstr "CRM에서 이번 주 목록을 내려받아 공유 폴더에 넣기"
 
@@ -2041,14 +2042,14 @@ msgstr "매우 높음"
 msgid "Failed"
 msgstr "실패"
 
-#: src/pages/Shell.tsx:2068
-#: src/pages/Shell.tsx:2070
-#: src/pages/Shell.tsx:2072
+#: src/pages/Shell.tsx:2088
+#: src/pages/Shell.tsx:2090
+#: src/pages/Shell.tsx:2092
 msgid "Failed to send message"
 msgstr "메시지를 보내지 못했습니다."
 
-#: src/pages/Shell.tsx:2128
-#: src/pages/Shell.tsx:2147
+#: src/pages/Shell.tsx:2148
+#: src/pages/Shell.tsx:2167
 msgid "Failed to stop"
 msgstr "작업을 중지하지 못했습니다."
 
@@ -2168,7 +2169,7 @@ msgstr ""
 msgid "Hang up first, then enter the code on screen."
 msgstr "먼저 전화를 끊은 다음 화면에 표시된 코드를 입력하세요."
 
-#: src/pages/CallView.tsx:147
+#: src/pages/CallView.tsx:149
 msgid "Hang up, then enter the code on screen."
 msgstr "전화를 끊은 다음 화면에 표시된 코드를 입력하세요."
 
@@ -2228,7 +2229,7 @@ msgstr "이 봇이 어떻게 동작해야 하는지"
 msgid "How to check"
 msgstr "완료 확인 방법"
 
-#: src/pages/shell/side-panel.tsx:794
+#: src/pages/shell/side-panel.tsx:801
 msgid "I’m done"
 msgstr "조작 끝내기"
 
@@ -2293,6 +2294,7 @@ msgstr "인스턴스 API 키"
 msgid "Instruction"
 msgstr "실행할 내용"
 
+#: src/components/AskCard.tsx:313
 #: src/pages/shell/bot-panel.tsx:463
 msgid "Instructions"
 msgstr "지침"
@@ -2332,11 +2334,11 @@ msgstr "이 Bot만 사용"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "대화, 파일, 자동 실행이 영구 삭제됩니다. 이 Bot이 만든 다른 Bot은 목록에 남습니다."
 
-#: src/pages/shell/transcript.tsx:662
+#: src/pages/shell/transcript.tsx:666
 msgid "Jump to latest"
 msgstr "최신 메시지로 이동"
 
-#: src/pages/shell/message-view.tsx:181
+#: src/pages/shell/message-view.tsx:184
 msgid "Jump to replied message"
 msgstr "답장한 메시지로 이동"
 
@@ -2370,7 +2372,7 @@ msgstr ""
 msgid "Leave"
 msgstr "나가기"
 
-#: src/pages/DecisionModelSettingsPanel.tsx:84
+#: src/pages/DecisionModelSettingsPanel.tsx:91
 msgid "Let bots complete multi-step web page tasks faster."
 msgstr ""
 
@@ -2394,7 +2396,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:469
+#: src/pages/shell/transcript.tsx:472
 msgid "Load earlier messages"
 msgstr "이전 메시지 불러오기"
 
@@ -2435,7 +2437,7 @@ msgstr "음성 서비스를 불러오는 중…"
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/transcript.tsx:469
+#: src/pages/shell/transcript.tsx:472
 msgid "Loading…"
 msgstr "불러오는 중…"
 
@@ -2564,7 +2566,7 @@ msgstr ""
 
 #: src/pages/shell/composer.tsx:1049
 #: src/pages/shell/composer.tsx:1150
-#: src/pages/shell/message-view.tsx:106
+#: src/pages/shell/message-view.tsx:107
 msgid "Message"
 msgstr ""
 
@@ -2592,7 +2594,7 @@ msgstr "메시지 작성기"
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:332
+#: src/pages/shell/message-view.tsx:335
 msgid "Message from {peer}"
 msgstr "{peer}의 메시지"
 
@@ -2601,11 +2603,11 @@ msgid "Message…"
 msgstr "메시지를 입력하세요"
 
 #. placeholder {0}: sent.toBotName
-#: src/pages/shell/message-view.tsx:436
+#: src/pages/shell/message-view.tsx:439
 msgid "Messaged {0}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:332
+#: src/pages/shell/message-view.tsx:335
 msgid "Messaged {peer}"
 msgstr "{peer}에게 메시지 보냄"
 
@@ -2614,7 +2616,7 @@ msgstr "{peer}에게 메시지 보냄"
 msgid "Messaging"
 msgstr "메시징"
 
-#: src/pages/CallView.tsx:133
+#: src/pages/CallView.tsx:135
 msgid "Microphone failed"
 msgstr "마이크를 사용할 수 없습니다."
 
@@ -2641,7 +2643,7 @@ msgstr "분"
 msgid "minutes"
 msgstr "분"
 
-#: src/pages/DecisionModelSettingsPanel.tsx:149
+#: src/pages/DecisionModelSettingsPanel.tsx:156
 #: src/pages/ModelSettingsOverlay.tsx:497
 #: src/pages/ModelSettingsOverlay.tsx:607
 #: src/pages/ModelSettingsOverlay.tsx:1057
@@ -2688,7 +2690,7 @@ msgstr "서버에서 찾은 모델"
 msgid "Monthly"
 msgstr "매월"
 
-#: src/components/ComputerMaintenanceActions.tsx:118
+#: src/components/ComputerMaintenanceActions.tsx:123
 msgid "More computer actions"
 msgstr "컴퓨터 작업 더보기"
 
@@ -2700,10 +2702,11 @@ msgstr "공용 기억으로 옮깁니다."
 msgid "Move to"
 msgstr "섹션으로 이동"
 
-#: src/pages/CallView.tsx:398
+#: src/pages/CallView.tsx:410
 msgid "Mute"
 msgstr ""
 
+#: src/components/AskCard.tsx:295
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:134
 #: src/pages/GroupPanel.tsx:133
@@ -2737,11 +2740,11 @@ msgstr "입력 필요"
 msgid "Needs takeover"
 msgstr "인수 필요"
 
-#: src/pages/shell/side-panel.tsx:670
+#: src/pages/shell/side-panel.tsx:674
 msgid "Needs you"
 msgstr "확인 필요"
 
-#: src/components/AskCard.tsx:152
+#: src/components/AskCard.tsx:188
 msgid "Needs your call"
 msgstr ""
 
@@ -2775,7 +2778,7 @@ msgstr "새 스킬"
 msgid "New space"
 msgstr "새 스페이스"
 
-#: src/components/AskCard.tsx:616
+#: src/components/AskCard.tsx:748
 msgid "Next"
 msgstr ""
 
@@ -2823,8 +2826,8 @@ msgstr "아직 그룹 채팅이 없습니다."
 msgid "No integrations installed yet."
 msgstr "아직 설치된 통합이 없습니다."
 
-#: src/components/AskCard.tsx:173
-#: src/components/AskCard.tsx:553
+#: src/components/AskCard.tsx:211
+#: src/components/AskCard.tsx:690
 msgid "No longer active"
 msgstr "이미 종료된 요청입니다"
 
@@ -2985,7 +2988,7 @@ msgstr "일정에 따라"
 msgid "on the 1st at {0}"
 msgstr "매월 1일 {0}에"
 
-#: src/pages/Shell.tsx:3076
+#: src/pages/Shell.tsx:3097
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3021,7 +3024,7 @@ msgstr "진행 중인 작업"
 msgid "OpenAI-compatible server URL"
 msgstr "OpenAI 호환 서버 주소"
 
-#: src/pages/shell/message-view.tsx:423
+#: src/pages/shell/message-view.tsx:426
 msgid "Opened its thread."
 msgstr "대화가 만들어졌습니다."
 
@@ -3033,7 +3036,7 @@ msgstr "채팅 여는 중…"
 msgid "Opening your Space…"
 msgstr "작업공간을 여는 중…"
 
-#: src/pages/DecisionModelSettingsPanel.tsx:111
+#: src/pages/DecisionModelSettingsPanel.tsx:118
 msgid "OpenRouter API key"
 msgstr ""
 
@@ -3066,16 +3069,16 @@ msgstr "자연스럽게"
 msgid "Organization API key"
 msgstr "조직 API 키"
 
-#: src/components/AskCard.tsx:520
+#: src/components/AskCard.tsx:657
 msgid "Other"
 msgstr ""
 
-#: src/components/AskCard.tsx:246
-#: src/components/AskCard.tsx:669
+#: src/components/AskCard.tsx:381
+#: src/components/AskCard.tsx:800
 msgid "Other answer"
 msgstr ""
 
-#: src/components/AskCard.tsx:293
+#: src/components/AskCard.tsx:424
 msgid "Other answer…"
 msgstr ""
 
@@ -3085,7 +3088,7 @@ msgstr ""
 msgid "Other model…"
 msgstr "다른 모델 직접 입력…"
 
-#: src/components/AskCard.tsx:660
+#: src/components/AskCard.tsx:791
 msgid "Other…"
 msgstr ""
 
@@ -3102,7 +3105,7 @@ msgstr "PagerDuty 인시던트"
 msgid "Park"
 msgstr "보류"
 
-#: src/components/AskCard.tsx:50
+#: src/components/AskCard.tsx:84
 #: src/pages/AccountSettingsOverlay.tsx:448
 #: src/pages/Auth.tsx:166
 #: src/pages/Auth.tsx:175
@@ -3240,13 +3243,13 @@ msgstr "OAuth 다시 연결"
 msgid "Reconnecting"
 msgstr "다시 연결 중"
 
-#: src/components/teach/TeachComputerOverlay.tsx:76
-#: src/components/teach/TeachComputerOverlay.tsx:127
-#: src/components/teach/TeachComputerOverlay.tsx:160
+#: src/components/teach/TeachComputerOverlay.tsx:85
+#: src/components/teach/TeachComputerOverlay.tsx:136
+#: src/components/teach/TeachComputerOverlay.tsx:169
 msgid "Recording may have started, but the view could not refresh"
 msgstr "녹화가 시작됐을 수 있지만 화면을 새로고침하지 못했습니다"
 
-#: src/components/teach/TeachComputerOverlay.tsx:266
+#: src/components/teach/TeachComputerOverlay.tsx:286
 msgid "Recording started. Refresh the view to continue."
 msgstr "녹화가 시작되었습니다. 화면을 새로고침한 뒤 이어가세요."
 
@@ -3256,7 +3259,7 @@ msgstr "녹화가 시작되었습니다. 화면을 새로고침한 뒤 이어가
 msgid "Recording: {0}"
 msgstr "녹화 중: {0}"
 
-#: src/components/ComputerMaintenanceActions.tsx:135
+#: src/components/ComputerMaintenanceActions.tsx:145
 #: src/components/ComputerUpdateProgress.tsx:209
 msgid "Recover computer"
 msgstr "컴퓨터 복구"
@@ -3270,7 +3273,7 @@ msgstr ""
 msgid "Recovering Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:135
+#: src/components/ComputerMaintenanceActions.tsx:145
 msgid "Recovering…"
 msgstr "복구 중…"
 
@@ -3290,15 +3293,15 @@ msgstr ""
 msgid "Recreating the computer"
 msgstr ""
 
-#: src/components/teach/TeachComputerOverlay.tsx:271
+#: src/components/teach/TeachComputerOverlay.tsx:291
 msgid "Refresh view"
 msgstr "화면 새로고침"
 
-#: src/components/teach/TeachComputerOverlay.tsx:271
+#: src/components/teach/TeachComputerOverlay.tsx:291
 msgid "Refreshing…"
 msgstr "새로고침 중…"
 
-#: src/pages/shell/side-panel.tsx:784
+#: src/pages/shell/side-panel.tsx:791
 msgid "Release"
 msgstr "제어권 돌려주기"
 
@@ -3367,7 +3370,7 @@ msgstr "작업 기술 {0} 삭제"
 msgid "Remove webhook"
 msgstr "웹훅 제거"
 
-#: src/pages/shell/message-view.tsx:422
+#: src/pages/shell/message-view.tsx:425
 msgid "Removed with chat, computer, and memory."
 msgstr "대화, 컴퓨터, 기억과 함께 삭제되었습니다."
 
@@ -3383,7 +3386,7 @@ msgid "Removing…"
 msgstr "삭제 중…"
 
 #: src/pages/BotContextMenu.tsx:119
-#: src/pages/Shell.tsx:3165
+#: src/pages/Shell.tsx:3186
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr ""
@@ -3420,15 +3423,15 @@ msgstr "{replyName}에게 답장"
 msgid "Report, {0} · Opens in full"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:100
+#: src/components/ComputerMaintenanceActions.tsx:105
 msgid "Reset"
 msgstr "재설정"
 
-#: src/components/ComputerMaintenanceActions.tsx:140
+#: src/components/ComputerMaintenanceActions.tsx:150
 msgid "Reset computer"
 msgstr "컴퓨터 재설정"
 
-#: src/components/ComputerMaintenanceActions.tsx:88
+#: src/components/ComputerMaintenanceActions.tsx:93
 msgid "Reset computer?"
 msgstr "컴퓨터를 재설정할까요?"
 
@@ -3440,8 +3443,8 @@ msgstr "비밀번호 재설정"
 msgid "Reset your password"
 msgstr "비밀번호를 재설정하세요"
 
-#: src/components/ComputerMaintenanceActions.tsx:100
-#: src/components/ComputerMaintenanceActions.tsx:140
+#: src/components/ComputerMaintenanceActions.tsx:105
+#: src/components/ComputerMaintenanceActions.tsx:150
 msgid "Resetting…"
 msgstr "재설정 중…"
 
@@ -3455,7 +3458,7 @@ msgstr ""
 msgid "Restore"
 msgstr "복원"
 
-#: src/components/ComputerMaintenanceActions.tsx:91
+#: src/components/ComputerMaintenanceActions.tsx:96
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "마지막으로 저장된 작업 공간을 복원합니다. 컴퓨터에서 저장하지 않은 작업은 사라집니다."
 
@@ -3468,7 +3471,7 @@ msgstr ""
 msgid "Retry now"
 msgstr "지금 다시 시도"
 
-#: src/pages/Shell.tsx:2510
+#: src/pages/Shell.tsx:2530
 msgid "Retry screen"
 msgstr "화면 다시 시도"
 
@@ -3502,6 +3505,10 @@ msgstr "key 교체"
 #: src/pages/shell/side-panel.tsx:471
 msgid "Routine"
 msgstr "자동 실행"
+
+#: src/components/AskCard.tsx:62
+msgid "Routine created"
+msgstr "자동 실행 생성됨"
 
 #: src/pages/RoutineEditor.tsx:124
 msgid "Routines"
@@ -3537,7 +3544,7 @@ msgstr "실행 중…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
-#: src/components/AskCard.tsx:222
+#: src/components/AskCard.tsx:355
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
@@ -3550,7 +3557,7 @@ msgstr ""
 msgid "Save"
 msgstr "저장"
 
-#: src/components/AskCard.tsx:19
+#: src/components/AskCard.tsx:43
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:257
 msgid "Saved"
@@ -3577,7 +3584,7 @@ msgstr ""
 msgid "Saving..."
 msgstr ""
 
-#: src/components/AskCard.tsx:222
+#: src/components/AskCard.tsx:355
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/ModelSettingsOverlay.tsx:789
@@ -3590,11 +3597,6 @@ msgstr "저장 중…"
 #: src/pages/CallView.tsx:65
 msgid "Say yes or no, or answer in a sentence."
 msgstr "예 또는 아니요로 답하거나 문장으로 답해 주세요."
-
-#: src/pages/CallView.tsx:68
-#: src/pages/CallView.tsx:69
-msgid "Approve it in the chat, or say no to cancel."
-msgstr "채팅에서 승인하거나, 취소하려면 아니요라고 말해 주세요."
 
 #: src/pages/ModelSettingsOverlay.tsx:1082
 #: src/pages/PluginsOverlay.tsx:941
@@ -3660,16 +3662,16 @@ msgstr "보내기"
 msgid "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked."
 msgstr "10분 안에 채팅 앱에서 연결할 회선으로 <0>{linkCode}</0>를 보내세요. 연결되면 확인 답장을 받습니다."
 
-#: src/components/AskCard.tsx:281
-#: src/components/AskCard.tsx:332
+#: src/components/AskCard.tsx:413
+#: src/components/AskCard.tsx:460
 msgid "Send answer"
 msgstr "답변 보내기"
 
-#: src/components/AskCard.tsx:606
+#: src/components/AskCard.tsx:738
 msgid "Send answers"
 msgstr ""
 
-#: src/components/AskCard.tsx:357
+#: src/components/AskCard.tsx:481
 msgid "Send it"
 msgstr "보내기"
 
@@ -3677,12 +3679,12 @@ msgstr "보내기"
 msgid "Send reset link"
 msgstr "재설정 링크 보내기"
 
-#: src/components/AskCard.tsx:193
-#: src/components/AskCard.tsx:239
-#: src/components/AskCard.tsx:281
-#: src/components/AskCard.tsx:332
-#: src/components/AskCard.tsx:357
-#: src/components/AskCard.tsx:606
+#: src/components/AskCard.tsx:256
+#: src/components/AskCard.tsx:374
+#: src/components/AskCard.tsx:413
+#: src/components/AskCard.tsx:460
+#: src/components/AskCard.tsx:481
+#: src/components/AskCard.tsx:738
 msgid "Sending…"
 msgstr "보내는 중…"
 
@@ -3759,12 +3761,12 @@ msgstr "이전 / 이후 표시"
 msgid "Show bots"
 msgstr "봇 표시"
 
-#: src/pages/shell/message-view.tsx:72
+#: src/pages/shell/message-view.tsx:73
 msgid "Show less"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx:873
-#: src/pages/shell/message-view.tsx:72
+#: src/pages/shell/message-view.tsx:73
 msgid "Show more"
 msgstr "더 보기"
 
@@ -3805,9 +3807,9 @@ msgstr "작업 기술 {0}"
 msgid "Skills"
 msgstr "스킬"
 
-#: src/components/AskCard.tsx:592
+#: src/components/AskCard.tsx:727
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:791
+#: src/pages/shell/side-panel.tsx:798
 msgid "Skip"
 msgstr "건너뛰기"
 
@@ -3815,12 +3817,12 @@ msgstr "건너뛰기"
 msgid "Skip or deploy key"
 msgstr "건너뛰거나 배포 키"
 
-#: src/components/AskCard.tsx:521
+#: src/components/AskCard.tsx:658
 msgid "Skipped"
 msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1903
+#: src/pages/Shell.tsx:1923
 msgid "Skipped {0}"
 msgstr "{0} 건너뜀"
 
@@ -3865,7 +3867,7 @@ msgstr "이 답변 읽기"
 msgid "Specific agents"
 msgstr "특정 에이전트"
 
-#: src/components/teach/TeachComputerOverlay.tsx:250
+#: src/components/teach/TeachComputerOverlay.tsx:270
 msgid "Start recording"
 msgstr "작업 녹화 시작"
 
@@ -3873,7 +3875,7 @@ msgstr "작업 녹화 시작"
 msgid "Starting"
 msgstr "시작 중"
 
-#: src/components/teach/TeachComputerOverlay.tsx:248
+#: src/components/teach/TeachComputerOverlay.tsx:268
 #: src/pages/ModelSettingsOverlay.tsx:728
 #: src/pages/Onboarding.tsx:621
 msgid "Starting…"
@@ -3885,8 +3887,8 @@ msgstr "실행 단계"
 
 #: src/pages/shell/composer.tsx:986
 #: src/pages/shell/composer.tsx:1027
-#: src/pages/shell/side-panel.tsx:685
 #: src/pages/shell/side-panel.tsx:690
+#: src/pages/shell/side-panel.tsx:695
 msgid "Stop"
 msgstr "중지"
 
@@ -3913,7 +3915,7 @@ msgstr "암호화해 저장"
 msgid "Stored securely. Never shown here."
 msgstr "안전하게 저장됩니다. 이 화면에 표시되지 않습니다."
 
-#: src/pages/shell/message-view.tsx:382
+#: src/pages/shell/message-view.tsx:385
 msgid "subagent"
 msgstr "보조 에이전트"
 
@@ -3944,12 +3946,13 @@ msgstr "전환 중…"
 msgid "System"
 msgstr "시스템"
 
-#: src/components/teach/TeachComputerOverlay.tsx:205
-#: src/components/teach/TeachComputerOverlay.tsx:213
+#: src/components/ComputerMaintenanceActions.tsx:136
+#: src/components/teach/TeachComputerOverlay.tsx:219
+#: src/components/teach/TeachComputerOverlay.tsx:233
 msgid "Teach a task"
 msgstr "작업 가르치기"
 
-#: src/pages/Shell.tsx:2792
+#: src/pages/Shell.tsx:2813
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "작업을 가르치는 중입니다. 새 메시지를 보내려면 먼저 가르치기를 종료하세요."
 
@@ -4075,7 +4078,7 @@ msgstr "받는 사람:"
 
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:401
-#: src/pages/shell/transcript.tsx:214
+#: src/pages/shell/transcript.tsx:217
 msgid "Today"
 msgstr "오늘"
 
@@ -4099,13 +4102,13 @@ msgstr "Treg 토큰"
 msgid "Try again"
 msgstr "다시 시도"
 
-#: src/components/AskCard.tsx:250
-#: src/components/AskCard.tsx:681
+#: src/components/AskCard.tsx:385
+#: src/components/AskCard.tsx:812
 msgid "Type a different answer"
 msgstr ""
 
-#: src/components/AskCard.tsx:303
-#: src/components/AskCard.tsx:681
+#: src/components/AskCard.tsx:434
+#: src/components/AskCard.tsx:812
 msgid "Type your answer"
 msgstr "답변을 입력하세요"
 
@@ -4130,7 +4133,7 @@ msgid "Unpin"
 msgstr "고정 해제"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:1987
+#: src/pages/Shell.tsx:2007
 msgid "Unsupported file type: {0}"
 msgstr "지원하지 않는 파일 형식: {0}"
 
@@ -4155,7 +4158,7 @@ msgstr "업데이트"
 msgid "Update available"
 msgstr "업데이트 가능"
 
-#: src/components/ComputerMaintenanceActions.tsx:149
+#: src/components/ComputerMaintenanceActions.tsx:159
 msgid "Update computer"
 msgstr "컴퓨터 업데이트"
 
@@ -4191,7 +4194,7 @@ msgstr ""
 msgid "Updating Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:149
+#: src/components/ComputerMaintenanceActions.tsx:159
 #: src/components/SoftwareUpdateSection.tsx:81
 msgid "Updating…"
 msgstr "업데이트 중…"
@@ -4267,7 +4270,7 @@ msgstr "주중"
 msgid "What about its memories?"
 msgstr "이 Bot의 기억은 어떻게 할까요?"
 
-#: src/components/teach/TeachComputerOverlay.tsx:227
+#: src/components/teach/TeachComputerOverlay.tsx:247
 msgid "What result will you demonstrate?"
 msgstr "어떤 작업을 직접 보여줄까요?"
 
@@ -4317,12 +4320,12 @@ msgstr "작업 공간 루트"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402
-#: src/pages/shell/transcript.tsx:215
+#: src/pages/shell/transcript.tsx:218
 msgid "Yesterday"
 msgstr "어제"
 
-#: src/pages/Shell.tsx:1655
-#: src/pages/Shell.tsx:2534
+#: src/pages/Shell.tsx:1671
+#: src/pages/Shell.tsx:2554
 msgid "You"
 msgstr "나"
 
@@ -4334,7 +4337,7 @@ msgstr "자동으로 이동하지 않으면 이 탭을 닫아도 됩니다."
 msgid "You can close this window."
 msgstr "이 창을 닫아도 됩니다."
 
-#: src/pages/shell/side-panel.tsx:674
+#: src/pages/shell/side-panel.tsx:678
 msgid "You have control"
 msgstr "직접 조작 중"
 

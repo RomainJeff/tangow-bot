@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { selectedAskActionLabel } from "@rakazo/core";
+import { routineConfirmationBlock, selectedAskActionLabel, settleRoutineAsk } from "@rakazo/core";
 import { act } from "react";
 import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // vitest doesn't run the lingui macro/babel transform, so these macro imports must be
@@ -590,5 +591,74 @@ describe("AskCard stepper navigation", () => {
     ]);
     expect(row?.textContent).not.toContain("May");
     expect(container.textContent).toContain("When?");
+  });
+});
+
+describe("AskCard routine confirmation", () => {
+  const render = (block: AskBlock) =>
+    renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/app/g/group-1"]}>
+        <AskCard
+          block={block}
+          canAnswer={true}
+          onAnswer={async () => {}}
+          messageId="msg-routine"
+          botId="bot-1"
+        />
+      </MemoryRouter>,
+    );
+  const stretch = {
+    id: "routine-1",
+    name: "Stretch",
+    schedule: "Every hour UTC",
+    prompt: "Remind me to stretch",
+    notify: false,
+  };
+  const answeredLine = (html: string) => {
+    const start = html.indexOf('data-slot="framed-block-answered"');
+    return start < 0
+      ? null
+      : html.slice(html.indexOf(">", start) + 1, html.indexOf("</div>", start));
+  };
+
+  it("confirms a routine the user asked for, settled, linking to its bot's page from a group", () => {
+    const html = render(
+      routineConfirmationBlock("effect-1", {
+        id: "routine-1",
+        name: "Offres de la semaine",
+        schedule: "Every hour UTC",
+        prompt: "Résume les nouvelles offres. **Vite**",
+        notify: false,
+      }),
+    );
+    expect(html).toContain("Every hour UTC");
+    expect(html).toContain('href="/app/bot-1?routine=routine-1"');
+    expect(answeredLine(html)?.replace(/<[^>]+>/g, "")).toBe(
+      "Routine created · Offres de la semaine",
+    );
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("<pre");
+    expect(html).not.toContain("Needs your call");
+  });
+
+  it("settles the approval card the user allowed for a routine on that routine", () => {
+    const allowed: AskBlock = {
+      kind: "ask",
+      approvalEffectId: "effect-1",
+      text: "Review before schedule_create",
+      status: "answered",
+      answer: "allow",
+      actions: [
+        { id: "allow", label: "Allow once" },
+        { id: "always", label: "Always allow this tool" },
+        { id: "deny", label: "Deny" },
+      ],
+    };
+    const html = render(settleRoutineAsk(allowed, stretch));
+    expect(html).toContain("Every hour UTC");
+    expect(html).not.toContain("Review before schedule_create");
+    expect(html).toContain('href="/app/bot-1?routine=routine-1"');
+    expect(answeredLine(html)?.replace(/<[^>]+>/g, "")).toBe("Routine created · Stretch");
+    expect(html).not.toContain("Needs your call");
   });
 });

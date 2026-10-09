@@ -1,4 +1,5 @@
 import type { AdapterContext, MessagingSurface } from "@rakazo/adapter-kit";
+import { routineConfirmationBlock } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -766,6 +767,28 @@ describe("deliverMessagingOutbound channel runs", () => {
     expect(deps.sendToThread).not.toHaveBeenCalled();
     expect(deps.contextMessages).toEqual([]);
     expect(deps.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("publishes the reply of a run that set up a routine, whose card stays in the app", async () => {
+    const card = routineConfirmationBlock("effect-1", {
+      id: "routine-1",
+      name: "Stretch",
+      schedule: "Every hour UTC",
+      prompt: "Remind me to stretch",
+      notify: false,
+    });
+    const deps = createChannelDeps({
+      messages: [
+        { id: "card-1", blocks: [card] },
+        { id: "reply-1", blocks: [{ kind: "text", text: "Done, every hour." }] },
+      ],
+    });
+    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
+    expect(deps.sendToThread).toHaveBeenCalledWith(
+      { threadId: "sendblue:grp-1", body: "Alice's agent: Done, every hour." },
+      context,
+    );
+    expect(deps.sendToThread).toHaveBeenCalledTimes(1);
   });
 
   it("can still publish a group reply alongside an unanswered ask", async () => {

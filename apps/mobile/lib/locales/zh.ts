@@ -420,6 +420,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Return to inbox": "返回收件箱",
   Robot: "机器人",
   Routine: "例行任务",
+  "Routine created": "例行任务已创建",
   "Routine link is incomplete": "例行任务链接不完整",
   Running: "运行中",
   Save: "保存",
