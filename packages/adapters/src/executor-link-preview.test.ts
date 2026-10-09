@@ -415,6 +415,20 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     );
   });
 
+  it("pushes a finished reply's words without its markdown", async () => {
+    const f = fixture({
+      trigger: "user",
+      async *runtimeRun() {
+        yield { type: "text", text: "**Done**: see [the report](https://example.test/a)" };
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(f.pushes.mock.calls.map(([message]) => message.body)).toEqual(["Done: see the report"]);
+  });
+
   it.each([
     ["a bot-to-bot run", { trigger: "bot_message" }],
     ["a routine card run", { trigger: "routine", routineId: "routine-1", parentBotId: "bot-0" }],

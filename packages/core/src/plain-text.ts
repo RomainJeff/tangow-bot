@@ -63,3 +63,8 @@ export function clipText(text: string, max: number): string {
   const space = head.lastIndexOf(" ");
   return `${(space > head.length / 2 ? head.slice(0, space) : head).trimEnd()}…`;
 }
+
+/** What a notification shows of a message: its plain words, short enough for a lock screen. */
+export function notificationBody(markdown: string): string {
+  return clipText(plainText(markdown), 180);
+}

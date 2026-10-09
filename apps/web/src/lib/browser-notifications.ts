@@ -1,4 +1,5 @@
 import type { ProductEvent } from "@rakazo/contracts";
+import { notificationBody } from "@rakazo/core";
 import { i18n } from "./i18n";
 
 export type BrowserNotificationPermission = "default" | "denied" | "granted";
@@ -82,9 +83,11 @@ export function browserNotificationMessage(
           : "",
       )
       .filter(Boolean)
-      .join("\n")
-      .trim();
-    return { title: name, body: body || i18n._({ id: "Message", message: "Message" }) };
+      .join("\n");
+    return {
+      title: name,
+      body: notificationBody(body) || i18n._({ id: "Message", message: "Message" }),
+    };
   }
   if (event.type === "run.failed") {
     return {

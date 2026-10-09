@@ -88,6 +88,17 @@ describe("browser notifications", () => {
     );
   });
 
+  it("shows the bot message's words without its markdown, cut for a notification", () => {
+    const text = `**Done**: see [the report](https://example.test/r)\n- one\n- two ${"word ".repeat(60)}`;
+    const { body } = browserNotificationMessage(
+      event({ payload: { role: "bot", blocks: [{ kind: "text", text }] } }),
+      "Chief",
+    );
+    expect(body.startsWith("Done: see the report one two word")).toBe(true);
+    expect(body.endsWith("word…")).toBe(true);
+    expect(Array.from(body).length).toBeLessThanOrEqual(180);
+  });
+
   it("puts the bot message in the native notification", () => {
     expect(browserNotificationMessage(event(), "Chief")).toEqual({
       title: "Chief",
