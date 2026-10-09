@@ -12,6 +12,7 @@ import {
   nextCronDateAcross,
   nextCronDateAcrossStrict,
   ONCE_ROUTINE_CRON,
+  parseRunAt,
   presetFromCron,
   resolveRoutineNextRunAt,
   routineScheduleLabel,
@@ -297,6 +298,46 @@ describe("nextCronDateAcross", () => {
     const from = new Date("2026-08-24T00:00:00.000Z");
     expect(nextCronDateAcross([ONCE_ROUTINE_CRON], from, "UTC")).toBeNull();
     expect(nextCronDateAcross(["not-a-cron"], from, "UTC")).toBeNull();
+  });
+});
+
+describe("parseRunAt", () => {
+  const at = (value: string, timezone = "UTC") => parseRunAt(value, timezone)?.toISOString();
+
+  it("reads a time with no offset on the zone's clock, and takes an offset or Z as given", () => {
+    expect(at("2026-10-08T09:00:00", "Europe/Paris")).toBe("2026-10-08T07:00:00.000Z");
+    expect(at("2026-10-08T09:00", "America/New_York")).toBe("2026-10-08T13:00:00.000Z");
+    expect(at("2026-10-08T09:00:00")).toBe("2026-10-08T09:00:00.000Z");
+    expect(at("2026-10-08T09:00:00Z", "Europe/Paris")).toBe("2026-10-08T09:00:00.000Z");
+    expect(at("2026-10-08T09:00:00+02:00", "America/New_York")).toBe("2026-10-08T07:00:00.000Z");
+    expect(at("2026-10-08T09:00:00.500-0530")).toBe("2026-10-08T14:30:00.500Z");
+  });
+
+  it("moves a time the clocks skip forward by the gap, and takes the first of a repeated one", () => {
+    expect(at("2027-03-28T02:30:00", "Europe/Paris")).toBe("2027-03-28T01:30:00.000Z");
+    expect(at("2027-03-14T02:30:00", "America/New_York")).toBe("2027-03-14T07:30:00.000Z");
+    expect(at("2026-10-25T02:30:00", "Europe/Paris")).toBe("2026-10-25T00:30:00.000Z");
+    expect(at("2026-10-25T03:30:00", "Europe/Paris")).toBe("2026-10-25T02:30:00.000Z");
+    expect(at("2026-11-01T01:30:00", "America/New_York")).toBe("2026-11-01T05:30:00.000Z");
+  });
+
+  it("refuses what names no real time", () => {
+    expect(at("2026-02-30T09:00:00Z")).toBeUndefined();
+    expect(at("2026-10-08T24:00:00")).toBeUndefined();
+    expect(at("2026-10-08")).toBeUndefined();
+    expect(at("tomorrow at 9")).toBeUndefined();
+  });
+
+  it("refuses an offset beyond 14 hours or with 60 minutes or more", () => {
+    expect(at("2026-10-08T09:00:00+25:99")).toBeUndefined();
+    expect(at("2026-10-08T09:00:00+14:30")).toBeUndefined();
+    expect(at("2026-10-08T09:00:00-05:60")).toBeUndefined();
+    expect(at("2026-10-08T09:00:00+14:00")).toBe("2026-10-07T19:00:00.000Z");
+    expect(at("2026-10-08T09:00:00-12:00")).toBe("2026-10-08T21:00:00.000Z");
+  });
+
+  it("reads a time with no offset in UTC when its zone does not exist", () => {
+    expect(at("2026-10-08T09:00:00", "Mars/Base")).toBe("2026-10-08T09:00:00.000Z");
   });
 });
 

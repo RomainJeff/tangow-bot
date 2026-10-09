@@ -691,6 +691,20 @@ describe("schedule_list proposals", () => {
     });
   });
 
+  it("reads a proposed run time with no offset in the zone it was proposed in", async () => {
+    const request = { name: "Call", prompt: "Call", timezone: "Europe/Paris" };
+    const { proposals } = (
+      await list([
+        stored("Local", { request: { ...request, runAt: "2026-10-07T09:30:00" } }),
+        stored("Zoned", { request: { ...request, runAt: "2026-10-07T09:30:00Z" } }),
+      ])
+    ).earlierProposals!;
+    expect(proposals.map((p) => p.schedule)).toEqual([
+      "Once on Oct 7, 2026 at 09:30 Europe/Paris",
+      "Once on Oct 7, 2026 at 11:30 Europe/Paris",
+    ]);
+  });
+
   it("returns no proposals key when there are none, and none inside a group thread", async () => {
     expect(await list([])).toEqual({ routines: [] });
     expect(await list([stored("Waiting")], { threadId: "group-thread-1" })).toEqual({

@@ -397,6 +397,16 @@ function fixture(
   };
 }
 
+const at = async <T>(now: string, test: () => Promise<T>) => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(now));
+  try {
+    return await test();
+  } finally {
+    vi.useRealTimers();
+  }
+};
+
 describe("a routine the bot proposes on its own", () => {
   const offers = {
     name: "Weekly offers",
@@ -956,6 +966,30 @@ describe("a routine the user asks for", () => {
     expect(f.routineCreate).not.toHaveBeenCalled();
   });
 
+  it("reads a run time with no offset in the routine's zone, and one with an offset as given", () =>
+    at("2026-10-07T20:00:00Z", async () => {
+      const reminder = (runAt: string) => ({
+        name: "schedule_create",
+        args: { name: "Call", prompt: "Remind me to call", runAt, timezone: "Europe/Paris" },
+      });
+      const f = fixture();
+      await f.play([
+        [reminder("2026-10-08T09:00:00")],
+        [reminder("2026-10-08T09:00:00Z")],
+        [reminder("2026-10-08T09:00:00+02:00")],
+      ]);
+      expect(f.wakeups()).toEqual([
+        new Date("2026-10-08T07:00:00Z"),
+        new Date("2026-10-08T09:00:00Z"),
+        new Date("2026-10-08T07:00:00Z"),
+      ]);
+      expect(f.results).toEqual([
+        expect.objectContaining({ schedule: "Once on Oct 8, 2026 at 09:00 Europe/Paris" }),
+        expect.objectContaining({ schedule: "Once on Oct 8, 2026 at 11:00 Europe/Paris" }),
+        expect.objectContaining({ schedule: "Once on Oct 8, 2026 at 09:00 Europe/Paris" }),
+      ]);
+    }));
+
   it.each([null, ""])("is set up when the model sends %j as its routineId", async (routineId) => {
     const f = fixture();
     await f.play([[{ ...routine, args: { ...routine.args, routineId, runAt: null } }]]);
@@ -1040,15 +1074,6 @@ describe("a routine the user asks to change", () => {
     name: "schedule_create",
     args: { routineId: "routine-1", ...args },
   });
-  const at = async <T>(now: string, test: () => Promise<T>) => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date(now));
-    try {
-      return await test();
-    } finally {
-      vi.useRealTimers();
-    }
-  };
 
   it("changes this bot's routine and shows Routine updated, the schedule it now keeps", () =>
     at("2026-10-07T10:00:00Z", async () => {
@@ -1131,6 +1156,25 @@ describe("a routine the user asks to change", () => {
       expect(f.wakeups()).toEqual([new Date("2026-10-08T08:00:00Z")]);
       expect(f.posted()).toEqual([
         [expect.objectContaining({ text: "Once on Oct 8, 2026 at 08:00 UTC" })],
+      ]);
+    }));
+
+  it("reads a new run time with no offset in the zone the routine keeps", () =>
+    at("2026-10-07T10:00:00Z", async () => {
+      const f = fixture({
+        routines: [
+          {
+            ...stored,
+            crons: ["@once"],
+            timezone: "Europe/Paris",
+            nextRunAt: new Date("2026-10-08T09:00:00Z"),
+          },
+        ],
+      });
+      await f.play([[change({ runAt: "2026-10-08T09:00:00" })]]);
+      expect(f.routines[0]).toMatchObject({ nextRunAt: new Date("2026-10-08T07:00:00Z") });
+      expect(f.posted()).toEqual([
+        [expect.objectContaining({ text: "Once on Oct 8, 2026 at 09:00 Europe/Paris" })],
       ]);
     }));
 
