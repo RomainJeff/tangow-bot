@@ -1178,6 +1178,15 @@ describe("a routine the user asks to change", () => {
       ]);
     }));
 
+  it("refuses to move a reminder more than 5 years ahead", () =>
+    at("2026-10-07T10:00:00Z", async () => {
+      const reminder = { ...stored, crons: ["@once"], nextRunAt: new Date("2026-10-08T08:00:00Z") };
+      const f = fixture({ routines: [reminder] });
+      await f.play([[change({ runAt: "2031-10-08T08:00:00Z" })]]);
+      expect(f.results).toEqual([{ error: "One-shot schedules must run within 5 years." }]);
+      expect(f.routines[0]).toMatchObject({ nextRunAt: new Date("2026-10-08T08:00:00Z") });
+    }));
+
   it("keeps a paused routine paused, and says so to the bot and on the card", async () => {
     const f = fixture({ routines: [{ ...stored, active: false, nextRunAt: null }] });
     await f.play([[change({ cron: "0 9 * * *" })]]);
