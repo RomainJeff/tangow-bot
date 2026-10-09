@@ -1294,18 +1294,30 @@ describe("routine update triggers", () => {
     expect(routineUpdate).not.toHaveBeenCalled();
   });
 
-  it("arms a one-shot that never ran at the time the editor gives", async () => {
-    const { update, enqueue } = updateDeps({ crons: ["@once"], nextRunAt: null });
+  it("arms a one-shot that never ran at the time the editor gives", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue } = updateDeps({ crons: ["@once"], nextRunAt: null });
 
-    const response = await update({ runAt: "2999-01-01T09:00:00.000Z" });
+      const saved = await savedRoutine(await update({ runAt: "2027-01-01T09:00:00.000Z" }));
 
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { json: { nextRunAt: string | null } };
-    expect(body.json.nextRunAt).toBe("2999-01-01T09:00:00.000Z");
-    expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
-      new Date("2999-01-01T09:00:00.000Z"),
-    ]);
-  });
+      expect(saved.nextRunAt).toBe("2027-01-01T09:00:00.000Z");
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2027-01-01T09:00:00.000Z"),
+      ]);
+    }));
+
+  it("refuses to arm a one-shot more than 5 years ahead", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { routineUpdate, update } = updateDeps({ crons: ["@once"], nextRunAt: null });
+
+      const error = await refusal(await update({ runAt: "2031-10-08T09:00:00.000Z" }));
+
+      expect(error).toMatchObject({
+        code: "BAD_REQUEST",
+        message: "One-shot schedules must run within 5 years.",
+      });
+      expect(routineUpdate).not.toHaveBeenCalled();
+    }));
 
   it("keeps a reminder that already ran from resuming without a new time", async () => {
     const { routineUpdate, update } = updateDeps({
@@ -1375,6 +1387,18 @@ describe("routine update triggers", () => {
         new Date("2026-10-08T07:30:00.000Z"),
       ]);
       expect(cancel.mock.calls).toEqual([]);
+    }));
+
+  it("keeps a recurring routine at its time of day when the editor changes only its zone", () =>
+    at("2026-10-07T10:00:00.000Z", async () => {
+      const { update, enqueue } = updateDeps({});
+
+      const saved = await savedRoutine(await update({ ...editorForm, timezone: "Europe/Paris" }));
+
+      expect(saved.nextRunAt).toBe("2026-10-08T07:00:00.000Z");
+      expect(enqueue.mock.calls.map(([job]) => job.availableAt)).toEqual([
+        new Date("2026-10-08T07:00:00.000Z"),
+      ]);
     }));
 
   it("clears the next run and cancels its wake-up when the editor pauses a routine", () =>
