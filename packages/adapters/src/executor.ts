@@ -3020,34 +3020,38 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await confirmRoutine(applied.effect.id, routine, change);
             }
           };
-          if (name === "schedule_create" && args.routineId !== undefined) {
-            const updated = await updateScheduleFromTool(deps, {
-              spaceId: run.spaceId,
-              botId: bot.id,
-              userId: run.userId,
-              threadId: thread.id,
-              inGroup: Boolean(thread.groupId),
-              startedByUser: isUserOpenedTrigger(run.trigger),
-              currentHop: await resolveRunHop(deps.prisma, run),
-              routineId: String(args.routineId),
-              name: typeof args.name === "string" ? args.name : undefined,
-              prompt: typeof args.prompt === "string" ? args.prompt : undefined,
-              timezone: args.timezone ? String(args.timezone) : undefined,
-              notify: typeof args.notify === "boolean" ? args.notify : undefined,
-              schedule: {
-                cron: args.cron,
-                every: args.every,
-                unit: args.unit,
-                runAt: args.runAt,
-                delayMinutes: args.delayMinutes,
-                delaySeconds: args.delaySeconds,
-              },
-            });
-            const settled = await finish(updated);
-            await showRoutine(updated, "updated");
-            return settled;
-          }
           if (name === "schedule_create") {
+            const schedule = {
+              cron: args.cron ?? undefined,
+              every: args.every ?? undefined,
+              unit: args.unit ?? undefined,
+              runAt: args.runAt ?? undefined,
+              delayMinutes: args.delayMinutes ?? undefined,
+              delaySeconds: args.delaySeconds ?? undefined,
+            };
+            const timezone = args.timezone ? String(args.timezone) : undefined;
+            const notify = typeof args.notify === "boolean" ? args.notify : undefined;
+            const currentHop = await resolveRunHop(deps.prisma, run);
+            if (typeof args.routineId === "string" && args.routineId.trim() !== "") {
+              const updated = await updateScheduleFromTool(deps, {
+                spaceId: run.spaceId,
+                botId: bot.id,
+                userId: run.userId,
+                threadId: thread.id,
+                inGroup: Boolean(thread.groupId),
+                startedByUser: isUserOpenedTrigger(run.trigger),
+                currentHop,
+                routineId: args.routineId,
+                name: typeof args.name === "string" ? args.name : undefined,
+                prompt: typeof args.prompt === "string" ? args.prompt : undefined,
+                timezone,
+                notify,
+                schedule,
+              });
+              const settled = await finish(updated);
+              await showRoutine(updated, "updated");
+              return settled;
+            }
             const created = await createScheduleFromTool(deps, {
               spaceId: run.spaceId,
               botId: bot.id,
@@ -3055,17 +3059,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               threadId: thread.id,
               name: String(args.name ?? ""),
               prompt: String(args.prompt ?? ""),
-              timezone: args.timezone ? String(args.timezone) : undefined,
-              notify: typeof args.notify === "boolean" ? args.notify : undefined,
-              currentHop: await resolveRunHop(deps.prisma, run),
-              schedule: {
-                cron: args.cron,
-                every: args.every,
-                unit: args.unit,
-                runAt: args.runAt,
-                delayMinutes: args.delayMinutes,
-                delaySeconds: args.delaySeconds,
-              },
+              timezone,
+              notify,
+              currentHop,
+              schedule,
             });
             const settled = await finish(created);
             await showRoutine(created, "created");

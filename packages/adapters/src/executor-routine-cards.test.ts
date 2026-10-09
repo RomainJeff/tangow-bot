@@ -466,6 +466,15 @@ describe("a routine the user asks for", () => {
     expect(f.routineCreate).not.toHaveBeenCalled();
   });
 
+  it.each([null, ""])("is set up when the model sends %j as its routineId", async (routineId) => {
+    const f = fixture();
+    await f.play([[{ ...routine, args: { ...routine.args, routineId, runAt: null } }]]);
+    expect(f.routineCreate).toHaveBeenCalledOnce();
+    expect(f.results).toEqual([
+      expect.objectContaining({ ok: true, routineId: "routine-new", schedule: "Every hour UTC" }),
+    ]);
+  });
+
   it("refuses an unknown time zone before anything is stored", async () => {
     const f = fixture();
     await f.play([
@@ -701,13 +710,31 @@ describe("a routine the user asks to change", () => {
     ]);
   });
 
-  it("keeps the stored name and prompt when the model sends null for them", async () => {
+  it("keeps every field the model sends as null as stored", async () => {
     const f = fixture({ routines: [stored] });
-    await f.play([[change({ name: null, prompt: null, notify: true })]]);
+    await f.play([
+      [
+        change({
+          name: "Stretch more",
+          prompt: null,
+          cron: null,
+          every: null,
+          unit: null,
+          runAt: null,
+          delayMinutes: null,
+          delaySeconds: null,
+          timezone: null,
+          notify: null,
+        }),
+      ],
+    ]);
+    expect(f.results).toEqual([expect.objectContaining({ ok: true, name: "Stretch more" })]);
     expect(f.routines[0]).toMatchObject({
-      name: "Stretch",
+      name: "Stretch more",
       prompt: "Remind me to stretch",
-      notify: true,
+      crons: ["0 * * * *"],
+      timezone: "UTC",
+      notify: false,
     });
   });
 
