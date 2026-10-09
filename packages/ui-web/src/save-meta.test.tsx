@@ -4,6 +4,7 @@ import { SaveMeta } from "./save-meta.js";
 
 const labels = { saving: "Saving…", saved: "Saved", failed: "Could not save", retry: "Retry" };
 const at = Date.UTC(2026, 9, 6, 14, 2);
+const retry = () => {};
 
 describe("SaveMeta", () => {
   const timeZone = process.env.TZ;
@@ -16,7 +17,9 @@ describe("SaveMeta", () => {
   });
 
   it("is an empty polite live region at rest, so the next change is announced", () => {
-    const html = renderToString(<SaveMeta state={{ kind: "idle" }} labels={labels} />);
+    const html = renderToString(
+      <SaveMeta state={{ kind: "idle" }} labels={labels} onRetry={retry} />,
+    );
     expect(html).toContain('data-slot="save-meta"');
     expect(html).toContain('aria-live="polite"');
     expect(html).toMatch(/<span[^>]*><\/span>$/);
@@ -24,24 +27,27 @@ describe("SaveMeta", () => {
 
   it("says Saving… while the call runs", () => {
     const html = renderToString(
-      <SaveMeta state={{ kind: "saving", value: "x", attempt: 1 }} labels={labels} />,
+      <SaveMeta
+        state={{ kind: "saving", value: "x", attempt: 1 }}
+        labels={labels}
+        onRetry={retry}
+      />,
     );
     expect(html).toContain("Saving…");
   });
 
   it("shows the time of the save in the locale it is given", () => {
     const state = { kind: "saved", value: "x", at, until: at + 3000 } as const;
-    expect(renderToString(<SaveMeta state={state} labels={labels} locale="en-GB" />)).toContain(
-      "Saved 14:02",
-    );
-    expect(renderToString(<SaveMeta state={state} labels={labels} locale="fr-FR" />)).toContain(
-      "Saved 14:02",
-    );
     expect(
-      renderToString(<SaveMeta state={state} labels={labels} locale="en-US" />).replace(
-        /[  ]/g,
-        " ",
-      ),
+      renderToString(<SaveMeta state={state} labels={labels} onRetry={retry} locale="en-GB" />),
+    ).toContain("Saved 14:02");
+    expect(
+      renderToString(<SaveMeta state={state} labels={labels} onRetry={retry} locale="fr-FR" />),
+    ).toContain("Saved 14:02");
+    expect(
+      renderToString(
+        <SaveMeta state={state} labels={labels} onRetry={retry} locale="en-US" />,
+      ).replace(/[  ]/g, " "),
     ).toContain("Saved 2:02 PM");
   });
 
@@ -50,7 +56,7 @@ describe("SaveMeta", () => {
       <SaveMeta
         state={{ kind: "failed", value: "x", reason: "", attempt: 1 }}
         labels={labels}
-        onRetry={() => {}}
+        onRetry={retry}
       />,
     );
     expect(html).toContain("Could not save");
@@ -64,7 +70,7 @@ describe("SaveMeta", () => {
         <SaveMeta
           state={{ kind: "failed", value: true, reason, attempt: 1 }}
           labels={labels}
-          onRetry={() => {}}
+          onRetry={retry}
         />,
       ).replace(/<!-- -->/g, "");
     expect(failed("Add a run time for this one-shot.")).toMatch(
@@ -79,6 +85,7 @@ describe("SaveMeta", () => {
       <SaveMeta
         state={{ kind: "idle" }}
         labels={labels}
+        onRetry={retry}
         className="ms-2"
         data-testid="meta"
         id="m"

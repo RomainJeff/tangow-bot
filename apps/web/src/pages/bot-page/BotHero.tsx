@@ -74,7 +74,7 @@ export function BotHero({ page, first }: { page: BotPageContext; first: boolean 
       <SaveMeta
         state={meta?.state ?? IDLE}
         labels={labels}
-        onRetry={meta ? () => void meta.retry() : undefined}
+        onRetry={() => void meta?.retry()}
         className="min-h-4"
       />
     </section>

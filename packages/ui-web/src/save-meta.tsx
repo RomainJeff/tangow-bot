@@ -17,7 +17,7 @@ export interface SaveMetaLabels {
 export interface SaveMetaProps extends Omit<ComponentPropsWithoutRef<"span">, "children"> {
   state: FieldSaveState<unknown>;
   labels: SaveMetaLabels;
-  onRetry?: () => void;
+  onRetry: () => void;
   /** BCP 47 tag for the time; the device locale when omitted. */
   locale?: string;
 }
