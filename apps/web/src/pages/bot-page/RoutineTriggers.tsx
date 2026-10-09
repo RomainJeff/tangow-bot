@@ -213,6 +213,7 @@ function TriggerDialog({
   const [edit, setEdit] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [revealing, setRevealing] = useState<InboundKind | null>(null);
   const ref = triggerEditRef(edit);
   const next = applyTriggerEdit(draft, edit);
   const armOneShot = triggerEditArmsOneShot(draft, edit, existing);
@@ -226,11 +227,20 @@ function TriggerDialog({
           : t`When a webhook fires`;
 
   const save = async (value: RoutineDraft, arm: boolean) => {
+    // A saved routine's first webhook or Git trigger mints the bot's key: show it before closing.
+    const mints =
+      existing !== null &&
+      ref === null &&
+      (edit.kind === "webhook" || edit.kind === "github") &&
+      !webhook.configured
+        ? edit.kind
+        : null;
     setBusy(true);
     setError(null);
     try {
       const failure = await onSave(value, arm);
       if (failure) setError(failure);
+      else if (mints) setRevealing(mints);
       else onClose();
     } finally {
       setBusy(false);
@@ -247,6 +257,8 @@ function TriggerDialog({
     if (effect === "confirm" && !(await confirm(t`Remove ${title}?`, t`Remove`))) return;
     await save(withoutTrigger(draft, ref), false);
   };
+
+  if (revealing) return <KeyDialog kind={revealing} webhook={webhook} onDone={onClose} />;
 
   return (
     <Dialog
@@ -324,6 +336,39 @@ function TriggerDialog({
   );
 }
 
+type InboundKind = "webhook" | "github";
+
+/** The bot's key, right after a save minted it: the one time it is shown without a rotation. */
+export function KeyDialog({
+  kind,
+  webhook,
+  onDone,
+}: {
+  kind: InboundKind;
+  webhook: WebhookInfo;
+  onDone: () => void;
+}) {
+  const { t } = useLingui();
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onDone();
+      }}
+    >
+      <DialogContent showCloseButton={false} className="gap-4 sm:max-w-md">
+        <DialogTitle>{kind === "github" ? t`Git event` : t`When a webhook fires`}</DialogTitle>
+        <InboundDetails kind={kind} saved webhook={webhook} onRotate={() => undefined} />
+        <div className="flex justify-end">
+          <Button variant="capsule" size="capsule" onClick={onDone}>
+            {t`Done`}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** Where an inbound trigger posts and how it signs. The key shows once, then only after a rotation. */
 function InboundDetails({
   kind,
@@ -331,7 +376,7 @@ function InboundDetails({
   webhook,
   onRotate,
 }: {
-  kind: "webhook" | "github";
+  kind: InboundKind;
   saved: boolean;
   webhook: WebhookInfo;
   onRotate: () => void;

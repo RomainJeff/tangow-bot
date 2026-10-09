@@ -2,7 +2,7 @@
 import { ORPCError } from "@orpc/client";
 import type { Bot, Routine } from "@rakazo/contracts";
 import { SaveStoreProvider } from "@rakazo/ui-web";
-import { act, type ReactNode } from "react";
+import { act, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { saveStore } from "../../lib/save-store";
@@ -219,4 +219,83 @@ it("refuses to remove a routine's last trigger", async () => {
     "Add a schedule, webhook, GitHub, or message trigger",
   );
   expect(updateRoutine).not.toHaveBeenCalled();
+});
+
+function KeyHolder({
+  children,
+}: {
+  children: (secret: string | null, onSecret: (secret: string) => void) => ReactNode;
+}) {
+  const [secret, setSecret] = useState<string | null>(null);
+  return children(secret, setSecret);
+}
+
+async function addWebhook() {
+  await act(async () => button("Add trigger").click());
+  const item = [...document.querySelectorAll('[role="menuitem"]')].find(
+    (entry) => entry.textContent === "Webhook",
+  ) as HTMLElement;
+  await act(async () => item.click());
+  await act(async () => button("Done").click());
+}
+
+const dialogText = () => document.querySelector('[role="dialog"]')?.textContent ?? "";
+
+it("shows the bot's key once a routine's first webhook mints it, until Done", async () => {
+  const updateRoutine = vi.fn(async () => ({ ...ROUTINE, webhookEnabled: true }));
+  const revealWebhookSecret = vi.fn(async () => "key-minted-once");
+  await render(
+    <KeyHolder>
+      {(secret, onSecret) => (
+        <RoutineDetail
+          page={page({ updateRoutine, revealWebhookSecret })}
+          routine={ROUTINE}
+          messageProviders={[]}
+          webhookSecret={secret}
+          onWebhookSecret={onSecret}
+          confirm={vi.fn()}
+          onDeleted={vi.fn()}
+        />
+      )}
+    </KeyHolder>,
+  );
+
+  await addWebhook();
+
+  expect(updateRoutine.mock.calls).toEqual([["bot-1", "routine-1", { webhookEnabled: true }]]);
+  expect(dialogText()).toContain("key-minted-once");
+  expect(dialogText()).toContain("Authorization: Bearer key-minted-once");
+
+  await act(async () => button("Done").click());
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it("shows the key a new routine's webhook minted before opening the routine", async () => {
+  const created = { ...ROUTINE, id: "routine-2", webhookEnabled: true, crons: [] };
+  const createRoutine = vi.fn(async () => created);
+  const revealWebhookSecret = vi.fn(async () => "key-minted-once");
+  const onCreated = vi.fn();
+  await render(
+    <KeyHolder>
+      {(secret, onSecret) => (
+        <RoutineCreateForm
+          page={page({ createRoutine, revealWebhookSecret })}
+          seed={{ name: "Deploy watch", prompt: "Say what shipped." }}
+          messageProviders={[]}
+          webhookSecret={secret}
+          onWebhookSecret={onSecret}
+          confirm={vi.fn()}
+          onCreated={onCreated}
+        />
+      )}
+    </KeyHolder>,
+  );
+  await addWebhook();
+
+  await act(async () => button("Create").click());
+
+  expect(dialogText()).toContain("Authorization: Bearer key-minted-once");
+  expect(onCreated).not.toHaveBeenCalled();
+  await act(async () => button("Done").click());
+  expect(onCreated.mock.calls).toEqual([[created]]);
 });
