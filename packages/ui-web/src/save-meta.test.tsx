@@ -42,7 +42,7 @@ describe("SaveMeta", () => {
         /[  ]/g,
         " ",
       ),
-    ).toContain("Saved 02:02 PM");
+    ).toContain("Saved 2:02 PM");
   });
 
   it("offers a Retry next to the failure and wires it to onRetry", () => {

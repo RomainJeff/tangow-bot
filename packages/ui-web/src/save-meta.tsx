@@ -58,5 +58,5 @@ export function SaveMeta({ state, labels, onRetry, locale, className, ...props }
 }
 
 function formatTime(at: number, locale?: string): string {
-  return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(at);
+  return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(at);
 }
