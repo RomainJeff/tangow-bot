@@ -1204,6 +1204,10 @@ msgstr "ईमेल से जारी रखें"
 msgid "Copy"
 msgstr "कॉपी करें"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:449
+msgid "Copy {label}"
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "जोड़ा नहीं जा सका"
@@ -2260,6 +2264,10 @@ msgstr "नमस्ते, उत्तर पढ़कर सुनाते �
 #: src/pages/shell/sidebar.tsx:748
 msgid "Hide bots"
 msgstr "बॉट छिपाएँ"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Hide key"
+msgstr ""
 
 #: src/pages/Auth.tsx:186
 msgid "Hide password"
@@ -3615,9 +3623,17 @@ msgstr "रोबोट"
 msgid "Room guidance"
 msgstr ""
 
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate"
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:426
 msgid "Rotate key"
 msgstr "कुंजी बदलें"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate key?"
+msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:308
 #: src/pages/bot-page/RoutineCreateForm.tsx:49
@@ -3689,10 +3705,6 @@ msgstr "सहेजा गया, लेकिन सूची रिफ़्�
 #: src/pages/ModelSettingsOverlay.tsx:333
 msgid "Saved."
 msgstr "सहेजा गया।"
-
-#: src/pages/bot-page/RoutineTriggers.tsx:398
-msgid "Saved. Rotate to reveal."
-msgstr "सहेजा गया। देखने के लिए कुंजी बदलें।"
 
 #: src/components/ComputerUpdateProgress.tsx:51
 msgid "Saving your workspace"
@@ -3883,6 +3895,10 @@ msgstr "बॉट दिखाएँ"
 msgid "Show earlier"
 msgstr "पहले के दिखाएँ"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Show key"
+msgstr ""
+
 #: src/pages/shell/message-view.tsx:73
 msgid "Show less"
 msgstr ""
@@ -3900,10 +3916,6 @@ msgstr "पासवर्ड दिखाएँ"
 #: src/pages/AccountSettingsOverlay.tsx:130
 msgid "Show the tools a bot used, with their input and output."
 msgstr "बॉट ने जो टूल उपयोग किए, उन्हें उनके इनपुट और आउटपुट के साथ दिखाएँ।"
-
-#: src/pages/bot-page/RoutineTriggers.tsx:388
-msgid "Shown once."
-msgstr ""
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:230

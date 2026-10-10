@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- Picking "Webhook" or "Git event" for a routine shows its address and key at once, before you save, on web and desktop.
+- Picking "Webhook" or "Git event" for a routine shows its address and key at once, before you save, and the key stays available behind dots with an eye to show it and Copy to take it whole, instead of being shown once, on web and desktop.
 
 #### Fixed
 

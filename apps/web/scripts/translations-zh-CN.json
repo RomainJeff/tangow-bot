@@ -701,7 +701,6 @@
   "Run at": "运行时间",
   "Run history": "运行记录",
   "Run time must be in the future.": "运行时间必须是将来的时间。",
-  "Saved. Rotate to reveal.": "已保存。轮换后可查看。",
   "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes. You'll get a confirmation reply once linked.": "请在 10 分钟内从聊天应用向该线路发送 <0>{linkCode}</0>。关联成功后你会收到确认回复。",
   "Sentry alert": "Sentry 告警",
   "Show password": "显示密码",

@@ -1204,6 +1204,10 @@ msgstr "E-posta ile devam et"
 msgid "Copy"
 msgstr "Kopyala"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:449
+msgid "Copy {label}"
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "Eklenemedi"
@@ -2260,6 +2264,10 @@ msgstr "Merhaba, yanıtları sesli okuduğumda böyle duyulacağım."
 #: src/pages/shell/sidebar.tsx:748
 msgid "Hide bots"
 msgstr "Botları gizle"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Hide key"
+msgstr ""
 
 #: src/pages/Auth.tsx:186
 msgid "Hide password"
@@ -3615,9 +3623,17 @@ msgstr "Robot"
 msgid "Room guidance"
 msgstr ""
 
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate"
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:426
 msgid "Rotate key"
 msgstr "Anahtarı döndür"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate key?"
+msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:308
 #: src/pages/bot-page/RoutineCreateForm.tsx:49
@@ -3689,10 +3705,6 @@ msgstr "Kaydedildi ama liste yenilenemedi"
 #: src/pages/ModelSettingsOverlay.tsx:333
 msgid "Saved."
 msgstr "Kaydedildi."
-
-#: src/pages/bot-page/RoutineTriggers.tsx:398
-msgid "Saved. Rotate to reveal."
-msgstr "Kaydedildi. Görmek için döndürün."
 
 #: src/components/ComputerUpdateProgress.tsx:51
 msgid "Saving your workspace"
@@ -3883,6 +3895,10 @@ msgstr "Botları göster"
 msgid "Show earlier"
 msgstr "Öncekileri göster"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Show key"
+msgstr ""
+
 #: src/pages/shell/message-view.tsx:73
 msgid "Show less"
 msgstr ""
@@ -3900,10 +3916,6 @@ msgstr "Parolayı göster"
 #: src/pages/AccountSettingsOverlay.tsx:130
 msgid "Show the tools a bot used, with their input and output."
 msgstr "Bir botun kullandığı araçları girdi ve çıktılarıyla gösterir."
-
-#: src/pages/bot-page/RoutineTriggers.tsx:388
-msgid "Shown once."
-msgstr ""
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:230

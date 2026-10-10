@@ -6,7 +6,7 @@ import { useId, useState } from "react";
 import { localTimezone } from "../../lib/local-timezone";
 import type { RoutineSeed } from "../shell/layout";
 import { type BotPageContext, type Confirm, SettingsGroup } from "./page-kit";
-import { WhenToRun, webhookInfo } from "./RoutineTriggers";
+import { WhenToRun } from "./RoutineTriggers";
 import { useRoutineCopy } from "./routine-copy";
 
 /**
@@ -18,16 +18,12 @@ export function RoutineCreateForm({
   page,
   seed,
   messageProviders,
-  webhookSecret,
-  onWebhookSecret,
   confirm,
   onCreated,
 }: {
   page: BotPageContext;
   seed: RoutineSeed | undefined;
   messageProviders: string[];
-  webhookSecret: string | null;
-  onWebhookSecret: (secret: string) => void;
   confirm: Confirm;
   onCreated: (routine: Routine) => void;
 }) {
@@ -38,15 +34,10 @@ export function RoutineCreateForm({
   const [draft, setDraft] = useState<RoutineDraft>(() => ({ ...emptyRoutineDraft(), ...seed }));
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const webhook = webhookInfo(bot.id, webhookSecret, bot.webhookConfigured);
+  const webhookKey = { botId: bot.id, read: () => commands.webhookSecret(bot.id) };
   const inbound = draft.webhookEnabled || draft.githubEnabled || Boolean(draft.messageProvider);
   const patch = (partial: Partial<RoutineDraft>) =>
     setDraft((current) => ({ ...current, ...partial }));
-
-  const reveal = async () => {
-    const secret = await commands.revealWebhookSecret(bot.id, { ifAbsent: true });
-    if (secret) onWebhookSecret(secret);
-  };
 
   const create = async () => {
     const checked = validateRoutineDraft(draft, null, () => new Date(), {
@@ -60,8 +51,8 @@ export function RoutineCreateForm({
     setCreating(true);
     setError(null);
     try {
-      const mints = (draft.webhookEnabled || draft.githubEnabled) && !webhook.configured;
-      if (mints) await reveal();
+      const needsKey = (draft.webhookEnabled || draft.githubEnabled) && !bot.webhookConfigured;
+      if (needsKey) await webhookKey.read();
       onCreated(await commands.createRoutine(bot.id, checked.payload));
     } catch (failure) {
       setError(
@@ -111,7 +102,7 @@ export function RoutineCreateForm({
         draft={draft}
         existing={null}
         timezone={localTimezone()}
-        webhook={webhook}
+        webhookKey={webhookKey}
         messageProviders={messageProviders}
         disabled={creating}
         confirm={confirm}
@@ -120,7 +111,6 @@ export function RoutineCreateForm({
           setError(null);
           return null;
         }}
-        onReveal={reveal}
       />
       <SettingsGroup>
         <SettingRow label={t`Active`}>

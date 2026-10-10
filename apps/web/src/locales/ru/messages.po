@@ -1204,6 +1204,10 @@ msgstr "Продолжить по электронной почте"
 msgid "Copy"
 msgstr "Копировать"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:449
+msgid "Copy {label}"
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "Не удалось добавить"
@@ -2260,6 +2264,10 @@ msgstr "Привет, вот как я буду звучать, когда бу�
 #: src/pages/shell/sidebar.tsx:748
 msgid "Hide bots"
 msgstr "Скрыть ботов"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Hide key"
+msgstr ""
 
 #: src/pages/Auth.tsx:186
 msgid "Hide password"
@@ -3615,9 +3623,17 @@ msgstr "Робот"
 msgid "Room guidance"
 msgstr "Инструкции для комнаты"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate"
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:426
 msgid "Rotate key"
 msgstr "Сменить ключ"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate key?"
+msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:308
 #: src/pages/bot-page/RoutineCreateForm.tsx:49
@@ -3689,10 +3705,6 @@ msgstr "Сохранено, но обновить список не удалос
 #: src/pages/ModelSettingsOverlay.tsx:333
 msgid "Saved."
 msgstr "Сохранено."
-
-#: src/pages/bot-page/RoutineTriggers.tsx:398
-msgid "Saved. Rotate to reveal."
-msgstr "Сохранено. Поверните, чтобы раскрыть."
 
 #: src/components/ComputerUpdateProgress.tsx:51
 msgid "Saving your workspace"
@@ -3883,6 +3895,10 @@ msgstr "Показать ботов"
 msgid "Show earlier"
 msgstr "Показать более ранние"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Show key"
+msgstr ""
+
 #: src/pages/shell/message-view.tsx:73
 msgid "Show less"
 msgstr ""
@@ -3899,10 +3915,6 @@ msgstr "Показать пароль"
 
 #: src/pages/AccountSettingsOverlay.tsx:130
 msgid "Show the tools a bot used, with their input and output."
-msgstr ""
-
-#: src/pages/bot-page/RoutineTriggers.tsx:388
-msgid "Shown once."
 msgstr ""
 
 #: src/lib/localized-provider-hint.ts:7

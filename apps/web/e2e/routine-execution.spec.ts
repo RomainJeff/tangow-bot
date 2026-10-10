@@ -74,7 +74,7 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
   const editor = page.getByRole("dialog");
   await expect(editor.getByText(new RegExp(`/api/v1/bots/${botId}/github$`))).toBeVisible();
   await expect(editor.getByText("X-Hub-Signature-256: sha256=…", { exact: true })).toBeVisible();
-  await expect(editor.getByText("Shown once.", { exact: true })).toBeVisible();
+  await expect(editor.getByText("••••••••••••••••", { exact: true })).toBeVisible();
   await editor.getByRole("button", { name: "Done", exact: true }).click();
   await expect(
     page.getByTestId("side-panel").getByText("Git event", { exact: true }),
@@ -96,11 +96,11 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
   await captureScreenshot(page, testInfo, "routine-github-event");
 });
 
-test("picking Webhook on a page that missed a key minted elsewhere keeps that key", async ({
+test("picking Webhook shows the key the bot already has, and that key signs a delivery", async ({
   page,
 }) => {
   const stamp = Date.now();
-  await signup(page, `routine-stale-key-${stamp}@rakazo.test`, "password12", "Stale Key");
+  await signup(page, `routine-live-key-${stamp}@rakazo.test`, "password12", "Live Key");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await openRoutineCreate(page);
@@ -109,9 +109,10 @@ test("picking Webhook on a page that missed a key minted elsewhere keeps that ke
   await page.getByRole("button", { name: "Add trigger" }).click();
   await page.getByRole("menuitem", { name: "Webhook", exact: true }).click();
   const editor = page.getByRole("dialog");
-  await expect(editor.getByText("Saved. Rotate to reveal.", { exact: true })).toBeVisible();
-  await expect(editor.getByText("Authorization: Bearer …", { exact: true })).toBeVisible();
+  await expect(editor.getByText("Authorization: Bearer ••••••••••••••••")).toBeVisible();
   await expect(editor.getByRole("button", { name: "Rotate key" })).toHaveCount(0);
+  await editor.getByRole("button", { name: "Show key" }).click();
+  await expect(editor.getByText(`Authorization: Bearer ${secret}`, { exact: true })).toBeVisible();
   await editor.getByRole("button", { name: "Cancel", exact: true }).click();
 
   const body = JSON.stringify({ zen: "Design for failure." });

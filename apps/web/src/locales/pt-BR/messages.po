@@ -1204,6 +1204,10 @@ msgstr "Continuar com e-mail"
 msgid "Copy"
 msgstr "Copiar"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:449
+msgid "Copy {label}"
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "Não foi possível adicionar."
@@ -2260,6 +2264,10 @@ msgstr "Olá, é assim que vou soar quando ler as respostas em voz alta."
 #: src/pages/shell/sidebar.tsx:748
 msgid "Hide bots"
 msgstr "Ocultar bots"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Hide key"
+msgstr ""
 
 #: src/pages/Auth.tsx:186
 msgid "Hide password"
@@ -3615,9 +3623,17 @@ msgstr "Robô"
 msgid "Room guidance"
 msgstr ""
 
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate"
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:426
 msgid "Rotate key"
 msgstr "Rotacionar a chave"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate key?"
+msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:308
 #: src/pages/bot-page/RoutineCreateForm.tsx:49
@@ -3689,10 +3705,6 @@ msgstr "Salvo, mas a atualização da lista falhou"
 #: src/pages/ModelSettingsOverlay.tsx:333
 msgid "Saved."
 msgstr "Salvo."
-
-#: src/pages/bot-page/RoutineTriggers.tsx:398
-msgid "Saved. Rotate to reveal."
-msgstr "Salva. Rotacione para exibir."
 
 #: src/components/ComputerUpdateProgress.tsx:51
 msgid "Saving your workspace"
@@ -3883,6 +3895,10 @@ msgstr "Mostrar bots"
 msgid "Show earlier"
 msgstr "Mostrar anteriores"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Show key"
+msgstr ""
+
 #: src/pages/shell/message-view.tsx:73
 msgid "Show less"
 msgstr ""
@@ -3900,10 +3916,6 @@ msgstr "Mostrar senha"
 #: src/pages/AccountSettingsOverlay.tsx:130
 msgid "Show the tools a bot used, with their input and output."
 msgstr "Mostra as ferramentas que um bot usou, com sua entrada e saída."
-
-#: src/pages/bot-page/RoutineTriggers.tsx:388
-msgid "Shown once."
-msgstr ""
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:230

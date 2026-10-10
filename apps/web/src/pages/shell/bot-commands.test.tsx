@@ -44,7 +44,6 @@ function Harness() {
     activeBotId,
     supersedeBotsRefresh,
     botAction: vi.fn(),
-    ensureWebhookSecret: vi.fn(),
     refreshThread: vi.fn(async () => undefined),
     navigate,
     panelCoversThread,

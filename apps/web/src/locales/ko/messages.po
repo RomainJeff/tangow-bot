@@ -1204,6 +1204,10 @@ msgstr "이메일로 계속하기"
 msgid "Copy"
 msgstr "복사"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:449
+msgid "Copy {label}"
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "추가하지 못했습니다."
@@ -2260,6 +2264,10 @@ msgstr "안녕하세요. 답변을 소리 내어 읽을 때 이런 목소리로 
 #: src/pages/shell/sidebar.tsx:748
 msgid "Hide bots"
 msgstr "봇 숨기기"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Hide key"
+msgstr ""
 
 #: src/pages/Auth.tsx:186
 msgid "Hide password"
@@ -3615,9 +3623,17 @@ msgstr "로봇"
 msgid "Room guidance"
 msgstr ""
 
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate"
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:426
 msgid "Rotate key"
 msgstr "key 교체"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate key?"
+msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:308
 #: src/pages/bot-page/RoutineCreateForm.tsx:49
@@ -3689,10 +3705,6 @@ msgstr "저장했지만 목록을 새로고침하지 못했습니다."
 #: src/pages/ModelSettingsOverlay.tsx:333
 msgid "Saved."
 msgstr "저장되었습니다."
-
-#: src/pages/bot-page/RoutineTriggers.tsx:398
-msgid "Saved. Rotate to reveal."
-msgstr "저장되었습니다. key를 교체하면 표시됩니다."
 
 #: src/components/ComputerUpdateProgress.tsx:51
 msgid "Saving your workspace"
@@ -3883,6 +3895,10 @@ msgstr "봇 표시"
 msgid "Show earlier"
 msgstr "이전 항목 보기"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Show key"
+msgstr ""
+
 #: src/pages/shell/message-view.tsx:73
 msgid "Show less"
 msgstr ""
@@ -3900,10 +3916,6 @@ msgstr "비밀번호 표시"
 #: src/pages/AccountSettingsOverlay.tsx:130
 msgid "Show the tools a bot used, with their input and output."
 msgstr "봇이 사용한 도구를 입력 및 출력과 함께 표시합니다."
-
-#: src/pages/bot-page/RoutineTriggers.tsx:388
-msgid "Shown once."
-msgstr ""
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:230
