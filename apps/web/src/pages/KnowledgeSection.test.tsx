@@ -89,3 +89,36 @@ it("disables skill rows while a completed save is refreshing the catalog", async
     vi.unstubAllGlobals();
   }
 });
+
+it("hands a skill and a new one to onOpenEditor instead of editing in the list", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  api.list.mockResolvedValue([
+    {
+      id: "skill-fixture",
+      name: "greeting",
+      description: "Greet politely",
+      availability: "all",
+      visibleBotIds: [],
+      source: "user",
+    },
+  ]);
+  const onOpenEditor = vi.fn();
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const button = (text: string) =>
+    [...container.querySelectorAll("button")].find((entry) => entry.textContent?.includes(text))!;
+  try {
+    await act(async () =>
+      root.render(<AgentSkills botId="bot-fixture" onOpenEditor={onOpenEditor} />),
+    );
+    await act(async () => button("greeting").click());
+    await act(async () => button("New skill").click());
+    expect(onOpenEditor.mock.calls).toEqual([["skill-fixture"], [null]]);
+    expect(container.querySelector("textarea")).toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});

@@ -120,13 +120,16 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await expect(botDocEditor).toHaveValue(new RegExp(botMarker));
   await botMemory.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  // Skills: its own section on the Knowledge tab. Create one through the editor,
-  // reopen it, edit, then delete it. Builtin catalog is currently empty; user
-  // skills still cover create/edit/delete.
+  // Skills: its own section on the Knowledge tab; the editor opens in the wide
+  // panel. Create one, reopen it, edit, then delete it. Builtin catalog is
+  // currently empty; user skills still cover create/edit/delete.
+  const panel = page.getByTestId("side-panel");
   const skillsSection = botPage.getByTestId("bot-skills");
   await expect(skillsSection.getByText("Skills", { exact: true })).toBeVisible();
   await skillsSection.getByRole("button", { name: "New skill", exact: true }).click();
-  const editor = skillsSection.locator("textarea");
+  await expect(panel).toHaveAttribute("data-detail", "skill");
+  await expect(panel).toHaveAttribute("data-size", "wide");
+  const editor = panel.getByTestId("bot-knowledge-skill-editor").locator("textarea");
   await editor.fill(
     [
       "---",
@@ -138,7 +141,8 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     ].join("\n"),
   );
   await captureScreenshot(page, testInfo, "81-knowledge-skill-editor");
-  await skillsSection.getByRole("button", { name: "Save", exact: true }).click();
+  await panel.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-size", "default");
   const skillRow = skillsSection.getByRole("button", { name: /greet-politely/ });
   await expect(skillRow).toBeVisible();
   await expect(skillsSection.getByText("Say hello before anything else.")).toBeVisible();
@@ -201,24 +205,23 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   await reopenKnowledge();
   await expect(skillCard).toHaveCount(1);
 
-  // A provider-owned skill uses the same viewer without mutation controls.
-  await page.route(
-    "**/rpc/agentSkills/get",
-    async (route) => {
-      const response = await route.fetch();
-      const body = await response.json();
-      await route.fulfill({
-        response,
-        json: { ...body, json: { ...body.json, readOnly: true, source: "plugin" } },
-      });
-    },
-    { times: 1 },
-  );
+  // A provider-owned skill uses the same viewer without mutation controls. The
+  // editor reads the skill as it mounts, so every read answers read-only until unrouted.
+  await page.route("**/rpc/agentSkills/get", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({
+      response,
+      json: { ...body, json: { ...body.json, readOnly: true, source: "plugin" } },
+    });
+  });
   await skillRow.click();
   await expect(editor).toHaveAttribute("readonly", "");
-  await expect(skillsSection.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
-  await expect(skillsSection.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
-  await skillsSection.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(panel.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+  await panel.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-size", "default");
+  await page.unroute("**/rpc/agentSkills/get");
   await skillRow.click();
   await expect(editor).toHaveValue(/Always open with a greeting/);
   await editor.fill(
@@ -243,18 +246,20 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     },
     { times: 1 },
   );
-  await skillsSection.getByRole("button", { name: "Save", exact: true }).click();
+  // Saved, the panel goes back to Knowledge, which reads the catalog again.
+  await panel.getByRole("button", { name: "Save", exact: true }).click();
   try {
     await expect(editor).toBeHidden();
-    await expect(skillRow).toBeDisabled();
+    await expect(panel).toHaveAttribute("data-size", "default");
     await captureScreenshot(page, testInfo, "85-skill-refresh-pending");
   } finally {
     releaseSkillRefresh();
   }
   await skillRow.click();
   await expect(editor).toHaveValue(/warm greeting/);
-  await skillsSection.getByRole("button", { name: "Delete", exact: true }).click();
-  await skillsSection.getByRole("button", { name: "Confirm delete", exact: true }).click();
+  await panel.getByRole("button", { name: "Delete", exact: true }).click();
+  await panel.getByRole("button", { name: "Confirm delete", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-size", "default");
   await expect(skillRow).toBeHidden();
   await composer.fill("/");
   await expect(page.getByRole("button", { name: "Skill greet-politely", exact: true })).toHaveCount(

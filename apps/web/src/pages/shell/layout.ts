@@ -14,7 +14,9 @@ export type BotDetail =
   | { kind: "model" }
   | { kind: "voice" }
   | { kind: "routine"; routineId: string }
-  | { kind: "routine-new"; seed?: RoutineSeed };
+  | { kind: "routine-new"; seed?: RoutineSeed }
+  /** `skillId` null writes a new skill. */
+  | { kind: "skill"; skillId: string | null };
 
 export type BotPageView = { tab: BotTab; detail: BotDetail | null };
 
@@ -25,16 +27,24 @@ const WIDE_DETAILS: ReadonlySet<BotDetail["kind"]> = new Set([
   "description",
   "routine",
   "routine-new",
+  "skill",
 ]);
 
-/** The panel widens to edit a long text or a routine; its width is never stored. */
+/** The panel widens to edit a long text, a routine or a skill; its width is never stored. */
 export function panelSizeFor(panel: Panel, view: BotPageView): PanelSize {
   return panel === "bot" && view.detail && WIDE_DETAILS.has(view.detail.kind) ? "wide" : "default";
 }
 
 /** The row that opened a detail carries this in `data-opens`, so focus can go back to it. */
 export function detailOpener(detail: BotDetail): string {
-  return detail.kind === "routine" ? `routine:${detail.routineId}` : detail.kind;
+  switch (detail.kind) {
+    case "routine":
+      return `routine:${detail.routineId}`;
+    case "skill":
+      return `skill:${detail.skillId ?? "new"}`;
+    default:
+      return detail.kind;
+  }
 }
 
 export type PendingAttachment = {
