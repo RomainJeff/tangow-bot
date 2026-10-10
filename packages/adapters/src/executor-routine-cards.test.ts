@@ -11,6 +11,7 @@ import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { createInMemorySkillLock } from "./skill-lock.js";
 import { listUserSkills, userSkillsRoot } from "./skill-store.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
@@ -381,6 +382,7 @@ function fixture(
     jobs: { enqueue, cancel },
     secrets: [],
     dataDir,
+    skillLock: createInMemorySkillLock(),
     skillLearning: options.skillLearning,
   } as unknown as Parameters<typeof createRunExecutor>[0]);
 

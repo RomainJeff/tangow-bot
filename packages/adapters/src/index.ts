@@ -101,6 +101,7 @@ export * from "./secrets.js";
 export * from "./sendblue-emulator.js";
 export { SerenityMemoryProvider } from "./serenity-memory-provider.js";
 export * from "./skill-lines.js";
+export * from "./skill-lock.js";
 export * from "./skill-store.js";
 export * from "./skill-tools.js";
 export * from "./smtp-email.js";

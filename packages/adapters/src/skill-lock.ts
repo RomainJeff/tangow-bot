@@ -1,6 +1,5 @@
 import { getLogger } from "@rakazo/logging";
 import type { Pool } from "pg";
-import { unavailable } from "./skill-tree.js";
 
 export type SkillOwner = { spaceId: string; userId: string };
 
@@ -54,7 +53,7 @@ const UNLOCK = "SELECT pg_advisory_unlock(hashtext('skill-library'), hashtext($1
 export function createPostgresSkillLock(pool: Pick<Pool, "connect">): SkillOwnerLock {
   const refuse = (error: unknown) => {
     getLogger().warn("[skills] could not take the owner lock", { error });
-    return unavailable();
+    return new Error("Could not take the skill owner lock.");
   };
   return {
     run: (owner, fn) =>

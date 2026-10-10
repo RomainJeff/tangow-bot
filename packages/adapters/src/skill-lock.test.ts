@@ -221,10 +221,7 @@ describe("skill owner lock", () => {
       await holding;
       const waiter = server.pool();
       const ran: string[] = [];
-      const refusal = (error: { reason?: string; message: string }) => [
-        error.reason,
-        error.message,
-      ];
+      const refusal = (error: Error) => error.message;
       const waited = (await lockOfAnotherProcess())(waiter)
         .run(alice, async () => {
           ran.push("ran");
@@ -236,7 +233,7 @@ describe("skill owner lock", () => {
       } as unknown as Pool;
 
       expect([await waited, ran, waiter.returned]).toEqual([
-        ["unavailable", "Skills are unavailable right now. Try again later."],
+        "Could not take the skill owner lock.",
         [],
         ["destroyed"],
       ]);
@@ -244,7 +241,7 @@ describe("skill owner lock", () => {
         await createPostgresSkillLock(unreachable)
           .run(bob, async () => "ran")
           .catch(refusal),
-      ).toEqual(["unavailable", "Skills are unavailable right now. Try again later."]);
+      ).toEqual("Could not take the skill owner lock.");
       release();
       await held;
     } finally {
