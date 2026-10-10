@@ -29,6 +29,10 @@ describe("previewSnippet", () => {
     );
   });
 
+  it("keeps a file name in code as written", () => {
+    expect(previewSnippet("Check `__init__.py` now")).toBe("Check __init__.py now");
+  });
+
   it("returns an empty snippet when there is no message text", () => {
     expect(previewSnippet("")).toBe("");
     expect(previewSnippet("   **  **   ")).toBe("");
