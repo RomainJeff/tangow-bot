@@ -30,6 +30,8 @@ export interface BotCommands {
   rotateWebhookSecret(botId: string): Promise<string>;
   /** The lifecycle actions the sidebar menu already runs, with the same confirmations. */
   botAction(botId: string, action: BotAction): void;
+  /** Reads the bot and its routines again; rejects when either read fails. */
+  refresh(botId: string): Promise<void>;
   /** Changes whenever a run of the open bot ends. */
   readonly activityEpoch: number;
   /** Opens the run's thread on the message that started it, closing the panel if it hides that thread. */
@@ -41,6 +43,7 @@ export interface BotCommands {
 export interface BotCommandDeps {
   setBots: Dispatch<SetStateAction<Bot[]>>;
   setRoutines: Dispatch<SetStateAction<Routine[]>>;
+  setRoutinesBotId: Dispatch<SetStateAction<string | null>>;
   activeBotId: RefObject<string | undefined>;
   /**
    * Replaces a roster refresh already in flight, which would carry the bot as it
@@ -73,13 +76,15 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
       const request = order.next();
       const bot = await write();
       const merge = order.write(botId, request, sent, bot);
-      if (merge) {
-        depsRef.current.supersedeBotsRefresh();
-        depsRef.current.setBots((list) =>
-          list.map((item) => (item.id === botId ? merge(item) : item)),
-        );
-      }
+      if (merge) mergeIntoRoster(botId, merge);
       return bot;
+    }
+
+    function mergeIntoRoster(botId: string, merge: (bot: Bot) => Bot) {
+      depsRef.current.supersedeBotsRefresh();
+      depsRef.current.setBots((list) =>
+        list.map((item) => (item.id === botId ? merge(item) : item)),
+      );
     }
 
     /** Routines belong to the open bot only: an answer for another bot leaves them alone. */
@@ -97,11 +102,13 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
       setComputer: (botId, mode) =>
         writeBot(botId, ["computerMode"], () => rpc.bots.setComputer({ botId, mode })),
       async createRoutine(botId, payload) {
+        const request = order.next();
         const routine = await rpc.routines.create({
           botId,
           timezone: localTimezone(),
           ...payload,
         });
+        order.write(`routine:${routine.id}`, request, [], routine);
         setOpenBotRoutines(botId, (list) => [
           ...list.filter((item) => item.id !== routine.id),
           routine,
@@ -121,6 +128,7 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
       },
       async removeRoutine(botId, routineId) {
         await rpc.routines.remove({ routineId });
+        order.close(`routine:${routineId}`);
         setOpenBotRoutines(botId, (list) => list.filter((item) => item.id !== routineId));
       },
       async testRun(botId, routineId) {
@@ -140,6 +148,30 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
         return secret;
       },
       botAction: (botId, action) => depsRef.current.botAction(botId, action),
+      async refresh(botId) {
+        const request = order.next();
+        const [bot, routines] = await Promise.all([
+          rpc.bots.get({ botId }),
+          rpc.routines.list({ botId }),
+        ]);
+        if (order.read(botId, request)) mergeIntoRoster(botId, () => bot);
+        if (depsRef.current.activeBotId.current !== botId) return;
+        if (!order.read(`routines:${botId}`, request)) return;
+        // Per routine, the read lands unless a write answered meanwhile: then what that write left
+        // stays, a routine created during the read included and a removed one still gone.
+        const fresh = (id: string) => order.read(`routine:${id}`, request);
+        depsRef.current.setRoutines((list) => {
+          const held = list.filter((item) => item.botId === botId);
+          const read = new Set(routines.map((item) => item.id));
+          return [
+            ...routines.flatMap((item) =>
+              fresh(item.id) ? [item] : held.filter((kept) => kept.id === item.id),
+            ),
+            ...held.filter((item) => !read.has(item.id) && !fresh(item.id)),
+          ];
+        });
+        depsRef.current.setRoutinesBotId(botId);
+      },
       openRun(row) {
         if (depsRef.current.panelCoversThread.current) depsRef.current.closePanel();
         depsRef.current.navigate(

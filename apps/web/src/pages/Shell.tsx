@@ -2582,6 +2582,7 @@ export function ShellPage() {
   const botCommands = useBotCommands({
     setBots,
     setRoutines,
+    setRoutinesBotId,
     activeBotId,
     supersedeBotsRefresh: () => {
       if (botsRefreshInFlight.current > 0) void refreshBots().catch(() => undefined);

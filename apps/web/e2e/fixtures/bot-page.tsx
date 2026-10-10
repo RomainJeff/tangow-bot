@@ -28,6 +28,8 @@ import "../../src/styles.css";
  *   activity=empty|error (what reading the activity answers; by default 39 routine runs
  *   and 3 creations, 30 a page; a routine's page reads only its runs)
  *   fail=1 (every save fails)   refuse=1 (the server refuses a computer change)   theme=dark
+ *   read=loading|error (the page's read of the bot and its routines never answers, or fails
+ *   until "Fail reads" is unchecked; the routines stay unknown until a read answers)
  * Writes go through in-memory commands that answer after 400 ms; reads are
  * answered by a stubbed fetch with fixed data. A refusal carries the server's
  * reason like a real RPC error; fail=1 fails like a dropped connection.
@@ -37,6 +39,7 @@ const NEW = params.get("new") === "1";
 const BUSY = params.get("busy") === "1";
 const ACTIVITY = params.get("activity");
 const REFUSE = params.get("refuse") === "1";
+const READ = params.get("read");
 const SAVE_DELAY = 400;
 
 applyResolvedAppearance(params.get("theme") === "dark" ? "dark" : "light");
@@ -406,6 +409,10 @@ function Fixture() {
   const [fail, setFail] = useState(params.get("fail") === "1");
   const failRef = useRef(fail);
   failRef.current = fail;
+  const [routinesRead, setRoutinesRead] = useState(READ === null);
+  const [failReads, setFailReads] = useState(READ === "error");
+  const failReadsRef = useRef(failReads);
+  failReadsRef.current = failReads;
   const webhookKeyRef = useRef("whsec_fixture_0000");
   const tab = params.get("tab");
   const [view, setView] = useState<BotPageView>({
@@ -470,6 +477,12 @@ function Fixture() {
         return webhookKeyRef.current;
       },
       botAction: (_botId, action) => console.info(`bot action: ${action}`),
+      async refresh() {
+        await delay(150);
+        if (READ === "loading") await new Promise(() => undefined);
+        if (failReadsRef.current) throw new Error("The server did not answer.");
+        setRoutinesRead(true);
+      },
       activityEpoch: 0,
       openRun: (row) => console.info(`open run from ${row.sourceMessageId ?? "the end"}`),
       skillsChanged: () => undefined,
@@ -493,6 +506,15 @@ function Fixture() {
           />
           Fail saves
         </label>
+        <label className="ms-4 flex items-center gap-2 text-meta text-muted-foreground">
+          <input
+            type="checkbox"
+            data-testid="fixture-fail-reads"
+            checked={failReads}
+            onChange={(event) => setFailReads(event.target.checked)}
+          />
+          Fail reads
+        </label>
       </main>
       <aside
         data-testid="side-panel"
@@ -506,7 +528,7 @@ function Fixture() {
         <BotPage
           bot={bot}
           userId="user-1"
-          routines={routines}
+          routines={routinesRead ? routines : null}
           memoryProviderConfigured={false}
           view={view}
           onView={setView}
