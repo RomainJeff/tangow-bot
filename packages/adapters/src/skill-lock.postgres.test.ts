@@ -2,29 +2,26 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildSkillMd } from "@rakazo/core";
-import { createDb, createPool } from "@rakazo/db";
+import { createPool } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
+import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
   process.env.VERIFY_DATABASE && databaseUrl ? describe.sequential : describe.skip;
 
-/** Fresh copies of the modules, so their in-process queue is not shared: two processes, in effect. */
+/** A fresh copy of the module, so its in-process queue is not shared: two processes, in effect. */
 async function anotherProcess() {
   vi.resetModules();
-  const [{ createPostgresSkillLock }, { createSkillLibrary }] = await Promise.all([
-    import("./skill-lock.js"),
-    import("./skill-library.js"),
-  ]);
-  return { createPostgresSkillLock, createSkillLibrary };
+  return (await import("./skill-lock.js")).createPostgresSkillLock;
 }
 
 describePostgres("skill owner lock (PostgreSQL contract)", () => {
   it("serializes one owner's changes across two processes", async () => {
     const apiPool = createPool(databaseUrl!, { poolMax: 2 });
     const workerPool = createPool(databaseUrl!, { poolMax: 2 });
-    const apiLock = (await anotherProcess()).createPostgresSkillLock(apiPool);
-    const workerLock = (await anotherProcess()).createPostgresSkillLock(workerPool);
+    const apiLock = (await anotherProcess())(apiPool);
+    const workerLock = (await anotherProcess())(workerPool);
     const owner = { spaceId: "skill-lock-test", userId: `pid-${process.pid}` };
     const log: string[] = [];
     const change = (name: string) => async () => {
@@ -45,43 +42,31 @@ describePostgres("skill owner lock (PostgreSQL contract)", () => {
     }
   });
 
-  it("orders two processes writing one skill into two versions, losing neither", async () => {
+  it("orders two processes editing one skill, losing neither edit", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-lock-pg-"));
-    const processes = await Promise.all(
-      ["api", "worker"].map(async (name) => {
-        const db = createDb(databaseUrl!, { poolMax: 4, applicationName: name });
-        const lockPool = createPool(databaseUrl!, { poolMax: 2 });
-        const modules = await anotherProcess();
-        const library = modules.createSkillLibrary({
-          prisma: db.prisma,
-          dataDir,
-          lock: modules.createPostgresSkillLock(lockPool),
-        });
-        const close = async () => {
-          await db.prisma.$disconnect();
-          await db.pool.end();
-          await lockPool.end();
-        };
-        return { name, library, close };
-      }),
+    const owner = { spaceId: "skill-lock-test", userId: `pid-${process.pid}` };
+    const root = userSkillsRoot(dataDir, owner);
+    const pools = ["api", "worker"].map((name) =>
+      createPool(databaseUrl!, { poolMax: 2, applicationName: name }),
     );
-    const owner = { spaceId: "skill-library-test", userId: `pid-${process.pid}` };
-    const content = (body: string) => ({
-      kind: "skill-md" as const,
-      name: "Deploy",
-      content: buildSkillMd({ name: "Deploy", description: "About Deploy", body }),
-    });
+    const locks = [(await anotherProcess())(pools[0]!), (await anotherProcess())(pools[1]!)];
+    const content = buildSkillMd({ name: "Deploy", description: "About Deploy", body: "Base" });
     try {
-      const [api, worker] = processes;
-      await api?.library.forOwner(owner).create(content("Base"));
+      await writeUserSkill(root, { name: "Deploy", content }, "create");
       await Promise.all(
-        processes.map((p) => p.library.forOwner(owner).update("user:deploy", content(p.name))),
+        locks.map((lock, i) =>
+          lock.run(owner, async () => {
+            const [current] = await listUserSkills(root);
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            const edited = `${current?.content.trimEnd()}\nedit ${i}\n`;
+            await writeUserSkill(root, { name: "Deploy", content: edited }, "replace");
+          }),
+        ),
       );
-      const versions = await worker?.library.forOwner(owner).versions("user:deploy");
-      expect(versions?.map((v) => v.seq)).toEqual([3, 2, 1]);
-      expect(new Set(versions?.map((v) => v.fingerprint)).size).toBe(3);
+      const [deploy] = await listUserSkills(root);
+      expect(deploy?.content.trimEnd().split("\n").slice(-2).sort()).toEqual(["edit 0", "edit 1"]);
     } finally {
-      await Promise.all(processes.map((p) => p.close()));
+      await Promise.all(pools.map((pool) => pool.end()));
       await rm(dataDir, { recursive: true, force: true });
     }
   });
