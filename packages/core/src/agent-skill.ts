@@ -234,6 +234,29 @@ export function mergeBuiltinSkills<T extends { name: string }>(
   return [...builtins.filter((skill) => !findSkillByName(userSkills, skill.name)), ...userSkills];
 }
 
+const SLASH_SKILL_LIMIT = 8;
+
+/**
+ * Skills the composer `/` picker offers for a query. Non-builtin skills (the user's own and
+ * plugin skills) come before builtins so a growing builtin catalog never pushes them out of
+ * the capped list.
+ */
+export function slashSkillOptions<
+  T extends { name: string; description: string; source: SkillSource },
+>(skills: readonly T[], query: string): T[] {
+  const needle = query.trim().toLowerCase();
+  const matches = skills.filter(
+    (skill) =>
+      !needle ||
+      skill.name.toLowerCase().includes(needle) ||
+      skill.description.toLowerCase().includes(needle),
+  );
+  return [
+    ...matches.filter((skill) => skill.source !== "builtin"),
+    ...matches.filter((skill) => skill.source === "builtin"),
+  ].slice(0, SLASH_SKILL_LIMIT);
+}
+
 const SKILL_SEARCH_LIMIT = 10;
 
 /**

@@ -92,7 +92,20 @@ const components: Components = {
   pre({ node: _node, ...props }) {
     return <CodeBlock {...props} />;
   },
+  // react-markdown turns a column's alignment into an inline physical
+  // `text-align`, which beats the stylesheet's logical mapping and breaks RTL.
+  th({ node, style: _style, ...props }) {
+    return <th {...props} align={cellAlign(node)} />;
+  },
+  td({ node, style: _style, ...props }) {
+    return <td {...props} align={cellAlign(node)} />;
+  },
 };
+
+function cellAlign(node: { properties?: Record<string, unknown> } | undefined) {
+  const align = node?.properties?.align;
+  return align === "left" || align === "center" || align === "right" ? align : undefined;
+}
 
 // Untrusted content: drop every image node so no remote request is made,
 // whatever the URL scheme (threat model S-R1). Nothing is rendered in its place.

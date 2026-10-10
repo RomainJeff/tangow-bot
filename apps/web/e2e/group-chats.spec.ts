@@ -146,12 +146,18 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   const transcript = page.getByTestId("transcript");
   await expect(transcript.getByText("Researcher", { exact: true }).first()).toBeVisible();
   await expect(transcript.getByText("Research Writer", { exact: true }).first()).toBeVisible();
-  const researcherSpeak = transcript
-    .locator("div")
+  const researcherRow = transcript
+    .locator("[data-message-id]")
     .filter({ has: page.getByText("Researcher", { exact: true }) })
-    .filter({ has: page.getByRole("button", { name: "Speak this reply" }) })
-    .first()
-    .getByRole("button", { name: "Speak this reply" });
+    .first();
+  const researcherSpeak = researcherRow.getByRole("button", { name: "Speak this reply" });
+  // The hover pill only takes pointer events while its row is hovered.
+  await expect
+    .poll(async () => {
+      await researcherRow.hover();
+      return researcherSpeak.evaluate((element) => getComputedStyle(element).pointerEvents);
+    })
+    .toBe("auto");
   const [speechRequest] = await Promise.all([
     page.waitForRequest(
       (request) => request.url().includes("/api/voice/speak") && request.method() === "POST",
@@ -193,10 +199,14 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   await page.getByRole("button", { name: "Send answer" }).click();
   await expect(page.getByText("Answered: Paris", { exact: true })).toBeVisible({ timeout: 30_000 });
 
-  const firstMessage = transcript.locator("[data-message-id]").first();
-  await firstMessage.hover();
-  const replyButton = firstMessage.getByRole("button", { name: "Reply" });
-  await expect(replyButton).toBeVisible();
+  // Only bot replies carry Reply; your own messages have no hover pill.
+  const replyButton = researcherRow.getByRole("button", { name: "Reply", exact: true });
+  await expect
+    .poll(async () => {
+      await researcherRow.hover();
+      return replyButton.evaluate((element) => getComputedStyle(element).pointerEvents);
+    })
+    .toBe("auto");
   await replyButton.click();
   await expect(page.getByTestId("reply-chip")).toContainText(/Replying to/);
   await page.getByRole("button", { name: "Cancel reply" }).click();

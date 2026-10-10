@@ -9,14 +9,13 @@ import type {
 import { routineJobKey, runContinueJob, runJobKey } from "@rakazo/adapter-kit";
 import { type Actor, type Bot, type ComputerMode, GROUP_MEMBER_MIN } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
   cancelRunsInTransaction,
   computerScopeKey,
   createRepos,
   createThreadMessageInTransaction,
   expireComputerExecutionLeases,
-  type Prisma,
-  type PrismaClient,
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -196,6 +195,7 @@ type BotLifecycleDeps = {
   sandbox: SandboxProvider;
   home: AgentHomeStore;
   jobs: JobPublisher;
+  events: ThreadEvents;
   dataDir?: string;
   artifacts?: ArtifactStore;
 };

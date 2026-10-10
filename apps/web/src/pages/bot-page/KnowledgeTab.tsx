@@ -38,7 +38,7 @@ export function KnowledgeTab({
         <AgentFiles key={bot.id} botId={bot.id} />
       </KnowledgeGroup>
       <KnowledgeGroup label={t`Skills`} testId="bot-skills">
-        <AgentSkills botId={bot.id} />
+        <AgentSkills botId={bot.id} onChanged={page.commands.skillsChanged} />
       </KnowledgeGroup>
       <ScratchpadSection botId={bot.id} />
     </div>
