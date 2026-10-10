@@ -332,7 +332,7 @@ describe("projectInferenceTurns", () => {
       },
       { role: "user", content: "[context] The user took control of the computer." },
       { role: "user", content: "[context] A webhook of routine rtn_launch started this run." },
-      { role: "assistant", content: "" },
+      { role: "assistant", content: "Publish the post now?\nA. Publish now\nB. Wait for Tuesday" },
     ]);
   });
 

@@ -86,7 +86,7 @@ function renderTurn(
     case "run.message":
       return speakerTurn(
         segment.botId,
-        blocksToAgentHistoryText(segment.blocks, botNames),
+        historyText(segment.blocks, botNames),
         options,
         replayParts(segment.blocks, botNames),
       );
@@ -95,7 +95,7 @@ function renderTurn(
         role: "user",
         content: [
           replyContext(segment, targetOf, botNames),
-          blocksToAgentHistoryText(segment.payload.blocks, botNames),
+          historyText(segment.payload.blocks, botNames),
         ]
           .filter(Boolean)
           .join("\n\n"),
@@ -156,6 +156,20 @@ function speakerTurn(
     return { role: "user", content: renderBotMessageBlock(name, content) };
   }
   return parts ? { role: "assistant", content, parts } : { role: "assistant", content };
+}
+
+function historyText(
+  blocks: readonly MessageBlock[],
+  botNames: ReadonlyMap<string, string> | undefined,
+): string {
+  return blocksToAgentHistoryText(
+    blocks.map((block): MessageBlock => {
+      if (block.kind !== "choice") return block;
+      const options = block.options.map((option) => `${option.letter}. ${option.label}`);
+      return { kind: "text", text: [block.question, ...options].join("\n") };
+    }),
+    botNames,
+  );
 }
 
 /** Runs woken by an entry in the chain need no line: that entry already says why. */
@@ -219,7 +233,7 @@ function replyContext(
   const excerpt = !emoji ? replyTo.quote?.trim() : undefined;
   const quoted = excerpt
     ? { quotedText: excerpt.slice(0, REPLY_QUOTE_MAX_LENGTH) }
-    : quotedContent(blocksToAgentHistoryText(target.blocks, botNames));
+    : quotedContent(historyText(target.blocks, botNames));
   const quote = JSON.stringify({ messageId: replyTo.entryId, role: target.role, ...quoted })
     .replaceAll("<", "\\u003c")
     .replaceAll(">", "\\u003e");
@@ -270,7 +284,7 @@ function replayParts(
         (step) => step.calls?.length === step.count && step.calls.every((call) => call.id),
       )
     ) {
-      pushText(blocksToAgentHistoryText([block], botNames));
+      pushText(historyText([block], botNames));
       continue;
     }
     parts.push({
