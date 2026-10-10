@@ -15,7 +15,7 @@ import {
   saveKey,
 } from "@rakazo/core";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { rpc } from "./api";
+import { rpc, selectedSpaceId } from "./api";
 import { botRecords, botSaves, modelCatalogRead, viewer, voicesRead } from "./bot-page-state";
 import type { ReadState, SharedRead } from "./shared-read";
 
@@ -147,12 +147,13 @@ export function loadModelCatalog(): Promise<ModelCatalog> {
   return Promise.all([
     rpc<ModelCredential[]>("models/credentials"),
     rpc<ModelCatalogEntry[]>("models/list"),
-    readViewer(),
+    rpc<Me>("me"),
   ]).then(([credentials, catalog, me]) => ({ credentials, catalog, me }));
 }
 
+/** The read of the space the calls go to: `loadModelCatalog` reads what the server says there. */
 export function selectedModelCatalog(): SharedRead<ModelCatalog> {
-  return modelCatalogRead;
+  return modelCatalogRead(selectedSpaceId() ?? "");
 }
 
 /** The connections, catalog and space default a bot's model is chosen from. */
