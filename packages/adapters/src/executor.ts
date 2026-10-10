@@ -353,7 +353,6 @@ import {
 } from "./scratchpad-tools.js";
 import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
-import { createSkillLibrary } from "./skill-library.js";
 import { writeSkillLines } from "./skill-lines.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
 import {
@@ -1005,8 +1004,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
   const learning = deps.skillLearning ?? "off";
-  const skillDeps = { prisma: deps.prisma, dataDir: deps.dataDir ?? "./data", learning };
-  const skillLibrary = createSkillLibrary({ ...skillDeps, lock: deps.skillLock });
+  const skillDeps = {
+    prisma: deps.prisma,
+    dataDir: deps.dataDir ?? "./data",
+    learning,
+    lock: deps.skillLock,
+  };
   // Never fatal: the run already ended, and the sweep adds a line that failed here.
   const writeRunSkillLines = (runId: string) =>
     writeSkillLines(
@@ -3280,14 +3283,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if ("ok" in result) savedSkill = true;
             return finish(result);
           };
-          const skillWriter = () =>
-            skillLibrary.forBot(skillOwner, {
-              botId: bot.id,
-              botName: bot.name,
-              runId,
-              toolCallId: effectKey,
-              secrets: runSecrets,
-            });
           if (name === "skill_create" || name === "skill_update") {
             const draftPath = typeof args.path === "string" ? args.path.trim() : "";
             const files = draftPath
@@ -3299,10 +3294,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 )
               : undefined;
             if (files && "error" in files) return finish(files);
-            const writer = skillWriter();
             if (name === "skill_create") {
               return saved(
-                await skillCreateFromTool(skillDeps, skillOwner, writer, {
+                await skillCreateFromTool(skillDeps, skillOwner, runSecrets, {
                   files,
                   name: args.name ? String(args.name) : undefined,
                   description: args.description ? String(args.description) : undefined,
@@ -3312,7 +3306,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               );
             }
             return saved(
-              await skillUpdateFromTool(skillDeps, skillOwner, writer, {
+              await skillUpdateFromTool(skillDeps, skillOwner, runSecrets, {
                 files,
                 name: args.name ? String(args.name) : undefined,
                 skillId: args.skillId ? String(args.skillId) : undefined,
@@ -3324,7 +3318,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "skill_delete") {
             return saved(
-              await skillDeleteFromTool(skillDeps, skillOwner, skillWriter(), {
+              await skillDeleteFromTool(skillDeps, skillOwner, {
                 name: args.name ? String(args.name) : undefined,
                 skillId: args.skillId ? String(args.skillId) : undefined,
               }),

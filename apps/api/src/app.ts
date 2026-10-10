@@ -57,15 +57,14 @@ import {
   PostgresRealtimeFanout,
   pipedreamConfigFromEnv,
   piSessionsRoot,
-  purgeUserSkills,
   pushTokenPath,
   reconcileComputerUpdates,
   removePiUserSessions,
+  removeUserSkillDirs,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
-  scheduleSkillLibraryRepair,
   toTeamChatInbound,
 } from "@rakazo/adapters";
 import { blockedAuthPaths, createAuth } from "@rakazo/auth";
@@ -360,7 +359,7 @@ export async function createApp(
       );
       await removePiUserSessions(env.dataDir, userId);
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
-      await purgeUserSkills(env.dataDir, userId);
+      await removeUserSkillDirs(env.dataDir, userId);
     },
   });
   const shutdown = new AbortController();
@@ -370,11 +369,6 @@ export async function createApp(
     applicationName: "rakazo-api-skill-lock",
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
-  const stopSkillSweep = scheduleSkillLibraryRepair({
-    prisma,
-    dataDir: env.dataDir,
-    lock: skillLock,
-  });
   const executor = createRunExecutor({
     prisma,
     skillLock,
@@ -448,6 +442,7 @@ export async function createApp(
 
   const router = createRouter({
     prisma,
+    skillLock,
     events,
     auth,
     jobs,
@@ -854,7 +849,6 @@ export async function createApp(
       // Abort in-flight continueRun boot waits before draining jobs so stop() cannot sit
       // on waitForComputerReady for the full boot-wait window during shared Postgres journeys.
       shutdown.abort();
-      stopSkillSweep();
       oauthLogins.abortAll();
       messagingStopped = true;
       clearMessagingRetryDelay?.();

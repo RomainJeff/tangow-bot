@@ -8,6 +8,7 @@
 import type { Stats } from "node:fs";
 import { createWriteStream } from "node:fs";
 import {
+  link,
   lstat,
   mkdir,
   mkdtemp,
@@ -119,8 +120,8 @@ export async function listUserSkills(root: string): Promise<UserSkillFile[]> {
 
 /**
  * "create" fails with EEXIST when a skill with the same key exists (the FS is the uniqueness
- * guard the DB index used to be). "replace" writes tmp + rename so a crash never leaves a
- * half-written SKILL.md.
+ * guard the DB index used to be). Both modes write a temp file first, then link (create) or
+ * rename (replace) it onto SKILL.md, so a failed or interrupted write never leaves a partial one.
  */
 export async function writeUserSkill(
   root: string,
@@ -129,13 +130,13 @@ export async function writeUserSkill(
 ): Promise<void> {
   const file = skillFile(root, skill.name);
   await mkdir(path.dirname(file), { recursive: true });
-  if (mode === "create") {
-    await writeFile(file, skill.content, { encoding: "utf8", flag: "wx" });
-    return;
-  }
   const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, skill.content, "utf8");
-  await rename(tmp, file);
+  try {
+    await writeFile(tmp, skill.content, "utf8");
+    await (mode === "create" ? link(tmp, file) : rename(tmp, file));
+  } finally {
+    await rm(tmp, { force: true });
+  }
 }
 
 /**
@@ -153,11 +154,15 @@ async function moveIntoSkillDir(from: string, dest: string): Promise<void> {
   }
   await rename(from, dest).catch(async (error: unknown) => {
     await rmdir(dest).catch(() => undefined);
-    if (hasCode(error, "ENOTEMPTY") || isExists(error)) {
-      throw Object.assign(new Error("A skill with that name already exists."), { code: "EEXIST" });
-    }
-    throw error;
+    throw asNameClash(error);
   });
+}
+
+/** A rename onto a folder another write filled: EEXIST, with no host path in the message. */
+function asNameClash(error: unknown): unknown {
+  return hasCode(error, "ENOTEMPTY") || isExists(error)
+    ? Object.assign(new Error("A skill with that name already exists."), { code: "EEXIST" })
+    : error;
 }
 
 /**
@@ -263,6 +268,7 @@ async function importSkillTree(
   await mkdir(root, { recursive: true });
   // No SKILL.md directly inside the wrapper, so listUserSkills never sees a half-imported skill.
   const wrapper = await mkdtemp(path.join(root, ".import-"));
+  let keepWrapper = false;
   try {
     const out = path.join(wrapper, "bundle");
     await mkdir(out);
@@ -273,19 +279,23 @@ async function importSkillTree(
     const dest = path.join(root, skillDirName(resolved.name));
     const old = target === "create" ? undefined : path.join(root, skillDirName(target.replace));
     if (old === dest) {
-      // The old folder waits in the wrapper (removed below) until the new one is in place.
+      // The old folder waits in the wrapper (removed below) until the new one is in place. If the
+      // swap fails it goes back; when an I/O failure stops that too, it stays in the wrapper.
       const aside = path.join(wrapper, "old");
       await rename(old, aside);
-      await rename(skillDir, dest).catch(async (error) => {
-        await rename(aside, dest);
-        throw error;
+      await rename(skillDir, dest).catch(async (error: unknown) => {
+        await rename(aside, dest).catch(() => {
+          keepWrapper = true;
+          getLogger().warn(`[skills] kept the replaced version of ${dest} in ${aside}`);
+        });
+        throw asNameClash(error);
       });
       return;
     }
     await moveIntoSkillDir(skillDir, dest);
     if (old) await rm(old, { recursive: true, force: true });
   } finally {
-    await rm(wrapper, { recursive: true, force: true });
+    if (!keepWrapper) await rm(wrapper, { recursive: true, force: true });
   }
 }
 

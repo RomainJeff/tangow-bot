@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildSkillMd } from "@rakazo/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isExists, renameUserSkill, writeUserSkill, writeUserSkillFiles } from "./skill-store.js";
+import {
+  isExists,
+  listUserSkills,
+  renameUserSkill,
+  replaceUserSkillFiles,
+  writeUserSkill,
+  writeUserSkillFiles,
+} from "./skill-store.js";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>();
@@ -37,6 +44,19 @@ const resolve = async (skillMd: string) => ({
   name: /^name: (.*)$/m.exec(skillMd)?.[1] ?? "",
   content: skillMd,
 });
+
+/** Every folder under `dir` whose SKILL.md reads `content`. */
+async function foldersHolding(dir: string, content: string): Promise<string[]> {
+  const found: string[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const child = path.join(dir, entry.name);
+    const skillMd = await readFile(path.join(child, "SKILL.md"), "utf8").catch(() => "");
+    if (skillMd === content) found.push(child);
+    found.push(...(await foldersHolding(child, content)));
+  }
+  return found;
+}
 
 describe("skill store under concurrent writers", () => {
   it("never removes the skill another write moved into the folder it claimed", async () => {
@@ -87,5 +107,60 @@ describe("skill store under concurrent writers", () => {
     expect(await readFile(path.join(dest, "SKILL.md"), "utf8")).toBe(md("Deploy", winner));
     expect((await readdir(dest)).sort()).toEqual(["SKILL.md", `${winner.toLowerCase()}.txt`]);
     expect(await readdir(root)).toEqual(["deploy"]);
+  });
+
+  it("keeps the old version in the wrapper when it cannot be put back after a failed swap", async () => {
+    const root = await tmpRoot();
+    const dest = path.join(root, "deploy");
+    await writeUserSkillFiles(
+      root,
+      [file("SKILL.md", md("Deploy", "Old")), file("scripts/old.sh", "old")],
+      resolve,
+    );
+    renameMock.mockImplementation(async (from, to) => {
+      if (to === dest && path.basename(String(from)) === "bundle") {
+        await writeUserSkill(root, { name: "Deploy", content: md("Deploy", "Theirs") }, "create");
+      }
+      return actual.rename(from, to);
+    });
+
+    const error = await replaceUserSkillFiles(
+      root,
+      "Deploy",
+      [file("SKILL.md", md("Deploy", "New"))],
+      resolve,
+    ).catch((e: unknown) => e);
+
+    expect(isExists(error)).toBe(true);
+    expect((error as Error).message).toBe("A skill with that name already exists.");
+    expect((await listUserSkills(root)).map((skill) => skill.content)).toEqual([
+      md("Deploy", "Theirs"),
+    ]);
+    const kept = await foldersHolding(root, md("Deploy", "Old"));
+    expect(kept).toHaveLength(1);
+    expect(await readFile(path.join(kept[0] ?? "", "scripts/old.sh"), "utf8")).toBe("old");
+  });
+
+  it("puts the old version back when the new folder cannot move in", async () => {
+    const root = await tmpRoot();
+    const dest = path.join(root, "deploy");
+    await writeUserSkill(root, { name: "Deploy", content: md("Deploy", "Old") }, "create");
+    renameMock.mockImplementation(async (from, to) => {
+      if (to === dest && path.basename(String(from)) === "bundle") {
+        throw Object.assign(new Error("denied"), { code: "EACCES" });
+      }
+      return actual.rename(from, to);
+    });
+
+    const error = await replaceUserSkillFiles(
+      root,
+      "Deploy",
+      [file("SKILL.md", md("Deploy", "New"))],
+      resolve,
+    ).catch((e: unknown) => e);
+
+    expect((error as Error).message).toBe("denied");
+    expect(await readdir(root)).toEqual(["deploy"]);
+    expect(await readFile(path.join(dest, "SKILL.md"), "utf8")).toBe(md("Deploy", "Old"));
   });
 });
