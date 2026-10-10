@@ -279,7 +279,7 @@ const itemBase = { id: EntryId, ts: IsoDate };
 const noteFields = { id: true, ts: true, type: true, payload: true } as const;
 const noteKind = { kind: z.literal("note") };
 
-/** What a thread renders, one item per kind. A run folds into one message and one run item. */
+/** What a thread renders, one item per kind. A run becomes a run item and a message per stretch. */
 export const ThreadItemSchema = z.discriminatedUnion("kind", [
   z.discriminatedUnion("role", [
     z.object({

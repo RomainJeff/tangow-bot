@@ -79,7 +79,7 @@ export async function readTailFromEnd(
       let lineEnd = chunk.length;
       for (let index = chunk.length - 1; index >= 0; index -= 1) {
         if (chunk[index] !== NEWLINE) continue;
-        if (visit(concat([chunk.subarray(index + 1, lineEnd), ...pieces.reverse()]))) {
+        if (visit(concat([chunk.subarray(index + 1, lineEnd), ...pieces.toReversed()]))) {
           return chain.reverse();
         }
         pieces = [];
@@ -87,7 +87,7 @@ export async function readTailFromEnd(
       }
       pieces.push(chunk.subarray(0, lineEnd));
     }
-    if (visit(concat(pieces.reverse())) || wanted === undefined) return chain.reverse();
+    if (visit(concat(pieces.toReversed())) || wanted === undefined) return chain.reverse();
     throw new SessionEntryDecodeError(
       `Invalid session entry at ${wantedBy}: its parent ${wanted} is missing from the file`,
     );

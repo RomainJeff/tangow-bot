@@ -35,7 +35,7 @@ type ReplyTarget = { role: "user" | "bot"; blocks: MessageBlock[] };
  * The history a bot reads, from a session's chain oldest first. The chain starts at its last
  * `compaction` entry, whose summary becomes the first turn. A tool call whose result is missing
  * from the chain, cut by a rewind or still running, is left out so no call replays unanswered.
- * A cancelled run's words are left out too: a half-finished answer is not history to build on.
+ * A cancelled run's words are left out too, since a half-finished answer is no history to build on.
  */
 export function projectInferenceTurns(
   entries: readonly SessionEntry[],

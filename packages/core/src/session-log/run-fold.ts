@@ -7,24 +7,16 @@ import type {
 } from "@rakazo/contracts";
 import { appendToolCallSegment } from "../events.js";
 
-type FoldedEntry = SessionEntryOf<
-  | "assistant.text"
-  | "assistant.reasoning"
-  | "assistant.ask"
-  | "assistant.choice"
-  | "tool.call"
-  | "tool.result"
->;
-
-const STRETCH_TYPES = new Set<SessionEntryType>([
+const FOLDED_TYPES = [
   "assistant.text",
   "assistant.reasoning",
   "assistant.ask",
   "assistant.choice",
   "tool.call",
   "tool.result",
-  "subagent",
-]);
+] as const;
+type FoldedEntry = SessionEntryOf<(typeof FOLDED_TYPES)[number]>;
+const STRETCH_TYPES = new Set<SessionEntryType>([...FOLDED_TYPES, "subagent"]);
 
 type RunMessage = {
   type: "run.message";
@@ -98,7 +90,7 @@ export function foldRuns(
   return segments;
 }
 
-/** Providers reuse call ids such as `call_0` from one run to the next, so a call is its run's. */
+/** Providers reuse call ids such as `call_0` from run to run, so a call pairs within its run. */
 export function toolCallKey(entry: SessionEntryOf<"tool.call" | "tool.result" | "subagent">) {
   return JSON.stringify([entry.runId, entry.payload.callId]);
 }
