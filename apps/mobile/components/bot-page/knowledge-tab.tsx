@@ -4,13 +4,18 @@ import { View } from "react-native";
 import { rpc } from "../../lib/api";
 import type { BotPageContext } from "../../lib/bot-page";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
+import { FileList } from "./files";
 import { Group, LoadFailed, LoadingRows, QuietLine, Row, useFocusedRead } from "./kit";
 
-/** What the bot knows: its memory. */
+/** What the bot knows: its memory and the files on its computer. */
 export function KnowledgeTab({ page, epoch }: { page: BotPageContext; epoch: number }) {
+  const { t } = useI18n();
   return (
     <View style={{ gap: 28 }}>
       <MemoryGroup page={page} epoch={epoch} />
+      <Group label={t("Files")}>
+        <FileList botId={page.bot.id} path="" shown={5} epoch={epoch} />
+      </Group>
     </View>
   );
 }

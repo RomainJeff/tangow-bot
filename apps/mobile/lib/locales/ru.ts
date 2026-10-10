@@ -756,8 +756,13 @@ export const RU_MESSAGES: Record<string, string> = {
   "Shape {number}": "Форма {number}",
   "Voice and replies": "Голос и ответы",
   "What it does, in one line": "Чем он занят, одной строкой",
+  "Could not read this file": "Не удалось прочитать файл",
+  Files: "Файлы",
   Knowledge: "Знания",
   Memory: "Память",
+  "No files yet": "Пока нет файлов",
   "Nothing remembered yet": "Пока ничего не запомнено",
   Settings: "Настройки",
+  "{size} KB": "{size} КБ",
+  "{size} MB": "{size} МБ",
 };
