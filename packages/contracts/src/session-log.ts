@@ -97,7 +97,7 @@ const AttachmentAddedEntry = entry("attachment.added", z.object({ artifactId: Id
 const SessionTitleEntry = entry("session.title", z.object({ title: z.string() }));
 const SystemNoteEntry = entry("system.note", z.object({ text: z.string() }));
 
-export const SessionEntrySchema = z.discriminatedUnion("type", [
+const EntryShapes = z.discriminatedUnion("type", [
   entry("user.message", UserMessagePayload),
   runEntry("assistant.text", z.object({ blocks: z.array(MessageBlock) })),
   runEntry("assistant.reasoning", z.object({ text: z.string() })),
@@ -165,16 +165,48 @@ export const SessionEntrySchema = z.discriminatedUnion("type", [
   AttachmentAddedEntry,
   SessionTitleEntry,
   SystemNoteEntry,
-  entry("compaction", z.object({ summary: z.string(), coveredUpToSeq: EntrySeq })),
+  entry(
+    "compaction",
+    z.object({
+      summary: z.string(),
+      /**
+       * The seq of the compaction's parent, the last entry it summarizes, so nothing on the chain
+       * sits between them.
+       */
+      coveredUpToSeq: EntrySeq,
+    }),
+  ),
   z.object({
     ...envelope,
     parentId: EntryId,
     type: z.literal("rewind"),
     payload: z.object({ reason: z.string().optional() }),
   }),
-  z.object({ ...envelope, parentId: z.null(), type: z.literal("clear"), payload: z.object({}) }),
+  z.object({
+    ...envelope,
+    parentId: z.null(),
+    type: z.literal("clear"),
+    payload: z.strictObject({}),
+  }),
   entry("harness.session", z.object({ harness: z.string(), sessionId: z.string() })),
 ]);
+
+export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
+  if (entry.parentId === null && entry.type !== "clear" && entry.seq !== 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["parentId"],
+      message: "Only a clear entry or the first entry of a session has no parent",
+    });
+  }
+  if (entry.type === "compaction" && entry.payload.coveredUpToSeq >= entry.seq) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["payload", "coveredUpToSeq"],
+      message: "A compaction covers only entries before it",
+    });
+  }
+});
 export type SessionEntry = z.infer<typeof SessionEntrySchema>;
 export type SessionEntryType = SessionEntry["type"];
 export type SessionEntryOf<T extends SessionEntryType> = Extract<SessionEntry, { type: T }>;

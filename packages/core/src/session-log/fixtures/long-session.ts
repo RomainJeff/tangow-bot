@@ -27,8 +27,8 @@ export function longSessionJsonl(options: {
       ts: new Date(Date.UTC(2026, 9, 10) + seq * 1000).toISOString(),
     };
     const body =
-      seq % options.compactionEvery === 0
-        ? { type: "compaction", payload: { summary: FILLER, coveredUpToSeq: seq } }
+      seq > 0 && seq % options.compactionEvery === 0
+        ? { type: "compaction", payload: { summary: FILLER, coveredUpToSeq: seq - 1 } }
         : rewinds
           ? { type: "rewind", payload: {} }
           : exchangeEntry(seq);
