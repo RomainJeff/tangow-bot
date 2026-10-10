@@ -316,6 +316,12 @@ describe("contracts", () => {
         notificationsEnabled: true,
         promptSnippet: "Review the report",
         updatedAt: "2026-08-26T00:00:01.000Z",
+        routineId: null,
+        routineName: null,
+        sourceMessageId: "message-1",
+        startedAt: null,
+        completedAt: null,
+        failureKind: null,
       }).success,
     ).toBe(true);
     expect(RunSchema.safeParse({ ...run, trigger: "webhook" }).success).toBe(true);
