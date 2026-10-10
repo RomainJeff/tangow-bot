@@ -57,6 +57,7 @@ const store = createSaveStore();
 let container: HTMLElement;
 let root: Root;
 let updateBot: ReturnType<typeof vi.fn>;
+let refresh: ReturnType<typeof vi.fn<(botId: string) => Promise<void>>>;
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -72,6 +73,7 @@ beforeEach(() => {
   api.me.mockResolvedValue(null);
   api.voice.voices.mockResolvedValue([]);
   updateBot = vi.fn(async (_botId: string, patch: Partial<Bot>) => ({ ...BOT, ...patch }));
+  refresh = vi.fn(async () => undefined);
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -94,6 +96,7 @@ async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[]
     updateBot: updateBot as BotCommands["updateBot"],
     setComputer: vi.fn(),
     botAction: vi.fn(),
+    refresh,
     activityEpoch: 0,
     openRun: vi.fn(),
   } as Partial<BotCommands> as BotCommands;
@@ -200,6 +203,48 @@ it("is busy until the bot's routines are read", async () => {
 
   await render({ tab: "settings", detail: null });
   expect(page()?.hasAttribute("aria-busy")).toBe(false);
+});
+
+it("says Could not load with Retry when a first read fails, and Retry reads again", async () => {
+  refresh.mockRejectedValueOnce(new Error("offline"));
+  await render({ tab: "routines", detail: null }, { routines: null });
+  const panel = () => container.querySelector('[role="tabpanel"]')!;
+  const page = () => container.querySelector('[data-testid="bot-page"]')!;
+  expect(panel().textContent).toBe("Could not load · Retry");
+  expect(page().hasAttribute("aria-busy")).toBe(false);
+
+  await act(async () => panel().querySelector("button")!.click());
+
+  expect(refresh.mock.calls).toEqual([["bot-1"], ["bot-1"]]);
+  expect(panel().textContent).toBe("");
+  expect(page().getAttribute("aria-busy")).toBe("true");
+});
+
+it("says Could not load in place of a routine opened before the routines could be read", async () => {
+  refresh.mockRejectedValueOnce(new Error("offline"));
+  await render(
+    { tab: "routines", detail: { kind: "routine", routineId: "r-1" } },
+    { routines: null },
+  );
+  expect(container.querySelector('[data-testid="bot-page"]')?.textContent).toContain(
+    "Could not load · Retry",
+  );
+  expect(onView).not.toHaveBeenCalled();
+});
+
+it("reads the bot again on each tab and when the window gains focus, never an archived one", async () => {
+  await render({ tab: "settings", detail: null });
+  await render({ tab: "routines", detail: null });
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(refresh.mock.calls).toEqual([["bot-1"], ["bot-1"], ["bot-1"]]);
+
+  refresh.mockClear();
+  await render(
+    { tab: "activity", detail: null },
+    { bot: { ...BOT, archivedAt: "2026-10-02T08:00:00.000Z" } as Bot },
+  );
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(refresh).not.toHaveBeenCalled();
 });
 
 it("fills a new routine from the latest skill picked, even when the form is already open", async () => {

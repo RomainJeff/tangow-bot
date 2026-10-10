@@ -23,13 +23,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
 import { BotActivity } from "./BotActivity";
 import { BotHero } from "./BotHero";
 import type { BotPageContext } from "./page-kit";
-import { useBotField, useConfirm } from "./page-kit";
+import { PendingRead, useBotField, useConfirm } from "./page-kit";
 import { RoutineCreateForm } from "./RoutineCreateForm";
 import { RoutineDetail } from "./RoutineDetail";
 import { RoutinesTab } from "./RoutinesTab";
@@ -99,6 +99,24 @@ export function BotPage({
     if (missingRoutine) onView({ tab: "routines", detail: null });
   }, [missingRoutine, onView]);
 
+  // The bot or its routines may have changed elsewhere: on another device, or by the bot during
+  // a run (a run ending renews `commands`). Read them again on open, on each tab, on focus.
+  const [readFailed, setReadFailed] = useState(false);
+  const refresh = useCallback(
+    () =>
+      void commands.refresh(bot.id).then(
+        () => setReadFailed(false),
+        () => setReadFailed(true),
+      ),
+    [commands, bot.id],
+  );
+  useEffect(() => {
+    if (archived) return;
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [refresh, archived, view.tab]);
+
   // Focus follows the editor: into it when it opens (a text editor focuses its
   // own field), back to the row that opened it when it closes.
   const backButton = useRef<HTMLButtonElement>(null);
@@ -115,7 +133,7 @@ export function BotPage({
     <div
       ref={root}
       data-testid="bot-page"
-      aria-busy={(!archived && routines === null) || undefined}
+      aria-busy={(!archived && routines === null && !readFailed) || undefined}
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
@@ -165,7 +183,11 @@ export function BotPage({
               confirm={confirm}
               onDeleted={toRoutines}
             />
-          ) : null}
+          ) : (
+            <div className="px-4 pt-5">
+              <PendingRead failed={readFailed} onRetry={refresh} />
+            </div>
+          )}
         </div>
       ) : detail?.kind === "routine-new" ? (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto">
@@ -217,7 +239,13 @@ export function BotPage({
                 />
               </TabsContent>
               <TabsContent value="routines" className="px-4">
-                <RoutinesTab page={page} routines={routines} onOpen={open} />
+                <RoutinesTab
+                  page={page}
+                  routines={routines}
+                  failed={readFailed}
+                  onOpen={open}
+                  onRetry={refresh}
+                />
               </TabsContent>
               <TabsContent value="knowledge" className="px-4">
                 <Suspense fallback={null}>

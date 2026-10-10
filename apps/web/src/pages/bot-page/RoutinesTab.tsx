@@ -4,7 +4,7 @@ import { saveKey } from "@rakazo/core";
 import { Button, type FieldSave, SaveMeta, SettingRow, Switch, useFieldSave } from "@rakazo/ui-web";
 import { Plus } from "lucide-react";
 import type { BotDetail } from "../shell/layout";
-import { type BotPageContext, SettingsGroup, useSaveLabels } from "./page-kit";
+import { type BotPageContext, PendingRead, SettingsGroup, useSaveLabels } from "./page-kit";
 import { useRoutineCopy } from "./routine-copy";
 
 /** Whether a routine is on, saved the moment it is switched. */
@@ -23,18 +23,23 @@ export function useRoutineActive(page: BotPageContext, routine: Routine): FieldS
 export function RoutinesTab({
   page,
   routines,
+  failed,
   onOpen,
+  onRetry,
 }: {
   page: BotPageContext;
   /** `null` until this bot's routines are read. */
   routines: Routine[] | null;
+  /** The last read failed. */
+  failed: boolean;
   onOpen: (detail: BotDetail) => void;
+  onRetry: () => void;
 }) {
   const { t } = useLingui();
   const copy = useRoutineCopy();
   const create = () => onOpen({ kind: "routine-new" });
 
-  if (routines === null) return null;
+  if (routines === null) return <PendingRead failed={failed} onRetry={onRetry} />;
 
   if (routines.length === 0) {
     return (

@@ -90,7 +90,13 @@ it("saves a routine's switch at once, then turns it back and says why when the s
   const write = deferred<Routine>();
   const updateRoutine = vi.fn(() => write.promise);
   await render(
-    <RoutinesTab page={page({ updateRoutine })} routines={[ROUTINE]} onOpen={vi.fn()} />,
+    <RoutinesTab
+      page={page({ updateRoutine })}
+      routines={[ROUTINE]}
+      failed={false}
+      onOpen={vi.fn()}
+      onRetry={vi.fn()}
+    />,
   );
   const toggle = container.querySelector<HTMLElement>('[aria-label="Active: Morning digest"]')!;
   expect(toggle.getAttribute("aria-checked")).toBe("false");
@@ -139,7 +145,9 @@ it("words a weekly routine and opens a new one from the round add button", async
     <RoutinesTab
       page={page({})}
       routines={[{ ...ROUTINE, crons: ["0 10 * * 6"] }]}
+      failed={false}
       onOpen={onOpen}
+      onRetry={vi.fn()}
     />,
   );
   expect(container.textContent).toContain("Weekly on Saturday at 10:00 AM · paused");
@@ -163,13 +171,40 @@ it("says when and why an active routine's last run failed, with a red dot", asyn
           lastRunFailureKind: "provider",
         },
       ]}
+      failed={false}
       onOpen={vi.fn()}
+      onRetry={vi.fn()}
     />,
   );
   expect(container.textContent).toContain(
     "Last run failedMorning digestFailed yesterday · Model error",
   );
   expect(container.querySelector(".bg-destructive")).not.toBeNull();
+});
+
+it("shows loading rows until the routines are read, and Retry once the read failed", async () => {
+  const onRetry = vi.fn();
+  const tab = (failed: boolean, routines: Routine[] | null) => (
+    <RoutinesTab
+      page={page({})}
+      routines={routines}
+      failed={failed}
+      onOpen={vi.fn()}
+      onRetry={onRetry}
+    />
+  );
+  await render(tab(false, null));
+  expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+  expect(container.textContent).toBe("");
+
+  await render(tab(true, null));
+  expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(container.textContent).toBe("Could not load · Retry");
+  await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+  expect(onRetry).toHaveBeenCalledTimes(1);
+
+  await render(tab(false, [ROUTINE]));
+  expect(container.textContent).toContain("Morning digest");
 });
 
 it("lists the routine's own runs on its page, and a test run as soon as it starts", async () => {

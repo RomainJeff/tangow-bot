@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On web and desktop, the composer's text field keeps its width while you type and sits centred on its buttons.
 - Number columns in a bot's tables now line up at the end of the cell in right-to-left languages too.
 - On web and desktop, an open bot screen reconnects to the computer when the bot finishes a task instead of staying on a released screen.
+- On web and desktop, a bot's page now picks up changes made elsewhere when you come back to the window or switch tabs, without undoing a change you just saved, and its Routines tab shows loading rows, then "Could not load · Retry" when the routines cannot be read, instead of staying blank.
 
 ### 2026-10-09
 
