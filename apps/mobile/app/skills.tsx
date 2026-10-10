@@ -6,11 +6,13 @@ import type {
   MarketplaceUpdateCheck,
   SkillAvailability,
   SpaceMarketplace,
+  TrashedSkill,
 } from "@rakazo/contracts";
 import { filterSkillList, marketplaceSkillKey, parseSkillMd } from "@rakazo/core";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
-import { useEffect, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +28,7 @@ import { type MobileBot, rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
 import { native, useThemedStyles } from "../lib/native";
+import { takeRestored } from "../lib/skill-versions";
 
 /** Runtime ceiling: the agent only sees the first 50 visible skills. */
 const SKILL_LIMIT = 50;
@@ -61,6 +64,8 @@ export default function Skills() {
   const [catalog, setCatalog] = useState<AgentSkillCatalogEntry[]>([]);
   const [marketplaces, setMarketplaces] = useState<SpaceMarketplace[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [trashed, setTrashed] = useState(0);
+  const [botGone, setBotGone] = useState(false);
 
   async function refresh() {
     const [skills, spaces] = await Promise.all([
@@ -70,6 +75,20 @@ export default function Skills() {
     setCatalog(skills);
     setMarketplaces(spaces);
   }
+
+  // Back from Recently deleted: count what is left, and show a skill brought back.
+  useFocusEffect(
+    useCallback(() => {
+      void rpc<TrashedSkill[]>("agentSkills/trash", {}).then(
+        (skills) => setTrashed(skills.length),
+        () => setTrashed(0),
+      );
+      const restored = takeRestored();
+      if (!restored) return;
+      setBotGone(restored.botGone);
+      void refresh().catch(() => undefined);
+    }, []),
+  );
 
   // ponytail: refetch on every tab switch so the counter follows edits made in Installed.
   useEffect(() => {
@@ -110,6 +129,8 @@ export default function Skills() {
           <InstalledTab
             styles={styles}
             catalog={catalog}
+            trashed={trashed}
+            botGone={botGone}
             onChanged={() => void refresh().catch(() => undefined)}
           />
         ) : null}
@@ -146,13 +167,20 @@ type Styles = ReturnType<typeof createSkillsStyles>;
 function InstalledTab({
   styles,
   catalog,
+  trashed,
+  botGone,
   onChanged,
 }: {
   styles: Styles;
   catalog: AgentSkillCatalogEntry[];
+  /** How many skills wait in Recently deleted; its row shows only when some do. */
+  trashed: number;
+  /** The skill just brought back has no bot left to use it. */
+  botGone: boolean;
   onChanged: () => void;
 }) {
   const { t } = useI18n();
+  const router = useRouter();
   const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>(catalog);
   const [bots, setBots] = useState<MobileBot[]>([]);
   const [open, setOpen] = useState<AgentSkill | null>(null);
@@ -490,6 +518,21 @@ function InstalledTab({
           </View>
         );
       })}
+
+      {trashed > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          testID="skills-trash"
+          onPress={() => router.push("/bot-skills-trash")}
+          style={styles.card}
+        >
+          <View style={styles.row}>
+            <Text style={[styles.title, styles.grow]}>{t("Recently deleted")}</Text>
+            <Text style={styles.secondary}>{String(trashed)}</Text>
+          </View>
+        </Pressable>
+      ) : null}
+      {botGone ? <Text style={styles.secondary}>{t("No bot uses this skill yet.")}</Text> : null}
     </View>
   );
 }

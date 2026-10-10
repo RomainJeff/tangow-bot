@@ -3624,7 +3624,10 @@ const MessageBubble = memo(function MessageBubble({
             ? t("Skill updated · {name}", { name: line.name })
             : t("Skill deleted · {name}", { name: line.name }),
       icon: { ios: "book", android: "book-outline" },
-      onPress: () => router.push(skillLineRoute(line)),
+      onPress: () =>
+        void skillLineRoute(line, () =>
+          rpc<AgentSkillCatalogEntry[]>("agentSkills/list").catch(() => []),
+        ).then((route) => router.push(route)),
       live: skillsLive,
     }),
   );

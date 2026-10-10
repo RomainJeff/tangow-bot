@@ -128,9 +128,20 @@ describe("skill lines", () => {
     ]);
   });
 
-  it("opens the Skills screen, where the owner manages skills on iPhone", () => {
-    for (const change of ["learned", "updated", "deleted"] as const) {
-      expect(skillLineRoute(line(change))).toEqual({ pathname: "/skills" });
-    }
+  it("opens the skill by its uid, Recently deleted for a deleted one, or Skills when it is gone", async () => {
+    const catalog = async () => [
+      { id: "user:tea", uid: "f".repeat(32) },
+      { id: "user:coffee-renamed", uid },
+    ];
+    await expect(skillLineRoute(line("learned"), catalog)).resolves.toEqual({
+      pathname: "/bot-skill",
+      params: { skillId: "user:coffee-renamed" },
+    });
+    await expect(skillLineRoute(line("updated"), async () => [])).resolves.toEqual({
+      pathname: "/skills",
+    });
+    await expect(skillLineRoute(line("deleted"), catalog)).resolves.toEqual({
+      pathname: "/bot-skills-trash",
+    });
   });
 });
