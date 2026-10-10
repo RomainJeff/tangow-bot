@@ -299,6 +299,36 @@ it("reads an open run's recap again once the run ends", async () => {
   expect(recapText()).toBe("Inbox is clear.Open in chat");
 });
 
+it("shows a run that ended as done once earlier pages are loaded, not running at the top", async () => {
+  const cursor = { createdAt: "2026-10-06T11:00:00.000Z", id: "run-2" };
+  api.bots.activity
+    .mockResolvedValueOnce(
+      page([run("live", 90, { status: "running", completedAt: null }), run("run-2", 60)], cursor),
+    )
+    .mockResolvedValueOnce(page([run("run-3", 120, { routineName: "Digest", routineId: "r-3" })]))
+    .mockResolvedValueOnce(
+      page(
+        [run("run-1", 30, { routineName: "Inbox", routineId: "r-4" }), run("run-2", 60)],
+        cursor,
+      ),
+    );
+  await render(0);
+  await act(async () => button("Show earlier")?.click());
+  expect(lines()).toEqual([
+    expect.stringMatching(/^Sweep, Running, /),
+    expect.stringMatching(/^Sweep, Done, /),
+    expect.stringMatching(/^Digest, Done, /),
+  ]);
+
+  await render(1);
+
+  expect(lines()).toEqual([
+    expect.stringMatching(/^Inbox, Done, /),
+    expect.stringMatching(/^Sweep, Done, /),
+  ]);
+  expect(button("Show earlier")).toBeDefined();
+});
+
 it("offers a retry when the list cannot be read", async () => {
   api.bots.activity.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(page([]));
   await render();

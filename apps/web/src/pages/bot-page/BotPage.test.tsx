@@ -57,6 +57,7 @@ const store = createSaveStore();
 let container: HTMLElement;
 let root: Root;
 let updateBot: ReturnType<typeof vi.fn>;
+let refresh: ReturnType<typeof vi.fn<(botId: string) => Promise<void>>>;
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -72,6 +73,7 @@ beforeEach(() => {
   api.me.mockResolvedValue(null);
   api.voice.voices.mockResolvedValue([]);
   updateBot = vi.fn(async (_botId: string, patch: Partial<Bot>) => ({ ...BOT, ...patch }));
+  refresh = vi.fn(async () => undefined);
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -88,13 +90,17 @@ afterEach(() => {
 let onView: ReturnType<typeof vi.fn<(view: BotPageView) => void>>;
 let commands: BotCommands;
 
-async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[] | null } = {}) {
+async function render(
+  view: BotPageView,
+  { bot = BOT, routines = [] as Routine[] | null, activityEpoch = 0 } = {},
+) {
   onView = vi.fn<(view: BotPageView) => void>();
   commands = {
     updateBot: updateBot as BotCommands["updateBot"],
     setComputer: vi.fn(),
     botAction: vi.fn(),
-    activityEpoch: 0,
+    refresh,
+    activityEpoch,
     openRun: vi.fn(),
   } as Partial<BotCommands> as BotCommands;
   await act(async () => {
@@ -202,6 +208,63 @@ it("is busy until the bot's routines are read", async () => {
   expect(page()?.hasAttribute("aria-busy")).toBe(false);
 });
 
+it("says Could not load with Retry when a first read fails, and loads while Retry reads again", async () => {
+  let answer!: () => void;
+  refresh
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockReturnValueOnce(new Promise<void>((done) => (answer = done)));
+  await render({ tab: "routines", detail: null }, { routines: null });
+  const panel = () => container.querySelector('[role="tabpanel"]')!;
+  const page = () => container.querySelector('[data-testid="bot-page"]')!;
+  expect(panel().textContent).toBe("Could not load · Retry");
+  expect(page().hasAttribute("aria-busy")).toBe(false);
+
+  await act(async () => panel().querySelector("button")!.click());
+
+  expect(refresh.mock.calls).toEqual([["bot-1"], ["bot-1"]]);
+  expect(panel().textContent).toBe("");
+  expect(panel().querySelectorAll('[aria-busy="true"] > div')).toHaveLength(3);
+  expect(page().getAttribute("aria-busy")).toBe("true");
+
+  await act(async () => answer());
+  expect(panel().textContent).toBe("");
+});
+
+it("says Could not load in place of a routine opened before the routines could be read", async () => {
+  refresh.mockRejectedValueOnce(new Error("offline"));
+  await render(
+    { tab: "routines", detail: { kind: "routine", routineId: "r-1" } },
+    { routines: null },
+  );
+  expect(container.querySelector('[data-testid="bot-page"]')?.textContent).toContain(
+    "Could not load · Retry",
+  );
+  expect(onView).not.toHaveBeenCalled();
+});
+
+it("reads the bot again on each tab and when the window gains focus, never an archived one", async () => {
+  await render({ tab: "settings", detail: null });
+  await render({ tab: "routines", detail: null });
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(refresh.mock.calls).toEqual([["bot-1"], ["bot-1"], ["bot-1"]]);
+
+  refresh.mockClear();
+  await render(
+    { tab: "activity", detail: null },
+    { bot: { ...BOT, archivedAt: "2026-10-02T08:00:00.000Z" } as Bot },
+  );
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(refresh).not.toHaveBeenCalled();
+});
+
+it("reads the bot again when one of its runs ends", async () => {
+  await render({ tab: "routines", detail: null });
+  expect(refresh.mock.calls).toEqual([["bot-1"]]);
+
+  await render({ tab: "routines", detail: null }, { activityEpoch: 1 });
+  expect(refresh.mock.calls).toEqual([["bot-1"], ["bot-1"]]);
+});
+
 it("fills a new routine from the latest skill picked, even when the form is already open", async () => {
   const nameField = () =>
     container.querySelector<HTMLInputElement>('[data-testid="routine-create"] input')!;
@@ -283,4 +346,34 @@ it("shows an archived bot's page read-only, with Restore and Delete as its only 
   await act(async () => items[0]!.click());
   expect(vi.mocked(commands.botAction).mock.calls).toEqual([["bot-1", "restore"]]);
   expect(updateBot).not.toHaveBeenCalled();
+});
+
+it("marks the Activity tab while a routine that is on last failed, until it succeeds, pauses or goes", async () => {
+  const routine = (lastRunStatus: Routine["lastRunStatus"], active = true) =>
+    ({ id: "routine-1", name: "Inbox sweep", active, lastRunStatus }) as Routine;
+  const other = {
+    id: "routine-2",
+    name: "Digest",
+    active: true,
+    lastRunStatus: "succeeded",
+  } as Routine;
+  const activityTab = () => {
+    const tab = container.querySelector('[data-testid="bot-tab-activity"]');
+    return [tab?.getAttribute("aria-label") ?? null, tab?.querySelectorAll("[aria-hidden]").length];
+  };
+
+  await render({ tab: "activity", detail: null }, { routines: [routine("failed")] });
+  expect(activityTab()).toEqual(["Activity, last run failed", 1]);
+
+  await render({ tab: "activity", detail: null }, { routines: [routine("succeeded")] });
+  expect(activityTab()).toEqual([null, 0]);
+
+  await render({ tab: "activity", detail: null }, { routines: [routine("failed", false)] });
+  expect(activityTab()).toEqual([null, 0]);
+
+  await render({ tab: "activity", detail: null }, { routines: [other, routine("failed")] });
+  expect(activityTab()).toEqual(["Activity, last run failed", 1]);
+
+  await render({ tab: "activity", detail: null }, { routines: [other] });
+  expect(activityTab()).toEqual([null, 0]);
 });
