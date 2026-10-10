@@ -126,71 +126,75 @@ export const ASK_DISMISSED_ANSWER = "dismissed";
 export const ProposalKind = z.enum(["routine"]);
 export type ProposalKind = z.infer<typeof ProposalKind>;
 
+export const AskBlock = z.object({
+  kind: z.literal("ask"),
+  text: z.string(),
+  approvalEffectId: Id.optional(),
+  detail: z.string().optional(),
+  input: z.enum(["text", "secret"]).optional(),
+  /** Why the secret is needed; drives field label on the masked card. */
+  purpose: SecretAskPurpose.optional(),
+  credential: BotSecretDestination.optional(),
+  status: z.enum(["pending", "answered"]).optional(),
+  answer: z.string().optional(),
+  actions: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        outcome: AskActionOutcome.optional(),
+      }),
+    )
+    .optional(),
+  /** ask_user v2: when present, the card renders a multi-question stepper. */
+  questions: z.array(AskQuestion).optional(),
+  /** Structured answers once submitted; drives the frozen summary. */
+  answers: AskAnswers.optional(),
+  /** A spawn_bot approval card: the normalized fields, so a client can offer to edit them. */
+  spawnBot: z
+    .object({
+      name: z.string(),
+      title: z.string(),
+      instructions: z.string(),
+      prompt: z.string(),
+      computerMode: z.enum(["", "team", "dedicated"]),
+      /** The run's owner, the only person the server lets edit the card. */
+      ownerUserId: z.string().optional(),
+    })
+    .optional(),
+  proposal: ProposalKind.optional(),
+  /** A routine card: what it sets up, the schedule as the server resolved it. */
+  routine: z
+    .object({ name: z.string(), schedule: z.string(), prompt: z.string(), notify: z.boolean() })
+    .optional(),
+  /** Written once the routine exists: the card links to it. */
+  created: z.object({ kind: ProposalKind, id: z.string(), label: z.string() }).optional(),
+  /** The proposal was approved but could not be created. */
+  failed: z.literal(true).optional(),
+  /**
+   * What became of the routine the card is about. A confirmation the server settled has no
+   * `answer`, so nothing the user typed in the app is in it.
+   */
+  confirms: z.enum(["created", "updated"]).optional(),
+});
+
+export const ChoiceBlock = z.object({
+  kind: z.literal("choice"),
+  question: z.string(),
+  subtitle: z.string().optional(),
+  options: z.array(z.object({ id: z.string(), letter: z.string(), label: z.string() })),
+  /** Set once the user picks an option; renders the picker as answered. */
+  answerId: z.string().optional(),
+});
+
 export const MessageBlock = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string() }),
   z.object({
     kind: z.literal("card"),
     lines: z.array(z.object({ k: z.string(), v: z.string() })),
   }),
-  z.object({
-    kind: z.literal("ask"),
-    text: z.string(),
-    approvalEffectId: Id.optional(),
-    detail: z.string().optional(),
-    input: z.enum(["text", "secret"]).optional(),
-    /** Why the secret is needed; drives field label on the masked card. */
-    purpose: SecretAskPurpose.optional(),
-    credential: BotSecretDestination.optional(),
-    status: z.enum(["pending", "answered"]).optional(),
-    answer: z.string().optional(),
-    actions: z
-      .array(
-        z.object({
-          id: z.string(),
-          label: z.string(),
-          outcome: AskActionOutcome.optional(),
-        }),
-      )
-      .optional(),
-    /** ask_user v2: when present, the card renders a multi-question stepper. */
-    questions: z.array(AskQuestion).optional(),
-    /** Structured answers once submitted; drives the frozen summary. */
-    answers: AskAnswers.optional(),
-    /** A spawn_bot approval card: the normalized fields, so a client can offer to edit them. */
-    spawnBot: z
-      .object({
-        name: z.string(),
-        title: z.string(),
-        instructions: z.string(),
-        prompt: z.string(),
-        computerMode: z.enum(["", "team", "dedicated"]),
-        /** The run's owner, the only person the server lets edit the card. */
-        ownerUserId: z.string().optional(),
-      })
-      .optional(),
-    proposal: ProposalKind.optional(),
-    /** A routine card: what it sets up, the schedule as the server resolved it. */
-    routine: z
-      .object({ name: z.string(), schedule: z.string(), prompt: z.string(), notify: z.boolean() })
-      .optional(),
-    /** Written once the routine exists: the card links to it. */
-    created: z.object({ kind: ProposalKind, id: z.string(), label: z.string() }).optional(),
-    /** The proposal was approved but could not be created. */
-    failed: z.literal(true).optional(),
-    /**
-     * What became of the routine the card is about. A confirmation the server settled has no
-     * `answer`, so nothing the user typed in the app is in it.
-     */
-    confirms: z.enum(["created", "updated"]).optional(),
-  }),
-  z.object({
-    kind: z.literal("choice"),
-    question: z.string(),
-    subtitle: z.string().optional(),
-    options: z.array(z.object({ id: z.string(), letter: z.string(), label: z.string() })),
-    /** Set once the user picks an option; renders the picker as answered. */
-    answerId: z.string().optional(),
-  }),
+  AskBlock,
+  ChoiceBlock,
   z.object({
     /** Inline app authorization card (Composio-backed): logo, name, one-line
         description, and an Authorize button that flips to connected. */
