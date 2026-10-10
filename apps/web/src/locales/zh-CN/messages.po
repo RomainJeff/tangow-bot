@@ -32,6 +32,7 @@ msgid "{0, plural, one {# routine} other {# routines}}"
 msgstr "{0, plural, one {# 个例行任务} other {# 个例行任务}}"
 
 #. placeholder {0}: runs.length
+#: src/pages/bot-page/BotActivity.tsx:565
 #: src/pages/shell/routine-run-line.tsx:335
 msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
@@ -145,18 +146,22 @@ msgstr "{hours} 小时前"
 msgid "{minutes}m ago"
 msgstr "{minutes} 分钟前"
 
+#: src/pages/bot-page/BotActivity.tsx:278
+msgid "{name} created"
+msgstr "{name} 已创建"
+
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:91
+#: src/lib/browser-notifications.ts:94
 msgid "{name} failed"
 msgstr "{name} 失败"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:102
+#: src/lib/browser-notifications.ts:105
 msgid "{name} finished"
 msgstr "{name} 已完成"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:97
+#: src/lib/browser-notifications.ts:100
 msgid "{name} stopped"
 msgstr "{name} 已停止"
 
@@ -248,14 +253,14 @@ msgstr "操作确认"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:217
+#: src/pages/bot-page/BotPage.tsx:237
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/Shell.tsx:3208
+#: src/pages/Shell.tsx:3213
 #: src/pages/shell/sidebar.tsx:405
 msgid "Actions for {0}"
 msgstr "{0} 的操作"
 
-#: src/pages/Shell.tsx:3082
+#: src/pages/Shell.tsx:3087
 msgid "Actions for space"
 msgstr ""
 
@@ -276,6 +281,7 @@ msgstr "当前模型"
 msgid "Active: {0}"
 msgstr "启用：{0}"
 
+#: src/pages/bot-page/BotPage.tsx:85
 #: src/pages/shell/sidebar.tsx:212
 #: src/pages/shell/sidebar.tsx:214
 msgid "Activity"
@@ -558,7 +564,7 @@ msgstr "请在聊天中批准，或说“不”以取消。"
 msgid "Approve this server to let your agent use its tools."
 msgstr "批准此服务器后，Agent 才能使用它的工具。"
 
-#: src/pages/bot-page/BotPage.tsx:238
+#: src/pages/bot-page/BotPage.tsx:258
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
 msgstr "归档"
@@ -730,7 +736,7 @@ msgid "Bot"
 msgstr "Bot"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:71
+#: src/lib/browser-notifications.ts:72
 msgid "Bot"
 msgstr "Bot"
 
@@ -742,10 +748,10 @@ msgstr "Bot 屏幕"
 msgid "Bot screen preview"
 msgstr "Bot 屏幕预览"
 
-#: src/pages/Shell.tsx:3019
+#: src/pages/Shell.tsx:3024
 #: src/pages/shell/composer.tsx:1178
-#: src/pages/shell/thread-header.tsx:151
-#: src/pages/shell/thread-header.tsx:152
+#: src/pages/shell/thread-header.tsx:154
+#: src/pages/shell/thread-header.tsx:155
 msgid "Bot settings"
 msgstr ""
 
@@ -819,6 +825,7 @@ msgstr "取消回复"
 
 #: src/components/AskCard.tsx:48
 #: src/pages/ActivityList.tsx:162
+#: src/pages/bot-page/BotActivity.tsx:302
 #: src/pages/shell/routine-run-line.tsx:161
 msgid "Cancelled"
 msgstr "已取消"
@@ -905,7 +912,7 @@ msgstr "清空"
 msgid "Clear {0}’s conversation?"
 msgstr "清空与 {0} 的对话？"
 
-#: src/pages/bot-page/BotPage.tsx:234
+#: src/pages/bot-page/BotPage.tsx:254
 #: src/pages/BotContextMenu.tsx:142
 msgid "Clear conversation"
 msgstr "清空对话"
@@ -974,11 +981,11 @@ msgstr "关闭消息设置"
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
-#: src/pages/Shell.tsx:2674
+#: src/pages/Shell.tsx:2679
 msgid "Close navigation"
 msgstr "关闭导航"
 
-#: src/pages/bot-page/BotPage.tsx:130
+#: src/pages/bot-page/BotPage.tsx:136
 #: src/pages/shell/side-panel.tsx:170
 msgid "Close panel"
 msgstr "关闭面板"
@@ -1279,7 +1286,7 @@ msgstr "无法连接此提供方"
 msgid "Could not connect this voice provider"
 msgstr "无法连接此语音提供方"
 
-#: src/pages/Shell.tsx:855
+#: src/pages/Shell.tsx:860
 #: src/pages/Shell.tsx:2526
 msgid "Could not connect to the computer screen"
 msgstr "无法连接到电脑屏幕"
@@ -1374,6 +1381,7 @@ msgstr "无法安装连接器"
 msgid "Could not install skills"
 msgstr "无法安装技能"
 
+#: src/pages/bot-page/BotActivity.tsx:479
 #: src/pages/KnowledgeSection.tsx:80
 #: src/pages/KnowledgeSection.tsx:121
 #: src/pages/KnowledgeSection.tsx:244
@@ -1383,6 +1391,10 @@ msgstr "无法安装技能"
 #: src/pages/KnowledgeSection.tsx:673
 msgid "Could not load"
 msgstr "无法加载"
+
+#: src/pages/bot-page/BotActivity.tsx:238
+msgid "Could not load · Retry"
+msgstr "无法加载 · 重试"
 
 #: src/components/ApprovalRulesSettings.tsx:48
 msgid "Could not load approval rules"
@@ -1657,7 +1669,7 @@ msgstr "创建 Bot？"
 msgid "Create group"
 msgstr "创建群组"
 
-#: src/pages/Shell.tsx:2820
+#: src/pages/Shell.tsx:2825
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "新建 Bot"
@@ -1768,7 +1780,7 @@ msgstr ""
 msgid "Default scope"
 msgstr "默认范围"
 
-#: src/pages/bot-page/BotPage.tsx:242
+#: src/pages/bot-page/BotPage.tsx:262
 #: src/pages/BotContextMenu.tsx:150
 #: src/pages/KnowledgeSection.tsx:621
 #: src/pages/McpServersOverlay.tsx:508
@@ -1805,7 +1817,7 @@ msgstr "同时删除记忆"
 msgid "Delete routine"
 msgstr "删除例行任务"
 
-#: src/pages/Shell.tsx:3096
+#: src/pages/Shell.tsx:3101
 msgid "Delete space"
 msgstr ""
 
@@ -1922,6 +1934,7 @@ msgid "Don’t have an account?"
 msgstr "还没有账户？"
 
 #: src/pages/ActivityList.tsx:158
+#: src/pages/bot-page/BotActivity.tsx:300
 #: src/pages/bot-page/RoutineTriggers.tsx:337
 #: src/pages/bot-page/RoutineTriggers.tsx:370
 msgid "Done"
@@ -1958,7 +1971,7 @@ msgstr ""
 msgid "Draft skill"
 msgstr "技能草稿"
 
-#: src/pages/bot-page/BotPage.tsx:225
+#: src/pages/bot-page/BotPage.tsx:245
 #: src/pages/BotContextMenu.tsx:137
 msgid "Duplicate"
 msgstr "复制"
@@ -1980,7 +1993,7 @@ msgstr "编辑并重新发送"
 msgid "Edit first"
 msgstr "先编辑"
 
-#: src/pages/Shell.tsx:3019
+#: src/pages/Shell.tsx:3024
 msgid "Edit Profile"
 msgstr "编辑资料"
 
@@ -2070,7 +2083,7 @@ msgstr "展开"
 msgid "Expand {0}"
 msgstr "展开 {0}"
 
-#: src/pages/bot-page/BotPage.tsx:229
+#: src/pages/bot-page/BotPage.tsx:249
 msgid "Export"
 msgstr "导出"
 
@@ -2090,6 +2103,7 @@ msgid "Extra high"
 msgstr "极高"
 
 #: src/pages/ActivityList.tsx:160
+#: src/pages/bot-page/BotActivity.tsx:301
 #: src/pages/bot-page/routine-copy.ts:63
 #: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
@@ -2111,7 +2125,7 @@ msgid "Failed to stop"
 msgstr "停止失败"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:92
+#: src/lib/browser-notifications.ts:95
 msgid "Failed."
 msgstr "失败。"
 
@@ -2148,7 +2162,7 @@ msgid "Finish signing in at <0>{0}</0>. The final page may not load; paste its U
 msgstr "在 <0>{0}</0> 完成登录。最后一页可能无法加载；把 URL 或代码粘贴到这里。"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:103
+#: src/lib/browser-notifications.ts:106
 msgid "Finished."
 msgstr "已完成。"
 
@@ -2201,7 +2215,7 @@ msgid "Global"
 msgstr "全局"
 
 #: src/pages/MessagingSettingsOverlay.tsx:204
-#: src/pages/shell/thread-header.tsx:92
+#: src/pages/shell/thread-header.tsx:95
 msgid "Group"
 msgstr "群组"
 
@@ -2417,7 +2431,7 @@ msgstr "保留记忆"
 msgid "key"
 msgstr "密钥"
 
-#: src/pages/bot-page/BotPage.tsx:81
+#: src/pages/bot-page/BotPage.tsx:87
 msgid "Knowledge"
 msgstr "知识"
 
@@ -2635,7 +2649,7 @@ msgid "Message"
 msgstr ""
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:87
+#: src/lib/browser-notifications.ts:89
 msgid "Message"
 msgstr "消息"
 
@@ -2861,6 +2875,10 @@ msgstr "新建工作区"
 msgid "Next"
 msgstr ""
 
+#: src/pages/bot-page/BotActivity.tsx:198
+msgid "No activity yet"
+msgstr "暂无动态"
+
 #: src/pages/MessagingSettingsOverlay.tsx:265
 msgid "No agent connections yet."
 msgstr "还没有 Agent 连接。"
@@ -2953,6 +2971,10 @@ msgstr "未找到提供方。"
 #: src/components/integrations/IntegrationSetup.tsx:273
 msgid "No remote MCP servers found"
 msgstr ""
+
+#: src/pages/bot-page/BotActivity.tsx:417
+msgid "No report"
+msgstr "无报告"
 
 #: src/pages/PluginsOverlay.tsx:952
 #: src/pages/SpaceSearch.tsx:23
@@ -3079,7 +3101,7 @@ msgstr "每月 1 日 {0}"
 msgid "One-time"
 msgstr "一次性"
 
-#: src/pages/Shell.tsx:3134
+#: src/pages/Shell.tsx:3139
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3098,11 +3120,15 @@ msgstr "打开"
 msgid "Open {0}"
 msgstr "打开 {0}"
 
+#: src/pages/bot-page/BotActivity.tsx:420
+msgid "Open in chat"
+msgstr "在聊天中打开"
+
 #: src/pages/shell/side-panel.tsx:186
 msgid "Open in full window"
 msgstr "在完整窗口中打开"
 
-#: src/pages/shell/thread-header.tsx:54
+#: src/pages/shell/thread-header.tsx:55
 msgid "Open navigation"
 msgstr "打开导航"
 
@@ -3473,7 +3499,7 @@ msgid "Removing…"
 msgstr "正在移除…"
 
 #: src/pages/BotContextMenu.tsx:121
-#: src/pages/Shell.tsx:3223
+#: src/pages/Shell.tsx:3228
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr ""
@@ -3558,6 +3584,7 @@ msgstr "恢复未保存的文本"
 msgid "Restoring your workspace"
 msgstr ""
 
+#: src/pages/bot-page/BotActivity.tsx:486
 #: src/pages/bot-page/page-kit.tsx:49
 msgid "Retry"
 msgstr "重试"
@@ -3596,19 +3623,25 @@ msgstr ""
 msgid "Rotate key"
 msgstr "轮换密钥"
 
+#: src/pages/bot-page/BotActivity.tsx:308
 #: src/pages/bot-page/RoutineCreateForm.tsx:49
 msgid "Routine"
 msgstr "例行任务"
 
 #: src/components/AskCard.tsx:77
+#: src/pages/bot-page/BotActivity.tsx:269
 msgid "Routine created"
 msgstr "例行任务已创建"
+
+#: src/pages/bot-page/BotActivity.tsx:269
+msgid "Routine created by {by}"
+msgstr "{by} 创建的例行任务"
 
 #: src/components/AskCard.tsx:77
 msgid "Routine updated"
 msgstr "例行任务已更新"
 
-#: src/pages/bot-page/BotPage.tsx:80
+#: src/pages/bot-page/BotPage.tsx:86
 msgid "Routines"
 msgstr "例行任务"
 
@@ -3621,6 +3654,7 @@ msgid "Run time must be in the future."
 msgstr "运行时间必须是将来的时间。"
 
 #: src/pages/ActivityList.tsx:152
+#: src/pages/bot-page/BotActivity.tsx:303
 #: src/pages/shell/routine-run-line.tsx:156
 msgid "Running"
 msgstr "运行中"
@@ -3686,8 +3720,8 @@ msgstr "正在保存…"
 msgid "Say yes or no, or answer in a sentence."
 msgstr "回答是或否，或一句话说明。"
 
-#: src/pages/shell/thread-header.tsx:132
-#: src/pages/shell/thread-header.tsx:133
+#: src/pages/shell/thread-header.tsx:135
+#: src/pages/shell/thread-header.tsx:136
 msgid "Screen"
 msgstr "屏幕"
 
@@ -3743,7 +3777,7 @@ msgstr "正在搜索…"
 msgid "Select {0}"
 msgstr "选择 {0}"
 
-#: src/pages/shell/thread-header.tsx:93
+#: src/pages/shell/thread-header.tsx:96
 msgid "Select a bot"
 msgstr "选择 Bot"
 
@@ -3799,7 +3833,7 @@ msgstr "服务器名称"
 msgid "Server URL"
 msgstr "服务器 URL"
 
-#: src/pages/bot-page/BotPage.tsx:82
+#: src/pages/bot-page/BotPage.tsx:88
 #: src/pages/MessagingSettingsOverlay.tsx:361
 #: src/pages/SettingsOverlay.tsx:110
 #: src/pages/SettingsOverlay.tsx:165
@@ -3844,15 +3878,20 @@ msgid "Show before / after"
 msgstr "显示前后对比"
 
 #: src/pages/shell/sidebar.tsx:748
-#: src/pages/shell/thread-header.tsx:65
 #: src/pages/shell/thread-header.tsx:66
+#: src/pages/shell/thread-header.tsx:67
 msgid "Show bots"
 msgstr "显示机器人"
+
+#: src/pages/bot-page/BotActivity.tsx:238
+msgid "Show earlier"
+msgstr "显示更早的"
 
 #: src/pages/shell/message-view.tsx:73
 msgid "Show less"
 msgstr ""
 
+#: src/pages/bot-page/BotActivity.tsx:467
 #: src/pages/PluginsOverlay.tsx:873
 #: src/pages/shell/message-view.tsx:73
 msgid "Show more"
@@ -3985,7 +4024,7 @@ msgid "Stop teaching"
 msgstr "停止示范"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:98
+#: src/lib/browser-notifications.ts:101
 msgid "Stopped."
 msgstr "已停止。"
 
@@ -4034,7 +4073,7 @@ msgstr "系统"
 msgid "Teach a task"
 msgstr "示范任务"
 
-#: src/pages/Shell.tsx:2860
+#: src/pages/Shell.tsx:2865
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "正在示范，发送新消息前请先停止示范。"
 
@@ -4153,6 +4192,7 @@ msgstr "标题"
 msgid "To:"
 msgstr "至:"
 
+#: src/pages/bot-page/BotActivity.tsx:213
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:401
 #: src/pages/shell/transcript.tsx:217
@@ -4312,8 +4352,8 @@ msgstr "正在校验…"
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/SettingsOverlay.tsx:102
-#: src/pages/shell/thread-header.tsx:117
-#: src/pages/shell/thread-header.tsx:118
+#: src/pages/shell/thread-header.tsx:120
+#: src/pages/shell/thread-header.tsx:121
 #: src/pages/VoiceSettingsOverlay.tsx:170
 #: src/pages/VoiceSettingsOverlay.tsx:293
 msgid "Voice"
@@ -4323,6 +4363,10 @@ msgstr "语音"
 #: src/pages/bot-page/SettingsTab.tsx:36
 msgid "Voice and replies"
 msgstr "语音与回复"
+
+#: src/pages/bot-page/BotActivity.tsx:304
+msgid "Waiting"
+msgstr "等待中"
 
 #: src/pages/ModelSettingsOverlay.tsx:692
 #: src/pages/ModelSettingsOverlay.tsx:714
@@ -4412,10 +4456,15 @@ msgstr "处理中…"
 msgid "Workspace root"
 msgstr "工作区根目录"
 
+#: src/pages/bot-page/BotActivity.tsx:286
+msgid "Write its first instructions"
+msgstr "编写它的第一份指令"
+
 #: src/pages/RoutineSchedule.tsx:198
 msgid "Yearly on {date} at {time}"
 msgstr "每年{date} {time}"
 
+#: src/pages/bot-page/BotActivity.tsx:214
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402
 #: src/pages/shell/transcript.tsx:218

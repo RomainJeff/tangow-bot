@@ -1,9 +1,14 @@
 import { type Actor, MessageBlock, type Routine, type RunActivityRow } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, botMessageContext, classifyRunFailure } from "@rakazo/core";
+import {
+  ACTIVE_RUN_STATUSES,
+  botMessageContext,
+  classifyRunFailure,
+  isTerminal,
+} from "@rakazo/core";
 import { Prisma, type PrismaClient } from "@rakazo/db";
 
 const RECENT_LIMIT = 20;
-const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
+export const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
 
 function promptSnippet(prompt: string, max = 120): string {
   const oneLine = prompt.replace(/\s+/g, " ").trim();
@@ -34,6 +39,52 @@ export function activityNotificationsEnabled(
   return groupId !== null || notifyOnFinish;
 }
 
+export const RUN_INCLUDE = {
+  bot: { select: { name: true, archivedAt: true, notifyOnFinish: true } },
+  task: { select: { prompt: true } },
+  routine: { select: { name: true } },
+  sourceMessage: { select: { blocks: true } },
+  thread: {
+    select: {
+      groupId: true,
+      group: { select: { name: true } },
+    },
+  },
+} satisfies Prisma.RunInclude;
+
+type RunRow = Prisma.RunGetPayload<{ include: typeof RUN_INCLUDE }>;
+
+export function mapRun(row: RunRow): RunActivityRow {
+  const status = row.status as RunActivityRow["status"];
+  return {
+    runId: row.id,
+    botId: row.botId,
+    botName: row.bot.name,
+    groupId: row.thread.groupId,
+    groupName: row.thread.group?.name ?? null,
+    threadId: row.threadId,
+    status,
+    trigger: row.trigger as RunActivityRow["trigger"],
+    notificationsEnabled: activityNotificationsEnabled(row.thread.groupId, row.bot.notifyOnFinish),
+    promptSnippet: activityPromptSnippet({
+      trigger: row.trigger,
+      prompt: row.task.prompt,
+      sourceBlocks: row.sourceMessage?.blocks,
+    }),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: (isTerminal(status) && row.completedAt
+      ? row.completedAt
+      : row.updatedAt
+    ).toISOString(),
+    routineId: row.routineId,
+    routineName: row.routine?.name ?? null,
+    sourceMessageId: row.sourceMessageId,
+    startedAt: row.startedAt?.toISOString() ?? null,
+    completedAt: row.completedAt?.toISOString() ?? null,
+    failureKind: classifyRunFailure(status, row.error),
+  };
+}
+
 export async function listSpaceRuns(
   prisma: PrismaClient,
   actor: Actor,
@@ -48,44 +99,14 @@ export async function listSpaceRuns(
         ? { status: { in: [...ACTIVE_RUN_STATUSES] } }
         : { status: { in: [...TERMINAL_STATUSES] } }),
     },
-    include: {
-      bot: { select: { name: true, archivedAt: true, notifyOnFinish: true } },
-      task: { select: { prompt: true } },
-      sourceMessage: { select: { blocks: true } },
-      thread: {
-        select: {
-          groupId: true,
-          group: { select: { name: true } },
-        },
-      },
-    },
+    include: RUN_INCLUDE,
     orderBy:
       filter === "active"
         ? [{ updatedAt: "desc" }, { id: "desc" }]
         : [{ completedAt: "desc" }, { updatedAt: "desc" }, { id: "desc" }],
     take: filter === "recent" ? RECENT_LIMIT : undefined,
   });
-
-  return rows.map((row) => ({
-    runId: row.id,
-    botId: row.botId,
-    botName: row.bot.name,
-    groupId: row.thread.groupId,
-    groupName: row.thread.group?.name ?? null,
-    threadId: row.threadId,
-    status: row.status as RunActivityRow["status"],
-    trigger: row.trigger as RunActivityRow["trigger"],
-    notificationsEnabled: activityNotificationsEnabled(row.thread.groupId, row.bot.notifyOnFinish),
-    promptSnippet: activityPromptSnippet({
-      trigger: row.trigger,
-      prompt: row.task.prompt,
-      sourceBlocks: row.sourceMessage?.blocks,
-    }),
-    updatedAt: (filter === "recent" && row.completedAt
-      ? row.completedAt
-      : row.updatedAt
-    ).toISOString(),
-  }));
+  return rows.map(mapRun);
 }
 
 export type RoutineLastRun = Pick<Routine, "lastRunStatus" | "lastRunFailureKind">;

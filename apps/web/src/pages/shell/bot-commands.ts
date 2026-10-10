@@ -1,9 +1,10 @@
-import type { Bot, ComputerMode, Routine } from "@rakazo/contracts";
+import type { Bot, ComputerMode, Routine, RunActivityRow } from "@rakazo/contracts";
 import { createAnswerOrder, type RoutinePayload } from "@rakazo/core";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { useMemo, useRef } from "react";
 import { localTimezone } from "../../lib/local-timezone";
 import { rpc } from "../../lib/rpc";
+import { threadJumpLocation } from "./layout";
 
 export type UpdateBotPatch = Omit<Parameters<typeof rpc.bots.update>[0], "botId">;
 
@@ -27,6 +28,10 @@ export interface BotCommands {
   revealWebhookSecret(botId: string): Promise<string>;
   /** The lifecycle actions the sidebar menu already runs, with the same confirmations. */
   botAction(botId: string, action: BotAction): void;
+  /** Changes whenever a run of the open bot ends. */
+  readonly activityEpoch: number;
+  /** Opens the run's thread on the message that started it, closing the panel if it hides that thread. */
+  openRun(row: Pick<RunActivityRow, "botId" | "groupId" | "sourceMessageId">): void;
   /** Re-reads the composer's skill catalog after a skill write the server has confirmed. */
   skillsChanged(): void;
 }
@@ -43,6 +48,11 @@ export interface BotCommandDeps {
   botAction: BotCommands["botAction"];
   ensureWebhookSecret: (botId: string) => Promise<string>;
   refreshThread: (botId: string) => Promise<unknown>;
+  navigate: (to: { pathname: string; search: string | undefined }) => void;
+  /** True while the panel lies over the thread (narrow windows, or the wide panel below `xl`). */
+  panelCoversThread: RefObject<boolean>;
+  closePanel: () => void;
+  activityEpoch: number;
   refreshSkills: () => void;
 }
 
@@ -51,6 +61,7 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
   depsRef.current = deps;
   // Per bot and per routine, what a late answer may still put back.
   const order = useRef(createAnswerOrder()).current;
+  const { activityEpoch } = deps;
 
   return useMemo<BotCommands>(() => {
     async function writeBot(
@@ -79,6 +90,7 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
     }
 
     return {
+      activityEpoch,
       updateBot: (botId, patch) =>
         writeBot(botId, Object.keys(patch), () => rpc.bots.update({ botId, ...patch })),
       setComputer: (botId, mode) =>
@@ -116,9 +128,19 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
       },
       revealWebhookSecret: (botId) => depsRef.current.ensureWebhookSecret(botId),
       botAction: (botId, action) => depsRef.current.botAction(botId, action),
+      openRun(row) {
+        if (depsRef.current.panelCoversThread.current) depsRef.current.closePanel();
+        depsRef.current.navigate(
+          threadJumpLocation({
+            botId: row.botId,
+            groupId: row.groupId,
+            messageId: row.sourceMessageId,
+          }),
+        );
+      },
       skillsChanged: () => depsRef.current.refreshSkills(),
     };
-  }, [order]);
+  }, [order, activityEpoch]);
 }
 
 /** Saves the bot's export manifest as a JSON file. */

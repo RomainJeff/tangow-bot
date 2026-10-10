@@ -1,7 +1,13 @@
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import { ORPCError } from "@orpc/client";
-import type { Bot, Routine } from "@rakazo/contracts";
+import type {
+  Bot,
+  BotActivityInput,
+  BotActivityItem,
+  Routine,
+  RunActivityRow,
+} from "@rakazo/contracts";
 import { SaveStoreProvider } from "@rakazo/ui-web";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -16,16 +22,20 @@ import "../../src/styles.css";
 
 /*
  * The bot page without a server. Query parameters pick what it shows:
- *   tab=routines|knowledge|settings
+ *   tab=activity|routines|knowledge|settings
  *   detail=instructions|description|model|voice|routine|routine-new   routine=<id>
- *   busy=1 (the bot is working)
+ *   new=1 (a bot just created by hand: no instructions, only its birth)   busy=1 (the bot is working)
+ *   activity=empty|error (what reading the activity answers; by default 39 routine runs
+ *   and 3 creations, 30 a page)
  *   fail=1 (every save fails)   refuse=1 (the server refuses a computer change)   theme=dark
  * Writes go through in-memory commands that answer after 400 ms; reads are
  * answered by a stubbed fetch with fixed data. A refusal carries the server's
  * reason like a real RPC error; fail=1 fails like a dropped connection.
  */
 const params = new URLSearchParams(window.location.search);
+const NEW = params.get("new") === "1";
 const BUSY = params.get("busy") === "1";
+const ACTIVITY = params.get("activity");
 const REFUSE = params.get("refuse") === "1";
 const SAVE_DELAY = 400;
 
@@ -40,8 +50,9 @@ const BOT: Bot = {
   name: "Scout",
   title: "Watches the inbox and flags what needs you",
   description: "Keeps the shared inbox down to what needs a person.",
-  instructions:
-    "You watch the shared inbox for the team and surface only what needs a person. You never reply to a sender yourself.\n\nEvery weekday morning, group what arrived overnight into three buckets: needs a decision, needs a reply, can wait.",
+  instructions: NEW
+    ? ""
+    : "You watch the shared inbox for the team and surface only what needs a person. You never reply to a sender yourself.\n\nEvery weekday morning, group what arrived overnight into three buckets: needs a decision, needs a reply, can wait.",
   color: "#3BC9A0",
   shapeSeed: null,
   notifyOnFinish: true,
@@ -113,6 +124,138 @@ const ROUTINES: Routine[] = [
     nextRunAt: null,
   }),
 ];
+
+function run(index: number, hoursAgo: number, extra: Partial<RunActivityRow>): RunActivityRow {
+  return {
+    runId: `run-${String(index).padStart(2, "0")}`,
+    botId: BOT.id,
+    botName: BOT.name,
+    groupId: null,
+    groupName: null,
+    threadId: BOT.threadId,
+    status: "completed",
+    trigger: "routine",
+    notificationsEnabled: true,
+    promptSnippet: "",
+    createdAt: at(-hoursAgo * HOUR),
+    updatedAt: at(-hoursAgo * HOUR),
+    routineId: null,
+    routineName: null,
+    sourceMessageId: `message-${index}`,
+    startedAt: at(-hoursAgo * HOUR - 60_000),
+    completedAt: at(-hoursAgo * HOUR),
+    failureKind: null,
+    ...extra,
+  };
+}
+
+const sweep = { routineId: "routine-1", routineName: "Morning digest" } as const;
+const digest = { routineId: "routine-2", routineName: "Weekly digest" } as const;
+const invoices = { routineId: "routine-3", routineName: "Invoice watch" } as const;
+
+/** Newest first: one running, a day of routine runs, then a long tail to page through. */
+const RUNS: RunActivityRow[] = NEW
+  ? []
+  : [
+      run(0, 0.05, { ...sweep, status: "running", completedAt: null }),
+      run(1, 1, invoices),
+      run(2, 2, { ...digest, status: "failed", failureKind: "provider" }),
+      run(4, 24, sweep),
+      run(5, 25, sweep),
+      run(6, 26, sweep),
+      run(7, 28, invoices),
+      ...Array.from({ length: 32 }, (_, offset) =>
+        run(8 + offset, 48 + offset * 8, offset % 5 === 4 ? invoices : sweep),
+      ),
+    ];
+
+/** What each run left in its thread; run-07 said nothing. */
+const RECAPS: Record<string, string | null> = {
+  "run-01":
+    "**2 invoices** arrived from Northwind.\n\n- INV-2041 · 1,280 € · due Oct 20\n- INV-2042 · 640 € · due Oct 27\n\nBoth match the purchase orders. Nothing to approve today.",
+  "run-04": [
+    "**Overnight inbox** · 14 messages",
+    "",
+    "**Needs a decision**",
+    "- Lease renewal for the Lyon office: the landlord wants an answer by Friday.",
+    "- Two candidates for the support role asked to move their interviews.",
+    "",
+    "**Needs a reply**",
+    "- Acme asked whether the October invoice can be split in two.",
+    "- The accountant needs the signed engagement letter.",
+    "- A customer reports the export button does nothing on Safari.",
+    "",
+    "**Can wait**",
+    "- Three newsletters, two webinar invitations and a survey.",
+    "- The quarterly team lunch poll closes next week.",
+  ].join("\n"),
+  "run-07": null,
+};
+
+type Entry = { at: string; id: string; item: BotActivityItem };
+
+const CREATIONS: Entry[] = [
+  ...(NEW
+    ? []
+    : [
+        {
+          at: at(-40 * HOUR),
+          id: "routine-3",
+          item: {
+            kind: "routine_created" as const,
+            routineId: "routine-3",
+            routineName: "Invoice watch",
+            createdAt: at(-40 * HOUR),
+            byBotName: BOT.name,
+          },
+        },
+        {
+          at: "2026-09-02T08:00:00.000Z",
+          id: "routine-2",
+          item: {
+            kind: "routine_created" as const,
+            routineId: "routine-2",
+            routineName: "Weekly digest",
+            createdAt: "2026-09-02T08:00:00.000Z",
+            byBotName: null,
+          },
+        },
+      ]),
+  {
+    at: BOT.createdAt,
+    id: BOT.id,
+    item: { kind: "bot_created", botId: BOT.id, botName: BOT.name, createdAt: BOT.createdAt },
+  },
+];
+
+const ACTIVE = new Set(["queued", "leased", "running", "waiting_input", "waiting_takeover"]);
+
+function listActivity(input: BotActivityInput) {
+  const entries: Entry[] = [
+    ...RUNS.filter((row) => !ACTIVE.has(row.status)).map((row) => ({
+      at: row.createdAt,
+      id: row.runId,
+      item: { kind: "routine_run" as const, run: row },
+    })),
+    ...CREATIONS,
+  ].sort((left, right) => right.at.localeCompare(left.at));
+  const start = input.cursor ? entries.findIndex((entry) => entry.id === input.cursor?.id) + 1 : 0;
+  const limit = input.limit ?? 30;
+  const page = entries.slice(start, start + limit);
+  const last = page.at(-1);
+  return {
+    items: [
+      ...(input.cursor
+        ? []
+        : RUNS.filter((row) => ACTIVE.has(row.status)).map((row) => ({
+            kind: "routine_run" as const,
+            run: row,
+          }))),
+      ...page.map((entry) => entry.item),
+    ],
+    nextCursor: last && start + limit < entries.length ? { createdAt: last.at, id: last.id } : null,
+  };
+}
 
 const READS: Record<string, unknown> = {
   "models/credentials": [
@@ -199,6 +342,26 @@ window.fetch = async (input, init) => {
   if (!url.pathname.startsWith("/rpc/")) return realFetch(input, init);
   const procedure = url.pathname.slice("/rpc/".length);
   await delay(150);
+  const body = input instanceof Request ? await input.text() : String(init?.body ?? "{}");
+  const query = (JSON.parse(body) as { json?: Record<string, unknown> }).json ?? {};
+  if (procedure === "bots/activity") {
+    if (ACTIVITY === "error") {
+      return Response.json({ json: { message: "The server did not answer." } }, { status: 500 });
+    }
+    return Response.json({
+      json:
+        ACTIVITY === "empty"
+          ? { items: [], nextCursor: null }
+          : listActivity(query as BotActivityInput),
+    });
+  }
+  if (procedure === "runs/recap") {
+    const runId = String(query.runId);
+    const text = runId in RECAPS ? RECAPS[runId] : `Done: ${runId}.`;
+    return Response.json({
+      json: { text: text ?? null, messageId: text === null ? null : `message-${runId}` },
+    });
+  }
   const json = READS[procedure];
   if (json === undefined) {
     return Response.json(
@@ -210,7 +373,9 @@ window.fetch = async (input, init) => {
 };
 
 function isTab(value: string | null): value is BotTab {
-  return value === "routines" || value === "knowledge" || value === "settings";
+  return (
+    value === "activity" || value === "routines" || value === "knowledge" || value === "settings"
+  );
 }
 
 function initialDetail(value: string | null): BotDetail | null {
@@ -297,6 +462,8 @@ function Fixture() {
         return "whsec_fixture_0000";
       },
       botAction: (_botId, action) => console.info(`bot action: ${action}`),
+      activityEpoch: 0,
+      openRun: (row) => console.info(`open run from ${row.sourceMessageId ?? "the end"}`),
       skillsChanged: () => undefined,
     };
   }, []);

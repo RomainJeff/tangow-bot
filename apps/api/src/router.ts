@@ -154,6 +154,7 @@ import {
   getOwnedArtifact,
   getSpaceArtifact,
 } from "./artifacts.js";
+import { listBotActivity, readRunRecap } from "./bot-activity.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
   executionBlocksUserTakeover,
@@ -1008,6 +1009,10 @@ export function createRouter(deps: RouterDeps) {
         const found = (await repos.listBots(context.actor)).find((bot) => bot.id === input.botId);
         if (!found) throw new IsolationError();
         return found;
+      }),
+      activity: authed.bots.activity.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        return listBotActivity(deps.prisma, context.actor, bot, input);
       }),
       create: authed.bots.create.handler(async ({ context, input }) => {
         try {
@@ -4685,6 +4690,9 @@ export function createRouter(deps: RouterDeps) {
       list: authed.runs.list.handler(async ({ context, input }) => ({
         runs: await listSpaceRuns(deps.prisma, context.actor, input.filter),
       })),
+      recap: authed.runs.recap.handler(({ context, input }) =>
+        readRunRecap(deps.prisma, context.actor, input.runId),
+      ),
     },
     voice: {
       catalog: authed.voice.catalog.handler(async () => listVoiceCatalog()),
