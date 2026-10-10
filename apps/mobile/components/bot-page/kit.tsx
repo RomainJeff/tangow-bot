@@ -4,6 +4,7 @@ import { useFocusEffect } from "expo-router";
 import {
   Children,
   Fragment,
+  isValidElement,
   type ReactNode,
   useCallback,
   useEffect,
@@ -58,8 +59,9 @@ export function Group({
 /** Rows with a hairline between each, for a list built inside a `Group`. */
 export function Separated({ children }: { children: ReactNode }) {
   const styles = useThemedStyles(createKitStyles);
+  // Each row keeps its own key, so inserting one above does not remount (and blur) those below.
   return Children.toArray(children).map((row, index) => (
-    <Fragment key={index}>
+    <Fragment key={isValidElement(row) && row.key != null ? row.key : index}>
       {index > 0 ? <View style={styles.hairline} /> : null}
       {row}
     </Fragment>

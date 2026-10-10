@@ -18,10 +18,13 @@ export function ScratchpadGroup({
   botId,
   readOnly,
   epoch,
+  onAddFocus,
 }: {
   botId: string;
   readOnly: boolean;
   epoch: number;
+  /** The add field took focus: the page brings it above the keyboard. */
+  onAddFocus: () => void;
 }) {
   const { t } = useI18n();
   const styles = useThemedStyles(createScratchpadStyles);
@@ -49,13 +52,20 @@ export function ScratchpadGroup({
     }
   };
 
-  const add = () => {
-    const title = draft.trim();
+  /** Reads the submitted text, not `draft`, which can trail fast typing by a render. */
+  const add = (text: string) => {
+    const title = text.trim();
     if (!title || busy) return;
+    // Cleared at once so the next item can be typed; given back if the save fails.
+    setDraft("");
     void change(async () => {
-      const created = await rpc<ScratchpadItem>("scratchpad/create", { botId, title });
-      setDraft("");
-      return (items) => [created, ...items.filter((item) => item.id !== created.id)];
+      try {
+        const created = await rpc<ScratchpadItem>("scratchpad/create", { botId, title });
+        return (items) => [created, ...items.filter((item) => item.id !== created.id)];
+      } catch (error) {
+        setDraft((current) => current || title);
+        throw error;
+      }
     });
   };
 
@@ -111,6 +121,7 @@ export function ScratchpadGroup({
       ))}
       {read.kind === "ready" && !readOnly ? (
         <TextInput
+          key="add"
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
@@ -118,10 +129,10 @@ export function ScratchpadGroup({
           placeholderTextColor={tokens.mutedForeground}
           accessibilityLabel={t("Add item")}
           maxLength={200}
-          editable={!busy}
           returnKeyType="done"
           submitBehavior="submit"
-          onSubmitEditing={add}
+          onFocus={onAddFocus}
+          onSubmitEditing={(event) => add(event.nativeEvent.text)}
         />
       ) : null}
     </Group>

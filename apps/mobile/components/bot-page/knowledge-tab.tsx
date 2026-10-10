@@ -22,7 +22,15 @@ import {
 import { ScratchpadGroup } from "./scratchpad";
 
 /** What the bot knows: its memory, the files on its computer, its skills, and open work. */
-export function KnowledgeTab({ page, epoch }: { page: BotPageContext; epoch: number }) {
+export function KnowledgeTab({
+  page,
+  epoch,
+  onAddFocus,
+}: {
+  page: BotPageContext;
+  epoch: number;
+  onAddFocus: () => void;
+}) {
   const { t } = useI18n();
   return (
     <>
@@ -31,7 +39,12 @@ export function KnowledgeTab({ page, epoch }: { page: BotPageContext; epoch: num
         <FileList botId={page.bot.id} path="" shown={5} epoch={epoch} />
       </Group>
       <SkillsGroup page={page} />
-      <ScratchpadGroup botId={page.bot.id} readOnly={page.readOnly} epoch={epoch} />
+      <ScratchpadGroup
+        botId={page.bot.id}
+        readOnly={page.readOnly}
+        epoch={epoch}
+        onAddFocus={onAddFocus}
+      />
     </>
   );
 }
