@@ -1,5 +1,11 @@
-import type { Pool } from "@rakazo/db";
-import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { buildSkillMd } from "@rakazo/core";
+import type { Pool, PrismaClient } from "@rakazo/db";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createSkillLibrary } from "./skill-library.js";
+import { fakeSkillPrisma } from "./skill-library.test-support.js";
 import { createInMemorySkillLock, createPostgresSkillLock } from "./skill-lock.js";
 
 const alice = { spaceId: "ws-1", userId: "alice" };
@@ -78,6 +84,68 @@ async function lockOfAnotherProcess() {
   vi.resetModules();
   return (await import("./skill-lock.js")).createPostgresSkillLock;
 }
+
+/**
+ * The app's Prisma pool: each query, or batch of queries in one transaction, holds one of `size`
+ * connections, and a caller waits at most `waitMs` for one.
+ */
+function pooledPrisma(size: number, waitMs: number) {
+  let free = size;
+  const queue: Array<() => void> = [];
+  const withConnection = async <T>(work: () => Promise<T>): Promise<T> => {
+    if (free > 0) free -= 1;
+    else {
+      await new Promise<void>((resolve, reject) => {
+        const take = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        const timer = setTimeout(() => {
+          queue.splice(queue.indexOf(take), 1);
+          reject(new Error("Timed out waiting for a pooled connection."));
+        }, waitMs);
+        queue.push(take);
+      });
+    }
+    try {
+      return await work();
+    } finally {
+      const next = queue.shift();
+      if (next) next();
+      else free += 1;
+    }
+  };
+  const base = fakeSkillPrisma();
+  const lazy = <T extends Record<string, unknown>>(table: T) =>
+    Object.fromEntries(
+      Object.entries(table).map(([name, value]) => [
+        name,
+        typeof value === "function"
+          ? (...args: unknown[]) => {
+              const query = () => (value as (...a: unknown[]) => Promise<unknown>)(...args);
+              return {
+                query,
+                // biome-ignore lint/suspicious/noThenProperty: like a Prisma query, it runs only once awaited.
+                then: (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) =>
+                  withConnection(query).then(ok, ko),
+              };
+            }
+          : value,
+      ]),
+    );
+  return {
+    ...base,
+    skillSetting: lazy(base.skillSetting),
+    botSkill: lazy(base.botSkill),
+    $transaction: (batch: Array<{ query: () => Promise<unknown> }>) =>
+      withConnection(() => Promise.all(batch.map((op) => op.query()))),
+  };
+}
+
+const dirs: string[] = [];
+afterEach(async () => {
+  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
 
 describe("skill owner lock", () => {
   it("runs one owner's changes one at a time and other owners alongside", async () => {
@@ -182,5 +250,31 @@ describe("skill owner lock", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("lets more owners write at once than the app's pool has connections", {
+    timeout: 120_000,
+  }, async () => {
+    const data = await mkdtemp(path.join(tmpdir(), "rakazo-skill-lock-"));
+    dirs.push(data);
+    const library = createSkillLibrary({
+      prisma: pooledPrisma(4, 10_000) as unknown as PrismaClient,
+      dataDir: data,
+      lock: createPostgresSkillLock(advisoryServer().pool()),
+    });
+    const owners = Array.from({ length: 6 }, (_, i) => ({ spaceId: "ws-1", userId: `user-${i}` }));
+    const content = buildSkillMd({ name: "Deploy", description: "About Deploy", body: "Steps" });
+    const results = await Promise.all(
+      owners.map((owner) =>
+        library
+          .forOwner(owner)
+          .create({ kind: "skill-md", name: "Deploy", content })
+          .then(
+            (result) => result.key,
+            (error: Error) => error.message,
+          ),
+      ),
+    );
+    expect(results).toEqual(owners.map(() => "user:deploy"));
   });
 });

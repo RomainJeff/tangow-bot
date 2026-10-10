@@ -19,20 +19,13 @@ import {
   userSkillKey,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
+import { getLogger } from "@rakazo/logging";
 import { loadBuiltinSkills } from "./builtin-skills.js";
 import { listMarketplaceSkills, marketplacesRoot } from "./marketplace-store.js";
+import type { BotSkillWriter, SkillContent } from "./skill-library.js";
+import { SkillRefusal } from "./skill-library.js";
 import type { SkillTreeFile } from "./skill-store.js";
-import {
-  isExists,
-  listUserSkills,
-  removeUserSkill,
-  renameUserSkill,
-  replaceUserSkillFiles,
-  skillDirName,
-  userSkillsRoot,
-  writeUserSkill,
-  writeUserSkillFiles,
-} from "./skill-store.js";
+import { listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
 
 export const SKILL_TOOL_NAMES = new Set([
   "skill_read",
@@ -254,9 +247,19 @@ function parseDraftSkillMd(files: SkillTreeFile[]): ReturnType<typeof parseSkill
   return parseSkillMd(new TextDecoder().decode(skillMd.bytes));
 }
 
+/** A refusal reads back to the bot as is; anything else is logged and reported without host paths. */
+function writeError(error: unknown, nameTaken: string, fallback: string): { error: string } {
+  if (error instanceof SkillRefusal) {
+    return { error: error.reason === "name_taken" ? nameTaken : error.message };
+  }
+  getLogger().warn(`[skills] write failed: ${error instanceof Error ? error.message : error}`);
+  return { error: fallback };
+}
+
 export async function skillCreateFromTool(
   deps: SkillToolDeps,
   owner: SkillOwner,
+  writer: BotSkillWriter,
   input: {
     name?: string;
     description?: string;
@@ -303,39 +306,16 @@ export async function skillCreateFromTool(
   const existing = await findOwnedSkill(deps, owner, { name });
   if (existing) return { error: `A skill named "${existing.name}" already exists.` };
 
-  const root = userSkillsRoot(deps.dataDir, owner);
+  // A bot-created skill starts scoped to its creator (design Q2); the user widens it in the UI.
+  const saved: SkillContent = input.files
+    ? { kind: "files", name, content, files: input.files }
+    : { kind: "skill-md", name, content };
   try {
-    if (input.files) {
-      await writeUserSkillFiles(root, input.files, async () => ({ name, content }));
-    } else {
-      await writeUserSkill(root, { name, content }, "create");
-    }
+    await writer.create(saved);
   } catch (error) {
-    if (isExists(error)) return { error: `A skill named "${name}" already exists.` };
-    // writeUserSkillFiles messages name the offending draft file and carry no host path.
-    if (input.files && error instanceof Error && !("code" in error)) {
-      return { error: error.message };
-    }
-    return { error: "Could not create skill." };
+    return writeError(error, `A skill named "${name}" already exists.`, "Could not create skill.");
   }
   const skillKey = userSkillKey(name);
-  if (owner.botId) {
-    // A bot-created skill starts scoped to its creator (design Q2); the user widens it in the UI.
-    // API/panel creation (no botId) stays "all agents": no access rows.
-    const scope = { spaceId: owner.spaceId, userId: owner.userId };
-    await deps.prisma.$transaction([
-      deps.prisma.skillSetting.upsert({
-        where: { spaceId_userId_skillKey: { ...scope, skillKey } },
-        create: { ...scope, skillKey, availability: "selected" },
-        update: { availability: "selected" },
-      }),
-      deps.prisma.botSkill.upsert({
-        where: { botId_skillKey: { botId: owner.botId, skillKey } },
-        create: { ...scope, botId: owner.botId, skillKey, enabled: true },
-        update: { enabled: true },
-      }),
-    ]);
-  }
   return {
     ok: true,
     id: skillKey,
@@ -350,6 +330,7 @@ export async function skillCreateFromTool(
 export async function skillUpdateFromTool(
   deps: SkillToolDeps,
   owner: SkillOwner,
+  writer: BotSkillWriter,
   input: {
     name?: string;
     skillId?: string;
@@ -417,60 +398,35 @@ export async function skillUpdateFromTool(
     }
   }
 
-  const root = userSkillsRoot(deps.dataDir, owner);
-  const scope = { spaceId: owner.spaceId, userId: owner.userId };
-  const oldKey = userSkillKey(existing.name);
-  const newKey = userSkillKey(nextName);
-  const skill = { name: nextName, content: nextContent };
+  const saved: SkillContent = input.files
+    ? { kind: "files", name: nextName, content: nextContent, files: input.files }
+    : { kind: "skill-md", name: nextName, content: nextContent };
   try {
-    if (input.files) {
-      await replaceUserSkillFiles(root, existing.name, input.files, async () => skill);
-    } else if (oldKey === newKey) {
-      await writeUserSkill(root, skill, "replace");
-    } else {
-      // The whole directory moves, so bundle extras follow the new name.
-      await renameUserSkill(root, existing.name, skill);
-    }
-    // Access rows follow the key once the folder has moved.
-    if (oldKey !== newKey) {
-      await deps.prisma.$transaction([
-        deps.prisma.skillSetting.updateMany({
-          where: { ...scope, skillKey: oldKey },
-          data: { skillKey: newKey },
-        }),
-        deps.prisma.botSkill.updateMany({
-          where: { ...scope, skillKey: oldKey },
-          data: { skillKey: newKey },
-        }),
-      ]);
-    }
+    await writer.update(userSkillKey(existing.name), saved);
   } catch (error) {
-    if (isExists(error)) return { error: `A skill named "${nextName}" already exists.` };
-    // replaceUserSkillFiles messages name the offending draft file and carry no host path.
-    if (input.files && error instanceof Error && !("code" in error)) {
-      return { error: error.message };
-    }
-    return { error: "Could not update skill." };
+    return writeError(
+      error,
+      `A skill named "${nextName}" already exists.`,
+      "Could not update skill.",
+    );
   }
-  return { ok: true, id: newKey, name: nextName, description: nextDescription };
+  return { ok: true, id: userSkillKey(nextName), name: nextName, description: nextDescription };
 }
 
 export async function skillDeleteFromTool(
   deps: SkillToolDeps,
   owner: SkillOwner,
+  writer: BotSkillWriter,
   input: { name?: string; skillId?: string },
 ): Promise<Record<string, unknown>> {
   const existing = await findOwnedSkill(deps, owner, input);
   if (!existing) return { error: "Skill not found." };
   const readOnly = readOnlyError(existing);
   if (readOnly) return { error: readOnly };
-  const scope = { spaceId: owner.spaceId, userId: owner.userId };
-  const skillKey = userSkillKey(existing.name);
-  // File first, rows second: orphan rows are harmless, a row-less file would widen to "all".
-  await removeUserSkill(userSkillsRoot(deps.dataDir, owner), existing.name);
-  await deps.prisma.$transaction([
-    deps.prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
-    deps.prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
-  ]);
+  try {
+    await writer.delete(userSkillKey(existing.name));
+  } catch (error) {
+    return writeError(error, "Skill not found.", "Could not delete skill.");
+  }
   return { ok: true, name: existing.name };
 }

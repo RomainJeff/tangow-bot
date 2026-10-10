@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { MessageBlock } from "@rakazo/contracts";
@@ -31,7 +31,7 @@ import {
   unreadConversationCount,
 } from "./executor.js";
 import { serializeModelSecret } from "./pi-oauth.js";
-import { userSkillsRoot, writeUserSkill } from "./skill-store.js";
+import { skillDirName, userSkillsRoot } from "./skill-store.js";
 
 describe("tool completion audit", () => {
   it("records result metadata without persisting tool contents", () => {
@@ -854,11 +854,12 @@ description: Prepare standup notes
 1. Summarize wins.
 `;
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-executor-skills-"));
-    await writeUserSkill(
+    const skillDir = path.join(
       userSkillsRoot(dataDir, { spaceId: "ws-1", userId: "user-1" }),
-      { name: "Daily standup", content: skillContent },
-      "create",
+      skillDirName("Daily standup"),
     );
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(path.join(skillDir, "SKILL.md"), skillContent);
     const prisma = {
       routine: {
         findUnique: vi.fn(async () => ({

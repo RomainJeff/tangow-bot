@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import http from "node:http";
 import net from "node:net";
-import { resolveSupervisorToken } from "@rakazo/core";
+import path from "node:path";
+import { resolveSupervisorToken, skillHistorySegments } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
   MAX_SUPERVISOR_FILE_REQUEST_BYTES,
@@ -265,6 +266,19 @@ describe("skills binds", () => {
       "/var/rakazo/skills/marketplaces/s1:/skills/marketplaces:ro",
       "/var/rakazo/managed-skills:/managed-skills:ro",
     ]);
+  });
+
+  it("never mounts a user's skill versions or trash into the computer", () => {
+    const mounted = skillsBindsFor("/data", "s1", "u1", (p) => p).map((bind) => bind.split(":")[0]);
+    const covers = (file: string) =>
+      mounted.some((source) => source && (file === source || file.startsWith(`${source}/`)));
+    const owner = { spaceId: "s1", userId: "u1" };
+    expect(covers(path.join("/data", "skills", "user", "s1", "u1", "deploy", "SKILL.md"))).toBe(
+      true,
+    );
+    expect(
+      covers(path.join("/data", ...skillHistorySegments(owner), "skills", "x", "skill.json")),
+    ).toBe(false);
   });
 });
 

@@ -29,6 +29,16 @@ export function isSkillVisible(input: {
   return availability === "all";
 }
 
+export const SKILL_HISTORY_DIR = "skill-history";
+
+/**
+ * Where a user's skill versions and trash live under the data dir: beside the skills mounted
+ * into the bot's computer, never under them, so a bot cannot read or rewrite its own history.
+ */
+export function skillHistorySegments(owner: { spaceId: string; userId: string }): string[] {
+  return [SKILL_HISTORY_DIR, owner.spaceId, owner.userId];
+}
+
 /** Marketplace skills (phase 3): `mkt:<marketplace>/<plugin>/<slug>`, all three already lowercase. */
 export function marketplaceSkillKey(marketplace: string, plugin: string, slug: string): string {
   return `mkt:${marketplace}/${plugin}/${slug}`;
