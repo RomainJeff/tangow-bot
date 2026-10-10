@@ -44,13 +44,16 @@ function activityKey(entry: BotActivityItem): string {
  * it). Two or more finished-with-success runs of one routine in a row fold into one item; a
  * failed, cancelled or active run, or a creation, is never folded and ends the sequence.
  */
-export function foldActivity(entries: readonly BotActivityItem[]): ActivityItem[] {
+export function foldActivity(
+  entries: readonly BotActivityItem[],
+  { fold = true }: { fold?: boolean } = {},
+): ActivityItem[] {
   const ordered = [...entries.filter(isActiveRun), ...entries.filter((e) => !isActiveRun(e))];
   const items: ActivityItem[] = [];
   let sequence: RunActivityRow[] = [];
   const flush = () => {
     const [first] = sequence;
-    if (first?.routineId && sequence.length >= 2) {
+    if (fold && first?.routineId && sequence.length >= 2) {
       items.push({
         kind: "folded",
         routineId: first.routineId,

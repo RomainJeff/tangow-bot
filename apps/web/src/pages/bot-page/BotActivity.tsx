@@ -37,10 +37,10 @@ import type { BotCommands } from "../shell/bot-commands";
 import { useRoutineCopy } from "./routine-copy";
 
 /**
- * A bot's activity, newest first, a page at a time. Reads again when a run ends (`epoch`) and
- * when the window comes back into focus.
+ * A bot's activity, or one routine's runs, newest first, a page at a time. Reads again when a run
+ * ends (`epoch`) and when the window comes back into focus.
  */
-function useBotActivity(botId: string, epoch: number) {
+function useBotActivity(botId: string, routineId: string | undefined, epoch: number) {
   const [read, dispatch] = useReducer(reduceActivity, { kind: "loading" });
   const readRef = useRef(read);
   readRef.current = read;
@@ -50,12 +50,12 @@ function useBotActivity(botId: string, epoch: number) {
   const load = useCallback(async () => {
     const mine = ++token.current;
     try {
-      const page = await rpc.bots.activity({ botId });
+      const page = await rpc.bots.activity({ botId, routineId });
       if (mine === token.current) dispatch({ type: "first", page });
     } catch {
       if (mine === token.current) dispatch({ type: "first-failed" });
     }
-  }, [botId]);
+  }, [botId, routineId]);
 
   const showEarlier = useCallback(async () => {
     const current = readRef.current;
@@ -64,12 +64,12 @@ function useBotActivity(botId: string, epoch: number) {
     const cursor = current.next;
     dispatch({ type: "earlier-started" });
     try {
-      const page = await rpc.bots.activity({ botId, cursor });
+      const page = await rpc.bots.activity({ botId, routineId, cursor });
       if (mine === token.current) dispatch({ type: "earlier", page });
     } catch {
       if (mine === token.current) dispatch({ type: "earlier-failed" });
     }
-  }, [botId]);
+  }, [botId, routineId]);
 
   const retry = useCallback(() => {
     dispatch({ type: "retry" });
@@ -116,6 +116,9 @@ const OpenRuns = createContext<{ open: ReadonlySet<string>; toggle: (runId: stri
   toggle: () => {},
 });
 
+/** On a routine's own page every line is that routine: lines lead with their time instead. */
+const OneRoutine = createContext(false);
+
 function useOpenRuns() {
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
   const toggle = useCallback((runId: string) => {
@@ -161,24 +164,27 @@ function itemKey(item: ActivityItem): string {
 type OpenRun = BotCommands["openRun"];
 
 /**
- * The bot's routine runs, the routines it was given and its own creation, grouped by day. A run
- * opens its recap in place, with a way into the chat; a routine's creation opens the routine.
- * With `onWriteInstructions` (a bot with no instructions yet) its creation offers to write them.
+ * The bot's routine runs, the routines it was given and its own creation, grouped by day; with
+ * `routineId`, only that routine's runs. A run opens its recap in place, with a way into the chat;
+ * a routine's creation opens the routine. With `onWriteInstructions` (a bot with no instructions
+ * yet) its creation offers to write them.
  */
 export function BotActivity({
   botId,
+  routineId,
   commands,
   onOpenRoutine,
   onWriteInstructions,
 }: {
   botId: string;
+  routineId?: string;
   commands: Pick<BotCommands, "activityEpoch" | "openRun">;
-  onOpenRoutine: (routineId: string) => void;
+  onOpenRoutine?: (routineId: string) => void;
   onWriteInstructions?: () => void;
 }) {
   const { openRun } = commands;
   const { t, i18n } = useLingui();
-  const { read, showEarlier, retry } = useBotActivity(botId, commands.activityEpoch);
+  const { read, showEarlier, retry } = useBotActivity(botId, routineId, commands.activityEpoch);
   const openRuns = useOpenRuns();
   const locale = i18n.locale || "en";
 
@@ -193,45 +199,48 @@ export function BotActivity({
   }
 
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const days = dayMarkers(foldActivity(read.entries), timeZone);
+  // A routine's own page lists every run: folding would hide the history it is there to show.
+  const days = dayMarkers(foldActivity(read.entries, { fold: !routineId }), timeZone);
   return (
     <OpenRuns.Provider value={openRuns}>
-      <div data-testid="bot-activity" className="flex flex-col">
-        {days.map(({ day, at, items }) => (
-          <section key={day ?? "now"} className="flex flex-col not-first:pt-3">
-            {day ? (
-              <h3 className="pb-1.5 ps-0.5 text-label text-muted-foreground">
-                {threadTimeMarkerLabel(at, {
-                  locale,
-                  today: t`Today`,
-                  yesterday: t`Yesterday`,
-                  withTime: false,
-                })}
-              </h3>
-            ) : null}
-            {items.map((item) => (
-              <ActivityLine
-                key={itemKey(item)}
-                item={item}
-                openRun={openRun}
-                onOpenRoutine={onOpenRoutine}
-                onWriteInstructions={onWriteInstructions}
-              />
-            ))}
-          </section>
-        ))}
-        {read.next ? (
-          <Button
-            variant="tertiary"
-            size="capsule"
-            className="-ms-3 mt-2 self-start"
-            disabled={read.earlier === "loading"}
-            onClick={() => void showEarlier()}
-          >
-            {read.earlier === "failed" ? t`Could not load · Retry` : t`Show earlier`}
-          </Button>
-        ) : null}
-      </div>
+      <OneRoutine.Provider value={Boolean(routineId)}>
+        <div data-testid="bot-activity" className="flex flex-col">
+          {days.map(({ day, at, items }) => (
+            <section key={day ?? "now"} className="flex flex-col not-first:pt-3">
+              {day ? (
+                <h3 className="pb-1.5 ps-0.5 text-label text-muted-foreground">
+                  {threadTimeMarkerLabel(at, {
+                    locale,
+                    today: t`Today`,
+                    yesterday: t`Yesterday`,
+                    withTime: false,
+                  })}
+                </h3>
+              ) : null}
+              {items.map((item) => (
+                <ActivityLine
+                  key={itemKey(item)}
+                  item={item}
+                  openRun={openRun}
+                  onOpenRoutine={onOpenRoutine}
+                  onWriteInstructions={onWriteInstructions}
+                />
+              ))}
+            </section>
+          ))}
+          {read.next ? (
+            <Button
+              variant="tertiary"
+              size="capsule"
+              className="-ms-3 mt-2 self-start"
+              disabled={read.earlier === "loading"}
+              onClick={() => void showEarlier()}
+            >
+              {read.earlier === "failed" ? t`Could not load · Retry` : t`Show earlier`}
+            </Button>
+          ) : null}
+        </div>
+      </OneRoutine.Provider>
     </OpenRuns.Provider>
   );
 }
@@ -244,7 +253,7 @@ function ActivityLine({
 }: {
   item: ActivityItem;
   openRun: OpenRun;
-  onOpenRoutine: (routineId: string) => void;
+  onOpenRoutine?: (routineId: string) => void;
   onWriteInstructions?: () => void;
 }) {
   const { t } = useLingui();
@@ -261,7 +270,7 @@ function ActivityLine({
           name={item.routineName}
           detail={by ? t`Routine created by ${by}` : t`Routine created`}
           at={item.createdAt}
-          onOpen={() => onOpenRoutine(item.routineId)}
+          onOpen={onOpenRoutine && (() => onOpenRoutine(item.routineId))}
         />
       );
     }
@@ -330,12 +339,14 @@ function RunLine({ row, openRun }: { row: RunActivityRow; openRun: OpenRun }) {
   const word = run.words[state.word];
   const reason = row.status === "failed" ? run.reason(row.failureKind) : null;
   const time = run.time(row.createdAt);
+  const oneRoutine = useContext(OneRoutine);
+  const title = oneRoutine ? time : name;
   return (
     <div>
       <button
         type="button"
         aria-expanded={open}
-        aria-label={[name, reason, word, time].filter(Boolean).join(", ")}
+        aria-label={[title, reason, word, oneRoutine ? null : time].filter(Boolean).join(", ")}
         onClick={() => runs.toggle(row.runId)}
         data-testid="activity-run"
         className={LINE}
@@ -349,10 +360,12 @@ function RunLine({ row, openRun }: { row: RunActivityRow; openRun: OpenRun }) {
           className="min-w-0 flex-1 truncate text-row-name font-medium text-foreground"
           dir="auto"
         >
-          {name}
+          {title}
           {reason ? <span className="font-normal text-muted-foreground"> · {reason}</span> : null}
         </span>
-        <span className="shrink-0 text-time tabular-nums text-muted-foreground">{time}</span>
+        {oneRoutine ? null : (
+          <span className="shrink-0 text-time tabular-nums text-muted-foreground">{time}</span>
+        )}
         {state.word === "running" ? (
           <Shimmer className="shrink-0 text-label font-medium text-muted-foreground">
             {word}
