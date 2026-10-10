@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Bot, Routine } from "@rakazo/contracts";
+import { routineFailing } from "@rakazo/core";
 import {
   Button,
   DropdownMenu,
@@ -23,13 +24,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
 import { BotActivity } from "./BotActivity";
 import { BotHero } from "./BotHero";
 import type { BotPageContext } from "./page-kit";
-import { useBotField, useConfirm } from "./page-kit";
+import { PendingRead, useBotField, useConfirm } from "./page-kit";
 import { RoutineCreateForm } from "./RoutineCreateForm";
 import { RoutineDetail } from "./RoutineDetail";
 import { RoutinesTab } from "./RoutinesTab";
@@ -92,6 +93,7 @@ export function BotPage({
   const detail = archived ? null : view.detail;
   const routine =
     detail?.kind === "routine" ? routines?.find((item) => item.id === detail.routineId) : undefined;
+  const routineFailed = routines?.some(routineFailing) ?? false;
   const tabLabels: Record<BotTab, string> = {
     activity: t`Activity`,
     routines: t`Routines`,
@@ -115,6 +117,29 @@ export function BotPage({
     if (missingRoutine) onView({ tab: "routines", detail: null });
   }, [missingRoutine, onView]);
 
+  // The bot or its routines may have changed elsewhere: on another device, or by the bot during
+  // a run (a run ending renews `commands`). Read them again on open, on each tab, on focus.
+  const [readFailed, setReadFailed] = useState(false);
+  const refresh = useCallback(
+    () =>
+      void commands.refresh(bot.id).then(
+        () => setReadFailed(false),
+        () => setReadFailed(true),
+      ),
+    [commands, bot.id],
+  );
+  // Only a Retry shows loading again; a focus read keeps what is shown until it answers.
+  const retry = () => {
+    setReadFailed(false);
+    refresh();
+  };
+  useEffect(() => {
+    if (archived) return;
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [refresh, archived, view.tab]);
+
   // Focus follows the editor: into it when it opens (a text editor focuses its
   // own field), back to the row that opened it when it closes.
   const backButton = useRef<HTMLButtonElement>(null);
@@ -131,7 +156,7 @@ export function BotPage({
     <div
       ref={root}
       data-testid="bot-page"
-      aria-busy={(!archived && routines === null) || undefined}
+      aria-busy={(!archived && routines === null && !readFailed) || undefined}
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
@@ -181,7 +206,11 @@ export function BotPage({
               confirm={confirm}
               onDeleted={toRoutines}
             />
-          ) : null}
+          ) : (
+            <div className="px-4 pt-5">
+              <PendingRead failed={readFailed} onRetry={retry} />
+            </div>
+          )}
         </div>
       ) : detail?.kind === "memory" || detail?.kind === "skill" ? (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto px-4 pt-1 pb-4">
@@ -230,8 +259,24 @@ export function BotPage({
               <div className="px-4 pt-5 pb-4">
                 <TabsList variant="segmented" className="w-full">
                   {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
-                    <TabsTrigger key={tab} value={tab} data-testid={`bot-tab-${tab}`}>
+                    <TabsTrigger
+                      key={tab}
+                      value={tab}
+                      data-testid={`bot-tab-${tab}`}
+                      aria-label={
+                        tab === "activity" && routineFailed
+                          ? t`Activity, last run failed`
+                          : undefined
+                      }
+                      className="gap-1.5"
+                    >
                       {tabLabels[tab]}
+                      {tab === "activity" && routineFailed ? (
+                        <span
+                          aria-hidden
+                          className="size-1.5 shrink-0 rounded-full bg-destructive"
+                        />
+                      ) : null}
                     </TabsTrigger>
                   ))}
                 </TabsList>
@@ -251,7 +296,13 @@ export function BotPage({
                 />
               </TabsContent>
               <TabsContent value="routines" className="px-4">
-                <RoutinesTab page={page} routines={routines} onOpen={open} />
+                <RoutinesTab
+                  page={page}
+                  routines={routines}
+                  failed={readFailed}
+                  onOpen={open}
+                  onRetry={retry}
+                />
               </TabsContent>
               <TabsContent value="knowledge" className="px-4">
                 <Suspense fallback={null}>

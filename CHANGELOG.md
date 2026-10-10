@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **A bot's page now has an Activity tab on web and desktop.** It lists the runs of the bot's routines, the routines it was given and its own creation, newest first, with each failed run's reason, a recap that opens in place and "Open in chat" to land on the run's message. The bot's name in the header opens it, and so do the gear and "Bot settings" while the bot has no instructions, with "Write its first instructions" under its creation.
+- **A bot's Activity tab now carries a red dot while one of its routines is failing, on web and desktop.** A routine that is on and whose last run failed keeps the dot there until a later run of it does not fail, or it is paused or deleted, and a screen reader hears the tab as "Activity, last run failed".
 - **An archived bot's page opens from the sidebar's Archived list on web and desktop.** It shows the bot's name, title and Activity, with each run's recap, and nothing on it can be edited; its menu offers Restore, which brings the bot back with its page still open beside its conversation, and Delete. Archived bots used to offer only Restore and Delete from the list, with no way to see what they did.
 
 #### Changed
@@ -33,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On web and desktop, the composer's text field keeps its width while you type and sits centred on its buttons.
 - Number columns in a bot's tables now line up at the end of the cell in right-to-left languages too.
 - On web and desktop, an open bot screen reconnects to the computer when the bot finishes a task instead of staying on a released screen.
+- On web and desktop, a bot's page now picks up changes made elsewhere when you come back to the window or switch tabs, without undoing a change you just saved, and its Routines tab shows loading rows, then "Could not load · Retry" when the routines cannot be read, instead of staying blank.
 
 ### 2026-10-09
 
