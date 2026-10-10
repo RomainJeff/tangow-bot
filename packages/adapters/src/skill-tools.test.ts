@@ -10,12 +10,16 @@ import {
 } from "@rakazo/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BUILTIN_SKILLS_ROOT, loadBuiltinSkills } from "./builtin-skills.js";
+import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { marketplacesRoot } from "./marketplace-store.js";
-import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
+import { createSkillLibrary } from "./skill-library.js";
+import { createInMemorySkillLock } from "./skill-lock.js";
+import { listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
 import {
   listAgentSkillRecords,
   readSkillDraft,
+  SKILL_TOOL_NAMES,
   type SkillToolDeps,
   skillCreateFromTool,
   skillDeleteFromTool,
@@ -90,6 +94,28 @@ function makePrisma() {
 
 const owner = { spaceId: "ws-1", userId: "user-1" };
 
+const lock = createInMemorySkillLock();
+let call = 0;
+
+/** What the executor hands a skill tool: the bot's writer, or the owner's when no bot is named. */
+function writerFor(deps: SkillToolDeps, who: { spaceId: string; userId: string; botId?: string }) {
+  const library = createSkillLibrary({ ...deps, lock });
+  call += 1;
+  return who.botId
+    ? library.forBot(who, {
+        botId: who.botId,
+        botName: "Bot",
+        runId: `run-${call}`,
+        toolCallId: `call-${call}`,
+      })
+    : library.forOwner(who);
+}
+
+async function seedSkillFolder(root: string, name: string, content: string) {
+  await mkdir(path.join(root, skillDirName(name)), { recursive: true });
+  await writeFile(path.join(root, skillDirName(name), "SKILL.md"), content);
+}
+
 describe("skill tools", () => {
   let prisma: ReturnType<typeof makePrisma>;
   let dataDir: string;
@@ -105,16 +131,40 @@ describe("skill tools", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  /** Seed a skill file the way the API/panel would (no access rows = visible to all). */
+  /** Seed a skill folder written before history (no access rows = visible to all). */
   const seed = (name: string, description: string, body = "", scope = owner) =>
-    writeUserSkill(
+    seedSkillFolder(
       userSkillsRoot(dataDir, scope),
-      { name, content: buildSkillMd({ name, description, body }) },
-      "create",
+      name,
+      buildSkillMd({ name, description, body }),
     );
 
+  it("gives bots skill tools that only read or reach the bot's three writes", () => {
+    const offered = [...builtinAgentTools, ...agentConnectionTools]
+      .map((tool) => tool.name)
+      .filter((name) => name.startsWith("skill_"))
+      .sort();
+    expect(offered).toEqual([...SKILL_TOOL_NAMES].sort());
+    const writes = Object.keys(
+      createSkillLibrary({ ...deps, lock: createInMemorySkillLock() }).forBot(owner, {
+        botId: "bot-1",
+        botName: "Bot",
+        runId: "run-1",
+        toolCallId: "call-1",
+      }),
+    );
+    expect(writes.sort()).toEqual(["create", "delete", "replayed", "update"]);
+    expect(offered).toEqual([
+      "skill_create",
+      "skill_delete",
+      "skill_read",
+      "skill_search",
+      "skill_update",
+    ]);
+  });
+
   it("creates, reads, updates, and deletes user skills", async () => {
-    const created = await skillCreateFromTool(deps, owner, {
+    const created = await skillCreateFromTool(deps, owner, writerFor(deps, owner), {
       name: "Daily standup",
       description: "Prepare standup notes",
       body: "1. Summarize yesterday.\n2. List blockers.",
@@ -130,7 +180,7 @@ describe("skill tools", () => {
     });
     expect(String(read.content)).toContain("Summarize yesterday");
 
-    const updated = await skillUpdateFromTool(deps, owner, {
+    const updated = await skillUpdateFromTool(deps, owner, writerFor(deps, owner), {
       name: "Daily standup",
       description: "Updated when-to-use",
     });
@@ -139,7 +189,9 @@ describe("skill tools", () => {
       { name: "Daily standup", description: "Updated when-to-use" },
     ]);
 
-    const deleted = await skillDeleteFromTool(deps, owner, { name: "Daily standup" });
+    const deleted = await skillDeleteFromTool(deps, owner, writerFor(deps, owner), {
+      name: "Daily standup",
+    });
     expect(deleted).toEqual({ ok: true, name: "Daily standup" });
     expect(await skillReadFromTool(deps, owner, { name: "Daily standup" })).toEqual({
       error: "Skill not found.",
@@ -154,8 +206,8 @@ describe("skill tools", () => {
       body: "1. Read the diff.",
       frontmatter: { compatibility: "cursor", "allowed-tools": ["shell"] },
     });
-    await skillCreateFromTool(deps, owner, { content });
-    await skillUpdateFromTool(deps, owner, {
+    await skillCreateFromTool(deps, owner, writerFor(deps, owner), { content });
+    await skillUpdateFromTool(deps, owner, writerFor(deps, owner), {
       name: "Review PR",
       body: "1. Read the diff.\n2. Leave comments.",
     });
@@ -165,20 +217,20 @@ describe("skill tools", () => {
   });
 
   it("renames only via newName, not the name lookup key", async () => {
-    const created = await skillCreateFromTool(deps, owner, {
+    const created = await skillCreateFromTool(deps, owner, writerFor(deps, owner), {
       name: "Original",
       description: "Keep name unless newName",
       body: "body",
     });
     const skillId = String(created.id);
-    const mistyped = await skillUpdateFromTool(deps, owner, {
+    const mistyped = await skillUpdateFromTool(deps, owner, writerFor(deps, owner), {
       skillId,
       name: "Should not apply",
       description: "still original name",
     });
     expect(mistyped).toMatchObject({ ok: true, id: "user:original", name: "Original" });
 
-    const renamed = await skillUpdateFromTool(deps, owner, {
+    const renamed = await skillUpdateFromTool(deps, owner, writerFor(deps, owner), {
       skillId,
       newName: "Renamed",
     });
@@ -190,7 +242,7 @@ describe("skill tools", () => {
 
   it("scopes list to the owner workspace and injects catalog lines", async () => {
     await seed("Other workspace skill", "not visible", "x", { spaceId: "ws-2", userId: "user-2" });
-    await skillCreateFromTool(deps, owner, {
+    await skillCreateFromTool(deps, owner, writerFor(deps, owner), {
       name: "Daily standup",
       description: "Prepare standup notes",
       body: "steps",
@@ -203,9 +255,37 @@ describe("skill tools", () => {
     expect(catalog).toContain("skill_read");
   });
 
+  it("answers a tool call run again after a crash with its first result", async () => {
+    const bot = { ...owner, botId: "bot-1" };
+    const library = createSkillLibrary({ ...deps, lock });
+    const sameCall = (toolCallId: string) =>
+      library.forBot(bot, { botId: "bot-1", botName: "Bot", runId: "run-1", toolCallId });
+    const create = { name: "Deploy", description: "Ship it", body: "steps" };
+    const created = await skillCreateFromTool(deps, bot, sameCall("call-1"), create);
+    expect(await skillCreateFromTool(deps, bot, sameCall("call-1"), create)).toEqual(created);
+
+    const rename = { skillId: "user:deploy", newName: "Ship" };
+    const renamed = await skillUpdateFromTool(deps, bot, sameCall("call-2"), rename);
+    expect(renamed).toEqual({ ok: true, id: "user:ship", name: "Ship", description: "Ship it" });
+    expect(await skillUpdateFromTool(deps, bot, sameCall("call-2"), rename)).toEqual(renamed);
+    expect(await skillCreateFromTool(deps, bot, sameCall("call-3"), create)).toMatchObject({
+      ok: true,
+      id: "user:deploy",
+    });
+    expect(
+      await skillUpdateFromTool(deps, bot, sameCall("call-4"), {
+        skillId: "user:ship",
+        newName: "Deploy",
+      }),
+    ).toEqual({ error: 'A skill named "Deploy" already exists.' });
+  });
+
   it("reports a conflict when two creators race on the same name", async () => {
     await seed("Alpha", "First");
-    const result = await skillCreateFromTool(deps, owner, { name: "alpha", description: "Dup" });
+    const result = await skillCreateFromTool(deps, owner, writerFor(deps, owner), {
+      name: "alpha",
+      description: "Dup",
+    });
     expect(result).toEqual({ error: 'A skill named "Alpha" already exists.' });
   });
 
@@ -243,19 +323,21 @@ describe("skill tools", () => {
     expect(String(read.content)).toContain("Do not modify files");
 
     expect(
-      await skillCreateFromTool(deps, owner, {
+      await skillCreateFromTool(deps, owner, writerFor(deps, owner), {
         name: "interrogate",
         description: "shadow the builtin",
         body: "steps",
       }),
     ).toEqual({ error: 'A skill named "Interrogate" already exists.' });
     expect(
-      await skillUpdateFromTool(deps, owner, {
+      await skillUpdateFromTool(deps, owner, writerFor(deps, owner), {
         name: "Interrogate",
         description: "hijack",
       }),
     ).toEqual({ error: "Builtin and plugin skills are read-only." });
-    expect(await skillDeleteFromTool(deps, owner, { name: "Interrogate" })).toEqual({
+    expect(
+      await skillDeleteFromTool(deps, owner, writerFor(deps, owner), { name: "Interrogate" }),
+    ).toEqual({
       error: "Builtin and plugin skills are read-only.",
     });
   });
@@ -276,17 +358,10 @@ describe("skill tools", () => {
 
   it.each(["interrogate", " Interrogate "])("preserves a saved skill named %j", async (name) => {
     // A skill file whose name collides with a builtin still belongs to its owner.
-    await writeUserSkill(
+    await seedSkillFolder(
       userSkillsRoot(dataDir, owner),
-      {
-        name,
-        content: buildSkillMd({
-          name: name.trim(),
-          description: "my review recipe",
-          body: "my steps",
-        }),
-      },
-      "create",
+      name,
+      buildSkillMd({ name: name.trim(), description: "my review recipe", body: "my steps" }),
     );
 
     const records = await listAgentSkillRecords(deps, owner);
@@ -302,12 +377,14 @@ describe("skill tools", () => {
       source: "user",
     });
     expect(
-      await skillUpdateFromTool(deps, owner, {
+      await skillUpdateFromTool(deps, owner, writerFor(deps, owner), {
         name: "Interrogate",
         description: "still mine",
       }),
     ).toMatchObject({ ok: true });
-    expect(await skillDeleteFromTool(deps, owner, { name: "Interrogate" })).toEqual({
+    expect(
+      await skillDeleteFromTool(deps, owner, writerFor(deps, owner), { name: "Interrogate" }),
+    ).toEqual({
       ok: true,
       name: name.trim(),
     });
@@ -315,7 +392,7 @@ describe("skill tools", () => {
 
   it("rejects oversized skill content", async () => {
     const body = "x".repeat(100_001);
-    const created = await skillCreateFromTool(deps, owner, {
+    const created = await skillCreateFromTool(deps, owner, writerFor(deps, owner), {
       name: "Huge",
       description: "too big",
       body,
@@ -326,20 +403,20 @@ describe("skill tools", () => {
   it("rejects overlong skill names on structured create and rename", async () => {
     const longName = "N".repeat(81);
     expect(
-      await skillCreateFromTool(deps, owner, {
+      await skillCreateFromTool(deps, owner, writerFor(deps, owner), {
         name: longName,
         description: "ok description",
         body: "steps",
       }),
     ).toEqual({ error: "Skill name must be at most 80 characters." });
 
-    await skillCreateFromTool(deps, owner, {
+    await skillCreateFromTool(deps, owner, writerFor(deps, owner), {
       name: "Short",
       description: "ok description",
       body: "steps",
     });
     expect(
-      await skillUpdateFromTool(deps, owner, {
+      await skillUpdateFromTool(deps, owner, writerFor(deps, owner), {
         name: "Short",
         newName: longName,
       }),
@@ -391,7 +468,7 @@ describe("skill tools", () => {
 
   it("scopes a bot-created skill to its creator", async () => {
     const creator = { spaceId: "w1", userId: "u1", botId: "botA" };
-    const created = await skillCreateFromTool(deps, creator, {
+    const created = await skillCreateFromTool(deps, creator, writerFor(deps, creator), {
       name: "Mine",
       description: "d",
       body: "x",
@@ -399,7 +476,6 @@ describe("skill tools", () => {
     expect(created.ok).toBe(true);
     expect(String(created.hint)).toContain("/Mine");
     expect(String(created.hint)).toContain("share it with other agents");
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:mine" } })).toMatchObject([
       { spaceId: "w1", userId: "u1", availability: "selected" },
     ]);
@@ -421,18 +497,22 @@ describe("skill tools", () => {
     const shared = await skillCreateFromTool(
       deps,
       { spaceId: "w1", userId: "u1" },
+      writerFor(deps, { spaceId: "w1", userId: "u1" }),
       { name: "Shared", description: "d", body: "x" },
     );
     expect(shared.ok).toBe(true);
     expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:shared" } })).toEqual([]);
     expect(await prisma.botSkill.findMany({ where: { skillKey: "user:shared" } })).toEqual([]);
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(await names({ ...creator, botId: "botB" })).toEqual(["Shared"]);
   });
 
   it("renames access rows with the skill and removes them on delete", async () => {
     const scope = { spaceId: owner.spaceId, userId: owner.userId };
-    await skillCreateFromTool(deps, owner, { name: "Old", description: "d", body: "x" });
+    await skillCreateFromTool(deps, owner, writerFor(deps, owner), {
+      name: "Old",
+      description: "d",
+      body: "x",
+    });
     await prisma.skillSetting.upsert({
       where: { spaceId_userId_skillKey: { ...scope, skillKey: "user:old" } },
       create: { ...scope, skillKey: "user:old", availability: "selected" },
@@ -445,7 +525,12 @@ describe("skill tools", () => {
     });
 
     // Case-only rename keeps the key: access rows untouched, same directory replaced.
-    expect(await skillUpdateFromTool(deps, owner, { name: "Old", newName: "OLD" })).toMatchObject({
+    expect(
+      await skillUpdateFromTool(deps, owner, writerFor(deps, owner), {
+        name: "Old",
+        newName: "OLD",
+      }),
+    ).toMatchObject({
       ok: true,
       id: "user:old",
       name: "OLD",
@@ -454,7 +539,10 @@ describe("skill tools", () => {
     expect(prisma.botSkill.updateMany).not.toHaveBeenCalled();
     expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:old" } })).toHaveLength(1);
 
-    const renamed = await skillUpdateFromTool(deps, owner, { name: "OLD", newName: "New" });
+    const renamed = await skillUpdateFromTool(deps, owner, writerFor(deps, owner), {
+      name: "OLD",
+      newName: "New",
+    });
     expect(renamed).toMatchObject({ ok: true, id: "user:new", name: "New" });
     expect(prisma.$transaction).toHaveBeenCalled();
     expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:old" } })).toEqual([]);
@@ -475,10 +563,12 @@ describe("skill tools", () => {
     ]);
     expect(ownNames(await listAgentSkillRecords(deps, { ...owner, botId: "botB" }))).toEqual([]);
 
-    expect(await skillDeleteFromTool(deps, owner, { name: "New" })).toEqual({
-      ok: true,
-      name: "New",
-    });
+    expect(await skillDeleteFromTool(deps, owner, writerFor(deps, owner), { name: "New" })).toEqual(
+      {
+        ok: true,
+        name: "New",
+      },
+    );
     expect(await prisma.skillSetting.findMany()).toEqual([]);
     expect(await prisma.botSkill.findMany()).toEqual([]);
     expect(await listUserSkills(userSkillsRoot(dataDir, owner))).toEqual([]);
@@ -558,8 +648,12 @@ describe("skill tools", () => {
     expect(String(read.content)).toContain("Outline first.");
 
     const readOnly = { error: expect.stringContaining("read-only") };
-    expect(await skillUpdateFromTool(deps, owner, { skillId: mktId, body: "x" })).toEqual(readOnly);
-    expect(await skillDeleteFromTool(deps, owner, { skillId: mktId })).toEqual(readOnly);
+    expect(
+      await skillUpdateFromTool(deps, owner, writerFor(deps, owner), { skillId: mktId, body: "x" }),
+    ).toEqual(readOnly);
+    expect(
+      await skillDeleteFromTool(deps, owner, writerFor(deps, owner), { skillId: mktId }),
+    ).toEqual(readOnly);
     expect(await ids(owner)).toEqual(["user:mine", mktId]);
   });
 });
@@ -647,7 +741,9 @@ describe("skill drafts", () => {
     ];
 
     it("saves the folder as a skill scoped to the creating bot", async () => {
-      expect(await skillCreateFromTool(deps, creator, { files: draft })).toMatchObject({
+      expect(
+        await skillCreateFromTool(deps, creator, writerFor(deps, creator), { files: draft }),
+      ).toMatchObject({
         ok: true,
         id: "user:deploy",
         name: "Deploy",
@@ -666,16 +762,27 @@ describe("skill drafts", () => {
       expect(
         await skillReadFromTool(deps, { ...creator, botId: "botB" }, { name: "Deploy" }),
       ).toEqual({ error: "Skill not found." });
-      expect(await skillCreateFromTool(deps, creator, { files: draft })).toEqual({
+      expect(
+        await skillCreateFromTool(deps, creator, writerFor(deps, creator), { files: draft }),
+      ).toEqual({
         error: 'A skill named "Deploy" already exists.',
       });
     });
 
     it("rejects files combined with content and a draft without SKILL.md", async () => {
-      expect(await skillCreateFromTool(deps, creator, { files: draft, content: skillMd })).toEqual({
+      expect(
+        await skillCreateFromTool(deps, creator, writerFor(deps, creator), {
+          files: draft,
+          content: skillMd,
+        }),
+      ).toEqual({
         error: "Pass either path or name/description/body/content, not both.",
       });
-      expect(await skillCreateFromTool(deps, creator, { files: draft.slice(1) })).toEqual({
+      expect(
+        await skillCreateFromTool(deps, creator, writerFor(deps, creator), {
+          files: draft.slice(1),
+        }),
+      ).toEqual({
         error: "No SKILL.md at the root of the skill folder.",
       });
       expect(await listUserSkills(userSkillsRoot(dataDir, creator))).toEqual([]);
@@ -684,10 +791,10 @@ describe("skill drafts", () => {
     const shipMd = buildSkillMd({ name: "Ship", description: "Ship faster", body: "1. Go." });
 
     it("replaces a saved skill's scripts from a folder", async () => {
-      await skillCreateFromTool(deps, creator, { files: draft });
+      await skillCreateFromTool(deps, creator, writerFor(deps, creator), { files: draft });
       const nextMd = buildSkillMd({ name: "Deploy", description: "Ship it", body: "2. Check." });
       expect(
-        await skillUpdateFromTool(deps, creator, {
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
           name: "Deploy",
           files: [
             { path: "SKILL.md", bytes: text(nextMd), executable: false },
@@ -702,9 +809,9 @@ describe("skill drafts", () => {
     });
 
     it("moves access rows when the folder's SKILL.md renames the skill", async () => {
-      await skillCreateFromTool(deps, creator, { files: draft });
+      await skillCreateFromTool(deps, creator, writerFor(deps, creator), { files: draft });
       expect(
-        await skillUpdateFromTool(deps, creator, {
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
           name: "Deploy",
           files: [{ path: "SKILL.md", bytes: text(shipMd), executable: false }],
         }),
@@ -723,12 +830,19 @@ describe("skill drafts", () => {
     });
 
     it("rejects files combined with body and folders for read-only skills", async () => {
-      await skillCreateFromTool(deps, creator, { files: draft });
+      await skillCreateFromTool(deps, creator, writerFor(deps, creator), { files: draft });
       expect(
-        await skillUpdateFromTool(deps, creator, { name: "Deploy", files: draft, body: "x" }),
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
+          name: "Deploy",
+          files: draft,
+          body: "x",
+        }),
       ).toEqual({ error: "Pass either path or newName/description/body/content, not both." });
       expect(
-        await skillUpdateFromTool(deps, creator, { name: "Interrogate", files: draft }),
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
+          name: "Interrogate",
+          files: draft,
+        }),
       ).toEqual({ error: "Builtin and plugin skills are read-only." });
       expect(
         await readdir(path.join(userSkillsRoot(dataDir, creator), "deploy", "scripts")),

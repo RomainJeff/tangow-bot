@@ -100,7 +100,31 @@ export * from "./scripted-voice.js";
 export * from "./secrets.js";
 export * from "./sendblue-emulator.js";
 export { SerenityMemoryProvider } from "./serenity-memory-provider.js";
-export * from "./skill-store.js";
+export type {
+  BotSkillWriter,
+  BotWriteContext,
+  OwnerSkillAdmin,
+  SkillAccess,
+  SkillAuthor,
+  SkillContent,
+  SkillUid,
+  SkillWriteResult,
+  TrashedSkill,
+  VersionId,
+  VersionManifest,
+} from "./skill-library.js";
+export {
+  createSkillLibrary,
+  parseSkillUid,
+  parseVersionId,
+  purgeUserSkills,
+  repairSkillLibrary,
+  SkillRefusal,
+  scheduleSkillLibraryRepair,
+} from "./skill-library.js";
+export * from "./skill-lock.js";
+export type { SkillTreeFile, UserSkillFile } from "./skill-store.js";
+export { bundleFormat, listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
 export * from "./skill-tools.js";
 export * from "./smtp-email.js";
 export { SupermemoryMemoryProvider } from "./supermemory-memory-provider.js";

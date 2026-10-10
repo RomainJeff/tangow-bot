@@ -350,6 +350,8 @@ import {
 } from "./scratchpad-tools.js";
 import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
+import { createSkillLibrary } from "./skill-library.js";
+import type { SkillOwnerLock } from "./skill-lock.js";
 import {
   listAgentSkillRecords,
   readSkillDraft,
@@ -661,6 +663,8 @@ export interface ExecutorDeps {
   decisionProviders?: DecisionProviderResolver;
   /** Aborted when createApp stop() begins so in-flight continueRun boot waits exit promptly. */
   shutdownSignal?: AbortSignal;
+  /** Serializes skill writes with the API's; production passes createPostgresSkillLock. */
+  skillLock: SkillOwnerLock;
 }
 
 function isAuditableToolResult(value: unknown): value is {
@@ -995,6 +999,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
   const skillDeps = { prisma: deps.prisma, dataDir: deps.dataDir ?? "./data" };
+  const skillLibrary = createSkillLibrary({ ...skillDeps, lock: deps.skillLock });
   const browser = deps.browser ?? createBrowserProvider(undefined, { sandbox: deps.sandbox });
   const resolveConnectedModel = async (
     scope: { userId: string; spaceId: string },
@@ -3228,6 +3233,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
               { query: args.query ? String(args.query) : undefined },
             );
           }
+          const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+          const skillWriter = () =>
+            skillLibrary.forBot(skillOwner, {
+              botId: bot.id,
+              botName: bot.name,
+              runId,
+              toolCallId: effectKey,
+            });
           if (name === "skill_create" || name === "skill_update") {
             const draftPath = typeof args.path === "string" ? args.path.trim() : "";
             const files = draftPath
@@ -3239,10 +3252,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 )
               : undefined;
             if (files && "error" in files) return finish(files);
-            const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+            const writer = skillWriter();
             if (name === "skill_create") {
               return finish(
-                await skillCreateFromTool(skillDeps, skillOwner, {
+                await skillCreateFromTool(skillDeps, skillOwner, writer, {
                   files,
                   name: args.name ? String(args.name) : undefined,
                   description: args.description ? String(args.description) : undefined,
@@ -3252,7 +3265,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               );
             }
             return finish(
-              await skillUpdateFromTool(skillDeps, skillOwner, {
+              await skillUpdateFromTool(skillDeps, skillOwner, writer, {
                 files,
                 name: args.name ? String(args.name) : undefined,
                 skillId: args.skillId ? String(args.skillId) : undefined,
@@ -3265,18 +3278,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "skill_delete") {
             return finish(
-              await skillDeleteFromTool(
-                skillDeps,
-                {
-                  spaceId: run.spaceId,
-                  userId: run.userId,
-                  botId: run.botId,
-                },
-                {
-                  name: args.name ? String(args.name) : undefined,
-                  skillId: args.skillId ? String(args.skillId) : undefined,
-                },
-              ),
+              await skillDeleteFromTool(skillDeps, skillOwner, skillWriter(), {
+                name: args.name ? String(args.name) : undefined,
+                skillId: args.skillId ? String(args.skillId) : undefined,
+              }),
             );
           }
           if (name === "add_mcp_server") {

@@ -11,6 +11,7 @@ import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { createInMemorySkillLock } from "./skill-lock.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -119,6 +120,12 @@ function table(store: Row[]) {
       if (found) return found;
       store.push({ ...create });
       return create;
+    }),
+    deleteMany: vi.fn(async ({ where }: { where: Row }) => {
+      const kept = store.filter((row) => !matches(row, where));
+      const count = store.length - kept.length;
+      store.splice(0, store.length, ...kept);
+      return { count };
     }),
   };
 }
@@ -357,6 +364,7 @@ function fixture(
     jobs: { enqueue, cancel },
     secrets: [],
     dataDir,
+    skillLock: createInMemorySkillLock(),
   } as unknown as Parameters<typeof createRunExecutor>[0]);
 
   const postedCards = () =>

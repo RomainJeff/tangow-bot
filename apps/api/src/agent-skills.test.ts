@@ -1,7 +1,13 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { listUserSkills, marketplacesRoot, userSkillsRoot } from "@rakazo/adapters";
+import {
+  createInMemorySkillLock,
+  createSkillLibrary,
+  listUserSkills,
+  marketplacesRoot,
+  userSkillsRoot,
+} from "@rakazo/adapters";
 import { buildSkillMd } from "@rakazo/core";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
 import { create as tarCreate } from "tar";
@@ -86,7 +92,8 @@ describe("agent skills service (filesystem)", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  const service = () => createAgentSkillsService(prisma as unknown as PrismaClient, dataDir);
+  const service = () =>
+    createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, createInMemorySkillLock());
 
   it("creates, lists, renames (cascading access rows) and removes a skill", async () => {
     const skills = service();
@@ -130,6 +137,52 @@ describe("agent skills service (filesystem)", () => {
     expect(await listUserSkills(userSkillsRoot(dataDir, actor))).toEqual([]);
     expect(prisma.skillSetting._store).toEqual([]);
     expect(prisma.botSkill._store).toEqual([]);
+
+    // Removed, not gone: the skill waits in the trash.
+    const admin = createSkillLibrary({
+      prisma: prisma as unknown as PrismaClient,
+      dataDir,
+      lock: createInMemorySkillLock(),
+    }).forOwner(actor);
+    expect((await admin.trash()).map((entry) => entry.name)).toEqual(["Standup"]);
+  });
+
+  it("never loses an access change made while a rename moves the rows", async () => {
+    const lock = createInMemorySkillLock();
+    const skills = createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, lock);
+    const created = await skills.create(actor, {
+      content: buildSkillMd({ name: "Daily Standup", description: "Notes", body: "Steps" }),
+    });
+    const rename = createSkillLibrary({
+      prisma: prisma as unknown as PrismaClient,
+      dataDir,
+      lock,
+    })
+      .forOwner(actor)
+      .update(created.id, {
+        kind: "skill-md",
+        name: "Standup",
+        content: buildSkillMd({ name: "Standup", description: "Notes", body: "Steps" }),
+      });
+    const findBots = prisma.bot.findMany.getMockImplementation();
+    prisma.bot.findMany.mockImplementationOnce(async (args) => {
+      await rename.catch(() => undefined);
+      return findBots?.(args);
+    });
+    const narrowed = await skills
+      .setAccess(actor, {
+        skillId: created.id,
+        availability: "selected",
+        bots: [{ botId: "bot-1", enabled: true }],
+      })
+      .then(
+        () => "applied",
+        (error: unknown) => (error instanceof IsolationError ? "gone" : error),
+      );
+    await rename;
+
+    const rows = prisma.skillSetting._store.map((row) => [row.skillKey, row.availability]);
+    expect({ narrowed, rows }).toEqual({ narrowed: "gone", rows: [] });
   });
 
   it("rejects duplicate names with CONFLICT and unknown ids with IsolationError", async () => {
