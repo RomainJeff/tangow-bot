@@ -907,6 +907,17 @@ describe("skill drafts", () => {
       expect(await listUserSkills(userSkillsRoot(dataDir, creator))).toEqual([]);
     });
 
+    it("answers a codeless failure of a draft create's access rows without the host path", async () => {
+      prisma.$transaction.mockRejectedValueOnce(
+        new Error(`Invalid \`prisma.skillSetting.upsert()\` invocation in ${dataDir}/index.js`),
+      );
+
+      expect(await skillCreateFromTool(deps, creator, [], { files: draft })).toEqual({
+        error: "Could not create skill.",
+      });
+      expect(await listUserSkills(userSkillsRoot(dataDir, creator))).toEqual([]);
+    });
+
     const shipMd = buildSkillMd({ name: "Ship", description: "Ship faster", body: "1. Go." });
 
     it("replaces a saved skill's scripts from a folder", async () => {

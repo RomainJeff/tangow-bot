@@ -376,6 +376,9 @@ function createdSkillHint(name: string, forBot: boolean, learning: SkillLearning
     : `Created skill. Mention /${name} so the user can open it.`;
 }
 
+/** A bot's draft refused by the store, with a message safe to show the bot. */
+class DraftRefused extends Error {}
+
 export function skillCreateFromTool(...args: Parameters<typeof createSkill>) {
   return underOwnerLock(args[0], args[1], "Could not create skill.", () => createSkill(...args));
 }
@@ -476,7 +479,14 @@ async function createSkill(
       ]);
     }
     if (input.files) {
-      await writeUserSkillFiles(root, input.files, async () => ({ name, content }));
+      await writeUserSkillFiles(root, input.files, async () => ({ name, content })).catch(
+        (error: unknown) => {
+          // Its codeless errors name the offending draft file and carry no host path.
+          throw error instanceof Error && !("code" in error)
+            ? new DraftRefused(error.message)
+            : error;
+        },
+      );
     } else {
       await writeUserSkill(root, { name, content }, "create");
     }
@@ -496,10 +506,7 @@ async function createSkill(
       }
     }
     if (isExists(error)) return taken;
-    // writeUserSkillFiles messages name the offending draft file and carry no host path.
-    if (input.files && error instanceof Error && !("code" in error)) {
-      return { error: error.message };
-    }
+    if (error instanceof DraftRefused) return { error: error.message };
     throw error;
   }
   return {
