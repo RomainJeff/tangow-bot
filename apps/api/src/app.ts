@@ -448,7 +448,6 @@ export async function createApp(
 
   const router = createRouter({
     prisma,
-    skillLock,
     events,
     auth,
     jobs,
