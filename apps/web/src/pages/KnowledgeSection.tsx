@@ -221,23 +221,18 @@ export function MemoryDocumentEditor({
         className={fieldClass}
         dir="auto"
       />
-      <div className="mt-2 flex gap-2">
-        <button
-          type="button"
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <Button variant="capsuleSecondary" size="capsule" disabled={busy} onClick={onCancel}>
+          <Trans>Cancel</Trans>
+        </Button>
+        <Button
+          variant="capsule"
+          size="capsule"
           disabled={busy || draft === doc.content}
           onClick={() => void save()}
-          className="rounded-lg bg-muted px-3 py-1.5 text-[13px] text-foreground disabled:opacity-50"
         >
           <Trans>Save</Trans>
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onCancel}
-          className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground disabled:opacity-50"
-        >
-          <Trans>Cancel</Trans>
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -668,9 +663,27 @@ export function AgentSkillEditor({
         </p>
       ) : null}
       <div className="mt-2 flex items-center gap-2">
+        {skill && !skill.readOnly ? (
+          <Button
+            variant="tertiary"
+            size="capsule"
+            disabled={busy}
+            onClick={() => void remove(skill)}
+            className={`-ms-3 text-destructive hover:text-destructive ${
+              confirmingDelete ? "bg-destructive/15" : ""
+            }`}
+          >
+            {confirmingDelete ? <Trans>Confirm delete</Trans> : <Trans>Delete</Trans>}
+          </Button>
+        ) : null}
+        <span className="flex-1" />
+        <Button variant="capsuleSecondary" size="capsule" onClick={() => onDone(false)}>
+          {skill?.readOnly ? <Trans>Close</Trans> : <Trans>Cancel</Trans>}
+        </Button>
         {loaded && !skill?.readOnly ? (
-          <button
-            type="button"
+          <Button
+            variant="capsule"
+            size="capsule"
             disabled={
               busy ||
               !draft.trim() ||
@@ -678,29 +691,9 @@ export function AgentSkillEditor({
               (!creating && draft === skill?.content)
             }
             onClick={() => void save()}
-            className="rounded-lg bg-muted px-3 py-1.5 text-[13px] text-foreground disabled:opacity-50"
           >
             <Trans>Save</Trans>
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => onDone(false)}
-          className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground"
-        >
-          {skill?.readOnly ? <Trans>Close</Trans> : <Trans>Cancel</Trans>}
-        </button>
-        {skill && !skill.readOnly ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void remove(skill)}
-            className={`ms-auto rounded-lg px-3 py-1.5 text-[13px] ${
-              confirmingDelete ? "bg-destructive/15 text-destructive" : "text-destructive"
-            }`}
-          >
-            {confirmingDelete ? <Trans>Confirm delete</Trans> : <Trans>Delete</Trans>}
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>
