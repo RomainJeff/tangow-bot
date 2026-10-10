@@ -1,8 +1,8 @@
 import type { Routine } from "@rakazo/contracts";
 import { draftFromRoutine, type RoutineDraft, triggerSave } from "@rakazo/core";
 import { radii } from "@rakazo/ui-tokens";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   Alert,
   Pressable,
@@ -18,17 +18,22 @@ import {
   Group,
   InkSwitch,
   LoadFailed,
+  LoadingRows,
   QuietLine,
   Row,
   SaveMeta,
-  useFocusedRead,
 } from "../components/bot-page/kit";
+import { useRoutines } from "../components/bot-page/routines-tab";
 import { WhenToRun } from "../components/bot-page/when-to-run";
-import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import {
   type BotPageContext,
   type FieldSave,
+  type RoutinePatch,
+  readBotPage,
+  readViewer,
+  removeRoutine,
+  updateRoutine,
   useBotField,
   useBotPageContext,
 } from "../lib/bot-page";
@@ -41,43 +46,47 @@ import { leaveTextField, restingText } from "../lib/text-field";
 import { nativeTextStyle } from "../lib/typography";
 import { readWebhookKey } from "../lib/webhook-key";
 
-type Routines = ReturnType<typeof useFocusedRead<Routine[]>>;
-type RoutinePatch = Partial<
-  Pick<
-    Routine,
-    | "name"
-    | "prompt"
-    | "active"
-    | "notify"
-    | "requireToolApproval"
-    | "crons"
-    | "webhookEnabled"
-    | "githubEnabled"
-    | "messageProvider"
-  >
-> & { runAt?: string };
-
 /**
- * One routine, from the Routines tab or a link in a thread. Each part saves on its own, like on
- * the web. The bot's routines are read again on focus and when a run ends, since there is no
- * read of one routine.
+ * One routine, from the Routines tab, a link in a thread or search. Each part saves on its own,
+ * like on the web. The bot's routines are read again on focus and when a run ends, since there
+ * is no read of one routine.
  */
 export default function BotRoutineScreen() {
   const { botId = "", routineId = "" } = useLocalSearchParams<{
     botId: string;
     routineId: string;
   }>();
+  const styles = useThemedStyles(createRoutineStyles);
   const { t } = useI18n();
   const router = useRouter();
+  const navigation = useNavigation();
   const page = useBotPageContext(botId);
   const epoch = useSyncExternalStore(
     subscribeBotRunEnds,
     () => botRunEpoch(botId),
     () => botRunEpoch(botId),
   );
-  const routines = useFocusedRead(() => rpc<Routine[]>("routines/list", { botId }), [botId, epoch]);
-  const { read } = routines;
-  const routine = read.kind === "ready" ? read.value.find((item) => item.id === routineId) : null;
+  const { routines, read, retry } = useRoutines(botId, epoch);
+  const known = routines?.find((item) => item.id === routineId);
+
+  // Opened from a thread or search, the bot may not be read yet; a failed read offers Retry.
+  const [botFailed, setBotFailed] = useState(false);
+  const pageKnown = page !== null;
+  const readBot = useCallback(() => {
+    if (pageKnown || !botId) return;
+    void Promise.all([readBotPage(botId), readViewer()]).then(
+      () => setBotFailed(false),
+      () => setBotFailed(true),
+    );
+  }, [botId, pageKnown]);
+  useEffect(readBot, [readBot]);
+
+  // Deleted here, the routine stays on screen while the screen slides away.
+  const deletedHere = useRef(false);
+  const lastShown = useRef(known);
+  if (known) lastShown.current = known;
+  const routine = known ?? (deletedHere.current ? lastShown.current : undefined);
+
   // A delete answering after the person swiped back must not pop the screen below too.
   const mounted = useRef(true);
   useEffect(
@@ -86,19 +95,44 @@ export default function BotRoutineScreen() {
     },
     [],
   );
-  const leave = () => {
+  const remove = async () => {
+    deletedHere.current = true;
+    try {
+      await removeRoutine(botId, routineId);
+    } catch (error) {
+      deletedHere.current = false;
+      throw error;
+    }
     if (mounted.current) router.back();
   };
+
+  const state = navigation.getState();
+  const fromBotPage = state?.routes[state.index - 1]?.name === "bot";
+
   return (
     <>
-      <Stack.Screen options={{ title: "", headerBackTitle: t("Routines") }} />
-      {read.kind === "failed" ? (
-        <LoadFailed onRetry={routines.retry} />
-      ) : page && routine ? (
-        <RoutineDetail page={page} routine={routine} routines={routines} onDeleted={leave} />
-      ) : read.kind === "ready" && !routine ? (
+      <Stack.Screen
+        options={{ title: "", headerBackTitle: fromBotPage ? t("Routines") : undefined }}
+      />
+      {page && routine ? (
+        <RoutineDetail page={page} routine={routine} onDelete={remove} />
+      ) : read === "ready" && routines && !routine ? (
         <QuietLine>{t("This routine no longer exists")}</QuietLine>
-      ) : null}
+      ) : read === "failed" || botFailed ? (
+        <LoadFailed
+          onRetry={() => {
+            setBotFailed(false);
+            readBot();
+            retry();
+          }}
+        />
+      ) : (
+        <View style={[styles.screen, styles.content]}>
+          <Group>
+            <LoadingRows />
+          </Group>
+        </View>
+      )}
     </>
   );
 }
@@ -106,31 +140,19 @@ export default function BotRoutineScreen() {
 function RoutineDetail({
   page,
   routine,
-  routines,
-  onDeleted,
+  onDelete,
 }: {
   page: BotPageContext;
   routine: Routine;
-  routines: Routines;
-  onDeleted: () => void;
+  onDelete: () => Promise<void>;
 }) {
   const styles = useThemedStyles(createRoutineStyles);
   const { t } = useI18n();
-  const { bot, readOnly } = page;
+  const { bot } = page;
+  const [deleting, setDeleting] = useState(false);
+  const readOnly = page.readOnly || deleting;
 
-  /** Sends a change; its answer replaces the routine in the list a read made. */
-  const update = async (patch: RoutinePatch) => {
-    const settle = routines.write();
-    const saved = await rpc<Routine>("routines/update", { routineId: routine.id, ...patch });
-    settle((current) =>
-      current.kind === "ready"
-        ? {
-            kind: "ready",
-            value: current.value.map((item) => (item.id === saved.id ? saved : item)),
-          }
-        : current,
-    );
-  };
+  const update = (patch: RoutinePatch) => updateRoutine(bot.id, routine.id, patch);
   const useField = <K extends "name" | "prompt" | "notify" | "requireToolApproval" | "active">(
     field: K,
   ): FieldSave<Routine[K]> =>
@@ -165,10 +187,13 @@ function RoutineDetail({
       {
         text: t("Delete"),
         style: "destructive",
-        onPress: () =>
-          void rpc("routines/remove", { routineId: routine.id }).then(onDeleted, (error: unknown) =>
-            Alert.alert(t("Could not delete routine"), serverMessage(error) || t("Try again.")),
-          ),
+        onPress: () => {
+          setDeleting(true);
+          void onDelete().catch((error: unknown) => {
+            setDeleting(false);
+            Alert.alert(t("Could not delete routine"), serverMessage(error) || t("Try again."));
+          });
+        },
       },
     ]);
 
@@ -260,10 +285,12 @@ function RoutineDetail({
         />
       </Group>
 
-      {readOnly ? null : (
+      {page.readOnly ? null : (
         <Group>
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: deleting }}
+            disabled={deleting}
             onPress={confirmDelete}
             style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
           >

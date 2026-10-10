@@ -45,6 +45,7 @@ import {
 } from "react-native";
 import { currentApiBase, rpc } from "../../lib/api";
 import { mobileTokens } from "../../lib/appearance";
+import { deviceTimezone } from "../../lib/bot-page";
 import { useI18n } from "../../lib/i18n";
 import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../../lib/native";
 import {
@@ -64,7 +65,7 @@ import { SpokenError } from "./spoken-error";
 
 // The trigger menu and sheets are SwiftUI views. Android ships no build of this app yet, so there
 // the triggers are listed without editing rather than rendering views it does not register.
-const EDITS_TRIGGERS = Platform.OS === "ios";
+export const EDITS_TRIGGERS = Platform.OS === "ios";
 
 const TIMED: readonly CronFreq[] = ["Every day", "Weekdays", "Every week", "Every month"];
 const AMOUNTS = [1, 2, 3, 5, 10, 15, 30, 45];
@@ -97,7 +98,7 @@ export function WhenToRun({
   );
   const messageProviders = messaging.kind === "ready" ? messaging.value.providers : [];
   const triggers = routineTriggers(draft);
-  const timezone = existing?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone = existing?.timezone ?? deviceTimezone();
 
   return (
     <>

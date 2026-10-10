@@ -4,6 +4,7 @@ import type {
   Me,
   ModelCatalogEntry,
   ModelCredential,
+  Routine,
   VoiceInfo,
 } from "@rakazo/contracts";
 import {
@@ -12,11 +13,19 @@ import {
   type FieldSaveState,
   fieldValue,
   type ModelCatalog,
+  type RoutinePayload,
   saveKey,
 } from "@rakazo/core";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { rpc, selectedSpaceId } from "./api";
-import { botRecords, botSaves, modelCatalogRead, viewer, voicesRead } from "./bot-page-state";
+import {
+  botRecords,
+  botSaves,
+  modelCatalogRead,
+  routineRecords,
+  viewer,
+  voicesRead,
+} from "./bot-page-state";
 import type { ReadState, SharedRead } from "./shared-read";
 
 export type BotPatch = Partial<
@@ -70,6 +79,59 @@ export function setBotComputer(botId: string, mode: ComputerMode): Promise<Bot> 
   return botRecords.write(botId, () => rpc<Bot>("bots/setComputer", { botId, mode }), [
     "computerMode",
   ]);
+}
+
+export type RoutinePatch = Partial<
+  Pick<
+    Routine,
+    | "name"
+    | "prompt"
+    | "active"
+    | "notify"
+    | "requireToolApproval"
+    | "crons"
+    | "webhookEnabled"
+    | "githubEnabled"
+    | "messageProvider"
+  >
+> & { runAt?: string };
+
+/** The device's timezone, which new routines are scheduled in, like on the web. */
+export function deviceTimezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+export function readRoutines(botId: string): Promise<void> {
+  return routineRecords.read(botId, () => rpc<Routine[]>("routines/list", { botId }));
+}
+
+export function updateRoutine(
+  botId: string,
+  routineId: string,
+  patch: RoutinePatch,
+): Promise<Routine> {
+  return routineRecords.write(
+    botId,
+    routineId,
+    () => rpc<Routine>("routines/update", { routineId, ...patch }),
+    Object.keys(patch),
+  );
+}
+
+export function createRoutine(botId: string, payload: RoutinePayload): Promise<Routine> {
+  return routineRecords.create(botId, () =>
+    rpc<Routine>("routines/create", { botId, timezone: deviceTimezone(), ...payload }),
+  );
+}
+
+export function removeRoutine(botId: string, routineId: string): Promise<void> {
+  return routineRecords.remove(botId, routineId, () => rpc("routines/remove", { routineId }));
+}
+
+/** The bot's routines as last read or written, `undefined` until a read lands. */
+export function useRoutineList(botId: string): Routine[] | undefined {
+  const read = () => routineRecords.routines(botId);
+  return useSyncExternalStore(routineRecords.subscribe, read, read);
 }
 
 function useBotRecord(botId: string): Bot | undefined {

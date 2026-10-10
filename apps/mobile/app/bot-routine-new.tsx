@@ -1,4 +1,3 @@
-import type { Routine } from "@rakazo/contracts";
 import { emptyRoutineDraft, type RoutineDraft, validateRoutineDraft } from "@rakazo/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
@@ -6,9 +5,8 @@ import { ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { Group, InkSwitch, Row } from "../components/bot-page/kit";
 import { SpokenError } from "../components/bot-page/spoken-error";
 import { WhenToRun } from "../components/bot-page/when-to-run";
-import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
-import { type BotPageContext, useBotPageContext } from "../lib/bot-page";
+import { type BotPageContext, createRoutine, useBotPageContext } from "../lib/bot-page";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
 import { draftError } from "../lib/routine-copy";
@@ -56,13 +54,7 @@ function NewRoutineForm({ page }: { page: BotPageContext }) {
     try {
       const needsKey = (draft.webhookEnabled || draft.githubEnabled) && !bot.webhookConfigured;
       if (needsKey) await readWebhookKey(bot.id);
-      // Scheduled in the device's timezone, like on the web.
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const created = await rpc<Routine>("routines/create", {
-        botId: bot.id,
-        timezone,
-        ...checked.payload,
-      });
+      const created = await createRoutine(bot.id, checked.payload);
       open(created.id);
     } catch (failure) {
       setError(serverMessage(failure) || t("Could not save routine"));

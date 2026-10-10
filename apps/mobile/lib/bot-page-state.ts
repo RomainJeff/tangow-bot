@@ -1,11 +1,15 @@
 import type { Me, VoiceInfo } from "@rakazo/contracts";
 import { createSaveStore, type ModelCatalog } from "@rakazo/core";
 import { createBotRecords } from "./bot-records";
+import { createRoutineRecords } from "./routine-records";
 import { serverMessage } from "./server-error";
 import { createSharedRead, type SharedRead } from "./shared-read";
 
 /** One copy of the bot page's data and saves for the app session, outside React. */
 export const botRecords = createBotRecords();
+
+/** Each bot's routines, shared by the Routines tab and a routine's screen. */
+export const routineRecords = createRoutineRecords();
 
 /** Field saves and unsaved drafts: memory only, so a draft never reaches the disk. */
 export const botSaves = createSaveStore({ reasonOf: serverMessage });
@@ -47,9 +51,10 @@ export function subscribeBotRunEnds(listener: () => void): () => void {
   };
 }
 
-/** Sign-out: nothing of the last person's bots, saves or drafts stays in memory. */
+/** Sign-out: nothing of the last person's bots, routines, saves or drafts stays in memory. */
 export function resetBotPage(): void {
   botRecords.reset();
+  routineRecords.reset();
   botSaves.reset();
   runEnds.clear();
   viewer.current = null;

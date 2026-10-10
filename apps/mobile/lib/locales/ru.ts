@@ -714,8 +714,6 @@ export const RU_MESSAGES: Record<string, string> = {
   "Notifications on": "Уведомления включены",
   "Show details": "Показать детали",
   "Hide details": "Скрыть детали",
-  "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
-    "Включено — уведомление и развёрнутая карточка при каждом запуске. Выключено — только тихий след в этом чате.",
 
   Dictate: "Диктовать",
   "Cancel dictation": "Отменить надиктовку",
@@ -846,6 +844,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Check in.": "Проверить.",
   "Could not save routine": "Не удалось сохранить задачу",
   "New routine": "Новая задача",
+  "No routines yet": "Задач пока нет",
   "Name this routine": "Назовите эту задачу",
   "Every day": "Каждый день",
   Weekdays: "Будни",

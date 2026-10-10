@@ -698,8 +698,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Notifications on": "通知已开启",
   "Show details": "显示详情",
   "Hide details": "隐藏详情",
-  "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
-    "开启后每次运行都会通知并展开卡片；关闭则仅在此对话中保留静默记录。",
 
   Dictate: "语音输入",
   "Cancel dictation": "取消语音输入",
@@ -829,6 +827,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Check in.": "报到。",
   "Could not save routine": "无法保存例行任务",
   "New routine": "新建例行任务",
+  "No routines yet": "暂无例行任务",
   "Name this routine": "给这个例行任务命名",
   "Every day": "每天",
   Weekdays: "工作日",
