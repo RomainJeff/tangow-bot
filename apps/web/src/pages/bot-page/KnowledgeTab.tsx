@@ -19,10 +19,13 @@ type MemoryScopeChoice = "" | "isolated" | "shared";
 export function KnowledgeTab({
   page,
   memoryProviderConfigured,
+  epoch,
   onOpen,
 }: {
   page: BotPageContext;
   memoryProviderConfigured: boolean;
+  /** Bumped when a wide editor closes, so the lists read again in place. */
+  epoch: number;
   /** Memory documents and the skill editor open in the wide detail. */
   onOpen: (detail: BotDetail) => void;
 }) {
@@ -34,6 +37,7 @@ export function KnowledgeTab({
         <MemoryDocumentList
           key={bot.id}
           load={() => rpc.memory.list({ botId: bot.id, scope: "bot" })}
+          epoch={epoch}
           exportFilename="memory.md"
           emptyLabel={<Trans>Nothing remembered yet</Trans>}
           testId="bot-knowledge-memory"
@@ -51,6 +55,7 @@ export function KnowledgeTab({
       <KnowledgeGroup label={t`Skills`} testId="bot-skills">
         <AgentSkills
           botId={bot.id}
+          epoch={epoch}
           onChanged={page.commands.skillsChanged}
           onOpenEditor={(skillId) => onOpen({ kind: "skill", skillId })}
         />

@@ -23,7 +23,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
 import { BotActivity } from "./BotActivity";
@@ -98,8 +98,15 @@ export function BotPage({
     knowledge: t`Knowledge`,
     settings: t`Settings`,
   };
+  // Knowledge stays mounted behind its memory and skill editors, so closing one
+  // keeps the tab as it was and reads its lists again in place.
+  const knowledgeBehind = detail?.kind === "memory" || detail?.kind === "skill";
+  const [knowledgeEpoch, setKnowledgeEpoch] = useState(0);
   const open = (next: BotDetail) => onView({ tab: view.tab, detail: next });
-  const back = () => onView({ tab: view.tab, detail: null });
+  const back = () => {
+    setKnowledgeEpoch((epoch) => epoch + 1);
+    onView({ tab: view.tab, detail: null });
+  };
   const toRoutines = () => onView({ tab: "routines", detail: null });
 
   // A routine that is gone (deleted here or elsewhere) leaves its tab showing.
@@ -116,21 +123,8 @@ export function BotPage({
     const closed = lastDetail.current;
     lastDetail.current = detail;
     if (detail && FOCUS_BACK.has(detail.kind)) backButton.current?.focus();
-    const page = root.current;
-    if (detail || !closed || !page) return;
-    // A row read again on the way back (a memory document, a skill) is focused once it is there.
-    const selector = `[data-opens="${detailOpener(closed)}"]`;
-    const focusOpener = () => {
-      const opener = page.querySelector<HTMLElement>(selector);
-      opener?.focus();
-      return opener !== null;
-    };
-    if (focusOpener()) return;
-    const observer = new MutationObserver(() => {
-      if (focusOpener()) observer.disconnect();
-    });
-    observer.observe(page, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    if (detail || !closed) return;
+    root.current?.querySelector<HTMLElement>(`[data-opens="${detailOpener(closed)}"]`)?.focus();
   }, [detail]);
 
   return (
@@ -219,8 +213,9 @@ export function BotPage({
             }
           />
         </div>
-      ) : (
-        <div className="rk-scroll min-h-0 flex-1 overflow-y-auto pb-4">
+      ) : null}
+      {detail && !knowledgeBehind ? null : (
+        <div hidden={knowledgeBehind} className="rk-scroll min-h-0 flex-1 overflow-y-auto pb-4">
           <BotHero page={page} />
           {archived ? (
             <div className="px-4 pt-5">
@@ -263,6 +258,7 @@ export function BotPage({
                   <KnowledgeTab
                     page={page}
                     memoryProviderConfigured={memoryProviderConfigured}
+                    epoch={knowledgeEpoch}
                     onOpen={open}
                   />
                 </Suspense>

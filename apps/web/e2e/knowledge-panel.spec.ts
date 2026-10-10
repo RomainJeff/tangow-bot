@@ -119,10 +119,28 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   expect(
     await rpc<MemoryDocument[]>(page, "memory/list", { botId: chiefId, scope: "bot" }),
   ).toContainEqual(expect.objectContaining({ revision: 1 }));
+  // Back on Knowledge, the row stays on screen while the list reads again.
+  let releaseMemoryRefresh!: () => void;
+  const memoryRefreshGate = new Promise<void>((resolve) => {
+    releaseMemoryRefresh = resolve;
+  });
+  await page.route(
+    "**/rpc/memory/list",
+    async (route) => {
+      await memoryRefreshGate;
+      await route.continue();
+    },
+    { times: 1 },
+  );
   await panel.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(panel).toHaveAttribute("data-size", "default");
+  try {
+    await expect(panel).toHaveAttribute("data-size", "default");
+    await expect(botMemoryRow).toBeFocused();
+    await expect(botMemory).not.toContainText("Nothing remembered yet");
+  } finally {
+    releaseMemoryRefresh();
+  }
   await expect(botMemory.getByText("rev 2")).toBeVisible();
-  await expect(botMemoryRow).toBeFocused();
   expect(
     await rpc<MemoryDocument[]>(page, "memory/list", { botId: chiefId, scope: "bot" }),
   ).toContainEqual(expect.objectContaining({ content: `# Chief\n\n${botMarker}\n`, revision: 2 }));
@@ -261,6 +279,7 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   try {
     await expect(editor).toBeHidden();
     await expect(panel).toHaveAttribute("data-size", "default");
+    await expect(skillRow).toBeFocused();
     await captureScreenshot(page, testInfo, "85-skill-refresh-pending");
   } finally {
     releaseSkillRefresh();

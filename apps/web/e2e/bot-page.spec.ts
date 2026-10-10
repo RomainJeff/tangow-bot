@@ -239,11 +239,14 @@ test("Knowledge shows memory, the first five files and skills", async ({ page })
   await expect(knowledge.getByTestId("bot-skills")).toContainText("inbox-triage");
 });
 
-test("a memory document and a skill open wide, and focus returns to their row", async ({
+test("a memory document and a skill open wide, and the tab comes back as it was", async ({
   page,
 }) => {
   await page.goto(`${FIXTURE}?tab=knowledge`);
   const panel = page.getByTestId("side-panel");
+  const files = page.getByTestId("bot-knowledge-files");
+  await files.getByRole("button", { name: "notes/" }).click();
+  await expect(files).toContainText("vendors.csv");
   const memoryRow = page.getByTestId("bot-knowledge-memory").getByRole("button", {
     name: /MEMORY\.md/,
   });
@@ -265,6 +268,7 @@ test("a memory document and a skill open wide, and focus returns to their row", 
   await page.keyboard.press("Escape");
   await expect(panel).toHaveAttribute("data-size", "default");
   await expect(skillRow).toBeFocused();
+  await expect(files).toContainText("vendors.csv");
 });
 
 test("a routine row says how its last run went, and its switch saves on its own", async ({

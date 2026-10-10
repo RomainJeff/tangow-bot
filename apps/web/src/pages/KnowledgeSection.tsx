@@ -51,12 +51,15 @@ export function SpaceMemorySection() {
  */
 export function MemoryDocumentList({
   load,
+  epoch,
   exportFilename,
   emptyLabel,
   testId,
   onOpen,
 }: {
   load: () => Promise<MemoryDocument[]>;
+  /** A change reads the list again, keeping the rows shown until it answers. */
+  epoch?: number;
   exportFilename: string;
   emptyLabel: ReactNode;
   testId: string;
@@ -87,7 +90,7 @@ export function MemoryDocumentList({
     return () => {
       generation.current += 1;
     };
-  }, [t]);
+  }, [t, epoch]);
 
   function openDoc(doc: MemoryDocument) {
     if (onOpen) {
@@ -255,10 +258,13 @@ Steps the agent should follow.
  */
 export function AgentSkills({
   botId,
+  epoch,
   onChanged,
   onOpenEditor,
 }: {
   botId?: string;
+  /** A change reads the list again, keeping the rows shown until it answers. */
+  epoch?: number;
   /** Called once the server has confirmed a skill write. */
   onChanged?: () => void;
   onOpenEditor?: (skillId: string | null) => void;
@@ -298,7 +304,7 @@ export function AgentSkills({
     return () => {
       generation.current += 1;
     };
-  }, [t, botId]);
+  }, [t, botId, epoch]);
 
   function openEditor(skillId: string | null) {
     if (busy) return;
