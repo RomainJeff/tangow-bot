@@ -12,8 +12,9 @@ const MISSING_MODEL_ERRORS: ReadonlySet<string> = new Set([
 
 const COMPUTER_ERROR = /computer|Box API|sandbox|takeover/i;
 
+// A provider SDK leads its message with the HTTP status; anywhere else a status could be a tool's.
 const PROVIDER_ERROR =
-  /\b(?:401|402|403|404|408|409|413|429|5\d\d)\b|rate.?limit|too many requests|overloaded|unauthori[sz]ed|forbidden|api.?key|quota|billing|insufficient|credit|context (?:length|window)|timed? ?out|fetch failed|ECONN\w*|ENOTFOUND|OpenCode|provider|model/i;
+  /^(?:401|402|403|429|5\d\d)\b|rate.?limit|too many requests|overloaded|invalid.{0,20}api.?key|quota|billing|credit balance|context (?:length|window)|OpenCode/i;
 
 /** Only a failed run has a failure kind. Unrecognised text is `other`, never guessed as a provider fault. */
 export function classifyRunFailure(

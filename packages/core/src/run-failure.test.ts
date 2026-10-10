@@ -22,6 +22,11 @@ describe("classifyRunFailure", () => {
       "OpenCode rejected this chat session. Send the message again.",
       "provider",
     ],
+    ["provider billing", "400 Your credit balance is too low", "provider"],
+    ["provider server error", "529 Overloaded", "provider"],
+    ["tool not found", "web_fetch failed: 404 Not Found", "other"],
+    ["tool naming a model", "Tool error: model file missing", "other"],
+    ["network failure", "fetch failed", "other"],
     ["pause for approval", "Could not pause this run for approval; try sending again.", "other"],
     [
       "pause for protected input",
