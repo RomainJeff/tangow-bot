@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
   type FieldSave,
   type SaveMetaLabels,
+  Skeleton,
   Surface,
   useFieldSave,
 } from "@rakazo/ui-web";
@@ -108,4 +109,19 @@ export function useConfirm(): { confirm: Confirm; dialog: ReactNode } {
     </AlertDialog>
   ) : null;
   return { confirm, dialog };
+}
+
+/** Rows that keep the height of what is loading; never a bare spinner. */
+export function LoadingRows() {
+  return (
+    <div aria-busy className="flex flex-col">
+      {[0, 1, 2].map((index) => (
+        <div key={index} className="flex min-h-11 items-center gap-2.5">
+          <Skeleton className="size-4.5 rounded-full" />
+          <Skeleton className="h-3.5 flex-1" />
+          <Skeleton className="h-3.5 w-12" />
+        </div>
+      ))}
+    </div>
+  );
 }

@@ -13,10 +13,13 @@ type MemoryScopeChoice = "" | "isolated" | "shared";
 export function KnowledgeTab({
   page,
   memoryProviderConfigured,
+  trashOpen,
   onOpen,
 }: {
   page: BotPageContext;
   memoryProviderConfigured: boolean;
+  /** A line about a deleted skill led here: Recently deleted starts expanded. */
+  trashOpen?: boolean;
   /** The skill editor opens in the wide detail. */
   onOpen: (detail: BotDetail) => void;
 }) {
@@ -44,6 +47,7 @@ export function KnowledgeTab({
       <KnowledgeGroup label={t`Skills`} testId="bot-skills">
         <AgentSkills
           botId={bot.id}
+          trashOpen={trashOpen}
           onOpenEditor={(skillId) => onOpen({ kind: "skill", skillId })}
         />
       </KnowledgeGroup>

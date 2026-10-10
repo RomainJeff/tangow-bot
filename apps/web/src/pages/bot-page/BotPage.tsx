@@ -163,7 +163,14 @@ export function BotPage({
       ) : detail?.kind === "skill" ? (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto px-4 pt-1 pb-4">
           <Suspense fallback={null}>
-            <AgentSkillEditor key={detail.skillId} skillId={detail.skillId} onDone={back} />
+            <AgentSkillEditor
+              key={detail.skillId}
+              skillId={detail.skillId}
+              onDone={back}
+              onSkillChange={(skillId) =>
+                onView({ tab: view.tab, detail: { kind: "skill", skillId } })
+              }
+            />
           </Suspense>
         </div>
       ) : detail?.kind === "routine-new" ? (
@@ -206,6 +213,7 @@ export function BotPage({
                 <KnowledgeTab
                   page={page}
                   memoryProviderConfigured={memoryProviderConfigured}
+                  trashOpen={view.trash}
                   onOpen={open}
                 />
               </Suspense>
