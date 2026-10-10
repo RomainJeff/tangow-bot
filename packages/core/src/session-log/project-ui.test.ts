@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fixtureChain } from "./fixtures/read-fixture.js";
+import { fixtureChain, linkEntries } from "./fixtures/read-fixture.js";
 import { projectThreadItems } from "./project-ui.js";
 
 const model = { provider: "emulator", id: "emulator-1" };
@@ -746,6 +746,29 @@ describe("projectThreadItems", () => {
             ],
           },
         ],
+      },
+    ]);
+  });
+
+  it("gives a run finished at a timestamp before its start a duration of zero", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const trigger = { kind: "webhook", routineId: "rtn_1" };
+    const usage = { inputTokens: 300, outputTokens: 5 };
+    const chain = linkEntries("skew", [
+      { ...run, ts: at(5), type: "run.started", payload: { trigger, model, effort: null } },
+      { ...run, ts: at(3), type: "run.finished", payload: { status: "completed", usage } },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "run",
+        id: "skew-0",
+        ts: at(5),
+        runId: "run_1",
+        botId: "bot_ada",
+        trigger,
+        model,
+        effort: null,
+        finished: { outcome: { status: "completed", usage }, durationMs: 0 },
       },
     ]);
   });
