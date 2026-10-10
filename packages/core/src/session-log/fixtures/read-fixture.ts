@@ -12,6 +12,7 @@ export const FIXTURES = [
   "group",
   "bot-exchange",
   "steered",
+  "cleared",
 ] as const;
 export type FixtureName = (typeof FIXTURES)[number];
 

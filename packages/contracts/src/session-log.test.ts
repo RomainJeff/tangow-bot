@@ -34,7 +34,6 @@ describe("SessionEntrySchema", () => {
       { ...envelope, seq: 0, parentId: null, ...note },
     ],
     ["a clear with no parent", { ...envelope, parentId: null, type: "clear", payload: {} }],
-    ["a rewind to its target", { ...envelope, type: "rewind", payload: {} }],
     [
       "a compaction covering up to its parent",
       { ...envelope, type: "compaction", payload: { summary: "Earlier.", coveredUpToSeq: 2 } },

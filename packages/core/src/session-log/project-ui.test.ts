@@ -605,4 +605,134 @@ describe("projectThreadItems", () => {
       },
     ]);
   });
+
+  it("opens on the clear divider and keeps attachments, an ask, a choice and a control note", async () => {
+    expect(projectThreadItems(await fixtureChain("cleared"))).toEqual([
+      { kind: "divider", id: "clr-01", ts: at(1), reason: "clear" },
+      {
+        kind: "message",
+        role: "user",
+        id: "clr-02",
+        ts: at(2),
+        blocks: [
+          { kind: "text", text: "Draft the launch post from these." },
+          { kind: "image", artifactId: "art_photo", mimeType: "image/png", name: "site.png" },
+          {
+            kind: "file",
+            artifactId: "art_brief",
+            mimeType: "application/pdf",
+            name: "brief.pdf",
+            size: 2048,
+          },
+          {
+            kind: "link_preview",
+            url: "https://example.com/launch",
+            format: "compact",
+            title: "Launch page",
+          },
+        ],
+        source: "app",
+      },
+      {
+        kind: "run",
+        id: "clr-03",
+        ts: at(3),
+        runId: "run_clr_1",
+        botId: "bot_ada",
+        trigger: { kind: "message", entryId: "clr-02" },
+        model,
+        effort: null,
+        finished: {
+          outcome: { status: "completed", usage: { inputTokens: 800, outputTokens: 9 } },
+          durationMs: 2000,
+        },
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "clr-04",
+        ts: at(4),
+        botId: "bot_ada",
+        runId: "run_clr_1",
+        blocks: [{ kind: "ask", text: "Which day should it go out?" }],
+      },
+      {
+        kind: "message",
+        role: "user",
+        id: "clr-06",
+        ts: at(6),
+        blocks: text("Tuesday."),
+        replyTo: { entryId: "clr-04" },
+        source: "app",
+      },
+      {
+        kind: "note",
+        id: "clr-07",
+        ts: at(7),
+        type: "computer.control",
+        payload: { holder: "user" },
+      },
+      {
+        kind: "run",
+        id: "clr-08",
+        ts: at(8),
+        runId: "run_clr_2",
+        botId: "bot_ada",
+        trigger: { kind: "webhook", routineId: "rtn_launch" },
+        model,
+        effort: null,
+        finished: {
+          outcome: { status: "completed", usage: { inputTokens: 850, outputTokens: 14 } },
+          durationMs: 2000,
+        },
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "clr-09",
+        ts: at(9),
+        botId: "bot_ada",
+        runId: "run_clr_2",
+        blocks: [
+          {
+            kind: "choice",
+            question: "Publish the post now?",
+            options: [
+              { id: "now", letter: "A", label: "Publish now" },
+              { id: "later", letter: "B", label: "Wait for Tuesday" },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("shows the words of a run whose start and first call are before the page", async () => {
+    const page = (await fixtureChain("compacted")).filter((entry) => entry.seq >= 7);
+    expect(projectThreadItems(page)).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "cmp-08",
+        ts: at(8),
+        botId: "bot_ada",
+        runId: "run_cmp_2",
+        blocks: [
+          {
+            kind: "steps",
+            steps: [
+              {
+                label: "Send email",
+                count: 1,
+                calls: [
+                  { name: "send_email", input: '{"to":"team"}', output: "sent", id: "call_mail" },
+                ],
+              },
+            ],
+          },
+          { kind: "text", text: "Digest sent: 3 articles about the launch." },
+        ],
+      },
+    ]);
+  });
 });
