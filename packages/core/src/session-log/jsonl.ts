@@ -8,7 +8,10 @@ export class SessionEntryDecodeError extends Error {
   }
 }
 
-/** Random access to the bytes of one session's JSONL file, opened for a single read. */
+/**
+ * Random access to the bytes of one session's JSONL file, opened for a single read. Each `read`
+ * returns a buffer the caller owns, never a reused one, because the reader keeps subarray views.
+ */
 export interface TailSource {
   readonly size: number;
   /** Resolves to exactly `length` bytes starting at `position`. */
