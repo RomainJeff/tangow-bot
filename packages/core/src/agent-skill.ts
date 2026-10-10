@@ -6,6 +6,8 @@ import { SKILL_DESCRIPTION_MAX_CHARS } from "@rakazo/contracts";
  * Distinct from taught skills (demo/record playbooks on a single bot).
  */
 
+import { isVisibleText } from "./spawn-bot.js";
+
 const FRONTMATTER_FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 export type SkillSource = "user" | "builtin" | "plugin";
@@ -90,6 +92,92 @@ export function parseSkillMd(content: string): ParsedSkillMd | { error: string }
     };
   }
   return { name, description, body, frontmatter };
+}
+
+export const BOT_SKILL_DESCRIPTION_MAX_LENGTH = 300;
+
+/**
+ * What a bot may write as a skill. Its name and description become one line of every bot's
+ * system prompt, so they stay one visible line, and nothing in the file may be hidden from the
+ * person reading it. A bot changing a skill (`prior`) answers only for what it changed: the
+ * description the user wrote stays as it is, and so do the other frontmatter keys they added.
+ */
+export function validateBotSkill(
+  skill: ParsedSkillMd,
+  content: string,
+  prior?: Pick<ParsedSkillMd, "description" | "frontmatter">,
+): string | undefined {
+  if (!isVisibleText(skill.name, "single")) {
+    return "Skill name must be a single line of visible text.";
+  }
+  if (skill.description !== prior?.description) {
+    if (!isVisibleText(skill.description, "single")) {
+      return "Skill description must be a single line of visible text.";
+    }
+    if (skill.description.length > BOT_SKILL_DESCRIPTION_MAX_LENGTH) {
+      return `Skill description must be at most ${BOT_SKILL_DESCRIPTION_MAX_LENGTH} characters.`;
+    }
+  }
+  const extraKeys = Object.keys(skill.frontmatter).filter(
+    (key) =>
+      key !== "name" &&
+      key !== "description" &&
+      JSON.stringify(skill.frontmatter[key]) !== JSON.stringify(prior?.frontmatter[key]),
+  );
+  if (extraKeys.length > 0) {
+    return `Skill frontmatter may only hold name and description, not ${extraKeys.join(", ")}.`;
+  }
+  if (!isVisibleText(content, "multi")) {
+    return "Skill content must not contain invisible or control characters.";
+  }
+  return undefined;
+}
+
+const BOT_SKILL_TEXT_EXTENSIONS = [
+  "md",
+  "txt",
+  "json",
+  "yaml",
+  "yml",
+  "toml",
+  "csv",
+  "js",
+  "ts",
+  "py",
+  "sh",
+  "html",
+  "css",
+];
+export const BOT_SKILL_TEXT_FILE_MAX_BYTES = 1024 * 1024;
+
+/**
+ * Every file a bot writes into a skill is read or run later, so it must be text the person can
+ * read, with nothing hidden: an allowlisted extension, at most 1 MB, UTF-8, no invisible or
+ * control character. A Windows line ending is a visible one, kept as written. This is not a
+ * safety check on what a script does.
+ */
+export function validateBotSkillFile(file: {
+  path: string;
+  bytes: Uint8Array;
+}): string | undefined {
+  const base = file.path.split("/").pop() ?? "";
+  const extension = base.includes(".") ? (base.split(".").pop() ?? "").toLowerCase() : "";
+  if (!BOT_SKILL_TEXT_EXTENSIONS.includes(extension)) {
+    return `${file.path}: a skill may only hold text files (${BOT_SKILL_TEXT_EXTENSIONS.join(", ")}).`;
+  }
+  if (file.bytes.byteLength > BOT_SKILL_TEXT_FILE_MAX_BYTES) {
+    return `${file.path} is larger than 1 MB.`;
+  }
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(file.bytes);
+  } catch {
+    return `${file.path} is not UTF-8 text.`;
+  }
+  if (!isVisibleText(text.replaceAll("\r\n", "\n"), "multi")) {
+    return `${file.path} must not contain invisible or control characters.`;
+  }
+  return undefined;
 }
 
 /** Build SKILL.md, preserving unknown frontmatter keys from a prior parse. */

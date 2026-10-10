@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildSkillMd, skillHistorySegments } from "@rakazo/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { OwnerSkillAdmin, SkillUid } from "./skill-library.js";
+import type { OwnerSkillAdmin, SkillUid, VersionId } from "./skill-library.js";
 import { crash, fakeSkillPrisma, testLibrary } from "./skill-library.test-support.js";
 import { listUserSkills, userSkillsRoot } from "./skill-store.js";
 
@@ -40,7 +40,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 const owner = { spaceId: "ws-1", userId: "user-1" };
 const md = (name: string, body = "Steps") =>
   buildSkillMd({ name, description: `About ${name}`, body });
-const ada = { botId: "bot-1", botName: "Ada", runId: "run-1", toolCallId: "call-1" };
+const ada = { botId: "bot-1", botName: "Ada", runId: "run-1", toolCallId: "call-1", secrets: [] };
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -83,6 +83,27 @@ const scenarios: Scenario[] = [
     name: "deleting a reserved skill",
     seed: reservedBotSkill,
     act: (admin) => admin.delete("user:deploy"),
+  },
+  {
+    name: "restoring a reserved skill from the trash",
+    seed: async (admin, writeAsBot) => {
+      await writeAsBot();
+      return (await admin.delete("user:deploy")).uid;
+    },
+    act: (admin, uid) => admin.restore(uid as SkillUid),
+  },
+  {
+    name: "undoing a rename of a reserved skill",
+    seed: async (admin, writeAsBot) => {
+      await writeAsBot();
+      return (
+        await admin.update("user:deploy", { kind: "skill-md", name: "Ship", content: md("Ship") })
+      ).uid;
+    },
+    act: async (admin, uid) => {
+      const [current] = await admin.versions("user:ship");
+      return admin.undo(uid as SkillUid, current?.versionId ?? ("" as never));
+    },
   },
 ];
 
@@ -183,5 +204,131 @@ describe("replacing a skill's folder under the same name", () => {
     for (let failAt = 1; failAt <= steps; failAt += 1) {
       expect((await replaceAndCrash(failAt)).names, `crash at step ${failAt}`).toEqual(["Deploy"]);
     }
+  });
+});
+
+describe("a crash at any step of erasing history", () => {
+  const day = (n: number) => new Date(Date.UTC(2026, 9, n));
+
+  /** Crashes `act` at step 1, 2, ... until it completes, checking what the owner sees after each. */
+  async function eachCrash(
+    seed: (admin: OwnerSkillAdmin, prisma: ReturnType<typeof fakeSkillPrisma>) => Promise<SkillUid>,
+    act: (admin: OwnerSkillAdmin, uid: SkillUid, clock: { now: Date }) => Promise<unknown>,
+    check: (
+      admin: OwnerSkillAdmin,
+      uid: SkillUid,
+      at: string,
+      prisma: ReturnType<typeof fakeSkillPrisma>,
+    ) => Promise<void>,
+  ) {
+    for (let failAt = 1; failAt < 500; failAt += 1) {
+      const data = await mkdtemp(path.join(tmpdir(), "rakazo-skill-crash-"));
+      dirs.push(data);
+      const clock = { now: day(1) };
+      const prisma = fakeSkillPrisma();
+      const { library } = testLibrary(data, { prisma, now: () => clock.now });
+      const admin = library.forOwner(owner);
+      const uid = await seed(admin, prisma);
+      crash.reset(failAt);
+      const outcome = await act(admin, uid, clock).then(
+        () => "done",
+        (error: Error) => error.message,
+      );
+      crash.reset();
+      await library.repair(owner);
+      const at = `crash at step ${failAt} (${outcome})`;
+      await check(admin, uid, at, prisma);
+      expect(
+        (await readdir(path.join(data, ...skillHistorySegments(owner)))).filter(
+          (name) => name !== "skills",
+        ),
+        at,
+      ).toEqual([]);
+      if (outcome === "done") return;
+    }
+    throw new Error("the operation never completed");
+  }
+
+  const reservedInTrash = async (
+    admin: OwnerSkillAdmin,
+    prisma: ReturnType<typeof fakeSkillPrisma>,
+  ) => {
+    const { uid } = await admin.create({ kind: "skill-md", name: "Deploy", content: md("Deploy") });
+    prisma.skillSetting.rows.push({ ...owner, skillKey: "user:deploy", availability: "selected" });
+    prisma.botSkill.rows.push({ ...owner, skillKey: "user:deploy", botId: "bot-1", enabled: true });
+    await admin.delete("user:deploy");
+    return uid;
+  };
+
+  it("purges for good or not at all, never back in the trash with wider access", {
+    timeout: 180_000,
+  }, async () => {
+    await eachCrash(
+      reservedInTrash,
+      (admin, uid, clock) => {
+        clock.now = day(2);
+        return admin.purge(uid);
+      },
+      async (admin, uid, at, prisma) => {
+        const trash = await admin.trash();
+        if (trash.length === 0) return;
+        expect(trash, at).toEqual([{ uid, name: "Deploy", trashedAt: day(1).toISOString() }]);
+        await admin.restore(uid);
+        expect(
+          prisma.skillSetting.rows.map((row) => row.availability),
+          at,
+        ).toEqual(["selected"]);
+        expect(
+          prisma.botSkill.rows.map((row) => row.botId),
+          at,
+        ).toEqual(["bot-1"]);
+      },
+    );
+  });
+
+  it("expires the trash for good after thirty days", { timeout: 180_000 }, async () => {
+    await eachCrash(
+      reservedInTrash,
+      (admin, _uid, clock) => {
+        clock.now = day(32);
+        return admin.trash();
+      },
+      async (admin, _uid, at) => {
+        expect(await admin.trash(), at).toEqual([]);
+      },
+    );
+  });
+
+  it("deletes a version for good or not at all, never leaving it damaged", {
+    timeout: 180_000,
+  }, async () => {
+    let middle = "" as VersionId;
+    await eachCrash(
+      async (admin) => {
+        const write = (body: string) =>
+          admin.update("user:deploy", {
+            kind: "skill-md",
+            name: "Deploy",
+            content: md("Deploy", body),
+          });
+        const { uid } = await admin.create({
+          kind: "skill-md",
+          name: "Deploy",
+          content: md("Deploy"),
+        });
+        middle = (await write("Two")).versionId;
+        await write("Three");
+        return uid;
+      },
+      (admin, uid) => admin.deleteVersion(uid, middle),
+      async (admin, uid, at) => {
+        const [current, ...older] = await admin.versions("user:deploy");
+        expect(
+          older.map((v) => v.seq),
+          at,
+        ).toEqual(older.some((v) => v.versionId === middle) ? [2, 1] : [1]);
+        expect((await admin.undo(uid, current?.versionId as VersionId)).kind, at).toBe("restored");
+      },
+    );
   });
 });

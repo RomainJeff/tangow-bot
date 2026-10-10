@@ -101,6 +101,7 @@ export function testLibrary(
     prisma?: FakeSkillPrisma;
     lock?: SkillOwnerLock;
     now?: () => Date;
+    quotaBytes?: number;
   } = {},
 ) {
   const prisma = options.prisma ?? fakeSkillPrisma();
@@ -109,6 +110,7 @@ export function testLibrary(
     dataDir,
     lock: options.lock ?? createInMemorySkillLock(),
     now: options.now,
+    quotaBytes: options.quotaBytes,
   });
   return { prisma, library };
 }

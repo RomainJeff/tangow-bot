@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { SkillUid } from "@rakazo/adapters";
 import {
   createInMemorySkillLock,
   createSkillLibrary,
@@ -138,13 +139,20 @@ describe("agent skills service (filesystem)", () => {
     expect(prisma.skillSetting._store).toEqual([]);
     expect(prisma.botSkill._store).toEqual([]);
 
-    // Removed, not gone: the skill waits in the trash.
+    // Removed, not gone: the skill waits in the trash with its access, ready to come back.
     const admin = createSkillLibrary({
       prisma: prisma as unknown as PrismaClient,
       dataDir,
       lock: createInMemorySkillLock(),
     }).forOwner(actor);
-    expect((await admin.trash()).map((entry) => entry.name)).toEqual(["Standup"]);
+    const [trashed] = await admin.trash();
+    expect(trashed?.name).toBe("Standup");
+    await admin.restore(trashed?.uid as SkillUid);
+    expect((await skills.list(actor)).find((s) => s.id === "user:standup")).toMatchObject({
+      description: "Better",
+      availability: "selected",
+      visibleBotIds: ["bot-1"],
+    });
   });
 
   it("never loses an access change made while a rename moves the rows", async () => {

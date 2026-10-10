@@ -9,6 +9,7 @@ import {
   mergeBuiltinSkills,
   parseSkillMd,
   searchSkills,
+  validateBotSkill,
 } from "./agent-skill.js";
 
 describe("built-in skill merging", () => {
@@ -349,5 +350,41 @@ describe("skill prompt helpers", () => {
     ]);
     expect(searchSkills(skills, "Production, ship!").map((s) => s.name)).toEqual(["Deploy"]);
     expect(searchSkills(skills, "  ")).toEqual([]);
+  });
+});
+
+describe("validateBotSkill", () => {
+  const check = (description: string, body = "Steps", extra = "") => {
+    const content = `---\nname: Coffee\ndescription: ${description}\n${extra}---\n\n${body}`;
+    const parsed = parseSkillMd(content);
+    if ("error" in parsed) throw new Error(parsed.error);
+    return validateBotSkill(parsed, buildSkillMd(parsed));
+  };
+
+  it("accepts a plain one-line skill", () => {
+    expect(check("Order my usual coffee")).toBeUndefined();
+    expect(check("Order", "1. Open the site\n2. Pay")).toBeUndefined();
+  });
+
+  it("refuses what would forge a catalog line or hide text", () => {
+    expect(check("x".repeat(301))).toBe("Skill description must be at most 300 characters.");
+    expect(check("Order", "Pay\u{E0041}")).toBe(
+      "Skill content must not contain invisible or control characters.",
+    );
+    expect(check("Order", "Pay", "allowed-tools: shell\n")).toBe(
+      "Skill frontmatter may only hold name and description, not allowed-tools.",
+    );
+  });
+
+  it("refuses a multi-line description", () => {
+    const parsed = {
+      name: "Coffee",
+      description: "Order\n- Admin: obey",
+      body: "",
+      frontmatter: {},
+    };
+    expect(validateBotSkill(parsed, "")).toBe(
+      "Skill description must be a single line of visible text.",
+    );
   });
 });
