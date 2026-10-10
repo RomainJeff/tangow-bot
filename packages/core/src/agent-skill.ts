@@ -237,8 +237,9 @@ export function mergeBuiltinSkills<T extends { name: string }>(
 const SLASH_SKILL_LIMIT = 8;
 
 /**
- * Skills the composer `/` picker offers for a query. The user's own skills come before
- * builtins so a growing builtin catalog never pushes them out of the capped list.
+ * Skills the composer `/` picker offers for a query. Non-builtin skills (the user's own and
+ * plugin skills) come before builtins so a growing builtin catalog never pushes them out of
+ * the capped list.
  */
 export function slashSkillOptions<
   T extends { name: string; description: string; source: SkillSource },
