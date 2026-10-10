@@ -1,8 +1,9 @@
-import type { AgentSkillCatalogEntry, MemoryDocument } from "@rakazo/contracts";
+import type { AgentSkillCatalogEntry, MemoryDocument, SpaceMemoryConfig } from "@rakazo/contracts";
 import { filterSkillList } from "@rakazo/core";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { rpc } from "../../lib/api";
+import { useMemoryScopeChoice } from "../../lib/bot-choices";
 import { type BotPageContext, useBotField } from "../../lib/bot-page";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
 import { FileList } from "./files";
@@ -18,9 +19,18 @@ import {
   Separated,
   useFocusedRead,
 } from "./kit";
+import { ScratchpadGroup } from "./scratchpad";
 
-/** What the bot knows: its memory, the files on its computer, and its skills. */
-export function KnowledgeTab({ page, epoch }: { page: BotPageContext; epoch: number }) {
+/** What the bot knows: its memory, the files on its computer, its skills, and open work. */
+export function KnowledgeTab({
+  page,
+  epoch,
+  onAddFocus,
+}: {
+  page: BotPageContext;
+  epoch: number;
+  onAddFocus: () => void;
+}) {
   const { t } = useI18n();
   return (
     <>
@@ -29,6 +39,12 @@ export function KnowledgeTab({ page, epoch }: { page: BotPageContext; epoch: num
         <FileList botId={page.bot.id} path="" shown={5} epoch={epoch} />
       </Group>
       <SkillsGroup page={page} />
+      <ScratchpadGroup
+        botId={page.bot.id}
+        readOnly={page.readOnly}
+        epoch={epoch}
+        onAddFocus={onAddFocus}
+      />
     </>
   );
 }
@@ -41,6 +57,11 @@ function MemoryGroup({ page, epoch }: { page: BotPageContext; epoch: number }) {
   const { read, retry } = useFocusedRead(
     () => rpc<MemoryDocument[]>("memory/list", { botId, scope: "bot" }),
     [botId, epoch],
+  );
+  // A bot has a memory scope only when its space has a memory provider.
+  const provider = useFocusedRead(
+    () => rpc<SpaceMemoryConfig | null>("memory/providerConfig"),
+    [page.bot.spaceId],
   );
   const date = new Intl.DateTimeFormat(dateLocaleForUi(), { day: "numeric", month: "short" });
   return (
@@ -64,7 +85,30 @@ function MemoryGroup({ page, epoch }: { page: BotPageContext; epoch: number }) {
           />
         ))
       )}
+      {provider.read.kind === "ready" && provider.read.value ? (
+        <MemoryScopeRow page={page} />
+      ) : null}
     </Group>
+  );
+}
+
+function MemoryScopeRow({ page }: { page: BotPageContext }) {
+  const router = useRouter();
+  const choice = useMemoryScopeChoice(page);
+  return (
+    <Row
+      label={choice.title}
+      meta={<SaveMeta state={choice.save.state} onRetry={() => void choice.save.retry()} />}
+      value={choice.selected?.label}
+      chevron
+      disabled={choice.disabled}
+      onPress={() =>
+        router.push({
+          pathname: "/bot-choice",
+          params: { botId: page.bot.id, kind: "memoryScope" },
+        })
+      }
+    />
   );
 }
 

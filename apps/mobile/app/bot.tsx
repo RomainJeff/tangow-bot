@@ -1,6 +1,6 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState, useSyncExternalStore } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { BotHero, BotTabs } from "../components/bot-page/hero";
 import { LoadFailed } from "../components/bot-page/kit";
 import { KnowledgeTab } from "../components/bot-page/knowledge-tab";
@@ -25,6 +25,19 @@ export default function BotPageScreen() {
   const page = useBotPageContext(botId);
   const [readFailed, setReadFailed] = useState(false);
   const [view, setView] = useState<BotTab>("settings");
+  const scroll = useRef<ScrollView>(null);
+  /** Open work's add field is the page's last row: bring it above the keyboard it opens. */
+  const revealEnd = useCallback(() => {
+    if (Keyboard.isVisible()) {
+      scroll.current?.scrollToEnd();
+      return;
+    }
+    const shown = Keyboard.addListener("keyboardDidShow", () => {
+      shown.remove();
+      scroll.current?.scrollToEnd();
+    });
+    setTimeout(() => shown.remove(), 1000);
+  }, []);
   const epoch = useSyncExternalStore(
     subscribeBotRunEnds,
     () => botRunEpoch(botId),
@@ -94,6 +107,7 @@ export default function BotPageScreen() {
         }}
       />
       <ScrollView
+        ref={scroll}
         style={{ flex: 1, backgroundColor: tokens.background }}
         contentContainerStyle={{ paddingBottom: 48 }}
         keyboardShouldPersistTaps="handled"
@@ -111,7 +125,7 @@ export default function BotPageScreen() {
             <View style={styles.body}>
               <BotTabs value={view} onChange={setView} />
               {view === "knowledge" ? (
-                <KnowledgeTab page={page} epoch={epoch} />
+                <KnowledgeTab page={page} epoch={epoch} onAddFocus={revealEnd} />
               ) : (
                 <SettingsTab page={page} />
               )}
