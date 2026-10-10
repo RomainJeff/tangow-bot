@@ -330,11 +330,25 @@ const READS: Record<string, unknown> = {
       visibleBotIds: [BOT.id],
     },
   ],
+  "agentSkills/get": {
+    id: "skill-1",
+    name: "inbox-triage",
+    description: "Sorts a mailbox into decide, reply, wait.",
+    source: "user",
+    readOnly: false,
+    createdAt: "2026-10-01T08:00:00.000Z",
+    updatedAt: "2026-10-05T08:00:00.000Z",
+    content:
+      "---\nname: inbox-triage\ndescription: Sorts a mailbox into decide, reply, wait.\n---\n\nRead every unread email. Put each one under Decide, Reply or Wait, newest first.\n",
+  },
   "scratchpad/list": [],
   "computer/files": [
     { path: "notes", kind: "dir", size: 0 },
     { path: "inbox-report.md", kind: "file", size: 3_200 },
     { path: "q3-forecast.csv", kind: "file", size: 12_400 },
+    { path: "renewals.md", kind: "file", size: 2_050 },
+    { path: "team-notes.md", kind: "file", size: 4_800 },
+    { path: "vendors.csv", kind: "file", size: 9_300 },
   ],
   "bots/list": [],
 };
@@ -388,6 +402,8 @@ function initialDetail(value: string | null): BotDetail | null {
     return { kind: "routine", routineId: params.get("routine") ?? "routine-2" };
   }
   if (value === "routine-new") return { kind: "routine-new" };
+  if (value === "memory") return { kind: "memory", documentId: "memory-1" };
+  if (value === "skill") return { kind: "skill", skillId: "skill-1" };
   if (
     value === "instructions" ||
     value === "description" ||
