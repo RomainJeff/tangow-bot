@@ -313,6 +313,29 @@ describe("computeMessageGroups", () => {
     ]);
   });
 
+  it("a skill line added to a bot message keeps the burst grouped as before", () => {
+    const skillLine = {
+      kind: "skill_source",
+      skillUid: "0123456789abcdef0123456789abcdef",
+      skillId: "user:invoices",
+      name: "Invoices",
+      change: "learned",
+    } as const;
+    const messages = [
+      makeMessage({ createdAt: localIso(2026, 9, 2, 12, 0) }),
+      makeMessage({
+        createdAt: localIso(2026, 9, 2, 12, 1),
+        blocks: [{ kind: "text", text: "Filed." }, { kind: "text", text: "Done." }, skillLine],
+      }),
+      makeMessage({ createdAt: localIso(2026, 9, 2, 12, 3) }),
+    ];
+    expect(computeMessageGroups(messages, { isTransparent: noneTransparent })).toEqual([
+      { isFirstOfGroup: true, isLastOfGroup: false },
+      { isFirstOfGroup: false, isLastOfGroup: false },
+      { isFirstOfGroup: false, isLastOfGroup: true },
+    ]);
+  });
+
   it("two consecutive text-only user messages within the window group together", () => {
     const messages = [
       makeMessage({
