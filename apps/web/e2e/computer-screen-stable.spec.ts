@@ -1,5 +1,4 @@
 import type { Locator, Page } from "@playwright/test";
-import { expect, test } from "@playwright/test";
 import type { ComputerStatus } from "@rakazo/contracts";
 import { computerScreenKey } from "@rakazo/core";
 import {
@@ -11,6 +10,7 @@ import {
   rpc,
   signup,
 } from "./helpers";
+import { expect, test } from "./test";
 
 // Starting a run reprovisions the computer, which revokes earlier screen URLs, so the
 // baseline is taken once the run is working and the screen has settled.

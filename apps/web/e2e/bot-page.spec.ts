@@ -1,6 +1,7 @@
 // Needs the Vite dev server: the fixture is served from source and is not a build entry.
-import { expect, test } from "@playwright/test";
+
 import { captureScreenshot } from "./helpers";
+import { expect, test } from "./test";
 
 const FIXTURE = "/e2e/fixtures/bot-page.html";
 

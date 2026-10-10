@@ -1,6 +1,7 @@
 // Needs the Vite dev server: the fixture is served from source and is not a build entry.
-import { expect, test } from "@playwright/test";
+
 import { captureScreenshot } from "./helpers";
+import { expect, test } from "./test";
 
 test("a routine the bot proposes shows what it creates, decides on the right, and settles", async ({
   page,

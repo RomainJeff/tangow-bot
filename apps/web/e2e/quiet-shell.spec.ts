@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openBotPage, openBotTab, signup } from "./helpers";
+import { expect, test } from "./test";
 
 /** Documents the two-pane shell: sidebar, thread header, empty thread, light and dark. */
 test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) => {

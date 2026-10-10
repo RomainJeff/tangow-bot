@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openNewSpace, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("spaces stay invisible by default and chat creation requires approval", async ({
   page,

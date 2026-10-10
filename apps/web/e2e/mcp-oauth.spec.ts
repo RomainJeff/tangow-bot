@@ -1,7 +1,7 @@
-import { expect, type Route, test } from "@playwright/test";
 import type { McpServer } from "@rakazo/contracts";
 import { MCP_OAUTH_CHANNEL } from "../src/lib/mcp-connect";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, type Route, test } from "./test";
 
 test("connects an MCP server through the OAuth popup callback", async ({ page }, testInfo) => {
   const stamp = Date.now();

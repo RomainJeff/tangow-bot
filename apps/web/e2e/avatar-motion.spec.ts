@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 test("bot avatar ring stays still when reduced motion is enabled", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });

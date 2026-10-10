@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("model dropdown search and provider group headers", async ({ page }, testInfo) => {
   const stamp = Date.now();

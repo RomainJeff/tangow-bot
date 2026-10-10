@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { expect, test } from "@playwright/test";
 import { captureScreenshot } from "./helpers";
+import { expect, test } from "./test";
 
 const computerRoot = path.resolve(import.meta.dirname, "../../../infra/sandboxes/computer");
 

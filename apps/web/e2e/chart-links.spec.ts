@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot } from "./helpers";
+import { expect, test } from "./test";
 
 const fixture = "/e2e/fixtures/chart-links.html";
 

@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("advanced GraphQL install shows Add GraphQL in MCP, OpenAPI, GraphQL, Executor, Treg order", async ({
   page,

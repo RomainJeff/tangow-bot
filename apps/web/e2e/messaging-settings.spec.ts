@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test.afterEach(async ({ page }) => {
   // Polling can leave a route.fetch response in use when the assertions finish.
