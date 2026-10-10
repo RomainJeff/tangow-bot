@@ -146,21 +146,19 @@ tags:
 - tapOn: "Reply"
 - assertVisible: "Replying to"
 - tapOn: "Cancel reply"
-# Bot actions now live on a long press of the header title (its accessible
-# name is "Chat settings"; a short press opens the chat settings screen).
-- longPressOn: "Chat settings"
+# Bot actions live on a long press of the header title (its accessible name
+# is "Bot settings"; a short press opens the bot's page).
+- longPressOn: "Bot settings"
 - assertVisible: "Clear conversation"
 - takeScreenshot: "16-bot-actions"
 - back
 
-- openLink: "rakazo:///bot-settings?botId=${RAKAZO_SCREENSHOT_BOT_ID}"
+- openLink: "rakazo:///bot?botId=${RAKAZO_SCREENSHOT_BOT_ID}"
 - extendedWaitUntil:
-    visible: "Researcher"
+    visible: "Instructions"
     timeout: 10000
-- assertVisible: "Advanced"
-- tapOn: "Advanced"
+- assertVisible: "Voice and replies"
 - assertVisible: "Model"
-# Label includes the resolved space model, e.g. "Space default (OpenAI: …)".
 - assertVisible: "Space default.*"
 - takeScreenshot: "17-bot-settings"
 

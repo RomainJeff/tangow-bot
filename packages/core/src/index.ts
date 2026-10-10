@@ -10,6 +10,7 @@ export * from "./avatar-identity.js";
 export * from "./avatar-motion.js";
 export * from "./bloub/index.js";
 export * from "./bot-messages.js";
+export * from "./bot-model.js";
 export * from "./bot-sections.js";
 export * from "./compose-update.js";
 export * from "./composer-link-preview.js";
