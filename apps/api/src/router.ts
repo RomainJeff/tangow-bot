@@ -26,7 +26,6 @@ import type {
   MemoryProviderResolver,
   PiOAuthLogins,
   RemoteConnectorDependencies,
-  SkillOwnerLock,
 } from "@rakazo/adapters";
 import {
   acquireComputerExecutionLease,
@@ -501,8 +500,6 @@ export interface RouterDeps {
   /** Test seams of the link preview reader. */
   linkPreview?: LinkPreviewApiDeps["linkPreview"];
   dataDir: string;
-  /** Serializes skill writes per owner with the worker's. */
-  skillLock: SkillOwnerLock;
   /** Present when the external messaging surface is enabled. */
   messaging?: { enabled: boolean; providers: string[]; openSignup: boolean };
   env: {
@@ -556,7 +553,7 @@ export function createRouter(deps: RouterDeps) {
     home: deps.home,
     dataDir: deps.dataDir,
   });
-  const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir, deps.skillLock);
+  const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir);
   const marketplaces = createMarketplacesService({ prisma: deps.prisma, dataDir: deps.dataDir });
 
   const authed = os.use(async ({ context, next }) => {

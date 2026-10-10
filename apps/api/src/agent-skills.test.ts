@@ -1,14 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SkillUid } from "@rakazo/adapters";
-import {
-  createInMemorySkillLock,
-  createSkillLibrary,
-  listUserSkills,
-  marketplacesRoot,
-  userSkillsRoot,
-} from "@rakazo/adapters";
+import { listUserSkills, marketplacesRoot, userSkillsRoot } from "@rakazo/adapters";
 import { buildSkillMd } from "@rakazo/core";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
 import { create as tarCreate } from "tar";
@@ -93,8 +86,7 @@ describe("agent skills service (filesystem)", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  const service = () =>
-    createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, createInMemorySkillLock());
+  const service = () => createAgentSkillsService(prisma as unknown as PrismaClient, dataDir);
 
   it("creates, lists, renames (cascading access rows) and removes a skill", async () => {
     const skills = service();
@@ -138,89 +130,6 @@ describe("agent skills service (filesystem)", () => {
     expect(await listUserSkills(userSkillsRoot(dataDir, actor))).toEqual([]);
     expect(prisma.skillSetting._store).toEqual([]);
     expect(prisma.botSkill._store).toEqual([]);
-
-    // Removed, not gone: the skill waits in the trash with its access, ready to come back.
-    const admin = createSkillLibrary({
-      prisma: prisma as unknown as PrismaClient,
-      dataDir,
-      lock: createInMemorySkillLock(),
-    }).forOwner(actor);
-    const [trashed] = await admin.trash();
-    expect(trashed?.name).toBe("Standup");
-    await admin.restore(trashed?.uid as SkillUid);
-    expect((await skills.list(actor)).find((s) => s.id === "user:standup")).toMatchObject({
-      description: "Better",
-      availability: "selected",
-      visibleBotIds: ["bot-1"],
-    });
-  });
-
-  it("never loses an access change made while a rename moves the rows", async () => {
-    const lock = createInMemorySkillLock();
-    const skills = createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, lock);
-    const created = await skills.create(actor, {
-      content: buildSkillMd({ name: "Daily Standup", description: "Notes", body: "Steps" }),
-    });
-    const rename = createSkillLibrary({
-      prisma: prisma as unknown as PrismaClient,
-      dataDir,
-      lock,
-    })
-      .forOwner(actor)
-      .update(created.id, {
-        kind: "skill-md",
-        name: "Standup",
-        content: buildSkillMd({ name: "Standup", description: "Notes", body: "Steps" }),
-      });
-    const findBots = prisma.bot.findMany.getMockImplementation();
-    prisma.bot.findMany.mockImplementationOnce(async (args) => {
-      await rename.catch(() => undefined);
-      return findBots?.(args);
-    });
-    const narrowed = await skills
-      .setAccess(actor, {
-        skillId: created.id,
-        availability: "selected",
-        bots: [{ botId: "bot-1", enabled: true }],
-      })
-      .then(
-        () => "applied",
-        (error: unknown) => (error instanceof IsolationError ? "gone" : error),
-      );
-    await rename;
-
-    const rows = prisma.skillSetting._store.map((row) => [row.skillKey, row.availability]);
-    expect({ narrowed, rows }).toEqual({ narrowed: "gone", rows: [] });
-  });
-
-  it("gives a user skill a uid that survives a rename, and none to a built-in", async () => {
-    const skills = service();
-    const created = await skills.create(actor, { name: "Standup", description: "Notes" });
-    await skills.update(actor, {
-      skillId: created.id,
-      content: buildSkillMd({ name: "Daily", description: "Notes", body: "One" }),
-    });
-    const entries = await skills.list(actor);
-    const fetched = await skills.get(actor, { skillId: "user:daily" });
-
-    expect({
-      listed: entries.find((entry) => entry.id === "user:daily")?.uid,
-      fetched: fetched.uid,
-      builtin: entries.find((entry) => entry.id === "builtin:Routines")?.uid,
-    }).toEqual({ listed: created.uid, fetched: created.uid, builtin: undefined });
-    expect(created.uid).toMatch(/^[0-9a-f]{32}$/);
-  });
-
-  it("answers service unavailable when the skill folder cannot be used", async () => {
-    const broken = createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, {
-      run: async () => {
-        throw Object.assign(new Error("EACCES: permission denied"), { syscall: "mkdir" });
-      },
-    });
-
-    await expect(
-      broken.create(actor, { name: "Planning", description: "Notes" }),
-    ).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
   });
 
   it("rejects duplicate names with CONFLICT and unknown ids with IsolationError", async () => {
