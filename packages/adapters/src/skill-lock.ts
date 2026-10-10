@@ -75,7 +75,10 @@ export function createPostgresSkillLock(pool: Pick<Pool, "connect">): SkillOwner
         } finally {
           const released = await client.query<{ released: boolean }>(UNLOCK, [key]).then(
             (result) => result.rows[0]?.released === true,
-            () => false,
+            (error: unknown) => {
+              getLogger().warn("[skills] could not release the owner lock", { error });
+              return false;
+            },
           );
           // A connection whose lock state is uncertain never goes back to the pool.
           client.release(!released);
