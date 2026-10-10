@@ -81,6 +81,7 @@ export function MemoryDocumentList({
       .then((list) => {
         if (current !== generation.current) return;
         setDocs(list);
+        setError(null);
       })
       .catch(() => {
         if (current !== generation.current) return;
@@ -295,6 +296,7 @@ export function AgentSkills({
         if (current !== generation.current) return;
         setSkills(list);
         setBots(allBots.filter((bot) => !bot.archivedAt));
+        setError(null);
       })
       .catch(() => {
         if (current !== generation.current) return;
