@@ -6,6 +6,7 @@ import {
   mkdtemp,
   readdir,
   readFile,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -143,6 +144,14 @@ describe("skill library", () => {
       2, 1,
     ]);
     expect(await liveSkillMd(data, "Deploy")).toBe(md("Deploy", "Two"));
+
+    const rename = library.forBot(owner, bot("run-3", "call-3"));
+    const renamed = await rename.update("user:deploy", skillMd("Ship"));
+    expect(await rename.update("user:deploy", skillMd("Ship"))).toEqual({
+      ...renamed,
+      changed: false,
+    });
+    expect(await rename.replayed()).toEqual({ ...renamed, changed: false });
   });
 
   it("adds no version for content identical to the current one", async () => {
@@ -459,11 +468,12 @@ describe("skill library", () => {
     expect(parseVersionId("v000001-0a1b2c3d/../x")).toBeUndefined();
   });
 
-  it("gives bots only the three writes", () => {
+  it("gives bots only the three writes and their replay", () => {
     const { library } = testLibrary("/unused");
     expect(Object.keys(library.forBot(owner, bot("run-1"))).sort()).toEqual([
       "create",
       "delete",
+      "replayed",
       "update",
     ]);
     expect(Object.keys(library.forOwner(owner)).sort()).toEqual([
@@ -472,7 +482,9 @@ describe("skill library", () => {
       "deleteVersion",
       "purge",
       "readVersion",
+      "replayed",
       "restore",
+      "setAccess",
       "trash",
       "uids",
       "undo",
@@ -691,7 +703,7 @@ describe("skill library", () => {
       expect((await library.forOwner(other).trash()).length).toBe(1);
     });
 
-    it("drops access rows with no skill at startup and leaves erasing history to account deletion", async () => {
+    it("keeps access rows with no skill at startup and leaves erasing history to account deletion", async () => {
       const data = await dataDir();
       const prisma = fakeSkillPrisma({ users: ["user-1"] });
       const { library } = testLibrary(data, { prisma });
@@ -715,8 +727,27 @@ describe("skill library", () => {
         "ghost",
         "user-1",
       ]);
-      expect(rows(prisma).settings).toEqual([]);
+      expect(rows(prisma).settings).toEqual([
+        { skillKey: "user:vanished", availability: "selected" },
+      ]);
       expect(await readdir(userSkillsRoot(data, owner))).toEqual(["deploy"]);
+    });
+
+    it("keeps a skill reserved to its bot when the skills folder is briefly missing", async () => {
+      const data = await dataDir();
+      const lock = createInMemorySkillLock();
+      const { library, prisma } = testLibrary(data, { lock });
+      await library.forBot(owner, bot("run-1")).create(skillMd("Deploy"));
+      const root = userSkillsRoot(data, owner);
+      await rename(root, `${root}.away`);
+
+      await repairSkillLibrary({ prisma: prisma as never, dataDir: data, lock });
+      await rename(`${root}.away`, root);
+      expect(rows(prisma)).toEqual({
+        settings: [{ skillKey: "user:deploy", availability: "selected" }],
+        bots: [{ skillKey: "user:deploy", botId: "bot-1", enabled: true }],
+      });
+      expect(await library.forOwner(owner).trash()).toEqual([]);
     });
   });
 });
@@ -733,19 +764,18 @@ describe("one owner's broken folder", () => {
     const { library } = testLibrary(data, { prisma });
     await library.forOwner(a).create(skillMd("A"));
     await library.forOwner(b).create(skillMd("B"));
-    prisma.skillSetting.rows.push({ ...b, skillKey: "user:b", availability: "selected" });
     await rm(path.join(userSkillsRoot(data, b), skillDirName("B")), { recursive: true });
+    await mkdir(path.join(userSkillsRoot(data, b), ".import-abc123"));
     return { data, prisma, library };
   }
-  const rowsOfB = (prisma: ReturnType<typeof fakeSkillPrisma>) =>
-    prisma.skillSetting.rows.filter((row) => row.userId === "user-b");
+  const swept = (data: string) => readdir(userSkillsRoot(data, b));
 
   it("heals a stray file in its history and never stops the sweep of other owners", async () => {
     const { data, prisma, library } = await twoOwners();
     await writeFile(path.join(data, ...skillHistorySegments(a), "skills", "0".repeat(32)), "x");
 
     await sweepAll(data, prisma);
-    expect(rowsOfB(prisma)).toEqual([]);
+    expect(await swept(data)).toEqual([]);
     expect(await refusal(library.forOwner(a).create(skillMd("A2")))).toBe("written");
   });
 
@@ -755,7 +785,7 @@ describe("one owner's broken folder", () => {
     await writeFile(userSkillsRoot(data, a), "not a folder");
 
     await sweepAll(data, prisma);
-    expect(rowsOfB(prisma)).toEqual([]);
+    expect(await swept(data)).toEqual([]);
     const error = await library
       .forOwner(a)
       .create(skillMd("A2"))
@@ -992,6 +1022,12 @@ describe("what a bot may write anywhere in the folder", () => {
       await refusal(ada("r3").create(one("C", "payload.bin", new Uint8Array([0, 1, 255])))),
     ).toBe("invalid");
     expect(await refusal(ada("r4").create(one("D", "notes.md", text("plain"))))).toBe("written");
+    expect(
+      await refusal(ada("r5").create(one("E", "scripts/invoice‮fdp.sh", text("echo ok")))),
+    ).toBe("invalid");
+    expect(await refusal(ada("r6").create(one("F", "references/a​b.md", text("ok"))))).toBe(
+      "invalid",
+    );
   });
 
   it("takes Windows line endings but not a lone carriage return", async () => {

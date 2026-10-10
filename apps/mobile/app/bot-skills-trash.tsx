@@ -10,7 +10,6 @@ import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import { useResolvedAppearance, useThemedStyles } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
-import { markRestored } from "../lib/skill-versions";
 
 /** Skills deleted in the last 30 days: bring one back, or delete it for good. */
 export default function BotSkillsTrashScreen() {
@@ -30,12 +29,12 @@ export default function BotSkillsTrashScreen() {
   }, [left]);
 
   const restore = (skill: TrashedSkill) =>
-    rpc<{ skillId: string; name: string; botGone: boolean }>("agentSkills/restore", {
+    rpc<{ botGone: boolean }>("agentSkills/restore", {
       uid: skill.uid,
     }).then(
-      ({ skillId, botGone }) => {
-        markRestored({ skillId, botGone });
+      ({ botGone }) => {
         router.back();
+        if (botGone) Alert.alert(t("No bot uses this skill yet."));
       },
       (error: unknown) => Alert.alert(serverMessage(error) || t("Could not restore")),
     );

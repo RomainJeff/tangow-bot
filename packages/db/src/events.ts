@@ -16,6 +16,7 @@ import {
   isSecretAskBlock,
   messagingChannelId,
   normalizeSpawnBotArgs,
+  runStartedByUser,
   sanitizeJsonValue,
   spawnBotApprovalBlock,
   spawnBotToolArgs,
@@ -123,6 +124,7 @@ export interface ClaimedSteeringMessage {
   messageId: string;
   text: string;
   blocks: MessageBlock[];
+  untrusted: boolean;
 }
 
 export interface FinalizeRunResult {
@@ -614,6 +616,7 @@ export async function sendUserMessage(
             botId: input.botId,
             userId: input.userId,
             runId: busy.id,
+            untrusted: !runStartedByUser({ trigger: input.trigger, sourceRole: "user" }),
           },
         });
         await tx.message.update({ where: { id: message.id }, data: { runId: busy.id } });
@@ -775,6 +778,7 @@ export async function claimSteering(
       messageId: item.messageId,
       text: blocksToAgentHistoryText(item.message.blocks as MessageBlock[]),
       blocks: item.message.blocks as MessageBlock[],
+      untrusted: item.untrusted,
     }));
   });
 }

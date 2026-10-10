@@ -283,37 +283,6 @@ export const MessageView = memo(function MessageView({
       </div>
     );
   };
-  if (!drawsSomething) return null;
-  if (isNarration) {
-    const prose = visibleBlocks.flatMap((block) => {
-      if (block.kind === "progress") return [{ text: block.text, streaming: true }];
-      const text = block.kind === "text" && !linkOnly ? bubbleText(block.text) : undefined;
-      return text === undefined ? [] : [{ text, streaming: false }];
-    });
-    return botRow(
-      <>
-        {messageContext}
-        {visibleBlocks.map((block, i) =>
-          block.kind === "steps" ? <AgentSteps key={i} block={block} live={isLive} /> : null,
-        )}
-        {prose.length > 0 ? (
-          <MessageBubble
-            data-testid="message-bot-bubble"
-            inGroup={inGroup}
-            className="space-y-2.5"
-            dir="auto"
-          >
-            {prose.map((entry, i) => (
-              <div key={i}>
-                <ChatMarkdown streaming={entry.streaming}>{entry.text}</ChatMarkdown>
-              </div>
-            ))}
-          </MessageBubble>
-        ) : null}
-        {previewView()}
-      </>,
-    );
-  }
   const skillLines = skills.map((skill) => {
     const { name } = skill;
     return {
@@ -333,6 +302,41 @@ export const MessageView = memo(function MessageView({
       ...(onOpenSkill ? { onClick: () => onOpenSkill(skill) } : {}),
     };
   });
+  if (!drawsSomething) return null;
+  if (isNarration) {
+    const prose = visibleBlocks.flatMap((block) => {
+      if (block.kind === "progress") return [{ text: block.text, streaming: true }];
+      const text = block.kind === "text" && !linkOnly ? bubbleText(block.text) : undefined;
+      return text === undefined ? [] : [{ text, streaming: false }];
+    });
+    return botRow(
+      <>
+        {messageContext}
+        {visibleBlocks.map((block, i) =>
+          block.kind === "steps" ? <AgentSteps key={i} block={block} live={isLive} /> : null,
+        )}
+        {prose.length > 0 ? (
+          <MessageBubble
+            data-testid="message-bot-bubble"
+            inGroup={inGroup}
+            className="space-y-2.5"
+            dir="auto"
+            meta={skillLines.length > 0 ? skillLines : undefined}
+          >
+            {prose.map((entry, i) => (
+              <div key={i}>
+                <ChatMarkdown streaming={entry.streaming}>{entry.text}</ChatMarkdown>
+              </div>
+            ))}
+          </MessageBubble>
+        ) : null}
+        {previewView()}
+        {prose.length === 0 && skillLines.length > 0 ? (
+          <MessageMeta lines={skillLines} className="px-3.5" />
+        ) : null}
+      </>,
+    );
+  }
   // The lines hang under the last bubble the message draws; with no bubble they stand alone.
   const skillLineBubble =
     message.role === "bot" && !linkOnly

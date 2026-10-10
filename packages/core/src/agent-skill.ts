@@ -8,7 +8,7 @@ import { SKILL_DESCRIPTION_MAX_CHARS } from "@rakazo/contracts";
 
 import { runStartedByUser } from "./proposal.js";
 import type { SkillLearningMode } from "./skill-learning.js";
-import { isVisibleText } from "./spawn-bot.js";
+import { hasHiddenText } from "./spawn-bot.js";
 
 const FRONTMATTER_FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
@@ -108,14 +108,23 @@ const SKILL_DELETE_ERROR = "Delete a skill only when the user asks you to in thi
  * every later run, so only the user's own conversation, their routines and a sub-bot's first
  * task save one; a delete needs the user. A routine counts as the user's only while its prompt
  * is (`trustedRoutine`): one a bot set up from a webhook would otherwise save on its word a
- * minute later. A resumed run keeps the trigger it started with.
+ * minute later. A run that read a message someone else sent into it (`steeredByOthers`) is no
+ * longer the user's alone. A resumed run keeps the trigger it started with.
  */
 export function skillWriteRefusal(
-  run: { trigger: string; sourceRole?: string | null; trustedRoutine?: boolean },
+  run: {
+    trigger: string;
+    sourceRole?: string | null;
+    trustedRoutine?: boolean;
+    steeredByOthers?: boolean;
+  },
   tool: string,
 ): string | undefined {
+  if (tool !== "skill_create" && tool !== "skill_update" && tool !== "skill_delete") {
+    return undefined;
+  }
+  if (run.steeredByOthers) return tool === "skill_delete" ? SKILL_DELETE_ERROR : SKILL_WRITE_ERROR;
   if (tool === "skill_delete") return runStartedByUser(run) ? undefined : SKILL_DELETE_ERROR;
-  if (tool !== "skill_create" && tool !== "skill_update") return undefined;
   return runStartedByUser(run) ||
     (run.trigger === "routine" && run.trustedRoutine === true) ||
     run.trigger === "spawn"
@@ -137,14 +146,14 @@ export function validateBotSkill(
   content: string,
   prior?: Pick<ParsedSkillMd, "name" | "description" | "frontmatter">,
 ): string | undefined {
-  if (!isVisibleText(skill.name, "single")) {
+  if (hasHiddenText(skill.name)) {
     return "Skill name must be a single line of visible text.";
   }
   if (skill.name !== prior?.name && SKILL_LINE_MARKS.test(skill.name)) {
     return "Skill name must not contain · or ›.";
   }
   if (skill.description !== prior?.description) {
-    if (!isVisibleText(skill.description, "single")) {
+    if (hasHiddenText(skill.description)) {
       return "Skill description must be a single line of visible text.";
     }
     if (skill.description.length > BOT_SKILL_DESCRIPTION_MAX_LENGTH) {
@@ -160,7 +169,7 @@ export function validateBotSkill(
   if (extraKeys.length > 0) {
     return `Skill frontmatter may only hold name and description, not ${extraKeys.join(", ")}.`;
   }
-  if (!isVisibleText(content, "multi")) {
+  if (hasHiddenText(content, true)) {
     return "Skill content must not contain invisible or control characters.";
   }
   return undefined;
@@ -181,7 +190,7 @@ const BOT_SKILL_TEXT_EXTENSIONS = [
   "html",
   "css",
 ];
-export const BOT_SKILL_TEXT_FILE_MAX_BYTES = 1024 * 1024;
+const BOT_SKILL_TEXT_FILE_MAX_BYTES = 1024 * 1024;
 
 /**
  * Every file a bot writes into a skill is read or run later, so it must be text the person can
@@ -193,6 +202,9 @@ export function validateBotSkillFile(file: {
   path: string;
   bytes: Uint8Array;
 }): string | undefined {
+  if (hasHiddenText(file.path)) {
+    return "Skill file paths must be a single line of visible text.";
+  }
   const base = file.path.split("/").pop() ?? "";
   const extension = base.includes(".") ? (base.split(".").pop() ?? "").toLowerCase() : "";
   if (!BOT_SKILL_TEXT_EXTENSIONS.includes(extension)) {
@@ -207,7 +219,7 @@ export function validateBotSkillFile(file: {
   } catch {
     return `${file.path} is not UTF-8 text.`;
   }
-  if (!isVisibleText(text.replaceAll("\r\n", "\n"), "multi")) {
+  if (hasHiddenText(text.replaceAll("\r\n", "\n"), true)) {
     return `${file.path} must not contain invisible or control characters.`;
   }
   return undefined;

@@ -40,7 +40,6 @@ import {
   clearInactiveUserComputerControl,
   computerSupportsUpdate,
   computerUpdateView,
-  createSkillLibrary,
   createVoiceProvider,
   deletePushToken,
   deploymentAutoReviewDefault,
@@ -85,7 +84,6 @@ import {
   touchRunningComputer,
   updateRoutine,
   verifyMcpInstall,
-  writeSkillLines,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
 import type { Actor, ComputerStatus, McpServer, Me, SpaceNavigation } from "@rakazo/contracts";
@@ -504,8 +502,6 @@ export interface RouterDeps {
   dataDir: string;
   /** Serializes skill writes per owner with the worker's. */
   skillLock: SkillOwnerLock;
-  /** A stopped run that left no message gets its skill line in a message of its own. */
-  skillLineOnlyMessages?: boolean;
   /** Present when the external messaging surface is enabled. */
   messaging?: { enabled: boolean; providers: string[]; openSignup: boolean };
   env: {
@@ -560,16 +556,6 @@ export function createRouter(deps: RouterDeps) {
     dataDir: deps.dataDir,
   });
   const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir, deps.skillLock);
-  const skillLines = {
-    prisma: deps.prisma,
-    library: createSkillLibrary({
-      prisma: deps.prisma,
-      dataDir: deps.dataDir,
-      lock: deps.skillLock,
-    }),
-    events: deps.events,
-    lineOnlyMessages: deps.skillLineOnlyMessages,
-  };
   const marketplaces = createMarketplacesService({ prisma: deps.prisma, dataDir: deps.dataDir });
 
   const authed = os.use(async ({ context, next }) => {
@@ -1560,11 +1546,6 @@ export function createRouter(deps: RouterDeps) {
           deps,
           stopping.map((run) => run.id),
         ).catch((error) => getLogger().error("cancelled run cards", error));
-        for (const run of stopping) {
-          await writeSkillLines(skillLines, run.id).catch((error) =>
-            getLogger().error("cancelled run skill lines", error),
-          );
-        }
         return { ok: true as const };
       }),
       clear: authed.threads.clear.handler(async ({ context, input }) => {

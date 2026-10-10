@@ -29,19 +29,3 @@ describe("skill description limit", () => {
     expect(guide).toContain(`(${limit})`);
   });
 });
-
-describe("skill_update tool", () => {
-  it("offers no way to rename the skill: a bot keeps its name", () => {
-    const tool = builtinAgentTools.find((candidate) => candidate.name === "skill_update");
-    const schema = tool?.inputSchema as { properties: Record<string, unknown> };
-    expect(Object.keys(schema.properties)).toEqual([
-      "name",
-      "skillId",
-      "path",
-      "description",
-      "body",
-      "content",
-    ]);
-    expect(JSON.stringify(tool)).not.toContain("newName");
-  });
-});

@@ -1,4 +1,5 @@
 import type { AgentSkill, SkillVersion } from "@rakazo/contracts";
+import { canUndoSkillVersion, showsSkillVersions } from "@rakazo/core";
 import { motion } from "@rakazo/ui-tokens";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useState } from "react";
@@ -6,6 +7,7 @@ import {
   Alert,
   Keyboard,
   LayoutAnimation,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,22 +15,16 @@ import {
 } from "react-native";
 import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
 import { Group, GroupAction, LoadFailed, Row, useFocusedRead } from "../components/bot-page/kit";
-import { MoreButton, useDateLabel } from "../components/bot-page/skill-parts";
+import { MoreButton, useDateLabel, useVersionSubline } from "../components/bot-page/skill-parts";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useChatReducedMotion } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
-import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../lib/native";
+import { native, useMobileTokens, useResolvedAppearance, useThemedStyles } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
 import { skillDirty, skillText } from "../lib/skill-draft";
-import {
-  canUndo,
-  showsVersions,
-  type UndoOutcome,
-  undoOutcome,
-  versionSubline,
-} from "../lib/skill-versions";
+import { type UndoOutcome, undoOutcome } from "../lib/skill-versions";
 import { nativeTextStyle } from "../lib/typography";
 
 type Loaded = { skill: AgentSkill; versions: SkillVersion[] };
@@ -56,6 +52,7 @@ export default function BotSkillScreen() {
   const router = useRouter();
   const reducedMotion = useChatReducedMotion();
   const dateLabel = useDateLabel();
+  const versionSubline = useVersionSubline();
   const { read, setRead, retry } = useFocusedRead(() => loadSkill(skillId), [skillId]);
   const [draft, setDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -161,6 +158,20 @@ export default function BotSkillScreen() {
           // editing value and the screen would stay without a way back.
           headerBackVisible: !editing,
           gestureEnabled: !editing,
+          // Android: the bar buttons below are iOS only, so a plain Cancel and Save stand in.
+          headerLeft: editing
+            ? () => (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  hitSlop={8}
+                  onPress={cancel}
+                  style={styles.headerCancel}
+                >
+                  <Text style={styles.headerCancelLabel}>{t("Cancel")}</Text>
+                </Pressable>
+              )
+            : undefined,
           unstable_headerLeftItems: editing
             ? () => [
                 {
@@ -184,7 +195,17 @@ export default function BotSkillScreen() {
               ]
             : undefined,
           headerRight: editing
-            ? undefined
+            ? () => (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy || !dirty}
+                  hitSlop={8}
+                  onPress={() => void save()}
+                  style={busy || !dirty ? styles.headerDisabled : undefined}
+                >
+                  <Text style={styles.headerSaveLabel}>{busy ? t("Saving…") : t("Save")}</Text>
+                </Pressable>
+              )
             : () => (writable ? <MoreButton label={t("More")} onPress={remove} /> : null),
         }}
       />
@@ -211,11 +232,11 @@ export default function BotSkillScreen() {
             placeholderTextColor={tokens.mutedForeground}
             style={styles.field}
           />
-          {writable && showsVersions(loaded.versions) ? (
+          {writable && showsSkillVersions(loaded.versions) ? (
             <Group
               label={t("Versions")}
               trailing={
-                canUndo(loaded.versions) && !editing ? (
+                canUndoSkillVersion(loaded.versions) && !editing ? (
                   <GroupAction label={t("Undo")} onPress={() => void undo(loaded.versions)} />
                 ) : null
               }
@@ -224,13 +245,7 @@ export default function BotSkillScreen() {
                 <Dimmed key={version.versionId} dimmed={version.undone}>
                   <Row
                     label={dateLabel(version.createdAt)}
-                    subline={versionSubline(version, {
-                      learned: t("learned"),
-                      updated: t("updated"),
-                      you: t("You"),
-                      undone: t("Undone"),
-                      unknown: t("Updated"),
-                    })}
+                    subline={versionSubline(version)}
                     checked={version.current}
                     onPress={() =>
                       router.push({
@@ -267,6 +282,13 @@ function createSkillStyles() {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: tokens.background },
     content: { paddingHorizontal: 16, paddingBottom: 48, gap: 28 },
+    headerCancel: { paddingEnd: 20, paddingVertical: 8, justifyContent: "center" },
+    headerCancelLabel: { color: native.label, ...nativeTextStyle("body", { size: 17 }) },
+    headerSaveLabel: {
+      color: tokens.primary,
+      ...nativeTextStyle("body", { size: 16, weight: 600 }),
+    },
+    headerDisabled: { opacity: 0.4 },
     error: { color: tokens.destructive, ...nativeTextStyle("meta", { size: 14 }) },
     field: {
       paddingHorizontal: 4,

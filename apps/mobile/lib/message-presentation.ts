@@ -1,6 +1,6 @@
 import type { MessageBlock } from "@rakazo/contracts";
-import { isToolActivityBlock, type SkillSourceBlock } from "@rakazo/core";
-import { skillIdForUid } from "./skill-versions";
+import type { SkillSourceBlock } from "@rakazo/core";
+import { isToolActivityBlock } from "@rakazo/core";
 
 /**
  * The blocks the thread is about to draw: tool activity is hidden, except the
@@ -56,8 +56,16 @@ export async function skillLineRoute(
   catalog: () => Promise<ReadonlyArray<{ id: string; uid?: string }>>,
 ) {
   if (line.change === "deleted") return { pathname: "/bot-skills-trash" } as const;
-  const skillId = skillIdForUid(await catalog(), line.skillUid, (entry) => entry.uid);
+  const skillId = (await catalog()).find((entry) => entry.uid === line.skillUid)?.id;
   return skillId
     ? ({ pathname: "/bot-skill", params: { skillId } } as const)
     : ({ pathname: "/skills" } as const);
+}
+
+/**
+ * The segment whose bubble the skill lines hang under, given the text each segment draws: the last
+ * one that draws any. -1 when none does, and the lines stand alone. Mirrors web's `skillLineBubble`.
+ */
+export function skillLineSegment(segmentTexts: readonly string[]): number {
+  return segmentTexts.findLastIndex((text) => text !== "");
 }

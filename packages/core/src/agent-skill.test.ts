@@ -449,6 +449,7 @@ describe("validateBotSkill", () => {
 describe("skillWriteRefusal", () => {
   const runs: Array<[string, Parameters<typeof skillWriteRefusal>[0]]> = [
     ["user", { trigger: "user" }],
+    ["user, steered by a webhook", { trigger: "user", steeredByOthers: true }],
     ["reaction", { trigger: "reaction" }],
     ["skill", { trigger: "skill" }],
     ["follow_up from user", { trigger: "follow_up", sourceRole: "user" }],
@@ -473,6 +474,7 @@ describe("skillWriteRefusal", () => {
     (tool) => {
       expect(verdicts(tool)).toEqual({
         user: "allowed",
+        "user, steered by a webhook": "refused",
         reaction: "allowed",
         skill: "allowed",
         "follow_up from user": "allowed",
@@ -493,6 +495,7 @@ describe("skillWriteRefusal", () => {
   it("deletes a skill only in a run the user started", () => {
     expect(verdicts("skill_delete")).toEqual({
       user: "allowed",
+      "user, steered by a webhook": "refused",
       reaction: "allowed",
       skill: "allowed",
       "follow_up from user": "allowed",
