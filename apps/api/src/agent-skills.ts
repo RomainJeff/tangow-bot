@@ -288,6 +288,8 @@ export function createAgentSkillsService(prisma: PrismaClient, dataDir: string) 
       }).catch((error: unknown) => {
         if (error instanceof ORPCError) throw error;
         if (isExists(error)) conflictOrRethrow(error);
+        // A filesystem failure is the server's, and its message names a host path.
+        if (error instanceof Error && "syscall" in error) throw error;
         // ponytail: archive/layout failures all read fine as-is; no error taxonomy.
         throw new ORPCError("BAD_REQUEST", {
           message: error instanceof Error ? error.message : "Invalid skill bundle.",

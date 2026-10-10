@@ -7,7 +7,17 @@
  */
 import type { Stats } from "node:fs";
 import { createWriteStream } from "node:fs";
-import { lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  rmdir,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import type { Readable as ReadableStream } from "node:stream";
 import { Readable, Transform } from "node:stream";
@@ -129,16 +139,25 @@ export async function writeUserSkill(
 }
 
 /**
- * Claims a skill folder: EEXIST on a name clash. An empty folder, left by a write a crash cut
- * short, is free: rename(2) replaces it.
+ * Moves `from` into the skill folder `dest` with "create" semantics: EEXIST on a name clash. An
+ * empty folder, left by a write a crash cut short, is free: rename(2) replaces it. Two writers can
+ * both take the same empty folder; rename(2) lets only one of them fill it, and the loser removes
+ * the folder only while it is still empty, so it never deletes the winner's skill.
  */
-async function claimSkillDir(dest: string): Promise<void> {
+async function moveIntoSkillDir(from: string, dest: string): Promise<void> {
   try {
     await mkdir(dest);
   } catch (error) {
     const left = isExists(error) ? await readdir(dest).catch(() => undefined) : undefined;
     if (left?.length !== 0) throw error;
   }
+  await rename(from, dest).catch(async (error: unknown) => {
+    await rmdir(dest).catch(() => undefined);
+    if (hasCode(error, "ENOTEMPTY") || isExists(error)) {
+      throw Object.assign(new Error("A skill with that name already exists."), { code: "EEXIST" });
+    }
+    throw error;
+  });
 }
 
 /**
@@ -153,11 +172,7 @@ export async function renameUserSkill(
 ): Promise<void> {
   const from = path.join(root, skillDirName(oldName));
   const dest = path.join(root, skillDirName(skill.name));
-  await claimSkillDir(dest);
-  await rename(from, dest).catch(async (error) => {
-    await rm(dest, { recursive: true, force: true });
-    throw error;
-  });
+  await moveIntoSkillDir(from, dest);
   await writeUserSkill(root, skill, "replace");
 }
 
@@ -267,11 +282,7 @@ async function importSkillTree(
       });
       return;
     }
-    await claimSkillDir(dest);
-    await rename(skillDir, dest).catch(async (error) => {
-      await rm(dest, { recursive: true, force: true });
-      throw error;
-    });
+    await moveIntoSkillDir(skillDir, dest);
     if (old) await rm(old, { recursive: true, force: true });
   } finally {
     await rm(wrapper, { recursive: true, force: true });
