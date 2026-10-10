@@ -1,6 +1,7 @@
 import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
 import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
+import type { SkillSourceBlock } from "@rakazo/core";
 import {
   computeMessageGroups,
   foldRoutineRuns,
@@ -83,6 +84,7 @@ export const Transcript = memo(function Transcript({
   onRefresh,
   onBotChanged,
   onAddRoutine,
+  onOpenSkill,
   voiceReady,
   speakingMessageId,
   onSpeak,
@@ -118,6 +120,8 @@ export const Transcript = memo(function Transcript({
   onRefresh: () => Promise<void>;
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
+  /** Opens a skill in its bot's page, from the line under the message that touched it. */
+  onOpenSkill?: (skill: SkillSourceBlock) => void;
   voiceReady: boolean;
   speakingMessageId: string | null;
   onSpeak: (message: ThreadMessage) => void;
@@ -619,6 +623,8 @@ export const Transcript = memo(function Transcript({
                       onBotChanged={onBotChanged}
                       onAddRoutine={onAddRoutine}
                       routineRole={routineRole}
+                      onOpenSkill={onOpenSkill}
+                      arrivesLive={isNewArrival(message)}
                     />
                   </div>
                 </div>

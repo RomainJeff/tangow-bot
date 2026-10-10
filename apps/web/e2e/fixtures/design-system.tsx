@@ -9,6 +9,7 @@ import {
   HoverPill,
   Interstitial,
   MessageBubble,
+  MessageMeta,
   MessageRow,
   ReasoningDisclosure,
   Shimmer,
@@ -18,7 +19,17 @@ import {
   UserBubble,
   WorkingLine,
 } from "@rakazo/ui-web";
-import { Copy, Mic, MoreHorizontal, Plus, Reply, Square, Volume2 } from "lucide-react";
+import {
+  BookOpen,
+  Copy,
+  Mic,
+  MoreHorizontal,
+  Plus,
+  Reply,
+  Send,
+  Square,
+  Volume2,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "../../src/styles.css";
@@ -275,6 +286,35 @@ function Kitchen() {
         >
           <span className="text-working text-muted-foreground">Ivy is speaking</span>
         </ComposerShell>
+      </Section>
+      <Section title="message proof lines">
+        <MessageBubble
+          inGroup
+          data-testid="message-meta-lines"
+          meta={[
+            {
+              label: "Sent to #ops",
+              icon: <Send aria-hidden className="size-3.5 shrink-0" />,
+              onClick: () => undefined,
+            },
+            {
+              label: "Skill learned · Book a room for the whole team across every office",
+              icon: <BookOpen aria-hidden className="size-3.5 shrink-0" />,
+              onClick: () => undefined,
+            },
+          ]}
+        >
+          Booked Tuesday at 14:00.
+        </MessageBubble>
+        <div className="px-3.5" data-testid="message-meta-alone">
+          <MessageMeta
+            lines={{
+              label: "Skill updated · Book a room",
+              icon: <BookOpen aria-hidden className="size-3.5 shrink-0" />,
+              onClick: () => undefined,
+            }}
+          />
+        </div>
       </Section>
     </main>
   );

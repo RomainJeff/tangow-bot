@@ -54,6 +54,8 @@ export * from "./secrets-guard.js";
 export * from "./self-update.js";
 export * from "./signup-policy.js";
 export * from "./skill-access.js";
+export * from "./skill-learning.js";
+export * from "./skill-source.js";
 export * from "./spawn-bot.js";
 export * from "./speech-text.js";
 export * from "./teach-playbook.js";

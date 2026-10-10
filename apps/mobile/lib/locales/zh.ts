@@ -718,4 +718,12 @@ export const ZH_MESSAGES: Record<string, string> = {
   Dictating: "正在语音输入",
   "Microphone access is off": "麦克风未授权",
   "Open Settings": "打开设置",
+  "Skill learned · {name}": "技能已学会 · {name}",
+  "Skill updated · {name}": "技能已更新 · {name}",
+  "Skill deleted · {name}": "技能已删除 · {name}",
+  "Could not load · Retry": "无法加载 · 重试",
+  "Could not save": "无法保存",
+  Discard: "放弃",
+  "Discard changes?": "放弃更改？",
+  "Keep editing": "继续编辑",
 };

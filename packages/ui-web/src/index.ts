@@ -55,6 +55,7 @@ export {
 export {
   MessageBubble,
   type MessageBubbleProps,
+  MessageMeta,
   MessageRow,
   type MessageRowMeta,
   type MessageRowProps,

@@ -5,15 +5,27 @@
  * (trusted); the skill directory name is derived from the skill key, never from user input
  * directly, so no path can escape the owner's root.
  */
+import type { Stats } from "node:fs";
 import { createWriteStream } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import {
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  rmdir,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import type { Readable as ReadableStream } from "node:stream";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip } from "node:zlib";
 import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
-import { parseSkillMd, type SkillRecord, userSkillKey } from "@rakazo/core";
+import { parseSkillMd, SKILL_HISTORY_DIR, type SkillRecord, userSkillKey } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
 import { extract as tarExtract } from "tar";
 import { type Entry, fromBuffer, type ZipFile } from "yauzl";
@@ -44,12 +56,23 @@ function skillFile(root: string, name: string): string {
   return path.join(root, skillDirName(name), "SKILL.md");
 }
 
-function hasCode(error: unknown, code: string): boolean {
+export function hasCode(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && error.code === code;
 }
 
 export function isExists(error: unknown): boolean {
   return hasCode(error, "EEXIST");
+}
+
+/**
+ * A file the store may open: a plain file with one name and a bounded size. A link, FIFO or
+ * device planted in a skill folder (a bot on desktop can write there) is never followed or read.
+ * `hardLinks` admits a second name, for reading only: the store never writes through a file.
+ */
+export function isStorableFile(info: Stats, options: { hardLinks?: boolean } = {}): boolean {
+  return (
+    info.isFile() && (options.hardLinks || info.nlink === 1) && info.size <= SKILL_BUNDLE_MAX_BYTES
+  );
 }
 
 export async function listUserSkills(root: string): Promise<UserSkillFile[]> {
@@ -62,21 +85,24 @@ export async function listUserSkills(root: string): Promise<UserSkillFile[]> {
   }
   const skills: UserSkillFile[] = [];
   for (const entry of entries) {
-    const file = path.join(root, entry, "SKILL.md");
-    let content: string;
-    try {
-      content = await readFile(file, "utf8");
-    } catch (error) {
-      if (hasCode(error, "ENOENT") || hasCode(error, "ENOTDIR")) continue;
-      throw error;
+    const dir = path.join(root, entry);
+    const file = path.join(dir, "SKILL.md");
+    const [dirInfo, info] = await Promise.all([
+      lstat(dir).catch(() => null),
+      lstat(file).catch(() => null),
+    ]);
+    if (!dirInfo?.isDirectory() || !info) continue;
+    if (!isStorableFile(info, { hardLinks: true })) {
+      getLogger().warn(`[skills] ignoring ${file}: not a plain file`);
+      continue;
     }
+    const content = await readFile(file, "utf8");
     const parsed = parseSkillMd(content);
     if ("error" in parsed) {
       // ponytail: skipped + log; a panel warning waits for a real user hitting this.
       getLogger().warn(`[skills] ignoring ${file}: ${parsed.error}`);
       continue;
     }
-    const info = await stat(file);
     skills.push({
       id: userSkillKey(parsed.name),
       name: parsed.name,
@@ -94,8 +120,8 @@ export async function listUserSkills(root: string): Promise<UserSkillFile[]> {
 
 /**
  * "create" fails with EEXIST when a skill with the same key exists (the FS is the uniqueness
- * guard the DB index used to be). "replace" writes tmp + rename so a crash never leaves a
- * half-written SKILL.md.
+ * guard the DB index used to be). Both modes write a temp file first, then link (create) or
+ * rename (replace) it onto SKILL.md, so a failed or interrupted write never leaves a partial one.
  */
 export async function writeUserSkill(
   root: string,
@@ -104,13 +130,39 @@ export async function writeUserSkill(
 ): Promise<void> {
   const file = skillFile(root, skill.name);
   await mkdir(path.dirname(file), { recursive: true });
-  if (mode === "create") {
-    await writeFile(file, skill.content, { encoding: "utf8", flag: "wx" });
-    return;
-  }
   const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, skill.content, "utf8");
-  await rename(tmp, file);
+  try {
+    await writeFile(tmp, skill.content, "utf8");
+    await (mode === "create" ? link(tmp, file) : rename(tmp, file));
+  } finally {
+    await rm(tmp, { force: true });
+  }
+}
+
+/**
+ * Moves `from` into the skill folder `dest` with "create" semantics: EEXIST on a name clash. An
+ * empty folder, left by a write a crash cut short, is free: rename(2) replaces it. Two writers can
+ * both take the same empty folder; rename(2) lets only one of them fill it, and the loser removes
+ * the folder only while it is still empty, so it never deletes the winner's skill.
+ */
+async function moveIntoSkillDir(from: string, dest: string): Promise<void> {
+  try {
+    await mkdir(dest);
+  } catch (error) {
+    const left = isExists(error) ? await readdir(dest).catch(() => undefined) : undefined;
+    if (left?.length !== 0) throw error;
+  }
+  await rename(from, dest).catch(async (error: unknown) => {
+    await rmdir(dest).catch(() => undefined);
+    throw asNameClash(error);
+  });
+}
+
+/** A rename onto a folder another write filled: EEXIST, with no host path in the message. */
+function asNameClash(error: unknown): unknown {
+  return hasCode(error, "ENOTEMPTY") || isExists(error)
+    ? Object.assign(new Error("A skill with that name already exists."), { code: "EEXIST" })
+    : error;
 }
 
 /**
@@ -125,19 +177,14 @@ export async function renameUserSkill(
 ): Promise<void> {
   const from = path.join(root, skillDirName(oldName));
   const dest = path.join(root, skillDirName(skill.name));
-  await mkdir(dest); // EEXIST = name clash
-  // rename(2) replaces the empty directory we just claimed.
-  await rename(from, dest).catch(async (error) => {
-    await rm(dest, { recursive: true, force: true });
-    throw error;
-  });
+  await moveIntoSkillDir(from, dest);
   await writeUserSkill(root, skill, "replace");
 }
 
 /**
- * Imports a `.skill` bundle: a gzip tar or zip with SKILL.md at its root (or inside a single top-level
- * directory) plus any extra files (scripts/, references/, ...). Same hardening as the marketplace
- * tarball: files and directories only, byte cap.
+ * Imports a `.skill` bundle: a gzip tar or zip with SKILL.md at its root (or inside a single
+ * top-level directory) plus any extra files (scripts/, references/, ...). Same hardening as the
+ * marketplace tarball: files and directories only, byte cap.
  */
 export async function writeUserSkillBundle(
   root: string,
@@ -174,6 +221,7 @@ export async function replaceUserSkillFiles(
   await importSkillTree(root, populateFiles(files), resolve, { replace: oldName });
 }
 
+/** The executable bit survives only under scripts/. */
 function populateFiles(files: SkillTreeFile[]): (out: string) => Promise<void> {
   if (files.length > SKILL_BUNDLE_MAX_ENTRIES) {
     throw new Error(`Skill has too many files (> ${SKILL_BUNDLE_MAX_ENTRIES}).`);
@@ -193,8 +241,9 @@ function populateFiles(files: SkillTreeFile[]): (out: string) => Promise<void> {
       ) {
         throw new Error(`Skill file escapes the skill folder: ${file.path}.`);
       }
+      const executable = file.executable && file.path.startsWith("scripts/");
       await mkdir(path.dirname(target), { recursive: true })
-        .then(() => writeFile(target, file.bytes, file.executable ? { mode: 0o755 } : {}))
+        .then(() => writeFile(target, file.bytes, executable ? { mode: 0o755 } : {}))
         .catch((error: unknown) => {
           if (error instanceof Error && "code" in error) {
             throw new Error(`Skill file could not be written: ${file.path}.`);
@@ -219,6 +268,7 @@ async function importSkillTree(
   await mkdir(root, { recursive: true });
   // No SKILL.md directly inside the wrapper, so listUserSkills never sees a half-imported skill.
   const wrapper = await mkdtemp(path.join(root, ".import-"));
+  let keepWrapper = false;
   try {
     const out = path.join(wrapper, "bundle");
     await mkdir(out);
@@ -229,24 +279,23 @@ async function importSkillTree(
     const dest = path.join(root, skillDirName(resolved.name));
     const old = target === "create" ? undefined : path.join(root, skillDirName(target.replace));
     if (old === dest) {
-      // The old folder waits in the wrapper (removed below) until the new one is in place.
+      // The old folder waits in the wrapper (removed below) until the new one is in place. If the
+      // swap fails it goes back; when an I/O failure stops that too, it stays in the wrapper.
       const aside = path.join(wrapper, "old");
       await rename(old, aside);
-      await rename(skillDir, dest).catch(async (error) => {
-        await rename(aside, dest);
-        throw error;
+      await rename(skillDir, dest).catch(async (error: unknown) => {
+        await rename(aside, dest).catch(() => {
+          keepWrapper = true;
+          getLogger().warn(`[skills] kept the replaced version of ${dest} in ${aside}`);
+        });
+        throw asNameClash(error);
       });
       return;
     }
-    await mkdir(dest); // EEXIST = name clash, same signal as writeUserSkill "create"
-    // rename(2) replaces the empty directory we just claimed.
-    await rename(skillDir, dest).catch(async (error) => {
-      await rm(dest, { recursive: true, force: true });
-      throw error;
-    });
+    await moveIntoSkillDir(skillDir, dest);
     if (old) await rm(old, { recursive: true, force: true });
   } finally {
-    await rm(wrapper, { recursive: true, force: true });
+    if (!keepWrapper) await rm(wrapper, { recursive: true, force: true });
   }
 }
 
@@ -294,21 +343,21 @@ async function extractBundle(archive: Buffer, out: string): Promise<void> {
 
 async function extractTar(archive: Buffer, out: string, cap: () => Transform): Promise<void> {
   let entries = 0;
+  // Entries past the cap are skipped rather than aborted on: an abort leaves file writes in
+  // flight, which outlive the rejection and race the caller's cleanup of `out`.
   const unpack = tarExtract({
     cwd: out,
     preservePaths: false,
     filter: (_path, entry) =>
-      "type" in entry && (entry.type === "File" || entry.type === "Directory"),
-    onReadEntry: () => {
-      if (++entries > SKILL_BUNDLE_MAX_ENTRIES) {
-        unpack.abort(
-          new Error(`Skill bundle has too many entries (> ${SKILL_BUNDLE_MAX_ENTRIES}).`),
-        );
-      }
-    },
+      ++entries <= SKILL_BUNDLE_MAX_ENTRIES &&
+      "type" in entry &&
+      (entry.type === "File" || entry.type === "Directory"),
   });
   // Explicit gunzip so the byte cap applies to the decompressed tar, not the compressed file.
   await pipeline(Readable.from([archive]), createGunzip(), cap(), unpack);
+  if (entries > SKILL_BUNDLE_MAX_ENTRIES) {
+    throw new Error(`Skill bundle has too many entries (> ${SKILL_BUNDLE_MAX_ENTRIES}).`);
+  }
 }
 
 const S_IFMT = 0o170000;
@@ -392,7 +441,7 @@ async function extractZipEntry(
  * A filesystem error in here is about the archive's own layout — a file and a directory claiming
  * the same name, an entry named "." — not about the user's skill list, and its message carries the
  * temp path we extracted into. Reword it so the import answers BAD_REQUEST naming the entry
- * instead of the CONFLICT that the name-clash mkdir in importSkillTree raises, and so no host
+ * instead of the CONFLICT a name clash with another skill gets, and so no host
  * path reaches the user. The byte cap and yauzl's own stream errors carry no `code` and pass
  * through untouched.
  */
@@ -410,7 +459,7 @@ function entryFailure(entry: Entry): (error: unknown) => never {
 }
 
 const isFile = (file: string) =>
-  stat(file).then(
+  lstat(file).then(
     (info) => info.isFile(),
     () => false,
   );
@@ -436,11 +485,20 @@ export async function removeUserSkill(root: string, name: string): Promise<void>
   await rm(path.join(root, skillDirName(name)), { recursive: true, force: true });
 }
 
-/** Account deletion: a user's skills live under every space they belonged to. */
+/**
+ * Account deletion: a user's skills live under every space they belonged to, and so does the
+ * skill history an earlier version kept beside them.
+ */
 export async function removeUserSkillDirs(dataDir: string, userId: string): Promise<void> {
-  const base = path.join(dataDir, "skills", "user");
-  const spaces = await readdir(base).catch(() => [] as string[]);
-  await Promise.all(
-    spaces.map((spaceId) => rm(path.join(base, spaceId, userId), { recursive: true, force: true })),
-  );
+  for (const base of [
+    path.join(dataDir, "skills", "user"),
+    path.join(dataDir, SKILL_HISTORY_DIR),
+  ]) {
+    const spaces = await readdir(base).catch(() => [] as string[]);
+    await Promise.all(
+      spaces.map((spaceId) =>
+        rm(path.join(base, spaceId, userId), { recursive: true, force: true }),
+      ),
+    );
+  }
 }
