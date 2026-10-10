@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+  link,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
@@ -116,6 +126,22 @@ describe("skill store", () => {
     ).catch((e: unknown) => e);
     expect(isExists(error)).toBe(true);
     expect(isExists(new Error("nope"))).toBe(false);
+  });
+
+  it("skips a SKILL.md that is a link when listing", async () => {
+    const root = await tmpRoot();
+    const target = path.join(root, "elsewhere.md");
+    await writeFile(target, md("Sneaky"));
+    await mkdir(path.join(root, "sneaky"));
+    await symlink(target, path.join(root, "sneaky", "SKILL.md"));
+    expect(await listUserSkills(root)).toEqual([]);
+  });
+
+  it("lists a skill whose SKILL.md is hard-linked", async () => {
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Deploy", content: md("Deploy") }, "create");
+    await link(path.join(root, "deploy", "SKILL.md"), path.join(root, "snapshot.md"));
+    expect((await listUserSkills(root)).map((s) => s.id)).toEqual(["user:deploy"]);
   });
 
   it("skips directories without a valid SKILL.md", async () => {
