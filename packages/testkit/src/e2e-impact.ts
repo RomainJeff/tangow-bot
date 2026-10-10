@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,7 +42,8 @@ export function touchedFiles(
 export function repoFile(absolute: string, repoRoot: string): string | undefined {
   const relative = path.relative(repoRoot, absolute).split(path.sep).join("/");
   if (relative.startsWith("../") || path.isAbsolute(relative)) return undefined;
-  if (relative.split("/").includes("node_modules") || !existsSync(absolute)) return undefined;
+  if (relative.split("/").includes("node_modules")) return undefined;
+  if (!statSync(absolute, { throwIfNoEntry: false })?.isFile()) return undefined;
   return relative;
 }
 
@@ -67,6 +68,24 @@ export function viteUrlToRepoFile(
   if (pathname.startsWith("/@fs/")) return repoFile(pathname.slice("/@fs".length), repoRoot);
   if (pathname.startsWith("/@")) return undefined;
   return repoFile(path.join(webRoot, pathname), repoRoot);
+}
+
+/**
+ * A page URL that is not a file is an app route, which Vite answers with
+ * `index.html`. Recording it lets files only the entry imports, such as global
+ * styles, reach the specs that opened the app.
+ */
+export function viteDocumentToRepoFile(
+  url: string,
+  origin: string,
+  webRoot: string,
+  repoRoot: string,
+): string | undefined {
+  if (!URL.canParse(url) || new URL(url).origin !== origin) return undefined;
+  return (
+    viteUrlToRepoFile(url, origin, webRoot, repoRoot) ??
+    repoFile(path.join(webRoot, "index.html"), repoRoot)
+  );
 }
 
 export function buildImpactMap(records: readonly ImpactRecord[], commit: string): ImpactMap {

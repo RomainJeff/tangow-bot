@@ -4,6 +4,7 @@ import { type BrowserContext, test as base, type Page } from "@playwright/test";
 import {
   type ScriptCoverage,
   touchedFiles,
+  viteDocumentToRepoFile,
   viteUrlToRepoFile,
 } from "../../../packages/testkit/src/e2e-impact";
 
@@ -67,7 +68,9 @@ export const test = base.extend<{ impact: undefined }>({
       browser.newContext = newContext;
       const apiFiles = (await apiImpact()) as string[];
       await Promise.all([...recording].map(stop));
-      const pageFiles = [...documents].map(toRepoFile).filter((file) => file !== undefined);
+      const pageFiles = [...documents]
+        .map((url) => viteDocumentToRepoFile(url, origin, webRoot, repoRoot))
+        .filter((file) => file !== undefined);
       const files = new Set([...apiFiles, ...touchedFiles(scripts, toRepoFile), ...pageFiles]);
       writeFileSync(
         path.join(impactDir!, `${testInfo.testId}.json`),

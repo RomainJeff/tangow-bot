@@ -74,9 +74,16 @@ function describe(selection: Selection, impactMap: ImpactMap | undefined) {
     return lines.join("\n");
   }
   if (selection.kind === "specs") {
-    lines.push(`${selection.specs.length} of ${specsOnDisk.length} specs:`);
-    for (const spec of selection.specs)
-      lines.push(`  ${spec}  <- ${selection.because[spec]!.join(", ")}`);
+    lines.push(`Running ${selection.specs.length} of ${specsOnDisk.length} specs.`);
+    const specsByReason = new Map<string, string[]>();
+    for (const spec of selection.specs) {
+      for (const reason of selection.because[spec]!) {
+        specsByReason.set(reason, [...(specsByReason.get(reason) ?? []), spec]);
+      }
+    }
+    for (const [reason, specs] of specsByReason) {
+      lines.push(`  ${reason} -> ${specs.length > 5 ? `${specs.length} specs` : specs.join(", ")}`);
+    }
   } else {
     lines.push("No e2e spec is affected.");
   }

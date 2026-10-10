@@ -8,6 +8,7 @@ import {
   parseImpactMap,
   specsForFile,
   touchedFiles,
+  viteDocumentToRepoFile,
   viteUrlToRepoFile,
   writeImpactMap,
 } from "./e2e-impact.js";
@@ -43,6 +44,18 @@ describe("viteUrlToRepoFile", () => {
     ["http://example.test/src/main.tsx", undefined],
   ])("maps %s", (url, file) => {
     expect(viteUrlToRepoFile(url, origin, webRoot, repoRoot)).toBe(file);
+  });
+});
+
+describe("viteDocumentToRepoFile", () => {
+  it.each([
+    [`${origin}/app/bot-1?tab=chat`, "apps/web/index.html"],
+    [`${origin}/`, "apps/web/index.html"],
+    [`${origin}/e2e/fixtures/bot-page.html`, "apps/web/e2e/fixtures/bot-page.html"],
+    ["about:blank", undefined],
+    ["http://example.test/app", undefined],
+  ])("maps the page %s", (url, file) => {
+    expect(viteDocumentToRepoFile(url, origin, webRoot, repoRoot)).toBe(file);
   });
 });
 
