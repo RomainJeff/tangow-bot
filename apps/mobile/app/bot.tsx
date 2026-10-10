@@ -1,5 +1,5 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { BotHero } from "../components/bot-page/hero";
 import { LoadFailed } from "../components/bot-page/kit";
@@ -28,17 +28,16 @@ export default function BotPageScreen() {
     () => botRunEpoch(botId),
   );
 
-  // Freshness: the bot may change its own settings mid-run.
+  // Freshness: the bot may change its own settings mid-run. A new `epoch` (a run ended) makes a
+  // new callback, which the focused page runs again and a covered page runs when it comes back.
   const refresh = useCallback(() => {
     if (!botId) return;
     void Promise.all([readBotPage(botId), readViewer()]).then(
       () => setReadFailed(false),
       () => setReadFailed(true),
     );
-  }, [botId]);
+  }, [botId, epoch]);
   useFocusEffect(refresh);
-  // The end of a run reads again.
-  useEffect(refresh, [refresh, epoch]);
 
   const leave = () => {
     router.dismissAll();
