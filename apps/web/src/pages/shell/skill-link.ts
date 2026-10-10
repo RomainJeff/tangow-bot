@@ -4,14 +4,12 @@ import type { BotPageView } from "./layout";
 
 /**
  * Where a skill line leads: the skill in the bot page's Knowledge tab, found by its uid when the
- * line has one, else by its id. A deleted skill opens that tab's list with Recently deleted
- * expanded, and one the catalog no longer has, the list.
+ * line has one, else by its id, or that tab's list when the catalog no longer has it.
  */
 export async function skillPageView(
-  skill: Pick<SkillSourceBlock, "skillUid" | "skillId" | "change">,
+  skill: Pick<SkillSourceBlock, "skillUid" | "skillId">,
   catalog: () => Promise<ReadonlyArray<Pick<AgentSkillCatalogEntry, "id" | "uid">>>,
 ): Promise<BotPageView> {
-  if (skill.change === "deleted") return { tab: "knowledge", detail: null, trash: true };
   const entry = (await catalog()).find((candidate) =>
     skill.skillUid ? candidate.uid === skill.skillUid : candidate.id === skill.skillId,
   );

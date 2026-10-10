@@ -92,7 +92,7 @@ const lines = () =>
   [...container.querySelectorAll('[data-slot="message-row-meta"]')] as HTMLElement[];
 
 describe("a skill line under a bot's message", () => {
-  it("names each change and opens the skill it is about", async () => {
+  it("names each change and opens the skill it is about, unless it was deleted", async () => {
     const opened: string[] = [];
     await render(
       botMessage([
@@ -109,9 +109,9 @@ describe("a skill line under a bot's message", () => {
       "Skill updated · Coffee",
       "Skill deleted · Old",
     ]);
-    expect(lines().every((line) => line.getAttribute("role") === "link")).toBe(true);
+    expect(lines().map((line) => line.getAttribute("role"))).toEqual(["link", "link", null]);
     for (const line of lines()) act(() => line.click());
-    expect(opened).toEqual(["learned:user:Invoices", "updated:user:Coffee", "deleted:user:Old"]);
+    expect(opened).toEqual(["learned:user:Invoices", "updated:user:Coffee"]);
   });
 
   it("sits inside the last bubble, under the text", async () => {

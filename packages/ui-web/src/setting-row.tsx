@@ -23,13 +23,10 @@ export type SettingRowProps = SettingRowContent &
   (
     | (Omitted<ComponentPropsWithoutRef<"button">> & {
         onClick: () => void;
-        /** Makes the row a disclosure: its chevron turns down while open. */
-        expanded?: boolean;
         meta?: never;
         children?: never;
       })
-    | (Omitted<ComponentPropsWithoutRef<"div">> &
-        SettingRowTrailing & { onClick?: undefined; expanded?: never })
+    | (Omitted<ComponentPropsWithoutRef<"div">> & SettingRowTrailing & { onClick?: undefined })
   );
 
 const rowClass = "flex min-h-12.5 w-full items-center gap-3 py-2.5 ps-3.5 pe-3 text-start";
@@ -48,7 +45,6 @@ export function SettingRow({
   meta,
   children,
   chevron,
-  expanded,
   className,
   ...props
 }: SettingRowProps) {
@@ -73,15 +69,10 @@ export function SettingRow({
           {children}
         </span>
       ) : null}
-      {chevron || expanded !== undefined ? (
+      {chevron ? (
         <ChevronRight
           aria-hidden="true"
-          className={cn(
-            "size-4 shrink-0 text-muted-foreground rtl:-scale-x-100",
-            expanded !== undefined &&
-              "transition-transform duration-(--duration-hover) ease-quiet motion-reduce:transition-none",
-            expanded && "rotate-90 rtl:-rotate-90",
-          )}
+          className="size-4 shrink-0 text-muted-foreground rtl:-scale-x-100"
         />
       ) : null}
     </>
@@ -92,7 +83,6 @@ export function SettingRow({
       <button
         type="button"
         data-slot="setting-row"
-        aria-expanded={expanded}
         className={cn(rowClass, pressableClass, className)}
         {...props}
       >

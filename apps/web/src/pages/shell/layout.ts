@@ -18,8 +18,7 @@ export type BotDetail =
   /** `skillId` null writes a new skill. */
   | { kind: "skill"; skillId: string | null };
 
-/** `trash` opens the Knowledge list with Recently deleted expanded. */
-export type BotPageView = { tab: BotTab; detail: BotDetail | null; trash?: true };
+export type BotPageView = { tab: BotTab; detail: BotDetail | null };
 
 export type PanelSize = "default" | "wide";
 

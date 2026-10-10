@@ -34,7 +34,6 @@
     "routine-crud.spec.ts",
     "routine-execution.spec.ts",
     "skill-access.spec.ts",
-    "skill-versions.spec.ts",
     "slash-skills.spec.ts",
     "team-computer.spec.ts",
     "ui-appearance.spec.ts",

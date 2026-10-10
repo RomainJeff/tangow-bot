@@ -257,6 +257,10 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   }
   await skillRow.click();
   await expect(editor).toHaveValue(/warm greeting/);
+  // Edited twice, the skill keeps no history to browse or undo.
+  await expect(panel.getByText("Versions", { exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Undo", exact: true })).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "85b-knowledge-skill-edited");
   await panel.getByRole("button", { name: "Delete", exact: true }).click();
   await panel.getByRole("button", { name: "Confirm delete", exact: true }).click();
   await expect(panel).toHaveAttribute("data-size", "default");

@@ -299,7 +299,7 @@ export const MessageView = memo(function MessageView({
         />
       ),
       className: skillLinesLive ? "bui-skill-line" : undefined,
-      ...(onOpenSkill ? { onClick: () => onOpenSkill(skill) } : {}),
+      ...(onOpenSkill && skill.change !== "deleted" ? { onClick: () => onOpenSkill(skill) } : {}),
     };
   });
   if (!drawsSomething) return null;
