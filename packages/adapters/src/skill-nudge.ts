@@ -183,7 +183,11 @@ const withoutDraftFolder = (tool: ConnectorTool): ConnectorTool => {
   const schema = tool.inputSchema as { properties?: Record<string, unknown> };
   if (!schema.properties?.path) return tool;
   const { path: _, ...properties } = schema.properties;
-  return { ...tool, inputSchema: { ...tool.inputSchema, properties } };
+  return {
+    ...tool,
+    description: tool.description.replace(/\s*Pass path to save a workspace folder[^.]*\./, ""),
+    inputSchema: { ...tool.inputSchema, properties },
+  };
 };
 
 /** The nudge's tools: skill reads and writes, without a draft folder it has no way to write. */

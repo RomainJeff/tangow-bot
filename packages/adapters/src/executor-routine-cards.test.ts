@@ -1848,6 +1848,18 @@ describe("the skill nudge at the end of an exchange", () => {
     ]);
   });
 
+  it("does not count the nudge's own skill reads as the exchange following a skill", async () => {
+    await writeCoffee();
+    const f = fixture({
+      skillLearning: "on",
+      nudge: [[{ name: "skill_read", args: { name: "Coffee" } }]],
+    });
+    await f.play([searches]);
+    expect(f.requests()).toHaveLength(2);
+    expect(f.nudgeResults).toHaveLength(1);
+    expect(f.eventsOf("agent.skill.used")).toEqual([]);
+  });
+
   it("names the skill the bot followed when a later step failed", async () => {
     await writeCoffee();
     const f = fixture({ skillLearning: "on" });

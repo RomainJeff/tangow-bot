@@ -11,12 +11,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **A line under a bot's message shows when it learns, improves or removes a skill, on web, desktop and iPhone.** It reads "Skill learned", "Skill updated" or "Skill deleted" with the skill's name and opens that skill, even after it was renamed, or the skills list when it no longer exists. On web and desktop the skill opens in the bot's Knowledge tab, and a group conversation names it without a link; on iPhone it opens on its own screen.
-- **A skill now keeps its history, and a deleted skill can come back, on web, desktop and iPhone.** Once a bot has changed a skill, its page lists the versions with who wrote them, lets you read one, and "Undo" goes back one version; a skill you delete, or whose creation you undo, waits 30 days in "Recently deleted" at the bottom of the skills list, where "Undo" restores it and "Delete now" erases it, and a "Skill deleted" line in a conversation opens that list. On iPhone a skill line opens the skill's own screen, where you can also edit it.
-- **Bots now keep and improve their methods as skills.** After a long task, or when a step fails while following one of your skills, a bot saves or fixes the method on its own instead of redoing the work from scratch next time, and the line under its reply shows what changed, on web, desktop and iPhone. It is off by default; a server admin turns it on with `SKILL_LEARNING` (see [Learned skills](docs/self-host.md#learned-skills)).
+- **A skill now keeps its history, and a deleted skill can come back, on web, desktop and iPhone.** Once a bot has changed a skill, its page lists the versions with who wrote them, lets you read one, and "Undo" goes back one version; a skill you delete, or whose creation you undo, waits 30 days in "Recently deleted" at the bottom of the skills list, where "Undo" restores it and "Delete now" erases it, and a "Skill deleted" line in a conversation opens that list.
+- **Bots now keep and improve their methods as skills.** After a long task, or when a step fails while following one of your skills, a bot saves or fixes the method on its own instead of redoing the work from scratch next time. It is off by default; a server admin turns it on with `SKILL_LEARNING` (see [Learned skills](docs/self-host.md#learned-skills)).
 
 #### Changed
 
-- A bot now saves or changes a skill only in an exchange you started, in a routine you set up or through its own sub-bot, never after a webhook, a message from another bot or an outside messaging channel, and it can no longer rename a skill, on web, desktop and iPhone.
+- A bot now saves or changes a skill only in an exchange you started, in a routine you set up or through its own sub-bot, never after a webhook, a message from another bot or an outside messaging channel.
+- A bot can no longer rename a skill, on web, desktop and iPhone.
 - On web and desktop, a skill in a bot's Knowledge tab now opens in the wider panel of its page, like a routine, instead of inside the list.
 
 #### Fixed

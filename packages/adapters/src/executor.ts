@@ -2097,6 +2097,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           args: Record<string, unknown>,
           toolCallId: string,
           files?: SkillTreeFile[],
+          fromNudge = false,
         ): Promise<Record<string, unknown>> => {
           const text = (key: string) => (args[key] ? String(args[key]) : undefined);
           if (name === "skill_read") {
@@ -2104,7 +2105,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               name: text("name"),
               skillId: text("skillId"),
             });
-            if (!("error" in read)) await recordSkillUse(String(read.name), "skill_read");
+            if (!("error" in read) && !fromNudge) {
+              await recordSkillUse(String(read.name), "skill_read");
+            }
             return read;
           }
           if (name === "skill_search") {
@@ -5050,7 +5053,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 callTool: async (name, args, toolCallId) => {
                   const safeArgs = redactBotToolArgs(name, args, runSecrets);
                   if (name !== "skill_create" && name !== "skill_update") {
-                    return runSkillTool(name, safeArgs, toolCallId);
+                    return runSkillTool(name, safeArgs, toolCallId, undefined, true);
                   }
                   // The effect row is what the line sweep looks for if the worker dies mid-turn.
                   const effect = await deps.prisma.externalEffect.create({
@@ -5063,7 +5066,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       request: safeArgs as never,
                     },
                   });
-                  const result = await runSkillTool(name, safeArgs, toolCallId);
+                  const result = await runSkillTool(name, safeArgs, toolCallId, undefined, true);
                   await completeEffect(deps, effect.id, "intended", result);
                   return result;
                 },

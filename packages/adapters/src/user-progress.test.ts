@@ -10,6 +10,7 @@ import {
   isProgressMessageTruncated,
   isUserProgressClientNonce,
   repeatsSentUserText,
+  toolCallBudgetNotice,
   USER_PROGRESS_MESSAGE_MAX_LENGTH,
   userMessageClientNonce,
   userProgressClientNonce,
@@ -183,8 +184,7 @@ describe("repeatsSentUserText", () => {
 });
 
 describe("endsWithToolCallBudgetNotice", () => {
-  const notice =
-    "I stopped after reaching the limit of 40 tool calls in this turn. Send another message to continue.";
+  const notice = toolCallBudgetNotice(40);
 
   it("recognises the runtime's limit notice, alone or after the model's own text", () => {
     expect(endsWithToolCallBudgetNotice(notice)).toBe(true);
@@ -193,6 +193,11 @@ describe("endsWithToolCallBudgetNotice", () => {
 
   it("ignores ordinary text, including one that only mentions a limit", () => {
     expect(endsWithToolCallBudgetNotice("")).toBe(false);
+    expect(
+      endsWithToolCallBudgetNotice(
+        "I stopped after reaching the limit of many tool calls in this turn. Send another message to continue.",
+      ),
+    ).toBe(false);
     expect(endsWithToolCallBudgetNotice("Nothing to report.")).toBe(false);
     expect(endsWithToolCallBudgetNotice(`${notice} Then I carried on.`)).toBe(false);
   });

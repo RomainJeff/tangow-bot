@@ -168,9 +168,22 @@ export function botMessageOutcomeFromMidTurn(
   return { text: midTurn.join("\n\n"), intent: "status" };
 }
 
-/** Whether a run's text ends on the notice the runtime adds when the tool-call limit stops it. */
+const BUDGET_NOTICE_HEAD = "I stopped after reaching the limit of ";
+const BUDGET_NOTICE_TAIL = " tool calls in this turn. Send another message to continue.";
+
+/** The notice a runtime ends a run with when the tool-call limit stops it. */
+export function toolCallBudgetNotice(limit: number): string {
+  return `${BUDGET_NOTICE_HEAD}${limit}${BUDGET_NOTICE_TAIL}`;
+}
+
+/** Whether a run's text ends on `toolCallBudgetNotice`, whatever the limit. */
 export function endsWithToolCallBudgetNotice(text: string): boolean {
-  return /I stopped after reaching the limit of \d+ tool calls in this turn\. Send another message to continue\.$/.test(
-    text.trimEnd(),
+  const trimmed = text.trimEnd();
+  if (!trimmed.endsWith(BUDGET_NOTICE_TAIL)) return false;
+  const before = trimmed.slice(0, -BUDGET_NOTICE_TAIL.length);
+  return (
+    /^\d+$/.test(
+      before.slice(before.lastIndexOf(BUDGET_NOTICE_HEAD) + BUDGET_NOTICE_HEAD.length),
+    ) && before.includes(BUDGET_NOTICE_HEAD)
   );
 }
