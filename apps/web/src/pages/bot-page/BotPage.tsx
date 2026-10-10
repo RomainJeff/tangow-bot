@@ -25,8 +25,9 @@ import {
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
+import { BotActivity } from "./BotActivity";
 import { BotHero } from "./BotHero";
-import { type BotPageContext, useConfirm } from "./page-kit";
+import { type BotPageContext, useBotField, useConfirm } from "./page-kit";
 import { RoutineCreateForm } from "./RoutineCreateForm";
 import { RoutineDetail } from "./RoutineDetail";
 import { RoutinesTab } from "./RoutinesTab";
@@ -52,9 +53,9 @@ export interface BotPageProps {
 }
 
 /**
- * The bot's page in the side panel: who it is at the top, then Routines,
- * Knowledge and Settings. Every setting saves itself through `commands`; the
- * page holds no copy of the bot.
+ * The bot's page in the side panel: who it is at the top, then Activity,
+ * Routines, Knowledge and Settings. Every setting saves itself through
+ * `commands`; the page holds no copy of the bot.
  */
 export function BotPage({
   bot,
@@ -71,12 +72,17 @@ export function BotPage({
   const { confirm, dialog } = useConfirm();
   const root = useRef<HTMLDivElement>(null);
   const page: BotPageContext = { bot, userId, commands };
+  // Instructions being saved already count, so the link to write them goes as the editor closes.
+  const instructions = useBotField(page, "instructions", bot.instructions, (value) => ({
+    instructions: value,
+  }));
   const detail = view.detail;
   const routine =
     detail?.kind === "routine" ? routines?.find((item) => item.id === detail.routineId) : undefined;
   // A key minted for this bot's inbound triggers is shown once, wherever it was minted.
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
   const tabLabels: Record<BotTab, string> = {
+    activity: t`Activity`,
     routines: t`Routines`,
     knowledge: t`Knowledge`,
     settings: t`Settings`,
@@ -189,6 +195,20 @@ export function BotPage({
                 ))}
               </TabsList>
             </div>
+            <TabsContent value="activity" className="px-4">
+              <BotActivity
+                botId={bot.id}
+                commands={commands}
+                onWriteInstructions={
+                  instructions.value
+                    ? undefined
+                    : () => onView({ tab: "activity", detail: { kind: "instructions" } })
+                }
+                onOpenRoutine={(routineId) =>
+                  onView({ tab: "routines", detail: { kind: "routine", routineId } })
+                }
+              />
+            </TabsContent>
             <TabsContent value="routines" className="px-4">
               <RoutinesTab page={page} routines={routines} onOpen={open} />
             </TabsContent>
