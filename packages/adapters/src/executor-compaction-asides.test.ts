@@ -184,6 +184,35 @@ describe("thread asides and the compaction summary", () => {
     expect(contents.some((content) => content.includes("First question"))).toBe(true);
   });
 
+  it("gives the model no turn for a message that carries skill lines alone", async () => {
+    const line = {
+      id: "m-8",
+      seq: 8,
+      role: "bot",
+      blocks: [
+        {
+          kind: "skill_source",
+          skillUid: "0123456789abcdef0123456789abcdef",
+          skillId: "user:coffee",
+          name: "Coffee",
+          change: "learned",
+        } as unknown as { kind: string; text: string },
+      ],
+    };
+    const f = fixture({ summary: null, compactedUpToSeq: null, messages: [...conversation, line] });
+
+    await f.run();
+
+    const [request] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
+    const turns = (request.history ?? [])
+      .filter((entry) => !entry.content.startsWith("Memory recalled"))
+      .map((entry) => [entry.role, entry.content]);
+    expect(turns).toEqual([
+      ["user", "First question"],
+      ["assistant", "First answer"],
+    ]);
+  });
+
   // The aside is dropped before the window ever sees it, so counting it as "available" reported a
   // message lost to truncation on every run of every thread that holds one.
   it("counts only windowable messages as available, and says when no window was sized", async () => {

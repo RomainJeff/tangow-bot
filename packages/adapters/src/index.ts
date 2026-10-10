@@ -107,6 +107,8 @@ export type {
   SkillAccess,
   SkillAuthor,
   SkillContent,
+  SkillLibrary,
+  SkillRunChange,
   SkillUid,
   SkillWriteResult,
   TrashedSkill,
@@ -122,6 +124,7 @@ export {
   SkillRefusal,
   scheduleSkillLibraryRepair,
 } from "./skill-library.js";
+export * from "./skill-lines.js";
 export * from "./skill-lock.js";
 export type { SkillTreeFile, UserSkillFile } from "./skill-store.js";
 export { bundleFormat, listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";

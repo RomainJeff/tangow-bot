@@ -143,6 +143,8 @@ function fixture(
     routineId?: string;
     /** Another run of this conversation waits on a card. */
     otherRunWaiting?: boolean;
+    /** The model fails with this message once the calls ran. */
+    fails?: string;
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
@@ -323,7 +325,10 @@ function fixture(
     run.status = "waiting_input";
     return true;
   });
-  const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
+  const finalizeRun = vi.fn(async (input: { outcome: string }) => {
+    run.status = input.outcome;
+    return { continuationRunId: null };
+  });
   const execute = vi.fn(async function* (call: ConnectorCall) {
     yield { type: "result" as const, data: { item: call.args.id } };
   });
@@ -340,6 +345,7 @@ function fixture(
       results.push(...settled);
       if (settled.some(isApprovalPausedResult)) return;
     }
+    if (options.fails) throw new Error(options.fails);
     yield { type: "done" as const, text: "Done" };
   });
   const executor = createRunExecutor({
@@ -390,6 +396,9 @@ function fixture(
     messageUpdate,
     /** The cards the run posted outside a pause, in order. */
     posted: () => postedCards().map((data) => data.blocks),
+    /** Every bot message the run wrote outside a pause, cards or not, in order. */
+    written: () => messageCreate.mock.calls.map(([{ data }]) => data.blocks),
+    nonces: () => messageCreate.mock.calls.map(([{ data }]) => data.clientNonce),
     send,
     instructions: () =>
       (runtimeRun.mock.calls[0]?.[0] as AgentRunRequest | undefined)?.instructions,
@@ -1460,5 +1469,57 @@ describe("a routine the user asks to change", () => {
     expect(f.results).toEqual([{ error: "Proposing a change to a routine is not available yet." }]);
     expect(f.askBlock()).toBeUndefined();
     expect(f.routineUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("a skill the bot saves on its own", () => {
+  const save = {
+    name: "skill_create",
+    args: { name: "Coffee", description: "Order coffee", body: "Pay." },
+  };
+  const reply = {
+    id: "reply",
+    threadId: "thread-1",
+    seq: 3,
+    role: "bot",
+    runId: "run-1",
+    botId: "bot-1",
+    blocks: [{ kind: "text", text: "Ordered." }],
+  };
+  const line = {
+    kind: "skill_source",
+    skillUid: expect.stringMatching(/^[0-9a-f]{32}$/),
+    skillId: "user:coffee",
+    name: "Coffee",
+    change: "learned",
+  };
+  const lined = (f: ReturnType<typeof fixture>) =>
+    f.messageUpdate.mock.calls.flatMap((call) => {
+      const { where, data } = (call as unknown as [{ where: Row; data: { blocks?: Row[] } }])[0];
+      return data.blocks?.some((block) => block.kind === "skill_source")
+        ? [[where.id, data.blocks]]
+        : [];
+    });
+
+  it("leaves the line the server writes under the run's reply once the run ends", async () => {
+    const f = fixture({ messages: [reply] });
+    await f.play([[save]]);
+    expect(f.results).toEqual([expect.objectContaining({ ok: true, name: "Coffee" })]);
+    expect(lined(f)).toEqual([["reply", [{ kind: "text", text: "Ordered." }, line]]]);
+    expect(f.written()).toEqual([]);
+  });
+
+  it("leaves the line under the reply of a run that failed after saving", async () => {
+    const f = fixture({ messages: [reply], fails: "The model is unreachable." });
+    await f.play([[save]], "worker-1", "failed");
+    expect(lined(f)).toEqual([["reply", [{ kind: "text", text: "Ordered." }, line]]]);
+  });
+
+  it("writes nothing visible for a run that left no message", async () => {
+    const f = fixture();
+    await f.play([[save]]);
+    expect(lined(f)).toEqual([]);
+    expect(f.written()).toEqual([]);
+    expect(f.run.skillLinesAt).toBeInstanceOf(Date);
   });
 });

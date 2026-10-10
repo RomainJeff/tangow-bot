@@ -351,6 +351,7 @@ import {
 import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { createSkillLibrary } from "./skill-library.js";
+import { writeSkillLines } from "./skill-lines.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
 import {
   listAgentSkillRecords,
@@ -1000,6 +1001,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
   const skillDeps = { prisma: deps.prisma, dataDir: deps.dataDir ?? "./data" };
   const skillLibrary = createSkillLibrary({ ...skillDeps, lock: deps.skillLock });
+  // Never fatal: the run already ended, and the sweep adds a line that failed here.
+  const writeRunSkillLines = (runId: string) =>
+    writeSkillLines(
+      { prisma: deps.prisma, library: skillLibrary, events: deps.events },
+      runId,
+    ).catch((error) => getLogger().error("skill lines", error));
   const browser = deps.browser ?? createBrowserProvider(undefined, { sandbox: deps.sandbox });
   const resolveConnectedModel = async (
     scope: { userId: string; spaceId: string },
@@ -1347,6 +1354,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
       heartbeat.unref?.();
 
       const runSecrets = [...deps.secrets];
+      // A skill write landed in this attempt: its line goes under the run's message at the end.
+      let savedSkill = false;
       try {
         // A follow_up's source message tells whether the user or another bot started it.
         const sourceMessage =
@@ -3234,6 +3243,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             );
           }
           const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+          const saved = (result: Record<string, unknown>) => {
+            if ("ok" in result) savedSkill = true;
+            return finish(result);
+          };
           const skillWriter = () =>
             skillLibrary.forBot(skillOwner, {
               botId: bot.id,
@@ -3255,7 +3268,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (files && "error" in files) return finish(files);
             const writer = skillWriter();
             if (name === "skill_create") {
-              return finish(
+              return saved(
                 await skillCreateFromTool(skillDeps, skillOwner, writer, {
                   files,
                   name: args.name ? String(args.name) : undefined,
@@ -3265,7 +3278,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 }),
               );
             }
-            return finish(
+            return saved(
               await skillUpdateFromTool(skillDeps, skillOwner, writer, {
                 files,
                 name: args.name ? String(args.name) : undefined,
@@ -3278,7 +3291,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             );
           }
           if (name === "skill_delete") {
-            return finish(
+            return saved(
               await skillDeleteFromTool(skillDeps, skillOwner, skillWriter(), {
                 name: args.name ? String(args.name) : undefined,
                 skillId: args.skillId ? String(args.skillId) : undefined,
@@ -4799,6 +4812,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             markUnread: completionMarksUnread(run.trigger, text, isRoutineCardRun),
           });
           if (!completed) return;
+          if (savedSkill) await writeRunSkillLines(runId);
           // After the commit, never inside it. Delegated runs report back to the ordering bot
           // and routine cards are not messages to the person: no preview for either.
           if (run.trigger !== "bot_message" && !isRoutineCardRun) {
@@ -4902,6 +4916,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!failed) return;
           await settleRoutineRunCard("failed", message);
+          if (savedSkill) await writeRunSkillLines(runId);
           await settleStrandedCards();
           if (failed.continuationRunId) {
             await deps.jobs

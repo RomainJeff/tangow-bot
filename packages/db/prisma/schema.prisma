@@ -595,6 +595,9 @@ model Run {
   botOutcomeReturnedAt DateTime?
   messagingMirroredAt  DateTime?
   teamChatMirroredAt   DateTime?
+  // When the lines of the skills this run changed were placed, or given up because a clear or a
+  // rewind removed the messages they belonged under: a run gets its lines once, never again.
+  skillLinesAt         DateTime?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   attempts             Attempt[]

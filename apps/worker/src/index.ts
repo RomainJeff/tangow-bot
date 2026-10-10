@@ -21,6 +21,8 @@ import {
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
+  createSkillLibrary,
+  createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
   databaseCapacityBackoffMs,
@@ -282,6 +284,11 @@ async function main() {
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
     purgeLinkPreviews: createLinkPreviewPurge({ prisma, artifacts }),
+    sweepSkillLines: createSkillLineSweep({
+      prisma,
+      library: createSkillLibrary({ prisma, dataDir, lock: skillLock }),
+      events,
+    }),
   });
   reconciler.start();
 
