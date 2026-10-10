@@ -312,3 +312,21 @@ it("rejects when a read fails, leaving what is shown", async () => {
   expect(routineNames()).toEqual(["Morning", "Evening"]);
   expect(view.routinesBotId).toBe(null);
 });
+
+it.fails("keeps a routine switched while a run end was reading the routines", async () => {
+  const list = deferred<Routine[]>();
+  api.routines.list.mockReturnValueOnce(list.promise);
+  api.routines.update.mockResolvedValueOnce({ ...routine("r-1", "Morning"), active: false });
+
+  const reading = view.commands.refreshRoutines("a");
+  await act(() => view.commands.updateRoutine("a", "r-1", { active: false }));
+  // The server read the list before the switch landed.
+  list.resolve([{ ...routine("r-1", "Morning"), active: true }, routine("r-2", "Evening")]);
+  await act(() => reading);
+
+  expect(view.routines.map((item) => [item.id, item.active])).toEqual([
+    ["r-1", false],
+    ["r-2", undefined],
+  ]);
+  expect(view.routinesBotId).toBe("a");
+});

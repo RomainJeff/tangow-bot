@@ -32,6 +32,8 @@ export interface BotCommands {
   botAction(botId: string, action: BotAction): void;
   /** Reads the bot and its routines again; rejects when either read fails. */
   refresh(botId: string): Promise<void>;
+  /** Reads the bot's routines again, in the same answer order as `refresh` and the writes. */
+  refreshRoutines(botId: string): Promise<void>;
   /** Changes whenever a run of the open bot ends. */
   readonly activityEpoch: number;
   /** Opens the run's thread on the message that started it, closing the panel if it hides that thread. */
@@ -95,6 +97,25 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
       );
     }
 
+    function landRoutines(botId: string, request: number, routines: Routine[]) {
+      if (depsRef.current.activeBotId.current !== botId) return;
+      if (!order.read(`routines:${botId}`, request)) return;
+      // Per routine, the read lands unless a write answered meanwhile: then what that write left
+      // stays, a routine created during the read included and a removed one still gone.
+      const fresh = (id: string) => order.read(`routine:${id}`, request);
+      depsRef.current.setRoutines((list) => {
+        const held = list.filter((item) => item.botId === botId);
+        const read = new Set(routines.map((item) => item.id));
+        return [
+          ...routines.flatMap((item) =>
+            fresh(item.id) ? [item] : held.filter((kept) => kept.id === item.id),
+          ),
+          ...held.filter((item) => !read.has(item.id) && !fresh(item.id)),
+        ];
+      });
+      depsRef.current.setRoutinesBotId(botId);
+    }
+
     return {
       activityEpoch,
       updateBot: (botId, patch) =>
@@ -155,21 +176,12 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
           rpc.routines.list({ botId }),
         ]);
         if (order.read(botId, request)) mergeIntoRoster(botId, () => bot);
+        landRoutines(botId, request, routines);
+      },
+      async refreshRoutines(botId) {
+        const routines = await rpc.routines.list({ botId });
         if (depsRef.current.activeBotId.current !== botId) return;
-        if (!order.read(`routines:${botId}`, request)) return;
-        // Per routine, the read lands unless a write answered meanwhile: then what that write left
-        // stays, a routine created during the read included and a removed one still gone.
-        const fresh = (id: string) => order.read(`routine:${id}`, request);
-        depsRef.current.setRoutines((list) => {
-          const held = list.filter((item) => item.botId === botId);
-          const read = new Set(routines.map((item) => item.id));
-          return [
-            ...routines.flatMap((item) =>
-              fresh(item.id) ? [item] : held.filter((kept) => kept.id === item.id),
-            ),
-            ...held.filter((item) => !read.has(item.id) && !fresh(item.id)),
-          ];
-        });
+        depsRef.current.setRoutines(routines);
         depsRef.current.setRoutinesBotId(botId);
       },
       openRun(row) {

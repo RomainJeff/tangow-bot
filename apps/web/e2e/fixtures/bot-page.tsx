@@ -483,6 +483,7 @@ function Fixture() {
         if (failReadsRef.current) throw new Error("The server did not answer.");
         setRoutinesRead(true);
       },
+      refreshRoutines: async () => undefined,
       activityEpoch: 0,
       openRun: (row) => console.info(`open run from ${row.sourceMessageId ?? "the end"}`),
       skillsChanged: () => undefined,
