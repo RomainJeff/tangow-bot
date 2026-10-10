@@ -8,6 +8,7 @@
 import type { Stats } from "node:fs";
 import { createWriteStream } from "node:fs";
 import {
+  link,
   lstat,
   mkdir,
   mkdtemp,
@@ -119,8 +120,8 @@ export async function listUserSkills(root: string): Promise<UserSkillFile[]> {
 
 /**
  * "create" fails with EEXIST when a skill with the same key exists (the FS is the uniqueness
- * guard the DB index used to be). "replace" writes tmp + rename so a crash never leaves a
- * half-written SKILL.md.
+ * guard the DB index used to be). Both modes write a temp file first, then link (create) or
+ * rename (replace) it onto SKILL.md, so a failed or interrupted write never leaves a partial one.
  */
 export async function writeUserSkill(
   root: string,
@@ -129,13 +130,13 @@ export async function writeUserSkill(
 ): Promise<void> {
   const file = skillFile(root, skill.name);
   await mkdir(path.dirname(file), { recursive: true });
-  if (mode === "create") {
-    await writeFile(file, skill.content, { encoding: "utf8", flag: "wx" });
-    return;
-  }
   const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, skill.content, "utf8");
-  await rename(tmp, file);
+  try {
+    await writeFile(tmp, skill.content, "utf8");
+    await (mode === "create" ? link(tmp, file) : rename(tmp, file));
+  } finally {
+    await rm(tmp, { force: true });
+  }
 }
 
 /**
