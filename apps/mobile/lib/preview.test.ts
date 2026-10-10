@@ -29,8 +29,8 @@ describe("previewSnippet", () => {
     );
   });
 
-  it("keeps a greater-than sign that does not open a quote", () => {
-    expect(previewSnippet("Signed up\n>100 users today")).toBe("Signed up >100 users today");
+  it("keeps a file name in code as written", () => {
+    expect(previewSnippet("Check `__init__.py` now")).toBe("Check __init__.py now");
   });
 
   it("returns an empty snippet when there is no message text", () => {

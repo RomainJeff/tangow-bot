@@ -80,6 +80,27 @@ describe("plainText", () => {
     );
   });
 
+  it("opens a code fence only at the start of a line", () => {
+    expect(plainText("Run ```npm i``` now and then rest")).toBe("Run npm i now and then rest");
+    expect(plainText("Use ``` to open a block. Then keep reading this")).toBe(
+      "Use ``` to open a block. Then keep reading this",
+    );
+    expect(plainText("a ~~~not fence")).toBe("a ~~~not fence");
+  });
+
+  it("drops emphasis around a bare address", () => {
+    expect(plainText("**https://example.test/docs** is the link")).toBe(
+      "https://example.test/docs is the link",
+    );
+    expect(plainText("_see https://example.test/docs_ now")).toBe(
+      "see https://example.test/docs now",
+    );
+  });
+
+  it("drops nested strong and emphasis markers", () => {
+    expect(plainText("_**mixed**_ emphasis")).toBe("mixed emphasis");
+  });
+
   it("keeps angle-bracket text that is not HTML and unwraps email autolinks", () => {
     expect(plainText("mail <user@example.com>, use Array<string> type, <b>bold</b>")).toBe(
       "mail user@example.com, use Array<string> type, bold",
