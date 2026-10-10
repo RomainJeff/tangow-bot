@@ -279,8 +279,8 @@ async function importSkillTree(
     const dest = path.join(root, skillDirName(resolved.name));
     const old = target === "create" ? undefined : path.join(root, skillDirName(target.replace));
     if (old === dest) {
-      // The old folder waits in the wrapper (removed below) until the new one is in place. A
-      // create can take the name in between: the old version then stays in the wrapper.
+      // The old folder waits in the wrapper (removed below) until the new one is in place. If the
+      // swap fails it goes back; when an I/O failure stops that too, it stays in the wrapper.
       const aside = path.join(wrapper, "old");
       await rename(old, aside);
       await rename(skillDir, dest).catch(async (error: unknown) => {

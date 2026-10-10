@@ -109,7 +109,7 @@ describe("skill store under concurrent writers", () => {
     expect(await readdir(root)).toEqual(["deploy"]);
   });
 
-  it("keeps the old version when a create takes the name while a replace swaps the folder", async () => {
+  it("keeps the old version in the wrapper when it cannot be put back after a failed swap", async () => {
     const root = await tmpRoot();
     const dest = path.join(root, "deploy");
     await writeUserSkillFiles(
