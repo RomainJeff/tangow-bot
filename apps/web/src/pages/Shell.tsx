@@ -2785,7 +2785,8 @@ export function ShellPage() {
             active={active}
             activeGroup={activeGroup}
             activeSnapshot={activeSnapshot}
-            panel={panel}
+            // An archived bot's page is not this conversation's bot page: the gear opens the latter.
+            panel={panel === "bot" && pickedBotId ? null : panel}
             setPanel={setPanel}
             onOpenBotPage={showBotPage}
             refreshThread={refreshThread}
