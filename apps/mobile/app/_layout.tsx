@@ -196,6 +196,8 @@ export default function Layout() {
                   name="bot-text"
                   options={{ presentation: "fullScreenModal", gestureEnabled: false }}
                 />
+                <Stack.Screen name="bot-routine" />
+                <Stack.Screen name="bot-routine-new" options={{ title: t("New routine") }} />
                 <Stack.Screen name="bot-model" options={{ title: t("Model") }} />
                 <Stack.Screen name="bot-voice" options={{ title: t("Voice and replies") }} />
                 <Stack.Screen name="bot-choice" options={{ title: "" }} />

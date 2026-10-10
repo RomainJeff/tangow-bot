@@ -1,22 +1,14 @@
 import type { Routine } from "@rakazo/contracts";
 import { routineFailing } from "@rakazo/core";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { rpc } from "../../lib/api";
 import { mobileTokens } from "../../lib/appearance";
 import { type BotPageContext, useBotField } from "../../lib/bot-page";
 import { useI18n } from "../../lib/i18n";
-import { useThemedStyles } from "../../lib/native";
+import { useMobileTokens, useThemedStyles } from "../../lib/native";
 import { cadenceLine, routinesSummary } from "../../lib/routine-copy";
-import {
-  Group,
-  InkSwitch,
-  LoadFailed,
-  LoadingRows,
-  QuietLine,
-  Row,
-  SaveMeta,
-  useFocusedRead,
-} from "./kit";
+import { NativeSymbol } from "../native-symbol";
+import { Group, InkSwitch, LoadFailed, LoadingRows, Row, SaveMeta, useFocusedRead } from "./kit";
 
 type Write = ReturnType<typeof useFocusedRead<Routine[]>>["write"];
 
@@ -28,10 +20,12 @@ export function RoutinesTab({
   page,
   epoch,
   onOpen,
+  onCreate,
 }: {
   page: BotPageContext;
   epoch: number;
   onOpen: (routine: Routine) => void;
+  onCreate: () => void;
 }) {
   const { t } = useI18n();
   const botId = page.bot.id;
@@ -48,9 +42,18 @@ export function RoutinesTab({
   }
   if (read.kind === "failed") return <LoadFailed onRetry={retry} />;
   const routines = read.value;
-  if (routines.length === 0) return <QuietLine>{t("No routines yet")}</QuietLine>;
+  if (routines.length === 0) {
+    return (
+      <Group>
+        <Row label={t("New routine")} disabled={page.readOnly} onPress={onCreate} chevron />
+      </Group>
+    );
+  }
   return (
-    <Group label={routinesSummary(routines)}>
+    <Group
+      label={routinesSummary(routines)}
+      trailing={page.readOnly ? null : <AddButton label={t("New routine")} onPress={onCreate} />}
+    >
       {routines.map((routine) => (
         <RoutineRow
           key={routine.id}
@@ -118,6 +121,29 @@ function RoutineRow({
   );
 }
 
+/** A round "+" on the group label's line, centred on it since a view has no text baseline. */
+function AddButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useThemedStyles(createRoutineStyles);
+  const tokens = useMobileTokens();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [styles.add, pressed && styles.addPressed]}
+    >
+      <NativeSymbol
+        ios="plus"
+        android="add"
+        size={15}
+        weight="semibold"
+        color={tokens.foreground}
+      />
+    </Pressable>
+  );
+}
+
 function createRoutineStyles() {
   const tokens = mobileTokens();
   return StyleSheet.create({
@@ -125,5 +151,17 @@ function createRoutineStyles() {
     ok: { backgroundColor: tokens.success },
     failed: { backgroundColor: tokens.destructive },
     paused: { backgroundColor: tokens.input },
+    // Negative margins keep the label line's height, so the circle never reaches the card below.
+    add: {
+      alignSelf: "center",
+      marginVertical: -5,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: tokens.secondary,
+    },
+    addPressed: { opacity: 0.6 },
   });
 }

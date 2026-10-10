@@ -131,10 +131,11 @@ export default function BotPageScreen() {
                   epoch={epoch}
                   onOpen={(routine) =>
                     router.push({
-                      pathname: "/routine",
-                      params: { botId, botName: page.bot.name, routineId: routine.id },
+                      pathname: "/bot-routine",
+                      params: { botId, routineId: routine.id },
                     })
                   }
+                  onCreate={() => router.push({ pathname: "/bot-routine-new", params: { botId } })}
                 />
               ) : view === "knowledge" ? (
                 <KnowledgeTab page={page} epoch={epoch} onAddFocus={revealEnd} />
