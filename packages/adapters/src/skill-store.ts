@@ -5,6 +5,7 @@
  * (trusted); the skill directory name is derived from the skill key, never from user input
  * directly, so no path can escape the owner's root.
  */
+import type { Stats } from "node:fs";
 import { createWriteStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -44,8 +45,19 @@ function skillFile(root: string, name: string): string {
   return path.join(root, skillDirName(name), "SKILL.md");
 }
 
-function hasCode(error: unknown, code: string): boolean {
+export function hasCode(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && error.code === code;
+}
+
+/**
+ * A file the store may open: a plain file with one name and a bounded size. A link, FIFO or
+ * device planted in a skill folder (a bot on desktop can write there) is never followed or read.
+ * `hardLinks` admits a second name, for reading only: the store never writes through a file.
+ */
+export function isStorableFile(info: Stats, options: { hardLinks?: boolean } = {}): boolean {
+  return (
+    info.isFile() && (options.hardLinks || info.nlink === 1) && info.size <= SKILL_BUNDLE_MAX_BYTES
+  );
 }
 
 export function isExists(error: unknown): boolean {
