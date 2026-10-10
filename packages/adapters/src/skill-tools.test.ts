@@ -39,13 +39,20 @@ import {
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>();
-  return { ...actual, rm: vi.fn(actual.rm), writeFile: vi.fn(actual.writeFile) };
+  return {
+    ...actual,
+    readdir: vi.fn(actual.readdir),
+    rm: vi.fn(actual.rm),
+    writeFile: vi.fn(actual.writeFile),
+  };
 });
 
 const fs = await vi.importActual<typeof FsPromises>("node:fs/promises");
+const readdirMock = vi.mocked(readdir);
 const rmMock = vi.mocked(rm);
 const writeFileMock = vi.mocked(writeFile);
 afterEach(() => {
+  readdirMock.mockImplementation(fs.readdir as never);
   rmMock.mockImplementation(fs.rm);
   writeFileMock.mockImplementation(fs.writeFile);
 });
@@ -1124,6 +1131,32 @@ describe("skill drafts", () => {
         expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toBe(skillMd);
       },
     );
+
+    it("answers a filesystem failure without the host path", async () => {
+      await skillCreateFromTool(deps, { spaceId: "w1", userId: "u1" }, [], { files: draft });
+      const dir = path.join(userSkillsRoot(dataDir, creator), "deploy");
+      const denied = Object.assign(new Error(`EACCES: permission denied, '${dir}'`), {
+        code: "EACCES",
+      });
+      readdirMock.mockImplementation((async (...args: Parameters<typeof fs.readdir>) => {
+        if (args[0] === dir) throw denied;
+        return fs.readdir(...args);
+      }) as never);
+      rmMock.mockImplementation(async (...args: Parameters<typeof fs.rm>) => {
+        if (args[0] === dir) throw denied;
+        return fs.rm(...args);
+      });
+
+      expect(
+        await skillCreateFromTool(deps, creator, [], { name: "Other", description: "d", body: "x" }),
+      ).toEqual({ error: "Could not create skill." });
+      expect(
+        await skillUpdateFromTool(deps, creator, [], { name: "Deploy", files: draft }),
+      ).toEqual({ error: "Could not update skill." });
+      expect(await skillDeleteFromTool(deps, creator, { name: "Deploy" })).toEqual({
+        error: "Could not delete skill.",
+      });
+    });
 
     it("claims the name of a skill hidden from the bot without touching it or its access", async () => {
       const user = { spaceId: "w1", userId: "u1" };

@@ -334,6 +334,12 @@ async function botFilesError(
   return undefined;
 }
 
+/** A filesystem or database failure answers `message`; its detail, host paths included, is logged. */
+function failed(message: string, error: unknown): { error: string } {
+  getLogger().warn(`[skills] ${message} ${error instanceof Error ? error.message : error}`);
+  return { error: message };
+}
+
 /** The folder a write leaves: the draft with its SKILL.md normalized, or SKILL.md alone. */
 function writtenFiles(content: string, files?: SkillTreeFile[]): SkillTreeFile[] {
   const skillMd = { path: "SKILL.md", bytes: new TextEncoder().encode(content), executable: false };
@@ -412,7 +418,7 @@ export async function skillCreateFromTool(
       writtenFiles(content, input.files),
       Boolean(input.files),
       secrets,
-    );
+    ).catch((error: unknown) => failed("Could not create skill.", error).error);
     if (refused) return { error: refused };
   }
   const skillKey = userSkillKey(name);
@@ -424,7 +430,7 @@ export async function skillCreateFromTool(
       await mkdir(root, { recursive: true });
       await mkdir(dir);
     } catch (error) {
-      return isExists(error) ? taken : { error: "Could not create skill." };
+      return isExists(error) ? taken : failed("Could not create skill.", error);
     }
   }
   let restoreRows: (() => Promise<unknown>) | undefined;
@@ -478,7 +484,7 @@ export async function skillCreateFromTool(
     if (input.files && error instanceof Error && !("code" in error)) {
       return { error: error.message };
     }
-    return { error: "Could not create skill." };
+    return failed("Could not create skill.", error);
   }
   return {
     ok: true,
@@ -576,7 +582,7 @@ export async function skillUpdateFromTool(
       writtenFiles(nextContent, input.files),
       Boolean(input.files),
       secrets,
-    );
+    ).catch((error: unknown) => failed("Could not update skill.", error).error);
     if (refused) return { error: refused };
   }
   const scope = { spaceId: owner.spaceId, userId: owner.userId };
@@ -611,7 +617,7 @@ export async function skillUpdateFromTool(
     if (input.files && error instanceof Error && !("code" in error)) {
       return { error: error.message };
     }
-    return { error: "Could not update skill." };
+    return failed("Could not update skill.", error);
   }
   return { ok: true, id: newKey, name: nextName, description: nextDescription };
 }
@@ -627,11 +633,15 @@ export async function skillDeleteFromTool(
   if (readOnly) return { error: readOnly };
   const scope = { spaceId: owner.spaceId, userId: owner.userId };
   const skillKey = userSkillKey(existing.name);
-  // File first, rows second: orphan rows are harmless, a row-less file would widen to "all".
-  await removeUserSkill(userSkillsRoot(deps.dataDir, owner), existing.name);
-  await deps.prisma.$transaction([
-    deps.prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
-    deps.prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
-  ]);
+  try {
+    // File first, rows second: orphan rows are harmless, a row-less file would widen to "all".
+    await removeUserSkill(userSkillsRoot(deps.dataDir, owner), existing.name);
+    await deps.prisma.$transaction([
+      deps.prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
+      deps.prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
+    ]);
+  } catch (error) {
+    return failed("Could not delete skill.", error);
+  }
   return { ok: true, name: existing.name };
 }
