@@ -1,8 +1,10 @@
 import { BOT_NAME_MAX_LENGTH, BOT_TITLE_MAX_LENGTH } from "@rakazo/contracts";
+import { radii, shadowsForAppearance } from "@rakazo/ui-tokens";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, TextInput, type TextStyle, View } from "react-native";
-import { mobileTokens } from "../../lib/appearance";
+import { Pressable, StyleSheet, Text, TextInput, type TextStyle, View } from "react-native";
+import { mobileTokens, resolveMobileAppearance } from "../../lib/appearance";
 import { type BotPageContext, type FieldSave, shownSave, useBotSetting } from "../../lib/bot-page";
+import { BOT_TABS, type BotTab } from "../../lib/bot-tab";
 import { useI18n } from "../../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../../lib/native";
 import { leaveTextField, restingText } from "../../lib/text-field";
@@ -117,6 +119,38 @@ function HeroText({
   );
 }
 
+/** The page's destinations in one round pill; the selected one sits on the surface. */
+export function BotTabs({ value, onChange }: { value: BotTab; onChange: (tab: BotTab) => void }) {
+  const styles = useThemedStyles(createHeroStyles);
+  const { t } = useI18n();
+  const labels: Record<BotTab, string> = { knowledge: t("Knowledge"), settings: t("Settings") };
+  return (
+    <View style={styles.tabs} accessibilityRole="tablist">
+      {BOT_TABS.map((tab) => {
+        const selected = tab === value;
+        return (
+          <Pressable
+            key={tab}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(tab)}
+            style={[styles.tab, selected && styles.tabOn]}
+          >
+            <Text
+              style={[styles.tabLabel, selected && styles.tabLabelOn]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
+              {labels[tab]}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function createHeroStyles() {
   const tokens = mobileTokens();
   return StyleSheet.create({
@@ -136,5 +170,26 @@ function createHeroStyles() {
       ...nativeTextStyle("meta", { size: 15 }),
     },
     meta: { minHeight: 18, marginTop: 6, alignItems: "center" },
+    tabs: {
+      flexDirection: "row",
+      padding: 3,
+      gap: 2,
+      borderRadius: radii.pill,
+      backgroundColor: tokens.muted,
+    },
+    tab: {
+      flex: 1,
+      minHeight: 34,
+      paddingHorizontal: 6,
+      borderRadius: radii.pill,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    tabOn: {
+      backgroundColor: tokens.surface,
+      boxShadow: shadowsForAppearance(resolveMobileAppearance()).row,
+    },
+    tabLabel: { color: tokens.mutedForeground, ...nativeTextStyle("meta", { size: 14 }) },
+    tabLabelOn: { color: tokens.foreground, fontWeight: "600" },
   });
 }

@@ -209,6 +209,7 @@ export default function Layout() {
                     headerShown: false,
                   }}
                 />
+                <Stack.Screen name="bot-memory" options={{ presentation: "modal" }} />
                 <Stack.Screen name="thread" options={{ title: t("Thread") }} />
                 <Stack.Screen name="peer-messages" options={{ title: t("Bot chat") }} />
                 <Stack.Screen name="routine" options={{ title: t("Routine") }} />

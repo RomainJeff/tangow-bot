@@ -1,19 +1,21 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { BotHero } from "../components/bot-page/hero";
+import { BotHero, BotTabs } from "../components/bot-page/hero";
 import { LoadFailed } from "../components/bot-page/kit";
+import { KnowledgeTab } from "../components/bot-page/knowledge-tab";
 import { SettingsTab } from "../components/bot-page/settings-tab";
 import { NativeSymbol } from "../components/native-symbol";
 import { rpc } from "../lib/api";
 import { archiveBot, confirmClearConversation, confirmDeleteBot } from "../lib/bot-lifecycle";
 import { readBotPage, readViewer, useBotPageContext } from "../lib/bot-page";
 import { botRunEpoch, subscribeBotRunEnds } from "../lib/bot-page-state";
+import type { BotTab } from "../lib/bot-tab";
 import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import { useMobileTokens, useResolvedAppearance } from "../lib/native";
 
-/** The bot's page, pushed from its thread: who it is at the top, then its settings. Every field saves itself. */
+/** The bot's page, pushed from its thread: who it is at the top, then Knowledge and Settings. Every field saves itself. */
 export default function BotPageScreen() {
   const { botId = "" } = useLocalSearchParams<{ botId: string }>();
   const { t } = useI18n();
@@ -22,6 +24,7 @@ export default function BotPageScreen() {
   const colorScheme = useResolvedAppearance();
   const page = useBotPageContext(botId);
   const [readFailed, setReadFailed] = useState(false);
+  const [view, setView] = useState<BotTab>("settings");
   const epoch = useSyncExternalStore(
     subscribeBotRunEnds,
     () => botRunEpoch(botId),
@@ -106,7 +109,12 @@ export default function BotPageScreen() {
               }
             />
             <View style={styles.body}>
-              <SettingsTab page={page} />
+              <BotTabs value={view} onChange={setView} />
+              {view === "knowledge" ? (
+                <KnowledgeTab page={page} epoch={epoch} />
+              ) : (
+                <SettingsTab page={page} />
+              )}
             </View>
           </>
         ) : readFailed ? (
@@ -118,5 +126,5 @@ export default function BotPageScreen() {
 }
 
 const styles = StyleSheet.create({
-  body: { paddingHorizontal: 16, paddingTop: 28 },
+  body: { paddingHorizontal: 16, paddingTop: 20, gap: 28 },
 });

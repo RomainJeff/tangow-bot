@@ -740,4 +740,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Shape {number}": "形状 {number}",
   "Voice and replies": "语音与回复",
   "What it does, in one line": "一句话说明它做什么",
+  Knowledge: "知识",
+  Memory: "记忆",
+  "Nothing remembered yet": "暂无记忆",
+  Settings: "设置",
 };
