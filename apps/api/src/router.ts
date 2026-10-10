@@ -1061,25 +1061,28 @@ export function createRouter(deps: RouterDeps) {
             })),
           });
         }
-        // Per-bot skill overrides travel with the bot, like MCP assignments.
-        const skillAccess = await deps.prisma.botSkill.findMany({
-          where: {
-            botId: source.id,
-            spaceId: context.actor.spaceId,
-            userId: context.actor.userId,
-          },
-        });
-        if (skillAccess.length) {
-          await deps.prisma.botSkill.createMany({
-            data: skillAccess.map((row) => ({
+        // Per-bot skill overrides travel with the bot, like MCP assignments, copied under the
+        // owner's skill lock so no skill write lands between the read and the copy.
+        await deps.skillLock.run(context.actor, async () => {
+          const skillAccess = await deps.prisma.botSkill.findMany({
+            where: {
+              botId: source.id,
               spaceId: context.actor.spaceId,
               userId: context.actor.userId,
-              botId: duplicate.id,
-              skillKey: row.skillKey,
-              enabled: row.enabled,
-            })),
+            },
           });
-        }
+          if (skillAccess.length) {
+            await deps.prisma.botSkill.createMany({
+              data: skillAccess.map((row) => ({
+                spaceId: context.actor.spaceId,
+                userId: context.actor.userId,
+                botId: duplicate.id,
+                skillKey: row.skillKey,
+                enabled: row.enabled,
+              })),
+            });
+          }
+        });
         return duplicate;
       }),
       reorder: authed.bots.reorder.handler(async ({ context, input }) => {
