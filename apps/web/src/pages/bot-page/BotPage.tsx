@@ -211,7 +211,10 @@ export function BotPage({
                     >
                       {tabLabels[tab]}
                       {tab === "activity" && routineFailed ? (
-                        <span aria-hidden className="size-1.5 rounded-full bg-destructive" />
+                        <span
+                          aria-hidden
+                          className="size-1.5 shrink-0 rounded-full bg-destructive"
+                        />
                       ) : null}
                     </TabsTrigger>
                   ))}
