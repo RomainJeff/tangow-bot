@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
   models: { credentials: vi.fn(), list: vi.fn() },
   me: vi.fn(),
   voice: { voices: vi.fn() },
-  agentSkills: { list: vi.fn(), get: vi.fn() },
+  agentSkills: { list: vi.fn(), get: vi.fn(), update: vi.fn() },
   memory: { list: vi.fn() },
   computer: { files: vi.fn() },
   scratchpad: { list: vi.fn() },
@@ -89,15 +89,18 @@ afterEach(() => {
 });
 
 let onView: ReturnType<typeof vi.fn<(view: BotPageView) => void>>;
+let skillsChanged: ReturnType<typeof vi.fn<() => void>>;
 
 async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[] | null } = {}) {
   onView = vi.fn<(view: BotPageView) => void>();
+  skillsChanged = vi.fn<() => void>();
   const commands = {
     updateBot: updateBot as BotCommands["updateBot"],
     setComputer: vi.fn(),
     botAction: vi.fn(),
     activityEpoch: 0,
     openRun: vi.fn(),
+    skillsChanged,
   } as Partial<BotCommands> as BotCommands;
   await act(async () => {
     root.render(
@@ -256,4 +259,37 @@ it("returns focus to a skill's row once the catalog reloads after its editor clo
   expect(skills?.textContent).not.toContain("No skills yet");
   await act(async () => finishList([skill]));
   expect(document.activeElement).toBe(row());
+});
+
+it("tells the shell the skills changed once a skill edited in the wide detail is saved", async () => {
+  const skill = {
+    id: "skill-1",
+    name: "greeting",
+    description: "Greet politely",
+    content: "---\nname: greeting\ndescription: Greet politely\n---\n\nSay hello.",
+    availability: "all",
+    visibleBotIds: ["bot-1"],
+    source: "user",
+  };
+  api.agentSkills.get.mockResolvedValue(skill);
+  api.agentSkills.update.mockResolvedValue(skill);
+  await render({ tab: "knowledge", detail: { kind: "skill", skillId: "skill-1" } });
+  const textarea = await vi.waitFor(() => {
+    const found = container.querySelector<HTMLTextAreaElement>(
+      '[data-testid="bot-knowledge-skill-editor"] textarea',
+    );
+    if (!found) throw new Error("editor not loaded");
+    return found;
+  });
+  await act(async () => {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    setValue.call(textarea, `${skill.content} Then wave.`);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(skillsChanged).not.toHaveBeenCalled();
+  const save = [...container.querySelectorAll("button")].find((b) => b.textContent === "Save")!;
+  await act(async () => save.click());
+
+  expect(skillsChanged).toHaveBeenCalledTimes(1);
+  expect(onView).toHaveBeenLastCalledWith({ tab: "knowledge", detail: null });
 });
