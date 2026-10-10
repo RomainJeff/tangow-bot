@@ -35,7 +35,8 @@ type ReplyTarget = { role: "user" | "bot"; blocks: MessageBlock[] };
  * The history a bot reads, from a session's chain oldest first. The chain starts at its last
  * `compaction` entry, whose summary becomes the first turn. A tool call whose result is missing
  * from the chain, cut by a rewind or still running, is left out so no call replays unanswered.
- * A cancelled run's words are left out too, since a half-finished answer is no history to build on.
+ * A cancelled run replays only its answered tool calls, so the bot knows what its tools already
+ * did; its half-finished words are no history to build on.
  */
 export function projectInferenceTurns(
   entries: readonly SessionEntry[],
@@ -65,11 +66,13 @@ export function projectInferenceTurns(
   const targets = replyTargets(chain, segments);
   const targetOf = (entryId: EntryId) =>
     targets.get(entryId) ?? resolvedTarget(options.resolveReplyTarget?.(entryId));
-  return segments.flatMap((segment) =>
-    segment.type === "run.message" && cancelled.has(segment.runId)
-      ? []
-      : (renderTurn(segment, options, targetOf) ?? []),
-  );
+  return segments.flatMap((segment) => {
+    if (segment.type !== "run.message" || !cancelled.has(segment.runId)) {
+      return renderTurn(segment, options, targetOf) ?? [];
+    }
+    const blocks = segment.blocks.filter((block) => block.kind === "steps");
+    return blocks.length > 0 ? (renderTurn({ ...segment, blocks }, options, targetOf) ?? []) : [];
+  });
 }
 
 function renderTurn(

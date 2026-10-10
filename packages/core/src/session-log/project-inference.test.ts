@@ -6,6 +6,7 @@ import { decodeEntries } from "./jsonl.js";
 import { projectInferenceTurns } from "./project-inference.js";
 
 const ada = { selfBotId: "bot_ada" };
+const text = (value: string) => [{ kind: "text", text: value }];
 const readFile = (runId: string, path: string, output?: string, callId = "call_0") => [
   {
     botId: "bot_ada",
@@ -78,6 +79,43 @@ describe("projectInferenceTurns", () => {
         role: "user",
         content:
           '<bot_message from="Bob">\nTwo flights found.\nThe 9:00 one is cheaper.\n</bot_message>',
+      },
+    ]);
+  });
+
+  it("replays the tool calls a cancelled run finished and drops its words", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const chain = linkEntries("cancel", [
+      { type: "user.message", payload: { blocks: text("Email the team."), source: "app" } },
+      { ...run, type: "assistant.text", payload: { blocks: text("Sending now.") } },
+      {
+        ...run,
+        type: "tool.call",
+        payload: { callId: "call_mail", name: "send_email", input: '{"to":"team"}' },
+      },
+      {
+        ...run,
+        type: "tool.result",
+        payload: { callId: "call_mail", output: "sent", isError: false, artifactIds: [] },
+      },
+      { ...run, type: "assistant.text", payload: { blocks: text("Done, I") } },
+      {
+        ...run,
+        type: "run.finished",
+        payload: { status: "cancelled", usage: { inputTokens: 900, outputTokens: 12 } },
+      },
+    ]);
+    expect(projectInferenceTurns(chain, ada)).toEqual([
+      { role: "user", content: "Email the team." },
+      {
+        role: "assistant",
+        content: '(already ran Send email, input: {"to":"team"}, result: sent)',
+        parts: [
+          {
+            type: "toolCalls",
+            calls: [{ id: "call_mail", name: "send_email", args: { to: "team" }, output: "sent" }],
+          },
+        ],
       },
     ]);
   });
