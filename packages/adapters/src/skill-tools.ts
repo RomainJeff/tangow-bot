@@ -429,13 +429,15 @@ export async function skillCreateFromTool(
   try {
     if (owner.botId) {
       // A bot-created skill starts scoped to its creator (design Q2); the user widens it in the UI.
-      // The rows land before SKILL.md, so no other bot ever sees it.
+      // The rows land before SKILL.md, so no other bot ever sees it, even one whose row a
+      // deleted skill of that name left behind.
       await deps.prisma.$transaction([
         deps.prisma.skillSetting.upsert({
           where: { spaceId_userId_skillKey: { ...scope, skillKey } },
           create: { ...scope, skillKey, availability: "selected" },
           update: { availability: "selected" },
         }),
+        deps.prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
         deps.prisma.botSkill.upsert({
           where: { botId_skillKey: { botId: owner.botId, skillKey } },
           create: { ...scope, botId: owner.botId, skillKey, enabled: true },

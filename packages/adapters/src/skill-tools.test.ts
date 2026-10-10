@@ -483,6 +483,28 @@ describe("skill tools", () => {
     expect(await names({ ...creator, botId: "botB" })).toEqual(["Shared"]);
   });
 
+  it("keeps a bot-created skill from bots that kept access rows for an older one", async () => {
+    const scope = { spaceId: "w1", userId: "u1" };
+    await prisma.botSkill.upsert({
+      where: { botId_skillKey: { botId: "botB", skillKey: "user:mine" } },
+      create: { ...scope, botId: "botB", skillKey: "user:mine", enabled: true },
+      update: {},
+    });
+
+    expect(
+      await skillCreateFromTool(deps, { ...scope, botId: "botA" }, [], {
+        name: "Mine",
+        description: "d",
+        body: "x",
+      }),
+    ).toMatchObject({ ok: true });
+
+    expect(ownNames(await listAgentSkillRecords(deps, { ...scope, botId: "botA" }))).toEqual([
+      "Mine",
+    ]);
+    expect(ownNames(await listAgentSkillRecords(deps, { ...scope, botId: "botB" }))).toEqual([]);
+  });
+
   it("renames access rows with the skill and removes them on delete", async () => {
     const scope = { spaceId: owner.spaceId, userId: owner.userId };
     await skillCreateFromTool(deps, owner, [], {
