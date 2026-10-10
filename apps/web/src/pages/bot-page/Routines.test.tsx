@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { ORPCError } from "@orpc/client";
-import type { Bot, Routine } from "@rakazo/contracts";
+import type { Bot, BotActivityOutput, Routine } from "@rakazo/contracts";
 import { SaveStoreProvider } from "@rakazo/ui-web";
 import { act, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -8,7 +8,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { saveStore } from "../../lib/save-store";
 import type { BotCommands } from "../shell/bot-commands";
 
-vi.mock("../../lib/rpc", () => ({ rpc: {} }));
+const api = vi.hoisted(() => ({ bots: { activity: vi.fn() } }));
+vi.mock("../../lib/rpc", () => ({ rpc: api }));
 vi.mock("@lingui/react/macro", () => {
   const t = (parts: TemplateStringsArray, ...values: unknown[]) => String.raw(parts, ...values);
   return {
@@ -72,6 +73,7 @@ async function render(node: ReactNode) {
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  api.bots.activity.mockResolvedValue({ items: [], nextCursor: null });
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -168,6 +170,72 @@ it("says when and why an active routine's last run failed, with a red dot", asyn
     "Last run failedMorning digestFailed yesterday · Model error",
   );
   expect(container.querySelector(".bg-destructive")).not.toBeNull();
+});
+
+it("lists the routine's own runs on its page, and a test run as soon as it starts", async () => {
+  const run = (runId: string, status: "completed" | "failed" | "running", createdAt: string) => ({
+    kind: "routine_run" as const,
+    run: {
+      runId,
+      botId: "bot-1",
+      botName: "Scout",
+      groupId: null,
+      groupName: null,
+      threadId: "thread-1",
+      status,
+      trigger: "routine" as const,
+      notificationsEnabled: false,
+      promptSnippet: "",
+      createdAt,
+      updatedAt: createdAt,
+      routineId: "routine-1",
+      routineName: "Morning digest",
+      sourceMessageId: null,
+      startedAt: createdAt,
+      completedAt: status === "running" ? null : createdAt,
+      failureKind: status === "failed" ? ("missing_model" as const) : null,
+    },
+  });
+  api.bots.activity.mockResolvedValue({
+    items: [
+      run("run-2", "failed", "2026-10-06T09:00:00.000Z"),
+      run("run-1", "completed", "2026-10-06T08:00:00.000Z"),
+    ],
+    nextCursor: null,
+  } satisfies BotActivityOutput);
+  const testRun = vi.fn(async () => {});
+  await render(
+    <RoutineDetail
+      page={page({ activityEpoch: 0, openRun: vi.fn(), testRun })}
+      routine={ROUTINE}
+      messageProviders={[]}
+      confirm={vi.fn()}
+      onDeleted={vi.fn()}
+    />,
+  );
+
+  const lines = () =>
+    [...container.querySelectorAll('[data-testid="activity-run"]')].map((line) =>
+      line.getAttribute("aria-label"),
+    );
+  expect(api.bots.activity.mock.calls).toEqual([[{ botId: "bot-1", routineId: "routine-1" }]]);
+  expect(lines()).toEqual([
+    expect.stringMatching(/^Morning digest, No model connected, Failed, /),
+    expect.stringMatching(/^Morning digest, Done, /),
+  ]);
+
+  api.bots.activity.mockResolvedValue({
+    items: [
+      run("run-3", "running", "2026-10-06T10:00:00.000Z"),
+      run("run-2", "failed", "2026-10-06T09:00:00.000Z"),
+      run("run-1", "completed", "2026-10-06T08:00:00.000Z"),
+    ],
+    nextCursor: null,
+  } satisfies BotActivityOutput);
+  await act(async () => button("Test run").click());
+
+  expect(testRun.mock.calls).toEqual([["bot-1", "routine-1"]]);
+  expect(lines()[0]).toMatch(/^Morning digest, Running, /);
 });
 
 function button(name: string) {

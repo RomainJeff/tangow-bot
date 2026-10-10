@@ -12,6 +12,7 @@ import {
 } from "@rakazo/ui-web";
 import { useState } from "react";
 import { DeleteItemDialog } from "../shell/dialogs";
+import { BotActivity } from "./BotActivity";
 import { type BotPageContext, type Confirm, SettingsGroup, useSaveLabels } from "./page-kit";
 import { useRoutineActive } from "./RoutinesTab";
 import { WhenToRun } from "./RoutineTriggers";
@@ -60,6 +61,8 @@ export function RoutineDetail({
   const approval = useRoutineField(page, routine, "requireToolApproval");
   const active = useRoutineActive(page, routine);
   const [running, setRunning] = useState(false);
+  // The shell reads activity again when a run ends; a test run should show as soon as it starts.
+  const [testRuns, setTestRuns] = useState(0);
   const [runError, setRunError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const draft = draftFromRoutine(routine, () => new Date());
@@ -90,6 +93,7 @@ export function RoutineDetail({
     setRunError(null);
     try {
       await commands.testRun(bot.id, routine.id);
+      setTestRuns((count) => count + 1);
     } catch (error) {
       setRunError(
         error instanceof Error && error.message ? error.message : t`Could not run routine`,
@@ -182,15 +186,37 @@ export function RoutineDetail({
         </SettingRow>
       </SettingsGroup>
 
-      {runError ? (
-        <p role="alert" className="mx-3.5 text-meta text-destructive">
-          {runError}
-        </p>
-      ) : null}
-      <div className="flex items-center justify-between gap-2">
-        <Button variant="tertiary" size="capsule" disabled={running} onClick={() => void testRun()}>
-          {running ? t`Running…` : t`Test run`}
-        </Button>
+      <section className="flex flex-col gap-1.5">
+        <div className="mx-3.5 flex items-baseline justify-between gap-3">
+          <h2 className="text-label text-muted-foreground">{t`Activity`}</h2>
+          <Button
+            variant="tertiary"
+            size="capsule"
+            className="-me-3"
+            disabled={running}
+            onClick={() => void testRun()}
+          >
+            {running ? t`Running…` : t`Test run`}
+          </Button>
+        </div>
+        {runError ? (
+          <p role="alert" className="mx-3.5 text-meta text-destructive">
+            {runError}
+          </p>
+        ) : null}
+        <div className="px-3.5">
+          <BotActivity
+            botId={bot.id}
+            routineId={routine.id}
+            commands={{
+              activityEpoch: commands.activityEpoch + testRuns,
+              openRun: commands.openRun,
+            }}
+          />
+        </div>
+      </section>
+
+      <div className="flex justify-end">
         <Button
           variant="tertiary"
           size="capsule"

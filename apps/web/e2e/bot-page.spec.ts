@@ -119,6 +119,21 @@ test("Activity lists routine runs and creations, pages back, and opens a recap i
   await expect(page.getByTestId("side-panel")).toHaveAttribute("data-detail", "routine");
 });
 
+test("a routine's page lists only its own runs and opens one in place", async ({ page }) => {
+  await page.goto(`${FIXTURE}?tab=routines&detail=routine&routine=routine-3`);
+  const activity = page.getByTestId("routine-detail").getByTestId("bot-activity");
+  await activity.getByRole("button", { name: /^Invoice watch, 8 runs, Done/ }).click();
+  const runs = activity.getByTestId("activity-run");
+  await expect(runs).toHaveText(Array.from({ length: 8 }, () => /^Invoice watch\d/));
+  await expect(activity.getByTestId("activity-created")).toHaveCount(0);
+  await expect(activity.getByRole("button", { name: "Show earlier" })).toHaveCount(0);
+
+  await runs.first().click();
+  await expect(activity.getByTestId("activity-recap").locator("strong").first()).toHaveText(
+    "2 invoices",
+  );
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`Activity with recaps open, ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 900 });

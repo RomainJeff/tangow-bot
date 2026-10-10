@@ -26,7 +26,7 @@ import "../../src/styles.css";
  *   detail=instructions|description|model|voice|routine|routine-new   routine=<id>
  *   new=1 (a bot just created by hand: no instructions, only its birth)   busy=1 (the bot is working)
  *   activity=empty|error (what reading the activity answers; by default 39 routine runs
- *   and 3 creations, 30 a page)
+ *   and 3 creations, 30 a page; a routine's page reads only its runs)
  *   fail=1 (every save fails)   refuse=1 (the server refuses a computer change)   theme=dark
  * Writes go through in-memory commands that answer after 400 ms; reads are
  * answered by a stubbed fetch with fixed data. A refusal carries the server's
@@ -231,13 +231,16 @@ const CREATIONS: Entry[] = [
 const ACTIVE = new Set(["queued", "leased", "running", "waiting_input", "waiting_takeover"]);
 
 function listActivity(input: BotActivityInput) {
+  const runs = RUNS.filter((row) => !input.routineId || row.routineId === input.routineId);
   const entries: Entry[] = [
-    ...RUNS.filter((row) => !ACTIVE.has(row.status)).map((row) => ({
-      at: row.createdAt,
-      id: row.runId,
-      item: { kind: "routine_run" as const, run: row },
-    })),
-    ...CREATIONS,
+    ...runs
+      .filter((row) => !ACTIVE.has(row.status))
+      .map((row) => ({
+        at: row.createdAt,
+        id: row.runId,
+        item: { kind: "routine_run" as const, run: row },
+      })),
+    ...(input.routineId ? [] : CREATIONS),
   ].sort((left, right) => right.at.localeCompare(left.at));
   const start = input.cursor ? entries.findIndex((entry) => entry.id === input.cursor?.id) + 1 : 0;
   const limit = input.limit ?? 30;
@@ -247,10 +250,9 @@ function listActivity(input: BotActivityInput) {
     items: [
       ...(input.cursor
         ? []
-        : RUNS.filter((row) => ACTIVE.has(row.status)).map((row) => ({
-            kind: "routine_run" as const,
-            run: row,
-          }))),
+        : runs
+            .filter((row) => ACTIVE.has(row.status))
+            .map((row) => ({ kind: "routine_run" as const, run: row }))),
       ...page.map((entry) => entry.item),
     ],
     nextCursor: last && start + limit < entries.length ? { createdAt: last.at, id: last.id } : null,

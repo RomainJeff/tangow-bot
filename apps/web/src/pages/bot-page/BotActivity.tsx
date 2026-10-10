@@ -37,10 +37,10 @@ import type { BotCommands } from "../shell/bot-commands";
 import { useRoutineCopy } from "./routine-copy";
 
 /**
- * A bot's activity, newest first, a page at a time. Reads again when a run ends (`epoch`) and
- * when the window comes back into focus.
+ * A bot's activity, or one routine's runs, newest first, a page at a time. Reads again when a run
+ * ends (`epoch`) and when the window comes back into focus.
  */
-function useBotActivity(botId: string, epoch: number) {
+function useBotActivity(botId: string, routineId: string | undefined, epoch: number) {
   const [read, dispatch] = useReducer(reduceActivity, { kind: "loading" });
   const readRef = useRef(read);
   readRef.current = read;
@@ -50,12 +50,12 @@ function useBotActivity(botId: string, epoch: number) {
   const load = useCallback(async () => {
     const mine = ++token.current;
     try {
-      const page = await rpc.bots.activity({ botId });
+      const page = await rpc.bots.activity({ botId, routineId });
       if (mine === token.current) dispatch({ type: "first", page });
     } catch {
       if (mine === token.current) dispatch({ type: "first-failed" });
     }
-  }, [botId]);
+  }, [botId, routineId]);
 
   const showEarlier = useCallback(async () => {
     const current = readRef.current;
@@ -64,12 +64,12 @@ function useBotActivity(botId: string, epoch: number) {
     const cursor = current.next;
     dispatch({ type: "earlier-started" });
     try {
-      const page = await rpc.bots.activity({ botId, cursor });
+      const page = await rpc.bots.activity({ botId, routineId, cursor });
       if (mine === token.current) dispatch({ type: "earlier", page });
     } catch {
       if (mine === token.current) dispatch({ type: "earlier-failed" });
     }
-  }, [botId]);
+  }, [botId, routineId]);
 
   const retry = useCallback(() => {
     dispatch({ type: "retry" });
@@ -161,24 +161,27 @@ function itemKey(item: ActivityItem): string {
 type OpenRun = BotCommands["openRun"];
 
 /**
- * The bot's routine runs, the routines it was given and its own creation, grouped by day. A run
- * opens its recap in place, with a way into the chat; a routine's creation opens the routine.
- * With `onWriteInstructions` (a bot with no instructions yet) its creation offers to write them.
+ * The bot's routine runs, the routines it was given and its own creation, grouped by day; with
+ * `routineId`, only that routine's runs. A run opens its recap in place, with a way into the chat;
+ * a routine's creation opens the routine. With `onWriteInstructions` (a bot with no instructions
+ * yet) its creation offers to write them.
  */
 export function BotActivity({
   botId,
+  routineId,
   commands,
   onOpenRoutine,
   onWriteInstructions,
 }: {
   botId: string;
+  routineId?: string;
   commands: Pick<BotCommands, "activityEpoch" | "openRun">;
-  onOpenRoutine: (routineId: string) => void;
+  onOpenRoutine?: (routineId: string) => void;
   onWriteInstructions?: () => void;
 }) {
   const { openRun } = commands;
   const { t, i18n } = useLingui();
-  const { read, showEarlier, retry } = useBotActivity(botId, commands.activityEpoch);
+  const { read, showEarlier, retry } = useBotActivity(botId, routineId, commands.activityEpoch);
   const openRuns = useOpenRuns();
   const locale = i18n.locale || "en";
 
@@ -244,7 +247,7 @@ function ActivityLine({
 }: {
   item: ActivityItem;
   openRun: OpenRun;
-  onOpenRoutine: (routineId: string) => void;
+  onOpenRoutine?: (routineId: string) => void;
   onWriteInstructions?: () => void;
 }) {
   const { t } = useLingui();
@@ -261,7 +264,7 @@ function ActivityLine({
           name={item.routineName}
           detail={by ? t`Routine created by ${by}` : t`Routine created`}
           at={item.createdAt}
-          onOpen={() => onOpenRoutine(item.routineId)}
+          onOpen={onOpenRoutine && (() => onOpenRoutine(item.routineId))}
         />
       );
     }
