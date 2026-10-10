@@ -1093,20 +1093,33 @@ describe("skill drafts", () => {
       });
     });
 
-    it("frees the name and its access when a bot create fails", async () => {
+    it("frees the name and its access when a bot create fails partway through SKILL.md", async () => {
       const root = userSkillsRoot(dataDir, creator);
       const skillFile = path.join(root, "deploy", "SKILL.md");
       writeFileMock.mockImplementation(async (...args: Parameters<typeof fs.writeFile>) => {
-        if (args[0] === skillFile) throw Object.assign(new Error("full"), { code: "ENOSPC" });
+        const [target, data] = args;
+        if (String(target).startsWith(skillFile)) {
+          await fs.writeFile(target, String(data).slice(0, 4096));
+          throw Object.assign(new Error("full"), { code: "ENOSPC" });
+        }
         return fs.writeFile(...args);
       });
       const create = () =>
-        skillCreateFromTool(deps, creator, [], { name: "Deploy", description: "d", body: "x" });
+        skillCreateFromTool(deps, creator, [], {
+          name: "Deploy",
+          description: "d",
+          body: "1. Run the deploy.\n".repeat(400),
+        });
 
       expect(await create()).toEqual({ error: "Could not create skill." });
       expect(await readdir(root)).toEqual([]);
-      expect(await prisma.skillSetting.findMany()).toEqual([]);
-      expect(await prisma.botSkill.findMany()).toEqual([]);
+      expect(ownNames(await listAgentSkillRecords(deps, { ...creator, botId: "botB" }))).toEqual(
+        [],
+      );
+      expect([await prisma.skillSetting.findMany(), await prisma.botSkill.findMany()]).toEqual([
+        [],
+        [],
+      ]);
       writeFileMock.mockImplementation(fs.writeFile);
       expect(await create()).toMatchObject({ ok: true });
     });
