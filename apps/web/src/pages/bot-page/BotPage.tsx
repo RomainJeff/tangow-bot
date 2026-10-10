@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Bot, Routine } from "@rakazo/contracts";
+import { routineFailing } from "@rakazo/core";
 import {
   Button,
   DropdownMenu,
@@ -83,6 +84,7 @@ export function BotPage({
   const detail = archived ? null : view.detail;
   const routine =
     detail?.kind === "routine" ? routines?.find((item) => item.id === detail.routineId) : undefined;
+  const routineFailed = routines?.some(routineFailing) ?? false;
   const tabLabels: Record<BotTab, string> = {
     activity: t`Activity`,
     routines: t`Routines`,
@@ -223,8 +225,24 @@ export function BotPage({
               <div className="px-4 pt-5 pb-4">
                 <TabsList variant="segmented" className="w-full">
                   {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
-                    <TabsTrigger key={tab} value={tab} data-testid={`bot-tab-${tab}`}>
+                    <TabsTrigger
+                      key={tab}
+                      value={tab}
+                      data-testid={`bot-tab-${tab}`}
+                      aria-label={
+                        tab === "activity" && routineFailed
+                          ? t`Activity, last run failed`
+                          : undefined
+                      }
+                      className="gap-1.5"
+                    >
                       {tabLabels[tab]}
+                      {tab === "activity" && routineFailed ? (
+                        <span
+                          aria-hidden
+                          className="size-1.5 shrink-0 rounded-full bg-destructive"
+                        />
+                      ) : null}
                     </TabsTrigger>
                   ))}
                 </TabsList>

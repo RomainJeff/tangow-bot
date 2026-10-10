@@ -287,6 +287,10 @@ msgstr "Aktiv: {0}"
 msgid "Activity"
 msgstr "Aktivität"
 
+#: src/pages/bot-page/BotPage.tsx:207
+msgid "Activity, last run failed"
+msgstr "Aktivität, letzter Lauf fehlgeschlagen"
+
 #: src/pages/PluginsOverlay.tsx:481
 #: src/pages/PluginsOverlay.tsx:996
 #: src/pages/ScratchpadSection.tsx:196

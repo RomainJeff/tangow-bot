@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Routine } from "@rakazo/contracts";
-import { saveKey } from "@rakazo/core";
+import { routineFailing, saveKey } from "@rakazo/core";
 import { Button, type FieldSave, SaveMeta, SettingRow, Switch, useFieldSave } from "@rakazo/ui-web";
 import { Plus } from "lucide-react";
 import type { BotDetail } from "../shell/layout";
@@ -103,7 +103,7 @@ function RoutineRow({
   const labels = useSaveLabels();
   const active = useRoutineActive(page, routine);
   const shown = { ...routine, active: active.value };
-  const state = !shown.active ? "paused" : shown.lastRunStatus === "failed" ? "failed" : "ok";
+  const state = !shown.active ? "paused" : routineFailing(shown) ? "failed" : "ok";
   const stateLabel = { paused: t`Paused`, failed: t`Last run failed`, ok: t`Active` }[state];
   const dot = { paused: "bg-input", failed: "bg-destructive", ok: "bg-success" }[state];
   return (

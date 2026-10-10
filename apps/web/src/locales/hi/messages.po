@@ -287,6 +287,10 @@ msgstr "सक्रिय: {0}"
 msgid "Activity"
 msgstr "गतिविधि"
 
+#: src/pages/bot-page/BotPage.tsx:207
+msgid "Activity, last run failed"
+msgstr "गतिविधि, पिछला रन विफल रहा"
+
 #: src/pages/PluginsOverlay.tsx:481
 #: src/pages/PluginsOverlay.tsx:996
 #: src/pages/ScratchpadSection.tsx:196
