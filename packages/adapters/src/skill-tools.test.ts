@@ -1085,6 +1085,7 @@ describe("skill drafts", () => {
 
     it.each([
       ["fails", Object.assign(new Error("full"), { code: "ENOSPC" }), "Could not create skill."],
+      ["loses the name", undefined, 'A skill named "Deploy" already exists.'],
     ])(
       "leaves another bot's skill and its access as they were when a create that claimed its folder %s",
       async (_, failure, answer) => {

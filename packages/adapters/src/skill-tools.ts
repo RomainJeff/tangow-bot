@@ -464,9 +464,10 @@ export async function skillCreateFromTool(
       await writeUserSkill(root, { name, content }, "create");
     }
   } catch (error) {
-    // Another skill can fill the claimed folder: the rows go back to what they were, while the
-    // claim still keeps other creates out, then the claim goes only while it is still empty.
-    if (owner.botId && !isExists(error)) {
+    // Another skill can fill the claimed folder (a same-name replace moving its folder back in):
+    // the rows go back to what they were, while the claim still keeps other creates out, then the
+    // claim goes only while it is still empty.
+    if (owner.botId) {
       await restoreRows?.().catch((failure: unknown) => {
         getLogger().warn(`[skills] could not restore the access rows of ${skillKey}: ${failure}`);
       });
