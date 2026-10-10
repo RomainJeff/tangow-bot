@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("renders tappable choice buttons and submits the offered action id", async ({
   page,

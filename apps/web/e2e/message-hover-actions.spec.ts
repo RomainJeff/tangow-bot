@@ -1,5 +1,5 @@
-import { expect, type Locator, type Page, type Route, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, type Locator, type Page, type Route, test } from "./test";
 
 /** Submit from the Send control so an in-flight prior send cannot swallow Enter. */
 async function sendComposerMessage(page: Page, composer: Locator, text: string) {

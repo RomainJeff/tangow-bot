@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 const SCREEN_ORIGIN = "https://screen.example";
 const SCREEN_URL = `${SCREEN_ORIGIN}/novnc/session/view/1.e2e_signature/embed.html`;

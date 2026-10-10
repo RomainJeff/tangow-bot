@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 // A run parked on an ask_user card can be answered from the main composer instead of the card
 // (feature ask-answer-via-composer, PR 1). Typing a reply must resolve the ask and resume the

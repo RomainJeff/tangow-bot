@@ -1,4 +1,3 @@
-import { expect, type Page, test } from "@playwright/test";
 import {
   activeBotId,
   addRoutineTrigger,
@@ -11,6 +10,7 @@ import {
   rpc,
   signup,
 } from "./helpers";
+import { expect, type Page, test } from "./test";
 
 function sidebarBotButton(page: Page, name: RegExp | string) {
   return page.locator("[data-sidebar-group] [data-roster-bot-id]").filter({

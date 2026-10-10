@@ -195,8 +195,9 @@ pnpm test:e2e
 
 CI does not run the web end-to-end suite, so it is on every change:
 
-- Run `pnpm test:e2e` before pushing anything that changes behavior or UI. Narrow a run with `pnpm test:e2e --spec=<file>` or `--grep=<title>`, then run the full suite once before the pull request.
-- Update the specs in `apps/web/e2e/` in the same change: adjust the ones whose behavior or copy changed, and add one for any new screen or flow.
+- Before pushing anything that changes behavior or UI, run `pnpm test:e2e:affected`: it runs only the specs your branch reaches and switches to the full suite itself when shared test plumbing, dependencies, or the database schema change, or when a changed source file is reached by no spec (`--dry-run` prints the selection). An uncovered file is a prompt to decide whether a user-visible flow needs a spec, not a reason to add one by default. Narrow a run further with `pnpm test:e2e --spec=<file>` or `--grep=<title>`.
+- The selection comes from `apps/web/e2e/impact-map.json`, the files each spec ran in its last recorded run. Rerecord it with `pnpm test:e2e:impact-map` (a full, serial run) when the selector says it is stale or after a large refactor, and commit it.
+- Update the specs in `apps/web/e2e/` in the same change: adjust the ones whose behavior or copy changed, and add one for any new screen or flow. Specs import `test` and `expect` from `./test` so they are recorded in the map.
 - A failing end-to-end test is fixed or updated, never skipped or deleted to get green.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for the development workflow and test matrix.

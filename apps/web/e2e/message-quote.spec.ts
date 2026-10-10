@@ -1,5 +1,5 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, type Locator, type Page, test } from "./test";
 
 /**
  * Build a real browser Selection over `startNeedle` … `endNeedle` inside `scope`

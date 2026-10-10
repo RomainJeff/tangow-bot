@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { expect, test } from "@playwright/test";
 import type { MemoryDocument } from "@rakazo/contracts";
 import {
   activeBotId,
@@ -11,6 +10,7 @@ import {
   rpc,
   signup,
 } from "./helpers";
+import { expect, test } from "./test";
 
 test("memory and skills are readable and editable in the app", async ({ page }, testInfo) => {
   const stamp = Date.now();

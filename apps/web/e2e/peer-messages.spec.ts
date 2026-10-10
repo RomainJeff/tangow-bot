@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("shows peer chips in transcript and opens view-only peer chat", async ({ page }, testInfo) => {
   const stamp = Date.now();

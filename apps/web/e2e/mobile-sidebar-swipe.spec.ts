@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test.use({
   hasTouch: true,

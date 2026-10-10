@@ -1,26 +1,32 @@
 import { execSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { Session } from "node:inspector/promises";
 import path from "node:path";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import type { createApp } from "../../../../apps/api/src/app.ts";
+import { fileUrlToRepoFile, touchedFiles, writeImpactMap } from "../e2e-impact.js";
 import { runProcess } from "./process.js";
 
 loadRootEnv();
 
 const integration = process.argv.includes("--integration");
 const e2e = process.argv.includes("--e2e");
+const impact = process.argv.includes("--impact");
 const sandboxArg = process.argv.find((arg) => arg.startsWith("--sandbox="));
 const specArg = process.argv.find((arg) => arg.startsWith("--spec="));
 const grepArg = process.argv.find((arg) => arg.startsWith("--grep="));
 const runtimeArg = process.argv.find((arg) => arg.startsWith("--runtime="));
 const sandboxProvider = sandboxArg?.slice("--sandbox=".length) ?? "fake";
-const e2eSpec = specArg?.slice("--spec=".length);
+const e2eSpecs = specArg?.slice("--spec=".length).split(",").filter(Boolean) ?? [];
 const e2eGrep = grepArg?.slice("--grep=".length);
 const agentRuntime = runtimeArg?.slice("--runtime=".length) ?? "scripted";
 
 if (Number(integration) + Number(e2e) !== 1) {
   throw new Error("Pass exactly one of --integration or --e2e");
+}
+if (impact && (!e2e || e2eSpecs.length > 0 || e2eGrep)) {
+  throw new Error("--impact records the whole e2e suite; pass it with --e2e only");
 }
 if (!["fake", "e2b", "daytona", "box"].includes(sandboxProvider)) {
   throw new Error('Sandbox must be "fake", "e2b", "daytona", or "box"');
@@ -148,6 +154,14 @@ async function main() {
       return;
     }
 
+    // Started before the API loads so every API function call is counted.
+    const apiCoverage = impact ? await startApiCoverage() : undefined;
+    const impactDir = path.join(reportDir, "impact");
+    if (impact) {
+      await rm(impactDir, { recursive: true, force: true });
+      await mkdir(impactDir, { recursive: true });
+      process.env.E2E_IMPACT_DIR = impactDir;
+    }
     const [
       { ComposioEmulator, EmailEmulator, PipedreamConnector, ThirdPartyConnectorEmulator },
       { createApp },
@@ -181,8 +195,12 @@ async function main() {
     const requestWaiters = new Set<() => void>();
     const server = serve({
       fetch: async (request) => {
-        if (new URL(request.url).pathname === "/__e2e/emails") {
+        const { pathname } = new URL(request.url);
+        if (pathname === "/__e2e/emails") {
           return Response.json(email.sent, { headers: { "cache-control": "no-store" } });
+        }
+        if (pathname === "/__e2e/impact" && apiCoverage) {
+          return Response.json(await apiCoverage(), { headers: { "cache-control": "no-store" } });
         }
         activeRequests += 1;
         try {
@@ -210,8 +228,10 @@ async function main() {
             "exec",
             "playwright",
             "test",
-            ...(e2eSpec ? [e2eSpec] : []),
+            ...e2eSpecs,
             ...(e2eGrep ? ["--grep", e2eGrep] : []),
+            // One test at a time so the API coverage belongs to the test that ran.
+            ...(impact ? ["--workers=1"] : []),
           ],
           {
             ...process.env,
@@ -227,6 +247,11 @@ async function main() {
         });
         if (failedRuns.length) console.error("Failed agent runs:", failedRuns);
         throw error;
+      }
+      if (impact) {
+        const commit = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+        const map = writeImpactMap(impactDir, process.cwd(), commit);
+        console.log(`Impact map: ${map.specs} specs, ${map.files} files, ${map.bytes} bytes`);
       }
       await writeSummary(reportDir, {
         ok: true,
@@ -284,6 +309,19 @@ async function main() {
 }
 
 type AppHandles = Awaited<ReturnType<typeof createApp>>;
+
+/** Returns a reader of the repo files the API ran since the previous read. */
+async function startApiCoverage() {
+  const session = new Session();
+  session.connect();
+  await session.post("Profiler.enable");
+  await session.post("Profiler.startPreciseCoverage", { callCount: true, detailed: false });
+  const repoRoot = process.cwd();
+  return async () => {
+    const { result } = await session.post("Profiler.takePreciseCoverage");
+    return touchedFiles(result, (url) => fileUrlToRepoFile(url, repoRoot));
+  };
+}
 
 async function managedComputers(handles: AppHandles) {
   if (!["e2b", "daytona", "box"].includes(sandboxProvider)) return [];

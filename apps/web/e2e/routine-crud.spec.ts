@@ -1,4 +1,3 @@
-import { expect, type Locator, test } from "@playwright/test";
 import type { Bot, Routine } from "@rakazo/contracts";
 import {
   activeBotId,
@@ -12,6 +11,7 @@ import {
   saveRoutineField,
   signup,
 } from "./helpers";
+import { expect, type Locator, test } from "./test";
 
 test("a new routine starts active and silent, and its switches answer the keyboard", async ({
   page,

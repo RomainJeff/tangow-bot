@@ -1,5 +1,5 @@
-import { expect, type Page, type Route, test } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, type Page, type Route, test } from "./test";
 
 type Message = Record<string, unknown>;
 

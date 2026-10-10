@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("restricted signup waits for mailbox verification", async ({ page }, testInfo) => {
   await page.route("**/api/auth/get-session**", (route) => route.fulfill({ json: null }));

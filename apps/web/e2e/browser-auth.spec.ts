@@ -1,7 +1,7 @@
 import { createServer } from "node:net";
-import { expect, test } from "@playwright/test";
 import { openBrowserAuth } from "../../desktop/src/browser-auth";
 import { captureScreenshot } from "./helpers";
+import { expect, test } from "./test";
 
 test("browser sign-in returns a callback and shows the return-to-app message", async ({
   page,

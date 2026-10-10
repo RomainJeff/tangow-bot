@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("a bot asks before creating a bot, and Cancel creates nothing", async ({ page }, testInfo) => {
   const stamp = Date.now();

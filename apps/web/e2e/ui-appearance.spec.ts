@@ -1,5 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, createNamedBot, signup } from "./helpers";
+import { expect, type Page, test } from "./test";
 
 async function captureSidebarSearchSelected(
   page: Page,
