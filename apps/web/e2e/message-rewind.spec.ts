@@ -1,5 +1,5 @@
-import { expect, type Locator, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, type Locator, test } from "./test";
 
 // Edit and resend sits under your own bubble on hover. Incoming replies can
 // scroll the row away from the pointer, so hover again until the click lands.

@@ -4,7 +4,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { chromium, expect, test } from "@playwright/test";
+import { chromium, expect, test } from "./test";
 
 const execute = promisify(execFile);
 const helper = path.resolve(

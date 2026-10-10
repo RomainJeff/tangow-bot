@@ -21,7 +21,6 @@ import {
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
-  createSkillLibrary,
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
@@ -52,7 +51,6 @@ import {
   ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
-  scheduleSkillLibraryRepair,
 } from "@rakazo/adapters";
 import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
 import {
@@ -200,7 +198,6 @@ async function main() {
     applicationName: "rakazo-worker-skill-lock",
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
-  const stopSkillSweep = scheduleSkillLibraryRepair({ prisma, dataDir, lock: skillLock });
   const skillLearning = parseSkillLearningMode(process.env.SKILL_LEARNING);
   const executor = createRunExecutor({
     prisma,
@@ -288,7 +285,6 @@ async function main() {
     purgeLinkPreviews: createLinkPreviewPurge({ prisma, artifacts }),
     sweepSkillLines: createSkillLineSweep({
       prisma,
-      library: createSkillLibrary({ prisma, dataDir, lock: skillLock }),
       events,
       lineOnlyMessages: skillLearning !== "off",
     }),
@@ -300,7 +296,6 @@ async function main() {
     if (stopping) return;
     stopping = true;
     try {
-      stopSkillSweep();
       await reconciler.stop();
       await jobHost.stop();
       await previewHost?.stop();

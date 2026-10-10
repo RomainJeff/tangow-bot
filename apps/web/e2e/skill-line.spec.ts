@@ -1,6 +1,6 @@
 // Needs the Vite dev server: the fixture is served from source and is not a build entry.
-import { expect, test } from "@playwright/test";
 import { captureScreenshot } from "./helpers";
+import { expect, test } from "./test";
 
 test("a skill line sits under the bot's message, opens the skill, and cannot be faked", async ({
   page,
@@ -29,22 +29,25 @@ test("a skill line sits under the bot's message, opens the skill, and cannot be 
     "Skill deleted · Old checklist",
   ]);
 
-  // Renamed since the line was written: the line still opens it, under its name now.
+  // A line stored with a uid opens the skill by its id.
   await line.click();
   await expect(page.getByTestId("opened")).toHaveText(
-    '{"tab":"knowledge","detail":{"kind":"skill","skillId":"user:meeting-rooms"}}',
+    '{"tab":"knowledge","detail":{"kind":"skill","skillId":"user:rooms"}}',
   );
 
-  // A skill the catalog no longer has opens the Knowledge list, a deleted one Recently deleted.
+  // A skill the catalog no longer has opens the Knowledge list.
   await page
     .locator('[data-message-id="alone"]')
     .getByRole("link", { name: /^Skill updated/ })
     .click();
   await expect(page.getByTestId("opened")).toHaveText('{"tab":"knowledge","detail":null}');
-  await report.getByRole("link", { name: "Skill deleted · Old checklist" }).click();
-  await expect(page.getByTestId("opened")).toHaveText(
-    '{"tab":"knowledge","detail":null,"trash":true}',
-  );
+
+  // A deleted skill has nothing to open: its line is a plain trace, icon and all.
+  await expect(report.getByRole("link")).toHaveCount(1);
+  const deleted = report.locator('[data-slot="message-row-meta"]').filter({
+    hasText: "Skill deleted · Old checklist",
+  });
+  await expect(deleted.locator("svg")).toHaveCount(1);
 
   // A message with only the line draws no bubble and stays at the bubble's inset, never centred.
   const alone = page.locator('[data-message-id="alone"]');

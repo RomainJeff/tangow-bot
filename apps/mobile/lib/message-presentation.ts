@@ -47,16 +47,14 @@ export function stepsBlocks(
 }
 
 /**
- * Where a skill line opens: the skill's own screen, found by its uid so a rename since the line
- * still opens it, or Recently deleted for a deleted skill. One the catalog no longer has opens
- * Skills.
+ * Where a skill line opens: the skill's own screen, found by its id. One the catalog no longer
+ * has opens Skills.
  */
 export async function skillLineRoute(
-  line: Pick<SkillSourceBlock, "change" | "skillUid">,
-  catalog: () => Promise<ReadonlyArray<{ id: string; uid?: string }>>,
+  line: Pick<SkillSourceBlock, "skillId">,
+  catalog: () => Promise<ReadonlyArray<{ id: string }>>,
 ) {
-  if (line.change === "deleted") return { pathname: "/bot-skills-trash" } as const;
-  const skillId = (await catalog()).find((entry) => entry.uid === line.skillUid)?.id;
+  const skillId = (await catalog()).find((entry) => entry.id === line.skillId)?.id;
   return skillId
     ? ({ pathname: "/bot-skill", params: { skillId } } as const)
     : ({ pathname: "/skills" } as const);

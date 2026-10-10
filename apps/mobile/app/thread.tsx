@@ -44,6 +44,7 @@ import {
   serializeComposerPrompt,
   showsTimeMarker,
   skillSourcesOf,
+  slashSkillOptions as slashSkills,
   threadTimeMarkerLabel,
   truncateSlashDescription,
   userVisibleMessages,
@@ -604,17 +605,7 @@ function Thread() {
   }, [composerMentionTargets, mentionQuery]);
   const slashQueryNormalized = slashQuery?.trim().toLowerCase() ?? null;
   const slashSkillOptions =
-    slashQuery !== null && mentionQuery === null
-      ? agentSkills
-          .filter((skill) => {
-            if (!slashQueryNormalized) return true;
-            return (
-              skill.name.toLowerCase().includes(slashQueryNormalized) ||
-              skill.description.toLowerCase().includes(slashQueryNormalized)
-            );
-          })
-          .slice(0, 8)
-      : [];
+    slashQuery !== null && mentionQuery === null ? slashSkills(agentSkills, slashQuery) : [];
   const slashActionOptions =
     slashQuery !== null && mentionQuery === null
       ? SLASH_ACTIONS.filter((action) => {
@@ -4011,7 +4002,7 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-/** The skill lines under a bot's message: what it learned, updated or deleted, each opening Skills. */
+/** The skill lines under a bot's message: what it learned or updated opens the skill, a deleted one only shows. */
 function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] {
   const { t } = useI18n();
   const router = useRouter();
@@ -4020,7 +4011,7 @@ function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] 
   const skillsLive = isNew || skillLines.length > skillsAtMount.current;
   return skillLines.map(
     (line): BotBubbleMeta => ({
-      id: `${line.skillUid}:${line.change}`,
+      id: `${line.skillId}:${line.change}`,
       label:
         line.change === "learned"
           ? t("Skill learned · {name}", { name: line.name })
@@ -4028,10 +4019,13 @@ function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] 
             ? t("Skill updated · {name}", { name: line.name })
             : t("Skill deleted · {name}", { name: line.name }),
       icon: { ios: "book", android: "book-outline" },
-      onPress: () =>
-        void skillLineRoute(line, () =>
-          rpc<AgentSkillCatalogEntry[]>("agentSkills/list").catch(() => []),
-        ).then((route) => router.push(route)),
+      onPress:
+        line.change === "deleted"
+          ? undefined
+          : () =>
+              void skillLineRoute(line, () =>
+                rpc<AgentSkillCatalogEntry[]>("agentSkills/list").catch(() => []),
+              ).then((route) => router.push(route)),
       live: skillsLive,
     }),
   );

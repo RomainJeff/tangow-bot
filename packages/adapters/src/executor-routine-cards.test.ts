@@ -1610,7 +1610,6 @@ describe("a skill the bot saves on its own", () => {
   };
   const line = {
     kind: "skill_source",
-    skillUid: expect.stringMatching(/^[0-9a-f]{32}$/),
     skillId: "user:coffee",
     name: "Coffee",
     change: "learned",

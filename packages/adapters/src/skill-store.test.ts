@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+  link,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
@@ -6,10 +16,19 @@ import { buildSkillMd } from "@rakazo/core";
 import { create as tarCreate } from "tar";
 import { afterEach, describe, expect, it } from "vitest";
 import { ZipFile } from "yazl";
-import { SkillRefusal } from "./skill-library.js";
-import { testLibrary } from "./skill-library.test-support.js";
-import type { SkillTreeFile } from "./skill-store.js";
-import { listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
+import {
+  isExists,
+  listUserSkills,
+  removeUserSkill,
+  removeUserSkillDirs,
+  renameUserSkill,
+  replaceUserSkillFiles,
+  skillDirName,
+  userSkillsRoot,
+  writeUserSkill,
+  writeUserSkillBundle,
+  writeUserSkillFiles,
+} from "./skill-store.js";
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -22,42 +41,8 @@ async function tmpRoot() {
   return dir;
 }
 
-const owner = { spaceId: "ws-1", userId: "user-1" };
-
-/** A user's skills root, written only through the owner's skill library. */
-async function tmpStore(dataDir?: string) {
-  const data = dataDir ?? (await tmpRoot());
-  const admin = testLibrary(data).library.forOwner(owner);
-  return { root: userSkillsRoot(data, owner), admin };
-}
-
 const md = (name: string, body = "Steps") =>
   buildSkillMd({ name, description: `About ${name}`, body });
-
-const skillMd = (name: string, content = md(name)) => ({
-  kind: "skill-md" as const,
-  name,
-  content,
-});
-
-const isNameTaken = (error: unknown) =>
-  error instanceof SkillRefusal && error.reason === "name_taken";
-
-const entries = (dir: string) => readdir(dir).catch(() => [] as string[]);
-
-const resolve = async (skillMd: string) => {
-  const name = /^name: (.*)$/m.exec(skillMd)?.[1] ?? "";
-  return { name, content: `${skillMd}\n<!-- normalized -->\n` };
-};
-
-const bundleOf = (archive: Buffer) => ({ kind: "bundle" as const, archive, resolve });
-
-/** A bot's draft folder as the skill tools hand it over: SKILL.md already resolved. */
-async function folderOf(files: SkillTreeFile[]) {
-  const skillMdFile = files.find((file) => file.path === "SKILL.md");
-  const resolved = await resolve(new TextDecoder().decode(skillMdFile?.bytes));
-  return { kind: "files" as const, ...resolved, files };
-}
 
 describe("skill store", () => {
   it("scopes the root per space and user", () => {
@@ -74,36 +59,15 @@ describe("skill store", () => {
     expect(skillDirName("..")).toBe("%2E.");
   });
 
-  it("exports no way to write a skill outside the skill library", async () => {
-    expect(Object.keys(await import("./skill-store.js")).sort()).toEqual([
-      "bundleFormat",
-      "extractSkillBundle",
-      "hasCode",
-      "isStorableFile",
-      "listUserSkills",
-      "skillDirName",
-      "userSkillsRoot",
-    ]);
-    expect(Object.keys(await import("./skill-library.js")).sort()).toEqual([
-      "SkillRefusal",
-      "createSkillLibrary",
-      "parseSkillUid",
-      "parseVersionId",
-      "purgeUserSkills",
-      "repairSkillLibrary",
-      "scheduleSkillLibraryRepair",
-    ]);
-  });
-
   it("returns an empty list when the root does not exist", async () => {
     const root = path.join(await tmpRoot(), "missing");
     expect(await listUserSkills(root)).toEqual([]);
   });
 
   it("writes, lists, replaces and removes skills", async () => {
-    const { root, admin } = await tmpStore();
-    await admin.create(skillMd("Daily Standup"));
-    await admin.create(skillMd("Alpha"));
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Daily Standup", content: md("Daily Standup") }, "create");
+    await writeUserSkill(root, { name: "Alpha", content: md("Alpha") }, "create");
 
     const listed = await listUserSkills(root);
     expect(listed.map((s) => s.name)).toEqual(["Alpha", "Daily Standup"]);
@@ -116,23 +80,23 @@ describe("skill store", () => {
     expect(listed[1]?.content).toBe(md("Daily Standup"));
     expect(listed[1]?.updatedAt).toBeInstanceOf(Date);
 
-    await admin.update("user:alpha", skillMd("Alpha", md("Alpha", "New")));
+    await writeUserSkill(root, { name: "Alpha", content: md("Alpha", "New") }, "replace");
     expect((await listUserSkills(root)).find((s) => s.name === "Alpha")?.content).toBe(
       md("Alpha", "New"),
     );
     expect(await readFile(path.join(root, "alpha", "SKILL.md"), "utf8")).toBe(md("Alpha", "New"));
 
-    await admin.delete("user:alpha");
+    await removeUserSkill(root, "alpha");
     expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Daily Standup"]);
   });
 
   it("renaming moves the whole directory, keeping bundle extras", async () => {
-    const { root, admin } = await tmpStore();
-    await admin.create(skillMd("Alpha"));
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Alpha", content: md("Alpha") }, "create");
     await mkdir(path.join(root, "alpha", "scripts"), { recursive: true });
     await writeFile(path.join(root, "alpha", "scripts", "run.sh"), "echo hi");
 
-    await admin.update("user:alpha", skillMd("Beta"));
+    await renameUserSkill(root, "Alpha", { name: "Beta", content: md("Beta") });
 
     expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Beta"]);
     expect(await readFile(path.join(root, "beta", "scripts", "run.sh"), "utf8")).toBe("echo hi");
@@ -141,25 +105,48 @@ describe("skill store", () => {
   });
 
   it("refuses to rename onto an existing skill name", async () => {
-    const { root, admin } = await tmpStore();
-    await admin.create(skillMd("Alpha"));
-    await admin.create(skillMd("Beta"));
-    const error = await admin.update("user:alpha", skillMd("Beta")).catch((e: unknown) => e);
-    expect(isNameTaken(error)).toBe(true);
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Alpha", content: md("Alpha") }, "create");
+    await writeUserSkill(root, { name: "Beta", content: md("Beta") }, "create");
+    const error = await renameUserSkill(root, "Alpha", {
+      name: "Beta",
+      content: md("Beta"),
+    }).catch((e: unknown) => e);
+    expect(isExists(error)).toBe(true);
     expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Alpha", "Beta"]);
   });
 
   it("refuses to create over an existing skill, case-insensitively", async () => {
-    const { admin } = await tmpStore();
-    await admin.create(skillMd("Alpha"));
-    const error = await admin.create(skillMd("ALPHA")).catch((e: unknown) => e);
-    expect(isNameTaken(error)).toBe(true);
-    expect(isNameTaken(new Error("nope"))).toBe(false);
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Alpha", content: md("Alpha") }, "create");
+    const error = await writeUserSkill(
+      root,
+      { name: "ALPHA", content: md("ALPHA") },
+      "create",
+    ).catch((e: unknown) => e);
+    expect(isExists(error)).toBe(true);
+    expect(isExists(new Error("nope"))).toBe(false);
+  });
+
+  it("skips a SKILL.md that is a link when listing", async () => {
+    const root = await tmpRoot();
+    const target = path.join(root, "elsewhere.md");
+    await writeFile(target, md("Sneaky"));
+    await mkdir(path.join(root, "sneaky"));
+    await symlink(target, path.join(root, "sneaky", "SKILL.md"));
+    expect(await listUserSkills(root)).toEqual([]);
+  });
+
+  it("lists a skill whose SKILL.md is hard-linked", async () => {
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Deploy", content: md("Deploy") }, "create");
+    await link(path.join(root, "deploy", "SKILL.md"), path.join(root, "snapshot.md"));
+    expect((await listUserSkills(root)).map((s) => s.id)).toEqual(["user:deploy"]);
   });
 
   it("skips directories without a valid SKILL.md", async () => {
-    const { root, admin } = await tmpStore();
-    await admin.create(skillMd("Good"));
+    const root = await tmpRoot();
+    await writeUserSkill(root, { name: "Good", content: md("Good") }, "create");
     await mkdir(path.join(root, "empty"));
     await mkdir(path.join(root, "broken"));
     await writeFile(path.join(root, "broken", "SKILL.md"), "no frontmatter", "utf8");
@@ -167,7 +154,34 @@ describe("skill store", () => {
     expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Good"]);
   });
 
+  it("removes a user's skills across every space on account deletion", async () => {
+    const dataDir = await tmpRoot();
+    const a = userSkillsRoot(dataDir, { spaceId: "ws-1", userId: "user-1" });
+    const b = userSkillsRoot(dataDir, { spaceId: "ws-2", userId: "user-1" });
+    const other = userSkillsRoot(dataDir, { spaceId: "ws-1", userId: "user-2" });
+    for (const root of [a, b, other]) {
+      await writeUserSkill(root, { name: "Alpha", content: md("Alpha") }, "create");
+    }
+    const history = (userId: string) => path.join(dataDir, "skill-history", "ws-1", userId);
+    for (const userId of ["user-1", "user-2"]) {
+      await mkdir(path.join(history(userId), "skills"), { recursive: true });
+    }
+    await removeUserSkillDirs(dataDir, "user-1");
+    expect(await listUserSkills(a)).toEqual([]);
+    expect(await listUserSkills(b)).toEqual([]);
+    expect((await listUserSkills(other)).map((s) => s.name)).toEqual(["Alpha"]);
+    expect(await readdir(path.join(dataDir, "skill-history", "ws-1"))).toEqual(["user-2"]);
+    await expect(
+      removeUserSkillDirs(path.join(dataDir, "nope"), "user-1"),
+    ).resolves.toBeUndefined();
+  });
+
   describe("bundles", () => {
+    const resolve = async (skillMd: string) => {
+      const name = /^name: (.*)$/m.exec(skillMd)?.[1] ?? "";
+      return { name, content: `${skillMd}\n<!-- normalized -->\n` };
+    };
+
     /** Writes `files` under a source dir and tars the given top-level entries (gzip). */
     async function bundle(
       files: Record<string, string>,
@@ -186,75 +200,71 @@ describe("skill store", () => {
     }
 
     it("extracts SKILL.md with its extra files next to it, dropping symlinks", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await bundle(
         { "SKILL.md": md("Deploy"), "scripts/run.sh": "echo hi", "references/notes.md": "n" },
         ["SKILL.md", "scripts", "references", "link"],
         (src) => symlink("/etc/passwd", path.join(src, "link")),
       );
-      await admin.create(bundleOf(archive));
+      await writeUserSkillBundle(root, archive, resolve);
       const dir = path.join(root, "deploy");
       expect((await readdir(dir)).sort()).toEqual(["SKILL.md", "references", "scripts"]);
       expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toContain("normalized");
       expect(await readFile(path.join(dir, "scripts/run.sh"), "utf8")).toBe("echo hi");
       expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Deploy"]);
-      expect(await entries(root)).toEqual(["deploy"]);
+      expect(await readdir(root)).toEqual(["deploy"]);
     });
 
     it("accepts a single top-level directory wrapping the skill", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await bundle({ "deploy/SKILL.md": md("Deploy"), "deploy/x.txt": "x" }, [
         "deploy",
       ]);
-      await admin.create(bundleOf(archive));
+      await writeUserSkillBundle(root, archive, resolve);
       expect(await readFile(path.join(root, "deploy", "x.txt"), "utf8")).toBe("x");
     });
 
     it("rejects bundles without SKILL.md at the root and cleans up", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await bundle({ "a/SKILL.md": md("A"), "b/SKILL.md": md("B") }, ["a", "b"]);
-      await expect(admin.create(bundleOf(archive))).rejects.toThrow(/SKILL\.md/);
-      expect(await entries(root)).toEqual([]);
+      await expect(writeUserSkillBundle(root, archive, resolve)).rejects.toThrow(/SKILL\.md/);
+      expect(await readdir(root)).toEqual([]);
     });
 
     it("fails with EEXIST on a name clash without touching the existing skill", async () => {
-      const { root, admin } = await tmpStore();
-      await admin.create(skillMd("Deploy", md("Deploy", "Old")));
+      const root = await tmpRoot();
+      await writeUserSkill(root, { name: "Deploy", content: md("Deploy", "Old") }, "create");
       const archive = await bundle({ "SKILL.md": md("Deploy"), "x.txt": "x" }, [
         "SKILL.md",
         "x.txt",
       ]);
-      const error = await admin.create(bundleOf(archive)).catch((e: unknown) => e);
-      expect(isNameTaken(error)).toBe(true);
+      const error = await writeUserSkillBundle(root, archive, resolve).catch((e: unknown) => e);
+      expect(isExists(error)).toBe(true);
       expect(await readdir(path.join(root, "deploy"))).toEqual(["SKILL.md"]);
       expect(await readFile(path.join(root, "deploy", "SKILL.md"), "utf8")).toBe(
         md("Deploy", "Old"),
       );
-      expect(await entries(root)).toEqual(["deploy"]);
+      expect(await readdir(root)).toEqual(["deploy"]);
     });
 
     it("propagates resolve failures and leaves nothing behind", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await bundle({ "SKILL.md": "junk" }, ["SKILL.md"]);
       await expect(
-        admin.create({
-          kind: "bundle",
-          archive,
-          resolve: async () => {
-            throw new Error("bad frontmatter");
-          },
+        writeUserSkillBundle(root, archive, async () => {
+          throw new Error("bad frontmatter");
         }),
       ).rejects.toThrow("bad frontmatter");
-      expect(await entries(root)).toEqual([]);
+      expect(await readdir(root)).toEqual([]);
     });
 
     it("rejects oversize bundles and too many entries", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const big = await bundle(
         { "SKILL.md": md("Big"), "blob.bin": "a".repeat(SKILL_BUNDLE_MAX_BYTES + 1) },
         ["SKILL.md", "blob.bin"],
       );
-      await expect(admin.create(bundleOf(big))).rejects.toThrow(/too large/);
+      await expect(writeUserSkillBundle(root, big, resolve)).rejects.toThrow(/too large/);
       const many = await bundle(
         Object.fromEntries([
           ["SKILL.md", md("Many")],
@@ -262,18 +272,24 @@ describe("skill store", () => {
         ]),
         ["SKILL.md", "f"],
       );
-      await expect(admin.create(bundleOf(many))).rejects.toThrow(/too many/);
-      expect(await entries(root)).toEqual([]);
+      await expect(writeUserSkillBundle(root, many, resolve)).rejects.toThrow(/too many/);
+      expect(await readdir(root)).toEqual([]);
     });
 
     it("rejects data that is neither a gzip tar nor a zip", async () => {
-      const { root, admin } = await tmpStore();
-      await expect(admin.create(bundleOf(Buffer.from("plain text")))).rejects.toThrow();
-      expect(await entries(root)).toEqual([]);
+      const root = await tmpRoot();
+      await expect(
+        writeUserSkillBundle(root, Buffer.from("plain text"), resolve),
+      ).rejects.toThrow();
+      expect(await readdir(root)).toEqual([]);
     });
   });
 
   describe("files", () => {
+    const resolve = async (skillMd: string) => {
+      const name = /^name: (.*)$/m.exec(skillMd)?.[1] ?? "";
+      return { name, content: `${skillMd}\n<!-- normalized -->\n` };
+    };
     const text = (value: string) => new TextEncoder().encode(value);
     const file = (filePath: string, value: string, executable = false) => ({
       path: filePath,
@@ -282,13 +298,16 @@ describe("skill store", () => {
     });
 
     it("writes SKILL.md and nested files, keeping the executable bit under scripts/", async () => {
-      const { root, admin } = await tmpStore();
-      await admin.create(
-        await folderOf([
+      const root = await tmpRoot();
+      await writeUserSkillFiles(
+        root,
+        [
           file("SKILL.md", md("Deploy")),
           file("scripts/run.sh", "echo hi", true),
+          file("tools/run.sh", "echo hi", true),
           file("references/api/notes.md", "n"),
-        ]),
+        ],
+        resolve,
       );
       const dir = path.join(root, "deploy");
       expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toBe(
@@ -298,75 +317,97 @@ describe("skill store", () => {
       expect(await readFile(path.join(dir, "references/api/notes.md"), "utf8")).toBe("n");
       expect((await stat(path.join(dir, "scripts/run.sh"))).mode & 0o111).toBe(0o111);
       expect((await stat(path.join(dir, "references/api/notes.md"))).mode & 0o111).toBe(0);
-      expect(await entries(root)).toEqual(["deploy"]);
+      expect((await stat(path.join(dir, "tools/run.sh"))).mode & 0o111).toBe(0);
+      expect(await readdir(root)).toEqual(["deploy"]);
     });
 
-    it("writes the files under a relative data dir", async () => {
-      const { root, admin } = await tmpStore(path.relative(process.cwd(), await tmpRoot()));
-      await admin.create(
-        await folderOf([file("SKILL.md", md("Deploy")), file("scripts/run.sh", "echo hi")]),
+    it("writes the files under a relative root", async () => {
+      const root = path.relative(process.cwd(), await tmpRoot());
+      await writeUserSkillFiles(
+        root,
+        [file("SKILL.md", md("Deploy")), file("scripts/run.sh", "echo hi")],
+        resolve,
       );
       expect(await readFile(path.join(root, "deploy", "scripts/run.sh"), "utf8")).toBe("echo hi");
     });
 
     it("rejects paths that leave the skill folder and leaves nothing behind", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       for (const bad of ["../x", "scripts/../../x", "/etc/x"]) {
         await expect(
-          admin.create(await folderOf([file("SKILL.md", md("Deploy")), file(bad, "x")])),
+          writeUserSkillFiles(root, [file("SKILL.md", md("Deploy")), file(bad, "x")], resolve),
         ).rejects.toThrow(`Skill file escapes the skill folder: ${bad}.`);
       }
-      expect(await entries(root)).toEqual([]);
-      expect(await entries(path.dirname(root))).not.toContain("x");
+      expect(await readdir(root)).toEqual([]);
+      expect(await readdir(path.dirname(root))).not.toContain("x");
     });
 
     it("rejects too many files and too many bytes before writing", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const many = [
         file("SKILL.md", md("Many")),
         ...Array.from({ length: SKILL_BUNDLE_MAX_ENTRIES }, (_, i) => file(`f/${i}.txt`, "x")),
       ];
-      await expect(admin.create(await folderOf(many))).rejects.toThrow(
-        `Skill has too many files and folders (> ${SKILL_BUNDLE_MAX_ENTRIES}).`,
+      await expect(writeUserSkillFiles(root, many, resolve)).rejects.toThrow(
+        `Skill has too many files (> ${SKILL_BUNDLE_MAX_ENTRIES}).`,
       );
       const big = [
         file("SKILL.md", md("Big")),
         { path: "blob.bin", bytes: new Uint8Array(SKILL_BUNDLE_MAX_BYTES), executable: false },
       ];
-      await expect(admin.create(await folderOf(big))).rejects.toThrow(
+      await expect(writeUserSkillFiles(root, big, resolve)).rejects.toThrow(
         `Skill too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`,
       );
-      expect(await entries(root)).toEqual([]);
+      expect(await readdir(root)).toEqual([]);
     });
 
-    it("refuses a name clash without touching the existing skill", async () => {
-      const { root, admin } = await tmpStore();
-      await admin.create(skillMd("Deploy", md("Deploy", "Old")));
-      const error = await admin
-        .create(await folderOf([file("SKILL.md", md("Deploy")), file("x.txt", "x")]))
-        .catch((e: unknown) => e);
-      expect(isNameTaken(error)).toBe(true);
+    it("fails with EEXIST on a name clash without touching the existing skill", async () => {
+      const root = await tmpRoot();
+      await writeUserSkill(root, { name: "Deploy", content: md("Deploy", "Old") }, "create");
+      const error = await writeUserSkillFiles(
+        root,
+        [file("SKILL.md", md("Deploy")), file("x.txt", "x")],
+        resolve,
+      ).catch((e: unknown) => e);
+      expect(isExists(error)).toBe(true);
       expect(await readdir(path.join(root, "deploy"))).toEqual(["SKILL.md"]);
-      expect(await entries(root)).toEqual(["deploy"]);
+      expect(await readdir(root)).toEqual(["deploy"]);
     });
 
-    const seedDeploy = async (admin: Awaited<ReturnType<typeof tmpStore>>["admin"]) =>
-      admin.create(
-        await folderOf([
-          file("SKILL.md", md("Deploy", "Old")),
-          file("scripts/old.sh", "old", true),
-        ]),
+    it("takes over the empty folder a write cut short left behind", async () => {
+      const root = await tmpRoot();
+      await mkdir(path.join(root, "deploy"));
+      await writeUserSkillFiles(
+        root,
+        [file("SKILL.md", md("Deploy")), file("x.txt", "x")],
+        resolve,
+      );
+      expect((await readdir(path.join(root, "deploy"))).sort()).toEqual(["SKILL.md", "x.txt"]);
+    });
+
+    it("rejects a folder without SKILL.md and cleans up", async () => {
+      const root = await tmpRoot();
+      await expect(writeUserSkillFiles(root, [file("notes.md", "n")], resolve)).rejects.toThrow(
+        "Skill bundle must contain SKILL.md at its root.",
+      );
+      expect(await readdir(root)).toEqual([]);
+    });
+
+    const seedDeploy = (root: string) =>
+      writeUserSkillFiles(
+        root,
+        [file("SKILL.md", md("Deploy", "Old")), file("scripts/old.sh", "old", true)],
+        resolve,
       );
 
     it("replaces a skill's whole folder in place", async () => {
-      const { root, admin } = await tmpStore();
-      await seedDeploy(admin);
-      await admin.update(
-        "user:deploy",
-        await folderOf([
-          file("SKILL.md", md("Deploy", "New")),
-          file("scripts/new.sh", "new", true),
-        ]),
+      const root = await tmpRoot();
+      await seedDeploy(root);
+      await replaceUserSkillFiles(
+        root,
+        "Deploy",
+        [file("SKILL.md", md("Deploy", "New")), file("scripts/new.sh", "new", true)],
+        resolve,
       );
       const dir = path.join(root, "deploy");
       expect(await readdir(path.join(dir, "scripts"))).toEqual(["new.sh"]);
@@ -375,29 +416,34 @@ describe("skill store", () => {
       expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toBe(
         `${md("Deploy", "New")}\n<!-- normalized -->\n`,
       );
-      expect(await entries(root)).toEqual(["deploy"]);
+      expect(await readdir(root)).toEqual(["deploy"]);
     });
 
     it("moves the folder when the new SKILL.md renames the skill", async () => {
-      const { root, admin } = await tmpStore();
-      await seedDeploy(admin);
-      await admin.update(
-        "user:deploy",
-        await folderOf([file("SKILL.md", md("Ship")), file("scripts/new.sh", "new")]),
+      const root = await tmpRoot();
+      await seedDeploy(root);
+      await replaceUserSkillFiles(
+        root,
+        "Deploy",
+        [file("SKILL.md", md("Ship")), file("scripts/new.sh", "new")],
+        resolve,
       );
-      expect(await entries(root)).toEqual(["ship"]);
+      expect(await readdir(root)).toEqual(["ship"]);
       expect(await readdir(path.join(root, "ship", "scripts"))).toEqual(["new.sh"]);
     });
 
-    it("refuses a rename onto another skill, leaving both intact", async () => {
-      const { root, admin } = await tmpStore();
-      await seedDeploy(admin);
-      await admin.create(skillMd("Ship", md("Ship", "Theirs")));
-      const error = await admin
-        .update("user:deploy", await folderOf([file("SKILL.md", md("Ship")), file("x.txt", "x")]))
-        .catch((e: unknown) => e);
-      expect(isNameTaken(error)).toBe(true);
-      expect((await entries(root)).sort()).toEqual(["deploy", "ship"]);
+    it("fails with EEXIST when the rename lands on another skill, leaving both intact", async () => {
+      const root = await tmpRoot();
+      await seedDeploy(root);
+      await writeUserSkill(root, { name: "Ship", content: md("Ship", "Theirs") }, "create");
+      const error = await replaceUserSkillFiles(
+        root,
+        "Deploy",
+        [file("SKILL.md", md("Ship")), file("x.txt", "x")],
+        resolve,
+      ).catch((e: unknown) => e);
+      expect(isExists(error)).toBe(true);
+      expect((await readdir(root)).sort()).toEqual(["deploy", "ship"]);
       expect(await readFile(path.join(root, "deploy", "scripts/old.sh"), "utf8")).toBe("old");
       expect(await readFile(path.join(root, "ship", "SKILL.md"), "utf8")).toBe(
         md("Ship", "Theirs"),
@@ -405,20 +451,27 @@ describe("skill store", () => {
     });
 
     it("leaves the saved skill untouched when the new folder is rejected", async () => {
-      const { root, admin } = await tmpStore();
-      await seedDeploy(admin);
+      const root = await tmpRoot();
+      await seedDeploy(root);
       await expect(
-        admin.update(
-          "user:deploy",
-          await folderOf([file("SKILL.md", md("Deploy", "New")), file("../x", "x")]),
+        replaceUserSkillFiles(
+          root,
+          "Deploy",
+          [file("SKILL.md", md("Deploy", "New")), file("../x", "x")],
+          resolve,
         ),
       ).rejects.toThrow("Skill file escapes the skill folder: ../x.");
-      expect(await entries(root)).toEqual(["deploy"]);
+      expect(await readdir(root)).toEqual(["deploy"]);
       expect(await readdir(path.join(root, "deploy", "scripts"))).toEqual(["old.sh"]);
     });
   });
 
   describe("zip bundles", () => {
+    const resolve = async (skillMd: string) => {
+      const name = /^name: (.*)$/m.exec(skillMd)?.[1] ?? "";
+      return { name, content: `${skillMd}\n<!-- normalized -->\n` };
+    };
+
     type ZipEntry = { name: string; content?: string; mode?: number; compress?: boolean };
 
     async function zip(entries: ZipEntry[]): Promise<Buffer> {
@@ -482,34 +535,34 @@ describe("skill store", () => {
       });
 
     it("extracts SKILL.md with its extra files next to it, dropping symlinks", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await zip([
         { name: "SKILL.md", content: md("Deploy") },
         { name: "scripts/run.sh", content: "echo hi" },
         { name: "references/notes.md", content: "n" },
         { name: "link", content: "/etc/passwd", mode: 0o120777 },
       ]);
-      await admin.create(bundleOf(archive));
+      await writeUserSkillBundle(root, archive, resolve);
       const dir = path.join(root, "deploy");
       expect((await readdir(dir)).sort()).toEqual(["SKILL.md", "references", "scripts"]);
       expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toContain("normalized");
       expect(await readFile(path.join(dir, "scripts/run.sh"), "utf8")).toBe("echo hi");
       expect((await listUserSkills(root)).map((s) => s.name)).toEqual(["Deploy"]);
-      expect(await entries(root)).toEqual(["deploy"]);
+      expect(await readdir(root)).toEqual(["deploy"]);
     });
 
     it("accepts a single top-level directory wrapping the skill", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await zip([
         { name: "deploy/SKILL.md", content: md("Deploy") },
         { name: "deploy/x.txt", content: "x" },
       ]);
-      await admin.create(bundleOf(archive));
+      await writeUserSkillBundle(root, archive, resolve);
       expect(await readFile(path.join(root, "deploy", "x.txt"), "utf8")).toBe("x");
     });
 
     it("accepts a Finder-compressed archive, ignoring its __MACOSX sibling", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       // What `ditto -c -k --sequesterRsrc --keepParent` writes for a directory with xattrs.
       const archive = await zip([
         { name: "deploy/" },
@@ -519,40 +572,40 @@ describe("skill store", () => {
         { name: "__MACOSX/deploy/" },
         { name: "__MACOSX/deploy/._run.sh", content: "\u0000\u0005\u0016\u0007" },
       ]);
-      await admin.create(bundleOf(archive));
-      expect(await entries(root)).toEqual(["deploy"]);
+      await writeUserSkillBundle(root, archive, resolve);
+      expect(await readdir(root)).toEqual(["deploy"]);
       const dir = path.join(root, "deploy");
       expect((await readdir(dir)).sort()).toEqual(["SKILL.md", "run.sh"]);
       expect(await readFile(path.join(dir, "run.sh"), "utf8")).toBe("echo hi");
     });
 
     it("rejects bundles without SKILL.md at the root and cleans up", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await zip([
         { name: "a/SKILL.md", content: md("A") },
         { name: "b/SKILL.md", content: md("B") },
       ]);
-      await expect(admin.create(bundleOf(archive))).rejects.toThrow(/SKILL\.md/);
-      expect(await entries(root)).toEqual([]);
+      await expect(writeUserSkillBundle(root, archive, resolve)).rejects.toThrow(/SKILL\.md/);
+      expect(await readdir(root)).toEqual([]);
     });
 
     it("fails with EEXIST on a name clash without touching the existing skill", async () => {
-      const { root, admin } = await tmpStore();
-      await admin.create(skillMd("Deploy", md("Deploy", "Old")));
+      const root = await tmpRoot();
+      await writeUserSkill(root, { name: "Deploy", content: md("Deploy", "Old") }, "create");
       const archive = await zip([
         { name: "SKILL.md", content: md("Deploy") },
         { name: "x.txt", content: "x" },
       ]);
-      const error = await admin.create(bundleOf(archive)).catch((e: unknown) => e);
-      expect(isNameTaken(error)).toBe(true);
+      const error = await writeUserSkillBundle(root, archive, resolve).catch((e: unknown) => e);
+      expect(isExists(error)).toBe(true);
       expect(await readFile(path.join(root, "deploy", "SKILL.md"), "utf8")).toBe(
         md("Deploy", "Old"),
       );
-      expect(await entries(root)).toEqual(["deploy"]);
+      expect(await readdir(root)).toEqual(["deploy"]);
     });
 
     it("caps the bytes it observes, not the size the archive declares", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       // Deflates to a few KB, so only the running counter over the inflated stream catches it.
       // Twice the cap, so the counter trips with megabytes still in flight: at cap + 1 byte the
       // stream ends in the same tick and yauzl's own end-of-entry error can win the race.
@@ -560,21 +613,21 @@ describe("skill store", () => {
         { name: "SKILL.md", content: md("Bomb") },
         { name: "blob.bin", content: "a".repeat(SKILL_BUNDLE_MAX_BYTES * 2) },
       ]);
-      await expect(admin.create(bundleOf(bomb))).rejects.toThrow(/too large/);
-      expect(await entries(root)).toEqual([]);
+      await expect(writeUserSkillBundle(root, bomb, resolve)).rejects.toThrow(/too large/);
+      expect(await readdir(root)).toEqual([]);
 
       // Same bytes, blob.bin alone now claiming to be 1 KB: the inflated stream is cut short,
       // by yauzl's size assertion or by our counter, whichever trips first. Never written.
-      await expect(admin.create(bundleOf(declareSize(bomb, "blob.bin", 1024)))).rejects.toThrow(
-        /too many bytes|too large/,
-      );
-      expect(await entries(root)).toEqual([]);
+      await expect(
+        writeUserSkillBundle(root, declareSize(bomb, "blob.bin", 1024), resolve),
+      ).rejects.toThrow(/too many bytes|too large/);
+      expect(await readdir(root)).toEqual([]);
 
       // 0xffffffff declares more than yauzl will ever assert, so only our own counter stops it.
       await expect(
-        admin.create(bundleOf(declareSize(bomb, "blob.bin", 0xffffffff))),
+        writeUserSkillBundle(root, declareSize(bomb, "blob.bin", 0xffffffff), resolve),
       ).rejects.toThrow(/too large/);
-      expect(await entries(root)).toEqual([]);
+      expect(await readdir(root)).toEqual([]);
 
       // Stored entries get no size assertion from yauzl at all: the counter is the only bound.
       const stored = await zip([
@@ -585,8 +638,8 @@ describe("skill store", () => {
           compress: false,
         },
       ]);
-      await expect(admin.create(bundleOf(stored))).rejects.toThrow(/too large/);
-      expect(await entries(root)).toEqual([]);
+      await expect(writeUserSkillBundle(root, stored, resolve)).rejects.toThrow(/too large/);
+      expect(await readdir(root)).toEqual([]);
 
       // One counter for the whole bundle: two entries under the cap that together exceed it.
       const half = "b".repeat(Math.ceil(SKILL_BUNDLE_MAX_BYTES * 0.6));
@@ -595,12 +648,12 @@ describe("skill store", () => {
         { name: "one.bin", content: half },
         { name: "two.bin", content: half },
       ]);
-      await expect(admin.create(bundleOf(split))).rejects.toThrow(/too large/);
-      expect(await entries(root)).toEqual([]);
+      await expect(writeUserSkillBundle(root, split, resolve)).rejects.toThrow(/too large/);
+      expect(await readdir(root)).toEqual([]);
     });
 
     it("rejects bundles with too many entries", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await zip([
         { name: "SKILL.md", content: md("Many") },
         ...Array.from({ length: SKILL_BUNDLE_MAX_ENTRIES }, (_, i) => ({
@@ -608,21 +661,21 @@ describe("skill store", () => {
           content: "x",
         })),
       ]);
-      await expect(admin.create(bundleOf(archive))).rejects.toThrow(/too many/);
-      expect(await entries(root)).toEqual([]);
+      await expect(writeUserSkillBundle(root, archive, resolve)).rejects.toThrow(/too many/);
+      expect(await readdir(root)).toEqual([]);
     });
 
     it("rejects truncated zip bytes", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await zip([{ name: "SKILL.md", content: md("Cut") }]);
       await expect(
-        admin.create(bundleOf(archive.subarray(0, archive.length - 20))),
+        writeUserSkillBundle(root, archive.subarray(0, archive.length - 20), resolve),
       ).rejects.toThrow();
-      expect(await entries(root)).toEqual([]);
+      expect(await readdir(root)).toEqual([]);
     });
 
     it("rejects entries that escape the bundle root", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       // yazl refuses to author "..", so swap in a same-length placeholder after the fact.
       const archive = await zip([
         { name: "SKILL.md", content: md("Escape") },
@@ -632,44 +685,46 @@ describe("skill store", () => {
         archive.toString("latin1").replaceAll("zz/escape.txt", "../escape.txt"),
         "latin1",
       );
-      await expect(admin.create(bundleOf(traversal))).rejects.toThrow();
-      expect(await entries(root)).toEqual([]);
+      await expect(writeUserSkillBundle(root, traversal, resolve)).rejects.toThrow();
+      expect(await readdir(root)).toEqual([]);
       await expect(stat(path.join(root, "..", "escape.txt"))).rejects.toThrow();
     });
 
     it("reports entries that collide with each other, without leaking the temp path", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await zip([
         { name: "SKILL.md", content: md("Clash") },
         { name: "scripts", content: "not a directory" },
         { name: "scripts/run.sh", content: "echo hi" },
       ]);
-      const error = await admin.create(bundleOf(archive)).catch((e: unknown) => e);
+      const error = await writeUserSkillBundle(root, archive, resolve).catch((e: unknown) => e);
       // Not EEXIST: that signal is reserved for a name clash with an existing skill.
-      expect(isNameTaken(error)).toBe(false);
+      expect(isExists(error)).toBe(false);
       expect((error as Error).message).toMatch(/conflicting entries: scripts\/run\.sh/);
       expect((error as Error).message).not.toContain(root);
-      expect(await entries(root)).toEqual([]);
+      expect(await readdir(root)).toEqual([]);
 
       // An entry named "." resolves onto the bundle directory itself: same treatment.
       const dot = await zip([
         { name: "SKILL.md", content: md("Dot") },
         { name: ".", content: "x" },
       ]);
-      const dotError = await admin.create(bundleOf(dot)).catch((e: unknown) => e);
+      const dotError = await writeUserSkillBundle(root, dot, resolve).catch((e: unknown) => e);
       expect((dotError as Error).message).toMatch(/^Skill bundle /);
       expect((dotError as Error).message).not.toContain(root);
-      expect(await entries(root)).toEqual([]);
+      expect(await readdir(root)).toEqual([]);
     });
 
     it("rejects encrypted entries by name", async () => {
-      const { root, admin } = await tmpStore();
+      const root = await tmpRoot();
       const archive = await zip([
         { name: "SKILL.md", content: md("Secret") },
         { name: "payload.txt", content: "z".repeat(2048) },
       ]);
-      await expect(admin.create(bundleOf(markEncrypted(archive)))).rejects.toThrow(/encryption/);
-      expect(await entries(root)).toEqual([]);
+      await expect(writeUserSkillBundle(root, markEncrypted(archive), resolve)).rejects.toThrow(
+        /encryption/,
+      );
+      expect(await readdir(root)).toEqual([]);
     });
   });
 });

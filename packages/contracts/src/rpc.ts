@@ -61,9 +61,6 @@ import {
   ServerUpdateStatusSchema,
   SkillAvailabilitySchema,
   SkillPlaybookSchema,
-  SkillVersionDetailSchema,
-  SkillVersionIdSchema,
-  SkillVersionSchema,
   SpaceDecisionConfigSchema,
   SpaceMarketplaceSchema,
   SpaceMemoryConfigSchema,
@@ -73,7 +70,6 @@ import {
   TeachRecordingEventSchema,
   ThreadMessagePageSchema,
   ThreadSnapshotSchema,
-  TrashedSkillSchema,
   UpdateAgentSkillInput,
   UpdateBotInput,
   UpdateExternalConversationPolicyInput,
@@ -85,7 +81,7 @@ import {
   VoiceStatusSchema,
 } from "./domain.js";
 import { ProductEventSchema } from "./events.js";
-import { Id, IsoDate, SkillUidSchema } from "./ids.js";
+import { Id, IsoDate } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
   IntegrationSetupStateSchema,
@@ -97,7 +93,12 @@ import {
   LinkPreviewDraftSchema,
 } from "./link-preview.js";
 import { MessageReactionSchema } from "./reactions.js";
-import { RunsListOutputSchema } from "./runs.js";
+import {
+  BotActivityInputSchema,
+  BotActivityOutputSchema,
+  RunRecapSchema,
+  RunsListOutputSchema,
+} from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
 
 const botId = z.object({ botId: Id });
@@ -255,6 +256,7 @@ export const appContract = {
     list: oc.output(z.array(BotSchema)),
     listArchived: oc.output(z.array(BotSchema)),
     get: oc.input(botId).output(BotSchema),
+    activity: oc.input(BotActivityInputSchema).output(BotActivityOutputSchema),
     create: oc.input(CreateBotInput).output(BotSchema),
     duplicate: oc.input(botId).output(BotSchema),
     reorder: oc.input(ReorderBotsInput).output(z.object({ ok: z.literal(true) })),
@@ -583,29 +585,6 @@ export const appContract = {
     import: oc.input(ImportAgentSkillInput).output(AgentSkillSchema),
     update: oc.input(UpdateAgentSkillInput).output(AgentSkillSchema),
     remove: oc.input(z.object({ skillId: Id })).output(z.object({ ok: z.literal(true) })),
-    /** Newest first. Only the skill's owner reads or changes its history; bots have no tool for it. */
-    versions: oc.input(z.object({ skillId: Id })).output(z.array(SkillVersionSchema)),
-    version: oc
-      .input(z.object({ skillId: Id, versionId: SkillVersionIdSchema }))
-      .output(SkillVersionDetailSchema),
-    /** Refused when `expectedVersionId` is no longer the current version. */
-    undo: oc
-      .input(z.object({ skillId: Id, expectedVersionId: SkillVersionIdSchema }))
-      .output(
-        z.discriminatedUnion("kind", [
-          z.object({ kind: z.literal("restored"), skillId: Id, name: z.string() }),
-          z.object({ kind: z.literal("trashed") }),
-        ]),
-      ),
-    deleteVersion: oc
-      .input(z.object({ skillId: Id, versionId: SkillVersionIdSchema }))
-      .output(z.object({ ok: z.literal(true) })),
-    trash: oc.output(z.array(TrashedSkillSchema)),
-    /** `botGone`: the skill was reserved to a bot that no longer exists, so no bot can use it. */
-    restore: oc
-      .input(z.object({ uid: SkillUidSchema }))
-      .output(z.object({ skillId: Id, name: z.string(), botGone: z.boolean() })),
-    purge: oc.input(z.object({ uid: SkillUidSchema })).output(z.object({ ok: z.literal(true) })),
     /**
      * One write path for the global state and the per-bot overrides, applied together so
      * `all → selected` can seed the include list in the same transaction.
@@ -898,6 +877,7 @@ export const appContract = {
   },
   runs: {
     list: oc.input(z.object({ filter: z.enum(["active", "recent"]) })).output(RunsListOutputSchema),
+    recap: oc.input(z.object({ runId: Id })).output(RunRecapSchema),
   },
   voice: {
     catalog: oc.output(z.array(VoiceCatalogEntrySchema)),

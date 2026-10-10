@@ -1,5 +1,5 @@
-import { expect, type Locator, type Page, type Route, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, type Locator, type Page, type Route, test } from "./test";
 
 /** Submit from the Send control so an in-flight prior send cannot swallow Enter. */
 async function sendComposerMessage(page: Page, composer: Locator, text: string) {
@@ -139,8 +139,11 @@ test("message hover shows a floating action pill; reply links to parent", async 
   const userBubble = parentRow.getByTestId("message-user-bubble");
   const userActions = parentRow.getByTestId("message-user-actions");
   await expect(userActions).toHaveCSS("opacity", "0");
-  await parentRow.hover();
-  await expect(userActions).toHaveCSS("opacity", "1");
+  // The bot's reply can land and shift the row out from under the pointer, so hover again.
+  await expect(async () => {
+    await parentRow.hover();
+    await expect(userActions).toHaveCSS("opacity", "1", { timeout: 2_000 });
+  }).toPass();
 
   // Bare icons float below the bubble, end-aligned with it.
   await expect
@@ -179,15 +182,19 @@ test("message hover shows a floating action pill; reply links to parent", async 
   await captureScreenshot(page, testInfo, "message-user-bubble-desktop");
 
   // The row's own invisible frame (the pill's touch/anchor area) still runs
-  // the column's full width — the visible bot bubble inside it is narrower
-  // (fit-content, capped at 82%/88%) and never widens to hug the pill.
+  // the column's full width (inside the transcript's padding) — the visible
+  // bot bubble inside it is narrower (fit-content, capped at 82%/88%) and
+  // never widens to hug the pill.
   const botFrame = botRow.getByTestId("message-bubble-frame");
   await expect
     .poll(async () => {
       const frameBox = await botFrame.boundingBox();
-      const transcriptBox = await transcript.boundingBox();
-      if (!frameBox || !transcriptBox) return null;
-      return transcriptBox.width - frameBox.width;
+      const columnWidth = await transcript.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      });
+      if (!frameBox) return null;
+      return Math.abs(columnWidth - frameBox.width);
     })
     .toBeLessThan(4);
 

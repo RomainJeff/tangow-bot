@@ -8,7 +8,6 @@ import {
   RunFailureKind,
   RunStatus,
   SandboxKind,
-  SkillUidSchema,
 } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
 
@@ -528,8 +527,6 @@ export type SkillAvailability = z.infer<typeof SkillAvailabilitySchema>;
 
 export const AgentSkillSchema = z.object({
   id: Id,
-  /** A user skill's stable id: it survives a rename. Absent for built-in and plugin skills. */
-  uid: SkillUidSchema.optional(),
   name: z.string(),
   description: z.string(),
   content: z.string(),
@@ -542,7 +539,6 @@ export type AgentSkill = z.infer<typeof AgentSkillSchema>;
 
 export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
   id: true,
-  uid: true,
   name: true,
   description: true,
   source: true,
@@ -554,37 +550,6 @@ export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
   visibleBotIds: z.array(Id),
 });
 export type AgentSkillCatalogEntry = z.infer<typeof AgentSkillCatalogEntrySchema>;
-
-export const SKILL_VERSION_ID_PATTERN = /^v\d{6}-[0-9a-f]{8}$/;
-export const SkillVersionIdSchema = z.string().regex(SKILL_VERSION_ID_PATTERN);
-
-export const SkillVersionSchema = z.object({
-  versionId: SkillVersionIdSchema,
-  createdAt: z.string(),
-  author: z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("bot"), botId: Id, botName: z.string() }),
-    z.object({ kind: z.literal("user") }),
-    z.object({ kind: z.literal("unknown") }),
-  ]),
-  nature: z.enum(["created", "modified", "unknown"]),
-  current: z.boolean(),
-  /** Undone versions stay readable for 30 days, but cannot come back. */
-  undone: z.boolean(),
-});
-export type SkillVersion = z.infer<typeof SkillVersionSchema>;
-
-export const SkillVersionDetailSchema = SkillVersionSchema.extend({
-  content: z.string(),
-  files: z.array(z.object({ path: z.string(), size: z.number().int() })),
-});
-export type SkillVersionDetail = z.infer<typeof SkillVersionDetailSchema>;
-
-export const TrashedSkillSchema = z.object({
-  uid: SkillUidSchema,
-  name: z.string(),
-  trashedAt: z.string(),
-});
-export type TrashedSkill = z.infer<typeof TrashedSkillSchema>;
 
 /** Agent Skills spec bound; every description sits in the prompt catalog on each turn. */
 export const SKILL_DESCRIPTION_MAX_CHARS = 1024;

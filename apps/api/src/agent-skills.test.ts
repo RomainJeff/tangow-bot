@@ -1,12 +1,12 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SkillUid } from "@rakazo/adapters";
 import {
   createInMemorySkillLock,
-  createSkillLibrary,
   listUserSkills,
   marketplacesRoot,
+  type SkillOwnerLock,
+  skillCreateFromTool,
   userSkillsRoot,
 } from "@rakazo/adapters";
 import { buildSkillMd } from "@rakazo/core";
@@ -62,7 +62,8 @@ function table(store: Row[]) {
   };
 }
 
-const actor = { spaceId: "ws-1", userId: "user-1" } as never;
+const owner = { spaceId: "ws-1", userId: "user-1" };
+const actor = owner as never;
 
 describe("agent skills service (filesystem)", () => {
   let dataDir: string;
@@ -93,8 +94,89 @@ describe("agent skills service (filesystem)", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  const service = () =>
-    createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, createInMemorySkillLock());
+  const service = (lock: SkillOwnerLock = createInMemorySkillLock()) =>
+    createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, lock);
+  const userSkills = async (skills: ReturnType<typeof service>) =>
+    (await skills.list(actor))
+      .filter((skill) => skill.source === "user")
+      .map((skill) => [skill.name, skill.description, skill.availability, skill.visibleBotIds]);
+
+  it("waits for the owner's earlier skill write before any write of its own", async () => {
+    const lock = createInMemorySkillLock();
+    const skills = service(lock);
+    const kept = await skills.create(actor, { name: "Kept", description: "K" });
+    const gone = await skills.create(actor, { name: "Gone", description: "G" });
+    let release = () => {};
+    const held = lock.run(
+      owner,
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const imported = buildSkillMd({ name: "Imported", description: "I", body: "Body" });
+    const writes = Promise.all([
+      skills.create(actor, { name: "New", description: "N" }),
+      skills.import(actor, { data: Buffer.from(imported).toString("base64") }),
+      skills.update(actor, { skillId: kept.id, description: "Better" }),
+      skills.setAccess(actor, { skillId: kept.id, availability: "disabled" }),
+      skills.remove(actor, gone.id),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await userSkills(skills)).toEqual([
+      ["Gone", "G", "all", ["bot-1", "bot-2"]],
+      ["Kept", "K", "all", ["bot-1", "bot-2"]],
+    ]);
+
+    release();
+    await held;
+    await writes;
+    expect(await userSkills(skills)).toEqual([
+      ["Imported", "I", "all", ["bot-1", "bot-2"]],
+      ["Kept", "Better", "disabled", []],
+      ["New", "N", "all", ["bot-1", "bot-2"]],
+    ]);
+  });
+
+  it("renames a skill onto a name a bot is creating only once that create is done", async () => {
+    const lock = createInMemorySkillLock();
+    const skills = service(lock);
+    const old = await skills.create(actor, { name: "Old", description: "O" });
+    await skills.setAccess(actor, {
+      skillId: old.id,
+      availability: "selected",
+      bots: [{ botId: "bot-2", enabled: true }],
+    });
+    let release = () => {};
+    const upsert = prisma.skillSetting.upsert.getMockImplementation();
+    const rowsLanding = new Promise<void>((entered) => {
+      prisma.skillSetting.upsert.mockImplementationOnce(async (args) => {
+        entered();
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return upsert?.(args);
+      });
+    });
+
+    const created = skillCreateFromTool(
+      { prisma: prisma as unknown as PrismaClient, dataDir, lock },
+      { ...owner, botId: "bot-1" },
+      [],
+      { name: "Deploy", description: "D", body: "x" },
+    );
+    await rowsLanding;
+    const renamed = skills.update(actor, { skillId: old.id, name: "Deploy" }).catch((e) => e);
+    await Promise.race([renamed, new Promise((resolve) => setTimeout(resolve, 100))]);
+    release();
+
+    expect(await created).toMatchObject({ ok: true });
+    expect(await renamed).toMatchObject({ code: "CONFLICT" });
+    expect(await userSkills(skills)).toEqual([
+      ["Deploy", "D", "selected", ["bot-1"]],
+      ["Old", "O", "selected", ["bot-2"]],
+    ]);
+  });
 
   it("creates, lists, renames (cascading access rows) and removes a skill", async () => {
     const skills = service();
@@ -138,298 +220,6 @@ describe("agent skills service (filesystem)", () => {
     expect(await listUserSkills(userSkillsRoot(dataDir, actor))).toEqual([]);
     expect(prisma.skillSetting._store).toEqual([]);
     expect(prisma.botSkill._store).toEqual([]);
-
-    // Removed, not gone: the skill waits in the trash with its access, ready to come back.
-    const admin = createSkillLibrary({
-      prisma: prisma as unknown as PrismaClient,
-      dataDir,
-      lock: createInMemorySkillLock(),
-    }).forOwner(actor);
-    const [trashed] = await admin.trash();
-    expect(trashed?.name).toBe("Standup");
-    await admin.restore(trashed?.uid as SkillUid);
-    expect((await skills.list(actor)).find((s) => s.id === "user:standup")).toMatchObject({
-      description: "Better",
-      availability: "selected",
-      visibleBotIds: ["bot-1"],
-    });
-  });
-
-  it("never loses an access change made while a rename moves the rows", async () => {
-    const lock = createInMemorySkillLock();
-    const skills = createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, lock);
-    const created = await skills.create(actor, {
-      content: buildSkillMd({ name: "Daily Standup", description: "Notes", body: "Steps" }),
-    });
-    const rename = createSkillLibrary({
-      prisma: prisma as unknown as PrismaClient,
-      dataDir,
-      lock,
-    })
-      .forOwner(actor)
-      .update(created.id, {
-        kind: "skill-md",
-        name: "Standup",
-        content: buildSkillMd({ name: "Standup", description: "Notes", body: "Steps" }),
-      });
-    const findBots = prisma.bot.findMany.getMockImplementation();
-    prisma.bot.findMany.mockImplementationOnce(async (args) => {
-      await rename.catch(() => undefined);
-      return findBots?.(args);
-    });
-    const narrowed = await skills
-      .setAccess(actor, {
-        skillId: created.id,
-        availability: "selected",
-        bots: [{ botId: "bot-1", enabled: true }],
-      })
-      .then(
-        () => "applied",
-        (error: unknown) => (error instanceof IsolationError ? "gone" : error),
-      );
-    await rename;
-
-    const rows = prisma.skillSetting._store.map((row) => [row.skillKey, row.availability]);
-    expect({ narrowed, rows }).toEqual({ narrowed: "gone", rows: [] });
-  });
-
-  describe("history", () => {
-    const stranger = { spaceId: "ws-2", userId: "user-2" } as never;
-    const body = (text: string) =>
-      buildSkillMd({ name: "Standup", description: "Notes", body: text });
-
-    it("lists versions newest first, reads one, undoes it and keeps the undone one readable", async () => {
-      const skills = service();
-      const created = await skills.create(actor, { content: body("One") });
-      await skills.update(actor, { skillId: created.id, content: body("Two") });
-
-      const [second, first] = await skills.versions(actor, { skillId: created.id });
-      expect([second, first]).toEqual([
-        expect.objectContaining({
-          author: { kind: "user" },
-          nature: "modified",
-          current: true,
-          undone: false,
-        }),
-        expect.objectContaining({
-          author: { kind: "user" },
-          nature: "created",
-          current: false,
-          undone: false,
-        }),
-      ]);
-      const detail = await skills.version(actor, {
-        skillId: created.id,
-        versionId: first?.versionId as string,
-      });
-      expect(detail.content).toContain("One");
-      expect(detail.files).toEqual([{ path: "SKILL.md", size: Buffer.byteLength(detail.content) }]);
-
-      expect(
-        await skills.undo(actor, {
-          skillId: created.id,
-          expectedVersionId: second?.versionId as string,
-        }),
-      ).toEqual({ kind: "restored", skillId: "user:standup", name: "Standup" });
-      expect((await skills.get(actor, { skillId: created.id })).content).toContain("One");
-      expect(
-        (await skills.versions(actor, { skillId: created.id })).map((v) => [v.current, v.undone]),
-      ).toEqual([
-        [false, true],
-        [true, false],
-      ]);
-    });
-
-    it("lists no version for a skill that has no history yet, and none for an unknown one", async () => {
-      const skills = service();
-      const folder = path.join(userSkillsRoot(dataDir, actor), "standup");
-      await mkdir(folder, { recursive: true });
-      await writeFile(path.join(folder, "SKILL.md"), body("Written before the history"));
-
-      expect(await skills.versions(actor, { skillId: "user:standup" })).toEqual([]);
-      await expect(skills.versions(actor, { skillId: "user:unknown" })).rejects.toBeInstanceOf(
-        IsolationError,
-      );
-    });
-
-    it("gives a user skill a uid that survives a rename, and none to a built-in", async () => {
-      const skills = service();
-      const created = await skills.create(actor, { content: body("One") });
-      await skills.update(actor, {
-        skillId: created.id,
-        content: buildSkillMd({ name: "Daily", description: "Notes", body: "One" }),
-      });
-      const entries = await skills.list(actor);
-      const daily = entries.find((entry) => entry.id === "user:daily");
-      const fetched = await skills.get(actor, { skillId: "user:daily" });
-      await skills.remove(actor, "user:daily");
-      const [trashed] = await skills.trash(actor);
-
-      expect({
-        created: created.uid,
-        listed: daily?.uid,
-        fetched: fetched.uid,
-        builtin: entries.find((entry) => entry.id === "builtin:Routines")?.uid,
-      }).toEqual({
-        created: trashed?.uid,
-        listed: trashed?.uid,
-        fetched: trashed?.uid,
-        builtin: undefined,
-      });
-      expect(trashed?.uid).toMatch(/^[0-9a-f]{32}$/);
-    });
-
-    it("refuses an undo whose expected version is no longer current", async () => {
-      const skills = service();
-      const created = await skills.create(actor, { content: body("One") });
-      await skills.update(actor, { skillId: created.id, content: body("Two") });
-      const [, first] = await skills.versions(actor, { skillId: created.id });
-
-      await expect(
-        skills.undo(actor, { skillId: created.id, expectedVersionId: first?.versionId as string }),
-      ).rejects.toMatchObject({
-        code: "CONFLICT",
-        message: "This skill changed. Reload and try again.",
-      });
-      expect((await skills.get(actor, { skillId: created.id })).content).toContain("Two");
-    });
-
-    it("answers service unavailable when the skill folder cannot be used", async () => {
-      const broken = createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, {
-        run: async () => {
-          throw Object.assign(new Error("EACCES: permission denied"), { syscall: "mkdir" });
-        },
-      });
-
-      const skills = service();
-      const created = await skills.create(actor, { content: body("One") });
-      const [current] = await skills.versions(actor, { skillId: created.id });
-      const gone = await skills.create(actor, {
-        content: buildSkillMd({ name: "Retro", description: "Notes", body: "Two" }),
-      });
-      await skills.remove(actor, gone.id);
-      const [trashed] = await skills.trash(actor);
-      const skillId = created.id;
-      const versionId = current?.versionId as string;
-      const uid = trashed?.uid as string;
-
-      for (const call of [
-        () =>
-          broken.create(actor, {
-            content: buildSkillMd({ name: "Planning", description: "Notes", body: "One" }),
-          }),
-        () => broken.versions(actor, { skillId }),
-        () => broken.version(actor, { skillId, versionId }),
-        () => broken.undo(actor, { skillId, expectedVersionId: versionId }),
-        () => broken.deleteVersion(actor, { skillId, versionId }),
-        () => broken.trash(actor),
-        () => broken.restore(actor, { uid }),
-        () => broken.purge(actor, { uid }),
-      ]) {
-        await expect(call()).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
-      }
-    });
-
-    it("deletes an old version but never the current one", async () => {
-      const skills = service();
-      const created = await skills.create(actor, { content: body("One") });
-      await skills.update(actor, { skillId: created.id, content: body("Two") });
-      const [second, first] = await skills.versions(actor, { skillId: created.id });
-
-      await expect(
-        skills.deleteVersion(actor, {
-          skillId: created.id,
-          versionId: second?.versionId as string,
-        }),
-      ).rejects.toMatchObject({
-        code: "BAD_REQUEST",
-        message: "The current version cannot be deleted.",
-      });
-      expect(
-        await skills.deleteVersion(actor, {
-          skillId: created.id,
-          versionId: first?.versionId as string,
-        }),
-      ).toEqual({ ok: true });
-      expect((await skills.versions(actor, { skillId: created.id })).length).toBe(1);
-    });
-
-    it("trashes, restores and purges, refusing a restore onto a name taken since", async () => {
-      const skills = service();
-      const created = await skills.create(actor, { content: body("One") });
-      await skills.remove(actor, created.id);
-      const [trashed] = await skills.trash(actor);
-      expect(trashed).toMatchObject({ name: "Standup" });
-
-      await skills.create(actor, { content: body("Other") });
-      await expect(skills.restore(actor, { uid: trashed?.uid as string })).rejects.toMatchObject({
-        code: "CONFLICT",
-      });
-      expect(await skills.trash(actor)).toHaveLength(1);
-
-      await skills.remove(actor, created.id);
-      expect(await skills.trash(actor)).toHaveLength(2);
-      const [older] = (await skills.trash(actor)).filter((t) => t.uid === trashed?.uid);
-      expect(await skills.purge(actor, { uid: older?.uid as string })).toEqual({ ok: true });
-      expect((await skills.trash(actor)).map((t) => t.uid)).not.toContain(trashed?.uid);
-    });
-
-    it("restores a skill reserved to a bot that is gone and says no bot can use it", async () => {
-      const skills = service();
-      const lock = createInMemorySkillLock();
-      const library = createSkillLibrary({
-        prisma: prisma as unknown as PrismaClient,
-        dataDir,
-        lock,
-      });
-      const botSkills = createAgentSkillsService(prisma as unknown as PrismaClient, dataDir, lock);
-      await library
-        .forBot(actor, {
-          botId: "bot-1",
-          botName: "Ada",
-          runId: "run-1",
-          toolCallId: "call-1",
-          secrets: [],
-        })
-        .create({ kind: "skill-md", name: "Standup", content: body("One") });
-      await botSkills.remove(actor, "user:standup");
-
-      prisma.bot.findMany.mockResolvedValue([]);
-      const [trashed] = await skills.trash(actor);
-      expect(await botSkills.restore(actor, { uid: trashed?.uid as string })).toEqual({
-        skillId: "user:standup",
-        name: "Standup",
-        botGone: true,
-      });
-    });
-
-    it("answers another owner's skill, version and trash ids as unknown", async () => {
-      const skills = service();
-      const created = await skills.create(actor, { content: body("One") });
-      await skills.update(actor, { skillId: created.id, content: body("Two") });
-      const [second, first] = await skills.versions(actor, { skillId: created.id });
-      await skills.create(actor, { name: "Gone", description: "G" });
-      await skills.remove(actor, "user:gone");
-      const [trashed] = await skills.trash(actor);
-
-      const attempts = [
-        skills.versions(stranger, { skillId: created.id }),
-        skills.version(stranger, { skillId: created.id, versionId: first?.versionId as string }),
-        skills.undo(stranger, {
-          skillId: created.id,
-          expectedVersionId: second?.versionId as string,
-        }),
-        skills.deleteVersion(stranger, {
-          skillId: created.id,
-          versionId: first?.versionId as string,
-        }),
-        skills.restore(stranger, { uid: trashed?.uid as string }),
-        skills.purge(stranger, { uid: trashed?.uid as string }),
-      ];
-      for (const attempt of attempts) await expect(attempt).rejects.toBeInstanceOf(IsolationError);
-      expect(await skills.trash(stranger)).toEqual([]);
-      expect(await skills.trash(actor)).toHaveLength(1);
-    });
   });
 
   it("rejects duplicate names with CONFLICT and unknown ids with IsolationError", async () => {

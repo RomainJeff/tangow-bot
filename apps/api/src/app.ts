@@ -31,7 +31,6 @@ import {
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
-  createSkillLibrary,
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
@@ -58,15 +57,14 @@ import {
   PostgresRealtimeFanout,
   pipedreamConfigFromEnv,
   piSessionsRoot,
-  purgeUserSkills,
   pushTokenPath,
   reconcileComputerUpdates,
   removePiUserSessions,
+  removeUserSkillDirs,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
-  scheduleSkillLibraryRepair,
   toTeamChatInbound,
 } from "@rakazo/adapters";
 import { blockedAuthPaths, createAuth } from "@rakazo/auth";
@@ -345,7 +343,7 @@ export async function createApp(
       await Promise.all(
         bots.map((bot) =>
           destroyBot(
-            { prisma, sandbox, home, jobs, artifacts, dataDir: env.dataDir },
+            { prisma, sandbox, home, jobs, events, artifacts, dataDir: env.dataDir },
             bot,
             {
               operationId: `account-delete:${userId}`,
@@ -361,7 +359,7 @@ export async function createApp(
       );
       await removePiUserSessions(env.dataDir, userId);
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
-      await purgeUserSkills(env.dataDir, userId);
+      await removeUserSkillDirs(env.dataDir, userId);
     },
   });
   const shutdown = new AbortController();
@@ -371,11 +369,6 @@ export async function createApp(
     applicationName: "rakazo-api-skill-lock",
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
-  const stopSkillSweep = scheduleSkillLibraryRepair({
-    prisma,
-    dataDir: env.dataDir,
-    lock: skillLock,
-  });
   const executor = createRunExecutor({
     prisma,
     skillLock,
@@ -440,7 +433,6 @@ export async function createApp(
         purgeLinkPreviews: createLinkPreviewPurge({ prisma, artifacts }),
         sweepSkillLines: createSkillLineSweep({
           prisma,
-          library: createSkillLibrary({ prisma, dataDir: env.dataDir, lock: skillLock }),
           events,
           lineOnlyMessages: env.skillLearning !== "off",
         }),
@@ -857,7 +849,6 @@ export async function createApp(
       // Abort in-flight continueRun boot waits before draining jobs so stop() cannot sit
       // on waitForComputerReady for the full boot-wait window during shared Postgres journeys.
       shutdown.abort();
-      stopSkillSweep();
       oauthLogins.abortAll();
       messagingStopped = true;
       clearMessagingRetryDelay?.();

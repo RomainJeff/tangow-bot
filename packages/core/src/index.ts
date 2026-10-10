@@ -1,4 +1,5 @@
 export * from "./action-approval.js";
+export * from "./activity-rows.js";
 export * from "./agent-skill.js";
 export * from "./ai-consent.js";
 export * from "./answer-order.js";
@@ -54,7 +55,6 @@ export * from "./signup-policy.js";
 export * from "./skill-access.js";
 export * from "./skill-learning.js";
 export * from "./skill-source.js";
-export * from "./skill-versions.js";
 export * from "./spawn-bot.js";
 export * from "./speech-text.js";
 export * from "./teach-playbook.js";

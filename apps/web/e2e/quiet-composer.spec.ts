@@ -1,4 +1,3 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
   captureScreenshot,
   completeOnboarding,
@@ -7,6 +6,7 @@ import {
   openUserSettings,
   signup,
 } from "./helpers";
+import { expect, type Locator, type Page, test } from "./test";
 
 async function setupGroupComposer(page: Page) {
   const stamp = Date.now();

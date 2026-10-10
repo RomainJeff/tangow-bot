@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("onboarding skips model connect when a default model is already available", async ({
   page,

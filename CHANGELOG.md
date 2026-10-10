@@ -10,21 +10,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **A line under a bot's message shows when it learns, improves or removes a skill, on web, desktop and iPhone.** It reads "Skill learned", "Skill updated" or "Skill deleted" with the skill's name and opens that skill, even after it was renamed, or the skills list when it no longer exists. On web and desktop the skill opens in the bot's Knowledge tab, and a group conversation names it without a link; on iPhone it opens on its own screen.
-- **A skill now keeps its history, and a deleted skill can come back, on web, desktop and iPhone.** Once a bot has changed a skill, its page lists the versions with who wrote them, lets you read one, and "Undo" goes back one version; a skill you delete, or whose creation you undo, waits 30 days in "Recently deleted" at the bottom of the skills list, where "Undo" restores it and "Delete now" erases it, and a "Skill deleted" line in a conversation opens that list.
-- **Bots now keep and improve their methods as skills.** After a long task, or when a step fails while following one of your skills, a bot saves or fixes the method on its own instead of redoing the work from scratch next time. It is off by default; a server admin turns it on with `SKILL_LEARNING` (see [Learned skills](docs/self-host.md#learned-skills)).
-
-#### Changed
-
-- A bot now saves or changes a skill only in an exchange you started, in a routine you set up or through its own sub-bot, never after a webhook, a message from another bot or an outside messaging channel.
-- A bot can no longer rename a skill, on web, desktop and iPhone.
-- On web and desktop, a skill in a bot's Knowledge tab now opens in the wider panel of its page, like a routine, instead of inside the list.
+- **A bot's page now has an Activity tab on web and desktop.** It lists the runs of the bot's routines, the routines it was given and its own creation, newest first, with each failed run's reason, a recap that opens in place and "Open in chat" to land on the run's message. The bot's name in the header opens it, and so do the gear and "Bot settings" while the bot has no instructions, with "Write its first instructions" under its creation.
 
 #### Fixed
 
 - Notifications on iPhone, web and desktop now show a bot's message as plain words, cut on a whole word, instead of its raw formatting symbols such as asterisks, hashes and bracketed links.
 - The conversation list on web and desktop now previews the last message as plain words, as on iPhone, instead of its raw formatting symbols.
 - On iPhone, conversation previews keep file names, code and addresses as written instead of mangling them.
+- On iPhone, a bot message made only of a list now reads at full width instead of shrinking to a narrow strip with one letter per line and empty items.
+- Your own skills show up again in the composer `/` picker on web, desktop and mobile instead of being crowded out by built-in skills.
+- On web and desktop, a skill you create, edit or delete is reflected in the composer `/` picker right away instead of after a reload.
+- On web and desktop, creating an account goes straight to onboarding instead of flashing the sign-in page first.
+- On web and desktop, asking for a password reset right after the page opens no longer claims recovery is not configured.
+- On web and desktop, the composer's text field keeps its width while you type and sits centred on its buttons.
+- Number columns in a bot's tables now line up at the end of the cell in right-to-left languages too.
+- On web and desktop, an open bot screen reconnects to the computer when the bot finishes a task instead of staying on a released screen.
 
 ### 2026-10-09
 

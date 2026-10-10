@@ -14,6 +14,8 @@ required secrets, and startup commands.
 | `pnpm test` | Default. Units, properties, and in-process contracts. Scripted runtime, fake sandbox, in-memory wakeup — no live connector or model-provider calls. |
 | `pnpm test:integration` | Postgres via Testcontainers: product journeys, authorization, executor lifecycle, Graphile / LISTEN/NOTIFY. Needs Docker. |
 | `pnpm test:e2e` | Playwright against the emulated API. Needs Docker. |
+| `pnpm test:e2e:affected` | Only the e2e specs the branch reaches, or the full suite when shared plumbing changed. `--dry-run` prints the selection. Needs Docker. |
+| `pnpm test:e2e:impact-map` | Full serial e2e run that rerecords `apps/web/e2e/impact-map.json` for the selector. Needs Docker. |
 | `pnpm test:topology` | Local product-path smoke: Docker computer + Graphile worker recovery. Needs Docker. Not PR CI. |
 | `pnpm test:canary` | Live provider canaries. Needs keys. Not PR CI. |
 | `pnpm test:pi` | Real Pi against a local HTTP model fixture: streaming, tool round trips, failures and cancellation. No keys. |

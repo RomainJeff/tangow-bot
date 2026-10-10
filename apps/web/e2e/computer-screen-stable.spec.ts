@@ -1,5 +1,4 @@
 import type { Locator, Page } from "@playwright/test";
-import { expect, test } from "@playwright/test";
 import type { ComputerStatus } from "@rakazo/contracts";
 import { computerScreenKey } from "@rakazo/core";
 import {
@@ -11,10 +10,13 @@ import {
   rpc,
   signup,
 } from "./helpers";
+import { expect, test } from "./test";
 
 // Starting a run reprovisions the computer, which revokes earlier screen URLs, so the
 // baseline is taken once the run is working and the screen has settled.
-test("the bot screen keeps its connection until the bot's run ends", async ({ page }, testInfo) => {
+test("the bot screen reconnects when the bot's run ends, then holds", async ({
+  page,
+}, testInfo) => {
   await signup(page, `screen-stable-${Date.now()}@rakazo.test`, "password12", "Screen Stable");
   await completeOnboarding(page);
   const botId = activeBotId(page);
@@ -92,11 +94,22 @@ test("the bot screen keeps its connection until the bot's run ends", async ({ pa
   // The end-of-run thread refresh and computer status events land after the run reads idle.
   await page.waitForTimeout(QUIET_WINDOW_MS);
 
-  expect(computerScreenKey(await computerStatus(page, botId))).toBe(keyBeforeEnd);
-  expect(screenReads).toBe(readsBeforeEnd);
-  expect(screenLoads).toBe(loadsBeforeEnd);
-  await expect(frame).toHaveAttribute("src", src ?? "");
-  expect(await screenMark(frame)).toBe("kept");
+  // Ending the run releases the screen slot, so the screen reconnects to a fresh URL.
+  expect(computerScreenKey(await computerStatus(page, botId))).not.toBe(keyBeforeEnd);
+  await expect(frame).not.toHaveAttribute("src", src ?? "");
+  await expect(frame).toHaveAttribute("src", /^https:\/\/screen\.example\/vnc\.html\?read=\d+$/);
+  expect(screenReads).toBeGreaterThan(readsBeforeEnd);
+  expect(screenLoads).toBeGreaterThan(loadsBeforeEnd);
+  expect(await screenMark(frame)).not.toBe("kept");
+  // ...and then holds that connection.
+  await settle(() => rpcCalls);
+  const readsAfterReconnect = screenReads;
+  const loadsAfterReconnect = screenLoads;
+  const srcAfterReconnect = await frame.getAttribute("src");
+  const keyAfterReconnect = computerScreenKey(await computerStatus(page, botId));
+  await page.waitForTimeout(QUIET_WINDOW_MS);
+  expect(screenReads).toBe(readsAfterReconnect);
+  expect(screenLoads).toBe(loadsAfterReconnect);
   await captureScreenshot(page, testInfo, "computer-screen-stable-after-run");
 
   const panelToggle = page.getByTestId("open-computer-panel");
@@ -108,11 +121,11 @@ test("the bot screen keeps its connection until the bot's run ends", async ({ pa
   await sidebar.locator(`[data-roster-bot-id="${botId}"]`).click();
   await expect(page).toHaveURL(new RegExp(`/app/${botId}$`));
   await panelToggle.click();
-  await expect(frame).toHaveAttribute("src", src ?? "");
+  await expect(frame).toHaveAttribute("src", srcAfterReconnect ?? "");
   await markScreen(frame);
   const loadsAfterReturn = screenLoads;
   await page.waitForTimeout(QUIET_WINDOW_MS);
-  expect(computerScreenKey(await computerStatus(page, botId))).toBe(keyBeforeEnd);
+  expect(computerScreenKey(await computerStatus(page, botId))).toBe(keyAfterReconnect);
   expect(screenReadsByBot.get(botId)).toBe(readsOfBotBeforeLeaving);
   expect(screenLoads).toBe(loadsAfterReturn);
   expect(await screenMark(frame)).toBe("kept");

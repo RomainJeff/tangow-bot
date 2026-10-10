@@ -355,7 +355,6 @@ import {
 } from "./scratchpad-tools.js";
 import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
-import { createSkillLibrary } from "./skill-library.js";
 import { writeSkillLines } from "./skill-lines.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
 import type { SkillNudgeDecision } from "./skill-nudge.js";
@@ -1052,14 +1051,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
   const learning = deps.skillLearning ?? "off";
-  const skillDeps = { prisma: deps.prisma, dataDir: deps.dataDir ?? "./data", learning };
-  const skillLibrary = createSkillLibrary({ ...skillDeps, lock: deps.skillLock });
+  const skillDeps = {
+    prisma: deps.prisma,
+    dataDir: deps.dataDir ?? "./data",
+    learning,
+    lock: deps.skillLock,
+  };
   // Never fatal: the run already ended, and the sweep adds a line that failed here.
   const writeRunSkillLines = (runId: string) =>
     writeSkillLines(
       {
         prisma: deps.prisma,
-        library: skillLibrary,
         events: deps.events,
         lineOnlyMessages: learning !== "off",
       },
@@ -2095,7 +2097,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const runSkillTool = async (
           name: string,
           args: Record<string, unknown>,
-          toolCallId: string,
           files?: SkillTreeFile[],
           fromNudge = false,
         ): Promise<Record<string, unknown>> => {
@@ -2113,15 +2114,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "skill_search") {
             return skillSearchFromTool(skillDeps, skillOwner, { query: text("query") });
           }
-          const writer = skillLibrary.forBot(skillOwner, {
-            botId: bot.id,
-            botName: bot.name,
-            runId,
-            toolCallId,
-            secrets: runSecrets,
-          });
           if (name === "skill_create") {
-            return skillCreateFromTool(skillDeps, skillOwner, writer, {
+            return skillCreateFromTool(skillDeps, skillOwner, runSecrets, {
               files,
               name: text("name"),
               description: text("description"),
@@ -2132,7 +2126,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "skill_update") {
             const given = (key: string) =>
               args[key] !== undefined ? String(args[key]) : undefined;
-            return skillUpdateFromTool(skillDeps, skillOwner, writer, {
+            return skillUpdateFromTool(skillDeps, skillOwner, runSecrets, {
               files,
               name: text("name"),
               skillId: text("skillId"),
@@ -2141,7 +2135,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               content: text("content"),
             });
           }
-          return skillDeleteFromTool(skillDeps, skillOwner, writer, {
+          return skillDeleteFromTool(skillDeps, skillOwner, {
             name: text("name"),
             skillId: text("skillId"),
           });
@@ -3392,7 +3386,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   )
                 : undefined;
             if (files && "error" in files) return finish(files);
-            const result = await runSkillTool(name, args, effectKey, files);
+            const result = await runSkillTool(name, args, files);
             if (name === "skill_read" || name === "skill_search") return result;
             if ("ok" in result) savedSkill = true;
             return finish(result);
@@ -5053,7 +5047,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 callTool: async (name, args, toolCallId) => {
                   const safeArgs = redactBotToolArgs(name, args, runSecrets);
                   if (name !== "skill_create" && name !== "skill_update") {
-                    return runSkillTool(name, safeArgs, toolCallId, undefined, true);
+                    return runSkillTool(name, safeArgs, undefined, true);
                   }
                   // The effect row is what the line sweep looks for if the worker dies mid-turn.
                   const effect = await deps.prisma.externalEffect.create({
@@ -5066,7 +5060,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       request: safeArgs as never,
                     },
                   });
-                  const result = await runSkillTool(name, safeArgs, toolCallId, undefined, true);
+                  const result = await runSkillTool(name, safeArgs, undefined, true);
                   await completeEffect(deps, effect.id, "intended", result);
                   return result;
                 },

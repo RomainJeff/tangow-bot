@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { activeBotId, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 type CatalogEntry = { id: string; name: string; availability: string; visibleBotIds: string[] };
 

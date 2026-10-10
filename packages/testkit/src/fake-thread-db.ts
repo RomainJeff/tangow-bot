@@ -60,6 +60,9 @@ export interface FakeThreadDb {
     linkPreviewRead: Map<string, Row>;
     chatGroupMembers: Map<string, Row>;
     externalMessages: Map<string, Row>;
+    externalEffects: Map<string, Row>;
+    skillSettings: Map<string, Row>;
+    botSkills: Map<string, Row>;
   };
   seedThread(input: {
     id: string;
@@ -107,6 +110,9 @@ export function createFakeThreadDb(): FakeThreadDb {
     linkPreviewRead: new Map<string, Row>(),
     chatGroupMembers: new Map<string, Row>(),
     externalMessages: new Map<string, Row>(),
+    externalEffects: new Map<string, Row>(),
+    skillSettings: new Map<string, Row>(),
+    botSkills: new Map<string, Row>(),
   };
   let counter = 0;
   const nextId = (prefix: string) => `${prefix}-${++counter}`;
@@ -327,6 +333,9 @@ export function createFakeThreadDb(): FakeThreadDb {
         },
       }),
       chatGroupMember: table(tables.chatGroupMembers),
+      externalEffect: table(tables.externalEffects),
+      skillSetting: table(tables.skillSettings),
+      botSkill: table(tables.botSkills),
       linkPreviewRead: table(tables.linkPreviewRead, {
         async create(args: { data: Record<string, unknown> }) {
           const row = { id: nextId("read"), ...args.data } as Row;

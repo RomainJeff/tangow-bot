@@ -129,20 +129,14 @@ describe("skill lines", () => {
     ]);
   });
 
-  it("opens the skill by its uid, Recently deleted for a deleted one, or Skills when it is gone", async () => {
-    const catalog = async () => [
-      { id: "user:tea", uid: "f".repeat(32) },
-      { id: "user:coffee-renamed", uid },
-    ];
-    await expect(skillLineRoute(line("learned"), catalog)).resolves.toEqual({
-      pathname: "/bot-skill",
-      params: { skillId: "user:coffee-renamed" },
-    });
+  it("opens the skill by its id, also from a line stored with a uid, or Skills when it is gone", async () => {
+    const { skillUid: _, ...withoutUid } = line("updated");
+    const catalog = async () => [{ id: "builtin:routines" }, { id: "user:coffee" }];
+    const opened = { pathname: "/bot-skill", params: { skillId: "user:coffee" } };
+    await expect(skillLineRoute(withoutUid, catalog)).resolves.toEqual(opened);
+    await expect(skillLineRoute(line("learned"), catalog)).resolves.toEqual(opened);
     await expect(skillLineRoute(line("updated"), async () => [])).resolves.toEqual({
       pathname: "/skills",
-    });
-    await expect(skillLineRoute(line("deleted"), catalog)).resolves.toEqual({
-      pathname: "/bot-skills-trash",
     });
   });
 

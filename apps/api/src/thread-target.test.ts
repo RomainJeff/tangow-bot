@@ -1,6 +1,6 @@
 import type { SandboxProvider } from "@rakazo/adapter-kit";
 import type { Actor } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { conversationRunFilter } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -2447,7 +2447,13 @@ describe("stopThreadRuns", () => {
       $transaction: vi.fn(async (callback: (client: typeof transaction) => unknown) =>
         callback(transaction),
       ),
-      bot: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      bot: {
+        update: vi.fn(async ({ where }: { where: { id: string } }) => ({
+          spaceId: "workspace-1",
+          thread: { id: `thread-of-${where.id}` },
+          computer: { state: "running" },
+        })),
+      },
       // Simulate workers clearing leases / execution columns as soon as the
       // transaction commits. A post-commit lookup would now miss both sandboxes.
       computer: {
@@ -2472,8 +2478,13 @@ describe("stopThreadRuns", () => {
       memberBotIds: ["bot-a", "bot-b"],
     } satisfies ThreadTarget;
 
+    const append = vi.fn().mockResolvedValue({});
     await stopThreadRuns(
-      { prisma, sandbox: { releaseScreen, execute } as unknown as SandboxProvider },
+      {
+        prisma,
+        sandbox: { releaseScreen, execute } as unknown as SandboxProvider,
+        events: { append } as unknown as ThreadEvents,
+      },
       actor,
       target,
     );
@@ -2520,9 +2531,25 @@ describe("stopThreadRuns", () => {
         screenLeaseId: "run-b:4",
       }),
     );
-    expect(vi.mocked(prisma.bot.updateMany).mock.calls).toEqual([
-      [{ where: { id: "bot-a" }, data: { screenGeneration: { increment: 1 } } }],
-      [{ where: { id: "bot-b" }, data: { screenGeneration: { increment: 1 } } }],
+    expect(append.mock.calls).toEqual([
+      [
+        {
+          spaceId: "workspace-1",
+          threadId: "thread-of-bot-a",
+          botId: "bot-a",
+          type: "computer.status",
+          payload: { status: "running" },
+        },
+      ],
+      [
+        {
+          spaceId: "workspace-1",
+          threadId: "thread-of-bot-b",
+          botId: "bot-b",
+          type: "computer.status",
+          payload: { status: "running" },
+        },
+      ],
     ]);
     expect(prisma.computer.findMany).not.toHaveBeenCalled();
     expect(prisma.computerExecutionLease.updateMany).toHaveBeenCalledWith({
@@ -2571,7 +2598,13 @@ describe("stopThreadRuns", () => {
       $transaction: vi.fn(async (callback: (client: typeof transaction) => unknown) =>
         callback(transaction),
       ),
-      bot: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      bot: {
+        update: vi.fn(async ({ where }: { where: { id: string } }) => ({
+          spaceId: "workspace-1",
+          thread: { id: `thread-of-${where.id}` },
+          computer: { state: "running" },
+        })),
+      },
       computer: {
         findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -2594,8 +2627,13 @@ describe("stopThreadRuns", () => {
       memberBotIds: ["bot-a", "bot-b"],
     } satisfies ThreadTarget;
 
+    const append = vi.fn().mockResolvedValue({});
     await stopThreadRuns(
-      { prisma, sandbox: { releaseScreen, execute } as unknown as SandboxProvider },
+      {
+        prisma,
+        sandbox: { releaseScreen, execute } as unknown as SandboxProvider,
+        events: { append } as unknown as ThreadEvents,
+      },
       actor,
       target,
     );

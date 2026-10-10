@@ -1,11 +1,16 @@
 // Needs the Vite dev server: the fixture is served from source and is not a build entry.
-import { expect, test } from "@playwright/test";
+
 import { captureScreenshot } from "./helpers";
+import { expect, test } from "./test";
 
 const FIXTURE = "/e2e/fixtures/bot-page.html";
 
 const STATES: Array<{ name: string; query: string; trigger?: RegExp }> = [
   { name: "settings", query: "tab=settings" },
+  { name: "activity", query: "tab=activity" },
+  { name: "activity-new", query: "tab=activity&new=1" },
+  { name: "activity-empty", query: "tab=activity&activity=empty" },
+  { name: "activity-error", query: "tab=activity&activity=error" },
   { name: "routines", query: "tab=routines" },
   { name: "routine", query: "tab=routines&detail=routine&routine=routine-2" },
   {
@@ -30,6 +35,7 @@ for (const theme of ["light", "dark"] as const) {
       const botPage = page.getByTestId("bot-page");
       await expect(botPage).toBeVisible();
       await expect(botPage).not.toHaveAttribute("aria-busy", "true");
+      await expect(botPage.locator('[aria-busy="true"]')).toHaveCount(0);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       if (state.name === "knowledge") {
         await expect(page.getByTestId("bot-knowledge-memory")).toContainText("MEMORY.md");
@@ -44,18 +50,97 @@ for (const theme of ["light", "dark"] as const) {
 }
 
 test("the tabs are one tab stop, moved with the arrow keys", async ({ page }) => {
-  await page.goto(`${FIXTURE}?tab=routines`);
+  await page.goto(`${FIXTURE}?tab=activity`);
   const tabs = page.getByRole("tablist");
-  await expect(tabs.getByRole("tab")).toHaveText(["Routines", "Knowledge", "Settings"]);
-  await tabs.getByRole("tab", { name: "Routines" }).focus();
+  await expect(tabs.getByRole("tab")).toHaveText(["Activity", "Routines", "Knowledge", "Settings"]);
+  await tabs.getByRole("tab", { name: "Activity" }).focus();
   await page.keyboard.press("ArrowRight");
-  await expect(tabs.getByRole("tab", { name: "Knowledge" })).toBeFocused();
+  await expect(tabs.getByRole("tab", { name: "Routines" })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(tabs.getByRole("tab", { name: "Knowledge" })).toHaveAttribute(
+  await expect(tabs.getByRole("tab", { name: "Routines" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
 });
+
+test("a new bot offers its first instructions under its creation on Activity", async ({ page }) => {
+  await page.goto(`${FIXTURE}?tab=activity&new=1`);
+  const botPage = page.getByTestId("bot-page");
+  const created = page.getByTestId("activity-created");
+  await expect(created.getByText("Scout created")).toBeVisible();
+  await created.getByRole("button", { name: "Write its first instructions" }).click();
+  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-size", "wide");
+  await page.getByTestId("bot-instructions").fill("Close the books every first Monday.");
+  await botPage.getByRole("button", { name: "Activity", exact: true }).click();
+  await expect(created.getByText("Scout created")).toBeVisible();
+  await expect(created.getByRole("button")).toHaveCount(0);
+});
+
+test("Activity lists routine runs and creations, pages back, and opens a recap in place", async ({
+  page,
+}) => {
+  const opened: string[] = [];
+  page.on("console", (message) => opened.push(message.text()));
+  await page.goto(`${FIXTURE}?tab=activity`);
+  const activity = page.getByTestId("bot-activity");
+  await expect(activity.getByRole("button", { name: /^Morning digest, Running/ })).toBeVisible();
+  await expect(
+    activity.getByRole("button", { name: /^Weekly digest, Model error, Failed/ }),
+  ).toBeVisible();
+
+  const run = activity.getByRole("button", { name: /^Invoice watch, Done/ }).first();
+  await run.click();
+  await expect(run).toHaveAttribute("aria-expanded", "true");
+  const recap = activity.getByTestId("activity-recap");
+  await expect(recap.locator("strong").first()).toHaveText("2 invoices");
+  await recap.getByRole("button", { name: "Open in chat" }).click();
+  expect(opened).toContain("open run from message-run-01");
+
+  const failed = activity.getByRole("button", { name: /^Weekly digest, Model error, Failed/ });
+  await failed.click();
+  const failedRecap = activity.getByTestId("activity-recap").nth(1);
+  await expect(failedRecap.getByRole("button", { name: "Open in chat" })).toBeVisible();
+  await expect(failedRecap).not.toContainText("Model error");
+
+  const folded = activity.getByRole("button", { name: /^Morning digest, 3 runs, Done/ }).first();
+  await folded.click();
+  await expect(folded).toHaveAttribute("aria-expanded", "true");
+  const long = activity.getByRole("button", { name: /^Morning digest, Done/ }).first();
+  await long.click();
+  await expect(activity.getByRole("button", { name: "Show more" })).toBeVisible();
+  await activity.getByRole("button", { name: "Show more" }).click();
+  await expect(activity.getByText("The quarterly team lunch poll closes next week.")).toBeVisible();
+
+  await activity.getByRole("button", { name: "Show earlier" }).click();
+  await expect(activity.getByRole("button", { name: "Show earlier" })).toHaveCount(0);
+  await expect(activity.getByText("Scout created")).toBeVisible();
+  await activity.getByRole("button", { name: /^Invoice watch, Routine created by Scout/ }).click();
+  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-detail", "routine");
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Activity with recaps open, ${theme}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`${FIXTURE}?tab=activity&theme=${theme}`);
+    const activity = page.getByTestId("bot-activity");
+    await activity
+      .getByRole("button", { name: /^Invoice watch, Done/ })
+      .first()
+      .click();
+    await activity
+      .getByRole("button", { name: /^Morning digest, 3 runs, Done/ })
+      .first()
+      .click();
+    await activity
+      .getByRole("button", { name: /^Morning digest, Done/ })
+      .first()
+      .click();
+    await expect(activity.getByRole("button", { name: "Show more" })).toBeVisible();
+    await captureScreenshot(page, testInfo, `bot-page-activity-open-${theme}`);
+    await activity.getByRole("button", { name: "Show more" }).scrollIntoViewIfNeeded();
+    await captureScreenshot(page, testInfo, `bot-page-activity-show-more-${theme}`);
+  });
+}
 
 test("instructions save on blur, say so, and keep the text when a save fails", async ({ page }) => {
   await page.goto(`${FIXTURE}?tab=settings&detail=instructions`);

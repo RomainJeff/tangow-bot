@@ -155,6 +155,7 @@ import {
   getOwnedArtifact,
   getSpaceArtifact,
 } from "./artifacts.js";
+import { listBotActivity, readRunRecap } from "./bot-activity.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
   executionBlocksUserTakeover,
@@ -1012,6 +1013,10 @@ export function createRouter(deps: RouterDeps) {
         if (!found) throw new IsolationError();
         return found;
       }),
+      activity: authed.bots.activity.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        return listBotActivity(deps.prisma, context.actor, bot, input);
+      }),
       create: authed.bots.create.handler(async ({ context, input }) => {
         try {
           return await repos.createBot(context.actor, input);
@@ -1056,25 +1061,28 @@ export function createRouter(deps: RouterDeps) {
             })),
           });
         }
-        // Per-bot skill overrides travel with the bot, like MCP assignments.
-        const skillAccess = await deps.prisma.botSkill.findMany({
-          where: {
-            botId: source.id,
-            spaceId: context.actor.spaceId,
-            userId: context.actor.userId,
-          },
-        });
-        if (skillAccess.length) {
-          await deps.prisma.botSkill.createMany({
-            data: skillAccess.map((row) => ({
+        // Per-bot skill overrides travel with the bot, like MCP assignments, copied under the
+        // owner's skill lock so no skill write lands between the read and the copy.
+        await deps.skillLock.run(context.actor, async () => {
+          const skillAccess = await deps.prisma.botSkill.findMany({
+            where: {
+              botId: source.id,
               spaceId: context.actor.spaceId,
               userId: context.actor.userId,
-              botId: duplicate.id,
-              skillKey: row.skillKey,
-              enabled: row.enabled,
-            })),
+            },
           });
-        }
+          if (skillAccess.length) {
+            await deps.prisma.botSkill.createMany({
+              data: skillAccess.map((row) => ({
+                spaceId: context.actor.spaceId,
+                userId: context.actor.userId,
+                botId: duplicate.id,
+                skillKey: row.skillKey,
+                enabled: row.enabled,
+              })),
+            });
+          }
+        });
         return duplicate;
       }),
       reorder: authed.bots.reorder.handler(async ({ context, input }) => {
@@ -1260,6 +1268,7 @@ export function createRouter(deps: RouterDeps) {
             sandbox: deps.sandbox,
             home: deps.home,
             jobs: deps.jobs,
+            events: deps.events,
             artifacts: deps.artifacts,
             dataDir: deps.dataDir,
           },
@@ -1282,6 +1291,7 @@ export function createRouter(deps: RouterDeps) {
             sandbox: deps.sandbox,
             home: deps.home,
             jobs: deps.jobs,
+            events: deps.events,
             artifacts: deps.artifacts,
             dataDir: deps.dataDir,
           },
@@ -2724,27 +2734,6 @@ export function createRouter(deps: RouterDeps) {
       ),
       setAccess: authed.agentSkills.setAccess.handler(async ({ context, input }) =>
         agentSkills.setAccess(context.actor, input),
-      ),
-      versions: authed.agentSkills.versions.handler(async ({ context, input }) =>
-        agentSkills.versions(context.actor, input),
-      ),
-      version: authed.agentSkills.version.handler(async ({ context, input }) =>
-        agentSkills.version(context.actor, input),
-      ),
-      undo: authed.agentSkills.undo.handler(async ({ context, input }) =>
-        agentSkills.undo(context.actor, input),
-      ),
-      deleteVersion: authed.agentSkills.deleteVersion.handler(async ({ context, input }) =>
-        agentSkills.deleteVersion(context.actor, input),
-      ),
-      restore: authed.agentSkills.restore.handler(async ({ context, input }) =>
-        agentSkills.restore(context.actor, input),
-      ),
-      purge: authed.agentSkills.purge.handler(async ({ context, input }) =>
-        agentSkills.purge(context.actor, input),
-      ),
-      trash: authed.agentSkills.trash.handler(async ({ context }) =>
-        agentSkills.trash(context.actor),
       ),
     },
     marketplaces: {
@@ -4709,6 +4698,9 @@ export function createRouter(deps: RouterDeps) {
       list: authed.runs.list.handler(async ({ context, input }) => ({
         runs: await listSpaceRuns(deps.prisma, context.actor, input.filter),
       })),
+      recap: authed.runs.recap.handler(({ context, input }) =>
+        readRunRecap(deps.prisma, context.actor, input.runId),
+      ),
     },
     voice: {
       catalog: authed.voice.catalog.handler(async () => listVoiceCatalog()),

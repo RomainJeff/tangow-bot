@@ -405,46 +405,21 @@ A skill a bot learns, improves or deletes draws one line per skill under the
 bot's message: `BookOpen` and "Skill learned · <name>", "Skill updated · <name>"
 or "Skill deleted · <name>", the `meta` of `MessageBubble`. It opens the skill
 in the bot page's Knowledge tab, or the list when the skill is gone or not the
-reader's. In a group the line names the skill without a link, since a group has
-no bot page. A message with no text draws the line alone through `MessageMeta`.
+reader's. A "Skill deleted" line names the skill without a link, on web and
+iPhone, as does any line in a group on web, since a group has no bot page. A message with no text draws the line alone through `MessageMeta`.
 A line that arrives live rises (`rk-arrive`) and its icon pops (`bui-pop-in`),
 both over `--duration-arrive`, half of it late, as on iPhone; a line in loaded
 history is still, and reduced motion stills both. The `skill_source` block
 carries the skill; `skillSourcesOf` in `packages/core/src/skill-source.ts` reads
 it.
 
-### Versions of a skill
+### A skill on iPhone
 
-Under a skill's editor, once the skill has a history worth showing (a version a
-bot wrote, or more than one version), `text-label` "Versions" with a `tertiary`
-"Undo" (`Undo2`) at the end, then one `SettingRow` per version on a `background`
-`Surface`: the date (`threadTimeMarkerLabel`, so "Today 2:02 PM" as in the
-thread), then "<bot or You> · learned" or "· updated" (an author the history
-does not name reads "Updated") with a chevron. The current version carries a 6 px
-ink dot after its date and `aria-current`; an undone one is `muted` and ends "· Undone". Nothing
-shows while the history loads. A version opens read only: Back, the date and
-author, the SKILL.md in `pre` on `muted`, its files as plain lines with no label,
-and a two-step "Delete" that the current version does not offer. A refusal reads
-as the server's sentence only for a conflict or a bad request, else as what
-failed ("Could not undo", "Could not delete"). On iPhone a skill line opens the
-skill's own screen: its SKILL.md, edited like a memory document, then a `Group`
-"Versions" with a `GroupAction` "Undo" on its label line and a `Row` per version
-(the native check on the current one, dimmed when undone); the field holds a
-draft only while it is edited, so it never shows a text the server no longer
-has.
-
-### Recently deleted
-
-The last row of the Skills list, drawn only while a skill is waiting there: a
-`SettingRow` "Recently deleted" with `expanded`, so its chevron turns when it
-opens. Each row is the skill's name over its date, a `quickReply`
-"Undo", and a `⋯` ("More") holding a destructive "Delete now" that asks a second
-time ("Confirm delete"). A restored skill is lit `accent` for twice
-`--duration-arrive`, then fades over one, and none of it moves under reduced
-motion. A restored skill that no bot uses says "No bot uses this skill yet."
-under the list, the same sentence on iPhone. On iPhone the row is the last of the
-Installed list in Skills, with the count, and pushes a screen whose rows open an
-action sheet (Undo, Delete now); a "Skill deleted" line opens that screen too.
+On iPhone a skill line opens the skill's own screen: its SKILL.md, edited like a
+memory document, and Delete under the header's `⋯`. The field holds a draft only
+while it is edited, so it never shows a text the server no longer has. A refusal
+reads as the server's sentence only for a conflict or a bad request, else as
+what failed ("Could not delete skill").
 
 ### Clipped preview
 
@@ -751,9 +726,7 @@ with a hover fill and a focus ring, which carries a sub-line and a chevron, neve
 control or a `SaveMeta`, which would nest an interactive element inside another.
 
 Props: `label`, `subline?`, `meta?`, `children?` (the trailing control or
-value; neither on a pressable row, which the type refuses), `chevron?`,
-`expanded?` (a pressable row only: a disclosure whose chevron turns down while
-open, with `aria-expanded`).
+value; neither on a pressable row, which the type refuses), `chevron?`.
 
 ### SegmentedControl
 

@@ -373,11 +373,11 @@ export const MessageBlock = z.discriminatedUnion("kind", [
   }),
   z.object({
     /** A skill a bot learned, updated or deleted during this exchange, one block per skill.
-        Written by the server from the skill history, never by the model; clients show it as a
-        link under the message, outside its content. `skillId` and `name` are the skill's at the
-        end of the exchange; `skillUid` survives a later rename. */
+        Written by the server from the run's skill writes, never by the model; clients show it
+        as a link under the message, outside its content. `skillId` and `name` are the ones the
+        bot wrote; `skillUid` is only on lines written while skills kept versions. */
     kind: z.literal("skill_source"),
-    skillUid: SkillUidSchema,
+    skillUid: SkillUidSchema.optional(),
     skillId: z.string(),
     name: z.string(),
     change: z.enum(["learned", "updated", "deleted"]),
