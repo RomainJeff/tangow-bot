@@ -92,7 +92,7 @@ function describe(selection: Selection, impactMap: ImpactMap | undefined) {
   const unmapped = specsOnDisk.filter((spec) => !impactMap?.specs.includes(spec));
   if (unmapped.length)
     lines.push(
-      "Specs missing from the map always run; regenerate it with pnpm test:e2e:impact-map.",
+      `The impact map is stale: ${unmapped.length} specs are missing from it and always run. Rerecord it with pnpm test:e2e:impact-map.`,
     );
   return lines.join("\n");
 }
@@ -101,7 +101,7 @@ function mapAge(commit: string) {
   try {
     execFileSync("git", ["merge-base", "--is-ancestor", commit, "HEAD"], { stdio: "ignore" });
   } catch {
-    return `recorded at ${commit.slice(0, 9)}, not in this branch's history; regenerate it with pnpm test:e2e:impact-map`;
+    return `stale, recorded at ${commit.slice(0, 9)} outside this branch's history; rerecord it with pnpm test:e2e:impact-map`;
   }
   const behind = git("rev-list", "--count", `${commit}..HEAD`)[0];
   return `recorded at ${commit.slice(0, 9)}, ${behind} commits ago`;
