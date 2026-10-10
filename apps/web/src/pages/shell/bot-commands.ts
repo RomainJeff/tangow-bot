@@ -27,6 +27,8 @@ export interface BotCommands {
   revealWebhookSecret(botId: string): Promise<string>;
   /** The lifecycle actions the sidebar menu already runs, with the same confirmations. */
   botAction(botId: string, action: BotAction): void;
+  /** Re-reads the composer's skill catalog after a skill write the server has confirmed. */
+  skillsChanged(): void;
 }
 
 export interface BotCommandDeps {
@@ -41,6 +43,7 @@ export interface BotCommandDeps {
   botAction: BotCommands["botAction"];
   ensureWebhookSecret: (botId: string) => Promise<string>;
   refreshThread: (botId: string) => Promise<unknown>;
+  refreshSkills: () => void;
 }
 
 export function useBotCommands(deps: BotCommandDeps): BotCommands {
@@ -113,6 +116,7 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
       },
       revealWebhookSecret: (botId) => depsRef.current.ensureWebhookSecret(botId),
       botAction: (botId, action) => depsRef.current.botAction(botId, action),
+      skillsChanged: () => depsRef.current.refreshSkills(),
     };
   }, [order]);
 }

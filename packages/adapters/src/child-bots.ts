@@ -17,6 +17,7 @@ import {
   expireComputerExecutionLeases,
   type Prisma,
   type PrismaClient,
+  type ThreadEvents,
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -196,6 +197,7 @@ type BotLifecycleDeps = {
   sandbox: SandboxProvider;
   home: AgentHomeStore;
   jobs: JobPublisher;
+  events: ThreadEvents;
   dataDir?: string;
   artifacts?: ArtifactStore;
 };

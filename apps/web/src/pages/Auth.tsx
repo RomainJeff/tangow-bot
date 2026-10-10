@@ -3,7 +3,7 @@ import { readBoundedJsonResponse, signupRequiresEmailVerification } from "@rakaz
 import { Button, Input, Label } from "@rakazo/ui-web";
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { authClient } from "../lib/auth";
 import { clearSpaceSelection } from "../lib/rpc";
 
@@ -17,7 +17,6 @@ const MAX_AUTH_CAPABILITIES_RESPONSE_BYTES = 64 * 1024;
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const { t } = useLingui();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,7 +27,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [resetSent, setResetSent] = useState(false);
   // Signup triggers a session refresh that remounts the anonymous auth page.
   const sent = resetSent || searchParams.get("verify") === "email";
-  const [reset, setReset] = useState<PasswordResetCapabilities | null>(null);
+  // undefined while the capabilities request is in flight; null when it failed.
+  const [reset, setReset] = useState<PasswordResetCapabilities | null>();
   const passwordFieldId = mode === "in" ? "current-password" : "new-password";
   const title = sent ? (
     <Trans>Check your email</Trans>
@@ -57,7 +57,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
       .then((capabilities) => {
         if (active) setReset(capabilities);
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (active) setReset(null);
+      })
       .finally(() => clearTimeout(timer));
     return () => {
       active = false;
@@ -104,13 +106,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         return;
       }
       clearSpaceSelection();
-      navigate(
-        mode === "up"
-          ? "/onboarding"
-          : searchParams.get("next") === "/integrations/setup"
-            ? "/integrations/setup"
-            : "/app",
-      );
+      // The session refetch that follows sign-in/sign-up lets the route redirect; navigating
+      // first would reach a guarded route without a user and flash the sign-in page.
     } catch {
       setError(t`Could not reach the server`);
     } finally {
@@ -204,7 +201,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               {error}
             </p>
           ) : null}
-          <Button type="submit" size="lg" disabled={pending} className={submitClass}>
+          <Button
+            type="submit"
+            size="lg"
+            disabled={pending || (mode === "forgot" && reset === undefined)}
+            className={submitClass}
+          >
             {pending ? (
               <Trans>Working…</Trans>
             ) : mode === "in" ? (
