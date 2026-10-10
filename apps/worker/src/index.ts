@@ -54,7 +54,7 @@ import {
   SpaceMemoryProviderResolver,
   scheduleSkillLibraryRepair,
 } from "@rakazo/adapters";
-import { resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
+import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
 import {
   createDb,
   createPool,
@@ -201,6 +201,7 @@ async function main() {
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
   const stopSkillSweep = scheduleSkillLibraryRepair({ prisma, dataDir, lock: skillLock });
+  const skillLearning = parseSkillLearningMode(process.env.SKILL_LEARNING);
   const executor = createRunExecutor({
     prisma,
     skillLock,
@@ -233,6 +234,7 @@ async function main() {
     events,
     messaging: messaging ? createMessagingContextLoader(prisma) : undefined,
     web: createWebProvider(),
+    skillLearning,
   });
 
   const jobHandlers = createBackgroundJobHandlers({
@@ -288,6 +290,7 @@ async function main() {
       prisma,
       library: createSkillLibrary({ prisma, dataDir, lock: skillLock }),
       events,
+      lineOnlyMessages: skillLearning !== "off",
     }),
   });
   reconciler.start();

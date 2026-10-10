@@ -504,6 +504,8 @@ export interface RouterDeps {
   dataDir: string;
   /** Serializes skill writes per owner with the worker's. */
   skillLock: SkillOwnerLock;
+  /** A stopped run that left no message gets its skill line in a message of its own. */
+  skillLineOnlyMessages?: boolean;
   /** Present when the external messaging surface is enabled. */
   messaging?: { enabled: boolean; providers: string[]; openSignup: boolean };
   env: {
@@ -566,6 +568,7 @@ export function createRouter(deps: RouterDeps) {
       lock: deps.skillLock,
     }),
     events: deps.events,
+    lineOnlyMessages: deps.skillLineOnlyMessages,
   };
   const marketplaces = createMarketplacesService({ prisma: deps.prisma, dataDir: deps.dataDir });
 

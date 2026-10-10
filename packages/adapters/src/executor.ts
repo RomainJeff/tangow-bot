@@ -44,6 +44,7 @@ import type {
   ProposalEffectKind,
   ProposalRefusal,
   RoutineCard,
+  SkillLearningMode,
 } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
@@ -668,6 +669,8 @@ export interface ExecutorDeps {
   shutdownSignal?: AbortSignal;
   /** Serializes skill writes with the API's; production passes createPostgresSkillLock. */
   skillLock: SkillOwnerLock;
+  /** SKILL_LEARNING: whether bots keep their methods as skills on their own. Off when omitted. */
+  skillLearning?: SkillLearningMode;
 }
 
 function isAuditableToolResult(value: unknown): value is {
@@ -1001,12 +1004,18 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
 export function createRunExecutor(deps: ExecutorDeps) {
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
-  const skillDeps = { prisma: deps.prisma, dataDir: deps.dataDir ?? "./data" };
+  const learning = deps.skillLearning ?? "off";
+  const skillDeps = { prisma: deps.prisma, dataDir: deps.dataDir ?? "./data", learning };
   const skillLibrary = createSkillLibrary({ ...skillDeps, lock: deps.skillLock });
   // Never fatal: the run already ended, and the sweep adds a line that failed here.
   const writeRunSkillLines = (runId: string) =>
     writeSkillLines(
-      { prisma: deps.prisma, library: skillLibrary, events: deps.events },
+      {
+        prisma: deps.prisma,
+        library: skillLibrary,
+        events: deps.events,
+        lineOnlyMessages: learning !== "off",
+      },
       runId,
     ).catch((error) => getLogger().error("skill lines", error));
   const browser = deps.browser ?? createBrowserProvider(undefined, { sandbox: deps.sandbox });
@@ -4061,7 +4070,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   "\n",
                 )}\nWhen the user asks to run a taught skill by name, follow that skill's playbook exactly. The full playbook is included in the user task when they invoke it.`
             : undefined;
-        const agentSkillsCatalog = formatSkillsCatalogInstruction(agentSkills);
+        const agentSkillsCatalog = formatSkillsCatalogInstruction(agentSkills, learning);
         // ponytail: only docker mounts these; harmless hint elsewhere.
         const agentSkillsLine = agentSkillsCatalog
           ? `${agentSkillsCatalog}\nSkill files (scripts/, references/) are mounted read-only in the sandbox; skill_read returns the skill's folder as dir.`

@@ -410,6 +410,7 @@ export async function createApp(
     messaging: messaging ? createMessagingContextLoader(prisma) : undefined,
     web: createWebProvider(),
     shutdownSignal: shutdown.signal,
+    skillLearning: env.skillLearning,
   });
 
   const jobHandlers = createBackgroundJobHandlers({
@@ -441,6 +442,7 @@ export async function createApp(
           prisma,
           library: createSkillLibrary({ prisma, dataDir: env.dataDir, lock: skillLock }),
           events,
+          lineOnlyMessages: env.skillLearning !== "off",
         }),
       })
     : undefined;
@@ -449,6 +451,7 @@ export async function createApp(
   const router = createRouter({
     prisma,
     skillLock,
+    skillLineOnlyMessages: env.skillLearning !== "off",
     events,
     auth,
     jobs,

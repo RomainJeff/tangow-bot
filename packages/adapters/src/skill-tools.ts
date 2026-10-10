@@ -4,7 +4,7 @@ import {
   SKILL_BUNDLE_MAX_ENTRIES,
   SKILL_DESCRIPTION_MAX_CHARS,
 } from "@rakazo/contracts";
-import type { ParsedSkillMd } from "@rakazo/core";
+import type { ParsedSkillMd, SkillLearningMode } from "@rakazo/core";
 import {
   asSkillAvailability,
   buildSkillMd,
@@ -48,7 +48,12 @@ type SkillOwner = {
   botId?: string;
 };
 
-export type SkillToolDeps = { prisma: PrismaClient; dataDir: string };
+export type SkillToolDeps = {
+  prisma: PrismaClient;
+  dataDir: string;
+  /** Off by default: a created skill's result still asks the bot to mention /Name. */
+  learning?: SkillLearningMode;
+};
 
 async function builtinRecords(): Promise<Array<SkillRecord & { id: string }>> {
   return (await loadBuiltinSkills()).map((skill) => ({
@@ -269,6 +274,18 @@ function writeError(error: unknown, nameTaken: string, fallback: string): { erro
   return { error: fallback };
 }
 
+/** With learning on, the app shows the line under the bot's message, so the bot says nothing. */
+function createdSkillHint(name: string, forBot: boolean, learning: SkillLearningMode): string {
+  if (learning !== "off") {
+    return forBot
+      ? "Created skill, available to this agent until the user shares it. The app shows the user a line for it: do not announce it."
+      : "Created skill. The app shows the user a line for it: do not announce it.";
+  }
+  return forBot
+    ? `Created skill, available to this agent. Mention /${name} so the user can open it; they can share it with other agents from its settings.`
+    : `Created skill. Mention /${name} so the user can open it.`;
+}
+
 export async function skillCreateFromTool(
   deps: SkillToolDeps,
   owner: SkillOwner,
@@ -334,9 +351,7 @@ export async function skillCreateFromTool(
     id: skillKey,
     name,
     description,
-    hint: owner.botId
-      ? `Created skill, available to this agent. Mention /${name} so the user can open it; they can share it with other agents from its settings.`
-      : `Created skill. Mention /${name} so the user can open it.`,
+    hint: createdSkillHint(name, Boolean(owner.botId), deps.learning ?? "off"),
   };
 }
 

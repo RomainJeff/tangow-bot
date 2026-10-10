@@ -7,6 +7,7 @@ import {
   SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH,
   SPAWN_BOT_PROMPT_MAX_LENGTH,
 } from "@rakazo/contracts";
+import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@rakazo/core";
 import { z } from "zod";
 
 export const DELEGATION_TOOL_NAMES = new Set([
@@ -717,7 +718,7 @@ export const builtinAgentTools: ConnectorTool[] = [
         name: { type: "string", description: "Short skill name." },
         description: {
           type: "string",
-          description: "When to use this skill (shown in the / picker and used for auto-use).",
+          description: `When to use this skill, at most ${BOT_SKILL_DESCRIPTION_MAX_LENGTH} characters (shown in the / picker and used for auto-use).`,
         },
         body: {
           type: "string",
@@ -745,7 +746,10 @@ export const builtinAgentTools: ConnectorTool[] = [
           description:
             "Workspace folder with the full new skill (SKILL.md, scripts/, references/); replaces the saved folder. Use instead of description/body/content.",
         },
-        description: { type: "string" },
+        description: {
+          type: "string",
+          description: `At most ${BOT_SKILL_DESCRIPTION_MAX_LENGTH} characters.`,
+        },
         body: { type: "string" },
         content: { type: "string", description: "Optional full replacement SKILL.md." },
       },
