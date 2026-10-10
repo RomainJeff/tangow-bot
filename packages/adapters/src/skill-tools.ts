@@ -376,31 +376,22 @@ function createdSkillHint(name: string, forBot: boolean, learning: SkillLearning
     : `Created skill. Mention /${name} so the user can open it.`;
 }
 
-type CreateInput = {
-  name?: string;
-  description?: string;
-  body?: string;
-  content?: string;
-  files?: SkillTreeFile[];
-};
-
-export function skillCreateFromTool(
-  deps: SkillToolDeps,
-  owner: SkillOwner,
-  /** The run's secret values: a bot write holding one is refused. */
-  secrets: string[],
-  input: CreateInput,
-): Promise<Record<string, unknown>> {
-  return underOwnerLock(deps, owner, "Could not create skill.", () =>
-    createSkill(deps, owner, secrets, input),
-  );
+export function skillCreateFromTool(...args: Parameters<typeof createSkill>) {
+  return underOwnerLock(args[0], args[1], "Could not create skill.", () => createSkill(...args));
 }
 
 async function createSkill(
   deps: SkillToolDeps,
   owner: SkillOwner,
+  /** The run's secret values: a bot write holding one is refused. */
   secrets: string[],
-  input: CreateInput,
+  input: {
+    name?: string;
+    description?: string;
+    body?: string;
+    content?: string;
+    files?: SkillTreeFile[];
+  },
 ): Promise<Record<string, unknown>> {
   let name = "";
   let description = "";
@@ -520,33 +511,24 @@ async function createSkill(
   };
 }
 
-type UpdateInput = {
-  name?: string;
-  skillId?: string;
-  newName?: string;
-  description?: string;
-  body?: string;
-  content?: string;
-  files?: SkillTreeFile[];
-};
-
-export function skillUpdateFromTool(
-  deps: SkillToolDeps,
-  owner: SkillOwner,
-  /** The run's secret values: a bot write holding one is refused. */
-  secrets: string[],
-  input: UpdateInput,
-): Promise<Record<string, unknown>> {
-  return underOwnerLock(deps, owner, "Could not update skill.", () =>
-    updateSkill(deps, owner, secrets, input),
-  );
+export function skillUpdateFromTool(...args: Parameters<typeof updateSkill>) {
+  return underOwnerLock(args[0], args[1], "Could not update skill.", () => updateSkill(...args));
 }
 
 async function updateSkill(
   deps: SkillToolDeps,
   owner: SkillOwner,
+  /** The run's secret values: a bot write holding one is refused. */
   secrets: string[],
-  input: UpdateInput,
+  input: {
+    name?: string;
+    skillId?: string;
+    newName?: string;
+    description?: string;
+    body?: string;
+    content?: string;
+    files?: SkillTreeFile[];
+  },
 ): Promise<Record<string, unknown>> {
   const existing = await findOwnedSkill(deps, owner, {
     skillId: input.skillId,
