@@ -714,6 +714,9 @@ function sortEntries(entries: WorkspaceEntry[]): WorkspaceEntry[] {
   });
 }
 
+/** The workspace root shows its first entries; a folder, opened on purpose, shows them all. */
+const FILES_SHOWN = 5;
+
 /**
  * The agent's working files: its computer workspace while the computer runs,
  * otherwise the last checkpoint. Rides on the existing computer.files and
@@ -726,12 +729,14 @@ export function AgentFiles({ botId }: { botId: string }) {
   const [open, setOpen] = useState<{ path: string; content: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const generation = useRef(0);
 
   useEffect(() => {
     const current = ++generation.current;
     setOpen(null);
     setError(null);
+    setExpanded(false);
     void rpc.computer
       .files({ botId, path: dir })
       .then((list) => {
@@ -839,7 +844,7 @@ export function AgentFiles({ botId }: { botId: string }) {
         </div>
       ) : null}
       {!open
-        ? entries.map((entry) => (
+        ? (expanded || dir ? entries : entries.slice(0, FILES_SHOWN)).map((entry) => (
             <button
               key={entry.path}
               type="button"
@@ -866,6 +871,16 @@ export function AgentFiles({ botId }: { botId: string }) {
             </button>
           ))
         : null}
+      {!open && !dir && entries.length > FILES_SHOWN ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className={`${rowClass(false)} text-row-name text-muted-foreground`}
+        >
+          {expanded ? t`Show less` : t`Show more`}
+        </button>
+      ) : null}
     </div>
   );
 }

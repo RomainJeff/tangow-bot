@@ -11,11 +11,13 @@ const api = vi.hoisted(() => ({
   get: vi.fn(),
   remove: vi.fn(),
 }));
+const files = vi.hoisted(() => vi.fn());
 const updateMemory = vi.hoisted(() => vi.fn());
 vi.mock("../lib/rpc", () => ({
   rpc: {
     agentSkills: api,
     bots: { list: async () => [] },
+    computer: { files },
     memory: { update: updateMemory },
   },
 }));
@@ -47,7 +49,7 @@ vi.mock("@rakazo/ui-web", () => {
   };
 });
 
-import { AgentSkills, MemoryDocumentList } from "./KnowledgeSection";
+import { AgentFiles, AgentSkills, MemoryDocumentList } from "./KnowledgeSection";
 
 async function mount(node: ReactNode) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -185,6 +187,43 @@ it("hands a skill and a new one to onOpenEditor instead of editing in the list",
     await act(async () => view.button("New skill").click());
     expect(onOpenEditor.mock.calls).toEqual([["skill-fixture"], [null]]);
     expect(view.container.querySelector("textarea")).toBeNull();
+  } finally {
+    await view.unmount();
+  }
+});
+
+it("lists the first five root files, Show more for the rest, and every file of a folder", async () => {
+  const root = ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md"].map((path) => ({
+    path,
+    kind: "file",
+    size: 1,
+  }));
+  files.mockImplementation(async ({ path }: { path: string }) =>
+    path === ""
+      ? [{ path: "notes", kind: "dir", size: 0 }, ...root]
+      : root.map((entry) => ({ ...entry, path: `notes/${entry.path}` })),
+  );
+  const view = await mount(<AgentFiles botId="bot-fixture" />);
+  const names = () =>
+    [...view.container.querySelectorAll("button")].map((entry) => entry.textContent);
+  try {
+    expect(names()).toEqual(["/", "notes/", "a.md", "b.md", "c.md", "d.md", "Show more"]);
+    await act(async () => view.button("Show more").click());
+    expect(names()).toEqual([
+      "/",
+      "notes/",
+      "a.md",
+      "b.md",
+      "c.md",
+      "d.md",
+      "e.md",
+      "f.md",
+      "Show less",
+    ]);
+    await act(async () => view.button("Show less").click());
+    expect(names().at(-1)).toBe("Show more");
+    await act(async () => view.button("notes/").click());
+    expect(names()).toEqual(["/", "notes /", "a.md", "b.md", "c.md", "d.md", "e.md", "f.md"]);
   } finally {
     await view.unmount();
   }

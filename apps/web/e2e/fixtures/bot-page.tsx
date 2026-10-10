@@ -343,6 +343,9 @@ const READS: Record<string, unknown> = {
     { path: "notes", kind: "dir", size: 0 },
     { path: "inbox-report.md", kind: "file", size: 3_200 },
     { path: "q3-forecast.csv", kind: "file", size: 12_400 },
+    { path: "renewals.md", kind: "file", size: 2_050 },
+    { path: "team-notes.md", kind: "file", size: 4_800 },
+    { path: "vendors.csv", kind: "file", size: 9_300 },
   ],
   "bots/list": [],
 };

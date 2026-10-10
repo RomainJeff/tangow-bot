@@ -222,11 +222,20 @@ test("a refused computer change turns back and says why", async ({ page }) => {
   await expect(own).toHaveAttribute("aria-pressed", "true");
 });
 
-test("Knowledge shows memory, files and skills", async ({ page }) => {
+test("Knowledge shows memory, the first five files and skills", async ({ page }) => {
   await page.goto(`${FIXTURE}?tab=knowledge`);
   const knowledge = page.getByTestId("bot-knowledge");
   await expect(knowledge.getByTestId("bot-knowledge-memory")).toContainText("MEMORY.md");
-  await expect(knowledge).toContainText("inbox-report.md");
+  const files = knowledge.getByTestId("bot-knowledge-files");
+  await expect(files).toContainText("inbox-report.md");
+  await expect(files).not.toContainText("vendors.csv");
+  await files.getByRole("button", { name: "Show more" }).click();
+  await expect(files).toContainText("vendors.csv");
+  await files.getByRole("button", { name: "Show less" }).click();
+  await expect(files).not.toContainText("vendors.csv");
+  await files.getByRole("button", { name: "notes/" }).click();
+  await expect(files).toContainText("vendors.csv");
+  await expect(files.getByRole("button", { name: "Show more" })).toHaveCount(0);
   await expect(knowledge.getByTestId("bot-skills")).toContainText("inbox-triage");
 });
 
