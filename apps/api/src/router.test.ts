@@ -8,6 +8,7 @@ import {
   ComputerScreenUnavailableError,
   createInMemorySkillLock,
   createSkillLibrary,
+  createSkillLineSweep,
 } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
 import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
@@ -1053,7 +1054,7 @@ describe("thread stop", () => {
           { prefix: "/rpc", context: { actor } },
         )
       ).response;
-    return { card, reply, effects, notify, stop };
+    return { prisma: prisma as unknown as PrismaClient, card, reply, effects, notify, stop };
   }
 
   it("settles a routine card the user approved but the stopped run never created", async () => {
@@ -1075,9 +1076,8 @@ describe("thread stop", () => {
     expect(notify).toHaveBeenCalledWith("thread-1", 7);
   });
 
-  it("writes the line of a skill the stopped run saved under its last message", async () => {
+  it("leaves a stopped run's skill lines to the sweep, which also takes a write that lands after the stop", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-router-stop-"));
-    const skillLock = createInMemorySkillLock();
     const owner = { spaceId: "workspace-1", userId: "user-1" };
     try {
       const none = {
@@ -1090,32 +1090,38 @@ describe("thread stop", () => {
         botSkill: none,
         $transaction: (ops: Promise<unknown>[]) => Promise.all(ops),
       } as unknown as PrismaClient;
-      await createSkillLibrary({ prisma: access, dataDir, lock: skillLock })
-        .forBot(owner, {
-          botId: "bot-1",
-          botName: "Ada",
-          runId: "run-1",
-          toolCallId: "call-1",
-          secrets: [],
-        })
-        .create({
-          kind: "skill-md",
-          name: "Coffee",
-          content: buildSkillMd({ name: "Coffee", description: "Order coffee", body: "Pay." }),
-        });
-      const { reply, stop } = await stopFixture({ dataDir, skillLock });
+      const skillLock = createInMemorySkillLock();
+      const library = createSkillLibrary({ prisma: access, dataDir, lock: skillLock });
+      const save = (name: string, toolCallId: string) =>
+        library
+          .forBot(owner, {
+            botId: "bot-1",
+            botName: "Ada",
+            runId: "run-1",
+            toolCallId,
+            secrets: [],
+          })
+          .create({
+            kind: "skill-md",
+            name,
+            content: buildSkillMd({ name, description: `Order ${name}`, body: "Pay." }),
+          });
+      const line = (name: string) => ({
+        kind: "skill_source",
+        skillUid: expect.stringMatching(/^[0-9a-f]{32}$/),
+        skillId: `user:${name.toLowerCase()}`,
+        name,
+        change: "learned",
+      });
+      await save("Coffee", "call-1");
+      const { prisma, reply, notify, stop } = await stopFixture({ dataDir, skillLock });
 
       expect((await stop()).status).toBe(200);
-      expect(reply.blocks).toEqual([
-        { kind: "text", text: "On it." },
-        {
-          kind: "skill_source",
-          skillUid: expect.stringMatching(/^[0-9a-f]{32}$/),
-          skillId: "user:coffee",
-          name: "Coffee",
-          change: "learned",
-        },
-      ]);
+      await save("Tea", "call-2");
+      expect(reply.blocks).toEqual([{ kind: "text", text: "On it." }]);
+
+      await createSkillLineSweep({ prisma, library, events: { notify } })();
+      expect(reply.blocks).toEqual([{ kind: "text", text: "On it." }, line("Coffee"), line("Tea")]);
     } finally {
       await rm(dataDir, { recursive: true, force: true });
     }
