@@ -1012,7 +1012,8 @@ export function createRouter(deps: RouterDeps) {
         return found;
       }),
       activity: authed.bots.activity.handler(async ({ context, input }) => {
-        const bot = await repos.getBot(context.actor, input.botId);
+        // An archived bot's page still shows what it did.
+        const bot = await repos.getBot(context.actor, input.botId, { includeArchived: true });
         return listBotActivity(deps.prisma, context.actor, bot, input);
       }),
       create: authed.bots.create.handler(async ({ context, input }) => {

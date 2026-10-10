@@ -1483,3 +1483,86 @@ describe("routine update triggers", () => {
     expect(routineUpdate).not.toHaveBeenCalled();
   });
 });
+
+describe("an archived bot's page", () => {
+  type BotRow = { id: string; spaceId: string; userId: string; archivedAt: Date | null };
+  const archived: BotRow = {
+    id: "bot-archived",
+    spaceId: "workspace-1",
+    userId: "user-1",
+    archivedAt: new Date("2026-10-02T08:00:00.000Z"),
+  };
+
+  function archivedDeps() {
+    const matches = (row: BotRow, where: Partial<BotRow>) =>
+      Object.entries(where).every(([key, value]) => row[key as keyof BotRow] === value);
+    const prisma = {
+      bot: {
+        findFirst: vi.fn(async ({ where }: { where: Partial<BotRow> }) =>
+          matches(archived, where)
+            ? {
+                ...archived,
+                name: "Scout",
+                createdAt: new Date("2026-10-01T08:00:00.000Z"),
+                thread: { id: "thread-1" },
+                computer: null,
+              }
+            : null,
+        ),
+      },
+      run: { findMany: vi.fn().mockResolvedValue([]) },
+      routine: { findMany: vi.fn().mockResolvedValue([]) },
+    } as unknown as PrismaClient;
+    const deps = {
+      prisma,
+      env: {
+        defaultProvider: "fake",
+        defaultModel: "fake-model",
+        webOrigin: "http://127.0.0.1:5173",
+        screenProxySecret: "fake-test-secret",
+        sandboxProvider: "fake",
+      },
+      dataDir: "/tmp/rakazo-router-test",
+    } as unknown as RouterDeps;
+    return new RPCHandler(createRouter(deps));
+  }
+
+  async function call(userId: string, path: string, body: unknown) {
+    const actor = {
+      spaceId: "workspace-1",
+      userId,
+      email: `${userId}@rakazo.test`,
+      isDeploymentOwner: false,
+    } satisfies Actor;
+    const { response } = await archivedDeps().handle(
+      new Request(`http://127.0.0.1/rpc/${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ json: body }),
+      }),
+      { prefix: "/rpc", context: { actor } },
+    );
+    return response!;
+  }
+
+  it("reads its activity for its owner only", async () => {
+    const own = await call("user-1", "bots/activity", { botId: archived.id });
+    await expect(own.json()).resolves.toEqual({
+      json: {
+        items: [
+          {
+            kind: "bot_created",
+            botId: "bot-archived",
+            botName: "Scout",
+            createdAt: "2026-10-01T08:00:00.000Z",
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+
+    const other = await call("user-2", "bots/activity", { botId: archived.id });
+    expect(other.ok).toBe(false);
+    expect(await other.text()).not.toContain("Scout");
+  });
+});

@@ -126,6 +126,7 @@ import {
   botPageFor,
   FALLBACK_BOT_COLOR,
   firstThreadRoute,
+  pageBotOf,
   panelIsOpen,
   panelSizeFor,
   threadJumpLocation,
@@ -260,8 +261,16 @@ export function ShellPage() {
   const [botPage, setBotPage] = useState<BotPageView>({ tab: "settings", detail: null });
   const botPageRef = useRef(botPage);
   botPageRef.current = botPage;
+  // An archived bot picked from the sidebar, whose page shows instead of the thread's bot.
+  const [pickedBotId, setPickedBotId] = useState<string | null>(null);
   const showBotPage = useCallback((view: BotPageView) => {
+    setPickedBotId(null);
     setBotPage(view);
+    setPanel("bot");
+  }, []);
+  const showArchivedBotPage = useCallback((botId: string) => {
+    setPickedBotId(botId);
+    setBotPage({ tab: "activity", detail: null });
     setPanel("bot");
   }, []);
   const panelCoversThread = useRef(false);
@@ -516,6 +525,7 @@ export function ShellPage() {
   const inGroup = Boolean(groupId);
   const active = inGroup ? undefined : (bots.find((b) => b.id === botId) ?? bots[0]);
   const activeGroup = groups.find((group) => group.id === groupId);
+  const pageBot = pageBotOf(pickedBotId, bots, archivedBots, active);
   const [computerWasShown, setComputerWasShown] = useState(computerShown);
   if (computerShown !== computerWasShown) {
     setComputerWasShown(computerShown);
@@ -2535,7 +2545,7 @@ export function ShellPage() {
 
   // The sidebar menu and the bot page's own menu run the same handlers.
   function runBotAction(botId: string, action: BotAction) {
-    const bot = bots.find((item) => item.id === botId);
+    const bot = [...bots, ...archivedBots].find((item) => item.id === botId);
     switch (action) {
       case "duplicate":
         void rpc.bots.duplicate({ botId }).then(async (copy) => {
@@ -2551,8 +2561,18 @@ export function ShellPage() {
         return;
       case "archive":
         // The page of a bot that just left the roster would show the next bot instead.
-        if (panel === "bot" && active?.id === botId) setPanel(null);
+        if (panel === "bot" && pageBot?.id === botId) setPanel(null);
         void rpc.bots.archive({ botId }).then(() => refreshBots(true));
+        return;
+      case "restore":
+        void rpc.bots.restore({ botId }).then(async () => {
+          await refreshBots(true);
+          // Restored while its page is open: the page stays, now beside the bot's own thread.
+          if (panel === "bot" && pickedBotId === botId) {
+            setPickedBotId(null);
+            navigate(`/app/${botId}`);
+          }
+        });
         return;
       case "delete":
         if (bot) setDeleteTarget(bot);
@@ -2581,7 +2601,7 @@ export function ShellPage() {
   const isDesktopWidth = useMediaQuery("(min-width: 1024px)");
   // The wide panel only sits beside the thread from `xl`; narrower, it lies over it.
   const isWideDesktopWidth = useMediaQuery("(min-width: 1280px)");
-  const panelOpen = panelIsOpen(panel, active, activeGroup);
+  const panelOpen = panelIsOpen(panel, panel === "bot" ? pageBot : active, activeGroup);
   const panelSize = panelSizeFor(panel, botPage);
   const panelCoversColumn =
     panelOpen && (!isDesktopWidth || (panelSize === "wide" && !isWideDesktopWidth));
@@ -2705,6 +2725,8 @@ export function ShellPage() {
         setArchivedOpen={setArchivedOpen}
         refreshBots={refreshBots}
         setDeleteTarget={setDeleteTarget}
+        onOpenArchivedBot={showArchivedBotPage}
+        onRestoreBot={(botId) => runBotAction(botId, "restore")}
         setDeleteGroupTarget={setDeleteGroupTarget}
         setCustomizeOpen={setCustomizeOpen}
         menuOpen={menuOpen}
@@ -2763,7 +2785,8 @@ export function ShellPage() {
             active={active}
             activeGroup={activeGroup}
             activeSnapshot={activeSnapshot}
-            panel={panel}
+            // An archived bot's page is not this conversation's bot page: the gear opens the latter.
+            panel={panel === "bot" && pickedBotId ? null : panel}
             setPanel={setPanel}
             onOpenBotPage={showBotPage}
             refreshThread={refreshThread}
@@ -2902,9 +2925,10 @@ export function ShellPage() {
         setPanel={setPanel}
         size={panelSize}
         botPage={botPage}
-        onBotPage={showBotPage}
+        onBotPage={setBotPage}
         commands={botCommands}
         userId={userId ?? ""}
+        pageBot={pageBot}
         active={active}
         activeGroup={activeGroup}
         computer={computer}

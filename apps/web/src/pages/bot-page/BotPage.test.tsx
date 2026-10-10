@@ -50,6 +50,7 @@ const BOT = {
   modelId: null,
   thinkingLevel: null,
   memoryScope: null,
+  archivedAt: null,
 } as unknown as Bot;
 
 const store = createSaveStore();
@@ -85,10 +86,11 @@ afterEach(() => {
 });
 
 let onView: ReturnType<typeof vi.fn<(view: BotPageView) => void>>;
+let commands: BotCommands;
 
 async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[] | null } = {}) {
   onView = vi.fn<(view: BotPageView) => void>();
-  const commands = {
+  commands = {
     updateBot: updateBot as BotCommands["updateBot"],
     setComputer: vi.fn(),
     botAction: vi.fn(),
@@ -218,4 +220,67 @@ it("fills a new routine from the latest skill picked, even when the form is alre
   expect(
     container.querySelector<HTMLTextAreaElement>('[data-testid="routine-create"] textarea')?.value,
   ).toBe("Sort the inbox.");
+});
+
+it("shows an archived bot's page read-only, with Restore and Delete as its only actions", async () => {
+  const archived = { ...BOT, archivedAt: "2026-10-02T08:00:00.000Z" } as Bot;
+  api.bots.activity.mockResolvedValue({
+    items: [
+      {
+        kind: "routine_run",
+        run: {
+          runId: "run-1",
+          botId: "bot-1",
+          groupId: null,
+          routineId: "routine-1",
+          routineName: "Inbox sweep",
+          status: "completed",
+          failureKind: null,
+          sourceMessageId: "message-1",
+          createdAt: "2026-10-01T09:00:00.000Z",
+          updatedAt: "2026-10-01T09:01:00.000Z",
+        },
+      },
+    ],
+    nextCursor: null,
+  });
+  api.runs.recap.mockResolvedValue({ text: "Two emails need a reply.", messageId: "message-2" });
+  await render(
+    { tab: "settings", detail: { kind: "instructions" } },
+    { bot: archived, routines: null },
+  );
+
+  const page = container.querySelector('[data-testid="bot-page"]')!;
+  expect(page.hasAttribute("aria-busy")).toBe(false);
+  expect(container.querySelector('[role="tablist"]')).toBeNull();
+  expect(container.querySelector('[data-testid="bot-instructions"]')).toBeNull();
+  expect(
+    [...container.querySelectorAll<HTMLInputElement>("input")].map((input) => [
+      input.value,
+      input.disabled,
+    ]),
+  ).toEqual([
+    ["Scout", true],
+    ["Watches the inbox", true],
+  ]);
+  expect(
+    container.querySelector<HTMLButtonElement>('[data-testid="bot-appearance-trigger"]')?.disabled,
+  ).toBe(true);
+
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[data-testid="activity-run"]')!.click(),
+  );
+  const recap = container.querySelector('[data-testid="activity-recap"]')!;
+  expect(recap.textContent).toBe("Two emails need a reply.");
+
+  const more = container.querySelector<HTMLElement>('[aria-label="Actions for Scout"]')!;
+  await act(async () => {
+    more.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    more.click();
+  });
+  const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  expect(items.map((item) => item.textContent)).toEqual(["Restore", "Delete"]);
+  await act(async () => items[0]!.click());
+  expect(vi.mocked(commands.botAction).mock.calls).toEqual([["bot-1", "restore"]]);
+  expect(updateBot).not.toHaveBeenCalled();
 });

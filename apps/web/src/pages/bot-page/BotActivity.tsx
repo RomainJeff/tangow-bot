@@ -161,7 +161,8 @@ function itemKey(item: ActivityItem): string {
   }
 }
 
-type OpenRun = BotCommands["openRun"];
+/** Absent on an archived bot's page: its chat cannot be opened. */
+type OpenRun = BotCommands["openRun"] | undefined;
 
 /**
  * The bot's routine runs, the routines it was given and its own creation, grouped by day; with
@@ -178,7 +179,7 @@ export function BotActivity({
 }: {
   botId: string;
   routineId?: string;
-  commands: Pick<BotCommands, "activityEpoch" | "openRun">;
+  commands: Pick<BotCommands, "activityEpoch"> & { openRun?: OpenRun };
   onOpenRoutine?: (routineId: string) => void;
   onWriteInstructions?: () => void;
 }) {
@@ -385,8 +386,10 @@ function RunLine({ row, openRun }: { row: RunActivityRow; openRun: OpenRun }) {
         <RunRecapBody
           body={view.body}
           onRetry={recap.retry}
-          onOpenChat={() =>
-            openRun({ botId: row.botId, groupId: row.groupId, sourceMessageId: view.jumpTo })
+          onOpenChat={
+            openRun &&
+            (() =>
+              openRun({ botId: row.botId, groupId: row.groupId, sourceMessageId: view.jumpTo }))
           }
         />
       ) : null}
@@ -402,7 +405,7 @@ function RunRecapBody({
 }: {
   body: RecapBody;
   onRetry: () => void;
-  onOpenChat: () => void;
+  onOpenChat: (() => void) | undefined;
 }) {
   const { t } = useLingui();
   return (
@@ -422,9 +425,11 @@ function RunRecapBody({
       ) : body.kind === "no_report" ? (
         <p className="text-meta text-muted-foreground">{t`No report`}</p>
       ) : null}
-      <Button variant="tertiary" size="capsule" className="-ms-3" onClick={onOpenChat}>
-        {t`Open in chat`}
-      </Button>
+      {onOpenChat ? (
+        <Button variant="tertiary" size="capsule" className="-ms-3" onClick={onOpenChat}>
+          {t`Open in chat`}
+        </Button>
+      ) : null}
     </div>
   );
 }
