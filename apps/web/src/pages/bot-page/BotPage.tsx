@@ -27,7 +27,8 @@ import type { BotAction, BotCommands } from "../shell/bot-commands";
 import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
 import { BotActivity } from "./BotActivity";
 import { BotHero } from "./BotHero";
-import { type BotPageContext, useBotField, useConfirm } from "./page-kit";
+import type { BotPageContext } from "./page-kit";
+import { useBotField, useConfirm } from "./page-kit";
 import { RoutineCreateForm } from "./RoutineCreateForm";
 import { RoutineDetail } from "./RoutineDetail";
 import { RoutinesTab } from "./RoutinesTab";
@@ -189,7 +190,7 @@ export function BotPage({
             <div className="px-4 pt-5 pb-4">
               <TabsList variant="segmented" className="w-full">
                 {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
-                  <TabsTrigger key={tab} value={tab}>
+                  <TabsTrigger key={tab} value={tab} data-testid={`bot-tab-${tab}`}>
                     {tabLabels[tab]}
                   </TabsTrigger>
                 ))}

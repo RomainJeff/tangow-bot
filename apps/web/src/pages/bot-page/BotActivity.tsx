@@ -10,7 +10,7 @@ import {
   reduceActivity,
   threadTimeMarkerLabel,
 } from "@rakazo/core";
-import { Button, Shimmer, Skeleton } from "@rakazo/ui-web";
+import { Button, ClippedPreview, Shimmer, Skeleton } from "@rakazo/ui-web";
 import {
   CalendarPlus,
   ChevronRight,
@@ -27,7 +27,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -423,51 +422,32 @@ function RunRecapBody({
   );
 }
 
-/** One line of the 23 px body; a recap shows eight before "Show more". */
-const LINE_HEIGHT_PX = 23;
-const RECAP_LINES = 8;
-
 /**
  * A recap in the chat's own markdown, without remote images, cut to eight lines when it hides at
- * least three more, with "Show more" to read the rest in place.
+ * least three more; pressing the preview shows the rest in place.
  */
 function RecapText({ text }: { text: string }) {
   const { t } = useLingui();
-  const [element, setElement] = useState<HTMLDivElement | null>(null);
-  const [long, setLong] = useState(false);
   const [more, setMore] = useState(false);
-  useLayoutEffect(() => {
-    if (!element) return;
-    const measure = () => setLong(element.scrollHeight > (RECAP_LINES + 3) * LINE_HEIGHT_PX);
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [element]);
-  const cut = long && !more;
-  return (
-    <>
-      <div
-        className="relative w-full overflow-hidden"
-        style={cut ? { maxHeight: RECAP_LINES * LINE_HEIGHT_PX } : undefined}
+  const markdown = (
+    <div dir="auto">
+      <ChatMarkdown allowImages={false}>{truncateMarkdownForRender(text)}</ChatMarkdown>
+    </div>
+  );
+  return more ? (
+    <div className="w-full">{markdown}</div>
+  ) : (
+    <div className="w-full">
+      <ClippedPreview
+        text={text}
+        maxLines={8}
+        fadeFrom="from-surface"
+        onOpen={() => setMore(true)}
+        ariaLabel={t`Show more`}
       >
-        <div ref={setElement} dir="auto">
-          <ChatMarkdown allowImages={false}>{truncateMarkdownForRender(text)}</ChatMarkdown>
-        </div>
-        {cut ? (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-linear-to-t from-surface to-transparent"
-          />
-        ) : null}
-      </div>
-      {cut ? (
-        <Button variant="tertiary" size="capsule" className="-ms-3" onClick={() => setMore(true)}>
-          {t`Show more`}
-        </Button>
-      ) : null}
-    </>
+        {markdown}
+      </ClippedPreview>
+    </div>
   );
 }
 

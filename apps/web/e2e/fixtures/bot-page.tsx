@@ -137,6 +137,7 @@ function run(index: number, hoursAgo: number, extra: Partial<RunActivityRow>): R
     trigger: "routine",
     notificationsEnabled: true,
     promptSnippet: "",
+    createdAt: at(-hoursAgo * HOUR),
     updatedAt: at(-hoursAgo * HOUR),
     routineId: null,
     routineName: null,
@@ -232,7 +233,7 @@ const ACTIVE = new Set(["queued", "leased", "running", "waiting_input", "waiting
 function listActivity(input: BotActivityInput) {
   const entries: Entry[] = [
     ...RUNS.filter((row) => !ACTIVE.has(row.status)).map((row) => ({
-      at: row.startedAt ?? row.updatedAt,
+      at: row.createdAt,
       id: row.runId,
       item: { kind: "routine_run" as const, run: row },
     })),

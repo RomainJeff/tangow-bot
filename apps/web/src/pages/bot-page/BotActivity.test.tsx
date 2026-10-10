@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import type { BotActivityItem, BotActivityOutput, RunActivityRow } from "@rakazo/contracts";
-import { act, type ReactNode } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import type { ReactNode } from "react";
+import { act } from "react";
+import type { Root } from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({ bots: { activity: vi.fn() }, runs: { recap: vi.fn() } }));
@@ -38,6 +40,7 @@ function run(id: string, minutesAgo: number, extra: Partial<RunActivityRow> = {}
       trigger: "routine",
       notificationsEnabled: false,
       promptSnippet: "",
+      createdAt: at,
       updatedAt: at,
       routineId: "r-1",
       routineName: "Sweep",
@@ -205,13 +208,16 @@ it("cuts a long recap and shows the rest in place", async () => {
   await act(async () =>
     container.querySelector<HTMLButtonElement>('[data-testid="activity-run"]')!.click(),
   );
-  const clip = () => container.querySelector<HTMLElement>('[data-testid="activity-recap"] > div');
+  const clip = () => container.querySelector<HTMLElement>('[data-slot="clipped-preview"]');
+  const showMore = () =>
+    container.querySelector<HTMLButtonElement>('button[aria-label="Show more"]');
   expect(clip()?.style.maxHeight).toBe("184px");
 
-  await act(async () => button("Show more")?.click());
+  await act(async () => showMore()?.click());
 
-  expect(clip()?.style.maxHeight).toBe("");
-  expect(button("Show more")).toBeUndefined();
+  expect(clip()).toBeNull();
+  expect(showMore()).toBeNull();
+  expect(recapText()).toContain("A long report");
 });
 
 it("folds a routine's successful runs in a row and keeps a failure on its own line", async () => {

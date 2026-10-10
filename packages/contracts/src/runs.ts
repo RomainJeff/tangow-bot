@@ -12,6 +12,7 @@ export const RunActivityRowSchema = z.object({
   trigger: RunTrigger,
   notificationsEnabled: z.boolean(),
   promptSnippet: z.string(),
+  createdAt: z.string(),
   updatedAt: z.string(),
   routineId: Id.nullable(),
   routineName: z.string().nullable(),

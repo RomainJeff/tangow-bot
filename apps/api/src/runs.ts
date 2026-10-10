@@ -71,6 +71,7 @@ export function mapRun(row: RunRow): RunActivityRow {
       prompt: row.task.prompt,
       sourceBlocks: row.sourceMessage?.blocks,
     }),
+    createdAt: row.createdAt.toISOString(),
     updatedAt: (isTerminal(status) && row.completedAt
       ? row.completedAt
       : row.updatedAt

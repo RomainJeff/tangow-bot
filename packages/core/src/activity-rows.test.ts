@@ -1,13 +1,7 @@
 import type { BotActivityItem, MessageBlock, RunActivityRow } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import {
-  type ActivityRead,
-  dayMarkers,
-  foldActivity,
-  recapView,
-  reduceActivity,
-  runRecap,
-} from "./activity-rows.js";
+import type { ActivityRead } from "./activity-rows.js";
+import { dayMarkers, foldActivity, recapView, reduceActivity, runRecap } from "./activity-rows.js";
 
 function row(id: string, overrides: Partial<RunActivityRow> = {}): RunActivityRow {
   return {
@@ -21,6 +15,7 @@ function row(id: string, overrides: Partial<RunActivityRow> = {}): RunActivityRo
     trigger: "routine",
     notificationsEnabled: false,
     promptSnippet: "",
+    createdAt: "2026-10-06T10:00:00.000Z",
     updatedAt: "2026-10-06T10:00:00.000Z",
     routineId: "routine_1",
     routineName: "Morning digest",
@@ -142,9 +137,15 @@ describe("foldActivity", () => {
 
 describe("dayMarkers", () => {
   const at = (id: string, completedAt: string, overrides: Partial<RunActivityRow> = {}) =>
-    run(id, { completedAt, updatedAt: completedAt, routineId: null, ...overrides });
+    run(id, {
+      completedAt,
+      createdAt: completedAt,
+      updatedAt: completedAt,
+      routineId: null,
+      ...overrides,
+    });
 
-  it("groups items by the day they started in the given zone, with the time it read", () => {
+  it("groups items by the day they were created in the given zone, with the time it read", () => {
     const items = foldActivity([
       at("late", "2026-10-06T23:30:00.000Z"),
       at("early", "2026-10-06T03:00:00.000Z"),
@@ -184,27 +185,17 @@ describe("dayMarkers", () => {
     expect(dayMarkers(items, "UTC").map((group) => group.day)).toEqual([null, "2026-10-06"]);
   });
 
-  it("files a run that finished after midnight under the day it started", () => {
+  it("groups by creation day, as the server sorts, whenever a run started or finished", () => {
     const items = foldActivity([
-      at("short", "2026-10-05T23:58:00.000Z", { startedAt: "2026-10-05T23:55:00.000Z" }),
-      at("long", "2026-10-06T00:10:00.000Z", { startedAt: "2026-10-05T23:40:00.000Z" }),
-      at("earlier", "2026-10-05T20:00:00.000Z", { startedAt: "2026-10-05T19:59:00.000Z" }),
+      at("overnight", "2026-10-10T00:20:00.000Z", {
+        createdAt: "2026-10-09T23:20:00.000Z",
+        startedAt: "2026-10-10T00:05:00.000Z",
+      }),
+      routineCreated("routine_2", "2026-10-09T23:30:00.000Z"),
     ]);
-    expect(dayMarkers(items, "UTC").map((group) => [group.day, group.items.length])).toEqual([
-      ["2026-10-05", 3],
-    ]);
-  });
-
-  it("never repeats a day label when start times disagree with the list order", () => {
-    const items = foldActivity([
-      at("a", "2026-10-05T23:58:00.000Z"),
-      at("b", "2026-10-06T00:10:00.000Z"),
-      at("c", "2026-10-05T20:00:00.000Z"),
-    ]);
-    expect(dayMarkers(items, "UTC").map((group) => group.day)).toEqual([
-      "2026-10-05",
-      "2026-10-06",
-    ]);
+    expect(
+      dayMarkers(items, "UTC").map((group) => [group.day, group.items.map((item) => item.kind)]),
+    ).toEqual([["2026-10-09", ["run", "routine_created"]]]);
   });
 
   it("places a folded item under the day of its newest run", () => {

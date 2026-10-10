@@ -171,12 +171,12 @@ export async function openRoutines(page: Page) {
 
 /**
  * The form for a new routine, from "New routine" on the Routines tab. The button and the tab
- * are found by test id and position, so this works in any interface language.
+ * are found by test id, so this works in any interface language.
  */
 export async function openRoutineCreate(page: Page) {
   const botPage = await openBotPage(page);
   const add = botPage.getByTestId("routine-create-button");
-  if (!(await add.isVisible())) await botPage.getByRole("tab").nth(1).click();
+  if (!(await add.isVisible())) await botPage.getByTestId("bot-tab-routines").click();
   await add.click();
   await expect(page.getByTestId("side-panel")).toHaveAttribute("data-detail", "routine-new");
 }

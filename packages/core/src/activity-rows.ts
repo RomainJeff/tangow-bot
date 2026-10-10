@@ -78,16 +78,12 @@ export function foldActivity(entries: readonly BotActivityItem[]): ActivityItem[
   return items;
 }
 
-function runStart(row: RunActivityRow): string {
-  return row.startedAt ?? row.completedAt ?? row.updatedAt;
-}
-
 function itemTime(item: ActivityItem): string {
   switch (item.kind) {
     case "run":
-      return runStart(item.row);
+      return item.row.createdAt;
     case "folded":
-      return item.runs[0] ? runStart(item.runs[0]) : "";
+      return item.runs[0]?.createdAt ?? "";
     case "routine_created":
     case "bot_created":
       return item.createdAt;
@@ -95,8 +91,8 @@ function itemTime(item: ActivityItem): string {
 }
 
 /**
- * Groups items under the calendar day, in `timeZone`, they started on, which follows the list's
- * order. Active runs lead under a `null` day because they have not finished. A folded item sits
+ * Groups items under the calendar day, in `timeZone`, they were created on: the key the server
+ * sorts by, so the days follow the list's order. Active runs lead under a `null` day because they have not finished. A folded item sits
  * under the day of its newest run.
  */
 export function dayMarkers(items: readonly ActivityItem[], timeZone: string): ActivityDay[] {
@@ -107,18 +103,13 @@ export function dayMarkers(items: readonly ActivityItem[], timeZone: string): Ac
     day: "2-digit",
   });
   const days: ActivityDay[] = [];
-  const seen = new Set<string | null>();
   for (const item of items) {
     const at = itemTime(item);
     const active = item.kind === "run" && ACTIVE.has(item.row.status);
     const day = active ? null : format.format(new Date(at));
     const last = days.at(-1);
-    // Start times only approximate the creation order the list pages by: never repeat a day label.
-    if (last && (last.day === day || seen.has(day))) last.items.push(item);
-    else {
-      seen.add(day);
-      days.push({ day, at, items: [item] });
-    }
+    if (last && last.day === day) last.items.push(item);
+    else days.push({ day, at, items: [item] });
   }
   return days;
 }
