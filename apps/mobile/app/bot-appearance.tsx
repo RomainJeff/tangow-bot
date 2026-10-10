@@ -7,7 +7,7 @@ import { useAvatarStyle } from "../components/avatar-style";
 import { BotAvatar } from "../components/bot-avatar";
 import { SaveMeta } from "../components/bot-page/kit";
 import { mobileTokens } from "../lib/appearance";
-import { type BotPageContext, useBotPageContext, useBotSetting } from "../lib/bot-page";
+import { type BotPageContext, shownSave, useBotPageContext, useBotSetting } from "../lib/bot-page";
 import { useI18n } from "../lib/i18n";
 import { useThemedStyles } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
@@ -25,7 +25,7 @@ function AppearancePicker({ page }: { page: BotPageContext }) {
   const { avatarStyle } = useAvatarStyle();
   const color = useBotSetting(page, "color");
   const shape = useBotSetting(page, "shapeSeed");
-  const failed = color.state.kind === "failed" ? color : shape;
+  const meta = shownSave([color, shape]);
   return (
     <View style={styles.sheet}>
       {avatarStyle === "organic" ? (
@@ -82,10 +82,7 @@ function AppearancePicker({ page }: { page: BotPageContext }) {
         })}
       </View>
       <View style={styles.meta}>
-        <SaveMeta
-          state={color.state.kind !== "idle" ? color.state : shape.state}
-          onRetry={() => void failed.retry()}
-        />
+        {meta ? <SaveMeta state={meta.state} onRetry={() => void meta.retry()} /> : null}
       </View>
     </View>
   );

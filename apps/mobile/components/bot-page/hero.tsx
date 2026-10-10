@@ -1,9 +1,8 @@
 import { BOT_NAME_MAX_LENGTH, BOT_TITLE_MAX_LENGTH } from "@rakazo/contracts";
-import type { FieldSaveState } from "@rakazo/core";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, type TextStyle, View } from "react-native";
 import { mobileTokens } from "../../lib/appearance";
-import { type BotPageContext, type FieldSave, useBotSetting } from "../../lib/bot-page";
+import { type BotPageContext, type FieldSave, shownSave, useBotSetting } from "../../lib/bot-page";
 import { useI18n } from "../../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../../lib/native";
 import { leaveTextField, restingText } from "../../lib/text-field";
@@ -26,7 +25,7 @@ export function BotHero({
   const title = useBotSetting(page, "title");
   const color = useBotSetting(page, "color");
   const shape = useBotSetting(page, "shapeSeed");
-  const meta = heroMeta([name, title, color, shape]);
+  const meta = shownSave([name, title, color, shape]);
 
   return (
     <View style={styles.hero}>
@@ -115,20 +114,6 @@ function HeroText({
       textAlign="center"
       style={style}
     />
-  );
-}
-
-type HeroField = Pick<FieldSave<unknown>, "state" | "retry">;
-
-/** The hero shares one meta line: a failure first, then a save in flight, then the latest save. */
-function heroMeta(fields: HeroField[]): HeroField | undefined {
-  const savedAt = (state: FieldSaveState<unknown>) => (state.kind === "saved" ? state.at : 0);
-  return (
-    fields.find((field) => field.state.kind === "failed") ??
-    fields.find((field) => field.state.kind === "saving") ??
-    fields
-      .filter((field) => field.state.kind === "saved")
-      .sort((a, b) => savedAt(b.state) - savedAt(a.state))[0]
   );
 }
 

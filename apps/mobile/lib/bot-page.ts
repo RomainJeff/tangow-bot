@@ -124,6 +124,18 @@ export function useBotField<V>(
   };
 }
 
+/** Several fields share one meta line: a failure first, then a save in flight, then the latest save. */
+export function shownSave<F extends Pick<FieldSave<unknown>, "state">>(fields: F[]): F | undefined {
+  const savedAt = (state: FieldSaveState<unknown>) => (state.kind === "saved" ? state.at : 0);
+  return (
+    fields.find((field) => field.state.kind === "failed") ??
+    fields.find((field) => field.state.kind === "saving") ??
+    fields
+      .filter((field) => field.state.kind === "saved")
+      .sort((a, b) => savedAt(b.state) - savedAt(a.state))[0]
+  );
+}
+
 /** A field of the bot written with `bots/update`. */
 export function useBotSetting<K extends keyof BotPatch>(
   page: BotPageContext,
