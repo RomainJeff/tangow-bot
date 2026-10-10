@@ -486,11 +486,33 @@ describe("skill library", () => {
       "restore",
       "setAccess",
       "trash",
+      "uids",
       "undo",
       "update",
       "usage",
       "versions",
     ]);
+  });
+
+  it("reads the uids while a write holds the owner lock, and when the lock is down", async () => {
+    const data = await dataDir();
+    const lock = createInMemorySkillLock();
+    const { library } = testLibrary(data, { lock });
+    const { uid } = await library.forOwner(owner).create(skillMd("Deploy"));
+    let release = () => {};
+    const held = lock.run(owner, () => new Promise<void>((resolve) => (release = resolve)));
+    const broken = testLibrary(data, {
+      lock: {
+        run: async () => {
+          throw new Error("lock unreachable");
+        },
+      },
+    }).library;
+
+    expect([...(await library.forOwner(owner).uids())]).toEqual([["user:deploy", uid]]);
+    expect([...(await broken.forOwner(owner).uids())]).toEqual([["user:deploy", uid]]);
+    release();
+    await held;
   });
 
   it("orders two concurrent writers through the owner lock, losing neither", async () => {
@@ -1025,5 +1047,107 @@ describe("what a bot may write anywhere in the folder", () => {
     expect(await refusal(ada.create(one("A", "references/sk-live-123456.md", text("ok"))))).toBe(
       "invalid",
     );
+  });
+});
+
+describe("what each bot run did to the skills", () => {
+  const described = (name: string, description: string, body = "Steps"): SkillContent => ({
+    kind: "skill-md",
+    name,
+    content: buildSkillMd({ name, description, body }),
+  });
+  const summary = async (
+    library: ReturnType<typeof testLibrary>["library"],
+    runIds = ["run-1", "run-2", "run-3", "run-4"],
+  ) =>
+    Object.fromEntries(
+      [...(await library.changesByRun(owner, runIds))].map(([runId, changes]) => [
+        runId,
+        changes.map(({ change, key, name, reachesOtherBots }) => ({
+          change,
+          key,
+          name,
+          reachesOtherBots,
+        })),
+      ]),
+    );
+
+  it("folds a run's writes into one change per skill, under the skill's final name", async () => {
+    const { library } = testLibrary(await dataDir());
+    const first = library.forBot(owner, bot("run-1", "call-1"));
+    await first.create(skillMd("Coffee"));
+    await library
+      .forBot(owner, bot("run-1", "call-2"))
+      .update("user:coffee", skillMd("Coffee", "More"));
+    await library.forOwner(owner).create(skillMd("Tea"));
+    await library.forBot(owner, bot("run-2")).update("user:coffee", skillMd("Coffee", "Again"));
+    await library.forBot(owner, bot("run-3")).delete("user:tea");
+    await library.forOwner(owner).update("user:coffee", skillMd("Espresso", "Again"));
+
+    expect(await summary(library)).toEqual({
+      "run-1": [
+        { change: "learned", key: "user:espresso", name: "Espresso", reachesOtherBots: false },
+      ],
+      "run-2": [
+        { change: "updated", key: "user:espresso", name: "Espresso", reachesOtherBots: false },
+      ],
+      "run-3": [{ change: "deleted", key: "user:tea", name: "Tea", reachesOtherBots: false }],
+    });
+    expect(await summary(library, ["run-3", "run-9"])).toEqual({
+      "run-3": [{ change: "deleted", key: "user:tea", name: "Tea", reachesOtherBots: false }],
+    });
+  });
+
+  it("says when a run changed what other bots read of a skill they share", async () => {
+    const { library, prisma } = testLibrary(await dataDir());
+    await library.forOwner(owner).create(described("Shared", "Book a table"));
+    await library.forOwner(owner).create(described("Mine", "Plan a trip"));
+    prisma.skillSetting.rows.push({ ...owner, skillKey: "user:mine", availability: "selected" });
+    prisma.botSkill.rows.push({ ...owner, botId: "bot-1", skillKey: "user:mine", enabled: true });
+
+    await library
+      .forBot(owner, bot("run-1"))
+      .update("user:shared", described("Shared", "Book a table", "Call first"));
+    await library
+      .forBot(owner, bot("run-2"))
+      .update("user:shared", described("Shared", "Book and pay"));
+    await library
+      .forBot(owner, bot("run-3"))
+      .update("user:mine", described("Mine", "Plan and book"));
+    await library.forBot(owner, bot("run-4")).update("user:shared", {
+      ...files("Shared", { "scripts/pay.sh": "echo pay" }),
+      content: buildSkillMd({ name: "Shared", description: "Book and pay", body: "Steps" }),
+    });
+
+    const reaches = Object.fromEntries(
+      Object.entries(await summary(library)).map(([runId, [change]]) => [
+        runId,
+        change?.reachesOtherBots,
+      ]),
+    );
+    expect(reaches).toEqual({ "run-1": false, "run-2": true, "run-3": false, "run-4": true });
+  });
+
+  it("still reads the other runs when a version on disk is damaged", async () => {
+    const data = await dataDir();
+    const { library } = testLibrary(data);
+    await library.forOwner(owner).create(described("Shared", "Book a table"));
+    await library.forBot(owner, bot("run-1")).create(skillMd("Coffee"));
+    await library
+      .forBot(owner, bot("run-2"))
+      .update("user:shared", described("Shared", "Book a table", "Call first"));
+    const skills = path.join(data, ...skillHistorySegments(owner), "skills");
+    for (const uid of await readdir(skills)) {
+      const versions = path.join(skills, uid, "versions");
+      for (const version of await readdir(versions)) {
+        const file = path.join(versions, version, "files", "SKILL.md");
+        if ((await readFile(file, "utf8")).includes("Call first")) await writeFile(file, "torn");
+      }
+    }
+
+    expect(await summary(library)).toEqual({
+      "run-1": [{ change: "learned", key: "user:coffee", name: "Coffee", reachesOtherBots: false }],
+      "run-2": [{ change: "updated", key: "user:shared", name: "Shared", reachesOtherBots: true }],
+    });
   });
 });

@@ -3,6 +3,10 @@ import * as z from "zod";
 export const Id = z.string().min(1);
 export const IsoDate = z.string().datetime({ offset: true });
 
+/** A user skill's stable id: it never changes when the skill is renamed. */
+export const SKILL_UID_PATTERN = /^[0-9a-f]{32}$/;
+export const SkillUidSchema = z.string().regex(SKILL_UID_PATTERN);
+
 export const ActorSchema = z.object({
   userId: Id,
   spaceId: Id,
