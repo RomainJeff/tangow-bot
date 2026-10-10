@@ -21,6 +21,8 @@ const STATES: Array<{ name: string; query: string; trigger?: RegExp }> = [
   },
   { name: "routine-new", query: "tab=routines&detail=routine-new" },
   { name: "knowledge", query: "tab=knowledge" },
+  { name: "memory", query: "tab=knowledge&detail=memory" },
+  { name: "skill", query: "tab=knowledge&detail=skill" },
   { name: "instructions", query: "tab=settings&detail=instructions" },
   { name: "description", query: "tab=settings&detail=description" },
   { name: "model", query: "tab=settings&detail=model" },
@@ -40,6 +42,9 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       if (state.name === "knowledge") {
         await expect(page.getByTestId("bot-knowledge-memory")).toContainText("MEMORY.md");
+      }
+      if (state.name === "memory" || state.name === "skill") {
+        await expect(botPage.locator("textarea")).not.toHaveValue("");
       }
       if (state.trigger) {
         await page.getByRole("button", { name: state.trigger }).click();
@@ -223,6 +228,34 @@ test("Knowledge shows memory, files and skills", async ({ page }) => {
   await expect(knowledge.getByTestId("bot-knowledge-memory")).toContainText("MEMORY.md");
   await expect(knowledge).toContainText("inbox-report.md");
   await expect(knowledge.getByTestId("bot-skills")).toContainText("inbox-triage");
+});
+
+test("a memory document and a skill open wide, and focus returns to their row", async ({
+  page,
+}) => {
+  await page.goto(`${FIXTURE}?tab=knowledge`);
+  const panel = page.getByTestId("side-panel");
+  const memoryRow = page.getByTestId("bot-knowledge-memory").getByRole("button", {
+    name: /MEMORY\.md/,
+  });
+  await memoryRow.click();
+  await expect(panel).toHaveAttribute("data-detail", "memory");
+  await expect(panel).toHaveAttribute("data-size", "wide");
+  await expect(panel.locator("textarea")).toHaveValue(/Counsel prefers a reply before 10:00/);
+  await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-size", "default");
+  await expect(memoryRow).toBeFocused();
+
+  const skillRow = page.getByTestId("bot-skills").getByRole("button", { name: /inbox-triage/ });
+  await skillRow.click();
+  await expect(panel).toHaveAttribute("data-detail", "skill");
+  await expect(panel).toHaveAttribute("data-size", "wide");
+  await expect(panel.getByTestId("bot-knowledge-skill-editor").locator("textarea")).toHaveValue(
+    /Read every unread email/,
+  );
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveAttribute("data-size", "default");
+  await expect(skillRow).toBeFocused();
 });
 
 test("a routine row says how its last run went, and its switch saves on its own", async ({

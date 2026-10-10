@@ -1,9 +1,16 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import type { MemoryDocument } from "@rakazo/contracts";
 import { NativeSelect, NativeSelectOption, SaveMeta, SettingRow, Surface } from "@rakazo/ui-web";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { rpc } from "../../lib/rpc";
-import { AgentFiles, AgentSkills, MemoryDocumentList } from "../KnowledgeSection";
+import {
+  AgentFiles,
+  AgentSkills,
+  MemoryDocumentEditor,
+  MemoryDocumentList,
+} from "../KnowledgeSection";
 import { ScratchpadSection } from "../ScratchpadSection";
+import type { BotDetail } from "../shell/layout";
 import { type BotPageContext, SettingsGroup, useBotField, useSaveLabels } from "./page-kit";
 
 type MemoryScopeChoice = "" | "isolated" | "shared";
@@ -12,9 +19,12 @@ type MemoryScopeChoice = "" | "isolated" | "shared";
 export function KnowledgeTab({
   page,
   memoryProviderConfigured,
+  onOpen,
 }: {
   page: BotPageContext;
   memoryProviderConfigured: boolean;
+  /** Memory documents and the skill editor open in the wide detail. */
+  onOpen: (detail: BotDetail) => void;
 }) {
   const { t } = useLingui();
   const { bot } = page;
@@ -27,6 +37,7 @@ export function KnowledgeTab({
           exportFilename="memory.md"
           emptyLabel={<Trans>Nothing remembered yet</Trans>}
           testId="bot-knowledge-memory"
+          onOpen={(doc) => onOpen({ kind: "memory", documentId: doc.id })}
         />
       </KnowledgeGroup>
       {memoryProviderConfigured ? (
@@ -38,7 +49,11 @@ export function KnowledgeTab({
         <AgentFiles key={bot.id} botId={bot.id} />
       </KnowledgeGroup>
       <KnowledgeGroup label={t`Skills`} testId="bot-skills">
-        <AgentSkills botId={bot.id} onChanged={page.commands.skillsChanged} />
+        <AgentSkills
+          botId={bot.id}
+          onChanged={page.commands.skillsChanged}
+          onOpenEditor={(skillId) => onOpen({ kind: "skill", skillId })}
+        />
       </KnowledgeGroup>
       <ScratchpadSection botId={bot.id} />
     </div>
@@ -87,5 +102,53 @@ function MemoryScopeRow({ page }: { page: BotPageContext }) {
         <NativeSelectOption value="shared">{t`Shared`}</NativeSelectOption>
       </NativeSelect>
     </SettingRow>
+  );
+}
+
+/** One memory document of the bot, read fresh, with its own Save and Cancel. */
+export function MemoryDetail({
+  botId,
+  documentId,
+  onDone,
+}: {
+  botId: string;
+  documentId: string;
+  onDone: () => void;
+}) {
+  const { t } = useLingui();
+  const [read, setRead] = useState<
+    { kind: "loading" } | { kind: "failed" } | { kind: "ready"; doc: MemoryDocument | undefined }
+  >({ kind: "loading" });
+  useEffect(() => {
+    let cancelled = false;
+    rpc.memory
+      .list({ botId, scope: "bot" })
+      .then((docs) => {
+        if (!cancelled) setRead({ kind: "ready", doc: docs.find((doc) => doc.id === documentId) });
+      })
+      .catch(() => {
+        if (!cancelled) setRead({ kind: "failed" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [botId, documentId]);
+  // A document that is gone (removed by the bot) leaves the tab showing.
+  const missing = read.kind === "ready" && !read.doc;
+  useEffect(() => {
+    if (missing) onDone();
+  }, [missing, onDone]);
+
+  if (read.kind === "failed") {
+    return <p className="py-10 text-center text-meta text-muted-foreground">{t`Could not load`}</p>;
+  }
+  if (read.kind !== "ready" || !read.doc) return null;
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="px-2.5 text-title text-foreground" dir="auto">
+        {read.doc.path}
+      </h2>
+      <MemoryDocumentEditor doc={read.doc} onSaved={onDone} onCancel={onDone} />
+    </section>
   );
 }

@@ -39,6 +39,15 @@ import { SettingsTab } from "./SettingsTab";
 const KnowledgeTab = lazy(() =>
   import("./KnowledgeTab").then((module) => ({ default: module.KnowledgeTab })),
 );
+const MemoryDetail = lazy(() =>
+  import("./KnowledgeTab").then((module) => ({ default: module.MemoryDetail })),
+);
+const AgentSkillEditor = lazy(() =>
+  import("../KnowledgeSection").then((module) => ({ default: module.AgentSkillEditor })),
+);
+
+/** Details whose first stop is the back button rather than a field of their own. */
+const FOCUS_BACK: ReadonlySet<BotDetail["kind"]> = new Set(["model", "voice", "memory", "skill"]);
 
 export interface BotPageProps {
   bot: Bot;
@@ -106,9 +115,22 @@ export function BotPage({
   useEffect(() => {
     const closed = lastDetail.current;
     lastDetail.current = detail;
-    if (detail?.kind === "model" || detail?.kind === "voice") backButton.current?.focus();
-    if (detail || !closed) return;
-    root.current?.querySelector<HTMLElement>(`[data-opens="${detailOpener(closed)}"]`)?.focus();
+    if (detail && FOCUS_BACK.has(detail.kind)) backButton.current?.focus();
+    const page = root.current;
+    if (detail || !closed || !page) return;
+    // A row read again on the way back (a memory document, a skill) is focused once it is there.
+    const selector = `[data-opens="${detailOpener(closed)}"]`;
+    const focusOpener = () => {
+      const opener = page.querySelector<HTMLElement>(selector);
+      opener?.focus();
+      return opener !== null;
+    };
+    if (focusOpener()) return;
+    const observer = new MutationObserver(() => {
+      if (focusOpener()) observer.disconnect();
+    });
+    observer.observe(page, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [detail]);
 
   return (
@@ -167,6 +189,23 @@ export function BotPage({
             />
           ) : null}
         </div>
+      ) : detail?.kind === "memory" || detail?.kind === "skill" ? (
+        <div className="rk-scroll min-h-0 flex-1 overflow-y-auto px-4 pt-1 pb-4">
+          <Suspense fallback={null}>
+            {detail.kind === "memory" ? (
+              <MemoryDetail botId={bot.id} documentId={detail.documentId} onDone={back} />
+            ) : (
+              <AgentSkillEditor
+                key={detail.skillId}
+                skillId={detail.skillId}
+                onDone={(changed) => {
+                  if (changed) commands.skillsChanged();
+                  back();
+                }}
+              />
+            )}
+          </Suspense>
+        </div>
       ) : detail?.kind === "routine-new" ? (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto">
           <RoutineCreateForm
@@ -221,7 +260,11 @@ export function BotPage({
               </TabsContent>
               <TabsContent value="knowledge" className="px-4">
                 <Suspense fallback={null}>
-                  <KnowledgeTab page={page} memoryProviderConfigured={memoryProviderConfigured} />
+                  <KnowledgeTab
+                    page={page}
+                    memoryProviderConfigured={memoryProviderConfigured}
+                    onOpen={open}
+                  />
                 </Suspense>
               </TabsContent>
               <TabsContent value="settings" className="px-4">
