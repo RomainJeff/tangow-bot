@@ -405,30 +405,21 @@ A skill a bot learns, improves or deletes draws one line per skill under the
 bot's message: `BookOpen` and "Skill learned · <name>", "Skill updated · <name>"
 or "Skill deleted · <name>", the `meta` of `MessageBubble`. It opens the skill
 in the bot page's Knowledge tab, or the list when the skill is gone or not the
-reader's. On web a "Skill deleted" line names the skill without a link, as does
-any line in a group, since a group has no bot page. A message with no text draws the line alone through `MessageMeta`.
+reader's. A "Skill deleted" line names the skill without a link, on web and
+iPhone, as does any line in a group on web, since a group has no bot page. A message with no text draws the line alone through `MessageMeta`.
 A line that arrives live rises (`rk-arrive`) and its icon pops (`bui-pop-in`),
 both over `--duration-arrive`, half of it late, as on iPhone; a line in loaded
 history is still, and reduced motion stills both. The `skill_source` block
 carries the skill; `skillSourcesOf` in `packages/core/src/skill-source.ts` reads
 it.
 
-### Versions of a skill
+### A skill on iPhone
 
 On iPhone a skill line opens the skill's own screen: its SKILL.md, edited like a
-memory document, then a `Group` "Versions" with a `GroupAction` "Undo" on its
-label line and a `Row` per version (the native check on the current one, dimmed
-when undone); the field holds a draft only while it is edited, so it never shows
-a text the server no longer has. A refusal reads as the server's sentence only
-for a conflict or a bad request, else as what failed ("Could not undo", "Could
-not delete").
-
-### Recently deleted
-
-On iPhone, deleted skills wait in the last row of the Installed list in Skills,
-with the count. It pushes a screen whose rows open an action sheet (Undo, Delete
-now); a "Skill deleted" line opens that screen too. A restored skill that no bot
-uses says "No bot uses this skill yet."
+memory document, and Delete under the header's `⋯`. The field holds a draft only
+while it is edited, so it never shows a text the server no longer has. A refusal
+reads as the server's sentence only for a conflict or a bad request, else as
+what failed ("Could not delete skill").
 
 ### Clipped preview
 

@@ -9,10 +9,6 @@ describe("the SKILL.md field", () => {
     expect(skillText(null, null)).toBe("");
   });
 
-  it("follows what the server holds after an Undo, never an old text", () => {
-    expect(skillText("older version after Undo", null)).toBe("older version after Undo");
-  });
-
   it("shows the draft while editing", () => {
     expect(skillText(loaded, "Grind, brew, serve.")).toBe("Grind, brew, serve.");
   });
