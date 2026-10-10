@@ -2732,27 +2732,6 @@ export function createRouter(deps: RouterDeps) {
       setAccess: authed.agentSkills.setAccess.handler(async ({ context, input }) =>
         agentSkills.setAccess(context.actor, input),
       ),
-      versions: authed.agentSkills.versions.handler(async ({ context, input }) =>
-        agentSkills.versions(context.actor, input),
-      ),
-      version: authed.agentSkills.version.handler(async ({ context, input }) =>
-        agentSkills.version(context.actor, input),
-      ),
-      undo: authed.agentSkills.undo.handler(async ({ context, input }) =>
-        agentSkills.undo(context.actor, input),
-      ),
-      deleteVersion: authed.agentSkills.deleteVersion.handler(async ({ context, input }) =>
-        agentSkills.deleteVersion(context.actor, input),
-      ),
-      restore: authed.agentSkills.restore.handler(async ({ context, input }) =>
-        agentSkills.restore(context.actor, input),
-      ),
-      purge: authed.agentSkills.purge.handler(async ({ context, input }) =>
-        agentSkills.purge(context.actor, input),
-      ),
-      trash: authed.agentSkills.trash.handler(async ({ context }) =>
-        agentSkills.trash(context.actor),
-      ),
     },
     marketplaces: {
       list: authed.marketplaces.list.handler(async ({ context }) =>
