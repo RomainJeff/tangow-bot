@@ -1309,6 +1309,11 @@ msgstr "Could not create space"
 msgid "Could not create your bot"
 msgstr "Could not create your bot"
 
+#: src/pages/RecentlyDeleted.tsx:81
+#: src/pages/SkillVersions.tsx:213
+msgid "Could not delete"
+msgstr "Could not delete"
+
 #: src/pages/shell/dialogs.tsx:404
 msgid "Could not delete bot"
 msgstr "Could not delete bot"
@@ -1499,6 +1504,10 @@ msgstr "Could not render chart"
 msgid "Could not reset password"
 msgstr "Could not reset password"
 
+#: src/pages/RecentlyDeleted.tsx:66
+msgid "Could not restore"
+msgstr "Could not restore"
+
 #: src/pages/PluginsOverlay.tsx:299
 #: src/pages/PluginsOverlay.tsx:322
 msgid "Could not revoke connection"
@@ -1583,6 +1592,10 @@ msgstr "Could not submit this answer"
 #: src/pages/Shell.tsx:2353
 msgid "Could not take control"
 msgstr "Could not take control"
+
+#: src/pages/SkillVersions.tsx:89
+msgid "Could not undo"
+msgstr "Could not undo"
 
 #: src/pages/ScratchpadSection.tsx:78
 msgid "Could not update"
@@ -1800,6 +1813,10 @@ msgstr "Delete group"
 #: src/pages/shell/dialogs.tsx:384
 msgid "Delete memories too"
 msgstr "Delete memories too"
+
+#: src/pages/RecentlyDeleted.tsx:151
+msgid "Delete now"
+msgstr "Delete now"
 
 #: src/pages/bot-page/RoutineDetail.tsx:203
 msgid "Delete routine"
@@ -2435,6 +2452,10 @@ msgstr "Last run failed"
 msgid "Later"
 msgstr "Later"
 
+#: src/pages/SkillVersions.tsx:19
+msgid "learned"
+msgstr "learned"
+
 #: src/pages/MessagingSettingsOverlay.tsx:249
 msgid "Leave"
 msgstr "Leave"
@@ -2762,6 +2783,10 @@ msgstr "Monthly"
 msgid "Monthly on day {day} at {time}"
 msgstr "Monthly on day {day} at {time}"
 
+#: src/pages/RecentlyDeleted.tsx:141
+msgid "More"
+msgstr "More"
+
 #: src/components/ComputerMaintenanceActions.tsx:123
 msgid "More computer actions"
 msgstr "More computer actions"
@@ -2876,6 +2901,10 @@ msgstr "no auth"
 #: src/pages/PluginsOverlay.tsx:1104
 msgid "No authentication"
 msgstr "No authentication"
+
+#: src/pages/KnowledgeSection.tsx:582
+msgid "No bot uses this skill yet."
+msgstr "No bot uses this skill yet."
 
 #: src/pages/shell/command-palette.tsx:107
 msgid "No bots"
@@ -3321,6 +3350,10 @@ msgstr "Recall only"
 #: src/pages/ActivityList.tsx:82
 msgid "Recent"
 msgstr "Recent"
+
+#: src/pages/RecentlyDeleted.tsx:93
+msgid "Recently deleted"
+msgstr "Recently deleted"
 
 #: src/pages/McpServersOverlay.tsx:39
 msgid "Reconnect OAuth"
@@ -4209,6 +4242,16 @@ msgstr "Unassigned"
 msgid "Unavailable"
 msgstr "Unavailable"
 
+#: src/pages/RecentlyDeleted.tsx:136
+#: src/pages/SkillVersions.tsx:112
+msgid "Undo"
+msgstr "Undo"
+
+#: src/pages/SkillVersions.tsx:151
+#: src/pages/SkillVersions.tsx:255
+msgid "Undone"
+msgstr "Undone"
+
 #: src/pages/PluginsOverlay.tsx:582
 msgid "Uninstall"
 msgstr "Uninstall"
@@ -4265,6 +4308,10 @@ msgstr "Update finished with errors"
 msgid "Update progress"
 msgstr "Update progress"
 
+#: src/pages/SkillVersions.tsx:19
+msgid "updated"
+msgstr "updated"
+
 #: src/components/SoftwareUpdateSection.tsx:178
 #: src/components/SoftwareUpdateSection.tsx:195
 msgid "Updated"
@@ -4320,6 +4367,10 @@ msgstr "Verify and add"
 #: src/pages/PluginsOverlay.tsx:1156
 msgid "Verifying…"
 msgstr "Verifying…"
+
+#: src/pages/SkillVersions.tsx:102
+msgid "Versions"
+msgstr "Versions"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189

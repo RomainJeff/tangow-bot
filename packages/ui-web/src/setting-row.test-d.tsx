@@ -13,3 +13,8 @@ export const withControl = (
 );
 
 export const pressable = <SettingRow label="Model" subline="Auto" onClick={open} chevron />;
+
+// @ts-expect-error Only a pressable row opens and closes.
+export const staticExpanded = <SettingRow label="Model" expanded />;
+
+export const disclosure = <SettingRow label="Recently deleted" onClick={open} expanded={false} />;

@@ -46,6 +46,20 @@ describe("SettingRow", () => {
     expect(html).toContain('aria-hidden="true"');
   });
 
+  it("turns its chevron down while a disclosure row is open", () => {
+    const closed = renderToString(
+      <SettingRow label="Recently deleted" onClick={() => {}} expanded={false} />,
+    );
+    const open = renderToString(
+      <SettingRow label="Recently deleted" onClick={() => {}} expanded />,
+    );
+    expect(closed).toContain('aria-expanded="false"');
+    expect(closed).toContain("<svg");
+    expect(closed).not.toContain("rotate-90");
+    expect(open).toContain('aria-expanded="true"');
+    expect(open).toContain("rotate-90");
+  });
+
   it("merges className and spreads native props", () => {
     const html = renderToString(
       <SettingRow label="Voice" className="py-0" data-testid="voice-row" aria-disabled="true" />,

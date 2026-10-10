@@ -27,12 +27,15 @@ describe("skillPageView", () => {
     });
   });
 
-  it("opens the Knowledge list for a deleted skill without looking it up", async () => {
+  it("opens Recently deleted for a deleted skill without looking it up", async () => {
     let looked = false;
     const view = await skillPageView({ skillUid: uid, change: "deleted" }, async () => {
       looked = true;
       return catalog();
     });
-    expect({ view, looked }).toEqual({ view: { tab: "knowledge", detail: null }, looked: false });
+    expect({ view, looked }).toEqual({
+      view: { tab: "knowledge", detail: null, trash: true },
+      looked: false,
+    });
   });
 });

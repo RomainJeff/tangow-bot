@@ -1309,6 +1309,11 @@ msgstr "스페이스를 만들 수 없습니다"
 msgid "Could not create your bot"
 msgstr "Bot을 만들지 못했습니다."
 
+#: src/pages/RecentlyDeleted.tsx:81
+#: src/pages/SkillVersions.tsx:213
+msgid "Could not delete"
+msgstr ""
+
 #: src/pages/shell/dialogs.tsx:404
 msgid "Could not delete bot"
 msgstr "Bot을 삭제하지 못했습니다."
@@ -1499,6 +1504,10 @@ msgstr "차트를 만들지 못했습니다."
 msgid "Could not reset password"
 msgstr "비밀번호를 재설정할 수 없습니다"
 
+#: src/pages/RecentlyDeleted.tsx:66
+msgid "Could not restore"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx:299
 #: src/pages/PluginsOverlay.tsx:322
 msgid "Could not revoke connection"
@@ -1583,6 +1592,10 @@ msgstr "답변을 보내지 못했습니다."
 #: src/pages/Shell.tsx:2353
 msgid "Could not take control"
 msgstr "직접 조작으로 전환하지 못했습니다."
+
+#: src/pages/SkillVersions.tsx:89
+msgid "Could not undo"
+msgstr ""
 
 #: src/pages/ScratchpadSection.tsx:78
 msgid "Could not update"
@@ -1800,6 +1813,10 @@ msgstr "그룹 삭제"
 #: src/pages/shell/dialogs.tsx:384
 msgid "Delete memories too"
 msgstr "기억도 함께 삭제"
+
+#: src/pages/RecentlyDeleted.tsx:151
+msgid "Delete now"
+msgstr ""
 
 #: src/pages/bot-page/RoutineDetail.tsx:203
 msgid "Delete routine"
@@ -2435,6 +2452,10 @@ msgstr "마지막 실행 실패"
 msgid "Later"
 msgstr ""
 
+#: src/pages/SkillVersions.tsx:19
+msgid "learned"
+msgstr ""
+
 #: src/pages/MessagingSettingsOverlay.tsx:249
 msgid "Leave"
 msgstr "나가기"
@@ -2762,6 +2783,10 @@ msgstr "매월"
 msgid "Monthly on day {day} at {time}"
 msgstr "매월 {day}일 {time}"
 
+#: src/pages/RecentlyDeleted.tsx:141
+msgid "More"
+msgstr ""
+
 #: src/components/ComputerMaintenanceActions.tsx:123
 msgid "More computer actions"
 msgstr "컴퓨터 작업 더보기"
@@ -2876,6 +2901,10 @@ msgstr "인증 없음"
 #: src/pages/PluginsOverlay.tsx:1104
 msgid "No authentication"
 msgstr "인증 없음"
+
+#: src/pages/KnowledgeSection.tsx:582
+msgid "No bot uses this skill yet."
+msgstr ""
 
 #: src/pages/shell/command-palette.tsx:107
 msgid "No bots"
@@ -3321,6 +3350,10 @@ msgstr ""
 #: src/pages/ActivityList.tsx:82
 msgid "Recent"
 msgstr "최근"
+
+#: src/pages/RecentlyDeleted.tsx:93
+msgid "Recently deleted"
+msgstr ""
 
 #: src/pages/McpServersOverlay.tsx:39
 msgid "Reconnect OAuth"
@@ -4209,6 +4242,16 @@ msgstr "섹션 없음"
 msgid "Unavailable"
 msgstr "사용할 수 없음"
 
+#: src/pages/RecentlyDeleted.tsx:136
+#: src/pages/SkillVersions.tsx:112
+msgid "Undo"
+msgstr ""
+
+#: src/pages/SkillVersions.tsx:151
+#: src/pages/SkillVersions.tsx:255
+msgid "Undone"
+msgstr ""
+
 #: src/pages/PluginsOverlay.tsx:582
 msgid "Uninstall"
 msgstr ""
@@ -4263,6 +4306,10 @@ msgstr "오류와 함께 업데이트가 완료되었습니다"
 
 #: src/components/ComputerUpdateProgress.tsx:118
 msgid "Update progress"
+msgstr ""
+
+#: src/pages/SkillVersions.tsx:19
+msgid "updated"
 msgstr ""
 
 #: src/components/SoftwareUpdateSection.tsx:178
@@ -4320,6 +4367,10 @@ msgstr "확인 후 추가"
 #: src/pages/PluginsOverlay.tsx:1156
 msgid "Verifying…"
 msgstr "확인 중…"
+
+#: src/pages/SkillVersions.tsx:102
+msgid "Versions"
+msgstr ""
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189

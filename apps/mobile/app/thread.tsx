@@ -43,6 +43,7 @@ import {
   selectedAskActionLabel,
   serializeComposerPrompt,
   showsTimeMarker,
+  skillSourcesOf,
   threadTimeMarkerLabel,
   truncateSlashDescription,
   userVisibleMessages,
@@ -112,7 +113,8 @@ import {
 import { AgentSteps } from "../components/agent-steps";
 import { AnimatedMessageBubble, MessageArrival } from "../components/animated-message-bubble";
 import { BotAvatar } from "../components/bot-avatar";
-import { BotBubble } from "../components/bot-bubble";
+import type { BotBubbleMeta } from "../components/bot-bubble";
+import { BotBubble, BubbleMeta } from "../components/bot-bubble";
 import { BuzzingAvatar } from "../components/buzzing-avatar";
 import { ComposerAttachment } from "../components/composer-attachment";
 import { ComposerLinkPreview } from "../components/composer-link-preview";
@@ -188,6 +190,7 @@ import { messageArrivalStaggerMs, useMessageArrivals } from "../lib/message-arri
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
+  skillLineSegment,
   stepsBlocks,
   visibleMessageBlocks,
 } from "../lib/message-presentation";
@@ -2126,10 +2129,11 @@ function Thread() {
     const withPreview = (content: ReactNode) =>
       previewNode ? (
         cardReplacesBubbleView ? (
-          // The card takes the bubble's place, and the quote it carried stays above it.
+          // The card takes the bubble's place: the quote it carried stays above it, its skill lines under it.
           <View style={{ alignItems: message.role === "user" ? "flex-end" : "flex-start" }}>
             <ReplyQuote message={message} replyPreview={replyPreviewNode} />
             {previewNode}
+            <CardSkillLines message={message} isNew={isNew} />
           </View>
         ) : (
           <View style={{ gap: 4 }}>
@@ -3434,6 +3438,17 @@ const MessageBubble = memo(function MessageBubble({
   // Mono-bot grammar (design contract §3b): the narration bubble caps at 82%
   // of the thread instead of 88% of the content column.
   const mono = !groupId;
+  const metaLines = useSkillLines(message, isNew);
+  // A card draws no bubble to hang the lines under, so they stand alone below it.
+  const withSkillLines = (card: ReactNode) =>
+    metaLines.length > 0 ? (
+      <View style={{ gap: 8, width: "100%" }}>
+        {card}
+        <BubbleMeta lines={metaLines} standalone />
+      </View>
+    ) : (
+      card
+    );
   const appConnectBlocks = message.blocks.filter(
     (block): block is Extract<MessageBlock, { kind: "app_connect" }> =>
       block.kind === "app_connect",
@@ -3461,6 +3476,7 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
         ))}
+        {metaLines.length > 0 ? <BubbleMeta lines={metaLines} standalone /> : null}
       </View>
     );
   }
@@ -3489,6 +3505,7 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
         ))}
+        {metaLines.length > 0 ? <BubbleMeta lines={metaLines} standalone /> : null}
       </View>
     );
   }
@@ -3508,7 +3525,9 @@ const MessageBubble = memo(function MessageBubble({
     const from = memberName(members, handoff.fromBotId) ?? t("bot");
     const to = memberName(members, handoff.toBotId) ?? t("bot");
     const label = t("{from} messaged {to}", { from, to });
-    return <HandoffDivider>{handoff.text ? `${label} · ${handoff.text}` : label}</HandoffDivider>;
+    return withSkillLines(
+      <HandoffDivider>{handoff.text ? `${label} · ${handoff.text}` : label}</HandoffDivider>,
+    );
   }
   const openPeerMessages = (peerBotId: string | undefined, peer: string | undefined) =>
     router.push({
@@ -3547,7 +3566,7 @@ const MessageBubble = memo(function MessageBubble({
     }));
     // Compact receipt only: peer bodies stay out of the human thread; the full
     // view-only exchange opens on its own screen.
-    return (
+    return withSkillLines(
       <Interstitial
         accessibilityLabel={label}
         avatars={<StackedAvatars items={pairItems} size={sizes.interstitial} still />}
@@ -3555,7 +3574,7 @@ const MessageBubble = memo(function MessageBubble({
         onPress={() => openPeerMessages(peerBotId, peer)}
       >
         {label}
-      </Interstitial>
+      </Interstitial>,
     );
   }
   const channelMessage = message.blocks.find(
@@ -3563,19 +3582,19 @@ const MessageBubble = memo(function MessageBubble({
       block.kind === "channel_message",
   );
   if (channelMessage) {
-    return (
+    return withSkillLines(
       <Interstitial avatars={null}>
         {`${messagingProviderLabel(channelMessage.provider, channelMessage.transport)} · ${
           channelMessage.fromLabel
         }: ${channelMessage.text}`}
-      </Interstitial>
+      </Interstitial>,
     );
   }
   const metaNote = message.blocks.find(
     (block): block is Extract<MessageBlock, { kind: "meta" }> => block.kind === "meta",
   );
   if (metaNote) {
-    return <Interstitial avatars={null}>{metaNote.text}</Interstitial>;
+    return withSkillLines(<Interstitial avatars={null}>{metaNote.text}</Interstitial>);
   }
   const routineRun = message.blocks.find(
     (block): block is Extract<MessageBlock, { kind: "routine_run" }> =>
@@ -3599,15 +3618,17 @@ const MessageBubble = memo(function MessageBubble({
       };
     };
     if (routineRole?.kind === "group") {
-      return (
-        <RoutineGroup runs={routineRole.runs} handoffFor={handoffFor} actionProps={actionProps} />
+      return withSkillLines(
+        <RoutineGroup runs={routineRole.runs} handoffFor={handoffFor} actionProps={actionProps} />,
       );
     }
     const item =
       routineRole?.kind === "run"
         ? routineRole.run
         : { messageId: message.id, createdAt: message.createdAt, run: routineRun, latest: true };
-    return <RoutineRunLine item={item} handoff={handoffFor(item)} actionProps={actionProps} />;
+    return withSkillLines(
+      <RoutineRunLine item={item} handoff={handoffFor(item)} actionProps={actionProps} />,
+    );
   }
   const special = message.blocks.find(
     (block) => block.kind === "subagent" || block.kind === "child_bot",
@@ -3616,7 +3637,7 @@ const MessageBubble = memo(function MessageBubble({
     const running = special.status === "running";
     const failed = special.status === "failed";
     const body = special.result || special.progress;
-    return (
+    return withSkillLines(
       <TaskCard
         title={special.name || t("subagent")}
         state={running ? "running" : failed ? "failed" : "done"}
@@ -3624,12 +3645,12 @@ const MessageBubble = memo(function MessageBubble({
         body={body}
         streaming={running}
         actionProps={actionProps}
-      />
+      />,
     );
   }
   if (special?.kind === "child_bot") {
     const removed = special.status === "deleted" || special.status === "archived";
-    return (
+    return withSkillLines(
       <Pressable
         {...actionProps}
         onPress={
@@ -3675,7 +3696,7 @@ const MessageBubble = memo(function MessageBubble({
               : special.title || t("Opened its thread.")}
           </Text>
         </Surface>
-      </Pressable>
+      </Pressable>,
     );
   }
   if (appConnectBlocks.length > 0 && appConnectBlocks.length === message.blocks.length) {
@@ -3690,6 +3711,7 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
         ))}
+        {metaLines.length > 0 ? <BubbleMeta lines={metaLines} standalone /> : null}
       </View>
     );
   }
@@ -3801,6 +3823,7 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
         ))}
+        {metaLines.length > 0 ? <BubbleMeta lines={metaLines} standalone /> : null}
       </View>
     );
   }
@@ -3947,6 +3970,7 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
         ))}
+        {metaLines.length > 0 ? <BubbleMeta lines={metaLines} /> : null}
       </Surface>
     );
   }
@@ -3954,6 +3978,9 @@ const MessageBubble = memo(function MessageBubble({
   const steps = showSteps ? stepsBlocks(message.blocks) : [];
   const live = message.id.startsWith("progress:");
   const firstContent = segments.findIndex((segment) => segment.kind === "content");
+  const lastContent = skillLineSegment(
+    segments.map((segment) => blockText({ ...message, blocks: segment.blocks })),
+  );
   return (
     <View style={{ gap: 8, width: "100%" }}>
       {steps.map((block, index) => (
@@ -3966,6 +3993,7 @@ const MessageBubble = memo(function MessageBubble({
           replyPreview={index === firstContent ? replyPreview : undefined}
           actionProps={actionProps}
           mono={mono}
+          meta={index === lastContent ? metaLines : undefined}
         />
       ))}
       {appConnectBlocks.map((block, index) => (
@@ -3977,9 +4005,39 @@ const MessageBubble = memo(function MessageBubble({
           onAccessibilityAction={actionProps.onAccessibilityAction}
         />
       ))}
+      {lastContent < 0 && metaLines.length > 0 ? <BubbleMeta lines={metaLines} standalone /> : null}
     </View>
   );
 });
+
+/** The skill lines under a bot's message: what it learned, updated or deleted, each opening Skills. */
+function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] {
+  const { t } = useI18n();
+  const router = useRouter();
+  const skillLines = skillSourcesOf(message.blocks);
+  const skillsAtMount = useRef(skillLines.length);
+  const skillsLive = isNew || skillLines.length > skillsAtMount.current;
+  return skillLines.map(
+    (line): BotBubbleMeta => ({
+      id: `${line.skillUid}:${line.change}`,
+      label:
+        line.change === "learned"
+          ? t("Skill learned · {name}", { name: line.name })
+          : line.change === "updated"
+            ? t("Skill updated · {name}", { name: line.name })
+            : t("Skill deleted · {name}", { name: line.name }),
+      icon: { ios: "book", android: "book-outline" },
+      onPress: () => router.push("/skills"),
+      live: skillsLive,
+    }),
+  );
+}
+
+/** The skill lines of a message whose link card took its bubble's place, standing alone under the card. */
+function CardSkillLines({ message, isNew }: { message: MobileMessage; isNew: boolean }) {
+  const lines = useSkillLines(message, isNew);
+  return lines.length > 0 ? <BubbleMeta lines={lines} standalone /> : null;
+}
 
 /** Native routine-run card: a sub-bot's routine traced by its run lifecycle
     (queued/running/completed/failed/cancelled) instead of a free closing
@@ -4862,11 +4920,14 @@ function MessageText({
   replyPreview,
   actionProps,
   mono = false,
+  meta,
 }: {
   message: MobileMessage;
   replyPreview?: MobileMessage;
   actionProps: MessageActionProps;
   mono?: boolean;
+  /** The skill lines under its last bubble. */
+  meta?: readonly BotBubbleMeta[];
 }) {
   const colorScheme = useResolvedAppearance();
   const tokens = mobileTokens();
@@ -4899,6 +4960,7 @@ function MessageText({
         accessibilityActions={actionProps.accessibilityActions}
         onAccessibilityAction={actionProps.onAccessibilityAction}
         mono={mono}
+        meta={meta}
       >
         <ChatMarkdown
           palette={tokens}

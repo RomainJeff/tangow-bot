@@ -3,18 +3,16 @@ import { isToolActivityBlock } from "@rakazo/core";
 
 /**
  * The blocks the thread is about to draw: tool activity is hidden, except the
- * `steps` the "Display agent steps" setting asks for, and so is the skill line,
- * not drawn yet. Mirrors the web `isHiddenActivityBlock`; the thread passes the
- * result to `isAsideOnlyMessage` so a hidden block cannot change how a message reads.
+ * `steps` the "Display agent steps" setting asks for. Mirrors the web `isHiddenActivityBlock`;
+ * the thread passes the result to `isAsideOnlyMessage` so a hidden block cannot change how a
+ * message reads.
  */
 export function visibleMessageBlocks(
   blocks: readonly MessageBlock[],
   showSteps = false,
 ): MessageBlock[] {
   return blocks.filter(
-    (block) =>
-      block.kind !== "skill_source" &&
-      (!isToolActivityBlock(block) || (showSteps && block.kind === "steps")),
+    (block) => !isToolActivityBlock(block) || (showSteps && block.kind === "steps"),
   );
 }
 
@@ -45,4 +43,12 @@ export function stepsBlocks(
   return blocks.filter(
     (block): block is Extract<MessageBlock, { kind: "steps" }> => block.kind === "steps",
   );
+}
+
+/**
+ * The segment whose bubble the skill lines hang under, given the text each segment draws: the last
+ * one that draws any. -1 when none does, and the lines stand alone. Mirrors web's `skillLineBubble`.
+ */
+export function skillLineSegment(segmentTexts: readonly string[]): number {
+  return segmentTexts.findLastIndex((text) => text !== "");
 }

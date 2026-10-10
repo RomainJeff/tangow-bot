@@ -734,4 +734,7 @@ export const RU_MESSAGES: Record<string, string> = {
   Dictating: "Идёт надиктовка",
   "Microphone access is off": "Нет доступа к микрофону",
   "Open Settings": "Открыть настройки",
+  "Skill learned · {name}": "Навык освоен · {name}",
+  "Skill updated · {name}": "Навык обновлён · {name}",
+  "Skill deleted · {name}": "Навык удалён · {name}",
 };
