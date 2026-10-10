@@ -27,13 +27,7 @@ import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import type { SkillOwner, SkillOwnerLock } from "./skill-lock.js";
 import type { SkillTreeFile } from "./skill-store.js";
-import {
-  extractSkillBundle,
-  hasCode,
-  listUserSkills,
-  skillDirName,
-  userSkillsRoot,
-} from "./skill-store.js";
+import { extractSkillBundle, hasCode, skillDirName, userSkillsRoot } from "./skill-store.js";
 import {
   captureTree,
   fingerprint,
@@ -161,6 +155,8 @@ export interface BotSkillWriter {
   update(key: string, content: SkillContent): Promise<SkillWriteResult>;
   /** `uid` is absent when the folder had no history and could not be kept: it is gone for good. */
   delete(key: string): Promise<{ uid?: SkillUid; name: string }>;
+  /** What this tool call already wrote, when a crash made it run again; never for the owner. */
+  replayed(): Promise<SkillWriteResult | undefined>;
 }
 
 export type TrashedSkill = { uid: SkillUid; name: string; trashedAt: string };
@@ -202,6 +198,11 @@ export interface OwnerSkillAdmin extends BotSkillWriter {
   purge(uid: SkillUid): Promise<void>;
   deleteVersion(uid: SkillUid, versionId: VersionId): Promise<void>;
   usage(): Promise<{ bytes: number; limit: number }>;
+  /** Changes the given rows only, after any interrupted rename has moved them. */
+  setAccess(
+    key: string,
+    change: { availability?: SkillAvailability; bots: Array<{ botId: string; enabled: boolean }> },
+  ): Promise<void>;
 }
 
 export type BotWriteContext = {
@@ -706,8 +707,10 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
     /**
      * A live skill whose folder was removed outside the store goes to the trash with the access
      * rows it has now, or visible to no bot without any: a version's own rows never return.
+     * A missing skills root is an unmounted volume, not every skill deleted: nothing moves.
      */
     async function trashOutOfStore(skill: Skill, key: string): Promise<void> {
+      if (!(await lstat(L.live).catch(() => null))) return;
       getLogger().warn(`[skills] ${skill.entry.uid} left its folder outside the store; trashed`);
       const rows = await readAccess(key);
       const access = rows.availability || rows.bots.length > 0 ? rows : NARROWEST;
@@ -1030,12 +1033,13 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
 
     const update = (key: string, content: SkillContent): Promise<SkillWriteResult> =>
       run(async (store) => {
+        // Before the lookup: a replayed rename no longer finds its old key.
+        const replayed = bot && (await replayOf(store, bot));
+        if (replayed) return replayed;
         const live = await reconcile(store, key);
         const { skill } = live;
         const current = currentVersion(skill);
         if (!current) throw new SkillRefusal("not_found", NOT_FOUND);
-        const replayed = bot && replayIn(skill, bot);
-        if (replayed) return replayed;
         const { name, tree } = await stage(content, live.tree);
         if (name === current.name && fingerprint(tree) === current.fingerprint) {
           return { uid: skill.entry.uid, versionId: current.versionId, key, name, changed: false };
@@ -1125,6 +1129,32 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
       create,
       update,
       delete: remove,
+      replayed: () => run(async (store) => (bot ? await replayOf(store, bot) : undefined)),
+
+      setAccess: (key, change) =>
+        run(async () => {
+          if (key.startsWith("user:") && !(await hasSkillMd(liveDir(key)))) {
+            throw new SkillRefusal("not_found", NOT_FOUND);
+          }
+          await prisma.$transaction([
+            ...(change.availability
+              ? [
+                  prisma.skillSetting.upsert({
+                    where: { spaceId_userId_skillKey: { ...scope, skillKey: key } },
+                    create: { ...scope, skillKey: key, availability: change.availability },
+                    update: { availability: change.availability },
+                  }),
+                ]
+              : []),
+            ...change.bots.map((row) =>
+              prisma.botSkill.upsert({
+                where: { botId_skillKey: { botId: row.botId, skillKey: key } },
+                create: { ...scope, botId: row.botId, skillKey: key, enabled: row.enabled },
+                update: { enabled: row.enabled },
+              }),
+            ),
+          ]);
+        }),
 
       versions: (key) =>
         run(async (store) => {
@@ -1369,31 +1399,25 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
         );
       });
 
-    /** Sweeps the store, then drops access rows whose skill folder is gone. */
-    const repair = () =>
-      run(async () => {
-        const [settings, bots, live] = await Promise.all([
-          prisma.skillSetting.findMany({ where: scope }),
-          prisma.botSkill.findMany({ where: scope }),
-          listUserSkills(L.live),
-        ]);
-        const liveKeys = new Set(live.map((skill) => skill.id));
-        const keys = new Set([...settings, ...bots].map((row) => row.skillKey));
-        for (const key of keys) {
-          if (key.startsWith("user:") && !liveKeys.has(key) && !(await hasSkillMd(liveDir(key)))) {
-            await replaceAccess(key, NO_ACCESS);
-          }
-        }
-      }, "sweep");
+    /**
+     * Sweeps the store. Rows whose folder is gone stay: a folder that comes back without its rows
+     * would be visible to every bot, while a row without a folder grants nothing.
+     */
+    const repair = () => run(async () => undefined, "sweep");
 
     return { admin, repair, changesByRun };
   }
 
   return {
-    /** Only the three writes, so no bot tool can reach the owner's history or trash. */
+    /** The three writes and their replay, so no bot tool can reach the owner's history or trash. */
     forBot(owner: SkillOwner, bot: BotWriteContext): BotSkillWriter {
       const { admin } = forOwner(owner, bot);
-      return { create: admin.create, update: admin.update, delete: admin.delete };
+      return {
+        create: admin.create,
+        update: admin.update,
+        delete: admin.delete,
+        replayed: admin.replayed,
+      };
     },
     forOwner: (owner: SkillOwner): OwnerSkillAdmin => forOwner(owner).admin,
     repair: (owner: SkillOwner): Promise<void> => forOwner(owner).repair(),

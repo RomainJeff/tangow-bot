@@ -600,7 +600,7 @@ export const appContract = {
     deleteVersion: oc
       .input(z.object({ skillId: Id, versionId: SkillVersionIdSchema }))
       .output(z.object({ ok: z.literal(true) })),
-    trash: oc.input(z.object({})).output(z.array(TrashedSkillSchema)),
+    trash: oc.output(z.array(TrashedSkillSchema)),
     /** `botGone`: the skill was reserved to a bot that no longer exists, so no bot can use it. */
     restore: oc
       .input(z.object({ uid: SkillUidSchema }))
