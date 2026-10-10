@@ -4020,7 +4020,7 @@ function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] 
   const skillsLive = isNew || skillLines.length > skillsAtMount.current;
   return skillLines.map(
     (line): BotBubbleMeta => ({
-      id: `${line.skillUid}:${line.change}`,
+      id: `${line.skillId}:${line.change}`,
       label:
         line.change === "learned"
           ? t("Skill learned · {name}", { name: line.name })

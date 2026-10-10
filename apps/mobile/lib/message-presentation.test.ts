@@ -146,6 +146,15 @@ describe("skill lines", () => {
     });
   });
 
+  it("opens a line written without a uid by its id, never a built-in skill", async () => {
+    const { skillUid: _, ...withoutUid } = line("updated");
+    const catalog = async () => [{ id: "builtin:routines" }, { id: "user:coffee", uid }];
+    await expect(skillLineRoute(withoutUid, catalog)).resolves.toEqual({
+      pathname: "/bot-skill",
+      params: { skillId: "user:coffee" },
+    });
+  });
+
   it("hangs the lines under the last segment that draws text, else stands them alone", () => {
     expect(skillLineSegment(["Done."])).toBe(0);
     expect(skillLineSegment(["Reading.", "Done.", ""])).toBe(1);
