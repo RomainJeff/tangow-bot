@@ -405,8 +405,8 @@ A skill a bot learns, improves or deletes draws one line per skill under the
 bot's message: `BookOpen` and "Skill learned · <name>", "Skill updated · <name>"
 or "Skill deleted · <name>", the `meta` of `MessageBubble`. It opens the skill
 in the bot page's Knowledge tab, or the list when the skill is gone or not the
-reader's. In a group the line names the skill without a link, since a group has
-no bot page. A message with no text draws the line alone through `MessageMeta`.
+reader's. On web a "Skill deleted" line names the skill without a link, as does
+any line in a group, since a group has no bot page. A message with no text draws the line alone through `MessageMeta`.
 A line that arrives live rises (`rk-arrive`) and its icon pops (`bui-pop-in`),
 both over `--duration-arrive`, half of it late, as on iPhone; a line in loaded
 history is still, and reduced motion stills both. The `skill_source` block

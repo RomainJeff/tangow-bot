@@ -35,16 +35,19 @@ test("a skill line sits under the bot's message, opens the skill, and cannot be 
     '{"tab":"knowledge","detail":{"kind":"skill","skillId":"user:meeting-rooms"}}',
   );
 
-  // A skill the catalog no longer has opens the Knowledge list, a deleted one Recently deleted.
+  // A skill the catalog no longer has opens the Knowledge list.
   await page
     .locator('[data-message-id="alone"]')
     .getByRole("link", { name: /^Skill updated/ })
     .click();
   await expect(page.getByTestId("opened")).toHaveText('{"tab":"knowledge","detail":null}');
-  await report.getByRole("link", { name: "Skill deleted · Old checklist" }).click();
-  await expect(page.getByTestId("opened")).toHaveText(
-    '{"tab":"knowledge","detail":null,"trash":true}',
-  );
+
+  // A deleted skill has nothing to open: its line is a plain trace, icon and all.
+  await expect(report.getByRole("link")).toHaveCount(1);
+  const deleted = report.locator('[data-slot="message-row-meta"]').filter({
+    hasText: "Skill deleted · Old checklist",
+  });
+  await expect(deleted.locator("svg")).toHaveCount(1);
 
   // A message with only the line draws no bubble and stays at the bubble's inset, never centred.
   const alone = page.locator('[data-message-id="alone"]');
