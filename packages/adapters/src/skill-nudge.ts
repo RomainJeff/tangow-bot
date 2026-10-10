@@ -23,7 +23,7 @@ import {
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { builtinAgentTools } from "./builtin-tools.js";
-import type { SkillLibrary } from "./skill-library.js";
+import { skillLinesByRun } from "./skill-lines.js";
 
 /** A bot that changed the named skill this recently is not asked to change it again. */
 const RECENT_EXCHANGES = 5;
@@ -60,9 +60,8 @@ export type SkillNudgeExchange = {
 };
 
 export type SkillNudgeDeps = {
-  prisma: Pick<PrismaClient, "event" | "run">;
+  prisma: Pick<PrismaClient, "event" | "run" | "externalEffect">;
   events: Pick<ThreadEvents, "append">;
-  library: Pick<SkillLibrary, "changesByRun">;
 };
 
 const FACT_EVENTS = ["agent.tool.completed", "agent.skill.used", "agent.skill.nudge"];
@@ -169,12 +168,12 @@ async function decide(
     select: { id: true },
   });
   if (recent.length === 0) return { nudge: true, mode, signal };
-  const changes = await deps.library.changesByRun(
-    run,
+  const changes = await skillLinesByRun(
+    deps.prisma,
     recent.map(({ id }) => id),
   );
-  const changedRecently = recent.some(({ id }) =>
-    changes.get(id)?.some((change) => followed.has(change.name.toLowerCase())),
+  const changedRecently = [...changes.values()].some((lines) =>
+    lines.some((line) => followed.has(line.name.toLowerCase())),
   );
   return changedRecently ? skip("recently_changed") : { nudge: true, mode, signal };
 }

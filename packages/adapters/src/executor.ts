@@ -4874,16 +4874,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const skillNudge: SkillNudgeDecision | undefined =
             learning === "off"
               ? undefined
-              : await decideSkillNudge(
-                  { prisma: deps.prisma, events: deps.events, library: skillLibrary },
-                  learning,
-                  {
-                    run: { ...run, threadId: thread.id },
-                    sourceRole,
-                    replied: !handedOff && (text.trim() !== "" || publishedMidTurnUserMessage),
-                    budgetExhausted: endsWithToolCallBudgetNotice(text),
-                  },
-                ).catch((error) => {
+              : await decideSkillNudge(deps, learning, {
+                  run: { ...run, threadId: thread.id },
+                  sourceRole,
+                  replied: !handedOff && (text.trim() !== "" || publishedMidTurnUserMessage),
+                  budgetExhausted: endsWithToolCallBudgetNotice(text),
+                }).catch((error) => {
                   getLogger().error("skill nudge decision", error);
                   return undefined;
                 });

@@ -19,7 +19,6 @@ import { createRunExecutor } from "./executor.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
 import { createInMemorySkillLock } from "./skill-lock.js";
 import { listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
-import { unavailable } from "./skill-tree.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -478,6 +477,7 @@ function fixture(
   return {
     run,
     effects,
+    externalEffect,
     messages,
     results,
     routineCreate,
@@ -1785,7 +1785,6 @@ describe("the skill nudge at the end of an exchange", () => {
   };
   const line = (name: string) => ({
     kind: "skill_source",
-    skillUid: expect.stringMatching(/^[0-9a-f]{32}$/),
     skillId: `user:${name.toLowerCase()}`,
     name,
     change: "learned",
@@ -1900,13 +1899,14 @@ describe("the skill nudge at the end of an exchange", () => {
     expect(await f.skills()).toEqual([]);
   });
 
-  it("skips the turn, and still ends the run, while skills are unavailable", async () => {
+  it("skips the turn, and still ends the run, when past skill writes cannot be read", async () => {
     await writeCoffee();
-    const f = fixture({
-      skillLearning: "on",
-      skillLock: { run: async () => Promise.reject(unavailable()) },
-      earlierRuns: [{ id: "run-0" }],
-      nudge: [[keep]],
+    const f = fixture({ skillLearning: "on", earlierRuns: [{ id: "run-0" }], nudge: [[keep]] });
+    const read = f.externalEffect.findMany.getMockImplementation()!;
+    f.externalEffect.findMany.mockImplementation(async (args) => {
+      const kinds = (args?.where?.kind as { in?: string[] } | undefined)?.in;
+      if (kinds?.includes("skill_create")) throw new Error("effects unavailable");
+      return read(args);
     });
     await f.play([
       [{ name: "skill_read", args: { name: "Coffee" } }],

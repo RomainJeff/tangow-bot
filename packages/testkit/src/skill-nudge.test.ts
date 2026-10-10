@@ -2,16 +2,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentRunRequest, AgentRuntime } from "@rakazo/adapter-kit";
-import type { SkillContent, SkillNudgeExchange } from "@rakazo/adapters";
+import type { SkillNudgeExchange } from "@rakazo/adapters";
 import {
   createInMemorySkillLock,
-  createSkillLibrary,
   decideSkillNudge,
   runSkillNudgeTurn,
   skillCreateFromTool,
   writeSkillLines,
 } from "@rakazo/adapters";
-import { buildSkillMd, skillNudgePrompt } from "@rakazo/core";
+import { skillNudgePrompt } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { afterEach, describe, expect, it } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
@@ -22,39 +21,28 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-/** The access tables the skill library reads: no rows, so a user's skill is every bot's. */
+/** The access tables a bot's skill write touches: no rows to start from. */
 function accessTables() {
   const table = () => ({
     findMany: async () => [],
     deleteMany: async () => ({ count: 0 }),
+    createMany: async () => ({ count: 0 }),
     upsert: async () => ({}),
   });
-  return {
+  const prisma = {
     skillSetting: table(),
     botSkill: table(),
-    bot: { findMany: async () => [] },
-    $transaction: (ops: Promise<unknown>[]) => Promise.all(ops),
-  } as unknown as PrismaClient;
+    $transaction: (ops: unknown) =>
+      typeof ops === "function" ? ops(prisma) : Promise.all(ops as Promise<unknown>[]),
+  };
+  return prisma as unknown as PrismaClient;
 }
-
-const skill = (name: string, body = "Steps"): SkillContent => ({
-  kind: "skill-md",
-  name,
-  content: buildSkillMd({ name, description: `About ${name}`, body }),
-});
 
 const hour = (n: number) => new Date(Date.UTC(2026, 9, 10, n));
 
 async function setup() {
   const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-nudge-"));
   dirs.push(dataDir);
-  let tick = 0;
-  const library = createSkillLibrary({
-    prisma: accessTables(),
-    dataDir,
-    lock: createInMemorySkillLock(),
-    now: () => new Date(Date.UTC(2026, 9, 10, 23, 0, tick++)),
-  });
   const db = createFakeThreadDb();
   db.seedThread({ id: "thread-1" });
   db.seedRun({ id: "run-1", threadId: "thread-1", status: "running", createdAt: hour(12) });
@@ -93,17 +81,21 @@ async function setup() {
     budgetExhausted: false,
     ...overrides,
   });
-  const writer = (runId: string) =>
-    library.forBot(owner, {
-      botId: "bot-1",
-      botName: "Ada",
+  /** A skill call that saved, as the executor records it once the call returned. */
+  const wrote = (runId: string, kind: string, result: Record<string, unknown>) => {
+    const id = `effect-${db.tables.externalEffects.size + 1}`;
+    db.tables.externalEffects.set(id, {
+      id,
       runId,
-      toolCallId: `${runId}-call`,
-      secrets: [],
+      kind,
+      status: "completed",
+      result,
+      createdAt: new Date(),
     });
-  const deps = { prisma: db.prisma, events, library };
+  };
+  const deps = { prisma: db.prisma, events };
   const marks = () => db.eventsOfType("agent.skill.nudge").map((event) => event.payload);
-  return { dataDir, db, library, deps, record, toolCalls, exchange, writer, marks };
+  return { dataDir, db, deps, record, toolCalls, exchange, wrote, marks };
 }
 
 describe("whether an exchange earns the skill nudge", () => {
@@ -175,12 +167,15 @@ describe("whether an exchange earns the skill nudge", () => {
     ]);
   });
 
-  it("reads the skill history only for an exchange that followed a skill and earns the nudge", async () => {
+  it("reads past skill writes only for an exchange that followed a skill and earns the nudge", async () => {
     const { deps, db, toolCalls, exchange } = await setup();
     db.seedRun({ id: "run-0", threadId: "thread-1", createdAt: hour(1) });
     const offline = {
       ...deps,
-      library: { changesByRun: () => Promise.reject(new Error("skills unavailable")) },
+      prisma: {
+        ...deps.prisma,
+        externalEffect: { findMany: () => Promise.reject(new Error("effects unavailable")) },
+      } as typeof deps.prisma,
     };
     await toolCalls(3);
     expect(await decideSkillNudge(offline, "shadow", exchange())).toEqual({
@@ -212,14 +207,13 @@ describe("whether an exchange earns the skill nudge", () => {
       type: "agent.tool.completed",
       payload: { name: "shell", outcome: "error" },
     });
-    await expect(decideSkillNudge(offline, "shadow", later)).rejects.toThrow("skills unavailable");
+    await expect(decideSkillNudge(offline, "shadow", later)).rejects.toThrow("effects unavailable");
   });
 
   it("names the skill followed before a failure, unless a bot changed it in the last five exchanges", async () => {
-    const { db, deps, library, record, exchange, writer } = await setup();
-    await library.forOwner(owner).create(skill("Coffee"));
+    const { db, deps, record, exchange, wrote } = await setup();
     db.seedRun({ id: "run-0", threadId: "thread-1", createdAt: hour(1) });
-    await writer("run-0").update("user:coffee", skill("Coffee", "Better steps"));
+    wrote("run-0", "skill_update", { ok: true, name: "Coffee" });
     await record("agent.skill.used", { name: "Coffee", via: "skill_read" });
     await record("agent.tool.completed", { name: "browser_act", outcome: "error" });
 
@@ -241,7 +235,7 @@ describe("whether an exchange earns the skill nudge", () => {
 
 describe("the skill nudge's private turn", () => {
   it("offers skill tools only, publishes none of its words, and its skill gets the line under the reply", async () => {
-    const { dataDir, db, library, record } = await setup();
+    const { dataDir, db, record, wrote } = await setup();
     db.tables.runs.get("run-1")!.status = "completed";
     db.seedMessage({
       id: "reply",
@@ -287,7 +281,12 @@ describe("the skill nudge's private turn", () => {
         })(),
     } as unknown as AgentRuntime;
     const signal = { signal: "tools" as const, toolCount: 17 };
-    const skillDeps = { prisma: accessTables(), dataDir, learning: "on" as const };
+    const skillDeps = {
+      prisma: accessTables(),
+      dataDir,
+      learning: "on" as const,
+      lock: createInMemorySkillLock(),
+    };
     const botOwner = { ...owner, botId: "bot-1" };
     const spent: unknown[] = [];
 
@@ -304,19 +303,11 @@ describe("the skill nudge's private turn", () => {
           model: { provider: "scripted", id: "scripted" },
         },
         context: { userId: "user-1", spaceId: "space-1" },
-        callTool: (_name, args, toolCallId) =>
-          skillCreateFromTool(
-            skillDeps,
-            botOwner,
-            library.forBot(owner, {
-              botId: "bot-1",
-              botName: "Ada",
-              runId: "run-1",
-              toolCallId,
-              secrets: [],
-            }),
-            args,
-          ),
+        callTool: async (name, args) => {
+          const result = await skillCreateFromTool(skillDeps, botOwner, [], args);
+          if ("ok" in result) wrote("run-1", name, result);
+          return result;
+        },
         audit: (completion) =>
           record("agent.tool.completed", {
             name: completion.name,
@@ -329,7 +320,7 @@ describe("the skill nudge's private turn", () => {
       },
     );
     await writeSkillLines(
-      { prisma: db.prisma, library, events: { notify: async () => undefined } },
+      { prisma: db.prisma, events: { notify: async () => undefined } },
       "run-1",
     );
 
