@@ -14,8 +14,8 @@ describe("previewSnippet", () => {
     ).toBe("Done! ✅ The inbox is completely empty and those drafts were permanently");
   });
 
-  it("leaves the server's plain text as it is, markers in code or file names included", () => {
-    expect(previewSnippet("Run __init__.py now", 40)).toBe("Run __init__.py now");
+  it("leaves the server's plain text as it is, markdown-like markers included", () => {
+    expect(previewSnippet("Run __main__ now", 40)).toBe("Run __main__ now");
   });
 
   it("returns an empty snippet when there is no preview", () => {
