@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("teach a task records interaction and saves a draft", async ({ page }, testInfo) => {
   const stamp = Date.now();

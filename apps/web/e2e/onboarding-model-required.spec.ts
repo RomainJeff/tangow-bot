@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("onboarding requires a model when the deployment has none", async ({ page }, testInfo) => {
   await page.route("**/rpc/me", async (route) => {

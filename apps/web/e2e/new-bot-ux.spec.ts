@@ -1,4 +1,3 @@
-import { expect, test } from "@playwright/test";
 import {
   captureScreenshot,
   completeOnboarding,
@@ -7,6 +6,7 @@ import {
   rpc,
   signup,
 } from "./helpers";
+import { expect, test } from "./test";
 
 test("create opens form, then empty chat; picker lists bots; sidebar collapses", async ({
   page,

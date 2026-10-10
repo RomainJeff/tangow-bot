@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openUserSettings, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("voice settings connect a key, speak a reply, and open a call", async ({ page }, testInfo) => {
   const stamp = Date.now();

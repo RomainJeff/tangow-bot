@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("shows peer chips in transcript and opens view-only peer chat", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -71,11 +71,16 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
     const chipBox = await chip.boundingBox();
     expect(transcriptBox).not.toBeNull();
     expect(chipBox).not.toBeNull();
-    // A delegation is an aside between messages: centred, and never as wide as a reply.
+    // A delegation is an aside between messages: centred, and narrower than a reply
+    // bubble's cap (MessageBubble's max-w-41/50, 82% of the content column in a mono thread).
     const chipMid = chipBox!.x + chipBox!.width / 2;
     const transcriptMid = transcriptBox!.x + transcriptBox!.width / 2;
     expect(Math.abs(chipMid - transcriptMid)).toBeLessThanOrEqual(2);
-    expect(chipBox!.width).toBeLessThan(transcriptBox!.width / 2);
+    const contentWidth = await transcript.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    });
+    expect(chipBox!.width).toBeLessThan(contentWidth * 0.82);
   };
 
   await assertChipCentered();

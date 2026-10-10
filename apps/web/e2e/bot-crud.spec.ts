@@ -1,4 +1,3 @@
-import { expect, test } from "@playwright/test";
 import {
   captureScreenshot,
   completeOnboarding,
@@ -8,6 +7,7 @@ import {
   saveField,
   signup,
 } from "./helpers";
+import { expect, test } from "./test";
 
 test("bot creation, editing, and deletion persist", async ({ page }, testInfo) => {
   const stamp = Date.now();

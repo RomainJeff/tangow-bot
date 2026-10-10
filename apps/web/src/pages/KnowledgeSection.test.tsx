@@ -5,7 +5,12 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), get: vi.fn() }));
+const api = vi.hoisted(() => ({
+  list: vi.fn(),
+  create: vi.fn(),
+  get: vi.fn(),
+  remove: vi.fn(),
+}));
 vi.mock("../lib/rpc", () => ({
   rpc: { agentSkills: api, bots: { list: async () => [] } },
 }));
@@ -85,6 +90,52 @@ it("disables skill rows while a completed save is refreshing the catalog", async
       finishRefresh([skill]);
       root.unmount();
     });
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("tells the shell a skill is gone only once the server has deleted it", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const skill = {
+    id: "user:greet-politely",
+    name: "greet-politely",
+    description: "Say hello",
+    content: "Hello",
+    availability: "all",
+    visibleBotIds: ["bot-fixture"],
+    source: "user",
+  };
+  let server = [skill];
+  api.list.mockImplementation(async () => server);
+  api.get.mockResolvedValue(skill);
+  api.remove.mockImplementation(async ({ skillId }: { skillId: string }) => {
+    await Promise.resolve();
+    server = server.filter((entry) => entry.id !== skillId);
+  });
+  const seenOnChange: string[][] = [];
+  const onChanged = () => {
+    seenOnChange.push(server.map((entry) => entry.name));
+  };
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const button = (text: string) => {
+    const found = [...container.querySelectorAll("button")].find(
+      (entry) => entry.textContent === text || entry.textContent?.startsWith(text),
+    );
+    if (!found) throw new Error(`Missing button: ${text}`);
+    return found;
+  };
+  try {
+    await act(async () => root.render(<AgentSkills botId="bot-fixture" onChanged={onChanged} />));
+    await act(async () => button("greet-politely").click());
+    await act(async () => button("Delete").click());
+    expect(seenOnChange).toEqual([]);
+    await act(async () => button("Confirm delete").click());
+    expect(seenOnChange).toEqual([[]]);
+  } finally {
+    await act(async () => root.unmount());
     container.remove();
     vi.unstubAllGlobals();
   }

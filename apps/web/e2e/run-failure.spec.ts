@@ -1,5 +1,5 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openNewSpace, signup } from "./helpers";
+import { expect, type Locator, type Page, test } from "./test";
 
 function isPresented(error: Locator) {
   return error.evaluate((element) => {

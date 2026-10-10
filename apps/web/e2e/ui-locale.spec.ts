@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("account settings language picker includes Simplified Chinese and applies it", async ({
   page,

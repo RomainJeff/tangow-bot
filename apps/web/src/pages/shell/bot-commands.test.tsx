@@ -43,6 +43,7 @@ function Harness() {
     botAction: vi.fn(),
     ensureWebhookSecret: vi.fn(),
     refreshThread: vi.fn(async () => undefined),
+    refreshSkills: vi.fn(),
   });
   view = { bots, routines, commands };
   return null;

@@ -13,6 +13,7 @@ import {
   resolveMentionPickerKey,
   SLASH_ACTIONS,
   serializeComposerPrompt,
+  slashSkillOptions as slashSkills,
   truncateSlashDescription,
 } from "@rakazo/core";
 import type { ComposerState } from "@rakazo/ui-web";
@@ -538,20 +539,10 @@ export const Composer = memo(function Composer({
     ? `${mentionListboxId}-option-${activeMentionIndex}`
     : undefined;
 
-  const slashSkillOptions = useMemo(() => {
-    if (slashQuery === null) return [];
-    const query = slashQuery.trim().toLowerCase();
-    const skills = agentSkills ?? [];
-    return skills
-      .filter((skill) => {
-        if (!query) return true;
-        return (
-          skill.name.toLowerCase().includes(query) ||
-          skill.description.toLowerCase().includes(query)
-        );
-      })
-      .slice(0, 8);
-  }, [agentSkills, slashQuery]);
+  const slashSkillOptions = useMemo(
+    () => (slashQuery === null ? [] : slashSkills(agentSkills ?? [], slashQuery)),
+    [agentSkills, slashQuery],
+  );
 
   const slashActionOptions = useMemo(() => {
     if (slashQuery === null) return [];
@@ -984,7 +975,10 @@ export const Composer = memo(function Composer({
                     className="transition-transform duration-(--duration-hover) ease-quiet motion-safe:group-hover/send:-translate-y-px"
                   />
                 </Button>
-              ) : null}
+              ) : (
+                // Holds Send's footprint so the field doesn't reflow as a draft starts.
+                <span aria-hidden="true" className="size-composer-icon shrink-0" />
+              )}
               {running ? (
                 <Button
                   variant="roundIcon"
@@ -1061,7 +1055,7 @@ export const Composer = memo(function Composer({
                 void insertDictation();
               }
             }}
-            className="rk-scroll block max-h-composer-field min-h-6 w-full overflow-y-auto py-0.5 text-body text-foreground outline-none"
+            className="rk-scroll block max-h-composer-field min-h-6 w-full overflow-y-auto py-1 text-body text-foreground outline-none"
           >
             {(() => {
               const snapshot = dictateSnapshotRef.current;
@@ -1164,7 +1158,7 @@ export const Composer = memo(function Composer({
             autoComplete="off"
             dir="auto"
             rows={1}
-            className="rk-scroll block max-h-composer-field min-h-6 w-full resize-none overflow-y-auto bg-transparent py-0.5 text-body text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-40"
+            className="rk-scroll block max-h-composer-field min-h-6 w-full resize-none overflow-y-auto bg-transparent py-1 text-body text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-40"
           />
         )}
       </ComposerShell>

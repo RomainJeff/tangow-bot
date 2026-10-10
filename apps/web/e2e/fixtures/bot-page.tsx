@@ -297,6 +297,7 @@ function Fixture() {
         return "whsec_fixture_0000";
       },
       botAction: (_botId, action) => console.info(`bot action: ${action}`),
+      skillsChanged: () => undefined,
     };
   }, []);
 

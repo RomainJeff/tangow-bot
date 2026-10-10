@@ -1,6 +1,5 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { expect, test } from "@playwright/test";
 import {
   captureScreenshot,
   completeOnboarding,
@@ -9,6 +8,7 @@ import {
   rpc,
   signup,
 } from "./helpers";
+import { expect, test } from "./test";
 
 const LOCAL_MODEL_ID = "rakazo-e2e-local";
 const LOCAL_MODEL_REPLY = "OpenAI-compatible endpoint verified end to end.";

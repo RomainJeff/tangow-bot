@@ -5,7 +5,7 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
-import type { createRepos, PrismaClient } from "@rakazo/db";
+import type { createRepos, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { resolveRunHop } from "./bot-messages.js";
 import {
@@ -241,6 +241,7 @@ describe("spawned bot archival", () => {
           sandbox: {} as SandboxProvider,
           home: {} as AgentHomeStore,
           jobs: { cancel: vi.fn() } as unknown as JobPublisher,
+          events: {} as ThreadEvents,
         },
         {
           spawnedByBotId: "parent-1",
@@ -298,6 +299,7 @@ describe("destroyBot", () => {
         sandbox: {} as SandboxProvider,
         home: {} as AgentHomeStore,
         jobs: { cancel: vi.fn() } as unknown as JobPublisher,
+        events: {} as ThreadEvents,
         artifacts: { remove: removeArtifact } as unknown as ArtifactStore,
       },
       { id: "bot-1", spaceId: "workspace-1", name: "Researcher", archivedAt: null },
@@ -425,9 +427,16 @@ describe("destroyBot", () => {
       },
       routine: { findMany: vi.fn().mockResolvedValue([]) },
       artifact: { findMany: vi.fn().mockResolvedValue([]) },
-      bot: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      bot: {
+        update: vi.fn().mockResolvedValue({
+          spaceId: "workspace-1",
+          thread: { id: "thread-2" },
+          computer: { state: "running" },
+        }),
+      },
       $transaction: transaction,
     } as unknown as PrismaClient;
+    const append = vi.fn().mockResolvedValue({});
 
     await destroyBot(
       {
@@ -435,6 +444,7 @@ describe("destroyBot", () => {
         sandbox: { releaseScreen } as unknown as SandboxProvider,
         home: {} as AgentHomeStore,
         jobs: { cancel } as unknown as JobPublisher,
+        events: { append } as unknown as ThreadEvents,
       },
       { id: "bot-1", spaceId: "workspace-1", name: "Researcher", archivedAt: null },
       context,
@@ -494,9 +504,12 @@ describe("destroyBot", () => {
         botId: "bot-2",
       }),
     );
-    expect(prisma.bot.updateMany).toHaveBeenCalledWith({
-      where: { id: "bot-2" },
-      data: { screenGeneration: { increment: 1 } },
+    expect(append).toHaveBeenCalledWith({
+      spaceId: "workspace-1",
+      threadId: "thread-2",
+      botId: "bot-2",
+      type: "computer.status",
+      payload: { status: "running" },
     });
   });
 
@@ -523,6 +536,7 @@ describe("destroyBot", () => {
           sandbox: {} as SandboxProvider,
           home: {} as AgentHomeStore,
           jobs: { cancel: vi.fn() } as unknown as JobPublisher,
+          events: {} as ThreadEvents,
           dataDir: "/tmp/rakazo-destroy-bot-test",
         },
         {
@@ -564,6 +578,7 @@ describe("destroyBot", () => {
           sandbox: {} as SandboxProvider,
           home: {} as AgentHomeStore,
           jobs: { cancel: vi.fn() } as unknown as JobPublisher,
+          events: {} as ThreadEvents,
         },
         { id: "bot-1", spaceId: "workspace-1", name: "Researcher", archivedAt: null },
         context,
@@ -611,6 +626,7 @@ describe("archiveBot", () => {
         sandbox: {} as SandboxProvider,
         home: {} as AgentHomeStore,
         jobs: { cancel } as unknown as JobPublisher,
+        events: {} as ThreadEvents,
       },
       { id: "bot-1", spaceId: "workspace-1", name: "Researcher", archivedAt: null },
       context,
@@ -677,6 +693,7 @@ describe("archiveBot", () => {
           sandbox,
           home,
           jobs: { cancel: vi.fn() } as unknown as JobPublisher,
+          events: {} as ThreadEvents,
         },
         { id: "bot-1", spaceId: "workspace-1", name: "Researcher", archivedAt },
         context,
@@ -732,6 +749,7 @@ describe("archiveBot", () => {
         sandbox,
         home,
         jobs: { cancel: vi.fn() } as unknown as JobPublisher,
+        events: {} as ThreadEvents,
       },
       { id: "bot-1", spaceId: "workspace-1", name: "Researcher", archivedAt: null },
       context,

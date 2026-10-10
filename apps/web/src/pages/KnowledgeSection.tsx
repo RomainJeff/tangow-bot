@@ -206,7 +206,14 @@ Steps the agent should follow.
  * disabled, every agent, or a picked set. Bot mode lists only the skills that
  * agent can install — globally disabled ones are out — with one toggle each.
  */
-export function AgentSkills({ botId }: { botId?: string } = {}) {
+export function AgentSkills({
+  botId,
+  onChanged,
+}: {
+  botId?: string;
+  /** Called once the server has confirmed a skill write. */
+  onChanged?: () => void;
+} = {}) {
   const { t } = useLingui();
   const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
   const [bots, setBots] = useState<Bot[]>([]);
@@ -276,6 +283,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
     setError(null);
     try {
       const updated = await rpc.agentSkills.setAccess({ skillId: entry.id, ...patch });
+      onChanged?.();
       setSkills((list) => list.map((skill) => (skill.id === updated.id ? updated : skill)));
     } catch {
       setError(t`Could not update agent access`);
@@ -300,6 +308,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
       } catch {
         setError(t`Could not load`);
       }
+      onChanged?.();
     } catch {
       setError(t`Could not save skill`);
     } finally {
@@ -323,6 +332,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
       } catch {
         setError(t`Could not load`);
       }
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : t`Could not import skill`);
     } finally {
@@ -350,6 +360,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
       } catch {
         setError(t`Could not load`);
       }
+      onChanged?.();
     } catch {
       setError(t`Could not delete skill`);
     } finally {
