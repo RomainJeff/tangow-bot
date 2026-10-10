@@ -527,8 +527,11 @@ export const Transcript = memo(function Transcript({
               <div
                 data-message-id={message.id}
                 // Only persisted messages can be reply targets: synthetic rows
-                // (progress:, subagent:) carry a `prefix:` id.
-                data-quotable={chrome === "row" && !message.id.includes(":") ? "" : undefined}
+                // (progress:, subagent:) carry a `prefix:` id, and rewound rows
+                // are deleted when the pending edit sends.
+                data-quotable={
+                  chrome === "row" && !rewound && !message.id.includes(":") ? "" : undefined
+                }
                 data-rewound={rewound ? "true" : undefined}
                 data-long-pressing={
                   chrome === "row" && pressingMessageId === message.id ? "true" : undefined
