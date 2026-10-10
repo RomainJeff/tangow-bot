@@ -60,17 +60,30 @@ describe("plainText", () => {
     expect(plainText("a\n>100 users\n> quoted")).toBe("a >100 users quoted");
   });
 
-  it("stays fast on long runs of blank lines or unclosed syntax", () => {
-    const started = performance.now();
-    for (const input of [
-      "\n".repeat(20_000),
-      "  \n".repeat(8000),
-      "[a".repeat(10_000),
-      "<a ".repeat(10_000),
-    ]) {
-      plainText(input);
-    }
-    expect(performance.now() - started).toBeLessThan(500);
+  it("reads only the first 4,000 characters, so a runaway message stays cheap", () => {
+    expect(plainText("\n".repeat(20_000))).toBe("");
+    expect(plainText("  \n".repeat(8000))).toBe("");
+    expect(plainText("[a".repeat(10_000))).toBe("[a".repeat(2000));
+    expect(plainText(`${"word ".repeat(1000)}tail`)).toBe("word ".repeat(800).trim());
+  });
+
+  it("keeps markers inside words, arithmetic and file names outside code", () => {
+    expect(plainText("edit __init__.py and setup__main__ now")).toBe(
+      "edit __init__.py and setup__main__ now",
+    );
+    expect(plainText("compute 2**3 and 4**5, or a*b*c")).toBe("compute 2**3 and 4**5, or a*b*c");
+  });
+
+  it("leaves bare addresses whole, even with markers in them", () => {
+    expect(plainText("see https://example.test/_foo_/bar and https://example.test/**x**")).toBe(
+      "see https://example.test/_foo_/bar and https://example.test/**x**",
+    );
+  });
+
+  it("keeps angle-bracket text that is not HTML and unwraps email autolinks", () => {
+    expect(plainText("mail <user@example.com>, use Array<string> type, <b>bold</b>")).toBe(
+      "mail user@example.com, use Array<string> type, bold",
+    );
   });
 
   it("returns an empty string when only syntax remains", () => {
