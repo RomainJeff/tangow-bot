@@ -158,7 +158,6 @@ export default function Layout() {
                 <Stack.Screen name="skills" options={{ title: t("Skills") }} />
                 <Stack.Screen name="bot-skill" />
                 <Stack.Screen name="bot-skill-version" />
-                <Stack.Screen name="bot-skills-trash" />
                 <Stack.Screen
                   name="new"
                   options={{
