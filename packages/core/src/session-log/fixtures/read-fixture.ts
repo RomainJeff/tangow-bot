@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { SessionEntry } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@rakazo/contracts";
 import type { TailSource } from "../jsonl.js";
 import { readTailFromEnd } from "../jsonl.js";
 
@@ -31,4 +32,18 @@ export function fixtureText(name: FixtureName): string {
 
 export function fixtureChain(name: FixtureName): Promise<SessionEntry[]> {
   return readTailFromEnd(bytesSource(new TextEncoder().encode(fixtureText(name))), 4096);
+}
+
+/** A linear chain from entry bodies, with ids, seqs, parents and timestamps filled in. */
+export function linkEntries(prefix: string, bodies: readonly object[]): SessionEntry[] {
+  return bodies.map((body, seq) =>
+    SessionEntrySchema.parse({
+      id: `${prefix}-${seq}`,
+      sessionId: `ses_${prefix}`,
+      seq,
+      parentId: seq === 0 ? null : `${prefix}-${seq - 1}`,
+      ts: new Date(Date.UTC(2026, 9, 10, 9, 0, seq)).toISOString(),
+      ...body,
+    }),
+  );
 }

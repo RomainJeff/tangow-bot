@@ -40,15 +40,15 @@ type RunMessage = {
  * the position of the stretch's first entry. Any other entry, or an entry of another run, closes
  * the open stretch, and the run's next such entry opens a new one; a `subagent` entry of the same
  * run passes through without closing it. A tool call takes its output from the `tool.result` or
- * `subagent` entry with the same `callId`, or an empty output while none exists yet.
+ * `subagent` entry with the same run and `callId`, or an empty output while none exists yet.
  */
 export function foldRuns(
   entries: readonly SessionEntry[],
 ): (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] {
   const outputs = new Map<string, string>();
   for (const entry of entries) {
-    if (entry.type === "tool.result") outputs.set(entry.payload.callId, entry.payload.output);
-    if (entry.type === "subagent") outputs.set(entry.payload.callId, entry.payload.result);
+    if (entry.type === "tool.result") outputs.set(toolCallKey(entry), entry.payload.output);
+    if (entry.type === "subagent") outputs.set(toolCallKey(entry), entry.payload.result);
   }
   const segments: (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] = [];
   let open: RunMessage | undefined;
@@ -84,7 +84,7 @@ export function foldRuns(
         message.blocks = appendToolCallSegment(message.blocks, name, {
           name,
           input,
-          output: outputs.get(callId) ?? "",
+          output: outputs.get(toolCallKey(entry)) ?? "",
           id: callId,
         });
         break;
@@ -96,4 +96,9 @@ export function foldRuns(
     }
   }
   return segments;
+}
+
+/** Providers reuse call ids such as `call_0` from one run to the next, so a call is its run's. */
+export function toolCallKey(entry: SessionEntryOf<"tool.call" | "tool.result" | "subagent">) {
+  return JSON.stringify([entry.runId, entry.payload.callId]);
 }

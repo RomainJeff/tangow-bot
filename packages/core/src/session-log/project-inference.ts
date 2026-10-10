@@ -11,7 +11,7 @@ import { isInferenceEntry, REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { blocksToAgentHistoryText } from "../attachments.js";
 import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from "../bot-messages.js";
 import { messageReaction } from "../message-reactions.js";
-import { foldRuns } from "./run-fold.js";
+import { foldRuns, toolCallKey } from "./run-fold.js";
 
 export interface InferenceProjectionOptions {
   /** The bot the history is for. Only its own words stay on the assistant side. */
@@ -45,13 +45,13 @@ export function projectInferenceTurns(
   );
   const answered = new Set(
     chain.flatMap((entry) =>
-      entry.type === "tool.result" || entry.type === "subagent" ? [entry.payload.callId] : [],
+      entry.type === "tool.result" || entry.type === "subagent" ? [toolCallKey(entry)] : [],
     ),
   );
   const segments = foldRuns(
     chain
       .filter(isInferenceEntry)
-      .filter((entry) => entry.type !== "tool.call" || answered.has(entry.payload.callId)),
+      .filter((entry) => entry.type !== "tool.call" || answered.has(toolCallKey(entry))),
   );
   const targets = replyTargets(chain, segments);
   return segments.flatMap((segment) => renderTurn(segment, options, targets) ?? []);

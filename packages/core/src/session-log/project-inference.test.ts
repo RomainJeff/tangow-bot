@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { fixtureChain } from "./fixtures/read-fixture.js";
+import { fixtureChain, linkEntries } from "./fixtures/read-fixture.js";
 import { projectInferenceTurns } from "./project-inference.js";
 
 const ada = { selfBotId: "bot_ada" };
+const readFile = (runId: string, path: string, output?: string) => [
+  {
+    botId: "bot_ada",
+    runId,
+    type: "tool.call",
+    payload: { callId: "call_0", name: "read_file", input: JSON.stringify({ path }) },
+  },
+  ...(output === undefined
+    ? []
+    : [
+        {
+          botId: "bot_ada",
+          runId,
+          type: "tool.result",
+          payload: { callId: "call_0", output, isError: false, artifactIds: [] },
+        },
+      ]),
+];
 
 describe("projectInferenceTurns", () => {
   it("replays a linear chain with tool parts, a reply quote and no reasoning or approvals", async () => {
@@ -43,6 +61,36 @@ describe("projectInferenceTurns", () => {
       { role: "assistant", content: "Two rivers at dusk." },
       { role: "user", content: "Make it about rain." },
       { role: "assistant", content: "Rain on Fourvière." },
+    ]);
+  });
+
+  it("pairs a call id that every run reuses with its own run's result", () => {
+    const chain = linkEntries("reuse", [
+      ...readFile("run_1", "a.md", "alpha"),
+      ...readFile("run_2", "b.md", "beta"),
+      ...readFile("run_3", "c.md"),
+    ]);
+    expect(projectInferenceTurns(chain, ada)).toEqual([
+      {
+        role: "assistant",
+        content: '(already ran Read file, input: {"path":"a.md"}, result: alpha)',
+        parts: [
+          {
+            type: "toolCalls",
+            calls: [{ id: "call_0", name: "read_file", args: { path: "a.md" }, output: "alpha" }],
+          },
+        ],
+      },
+      {
+        role: "assistant",
+        content: '(already ran Read file, input: {"path":"b.md"}, result: beta)',
+        parts: [
+          {
+            type: "toolCalls",
+            calls: [{ id: "call_0", name: "read_file", args: { path: "b.md" }, output: "beta" }],
+          },
+        ],
+      },
     ]);
   });
 
