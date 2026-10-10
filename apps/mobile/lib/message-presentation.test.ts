@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
+  skillLineRoute,
+  skillLineSegment,
   stepsBlocks,
   visibleMessageBlocks,
 } from "./message-presentation";
@@ -43,20 +45,6 @@ describe("mobile message presentation", () => {
         { kind: "steps", steps: [{ label: "Message bot", count: 1 }] },
       ]),
     ).toBe(false);
-  });
-
-  it("draws no bubble for a message that only carries a skill line", () => {
-    const text = { kind: "text", text: "Done." } as MessageBlock;
-    const line = {
-      kind: "skill_source",
-      skillUid: "0123456789abcdef0123456789abcdef",
-      skillId: "user:coffee",
-      name: "Coffee",
-      change: "learned",
-    } as MessageBlock;
-
-    expect(hasVisibleMessagePresentation([line])).toBe(false);
-    expect(visibleMessageBlocks([text, line])).toEqual([text]);
   });
 
   it("keeps steps-only messages visible when the setting is on", () => {
@@ -117,5 +105,51 @@ describe("mobile message presentation", () => {
         { kind: "text", text: "Done." },
       ]),
     ).toEqual([{ kind: "content", blocks: [{ kind: "text", text: "Done." }] }]);
+  });
+});
+
+describe("skill lines", () => {
+  const uid = "0123456789abcdef0123456789abcdef";
+  const line = (change: "learned" | "updated" | "deleted") =>
+    ({
+      kind: "skill_source",
+      skillUid: uid,
+      skillId: "user:coffee",
+      name: "Coffee",
+      change,
+    }) as const;
+
+  it("draws a message made only of skill lines, and keeps the lines beside its text", () => {
+    expect(hasVisibleMessagePresentation([line("learned")])).toBe(true);
+    const blocks = [{ kind: "text", text: "Done." }, line("updated")] as MessageBlock[];
+    expect(visibleMessageBlocks(blocks)).toEqual(blocks);
+    expect(messagePresentationSegments(blocks)[0]?.blocks.map((block) => block.kind)).toEqual([
+      "text",
+      "skill_source",
+    ]);
+  });
+
+  it("opens the skill by its uid, Recently deleted for a deleted one, or Skills when it is gone", async () => {
+    const catalog = async () => [
+      { id: "user:tea", uid: "f".repeat(32) },
+      { id: "user:coffee-renamed", uid },
+    ];
+    await expect(skillLineRoute(line("learned"), catalog)).resolves.toEqual({
+      pathname: "/bot-skill",
+      params: { skillId: "user:coffee-renamed" },
+    });
+    await expect(skillLineRoute(line("updated"), async () => [])).resolves.toEqual({
+      pathname: "/skills",
+    });
+    await expect(skillLineRoute(line("deleted"), catalog)).resolves.toEqual({
+      pathname: "/bot-skills-trash",
+    });
+  });
+
+  it("hangs the lines under the last segment that draws text, else stands them alone", () => {
+    expect(skillLineSegment(["Done."])).toBe(0);
+    expect(skillLineSegment(["Reading.", "Done.", ""])).toBe(1);
+    expect(skillLineSegment([""])).toBe(-1);
+    expect(skillLineSegment([])).toBe(-1);
   });
 });

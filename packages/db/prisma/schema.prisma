@@ -628,6 +628,9 @@ model SteeringMessage {
   userId    String
   runId     String?
   run       Run?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+  // Sent by someone other than the user (a webhook, a messaging contact, another bot): the run
+  // it steers may not save skills.
+  untrusted Boolean  @default(false)
   claimedAt DateTime?
   createdAt DateTime @default(now())
 

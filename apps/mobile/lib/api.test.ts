@@ -33,6 +33,7 @@ import {
   subscribeThread,
 } from "./api.js";
 import { resumeLiveNotifications } from "./live-notifications.js";
+import { serverMessage } from "./server-error.js";
 import {
   clearSessionToken,
   restoreSessionToken,
@@ -356,6 +357,70 @@ describe("mobile API authentication", () => {
       }),
     );
     await expect(rpc("bots/get", { botId: "missing" })).rejects.toThrow("Bot does not exist");
+  });
+
+  it("reports the reason the server gives for refusing an input", async () => {
+    vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        jsonResponse(
+          {
+            json: { code: "NOT_FOUND", status: 404, message: "Routine not found" },
+          },
+          { status: 404 },
+        ),
+      ),
+    );
+    await expect(
+      rpc("routines/remove", { routineId: "routine-1" }).catch(serverMessage),
+    ).resolves.toBe("Routine not found");
+  });
+
+  it("gives no reason for a server crash, whose message is not written for the person", async () => {
+    vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        jsonResponse(
+          {
+            json: {
+              code: "INTERNAL_SERVER_ERROR",
+              status: 500,
+              message: "Internal server error",
+            },
+          },
+          { status: 500 },
+        ),
+      ),
+    );
+    await expect(
+      rpc("routines/remove", { routineId: "routine-1" }).catch(serverMessage),
+    ).resolves.toBe("");
+  });
+
+  it("keeps the server's words as a save's reason, and none for a call that got no answer", async () => {
+    vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { error: { message: "Wait for Scout to finish before switching computers." } },
+          { status: 400 },
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({}, { status: 500 }))
+      .mockRejectedValueOnce(new TypeError("Network request failed"));
+    vi.stubGlobal("fetch", fetchMock);
+    const reason = () =>
+      rpc("bots/setComputer", { botId: "bot-1", mode: "dedicated" }).then(
+        () => "resolved",
+        serverMessage,
+      );
+
+    await expect(reason()).resolves.toBe("Wait for Scout to finish before switching computers.");
+    await expect(reason()).resolves.toBe("");
+    await expect(reason()).resolves.toBe("");
   });
 
   it("blocks mobile message and attachment submission when AI sharing is declined", async () => {

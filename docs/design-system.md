@@ -426,7 +426,12 @@ shows while the history loads. A version opens read only: Back, the date and
 author, the SKILL.md in `pre` on `muted`, its files as plain lines with no label,
 and a two-step "Delete" that the current version does not offer. A refusal reads
 as the server's sentence only for a conflict or a bad request, else as what
-failed ("Could not undo", "Could not delete").
+failed ("Could not undo", "Could not delete"). On iPhone a skill line opens the
+skill's own screen: its SKILL.md, edited like a memory document, then a `Group`
+"Versions" with a `GroupAction` "Undo" on its label line and a `Row` per version
+(the native check on the current one, dimmed when undone); the field holds a
+draft only while it is edited, so it never shows a text the server no longer
+has.
 
 ### Recently deleted
 
@@ -437,7 +442,9 @@ opens. Each row is the skill's name over its date, a `quickReply`
 time ("Confirm delete"). A restored skill is lit `accent` for twice
 `--duration-arrive`, then fades over one, and none of it moves under reduced
 motion. A restored skill that no bot uses says "No bot uses this skill yet."
-under the list, the same sentence on iPhone.
+under the list, the same sentence on iPhone. On iPhone the row is the last of the
+Installed list in Skills, with the count, and pushes a screen whose rows open an
+action sheet (Undo, Delete now); a "Skill deleted" line opens that screen too.
 
 ### Clipped preview
 

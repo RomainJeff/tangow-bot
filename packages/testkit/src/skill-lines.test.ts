@@ -9,7 +9,8 @@ import {
   writeSkillLines,
 } from "@rakazo/adapters";
 import { buildSkillMd } from "@rakazo/core";
-import { appendLinkPreviewBlock, clearThread, type PrismaClient, rewindThread } from "@rakazo/db";
+import type { PrismaClient } from "@rakazo/db";
+import { appendLinkPreviewBlock, clearThread, rewindThread } from "@rakazo/db";
 import { afterEach, describe, expect, it } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
 
@@ -195,19 +196,29 @@ describe("the skill line of a finished run", () => {
 
   describe("in a conversation the user emptied since", () => {
     const now = new Date(Date.UTC(2026, 9, 10, 12));
+    const asked = new Date(now.getTime() - 20 * 60_000);
     const thread = { spaceId: "space-1", threadId: "thread-1", botId: "bot-1" };
-    const emptied = async (status: string) => {
+    const emptied = async (
+      status: string,
+      { startedAt = asked, replied = true }: { startedAt?: Date; replied?: boolean } = {},
+    ) => {
       const ctx = await setup({ status }, { lineOnlyMessages: true });
-      ctx.db.tables.runs.get("run-1")!.updatedAt = new Date(now.getTime() - 10 * 60_000);
-      ctx.db.seedMessage({ ...reply("ask", "Order my coffee."), role: "user", runId: undefined });
-      ctx.db.seedMessage(reply("final", "Done."));
+      const run = ctx.db.tables.runs.get("run-1")!;
+      run.createdAt = startedAt;
+      run.updatedAt = new Date(now.getTime() - 10 * 60_000);
+      ctx.db.seedMessage({
+        ...reply("ask", "Order my coffee."),
+        role: "user",
+        runId: undefined,
+        createdAt: asked,
+      });
+      if (replied) ctx.db.seedMessage(reply("final", "Done."));
       await ctx.writer().create(skill("Coffee"));
       return ctx;
     };
 
     it("gets no line back after a clear", async () => {
       const { db, deps, linesIn } = await emptied("completed");
-      await writeSkillLines(deps, "run-1");
 
       await clearThread(db.prisma, thread);
       await createSkillLineSweep(deps, { now: () => now })();
@@ -216,8 +227,18 @@ describe("the skill line of a finished run", () => {
     });
 
     it("gets no line back after a rewind to the message that started the run", async () => {
-      const { db, deps, linesIn } = await emptied("completed");
-      await writeSkillLines(deps, "run-1");
+      const { db, deps, linesIn } = await emptied("completed", { replied: false });
+
+      await rewindThread(db.prisma, { ...thread, messageId: "ask" });
+      await createSkillLineSweep(deps, { now: () => now })();
+
+      expect(linesIn("thread-1")).toEqual([]);
+    });
+
+    it("gets no line back after a rewind to a message sent while the run was going, once its reply is gone", async () => {
+      const { db, deps, linesIn } = await emptied("completed", {
+        startedAt: new Date(asked.getTime() - 60_000),
+      });
 
       await rewindThread(db.prisma, { ...thread, messageId: "ask" });
       await createSkillLineSweep(deps, { now: () => now })();

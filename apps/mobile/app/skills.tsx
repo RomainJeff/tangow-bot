@@ -6,11 +6,13 @@ import type {
   MarketplaceUpdateCheck,
   SkillAvailability,
   SpaceMarketplace,
+  TrashedSkill,
 } from "@rakazo/contracts";
 import { filterSkillList, marketplaceSkillKey, parseSkillMd } from "@rakazo/core";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
-import { useEffect, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -61,6 +63,7 @@ export default function Skills() {
   const [catalog, setCatalog] = useState<AgentSkillCatalogEntry[]>([]);
   const [marketplaces, setMarketplaces] = useState<SpaceMarketplace[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [trashed, setTrashed] = useState(0);
 
   async function refresh() {
     const [skills, spaces] = await Promise.all([
@@ -70,6 +73,17 @@ export default function Skills() {
     setCatalog(skills);
     setMarketplaces(spaces);
   }
+
+  // Back from Recently deleted: count what is left, and list a skill brought back.
+  useFocusEffect(
+    useCallback(() => {
+      void rpc<TrashedSkill[]>("agentSkills/trash", {}).then(
+        (skills) => setTrashed(skills.length),
+        () => setTrashed(0),
+      );
+      void refresh().catch(() => undefined);
+    }, []),
+  );
 
   // ponytail: refetch on every tab switch so the counter follows edits made in Installed.
   useEffect(() => {
@@ -110,6 +124,7 @@ export default function Skills() {
           <InstalledTab
             styles={styles}
             catalog={catalog}
+            trashed={trashed}
             onChanged={() => void refresh().catch(() => undefined)}
           />
         ) : null}
@@ -146,13 +161,17 @@ type Styles = ReturnType<typeof createSkillsStyles>;
 function InstalledTab({
   styles,
   catalog,
+  trashed,
   onChanged,
 }: {
   styles: Styles;
   catalog: AgentSkillCatalogEntry[];
+  /** How many skills wait in Recently deleted; its row shows only when some do. */
+  trashed: number;
   onChanged: () => void;
 }) {
   const { t } = useI18n();
+  const router = useRouter();
   const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>(catalog);
   const [bots, setBots] = useState<MobileBot[]>([]);
   const [open, setOpen] = useState<AgentSkill | null>(null);
@@ -490,6 +509,20 @@ function InstalledTab({
           </View>
         );
       })}
+
+      {trashed > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          testID="skills-trash"
+          onPress={() => router.push("/bot-skills-trash")}
+          style={styles.card}
+        >
+          <View style={styles.row}>
+            <Text style={[styles.title, styles.grow]}>{t("Recently deleted")}</Text>
+            <Text style={styles.secondary}>{String(trashed)}</Text>
+          </View>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

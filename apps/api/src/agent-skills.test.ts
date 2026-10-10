@@ -301,9 +301,33 @@ describe("agent skills service (filesystem)", () => {
         },
       });
 
-      await expect(broken.create(actor, { content: body("One") })).rejects.toMatchObject({
-        code: "SERVICE_UNAVAILABLE",
+      const skills = service();
+      const created = await skills.create(actor, { content: body("One") });
+      const [current] = await skills.versions(actor, { skillId: created.id });
+      const gone = await skills.create(actor, {
+        content: buildSkillMd({ name: "Retro", description: "Notes", body: "Two" }),
       });
+      await skills.remove(actor, gone.id);
+      const [trashed] = await skills.trash(actor);
+      const skillId = created.id;
+      const versionId = current?.versionId as string;
+      const uid = trashed?.uid as string;
+
+      for (const call of [
+        () =>
+          broken.create(actor, {
+            content: buildSkillMd({ name: "Planning", description: "Notes", body: "One" }),
+          }),
+        () => broken.versions(actor, { skillId }),
+        () => broken.version(actor, { skillId, versionId }),
+        () => broken.undo(actor, { skillId, expectedVersionId: versionId }),
+        () => broken.deleteVersion(actor, { skillId, versionId }),
+        () => broken.trash(actor),
+        () => broken.restore(actor, { uid }),
+        () => broken.purge(actor, { uid }),
+      ]) {
+        await expect(call()).rejects.toMatchObject({ code: "SERVICE_UNAVAILABLE" });
+      }
     });
 
     it("deletes an old version but never the current one", async () => {

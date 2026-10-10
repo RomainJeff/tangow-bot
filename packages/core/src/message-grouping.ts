@@ -20,8 +20,8 @@ export type GroupableMessage = Pick<ThreadMessage, "role" | "blocks" | "replyToM
  * Whether a message is pure narration: bot prose with no rich card. This is the single
  * source of truth for "narration" used to decide whether a message can safely sit under a
  * shared header — a card (ask, choice, chart, ...) always gets its own header so it reads
- * as a distinct event. A link preview is not such a card: it hangs off the prose and arrives
- * after it, so it must not change how the message groups.
+ * as a distinct event. A link preview or a skill line is not such a card: it hangs off the
+ * prose and arrives after it, so it must not change how the message groups.
  */
 export function isNarrationMessage(message: Pick<ThreadMessage, "role" | "blocks">): boolean {
   return (
@@ -32,7 +32,8 @@ export function isNarrationMessage(message: Pick<ThreadMessage, "role" | "blocks
         block.kind === "text" ||
         block.kind === "progress" ||
         block.kind === "steps" ||
-        block.kind === "link_preview",
+        block.kind === "link_preview" ||
+        block.kind === "skill_source",
     )
   );
 }

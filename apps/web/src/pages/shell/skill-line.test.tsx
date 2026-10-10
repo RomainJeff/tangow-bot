@@ -124,14 +124,14 @@ describe("a skill line under a bot's message", () => {
     );
 
     const bubbles = container.querySelectorAll('[data-slot="message-row-bubble"]');
-    expect(bubbles).toHaveLength(2);
-    expect(bubbles[0]?.querySelectorAll('[data-slot="message-row-meta"]')).toHaveLength(0);
-    expect(bubbles[1]?.querySelectorAll('[data-slot="message-row-meta"]')).toHaveLength(1);
+    expect(bubbles).toHaveLength(1);
+    expect(bubbles[0]?.textContent).toMatch(/^3 invoices\s*Filed\.Skill updated · Invoices$/);
+    expect(bubbles[0]?.querySelectorAll('[data-slot="message-row-meta"]')).toHaveLength(1);
     expect(lines().map((line) => line.textContent)).toEqual(["Skill updated · Invoices"]);
     expect(lines().every((line) => line.querySelector("svg"))).toBe(true);
   });
 
-  it("names the skill without a link in a group, which has no bot page", async () => {
+  it("names the skill without a link when there is no skill to open", async () => {
     await render(botMessage([{ kind: "text", text: "ok" }, skill("learned", "Invoices")]));
 
     expect(lines().map((line) => line.textContent)).toEqual(["Skill learned · Invoices"]);

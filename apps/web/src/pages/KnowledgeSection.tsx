@@ -225,7 +225,8 @@ export function AgentSkills({
   trashOpen?: boolean;
 } = {}) {
   const { t } = useLingui();
-  const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
+  /** `null` until the catalog is first read. */
+  const [skills, setSkills] = useState<AgentSkillCatalogEntry[] | null>(null);
   const [bots, setBots] = useState<Bot[]>([]);
   const [editing, setEditing] = useState<{ skillId: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -307,7 +308,9 @@ export function AgentSkills({
     setError(null);
     try {
       const updated = await rpc.agentSkills.setAccess({ skillId: entry.id, ...patch });
-      setSkills((list) => list.map((skill) => (skill.id === updated.id ? updated : skill)));
+      setSkills(
+        (list) => list?.map((skill) => (skill.id === updated.id ? updated : skill)) ?? null,
+      );
     } catch {
       setError(t`Could not update agent access`);
     }
@@ -356,7 +359,7 @@ export function AgentSkills({
     { value: "selected", label: <Trans>Specific agents</Trans> },
   ] satisfies Array<{ value: SkillAvailability; label: ReactNode }>;
 
-  const shown = filterSkillList(skills, { query, filter, botId });
+  const shown = filterSkillList(skills ?? [], { query, filter, botId });
 
   const editorOpen = editing !== null;
   return (
@@ -426,7 +429,7 @@ export function AgentSkills({
           )}
         </div>
       ) : null}
-      {shown.length === 0 && !editorOpen && !error ? (
+      {skills && shown.length === 0 && !editorOpen && !error ? (
         <div className="px-2.5 py-1 text-[13.5px] text-muted-foreground/80">
           {skills.length === 0 ? <Trans>No skills yet</Trans> : <Trans>No skills match</Trans>}
         </div>
