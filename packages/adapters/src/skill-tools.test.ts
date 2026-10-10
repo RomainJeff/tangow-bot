@@ -1169,7 +1169,11 @@ describe("skill drafts", () => {
       });
 
       expect(
-        await skillCreateFromTool(deps, creator, [], { name: "Other", description: "d", body: "x" }),
+        await skillCreateFromTool(deps, creator, [], {
+          name: "Other",
+          description: "d",
+          body: "x",
+        }),
       ).toEqual({ error: "Could not create skill." });
       expect(
         await skillUpdateFromTool(deps, creator, [], { name: "Deploy", files: draft }),
