@@ -47,16 +47,14 @@ export function stepsBlocks(
 }
 
 /**
- * Where a skill line opens: the skill's own screen, found by its uid when the line has one, else
- * by its id. One the catalog no longer has opens Skills.
+ * Where a skill line opens: the skill's own screen, found by its id. One the catalog no longer
+ * has opens Skills.
  */
 export async function skillLineRoute(
-  line: Pick<SkillSourceBlock, "skillUid" | "skillId">,
-  catalog: () => Promise<ReadonlyArray<{ id: string; uid?: string }>>,
+  line: Pick<SkillSourceBlock, "skillId">,
+  catalog: () => Promise<ReadonlyArray<{ id: string }>>,
 ) {
-  const skillId = (await catalog()).find((entry) =>
-    line.skillUid ? entry.uid === line.skillUid : entry.id === line.skillId,
-  )?.id;
+  const skillId = (await catalog()).find((entry) => entry.id === line.skillId)?.id;
   return skillId
     ? ({ pathname: "/bot-skill", params: { skillId } } as const)
     : ({ pathname: "/skills" } as const);

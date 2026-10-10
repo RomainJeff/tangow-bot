@@ -29,10 +29,10 @@ test("a skill line sits under the bot's message, opens the skill, and cannot be 
     "Skill deleted · Old checklist",
   ]);
 
-  // Renamed since the line was written: the line still opens it, under its name now.
+  // A line stored with a uid opens the skill by its id.
   await line.click();
   await expect(page.getByTestId("opened")).toHaveText(
-    '{"tab":"knowledge","detail":{"kind":"skill","skillId":"user:meeting-rooms"}}',
+    '{"tab":"knowledge","detail":{"kind":"skill","skillId":"user:rooms"}}',
   );
 
   // A skill the catalog no longer has opens the Knowledge list.
