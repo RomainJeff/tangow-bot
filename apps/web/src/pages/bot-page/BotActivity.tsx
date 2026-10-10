@@ -34,6 +34,7 @@ import {
 } from "react";
 import { rpc } from "../../lib/rpc";
 import type { BotCommands } from "../shell/bot-commands";
+import { CouldNotLoad, LoadingRows } from "./page-kit";
 import { useRoutineCopy } from "./routine-copy";
 
 /**
@@ -459,39 +460,6 @@ function RecapText({ text }: { text: string }) {
       >
         {markdown}
       </ClippedPreview>
-    </div>
-  );
-}
-
-/** "Could not load · Retry", in place of what failed to read. */
-function CouldNotLoad({ onRetry, className }: { onRetry: () => void; className: string }) {
-  const { t } = useLingui();
-  return (
-    <p className={`text-muted-foreground ${className}`}>
-      {t`Could not load`}
-      {" · "}
-      <button
-        type="button"
-        onClick={onRetry}
-        className="rounded-chip underline underline-offset-2 outline-none duration-(--duration-hover) ease-quiet hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        {t`Retry`}
-      </button>
-    </p>
-  );
-}
-
-/** Rows that keep the height of what is loading; never a bare spinner. */
-function LoadingRows() {
-  return (
-    <div aria-busy className="flex flex-col">
-      {[0, 1, 2].map((index) => (
-        <div key={index} className="flex min-h-11 items-center gap-2.5">
-          <Skeleton className="size-4.5 rounded-full" />
-          <Skeleton className="h-3.5 flex-1" />
-          <Skeleton className="h-3.5 w-12" />
-        </div>
-      ))}
     </div>
   );
 }
