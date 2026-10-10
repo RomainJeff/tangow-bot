@@ -41,6 +41,8 @@ const processQueue = createInMemorySkillLock();
 // Far above an operation's few hundred milliseconds, and under the pool's 10 s checkout wait: a
 // caller stuck behind another process gives its connection back before the next checkout gives up.
 const LOCK_WAIT = "SET lock_timeout = 5000";
+// The key names a store that is gone. Renaming it would let an API and a worker of two builds take
+// different locks for one owner during a deploy.
 const LOCK = "SELECT pg_advisory_lock(hashtext('skill-library'), hashtext($1))";
 const UNLOCK = "SELECT pg_advisory_unlock(hashtext('skill-library'), hashtext($1)) AS released";
 
