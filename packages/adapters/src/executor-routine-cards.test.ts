@@ -1987,6 +1987,19 @@ describe("the skill nudge at the end of an exchange", () => {
     ]);
   });
 
+  it("does not run once a webhook steered into the exchange", async () => {
+    const f = fixture({ skillLearning: "on", steering: [true], nudge: [[keep]] });
+    await f.play([[keep], searches]);
+    expect(f.results[0]).toEqual({
+      error:
+        "Skills can't be saved in this run: only a conversation the user started, one of their routines or a sub-bot they created can save one.",
+    });
+    expect(f.requests()).toHaveLength(1);
+    expect(f.nudgeResults).toEqual([]);
+    expect(f.written()).toEqual([]);
+    expect(await f.skills()).toEqual([]);
+  });
+
   it("does not run for a routine, even a long one", async () => {
     const f = fixture({ skillLearning: "on", trigger: "routine", nudge: [[keep]] });
     await f.play([searches]);

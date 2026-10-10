@@ -4877,6 +4877,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : await decideSkillNudge(deps, learning, {
                   run: { ...run, threadId: thread.id },
                   sourceRole,
+                  steeredByOthers,
                   replied: !handedOff && (text.trim() !== "" || publishedMidTurnUserMessage),
                   budgetExhausted: endsWithToolCallBudgetNotice(text),
                 }).catch((error) => {
@@ -5041,6 +5042,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   ]),
                 },
                 callTool: async (name, args, toolCallId) => {
+                  const skillRefusal = skillWriteRefusal(
+                    { trigger: run.trigger, sourceRole, trustedRoutine, steeredByOthers },
+                    name,
+                  );
+                  if (skillRefusal) return { error: skillRefusal };
                   const safeArgs = redactBotToolArgs(name, args, runSecrets);
                   if (name !== "skill_create" && name !== "skill_update") {
                     return runSkillTool(name, safeArgs, undefined, true);

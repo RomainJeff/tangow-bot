@@ -53,6 +53,8 @@ export type SkillNudgeExchange = {
   };
   /** Who wrote a follow_up's or a messaging run's source message. */
   sourceRole?: string | null;
+  /** The exchange read a message someone other than the user sent into it. */
+  steeredByOthers: boolean;
   /** The user saw an answer: a final reply or a message_user bubble. */
   replied: boolean;
   /** The exchange stopped on the tool-call limit. */
@@ -134,10 +136,12 @@ export async function decideSkillNudge(
 async function decide(
   deps: SkillNudgeDeps,
   mode: Exclude<SkillLearningMode, "off">,
-  { run, sourceRole, replied, budgetExhausted }: SkillNudgeExchange,
+  { run, sourceRole, steeredByOthers, replied, budgetExhausted }: SkillNudgeExchange,
 ): Promise<SkillNudgeDecision> {
   const skip = (reason: SkillNudgeSkip): SkillNudgeDecision => ({ nudge: false, reason });
-  if (!runStartedByUser({ trigger: run.trigger, sourceRole })) return skip("not_user_started");
+  if (steeredByOthers || !runStartedByUser({ trigger: run.trigger, sourceRole })) {
+    return skip("not_user_started");
+  }
   if (!replied) return skip("no_reply");
   if (budgetExhausted) return skip("budget_exhausted");
   const { facts, nudged } = await exchangeFacts(deps.prisma, run.id);
