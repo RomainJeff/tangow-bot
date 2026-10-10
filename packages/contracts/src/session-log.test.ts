@@ -59,6 +59,11 @@ describe("SessionEntrySchema", () => {
       ["parentId: Only a clear entry or the first entry of a session has no parent"],
     ],
     [
+      "a first entry with a parent",
+      { ...envelope, seq: 0, ...note },
+      ["parentId: The first entry of a session has no parent"],
+    ],
+    [
       "a run entry with no run",
       { ...envelope, botId: "bot_ada", ...text },
       ["runId: Invalid input: expected string, received undefined"],

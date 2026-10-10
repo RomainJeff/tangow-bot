@@ -199,6 +199,13 @@ export const SessionEntrySchema = EntryShapes.superRefine((entry, ctx) => {
       message: "Only a clear entry or the first entry of a session has no parent",
     });
   }
+  if (entry.seq === 0 && entry.parentId !== null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["parentId"],
+      message: "The first entry of a session has no parent",
+    });
+  }
   if (entry.type === "compaction" && entry.payload.coveredUpToSeq >= entry.seq) {
     ctx.addIssue({
       code: "custom",
