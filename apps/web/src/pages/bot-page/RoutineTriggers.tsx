@@ -254,7 +254,13 @@ function TriggerDialog({
       setError(copy.draftError({ code: "no_trigger" }));
       return;
     }
-    if (effect === "confirm" && !(await confirm(t`Remove ${title}?`, t`Remove`))) return;
+    const question =
+      ref.kind === "webhook"
+        ? t`Remove webhook?`
+        : ref.kind === "github"
+          ? t`Remove Git event?`
+          : t`Remove message trigger?`;
+    if (effect === "confirm" && !(await confirm(question, t`Remove`))) return;
     await save(withoutTrigger(draft, ref), false);
   };
 

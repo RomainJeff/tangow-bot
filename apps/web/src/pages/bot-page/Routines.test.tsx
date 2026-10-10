@@ -206,7 +206,7 @@ it("asks before removing an inbound trigger, then saves only that trigger", asyn
 
   await act(async () => button("Remove").click());
 
-  expect(confirm.mock.calls).toEqual([["Remove When a webhook fires?", "Remove"]]);
+  expect(confirm.mock.calls).toEqual([["Remove webhook?", "Remove"]]);
   expect(updateRoutine.mock.calls).toEqual([["bot-1", "routine-1", { webhookEnabled: false }]]);
 });
 
