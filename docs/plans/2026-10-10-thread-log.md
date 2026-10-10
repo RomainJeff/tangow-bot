@@ -170,7 +170,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] `SessionLog` interface in `interfaces.ts` with `createSession(tx, input)`, `append(tx, entry)`, `readTail(sessionId)` which returns the chain from the last compaction to the head oldest first, `readPage(sessionId, before?, limit)` which returns the newest `limit` chain entries before an entry, and `readRun(runId)` which returns a run's entries in seq order for the detail views.
 - [ ] `appendSessionEntryInTransaction` in `sessions.ts`, which increments `nextEntrySeq` on the session row, sets `parentId` to the current head unless the entry is a `clear` or a `rewind`, inserts the row, and appends a `session.entry.appended` event through `appendEventInTransaction` on the owning thread. Reuse `sanitizeJsonValue` and `assertRunCanWriteHistory`.
 - [ ] `PostgresSessionLog` in `postgres.ts`. `readTail` runs the recursive CTE from Appendix A through `prisma.$queryRaw`, stopping at `type = 'compaction'`. `readPage` runs the same CTE bounded by depth. `readRun` is a plain indexed select.
-- [ ] `FileSessionLog` in `file.ts`, one `<root>/sessions/<sessionId>.jsonl` per session, append with a per-process lock, `readTail` through `readTailFromEnd` from SL1. Documented as single-process only.
+- [ ] `FileSessionLog` in `file.ts`, one `<root>/sessions/<sessionId>.jsonl` per session, append with a per-process lock as one write of the line plus its newline, `readTail` through `readTailFromEnd` from SL1, which skips a torn final line with no trailing newline and refuses any other malformed line. Documented as single-process only.
 - [ ] `runSessionLogConformance(makeLog)` in `conformance.ts`. Deterministic and offline. Covers append order, seq uniqueness, the parent invariant, rewind and clear chains, tail stopping at compaction, page boundaries, and two sessions appended concurrently with disjoint chains. Both backend tests call it. Postgres runs it on `@electric-sql/pglite`, already in the lockfile.
 
 **You see.**
@@ -191,7 +191,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] Lane 5. Rewind to an older entry through the log and read the tail. Save `pg-rewind.png`. Pass when entries after the target are absent from the tail and still present in the table.
 - [ ] Lane 6. Create a child session from a parent entry, append to both at once, read both tails. Save `pg-child.png`. Pass when the chains never cross and the child row points at the parent entry.
 - [ ] Lane 7. Run the same 1 000 entry script on `FileSessionLog`. Save `file-tail.png`. Pass when the tail matches the Postgres result entry for entry.
-- [ ] Lane 8. Corrupt the last line of a file log and read the tail. Save `file-corrupt.png`. Pass when the reader reports the line and refuses the tail instead of returning a partial chain.
+- [ ] Lane 8. Corrupt a newline-terminated line of a file log and read the tail, then truncate the file mid-line with no trailing newline and read again. Save `file-corrupt.png`. Pass when the first read reports the line and refuses the tail instead of returning a partial chain, and the second read skips the torn final line and returns the chain before it.
 - [ ] Lane 9. Run `pnpm lint` and `pnpm check` at head. Save `lint-check.png`. Pass when both exit zero.
 - [ ] Lane 10. Run `pnpm test` at head. Save `full-unit.png`. Pass when the run exits zero.
 
