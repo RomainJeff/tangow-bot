@@ -259,7 +259,7 @@ export function createAgentSkillsService(
   const admin = (actor: Actor) => library.forOwner(actor);
 
   async function history(actor: Actor, skillId: string) {
-    const versions = await admin(actor).versions(skillId);
+    const versions = await admin(actor).versions(skillId).catch(rethrowRefusal);
     const uid = versions[0]?.uid;
     if (!uid) throw new IsolationError();
     return { uid, versions };
@@ -379,7 +379,7 @@ export function createAgentSkillsService(
     },
 
     async versions(actor: Actor, input: { skillId: string }): Promise<SkillVersion[]> {
-      const versions = await admin(actor).versions(input.skillId);
+      const versions = await admin(actor).versions(input.skillId).catch(rethrowRefusal);
       if (versions.length === 0) await owned(actor, input.skillId);
       return versions.map((version) => toSkillVersion(version, versions));
     },
@@ -422,7 +422,7 @@ export function createAgentSkillsService(
     },
 
     async trash(actor: Actor): Promise<TrashedSkill[]> {
-      return admin(actor).trash();
+      return admin(actor).trash().catch(rethrowRefusal);
     },
 
     async restore(
