@@ -1,12 +1,10 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildSkillMd } from "@rakazo/core";
 import type { Pool, PrismaClient } from "@rakazo/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createSkillLibrary } from "./skill-library.js";
-import { fakeSkillPrisma } from "./skill-library.test-support.js";
 import { createInMemorySkillLock, createPostgresSkillLock } from "./skill-lock.js";
+import { skillCreateFromTool } from "./skill-tools.js";
 
 const alice = { spaceId: "ws-1", userId: "alice" };
 const bob = { spaceId: "ws-1", userId: "bob" };
@@ -85,6 +83,28 @@ async function lockOfAnotherProcess() {
   return (await import("./skill-lock.js")).createPostgresSkillLock;
 }
 
+type Row = Record<string, unknown>;
+
+/** The access rows a bot's skill create reads and writes. */
+function accessRows() {
+  const rows: Row[] = [];
+  const matches = (row: Row, where: Row) =>
+    Object.entries(where).every(([key, value]) => row[key] === value);
+  return {
+    findMany: async ({ where }: { where: Row }) => rows.filter((row) => matches(row, where)),
+    deleteMany: async ({ where }: { where: Row }) => {
+      const kept = rows.filter((row) => !matches(row, where));
+      const count = rows.length - kept.length;
+      rows.splice(0, rows.length, ...kept);
+      return { count };
+    },
+    upsert: async ({ create }: { create: Row }) => {
+      rows.push(create);
+      return create;
+    },
+  };
+}
+
 /**
  * The app's Prisma pool: each query, or batch of queries in one transaction, holds one of `size`
  * connections, and a caller waits at most `waitMs` for one.
@@ -115,7 +135,7 @@ function pooledPrisma(size: number, waitMs: number) {
       else free += 1;
     }
   };
-  const base = fakeSkillPrisma();
+  const base = { skillSetting: accessRows(), botSkill: accessRows() };
   const lazy = <T extends Record<string, unknown>>(table: T) =>
     Object.fromEntries(
       Object.entries(table).map(([name, value]) => [
@@ -252,24 +272,25 @@ describe("skill owner lock", () => {
   it("lets more owners write at once than the app's pool has connections", {
     timeout: 120_000,
   }, async () => {
-    const data = await mkdtemp(path.join(tmpdir(), "rakazo-skill-lock-"));
-    dirs.push(data);
-    const library = createSkillLibrary({
+    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-lock-"));
+    dirs.push(dataDir);
+    const deps = {
       prisma: pooledPrisma(4, 10_000) as unknown as PrismaClient,
-      dataDir: data,
+      dataDir,
       lock: createPostgresSkillLock(advisoryServer().pool()),
-    });
-    const owners = Array.from({ length: 6 }, (_, i) => ({ spaceId: "ws-1", userId: `user-${i}` }));
-    const content = buildSkillMd({ name: "Deploy", description: "About Deploy", body: "Steps" });
+    };
+    const owners = Array.from({ length: 6 }, (_, i) => ({
+      spaceId: "ws-1",
+      userId: `user-${i}`,
+      botId: `bot-${i}`,
+    }));
     const results = await Promise.all(
       owners.map((owner) =>
-        library
-          .forOwner(owner)
-          .create({ kind: "skill-md", name: "Deploy", content })
-          .then(
-            (result) => result.key,
-            (error: Error) => error.message,
-          ),
+        skillCreateFromTool(deps, owner, [], {
+          name: "Deploy",
+          description: "About Deploy",
+          body: "Steps",
+        }).then((result) => result.id ?? result.error),
       ),
     );
     expect(results).toEqual(owners.map(() => "user:deploy"));

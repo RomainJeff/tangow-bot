@@ -300,17 +300,6 @@ async function importSkillTree(
 }
 
 /**
- * Unpacks a `.skill` bundle (a gzip tar or zip with SKILL.md at its root, or inside a single
- * top-level directory, plus any extra files) into `out`, a fresh staging directory, and returns
- * the skill's directory inside it. Same hardening as the marketplace tarball: files and
- * directories only, byte and entry caps.
- */
-export async function extractSkillBundle(archive: Buffer, out: string): Promise<string> {
-  await extractBundle(archive, out);
-  return locateSkillDir(out);
-}
-
-/**
  * Magic bytes of the archive formats a `.skill` bundle may use, or null for anything else
  * (which the import path then reads as plain SKILL.md text). Two bytes are enough for zip:
  * `50 4b` covers the local-file, central-directory and spanning headers without enumerating

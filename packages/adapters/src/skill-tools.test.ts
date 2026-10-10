@@ -152,7 +152,7 @@ describe("skill tools", () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  /** Seed a skill folder written before history (no access rows = visible to all). */
+  /** Seed a skill folder with no access rows: visible to every bot. */
   const seed = (name: string, description: string, body = "", scope = owner) =>
     seedSkillFolder(
       userSkillsRoot(dataDir, scope),

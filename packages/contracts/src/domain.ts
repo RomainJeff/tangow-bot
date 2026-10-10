@@ -551,8 +551,6 @@ export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
 });
 export type AgentSkillCatalogEntry = z.infer<typeof AgentSkillCatalogEntrySchema>;
 
-export const SKILL_VERSION_ID_PATTERN = /^v\d{6}-[0-9a-f]{8}$/;
-
 /** Agent Skills spec bound; every description sits in the prompt catalog on each turn. */
 export const SKILL_DESCRIPTION_MAX_CHARS = 1024;
 
