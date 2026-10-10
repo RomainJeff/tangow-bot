@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { type AgentRuntime, type JobPublisher, runJobKey } from "@rakazo/adapter-kit";
-import { MessagingTeamChatEmulator, skillDirName, userSkillsRoot } from "@rakazo/adapters";
+import {
+  MessagingTeamChatEmulator,
+  skillDirName,
+  skillLinesByRun,
+  userSkillsRoot,
+} from "@rakazo/adapters";
 import type { ModelConnectInput, RunStatus } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, isTerminal } from "@rakazo/core";
 import type { createDb } from "@rakazo/db";
@@ -423,18 +428,26 @@ export async function runTrial(
       cookie,
       "agentSkills/list",
     );
+    const botRuns = await handles.prisma.run.findMany({ where: { botId }, select: { id: true } });
+    const botWrites = [
+      ...(
+        await skillLinesByRun(
+          handles.prisma,
+          botRuns.map((run) => run.id),
+        )
+      ).values(),
+    ].flat();
     for (const listedSkill of listed.filter((entry) => entry.source === "user")) {
-      const versions = await rpc<
-        Array<{ author: { kind: string }; nature: string; undone: boolean }>
-      >(app, cookie, "agentSkills/versions", { skillId: listedSkill.id });
-      const byBot = versions.filter((v) => v.author.kind === "bot" && !v.undone);
+      const byBot = botWrites.filter(
+        (line) => line.skillId === listedSkill.id && line.change !== "deleted",
+      );
       if (byBot.length === 0) continue;
       const current = await rpc<{ name: string; content: string }>(app, cookie, "agentSkills/get", {
         skillId: listedSkill.id,
       });
       skillsWritten.push({
         name: current.name,
-        change: byBot.some((v) => v.nature === "created") ? "learned" : "updated",
+        change: byBot.some((line) => line.change === "learned") ? "learned" : "updated",
         content: current.content,
         files: await skillFiles(
           path.join(userSkillsRoot(handles.dataDir, actors.at(-1)!), skillDirName(current.name)),
