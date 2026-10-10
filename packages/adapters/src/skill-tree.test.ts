@@ -159,6 +159,8 @@ describe("captureTree", () => {
     await rm(path.join(dir, "big.bin"));
     await truncate(await put(dir, "a.bin", ""), 6 * MB);
     await truncate(await put(dir, "b.bin", ""), 6 * MB);
+    // Sorted after the overflow: refused only if the walk read on past the cap.
+    await symlink(path.join(dir, "a.bin"), path.join(dir, "c.link"));
     await expect(captureTree(dir)).rejects.toThrow("Skill too large (> 10485760 bytes).");
   });
 

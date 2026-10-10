@@ -240,11 +240,14 @@ export async function captureTree(
       check(info);
       bytes += info.size;
       if (bytes > SKILL_BUNDLE_MAX_BYTES) throw tooLarge();
-      files.push({
-        path: relative,
-        bytes: await handle.readFile(),
-        executable: (info.mode & 0o111) !== 0,
-      });
+      // Exactly the size the caps vetted: a file that grew since its stat is refused, not read.
+      const content = Buffer.alloc(info.size);
+      const { bytesRead } = await handle.read(content, 0, info.size, 0);
+      const { bytesRead: beyond } = await handle.read(new Uint8Array(1), 0, 1, info.size);
+      if (bytesRead !== info.size || beyond > 0) {
+        throw new SkillRefusal("invalid", `${relative} changed while it was read. Try again.`);
+      }
+      files.push({ path: relative, bytes: content, executable: (info.mode & 0o111) !== 0 });
     } finally {
       await handle.close();
     }
