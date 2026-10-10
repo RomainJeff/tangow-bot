@@ -109,18 +109,15 @@ function markdownStyles(palette: ColorTokens, inBubble: boolean) {
     hr: {
       backgroundColor: palette.border,
     },
-    bullet_list_content: {
-      flex: 1,
-      flexShrink: 1,
-      minWidth: 0,
-    },
-    ordered_list_content: {
-      flex: 1,
-      flexShrink: 1,
-      minWidth: 0,
-    },
+    bullet_list_content: listContent,
+    ordered_list_content: listContent,
   });
 }
+
+// `flex: 0` cancels the library's default `flex: 1`, which Yoga reads as a zero
+// basis even next to `flexBasis: "auto"`. A list that is the widest thing in a
+// bubble sizes the bubble, so a zero basis drew its text one letter per line.
+const listContent = { flex: 0, flexGrow: 1, flexShrink: 1, minWidth: 0 };
 
 // No `canOpenURL` gate: its answer depends on per-platform scheme query
 // declarations and can be false for a link the OS would open, which silently

@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Notifications on iPhone, web and desktop now show a bot's message as plain words, cut on a whole word, instead of its raw formatting symbols such as asterisks, hashes and bracketed links.
 - The conversation list on web and desktop now previews the last message as plain words, as on iPhone, instead of its raw formatting symbols.
 - On iPhone, conversation previews keep file names, code and addresses as written instead of mangling them.
+- On iPhone, a bot message made only of a list now reads at full width instead of shrinking to a narrow strip with one letter per line and empty items.
 - Your own skills show up again in the composer `/` picker on web, desktop and mobile instead of being crowded out by built-in skills.
 - On web and desktop, a skill you create, edit or delete is reflected in the composer `/` picker right away instead of after a reload.
 - On web and desktop, creating an account goes straight to onboarding instead of flashing the sign-in page first.
