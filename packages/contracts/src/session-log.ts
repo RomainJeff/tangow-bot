@@ -178,3 +178,53 @@ export const SessionEntrySchema = z.discriminatedUnion("type", [
 export type SessionEntry = z.infer<typeof SessionEntrySchema>;
 export type SessionEntryType = SessionEntry["type"];
 export type SessionEntryOf<T extends SessionEntryType> = Extract<SessionEntry, { type: T }>;
+
+export type EntryAudience = { inference: "yes" | "no" | "context"; ui: boolean };
+
+/** Who reads each entry type. `context` is one short line in the model's history. */
+export const ENTRY_AUDIENCE = {
+  "user.message": { inference: "yes", ui: true },
+  "assistant.text": { inference: "yes", ui: true },
+  "assistant.reasoning": { inference: "no", ui: true },
+  "assistant.ask": { inference: "yes", ui: true },
+  "assistant.choice": { inference: "yes", ui: true },
+  "tool.call": { inference: "yes", ui: true },
+  "tool.result": { inference: "yes", ui: true },
+  subagent: { inference: "yes", ui: true },
+  handoff: { inference: "yes", ui: true },
+  "bot.message.sent": { inference: "yes", ui: true },
+  "bot.message.received": { inference: "yes", ui: true },
+  "run.started": { inference: "context", ui: true },
+  "run.finished": { inference: "no", ui: true },
+  "effect.requested": { inference: "no", ui: true },
+  "effect.edited": { inference: "no", ui: true },
+  "effect.resolved": { inference: "no", ui: true },
+  "computer.control": { inference: "context", ui: true },
+  "memory.revised": { inference: "no", ui: true },
+  "skill.saved": { inference: "no", ui: true },
+  "attachment.added": { inference: "no", ui: true },
+  "session.title": { inference: "no", ui: true },
+  "system.note": { inference: "no", ui: true },
+  compaction: { inference: "yes", ui: true },
+  rewind: { inference: "no", ui: true },
+  clear: { inference: "no", ui: true },
+  "harness.session": { inference: "no", ui: false },
+} as const satisfies Record<SessionEntryType, EntryAudience>;
+
+type Audience = typeof ENTRY_AUDIENCE;
+export type InferenceEntry = SessionEntryOf<
+  {
+    [T in SessionEntryType]: Audience[T]["inference"] extends "no" ? never : T;
+  }[SessionEntryType]
+>;
+export type UiEntry = SessionEntryOf<
+  { [T in SessionEntryType]: Audience[T]["ui"] extends true ? T : never }[SessionEntryType]
+>;
+
+export function isInferenceEntry(entry: SessionEntry): entry is InferenceEntry {
+  return ENTRY_AUDIENCE[entry.type].inference !== "no";
+}
+
+export function isUiEntry(entry: SessionEntry): entry is UiEntry {
+  return ENTRY_AUDIENCE[entry.type].ui;
+}
