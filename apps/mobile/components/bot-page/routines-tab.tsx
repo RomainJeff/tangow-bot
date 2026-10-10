@@ -97,12 +97,13 @@ function RoutineRow({
   const shown = { ...routine, active: active.value };
   const state = !shown.active ? "paused" : routineFailing(shown) ? "failed" : "ok";
   const stateLabel = { paused: t("Paused"), failed: t("Last run failed"), ok: t("Active") }[state];
+  const cadence = cadenceLine(shown);
   return (
     <Row
       label={routine.name}
-      subline={cadenceLine(shown)}
+      subline={cadence}
       sublineLines={2}
-      accessibilityLabel={`${routine.name}, ${stateLabel}`}
+      accessibilityLabel={`${routine.name}, ${stateLabel}, ${cadence}`}
       leading={<View style={[styles.dot, styles[state]]} />}
       meta={<SaveMeta state={active.state} onRetry={active.retry} />}
       onPress={onOpen}
