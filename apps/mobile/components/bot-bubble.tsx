@@ -158,9 +158,11 @@ function MetaLine({ line, hitSlop }: { line: BotBubbleMeta; hitSlop: number }) {
         <Text numberOfLines={1} style={[styles.metaText, styles.metaLabel]}>
           {line.label}
         </Text>
-        <Text accessibilityElementsHidden style={styles.metaText}>
-          {"›"}
-        </Text>
+        {line.onPress ? (
+          <Text accessibilityElementsHidden style={styles.metaText}>
+            {"›"}
+          </Text>
+        ) : null}
       </Pressable>
     </Animated.View>
   );

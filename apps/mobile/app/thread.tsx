@@ -4011,7 +4011,7 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-/** The skill lines under a bot's message: what it learned, updated or deleted, each opening Skills. */
+/** The skill lines under a bot's message: what it learned or updated opens the skill, a deleted one only shows. */
 function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] {
   const { t } = useI18n();
   const router = useRouter();
@@ -4028,10 +4028,13 @@ function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] 
             ? t("Skill updated · {name}", { name: line.name })
             : t("Skill deleted · {name}", { name: line.name }),
       icon: { ios: "book", android: "book-outline" },
-      onPress: () =>
-        void skillLineRoute(line, () =>
-          rpc<AgentSkillCatalogEntry[]>("agentSkills/list").catch(() => []),
-        ).then((route) => router.push(route)),
+      onPress:
+        line.change === "deleted"
+          ? undefined
+          : () =>
+              void skillLineRoute(line, () =>
+                rpc<AgentSkillCatalogEntry[]>("agentSkills/list").catch(() => []),
+              ).then((route) => router.push(route)),
       live: skillsLive,
     }),
   );
