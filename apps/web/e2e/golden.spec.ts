@@ -195,7 +195,7 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await captureScreenshot(page, testInfo, "11a2-multi-account-plugins");
 
   await page.getByRole("button", { name: "Close integrations" }).click();
-  await page.getByText("Integrations").click();
+  await page.getByTestId("open-customize").click();
   await expect(page.getByPlaceholder("Search apps")).toBeVisible();
   const gmailTileAgain = page.getByTestId("connection-tile-gmail");
   await expect(gmailTileAgain.getByRole("button", { name: "Added", exact: true })).toBeVisible();
@@ -393,10 +393,12 @@ test("sign-in, spawn, and stop work in the shell", async ({ page }, testInfo) =>
   // The Send icon only appears once there is a draft to send.
   await expect(page.getByRole("button", { name: "Send", exact: true })).toHaveCount(0);
   await composer.fill("Use the newer report and keep the answer short.");
-  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
   await expect(
     page.getByTestId("composer-bar").getByRole("button", { name: "Attach file", exact: true }),
   ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(composer).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(
     page.getByTestId("composer-bar").getByRole("button", { name: "Dictate", exact: true }),

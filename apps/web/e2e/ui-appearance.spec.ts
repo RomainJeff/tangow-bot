@@ -7,8 +7,6 @@ async function captureSidebarSearchSelected(
   name: string,
 ) {
   const aside = page.locator("aside").first();
-  // Search is revealed from the sidebar header, then shares the rows' inset.
-  await aside.getByRole("button", { name: "Search", exact: true }).click();
   const search = aside.getByTestId("sidebar-search");
   const selected = aside.getByRole("button", { name: /^Chief/ }).first();
   await expect(search).toBeVisible();
@@ -97,7 +95,7 @@ test("account settings appearance control switches to light mode", async ({ page
   await captureSidebarSearchSelected(page, testInfo, "sidebar-search-selected-dark");
 });
 
-test("sidebar bot rows hover with the same tone as the integrations row", async ({
+test("sidebar bot rows hover with the same tone as the Customize row", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
@@ -116,9 +114,9 @@ test("sidebar bot rows hover with the same tone as the integrations row", async 
   const chiefBg = await readChiefBg();
   await captureScreenshot(page, testInfo, "sidebar-row-hover");
 
-  const integrations = sidebar.getByRole("button", { name: "Integrations", exact: true });
-  await integrations.hover();
+  const customize = sidebar.getByTestId("open-customize");
+  await customize.hover();
   await expect
-    .poll(() => integrations.evaluate((el) => getComputedStyle(el).backgroundColor))
+    .poll(() => customize.evaluate((el) => getComputedStyle(el).backgroundColor))
     .toBe(chiefBg);
 });
