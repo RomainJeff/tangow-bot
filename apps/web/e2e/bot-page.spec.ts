@@ -22,6 +22,8 @@ const STATES: Array<{ name: string; query: string; trigger?: RegExp }> = [
   },
   { name: "routine-new", query: "tab=routines&detail=routine-new" },
   { name: "knowledge", query: "tab=knowledge" },
+  { name: "memory", query: "tab=knowledge&detail=memory" },
+  { name: "skill", query: "tab=knowledge&detail=skill" },
   { name: "instructions", query: "tab=settings&detail=instructions" },
   { name: "description", query: "tab=settings&detail=description" },
   { name: "model", query: "tab=settings&detail=model" },
@@ -41,6 +43,9 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       if (state.name === "knowledge") {
         await expect(page.getByTestId("bot-knowledge-memory")).toContainText("MEMORY.md");
+      }
+      if (state.name === "memory" || state.name === "skill") {
+        await expect(botPage.locator("textarea")).not.toHaveValue("");
       }
       if (state.trigger) {
         await page.getByRole("button", { name: state.trigger }).click();
@@ -239,12 +244,53 @@ test("a refused computer change turns back and says why", async ({ page }) => {
   await expect(own).toHaveAttribute("aria-pressed", "true");
 });
 
-test("Knowledge shows memory, files and skills", async ({ page }) => {
+test("Knowledge shows memory, the first five files and skills", async ({ page }) => {
   await page.goto(`${FIXTURE}?tab=knowledge`);
   const knowledge = page.getByTestId("bot-knowledge");
   await expect(knowledge.getByTestId("bot-knowledge-memory")).toContainText("MEMORY.md");
-  await expect(knowledge).toContainText("inbox-report.md");
+  const files = knowledge.getByTestId("bot-knowledge-files");
+  await expect(files).toContainText("inbox-report.md");
+  await expect(files).not.toContainText("vendors.csv");
+  await files.getByRole("button", { name: "Show more" }).click();
+  await expect(files).toContainText("vendors.csv");
+  await files.getByRole("button", { name: "Show less" }).click();
+  await expect(files).not.toContainText("vendors.csv");
+  await files.getByRole("button", { name: "notes/" }).click();
+  await expect(files).toContainText("vendors.csv");
+  await expect(files.getByRole("button", { name: "Show more" })).toHaveCount(0);
   await expect(knowledge.getByTestId("bot-skills")).toContainText("inbox-triage");
+});
+
+test("a memory document and a skill open wide, and the tab comes back as it was", async ({
+  page,
+}) => {
+  await page.goto(`${FIXTURE}?tab=knowledge`);
+  const panel = page.getByTestId("side-panel");
+  const files = page.getByTestId("bot-knowledge-files");
+  await files.getByRole("button", { name: "notes/" }).click();
+  await expect(files).toContainText("vendors.csv");
+  const memoryRow = page.getByTestId("bot-knowledge-memory").getByRole("button", {
+    name: /MEMORY\.md/,
+  });
+  await memoryRow.click();
+  await expect(panel).toHaveAttribute("data-detail", "memory");
+  await expect(panel).toHaveAttribute("data-size", "wide");
+  await expect(panel.locator("textarea")).toHaveValue(/Counsel prefers a reply before 10:00/);
+  await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-size", "default");
+  await expect(memoryRow).toBeFocused();
+
+  const skillRow = page.getByTestId("bot-skills").getByRole("button", { name: /inbox-triage/ });
+  await skillRow.click();
+  await expect(panel).toHaveAttribute("data-detail", "skill");
+  await expect(panel).toHaveAttribute("data-size", "wide");
+  await expect(panel.getByTestId("bot-knowledge-skill-editor").locator("textarea")).toHaveValue(
+    /Read every unread email/,
+  );
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveAttribute("data-size", "default");
+  await expect(skillRow).toBeFocused();
+  await expect(files).toContainText("vendors.csv");
 });
 
 test("a routine row says how its last run went, and its switch saves on its own", async ({

@@ -11,6 +11,10 @@ import type { BotPageView } from "../shell/layout";
 const api = vi.hoisted(() => ({
   bots: { activity: vi.fn() },
   runs: { recap: vi.fn() },
+  memory: { list: vi.fn(), update: vi.fn() },
+  agentSkills: { list: vi.fn(), get: vi.fn(), update: vi.fn(), remove: vi.fn() },
+  computer: { files: vi.fn() },
+  scratchpad: { list: vi.fn() },
   models: { credentials: vi.fn(), list: vi.fn() },
   me: vi.fn(),
   voice: { voices: vi.fn() },
@@ -102,6 +106,7 @@ async function render(
     refresh,
     activityEpoch,
     openRun: vi.fn(),
+    skillsChanged: vi.fn(),
   } as Partial<BotCommands> as BotCommands;
   await act(async () => {
     root.render(
@@ -346,6 +351,165 @@ it("shows an archived bot's page read-only, with Restore and Delete as its only 
   await act(async () => items[0]!.click());
   expect(vi.mocked(commands.botAction).mock.calls).toEqual([["bot-1", "restore"]]);
   expect(updateBot).not.toHaveBeenCalled();
+});
+
+async function renderKnowledge(view: BotPageView) {
+  await render(view);
+  await act(async () => {
+    await vi.dynamicImportSettled();
+  });
+}
+
+function clickOpener(opener: string) {
+  return act(async () =>
+    container.querySelector<HTMLButtonElement>(`[data-opens="${opener}"]`)!.click(),
+  );
+}
+
+const saveButton = () =>
+  [...container.querySelectorAll("button")].find((button) => button.textContent === "Save")!;
+
+it("edits a memory document in the wide detail, saved only by Save, then focuses its row", async () => {
+  const doc = {
+    id: "doc-1",
+    path: "MEMORY.md",
+    content: "Prefers short answers.",
+    revision: 3,
+    updatedAt: "2026-10-06T08:00:00.000Z",
+  };
+  api.memory.list.mockResolvedValue([doc]);
+  api.memory.update.mockImplementation(async ({ content }: { content: string }) => ({
+    ...doc,
+    content,
+    revision: 4,
+  }));
+  api.agentSkills.list.mockResolvedValue([]);
+  api.computer.files.mockResolvedValue([]);
+  api.scratchpad.list.mockResolvedValue([]);
+
+  await renderKnowledge({ tab: "knowledge", detail: null });
+  await clickOpener("memory:doc-1");
+  expect(onView.mock.calls).toEqual([
+    [{ tab: "knowledge", detail: { kind: "memory", documentId: "doc-1" } }],
+  ]);
+
+  await renderKnowledge({ tab: "knowledge", detail: { kind: "memory", documentId: "doc-1" } });
+  const editor = container.querySelector("textarea")!;
+  expect(editor.value).toBe("Prefers short answers.");
+  type(editor, "Prefers short answers, in French.");
+  await act(async () => editor.blur());
+  expect(api.memory.update).not.toHaveBeenCalled();
+  await act(async () => saveButton().click());
+  expect(api.memory.update.mock.calls).toEqual([
+    [{ documentId: "doc-1", content: "Prefers short answers, in French." }],
+  ]);
+  expect(onView.mock.calls).toEqual([[{ tab: "knowledge", detail: null }]]);
+
+  await renderKnowledge({ tab: "knowledge", detail: null });
+  expect(document.activeElement?.getAttribute("data-opens")).toBe("memory:doc-1");
+});
+
+it("edits a skill in the wide detail, tells the shell once saved, then focuses its row", async () => {
+  const skill = {
+    id: "skill-1",
+    name: "inbox-triage",
+    description: "Sorts a mailbox.",
+    content: "---\nname: inbox-triage\ndescription: Sorts a mailbox.\n---\n\nSort it.",
+    source: "user",
+    readOnly: false,
+    availability: "all",
+    visibleBotIds: ["bot-1"],
+  };
+  api.memory.list.mockResolvedValue([]);
+  api.agentSkills.list.mockResolvedValue([skill]);
+  api.agentSkills.get.mockResolvedValue(skill);
+  api.agentSkills.update.mockResolvedValue(skill);
+  api.computer.files.mockResolvedValue([]);
+  api.scratchpad.list.mockResolvedValue([]);
+
+  await renderKnowledge({ tab: "knowledge", detail: null });
+  await clickOpener("skill:skill-1");
+  expect(onView.mock.calls).toEqual([
+    [{ tab: "knowledge", detail: { kind: "skill", skillId: "skill-1" } }],
+  ]);
+
+  await renderKnowledge({ tab: "knowledge", detail: { kind: "skill", skillId: "skill-1" } });
+  const editor = container.querySelector("textarea")!;
+  type(editor, `${skill.content} Then reply.`);
+  await act(async () => saveButton().click());
+  expect(api.agentSkills.update.mock.calls).toEqual([
+    [{ skillId: "skill-1", content: `${skill.content} Then reply.` }],
+  ]);
+  expect(vi.mocked(commands.skillsChanged).mock.calls).toEqual([[]]);
+  expect(onView.mock.calls).toEqual([[{ tab: "knowledge", detail: null }]]);
+
+  await renderKnowledge({ tab: "knowledge", detail: null });
+  expect(document.activeElement?.getAttribute("data-opens")).toBe("skill:skill-1");
+});
+
+it("keeps a memory document's row on screen while the list reads again after its editor closes", async () => {
+  const doc = {
+    id: "doc-1",
+    path: "MEMORY.md",
+    content: "Prefers short answers.",
+    revision: 3,
+    updatedAt: "2026-10-06T08:00:00.000Z",
+  };
+  api.memory.list.mockResolvedValue([doc]);
+  api.memory.update.mockResolvedValue({ ...doc, content: "Prefers French.", revision: 4 });
+  api.agentSkills.list.mockResolvedValue([]);
+  api.computer.files.mockResolvedValue([]);
+  api.scratchpad.list.mockResolvedValue([]);
+
+  await renderKnowledge({ tab: "knowledge", detail: null });
+  await renderKnowledge({ tab: "knowledge", detail: { kind: "memory", documentId: "doc-1" } });
+  type(container.querySelector("textarea")!, "Prefers French.");
+  let reread: (docs: (typeof doc)[]) => void = () => {};
+  api.memory.list.mockReturnValue(new Promise((resolve) => (reread = resolve)));
+  await act(async () => saveButton().click());
+
+  await renderKnowledge({ tab: "knowledge", detail: null });
+  const memory = () => container.querySelector('[data-testid="bot-knowledge-memory"]')!.textContent;
+  expect(memory()).toBe("MEMORY.mdrev 3Download as markdown");
+
+  await act(async () => reread([{ ...doc, revision: 4 }]));
+  expect(memory()).toBe("MEMORY.mdrev 4Download as markdown");
+});
+
+it("deletes a skill in the wide detail, tells the shell once, and leaves focus alone", async () => {
+  const skill = {
+    id: "skill-1",
+    name: "inbox-triage",
+    description: "Sorts a mailbox.",
+    content: "---\nname: inbox-triage\ndescription: Sorts a mailbox.\n---\n\nSort it.",
+    source: "user",
+    readOnly: false,
+    availability: "all",
+    visibleBotIds: ["bot-1"],
+  };
+  api.memory.list.mockResolvedValue([]);
+  api.agentSkills.list.mockResolvedValue([skill]);
+  api.agentSkills.get.mockResolvedValue(skill);
+  api.agentSkills.remove.mockResolvedValue(undefined);
+  api.computer.files.mockResolvedValue([]);
+  api.scratchpad.list.mockResolvedValue([]);
+
+  await renderKnowledge({ tab: "knowledge", detail: null });
+  await renderKnowledge({ tab: "knowledge", detail: { kind: "skill", skillId: "skill-1" } });
+  const button = (label: string) =>
+    [...container.querySelectorAll("button")].find((item) => item.textContent === label)!;
+  await act(async () => button("Delete").click());
+  api.agentSkills.list.mockResolvedValue([]);
+  await act(async () => button("Confirm delete").click());
+  expect(api.agentSkills.remove.mock.calls).toEqual([[{ skillId: "skill-1" }]]);
+  expect(vi.mocked(commands.skillsChanged).mock.calls).toEqual([[]]);
+  expect(onView.mock.calls).toEqual([[{ tab: "knowledge", detail: null }]]);
+
+  await renderKnowledge({ tab: "knowledge", detail: null });
+  const skills = container.querySelector('[data-testid="bot-knowledge-skills"]')!;
+  expect(skills.querySelector('[data-opens="skill:skill-1"]')).toBeNull();
+  expect(skills.textContent).toContain("No skills yet");
+  expect(document.activeElement).toBe(document.body);
 });
 
 it("marks the Activity tab while a routine that is on last failed, until it succeeds, pauses or goes", async () => {
