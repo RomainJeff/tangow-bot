@@ -313,7 +313,7 @@ it("rejects when a read fails, leaving what is shown", async () => {
   expect(view.routinesBotId).toBe(null);
 });
 
-it.fails("keeps a routine switched while a run end was reading the routines", async () => {
+it("keeps a routine switched while a run end was reading the routines", async () => {
   const list = deferred<Routine[]>();
   api.routines.list.mockReturnValueOnce(list.promise);
   api.routines.update.mockResolvedValueOnce({ ...routine("r-1", "Morning"), active: false });

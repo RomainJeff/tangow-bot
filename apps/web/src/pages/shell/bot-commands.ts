@@ -179,10 +179,8 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
         landRoutines(botId, request, routines);
       },
       async refreshRoutines(botId) {
-        const routines = await rpc.routines.list({ botId });
-        if (depsRef.current.activeBotId.current !== botId) return;
-        depsRef.current.setRoutines(routines);
-        depsRef.current.setRoutinesBotId(botId);
+        const request = order.next();
+        landRoutines(botId, request, await rpc.routines.list({ botId }));
       },
       openRun(row) {
         if (depsRef.current.panelCoversThread.current) depsRef.current.closePanel();
