@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
-  skillLineRoute,
+  skillLineSegment,
   stepsBlocks,
   visibleMessageBlocks,
 } from "./message-presentation";
@@ -128,9 +128,10 @@ describe("skill lines", () => {
     ]);
   });
 
-  it("opens the Skills screen, where the owner manages skills on iPhone", () => {
-    for (const change of ["learned", "updated", "deleted"] as const) {
-      expect(skillLineRoute(line(change))).toEqual({ pathname: "/skills" });
-    }
+  it("hangs the lines under the last segment that draws text, else stands them alone", () => {
+    expect(skillLineSegment(["Done."])).toBe(0);
+    expect(skillLineSegment(["Reading.", "Done.", ""])).toBe(1);
+    expect(skillLineSegment([""])).toBe(-1);
+    expect(skillLineSegment([])).toBe(-1);
   });
 });

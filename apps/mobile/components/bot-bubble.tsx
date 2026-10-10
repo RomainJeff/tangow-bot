@@ -44,7 +44,8 @@ const LINE_RISE_PX = 6;
 const ICON_SIZE = 13;
 
 export interface BotBubbleProps extends PressableProps {
-  /** The proof lines, drawn inside the bubble under its content, one per line. */
+  /** The proof lines, drawn under the bubble at its text inset, one per line. They sit outside
+   * the bubble's Pressable so VoiceOver can reach each one. */
   meta?: readonly BotBubbleMeta[];
   /** A single-bot thread: the bubble caps at 82% of the thread instead of 88%
    * of the content column. */
@@ -65,22 +66,24 @@ export function BotBubble({ mono = false, meta, style, children, ...props }: Bot
   const column = width - THREAD_GUTTER * 2 - (mono ? 0 : sizes.message + AVATAR_GAP);
   const maxWidth = Math.floor(column * (mono ? 0.82 : 0.88));
   return (
-    <View style={styles.row}>
-      <Pressable
-        {...props}
-        style={(state) => [
-          styles.bubble,
-          { maxWidth },
-          typeof style === "function" ? style(state) : style,
-        ]}
-      >
-        {(state) => (
-          <>
-            {typeof children === "function" ? children(state) : children}
-            {meta?.length ? <BubbleMeta lines={meta} /> : null}
-          </>
-        )}
-      </Pressable>
+    <View>
+      <View style={styles.row}>
+        <Pressable
+          {...props}
+          style={(state) => [
+            styles.bubble,
+            { maxWidth },
+            typeof style === "function" ? style(state) : style,
+          ]}
+        >
+          {children}
+        </Pressable>
+      </View>
+      {meta?.length ? (
+        <View style={styles.under}>
+          <BubbleMeta lines={meta} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -144,15 +147,13 @@ function MetaLine({ line, hitSlop }: { line: BotBubbleMeta; hitSlop: number }) {
         onPress={line.onPress}
         style={styles.meta}
       >
-        <Animated.View accessibilityElementsHidden importantForAccessibility="no">
-          <Animated.View style={iconStyle}>
-            <NativeSymbol
-              ios={line.icon.ios}
-              android={line.icon.android}
-              size={ICON_SIZE}
-              color={tokens.mutedForeground}
-            />
-          </Animated.View>
+        <Animated.View accessibilityElementsHidden importantForAccessibility="no" style={iconStyle}>
+          <NativeSymbol
+            ios={line.icon.ios}
+            android={line.icon.android}
+            size={ICON_SIZE}
+            color={tokens.mutedForeground}
+          />
         </Animated.View>
         <Text numberOfLines={1} style={styles.metaText}>
           {line.label}
@@ -177,6 +178,9 @@ function createBotBubbleStyles() {
       backgroundColor: tokens.muted,
       paddingHorizontal: 14,
       paddingVertical: 10,
+    },
+    under: {
+      paddingHorizontal: 14,
     },
     lines: {
       gap: PROOF_LINE_GAP,

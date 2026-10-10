@@ -1,5 +1,5 @@
 import type { MessageBlock } from "@rakazo/contracts";
-import { isToolActivityBlock, type SkillSourceBlock } from "@rakazo/core";
+import { isToolActivityBlock } from "@rakazo/core";
 
 /**
  * The blocks the thread is about to draw: tool activity is hidden, except the
@@ -46,9 +46,9 @@ export function stepsBlocks(
 }
 
 /**
- * Where a skill line opens on iPhone: the Skills screen, where the owner manages the skills
- * every bot reads.
+ * The segment whose bubble the skill lines hang under, given the text each segment draws: the last
+ * one that draws any. -1 when none does, and the lines stand alone. Mirrors web's `skillLineBubble`.
  */
-export function skillLineRoute(_line: Pick<SkillSourceBlock, "change" | "skillUid">) {
-  return { pathname: "/skills" } as const;
+export function skillLineSegment(segmentTexts: readonly string[]): number {
+  return segmentTexts.findLastIndex((text) => text !== "");
 }
