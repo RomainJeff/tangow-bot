@@ -37,6 +37,7 @@ import { defaultApiBase, type EndpointResult, normalizeApiBase } from "./endpoin
 import { t } from "./i18n";
 import { resumeLiveNotifications } from "./live-notifications";
 import { clearMainBotCache } from "./main-bot-cache";
+import { serverError } from "./server-error";
 import {
   clearSessionToken,
   loadSessionToken,
@@ -652,7 +653,13 @@ export async function rpc<T>(
       controller.signal,
     );
     if (!res.ok || parsed.error) {
-      const message = parsed.error?.message ?? `rpc ${proc} failed`;
+      // oRPC sends a refused input's reason as `json.message`, the shape a validation error takes.
+      const refusal = !res.ok ? (parsed.json as { message?: unknown } | undefined)?.message : null;
+      const written = parsed.error?.message ?? (typeof refusal === "string" ? refusal : null);
+      const message = written ?? `rpc ${proc} failed`;
+      // A 5xx message is the server's own "Internal server error", not a reason for the person.
+      const failure = () =>
+        written && res.status < 500 ? serverError(written) : new Error(message);
       const unauthorized = res.status === 401 || /unauthorized/i.test(message);
       // After a delete where SecureStore could not clear the stale id, restart
       // reloads it and the first RPCs 401. Probe once without a Space header:
@@ -722,9 +729,9 @@ export async function rpc<T>(
           throw retryError;
         }
         if (!selectedSpaceId()) await clearStaleSpaceSelection();
-        throw new Error(message);
+        throw failure();
       }
-      throw new Error(message);
+      throw failure();
     }
     return parsed.json as T;
   } finally {
