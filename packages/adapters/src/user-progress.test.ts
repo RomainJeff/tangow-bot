@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   botMessageOutcomeFromMidTurn,
   clampUserProgressMessage,
+  endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
   isProgressMessageTruncated,
@@ -178,5 +179,21 @@ describe("repeatsSentUserText", () => {
   it("never flags an empty message or an empty history", () => {
     expect(repeatsSentUserText("   ", ["   "])).toBe(false);
     expect(repeatsSentUserText("Done.", [])).toBe(false);
+  });
+});
+
+describe("endsWithToolCallBudgetNotice", () => {
+  const notice =
+    "I stopped after reaching the limit of 40 tool calls in this turn. Send another message to continue.";
+
+  it("recognises the runtime's limit notice, alone or after the model's own text", () => {
+    expect(endsWithToolCallBudgetNotice(notice)).toBe(true);
+    expect(endsWithToolCallBudgetNotice(`Partial result.\n\n${notice}\n`)).toBe(true);
+  });
+
+  it("ignores ordinary text, including one that only mentions a limit", () => {
+    expect(endsWithToolCallBudgetNotice("")).toBe(false);
+    expect(endsWithToolCallBudgetNotice("Nothing to report.")).toBe(false);
+    expect(endsWithToolCallBudgetNotice(`${notice} Then I carried on.`)).toBe(false);
   });
 });

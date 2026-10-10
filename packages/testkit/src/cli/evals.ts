@@ -148,11 +148,12 @@ async function main() {
         connection,
         createApp: async (composio, messaging) => {
           const sandbox = new EvalSandboxProvider();
+          const trialDataDir = path.join(dataDir, `${scenario.id}-${planned.trial}`);
           const handles = await createApp({
             sandbox,
             databaseUrl,
             realtimeDatabaseUrl: databaseUrl,
-            dataDir: path.join(dataDir, `${scenario.id}-${planned.trial}`),
+            dataDir: trialDataDir,
             sandboxProvider: "fake",
             agentRuntime: "pi",
             wakeupDriver: "memory",
@@ -181,8 +182,9 @@ async function main() {
             mcpStdioAllowedCommands: [],
             updaterUrl: undefined,
             updaterToken: undefined,
+            skillLearning: scenario.skillLearning ? "on" : "off",
           });
-          return { ...handles, harnessIssues: sandbox.harnessIssues };
+          return { ...handles, dataDir: trialDataDir, harnessIssues: sandbox.harnessIssues };
         },
       });
       save();

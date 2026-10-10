@@ -126,6 +126,7 @@ export {
 } from "./skill-library.js";
 export * from "./skill-lines.js";
 export * from "./skill-lock.js";
+export * from "./skill-nudge.js";
 export type { SkillTreeFile, UserSkillFile } from "./skill-store.js";
 export { bundleFormat, listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
 export * from "./skill-tools.js";

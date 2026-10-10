@@ -257,15 +257,27 @@ export function createFakeThreadDb(): FakeThreadDb {
         async findFirst(args: { where: Record<string, unknown> }) {
           return [...tables.runs.values()].find((run) => matches(run, args.where)) ?? null;
         },
-        async findMany(args: { where: Record<string, unknown>; distinct?: string[] }) {
+        async findMany(args: {
+          where: Record<string, unknown>;
+          distinct?: string[];
+          orderBy?: { createdAt: "asc" | "desc" };
+          take?: number;
+        }) {
           const rows = [...tables.runs.values()].filter((run) => matches(run, args.where));
+          const order = args.orderBy?.createdAt;
+          if (order) {
+            const at = (run: Row) => (run.createdAt as Date).getTime();
+            rows.sort((a, b) => (order === "asc" ? at(a) - at(b) : at(b) - at(a)));
+          }
           const seen = new Set<string>();
-          return rows.filter((run) => {
-            const key = JSON.stringify((args.distinct ?? ["id"]).map((field) => run[field]));
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
+          return rows
+            .filter((run) => {
+              const key = JSON.stringify((args.distinct ?? ["id"]).map((field) => run[field]));
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            })
+            .slice(0, args.take);
         },
         async updateMany(args: { where: Record<string, unknown>; data: Record<string, unknown> }) {
           const rows = [...tables.runs.values()].filter((run) => matches(run, args.where));

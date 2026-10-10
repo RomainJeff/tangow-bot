@@ -421,6 +421,23 @@ function restAlreadyIncludesSkillContent(rest: string, content: string): boolean
   );
 }
 
+/** The skills a prompt brings in whole, as expandSkillReferencesInPrompt finds them. */
+export function skillsReferencedInPrompt<T extends { name: string }>(
+  prompt: string,
+  skills: readonly T[],
+): Array<{ skill: T; via: "forced" | "mention" }> {
+  const forced = extractForcedSkillName(prompt);
+  const forcedSkill = forced ? findSkillByName(skills, forced.name) : undefined;
+  if (forcedSkill) return [{ skill: forcedSkill, via: "forced" }];
+  return extractRoutineSkillMentions(
+    prompt,
+    skills.map((skill) => skill.name),
+  ).flatMap((name) => {
+    const skill = findSkillByName(skills, name);
+    return skill ? [{ skill, via: "mention" as const }] : [];
+  });
+}
+
 /** Expand forced `/Name` or routine `@Name` mentions into full skill bodies for the task prompt. */
 export function expandSkillReferencesInPrompt<T extends SkillRecord>(
   prompt: string,

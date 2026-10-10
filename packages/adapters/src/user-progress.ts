@@ -167,3 +167,10 @@ export function botMessageOutcomeFromMidTurn(
   if (midTurn.length === 0) return null;
   return { text: midTurn.join("\n\n"), intent: "status" };
 }
+
+/** Whether a run's text ends on the notice the runtime adds when the tool-call limit stops it. */
+export function endsWithToolCallBudgetNotice(text: string): boolean {
+  return /I stopped after reaching the limit of \d+ tool calls in this turn\. Send another message to continue\.$/.test(
+    text.trimEnd(),
+  );
+}
