@@ -43,6 +43,7 @@ import {
   selectedAskActionLabel,
   serializeComposerPrompt,
   showsTimeMarker,
+  skillSourcesOf,
   threadTimeMarkerLabel,
   truncateSlashDescription,
   userVisibleMessages,
@@ -112,7 +113,7 @@ import {
 import { AgentSteps } from "../components/agent-steps";
 import { AnimatedMessageBubble, MessageArrival } from "../components/animated-message-bubble";
 import { BotAvatar } from "../components/bot-avatar";
-import { BotBubble } from "../components/bot-bubble";
+import { BotBubble, type BotBubbleMeta, BubbleMeta } from "../components/bot-bubble";
 import { BuzzingAvatar } from "../components/buzzing-avatar";
 import { ComposerAttachment } from "../components/composer-attachment";
 import { ComposerLinkPreview } from "../components/composer-link-preview";
@@ -188,6 +189,7 @@ import { messageArrivalStaggerMs, useMessageArrivals } from "../lib/message-arri
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
+  skillLineRoute,
   stepsBlocks,
   visibleMessageBlocks,
 } from "../lib/message-presentation";
@@ -3434,6 +3436,9 @@ const MessageBubble = memo(function MessageBubble({
   // Mono-bot grammar (design contract §3b): the narration bubble caps at 82%
   // of the thread instead of 88% of the content column.
   const mono = !groupId;
+  const skillLines = skillSourcesOf(message.blocks);
+  const skillsAtMount = useRef(skillLines.length);
+  const skillsLive = isNew || skillLines.length > skillsAtMount.current;
   const appConnectBlocks = message.blocks.filter(
     (block): block is Extract<MessageBlock, { kind: "app_connect" }> =>
       block.kind === "app_connect",
@@ -3609,6 +3614,20 @@ const MessageBubble = memo(function MessageBubble({
         : { messageId: message.id, createdAt: message.createdAt, run: routineRun, latest: true };
     return <RoutineRunLine item={item} handoff={handoffFor(item)} actionProps={actionProps} />;
   }
+  const metaLines: BotBubbleMeta[] = skillLines.map(
+    (line): BotBubbleMeta => ({
+      id: `${line.skillUid}:${line.change}`,
+      label:
+        line.change === "learned"
+          ? t("Skill learned · {name}", { name: line.name })
+          : line.change === "updated"
+            ? t("Skill updated · {name}", { name: line.name })
+            : t("Skill deleted · {name}", { name: line.name }),
+      icon: { ios: "book", android: "book-outline" },
+      onPress: () => router.push(skillLineRoute(line)),
+      live: skillsLive,
+    }),
+  );
   const special = message.blocks.find(
     (block) => block.kind === "subagent" || block.kind === "child_bot",
   );
@@ -3947,6 +3966,7 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
         ))}
+        {metaLines.length > 0 ? <BubbleMeta lines={metaLines} /> : null}
       </Surface>
     );
   }
@@ -3954,6 +3974,11 @@ const MessageBubble = memo(function MessageBubble({
   const steps = showSteps ? stepsBlocks(message.blocks) : [];
   const live = message.id.startsWith("progress:");
   const firstContent = segments.findIndex((segment) => segment.kind === "content");
+  // The skill lines hang under the last bubble that draws text; with none they stand alone.
+  const lastContent = segments.findLastIndex(
+    (segment) =>
+      segment.kind === "content" && blockText({ ...message, blocks: segment.blocks }) !== "",
+  );
   return (
     <View style={{ gap: 8, width: "100%" }}>
       {steps.map((block, index) => (
@@ -3966,6 +3991,7 @@ const MessageBubble = memo(function MessageBubble({
           replyPreview={index === firstContent ? replyPreview : undefined}
           actionProps={actionProps}
           mono={mono}
+          meta={index === lastContent ? metaLines : undefined}
         />
       ))}
       {appConnectBlocks.map((block, index) => (
@@ -3977,6 +4003,7 @@ const MessageBubble = memo(function MessageBubble({
           onAccessibilityAction={actionProps.onAccessibilityAction}
         />
       ))}
+      {lastContent < 0 && metaLines.length > 0 ? <BubbleMeta lines={metaLines} standalone /> : null}
     </View>
   );
 });
@@ -4862,11 +4889,14 @@ function MessageText({
   replyPreview,
   actionProps,
   mono = false,
+  meta,
 }: {
   message: MobileMessage;
   replyPreview?: MobileMessage;
   actionProps: MessageActionProps;
   mono?: boolean;
+  /** The skill lines under its last bubble. */
+  meta?: readonly BotBubbleMeta[];
 }) {
   const colorScheme = useResolvedAppearance();
   const tokens = mobileTokens();
@@ -4899,6 +4929,7 @@ function MessageText({
         accessibilityActions={actionProps.accessibilityActions}
         onAccessibilityAction={actionProps.onAccessibilityAction}
         mono={mono}
+        meta={meta}
       >
         <ChatMarkdown
           palette={tokens}
