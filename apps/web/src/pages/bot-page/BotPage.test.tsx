@@ -90,14 +90,17 @@ afterEach(() => {
 let onView: ReturnType<typeof vi.fn<(view: BotPageView) => void>>;
 let commands: BotCommands;
 
-async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[] | null } = {}) {
+async function render(
+  view: BotPageView,
+  { bot = BOT, routines = [] as Routine[] | null, activityEpoch = 0 } = {},
+) {
   onView = vi.fn<(view: BotPageView) => void>();
   commands = {
     updateBot: updateBot as BotCommands["updateBot"],
     setComputer: vi.fn(),
     botAction: vi.fn(),
     refresh,
-    activityEpoch: 0,
+    activityEpoch,
     openRun: vi.fn(),
   } as Partial<BotCommands> as BotCommands;
   await act(async () => {
@@ -205,8 +208,11 @@ it("is busy until the bot's routines are read", async () => {
   expect(page()?.hasAttribute("aria-busy")).toBe(false);
 });
 
-it("says Could not load with Retry when a first read fails, and Retry reads again", async () => {
-  refresh.mockRejectedValueOnce(new Error("offline"));
+it("says Could not load with Retry when a first read fails, and loads while Retry reads again", async () => {
+  let answer!: () => void;
+  refresh
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockReturnValueOnce(new Promise<void>((done) => (answer = done)));
   await render({ tab: "routines", detail: null }, { routines: null });
   const panel = () => container.querySelector('[role="tabpanel"]')!;
   const page = () => container.querySelector('[data-testid="bot-page"]')!;
@@ -217,7 +223,11 @@ it("says Could not load with Retry when a first read fails, and Retry reads agai
 
   expect(refresh.mock.calls).toEqual([["bot-1"], ["bot-1"]]);
   expect(panel().textContent).toBe("");
+  expect(panel().querySelectorAll('[aria-busy="true"] > div')).toHaveLength(3);
   expect(page().getAttribute("aria-busy")).toBe("true");
+
+  await act(async () => answer());
+  expect(panel().textContent).toBe("");
 });
 
 it("says Could not load in place of a routine opened before the routines could be read", async () => {
@@ -245,6 +255,14 @@ it("reads the bot again on each tab and when the window gains focus, never an ar
   );
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(refresh).not.toHaveBeenCalled();
+});
+
+it("reads the bot again when one of its runs ends", async () => {
+  await render({ tab: "routines", detail: null });
+  expect(refresh.mock.calls).toEqual([["bot-1"]]);
+
+  await render({ tab: "routines", detail: null }, { activityEpoch: 1 });
+  expect(refresh.mock.calls).toEqual([["bot-1"], ["bot-1"]]);
 });
 
 it("fills a new routine from the latest skill picked, even when the form is already open", async () => {

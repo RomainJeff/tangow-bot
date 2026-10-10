@@ -110,6 +110,11 @@ export function BotPage({
       ),
     [commands, bot.id],
   );
+  // Only a Retry shows loading again; a focus read keeps what is shown until it answers.
+  const retry = () => {
+    setReadFailed(false);
+    refresh();
+  };
   useEffect(() => {
     if (archived) return;
     refresh();
@@ -185,7 +190,7 @@ export function BotPage({
             />
           ) : (
             <div className="px-4 pt-5">
-              <PendingRead failed={readFailed} onRetry={refresh} />
+              <PendingRead failed={readFailed} onRetry={retry} />
             </div>
           )}
         </div>
@@ -244,7 +249,7 @@ export function BotPage({
                   routines={routines}
                   failed={readFailed}
                   onOpen={open}
-                  onRetry={refresh}
+                  onRetry={retry}
                 />
               </TabsContent>
               <TabsContent value="knowledge" className="px-4">
