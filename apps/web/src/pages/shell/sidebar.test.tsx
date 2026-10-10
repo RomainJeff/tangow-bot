@@ -1,0 +1,145 @@
+// @vitest-environment jsdom
+import type { Bot } from "@rakazo/contracts";
+import type { ComponentProps, ReactNode } from "react";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+vi.mock("@lingui/react/macro", () => {
+  const t = (parts: TemplateStringsArray, ...values: unknown[]) => String.raw(parts, ...values);
+  return {
+    useLingui: () => ({ t, i18n: { locale: "en" } }),
+    Trans: ({ children }: { children: ReactNode }) => children,
+  };
+});
+vi.mock("@lingui/core/macro", () => ({
+  t: (parts: TemplateStringsArray, ...values: unknown[]) => String.raw(parts, ...values),
+  plural: (count: number, forms: { one: string; other: string }) =>
+    (count === 1 ? forms.one : forms.other).replace("#", String(count)),
+}));
+vi.mock("../../lib/rpc", () => ({ rpc: {}, clearSpaceSelection: vi.fn() }));
+vi.mock("../../lib/auth", () => ({ authClient: {} }));
+
+import { BotsSidebar } from "./sidebar";
+
+const ARCHIVED = {
+  id: "bot-9",
+  spaceId: "space-1",
+  name: "Scout",
+  color: "#3BC9A0",
+  shapeSeed: null,
+  status: "idle",
+  archivedAt: "2026-10-01T08:00:00.000Z",
+} as unknown as Bot;
+
+let container: HTMLElement;
+let root: Root;
+
+beforeEach(() => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("matchMedia", (media: string) => ({
+    matches: false,
+    media,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+  vi.unstubAllGlobals();
+});
+
+function renderSidebar() {
+  const ref = { current: null };
+  const props = {
+    botsSidebarCollapsed: false,
+    mobileSidebarOpen: true,
+    activityMode: false,
+    toggleActivityMode: vi.fn(),
+    setBotsSidebarCollapsedPref: vi.fn(),
+    createMenuOpen: false,
+    setCreateMenuOpen: vi.fn(),
+    bots: [],
+    setMobileSidebarOpen: vi.fn(),
+    setPanel: vi.fn(),
+    navigate: vi.fn(),
+    setNewSpaceOpen: vi.fn(),
+    setPickerInfoTopic: vi.fn(),
+    query: "",
+    setQuery: vi.fn(),
+    showSpaceSearch: false,
+    searchHits: [],
+    searchLoading: false,
+    jumpToSearchHit: vi.fn(),
+    sidebarGroups: [],
+    collapsedSidebarSections: new Set<string>(),
+    openSpaceChat: vi.fn(),
+    toggleSidebarSection: vi.fn(),
+    spaceMenuAnchor: ref,
+    setSpaceMenu: vi.fn(),
+    sectionMenuAnchor: ref,
+    setSectionMenu: vi.fn(),
+    botSections: [],
+    spaces: [],
+    draggedBotId: null,
+    setDraggedBotId: vi.fn(),
+    reorderRosterBot: vi.fn(),
+    bootstrapMe: null,
+    botMenuAnchor: ref,
+    setBotMenu: vi.fn(),
+    inGroup: false,
+    active: undefined,
+    activeGroup: undefined,
+    activeSnapshot: null,
+    initials: "AO",
+    userImage: null,
+    archivedBots: [ARCHIVED],
+    archivedGroups: [],
+    archivedOpen: true,
+    setArchivedOpen: vi.fn(),
+    refreshBots: vi.fn(),
+    setDeleteTarget: vi.fn(),
+    onOpenArchivedBot: vi.fn(),
+    onRestoreBot: vi.fn(),
+    setDeleteGroupTarget: vi.fn(),
+    setCustomizeOpen: vi.fn(),
+    menuOpen: false,
+    setMenuOpen: vi.fn(),
+    userName: "Archive Owner",
+    setFailedUserImage: vi.fn(),
+    openSettings: vi.fn(),
+    setUsage: vi.fn(),
+    botsSidebarEdgeDragRef: { current: null },
+  } satisfies ComponentProps<typeof BotsSidebar>;
+  act(() => root.render(<BotsSidebar {...props} />));
+  return props;
+}
+
+it("opens an archived bot's page from its row, closing the sidebar over the thread", () => {
+  const props = renderSidebar();
+  const row = container.querySelector<HTMLButtonElement>('[data-testid="archived-bot-open"]')!;
+  expect(row.textContent).toBe("Scout");
+
+  act(() => row.click());
+
+  expect(props.onOpenArchivedBot.mock.calls).toEqual([["bot-9"]]);
+  expect(props.setMobileSidebarOpen.mock.calls).toEqual([[false]]);
+  expect(props.onRestoreBot).not.toHaveBeenCalled();
+});
+
+it("restores an archived bot from its row without opening its page", () => {
+  const props = renderSidebar();
+  const restore = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "Restore",
+  )!;
+
+  act(() => restore.click());
+
+  expect(props.onRestoreBot.mock.calls).toEqual([["bot-9"]]);
+  expect(props.onOpenArchivedBot).not.toHaveBeenCalled();
+});

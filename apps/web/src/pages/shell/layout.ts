@@ -72,6 +72,20 @@ export type PendingAttachment = {
   previewUrl?: string;
 };
 
+/**
+ * The bot whose page the panel shows: the thread's own, or the archived bot picked from the
+ * sidebar for as long as it exists (restoring it moves it to `bots`; deleting it closes the page).
+ */
+export function pageBotOf(
+  pickedBotId: string | null,
+  bots: readonly Bot[],
+  archivedBots: readonly Bot[],
+  active: Bot | undefined,
+): Bot | undefined {
+  if (pickedBotId === null) return active;
+  return [...archivedBots, ...bots].find((bot) => bot.id === pickedBotId);
+}
+
 /** The panel is showing when a kind is picked and it has something to show. */
 export function panelIsOpen(
   panel: Panel,

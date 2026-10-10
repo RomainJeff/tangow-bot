@@ -54,7 +54,7 @@ let container: HTMLElement;
 let root: Root;
 
 function page(commands: Partial<BotCommands>, bot: Bot = BOT): BotPageContext {
-  return { bot, userId: "user-1", commands: commands as BotCommands };
+  return { bot, userId: "user-1", commands: commands as BotCommands, readOnly: false };
 }
 
 function deferred<T>() {

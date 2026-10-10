@@ -14,6 +14,7 @@ import {
 } from "@rakazo/ui-web";
 import {
   Archive,
+  ArchiveRestore,
   ChevronLeft,
   Copy,
   Download,
@@ -56,7 +57,8 @@ export interface BotPageProps {
 /**
  * The bot's page in the side panel: who it is at the top, then Activity,
  * Routines, Knowledge and Settings. Every setting saves itself through
- * `commands`; the page holds no copy of the bot.
+ * `commands`; the page holds no copy of the bot. An archived bot's page only
+ * reads: who it is and its activity, until it is restored.
  */
 export function BotPage({
   bot,
@@ -72,12 +74,13 @@ export function BotPage({
   const { t } = useLingui();
   const { confirm, dialog } = useConfirm();
   const root = useRef<HTMLDivElement>(null);
-  const page: BotPageContext = { bot, userId, commands };
+  const archived = bot.archivedAt !== null;
+  const page: BotPageContext = { bot, userId, commands, readOnly: archived };
   // Instructions being saved already count, so the link to write them goes as the editor closes.
   const instructions = useBotField(page, "instructions", bot.instructions, (value) => ({
     instructions: value,
   }));
-  const detail = view.detail;
+  const detail = archived ? null : view.detail;
   const routine =
     detail?.kind === "routine" ? routines?.find((item) => item.id === detail.routineId) : undefined;
   const tabLabels: Record<BotTab, string> = {
@@ -112,7 +115,7 @@ export function BotPage({
     <div
       ref={root}
       data-testid="bot-page"
-      aria-busy={routines === null || undefined}
+      aria-busy={(!archived && routines === null) || undefined}
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
@@ -131,7 +134,11 @@ export function BotPage({
           <span />
         )}
         <div className="flex items-center gap-0.5">
-          <MoreMenu bot={bot} onAction={(action) => commands.botAction(bot.id, action)} />
+          <MoreMenu
+            bot={bot}
+            archived={archived}
+            onAction={(action) => commands.botAction(bot.id, action)}
+          />
           <Button variant="ghost" size="icon-sm" aria-label={t`Close panel`} onClick={onClose}>
             <X size={16} strokeWidth={1.8} />
           </Button>
@@ -176,46 +183,52 @@ export function BotPage({
       ) : (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto pb-4">
           <BotHero page={page} />
-          <Tabs
-            value={view.tab}
-            onValueChange={(tab) => onView({ tab: tab as BotTab, detail: null })}
-            className="gap-0"
-          >
-            <div className="px-4 pt-5 pb-4">
-              <TabsList variant="segmented" className="w-full">
-                {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
-                  <TabsTrigger key={tab} value={tab} data-testid={`bot-tab-${tab}`}>
-                    {tabLabels[tab]}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+          {archived ? (
+            <div className="px-4 pt-5">
+              <BotActivity botId={bot.id} commands={{ activityEpoch: commands.activityEpoch }} />
             </div>
-            <TabsContent value="activity" className="px-4">
-              <BotActivity
-                botId={bot.id}
-                commands={commands}
-                onWriteInstructions={
-                  instructions.value
-                    ? undefined
-                    : () => onView({ tab: "activity", detail: { kind: "instructions" } })
-                }
-                onOpenRoutine={(routineId) =>
-                  onView({ tab: "routines", detail: { kind: "routine", routineId } })
-                }
-              />
-            </TabsContent>
-            <TabsContent value="routines" className="px-4">
-              <RoutinesTab page={page} routines={routines} onOpen={open} />
-            </TabsContent>
-            <TabsContent value="knowledge" className="px-4">
-              <Suspense fallback={null}>
-                <KnowledgeTab page={page} memoryProviderConfigured={memoryProviderConfigured} />
-              </Suspense>
-            </TabsContent>
-            <TabsContent value="settings" className="px-4">
-              <SettingsTab page={page} onOpen={open} />
-            </TabsContent>
-          </Tabs>
+          ) : (
+            <Tabs
+              value={view.tab}
+              onValueChange={(tab) => onView({ tab: tab as BotTab, detail: null })}
+              className="gap-0"
+            >
+              <div className="px-4 pt-5 pb-4">
+                <TabsList variant="segmented" className="w-full">
+                  {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
+                    <TabsTrigger key={tab} value={tab} data-testid={`bot-tab-${tab}`}>
+                      {tabLabels[tab]}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+              <TabsContent value="activity" className="px-4">
+                <BotActivity
+                  botId={bot.id}
+                  commands={commands}
+                  onWriteInstructions={
+                    instructions.value
+                      ? undefined
+                      : () => onView({ tab: "activity", detail: { kind: "instructions" } })
+                  }
+                  onOpenRoutine={(routineId) =>
+                    onView({ tab: "routines", detail: { kind: "routine", routineId } })
+                  }
+                />
+              </TabsContent>
+              <TabsContent value="routines" className="px-4">
+                <RoutinesTab page={page} routines={routines} onOpen={open} />
+              </TabsContent>
+              <TabsContent value="knowledge" className="px-4">
+                <Suspense fallback={null}>
+                  <KnowledgeTab page={page} memoryProviderConfigured={memoryProviderConfigured} />
+                </Suspense>
+              </TabsContent>
+              <TabsContent value="settings" className="px-4">
+                <SettingsTab page={page} onOpen={open} />
+              </TabsContent>
+            </Tabs>
+          )}
         </div>
       )}
       {dialog}
@@ -223,7 +236,15 @@ export function BotPage({
   );
 }
 
-function MoreMenu({ bot, onAction }: { bot: Bot; onAction: (action: BotAction) => void }) {
+function MoreMenu({
+  bot,
+  archived,
+  onAction,
+}: {
+  bot: Bot;
+  archived: boolean;
+  onAction: (action: BotAction) => void;
+}) {
   const { t } = useLingui();
   return (
     <DropdownMenu>
@@ -235,23 +256,33 @@ function MoreMenu({ bot, onAction }: { bot: Bot; onAction: (action: BotAction) =
         }
       />
       <DropdownMenuContent align="end" className="min-w-52">
-        <DropdownMenuItem onClick={() => onAction("duplicate")}>
-          <Copy />
-          {t`Duplicate`}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction("export")}>
-          <Download />
-          {t`Export`}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onAction("clear")}>
-          <Eraser />
-          {t`Clear conversation`}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction("archive")}>
-          <Archive />
-          {t`Archive`}
-        </DropdownMenuItem>
+        {archived ? (
+          // What the archived list offers: the server refuses everything else on an archived bot.
+          <DropdownMenuItem onClick={() => onAction("restore")}>
+            <ArchiveRestore />
+            {t`Restore`}
+          </DropdownMenuItem>
+        ) : (
+          <>
+            <DropdownMenuItem onClick={() => onAction("duplicate")}>
+              <Copy />
+              {t`Duplicate`}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAction("export")}>
+              <Download />
+              {t`Export`}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onAction("clear")}>
+              <Eraser />
+              {t`Clear conversation`}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAction("archive")}>
+              <Archive />
+              {t`Archive`}
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuItem variant="destructive" onClick={() => onAction("delete")}>
           <Trash2 />
           {t`Delete`}

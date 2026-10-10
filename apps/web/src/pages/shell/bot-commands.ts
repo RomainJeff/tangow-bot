@@ -10,7 +10,7 @@ export type UpdateBotPatch = Omit<Parameters<typeof rpc.bots.update>[0], "botId"
 
 export type RoutinePatch = Omit<Parameters<typeof rpc.routines.update>[0], "routineId">;
 
-export type BotAction = "duplicate" | "export" | "clear" | "archive" | "delete";
+export type BotAction = "duplicate" | "export" | "clear" | "archive" | "restore" | "delete";
 
 /** Everything the bot page may ask of the shell. The shell stays the one owner of `bots` and `routines`. */
 export interface BotCommands {

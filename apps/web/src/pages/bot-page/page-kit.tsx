@@ -22,6 +22,8 @@ export type BotPageContext = {
   bot: Bot;
   userId: string;
   commands: BotCommands;
+  /** An archived bot's page only reads: the server refuses its edits until it is restored. */
+  readOnly: boolean;
 };
 
 /** One bot setting, saved through the shared store under this person, space, bot and field. */

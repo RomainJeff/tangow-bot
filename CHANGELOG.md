@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **A bot's page now has an Activity tab on web and desktop.** It lists the runs of the bot's routines, the routines it was given and its own creation, newest first, with each failed run's reason, a recap that opens in place and "Open in chat" to land on the run's message. The bot's name in the header opens it, and so do the gear and "Bot settings" while the bot has no instructions, with "Write its first instructions" under its creation.
+- **An archived bot's page opens from the sidebar's Archived list on web and desktop.** It shows the bot's name, title and Activity, with each run's recap, and nothing on it can be edited; its menu offers Restore, which brings the bot back with its page still open beside its conversation, and Delete. Archived bots used to offer only Restore and Delete from the list, with no way to see what they did.
 
 #### Changed
 

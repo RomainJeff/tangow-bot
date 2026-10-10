@@ -1,5 +1,6 @@
+import type { Bot } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { botPageFor, panelSizeFor, threadJumpLocation } from "./layout";
+import { botPageFor, pageBotOf, panelSizeFor, threadJumpLocation } from "./layout";
 
 describe("panelSizeFor", () => {
   it("widens the bot panel for long text and routines only", () => {
@@ -62,5 +63,20 @@ describe("threadJumpLocation", () => {
       pathname: "/app/bot-1",
       search: "?routine=r-1",
     });
+  });
+});
+
+describe("pageBotOf", () => {
+  const bot = (id: string) => ({ id }) as Bot;
+  const [alpha, beta, scout] = [bot("alpha"), bot("beta"), bot("scout")];
+
+  it("shows the thread's bot until an archived bot is picked", () => {
+    expect(pageBotOf(null, [alpha, beta], [scout], alpha)).toBe(alpha);
+    expect(pageBotOf("scout", [alpha, beta], [scout], alpha)).toBe(scout);
+  });
+
+  it("keeps the picked bot once restored, and shows no page once it is deleted", () => {
+    expect(pageBotOf("scout", [alpha, scout], [], alpha)).toBe(scout);
+    expect(pageBotOf("scout", [alpha], [], alpha)).toBeUndefined();
   });
 });
