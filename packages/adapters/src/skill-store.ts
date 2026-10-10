@@ -153,11 +153,15 @@ async function moveIntoSkillDir(from: string, dest: string): Promise<void> {
   }
   await rename(from, dest).catch(async (error: unknown) => {
     await rmdir(dest).catch(() => undefined);
-    if (hasCode(error, "ENOTEMPTY") || isExists(error)) {
-      throw Object.assign(new Error("A skill with that name already exists."), { code: "EEXIST" });
-    }
-    throw error;
+    throw asNameClash(error);
   });
+}
+
+/** A rename onto a folder another write filled: EEXIST, with no host path in the message. */
+function asNameClash(error: unknown): unknown {
+  return hasCode(error, "ENOTEMPTY") || isExists(error)
+    ? Object.assign(new Error("A skill with that name already exists."), { code: "EEXIST" })
+    : error;
 }
 
 /**
@@ -263,6 +267,7 @@ async function importSkillTree(
   await mkdir(root, { recursive: true });
   // No SKILL.md directly inside the wrapper, so listUserSkills never sees a half-imported skill.
   const wrapper = await mkdtemp(path.join(root, ".import-"));
+  let keepWrapper = false;
   try {
     const out = path.join(wrapper, "bundle");
     await mkdir(out);
@@ -273,19 +278,23 @@ async function importSkillTree(
     const dest = path.join(root, skillDirName(resolved.name));
     const old = target === "create" ? undefined : path.join(root, skillDirName(target.replace));
     if (old === dest) {
-      // The old folder waits in the wrapper (removed below) until the new one is in place.
+      // The old folder waits in the wrapper (removed below) until the new one is in place. A
+      // create can take the name in between: the old version then stays in the wrapper.
       const aside = path.join(wrapper, "old");
       await rename(old, aside);
-      await rename(skillDir, dest).catch(async (error) => {
-        await rename(aside, dest);
-        throw error;
+      await rename(skillDir, dest).catch(async (error: unknown) => {
+        await rename(aside, dest).catch(() => {
+          keepWrapper = true;
+          getLogger().warn(`[skills] kept the replaced version of ${dest} in ${aside}`);
+        });
+        throw asNameClash(error);
       });
       return;
     }
     await moveIntoSkillDir(skillDir, dest);
     if (old) await rm(old, { recursive: true, force: true });
   } finally {
-    await rm(wrapper, { recursive: true, force: true });
+    if (!keepWrapper) await rm(wrapper, { recursive: true, force: true });
   }
 }
 
