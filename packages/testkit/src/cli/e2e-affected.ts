@@ -15,6 +15,11 @@ const baseArg = args.find((arg) => arg.startsWith("--base="));
 const base = baseArg?.slice("--base=".length) ?? "origin/main";
 const dryRun = args.includes("--dry-run");
 const harnessArgs = args.filter((arg) => arg !== baseArg && arg !== "--dry-run");
+if (harnessArgs.some((arg) => arg.startsWith("--spec=") || arg.startsWith("--grep="))) {
+  throw new Error(
+    "test:e2e:affected picks the specs itself; use pnpm test:e2e for --spec or --grep",
+  );
+}
 
 const git = (...gitArgs: string[]) =>
   execFileSync("git", gitArgs, { encoding: "utf8" }).split("\n").filter(Boolean);

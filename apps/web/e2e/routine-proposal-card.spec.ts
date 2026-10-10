@@ -1,5 +1,4 @@
 // Needs the Vite dev server: the fixture is served from source and is not a build entry.
-
 import { captureScreenshot } from "./helpers";
 import { expect, test } from "./test";
 

@@ -23,8 +23,9 @@ const SPEC_FILE = /^apps\/web\/e2e\/([^/]+\.spec\.ts)$/;
 /**
  * First match wins. A traced file runs each spec it is, the specs whose recorded
  * coverage includes it, and the specs that reach it through imports. When none
- * does, a runtime file runs the full suite (nothing proves it unaffected) and
- * anything else (mobile, desktop, docs, infra) is ignored.
+ * does, an optional file (mobile, desktop, docs, tests, deploy infra) is ignored
+ * and any other file runs the full suite: it may be read from disk at runtime,
+ * so nothing proves it unaffected.
  */
 const RULES: ReadonlyArray<readonly [RegExp, Effect]> = [
   [/^apps\/web\/e2e\/(helpers|test)\.ts$/, full("shared e2e helpers changed")],
@@ -34,12 +35,18 @@ const RULES: ReadonlyArray<readonly [RegExp, Effect]> = [
   [/^((apps\/(web|api)|packages\/[^/]+)\/)?package\.json$/, full("package manifest changed")],
   [/^(pnpm-lock\.yaml|pnpm-workspace\.yaml|patches\/)/, full("dependencies changed")],
   [/^packages\/db\/prisma\//, full("database schema changed")],
+  [/^skills\/agent\//, runtime],
   [/(\.test\.tsx?|\.test-d\.ts|\.md)$/, optional],
-  [/^(apps\/web\/(src|public|e2e\/fixtures)|apps\/api\/src|packages\/[^/]+\/src)\//, runtime],
+  [/^apps\/web\/e2e\/([^/]+\.spec\.ts|impact-map\.json)$/, optional],
+  [
+    /^(apps\/(mobile|desktop|desktop-new|www)|infra\/(compose|systemd|updater)|docs|scripts|skills\/computer|\.github|\.agents|\.claude|\.scratch|\.ship)\//,
+    optional,
+  ],
+  [/^(LICENSE|biome\.json|vitest\.config\.ts|\.coderabbit\.yaml|\.gitignore)$/, optional],
 ];
 
 function effectOf(file: string): Effect {
-  return RULES.find(([pattern]) => pattern.test(file))?.[1] ?? optional;
+  return RULES.find(([pattern]) => pattern.test(file))?.[1] ?? runtime;
 }
 
 export function selectSpecs(input: {
@@ -87,7 +94,11 @@ export function selectSpecs(input: {
   };
 }
 
-/** Walk importers up from `file` until each path hits a spec or a file in the map. */
+/**
+ * Walk importers up from `file` until each path hits a spec or a file in the map.
+ * The changed file's own entry lists only specs that ran its functions, so the
+ * walk continues past it to catch specs that only load its module-level data.
+ */
 function reachedSpecs(file: string, map: ImpactMap, importers: Importers): string[] {
   const specs = new Set<string>();
   const seen = new Set([file]);
@@ -95,10 +106,8 @@ function reachedSpecs(file: string, map: ImpactMap, importers: Importers): strin
   for (const current of queue) {
     const spec = SPEC_FILE.exec(current)?.[1];
     const recorded = spec ? [spec] : specsForFile(map, current);
-    if (recorded) {
-      for (const name of recorded) specs.add(name);
-      continue;
-    }
+    for (const name of recorded ?? []) specs.add(name);
+    if (recorded && current !== file) continue;
     for (const importer of importers.get(current) ?? []) {
       if (seen.has(importer)) continue;
       seen.add(importer);

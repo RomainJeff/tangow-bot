@@ -41,6 +41,23 @@ describe("selectSpecs", () => {
     });
   });
 
+  it("runs the specs that reach a mapped file through importers as well as its own", () => {
+    const limitsMap = buildImpactMap(
+      [
+        { spec: "a.spec.ts", files: ["packages/core/src/limits.ts"] },
+        { spec: "b.spec.ts", files: ["apps/web/src/form.tsx"] },
+      ],
+      "abc123",
+    );
+    const selection = selectSpecs({
+      changed: ["packages/core/src/limits.ts"],
+      map: limitsMap,
+      specsOnDisk: ["a.spec.ts", "b.spec.ts"],
+      importers: new Map([["packages/core/src/limits.ts", ["apps/web/src/form.tsx"]]]),
+    });
+    expect(selection).toMatchObject({ kind: "specs", specs: ["a.spec.ts", "b.spec.ts"] });
+  });
+
   it("runs a spec that imports a changed file directly, even outside the web runtime", () => {
     const selection = select(
       ["apps/desktop/src/browser-auth.ts"],
@@ -82,10 +99,20 @@ describe("selectSpecs", () => {
   });
 
   it("runs the full suite when a changed runtime file is reached by no spec", () => {
-    expect(select(["apps/web/src/orphan.ts", "README.md"])).toEqual({
+    const changed = [
+      "apps/web/src/orphan.ts",
+      "infra/sandboxes/computer/x.js",
+      "skills/agent/notes/SKILL.md",
+      "README.md",
+    ];
+    expect(select(changed)).toEqual({
       kind: "full",
       reason: "no spec covers some changed runtime files",
-      uncovered: ["apps/web/src/orphan.ts"],
+      uncovered: [
+        "apps/web/src/orphan.ts",
+        "infra/sandboxes/computer/x.js",
+        "skills/agent/notes/SKILL.md",
+      ],
     });
   });
 
