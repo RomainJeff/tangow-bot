@@ -1,5 +1,6 @@
 // Needs the Vite dev server: the fixture is served from source and is not a build entry.
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { captureScreenshot } from "./helpers";
 
 const open = async (page: Page, query: string) => {
