@@ -315,6 +315,7 @@ describe("contracts", () => {
         trigger: run.trigger,
         notificationsEnabled: true,
         promptSnippet: "Review the report",
+        createdAt: "2026-08-26T00:00:00.000Z",
         updatedAt: "2026-08-26T00:00:01.000Z",
         routineId: null,
         routineName: null,

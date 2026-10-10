@@ -145,12 +145,6 @@ const RUN_STATE: Record<
   cancelled: { word: "cancelled", Icon: StopCircle, tone: "text-muted-foreground", filled: false },
 };
 
-function runTime(row: RunActivityRow): string {
-  return RUN_STATE[row.status].word === "running" || RUN_STATE[row.status].word === "waiting"
-    ? (row.startedAt ?? row.updatedAt)
-    : (row.completedAt ?? row.updatedAt);
-}
-
 function itemKey(item: ActivityItem): string {
   switch (item.kind) {
     case "run":
@@ -335,7 +329,7 @@ function RunLine({ row, openRun }: { row: RunActivityRow; openRun: OpenRun }) {
   const name = row.routineName ?? run.routine;
   const word = run.words[state.word];
   const reason = row.status === "failed" ? run.reason(row.failureKind) : null;
-  const time = run.time(runTime(row));
+  const time = run.time(row.createdAt);
   return (
     <div>
       <button
@@ -544,7 +538,7 @@ function FoldedLine({
   const title = name ?? run.routine;
   const count = plural(runs.length, { one: "# run", other: "# runs" });
   const newest = runs[0];
-  const time = newest ? run.time(runTime(newest)) : "";
+  const time = newest ? run.time(newest.createdAt) : "";
   return (
     <div>
       <button
