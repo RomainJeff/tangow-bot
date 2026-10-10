@@ -146,6 +146,7 @@ function fixture(
     otherRunWaiting?: boolean;
     /** The model fails with this message once the calls ran. */
     fails?: string;
+    skillLearning?: "off" | "shadow" | "on";
     /** Messages sent into the run as it starts: whether each came from someone but the user. */
     steering?: boolean[];
   } = {},
@@ -382,6 +383,7 @@ function fixture(
     secrets: [],
     dataDir,
     skillLock: createInMemorySkillLock(),
+    skillLearning: options.skillLearning,
   } as unknown as Parameters<typeof createRunExecutor>[0]);
 
   const postedCards = () =>
@@ -1550,6 +1552,39 @@ describe("a skill the bot saves on its own", () => {
     expect(lined(f)).toEqual([]);
     expect(f.written()).toEqual([]);
     expect(f.run.skillLinesAt).toBeInstanceOf(Date);
+  });
+
+  it.each(["shadow", "on"] as const)(
+    "posts the line alone for a run that left no message once learning is %s",
+    async (skillLearning) => {
+      const f = fixture({ skillLearning });
+      await f.play([[save]]);
+      expect(f.written()).toEqual([[line]]);
+      expect(f.nonces()).toEqual(["skill-source:run-1"]);
+    },
+  );
+
+  it("is announced by the bot, as today, until learning is on", async () => {
+    const today = fixture();
+    await today.play([[save]]);
+    expect(today.instructions()).toContain(
+      "After creating or updating one, mention /Name so the user can open it.",
+    );
+    expect(today.results).toEqual([
+      expect.objectContaining({ hint: expect.stringContaining("Mention /Coffee") }),
+    ]);
+
+    const learning = fixture({ skillLearning: "shadow" });
+    await learning.play([[{ ...save, args: { ...save.args, name: "Tea" } }]]);
+    expect(learning.instructions()).not.toContain("mention /Name");
+    expect(learning.instructions()).toContain(
+      "Do not announce it: the app shows a line under your message.",
+    );
+    expect(learning.results).toEqual([
+      expect.objectContaining({
+        hint: "Created skill, available to this agent until the user shares it. The app shows the user a line for it: do not announce it.",
+      }),
+    ]);
   });
 
   it("refuses it once a webhook steers into the user's run, and saves it when they steer", async () => {

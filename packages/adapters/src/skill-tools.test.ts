@@ -475,6 +475,41 @@ describe("skill tools", () => {
     );
   });
 
+  it("keeps the skill guidance a bot reads with learning off as before, announcing updates too", async () => {
+    const guide = (await loadBuiltinSkills()).find((skill) => skill.name === "Skill-authoring")!;
+    const entries = [
+      { name: "Coffee", description: "Order coffee", source: "user" as const, readOnly: false },
+      { ...guide, source: "builtin" as const, readOnly: true },
+    ];
+    expect(formatSkillsCatalogInstruction(entries, "off")).toBe(
+      [
+        "Available Claude Agent Skills (SKILL.md recipes shared across assistants; generic how-tos, not account-specific routines):",
+        "- Coffee: Order coffee",
+        "- Skill-authoring: Create or update a reusable skill (SKILL.md plus optional scripts/ and references/) with skill_create or skill_update. Use when a multi-step task is worth repeating or the user asks to save, write, change, or improve a skill.",
+        "When a skill matches the user's request, call skill_read for that name and follow it immediately. Prefer matching skills over improvising multi-step recipes.",
+        "Users can force a skill with /Name in the composer. Routines may mention a skill as @Name — that loads the skill at fire time.",
+        "Create a skill with skill_create when a multi-step task is worth repeating (or when asked); read the Skill-authoring skill first. After creating or updating one, mention /Name so the user can open it.",
+        "Only skill_update / skill_delete user-created skills (not builtin or plugin).",
+      ].join("\n"),
+    );
+    expect(guide.content).not.toMatch(/mention \/|announce/i);
+  });
+
+  it("tells the bot not to announce a skill it saved once learning is on", async () => {
+    const creator = { spaceId: "w1", userId: "u1", botId: "botA" };
+    const learning = { ...deps, learning: "on" as const };
+    const created = await skillCreateFromTool(learning, creator, writerFor(learning, creator), {
+      name: "Mine",
+      description: "d",
+      body: "x",
+    });
+    expect(created).toMatchObject({
+      ok: true,
+      name: "Mine",
+      hint: "Created skill, available to this agent until the user shares it. The app shows the user a line for it: do not announce it.",
+    });
+  });
+
   it("scopes a bot-created skill to its creator", async () => {
     const creator = { spaceId: "w1", userId: "u1", botId: "botA" };
     const created = await skillCreateFromTool(deps, creator, writerFor(deps, creator), {
