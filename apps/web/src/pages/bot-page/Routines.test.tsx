@@ -220,8 +220,9 @@ it("lists the routine's own runs on its page, and a test run as soon as it start
     );
   expect(api.bots.activity.mock.calls).toEqual([[{ botId: "bot-1", routineId: "routine-1" }]]);
   expect(lines()).toEqual([
-    expect.stringMatching(/^Morning digest, No model connected, Failed, /),
-    expect.stringMatching(/^Morning digest, Done, /),
+    // On its own page a routine's lines lead with their time, not its name.
+    expect.stringMatching(/^\d{1,2}:\d{2}\s?[AP]M, No model connected, Failed$/),
+    expect.stringMatching(/^\d{1,2}:\d{2}\s?[AP]M, Done$/),
   ]);
 
   api.bots.activity.mockResolvedValue({
@@ -235,7 +236,7 @@ it("lists the routine's own runs on its page, and a test run as soon as it start
   await act(async () => button("Test run").click());
 
   expect(testRun.mock.calls).toEqual([["bot-1", "routine-1"]]);
-  expect(lines()[0]).toMatch(/^Morning digest, Running, /);
+  expect(lines()[0]).toMatch(/^\d{1,2}:\d{2}\s?[AP]M, Running$/);
 });
 
 function button(name: string) {

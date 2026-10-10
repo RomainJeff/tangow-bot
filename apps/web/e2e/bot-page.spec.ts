@@ -122,9 +122,10 @@ test("Activity lists routine runs and creations, pages back, and opens a recap i
 test("a routine's page lists only its own runs and opens one in place", async ({ page }) => {
   await page.goto(`${FIXTURE}?tab=routines&detail=routine&routine=routine-3`);
   const activity = page.getByTestId("routine-detail").getByTestId("bot-activity");
-  await activity.getByRole("button", { name: /^Invoice watch, 8 runs, Done/ }).click();
+  // A routine's own page lists every run: no folded line to open first.
+  await expect(activity.getByRole("button", { name: /8 runs/ })).toHaveCount(0);
   const runs = activity.getByTestId("activity-run");
-  await expect(runs).toHaveText(Array.from({ length: 8 }, () => /^Invoice watch\d/));
+  await expect(runs).toHaveText(Array.from({ length: 8 }, () => /^\d{1,2}:\d{2}/));
   await expect(activity.getByTestId("activity-created")).toHaveCount(0);
   await expect(activity.getByRole("button", { name: "Show earlier" })).toHaveCount(0);
 
