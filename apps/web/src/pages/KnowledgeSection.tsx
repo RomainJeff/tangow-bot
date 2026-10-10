@@ -205,22 +205,26 @@ Steps the agent should follow.
  * The space's skill catalog. Space mode (no botId) manages each skill's reach:
  * disabled, every agent, or a picked set. Bot mode lists only the skills that
  * agent can install — globally disabled ones are out — with one toggle each.
+ * With `onOpenEditor` a skill (or `null` for a new one) is edited elsewhere.
  */
-export function AgentSkills({ botId }: { botId?: string } = {}) {
+export function AgentSkills({
+  botId,
+  onOpenEditor,
+}: {
+  botId?: string;
+  onOpenEditor?: (skillId: string | null) => void;
+} = {}) {
   const { t } = useLingui();
-  const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
+  /** `null` until the catalog is first read. */
+  const [skills, setSkills] = useState<AgentSkillCatalogEntry[] | null>(null);
   const [bots, setBots] = useState<Bot[]>([]);
-  const [open, setOpen] = useState<AgentSkill | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState<{ skillId: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [query, setQuery] = useState("");
   /** "all" | "active" | "disabled" | `bot:<id>`. */
   const [filter, setFilter] = useState("all");
   const generation = useRef(0);
-  const selection = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
 
   async function refresh() {
@@ -248,21 +252,23 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
     };
   }, [t, botId]);
 
-  async function openSkill(entry: AgentSkillCatalogEntry) {
+  function openEditor(skillId: string | null) {
     if (busy) return;
-    const current = ++selection.current;
-    setCreating(false);
-    setConfirmingDelete(false);
     setError(null);
+    if (onOpenEditor) onOpenEditor(skillId);
+    else setEditing({ skillId });
+  }
+
+  async function closeEditor(changed: boolean) {
+    setEditing(null);
+    if (!changed) return;
+    setBusy(true);
     try {
-      const skill = await rpc.agentSkills.get({ skillId: entry.id });
-      // A slower response must not clobber a newer selection or a fresh draft.
-      if (current !== selection.current) return;
-      setOpen(skill);
-      setDraft(skill.content);
+      await refresh();
     } catch {
-      if (current !== selection.current) return;
-      setError(t`Could not load skill`);
+      setError(t`Could not load`);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -276,34 +282,11 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
     setError(null);
     try {
       const updated = await rpc.agentSkills.setAccess({ skillId: entry.id, ...patch });
-      setSkills((list) => list.map((skill) => (skill.id === updated.id ? updated : skill)));
+      setSkills(
+        (list) => list?.map((skill) => (skill.id === updated.id ? updated : skill)) ?? null,
+      );
     } catch {
       setError(t`Could not update agent access`);
-    }
-  }
-
-  async function save() {
-    if (busy || !draft.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (creating) {
-        await rpc.agentSkills.create({ content: draft });
-      } else if (open) {
-        await rpc.agentSkills.update({ skillId: open.id, content: draft });
-      }
-      setOpen(null);
-      setCreating(false);
-      setConfirmingDelete(false);
-      try {
-        await refresh();
-      } catch {
-        setError(t`Could not load`);
-      }
-    } catch {
-      setError(t`Could not save skill`);
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -330,33 +313,6 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
     }
   }
 
-  async function remove(skill: AgentSkill) {
-    if (busy) return;
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
-    const skillId = skill.id;
-    setBusy(true);
-    setError(null);
-    try {
-      await rpc.agentSkills.remove({ skillId });
-      if (open?.id === skillId) {
-        setOpen(null);
-        setConfirmingDelete(false);
-      }
-      try {
-        await refresh();
-      } catch {
-        setError(t`Could not load`);
-      }
-    } catch {
-      setError(t`Could not delete skill`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   /**
    * Global -> Specific must seed the include list from the bots that can see the skill
    * now; otherwise a lone "excluded" row would flip into being the only include.
@@ -377,14 +333,9 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
     { value: "selected", label: <Trans>Specific agents</Trans> },
   ] satisfies Array<{ value: SkillAvailability; label: ReactNode }>;
 
-  const shown = filterSkillList(skills, { query, filter, botId });
+  const shown = filterSkillList(skills ?? [], { query, filter, botId });
 
-  const editorOpen = creating || open;
-  const draftError = (() => {
-    if (!editorOpen || open?.readOnly || !draft.trim()) return null;
-    const parsed = parseSkillMd(draft);
-    return "error" in parsed ? parsed.error : null;
-  })();
+  const editorOpen = editing !== null;
   return (
     <div data-testid="bot-knowledge-skills">
       {error ? <div className="px-2.5 pb-2 text-[13px] text-destructive">{error}</div> : null}
@@ -393,14 +344,8 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
           <button
             type="button"
             disabled={busy}
-            onClick={() => {
-              selection.current += 1;
-              setOpen(null);
-              setCreating(true);
-              setConfirmingDelete(false);
-              setDraft(NEW_SKILL_TEMPLATE);
-              setError(null);
-            }}
+            data-opens="skill:new"
+            onClick={() => openEditor(null)}
             className="text-[13px] text-muted-foreground hover:text-foreground"
           >
             <Trans>New skill</Trans>
@@ -458,7 +403,7 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
           )}
         </div>
       ) : null}
-      {shown.length === 0 && !editorOpen && !error ? (
+      {skills && shown.length === 0 && !editorOpen && !error ? (
         <div className="px-2.5 py-1 text-[13.5px] text-muted-foreground/80">
           {skills.length === 0 ? <Trans>No skills yet</Trans> : <Trans>No skills match</Trans>}
         </div>
@@ -477,7 +422,8 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void openSkill(entry)}
+                    data-opens={`skill:${entry.id}`}
+                    onClick={() => openEditor(entry.id)}
                     className={`min-w-0 flex-1 rounded-[11px] px-2.5 pt-2.5 text-start ${
                       controlled && !botId ? "pb-1" : "pb-2.5"
                     }`}
@@ -561,69 +507,145 @@ export function AgentSkills({ botId }: { botId?: string } = {}) {
             );
           })
         : null}
-      {editorOpen ? (
-        <div className="px-2.5 pb-2">
-          {open ? (
-            <div className="pb-1 text-[14px] text-foreground" dir="auto">
-              {open.name}
-            </div>
-          ) : null}
-          <textarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            rows={Math.min(20, Math.max(8, draft.split("\n").length + 1))}
-            readOnly={Boolean(open?.readOnly)}
-            className={fieldClass}
-            dir="auto"
-          />
-          {draftError ? (
-            <p className="mt-1 text-[12px] text-destructive" dir="auto" role="alert">
-              {draftError}
-            </p>
-          ) : null}
-          <div className="mt-2 flex items-center gap-2">
-            {!open?.readOnly ? (
-              <button
-                type="button"
-                disabled={
-                  busy ||
-                  !draft.trim() ||
-                  Boolean(draftError) ||
-                  (!creating && draft === open?.content)
-                }
-                onClick={() => void save()}
-                className="rounded-lg bg-muted px-3 py-1.5 text-[13px] text-foreground disabled:opacity-50"
-              >
-                <Trans>Save</Trans>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                selection.current += 1;
-                setOpen(null);
-                setCreating(false);
-                setConfirmingDelete(false);
-              }}
-              className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground"
-            >
-              {open?.readOnly ? <Trans>Close</Trans> : <Trans>Cancel</Trans>}
-            </button>
-            {open && !open.readOnly ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void remove(open)}
-                className={`ms-auto rounded-lg px-3 py-1.5 text-[13px] ${
-                  confirmingDelete ? "bg-destructive/15 text-destructive" : "text-destructive"
-                }`}
-              >
-                {confirmingDelete ? <Trans>Confirm delete</Trans> : <Trans>Delete</Trans>}
-              </button>
-            ) : null}
-          </div>
+      {editing ? <AgentSkillEditor skillId={editing.skillId} onDone={closeEditor} /> : null}
+    </div>
+  );
+}
+
+/**
+ * One skill's SKILL.md with Save, Cancel and Delete; `skillId` null starts a
+ * new skill from the template. `onDone` says whether the catalog changed.
+ */
+export function AgentSkillEditor({
+  skillId,
+  onDone,
+}: {
+  skillId: string | null;
+  onDone: (changed: boolean) => void;
+}) {
+  const { t } = useLingui();
+  const creating = skillId === null;
+  const [skill, setSkill] = useState<AgentSkill | null>(null);
+  const [draft, setDraft] = useState(creating ? NEW_SKILL_TEMPLATE : "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const loaded = creating || skill !== null;
+
+  useEffect(() => {
+    if (!skillId) return;
+    let cancelled = false;
+    rpc.agentSkills
+      .get({ skillId })
+      .then((found) => {
+        if (cancelled) return;
+        setSkill(found);
+        setDraft(found.content);
+      })
+      .catch(() => {
+        if (!cancelled) setError(t`Could not load skill`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [skillId, t]);
+
+  const draftError = (() => {
+    if (!loaded || skill?.readOnly || !draft.trim()) return null;
+    const parsed = parseSkillMd(draft);
+    return "error" in parsed ? parsed.error : null;
+  })();
+
+  async function save() {
+    if (busy || !draft.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (skill) await rpc.agentSkills.update({ skillId: skill.id, content: draft });
+      else await rpc.agentSkills.create({ content: draft });
+      onDone(true);
+    } catch {
+      setError(t`Could not save skill`);
+      setBusy(false);
+    }
+  }
+
+  async function remove(target: AgentSkill) {
+    if (busy) return;
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await rpc.agentSkills.remove({ skillId: target.id });
+      onDone(true);
+    } catch {
+      setError(t`Could not delete skill`);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="px-2.5 pb-2" data-testid="bot-knowledge-skill-editor">
+      {error ? <div className="pb-2 text-[13px] text-destructive">{error}</div> : null}
+      {skill ? (
+        <div className="pb-1 text-[14px] text-foreground" dir="auto">
+          {skill.name}
         </div>
       ) : null}
+      {loaded ? (
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          rows={Math.min(20, Math.max(8, draft.split("\n").length + 1))}
+          readOnly={Boolean(skill?.readOnly)}
+          className={fieldClass}
+          dir="auto"
+        />
+      ) : null}
+      {draftError ? (
+        <p className="mt-1 text-[12px] text-destructive" dir="auto" role="alert">
+          {draftError}
+        </p>
+      ) : null}
+      <div className="mt-2 flex items-center gap-2">
+        {loaded && !skill?.readOnly ? (
+          <button
+            type="button"
+            disabled={
+              busy ||
+              !draft.trim() ||
+              Boolean(draftError) ||
+              (!creating && draft === skill?.content)
+            }
+            onClick={() => void save()}
+            className="rounded-lg bg-muted px-3 py-1.5 text-[13px] text-foreground disabled:opacity-50"
+          >
+            <Trans>Save</Trans>
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => onDone(false)}
+          className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground"
+        >
+          {skill?.readOnly ? <Trans>Close</Trans> : <Trans>Cancel</Trans>}
+        </button>
+        {skill && !skill.readOnly ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void remove(skill)}
+            className={`ms-auto rounded-lg px-3 py-1.5 text-[13px] ${
+              confirmingDelete ? "bg-destructive/15 text-destructive" : "text-destructive"
+            }`}
+          >
+            {confirmingDelete ? <Trans>Confirm delete</Trans> : <Trans>Delete</Trans>}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

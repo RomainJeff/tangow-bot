@@ -88,6 +88,13 @@ test("the design-system kitchen sink renders every primitive light and dark", as
   // caller's `className` still decides.
   await expect(page.getByTestId("shimmer-override")).toHaveCSS("color", "rgb(220, 38, 38)");
 
+  // A bubble stacks its proof lines, each led by its icon, and a line with no text stands alone.
+  const stacked = page.getByTestId("message-meta-lines").locator('[data-slot="message-row-meta"]');
+  await expect(stacked).toHaveCount(2);
+  await expect(stacked.nth(0).locator("svg")).toHaveCount(2);
+  await expect(stacked.nth(1).locator("svg")).toHaveCount(2);
+  await expect(page.getByTestId("message-meta-alone").getByRole("link")).toBeVisible();
+
   await page.mouse.move(0, 0);
   await captureScreenshot(page, testInfo, "design-system-light");
 

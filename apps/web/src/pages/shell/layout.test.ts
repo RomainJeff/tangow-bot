@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import { panelSizeFor } from "./layout";
 
 describe("panelSizeFor", () => {
-  it("widens the bot panel for long text and routines only", () => {
+  it("widens the bot panel for long text, routines and skills only", () => {
     expect(panelSizeFor("bot", { tab: "settings", detail: { kind: "instructions" } })).toBe("wide");
     expect(panelSizeFor("bot", { tab: "settings", detail: { kind: "description" } })).toBe("wide");
     expect(
       panelSizeFor("bot", { tab: "routines", detail: { kind: "routine", routineId: "r" } }),
     ).toBe("wide");
     expect(panelSizeFor("bot", { tab: "routines", detail: { kind: "routine-new" } })).toBe("wide");
+    expect(
+      panelSizeFor("bot", { tab: "knowledge", detail: { kind: "skill", skillId: null } }),
+    ).toBe("wide");
     expect(panelSizeFor("bot", { tab: "settings", detail: { kind: "model" } })).toBe("default");
     expect(panelSizeFor("bot", { tab: "settings", detail: null })).toBe("default");
   });

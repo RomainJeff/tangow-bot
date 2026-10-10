@@ -1,6 +1,6 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MessageBubble, MessageRow } from "./message-row.js";
+import { MessageBubble, MessageMeta, MessageRow } from "./message-row.js";
 
 describe("MessageRow", () => {
   it("renders the avatar column and author by default, with no fill or border of its own", () => {
@@ -75,18 +75,69 @@ describe("MessageRow", () => {
     expect(group).toContain("max-w-22/25");
   });
 
-  it("renders the proof line as a button inside the bubble", () => {
+  it("renders the proof line as a link inside the bubble", () => {
     const html = renderToString(
-      <MessageBubble meta={{ label: "Sent to #ops" }}>done</MessageBubble>,
+      <MessageBubble meta={{ label: "Sent to #ops", onClick: () => undefined }}>
+        done
+      </MessageBubble>,
     );
 
     const bubbleAt = html.indexOf('data-slot="message-row-bubble"');
     const metaAt = html.indexOf('data-slot="message-row-meta"');
     expect(bubbleAt).toBeGreaterThanOrEqual(0);
     expect(metaAt).toBeGreaterThan(bubbleAt);
-    expect(html).toContain('type="button"');
+    expect(html).toContain('role="link"');
     expect(html).toContain("text-meta");
     expect(html).toContain("Sent to #ops");
+  });
+
+  it("renders a proof line with nothing to open as plain text", () => {
+    const html = renderToString(
+      <MessageBubble meta={{ label: "Sent to #ops" }}>done</MessageBubble>,
+    );
+
+    expect(html).toContain('data-slot="message-row-meta"');
+    expect(html).toContain("Sent to #ops");
+    expect(html).not.toContain("<button");
+  });
+
+  it("stacks several proof lines under the text, each with its own icon and link", () => {
+    const html = renderToString(
+      <MessageBubble
+        meta={[
+          {
+            label: "From Weekly review",
+            icon: <svg data-testid="repeat" />,
+            onClick: () => undefined,
+          },
+          {
+            label: "Skill updated · Invoices",
+            icon: <svg data-testid="book" />,
+            onClick: () => undefined,
+          },
+        ]}
+      >
+        done
+      </MessageBubble>,
+    );
+
+    expect(html.match(/data-slot="message-row-meta"/g)).toHaveLength(2);
+    expect(html.indexOf("From Weekly review")).toBeLessThan(
+      html.indexOf("Skill updated · Invoices"),
+    );
+    expect(html.indexOf('data-testid="repeat"')).toBeLessThan(html.indexOf("From Weekly review"));
+    expect(html.indexOf('data-testid="book"')).toBeLessThan(html.indexOf("Skill updated"));
+    expect(html.match(/<button/g)).toHaveLength(2);
+    expect(html).toContain("truncate");
+  });
+
+  it("draws proof lines alone, with no bubble, when there is no text", () => {
+    const html = renderToString(
+      <MessageMeta lines={{ label: "Skill learned · Invoices", onClick: () => undefined }} />,
+    );
+
+    expect(html).toContain("Skill learned · Invoices");
+    expect(html).not.toContain('data-slot="message-row-bubble"');
   });
 
   it("anchors a trailing overlay inside the row", () => {

@@ -399,6 +399,20 @@ row, the same fold, the `ReasoningDisclosure` idiom (`lucide-react`'s
 rail, the existing `CollaborationMarker` centred for the handoff, and a
 `ui-web` `Dialog` (sectioned by day) once a group passes eight runs.
 
+### A skill in the conversation
+
+A skill a bot learns, improves or deletes draws one line per skill under the
+bot's message: `BookOpen` and "Skill learned · <name>", "Skill updated · <name>"
+or "Skill deleted · <name>", the `meta` of `MessageBubble`. It opens the skill
+in the bot page's Knowledge tab, or the list when the skill is gone or not the
+reader's. In a group the line names the skill without a link, since a group has
+no bot page. A message with no text draws the line alone through `MessageMeta`.
+A line that arrives live rises (`rk-arrive`) and its icon pops (`bui-pop-in`),
+both over `--duration-arrive`, half of it late, as on iPhone; a line in loaded
+history is still, and reduced motion stills both. The `skill_source` block
+carries the skill; `skillSourcesOf` in `packages/core/src/skill-source.ts` reads
+it.
+
 ### Clipped preview
 
 Content cut to a height (a routine report at eight lines, a task result at
@@ -438,8 +452,15 @@ Used by: every bot message in the thread, cards included.
 
 What a bot said: `bg-muted rounded-bubble`, 10 × 14 padding, fitting its
 content up to 82% of the thread (single bot) or 88% of the column (`inGroup`).
-`meta?: { label, onClick? }` draws the proof line inside the bubble, under the
-text, in `text-meta` suffixed by a chevron. Its `data-slot="message-row-bubble"`
+`meta?: Line | Line[]`, with `Line = { label, icon?, onClick?, className? }`,
+draws the proof lines inside the bubble, under the text, stacked left, one per
+line in `text-meta` `mutedForeground` with a 14 px leading `icon` and a chevron
+when it opens something. A label truncates to one line. A line with an
+`onClick` is a link (`role="link"`, as on iPhone) named by its label; the icon is
+decorative. `MessageMeta`
+draws the same lines on their own, at the bubble's 14 px inset with no bubble,
+for a message that is only lines. A bot's own markdown never reaches this slot,
+so text that looks like a line is not one. Its `data-slot="message-row-bubble"`
 scopes the markdown rules for a bubble: code on `background`, tables without a
 surface, their hairlines running edge to edge.
 

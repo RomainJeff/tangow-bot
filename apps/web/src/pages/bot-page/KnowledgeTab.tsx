@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { rpc } from "../../lib/rpc";
 import { AgentFiles, AgentSkills, MemoryDocumentList } from "../KnowledgeSection";
 import { ScratchpadSection } from "../ScratchpadSection";
+import type { BotDetail } from "../shell/layout";
 import { type BotPageContext, SettingsGroup, useBotField, useSaveLabels } from "./page-kit";
 
 type MemoryScopeChoice = "" | "isolated" | "shared";
@@ -12,9 +13,12 @@ type MemoryScopeChoice = "" | "isolated" | "shared";
 export function KnowledgeTab({
   page,
   memoryProviderConfigured,
+  onOpen,
 }: {
   page: BotPageContext;
   memoryProviderConfigured: boolean;
+  /** The skill editor opens in the wide detail. */
+  onOpen: (detail: BotDetail) => void;
 }) {
   const { t } = useLingui();
   const { bot } = page;
@@ -38,7 +42,10 @@ export function KnowledgeTab({
         <AgentFiles key={bot.id} botId={bot.id} />
       </KnowledgeGroup>
       <KnowledgeGroup label={t`Skills`} testId="bot-skills">
-        <AgentSkills botId={bot.id} />
+        <AgentSkills
+          botId={bot.id}
+          onOpenEditor={(skillId) => onOpen({ kind: "skill", skillId })}
+        />
       </KnowledgeGroup>
       <ScratchpadSection botId={bot.id} />
     </div>

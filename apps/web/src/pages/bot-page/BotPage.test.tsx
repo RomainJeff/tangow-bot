@@ -12,6 +12,11 @@ const api = vi.hoisted(() => ({
   models: { credentials: vi.fn(), list: vi.fn() },
   me: vi.fn(),
   voice: { voices: vi.fn() },
+  agentSkills: { list: vi.fn(), get: vi.fn() },
+  bots: { list: vi.fn() },
+  memory: { list: vi.fn() },
+  computer: { files: vi.fn() },
+  scratchpad: { list: vi.fn() },
 }));
 vi.mock("../../lib/rpc", () => ({ rpc: api }));
 vi.mock("@lingui/react/macro", () => {
@@ -181,4 +186,38 @@ it("fills a new routine from the latest skill picked, even when the form is alre
   expect(
     container.querySelector<HTMLTextAreaElement>('[data-testid="routine-create"] textarea')?.value,
   ).toBe("Sort the inbox.");
+});
+
+it("returns focus to a skill's row once the catalog reloads after its editor closes", async () => {
+  const skill = {
+    id: "skill-1",
+    name: "greeting",
+    description: "Greet politely",
+    content: "Hello",
+    availability: "all",
+    visibleBotIds: ["bot-1"],
+    source: "user",
+  };
+  api.agentSkills.list.mockResolvedValue([skill]);
+  api.agentSkills.get.mockResolvedValue(skill);
+  api.memory.list.mockResolvedValue([]);
+  api.computer.files.mockResolvedValue([]);
+  api.scratchpad.list.mockResolvedValue([]);
+  const row = () => container.querySelector<HTMLElement>('[data-opens="skill:skill-1"]');
+  await render({ tab: "knowledge", detail: null });
+  await vi.waitFor(() => expect(row()?.textContent).toContain("greeting"));
+
+  await render({ tab: "knowledge", detail: { kind: "skill", skillId: "skill-1" } });
+  let finishList!: (list: (typeof skill)[]) => void;
+  api.agentSkills.list.mockReturnValue(
+    new Promise((resolve) => {
+      finishList = resolve;
+    }),
+  );
+  await render({ tab: "knowledge", detail: null });
+
+  const skills = container.querySelector('[data-testid="bot-knowledge-skills"]');
+  expect(skills?.textContent).not.toContain("No skills yet");
+  await act(async () => finishList([skill]));
+  expect(document.activeElement).toBe(row());
 });

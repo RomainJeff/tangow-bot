@@ -36,6 +36,9 @@ import { SettingsTab } from "./SettingsTab";
 const KnowledgeTab = lazy(() =>
   import("./KnowledgeTab").then((module) => ({ default: module.KnowledgeTab })),
 );
+const AgentSkillEditor = lazy(() =>
+  import("../KnowledgeSection").then((module) => ({ default: module.AgentSkillEditor })),
+);
 
 export interface BotPageProps {
   bot: Bot;
@@ -92,15 +95,29 @@ export function BotPage({
   }, [missingRoutine, onView]);
 
   // Focus follows the editor: into it when it opens (a text editor focuses its
-  // own field), back to the row that opened it when it closes.
+  // own field), back to the row that opened it when it closes. A row from a list
+  // that reloads with its tab (skills) is focused once it renders, unless focus
+  // has moved on by then.
   const backButton = useRef<HTMLButtonElement>(null);
   const lastDetail = useRef(detail);
   useEffect(() => {
     const closed = lastDetail.current;
     lastDetail.current = detail;
     if (detail?.kind === "model" || detail?.kind === "voice") backButton.current?.focus();
-    if (detail || !closed) return;
-    root.current?.querySelector<HTMLElement>(`[data-opens="${detailOpener(closed)}"]`)?.focus();
+    const page = root.current;
+    if (detail || !closed || !page) return;
+    const selector = `[data-opens="${detailOpener(closed)}"]`;
+    const focusOpener = () => {
+      const opener = page.querySelector<HTMLElement>(selector);
+      opener?.focus();
+      return opener !== null;
+    };
+    if (focusOpener()) return;
+    const observer = new MutationObserver(() => {
+      if (document.activeElement !== document.body || focusOpener()) observer.disconnect();
+    });
+    observer.observe(page, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [detail]);
 
   return (
@@ -157,6 +174,12 @@ export function BotPage({
             />
           ) : null}
         </div>
+      ) : detail?.kind === "skill" ? (
+        <div className="rk-scroll min-h-0 flex-1 overflow-y-auto px-4 pt-1 pb-4">
+          <Suspense fallback={null}>
+            <AgentSkillEditor key={detail.skillId} skillId={detail.skillId} onDone={back} />
+          </Suspense>
+        </div>
       ) : detail?.kind === "routine-new" ? (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto">
           <RoutineCreateForm
@@ -194,7 +217,11 @@ export function BotPage({
             </TabsContent>
             <TabsContent value="knowledge" className="px-4">
               <Suspense fallback={null}>
-                <KnowledgeTab page={page} memoryProviderConfigured={memoryProviderConfigured} />
+                <KnowledgeTab
+                  page={page}
+                  memoryProviderConfigured={memoryProviderConfigured}
+                  onOpen={open}
+                />
               </Suspense>
             </TabsContent>
             <TabsContent value="settings" className="px-4">
