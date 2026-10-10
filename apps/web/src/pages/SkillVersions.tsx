@@ -1,22 +1,22 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { SkillVersion, SkillVersionDetail } from "@rakazo/contracts";
+import { canUndoSkillVersion, showsSkillVersions, skillVersionSubline } from "@rakazo/core";
 import { Button, cn, SettingRow, Surface } from "@rakazo/ui-web";
 import { ChevronLeft, Undo2 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { LoadingRows } from "./bot-page/page-kit";
-import {
-  applyUndo,
-  canUndo,
-  formatVersionDate,
-  refusalMessage,
-  showVersions,
-  versionSubline,
-} from "./skill-versions";
+import { applyUndo, formatVersionDate, refusalMessage } from "./skill-versions";
 
 function useVersionWords() {
   const { t } = useLingui();
-  return { learned: t`learned`, updated: t`updated`, you: t`You`, unknown: t`Updated` };
+  return {
+    learned: t`learned`,
+    updated: t`updated`,
+    you: t`You`,
+    unknown: t`Updated`,
+    undone: t`Undone`,
+  };
 }
 
 /** The date of a version or a deleted skill, worded as the thread's time markers are. */
@@ -93,7 +93,7 @@ export function SkillVersions({
     }
   }
 
-  if (!versions || !showVersions(versions, false)) return null;
+  if (!versions || !showsSkillVersions(versions)) return null;
   const rows = versions;
   return (
     <section className="mt-6 flex flex-col gap-1.5" data-testid="skill-versions">
@@ -105,7 +105,7 @@ export function SkillVersions({
           variant="tertiary"
           size="capsule"
           className="-me-3"
-          disabled={busy || !canUndo(rows)}
+          disabled={busy || !canUndoSkillVersion(rows)}
           onClick={() => void undo()}
         >
           <Undo2 aria-hidden="true" />
@@ -142,17 +142,7 @@ export function SkillVersions({
                   />
                 </span>
               }
-              subline={
-                <>
-                  {versionSubline(version, words)}
-                  {version.undone ? (
-                    <>
-                      {" · "}
-                      <Trans>Undone</Trans>
-                    </>
-                  ) : null}
-                </>
-              }
+              subline={skillVersionSubline(version, words)}
               chevron
               aria-current={version.current ? "true" : undefined}
               data-testid="skill-version"
@@ -248,13 +238,7 @@ export function SkillVersionView({
           <div className="px-0.5 pt-2 pb-2">
             <div className="text-row-name text-foreground">{versionDate(version.createdAt)}</div>
             <div className="text-row-status text-muted-foreground">
-              {versionSubline(version, words)}
-              {version.undone ? (
-                <>
-                  {" · "}
-                  <Trans>Undone</Trans>
-                </>
-              ) : null}
+              {skillVersionSubline(version, words)}
             </div>
           </div>
           <pre

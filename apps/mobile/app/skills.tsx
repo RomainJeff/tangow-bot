@@ -28,7 +28,6 @@ import { type MobileBot, rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
 import { native, useThemedStyles } from "../lib/native";
-import { takeRestored } from "../lib/skill-versions";
 
 /** Runtime ceiling: the agent only sees the first 50 visible skills. */
 const SKILL_LIMIT = 50;
@@ -65,7 +64,6 @@ export default function Skills() {
   const [marketplaces, setMarketplaces] = useState<SpaceMarketplace[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [trashed, setTrashed] = useState(0);
-  const [botGone, setBotGone] = useState(false);
 
   async function refresh() {
     const [skills, spaces] = await Promise.all([
@@ -76,16 +74,13 @@ export default function Skills() {
     setMarketplaces(spaces);
   }
 
-  // Back from Recently deleted: count what is left, and show a skill brought back.
+  // Back from Recently deleted: count what is left, and list a skill brought back.
   useFocusEffect(
     useCallback(() => {
       void rpc<TrashedSkill[]>("agentSkills/trash", {}).then(
         (skills) => setTrashed(skills.length),
         () => setTrashed(0),
       );
-      const restored = takeRestored();
-      if (!restored) return;
-      setBotGone(restored.botGone);
       void refresh().catch(() => undefined);
     }, []),
   );
@@ -130,7 +125,6 @@ export default function Skills() {
             styles={styles}
             catalog={catalog}
             trashed={trashed}
-            botGone={botGone}
             onChanged={() => void refresh().catch(() => undefined)}
           />
         ) : null}
@@ -168,15 +162,12 @@ function InstalledTab({
   styles,
   catalog,
   trashed,
-  botGone,
   onChanged,
 }: {
   styles: Styles;
   catalog: AgentSkillCatalogEntry[];
   /** How many skills wait in Recently deleted; its row shows only when some do. */
   trashed: number;
-  /** The skill just brought back has no bot left to use it. */
-  botGone: boolean;
   onChanged: () => void;
 }) {
   const { t } = useI18n();
@@ -532,7 +523,6 @@ function InstalledTab({
           </View>
         </Pressable>
       ) : null}
-      {botGone ? <Text style={styles.secondary}>{t("No bot uses this skill yet.")}</Text> : null}
     </View>
   );
 }

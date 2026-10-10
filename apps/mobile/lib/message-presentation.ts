@@ -1,6 +1,5 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import { isToolActivityBlock, type SkillSourceBlock } from "@rakazo/core";
-import { skillIdForUid } from "./skill-versions";
 
 /**
  * The blocks the thread is about to draw: tool activity is hidden, except the
@@ -56,7 +55,7 @@ export async function skillLineRoute(
   catalog: () => Promise<ReadonlyArray<{ id: string; uid?: string }>>,
 ) {
   if (line.change === "deleted") return { pathname: "/bot-skills-trash" } as const;
-  const skillId = skillIdForUid(await catalog(), line.skillUid, (entry) => entry.uid);
+  const skillId = (await catalog()).find((entry) => entry.uid === line.skillUid)?.id;
   return skillId
     ? ({ pathname: "/bot-skill", params: { skillId } } as const)
     : ({ pathname: "/skills" } as const);
