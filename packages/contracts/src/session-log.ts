@@ -228,3 +228,103 @@ export function isInferenceEntry(entry: SessionEntry): entry is InferenceEntry {
 export function isUiEntry(entry: SessionEntry): entry is UiEntry {
   return ENTRY_AUDIENCE[entry.type].ui;
 }
+
+/** A turn of the history the runtime replays, in the shape `AgentRunRequest.history` takes. */
+export type AgentHistoryTurn = {
+  role: "user" | "assistant";
+  content: string;
+  /** The bot's own turns that ran tools, as ordered text and tool-call parts. */
+  parts?: AgentHistoryTurnPart[];
+};
+export type AgentHistoryTurnPart =
+  | { type: "text"; text: string }
+  | {
+      type: "toolCalls";
+      calls: { id: string; name: string; args: Record<string, unknown>; output: string }[];
+    };
+
+const itemBase = { id: EntryId, ts: IsoDate };
+
+/** What a thread renders, one item per kind. A run folds into one message and one run item. */
+export const ThreadItemSchema = z.discriminatedUnion("kind", [
+  z.discriminatedUnion("role", [
+    z.object({
+      kind: z.literal("message"),
+      role: z.literal("user"),
+      ...itemBase,
+      ...UserMessagePayload.shape,
+    }),
+    z.object({
+      kind: z.literal("message"),
+      role: z.literal("bot"),
+      ...itemBase,
+      botId: Id,
+      runId: Id,
+      blocks: z.array(MessageBlock),
+    }),
+  ]),
+  z.object({
+    kind: z.literal("run"),
+    ...itemBase,
+    runId: Id,
+    botId: Id,
+    trigger: SessionRunTrigger,
+    model: RunModel,
+    effort: ThinkingLevelSchema.nullable(),
+    finished: z.object({ outcome: RunOutcome, durationMs: z.number().int() }).nullable(),
+  }),
+  z.object({ kind: z.literal("subagent"), ...itemBase, runId: Id, ...SubagentPayload.shape }),
+  z.object({
+    kind: z.literal("handoff"),
+    ...itemBase,
+    fromBotId: Id,
+    toBotId: Id,
+    text: z.string(),
+  }),
+  z.discriminatedUnion("direction", [
+    z.object({
+      kind: z.literal("botMessage"),
+      direction: z.literal("sent"),
+      ...itemBase,
+      botId: Id,
+      peer: Peer,
+      text: z.string(),
+      intent: BotMessageIntent,
+      exchangeId: EntryId,
+      /** The later `bot.message.received` of the same exchange in this session, if any. */
+      answeredBy: EntryId.nullable(),
+    }),
+    z.object({
+      kind: z.literal("botMessage"),
+      direction: z.literal("received"),
+      ...itemBase,
+      peer: Peer,
+      text: z.string(),
+      intent: BotMessageIntent,
+      exchangeId: EntryId,
+      origin: z.object({ sessionId: SessionId, entryId: EntryId }),
+    }),
+  ]),
+  z.object({
+    kind: z.literal("divider"),
+    ...itemBase,
+    reason: z.enum(["compaction", "rewind", "clear"]),
+  }),
+  z.object({
+    kind: z.literal("effect"),
+    ...itemBase,
+    effectId: Id,
+    effectKind: z.string(),
+    proposal: JsonObject,
+    decision: z.enum(["approved", "denied"]).nullable(),
+  }),
+  z.discriminatedUnion("type", [
+    ComputerControlEntry.extend({ kind: z.literal("note") }),
+    MemoryRevisedEntry.extend({ kind: z.literal("note") }),
+    SkillSavedEntry.extend({ kind: z.literal("note") }),
+    AttachmentAddedEntry.extend({ kind: z.literal("note") }),
+    SessionTitleEntry.extend({ kind: z.literal("note") }),
+    SystemNoteEntry.extend({ kind: z.literal("note") }),
+  ]),
+]);
+export type ThreadItem = z.infer<typeof ThreadItemSchema>;
