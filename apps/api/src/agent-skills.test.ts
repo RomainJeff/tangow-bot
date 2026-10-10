@@ -252,6 +252,33 @@ describe("agent skills service (filesystem)", () => {
       );
     });
 
+    it("gives a user skill a uid that survives a rename, and none to a built-in", async () => {
+      const skills = service();
+      const created = await skills.create(actor, { content: body("One") });
+      await skills.update(actor, {
+        skillId: created.id,
+        content: buildSkillMd({ name: "Daily", description: "Notes", body: "One" }),
+      });
+      const entries = await skills.list(actor);
+      const daily = entries.find((entry) => entry.id === "user:daily");
+      const fetched = await skills.get(actor, { skillId: "user:daily" });
+      await skills.remove(actor, "user:daily");
+      const [trashed] = await skills.trash(actor);
+
+      expect({
+        created: created.uid,
+        listed: daily?.uid,
+        fetched: fetched.uid,
+        builtin: entries.find((entry) => entry.id === "builtin:Routines")?.uid,
+      }).toEqual({
+        created: trashed?.uid,
+        listed: trashed?.uid,
+        fetched: trashed?.uid,
+        builtin: undefined,
+      });
+      expect(trashed?.uid).toMatch(/^[0-9a-f]{32}$/);
+    });
+
     it("refuses an undo whose expected version is no longer current", async () => {
       const skills = service();
       const created = await skills.create(actor, { content: body("One") });

@@ -45,6 +45,20 @@ describe("mobile message presentation", () => {
     ).toBe(false);
   });
 
+  it("draws no bubble for a message that only carries a skill line", () => {
+    const text = { kind: "text", text: "Done." } as MessageBlock;
+    const line = {
+      kind: "skill_source",
+      skillUid: "0123456789abcdef0123456789abcdef",
+      skillId: "user:coffee",
+      name: "Coffee",
+      change: "learned",
+    } as MessageBlock;
+
+    expect(hasVisibleMessagePresentation([line])).toBe(false);
+    expect(visibleMessageBlocks([text, line])).toEqual([text]);
+  });
+
   it("keeps steps-only messages visible when the setting is on", () => {
     const steps = [{ kind: "steps", steps: [{ label: "Read file", count: 1 }] }] as MessageBlock[];
 

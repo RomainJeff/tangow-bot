@@ -3,16 +3,18 @@ import { isToolActivityBlock } from "@rakazo/core";
 
 /**
  * The blocks the thread is about to draw: tool activity is hidden, except the
- * `steps` the "Display agent steps" setting asks for. Mirrors the web
- * `isHiddenActivityBlock`; the thread passes the result to `isAsideOnlyMessage`
- * so a hidden block cannot change how a message reads.
+ * `steps` the "Display agent steps" setting asks for, and so is the skill line,
+ * not drawn yet. Mirrors the web `isHiddenActivityBlock`; the thread passes the
+ * result to `isAsideOnlyMessage` so a hidden block cannot change how a message reads.
  */
 export function visibleMessageBlocks(
   blocks: readonly MessageBlock[],
   showSteps = false,
 ): MessageBlock[] {
   return blocks.filter(
-    (block) => !isToolActivityBlock(block) || (showSteps && block.kind === "steps"),
+    (block) =>
+      block.kind !== "skill_source" &&
+      (!isToolActivityBlock(block) || (showSteps && block.kind === "steps")),
   );
 }
 

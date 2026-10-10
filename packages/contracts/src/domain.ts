@@ -8,6 +8,7 @@ import {
   RunFailureKind,
   RunStatus,
   SandboxKind,
+  SkillUidSchema,
 } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
 
@@ -527,6 +528,8 @@ export type SkillAvailability = z.infer<typeof SkillAvailabilitySchema>;
 
 export const AgentSkillSchema = z.object({
   id: Id,
+  /** A user skill's stable id: it survives a rename. Absent for built-in and plugin skills. */
+  uid: SkillUidSchema.optional(),
   name: z.string(),
   description: z.string(),
   content: z.string(),
@@ -539,6 +542,7 @@ export type AgentSkill = z.infer<typeof AgentSkillSchema>;
 
 export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
   id: true,
+  uid: true,
   name: true,
   description: true,
   source: true,
@@ -551,9 +555,7 @@ export const AgentSkillCatalogEntrySchema = AgentSkillSchema.pick({
 });
 export type AgentSkillCatalogEntry = z.infer<typeof AgentSkillCatalogEntrySchema>;
 
-export const SKILL_UID_PATTERN = /^[0-9a-f]{32}$/;
 export const SKILL_VERSION_ID_PATTERN = /^v\d{6}-[0-9a-f]{8}$/;
-export const SkillUidSchema = z.string().regex(SKILL_UID_PATTERN);
 export const SkillVersionIdSchema = z.string().regex(SKILL_VERSION_ID_PATTERN);
 
 export const SkillVersionSchema = z.object({

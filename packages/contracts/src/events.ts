@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { BotSecretDestination } from "./bot-secrets.js";
-import { Id } from "./ids.js";
+import { Id, SkillUidSchema } from "./ids.js";
 import { LinkPreviewBlock } from "./link-preview.js";
 import { McpTransportSchema } from "./mcp.js";
 
@@ -362,6 +362,17 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     /** Mirrors the routine's `notify` setting at the time this card was rendered, so the
         client can default the toggle open/closed without a second lookup. */
     notify: z.boolean().optional(),
+  }),
+  z.object({
+    /** A skill a bot learned, updated or deleted during this exchange, one block per skill.
+        Written by the server from the skill history, never by the model; clients show it as a
+        link under the message, outside its content. `skillId` and `name` are the skill's at the
+        end of the exchange; `skillUid` survives a later rename. */
+    kind: z.literal("skill_source"),
+    skillUid: SkillUidSchema,
+    skillId: z.string(),
+    name: z.string(),
+    change: z.enum(["learned", "updated", "deleted"]),
   }),
   LinkPreviewBlock,
 ]);

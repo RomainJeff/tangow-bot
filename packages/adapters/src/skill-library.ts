@@ -108,7 +108,10 @@ type SkillSummary = { name: string; bytes: number; botRuns: string[] };
 
 type SkillEntry = {
   uid: SkillUid;
-  state: { kind: "live" } | { kind: "trashed"; trashedAt: string; access: SkillAccess };
+  state:
+    | { kind: "live" }
+    /** `byRun`: the bot run that deleted it, for that run's line. */
+    | { kind: "trashed"; trashedAt: string; access: SkillAccess; byRun?: string };
   /** The version current when a bot first changed this skill: retention never purges it. */
   beforeFirstBot?: VersionId;
   summary?: SkillSummary;
@@ -162,6 +165,17 @@ export interface BotSkillWriter {
 
 export type TrashedSkill = { uid: SkillUid; name: string; trashedAt: string };
 
+/** What one bot run did to one skill, as the line under its message says it. */
+export type SkillRunChange = {
+  uid: SkillUid;
+  /** The skill's id and name now, after any later rename. */
+  key: string;
+  name: string;
+  change: "learned" | "updated" | "deleted";
+  /** The run changed the name, description or scripts of a skill other bots read too. */
+  reachesOtherBots: boolean;
+};
+
 /** What the owner of the skills may do, from the skills screen and the API. */
 export interface OwnerSkillAdmin extends BotSkillWriter {
   /** Newest first; the first one not undone is the current content. A read: it records nothing. */
@@ -170,6 +184,11 @@ export interface OwnerSkillAdmin extends BotSkillWriter {
     uid: SkillUid,
     versionId: VersionId,
   ): Promise<{ manifest: VersionManifest; skillMd: string }>;
+  /**
+   * The uid of each live skill, by key, from the entries alone: no lock, no replay, so a list
+   * never waits on a write and an unreadable history only leaves skills without a uid.
+   */
+  uids(): Promise<Map<string, SkillUid>>;
   trash(): Promise<TrashedSkill[]>;
   /** Back to the version before `expected`, or to the trash for a bot's fresh creation. */
   undo(
@@ -335,7 +354,11 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
   function forOwner(
     owner: SkillOwner,
     bot?: BotWriteContext,
-  ): { admin: OwnerSkillAdmin; repair: () => Promise<void> } {
+  ): {
+    admin: OwnerSkillAdmin;
+    repair: () => Promise<void>;
+    changesByRun: (runIds: Iterable<string>) => Promise<Map<string, SkillRunChange[]>>;
+  } {
     const { prisma } = deps;
     const L = layoutOf(deps.dataDir, owner);
     const scope = { spaceId: owner.spaceId, userId: owner.userId };
@@ -965,7 +988,12 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
       await journal(intent);
       skill.entry = {
         ...skill.entry,
-        state: { kind: "trashed", trashedAt: now().toISOString(), access: await readAccess(key) },
+        state: {
+          kind: "trashed",
+          trashedAt: now().toISOString(),
+          access: await readAccess(key),
+          ...(bot ? { byRun: bot.runId } : {}),
+        },
       };
       await writeEntry(skill.entry);
       await finish(intent, skill);
@@ -1115,6 +1143,23 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
           return { manifest, skillMd: textOf(skillMd.bytes) };
         }),
 
+      uids: async () => {
+        const uids = new Map<string, SkillUid>();
+        try {
+          for (const name of await readdirOrEmpty(L.skills)) {
+            const uid = parseSkillUid(name);
+            const read = uid ? await readHistoryJson(entryFile(uid), isEntry(uid)) : undefined;
+            if (uid && read?.state === "ok" && read.value.state.kind === "live") {
+              const { summary } = read.value;
+              if (isSummary(summary)) uids.set(userSkillKey(summary.name), uid);
+            }
+          }
+        } catch (error) {
+          getLogger().warn(`[skills] ${owner.spaceId}/${owner.userId}: uids unreadable`, { error });
+        }
+        return uids;
+      },
+
       trash: () =>
         run(async (store) => {
           for (const header of store.headers()) {
@@ -1242,6 +1287,88 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
       usage: () => run(async (store) => ({ bytes: usage(store), limit: quota })),
     };
 
+    /** Whether the run's last write changed what another bot reads of the skill. */
+    async function reachesOtherBots(skill: Skill, own: VersionManifest[]): Promise<boolean> {
+      const first = own[0];
+      const last = own.at(-1);
+      if (!first || !last || last.author.kind !== "bot") return false;
+      const writer = last.author.botId;
+      const { availability, bots } = last.access;
+      const shared =
+        availability !== "disabled" &&
+        ((availability ?? "all") === "all" ||
+          bots.some((row) => row.enabled && row.botId !== writer));
+      if (!shared) return false;
+      const before = skill.versions.filter((v) => v.seq < first.seq && !v.undoneAt).at(-1);
+      if (!before || before.name !== last.name) return true;
+      let prior: SkillTreeFile[];
+      let next: SkillTreeFile[];
+      try {
+        [prior, next] = await Promise.all([readVersionTree(before), readVersionTree(last)]);
+      } catch (error) {
+        if (error instanceof SkillRefusal) return true;
+        throw error;
+      }
+      const description = (tree: SkillTreeFile[]) => {
+        const skillMd = tree.find((file) => file.path === "SKILL.md");
+        const parsed = parseSkillMd(skillMd ? textOf(skillMd.bytes) : "");
+        return "error" in parsed ? undefined : parsed.description;
+      };
+      const scripts = (tree: SkillTreeFile[]) =>
+        fingerprint(tree.filter((file) => file.path.startsWith("scripts/")));
+      return description(prior) !== description(next) || scripts(prior) !== scripts(next);
+    }
+
+    /**
+     * For each run asked, what it did to each skill: one entry per (run, skill), read from the
+     * history, in the order the run first touched them. Only those runs' versions are compared.
+     */
+    const changesByRun = (asked: Iterable<string>) =>
+      run(async (store) => {
+        const wanted = new Set(asked);
+        const byRun = new Map<string, Array<SkillRunChange & { at: string }>>();
+        for (const skill of await store.all()) {
+          const name = (currentVersion(skill) ?? skill.versions.at(-1))?.name;
+          if (!name) continue;
+          const { state } = skill.entry;
+          const deletedBy = state.kind === "trashed" ? state.byRun : undefined;
+          const runIds = new Set(
+            skill.versions.flatMap((v) =>
+              v.author.kind === "bot" && wanted.has(v.author.runId) ? [v.author.runId] : [],
+            ),
+          );
+          if (deletedBy && wanted.has(deletedBy)) runIds.add(deletedBy);
+          for (const runId of runIds) {
+            const own = skill.versions.filter(
+              (v) => v.author.kind === "bot" && v.author.runId === runId,
+            );
+            const change =
+              runId === deletedBy
+                ? "deleted"
+                : own.some((v) => v.nature === "created")
+                  ? "learned"
+                  : "updated";
+            byRun.set(runId, [
+              ...(byRun.get(runId) ?? []),
+              {
+                uid: skill.entry.uid,
+                key: userSkillKey(name),
+                name,
+                change,
+                reachesOtherBots: change === "updated" && (await reachesOtherBots(skill, own)),
+                at: own[0]?.createdAt ?? (state.kind === "trashed" ? state.trashedAt : ""),
+              },
+            ]);
+          }
+        }
+        return new Map(
+          [...byRun].map(([runId, changes]) => [
+            runId,
+            changes.sort((a, b) => a.at.localeCompare(b.at)).map(({ at: _, ...change }) => change),
+          ]),
+        );
+      });
+
     /** Sweeps the store, then drops access rows whose skill folder is gone. */
     const repair = () =>
       run(async () => {
@@ -1259,7 +1386,7 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
         }
       }, "sweep");
 
-    return { admin, repair };
+    return { admin, repair, changesByRun };
   }
 
   return {
@@ -1270,8 +1397,14 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
     },
     forOwner: (owner: SkillOwner): OwnerSkillAdmin => forOwner(owner).admin,
     repair: (owner: SkillOwner): Promise<void> => forOwner(owner).repair(),
+    changesByRun: (
+      owner: SkillOwner,
+      runIds: Iterable<string>,
+    ): Promise<Map<string, SkillRunChange[]>> => forOwner(owner).changesByRun(runIds),
   };
 }
+
+export type SkillLibrary = ReturnType<typeof createSkillLibrary>;
 
 /** Bytes kept in an owner's versions and trash. */
 function usage(store: Store): number {

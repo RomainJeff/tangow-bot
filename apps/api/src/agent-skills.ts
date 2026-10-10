@@ -40,9 +40,10 @@ import { IsolationError, type PrismaClient } from "@rakazo/db";
 
 type SkillFile = UserSkillFile | MarketplaceSkillFile;
 
-function toAgentSkill(file: SkillFile): AgentSkill {
+function toAgentSkill(file: SkillFile, uid?: string): AgentSkill {
   return {
     id: file.id,
+    ...(uid ? { uid } : {}),
     name: file.name,
     description: file.description,
     content: file.content,
@@ -169,6 +170,10 @@ export function createAgentSkillsService(
   const allFiles = async (actor: Actor): Promise<SkillFile[]> =>
     (await Promise.all([files(actor), marketplaceFiles(actor)])).flat();
 
+  async function described(actor: Actor, file: SkillFile): Promise<AgentSkill> {
+    return toAgentSkill(file, (await library.forOwner(actor).uids()).get(file.id));
+  }
+
   async function owned(actor: Actor, skillId: string): Promise<SkillFile> {
     const file = (await allFiles(actor)).find((skill) => skill.id === skillId);
     if (!file) throw new IsolationError();
@@ -237,17 +242,21 @@ export function createAgentSkillsService(
   }
 
   async function catalog(actor: Actor, botId?: string): Promise<Array<AgentSkill & Access>> {
-    const [rows, access, builtinSkills] = await Promise.all([
+    const [rows, access, builtinSkills, uids] = await Promise.all([
       allFiles(actor),
       accessIndex(actor),
       builtinCatalog(),
+      library.forOwner(actor).uids(),
     ]);
     const builtins = builtinSkills.map((skill) => ({
       ...skill,
       availability: "all" as const,
       visibleBotIds: access.bots,
     }));
-    const users = rows.map((file) => ({ ...toAgentSkill(file), ...access.of(file.id) }));
+    const users = rows.map((file) => ({
+      ...toAgentSkill(file, uids.get(file.id)),
+      ...access.of(file.id),
+    }));
     const entries = mergeBuiltinSkills(builtins, users);
     return botId ? entries.filter((entry) => entry.visibleBotIds.includes(botId)) : entries;
   }
@@ -287,7 +296,7 @@ export function createAgentSkillsService(
       .forOwner(actor)
       .create({ kind: "skill-md", ...resolved })
       .catch(rethrowRefusal);
-    return toAgentSkill(await owned(actor, userSkillKey(resolved.name)));
+    return described(actor, await owned(actor, userSkillKey(resolved.name)));
   }
 
   return {
@@ -304,11 +313,11 @@ export function createAgentSkillsService(
         return builtin;
       }
       if (input.skillId) {
-        return toAgentSkill(await owned(actor, input.skillId));
+        return described(actor, await owned(actor, input.skillId));
       }
       const name = input.name?.trim() ?? "";
       const file = findSkillByName(await allFiles(actor), name);
-      if (file) return toAgentSkill(file);
+      if (file) return described(actor, file);
       const builtin = findSkillByName(await builtinCatalog(), name);
       if (!builtin) throw new IsolationError();
       return builtin;
@@ -342,7 +351,7 @@ export function createAgentSkillsService(
           },
         })
         .catch(rethrowRefusal);
-      return toAgentSkill(await owned(actor, saved.key));
+      return described(actor, await owned(actor, saved.key));
     },
 
     async update(
@@ -367,7 +376,7 @@ export function createAgentSkillsService(
         .forOwner(actor)
         .update(existing.id, { kind: "skill-md", ...resolved })
         .catch(rethrowRefusal);
-      return toAgentSkill(await owned(actor, newKey));
+      return described(actor, await owned(actor, newKey));
     },
 
     async remove(actor: Actor, skillId: string): Promise<{ ok: true }> {

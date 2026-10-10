@@ -61,7 +61,6 @@ import {
   ServerUpdateStatusSchema,
   SkillAvailabilitySchema,
   SkillPlaybookSchema,
-  SkillUidSchema,
   SkillVersionDetailSchema,
   SkillVersionIdSchema,
   SkillVersionSchema,
@@ -86,7 +85,7 @@ import {
   VoiceStatusSchema,
 } from "./domain.js";
 import { ProductEventSchema } from "./events.js";
-import { Id, IsoDate } from "./ids.js";
+import { Id, IsoDate, SkillUidSchema } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
   IntegrationSetupStateSchema,
