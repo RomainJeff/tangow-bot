@@ -942,7 +942,7 @@ describe("thread stop", () => {
       where.routineId === undefined && (where.status !== "cancelled" || runStatus === "cancelled");
     let runStatus = "running";
     const effects = [{ id: "effect-1", status: "approved", result: null as unknown }];
-    const skillWrites: Array<{ kind: string; status: string; result: unknown }> = [];
+    const skillWrites: Array<{ runId: string; kind: string; status: string; result: unknown }> = [];
     const card = {
       id: "message-2",
       blocks: [{ kind: "ask", approvalEffectId: "effect-1", status: "answered", answer: "allow" }],
@@ -1084,7 +1084,12 @@ describe("thread stop", () => {
   it("leaves a stopped run's skill lines to the sweep, which also takes a write that lands after the stop", async () => {
     const { prisma, reply, skillWrites, notify, stop } = await stopFixture();
     const save = (name: string) =>
-      skillWrites.push({ kind: "skill_create", status: "completed", result: { ok: true, name } });
+      skillWrites.push({
+        runId: "run-1",
+        kind: "skill_create",
+        status: "completed",
+        result: { ok: true, name },
+      });
     const line = (name: string) => ({
       kind: "skill_source",
       skillId: `user:${name.toLowerCase()}`,
