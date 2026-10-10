@@ -155,7 +155,7 @@ function MetaLine({ line, hitSlop }: { line: BotBubbleMeta; hitSlop: number }) {
             color={tokens.mutedForeground}
           />
         </Animated.View>
-        <Text numberOfLines={1} style={styles.metaText}>
+        <Text numberOfLines={1} style={[styles.metaText, styles.metaLabel]}>
           {line.label}
         </Text>
         <Text accessibilityElementsHidden style={styles.metaText}>
@@ -202,6 +202,9 @@ function createBotBubbleStyles() {
     metaText: {
       color: tokens.mutedForeground,
       ...nativeTextStyle("meta"),
+    },
+    metaLabel: {
+      flexShrink: 1,
     },
   });
 }

@@ -2129,10 +2129,11 @@ function Thread() {
     const withPreview = (content: ReactNode) =>
       previewNode ? (
         cardReplacesBubbleView ? (
-          // The card takes the bubble's place, and the quote it carried stays above it.
+          // The card takes the bubble's place: the quote it carried stays above it, its skill lines under it.
           <View style={{ alignItems: message.role === "user" ? "flex-end" : "flex-start" }}>
             <ReplyQuote message={message} replyPreview={replyPreviewNode} />
             {previewNode}
+            <CardSkillLines message={message} isNew={isNew} />
           </View>
         ) : (
           <View style={{ gap: 4 }}>
@@ -3437,23 +3438,7 @@ const MessageBubble = memo(function MessageBubble({
   // Mono-bot grammar (design contract §3b): the narration bubble caps at 82%
   // of the thread instead of 88% of the content column.
   const mono = !groupId;
-  const skillLines = skillSourcesOf(message.blocks);
-  const skillsAtMount = useRef(skillLines.length);
-  const skillsLive = isNew || skillLines.length > skillsAtMount.current;
-  const metaLines: BotBubbleMeta[] = skillLines.map(
-    (line): BotBubbleMeta => ({
-      id: `${line.skillUid}:${line.change}`,
-      label:
-        line.change === "learned"
-          ? t("Skill learned · {name}", { name: line.name })
-          : line.change === "updated"
-            ? t("Skill updated · {name}", { name: line.name })
-            : t("Skill deleted · {name}", { name: line.name }),
-      icon: { ios: "book", android: "book-outline" },
-      onPress: () => router.push("/skills"),
-      live: skillsLive,
-    }),
-  );
+  const metaLines = useSkillLines(message, isNew);
   // A card draws no bubble to hang the lines under, so they stand alone below it.
   const withSkillLines = (card: ReactNode) =>
     metaLines.length > 0 ? (
@@ -4024,6 +4009,35 @@ const MessageBubble = memo(function MessageBubble({
     </View>
   );
 });
+
+/** The skill lines under a bot's message: what it learned, updated or deleted, each opening Skills. */
+function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] {
+  const { t } = useI18n();
+  const router = useRouter();
+  const skillLines = skillSourcesOf(message.blocks);
+  const skillsAtMount = useRef(skillLines.length);
+  const skillsLive = isNew || skillLines.length > skillsAtMount.current;
+  return skillLines.map(
+    (line): BotBubbleMeta => ({
+      id: `${line.skillUid}:${line.change}`,
+      label:
+        line.change === "learned"
+          ? t("Skill learned · {name}", { name: line.name })
+          : line.change === "updated"
+            ? t("Skill updated · {name}", { name: line.name })
+            : t("Skill deleted · {name}", { name: line.name }),
+      icon: { ios: "book", android: "book-outline" },
+      onPress: () => router.push("/skills"),
+      live: skillsLive,
+    }),
+  );
+}
+
+/** The skill lines of a message whose link card took its bubble's place, standing alone under the card. */
+function CardSkillLines({ message, isNew }: { message: MobileMessage; isNew: boolean }) {
+  const lines = useSkillLines(message, isNew);
+  return lines.length > 0 ? <BubbleMeta lines={lines} standalone /> : null;
+}
 
 /** Native routine-run card: a sub-bot's routine traced by its run lifecycle
     (queued/running/completed/failed/cancelled) instead of a free closing
