@@ -268,7 +268,7 @@ export function createAgentSkillsService(
   const admin = (actor: Actor) => library.forOwner(actor);
 
   async function history(actor: Actor, skillId: string) {
-    const versions = await admin(actor).versions(skillId);
+    const versions = await admin(actor).versions(skillId).catch(rethrowRefusal);
     const uid = versions[0]?.uid;
     if (!uid) throw new IsolationError();
     return { uid, versions };
@@ -388,7 +388,7 @@ export function createAgentSkillsService(
     },
 
     async versions(actor: Actor, input: { skillId: string }): Promise<SkillVersion[]> {
-      const versions = await admin(actor).versions(input.skillId);
+      const versions = await admin(actor).versions(input.skillId).catch(rethrowRefusal);
       if (versions.length === 0) await owned(actor, input.skillId);
       return versions.map((version) => toSkillVersion(version, versions));
     },
@@ -431,7 +431,7 @@ export function createAgentSkillsService(
     },
 
     async trash(actor: Actor): Promise<TrashedSkill[]> {
-      return admin(actor).trash();
+      return admin(actor).trash().catch(rethrowRefusal);
     },
 
     async restore(
@@ -459,39 +459,21 @@ export function createAgentSkillsService(
       },
     ): Promise<AgentSkillCatalogEntry> {
       const scope = { spaceId: actor.spaceId, userId: actor.userId };
-      // Under the owner's lock, so a rename moving the rows to the new name cannot lose this change.
-      const existing = await lock.run(scope, async () => {
-        const existing = await owned(actor, input.skillId);
-        const skillKey = existing.id;
-        const bots = input.bots ?? [];
-        if (bots.length > 0) {
-          const ids = [...new Set(bots.map((bot) => bot.botId))];
-          const known = await prisma.bot.findMany({
-            where: { id: { in: ids }, ...scope },
-            select: { id: true },
-          });
-          if (known.length !== ids.length) throw new IsolationError();
-        }
-        await prisma.$transaction([
-          ...(input.availability
-            ? [
-                prisma.skillSetting.upsert({
-                  where: { spaceId_userId_skillKey: { ...scope, skillKey } },
-                  create: { ...scope, skillKey, availability: input.availability },
-                  update: { availability: input.availability },
-                }),
-              ]
-            : []),
-          ...bots.map((bot) =>
-            prisma.botSkill.upsert({
-              where: { botId_skillKey: { botId: bot.botId, skillKey } },
-              create: { ...scope, botId: bot.botId, skillKey, enabled: bot.enabled },
-              update: { enabled: bot.enabled },
-            }),
-          ),
-        ]);
-        return existing;
-      });
+      const existing = await owned(actor, input.skillId);
+      const bots = input.bots ?? [];
+      if (bots.length > 0) {
+        const ids = [...new Set(bots.map((bot) => bot.botId))];
+        const known = await prisma.bot.findMany({
+          where: { id: { in: ids }, ...scope },
+          select: { id: true },
+        });
+        if (known.length !== ids.length) throw new IsolationError();
+      }
+      // In the library, so a rename interrupted mid-way moves the rows before this change lands.
+      await library
+        .forOwner(actor)
+        .setAccess(existing.id, { availability: input.availability, bots })
+        .catch(rethrowRefusal);
       const entry = (await list(actor)).find((skill) => skill.id === existing.id);
       if (!entry) throw new IsolationError();
       return entry;
