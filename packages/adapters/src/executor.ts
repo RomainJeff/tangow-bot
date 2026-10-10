@@ -3240,6 +3240,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               botName: bot.name,
               runId,
               toolCallId: effectKey,
+              secrets: runSecrets,
             });
           if (name === "skill_create" || name === "skill_update") {
             const draftPath = typeof args.path === "string" ? args.path.trim() : "";

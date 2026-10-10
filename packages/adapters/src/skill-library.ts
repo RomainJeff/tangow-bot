@@ -15,10 +15,12 @@ import path from "node:path";
 import type { SkillAvailability } from "@rakazo/core";
 import {
   asSkillAvailability,
+  containsSecret,
   parseSkillMd,
   SKILL_HISTORY_DIR,
   skillHistorySegments,
   userSkillKey,
+  validateBotSkillFile,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -44,6 +46,8 @@ export type { SkillRefusalReason } from "./skill-tree.js";
 export { SkillRefusal } from "./skill-tree.js";
 
 const KEPT_VERSIONS = 20;
+const HISTORY_QUOTA_BYTES = 200 * 1024 * 1024;
+const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const SWEEP_EVERY_MS = 6 * 60 * 60 * 1000;
 
 export type SkillUid = string & { readonly __brand: "SkillUid" };
@@ -110,7 +114,7 @@ type SkillEntry = {
 type Intent = {
   uid: SkillUid;
   key: string;
-  /** The folder the skill leaves, for a rename. */
+  /** The folder the skill leaves, for a rename or the undo of one. */
   fromKey?: string;
   /** This operation created the `key` folder and wrote its access rows before committing. */
   claimed: boolean;
@@ -161,6 +165,18 @@ export interface OwnerSkillAdmin extends BotSkillWriter {
   /** Newest first; the first one not undone is the current content. */
   versions(key: string): Promise<VersionManifest[]>;
   trash(): Promise<TrashedSkill[]>;
+  /** Back to the version before `expected`, or to the trash for a bot's fresh creation. */
+  undo(
+    uid: SkillUid,
+    expected: VersionId,
+  ): Promise<
+    { kind: "restored"; versionId: VersionId; key: string; name: string } | { kind: "trashed" }
+  >;
+  /** Out of the trash, with the access rows it had, minus bots deleted since. */
+  restore(uid: SkillUid): Promise<{ key: string; name: string; droppedBotIds: string[] }>;
+  purge(uid: SkillUid): Promise<void>;
+  deleteVersion(uid: SkillUid, versionId: VersionId): Promise<void>;
+  usage(): Promise<{ bytes: number; limit: number }>;
   /** Changes the given rows only, after any interrupted rename has moved them. */
   setAccess(
     key: string,
@@ -173,6 +189,8 @@ export type BotWriteContext = {
   botName: string;
   runId: string;
   toolCallId: string;
+  /** The run's secret values; a bot write holding one is refused. */
+  secrets: string[];
 };
 
 export type SkillLibraryDeps = {
@@ -180,6 +198,7 @@ export type SkillLibraryDeps = {
   dataDir: string;
   lock: SkillOwnerLock;
   now?: () => Date;
+  quotaBytes?: number;
 };
 
 type Layout = { live: string; skills: string; staging: string; journal: string };
@@ -302,11 +321,13 @@ type Store = {
   live(key: string): Promise<Skill | undefined>;
   all(): Promise<Skill[]>;
   adopt(skill: Skill): void;
+  forget(uid: SkillUid): void;
   opened(): Skill[];
 };
 
 export function createSkillLibrary(deps: SkillLibraryDeps) {
   const now = deps.now ?? (() => new Date());
+  const quota = deps.quotaBytes ?? HISTORY_QUOTA_BYTES;
 
   function forOwner(
     owner: SkillOwner,
@@ -441,8 +462,9 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
         const uid = parseSkillUid(name);
         if (!uid) continue;
         const read = await readHistoryJson(entryFile(uid), isEntry(uid));
-        if (read.state === "ok" && isSummary(read.value.summary)) entries.set(uid, read.value);
-        else await open(uid);
+        if (read.state === "ok" && isSummary(read.value.summary) && !expired(read.value)) {
+          entries.set(uid, read.value);
+        } else await open(uid);
       }
       const skill = async (uid: SkillUid) =>
         loaded.get(uid) ?? (entries.has(uid) ? await open(uid) : undefined);
@@ -487,6 +509,10 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
         adopt(skill) {
           entries.set(skill.entry.uid, skill.entry);
           loaded.set(skill.entry.uid, skill);
+        },
+        forget(uid) {
+          entries.delete(uid);
+          loaded.delete(uid);
         },
         opened: () => [...loaded.values()],
       };
@@ -831,6 +857,38 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
       }
     }
 
+    /** A bot answers for the files it changes: readable text, no run secret, room in the quota. */
+    function checkBotWrite(
+      store: Store,
+      tree: SkillTreeFile[],
+      prior: SkillTreeFile[],
+      writer: BotWriteContext,
+    ): void {
+      const before = new Map(prior.map((file) => [file.path, file.bytes]));
+      const changed = tree.filter((file) => {
+        const old = before.get(file.path);
+        return !old || Buffer.compare(Buffer.from(old), Buffer.from(file.bytes)) !== 0;
+      });
+      for (const file of changed) {
+        const error = validateBotSkillFile(file);
+        if (error) throw new SkillRefusal("invalid", error);
+      }
+      if (
+        containsSecret(
+          changed.flatMap((file) => [file.path, textOf(file.bytes)]),
+          writer.secrets,
+        )
+      ) {
+        throw new SkillRefusal("invalid", "Skill files must not contain a secret from this run.");
+      }
+      if (usage(store) + treeBytes(tree) > quota) {
+        throw new SkillRefusal(
+          "quota",
+          "Skill history is full. The user can free space by deleting skills from Recently deleted.",
+        );
+      }
+    }
+
     function replayIn(skill: Skill, writer: BotWriteContext): SkillWriteResult | undefined {
       const hit = skill.versions.some(
         (version) =>
@@ -871,8 +929,25 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
           }
         : { kind: "user" };
 
-    /** Retention, whenever a skill is opened and after each operation; true while it exists. */
+    const expiredAt = (at: string | undefined) =>
+      at !== undefined && Date.parse(at) < now().getTime() - RETENTION_MS;
+    const expired = (entry: SkillEntry) =>
+      entry.state.kind === "trashed" && expiredAt(entry.state.trashedAt);
+
+    /**
+     * Retention and the thirty-day purge of the trash and of undone versions, whenever a skill is
+     * opened and after each operation; false once the skill itself expired.
+     */
     async function tidy(skill: Skill): Promise<boolean> {
+      if (expired(skill.entry)) {
+        await moveAway(skillDir(skill.entry.uid));
+        return false;
+      }
+      for (const version of skill.versions) {
+        if (expiredAt(version.undoneAt)) {
+          await removeVersion(skill, version.versionId);
+        }
+      }
       const keep = protectedVersionIds(skill);
       const purgeable = skill.versions.filter((v) => !v.undoneAt && !keep.has(v.versionId));
       for (const version of purgeable.slice(0, Math.max(0, purgeable.length - KEPT_VERSIONS))) {
@@ -902,6 +977,7 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
         const replayed = bot && (await replayOf(store, bot));
         if (replayed) return replayed;
         const { name, tree } = await stage(content, []);
+        if (bot) checkBotWrite(store, tree, [], bot);
         const key = userSkillKey(name);
         await claim(store, key);
         const uid = randomBytes(16).toString("hex") as SkillUid;
@@ -938,6 +1014,7 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
         if (name === current.name && fingerprint(tree) === current.fingerprint) {
           return { uid: skill.entry.uid, versionId: current.versionId, key, name, changed: false };
         }
+        if (bot) checkBotWrite(store, tree, live.tree, bot);
         const newKey = userSkillKey(name);
         const renamed = newKey !== key;
         if (renamed) await claim(store, newKey);
@@ -1010,6 +1087,14 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
         return { uid: skill.entry.uid, name: currentVersion(skill)?.name ?? keyName(key) };
       });
 
+    const findSkill = async (store: Store, uid: SkillUid, state: "live" | "trashed") => {
+      const skill = await store.skill(uid);
+      if (!skill || skill.entry.state.kind !== state) {
+        throw new SkillRefusal("not_found", NOT_FOUND);
+      }
+      return skill;
+    };
+
     const admin: OwnerSkillAdmin = {
       create,
       update,
@@ -1063,6 +1148,112 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
             )
             .sort((a, b) => b.trashedAt.localeCompare(a.trashedAt));
         }),
+
+      undo: (uid, expected) =>
+        run(async (store) => {
+          const key = keyOf(await findSkill(store, uid, "live"));
+          if (!key) throw new SkillRefusal("not_found", NOT_FOUND);
+          const { skill } = await reconcile(store, key);
+          const kept = skill.versions.filter((v) => !v.undoneAt);
+          const current = kept.at(-1);
+          const previous = kept.at(-2);
+          if (current?.versionId !== expected) {
+            throw new SkillRefusal("stale", "This skill changed since you opened it.");
+          }
+          if (!previous) {
+            if (current.author.kind !== "bot" || current.nature !== "created") {
+              throw new SkillRefusal("not_undoable", "There is no earlier version.");
+            }
+            await trashSkill(skill, key);
+            return { kind: "trashed" as const };
+          }
+          await readVersionTree(previous);
+          const toKey = userSkillKey(previous.name);
+          const renamed = toKey !== key;
+          if (renamed) await claim(store, toKey);
+          const intent: Intent = {
+            uid,
+            key: toKey,
+            ...(renamed ? { fromKey: key } : {}),
+            claimed: renamed,
+            target: { kind: "live", versionId: previous.versionId },
+          };
+          await journal(intent);
+          // A rename moves the current rows to the old name; a version's own rows never return.
+          if (renamed) await replaceAccess(toKey, await readAccess(key));
+          const undone = { ...current, undoneAt: now().toISOString() };
+          await writeJsonAtomic(manifestFile(uid, current.versionId), undone);
+          skill.versions = skill.versions.map((v) => (v === current ? undone : v));
+          await finish(intent, skill);
+          return {
+            kind: "restored" as const,
+            versionId: previous.versionId,
+            key: toKey,
+            name: previous.name,
+          };
+        }),
+
+      restore: (uid) =>
+        run(async (store) => {
+          const skill = await findSkill(store, uid, "trashed");
+          const current = currentVersion(skill);
+          if (!current || skill.entry.state.kind !== "trashed") {
+            throw new SkillRefusal("not_found", NOT_FOUND);
+          }
+          await readVersionTree(current);
+          const { access } = skill.entry.state;
+          const key = userSkillKey(current.name);
+          await claim(store, key);
+          const intent: Intent = {
+            uid,
+            key,
+            claimed: true,
+            target: { kind: "live", versionId: current.versionId },
+          };
+          await journal(intent);
+          const known = new Set(
+            (
+              await prisma.bot.findMany({
+                where: { ...scope, id: { in: access.bots.map((row) => row.botId) } },
+                select: { id: true },
+              })
+            ).map((row) => row.id),
+          );
+          await replaceAccess(key, {
+            availability: access.availability,
+            bots: access.bots.filter((row) => known.has(row.botId)),
+          });
+          skill.entry = { ...skill.entry, state: { kind: "live" } };
+          await writeEntry(skill.entry);
+          await finish(intent, skill);
+          return {
+            key,
+            name: current.name,
+            droppedBotIds: access.bots
+              .filter((row) => !known.has(row.botId))
+              .map((row) => row.botId),
+          };
+        }),
+
+      purge: (uid) =>
+        run(async (store) => {
+          await findSkill(store, uid, "trashed");
+          await moveAway(skillDir(uid));
+          store.forget(uid);
+        }),
+
+      deleteVersion: (uid, versionId) =>
+        run(async (store) => {
+          const skill = await store.skill(uid);
+          const version = skill?.versions.find((v) => v.versionId === versionId);
+          if (!skill || !version) throw new SkillRefusal("not_found", NOT_FOUND);
+          if (currentVersion(skill)?.versionId === versionId) {
+            throw new SkillRefusal("current_version", "The current version cannot be deleted.");
+          }
+          await removeVersion(skill, versionId);
+        }),
+
+      usage: () => run(async (store) => ({ bytes: usage(store), limit: quota })),
     };
 
     /**
@@ -1088,6 +1279,11 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
     forOwner: (owner: SkillOwner): OwnerSkillAdmin => forOwner(owner).admin,
     repair: (owner: SkillOwner): Promise<void> => forOwner(owner).repair(),
   };
+}
+
+/** Bytes kept in an owner's versions and trash. */
+function usage(store: Store): number {
+  return store.headers().reduce((sum, header) => sum + header.summary.bytes, 0);
 }
 
 /**

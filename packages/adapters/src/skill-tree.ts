@@ -12,7 +12,15 @@ import { getLogger } from "@rakazo/logging";
 import type { SkillTreeFile } from "./skill-store.js";
 import { hasCode, isStorableFile } from "./skill-store.js";
 
-export type SkillRefusalReason = "invalid" | "name_taken" | "not_found" | "unavailable";
+export type SkillRefusalReason =
+  | "invalid"
+  | "name_taken"
+  | "not_found"
+  | "quota"
+  | "stale"
+  | "not_undoable"
+  | "current_version"
+  | "unavailable";
 
 export class SkillRefusal extends Error {
   constructor(

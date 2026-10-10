@@ -4,6 +4,7 @@ import {
   SKILL_BUNDLE_MAX_ENTRIES,
   SKILL_DESCRIPTION_MAX_CHARS,
 } from "@rakazo/contracts";
+import type { ParsedSkillMd } from "@rakazo/core";
 import {
   asSkillAvailability,
   buildSkillMd,
@@ -17,6 +18,7 @@ import {
   type SkillRecord,
   searchSkills,
   userSkillKey,
+  validateBotSkill,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -89,6 +91,17 @@ function rejectOversizedContent(content: string): string | undefined {
     return `Skill content must be at most ${MAX_SKILL_CONTENT_CHARS} characters.`;
   }
   return undefined;
+}
+
+/** A skill a bot writes stays readable as written (validateBotSkill); the user's own are free. */
+function botSkillError(
+  owner: SkillOwner,
+  content: string,
+  prior?: Pick<ParsedSkillMd, "description" | "frontmatter">,
+): string | undefined {
+  if (!owner.botId) return undefined;
+  const parsed = parseSkillMd(content);
+  return "error" in parsed ? parsed.error : validateBotSkill(parsed, content, prior);
 }
 
 function rejectInvalidSkillFields(name: string, description: string): string | undefined {
@@ -300,8 +313,8 @@ export async function skillCreateFromTool(
     content = buildSkillMd({ name, description, body });
   }
 
-  const oversized = rejectOversizedContent(content);
-  if (oversized) return { error: oversized };
+  const rejected = rejectOversizedContent(content) ?? botSkillError(owner, content);
+  if (rejected) return { error: rejected };
 
   // A replayed call finds its own skill under that name; the writer returns it unchanged.
   if (!(await writer.replayed())) {
@@ -397,8 +410,11 @@ export async function skillUpdateFromTool(
 
   const invalid = rejectInvalidSkillFields(nextName, nextDescription);
   if (invalid) return { error: invalid };
-  const oversized = rejectOversizedContent(nextContent);
-  if (oversized) return { error: oversized };
+  const stored = parseSkillMd(existing.content);
+  const rejected =
+    rejectOversizedContent(nextContent) ??
+    botSkillError(owner, nextContent, "error" in stored ? undefined : stored);
+  if (rejected) return { error: rejected };
 
   if (nextName.toLowerCase() !== existing.name.toLowerCase()) {
     const clash = await findOwnedSkill(deps, owner, { name: nextName });
