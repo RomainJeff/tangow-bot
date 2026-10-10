@@ -54,7 +54,7 @@ test("the tabs are one tab stop, moved with the arrow keys", async ({ page }) =>
   await page.goto(`${FIXTURE}?tab=activity`);
   const tabs = page.getByRole("tablist");
   await expect(tabs.getByRole("tab")).toHaveText(["Activity", "Routines", "Knowledge", "Settings"]);
-  await tabs.getByRole("tab", { name: "Activity" }).focus();
+  await tabs.getByRole("tab", { name: "Activity, last run failed" }).focus();
   await page.keyboard.press("ArrowRight");
   await expect(tabs.getByRole("tab", { name: "Routines" })).toBeFocused();
   await page.keyboard.press("Enter");

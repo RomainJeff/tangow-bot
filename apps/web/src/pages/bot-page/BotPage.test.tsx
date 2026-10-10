@@ -284,3 +284,33 @@ it("shows an archived bot's page read-only, with Restore and Delete as its only 
   expect(vi.mocked(commands.botAction).mock.calls).toEqual([["bot-1", "restore"]]);
   expect(updateBot).not.toHaveBeenCalled();
 });
+
+it("marks the Activity tab while a routine that is on last failed, until it succeeds, pauses or goes", async () => {
+  const routine = (lastRunStatus: Routine["lastRunStatus"], active = true) =>
+    ({ id: "routine-1", name: "Inbox sweep", active, lastRunStatus }) as Routine;
+  const other = {
+    id: "routine-2",
+    name: "Digest",
+    active: true,
+    lastRunStatus: "succeeded",
+  } as Routine;
+  const activityTab = () => {
+    const tab = container.querySelector('[data-testid="bot-tab-activity"]');
+    return [tab?.getAttribute("aria-label") ?? null, tab?.querySelectorAll("[aria-hidden]").length];
+  };
+
+  await render({ tab: "activity", detail: null }, { routines: [routine("failed")] });
+  expect(activityTab()).toEqual(["Activity, last run failed", 1]);
+
+  await render({ tab: "activity", detail: null }, { routines: [routine("succeeded")] });
+  expect(activityTab()).toEqual([null, 0]);
+
+  await render({ tab: "activity", detail: null }, { routines: [routine("failed", false)] });
+  expect(activityTab()).toEqual([null, 0]);
+
+  await render({ tab: "activity", detail: null }, { routines: [other, routine("failed")] });
+  expect(activityTab()).toEqual(["Activity, last run failed", 1]);
+
+  await render({ tab: "activity", detail: null }, { routines: [other] });
+  expect(activityTab()).toEqual([null, 0]);
+});
