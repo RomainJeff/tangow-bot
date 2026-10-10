@@ -79,6 +79,7 @@ export interface FakeThreadDb {
     replyToMessageId?: string | null;
     replyQuote?: string | null;
     hiddenFromThread?: boolean;
+    createdAt?: Date;
   }): void;
   seedRun(input: {
     id: string;
@@ -424,6 +425,7 @@ export function createFakeThreadDb(): FakeThreadDb {
       replyToMessageId = null,
       replyQuote = null,
       hiddenFromThread = false,
+      createdAt,
     }) {
       tables.messages.set(id, {
         id,
@@ -437,6 +439,7 @@ export function createFakeThreadDb(): FakeThreadDb {
         replyToMessageId,
         replyQuote,
         hiddenFromThread,
+        createdAt,
       });
     },
     seedRun({

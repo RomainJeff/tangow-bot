@@ -188,11 +188,6 @@ export function hasHiddenText(text: string, multiLine = false): boolean {
   );
 }
 
-/** False when the text hides characters from a reader, or breaks a line that must stay one. */
-export function isVisibleText(value: string, lines: "single" | "multi"): boolean {
-  return !hasHiddenText(value, lines === "multi");
-}
-
 /** The card renders the name as text; a name shaped like a link or markup could pass for one. */
 export const LINK_LIKE_NAME = /[[\]<>]|:\/\/|www\./i;
 
