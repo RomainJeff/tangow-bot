@@ -89,6 +89,17 @@ describe("bot records", () => {
     expect(records.bot("bot-1")?.instructions).toBe("Changed by the bot");
   });
 
+  it("lands a read started during a save, and keeps the field that save sent", async () => {
+    const records = createBotRecords();
+    await records.read("bot-1", async () => bot());
+    const save = deferred<Bot>();
+    const saving = records.write("bot-1", () => save.promise, ["name"]);
+    await records.read("bot-1", async () => bot({ title: "Set by the bot" }));
+    save.resolve(bot({ name: "Scout 2" }));
+    await saving;
+    expect(records.bot("bot-1")).toMatchObject({ name: "Scout 2", title: "Set by the bot" });
+  });
+
   it("does not let an older read replace a newer one", async () => {
     const records = createBotRecords();
     const older = deferred<Bot>();

@@ -143,7 +143,7 @@ function useSharedRead<T>(read: SharedRead<T>, load: () => Promise<T>) {
   return { state, retry: () => void read.refresh(load, { force: true }) };
 }
 
-function loadModelCatalog(): Promise<ModelCatalog> {
+export function loadModelCatalog(): Promise<ModelCatalog> {
   return Promise.all([
     rpc<ModelCredential[]>("models/credentials"),
     rpc<ModelCatalogEntry[]>("models/list"),
@@ -151,9 +151,13 @@ function loadModelCatalog(): Promise<ModelCatalog> {
   ]).then(([credentials, catalog, me]) => ({ credentials, catalog, me }));
 }
 
+export function selectedModelCatalog(): SharedRead<ModelCatalog> {
+  return modelCatalogRead;
+}
+
 /** The connections, catalog and space default a bot's model is chosen from. */
 export function useModelCatalog(): { state: ReadState<ModelCatalog>; retry: () => void } {
-  return useSharedRead(modelCatalogRead, loadModelCatalog);
+  return useSharedRead(selectedModelCatalog(), loadModelCatalog);
 }
 
 function loadVoices(): Promise<VoiceInfo[]> {

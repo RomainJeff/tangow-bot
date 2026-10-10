@@ -47,7 +47,7 @@ describe("answer order", () => {
     expect(bot.name).toBe("Second");
   });
 
-  it("lets a later read replace every field, then lands writes whole again", () => {
+  it("lets a read replace every field, then lands writes whole again", () => {
     const order = createAnswerOrder();
     const bot = land(order.write("b", order.next(), ["name"], { ...shown, name: "Mine" }), shown);
     expect(order.read("b", order.next())).toBe(true);
@@ -55,14 +55,33 @@ describe("answer order", () => {
       order.write("b", order.next(), ["title"], { ...bot, name: "Renamed by the bot", title: "T" }),
       bot,
     );
-    expect(after.name).toBe("Renamed by the bot");
+    expect(after).toEqual({ id: "b", name: "Renamed by the bot", title: "T", status: "idle" });
   });
 
-  it("refuses a read answered after a newer write landed", () => {
+  it("refuses a read when a write answered while it was in flight, whenever that write started", () => {
     const order = createAnswerOrder();
+    const before = order.next();
     const read = order.next();
-    land(order.write("b", order.next(), ["name"], { ...shown, name: "New" }), shown);
+    land(order.write("b", before, ["name"], { ...shown, name: "New" }), shown);
     expect(order.read("b", read)).toBe(false);
+    expect(order.read("b", order.next())).toBe(true);
+  });
+
+  it("lets only the newest of two reads land, and answers the same when asked twice", () => {
+    const order = createAnswerOrder();
+    const older = order.next();
+    const newer = order.next();
+    expect(order.read("list", newer)).toBe(true);
+    expect(order.read("list", newer)).toBe(true);
+    expect(order.read("list", older)).toBe(false);
+  });
+
+  it("brings nothing back once the record is closed", () => {
+    const order = createAnswerOrder();
+    const write = order.next();
+    order.close("r");
+    expect(order.write("r", write, ["name"], { ...shown, name: "Late" })).toBeNull();
+    expect(order.read("r", order.next())).toBe(false);
   });
 
   it("keeps records apart", () => {
