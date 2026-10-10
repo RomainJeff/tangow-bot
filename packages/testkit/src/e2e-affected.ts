@@ -3,15 +3,9 @@ import { type ImpactMap, specsForFile } from "./e2e-impact.js";
 
 /** Specs are named relative to `apps/web/e2e`, as in the impact map. */
 export type Selection =
-  | { kind: "full"; reason: string }
-  | {
-      kind: "specs";
-      specs: string[];
-      because: Record<string, string[]>;
-      ignored: string[];
-      uncovered: string[];
-    }
-  | { kind: "none"; ignored: string[]; uncovered: string[] };
+  | { kind: "full"; reason: string; uncovered: string[] }
+  | { kind: "specs"; specs: string[]; because: Record<string, string[]>; ignored: string[] }
+  | { kind: "none"; ignored: string[] };
 
 /** Files that import a file, keyed by the imported file. Paths are repo-relative. */
 export type Importers = ReadonlyMap<string, readonly string[]>;
@@ -29,8 +23,8 @@ const SPEC_FILE = /^apps\/web\/e2e\/([^/]+\.spec\.ts)$/;
 /**
  * First match wins. A traced file runs each spec it is, the specs whose recorded
  * coverage includes it, and the specs that reach it through imports. When none
- * does, a runtime file is reported as uncovered and anything else (mobile,
- * desktop, docs, infra) as ignored.
+ * does, a runtime file runs the full suite (nothing proves it unaffected) and
+ * anything else (mobile, desktop, docs, infra) is ignored.
  */
 const RULES: ReadonlyArray<readonly [RegExp, Effect]> = [
   [/^apps\/web\/e2e\/(helpers|test)\.ts$/, full("shared e2e helpers changed")],
@@ -59,6 +53,7 @@ export function selectSpecs(input: {
     return {
       kind: "full",
       reason: "no readable impact map; run pnpm test:e2e:impact-map to record one",
+      uncovered: [],
     };
   }
   const because = new Map<string, string[]>();
@@ -68,23 +63,27 @@ export function selectSpecs(input: {
   const uncovered: string[] = [];
   for (const file of [...changed].sort()) {
     const effect = effectOf(file);
-    if (effect.kind === "full") return { kind: "full", reason: `${file}: ${effect.reason}` };
+    if (effect.kind === "full") {
+      return { kind: "full", reason: `${file}: ${effect.reason}`, uncovered: [] };
+    }
     const specs = reachedSpecs(file, map, importers).filter((spec) => specsOnDisk.includes(spec));
     for (const spec of specs) select(spec, file);
     if (specs.length > 0) continue;
     if (effect.unreached === "uncovered") uncovered.push(file);
     else ignored.push(file);
   }
+  if (uncovered.length > 0) {
+    return { kind: "full", reason: "no spec covers some changed runtime files", uncovered };
+  }
   const mapped = new Set(map.specs);
   for (const spec of specsOnDisk) if (!mapped.has(spec)) select(spec, "not in the impact map");
-  if (because.size === 0) return { kind: "none", ignored, uncovered };
+  if (because.size === 0) return { kind: "none", ignored };
   const specs = [...because.keys()].sort();
   return {
     kind: "specs",
     specs,
     because: Object.fromEntries(specs.map((spec) => [spec, because.get(spec)!])),
     ignored,
-    uncovered,
   };
 }
 

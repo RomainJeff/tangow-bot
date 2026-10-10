@@ -71,6 +71,12 @@ function describe(selection: Selection, impactMap: ImpactMap | undefined) {
     );
   if (selection.kind === "full") {
     lines.push(`Full e2e suite: ${selection.reason}.`);
+    if (selection.uncovered.length) {
+      lines.push(
+        `No spec runs: ${selection.uncovered.join(", ")}`,
+        "Decide whether one of these deserves an e2e: add one only for a user-visible flow no unit test can prove, then run the test-audit skill.",
+      );
+    }
     return lines.join("\n");
   }
   if (selection.kind === "specs") {
@@ -87,7 +93,6 @@ function describe(selection: Selection, impactMap: ImpactMap | undefined) {
   } else {
     lines.push("No e2e spec is affected.");
   }
-  if (selection.uncovered.length) lines.push(`No spec runs: ${selection.uncovered.join(", ")}`);
   if (selection.ignored.length) lines.push(`Ignored: ${selection.ignored.join(", ")}`);
   const unmapped = specsOnDisk.filter((spec) => !impactMap?.specs.includes(spec));
   if (unmapped.length)

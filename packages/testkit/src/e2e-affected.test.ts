@@ -26,7 +26,6 @@ describe("selectSpecs", () => {
       specs: ["bot-crud.spec.ts"],
       because: { "bot-crud.spec.ts": ["apps/web/src/bot-form.tsx"] },
       ignored: [],
-      uncovered: [],
     });
   });
 
@@ -39,7 +38,6 @@ describe("selectSpecs", () => {
         "spaces.spec.ts": ["packages/core/src/limits.ts"],
       },
       ignored: [],
-      uncovered: [],
     });
   });
 
@@ -62,7 +60,6 @@ describe("selectSpecs", () => {
       specs: ["spaces.spec.ts"],
       because: { "spaces.spec.ts": ["apps/web/e2e/spaces.spec.ts"] },
       ignored: ["apps/web/e2e/gone.spec.ts"],
-      uncovered: [],
     });
   });
 
@@ -72,21 +69,22 @@ describe("selectSpecs", () => {
       specs: ["new-flow.spec.ts"],
       because: { "new-flow.spec.ts": ["not in the impact map"] },
       ignored: ["docs/self-host.md"],
-      uncovered: [],
     });
   });
 
-  it("ignores files outside the e2e runtime and reports runtime files no spec reaches", () => {
-    expect(
-      select([
-        "apps/mobile/app/index.tsx",
-        "apps/web/src/orphan.ts",
-        "apps/web/src/app.test.tsx",
-        "README.md",
-      ]),
-    ).toEqual({
-      kind: "none",
-      ignored: ["README.md", "apps/mobile/app/index.tsx", "apps/web/src/app.test.tsx"],
+  it("ignores files outside the e2e runtime", () => {
+    expect(select(["apps/mobile/app/index.tsx", "apps/web/src/app.test.tsx", "README.md"])).toEqual(
+      {
+        kind: "none",
+        ignored: ["README.md", "apps/mobile/app/index.tsx", "apps/web/src/app.test.tsx"],
+      },
+    );
+  });
+
+  it("runs the full suite when a changed runtime file is reached by no spec", () => {
+    expect(select(["apps/web/src/orphan.ts", "README.md"])).toEqual({
+      kind: "full",
+      reason: "no spec covers some changed runtime files",
       uncovered: ["apps/web/src/orphan.ts"],
     });
   });
@@ -103,13 +101,18 @@ describe("selectSpecs", () => {
     ["apps/web/index.html", "apps/web/index.html: web build changed"],
     ["packages/testkit/src/cli/harness.ts", "packages/testkit/src/cli/harness.ts: harness changed"],
   ])("escalates to the full suite when %s changes", (file, reason) => {
-    expect(select(["apps/web/src/bot-form.tsx", file])).toEqual({ kind: "full", reason });
+    expect(select(["apps/web/src/bot-form.tsx", file])).toEqual({
+      kind: "full",
+      reason,
+      uncovered: [],
+    });
   });
 
   it("escalates to the full suite without a map", () => {
     expect(selectSpecs({ changed: [], map: undefined, specsOnDisk, importers })).toEqual({
       kind: "full",
       reason: "no readable impact map; run pnpm test:e2e:impact-map to record one",
+      uncovered: [],
     });
   });
 });
