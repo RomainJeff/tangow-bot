@@ -15,7 +15,7 @@ import { isApprovalPausedResult } from "./approval-effect.js";
 import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
-import { createRunExecutor, toolCompletionFromResult } from "./executor.js";
+import { createRunExecutor } from "./executor.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
 import { createInMemorySkillLock } from "./skill-lock.js";
 import { listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
@@ -405,9 +405,14 @@ function fixture(
         batch.map(async (call, index) => {
           const executionId = `${call.name}-${results.length + index}`;
           const result = await request.executeTool!(call.name, call.args, executionId);
-          await request.onToolCompleted?.(
-            toolCompletionFromResult({ name: call.name, executionId, durationMs: 0 }, result),
-          );
+          // Pi's completion: a tool that returns { error } arrives wrapped, never as `error`.
+          await request.onToolCompleted?.({
+            name: call.name,
+            executionId,
+            durationMs: 0,
+            result: { content: [{ type: "text", text: "" }], details: result },
+            paused: isApprovalPausedResult(result),
+          });
           return result;
         }),
       );

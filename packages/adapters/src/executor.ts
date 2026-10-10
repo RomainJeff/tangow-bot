@@ -717,14 +717,17 @@ export function toolCompletionAuditPayload(
   const durationMs = Number.isFinite(completion.durationMs)
     ? Math.max(0, Math.round(completion.durationMs))
     : 0;
+  // Pi hands a tool that returned { error }, rather than threw, over as a wrapped result.
+  const returned = (completion.result as { details?: unknown } | undefined)?.details;
+  const error = completion.error ?? (isFailedToolResult(returned) ? returned.error : undefined);
   const payload: Record<string, unknown> = {
     name: redactSecrets(completion.name, secrets),
     executionId: redactSecrets(completion.executionId, secrets),
     durationMs,
-    outcome: completion.paused ? "paused" : completion.error === undefined ? "succeeded" : "error",
+    outcome: completion.paused ? "paused" : error === undefined ? "succeeded" : "error",
   };
-  if (completion.error !== undefined) {
-    payload.error = sanitizeConnectorError(completion.error, secrets);
+  if (error !== undefined) {
+    payload.error = sanitizeConnectorError(error, secrets);
   }
   if (!isAuditableToolResult(completion.result)) return payload;
 
