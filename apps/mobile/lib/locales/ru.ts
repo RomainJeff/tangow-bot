@@ -769,4 +769,10 @@ export const RU_MESSAGES: Record<string, string> = {
   "Inherit default": "Наследовать значение по умолчанию",
   Isolated: "Изолированный",
   Shared: "Общий",
+  "Open work": "Открытые задачи",
+  "None yet": "Пока нет",
+  "Add item": "Добавить элемент",
+  Complete: "Завершить",
+  Park: "Приостановить",
+  Reopen: "Открыть заново",
 };

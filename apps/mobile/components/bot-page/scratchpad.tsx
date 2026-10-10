@@ -1,0 +1,142 @@
+import type { ScratchpadItem, ScratchpadItemStatus } from "@rakazo/contracts";
+import { useState } from "react";
+import { Alert, StyleSheet, TextInput } from "react-native";
+import { rpc } from "../../lib/api";
+import { mobileTokens } from "../../lib/appearance";
+import { useI18n } from "../../lib/i18n";
+import { presentMessageActionSheet } from "../../lib/message-action-sheet";
+import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../../lib/native";
+import { serverMessage } from "../../lib/server-error";
+import { nativeTextStyle } from "../../lib/typography";
+import { Group, LoadFailed, LoadingRows, QuietLine, Row, useFocusedRead } from "./kit";
+
+/**
+ * The bot's open work: the server lists open and parked items, so a completed one leaves.
+ * `epoch` changes when a run ends: the bot may have written to it.
+ */
+export function ScratchpadGroup({
+  botId,
+  readOnly,
+  epoch,
+}: {
+  botId: string;
+  readOnly: boolean;
+  epoch: number;
+}) {
+  const { t } = useI18n();
+  const styles = useThemedStyles(createScratchpadStyles);
+  const tokens = useMobileTokens();
+  const colorScheme = useResolvedAppearance();
+  const { read, write, retry } = useFocusedRead(
+    () => rpc<ScratchpadItem[]>("scratchpad/list", { botId }),
+    [botId, epoch],
+  );
+  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const change = async (apply: () => Promise<(items: ScratchpadItem[]) => ScratchpadItem[]>) => {
+    setBusy(true);
+    const settle = write();
+    try {
+      const next = await apply();
+      settle((current) =>
+        current.kind === "ready" ? { kind: "ready", value: next(current.value) } : current,
+      );
+    } catch (error) {
+      Alert.alert(serverMessage(error) || t("Could not save"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const add = () => {
+    const title = draft.trim();
+    if (!title || busy) return;
+    void change(async () => {
+      const created = await rpc<ScratchpadItem>("scratchpad/create", { botId, title });
+      setDraft("");
+      return (items) => [created, ...items.filter((item) => item.id !== created.id)];
+    });
+  };
+
+  /** `null` removes the item. */
+  const act = (item: ScratchpadItem, status: ScratchpadItemStatus | null) =>
+    change(async () => {
+      if (status === null) {
+        await rpc("scratchpad/remove", { itemId: item.id });
+        return (items) => items.filter((entry) => entry.id !== item.id);
+      }
+      const updated = await rpc<ScratchpadItem>("scratchpad/update", { itemId: item.id, status });
+      return (items) =>
+        items.flatMap((entry) =>
+          entry.id !== item.id ? [entry] : updated.status === "done" ? [] : [updated],
+        );
+    });
+
+  const open = (item: ScratchpadItem) =>
+    presentMessageActionSheet({
+      title: item.title,
+      actions: [
+        { text: t("Complete"), onPress: () => void act(item, "done") },
+        item.status === "parked"
+          ? { text: t("Reopen"), onPress: () => void act(item, "open") }
+          : { text: t("Park"), onPress: () => void act(item, "parked") },
+        { text: t("Remove"), destructive: true, onPress: () => void act(item, null) },
+      ],
+      colorScheme,
+      cancel: t("Cancel"),
+      more: t("More"),
+    });
+
+  const items = read.kind === "ready" ? read.value : [];
+  return (
+    <Group label={t("Open work")}>
+      {read.kind === "loading" ? (
+        <LoadingRows />
+      ) : read.kind === "failed" ? (
+        <LoadFailed onRetry={retry} />
+      ) : readOnly && items.length === 0 ? (
+        <QuietLine>{t("None yet")}</QuietLine>
+      ) : null}
+      {items.map((item) => (
+        <Row
+          key={item.id}
+          label={item.title}
+          subline={item.notes || null}
+          sublineLines={2}
+          value={item.status === "parked" ? t("Paused") : null}
+          disabled={busy}
+          onPress={readOnly ? undefined : () => open(item)}
+        />
+      ))}
+      {read.kind === "ready" && !readOnly ? (
+        <TextInput
+          style={styles.input}
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={t("Add item")}
+          placeholderTextColor={tokens.mutedForeground}
+          accessibilityLabel={t("Add item")}
+          maxLength={200}
+          editable={!busy}
+          returnKeyType="done"
+          submitBehavior="submit"
+          onSubmitEditing={add}
+        />
+      ) : null}
+    </Group>
+  );
+}
+
+function createScratchpadStyles() {
+  const tokens = mobileTokens();
+  return StyleSheet.create({
+    input: {
+      minHeight: 52,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      color: tokens.foreground,
+      ...nativeTextStyle("composer"),
+    },
+  });
+}

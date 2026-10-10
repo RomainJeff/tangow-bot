@@ -753,4 +753,10 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Inherit default": "沿用默认",
   Isolated: "隔离",
   Shared: "共享",
+  "Open work": "待办",
+  "None yet": "暂无",
+  "Add item": "添加项目",
+  Complete: "完成",
+  Park: "搁置",
+  Reopen: "重新打开",
 };
