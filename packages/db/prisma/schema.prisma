@@ -613,7 +613,6 @@ model Run {
   @@index([routineId, completedAt])
   @@index([sourceMessageId])
   @@index([threadId, status, createdAt])
-  @@index([routineId])
   @@map("runs")
 }
 

@@ -1,10 +1,4 @@
-import {
-  type Actor,
-  MessageBlock,
-  type Routine,
-  type RunActivityRow,
-  type RunStatus,
-} from "@rakazo/contracts";
+import { type Actor, MessageBlock, type Routine, type RunActivityRow } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, botMessageContext, classifyRunFailure } from "@rakazo/core";
 import { Prisma, type PrismaClient } from "@rakazo/db";
 
@@ -112,21 +106,27 @@ export async function lastRunsByRoutine(
 ): Promise<Map<string, RoutineLastRun>> {
   const lastRuns = new Map<string, RoutineLastRun>();
   if (routineIds.length === 0) return lastRuns;
-  // DISTINCT ON keeps one row per routine in Postgres; Prisma's `distinct` may dedupe in memory.
+  // One backward scan of runs(routineId, completedAt) per routine, however long its history.
   const rows = await prisma.$queryRaw<
     Array<{ routineId: string; status: (typeof TERMINAL_STATUSES)[number]; error: string | null }>
   >(Prisma.sql`
-    SELECT DISTINCT ON (r."routineId") r."routineId", r.status, r.error
-    FROM runs r
-    WHERE r."spaceId" = ${spaceId}
-      AND r."routineId" IN (${Prisma.join(routineIds)})
-      AND r.status IN (${Prisma.join(TERMINAL_STATUSES)})
-    ORDER BY r."routineId", r."completedAt" DESC NULLS LAST, r.id DESC
+    SELECT ids."routineId", last.status, last.error
+    FROM unnest(ARRAY[${Prisma.join(routineIds)}]::text[]) AS ids("routineId")
+    CROSS JOIN LATERAL (
+      SELECT r.status, r.error
+      FROM runs r
+      WHERE r."routineId" = ids."routineId"
+        AND r."spaceId" = ${spaceId}
+        AND r."completedAt" IS NOT NULL
+        AND r.status IN (${Prisma.join(TERMINAL_STATUSES)})
+      ORDER BY r."completedAt" DESC, r.id DESC
+      LIMIT 1
+    ) last
   `);
   for (const row of rows) {
     lastRuns.set(row.routineId, {
       lastRunStatus: ROUTINE_RUN_STATUS[row.status],
-      lastRunFailureKind: classifyRunFailure(row.status as RunStatus, row.error),
+      lastRunFailureKind: classifyRunFailure(row.status, row.error),
     });
   }
   return lastRuns;

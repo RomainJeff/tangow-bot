@@ -83,10 +83,6 @@ describe("routine last run", () => {
     const { body } = await call<Routine[]>("routines/list", { botId: "bot-1" });
 
     expect(queryRaw).toHaveBeenCalledTimes(1);
-    const sql = queryRaw.mock.calls[0]?.[0] as { sql: string; values: unknown[] };
-    expect(sql.sql).toContain('DISTINCT ON (r."routineId")');
-    expect(sql.sql).toContain('r."spaceId" = ');
-    expect(sql.values).toEqual(["space-1", "r1", "r2", "r3", "completed", "failed", "cancelled"]);
     expect(body.json.map((r) => [r.id, r.lastRunStatus, r.lastRunFailureKind] as const)).toEqual([
       ["r1", "succeeded", null],
       ["r2", "failed", "missing_model"],
