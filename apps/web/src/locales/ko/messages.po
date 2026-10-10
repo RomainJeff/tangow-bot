@@ -680,10 +680,6 @@ msgstr ""
 msgid "Automatic shape"
 msgstr "자동 모양"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:391
-msgid "Available after the routine is saved"
-msgstr "루틴을 저장한 후 사용할 수 있습니다"
-
 #. placeholder {0}: bot.name
 #: src/pages/bot-page/SettingsTab.tsx:103
 msgid "Available when {0} is idle"
@@ -1207,6 +1203,10 @@ msgstr "이메일로 계속하기"
 #: src/pages/shell/message-hover-actions.tsx:163
 msgid "Copy"
 msgstr "복사"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:449
+msgid "Copy {label}"
+msgstr ""
 
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
@@ -2264,6 +2264,10 @@ msgstr "안녕하세요. 답변을 소리 내어 읽을 때 이런 목소리로 
 #: src/pages/shell/sidebar.tsx:748
 msgid "Hide bots"
 msgstr "봇 숨기기"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Hide key"
+msgstr ""
 
 #: src/pages/Auth.tsx:186
 msgid "Hide password"
@@ -3619,9 +3623,17 @@ msgstr "로봇"
 msgid "Room guidance"
 msgstr ""
 
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate"
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:426
 msgid "Rotate key"
 msgstr "key 교체"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate key?"
+msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:308
 #: src/pages/bot-page/RoutineCreateForm.tsx:49
@@ -3693,10 +3705,6 @@ msgstr "저장했지만 목록을 새로고침하지 못했습니다."
 #: src/pages/ModelSettingsOverlay.tsx:333
 msgid "Saved."
 msgstr "저장되었습니다."
-
-#: src/pages/bot-page/RoutineTriggers.tsx:398
-msgid "Saved. Rotate to reveal."
-msgstr "저장되었습니다. key를 교체하면 표시됩니다."
 
 #: src/components/ComputerUpdateProgress.tsx:51
 msgid "Saving your workspace"
@@ -3886,6 +3894,10 @@ msgstr "봇 표시"
 #: src/pages/bot-page/BotActivity.tsx:238
 msgid "Show earlier"
 msgstr "이전 항목 보기"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Show key"
+msgstr ""
 
 #: src/pages/shell/message-view.tsx:73
 msgid "Show less"

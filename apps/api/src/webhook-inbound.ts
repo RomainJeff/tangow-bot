@@ -103,6 +103,25 @@ export function parseWebhookPayload(
   return { text: trimmed };
 }
 
+/** The bot's webhook key in plaintext, or null when it has none or the row is not this bot's own webhook key. */
+export async function loadWebhookSecret(
+  deps: Pick<WebhookDeps, "prisma" | "secrets">,
+  bot: { userId: string; spaceId: string; webhookSecretId: string | null },
+): Promise<string | null> {
+  if (!bot.webhookSecretId) return null;
+  const secret = await deps.prisma.secret.findUnique({
+    where: { id: bot.webhookSecretId },
+    select: { id: true, ciphertext: true, kind: true, userId: true, spaceId: true },
+  });
+  if (!secret || secret.kind !== WEBHOOK_SECRET_KIND) return null;
+  if (secret.userId !== bot.userId || secret.spaceId !== bot.spaceId) return null;
+  try {
+    return deps.secrets.load(secret.ciphertext, secret.id);
+  } catch {
+    return null;
+  }
+}
+
 /** Load the bot webhook secret target, or null when the bot/secret is missing or invalid. */
 export async function loadWebhookTarget(
   deps: Pick<WebhookDeps, "prisma" | "secrets">,
@@ -120,20 +139,8 @@ export async function loadWebhookTarget(
   });
 
   if (!bot?.thread || !bot.webhookSecretId) return null;
-
-  const secret = await deps.prisma.secret.findUnique({
-    where: { id: bot.webhookSecretId },
-    select: { id: true, ciphertext: true, kind: true, userId: true, spaceId: true },
-  });
-  if (!secret || secret.kind !== WEBHOOK_SECRET_KIND) return null;
-  if (secret.userId !== bot.userId || secret.spaceId !== bot.spaceId) return null;
-
-  let expected: string;
-  try {
-    expected = deps.secrets.load(secret.ciphertext, secret.id);
-  } catch {
-    return null;
-  }
+  const expected = await loadWebhookSecret(deps, bot);
+  if (expected === null) return null;
   return {
     bot: {
       id: bot.id,

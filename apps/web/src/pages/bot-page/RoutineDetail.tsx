@@ -14,7 +14,7 @@ import { useState } from "react";
 import { DeleteItemDialog } from "../shell/dialogs";
 import { type BotPageContext, type Confirm, SettingsGroup, useSaveLabels } from "./page-kit";
 import { useRoutineActive } from "./RoutinesTab";
-import { WhenToRun, webhookInfo } from "./RoutineTriggers";
+import { WhenToRun } from "./RoutineTriggers";
 import { useRoutineCopy } from "./routine-copy";
 
 type RoutineField = "name" | "prompt" | "notify" | "requireToolApproval";
@@ -41,16 +41,12 @@ export function RoutineDetail({
   page,
   routine,
   messageProviders,
-  webhookSecret,
-  onWebhookSecret,
   confirm,
   onDeleted,
 }: {
   page: BotPageContext;
   routine: Routine;
   messageProviders: string[];
-  webhookSecret: string | null;
-  onWebhookSecret: (secret: string) => void;
   confirm: Confirm;
   onDeleted: () => void;
 }) {
@@ -69,9 +65,11 @@ export function RoutineDetail({
   const draft = draftFromRoutine(routine, () => new Date());
   const inbound =
     routine.webhookEnabled || routine.githubEnabled || Boolean(routine.messageProvider);
-  const webhook = webhookInfo(bot.id, webhookSecret, bot.webhookConfigured);
-
-  const reveal = async () => onWebhookSecret(await commands.revealWebhookSecret(bot.id));
+  const webhookKey = {
+    botId: bot.id,
+    read: () => commands.webhookSecret(bot.id),
+    rotate: () => commands.rotateWebhookSecret(bot.id),
+  };
 
   const saveTriggers = async (next: typeof draft, armOneShot: boolean): Promise<string | null> => {
     const checked = triggerSave(routine, next, () => new Date(), armOneShot);
@@ -79,7 +77,7 @@ export function RoutineDetail({
     const { patch } = checked;
     if (Object.keys(patch).length === 0) return null;
     try {
-      if (checked.needsWebhookKey && !webhook.configured) await reveal();
+      if (checked.needsWebhookKey && !bot.webhookConfigured) await webhookKey.read();
       await commands.updateRoutine(bot.id, routine.id, patch);
       return null;
     } catch (error) {
@@ -151,11 +149,10 @@ export function RoutineDetail({
         draft={draft}
         existing={routine}
         timezone={routine.timezone}
-        webhook={webhook}
+        webhookKey={webhookKey}
         messageProviders={messageProviders}
         confirm={confirm}
         onSave={saveTriggers}
-        onRotate={() => void reveal().catch(() => undefined)}
       />
 
       <SettingsGroup>

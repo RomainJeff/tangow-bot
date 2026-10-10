@@ -22,7 +22,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
 import { BotActivity } from "./BotActivity";
@@ -80,8 +80,6 @@ export function BotPage({
   const detail = view.detail;
   const routine =
     detail?.kind === "routine" ? routines?.find((item) => item.id === detail.routineId) : undefined;
-  // A key minted for this bot's inbound triggers is shown once, wherever it was minted.
-  const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
   const tabLabels: Record<BotTab, string> = {
     activity: t`Activity`,
     routines: t`Routines`,
@@ -157,8 +155,6 @@ export function BotPage({
               page={page}
               routine={routine}
               messageProviders={messagingProviders}
-              webhookSecret={webhookSecret}
-              onWebhookSecret={setWebhookSecret}
               confirm={confirm}
               onDeleted={toRoutines}
             />
@@ -171,8 +167,6 @@ export function BotPage({
             page={page}
             seed={detail.seed}
             messageProviders={messagingProviders}
-            webhookSecret={webhookSecret}
-            onWebhookSecret={setWebhookSecret}
             confirm={confirm}
             onCreated={(created) =>
               onView({ tab: "routines", detail: { kind: "routine", routineId: created.id } })

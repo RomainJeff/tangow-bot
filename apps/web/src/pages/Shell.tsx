@@ -83,7 +83,6 @@ import { revokePendingAttachmentPreviews } from "../lib/pending-attachments";
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { rpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
-import { sharedInflight } from "../lib/shared-inflight";
 import {
   activeThreadRuns,
   applyThreadSendReceipt,
@@ -489,15 +488,6 @@ export function ShellPage() {
     runs: number;
   } | null>(null);
   const autoBooted = useRef<string | null>(null);
-  const webhookSecretProvisionRef = useRef(new Map<string, Promise<string>>());
-  const ensureWebhookSecret = (botId: string) =>
-    sharedInflight(webhookSecretProvisionRef.current, botId, async () => {
-      const result = await rpc.bots.rotateWebhookSecret({ botId });
-      setBots((current) =>
-        current.map((bot) => (bot.id === botId ? { ...bot, webhookConfigured: true } : bot)),
-      );
-      return result.secret;
-    });
   const routineRefetched = useRef(new Set<string>());
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
@@ -2577,7 +2567,6 @@ export function ShellPage() {
       if (botsRefreshInFlight.current > 0) void refreshBots().catch(() => undefined);
     },
     botAction: runBotAction,
-    ensureWebhookSecret,
     refreshThread: (botId) => refreshThreadRef.current(botId),
     navigate,
     panelCoversThread,

@@ -680,10 +680,6 @@ msgstr "Automated senders will appear after they post here."
 msgid "Automatic shape"
 msgstr "Automatic shape"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:391
-msgid "Available after the routine is saved"
-msgstr "Available after the routine is saved"
-
 #. placeholder {0}: bot.name
 #: src/pages/bot-page/SettingsTab.tsx:103
 msgid "Available when {0} is idle"
@@ -1207,6 +1203,10 @@ msgstr "Continue with email"
 #: src/pages/shell/message-hover-actions.tsx:163
 msgid "Copy"
 msgstr "Copy"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:449
+msgid "Copy {label}"
+msgstr "Copy {label}"
 
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
@@ -2264,6 +2264,10 @@ msgstr "Hi, this is how I'll sound when I read replies out loud."
 #: src/pages/shell/sidebar.tsx:748
 msgid "Hide bots"
 msgstr "Hide bots"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Hide key"
+msgstr "Hide key"
 
 #: src/pages/Auth.tsx:186
 msgid "Hide password"
@@ -3619,9 +3623,17 @@ msgstr "Robot"
 msgid "Room guidance"
 msgstr "Room guidance"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate"
+msgstr "Rotate"
+
 #: src/pages/bot-page/RoutineTriggers.tsx:426
 msgid "Rotate key"
 msgstr "Rotate key"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate key?"
+msgstr "Rotate key?"
 
 #: src/pages/bot-page/BotActivity.tsx:308
 #: src/pages/bot-page/RoutineCreateForm.tsx:49
@@ -3693,10 +3705,6 @@ msgstr "Saved, but list refresh failed"
 #: src/pages/ModelSettingsOverlay.tsx:333
 msgid "Saved."
 msgstr "Saved."
-
-#: src/pages/bot-page/RoutineTriggers.tsx:398
-msgid "Saved. Rotate to reveal."
-msgstr "Saved. Rotate to reveal."
 
 #: src/components/ComputerUpdateProgress.tsx:51
 msgid "Saving your workspace"
@@ -3886,6 +3894,10 @@ msgstr "Show bots"
 #: src/pages/bot-page/BotActivity.tsx:238
 msgid "Show earlier"
 msgstr "Show earlier"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Show key"
+msgstr "Show key"
 
 #: src/pages/shell/message-view.tsx:73
 msgid "Show less"

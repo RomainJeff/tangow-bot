@@ -4,6 +4,7 @@ import { captureScreenshot } from "./helpers";
 import { expect, test } from "./test";
 
 const FIXTURE = "/e2e/fixtures/bot-page.html";
+const DOTS = "••••••••••••••••";
 
 const STATES: Array<{ name: string; query: string; trigger?: RegExp }> = [
   { name: "settings", query: "tab=settings" },
@@ -274,18 +275,36 @@ test("a new routine is only created once it has a trigger", async ({ page }) => 
   );
 });
 
-test("a routine's first webhook shows the bot's new key until Done", async ({ page }, testInfo) => {
+test("a routine's webhook key stays behind dots until shown, copies whole, and rotates on confirm", async ({
+  page,
+  context,
+}, testInfo) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`${FIXTURE}?tab=routines&detail=routine&routine=routine-2`);
   const panel = page.getByTestId("side-panel");
   await panel.getByRole("button", { name: "Add trigger" }).click();
   await page.getByRole("menuitem", { name: "Webhook", exact: true }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Done", exact: true }).click();
 
-  const key = page.getByRole("dialog");
-  await expect(key.getByText("Authorization: Bearer whsec_fixture_0000")).toBeVisible();
+  const editor = page.getByRole("dialog");
+  await expect(editor.getByText(/\/api\/v1\/bots\/bot-scout\/webhook$/)).toBeVisible();
+  await expect(editor.getByText(`Authorization: Bearer ${DOTS}`)).toBeVisible();
+  await expect(editor).not.toContainText("whsec_fixture_0000");
   await captureScreenshot(page, testInfo, "bot-page-routine-key");
-  await key.getByRole("button", { name: "Done", exact: true }).click();
-  await expect(key).toHaveCount(0);
+
+  await editor.getByRole("button", { name: "Copy key" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("whsec_fixture_0000");
+  await editor.getByRole("button", { name: "Show key" }).click();
+  await expect(editor.getByText("Authorization: Bearer whsec_fixture_0000")).toBeVisible();
+  await captureScreenshot(page, testInfo, "bot-page-routine-key-shown");
+
+  await editor.getByRole("button", { name: "Rotate key" }).click();
+  await page.getByRole("button", { name: "Rotate", exact: true }).click();
+  await expect(editor.getByText(`Authorization: Bearer ${DOTS}`)).toBeVisible();
+  await editor.getByRole("button", { name: "Show key" }).click();
+  await expect(editor.getByText("Authorization: Bearer whsec_fixture_0001")).toBeVisible();
+
+  await editor.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(editor).toHaveCount(0);
   await expect(panel.getByRole("button", { name: /^When a webhook fires/ })).toBeVisible();
 });

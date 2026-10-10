@@ -24,8 +24,10 @@ export interface BotCommands {
   updateRoutine(botId: string, routineId: string, patch: RoutinePatch): Promise<Routine>;
   removeRoutine(botId: string, routineId: string): Promise<void>;
   testRun(botId: string, routineId: string): Promise<void>;
-  /** Mints a new webhook key for the bot and returns it; it is shown once. */
-  revealWebhookSecret(botId: string): Promise<string>;
+  /** The bot's webhook key, created on the first read; the roster learns the bot has one. */
+  webhookSecret(botId: string): Promise<string>;
+  /** Replaces the bot's webhook key and returns the new one; the old one stops working at once. */
+  rotateWebhookSecret(botId: string): Promise<string>;
   /** The lifecycle actions the sidebar menu already runs, with the same confirmations. */
   botAction(botId: string, action: BotAction): void;
   /** Changes whenever a run of the open bot ends. */
@@ -46,7 +48,6 @@ export interface BotCommandDeps {
    */
   supersedeBotsRefresh: () => void;
   botAction: BotCommands["botAction"];
-  ensureWebhookSecret: (botId: string) => Promise<string>;
   refreshThread: (botId: string) => Promise<unknown>;
   navigate: (to: { pathname: string; search: string | undefined }) => void;
   /** True while the panel lies over the thread (narrow windows, or the wide panel below `xl`). */
@@ -126,7 +127,18 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
         await rpc.routines.testRun({ routineId });
         await depsRef.current.refreshThread(botId).catch(() => undefined);
       },
-      revealWebhookSecret: (botId) => depsRef.current.ensureWebhookSecret(botId),
+      async webhookSecret(botId) {
+        const { secret } = await rpc.bots.webhookSecret({ botId });
+        depsRef.current.setBots((list) =>
+          list.map((bot) => (bot.id === botId ? { ...bot, webhookConfigured: true } : bot)),
+        );
+        return secret;
+      },
+      async rotateWebhookSecret(botId) {
+        const { secret } = await rpc.bots.rotateWebhookSecret({ botId });
+        if (secret === null) throw new Error("rotateWebhookSecret answered without a key");
+        return secret;
+      },
       botAction: (botId, action) => depsRef.current.botAction(botId, action),
       openRun(row) {
         if (depsRef.current.panelCoversThread.current) depsRef.current.closePanel();

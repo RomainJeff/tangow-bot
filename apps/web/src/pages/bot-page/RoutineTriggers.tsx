@@ -31,30 +31,18 @@ import {
   Label,
   SettingRow,
 } from "@rakazo/ui-web";
-import { Clock, GitBranch, Globe, MessageSquare } from "lucide-react";
-import { useId, useState } from "react";
+import { Check, Clock, Copy, Eye, EyeOff, GitBranch, Globe, MessageSquare } from "lucide-react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import { RoutineSchedule } from "../RoutineSchedule";
 import { type Confirm, SettingsGroup } from "./page-kit";
 import { useRoutineCopy } from "./routine-copy";
 
-/** Where a bot's inbound triggers post, and its key when it was just minted. */
-type WebhookInfo = {
-  path: string;
-  githubPath: string;
-  /** Shown once, right after it is minted. */
-  secret: string | null;
-  configured: boolean;
+/** How the trigger editor reaches the bot's webhook key; a routine not saved yet cannot rotate it. */
+export type WebhookKey = {
+  botId: string;
+  read: () => Promise<string>;
+  rotate?: () => Promise<string>;
 };
-
-export function webhookInfo(botId: string, secret: string | null, configured: boolean) {
-  const origin = window.location.origin;
-  return {
-    path: `${origin}/api/v1/bots/${botId}/webhook`,
-    githubPath: `${origin}/api/v1/bots/${botId}/github`,
-    secret,
-    configured: configured || secret !== null,
-  } satisfies WebhookInfo;
-}
 
 /**
  * "When to run": one row per trigger, each opening its editor, and the menu that
@@ -66,22 +54,20 @@ export function WhenToRun({
   draft,
   existing,
   timezone,
-  webhook,
+  webhookKey,
   messageProviders,
   disabled,
   confirm,
   onSave,
-  onRotate,
 }: {
   draft: RoutineDraft;
   existing: Routine | null;
   timezone: string;
-  webhook: WebhookInfo;
+  webhookKey: WebhookKey;
   messageProviders: string[];
   disabled?: boolean;
   confirm: Confirm;
   onSave: (next: RoutineDraft, armOneShot: boolean) => Promise<string | null>;
-  onRotate: () => void;
 }) {
   const { t } = useLingui();
   const copy = useRoutineCopy();
@@ -177,10 +163,9 @@ export function WhenToRun({
           initial={edit}
           draft={draft}
           existing={existing}
-          webhook={webhook}
+          webhookKey={webhookKey}
           confirm={confirm}
           onSave={onSave}
-          onRotate={onRotate}
           onClose={() => setEdit(null)}
         />
       ) : null}
@@ -192,19 +177,17 @@ function TriggerDialog({
   initial,
   draft,
   existing,
-  webhook,
+  webhookKey,
   confirm,
   onSave,
-  onRotate,
   onClose,
 }: {
   initial: TriggerEdit;
   draft: RoutineDraft;
   existing: Routine | null;
-  webhook: WebhookInfo;
+  webhookKey: WebhookKey;
   confirm: Confirm;
   onSave: (next: RoutineDraft, armOneShot: boolean) => Promise<string | null>;
-  onRotate: () => void;
   onClose: () => void;
 }) {
   const { t } = useLingui();
@@ -213,10 +196,10 @@ function TriggerDialog({
   const [edit, setEdit] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [revealing, setRevealing] = useState<InboundKind | null>(null);
   const ref = triggerEditRef(edit);
   const next = applyTriggerEdit(draft, edit);
   const armOneShot = triggerEditArmsOneShot(draft, edit, existing);
+  const inbound = edit.kind === "webhook" || edit.kind === "github" ? edit.kind : null;
   const title =
     edit.kind === "schedule"
       ? t`On a schedule`
@@ -227,20 +210,11 @@ function TriggerDialog({
           : t`When a webhook fires`;
 
   const save = async (value: RoutineDraft, arm: boolean) => {
-    // A saved routine's first webhook or Git trigger mints the bot's key: show it before closing.
-    const mints =
-      existing !== null &&
-      ref === null &&
-      (edit.kind === "webhook" || edit.kind === "github") &&
-      !webhook.configured
-        ? edit.kind
-        : null;
     setBusy(true);
     setError(null);
     try {
       const failure = await onSave(value, arm);
       if (failure) setError(failure);
-      else if (mints) setRevealing(mints);
       else onClose();
     } finally {
       setBusy(false);
@@ -263,8 +237,6 @@ function TriggerDialog({
     if (effect === "confirm" && !(await confirm(question, t`Remove`))) return;
     await save(withoutTrigger(draft, ref), false);
   };
-
-  if (revealing) return <KeyDialog kind={revealing} webhook={webhook} onDone={onClose} />;
 
   return (
     <Dialog
@@ -299,14 +271,9 @@ function TriggerDialog({
           <p className="text-meta text-muted-foreground">
             {t`Runs when this bot receives a verified message from this provider.`}
           </p>
-        ) : (
-          <InboundDetails
-            kind={edit.kind}
-            saved={existing !== null}
-            webhook={webhook}
-            onRotate={onRotate}
-          />
-        )}
+        ) : inbound ? (
+          <InboundDetails kind={inbound} webhookKey={webhookKey} confirm={confirm} />
+        ) : null}
         {error ? (
           <p role="alert" className="text-meta text-destructive">
             {error}
@@ -344,88 +311,148 @@ function TriggerDialog({
 
 type InboundKind = "webhook" | "github";
 
-/** The bot's key, right after a save minted it: the one time it is shown without a rotation. */
-export function KeyDialog({
-  kind,
-  webhook,
-  onDone,
-}: {
-  kind: InboundKind;
-  webhook: WebhookInfo;
-  onDone: () => void;
-}) {
-  const { t } = useLingui();
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onDone();
-      }}
-    >
-      <DialogContent showCloseButton={false} className="gap-4 sm:max-w-md">
-        <DialogTitle>{kind === "github" ? t`Git event` : t`When a webhook fires`}</DialogTitle>
-        <InboundDetails kind={kind} saved webhook={webhook} onRotate={() => undefined} />
-        <div className="flex justify-end">
-          <Button variant="capsule" size="capsule" onClick={onDone}>
-            {t`Done`}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+/** A fixed length, so the dots do not tell how long the key is. */
+const MASK = "•".repeat(16);
 
-/** Where an inbound trigger posts and how it signs. The key shows once, then only after a rotation. */
+/** Where an inbound trigger posts and how it signs, with the bot's key hidden until asked. */
 function InboundDetails({
   kind,
-  saved,
-  webhook,
-  onRotate,
+  webhookKey,
+  confirm,
 }: {
   kind: InboundKind;
-  saved: boolean;
-  webhook: WebhookInfo;
-  onRotate: () => void;
+  webhookKey: WebhookKey;
+  confirm: Confirm;
 }) {
   const { t } = useLingui();
-  const placeholder = t`Available after the routine is saved`;
-  const { secret, configured } = webhook;
-  // The GitHub delivery URL and signature header are fixed by the bot and the
-  // protocol, so they show before saving; the shared key needs a saved routine.
-  const post = kind === "github" ? webhook.githubPath : saved ? webhook.path : placeholder;
-  const key = !saved
-    ? placeholder
-    : (secret ?? (configured ? t`Saved. Rotate to reveal.` : placeholder));
-  const header =
-    kind === "github"
-      ? "X-Hub-Signature-256: sha256=…"
-      : !saved
-        ? placeholder
-        : secret
-          ? `Authorization: Bearer ${secret}`
-          : configured
-            ? "Authorization: Bearer …"
-            : placeholder;
-  const cell = "break-all rounded-row bg-muted px-2.5 py-1.5 font-mono text-mono text-foreground";
+  const [key, setKey] = useState<string | null>(null);
+  const [shown, setShown] = useState(false);
+  const [rotating, setRotating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fail = (failure: unknown) =>
+    setError(failure instanceof Error && failure.message ? failure.message : t`Couldn't create`);
+
+  // Read as the editor opens, so the key shows before the routine is saved.
+  useEffect(() => {
+    let open = true;
+    webhookKey.read().then(
+      (value) => open && setKey(value),
+      (failure) => open && fail(failure),
+    );
+    return () => {
+      open = false;
+    };
+  }, []);
+
+  const rotate = async () => {
+    if (!webhookKey.rotate || !(await confirm(t`Rotate key?`, t`Rotate`))) return;
+    setRotating(true);
+    setError(null);
+    try {
+      setKey(await webhookKey.rotate());
+      setShown(false);
+    } catch (failure) {
+      fail(failure);
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  const post = `${window.location.origin}/api/v1/bots/${webhookKey.botId}/${kind}`;
+  const visible = (value: string) => (shown ? value : MASK);
+  const reveal = (
+    <Button
+      variant="roundIcon"
+      size="roundIconSm"
+      aria-label={shown ? t`Hide key` : t`Show key`}
+      aria-pressed={shown}
+      onClick={() => setShown((current) => !current)}
+    >
+      {shown ? <EyeOff /> : <Eye />}
+    </Button>
+  );
   return (
-    <dl className="flex flex-col gap-2.5 text-meta text-muted-foreground">
-      <div className="flex flex-col gap-1">
-        <dt>{t`POST to`}</dt>
-        <dd className={cell}>{post}</dd>
-      </div>
-      <div className="flex flex-col gap-1">
-        <dt>{t`key`}</dt>
-        <dd className={cell}>{key}</dd>
-      </div>
-      <div className="flex flex-col gap-1">
-        <dt>{t`header`}</dt>
-        <dd className={cell}>{header}</dd>
-      </div>
-      {saved && configured && !secret ? (
-        <Button variant="tertiary" size="capsule" className="-ms-3 self-start" onClick={onRotate}>
+    <div className="flex flex-col gap-2.5 text-meta text-muted-foreground">
+      <dl className="flex flex-col gap-2.5">
+        <Detail label={t`POST to`} value={post} />
+        {key ? (
+          <>
+            <Detail label={t`key`} value={key} display={visible(key)} reveal={reveal} />
+            {kind === "github" ? (
+              <Detail label={t`header`} display="X-Hub-Signature-256: sha256=…" />
+            ) : (
+              <Detail
+                label={t`header`}
+                value={`Authorization: Bearer ${key}`}
+                display={`Authorization: Bearer ${visible(key)}`}
+              />
+            )}
+          </>
+        ) : null}
+      </dl>
+      {error ? (
+        <p role="alert" className="text-destructive">
+          {error}
+        </p>
+      ) : null}
+      {(key || error) && webhookKey.rotate ? (
+        <Button
+          variant="tertiary"
+          size="capsule"
+          className="-ms-3 self-start"
+          disabled={rotating}
+          onClick={() => void rotate()}
+        >
           {t`Rotate key`}
         </Button>
       ) : null}
-    </dl>
+    </div>
+  );
+}
+
+/** One labelled value; Copy takes `value` whatever `display` shows in its place. */
+function Detail({
+  label,
+  value,
+  display = value,
+  reveal,
+}: {
+  label: string;
+  value?: string;
+  display?: string;
+  reveal?: ReactNode;
+}) {
+  const { t } = useLingui();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const copy = (text: string) =>
+    void navigator.clipboard?.writeText(text).then(
+      () => setCopied(true),
+      () => undefined,
+    );
+  return (
+    <div className="flex flex-col gap-1">
+      <dt>{label}</dt>
+      <dd className="flex items-start gap-0.5 rounded-row bg-muted ps-2.5 pe-0.5">
+        <span className="min-w-0 flex-1 break-all py-1.5 font-mono text-mono text-foreground">
+          {display}
+        </span>
+        {reveal}
+        {value ? (
+          <Button
+            variant="roundIcon"
+            size="roundIconSm"
+            aria-label={t`Copy ${label}`}
+            onClick={() => copy(value)}
+          >
+            {copied ? <Check /> : <Copy />}
+          </Button>
+        ) : null}
+      </dd>
+    </div>
   );
 }

@@ -404,6 +404,7 @@ function Fixture() {
   const [fail, setFail] = useState(params.get("fail") === "1");
   const failRef = useRef(fail);
   failRef.current = fail;
+  const webhookKeyRef = useRef("whsec_fixture_0000");
   const tab = params.get("tab");
   const [view, setView] = useState<BotPageView>({
     tab: isTab(tab) ? tab : "settings",
@@ -457,9 +458,14 @@ function Fixture() {
       testRun: async () => {
         await delay(SAVE_DELAY);
       },
-      revealWebhookSecret: async () => {
+      webhookSecret: async () => {
         await delay(SAVE_DELAY);
-        return "whsec_fixture_0000";
+        return webhookKeyRef.current;
+      },
+      rotateWebhookSecret: async () => {
+        await delay(SAVE_DELAY);
+        webhookKeyRef.current = "whsec_fixture_0001";
+        return webhookKeyRef.current;
       },
       botAction: (_botId, action) => console.info(`bot action: ${action}`),
       activityEpoch: 0,
