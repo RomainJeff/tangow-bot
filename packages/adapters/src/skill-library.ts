@@ -12,6 +12,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { lstat, mkdir, readdir, rename, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
+import { SKILL_UID_PATTERN, SKILL_VERSION_ID_PATTERN } from "@rakazo/contracts";
 import type { SkillAvailability } from "@rakazo/core";
 import {
   asSkillAvailability,
@@ -53,15 +54,12 @@ const SWEEP_EVERY_MS = 6 * 60 * 60 * 1000;
 export type SkillUid = string & { readonly __brand: "SkillUid" };
 export type VersionId = string & { readonly __brand: "VersionId" };
 
-const SKILL_UID = /^[0-9a-f]{32}$/;
-const VERSION_ID = /^v\d{6}-[0-9a-f]{8}$/;
-
 export function parseSkillUid(value: string): SkillUid | undefined {
-  return SKILL_UID.test(value) ? (value as SkillUid) : undefined;
+  return SKILL_UID_PATTERN.test(value) ? (value as SkillUid) : undefined;
 }
 
 export function parseVersionId(value: string): VersionId | undefined {
-  return VERSION_ID.test(value) ? (value as VersionId) : undefined;
+  return SKILL_VERSION_ID_PATTERN.test(value) ? (value as VersionId) : undefined;
 }
 
 export type SkillAuthor =
@@ -162,8 +160,12 @@ export type TrashedSkill = { uid: SkillUid; name: string; trashedAt: string };
 
 /** What the owner of the skills may do, from the skills screen and the API. */
 export interface OwnerSkillAdmin extends BotSkillWriter {
-  /** Newest first; the first one not undone is the current content. */
+  /** Newest first; the first one not undone is the current content. A read: it records nothing. */
   versions(key: string): Promise<VersionManifest[]>;
+  readVersion(
+    uid: SkillUid,
+    versionId: VersionId,
+  ): Promise<{ manifest: VersionManifest; skillMd: string }>;
   trash(): Promise<TrashedSkill[]>;
   /** Back to the version before `expected`, or to the trash for a bot's fresh creation. */
   undo(
@@ -224,6 +226,8 @@ function nextVersionId(skill: Skill): VersionId {
 }
 
 const textOf = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+const damagedVersion = () =>
+  new SkillRefusal("invalid", "This skill version is damaged and cannot be used.");
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -556,8 +560,6 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
      * caps, the executable bit only under scripts/, and exactly the content its manifest names.
      */
     async function readVersionTree(manifest: VersionManifest): Promise<SkillTreeFile[]> {
-      const damaged = () =>
-        new SkillRefusal("invalid", "This skill version is damaged and cannot be used.");
       const executable = new Map(manifest.files.map((file) => [file.path, file.executable]));
       let tree: SkillTreeFile[];
       try {
@@ -569,7 +571,7 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
           stored.map((file) => ({ ...file, executable: executable.get(file.path) === true })),
         );
       } catch {
-        throw damaged();
+        throw damagedVersion();
       }
       const listed = manifest.files.map((file) => [file.path, file.size, file.executable]);
       const found = tree.map((file) => [file.path, file.bytes.length, file.executable]);
@@ -577,7 +579,7 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
         JSON.stringify(listed) !== JSON.stringify(found) ||
         fingerprint(tree) !== manifest.fingerprint
       ) {
-        throw damaged();
+        throw damagedVersion();
       }
       return tree;
     }
@@ -1127,7 +1129,21 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
         }),
 
       versions: (key) =>
-        run(async (store) => [...(await reconcile(store, key)).skill.versions].reverse()),
+        run(async (store) => {
+          const skill = await store.live(key);
+          return skill ? [...skill.versions].reverse() : [];
+        }),
+
+      readVersion: (uid, versionId) =>
+        run(async (store) => {
+          const manifest = (await store.skill(uid))?.versions.find(
+            (v) => v.versionId === versionId,
+          );
+          if (!manifest) throw new SkillRefusal("not_found", NOT_FOUND);
+          const skillMd = (await readVersionTree(manifest)).find((f) => f.path === "SKILL.md");
+          if (!skillMd) throw damagedVersion();
+          return { manifest, skillMd: textOf(skillMd.bytes) };
+        }),
 
       trash: () =>
         run(async (store) => {
@@ -1158,7 +1174,7 @@ export function createSkillLibrary(deps: SkillLibraryDeps) {
           const current = kept.at(-1);
           const previous = kept.at(-2);
           if (current?.versionId !== expected) {
-            throw new SkillRefusal("stale", "This skill changed since you opened it.");
+            throw new SkillRefusal("stale", "This skill changed. Reload and try again.");
           }
           if (!previous) {
             if (current.author.kind !== "bot" || current.nature !== "created") {

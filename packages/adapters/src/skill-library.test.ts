@@ -199,6 +199,18 @@ describe("skill library", () => {
     ]);
   });
 
+  it("reads the history of a skill written before history without recording anything", async () => {
+    const data = await dataDir();
+    await mkdir(liveDir(data, "Legacy"), { recursive: true });
+    await writeFile(path.join(liveDir(data, "Legacy"), "SKILL.md"), md("Legacy", "Old"));
+    const { library } = testLibrary(data);
+
+    expect(await library.forOwner(owner).versions("user:legacy")).toEqual([]);
+    await expect(readdir(path.join(data, "skill-history"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
   it("records a change made outside the store as an unknown version", async () => {
     const data = await dataDir();
     const { library } = testLibrary(data);
@@ -469,6 +481,7 @@ describe("skill library", () => {
       "delete",
       "deleteVersion",
       "purge",
+      "readVersion",
       "replayed",
       "restore",
       "setAccess",
@@ -933,7 +946,7 @@ describe("store safety", () => {
     await admin.create(skillMd("Deploy", "Mine"));
     for (let i = 0; i < 24; i += 1) {
       await writeFile(path.join(liveDir(data, "Deploy"), "SKILL.md"), md("Deploy", `Desk ${i}`));
-      await admin.versions("user:deploy");
+      await admin.update("user:deploy", skillMd("Deploy", `Desk ${i}`));
     }
     expect((await admin.versions("user:deploy")).length).toBe(21);
   });
