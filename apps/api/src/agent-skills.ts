@@ -1,5 +1,10 @@
 import { ORPCError } from "@orpc/server";
-import type { MarketplaceSkillFile, SkillOwnerLock, UserSkillFile } from "@rakazo/adapters";
+import type {
+  MarketplaceSkillFile,
+  SkillOwnerLock,
+  UserSkillFile,
+  VersionManifest,
+} from "@rakazo/adapters";
 import {
   bundleFormat,
   createSkillLibrary,
@@ -7,6 +12,8 @@ import {
   listUserSkills,
   loadBuiltinSkills,
   marketplacesRoot,
+  parseSkillUid,
+  parseVersionId,
   SkillRefusal,
   userSkillsRoot,
 } from "@rakazo/adapters";
@@ -15,6 +22,9 @@ import type {
   AgentSkill,
   AgentSkillCatalogEntry,
   SkillAvailability,
+  SkillVersion,
+  SkillVersionDetail,
+  TrashedSkill,
 } from "@rakazo/contracts";
 import {
   asSkillAvailability,
@@ -41,6 +51,21 @@ function toAgentSkill(file: SkillFile): AgentSkill {
     // ponytail: marketplace files only carry mtime; install time is not tracked.
     createdAt: ("createdAt" in file ? file.createdAt : file.updatedAt).toISOString(),
     updatedAt: file.updatedAt.toISOString(),
+  };
+}
+
+function toSkillVersion(manifest: VersionManifest, versions: VersionManifest[]): SkillVersion {
+  const { author } = manifest;
+  return {
+    versionId: manifest.versionId,
+    createdAt: manifest.createdAt,
+    author:
+      author.kind === "bot"
+        ? { kind: "bot", botId: author.botId, botName: author.botName }
+        : { kind: author.kind },
+    nature: manifest.nature,
+    current: versions.find((version) => !version.undoneAt)?.versionId === manifest.versionId,
+    undone: manifest.undoneAt !== undefined,
   };
 }
 
@@ -165,6 +190,10 @@ export function createAgentSkillsService(
       throw new ORPCError("CONFLICT", { message: "A skill with that name already exists." });
     }
     if (error.reason === "not_found") throw new IsolationError();
+    if (error.reason === "stale") throw new ORPCError("CONFLICT", { message: error.message });
+    if (error.reason === "unavailable") {
+      throw new ORPCError("SERVICE_UNAVAILABLE", { message: error.message });
+    }
     throw new ORPCError("BAD_REQUEST", { message: error.message });
   }
 
@@ -226,6 +255,27 @@ export function createAgentSkillsService(
   async function list(actor: Actor, input?: { botId?: string }): Promise<AgentSkillCatalogEntry[]> {
     return (await catalog(actor, input?.botId)).map(({ content: _content, ...entry }) => entry);
   }
+
+  const admin = (actor: Actor) => library.forOwner(actor);
+
+  async function history(actor: Actor, skillId: string) {
+    const versions = await admin(actor).versions(skillId);
+    const uid = versions[0]?.uid;
+    if (!uid) throw new IsolationError();
+    return { uid, versions };
+  }
+
+  const versionIdOf = (value: string) => {
+    const versionId = parseVersionId(value);
+    if (!versionId) throw new IsolationError();
+    return versionId;
+  };
+
+  const trashedUidOf = (value: string) => {
+    const uid = parseSkillUid(value);
+    if (!uid) throw new IsolationError();
+    return uid;
+  };
 
   async function create(
     actor: Actor,
@@ -325,6 +375,69 @@ export function createAgentSkillsService(
       assertWritable(existing);
       // To the trash, access rows included, rather than gone.
       await library.forOwner(actor).delete(existing.id).catch(rethrowRefusal);
+      return { ok: true };
+    },
+
+    async versions(actor: Actor, input: { skillId: string }): Promise<SkillVersion[]> {
+      const versions = await admin(actor).versions(input.skillId);
+      if (versions.length === 0) await owned(actor, input.skillId);
+      return versions.map((version) => toSkillVersion(version, versions));
+    },
+
+    async version(
+      actor: Actor,
+      input: { skillId: string; versionId: string },
+    ): Promise<SkillVersionDetail> {
+      const { uid, versions } = await history(actor, input.skillId);
+      const { manifest, skillMd } = await admin(actor)
+        .readVersion(uid, versionIdOf(input.versionId))
+        .catch(rethrowRefusal);
+      return {
+        ...toSkillVersion(manifest, versions),
+        content: skillMd,
+        files: manifest.files.map(({ path, size }) => ({ path, size })),
+      };
+    },
+
+    async undo(
+      actor: Actor,
+      input: { skillId: string; expectedVersionId: string },
+    ): Promise<{ kind: "restored"; skillId: string; name: string } | { kind: "trashed" }> {
+      const { uid } = await history(actor, input.skillId);
+      const result = await admin(actor)
+        .undo(uid, versionIdOf(input.expectedVersionId))
+        .catch(rethrowRefusal);
+      return result.kind === "trashed"
+        ? result
+        : { kind: "restored", skillId: result.key, name: result.name };
+    },
+
+    async deleteVersion(
+      actor: Actor,
+      input: { skillId: string; versionId: string },
+    ): Promise<{ ok: true }> {
+      const { uid } = await history(actor, input.skillId);
+      await admin(actor).deleteVersion(uid, versionIdOf(input.versionId)).catch(rethrowRefusal);
+      return { ok: true };
+    },
+
+    async trash(actor: Actor): Promise<TrashedSkill[]> {
+      return admin(actor).trash();
+    },
+
+    async restore(
+      actor: Actor,
+      input: { uid: string },
+    ): Promise<{ skillId: string; name: string; botGone: boolean }> {
+      const restored = await admin(actor).restore(trashedUidOf(input.uid)).catch(rethrowRefusal);
+      const botGone =
+        restored.droppedBotIds.length > 0 &&
+        (await accessIndex(actor)).of(restored.key).visibleBotIds.length === 0;
+      return { skillId: restored.key, name: restored.name, botGone };
+    },
+
+    async purge(actor: Actor, input: { uid: string }): Promise<{ ok: true }> {
+      await admin(actor).purge(trashedUidOf(input.uid)).catch(rethrowRefusal);
       return { ok: true };
     },
 

@@ -61,6 +61,10 @@ import {
   ServerUpdateStatusSchema,
   SkillAvailabilitySchema,
   SkillPlaybookSchema,
+  SkillUidSchema,
+  SkillVersionDetailSchema,
+  SkillVersionIdSchema,
+  SkillVersionSchema,
   SpaceDecisionConfigSchema,
   SpaceMarketplaceSchema,
   SpaceMemoryConfigSchema,
@@ -70,6 +74,7 @@ import {
   TeachRecordingEventSchema,
   ThreadMessagePageSchema,
   ThreadSnapshotSchema,
+  TrashedSkillSchema,
   UpdateAgentSkillInput,
   UpdateBotInput,
   UpdateExternalConversationPolicyInput,
@@ -579,6 +584,29 @@ export const appContract = {
     import: oc.input(ImportAgentSkillInput).output(AgentSkillSchema),
     update: oc.input(UpdateAgentSkillInput).output(AgentSkillSchema),
     remove: oc.input(z.object({ skillId: Id })).output(z.object({ ok: z.literal(true) })),
+    /** Newest first. Only the skill's owner reads or changes its history; bots have no tool for it. */
+    versions: oc.input(z.object({ skillId: Id })).output(z.array(SkillVersionSchema)),
+    version: oc
+      .input(z.object({ skillId: Id, versionId: SkillVersionIdSchema }))
+      .output(SkillVersionDetailSchema),
+    /** Refused when `expectedVersionId` is no longer the current version. */
+    undo: oc
+      .input(z.object({ skillId: Id, expectedVersionId: SkillVersionIdSchema }))
+      .output(
+        z.discriminatedUnion("kind", [
+          z.object({ kind: z.literal("restored"), skillId: Id, name: z.string() }),
+          z.object({ kind: z.literal("trashed") }),
+        ]),
+      ),
+    deleteVersion: oc
+      .input(z.object({ skillId: Id, versionId: SkillVersionIdSchema }))
+      .output(z.object({ ok: z.literal(true) })),
+    trash: oc.input(z.object({})).output(z.array(TrashedSkillSchema)),
+    /** `botGone`: the skill was reserved to a bot that no longer exists, so no bot can use it. */
+    restore: oc
+      .input(z.object({ uid: SkillUidSchema }))
+      .output(z.object({ skillId: Id, name: z.string(), botGone: z.boolean() })),
+    purge: oc.input(z.object({ uid: SkillUidSchema })).output(z.object({ ok: z.literal(true) })),
     /**
      * One write path for the global state and the per-bot overrides, applied together so
      * `all → selected` can seed the include list in the same transaction.
