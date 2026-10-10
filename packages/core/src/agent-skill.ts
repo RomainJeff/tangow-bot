@@ -7,7 +7,7 @@ import { SKILL_DESCRIPTION_MAX_CHARS } from "@rakazo/contracts";
  */
 
 import { runStartedByUser } from "./proposal.js";
-import { isVisibleText } from "./spawn-bot.js";
+import { hasHiddenText } from "./spawn-bot.js";
 
 const FRONTMATTER_FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
@@ -95,7 +95,7 @@ export function parseSkillMd(content: string): ParsedSkillMd | { error: string }
   return { name, description, body, frontmatter };
 }
 
-export const BOT_SKILL_DESCRIPTION_MAX_LENGTH = 300;
+const BOT_SKILL_DESCRIPTION_MAX_LENGTH = 300;
 
 const SKILL_WRITE_ERROR =
   "Skills can't be saved in this run: only a conversation the user started, one of their routines or a sub-bot they created can save one.";
@@ -145,14 +145,14 @@ export function validateBotSkill(
   content: string,
   prior?: Pick<ParsedSkillMd, "name" | "description" | "frontmatter">,
 ): string | undefined {
-  if (!isVisibleText(skill.name, "single")) {
+  if (hasHiddenText(skill.name)) {
     return "Skill name must be a single line of visible text.";
   }
   if (skill.name !== prior?.name && SKILL_LINE_MARKS.test(skill.name)) {
     return "Skill name must not contain · or ›.";
   }
   if (skill.description !== prior?.description) {
-    if (!isVisibleText(skill.description, "single")) {
+    if (hasHiddenText(skill.description)) {
       return "Skill description must be a single line of visible text.";
     }
     if (skill.description.length > BOT_SKILL_DESCRIPTION_MAX_LENGTH) {
@@ -168,7 +168,7 @@ export function validateBotSkill(
   if (extraKeys.length > 0) {
     return `Skill frontmatter may only hold name and description, not ${extraKeys.join(", ")}.`;
   }
-  if (!isVisibleText(content, "multi")) {
+  if (hasHiddenText(content, true)) {
     return "Skill content must not contain invisible or control characters.";
   }
   return undefined;
@@ -189,7 +189,7 @@ const BOT_SKILL_TEXT_EXTENSIONS = [
   "html",
   "css",
 ];
-export const BOT_SKILL_TEXT_FILE_MAX_BYTES = 1024 * 1024;
+const BOT_SKILL_TEXT_FILE_MAX_BYTES = 1024 * 1024;
 
 /**
  * Every file a bot writes into a skill is read or run later, so it must be text the person can
@@ -201,6 +201,9 @@ export function validateBotSkillFile(file: {
   path: string;
   bytes: Uint8Array;
 }): string | undefined {
+  if (hasHiddenText(file.path)) {
+    return "Skill file paths must be a single line of visible text.";
+  }
   const base = file.path.split("/").pop() ?? "";
   const extension = base.includes(".") ? (base.split(".").pop() ?? "").toLowerCase() : "";
   if (!BOT_SKILL_TEXT_EXTENSIONS.includes(extension)) {
@@ -215,7 +218,7 @@ export function validateBotSkillFile(file: {
   } catch {
     return `${file.path} is not UTF-8 text.`;
   }
-  if (!isVisibleText(text.replaceAll("\r\n", "\n"), "multi")) {
+  if (hasHiddenText(text.replaceAll("\r\n", "\n"), true)) {
     return `${file.path} must not contain invisible or control characters.`;
   }
   return undefined;
