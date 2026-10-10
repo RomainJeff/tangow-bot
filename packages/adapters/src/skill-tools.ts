@@ -25,6 +25,7 @@ import {
   validateBotSkillFile,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
+import { getLogger } from "@rakazo/logging";
 import { loadBuiltinSkills } from "./builtin-skills.js";
 import { listMarketplaceSkills, marketplacesRoot } from "./marketplace-store.js";
 import type { SkillTreeFile } from "./skill-store.js";
@@ -426,8 +427,20 @@ export async function skillCreateFromTool(
       return isExists(error) ? taken : { error: "Could not create skill." };
     }
   }
+  let restoreRows: (() => Promise<unknown>) | undefined;
   try {
     if (owner.botId) {
+      const [settings, bots] = await Promise.all([
+        deps.prisma.skillSetting.findMany({ where: { ...scope, skillKey } }),
+        deps.prisma.botSkill.findMany({ where: { ...scope, skillKey } }),
+      ]);
+      restoreRows = () =>
+        deps.prisma.$transaction([
+          deps.prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
+          deps.prisma.botSkill.deleteMany({ where: { ...scope, skillKey, botId: owner.botId } }),
+          deps.prisma.skillSetting.createMany({ data: settings }),
+          deps.prisma.botSkill.createMany({ data: bots, skipDuplicates: true }),
+        ]);
       // A bot-created skill starts scoped to its creator (design Q2); the user widens it in the UI.
       // The rows land before SKILL.md, so no other bot ever sees it, even one whose row a
       // deleted skill of that name left behind.
@@ -451,15 +464,13 @@ export async function skillCreateFromTool(
       await writeUserSkill(root, { name, content }, "create");
     }
   } catch (error) {
-    // Someone else's SKILL.md in the claimed folder keeps its rows: narrowed, never widened.
+    // Another skill can fill the claimed folder: the rows go back to what they were, while the
+    // claim still keeps other creates out, then the claim goes only while it is still empty.
     if (owner.botId && !isExists(error)) {
+      await restoreRows?.().catch((failure: unknown) => {
+        getLogger().warn(`[skills] could not restore the access rows of ${skillKey}: ${failure}`);
+      });
       await rmdir(dir).catch(() => undefined);
-      await deps.prisma
-        .$transaction([
-          deps.prisma.skillSetting.deleteMany({ where: { ...scope, skillKey } }),
-          deps.prisma.botSkill.deleteMany({ where: { ...scope, skillKey } }),
-        ])
-        .catch(() => undefined);
     }
     if (isExists(error)) return taken;
     // writeUserSkillFiles messages name the offending draft file and carry no host path.

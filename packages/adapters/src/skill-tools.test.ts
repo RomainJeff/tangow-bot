@@ -1,4 +1,15 @@
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, truncate, writeFile } from "node:fs/promises";
+import type * as FsPromises from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  truncate,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
@@ -26,6 +37,19 @@ import {
   skillUpdateFromTool,
 } from "./skill-tools.js";
 
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>();
+  return { ...actual, rm: vi.fn(actual.rm), writeFile: vi.fn(actual.writeFile) };
+});
+
+const fs = await vi.importActual<typeof FsPromises>("node:fs/promises");
+const rmMock = vi.mocked(rm);
+const writeFileMock = vi.mocked(writeFile);
+afterEach(() => {
+  rmMock.mockImplementation(fs.rm);
+  writeFileMock.mockImplementation(fs.writeFile);
+});
+
 type Row = Record<string, unknown>;
 
 /** Builtins ship with the repo and grow over time; tests compare only the skills they seed. */
@@ -35,7 +59,7 @@ const ownNames = (records: Array<{ name: string; source: string }>) =>
 const matches = (row: Row, where: Row) =>
   Object.entries(where).every(([key, value]) => row[key] === value);
 
-// ponytail: only findMany/upsert/updateMany/deleteMany, what the tools and tests use.
+// ponytail: only findMany/createMany/upsert/updateMany/deleteMany, what the tools and tests use.
 function table(store: Row[]) {
   return {
     findMany: vi.fn(async ({ where = {} }: { where?: Row } = {}) =>
@@ -51,6 +75,11 @@ function table(store: Row[]) {
       const count = store.length - kept.length;
       store.splice(0, store.length, ...kept);
       return { count };
+    }),
+    createMany: vi.fn(async ({ data }: { data: Row[] }) => {
+      const added = data.filter((row) => !store.some((kept) => kept.id === row.id));
+      store.push(...added.map((row) => ({ ...row })));
+      return { count: added.length };
     }),
     upsert: vi.fn(
       async ({
@@ -1035,6 +1064,65 @@ describe("skill drafts", () => {
         ok: true,
       });
     });
+
+    it("frees the name and its access when a bot create fails", async () => {
+      const root = userSkillsRoot(dataDir, creator);
+      const skillFile = path.join(root, "deploy", "SKILL.md");
+      writeFileMock.mockImplementation(async (...args: Parameters<typeof fs.writeFile>) => {
+        if (args[0] === skillFile) throw Object.assign(new Error("full"), { code: "ENOSPC" });
+        return fs.writeFile(...args);
+      });
+      const create = () =>
+        skillCreateFromTool(deps, creator, [], { name: "Deploy", description: "d", body: "x" });
+
+      expect(await create()).toEqual({ error: "Could not create skill." });
+      expect(await readdir(root)).toEqual([]);
+      expect(await prisma.skillSetting.findMany()).toEqual([]);
+      expect(await prisma.botSkill.findMany()).toEqual([]);
+      writeFileMock.mockImplementation(fs.writeFile);
+      expect(await create()).toMatchObject({ ok: true });
+    });
+
+    it.each([
+      ["fails", Object.assign(new Error("full"), { code: "ENOSPC" }), "Could not create skill."],
+    ])(
+      "leaves another bot's skill and its access as they were when a create that claimed its folder %s",
+      async (_, failure, answer) => {
+        const user = { spaceId: "w1", userId: "u1" };
+        const dir = path.join(userSkillsRoot(dataDir, user), "deploy");
+        await skillCreateFromTool(deps, { ...user, botId: "botB" }, [], { files: draft });
+        const rows = async () => [
+          await prisma.skillSetting.findMany(),
+          await prisma.botSkill.findMany(),
+        ];
+        const before = await rows();
+        // Bot B's same-name replace holds its folder aside, then moves it into bot A's claim.
+        const aside = path.join(dataDir, "aside");
+        await rename(dir, aside);
+        writeFileMock.mockImplementation(async (...args: Parameters<typeof fs.writeFile>) => {
+          if (args[0] === path.join(dir, "SKILL.md")) {
+            await rename(aside, dir);
+            if (failure) throw failure;
+          }
+          return fs.writeFile(...args);
+        });
+
+        expect(
+          await skillCreateFromTool(deps, creator, [], {
+            name: "Deploy",
+            description: "Mine",
+            body: "x",
+          }),
+        ).toEqual({ error: answer });
+        expect(await rows()).toEqual(before);
+        expect(ownNames(await listAgentSkillRecords(deps, creator))).toEqual([]);
+        expect(ownNames(await listAgentSkillRecords(deps, { ...user, botId: "botC" }))).toEqual([]);
+        expect(ownNames(await listAgentSkillRecords(deps, { ...user, botId: "botB" }))).toEqual([
+          "Deploy",
+        ]);
+        expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toBe(skillMd);
+      },
+    );
 
     it("claims the name of a skill hidden from the bot without touching it or its access", async () => {
       const user = { spaceId: "w1", userId: "u1" };
