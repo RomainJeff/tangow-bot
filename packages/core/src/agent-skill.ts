@@ -6,6 +6,7 @@ import { SKILL_DESCRIPTION_MAX_CHARS } from "@rakazo/contracts";
  * Distinct from taught skills (demo/record playbooks on a single bot).
  */
 
+import { runStartedByUser } from "./proposal.js";
 import { hasHiddenText } from "./spawn-bot.js";
 
 const FRONTMATTER_FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
@@ -96,19 +97,59 @@ export function parseSkillMd(content: string): ParsedSkillMd | { error: string }
 
 const BOT_SKILL_DESCRIPTION_MAX_LENGTH = 300;
 
+const SKILL_WRITE_ERROR =
+  "Skills can't be saved in this run: only a conversation the user started, one of their routines or a sub-bot they created can save one.";
+const SKILL_DELETE_ERROR = "Delete a skill only when the user asks you to in this conversation.";
+
+/**
+ * Whether a run may have its bot write skills, by what woke it. A skill saved on someone else's
+ * word (a webhook, another bot, a messaging contact) would sit in this user's library and steer
+ * every later run, so only the user's own conversation, their routines and a sub-bot's first
+ * task save one; a delete needs the user. A routine counts as the user's only while its prompt
+ * is (`trustedRoutine`): one a bot set up from a webhook would otherwise save on its word a
+ * minute later. A run that read a message someone else sent into it (`steeredByOthers`) is no
+ * longer the user's alone. A resumed run keeps the trigger it started with.
+ */
+export function skillWriteRefusal(
+  run: {
+    trigger: string;
+    sourceRole?: string | null;
+    trustedRoutine?: boolean;
+    steeredByOthers?: boolean;
+  },
+  tool: string,
+): string | undefined {
+  if (tool !== "skill_create" && tool !== "skill_update" && tool !== "skill_delete") {
+    return undefined;
+  }
+  if (run.steeredByOthers) return tool === "skill_delete" ? SKILL_DELETE_ERROR : SKILL_WRITE_ERROR;
+  if (tool === "skill_delete") return runStartedByUser(run) ? undefined : SKILL_DELETE_ERROR;
+  return runStartedByUser(run) ||
+    (run.trigger === "routine" && run.trustedRoutine === true) ||
+    run.trigger === "spawn"
+    ? undefined
+    : SKILL_WRITE_ERROR;
+}
+
+/** The separators of the skill line, "Skill learned · <name> ›": a name holding one could fake it. */
+const SKILL_LINE_MARKS = /[·›]/;
+
 /**
  * What a bot may write as a skill. Its name and description become one line of every bot's
  * system prompt, so they stay one visible line, and nothing in the file may be hidden from the
  * person reading it. A bot changing a skill (`prior`) answers only for what it changed: the
- * description the user wrote stays as it is, and so do the other frontmatter keys they added.
+ * name and description the user wrote stay as they are, and so do the other frontmatter keys.
  */
 export function validateBotSkill(
   skill: ParsedSkillMd,
   content: string,
-  prior?: Pick<ParsedSkillMd, "description" | "frontmatter">,
+  prior?: Pick<ParsedSkillMd, "name" | "description" | "frontmatter">,
 ): string | undefined {
   if (hasHiddenText(skill.name)) {
     return "Skill name must be a single line of visible text.";
+  }
+  if (skill.name !== prior?.name && SKILL_LINE_MARKS.test(skill.name)) {
+    return "Skill name must not contain · or ›.";
   }
   if (skill.description !== prior?.description) {
     if (hasHiddenText(skill.description)) {

@@ -97,7 +97,7 @@ function rejectOversizedContent(content: string): string | undefined {
 function botSkillError(
   owner: SkillOwner,
   content: string,
-  prior?: Pick<ParsedSkillMd, "description" | "frontmatter">,
+  prior?: Pick<ParsedSkillMd, "name" | "description" | "frontmatter">,
 ): string | undefined {
   if (!owner.botId) return undefined;
   const parsed = parseSkillMd(content);
@@ -410,6 +410,10 @@ export async function skillUpdateFromTool(
 
   const invalid = rejectInvalidSkillFields(nextName, nextDescription);
   if (invalid) return { error: invalid };
+  // A new name changes how every bot finds the skill: only the user renames it, from its settings.
+  if (owner.botId && nextName !== existing.name) {
+    return { error: `Keep the skill's name "${existing.name}"; the user can rename it.` };
+  }
   const stored = parseSkillMd(existing.content);
   const rejected =
     rejectOversizedContent(nextContent) ??

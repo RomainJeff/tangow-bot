@@ -743,9 +743,8 @@ export const builtinAgentTools: ConnectorTool[] = [
         path: {
           type: "string",
           description:
-            "Workspace folder with the full new skill (SKILL.md, scripts/, references/); replaces the saved folder. Use instead of newName/description/body/content.",
+            "Workspace folder with the full new skill (SKILL.md, scripts/, references/); replaces the saved folder. Use instead of description/body/content.",
         },
-        newName: { type: "string" },
         description: { type: "string" },
         body: { type: "string" },
         content: { type: "string", description: "Optional full replacement SKILL.md." },

@@ -103,9 +103,11 @@ import {
   resolveActionApprovalDetail,
   routineCardSizeError,
   routineConfirmationBlock,
+  runStartedByUser,
   SHAPES,
   sandboxCommandTimeoutMs,
   settleRoutineAsk,
+  skillWriteRefusal,
   spawnBotToolArgs,
   type ToolCallDetail,
   type ToolCallStreak,
@@ -1515,6 +1517,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
             routineRunCardMessageId = card?.id ?? null;
           }
         }
+        // A routine's runs may save skills only while its prompt is the user's (skillWriteRefusal).
+        const trustedRoutine =
+          run.trigger === "routine" && run.routineId
+            ? (
+                await deps.prisma.routine.findUnique({
+                  where: { id: run.routineId },
+                  select: { untrustedPrompt: true },
+                })
+              )?.untrustedPrompt === false
+            : false;
+        // Set once the run reads a message someone other than the user sent into it.
+        let steeredByOthers = false;
         // One place to flip the card to its terminal state, whichever way the run ends.
         // `routineForCard` is only set for a routine card run, so this is a no-op elsewhere.
         // Non-terminal pauses (ask -> waiting_input, takeover -> waiting_takeover) and lease
@@ -2163,6 +2177,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
             );
             if (placeError) return { error: placeError };
           }
+          // Refused before any approval path: no card can let a webhook save a skill.
+          const skillRefusal = viaConnector
+            ? undefined
+            : skillWriteRefusal(
+                { trigger: run.trigger, sourceRole, trustedRoutine, steeredByOthers },
+                name,
+              );
+          if (skillRefusal) return { error: skillRefusal };
           const effectName = replaysApproval
             ? nextApprovedTool
             : proposal
@@ -3166,6 +3188,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const timezone = args.timezone ? String(args.timezone) : undefined;
             const notify = typeof args.notify === "boolean" ? args.notify : undefined;
             const currentHop = await resolveRunHop(deps.prisma, run);
+            const startedByUser =
+              runStartedByUser({ trigger: run.trigger, sourceRole }) && !steeredByOthers;
             if (typeof args.routineId === "string") {
               const updated = await updateScheduleFromTool(deps, {
                 spaceId: run.spaceId,
@@ -3173,7 +3197,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 userId: run.userId,
                 threadId: thread.id,
                 inGroup: Boolean(thread.groupId),
-                startedByUser: isUserOpenedTrigger(run.trigger),
+                startedByUser: isUserOpenedTrigger(run.trigger) && !steeredByOthers,
                 currentHop,
                 routineId: args.routineId,
                 name: typeof args.name === "string" ? args.name : undefined,
@@ -3195,6 +3219,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               prompt: String(args.prompt ?? ""),
               timezone,
               notify,
+              untrustedPrompt: !startedByUser,
               currentHop,
               schedule,
             });
@@ -3283,7 +3308,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 files,
                 name: args.name ? String(args.name) : undefined,
                 skillId: args.skillId ? String(args.skillId) : undefined,
-                newName: args.newName ? String(args.newName) : undefined,
                 description: args.description !== undefined ? String(args.description) : undefined,
                 body: args.body !== undefined ? String(args.body) : undefined,
                 content: args.content ? String(args.content) : undefined,
@@ -4291,6 +4315,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       leaseFence: fence,
                       seenIds,
                     });
+                    if (steering.some((item) => item.untrusted)) steeredByOthers = true;
                     return Promise.all(
                       steering.map(async (item) => {
                         const { images, files, unavailableInstruction } =

@@ -2507,7 +2507,9 @@ export function createRouter(deps: RouterDeps) {
         if (!existing) throw new IsolationError();
         const bot = await repos.getBot(context.actor, existing.botId);
         const { routineId: _routineId, ...change } = input;
-        const updated = await updateRoutine(deps, existing, change, {
+        // A prompt the owner saves is theirs, whoever wrote it first.
+        const owned = change.prompt === undefined ? change : { ...change, untrustedPrompt: false };
+        const updated = await updateRoutine(deps, existing, owned, {
           spaceId: context.actor.spaceId,
           botId: bot.id,
           threadId: bot.thread?.id ?? null,

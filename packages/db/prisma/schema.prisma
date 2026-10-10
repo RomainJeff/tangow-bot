@@ -628,6 +628,9 @@ model SteeringMessage {
   userId    String
   runId     String?
   run       Run?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+  // Sent by someone other than the user (a webhook, a messaging contact, another bot): the run
+  // it steers may not save skills.
+  untrusted Boolean  @default(false)
   claimedAt DateTime?
   createdAt DateTime @default(now())
 
@@ -700,6 +703,10 @@ model Routine {
   requireToolApproval Boolean @default(true)
   // Bot-to-bot chain hop a bot's schedule_create carried into this routine; null when a person made it.
   inheritedHop   Int?
+  // True while the prompt was last written by a bot in a run the user did not start (a webhook, a
+  // messaging contact, another bot): the routine's runs may not save skills. The user saving a
+  // prompt, or a run they started writing one, clears it.
+  untrustedPrompt Boolean @default(false)
   lastRunAt      DateTime?
   nextRunAt      DateTime?
   createdAt      DateTime  @default(now())

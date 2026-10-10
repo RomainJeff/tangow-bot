@@ -1381,6 +1381,18 @@ describe("routine update triggers", () => {
     return body.json;
   }
 
+  it("lets a routine's runs save skills again once the owner saves its prompt, not before", async () => {
+    const { routineUpdate, update } = updateDeps({ untrustedPrompt: true });
+
+    expect((await update({ notify: true })).status).toBe(200);
+    expect((await update({ prompt: "Check twice" })).status).toBe(200);
+
+    expect(routineUpdate.mock.calls.map(([{ data }]) => data.untrustedPrompt)).toEqual([
+      undefined,
+      false,
+    ]);
+  });
+
   it("arms a never-run one-shot at a time with an offset, and refuses one without", () =>
     at("2026-10-07T10:00:00.000Z", async () => {
       const { routineUpdate, update } = updateDeps({

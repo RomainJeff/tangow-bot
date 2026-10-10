@@ -272,20 +272,21 @@ describe("skill tools", () => {
     const created = await skillCreateFromTool(deps, bot, sameCall("call-1"), create);
     expect(await skillCreateFromTool(deps, bot, sameCall("call-1"), create)).toEqual(created);
 
-    const rename = { skillId: "user:deploy", newName: "Ship" };
-    const renamed = await skillUpdateFromTool(deps, bot, sameCall("call-2"), rename);
-    expect(renamed).toEqual({ ok: true, id: "user:ship", name: "Ship", description: "Ship it" });
-    expect(await skillUpdateFromTool(deps, bot, sameCall("call-2"), rename)).toEqual(renamed);
-    expect(await skillCreateFromTool(deps, bot, sameCall("call-3"), create)).toMatchObject({
+    const edit = { skillId: "user:deploy", description: "Ship it twice" };
+    const edited = await skillUpdateFromTool(deps, bot, sameCall("call-2"), edit);
+    expect(edited).toEqual({
       ok: true,
       id: "user:deploy",
+      name: "Deploy",
+      description: "Ship it twice",
     });
+    expect(await skillUpdateFromTool(deps, bot, sameCall("call-2"), edit)).toEqual(edited);
     expect(
-      await skillUpdateFromTool(deps, bot, sameCall("call-4"), {
-        skillId: "user:ship",
-        newName: "Deploy",
+      await skillUpdateFromTool(deps, bot, sameCall("call-3"), {
+        skillId: "user:deploy",
+        description: "Ship it thrice",
       }),
-    ).toEqual({ error: 'A skill named "Deploy" already exists.' });
+    ).toMatchObject({ ok: true, description: "Ship it thrice" });
   });
 
   it("reports a conflict when two creators race on the same name", async () => {
@@ -904,25 +905,34 @@ describe("skill drafts", () => {
       expect((await skillReadFromTool(deps, creator, { name: "Deploy" })).content).toBe(nextMd);
     });
 
-    it("moves access rows when the folder's SKILL.md renames the skill", async () => {
+    it("keeps the name when a bot renames the skill, by folder, newName or content", async () => {
       await skillCreateFromTool(deps, creator, writerFor(deps, creator), { files: draft });
+      const refused = { error: `Keep the skill's name "Deploy"; the user can rename it.` };
       expect(
         await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
           name: "Deploy",
           files: [{ path: "SKILL.md", bytes: text(shipMd), executable: false }],
         }),
-      ).toEqual({ ok: true, id: "user:ship", name: "Ship", description: "Ship faster" });
-      expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:deploy" } })).toEqual(
-        [],
-      );
-      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:deploy" } })).toEqual([]);
+      ).toEqual(refused);
       expect(
-        await prisma.skillSetting.findMany({ where: { skillKey: "user:ship" } }),
-      ).toMatchObject([{ availability: "selected" }]);
-      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:ship" } })).toMatchObject([
-        { botId: "botA", enabled: true },
-      ]);
-      expect(await readdir(userSkillsRoot(dataDir, creator))).toEqual(["ship"]);
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
+          name: "Deploy",
+          newName: "Ship",
+        }),
+      ).toEqual(refused);
+      expect(
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
+          name: "Deploy",
+          content: shipMd,
+        }),
+      ).toEqual(refused);
+      expect(
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
+          name: "Deploy",
+          description: "Ship it twice",
+        }),
+      ).toMatchObject({ ok: true, id: "user:deploy", name: "Deploy" });
+      expect(await readdir(userSkillsRoot(dataDir, creator))).toEqual(["deploy"]);
     });
 
     it("rejects files combined with body and folders for read-only skills", async () => {
