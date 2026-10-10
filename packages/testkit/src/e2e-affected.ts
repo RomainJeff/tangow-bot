@@ -116,7 +116,7 @@ const CALL_IMPORT = /\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/g;
 const SCRIPT_SRC = /<script\b[^>]*\bsrc=["']([^"']+)["']/g;
 
 /** Runtime module specifiers in a source file. Type-only imports are skipped. */
-export function importSpecifiers(source: string): string[] {
+function importSpecifiers(source: string): string[] {
   const specifiers = [...source.matchAll(STATIC_IMPORT)]
     .filter((match) => !match[1])
     .map((match) => match[2]!);

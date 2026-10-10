@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildImporters, importSpecifiers, selectSpecs } from "./e2e-affected.js";
+import { buildImporters, selectSpecs } from "./e2e-affected.js";
 import { buildImpactMap } from "./e2e-impact.js";
 
 const map = buildImpactMap(
@@ -117,32 +117,6 @@ describe("selectSpecs", () => {
   });
 });
 
-describe("importSpecifiers", () => {
-  it("lists runtime imports and skips type-only ones", () => {
-    const source = [
-      'import { a, type B } from "./a.js";',
-      'import type { C } from "./types";',
-      "import {",
-      "  d,",
-      "  e,",
-      '} from "@rakazo/core/plot";',
-      'export * from "./f";',
-      'export type { G } from "./g";',
-      'import "./styles.css";',
-      'const lazy = () => import("../locales/en/messages.po");',
-      '<script type="module" src="./fixture.tsx"></script>',
-    ].join("\n");
-    expect(importSpecifiers(source)).toEqual([
-      "./a.js",
-      "@rakazo/core/plot",
-      "./f",
-      "./styles.css",
-      "../locales/en/messages.po",
-      "./fixture.tsx",
-    ]);
-  });
-});
-
 describe("buildImporters", () => {
   it("resolves relative, .js-for-.ts, html root, and workspace package imports", () => {
     const sources: Record<string, string> = {
@@ -182,6 +156,38 @@ describe("buildImporters", () => {
       "packages/ui-web/src/components/ui/button.tsx": ["apps/web/src/main.tsx"],
       "packages/core/src/plot/plot-spec.ts": ["apps/web/src/main.tsx"],
       "packages/core/src/format.ts": ["apps/web/src/app.tsx"],
+    });
+  });
+
+  it("follows re-exports, multi-line and dynamic imports but not type-only ones", () => {
+    const sources: Record<string, string> = {
+      "apps/web/src/a.ts": [
+        'import { b, type B } from "./b.js";',
+        'import type { T } from "./types";',
+        "import {",
+        "  d,",
+        '} from "./d";',
+        'export * from "./f";',
+        'export type { G } from "./g";',
+        'const lazy = () => import("./lazy");',
+      ].join("\n"),
+      "apps/web/src/b.ts": "",
+      "apps/web/src/types.ts": "",
+      "apps/web/src/d.ts": "",
+      "apps/web/src/f.ts": "",
+      "apps/web/src/g.ts": "",
+      "apps/web/src/lazy.ts": "",
+    };
+    const importers = buildImporters(
+      new Set(Object.keys(sources)),
+      (file) => sources[file]!,
+      new Map(),
+    );
+    expect(Object.fromEntries(importers)).toEqual({
+      "apps/web/src/b.ts": ["apps/web/src/a.ts"],
+      "apps/web/src/d.ts": ["apps/web/src/a.ts"],
+      "apps/web/src/f.ts": ["apps/web/src/a.ts"],
+      "apps/web/src/lazy.ts": ["apps/web/src/a.ts"],
     });
   });
 });
