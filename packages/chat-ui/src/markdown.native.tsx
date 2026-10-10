@@ -2,13 +2,18 @@ import { type ColorTokens, darkTokens, type ResolvedAppearance } from "@rakazo/u
 import Markdown, {
   type ASTNode,
   createMarkdownIt,
+  renderRules as defaultRenderRules,
+  hasParents,
   MarkdownStream,
   type MarkdownStyleMap,
   type RenderRules,
 } from "@ronradtke/react-native-markdown-display";
-import { memo, useMemo } from "react";
+import type { ReactElement, ReactNode } from "react";
+import { cloneElement, createContext, Fragment, memo, useContext, useMemo } from "react";
 import type { TextProps, TextStyle } from "react-native";
 import { Linking, StyleSheet, Text, View } from "react-native";
+import type { DetectedDate } from "./detected-dates";
+import { splitDetectedDates } from "./detected-dates";
 import type { NativeLinkMentions } from "./link-mention.native";
 import {
   botLinkMentionTone,
@@ -229,6 +234,64 @@ function mentionLinkRule(mentions: NativeLinkMentions, palette: ColorTokens): Re
 const renderRulesNoImages: RenderRules = { ...renderRules, image: () => null };
 
 /**
+ * Dates in a bubble, found by the device's own detector. The app provides them
+ * where the platform has one (iOS); without a provider, text renders as before.
+ */
+export type DateLinks = {
+  find(text: string): DetectedDate[];
+  open(date: DetectedDate, text: string): void;
+  accessibilityHint: string;
+};
+
+const DateLinksContext = createContext<DateLinks | null>(null);
+export const DateLinksProvider = DateLinksContext.Provider;
+
+/** The text with each date still ahead underlined in dots (the bubble's ink,
+ * veiled like a link's underline) and opening the calendar sheet on tap; the
+ * plain string when there is none. */
+function withDateLinks(
+  text: string,
+  links: DateLinks,
+  underline: string,
+  onLongPress?: TextProps["onLongPress"],
+): ReactNode {
+  const segments = splitDetectedDates(text, links.find(text), Date.now());
+  if (!segments.some((segment) => segment.date)) return text;
+  return segments.map((segment, i) => {
+    const date = segment.date;
+    return date ? (
+      <Text
+        accessibilityRole="button"
+        accessibilityHint={links.accessibilityHint}
+        key={i}
+        style={[layout.date, { textDecorationColor: underline }]}
+        onPress={() => links.open(date, text)}
+        onLongPress={onLongPress}
+      >
+        {segment.text}
+      </Text>
+    ) : (
+      segment.text
+    );
+  });
+}
+
+function withDates(base: RenderRules, links: DateLinks, underline: string): RenderRules {
+  // The library's own rule for a run of text, which this wraps.
+  const text = defaultRenderRules(Text).text;
+  if (!text) return base;
+  return {
+    ...base,
+    text: (node, children, parent, styles, inheritedStyles) => {
+      const plain = text(node, children, parent, styles, inheritedStyles) as ReactElement;
+      if (hasParents(parent, "link")) return plain;
+      const content = withDateLinks(node.content, links, underline);
+      return typeof content === "string" ? plain : cloneElement(plain, undefined, content);
+    },
+  };
+}
+
+/**
  * Tables render as a `TableGrid` read straight from the markdown tree, so a
  * phone gets compact, content-sized columns instead of the library's cells,
  * which share the width equally and inherit the body's text size. In a
@@ -288,14 +351,18 @@ export const ChatMarkdown = memo(function ChatMarkdown({
 }) {
   const styles = useMemo(() => markdownStyles(palette, inBubble), [palette, inBubble]);
   const imagePolicy = nativeImagePolicy(allowImages);
+  // Only a finished bubble: a reply still streaming would underline half a date.
+  const dateLinks = useContext(DateLinksContext);
+  const bubbleDates = inBubble && !streaming ? dateLinks : null;
   const rules = useMemo(() => {
     const base = withTables(
       imagePolicy.blockImages ? renderRulesNoImages : renderRules,
       palette,
       bleed ?? (inBubble ? 14 : 0),
     );
-    return mentions ? { ...base, link: mentionLinkRule(mentions, palette) } : base;
-  }, [imagePolicy.blockImages, palette, inBubble, bleed, mentions]);
+    const linked = mentions ? { ...base, link: mentionLinkRule(mentions, palette) } : base;
+    return bubbleDates ? withDates(linked, bubbleDates, linkUnderline(palette.foreground)) : linked;
+  }, [imagePolicy.blockImages, palette, inBubble, bleed, mentions, bubbleDates]);
   const sharedProps = {
     colorScheme,
     style: styles,
@@ -323,7 +390,8 @@ export const ChatMarkdown = memo(function ChatMarkdown({
 });
 
 /** Plain text (what the person typed) with every URL in it made clickable, as a
- * mention when the server resolved one for it. Nest it in a `Text` so links
+ * mention when the server resolved one for it, and its dates when the app
+ * provides them. Nest it in a `Text` so links
  * inherit the surrounding ink. A link is its own touch responder, so pass the
  * bubble's `onLongPress` to keep its actions reachable. */
 export function LinkifiedText({
@@ -339,9 +407,17 @@ export function LinkifiedText({
   mentions?: NativeLinkMentions;
 }) {
   const tone = personLinkMentionTone(ink);
+  const dateLinks = useContext(DateLinksContext);
   return linkifyText(children).map((segment, i) => {
     const href = segment.href;
-    if (!href) return segment.text;
+    if (!href)
+      return dateLinks ? (
+        <Fragment key={i}>
+          {withDateLinks(segment.text, dateLinks, tone.underline, onLongPress)}
+        </Fragment>
+      ) : (
+        segment.text
+      );
     return (
       nativeLinkMention({
         mentions,
@@ -370,6 +446,11 @@ const layout = StyleSheet.create({
   link: {
     textDecorationLine: "underline",
   },
+  // Dotted, so a date reads as "this can be tapped" and not as a link.
+  date: {
+    textDecorationLine: "underline",
+    textDecorationStyle: "dotted",
+  },
   wrap: {
     width: "100%",
     minWidth: 0,
@@ -381,6 +462,8 @@ const layout = StyleSheet.create({
   },
 });
 
+export type { CalendarEvent, DetectedDate } from "./detected-dates";
+export { eventForDate } from "./detected-dates";
 export type { NativeLinkMentions } from "./link-mention.native";
 export type { ChatMarkdownProps } from "./markdown";
 export { hasMarkdownTable, truncateMarkdownForRender } from "./markdown";

@@ -819,4 +819,5 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Earlier messages summarized": "较早的消息已总结",
   "Message edited": "消息已编辑",
   "Conversation cleared": "对话已清除",
+  "Add to calendar": "添加到日历",
 };

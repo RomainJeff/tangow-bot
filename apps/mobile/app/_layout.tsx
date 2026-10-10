@@ -1,3 +1,4 @@
+import { DateLinksProvider } from "@rakazo/chat-ui/native";
 import * as Notifications from "expo-notifications";
 import {
   DarkTheme,
@@ -18,6 +19,7 @@ import { LaunchSplash } from "../components/launch-splash";
 import { loadDisplayAgentSteps } from "../lib/agent-steps-pref";
 import { currentApiBase, loadApiBase, loadSessionToken, selectedSpaceId } from "../lib/api";
 import { loadAppearancePreference, mobileTokens } from "../lib/appearance";
+import { createDateLinks } from "../lib/detected-dates";
 import { bootstrapI18n, useI18n } from "../lib/i18n";
 import {
   configureForegroundNotifications,
@@ -36,6 +38,8 @@ void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function Layout() {
   const { t } = useI18n();
+  const addToCalendar = t("Add to calendar");
+  const dateLinks = useMemo(() => createDateLinks(addToCalendar), [addToCalendar]);
   const [ready, setReady] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
   const resolved = useResolvedAppearance();
@@ -105,123 +109,125 @@ export default function Layout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <KeyboardProvider>
         {ready ? (
-          <AvatarStyleProvider>
-            <ThemeProvider value={navigationTheme}>
-              <StatusBar style={resolved === "light" ? "dark" : "light"} />
-              <Stack
-                screenOptions={{
-                  headerStyle: { backgroundColor: navigationTheme.colors.background },
-                  headerTintColor: navigationTheme.colors.text,
-                  headerShadowVisible: false,
-                  headerBackButtonDisplayMode: "minimal",
-                  contentStyle: { backgroundColor: String(native.page) },
-                }}
-              >
-                <Stack.Screen name="index" options={{ headerShown: false, title: "Rakazo" }} />
-                <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-                <Stack.Screen
-                  name="integration-setup"
-                  options={{ title: t("Server integrations") }}
-                />
-                <Stack.Screen name="ai-data-sharing" options={{ title: "AI data sharing" }} />
-                <Stack.Screen name="account" options={{ title: t("Account") }} />
-                <Stack.Screen
-                  name="change-password"
-                  options={{
-                    title: t("Change password"),
-                    presentation: "formSheet",
-                    sheetAllowedDetents: [0.6, 1],
-                    sheetGrabberVisible: true,
+          <DateLinksProvider value={dateLinks}>
+            <AvatarStyleProvider>
+              <ThemeProvider value={navigationTheme}>
+                <StatusBar style={resolved === "light" ? "dark" : "light"} />
+                <Stack
+                  screenOptions={{
+                    headerStyle: { backgroundColor: navigationTheme.colors.background },
+                    headerTintColor: navigationTheme.colors.text,
+                    headerShadowVisible: false,
+                    headerBackButtonDisplayMode: "minimal",
+                    contentStyle: { backgroundColor: String(native.page) },
                   }}
-                />
-                <Stack.Screen
-                  name="edit-bot-proposal"
-                  options={{
-                    title: "",
-                    presentation: "formSheet",
-                    sheetAllowedDetents: [0.6, 1],
-                    sheetGrabberVisible: true,
-                  }}
-                />
-                <Stack.Screen
-                  name="sheet"
-                  options={{
-                    headerShown: false,
-                    presentation: "formSheet",
-                    sheetAllowedDetents: "fitToContents",
-                    sheetGrabberVisible: true,
-                  }}
-                />
-                <Stack.Screen name="models" options={{ title: t("Models") }} />
-                <Stack.Screen name="voice" options={{ title: t("Voice") }} />
-                <Stack.Screen name="integrations" options={{ title: t("Integrations") }} />
-                <Stack.Screen name="skills" options={{ title: t("Skills") }} />
-                <Stack.Screen
-                  name="new"
-                  options={{
-                    title: t("New bot"),
-                    presentation: "modal",
-                    gestureEnabled: true,
-                    headerBackVisible: false,
-                  }}
-                />
-                <Stack.Screen
-                  name="new-group"
-                  options={{
-                    title: t("New group"),
-                    presentation: "modal",
-                    gestureEnabled: true,
-                  }}
-                />
-                <Stack.Screen
-                  name="new-space"
-                  options={{
-                    title: t("New space"),
-                    presentation: "modal",
-                    gestureEnabled: true,
-                    headerBackVisible: false,
-                  }}
-                />
-                <Stack.Screen name="group-thread" options={{ title: t("Group") }} />
-                <Stack.Screen name="group-settings" options={{ title: t("Group settings") }} />
-                <Stack.Screen
-                  name="bot"
-                  options={{
-                    title: "",
-                    headerBackTitle: t("Chat"),
-                    headerBackButtonDisplayMode: "default",
-                  }}
-                />
-                <Stack.Screen
-                  name="bot-text"
-                  options={{ presentation: "fullScreenModal", gestureEnabled: false }}
-                />
-                <Stack.Screen name="bot-routine" />
-                <Stack.Screen name="bot-routine-new" options={{ title: t("New routine") }} />
-                <Stack.Screen name="bot-model" options={{ title: t("Model") }} />
-                <Stack.Screen name="bot-voice" options={{ title: t("Voice and replies") }} />
-                <Stack.Screen name="bot-choice" options={{ title: "" }} />
-                <Stack.Screen
-                  name="bot-appearance"
-                  options={{
-                    title: t("Appearance"),
-                    presentation: "formSheet",
-                    sheetAllowedDetents: "fitToContents",
-                    sheetGrabberVisible: true,
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen name="bot-memory" options={{ presentation: "modal" }} />
-                <Stack.Screen name="bot-skill" />
-                <Stack.Screen name="bot-files" options={{ title: t("Files") }} />
-                <Stack.Screen name="bot-file" options={{ title: t("Files") }} />
-                <Stack.Screen name="thread" options={{ title: t("Thread") }} />
-                <Stack.Screen name="peer-messages" options={{ title: t("Bot chat") }} />
-                <Stack.Screen name="computer" options={{ title: t("Computer") }} />
-              </Stack>
-              <ComputerUpdateProgress />
-            </ThemeProvider>
-          </AvatarStyleProvider>
+                >
+                  <Stack.Screen name="index" options={{ headerShown: false, title: "Rakazo" }} />
+                  <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="integration-setup"
+                    options={{ title: t("Server integrations") }}
+                  />
+                  <Stack.Screen name="ai-data-sharing" options={{ title: "AI data sharing" }} />
+                  <Stack.Screen name="account" options={{ title: t("Account") }} />
+                  <Stack.Screen
+                    name="change-password"
+                    options={{
+                      title: t("Change password"),
+                      presentation: "formSheet",
+                      sheetAllowedDetents: [0.6, 1],
+                      sheetGrabberVisible: true,
+                    }}
+                  />
+                  <Stack.Screen
+                    name="edit-bot-proposal"
+                    options={{
+                      title: "",
+                      presentation: "formSheet",
+                      sheetAllowedDetents: [0.6, 1],
+                      sheetGrabberVisible: true,
+                    }}
+                  />
+                  <Stack.Screen
+                    name="sheet"
+                    options={{
+                      headerShown: false,
+                      presentation: "formSheet",
+                      sheetAllowedDetents: "fitToContents",
+                      sheetGrabberVisible: true,
+                    }}
+                  />
+                  <Stack.Screen name="models" options={{ title: t("Models") }} />
+                  <Stack.Screen name="voice" options={{ title: t("Voice") }} />
+                  <Stack.Screen name="integrations" options={{ title: t("Integrations") }} />
+                  <Stack.Screen name="skills" options={{ title: t("Skills") }} />
+                  <Stack.Screen
+                    name="new"
+                    options={{
+                      title: t("New bot"),
+                      presentation: "modal",
+                      gestureEnabled: true,
+                      headerBackVisible: false,
+                    }}
+                  />
+                  <Stack.Screen
+                    name="new-group"
+                    options={{
+                      title: t("New group"),
+                      presentation: "modal",
+                      gestureEnabled: true,
+                    }}
+                  />
+                  <Stack.Screen
+                    name="new-space"
+                    options={{
+                      title: t("New space"),
+                      presentation: "modal",
+                      gestureEnabled: true,
+                      headerBackVisible: false,
+                    }}
+                  />
+                  <Stack.Screen name="group-thread" options={{ title: t("Group") }} />
+                  <Stack.Screen name="group-settings" options={{ title: t("Group settings") }} />
+                  <Stack.Screen
+                    name="bot"
+                    options={{
+                      title: "",
+                      headerBackTitle: t("Chat"),
+                      headerBackButtonDisplayMode: "default",
+                    }}
+                  />
+                  <Stack.Screen
+                    name="bot-text"
+                    options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+                  />
+                  <Stack.Screen name="bot-routine" />
+                  <Stack.Screen name="bot-routine-new" options={{ title: t("New routine") }} />
+                  <Stack.Screen name="bot-model" options={{ title: t("Model") }} />
+                  <Stack.Screen name="bot-voice" options={{ title: t("Voice and replies") }} />
+                  <Stack.Screen name="bot-choice" options={{ title: "" }} />
+                  <Stack.Screen
+                    name="bot-appearance"
+                    options={{
+                      title: t("Appearance"),
+                      presentation: "formSheet",
+                      sheetAllowedDetents: "fitToContents",
+                      sheetGrabberVisible: true,
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen name="bot-memory" options={{ presentation: "modal" }} />
+                  <Stack.Screen name="bot-skill" />
+                  <Stack.Screen name="bot-files" options={{ title: t("Files") }} />
+                  <Stack.Screen name="bot-file" options={{ title: t("Files") }} />
+                  <Stack.Screen name="thread" options={{ title: t("Thread") }} />
+                  <Stack.Screen name="peer-messages" options={{ title: t("Bot chat") }} />
+                  <Stack.Screen name="computer" options={{ title: t("Computer") }} />
+                </Stack>
+                <ComputerUpdateProgress />
+              </ThemeProvider>
+            </AvatarStyleProvider>
+          </DateLinksProvider>
         ) : null}
         {splashDone ? null : (
           <LaunchSplash ready={ready} onHidden={handleSplashHidden} onLayout={revealSplash} />

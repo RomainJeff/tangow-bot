@@ -837,4 +837,5 @@ export const RU_MESSAGES: Record<string, string> = {
   "Earlier messages summarized": "Ранние сообщения обобщены",
   "Message edited": "Сообщение изменено",
   "Conversation cleared": "Разговор очищен",
+  "Add to calendar": "Добавить в календарь",
 };

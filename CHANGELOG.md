@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-23
+
+#### Added
+
+- **On iPhone, a date in a message goes into your calendar in one tap.** Dates and times your iPhone recognises in a bubble, yours or a bot's, are underlined in dots, and a tap opens the iPhone's own New Event sheet filled in with the sentence and the time, ready to review and save. It needs iOS 17 or later; web, desktop and Android are unchanged.
+
 ### 2026-10-21
 
 #### Changed
