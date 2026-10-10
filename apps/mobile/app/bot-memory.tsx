@@ -28,7 +28,8 @@ export default function BotMemoryScreen() {
   const tokens = useMobileTokens();
   const { t } = useI18n();
   const router = useRouter();
-  const readOnly = useBotPageContext(botId)?.readOnly === true;
+  // Read only until the bot is known, so an archived bot never opens editable.
+  const readOnly = useBotPageContext(botId)?.readOnly !== false;
   const insets = useSafeAreaInsets();
   // The keyboard covers the bottom inset the safe area already pads.
   const keyboardInset = useKeyboardState((state) =>
