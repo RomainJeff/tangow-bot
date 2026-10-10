@@ -227,7 +227,6 @@ export function BotPage({
                 <KnowledgeTab
                   page={page}
                   memoryProviderConfigured={memoryProviderConfigured}
-                  trashOpen={view.trash}
                   onOpen={open}
                 />
               </Suspense>

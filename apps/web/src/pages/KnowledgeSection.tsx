@@ -7,7 +7,6 @@ import type {
   SkillAvailability,
 } from "@rakazo/contracts";
 import { filterSkillList, parseSkillMd } from "@rakazo/core";
-import { motion } from "@rakazo/ui-tokens";
 import {
   Button,
   Input,
@@ -21,12 +20,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatBytes } from "../components/ArtifactFileCard";
 import { downloadArtifactBytes } from "../lib/artifact-open";
 import { rpc } from "../lib/rpc";
-import type { RestoredSkill } from "./RecentlyDeleted";
-import { RecentlyDeleted } from "./RecentlyDeleted";
 import { SkillVersions, SkillVersionView } from "./SkillVersions";
-
-/** A skill brought back from Recently deleted stays lit twice as long as an arrival, then fades. */
-const HIGHLIGHT_MS = motion.arrive * 2;
 
 const fieldClass =
   "mt-2 w-full rounded-[11px] border border-border bg-transparent px-3.5 py-3 font-mono text-[13px] leading-relaxed text-foreground";
@@ -217,12 +211,9 @@ Steps the agent should follow.
 export function AgentSkills({
   botId,
   onOpenEditor,
-  trashOpen,
 }: {
   botId?: string;
   onOpenEditor?: (skillId: string | null) => void;
-  /** Starts Recently deleted expanded, when a line about a deleted skill led here. */
-  trashOpen?: boolean;
 } = {}) {
   const { t } = useLingui();
   /** `null` until the catalog is first read. */
@@ -234,9 +225,6 @@ export function AgentSkills({
   const [query, setQuery] = useState("");
   /** "all" | "active" | "disabled" | `bot:<id>`. */
   const [filter, setFilter] = useState("all");
-  const [reads, setReads] = useState(0);
-  const [restored, setRestored] = useState<RestoredSkill | null>(null);
-  const [highlighted, setHighlighted] = useState<string | null>(null);
   const generation = useRef(0);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -245,18 +233,6 @@ export function AgentSkills({
     const list = await rpc.agentSkills.list();
     if (current !== generation.current) return;
     setSkills(list);
-    setReads((count) => count + 1);
-  }
-
-  async function afterRestore(skill: RestoredSkill) {
-    setRestored(skill);
-    try {
-      await refresh();
-    } catch {
-      setError(t`Could not load`);
-    }
-    setHighlighted(skill.skillId);
-    window.setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
   }
 
   useEffect(() => {
@@ -280,7 +256,6 @@ export function AgentSkills({
   function openEditor(skillId: string | null) {
     if (busy) return;
     setError(null);
-    setRestored(null);
     if (onOpenEditor) onOpenEditor(skillId);
     else setEditing({ skillId });
   }
@@ -441,9 +416,7 @@ export function AgentSkills({
             return (
               <div
                 key={entry.id}
-                className={`rounded-row transition-colors duration-(--duration-arrive) ease-quiet hover:bg-muted motion-reduce:transition-none ${
-                  highlighted === entry.id ? "bg-accent motion-reduce:bg-transparent" : ""
-                }`}
+                className="rounded-row hover:bg-muted"
                 data-testid="bot-knowledge-skill"
               >
                 <div className="flex items-center gap-3 pe-2.5">
@@ -535,14 +508,6 @@ export function AgentSkills({
             );
           })
         : null}
-      {restored?.botGone && !editorOpen ? (
-        <p className="px-2.5 pt-1 text-meta text-muted-foreground">
-          <Trans>No bot uses this skill yet.</Trans>
-        </p>
-      ) : null}
-      {!editorOpen ? (
-        <RecentlyDeleted open={trashOpen} reloadKey={reads} onRestored={afterRestore} />
-      ) : null}
       {editing ? (
         <AgentSkillEditor
           skillId={editing.skillId}

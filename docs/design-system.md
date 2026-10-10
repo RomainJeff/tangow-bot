@@ -435,16 +435,10 @@ has.
 
 ### Recently deleted
 
-The last row of the Skills list, drawn only while a skill is waiting there: a
-`SettingRow` "Recently deleted" with `expanded`, so its chevron turns when it
-opens. Each row is the skill's name over its date, a `quickReply`
-"Undo", and a `⋯` ("More") holding a destructive "Delete now" that asks a second
-time ("Confirm delete"). A restored skill is lit `accent` for twice
-`--duration-arrive`, then fades over one, and none of it moves under reduced
-motion. A restored skill that no bot uses says "No bot uses this skill yet."
-under the list, the same sentence on iPhone. On iPhone the row is the last of the
-Installed list in Skills, with the count, and pushes a screen whose rows open an
-action sheet (Undo, Delete now); a "Skill deleted" line opens that screen too.
+On iPhone, deleted skills wait in the last row of the Installed list in Skills,
+with the count. It pushes a screen whose rows open an action sheet (Undo, Delete
+now); a "Skill deleted" line opens that screen too. A restored skill that no bot
+uses says "No bot uses this skill yet."
 
 ### Clipped preview
 
@@ -751,9 +745,7 @@ with a hover fill and a focus ring, which carries a sub-line and a chevron, neve
 control or a `SaveMeta`, which would nest an interactive element inside another.
 
 Props: `label`, `subline?`, `meta?`, `children?` (the trailing control or
-value; neither on a pressable row, which the type refuses), `chevron?`,
-`expanded?` (a pressable row only: a disclosure whose chevron turns down while
-open, with `aria-expanded`).
+value; neither on a pressable row, which the type refuses), `chevron?`.
 
 ### SegmentedControl
 

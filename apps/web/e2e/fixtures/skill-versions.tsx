@@ -1,20 +1,18 @@
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import type { AgentSkill, SkillVersion, SkillVersionDetail, TrashedSkill } from "@rakazo/contracts";
+import type { AgentSkill, SkillVersion, SkillVersionDetail } from "@rakazo/contracts";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { applyResolvedAppearance } from "../../src/lib/ui-appearance";
-import { AgentSkillEditor, AgentSkills } from "../../src/pages/KnowledgeSection";
+import { AgentSkillEditor } from "../../src/pages/KnowledgeSection";
 import "../../src/styles.css";
 
 /*
- * The skill panel and the skills list without a server. Query parameters:
- *   view=editor|list   skill=<id> (editor)   conflict=1 (the first Undo is refused)
- *   trash=open (the list opens with Recently deleted expanded)   theme=dark
+ * The skill panel without a server. Query parameters:
+ *   skill=<id>   conflict=1 (the first Undo is refused)   theme=dark
  * Reads and writes go to a stubbed fetch holding the state in memory.
  */
 const params = new URLSearchParams(window.location.search);
-const VIEW = params.get("view") ?? "editor";
 let conflict = params.get("conflict") === "1";
 
 applyResolvedAppearance(params.get("theme") === "dark" ? "dark" : "light");
@@ -70,11 +68,6 @@ const history = new Map<string, SkillVersion[]>([
   ["user:lone-bot", [version(1, -3_600_000, { current: true, nature: "created" })]],
 ]);
 
-const trash: TrashedSkill[] = [
-  { uid: "a".repeat(32), name: "Old checklist", trashedAt: at(-2 * DAY) },
-  { uid: "b".repeat(32), name: "Weekly draft", trashedAt: at(-9 * DAY) },
-];
-
 const delay = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const ok = (json: unknown) => Response.json({ json });
 const refuse = (code: string, status: number, message: string) =>
@@ -129,25 +122,6 @@ function answer(procedure: string, query: Record<string, string>): Response {
     );
     return ok({ ok: true });
   }
-  if (procedure === "agentSkills/trash") return ok(trash);
-  if (procedure === "agentSkills/restore") {
-    const at = trash.findIndex((entry) => entry.uid === query.uid);
-    const [entry] = trash.splice(at, 1);
-    const restored = skill(`user:${entry!.name.toLowerCase().replace(/\W+/g, "-")}`, entry!.name);
-    skills.set(restored.id, restored);
-    return ok({
-      skillId: restored.id,
-      name: restored.name,
-      botGone: entry!.name === "Weekly draft",
-    });
-  }
-  if (procedure === "agentSkills/purge") {
-    trash.splice(
-      trash.findIndex((entry) => entry.uid === query.uid),
-      1,
-    );
-    return ok({ ok: true });
-  }
   return refuse("NOT_FOUND", 404, `${procedure} is not in this fixture`);
 }
 
@@ -166,9 +140,7 @@ function Fixture() {
   const [id, setId] = useState(params.get("skill") ?? "user:rooms");
   return (
     <main className="mx-auto max-w-md bg-background px-4 py-8 text-foreground">
-      {VIEW === "list" ? (
-        <AgentSkills botId="bot-1" trashOpen={params.get("trash") === "open"} />
-      ) : closed ? null : (
+      {closed ? null : (
         <AgentSkillEditor
           key={id}
           skillId={id}
