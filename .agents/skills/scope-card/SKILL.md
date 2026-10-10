@@ -152,6 +152,7 @@ Duplicate, already shipped or in progress → write a minimal `## Scoping` secti
 - Use the real variables from `packages/ui-tokens` (scout worktree) and follow `docs/design-system.md`.
 - Fallback when the Design type is unavailable: static HTML with the same tokens, saved in the scratchpad and shown with `SendUserFile` (`display: "render"`).
 - Image for the card: capture the canvas (built-in browser) → PNG in the scratchpad → `notion-create-file-upload` → upload the bytes → the upload's `suggested_markdown` in the Maquettes zone. If a link in that chain fails: link only, and say so.
+- HTML for the card: next to the image, attach the recommendation's mockups as one standalone HTML file: every artboard inlined, no canvas runtime, only Google Fonts as an external resource. Upload it with `notion-create-file-upload` (Notion accepts `.html`), then put the upload's `suggested_markdown` (an `<embed>`) under the image. When the mockups change on a rerun, add the new image and HTML. `update_content` cannot match an existing media block, so ask the user to delete the old ones.
 
 ### 5. Synthesis
 
