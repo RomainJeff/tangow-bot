@@ -24,3 +24,27 @@ export function quoteDraftForSelection(
   if (!message || !text) return null;
   return { message, text };
 }
+
+/** Air between the Quote button and the selection or the viewport edge. */
+const QUOTE_BUTTON_GAP_PX = 8;
+
+/**
+ * Where the Quote button's top-left corner goes, in viewport pixels: centred
+ * above the selection, below it when there is no room above, and never past
+ * either side of the viewport.
+ */
+export function quoteButtonPlacement(
+  selection: Pick<DOMRect, "top" | "bottom" | "left" | "right">,
+  button: { width: number; height: number },
+  viewportWidth: number,
+): { top: number; left: number } {
+  const aboveTop = selection.top - QUOTE_BUTTON_GAP_PX - button.height;
+  const centredLeft = (selection.left + selection.right - button.width) / 2;
+  return {
+    top: aboveTop >= 0 ? aboveTop : selection.bottom + QUOTE_BUTTON_GAP_PX,
+    left: Math.min(
+      Math.max(centredLeft, QUOTE_BUTTON_GAP_PX),
+      viewportWidth - button.width - QUOTE_BUTTON_GAP_PX,
+    ),
+  };
+}

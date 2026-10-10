@@ -45,6 +45,7 @@ import { placeHoverPill } from "./hover-pill-placement";
 import { MessageActionsSheet } from "./message-actions-sheet";
 import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
 import { MessageView } from "./message-view";
+import { QuoteSelection } from "./quote-selection";
 
 /** B1: hold this long on a touch bubble to open its action sheet. */
 const LONG_PRESS_MS = 450;
@@ -105,7 +106,7 @@ export const Transcript = memo(function Transcript({
   onLoadOlder: () => void | Promise<void>;
   onOpenBot: (botId: string) => void;
   onAnswer: (message: ThreadMessage, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
-  onReply: (message: ThreadMessage) => void;
+  onReply: (message: ThreadMessage, quote?: string) => void;
   onEdit: (message: ThreadMessage) => void;
   rewindFromSeq: number | null;
   onReact: (message: ThreadMessage, reaction: MessageReaction) => Promise<void>;
@@ -525,6 +526,9 @@ export const Transcript = memo(function Transcript({
               ) : null}
               <div
                 data-message-id={message.id}
+                // Only persisted messages can be reply targets: synthetic rows
+                // (progress:, subagent:) carry a `prefix:` id.
+                data-quotable={chrome === "row" && !message.id.includes(":") ? "" : undefined}
                 data-rewound={rewound ? "true" : undefined}
                 data-long-pressing={
                   chrome === "row" && pressingMessageId === message.id ? "true" : undefined
@@ -673,6 +677,7 @@ export const Transcript = memo(function Transcript({
       >
         <ArrowDown size={17} strokeWidth={1.8} />
       </button>
+      <QuoteSelection messageById={messageById} onQuote={onReply} />
       <MessageActionsSheet
         message={sheetMessage}
         open={sheetOpen}

@@ -236,7 +236,11 @@ export function ShellPage() {
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const snapshotRef = useRef<ThreadSnapshot | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-  const [replyTarget, setReplyTarget] = useState<ThreadMessage | null>(null);
+  const [reply, setReply] = useState<{ message: ThreadMessage; quote?: string } | null>(null);
+  const replyTo = useCallback(
+    (message: ThreadMessage, quote?: string) => setReply({ message, quote }),
+    [],
+  );
   const [rewindTarget, setRewindTarget] = useState<ThreadMessage | null>(null);
   const [rewindArtifacts, setRewindArtifacts] = useState<{ id: string; name: string }[]>([]);
   // `key` re-seeds the composer draft: once when rewind starts, again when a failed send
@@ -1608,10 +1612,11 @@ export function ShellPage() {
     : snapshot?.botId === active?.id
       ? snapshot
       : null;
-  const activeReplyTarget =
-    replyTarget && activeSnapshot?.messages.some((message) => message.id === replyTarget.id)
-      ? replyTarget
+  const activeReply =
+    reply && activeSnapshot?.messages.some((message) => message.id === reply.message.id)
+      ? reply
       : null;
+  const activeReplyTarget = activeReply?.message ?? null;
   const activeRewindTarget =
     rewindTarget && activeSnapshot?.messages.some((message) => message.id === rewindTarget.id)
       ? rewindTarget
@@ -1692,7 +1697,7 @@ export function ShellPage() {
     setRewindDraft(null);
   }, []);
   const startRewind = useCallback((message: ThreadMessage) => {
-    setReplyTarget(null);
+    setReply(null);
     setRewindTarget(message);
     setRewindArtifacts(
       message.blocks.flatMap((block) =>
@@ -1994,7 +1999,7 @@ export function ShellPage() {
         }
         if (!plan.shouldSend) {
           dropDelayedSetup();
-          setReplyTarget(null);
+          setReply(null);
           revokePendingAttachmentPreviews(attachments);
           setPendingAttachments((current) =>
             current.filter((attachment) => attachment.threadKey !== originThreadKey),
@@ -2042,6 +2047,7 @@ export function ShellPage() {
             mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
             artifactIds: artifactIds.length ? artifactIds : undefined,
             replyToMessageId: reroutedToGroup ? undefined : activeReplyTarget?.id,
+            replyQuote: reroutedToGroup ? undefined : activeReply?.quote,
             linkPreview: options.linkPreview,
           });
         } else if (botTarget) {
@@ -2052,6 +2058,7 @@ export function ShellPage() {
             mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
             artifactIds: artifactIds.length ? artifactIds : undefined,
             replyToMessageId: activeReplyTarget?.id,
+            replyQuote: activeReply?.quote,
             linkPreview: options.linkPreview,
           });
           if (activeBotId.current === botTarget) {
@@ -2069,7 +2076,7 @@ export function ShellPage() {
           }
         }
         dropDelayedSetup();
-        setReplyTarget(null);
+        setReply(null);
         cancelRewind();
         revokePendingAttachmentPreviews(attachments);
         setPendingAttachments((current) =>
@@ -2107,6 +2114,7 @@ export function ShellPage() {
       }
     },
     [
+      activeReply?.quote,
       activeReplyTarget?.id,
       activeRewindTarget?.id,
       cancelRewind,
@@ -2435,7 +2443,7 @@ export function ShellPage() {
       revokePendingAttachmentPreviews(stale);
       return attachmentsForThread(current, threadKey);
     });
-    setReplyTarget(null);
+    setReply(null);
     cancelRewind();
     setAttachmentNotice(null);
     setSendError(null);
@@ -2837,7 +2845,7 @@ export function ShellPage() {
                 onLoadOlder={loadOlder}
                 onOpenBot={openBot}
                 onAnswer={answerMessage}
-                onReply={setReplyTarget}
+                onReply={replyTo}
                 onEdit={startRewind}
                 rewindFromSeq={rewindFromSeq}
                 onReact={reactToMessage}
@@ -2886,7 +2894,8 @@ export function ShellPage() {
                 dictationTranscribe={Boolean(voiceStatus?.transcribe)}
                 replyTarget={activeReplyTarget}
                 replyTargetName={replyTargetName}
-                onClearReply={() => setReplyTarget(null)}
+                replyQuote={activeReply?.quote}
+                onClearReply={() => setReply(null)}
                 rewindTarget={activeRewindTarget}
                 rewindDraft={rewindDraft}
                 rewindRemovedCount={rewindRemovedCount}

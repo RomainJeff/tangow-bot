@@ -186,7 +186,11 @@ export const MessageView = memo(function MessageView({
       className="mb-2 block max-w-3/4 truncate rounded-card border border-border bg-background px-3 py-2 text-start text-meta text-muted-foreground duration-(--duration-hover) ease-quiet hover:text-foreground"
       dir="auto"
     >
-      {replyPreview ? previewMessageText(replyPreview) : t`Earlier message`}
+      {message.replyQuote
+        ? `“${message.replyQuote}”`
+        : replyPreview
+          ? previewMessageText(replyPreview)
+          : t`Earlier message`}
     </button>
   ) : null;
   const author = peerBot(message.botId ?? "");

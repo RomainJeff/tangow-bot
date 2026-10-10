@@ -1,7 +1,7 @@
 import type { ThreadMessage } from "@rakazo/contracts";
 import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { quoteDraftForSelection } from "./quote-selection.js";
+import { quoteButtonPlacement, quoteDraftForSelection } from "./quote-selection.js";
 
 const message = (id: string) => ({ id, blocks: [{ kind: "text", text: "body" }] }) as ThreadMessage;
 const row = (messageId: string) => ({ dataset: { messageId, quotable: "" } });
@@ -63,5 +63,30 @@ describe("quoteDraftForSelection", () => {
       messageById,
     );
     expect(draft?.text).toHaveLength(REPLY_QUOTE_MAX_LENGTH);
+  });
+});
+
+describe("quoteButtonPlacement", () => {
+  const button = { width: 80, height: 32 };
+
+  it("centres the button above the selection", () => {
+    expect(
+      quoteButtonPlacement({ top: 200, bottom: 220, left: 300, right: 400 }, button, 1200),
+    ).toEqual({ top: 160, left: 310 });
+  });
+
+  it("drops below the selection when there is no room above", () => {
+    expect(
+      quoteButtonPlacement({ top: 30, bottom: 50, left: 300, right: 400 }, button, 1200),
+    ).toEqual({ top: 58, left: 310 });
+  });
+
+  it("stays inside the viewport at either edge", () => {
+    expect(
+      quoteButtonPlacement({ top: 200, bottom: 220, left: 0, right: 20 }, button, 1200).left,
+    ).toBe(8);
+    expect(
+      quoteButtonPlacement({ top: 200, bottom: 220, left: 1180, right: 1200 }, button, 1200).left,
+    ).toBe(1112);
   });
 });

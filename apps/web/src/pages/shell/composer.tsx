@@ -67,6 +67,7 @@ export const Composer = memo(function Composer({
   onStop,
   dictationTranscribe,
   replyTarget,
+  replyQuote,
   replyTargetName,
   onClearReply,
   rewindTarget,
@@ -114,6 +115,7 @@ export const Composer = memo(function Composer({
    * browsers). */
   dictationTranscribe?: boolean;
   replyTarget?: ThreadMessage | null;
+  replyQuote?: string;
   replyTargetName?: string;
   onClearReply?: () => void;
   rewindTarget?: ThreadMessage | null;
@@ -706,7 +708,11 @@ export const Composer = memo(function Composer({
           data-testid="reply-chip"
           className="mb-2 flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-meta text-foreground/75"
         >
-          <span className="min-w-0 flex-1 truncate text-muted-foreground">{t`Replying to ${replyName}`}</span>
+          <span className="min-w-0 flex-1 truncate text-muted-foreground">
+            {replyQuote
+              ? t`Replying to ${replyName}: “${replyQuote}”`
+              : t`Replying to ${replyName}`}
+          </span>
           <button
             type="button"
             aria-label={t`Cancel reply`}

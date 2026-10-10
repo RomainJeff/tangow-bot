@@ -37,12 +37,12 @@ msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1914
+#: src/pages/Shell.tsx:1919
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0} (máx. {ATTACHMENT_MAX_COUNT} archivos adjuntos)"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1918
+#: src/pages/Shell.tsx:1923
 msgid "{0} (over 10 MiB)"
 msgstr "{0} (más de 10 MiB)"
 
@@ -133,7 +133,7 @@ msgstr "{count} · próxima {next}"
 msgid "{days}d ago"
 msgstr "hace {days} d"
 
-#: src/pages/shell/message-view.tsx:323
+#: src/pages/shell/message-view.tsx:327
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -146,17 +146,17 @@ msgid "{minutes}m ago"
 msgstr "hace {minutes} min"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:91
+#: src/lib/browser-notifications.ts:94
 msgid "{name} failed"
 msgstr "{name} falló"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:102
+#: src/lib/browser-notifications.ts:105
 msgid "{name} finished"
 msgstr "{name} terminó"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:97
+#: src/lib/browser-notifications.ts:100
 msgid "{name} stopped"
 msgstr "{name} se detuvo"
 
@@ -193,12 +193,12 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · en pausa"
 
-#: src/pages/shell/transcript.tsx:234
+#: src/pages/shell/transcript.tsx:235
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} está trabajando"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:763
+#: src/pages/shell/composer.tsx:769
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -250,12 +250,12 @@ msgstr "Confirmaciones de acción"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:217
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/Shell.tsx:3208
+#: src/pages/Shell.tsx:3217
 #: src/pages/shell/sidebar.tsx:405
 msgid "Actions for {0}"
 msgstr "Acciones para {0}"
 
-#: src/pages/Shell.tsx:3082
+#: src/pages/Shell.tsx:3091
 msgid "Actions for space"
 msgstr ""
 
@@ -563,7 +563,7 @@ msgstr "Aprueba este servidor para que tu agente use sus herramientas."
 msgid "Archive"
 msgstr "Archivar"
 
-#: src/pages/shell/message-view.tsx:413
+#: src/pages/shell/message-view.tsx:417
 msgid "archived"
 msgstr "archivado"
 
@@ -571,7 +571,7 @@ msgstr "archivado"
 msgid "Archived"
 msgstr "Archivado"
 
-#: src/pages/shell/message-view.tsx:424
+#: src/pages/shell/message-view.tsx:428
 msgid "Archived. Chat, memory, and files kept."
 msgstr "Archivado. Se conservan el chat, la memoria y los archivos."
 
@@ -632,7 +632,7 @@ msgstr "a las {0}"
 msgid "at {timeSelect}"
 msgstr "a las {timeSelect}"
 
-#: src/pages/shell/composer.tsx:894
+#: src/pages/shell/composer.tsx:900
 msgid "Attach file"
 msgstr "Adjuntar archivo"
 
@@ -717,20 +717,20 @@ msgstr "Iniciando escritorio en vivo…"
 msgid "Booting up {0}’s computer"
 msgstr "Iniciando la computadora de {0}"
 
-#: src/pages/shell/message-view.tsx:311
-#: src/pages/shell/message-view.tsx:312
-#: src/pages/shell/message-view.tsx:417
+#: src/pages/shell/message-view.tsx:315
+#: src/pages/shell/message-view.tsx:316
+#: src/pages/shell/message-view.tsx:421
 msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/Shell.tsx:1683
-#: src/pages/shell/message-view.tsx:214
+#: src/pages/Shell.tsx:1688
+#: src/pages/shell/message-view.tsx:218
 msgid "Bot"
 msgstr "Bot"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:71
+#: src/lib/browser-notifications.ts:72
 msgid "Bot"
 msgstr "Bot"
 
@@ -742,8 +742,8 @@ msgstr "Pantalla del bot"
 msgid "Bot screen preview"
 msgstr "Vista previa de la pantalla del bot"
 
-#: src/pages/Shell.tsx:3019
-#: src/pages/shell/composer.tsx:1178
+#: src/pages/Shell.tsx:3028
+#: src/pages/shell/composer.tsx:1184
 #: src/pages/shell/thread-header.tsx:151
 #: src/pages/shell/thread-header.tsx:152
 msgid "Bot settings"
@@ -757,7 +757,7 @@ msgstr "Bot a vincular"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Los bots actúan sin preguntar de forma predeterminada. Agrega una excepción solo cuando quieras revisar primero un tipo de acción."
 
-#: src/pages/shell/transcript.tsx:235
+#: src/pages/shell/transcript.tsx:236
 msgid "Bots are working"
 msgstr "Los bots están trabajando"
 
@@ -797,11 +797,11 @@ msgstr "No se puede alcanzar el servidor."
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: src/pages/shell/composer.tsx:1008
+#: src/pages/shell/composer.tsx:1014
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:731
+#: src/pages/shell/composer.tsx:737
 msgid "Cancel edit"
 msgstr "Cancelar edición"
 
@@ -813,7 +813,7 @@ msgstr "Cancelar nuevo bot"
 msgid "Cancel new group"
 msgstr "Cancelar nuevo grupo"
 
-#: src/pages/shell/composer.tsx:712
+#: src/pages/shell/composer.tsx:718
 msgid "Cancel reply"
 msgstr "Cancelar respuesta"
 
@@ -974,7 +974,7 @@ msgstr "Cerrar configuración de mensajería"
 msgid "Close model settings"
 msgstr "Cerrar configuración de modelos"
 
-#: src/pages/Shell.tsx:2674
+#: src/pages/Shell.tsx:2682
 msgid "Close navigation"
 msgstr "Cerrar navegación"
 
@@ -1039,7 +1039,7 @@ msgstr ""
 #: src/pages/bot-page/SettingsTab.tsx:118
 #: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/bot-panel.tsx:28
-#: src/pages/shell/message-view.tsx:580
+#: src/pages/shell/message-view.tsx:584
 msgid "Computer"
 msgstr "Computadora"
 
@@ -1279,13 +1279,13 @@ msgstr "No se pudo conectar este proveedor"
 msgid "Could not connect this voice provider"
 msgstr "No se pudo conectar este proveedor de voz"
 
-#: src/pages/Shell.tsx:855
-#: src/pages/Shell.tsx:2526
+#: src/pages/Shell.tsx:859
+#: src/pages/Shell.tsx:2534
 msgid "Could not connect to the computer screen"
 msgstr "No se pudo conectar a la pantalla de la computadora"
 
 #: src/pages/Auth.tsx:99
-#: src/pages/Shell.tsx:2500
+#: src/pages/Shell.tsx:2508
 msgid "Could not continue"
 msgstr "No se pudo continuar"
 
@@ -1580,7 +1580,7 @@ msgstr ""
 msgid "Could not submit this answer"
 msgstr "No se pudo enviar esta respuesta"
 
-#: src/pages/Shell.tsx:2353
+#: src/pages/Shell.tsx:2361
 msgid "Could not take control"
 msgstr "No se pudo tomar el control"
 
@@ -1601,7 +1601,7 @@ msgstr "No se pudo actualizar la computadora"
 msgid "Could not update plugin"
 msgstr "No se pudo actualizar el plugin"
 
-#: src/pages/Shell.tsx:1900
+#: src/pages/Shell.tsx:1905
 msgid "Could not update reaction"
 msgstr "No se pudo actualizar la reacción"
 
@@ -1657,7 +1657,7 @@ msgstr "¿Crear bot?"
 msgid "Create group"
 msgstr "Crear grupo"
 
-#: src/pages/Shell.tsx:2820
+#: src/pages/Shell.tsx:2828
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "Crear nuevo bot"
@@ -1805,11 +1805,11 @@ msgstr "Eliminar también las memorias"
 msgid "Delete routine"
 msgstr "Eliminar rutina"
 
-#: src/pages/Shell.tsx:3096
+#: src/pages/Shell.tsx:3105
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:415
+#: src/pages/shell/message-view.tsx:419
 msgid "deleted"
 msgstr "eliminado"
 
@@ -1851,11 +1851,11 @@ msgstr ""
 msgid "Desktop update"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:964
+#: src/pages/shell/composer.tsx:970
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:1046
+#: src/pages/shell/composer.tsx:1052
 msgid "Dictating"
 msgstr ""
 
@@ -1887,7 +1887,7 @@ msgstr "Desconectando…"
 msgid "Dismiss"
 msgstr "Descartar"
 
-#: src/pages/shell/composer.tsx:691
+#: src/pages/shell/composer.tsx:693
 msgid "Dismiss error"
 msgstr "Descartar error"
 
@@ -1963,7 +1963,7 @@ msgstr "Habilidad en borrador"
 msgid "Duplicate"
 msgstr "Duplicar"
 
-#: src/pages/shell/message-view.tsx:189
+#: src/pages/shell/message-view.tsx:193
 msgid "Earlier message"
 msgstr "Mensaje anterior"
 
@@ -1980,12 +1980,12 @@ msgstr "Editar y reenviar"
 msgid "Edit first"
 msgstr "Editar primero"
 
-#: src/pages/Shell.tsx:3019
+#: src/pages/Shell.tsx:3028
 msgid "Edit Profile"
 msgstr "Editar perfil"
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer.tsx:727
+#: src/pages/shell/composer.tsx:733
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "Editando el mensaje de {rewindTime} · se eliminarán los {0} mensajes posteriores"
 
@@ -2099,19 +2099,19 @@ msgstr "Falló"
 msgid "Failed {when}"
 msgstr "Falló {when}"
 
-#: src/pages/Shell.tsx:2099
-#: src/pages/Shell.tsx:2101
-#: src/pages/Shell.tsx:2103
+#: src/pages/Shell.tsx:2106
+#: src/pages/Shell.tsx:2108
+#: src/pages/Shell.tsx:2110
 msgid "Failed to send message"
 msgstr "No se pudo enviar el mensaje"
 
-#: src/pages/Shell.tsx:2159
-#: src/pages/Shell.tsx:2178
+#: src/pages/Shell.tsx:2167
+#: src/pages/Shell.tsx:2186
 msgid "Failed to stop"
 msgstr "No se pudo detener"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:92
+#: src/lib/browser-notifications.ts:95
 msgid "Failed."
 msgstr "Falló."
 
@@ -2148,7 +2148,7 @@ msgid "Finish signing in at <0>{0}</0>. The final page may not load; paste its U
 msgstr "Termina de iniciar sesión en <0>{0}</0>. Es posible que la página final no cargue; pega aquí su URL o código."
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:103
+#: src/lib/browser-notifications.ts:106
 msgid "Finished."
 msgstr "Terminado."
 
@@ -2322,7 +2322,7 @@ msgstr "Entrada"
 msgid "Inputs"
 msgstr "Entradas"
 
-#: src/pages/shell/composer.tsx:1022
+#: src/pages/shell/composer.tsx:1028
 msgid "Insert dictation"
 msgstr ""
 
@@ -2397,7 +2397,7 @@ msgstr "Aislado"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Su conversación, archivos y rutinas se eliminarán de forma permanente. Los bots que creó permanecerán en tu lista."
 
-#: src/pages/shell/transcript.tsx:666
+#: src/pages/shell/transcript.tsx:670
 msgid "Jump to latest"
 msgstr "Ir al más reciente"
 
@@ -2459,7 +2459,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:472
+#: src/pages/shell/transcript.tsx:473
 msgid "Load earlier messages"
 msgstr "Cargar mensajes anteriores"
 
@@ -2500,7 +2500,7 @@ msgstr "Cargando proveedores de voz…"
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/transcript.tsx:472
+#: src/pages/shell/transcript.tsx:473
 msgid "Loading…"
 msgstr "Cargando…"
 
@@ -2620,7 +2620,7 @@ msgstr "Memoria"
 msgid "Memory scope"
 msgstr "Alcance de memoria"
 
-#: src/pages/shell/composer.tsx:749
+#: src/pages/shell/composer.tsx:755
 msgid "Mentions"
 msgstr "Menciones"
 
@@ -2628,20 +2628,20 @@ msgstr "Menciones"
 msgid "Mentions only"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:1055
-#: src/pages/shell/composer.tsx:1156
+#: src/pages/shell/composer.tsx:1061
+#: src/pages/shell/composer.tsx:1162
 #: src/pages/shell/message-view.tsx:107
 msgid "Message"
 msgstr ""
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:87
+#: src/lib/browser-notifications.ts:89
 msgid "Message"
 msgstr "Mensaje"
 
-#: src/pages/shell/composer.tsx:1055
-#: src/pages/shell/composer.tsx:1152
-#: src/pages/shell/composer.tsx:1156
+#: src/pages/shell/composer.tsx:1061
+#: src/pages/shell/composer.tsx:1158
+#: src/pages/shell/composer.tsx:1162
 msgid "Message {activeName}"
 msgstr "Mensaje a {activeName}"
 
@@ -2649,7 +2649,7 @@ msgstr "Mensaje a {activeName}"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:671
+#: src/pages/shell/composer.tsx:673
 msgid "Message composer"
 msgstr "Redactor de mensajes"
 
@@ -2657,20 +2657,20 @@ msgstr "Redactor de mensajes"
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:335
+#: src/pages/shell/message-view.tsx:339
 msgid "Message from {peer}"
 msgstr "Mensaje de {peer}"
 
-#: src/pages/shell/composer.tsx:1153
+#: src/pages/shell/composer.tsx:1159
 msgid "Message…"
 msgstr "Mensaje…"
 
 #. placeholder {0}: sent.toBotName
-#: src/pages/shell/message-view.tsx:439
+#: src/pages/shell/message-view.tsx:443
 msgid "Messaged {0}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:335
+#: src/pages/shell/message-view.tsx:339
 msgid "Messaged {peer}"
 msgstr "Mensaje enviado a {peer}"
 
@@ -3079,7 +3079,7 @@ msgstr "el día 1 a las {0}"
 msgid "One-time"
 msgstr "Una sola vez"
 
-#: src/pages/Shell.tsx:3134
+#: src/pages/Shell.tsx:3143
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3115,7 +3115,7 @@ msgstr "Trabajo abierto"
 msgid "OpenAI-compatible server URL"
 msgstr "URL de servidor compatible con OpenAI"
 
-#: src/pages/shell/message-view.tsx:426
+#: src/pages/shell/message-view.tsx:430
 msgid "Opened its thread."
 msgstr "Se abrió su hilo."
 
@@ -3287,6 +3287,10 @@ msgstr "Proveedores"
 msgid "Queued"
 msgstr "En cola"
 
+#: src/pages/shell/quote-selection.tsx:136
+msgid "Quote"
+msgstr "Citar"
+
 #: src/pages/shell/message-hover-actions.tsx:67
 msgid "React"
 msgstr "Reaccionar"
@@ -3416,8 +3420,8 @@ msgstr "Quitar"
 
 #. placeholder {0}: artifact.name
 #. placeholder {0}: attachment.file.name
-#: src/pages/shell/composer.tsx:841
-#: src/pages/shell/composer.tsx:851
+#: src/pages/shell/composer.tsx:847
+#: src/pages/shell/composer.tsx:857
 msgid "Remove {0}"
 msgstr "Quitar {0}"
 
@@ -3431,7 +3435,7 @@ msgid "Remove marketplace {0} and its skills?"
 msgstr "¿Eliminar el marketplace {0} y sus skills?"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer.tsx:939
+#: src/pages/shell/composer.tsx:945
 msgid "Remove mention {0}"
 msgstr "Quitar mención {0}"
 
@@ -3439,7 +3443,7 @@ msgstr "Quitar mención {0}"
 msgid "Remove message trigger?"
 msgstr "¿Quitar disparador de mensajes?"
 
-#: src/pages/shell/composer.tsx:873
+#: src/pages/shell/composer.tsx:879
 #: src/pages/shell/message-actions-sheet.tsx:80
 #: src/pages/shell/message-hover-actions.tsx:103
 #: src/pages/shell/message-hover-actions.tsx:104
@@ -3449,7 +3453,7 @@ msgid "Remove preview"
 msgstr "Quitar vista previa"
 
 #. placeholder {0}: selectedSkill.name
-#: src/pages/shell/composer.tsx:917
+#: src/pages/shell/composer.tsx:923
 msgid "Remove skill {0}"
 msgstr "Quitar habilidad {0}"
 
@@ -3457,7 +3461,7 @@ msgstr "Quitar habilidad {0}"
 msgid "Remove webhook?"
 msgstr "¿Quitar webhook?"
 
-#: src/pages/shell/message-view.tsx:425
+#: src/pages/shell/message-view.tsx:429
 msgid "Removed with chat, computer, and memory."
 msgstr "Eliminado junto con el chat, la computadora y la memoria."
 
@@ -3473,7 +3477,7 @@ msgid "Removing…"
 msgstr "Quitando…"
 
 #: src/pages/BotContextMenu.tsx:121
-#: src/pages/Shell.tsx:3223
+#: src/pages/Shell.tsx:3232
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr ""
@@ -3502,9 +3506,13 @@ msgstr "Responder"
 msgid "Reply in several short messages"
 msgstr "Responder en varios mensajes cortos"
 
-#: src/pages/shell/composer.tsx:709
+#: src/pages/shell/composer.tsx:714
 msgid "Replying to {replyName}"
 msgstr "Respondiendo a {replyName}"
+
+#: src/pages/shell/composer.tsx:713
+msgid "Replying to {replyName}: “{replyQuote}”"
+msgstr "Respondiendo a {replyName}: «{replyQuote}»"
 
 #. placeholder {0}: block.routineName
 #: src/pages/shell/routine-run-line.tsx:241
@@ -3567,7 +3575,7 @@ msgstr "Intentarlo de nuevo"
 msgid "Retry now"
 msgstr "Reintentar ahora"
 
-#: src/pages/Shell.tsx:2533
+#: src/pages/Shell.tsx:2541
 msgid "Retry screen"
 msgstr "Reintentar pantalla"
 
@@ -3747,7 +3755,7 @@ msgstr "Seleccionar {0}"
 msgid "Select a bot"
 msgstr "Selecciona un bot"
 
-#: src/pages/shell/composer.tsx:976
+#: src/pages/shell/composer.tsx:982
 msgid "Send"
 msgstr "Enviar"
 
@@ -3808,11 +3816,11 @@ msgstr "URL del servidor"
 msgid "Settings"
 msgstr "Configuración"
 
-#: src/pages/shell/composer.tsx:1180
+#: src/pages/shell/composer.tsx:1186
 msgid "Settings: General"
 msgstr "Configuración: General"
 
-#: src/pages/shell/composer.tsx:1182
+#: src/pages/shell/composer.tsx:1188
 msgid "Settings: Usage"
 msgstr "Configuración: Uso"
 
@@ -3884,7 +3892,7 @@ msgid "Sign up"
 msgstr "Registrarse"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer.tsx:796
+#: src/pages/shell/composer.tsx:802
 msgid "Skill {0}"
 msgstr "Habilidad {0}"
 
@@ -3910,7 +3918,7 @@ msgid "Skipped"
 msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1934
+#: src/pages/Shell.tsx:1939
 msgid "Skipped {0}"
 msgstr "Se omitió {0}"
 
@@ -3967,8 +3975,8 @@ msgstr "Iniciando…"
 msgid "Steps"
 msgstr "Pasos"
 
-#: src/pages/shell/composer.tsx:992
-#: src/pages/shell/composer.tsx:1033
+#: src/pages/shell/composer.tsx:998
+#: src/pages/shell/composer.tsx:1039
 #: src/pages/shell/side-panel.tsx:418
 #: src/pages/shell/side-panel.tsx:423
 msgid "Stop"
@@ -3985,7 +3993,7 @@ msgid "Stop teaching"
 msgstr "Detener enseñanza"
 
 #. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:98
+#: src/lib/browser-notifications.ts:101
 msgid "Stopped."
 msgstr "Detenido."
 
@@ -3997,7 +4005,7 @@ msgstr "Almacenado cifrado"
 msgid "Stored securely. Never shown here."
 msgstr "Almacenado de forma segura. Nunca se muestra aquí."
 
-#: src/pages/shell/message-view.tsx:385
+#: src/pages/shell/message-view.tsx:389
 msgid "subagent"
 msgstr "subagente"
 
@@ -4034,7 +4042,7 @@ msgstr "Sistema"
 msgid "Teach a task"
 msgstr "Enseñar una tarea"
 
-#: src/pages/Shell.tsx:2860
+#: src/pages/Shell.tsx:2868
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Enseñanza en curso: detén la enseñanza antes de enviar un nuevo mensaje."
 
@@ -4155,7 +4163,7 @@ msgstr "Para:"
 
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:401
-#: src/pages/shell/transcript.tsx:217
+#: src/pages/shell/transcript.tsx:218
 msgid "Today"
 msgstr "Hoy"
 
@@ -4210,7 +4218,7 @@ msgid "Unpin"
 msgstr "Desfijar"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:2018
+#: src/pages/Shell.tsx:2023
 msgid "Unsupported file type: {0}"
 msgstr "Tipo de archivo no compatible: {0}"
 
@@ -4418,12 +4426,12 @@ msgstr "Cada año el {date} a las {time}"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402
-#: src/pages/shell/transcript.tsx:218
+#: src/pages/shell/transcript.tsx:219
 msgid "Yesterday"
 msgstr "Ayer"
 
-#: src/pages/Shell.tsx:1682
-#: src/pages/Shell.tsx:2557
+#: src/pages/Shell.tsx:1687
+#: src/pages/Shell.tsx:2565
 msgid "You"
 msgstr "Tú"
 
