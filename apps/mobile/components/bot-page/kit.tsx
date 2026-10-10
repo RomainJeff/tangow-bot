@@ -82,7 +82,7 @@ export function Row({
 }) {
   const styles = useThemedStyles(createKitStyles);
   const tokens = useMobileTokens();
-  const body = (
+  const body = (meta: ReactNode) => (
     <>
       {leading}
       <View style={styles.rowText}>
@@ -127,25 +127,32 @@ export function Row({
   if (!onPress) {
     return (
       <View style={styles.row}>
-        {body}
+        {body(meta)}
         {control}
       </View>
     );
   }
-  // The control stays outside the pressable part so it remains its own target.
+  // The control and the meta (a save's Retry) stay outside the pressable part, each its own target.
   return (
-    <View style={styles.split}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        accessibilityState={{ disabled, ...(checked === undefined ? {} : { selected: checked }) }}
-        disabled={disabled}
-        onPress={onPress}
-        style={({ pressed }) => [styles.row, styles.splitMain, pressed && styles.pressed]}
-      >
-        {body}
-      </Pressable>
-      {control ? <View style={styles.splitControl}>{control}</View> : null}
+    <View>
+      <View style={styles.split}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+          accessibilityState={{ disabled, ...(checked === undefined ? {} : { selected: checked }) }}
+          disabled={disabled}
+          onPress={onPress}
+          style={({ pressed }) => [styles.row, styles.splitMain, pressed && styles.pressed]}
+        >
+          {body(null)}
+        </Pressable>
+        {control ? <View style={styles.splitControl}>{control}</View> : null}
+      </View>
+      {meta ? (
+        <View pointerEvents="box-none" style={styles.metaBelow}>
+          {meta}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -307,6 +314,8 @@ function createKitStyles() {
     splitMain: { flex: 1 },
     splitControl: { justifyContent: "center", paddingEnd: 16 },
     pressed: { backgroundColor: tokens.accent },
+    // Drawn over the row's bottom padding, so a meta that renders nothing adds no height.
+    metaBelow: { marginTop: -12, paddingHorizontal: 16, paddingBottom: 12 },
     rowText: { flex: 1, minWidth: 0, gap: 3 },
     rowLabel: { color: tokens.foreground, ...nativeTextStyle("composer") },
     dimmed: { opacity: 0.45 },
