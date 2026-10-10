@@ -749,4 +749,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   Settings: "设置",
   "{size} KB": "{size} KB",
   "{size} MB": "{size} MB",
+  "Memory scope": "记忆范围",
+  "Inherit default": "沿用默认",
+  Isolated: "隔离",
+  Shared: "共享",
 };

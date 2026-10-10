@@ -765,4 +765,8 @@ export const RU_MESSAGES: Record<string, string> = {
   Settings: "Настройки",
   "{size} KB": "{size} КБ",
   "{size} MB": "{size} МБ",
+  "Memory scope": "Область памяти",
+  "Inherit default": "Наследовать значение по умолчанию",
+  Isolated: "Изолированный",
+  Shared: "Общий",
 };

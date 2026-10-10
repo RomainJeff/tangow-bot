@@ -1,8 +1,9 @@
-import type { AgentSkillCatalogEntry, MemoryDocument } from "@rakazo/contracts";
+import type { AgentSkillCatalogEntry, MemoryDocument, SpaceMemoryConfig } from "@rakazo/contracts";
 import { filterSkillList } from "@rakazo/core";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { rpc } from "../../lib/api";
+import { useMemoryScopeChoice } from "../../lib/bot-choices";
 import { type BotPageContext, useBotField } from "../../lib/bot-page";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
 import { FileList } from "./files";
@@ -42,6 +43,11 @@ function MemoryGroup({ page, epoch }: { page: BotPageContext; epoch: number }) {
     () => rpc<MemoryDocument[]>("memory/list", { botId, scope: "bot" }),
     [botId, epoch],
   );
+  // A bot has a memory scope only when its space has a memory provider.
+  const provider = useFocusedRead(
+    () => rpc<SpaceMemoryConfig | null>("memory/providerConfig"),
+    [page.bot.spaceId],
+  );
   const date = new Intl.DateTimeFormat(dateLocaleForUi(), { day: "numeric", month: "short" });
   return (
     <Group label={t("Memory")}>
@@ -64,7 +70,30 @@ function MemoryGroup({ page, epoch }: { page: BotPageContext; epoch: number }) {
           />
         ))
       )}
+      {provider.read.kind === "ready" && provider.read.value ? (
+        <MemoryScopeRow page={page} />
+      ) : null}
     </Group>
+  );
+}
+
+function MemoryScopeRow({ page }: { page: BotPageContext }) {
+  const router = useRouter();
+  const choice = useMemoryScopeChoice(page);
+  return (
+    <Row
+      label={choice.title}
+      meta={<SaveMeta state={choice.save.state} onRetry={() => void choice.save.retry()} />}
+      value={choice.selected?.label}
+      chevron
+      disabled={choice.disabled}
+      onPress={() =>
+        router.push({
+          pathname: "/bot-choice",
+          params: { botId: page.bot.id, kind: "memoryScope" },
+        })
+      }
+    />
   );
 }
 

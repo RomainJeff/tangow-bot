@@ -81,7 +81,7 @@ function choiceOf<V>(
   };
 }
 
-export const BOT_CHOICE_KINDS = ["computer", "model", "thinking", "voice"] as const;
+export const BOT_CHOICE_KINDS = ["computer", "model", "thinking", "voice", "memoryScope"] as const;
 export type BotChoiceKind = (typeof BOT_CHOICE_KINDS)[number];
 
 export function isBotChoiceKind(value: unknown): value is BotChoiceKind {
@@ -209,6 +209,19 @@ export function useVoiceChoice(page: BotPageContext): BotChoice | null {
   );
 }
 
+export function useMemoryScopeChoice(page: BotPageContext): BotChoice {
+  return choiceOf(
+    t("Memory scope"),
+    useBotSetting(page, "memoryScope"),
+    [
+      { value: null, label: t("Inherit default") },
+      { value: "isolated", label: t("Isolated") },
+      { value: "shared", label: t("Shared") },
+    ],
+    { disabled: page.readOnly },
+  );
+}
+
 function useModelChoice(page: BotPageContext): BotChoice {
   return modelChoice(page, useModelFields(page));
 }
@@ -223,4 +236,5 @@ export const BOT_CHOICES: Record<BotChoiceKind, (page: BotPageContext) => BotCho
   model: useModelChoice,
   thinking: useThinkingChoice,
   voice: useVoiceChoice,
+  memoryScope: useMemoryScopeChoice,
 };

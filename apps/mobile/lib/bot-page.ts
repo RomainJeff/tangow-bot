@@ -35,6 +35,7 @@ export type BotPatch = Partial<
     | "modelProvider"
     | "modelId"
     | "thinkingLevel"
+    | "memoryScope"
   >
 >;
 
