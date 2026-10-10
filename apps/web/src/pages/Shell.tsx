@@ -108,8 +108,6 @@ import { useMediaQuery } from "../lib/use-media-query";
 import type { ContextMenuPosition } from "./BotContextMenu";
 import { memberName } from "./GroupPanel";
 import { HostComputerPrompt } from "./HostComputerPrompt";
-import type { RoutineDraftState } from "./RoutineEditor";
-import { draftFromRoutine, emptyRoutineDraft } from "./RoutineEditor";
 import type { SettingsSection } from "./SettingsOverlay";
 import type { BotAction } from "./shell/bot-commands";
 import { downloadBotExport, useBotCommands } from "./shell/bot-commands";
@@ -254,6 +252,8 @@ export function ShellPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [botPage, setBotPage] = useState<BotPageView>({ tab: "settings", detail: null });
+  const botPageRef = useRef(botPage);
+  botPageRef.current = botPage;
   const showBotPage = useCallback((view: BotPageView) => {
     setBotPage(view);
     setPanel("bot");
@@ -433,13 +433,6 @@ export function ShellPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [initialBotsLoaded, setInitialBotsLoaded] = useState(false);
   const [bootstrapMe, setBootstrapMe] = useState<Me | null>();
-  const [routineDraft, setRoutineDraft] = useState<RoutineDraftState>(emptyRoutineDraft());
-  const [routineWebhookSecret, setRoutineWebhookSecret] = useState<string | null>(null);
-  const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
-  const [deleteRoutineTarget, setDeleteRoutineTarget] = useState<Routine | null>(null);
-  const [savingRoutine, setSavingRoutine] = useState(false);
-  const [runningRoutine, setRunningRoutine] = useState(false);
-  const [routineError, setRoutineError] = useState<string | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
   const [computerOpen, setComputerOpen] = useState(false);
   const [computerViewport, setComputerViewport] = useState<{
@@ -492,19 +485,15 @@ export function ShellPage() {
     runs: number;
   } | null>(null);
   const autoBooted = useRef<string | null>(null);
-  const routineSavePending = useRef(false);
   const webhookSecretProvisionRef = useRef(new Map<string, Promise<string>>());
   const ensureWebhookSecret = (botId: string) =>
     sharedInflight(webhookSecretProvisionRef.current, botId, async () => {
       const result = await rpc.bots.rotateWebhookSecret({ botId });
-      setRoutineWebhookSecret(result.secret);
       setBots((current) =>
         current.map((bot) => (bot.id === botId ? { ...bot, webhookConfigured: true } : bot)),
       );
       return result.secret;
     });
-  const routineSaveRequest = useRef(0);
-  const routineRunPending = useRef(false);
   const routineRefetched = useRef(new Set<string>());
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
@@ -1587,14 +1576,10 @@ export function ShellPage() {
           .catch(() => undefined);
         return;
       }
-      if (routine) {
-        setRoutineDraft(draftFromRoutine(routine));
-        setRoutineWebhookSecret(null);
-        setEditingRoutine(routine);
-        setPanel("routine");
-      } else {
-        openBotPage("routines");
-      }
+      showBotPage({
+        tab: "routines",
+        detail: routine ? { kind: "routine", routineId: routine.id } : null,
+      });
       const next = new URLSearchParams(searchParams);
       next.delete("routine");
       setSearchParams(next, { replace: true });
@@ -1614,7 +1599,7 @@ export function ShellPage() {
     routinesBotId,
     searchParams,
     setSearchParams,
-    openBotPage,
+    showBotPage,
   ]);
   const activeSnapshot = inGroup
     ? snapshot?.groupId === groupId
@@ -2251,12 +2236,12 @@ export function ShellPage() {
     setTaughtSkills(skills);
     setTaughtSkillsBotId(id);
   }, []);
-  const addSkillRoutine = useCallback((name: string, prompt: string) => {
-    setRoutineDraft({ ...emptyRoutineDraft(), name, prompt });
-    setRoutineWebhookSecret(null);
-    setEditingRoutine(null);
-    setPanel("routine");
-  }, []);
+  const addSkillRoutine = useCallback(
+    (name: string, prompt: string) => {
+      showBotPage({ tab: "routines", detail: { kind: "routine-new", seed: { name, prompt } } });
+    },
+    [showBotPage],
+  );
   const speakingMessageIdRef = useRef(speakingMessageId);
   speakingMessageIdRef.current = speakingMessageId;
   const speakMessage = useCallback((message: ThreadMessage) => {
@@ -2435,20 +2420,12 @@ export function ShellPage() {
     }
   }, [computer?.busyBotName]);
 
+  // A routine open in the panel belongs to the bot that was showing: a switch closes it.
   useEffect(() => {
-    if (panel !== "routine") {
-      routineSaveRequest.current += 1;
-      setRoutineError(null);
-    }
-  }, [panel]);
-
-  // The routine panel copies a routine's data into local draft state at click time
-  // rather than deriving it from `active`, so it goes stale across a bot switch —
-  // without this, Save on bot B could silently update bot A's routine.
-  useEffect(() => {
-    setEditingRoutine(null);
-    setDeleteRoutineTarget(null);
-    setPanel((current) => (current === "routine" ? null : current));
+    const kind = botPageRef.current.detail?.kind;
+    if (kind !== "routine" && kind !== "routine-new") return;
+    setBotPage({ tab: "routines", detail: null });
+    setPanel((current) => (current === "bot" ? null : current));
   }, [active?.id]);
 
   useEffect(() => {
@@ -2615,10 +2592,14 @@ export function ShellPage() {
   }
   const botCommands = useBotCommands({
     setBots,
+    setRoutines,
+    activeBotId,
     supersedeBotsRefresh: () => {
       if (botsRefreshInFlight.current > 0) void refreshBots().catch(() => undefined);
     },
     botAction: runBotAction,
+    ensureWebhookSecret,
+    refreshThread: (botId) => refreshThreadRef.current(botId),
   });
 
   // Below `lg` the panel is full width over the thread instead of reflowing
@@ -2965,26 +2946,6 @@ export function ShellPage() {
         refreshGroupThread={refreshGroupThread}
         refreshBots={refreshBots}
         activeRoutines={activeRoutines}
-        snapshot={snapshot}
-        stopRun={stopRun}
-        routineDraft={routineDraft}
-        setRoutineDraft={setRoutineDraft}
-        editingRoutine={editingRoutine}
-        setEditingRoutine={setEditingRoutine}
-        routineWebhookSecret={routineWebhookSecret}
-        setRoutineWebhookSecret={setRoutineWebhookSecret}
-        routineError={routineError}
-        setRoutineError={setRoutineError}
-        savingRoutine={savingRoutine}
-        setSavingRoutine={setSavingRoutine}
-        runningRoutine={runningRoutine}
-        setRunningRoutine={setRunningRoutine}
-        setDeleteRoutineTarget={setDeleteRoutineTarget}
-        ensureWebhookSecret={ensureWebhookSecret}
-        routineSavePending={routineSavePending}
-        routineSaveRequest={routineSaveRequest}
-        routineRunPending={routineRunPending}
-        activeBotId={activeBotId}
         messagingProviders={messagingProviders}
         memoryProviderConfig={memoryProviderConfig}
         bots={bots}
@@ -3317,23 +3278,6 @@ export function ShellPage() {
               }
               setClearTarget(null);
               await refreshBots();
-            }}
-          />
-        ) : null}
-
-        {deleteRoutineTarget ? (
-          <DeleteItemDialog
-            item={deleteRoutineTarget}
-            noun="routine"
-            onCancel={() => setDeleteRoutineTarget(null)}
-            onConfirm={async () => {
-              const target = deleteRoutineTarget;
-              await rpc.routines.remove({ routineId: target.id });
-              setDeleteRoutineTarget(null);
-              setEditingRoutine((current) => (current?.id === target.id ? null : current));
-              if (activeBotId.current !== target.botId) return;
-              await refreshThread(target.botId);
-              if (activeBotId.current === target.botId) openBotPage("routines");
             }}
           />
         ) : null}

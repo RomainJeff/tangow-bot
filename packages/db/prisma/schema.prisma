@@ -610,9 +610,9 @@ model Run {
   @@index([trigger, status, messagingMirroredAt, updatedAt])
   @@index([trigger, status, teamChatMirroredAt, updatedAt])
   @@index([spaceId, botId])
+  @@index([routineId, completedAt])
   @@index([sourceMessageId])
   @@index([threadId, status, createdAt])
-  @@index([routineId])
   @@map("runs")
 }
 

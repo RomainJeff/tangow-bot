@@ -1,31 +1,40 @@
 import type { Bot, Group, SpaceBot, SpaceGroup } from "@rakazo/contracts";
 
-export type Panel =
-  | "computer"
-  | "bot"
-  | "routine"
-  | "create"
-  | "create-group"
-  | "group-settings"
-  | null;
+export type Panel = "computer" | "bot" | "create" | "create-group" | "group-settings" | null;
 
 export type BotTab = "routines" | "knowledge" | "settings";
+
+/** What a new routine starts from, when something other than the empty form opens it. */
+export type RoutineSeed = { name: string; prompt: string };
 
 /** What the bot page shows over its tab: an editor reached from a row. */
 export type BotDetail =
   | { kind: "instructions" }
   | { kind: "description" }
   | { kind: "model" }
-  | { kind: "voice" };
+  | { kind: "voice" }
+  | { kind: "routine"; routineId: string }
+  | { kind: "routine-new"; seed?: RoutineSeed };
 
 export type BotPageView = { tab: BotTab; detail: BotDetail | null };
 
 export type PanelSize = "default" | "wide";
 
-/** The panel widens to edit a long text; its width is never stored. */
+const WIDE_DETAILS: ReadonlySet<BotDetail["kind"]> = new Set([
+  "instructions",
+  "description",
+  "routine",
+  "routine-new",
+]);
+
+/** The panel widens to edit a long text or a routine; its width is never stored. */
 export function panelSizeFor(panel: Panel, view: BotPageView): PanelSize {
-  const kind = panel === "bot" ? view.detail?.kind : undefined;
-  return kind === "instructions" || kind === "description" ? "wide" : "default";
+  return panel === "bot" && view.detail && WIDE_DETAILS.has(view.detail.kind) ? "wide" : "default";
+}
+
+/** The row that opened a detail carries this in `data-opens`, so focus can go back to it. */
+export function detailOpener(detail: BotDetail): string {
+  return detail.kind === "routine" ? `routine:${detail.routineId}` : detail.kind;
 }
 
 export type PendingAttachment = {

@@ -183,6 +183,33 @@ export function cronSchedule(cron: string): CronSchedule {
   return raw;
 }
 
+/** The editor preset a schedule words as, so the apps keep the editor's own phrases for it. */
+export function cronSchedulePreset(schedule: CronSchedule): CronPreset | null {
+  const base = defaultCronPreset();
+  if (schedule.kind === "every") {
+    return schedule.unit === "hours" && schedule.n === 1
+      ? { ...base, freq: "Every hour" }
+      : { ...base, freq: "Interval", n: schedule.n, unit: schedule.unit };
+  }
+  if (schedule.kind !== "daily" && schedule.kind !== "weekly" && schedule.kind !== "monthly") {
+    return null;
+  }
+  const [time, ...more] = schedule.times;
+  if (!time || more.length > 0) return null;
+  const at = formatClock(time.hour, time.minute);
+  if (schedule.kind === "daily") return { ...base, freq: "Every day", time: at };
+  if (schedule.kind === "monthly")
+    return schedule.day === 1 ? { ...base, freq: "Every month", time: at } : null;
+  const days = schedule.weekdays.join(",");
+  if (days === "1,2,3,4,5") return { ...base, freq: "Weekdays", time: at };
+  return days === "1" ? { ...base, freq: "Every week", time: at } : null;
+}
+
+/** The single time of a schedule, or null when it runs at several. */
+export function cronScheduleTime(times: CronTime[]): string | null {
+  return times.length === 1 ? formatClock(times[0]!.hour, times[0]!.minute) : null;
+}
+
 /** An "every N" step over minutes, hours or days, with the rest of the fields left free. */
 function everyStep(
   minute: string,

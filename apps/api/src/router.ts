@@ -98,7 +98,9 @@ import {
   expandSkillReferencesInPrompt,
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
+  MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
   nextCronDateAcrossStrict,
+  UNKNOWN_MODEL_MESSAGE,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
@@ -184,7 +186,7 @@ import {
   promptFocus,
   startOnboarding,
 } from "./onboarding.js";
-import { listSpaceRuns } from "./runs.js";
+import { lastRunsByRoutine, listSpaceRuns, NO_LAST_RUN, type RoutineLastRun } from "./runs.js";
 import { addScreenProxyCapability } from "./screen-proxy.js";
 import { querySpaceSearch } from "./search.js";
 import { withSerializableRetry } from "./serializable-retry.js";
@@ -1096,14 +1098,14 @@ export function createRouter(deps: RouterDeps) {
             input.modelProvider,
           );
           if (!credential) {
-            throw new ORPCError("BAD_REQUEST", { message: "Connect that model provider first" });
+            throw new ORPCError("BAD_REQUEST", { message: MODEL_PROVIDER_NOT_CONNECTED_MESSAGE });
           }
           const knownModels = [...listPiCatalog(), scriptedCatalogEntry];
           const inCatalog = knownModels.some(
             (item) => item.provider === input.modelProvider && item.id === input.modelId,
           );
           if (!inCatalog && credential.defaultModel !== input.modelId) {
-            throw new ORPCError("BAD_REQUEST", { message: "Unknown model for that provider" });
+            throw new ORPCError("BAD_REQUEST", { message: UNKNOWN_MODEL_MESSAGE });
           }
         }
         const thinkingLevel = input.thinkingLevel;
@@ -2509,7 +2511,8 @@ export function createRouter(deps: RouterDeps) {
         });
         if ("error" in updated) throw new ORPCError("BAD_REQUEST", { message: updated.error });
         const row = updated.row;
-        return mapRoutine(row);
+        const lastRuns = await lastRunsByRoutine(deps.prisma, context.actor.spaceId, [row.id]);
+        return mapRoutine(row, lastRuns.get(row.id));
       }),
       remove: authed.routines.remove.handler(async ({ context, input }) => {
         const existing = await deps.prisma.routine.findFirst({
@@ -5279,23 +5282,26 @@ function nextRoutineDate(crons: string[], timezone: string): Date {
   return next;
 }
 
-function mapRoutine(row: {
-  id: string;
-  botId: string;
-  name: string;
-  prompt: string;
-  crons: string[];
-  timezone: string;
-  active: boolean;
-  notify: boolean;
-  webhookEnabled: boolean;
-  githubEnabled: boolean;
-  messageProvider: string | null;
-  requireToolApproval: boolean;
-  lastRunAt: Date | null;
-  nextRunAt: Date | null;
-  createdAt: Date;
-}) {
+function mapRoutine(
+  row: {
+    id: string;
+    botId: string;
+    name: string;
+    prompt: string;
+    crons: string[];
+    timezone: string;
+    active: boolean;
+    notify: boolean;
+    webhookEnabled: boolean;
+    githubEnabled: boolean;
+    messageProvider: string | null;
+    requireToolApproval: boolean;
+    lastRunAt: Date | null;
+    nextRunAt: Date | null;
+    createdAt: Date;
+  },
+  lastRun: RoutineLastRun = NO_LAST_RUN,
+) {
   return {
     id: row.id,
     botId: row.botId,
@@ -5310,6 +5316,7 @@ function mapRoutine(row: {
     messageProvider: row.messageProvider,
     requireToolApproval: row.requireToolApproval,
     lastRunAt: row.lastRunAt?.toISOString() ?? null,
+    ...lastRun,
     nextRunAt: row.nextRunAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
@@ -5319,7 +5326,12 @@ async function listRoutinesDto(deps: RouterDeps, actor: Actor, botId: string) {
   const rows = await deps.prisma.routine.findMany({
     where: { botId, spaceId: actor.spaceId },
   });
-  return rows.map(mapRoutine);
+  const lastRuns = await lastRunsByRoutine(
+    deps.prisma,
+    actor.spaceId,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => mapRoutine(row, lastRuns.get(row.id)));
 }
 
 function withViewOnly(url: string, viewOnly: boolean) {

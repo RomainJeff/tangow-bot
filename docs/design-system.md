@@ -111,7 +111,7 @@ ticks.
 
 Layout, in px: `sidebar 280`, `thread 800`, `header 56`, `panel 384`,
 `panelWide 640`, `block 520` — `w-sidebar`, `max-w-thread`, `h-header`,
-`w-panel`, `w-panel-wide` (the bot page while it edits a long text;
+`w-panel`, `w-panel-wide` (the bot page while it edits a long text or a routine;
 `pe-panel-wide` on the thread beside it), `max-w-block` (a framed block standing
 alone in the thread, §3.3); `composerField 220` —
 `max-h-composer-field`, the web/desktop composer field before it scrolls
@@ -213,6 +213,7 @@ size carries the height or the square.
 | `tertiary` | transparent, `text-muted-foreground`, ink on hover |
 | `quickReply` | transparent inside a `border-outline` hairline, `bg-accent` on hover |
 | `roundIcon` | transparent circle, `text-muted-foreground`, `bg-accent` on hover |
+| `roundIconSecondary` | `bg-secondary` circle on ink, hover to 85% opacity; an add control that must read as one |
 
 | Size | px | Utility |
 | --- | --- | --- |

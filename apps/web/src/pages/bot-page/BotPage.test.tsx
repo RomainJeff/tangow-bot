@@ -80,11 +80,11 @@ afterEach(() => {
 });
 
 async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[] | null } = {}) {
-  const commands: BotCommands = {
+  const commands = {
     updateBot: updateBot as BotCommands["updateBot"],
     setComputer: vi.fn(),
     botAction: vi.fn(),
-  };
+  } as Partial<BotCommands> as BotCommands;
   await act(async () => {
     root.render(
       <SaveStoreProvider store={store}>
@@ -92,14 +92,12 @@ async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[]
           bot={bot}
           userId="user-1"
           routines={routines}
-          runningRoutineId={null}
           memoryProviderConfigured={false}
           view={view}
           onView={vi.fn()}
           onClose={vi.fn()}
-          onOpenRoutine={vi.fn()}
-          onStopRun={vi.fn()}
           commands={commands}
+          messagingProviders={[]}
         />
       </SaveStoreProvider>,
     );
@@ -163,4 +161,24 @@ it("is busy until the bot's routines are read", async () => {
 
   await render({ tab: "settings", detail: null });
   expect(page()?.hasAttribute("aria-busy")).toBe(false);
+});
+
+it("fills a new routine from the latest skill picked, even when the form is already open", async () => {
+  const nameField = () =>
+    container.querySelector<HTMLInputElement>('[data-testid="routine-create"] input')!;
+  await render({
+    tab: "routines",
+    detail: { kind: "routine-new", seed: { name: "Weekly wrap-up", prompt: "Sum up the week." } },
+  });
+  expect(nameField().value).toBe("Weekly wrap-up");
+
+  await render({
+    tab: "routines",
+    detail: { kind: "routine-new", seed: { name: "Inbox triage", prompt: "Sort the inbox." } },
+  });
+
+  expect(nameField().value).toBe("Inbox triage");
+  expect(
+    container.querySelector<HTMLTextAreaElement>('[data-testid="routine-create"] textarea')?.value,
+  ).toBe("Sort the inbox.");
 });

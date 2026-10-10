@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { RunActivityRow } from "@rakazo/contracts";
+import type { Routine, RunActivityRow } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
@@ -132,6 +132,68 @@ describeRunsList("runs.list activity tracker", () => {
     expect(recent.runs.length).toBe(1);
   });
 
+  it("lists each routine with how its latest finished run ended, by completion time", async () => {
+    const cookie = await signup(app, `runs-last-${stamp}@rakazo.test`, "Last Run User");
+    const bot = await rpc<{ id: string }>(app, cookie, "bots/create", {
+      name: "Digest",
+      title: "Digest",
+      description: "",
+      instructions: "",
+      notifyOnFinish: true,
+    });
+    const routine = (name: string) =>
+      rpc<Routine>(app, cookie, "routines/create", {
+        botId: bot.id,
+        name,
+        prompt: "check",
+        crons: ["0 9 * * *"],
+      });
+    const failing = await routine("Failing");
+    const recovered = await routine("Recovered");
+    const running = await routine("Running");
+    const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+    // Created last but finished first: the order is completion time, not creation.
+    await seedRun(
+      prisma,
+      bot.id,
+      "failed",
+      "late",
+      minutesAgo(1),
+      failing.id,
+      "429 Too Many Requests",
+    );
+    await seedRun(prisma, bot.id, "completed", "early", minutesAgo(30), failing.id);
+    await seedRun(prisma, bot.id, "completed", "now ok", minutesAgo(1), recovered.id);
+    await seedRun(
+      prisma,
+      bot.id,
+      "failed",
+      "was broken",
+      minutesAgo(30),
+      recovered.id,
+      "Bot has no computer",
+    );
+    await seedRun(prisma, bot.id, "running", "in flight", null, running.id);
+
+    const listed = await rpc<Routine[]>(app, cookie, "routines/list", { botId: bot.id });
+    expect(
+      listed
+        .map((item) => [item.name, item.lastRunStatus, item.lastRunFailureKind])
+        .sort(([a], [b]) => String(a).localeCompare(String(b))),
+    ).toEqual([
+      ["Failing", "failed", "provider"],
+      ["Recovered", "succeeded", null],
+      ["Running", null, null],
+    ]);
+    expect(JSON.stringify(listed)).not.toContain("Too Many Requests");
+
+    const renamed = await rpc<Routine>(app, cookie, "routines/update", {
+      routineId: failing.id,
+      name: "Still failing",
+    });
+    expect([renamed.lastRunStatus, renamed.lastRunFailureKind]).toEqual(["failed", "provider"]);
+  });
+
   it("returns group runs with groupId for navigation", async () => {
     const cookie = await signup(app, `runs-group-${stamp}@rakazo.test`, "Group User");
     const botA = await rpc<{ id: string }>(app, cookie, "bots/create", {
@@ -188,9 +250,11 @@ describeRunsList("runs.list activity tracker", () => {
 async function seedRun(
   prisma: PrismaClient,
   botId: string,
-  status: "queued" | "running" | "completed",
+  status: "queued" | "running" | "completed" | "failed",
   prompt: string,
   completedAt?: Date | null,
+  routineId?: string,
+  error?: string,
 ) {
   const thread = await prisma.thread.findUniqueOrThrow({ where: { botId } });
   const task = await prisma.task.create({
@@ -211,8 +275,11 @@ async function seedRun(
       threadId: thread.id,
       taskId: task.id,
       status,
-      trigger: "user",
-      completedAt: status === "completed" ? (completedAt ?? new Date()) : null,
+      trigger: routineId ? "routine" : "user",
+      routineId,
+      error,
+      completedAt:
+        status === "completed" || status === "failed" ? (completedAt ?? new Date()) : null,
     },
   });
 }

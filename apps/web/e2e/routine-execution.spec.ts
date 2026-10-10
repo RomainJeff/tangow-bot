@@ -2,8 +2,10 @@ import { expect, test } from "@playwright/test";
 import type { Routine } from "@rakazo/contracts";
 import {
   activeBotId,
+  addRoutineTrigger,
   captureScreenshot,
   completeOnboarding,
+  createRoutine,
   openRoutineCreate,
   openRoutines,
   rpc,
@@ -33,18 +35,15 @@ test("Slack message trigger uses the mounted messaging provider and persists", a
     .fill("Review the verified message event");
   await page.getByRole("button", { name: "Add trigger" }).click();
   await page.getByRole("menuitem", { name: "Slack message", exact: true }).click();
+  const editor = page.getByRole("dialog");
+  await expect(
+    editor.getByText("Runs when this bot receives a verified message from this provider."),
+  ).toBeVisible();
+  await editor.getByRole("button", { name: "Done", exact: true }).click();
 
   const panel = page.getByTestId("side-panel");
   await expect(panel.getByText("Slack message", { exact: true })).toBeVisible();
-  await expect(
-    panel.getByText("Runs when this bot receives a verified message from this provider."),
-  ).toBeVisible();
-
-  const saved = page.waitForResponse(
-    (response) => response.url().includes("/rpc/routines/create") && response.ok(),
-  );
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await saved;
+  await createRoutine(page);
   const [routine] = await rpc<Routine[]>(page, "routines/list", { botId });
   expect(routine).toMatchObject({
     name: "Triage Slack updates",
@@ -71,22 +70,19 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
     .fill("Inspect the signed GitHub event");
   await page.getByRole("button", { name: "Add trigger" }).click();
   await page.getByRole("menuitem", { name: "Git event", exact: true }).click();
-
+  const editor = page.getByRole("dialog");
+  await expect(editor.getByText(new RegExp(`/api/v1/bots/${botId}/github$`))).toBeVisible();
+  await expect(editor.getByText("X-Hub-Signature-256: sha256=…", { exact: true })).toBeVisible();
+  await editor.getByRole("button", { name: "Done", exact: true }).click();
   await expect(
     page.getByTestId("side-panel").getByText("Git event", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(new RegExp(`/api/v1/bots/${botId}/github$`))).toBeVisible();
-  await expect(page.getByText("X-Hub-Signature-256: sha256=…", { exact: true })).toBeVisible();
   const toolApproval = page.getByRole("switch", { name: "Ask before every action" });
   await expect(toolApproval).toBeChecked();
   await toolApproval.click();
   await expect(toolApproval).not.toBeChecked();
 
-  const saved = page.waitForResponse(
-    (response) => response.url().includes("/rpc/routines/create") && response.ok(),
-  );
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await saved;
+  await createRoutine(page, { mintsKey: true });
   const [routine] = await rpc<Routine[]>(page, "routines/list", { botId });
   expect(routine).toMatchObject({
     name: "Review repository events",
@@ -107,14 +103,13 @@ test("Korean webhook routine keeps technical field labels in English", async ({
   await completeOnboarding(page);
 
   await page.getByRole("button", { name: new RegExp(userName) }).click();
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = page.getByTestId("user-settings");
   await settings.getByTestId("ui-locale-select").click();
   await settings.getByRole("option", { name: "한국어", exact: true }).click();
   await page.getByRole("button", { name: "계정 설정 닫기" }).click();
 
-  await page.getByTitle("Agent 컴퓨터").click();
-  await page.getByRole("button", { name: "자동 실행 만들기" }).click();
+  await openRoutineCreate(page);
   await page.getByPlaceholder("이 루틴의 이름을 정하세요").fill("한국어 웹훅 확인");
   await page
     .getByPlaceholder("이 루틴이 실행될 때마다 무엇을 해야 하나요?")
@@ -122,10 +117,11 @@ test("Korean webhook routine keeps technical field labels in English", async ({
   await page.getByRole("button", { name: "트리거 추가" }).click();
   await page.getByRole("menuitem", { name: "웹훅", exact: true }).click();
 
-  await expect(page.getByText("웹훅이 실행될 때", { exact: true })).toBeVisible();
-  await expect(page.getByText("POST 대상")).toBeVisible();
-  await expect(page.getByText("key", { exact: true })).toBeVisible();
-  await expect(page.getByText("header")).toBeVisible();
+  const editor = page.getByRole("dialog");
+  await expect(editor.getByText("웹훅이 실행될 때", { exact: true })).toBeVisible();
+  await expect(editor.getByText("POST 대상")).toBeVisible();
+  await expect(editor.getByText("key", { exact: true })).toBeVisible();
+  await expect(editor.getByText("header")).toBeVisible();
   await captureScreenshot(page, testInfo, "routine-webhook-ko");
 });
 
@@ -134,25 +130,18 @@ test("routine test-run completes and survives reload", async ({ page }, testInfo
   await signup(page, `routine-${stamp}@rakazo.test`, "password12", "Routine");
   await completeOnboarding(page);
 
-  await expect(page.getByRole("button", { name: "Test run" })).toHaveCount(0);
   await openRoutineCreate(page);
-  await page.locator("label:has-text('Name') input").fill("Daily verification");
-  await page
-    .locator("label:has-text('Instruction') textarea")
+  const panel = page.getByTestId("side-panel");
+  await panel.getByLabel("Name", { exact: true }).fill("Daily verification");
+  await panel
+    .getByLabel("Instruction")
     .fill("write routine-run-now-ok into the durable task result");
-  await page.getByRole("button", { name: "Add trigger" }).click();
-  await page.getByRole("menuitem", { name: "On a schedule" }).hover();
-  await page.getByRole("menuitem", { name: "Weekdays", exact: true }).click();
-  await expect(page.getByLabel("How often")).toHaveValue("Weekdays");
+  await addRoutineTrigger(page, { schedule: "Weekdays" });
+  await expect(panel.getByText(/^Weekdays at 9:00 AM/)).toBeVisible();
   await captureScreenshot(page, testInfo, "32-routine-configured");
 
-  const saved = page.waitForResponse(
-    (response) => response.url().includes("/rpc/routines/create") && response.ok(),
-  );
-  await page.getByRole("button", { name: "Save" }).click();
-  await saved;
-  await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
-  await page.getByRole("button", { name: "Back" }).click();
+  await createRoutine(page);
+  await panel.getByRole("button", { name: "Routines", exact: true }).click();
   const routine = page.getByRole("button", { name: /Daily verification/ });
   await expect(routine).toContainText("Weekdays at 9:00 AM");
   await captureScreenshot(page, testInfo, "33-routine-scheduled");

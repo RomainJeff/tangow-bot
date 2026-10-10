@@ -1,37 +1,52 @@
-import type { Bot, ComputerMode } from "@rakazo/contracts";
-import { createAnswerOrder } from "@rakazo/core";
-import type { Dispatch, SetStateAction } from "react";
+import type { Bot, ComputerMode, Routine } from "@rakazo/contracts";
+import { createAnswerOrder, type RoutinePayload } from "@rakazo/core";
+import type { Dispatch, RefObject, SetStateAction } from "react";
 import { useMemo, useRef } from "react";
+import { localTimezone } from "../../lib/local-timezone";
 import { rpc } from "../../lib/rpc";
 
 export type UpdateBotPatch = Omit<Parameters<typeof rpc.bots.update>[0], "botId">;
 
+export type RoutinePatch = Omit<Parameters<typeof rpc.routines.update>[0], "routineId">;
+
 export type BotAction = "duplicate" | "export" | "clear" | "archive" | "delete";
 
-/** Everything the bot page may ask of the shell. The shell stays the one owner of `bots`. */
+/** Everything the bot page may ask of the shell. The shell stays the one owner of `bots` and `routines`. */
 export interface BotCommands {
   /** Writes the patch, then merges the returned bot into the roster by id. */
   updateBot(botId: string, patch: UpdateBotPatch): Promise<Bot>;
   /** Its own call, never chained with `updateBot`: the server refuses it while the bot runs. */
   setComputer(botId: string, mode: ComputerMode): Promise<Bot>;
+  /** Creates the routine in the device's timezone and adds it to the open bot's routines. */
+  createRoutine(botId: string, payload: RoutinePayload): Promise<Routine>;
+  /** Writes the patch, then merges the returned routine into the open bot's routines by id. */
+  updateRoutine(botId: string, routineId: string, patch: RoutinePatch): Promise<Routine>;
+  removeRoutine(botId: string, routineId: string): Promise<void>;
+  testRun(botId: string, routineId: string): Promise<void>;
+  /** Mints a new webhook key for the bot and returns it; it is shown once. */
+  revealWebhookSecret(botId: string): Promise<string>;
   /** The lifecycle actions the sidebar menu already runs, with the same confirmations. */
   botAction(botId: string, action: BotAction): void;
 }
 
 export interface BotCommandDeps {
   setBots: Dispatch<SetStateAction<Bot[]>>;
+  setRoutines: Dispatch<SetStateAction<Routine[]>>;
+  activeBotId: RefObject<string | undefined>;
   /**
    * Replaces a roster refresh already in flight, which would carry the bot as it
    * was before a write, with one started after it.
    */
   supersedeBotsRefresh: () => void;
   botAction: BotCommands["botAction"];
+  ensureWebhookSecret: (botId: string) => Promise<string>;
+  refreshThread: (botId: string) => Promise<unknown>;
 }
 
 export function useBotCommands(deps: BotCommandDeps): BotCommands {
   const depsRef = useRef(deps);
   depsRef.current = deps;
-  // Per bot, what a late answer may still put back.
+  // Per bot and per routine, what a late answer may still put back.
   const order = useRef(createAnswerOrder()).current;
 
   return useMemo<BotCommands>(() => {
@@ -52,11 +67,51 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
       return bot;
     }
 
+    /** Routines belong to the open bot only: an answer for another bot leaves them alone. */
+    function setOpenBotRoutines(botId: string, update: (list: Routine[]) => Routine[]) {
+      if (depsRef.current.activeBotId.current !== botId) return;
+      depsRef.current.setRoutines((list) =>
+        list.some((item) => item.botId !== botId) ? list : update(list),
+      );
+    }
+
     return {
       updateBot: (botId, patch) =>
         writeBot(botId, Object.keys(patch), () => rpc.bots.update({ botId, ...patch })),
       setComputer: (botId, mode) =>
         writeBot(botId, ["computerMode"], () => rpc.bots.setComputer({ botId, mode })),
+      async createRoutine(botId, payload) {
+        const routine = await rpc.routines.create({
+          botId,
+          timezone: localTimezone(),
+          ...payload,
+        });
+        setOpenBotRoutines(botId, (list) => [
+          ...list.filter((item) => item.id !== routine.id),
+          routine,
+        ]);
+        return routine;
+      },
+      async updateRoutine(botId, routineId, patch) {
+        const request = order.next();
+        const routine = await rpc.routines.update({ routineId, ...patch });
+        const merge = order.write(`routine:${routineId}`, request, Object.keys(patch), routine);
+        if (merge) {
+          setOpenBotRoutines(botId, (list) =>
+            list.map((item) => (item.id === routine.id ? merge(item) : item)),
+          );
+        }
+        return routine;
+      },
+      async removeRoutine(botId, routineId) {
+        await rpc.routines.remove({ routineId });
+        setOpenBotRoutines(botId, (list) => list.filter((item) => item.id !== routineId));
+      },
+      async testRun(botId, routineId) {
+        await rpc.routines.testRun({ routineId });
+        await depsRef.current.refreshThread(botId).catch(() => undefined);
+      },
+      revealWebhookSecret: (botId) => depsRef.current.ensureWebhookSecret(botId),
       botAction: (botId, action) => depsRef.current.botAction(botId, action),
     };
   }, [order]);

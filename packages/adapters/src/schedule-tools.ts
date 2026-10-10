@@ -22,7 +22,7 @@ import {
   sameWallClockIn,
   shortestCronGapMs,
 } from "@rakazo/core";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 
 export { isOneShotRoutineCron, ONCE_ROUTINE_CRON };
 
@@ -362,6 +362,33 @@ type StoredRoutine = {
 type RoutineRow = Awaited<ReturnType<PrismaClient["routine"]["update"]>>;
 
 /** What a routine update may change; a field left out stays as stored. */
+const NO_TRIGGER_ERROR = "Add a schedule, webhook, GitHub, or message trigger";
+
+/**
+ * The stored row must still have a trigger this change leaves alone, so two edits that each
+ * remove a different trigger cannot both pass the check on a stale read and leave none. Null when
+ * the change removes no trigger or sets one itself.
+ */
+function keepsATrigger(change: RoutineChange): Prisma.RoutineWhereInput | null {
+  const removes =
+    change.crons?.length === 0 ||
+    change.webhookEnabled === false ||
+    change.githubEnabled === false ||
+    change.messageProvider === null;
+  const adds =
+    (change.crons?.length ?? 0) > 0 ||
+    change.webhookEnabled ||
+    change.githubEnabled ||
+    Boolean(change.messageProvider);
+  if (!removes || adds) return null;
+  const untouched: Prisma.RoutineWhereInput[] = [];
+  if (change.crons === undefined) untouched.push({ NOT: { crons: { isEmpty: true } } });
+  if (change.webhookEnabled === undefined) untouched.push({ webhookEnabled: true });
+  if (change.githubEnabled === undefined) untouched.push({ githubEnabled: true });
+  if (change.messageProvider === undefined) untouched.push({ messageProvider: { not: null } });
+  return { OR: untouched };
+}
+
 export type RoutineChange = {
   name?: string;
   prompt?: string;
@@ -402,7 +429,7 @@ export async function updateRoutine(
   const messageProvider =
     change.messageProvider === undefined ? existing.messageProvider : change.messageProvider;
   if (crons.length === 0 && !webhookEnabled && !githubEnabled && !messageProvider) {
-    return { error: "Add a schedule, webhook, GitHub, or message trigger" };
+    return { error: NO_TRIGGER_ERROR };
   }
   if (hasMixedOneShotSchedule(crons)) {
     return { error: "A one-time schedule can't be combined with other schedules." };
@@ -461,23 +488,31 @@ export async function updateRoutine(
     }
   }
 
-  const row = await deps.prisma.routine.update({
-    where: { id: existing.id },
-    data: {
-      name: change.name,
-      prompt: change.prompt,
-      crons: change.crons,
-      timezone: change.timezone,
-      active: change.active,
-      notify: change.notify,
-      webhookEnabled: change.webhookEnabled,
-      githubEnabled: change.githubEnabled,
-      messageProvider: change.messageProvider,
-      requireToolApproval: change.requireToolApproval,
-      inheritedHop: change.inheritedHop,
-      nextRunAt,
-    },
-  });
+  const kept = keepsATrigger(change);
+  let row: RoutineRow;
+  try {
+    row = await deps.prisma.routine.update({
+      where: { id: existing.id, ...(kept ? { AND: [kept] } : {}) },
+      data: {
+        name: change.name,
+        prompt: change.prompt,
+        crons: change.crons,
+        timezone: change.timezone,
+        active: change.active,
+        notify: change.notify,
+        webhookEnabled: change.webhookEnabled,
+        githubEnabled: change.githubEnabled,
+        messageProvider: change.messageProvider,
+        requireToolApproval: change.requireToolApproval,
+        inheritedHop: change.inheritedHop,
+        nextRunAt,
+      },
+    });
+  } catch (error) {
+    // P2025: no row matched, so a concurrent edit took away the trigger this change relied on.
+    if (kept && (error as { code?: unknown }).code === "P2025") return { error: NO_TRIGGER_ERROR };
+    throw error;
+  }
   if (row.active && row.nextRunAt) {
     await deps.jobs.enqueue(routineWakeupJob(row.id, row.nextRunAt));
   } else {

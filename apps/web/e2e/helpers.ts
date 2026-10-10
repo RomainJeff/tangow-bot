@@ -170,15 +170,70 @@ export async function openRoutines(page: Page) {
 }
 
 /**
- * The routine editor for a new routine, from the Routines tab's create button. The button and the
- * tab are found by test id and position, so this works in any interface language.
+ * The form for a new routine, from "New routine" on the Routines tab. The button and the tab
+ * are found by test id and position, so this works in any interface language.
  */
 export async function openRoutineCreate(page: Page) {
   const botPage = await openBotPage(page);
   const add = botPage.getByTestId("routine-create-button");
   if (!(await add.isVisible())) await botPage.getByRole("tab").first().click();
   await add.click();
-  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "routine");
+  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-detail", "routine-new");
+}
+
+export type RoutineTrigger =
+  | { schedule: string; cron?: string }
+  | "Slack message"
+  | "Git event"
+  | "Webhook";
+
+/** Pick a trigger from "Add trigger" and confirm its editor with Done. */
+export async function addRoutineTrigger(page: Page, trigger: RoutineTrigger) {
+  await page.getByRole("button", { name: "Add trigger" }).click();
+  if (typeof trigger === "string") {
+    await page.getByRole("menuitem", { name: trigger, exact: true }).click();
+  } else {
+    await page.getByRole("menuitem", { name: "On a schedule" }).hover();
+    await page.getByRole("menuitem", { name: trigger.schedule, exact: true }).click();
+  }
+  const editor = page.getByRole("dialog");
+  if (typeof trigger !== "string" && trigger.cron !== undefined) {
+    await editor.getByLabel("Cron expression").fill(trigger.cron);
+  }
+  await editor.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+}
+
+/**
+ * Create the routine being written and wait for it to open in its own page. A routine whose
+ * webhook or Git trigger minted the bot's key shows that key first, until Done.
+ */
+export async function createRoutine(page: Page, { mintsKey = false } = {}) {
+  const created = page.waitForResponse(
+    (response) => response.url().includes("/rpc/routines/create") && response.ok(),
+  );
+  await page
+    .getByTestId("routine-create")
+    .getByRole("button", { name: "Create", exact: true })
+    .click();
+  await created;
+  if (mintsKey) {
+    const key = page.getByRole("dialog");
+    await expect(key.getByText("key", { exact: true })).toBeVisible();
+    await expect(key.getByText("Available after the routine is saved")).toHaveCount(0);
+    await key.getByRole("button", { name: "Done", exact: true }).click();
+  }
+  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-detail", "routine");
+}
+
+/** Leave a routine field and wait for its autosave. */
+export async function saveRoutineField(page: Page, field: Locator, value: string) {
+  const saved = page.waitForResponse(
+    (response) => response.url().includes("/rpc/routines/update") && response.ok(),
+  );
+  await field.fill(value);
+  await field.blur();
+  await saved;
 }
 
 /** Open the user Settings overlay, optionally switching to a sidebar section. */

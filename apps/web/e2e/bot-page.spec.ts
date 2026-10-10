@@ -4,16 +4,23 @@ import { captureScreenshot } from "./helpers";
 
 const FIXTURE = "/e2e/fixtures/bot-page.html";
 
-const STATES = [
+const STATES: Array<{ name: string; query: string; trigger?: RegExp }> = [
   { name: "settings", query: "tab=settings" },
   { name: "routines", query: "tab=routines" },
+  { name: "routine", query: "tab=routines&detail=routine&routine=routine-2" },
+  {
+    name: "routine-trigger",
+    query: "tab=routines&detail=routine&routine=routine-2",
+    trigger: /^On a schedule/,
+  },
+  { name: "routine-new", query: "tab=routines&detail=routine-new" },
   { name: "knowledge", query: "tab=knowledge" },
   { name: "instructions", query: "tab=settings&detail=instructions" },
   { name: "description", query: "tab=settings&detail=description" },
   { name: "model", query: "tab=settings&detail=model" },
   { name: "voice", query: "tab=settings&detail=voice" },
   { name: "busy", query: "tab=settings&busy=1" },
-] as const;
+];
 
 for (const theme of ["light", "dark"] as const) {
   for (const state of STATES) {
@@ -26,6 +33,10 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       if (state.name === "knowledge") {
         await expect(page.getByTestId("bot-knowledge-memory")).toContainText("MEMORY.md");
+      }
+      if (state.trigger) {
+        await page.getByRole("button", { name: state.trigger }).click();
+        await expect(page.getByRole("dialog")).toBeVisible();
       }
       await captureScreenshot(page, testInfo, `bot-page-${state.name}-${theme}`);
     });
@@ -110,4 +121,86 @@ test("Knowledge shows memory, files and skills", async ({ page }) => {
   await expect(knowledge.getByTestId("bot-knowledge-memory")).toContainText("MEMORY.md");
   await expect(knowledge).toContainText("inbox-report.md");
   await expect(knowledge.getByTestId("bot-skills")).toContainText("inbox-triage");
+});
+
+test("a routine row says how its last run went, and its switch saves on its own", async ({
+  page,
+}) => {
+  await page.goto(`${FIXTURE}?tab=routines`);
+  const routines = page.getByTestId("bot-routines");
+  await expect(routines).toContainText("3 routines · next in 14 hr.");
+  await expect(routines.getByRole("button", { name: /Weekly digest/ })).toContainText(
+    "Failed yesterday · Model error",
+  );
+  await expect(routines.getByRole("button", { name: /Invoice watch/ })).toContainText(
+    "When a webhook fires · paused",
+  );
+
+  const toggle = routines.getByRole("switch", { name: "Active: Invoice watch" });
+  await toggle.click();
+  await expect(toggle).toBeChecked();
+  await expect(routines.locator('[data-slot="save-meta"]').last()).toHaveText(/^Saved \d/);
+  await expect(routines.getByRole("button", { name: /Invoice watch/ })).not.toContainText("paused");
+});
+
+test("a routine opens wide, saves its name on blur, and edits a trigger in a dialog", async ({
+  page,
+}) => {
+  await page.goto(`${FIXTURE}?tab=routines`);
+  const panel = page.getByTestId("side-panel");
+  await page.getByRole("button", { name: /Weekly digest/ }).click();
+  await expect(panel).toHaveAttribute("data-size", "wide");
+
+  const name = panel.getByLabel("Name", { exact: true });
+  await name.fill("Monday digest");
+  await name.blur();
+  await expect(panel.locator('[data-slot="save-meta"]').first()).toHaveText(/^Saved \d/);
+
+  await panel.getByRole("button", { name: /^On a schedule/ }).click();
+  const editor = page.getByRole("dialog");
+  await editor.getByLabel("How often").selectOption("Weekdays");
+  await editor.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: /^On a schedule/ })).toContainText(
+    "Weekdays at 9:00 AM",
+  );
+
+  await panel.getByRole("button", { name: "Routines", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-size", "default");
+  await expect(page.getByRole("button", { name: /Monday digest/ })).toBeFocused();
+});
+
+test("a new routine is only created once it has a trigger", async ({ page }) => {
+  await page.goto(`${FIXTURE}?tab=routines&detail=routine-new`);
+  const form = page.getByTestId("routine-create");
+  await form.getByLabel("Name", { exact: true }).fill("Friday wrap-up");
+  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(form.getByRole("alert")).toHaveText(
+    "Add a schedule, webhook, GitHub, or message trigger",
+  );
+
+  await form.getByRole("button", { name: "Add trigger" }).click();
+  await page.getByRole("menuitem", { name: "On a schedule" }).hover();
+  await page.getByRole("menuitem", { name: "Every week", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Done", exact: true }).click();
+  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByTestId("routine-detail").getByLabel("Name", { exact: true })).toHaveValue(
+    "Friday wrap-up",
+  );
+});
+
+test("a routine's first webhook shows the bot's new key until Done", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${FIXTURE}?tab=routines&detail=routine&routine=routine-2`);
+  const panel = page.getByTestId("side-panel");
+  await panel.getByRole("button", { name: "Add trigger" }).click();
+  await page.getByRole("menuitem", { name: "Webhook", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Done", exact: true }).click();
+
+  const key = page.getByRole("dialog");
+  await expect(key.getByText("Authorization: Bearer whsec_fixture_0000")).toBeVisible();
+  await captureScreenshot(page, testInfo, "bot-page-routine-key");
+  await key.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(key).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: /^When a webhook fires/ })).toBeVisible();
 });

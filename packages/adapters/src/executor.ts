@@ -75,6 +75,8 @@ import {
   isOneShotRoutineCrons,
   isTerminal,
   isUserOpenedTrigger,
+  MISSING_MODEL_MESSAGE,
+  MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
   messagingChannelId,
   messagingChannelPrivacyBlock,
   messagingDmSurfaceNote,
@@ -109,6 +111,7 @@ import {
   type ToolCallStreak,
   toolRequiresApproval,
   toolRequiresExplicitApproval,
+  UNKNOWN_MODEL_MESSAGE,
   unattendedTriggerToolRequiresApproval,
   userTurnBlocksForRun,
   validateBotNameText,
@@ -624,7 +627,6 @@ export function isProtectedComputerLifecycleCommand(command: string): boolean {
 
 /** Cap the roster so a large Space cannot flood the prompt. */
 const BOT_DIRECTORY_LIMIT = 40;
-const MISSING_MODEL_MESSAGE = "Connect a model in Settings before running bots.";
 
 function runtimeFallbackModel(runtime: AgentRuntime) {
   return runtime.describe().capabilities.scripted ? { provider: "scripted", id: "scripted" } : null;
@@ -1008,12 +1010,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
     );
     if (validationError) throw new Error(validationError);
     const credential = await findModelCredential(deps.prisma, scope, provider, modelId);
-    if (!credential) throw new Error("Connect that model provider first");
+    if (!credential) throw new Error(MODEL_PROVIDER_NOT_CONNECTED_MESSAGE);
     // Free-form selections must keep the preference that owns this modelId. A
     // intervening delete/change can make findModelCredential fall back to another
     // same-provider credential; reject that mismatch instead of mixing baseUrl.
     if (!isCatalogModelChoice(provider, modelId) && credential.defaultModel !== modelId) {
-      throw new Error("Unknown model for that provider");
+      throw new Error(UNKNOWN_MODEL_MESSAGE);
     }
     const resolved = await resolveModelKey(
       deps,

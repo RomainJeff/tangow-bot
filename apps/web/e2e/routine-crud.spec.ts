@@ -1,113 +1,76 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 import type { Bot, Routine } from "@rakazo/contracts";
 import {
   activeBotId,
+  addRoutineTrigger,
   captureScreenshot,
   completeOnboarding,
+  createRoutine,
   openRoutineCreate,
   openRoutines,
   rpc,
+  saveRoutineField,
   signup,
 } from "./helpers";
 
-async function addScheduleTrigger(page: Page, freq: string) {
-  await page.getByRole("button", { name: "Add trigger" }).click();
-  await page.getByRole("menuitem", { name: "On a schedule" }).hover();
-  await page.getByRole("menuitem", { name: freq, exact: true }).click();
-}
-
-async function saveAndReturn(page: Page, procedure: "routines/create" | "routines/update") {
-  const saved = page.waitForResponse(
-    (response) => response.url().includes(`/rpc/${procedure}`) && response.ok(),
-  );
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await saved;
-  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Back" }).click();
-}
-
-test("routine active switch keeps its thumb inside the track", async ({ page }, testInfo) => {
+test("a new routine starts active and silent, and its switches answer the keyboard", async ({
+  page,
+}, testInfo) => {
   const stamp = Date.now();
   await signup(page, `routine-toggle-${stamp}@rakazo.test`, "password12", "Routine Toggle");
   await completeOnboarding(page);
   await openRoutineCreate(page);
 
-  const toggle = page.getByRole("switch", { name: "Active" });
-  const thumb = toggle.locator("span");
-  async function expectThumbInsets(left: number, right: number) {
-    await thumb.evaluate((element) =>
-      Promise.all(element.getAnimations().map(({ finished }) => finished)),
-    );
-    const [trackBox, thumbBox] = await Promise.all([toggle.boundingBox(), thumb.boundingBox()]);
-    expect(trackBox).not.toBeNull();
-    expect(thumbBox).not.toBeNull();
-    expect(thumbBox!.x - trackBox!.x).toBeCloseTo(left, 1);
-    expect(trackBox!.x + trackBox!.width - thumbBox!.x - thumbBox!.width).toBeCloseTo(right, 1);
-  }
-
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await expectThumbInsets(20, 2);
-  await captureScreenshot(page, testInfo, "routine-toggle-desktop-active");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
-  await expectThumbInsets(2, 20);
-  await captureScreenshot(page, testInfo, "routine-toggle-desktop-inactive");
-
-  await toggle.focus();
-  await page.keyboard.press("Space");
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
-  expect(await toggle.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe(
-    "none",
-  );
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expectThumbInsets(20, 2);
-  await captureScreenshot(page, testInfo, "routine-toggle-mobile-active");
-  await toggle.click();
-  await expectThumbInsets(2, 20);
-  await captureScreenshot(page, testInfo, "routine-toggle-mobile-inactive");
-});
-
-test("routine notify switch keeps its thumb inside the track", async ({ page }, testInfo) => {
-  const stamp = Date.now();
-  await signup(page, `routine-notify-${stamp}@rakazo.test`, "password12", "Routine Notify");
-  await completeOnboarding(page);
-  await openRoutineCreate(page);
-
-  const toggle = page.getByRole("switch", { name: "Notify me on every run" });
-  const thumb = toggle.locator("span");
-  async function expectThumbInsets(left: number, right: number) {
-    await thumb.evaluate((element) =>
-      Promise.all(element.getAnimations().map(({ finished }) => finished)),
-    );
-    const [trackBox, thumbBox] = await Promise.all([toggle.boundingBox(), thumb.boundingBox()]);
-    expect(trackBox).not.toBeNull();
-    expect(thumbBox).not.toBeNull();
-    expect(thumbBox!.x - trackBox!.x).toBeCloseTo(left, 1);
-    expect(trackBox!.x + trackBox!.width - thumbBox!.x - thumbBox!.width).toBeCloseTo(right, 1);
-  }
-
+  const active = page.getByRole("switch", { name: "Active" });
+  const notify = page.getByRole("switch", { name: "Notify me" });
   // Off by default: the routine stays a silent, browsable trace until the user opts in.
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
-  await expectThumbInsets(2, 20);
-  await captureScreenshot(page, testInfo, "routine-notify-toggle-desktop-off");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await expectThumbInsets(20, 2);
-  await captureScreenshot(page, testInfo, "routine-notify-toggle-desktop-on");
+  await expect(active).toBeChecked();
+  await expect(notify).not.toBeChecked();
+  // The thumb sits inside the track, at mirrored insets on and off.
+  const off = await thumbInsets(notify);
+  expect(off.left).toBeGreaterThanOrEqual(0);
+  expect(off.right).toBeGreaterThan(off.left);
+  const expectThumb = async (toggle: Locator, on: boolean) => {
+    const insets = await thumbInsets(toggle);
+    expect(insets.left).toBeCloseTo(on ? off.right : off.left, 1);
+    expect(insets.right).toBeCloseTo(on ? off.left : off.right, 1);
+  };
+  await expectThumb(active, true);
+  await captureScreenshot(page, testInfo, "routine-create-switches");
 
-  await toggle.focus();
+  await active.click();
+  await expect(active).not.toBeChecked();
+  await expectThumb(active, false);
+  await notify.focus();
   await page.keyboard.press("Space");
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
-  expect(await toggle.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe(
-    "none",
-  );
+  await expect(notify).toBeChecked();
+  await expectThumb(notify, true);
+  // The focus ring is a box shadow (`focus-visible:ring`), not an outline.
+  expect(await notify.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe("none");
   await page.setViewportSize({ width: 390, height: 844 });
-  await expectThumbInsets(2, 20);
-  await captureScreenshot(page, testInfo, "routine-notify-toggle-mobile-off");
-  await toggle.click();
-  await expectThumbInsets(20, 2);
-  await captureScreenshot(page, testInfo, "routine-notify-toggle-mobile-on");
+  await expect(notify).toBeVisible();
+  await expectThumb(notify, true);
+  await notify.click();
+  await expectThumb(notify, false);
+  await active.click();
+  await expectThumb(active, true);
+  await captureScreenshot(page, testInfo, "routine-create-switches-mobile");
 });
+
+/** How far the switch's thumb sits from each end of its track, once it stops moving. */
+async function thumbInsets(toggle: Locator) {
+  const thumb = toggle.locator('[data-slot="switch-thumb"]');
+  await thumb.evaluate((element) =>
+    Promise.all(element.getAnimations().map(({ finished }) => finished)),
+  );
+  const [track, knob] = await Promise.all([toggle.boundingBox(), thumb.boundingBox()]);
+  expect(track).not.toBeNull();
+  expect(knob).not.toBeNull();
+  return {
+    left: knob!.x - track!.x,
+    right: track!.x + track!.width - knob!.x - knob!.width,
+  };
+}
 
 test("routine editing updates in place, preserves timezone, and deletion persists", async ({
   page,
@@ -131,11 +94,22 @@ test("routine editing updates in place, preserves timezone, and deletion persist
   await page.reload();
   await openRoutines(page);
 
+  const panel = page.getByTestId("side-panel");
   await page.getByRole("button", { name: /Tokyo check-in/ }).click();
-  await page.locator("label:has-text('Name') input").fill("Weekday check-in");
-  await page.locator("label:has-text('Instruction') textarea").fill("Send the revised update");
-  await page.getByLabel("How often").selectOption("Weekdays");
-  await saveAndReturn(page, "routines/update");
+  await expect(panel).toHaveAttribute("data-size", "wide");
+  await saveRoutineField(page, panel.getByLabel("Name", { exact: true }), "Weekday check-in");
+  await saveRoutineField(page, panel.getByLabel("Instruction"), "Send the revised update");
+  await panel.getByRole("button", { name: /^On a schedule/ }).click();
+  const editor = page.getByRole("dialog");
+  await editor.getByLabel("How often").selectOption("Weekdays");
+  const scheduled = page.waitForResponse(
+    (response) => response.url().includes("/rpc/routines/update") && response.ok(),
+  );
+  await editor.getByRole("button", { name: "Done", exact: true }).click();
+  await scheduled;
+  await expect(editor).toHaveCount(0);
+  await panel.getByRole("button", { name: "Routines", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-size", "default");
 
   const updatedButton = page.getByRole("button", { name: /Weekday check-in/ });
   await expect(updatedButton).toHaveCount(1);
@@ -156,19 +130,20 @@ test("routine editing updates in place, preserves timezone, and deletion persist
   await captureScreenshot(page, testInfo, "routine-weekday-schedule");
 
   await updatedButton.click();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await panel.getByRole("button", { name: "Delete routine", exact: true }).click();
   const dialog = page.getByRole("alertdialog", { name: "Delete Weekday check-in?" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.locator("label:has-text('Name') input")).toHaveValue("Weekday check-in");
+  await expect(panel.getByLabel("Name", { exact: true })).toHaveValue("Weekday check-in");
 
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await panel.getByRole("button", { name: "Delete routine", exact: true }).click();
   const removeResponse = page.waitForResponse(
     (response) => response.url().includes("/rpc/routines/remove") && response.ok(),
   );
   await dialog.getByRole("button", { name: "Delete", exact: true }).click();
   await removeResponse;
+  await expect(panel).not.toHaveAttribute("data-detail", /./);
   await expect(updatedButton).toHaveCount(0);
   expect(await rpc<Routine[]>(page, "routines/list", { botId })).toEqual([]);
 
@@ -178,6 +153,68 @@ test("routine editing updates in place, preserves timezone, and deletion persist
   await expect(updatedButton).toHaveCount(0);
 });
 
+test("a deep link opens the routine in the bot page", async ({ page }) => {
+  const stamp = Date.now();
+  await signup(page, `routine-link-${stamp}@rakazo.test`, "password12", "Routine Link");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  const routine = await rpc<Routine>(page, "routines/create", {
+    botId,
+    name: "Linked routine",
+    prompt: "Check in",
+    crons: ["0 9 * * *"],
+    timezone: "UTC",
+    active: true,
+  });
+
+  await page.goto(`/app/${botId}?routine=${routine.id}`);
+  const panel = page.getByTestId("side-panel");
+  await expect(panel).toHaveAttribute("data-panel", "bot");
+  await expect(panel).toHaveAttribute("data-detail", "routine");
+  await expect(panel.getByLabel("Name", { exact: true })).toHaveValue("Linked routine");
+});
+
+test("removing the last trigger is refused, an inbound one is confirmed first", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await signup(page, `routine-trigger-${stamp}@rakazo.test`, "password12", "Routine Trigger");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  await rpc<Routine>(page, "routines/create", {
+    botId,
+    name: "Hooked",
+    prompt: "Check in",
+    crons: ["0 9 * * *"],
+    timezone: "UTC",
+    active: true,
+    webhookEnabled: true,
+  });
+  await page.reload();
+  await openRoutines(page);
+  await page.getByRole("button", { name: /Hooked/ }).click();
+  const panel = page.getByTestId("side-panel");
+  const editor = page.getByRole("dialog");
+
+  await panel.getByRole("button", { name: /^When a webhook fires/ }).click();
+  await editor.getByRole("button", { name: "Remove", exact: true }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Remove webhook?" });
+  const removed = page.waitForResponse(
+    (response) => response.url().includes("/rpc/routines/update") && response.ok(),
+  );
+  await confirm.getByRole("button", { name: "Remove", exact: true }).click();
+  await removed;
+  await expect(panel.getByRole("button", { name: /^When a webhook fires/ })).toHaveCount(0);
+
+  await panel.getByRole("button", { name: /^On a schedule/ }).click();
+  await editor.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(editor.getByRole("alert")).toHaveText(
+    "Add a schedule, webhook, GitHub, or message trigger",
+  );
+  const [routine] = await rpc<Routine[]>(page, "routines/list", { botId });
+  expect(routine).toMatchObject({ crons: ["0 9 * * *"], webhookEnabled: false });
+});
+
 test("invalid advanced cron is rejected without creating a routine", async ({ page }, testInfo) => {
   const stamp = Date.now();
   await signup(page, `routine-invalid-${stamp}@rakazo.test`, "password12", "Invalid Routine");
@@ -185,49 +222,33 @@ test("invalid advanced cron is rejected without creating a routine", async ({ pa
   const botId = activeBotId(page);
 
   await openRoutineCreate(page);
-  await page.locator("label:has-text('Name') input").fill("Broken schedule");
-  await page.locator("label:has-text('Instruction') textarea").fill("This should never run");
-  await addScheduleTrigger(page, "Advanced...");
-  await page.getByLabel("Cron expression").fill("61 25 * * *");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  const panel = page.getByTestId("side-panel");
+  await panel.getByLabel("Name", { exact: true }).fill("Broken schedule");
+  await panel.getByLabel("Instruction").fill("This should never run");
+  await addRoutineTrigger(page, { schedule: "Advanced...", cron: "61 25 * * *" });
+  await panel.getByRole("button", { name: "Create", exact: true }).click();
 
   await expect(page.getByRole("alert")).toContainText("Enter a valid cron expression.");
+  await expect(panel).toHaveAttribute("data-detail", "routine-new");
   expect(await rpc<Routine[]>(page, "routines/list", { botId })).toEqual([]);
   await captureScreenshot(page, testInfo, "invalid-cron-rejected");
 });
 
-test("a successful routine create is not reported as failed when refresh fails", async ({
-  page,
-}) => {
+test("a created routine opens in its own page", async ({ page }) => {
   const stamp = Date.now();
   await signup(page, `routine-refresh-${stamp}@rakazo.test`, "password12", "Routine Refresh");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 
   await openRoutineCreate(page);
-  await page.locator("label:has-text('Name') input").fill("Persisted routine");
-  await page.locator("label:has-text('Instruction') textarea").fill("Run once each morning");
-  await addScheduleTrigger(page, "Every day");
-
-  await page.route(
-    "**/rpc/routines/list",
-    (route) => route.fulfill({ status: 500, body: "refresh failed" }),
-    { times: 1 },
-  );
-  const createResponse = page.waitForResponse(
-    (response) => response.url().includes("/rpc/routines/create") && response.ok(),
-  );
-  const failedRefresh = page.waitForResponse(
-    (response) => response.url().includes("/rpc/routines/list") && response.status() === 500,
-  );
-
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await createResponse;
-  await failedRefresh;
-  await expect(page.getByTestId("side-panel")).toHaveAttribute("data-panel", "routine");
+  const panel = page.getByTestId("side-panel");
+  await panel.getByLabel("Name", { exact: true }).fill("Persisted routine");
+  await panel.getByLabel("Instruction").fill("Run once each morning");
+  await addRoutineTrigger(page, { schedule: "Every day" });
+  await createRoutine(page);
+  await expect(panel.getByLabel("Name", { exact: true })).toHaveValue("Persisted routine");
   await expect(page.getByRole("alert")).toHaveCount(0);
 
-  await page.unroute("**/rpc/routines/list");
   const routines = await rpc<Routine[]>(page, "routines/list", { botId });
   expect(routines).toHaveLength(1);
   expect(routines[0]?.name).toBe("Persisted routine");
@@ -271,7 +292,8 @@ test("switching bots while a routine save is pending does not reopen stale state
 
   await openRoutines(page);
   await page.getByRole("button", { name: /First routine/ }).click();
-  await page.locator("label:has-text('Name') input").fill("First routine updated");
+  const name = page.getByTestId("side-panel").getByLabel("Name", { exact: true });
+  await name.fill("First routine updated");
 
   let releaseUpdate!: () => void;
   let sawUpdate!: () => void;
@@ -294,7 +316,7 @@ test("switching bots while a routine save is pending does not reopen stale state
     response.url().includes("/rpc/routines/update"),
   );
 
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await name.blur();
   await updateIntercepted;
   await page
     .locator("aside")

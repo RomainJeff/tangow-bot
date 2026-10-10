@@ -1,6 +1,6 @@
-import { type Actor, MessageBlock, type RunActivityRow } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, botMessageContext } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import { type Actor, MessageBlock, type Routine, type RunActivityRow } from "@rakazo/contracts";
+import { ACTIVE_RUN_STATUSES, botMessageContext, classifyRunFailure } from "@rakazo/core";
+import { Prisma, type PrismaClient } from "@rakazo/db";
 
 const RECENT_LIMIT = 20;
 const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
@@ -86,4 +86,48 @@ export async function listSpaceRuns(
       : row.updatedAt
     ).toISOString(),
   }));
+}
+
+export type RoutineLastRun = Pick<Routine, "lastRunStatus" | "lastRunFailureKind">;
+
+export const NO_LAST_RUN: RoutineLastRun = { lastRunStatus: null, lastRunFailureKind: null };
+
+const ROUTINE_RUN_STATUS = {
+  completed: "succeeded",
+  failed: "failed",
+  cancelled: "cancelled",
+} as const;
+
+/** How each routine's most recent finished run ended, in one query. Routines never run are absent. */
+export async function lastRunsByRoutine(
+  prisma: PrismaClient,
+  spaceId: string,
+  routineIds: readonly string[],
+): Promise<Map<string, RoutineLastRun>> {
+  const lastRuns = new Map<string, RoutineLastRun>();
+  if (routineIds.length === 0) return lastRuns;
+  // One backward scan of runs(routineId, completedAt) per routine, however long its history.
+  const rows = await prisma.$queryRaw<
+    Array<{ routineId: string; status: (typeof TERMINAL_STATUSES)[number]; error: string | null }>
+  >(Prisma.sql`
+    SELECT ids."routineId", last.status, last.error
+    FROM unnest(ARRAY[${Prisma.join(routineIds)}]::text[]) AS ids("routineId")
+    CROSS JOIN LATERAL (
+      SELECT r.status, r.error
+      FROM runs r
+      WHERE r."routineId" = ids."routineId"
+        AND r."spaceId" = ${spaceId}
+        AND r."completedAt" IS NOT NULL
+        AND r.status IN (${Prisma.join(TERMINAL_STATUSES)})
+      ORDER BY r."completedAt" DESC, r.id DESC
+      LIMIT 1
+    ) last
+  `);
+  for (const row of rows) {
+    lastRuns.set(row.routineId, {
+      lastRunStatus: ROUTINE_RUN_STATUS[row.status],
+      lastRunFailureKind: classifyRunFailure(row.status, row.error),
+    });
+  }
+  return lastRuns;
 }

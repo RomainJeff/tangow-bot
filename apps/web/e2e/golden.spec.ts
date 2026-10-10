@@ -1,8 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
   activeBotId,
+  addRoutineTrigger,
   captureScreenshot,
   completeOnboarding,
+  createRoutine,
   openBotPage,
   openRoutineCreate,
   realSandboxTimeout,
@@ -122,20 +124,14 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await captureScreenshot(page, testInfo, "09a-computer-takeover-skipped");
 
   await openRoutineCreate(page);
-  await page.locator("label:has-text('Name') input").fill("Monday briefing");
-  await page
-    .locator("label:has-text('Instruction') textarea")
+  const routinePanel = page.getByTestId("side-panel");
+  await routinePanel.getByLabel("Name", { exact: true }).fill("Monday briefing");
+  await routinePanel
+    .getByLabel("Instruction")
     .fill("write a file in your home called notes/result.txt that says routine-ok");
-  await page.getByRole("button", { name: "Add trigger" }).click();
-  await page.getByRole("menuitem", { name: "On a schedule" }).hover();
-  await page.getByRole("menuitem", { name: "Every day", exact: true }).click();
-  const savedRoutine = page.waitForResponse(
-    (response) => response.url().includes("/rpc/routines/create") && response.ok(),
-  );
-  await page.getByRole("button", { name: "Save" }).click();
-  await savedRoutine;
-  await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
-  await page.getByRole("button", { name: "Back" }).click();
+  await addRoutineTrigger(page, { schedule: "Every day" });
+  await createRoutine(page);
+  await routinePanel.getByRole("button", { name: "Routines", exact: true }).click();
   await expect(page.getByText("Monday briefing")).toBeVisible();
   await captureScreenshot(page, testInfo, "10-routine-created");
 
