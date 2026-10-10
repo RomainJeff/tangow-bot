@@ -20,14 +20,15 @@ import {
 import { Pencil } from "lucide-react";
 import { type BotPageContext, useBotField, useSaveLabels } from "./page-kit";
 
+/** Read-only (an archived bot), the name and title still read as text, not as greyed fields. */
 const HERO_INPUT =
-  "h-auto border-transparent bg-transparent px-2 py-0.5 text-center dark:bg-transparent";
+  "h-auto border-transparent bg-transparent px-2 py-0.5 text-center dark:bg-transparent disabled:bg-transparent disabled:opacity-100 dark:disabled:bg-transparent";
 
-/** The avatar, name and title at the top of the page, each saving on its own. */
+/** The avatar, name and title at the top of the page, each saving on its own unless read-only. */
 export function BotHero({ page }: { page: BotPageContext }) {
   const { t } = useLingui();
   const labels = useSaveLabels();
-  const { bot } = page;
+  const { bot, readOnly } = page;
   const name = useBotField(page, "name", bot.name, (value) => ({ name: value }));
   const title = useBotField(page, "title", bot.title, (value) => ({ title: value }));
   const color = useBotField(page, "color", bot.color, (value) => ({ color: value }));
@@ -40,6 +41,7 @@ export function BotHero({ page }: { page: BotPageContext }) {
         bot={bot}
         color={color.value}
         shapeSeed={shape.value}
+        disabled={readOnly}
         onColor={(value) => void color.save(value)}
         onShape={(value) => void shape.save(value)}
       />
@@ -50,6 +52,7 @@ export function BotHero({ page }: { page: BotPageContext }) {
         meta={false}
         required
         maxLength={BOT_NAME_MAX_LENGTH}
+        disabled={readOnly}
         dir="auto"
         className="mt-3 w-full gap-0"
         controlClassName={`${HERO_INPUT} text-title text-foreground md:text-title`}
@@ -60,6 +63,7 @@ export function BotHero({ page }: { page: BotPageContext }) {
         labels={labels}
         meta={false}
         maxLength={BOT_TITLE_MAX_LENGTH}
+        disabled={readOnly}
         dir="auto"
         placeholder={t`What it does, in one line`}
         className="w-full gap-0"
@@ -99,12 +103,14 @@ function AppearancePicker({
   bot,
   color,
   shapeSeed,
+  disabled,
   onColor,
   onShape,
 }: {
   bot: Bot;
   color: string;
   shapeSeed: number | null;
+  disabled: boolean;
   onColor: (color: string) => void;
   onShape: (shapeSeed: number | null) => void;
 }) {
@@ -115,6 +121,7 @@ function AppearancePicker({
       <PopoverTrigger
         data-testid="bot-appearance-trigger"
         aria-label={t`Appearance`}
+        disabled={disabled}
         className="group relative rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <BotAvatar
@@ -124,12 +131,14 @@ function AppearancePicker({
           size={80}
           status={bot.status}
         />
-        <span
-          aria-hidden
-          className="absolute end-0 bottom-0 grid size-6 place-items-center rounded-full bg-surface text-muted-foreground opacity-0 shadow-row duration-(--duration-hover) ease-quiet group-hover:opacity-100 group-focus-visible:opacity-100"
-        >
-          <Pencil className="size-3" strokeWidth={2} />
-        </span>
+        {disabled ? null : (
+          <span
+            aria-hidden
+            className="absolute end-0 bottom-0 grid size-6 place-items-center rounded-full bg-surface text-muted-foreground opacity-0 shadow-row duration-(--duration-hover) ease-quiet group-hover:opacity-100 group-focus-visible:opacity-100"
+          >
+            <Pencil className="size-3" strokeWidth={2} />
+          </span>
+        )}
       </PopoverTrigger>
       <PopoverContent data-testid="bot-appearance-picker" aria-label={t`Appearance`}>
         {avatarStyle === "organic" ? (

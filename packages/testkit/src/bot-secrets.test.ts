@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -313,6 +314,96 @@ describeIntegration("reusable credential lifecycle", () => {
       }
     },
   );
+
+  describe("webhook key", () => {
+    async function keyedBot(label: string) {
+      const cookie = await signup(`webhook-${label}-${stamp}@rakazo.test`, `Webhook ${label}`);
+      const me = await rpc<{ userId: string }>(cookie, "me");
+      const bot = await rpc<{ id: string }>(cookie, "bots/create", {
+        name: `Webhook ${label}`,
+        title: "",
+        description: "",
+        instructions: "",
+        notifyOnFinish: false,
+      });
+      const read = (as = cookie) =>
+        rpc<{ secret: string }>(as, "bots/webhookSecret", { botId: bot.id });
+      const rotate = (input: { ifAbsent?: boolean } = {}) =>
+        rpc<{ secret: string | null }>(cookie, "bots/rotateWebhookSecret", {
+          botId: bot.id,
+          ...input,
+        });
+      const accepts = async (secret: string) => {
+        const body = JSON.stringify({ zen: "Keep it logically awesome." });
+        const response = await handles.app.request(`/api/v1/bots/${bot.id}/github`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`,
+          },
+          body,
+        });
+        return response.status;
+      };
+      const stored = () =>
+        handles.prisma.secret.count({ where: { userId: me.userId, kind: "webhook" } });
+      const configured = async () =>
+        (await rpc<{ webhookConfigured: boolean }>(cookie, "bots/get", { botId: bot.id }))
+          .webhookConfigured;
+      return { read, rotate, accepts, stored, configured };
+    }
+
+    it("gives the owner the bot's live key on every read, creating it on the first", async () => {
+      const bot = await keyedBot("read");
+      expect(await bot.configured()).toBe(false);
+
+      const first = await bot.read();
+      expect(first.secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(await bot.read()).toEqual(first);
+      expect(await bot.accepts(first.secret)).toBe(200);
+      expect(await bot.configured()).toBe(true);
+      expect(await bot.stored()).toBe(1);
+    });
+
+    it("creates exactly one key when two first reads race", async () => {
+      const bot = await keyedBot("race");
+      const [one, two] = await Promise.all([bot.read(), bot.read()]);
+      expect(one.secret).toBe(two.secret);
+      expect(await bot.accepts(one.secret)).toBe(200);
+      expect(await bot.stored()).toBe(1);
+    });
+
+    it("refuses the key to anyone but the bot's owner", async () => {
+      const bot = await keyedBot("owner");
+      const { secret } = await bot.read();
+      const stranger = await signup(`webhook-stranger-${stamp}@rakazo.test`, "Webhook stranger");
+
+      await expect(bot.read(stranger)).rejects.toThrow("bots/webhookSecret failed (500)");
+      expect(await bot.read()).toEqual({ secret });
+      expect(await bot.stored()).toBe(1);
+    });
+
+    it("reads the new key after a rotation, and the old one stops working", async () => {
+      const bot = await keyedBot("rotate");
+      const before = await bot.read();
+      const rotated = await bot.rotate();
+
+      expect(rotated.secret).not.toBe(before.secret);
+      expect(await bot.read()).toEqual({ secret: rotated.secret });
+      expect(await bot.accepts(before.secret)).toBe(401);
+      expect(await bot.accepts(rotated.secret!)).toBe(200);
+      expect(await bot.stored()).toBe(1);
+    });
+
+    it("still leaves a live key alone for app builds that rotate with ifAbsent", async () => {
+      const bot = await keyedBot("if-absent");
+      const { secret } = await bot.read();
+
+      expect(await bot.rotate({ ifAbsent: true })).toMatchObject({ secret: null });
+      expect(await bot.accepts(secret)).toBe(200);
+      expect(await bot.stored()).toBe(1);
+    });
+  });
 
   async function seedRun(
     label: string,

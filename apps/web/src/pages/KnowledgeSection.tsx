@@ -45,21 +45,29 @@ export function SpaceMemorySection() {
   );
 }
 
+/**
+ * Memory documents with their own editor: Save and Cancel, never a save on blur.
+ * With `onOpen` a row hands its document to the caller instead of expanding.
+ */
 export function MemoryDocumentList({
   load,
+  epoch,
   exportFilename,
   emptyLabel,
   testId,
+  onOpen,
 }: {
   load: () => Promise<MemoryDocument[]>;
+  /** A change reads the list again, keeping the rows shown until it answers. */
+  epoch?: number;
   exportFilename: string;
   emptyLabel: ReactNode;
   testId: string;
+  onOpen?: (doc: MemoryDocument) => void;
 }) {
   const { t } = useLingui();
   const [docs, setDocs] = useState<MemoryDocument[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const generation = useRef(0);
@@ -73,6 +81,7 @@ export function MemoryDocumentList({
       .then((list) => {
         if (current !== generation.current) return;
         setDocs(list);
+        setError(null);
       })
       .catch(() => {
         if (current !== generation.current) return;
@@ -82,27 +91,15 @@ export function MemoryDocumentList({
     return () => {
       generation.current += 1;
     };
-  }, [t]);
+  }, [t, epoch]);
 
   function openDoc(doc: MemoryDocument) {
-    setOpenId(doc.id);
-    setDraft(doc.content);
-    setError(null);
-  }
-
-  async function save(doc: MemoryDocument) {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const updated = await rpc.memory.update({ documentId: doc.id, content: draft });
-      setDocs((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
-      setOpenId(null);
-    } catch {
-      setError(t`Could not save`);
-    } finally {
-      setBusy(false);
+    if (onOpen) {
+      onOpen(doc);
+      return;
     }
+    setOpenId(openId === doc.id ? null : doc.id);
+    setError(null);
   }
 
   async function exportMarkdown() {
@@ -135,7 +132,8 @@ export function MemoryDocumentList({
           <button
             type="button"
             disabled={busy}
-            onClick={() => (openId === doc.id ? setOpenId(null) : openDoc(doc))}
+            data-opens={`memory:${doc.id}`}
+            onClick={() => openDoc(doc)}
             className={rowClass(openId === doc.id)}
           >
             <span className="flex items-baseline justify-between gap-3">
@@ -148,34 +146,17 @@ export function MemoryDocumentList({
             </span>
           </button>
           {openId === doc.id ? (
-            <div className="px-2.5 pb-2">
-              <textarea
-                value={draft}
-                disabled={busy}
-                onChange={(event) => setDraft(event.target.value)}
-                rows={Math.min(16, Math.max(4, draft.split("\n").length + 1))}
-                className={fieldClass}
-                dir="auto"
-              />
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  disabled={busy || draft === doc.content}
-                  onClick={() => void save(doc)}
-                  className="rounded-lg bg-muted px-3 py-1.5 text-[13px] text-foreground disabled:opacity-50"
-                >
-                  <Trans>Save</Trans>
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => setOpenId(null)}
-                  className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground disabled:opacity-50"
-                >
-                  <Trans>Cancel</Trans>
-                </button>
-              </div>
-            </div>
+            <MemoryDocumentEditor
+              doc={doc}
+              onSaving={setBusy}
+              onSaved={(updated) => {
+                setDocs((current) =>
+                  current.map((entry) => (entry.id === updated.id ? updated : entry)),
+                );
+                setOpenId(null);
+              }}
+              onCancel={() => setOpenId(null)}
+            />
           ) : null}
         </div>
       ))}
@@ -189,6 +170,70 @@ export function MemoryDocumentList({
           <Trans>Download as markdown</Trans>
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * One memory document's text with explicit Save and Cancel: a save on blur
+ * after an accidental clear would wipe the bot's memory with no history.
+ */
+export function MemoryDocumentEditor({
+  doc,
+  onSaving,
+  onSaved,
+  onCancel,
+}: {
+  doc: MemoryDocument;
+  /** Tells a list around the editor to hold its other rows while the save runs. */
+  onSaving?: (saving: boolean) => void;
+  onSaved: (updated: MemoryDocument) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useLingui();
+  const [draft, setDraft] = useState(doc.content);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (busy) return;
+    setBusy(true);
+    onSaving?.(true);
+    setError(null);
+    try {
+      onSaved(await rpc.memory.update({ documentId: doc.id, content: draft }));
+    } catch {
+      setError(t`Could not save`);
+      setBusy(false);
+    } finally {
+      onSaving?.(false);
+    }
+  }
+
+  return (
+    <div className="px-2.5 pb-2">
+      {error ? <div className="pt-2 text-[13px] text-destructive">{error}</div> : null}
+      <textarea
+        value={draft}
+        disabled={busy}
+        onChange={(event) => setDraft(event.target.value)}
+        rows={Math.min(16, Math.max(4, draft.split("\n").length + 1))}
+        className={fieldClass}
+        dir="auto"
+      />
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <Button variant="capsuleSecondary" size="capsule" disabled={busy} onClick={onCancel}>
+          <Trans>Cancel</Trans>
+        </Button>
+        <Button
+          variant="capsule"
+          size="capsule"
+          disabled={busy || draft === doc.content}
+          onClick={() => void save()}
+        >
+          <Trans>Save</Trans>
+        </Button>
+      </div>
     </div>
   );
 }
@@ -209,13 +254,16 @@ Steps the agent should follow.
  */
 export function AgentSkills({
   botId,
-  onOpenEditor,
+  epoch,
   onChanged,
+  onOpenEditor,
 }: {
   botId?: string;
-  onOpenEditor?: (skillId: string | null) => void;
+  /** A change reads the list again, keeping the rows shown until it answers. */
+  epoch?: number;
   /** Called once the server has confirmed a skill write. */
   onChanged?: () => void;
+  onOpenEditor?: (skillId: string | null) => void;
 } = {}) {
   const { t } = useLingui();
   /** `null` until the catalog is first read. */
@@ -244,6 +292,7 @@ export function AgentSkills({
         if (current !== generation.current) return;
         setSkills(list);
         setBots(allBots.filter((bot) => !bot.archivedAt));
+        setError(null);
       })
       .catch(() => {
         if (current !== generation.current) return;
@@ -253,7 +302,7 @@ export function AgentSkills({
     return () => {
       generation.current += 1;
     };
-  }, [t, botId]);
+  }, [t, botId, epoch]);
 
   function openEditor(skillId: string | null) {
     if (busy) return;
@@ -617,9 +666,27 @@ export function AgentSkillEditor({
         </p>
       ) : null}
       <div className="mt-2 flex items-center gap-2">
+        {skill && !skill.readOnly ? (
+          <Button
+            variant="tertiary"
+            size="capsule"
+            disabled={busy}
+            onClick={() => void remove(skill)}
+            className={`-ms-3 text-destructive hover:text-destructive ${
+              confirmingDelete ? "bg-destructive/15" : ""
+            }`}
+          >
+            {confirmingDelete ? <Trans>Confirm delete</Trans> : <Trans>Delete</Trans>}
+          </Button>
+        ) : null}
+        <span className="flex-1" />
+        <Button variant="capsuleSecondary" size="capsule" onClick={() => onDone(false)}>
+          {skill?.readOnly ? <Trans>Close</Trans> : <Trans>Cancel</Trans>}
+        </Button>
         {loaded && !skill?.readOnly ? (
-          <button
-            type="button"
+          <Button
+            variant="capsule"
+            size="capsule"
             disabled={
               busy ||
               !draft.trim() ||
@@ -627,29 +694,9 @@ export function AgentSkillEditor({
               (!creating && draft === skill?.content)
             }
             onClick={() => void save()}
-            className="rounded-lg bg-muted px-3 py-1.5 text-[13px] text-foreground disabled:opacity-50"
           >
             <Trans>Save</Trans>
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => onDone(false)}
-          className="rounded-lg px-3 py-1.5 text-[13px] text-muted-foreground"
-        >
-          {skill?.readOnly ? <Trans>Close</Trans> : <Trans>Cancel</Trans>}
-        </button>
-        {skill && !skill.readOnly ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void remove(skill)}
-            className={`ms-auto rounded-lg px-3 py-1.5 text-[13px] ${
-              confirmingDelete ? "bg-destructive/15 text-destructive" : "text-destructive"
-            }`}
-          >
-            {confirmingDelete ? <Trans>Confirm delete</Trans> : <Trans>Delete</Trans>}
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>
@@ -671,6 +718,9 @@ function sortEntries(entries: WorkspaceEntry[]): WorkspaceEntry[] {
   });
 }
 
+/** The workspace root shows its first entries; a folder, opened on purpose, shows them all. */
+const FILES_SHOWN = 5;
+
 /**
  * The agent's working files: its computer workspace while the computer runs,
  * otherwise the last checkpoint. Rides on the existing computer.files and
@@ -683,12 +733,14 @@ export function AgentFiles({ botId }: { botId: string }) {
   const [open, setOpen] = useState<{ path: string; content: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const generation = useRef(0);
 
   useEffect(() => {
     const current = ++generation.current;
     setOpen(null);
     setError(null);
+    setExpanded(false);
     void rpc.computer
       .files({ botId, path: dir })
       .then((list) => {
@@ -796,7 +848,7 @@ export function AgentFiles({ botId }: { botId: string }) {
         </div>
       ) : null}
       {!open
-        ? entries.map((entry) => (
+        ? (expanded || dir ? entries : entries.slice(0, FILES_SHOWN)).map((entry) => (
             <button
               key={entry.path}
               type="button"
@@ -823,6 +875,16 @@ export function AgentFiles({ botId }: { botId: string }) {
             </button>
           ))
         : null}
+      {!open && !dir && entries.length > FILES_SHOWN ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className={`${rowClass(false)} text-row-name text-muted-foreground`}
+        >
+          {expanded ? t`Show less` : t`Show more`}
+        </button>
+      ) : null}
     </div>
   );
 }

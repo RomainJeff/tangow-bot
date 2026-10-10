@@ -101,29 +101,57 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   const knowledge = botPage.getByTestId("bot-knowledge");
   await expect(knowledge).toBeVisible();
 
-  // Bot creation seeds MEMORY.md (`# Chief`); edit it and assert the revision bumps.
+  // Bot creation seeds MEMORY.md (`# Chief`). It opens in the wide panel with its
+  // own Save and Cancel: leaving the field saves nothing.
+  const panel = page.getByTestId("side-panel");
   const botMemory = knowledge.getByTestId("bot-knowledge-memory");
   const botMemoryRow = botMemory.getByRole("button", { name: /MEMORY\.md/ });
   await expect(botMemoryRow).toBeVisible();
   await botMemoryRow.click();
-  const botDocEditor = botMemory.locator("textarea");
+  await expect(panel).toHaveAttribute("data-detail", "memory");
+  await expect(panel).toHaveAttribute("data-size", "wide");
+  const botDocEditor = panel.locator("textarea");
   await expect(botDocEditor).toHaveValue(/# Chief/);
   const botMarker = `Bot memory e2e ${stamp}`;
   await botDocEditor.fill(`# Chief\n\n${botMarker}\n`);
+  await botDocEditor.blur();
   await captureScreenshot(page, testInfo, "80-knowledge-bot-memory");
-  await botMemory.getByRole("button", { name: "Save", exact: true }).click();
+  expect(
+    await rpc<MemoryDocument[]>(page, "memory/list", { botId: chiefId, scope: "bot" }),
+  ).toContainEqual(expect.objectContaining({ revision: 1 }));
+  // Back on Knowledge, the row stays on screen while the list reads again.
+  let releaseMemoryRefresh!: () => void;
+  const memoryRefreshGate = new Promise<void>((resolve) => {
+    releaseMemoryRefresh = resolve;
+  });
+  await page.route(
+    "**/rpc/memory/list",
+    async (route) => {
+      await memoryRefreshGate;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  await panel.getByRole("button", { name: "Save", exact: true }).click();
+  try {
+    await expect(panel).toHaveAttribute("data-size", "default");
+    await expect(botMemoryRow).toBeFocused();
+    await expect(botMemory).not.toContainText("Nothing remembered yet");
+  } finally {
+    releaseMemoryRefresh();
+  }
   await expect(botMemory.getByText("rev 2")).toBeVisible();
   expect(
     await rpc<MemoryDocument[]>(page, "memory/list", { botId: chiefId, scope: "bot" }),
   ).toContainEqual(expect.objectContaining({ content: `# Chief\n\n${botMarker}\n`, revision: 2 }));
   await botMemoryRow.click();
   await expect(botDocEditor).toHaveValue(new RegExp(botMarker));
-  await botMemory.getByRole("button", { name: "Cancel", exact: true }).click();
+  await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-size", "default");
 
   // Skills: its own section on the Knowledge tab; the editor opens in the wide
   // panel. Create one, reopen it, edit, then delete it. Builtin catalog is
   // currently empty; user skills still cover create/edit/delete.
-  const panel = page.getByTestId("side-panel");
   const skillsSection = botPage.getByTestId("bot-skills");
   await expect(skillsSection.getByText("Skills", { exact: true })).toBeVisible();
   await skillsSection.getByRole("button", { name: "New skill", exact: true }).click();
@@ -251,6 +279,7 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
   try {
     await expect(editor).toBeHidden();
     await expect(panel).toHaveAttribute("data-size", "default");
+    await expect(skillRow).toBeFocused();
     await captureScreenshot(page, testInfo, "85-skill-refresh-pending");
   } finally {
     releaseSkillRefresh();
@@ -291,6 +320,8 @@ test("memory and skills are readable and editable in the app", async ({ page }, 
     )
     .toBe(true);
 
+  // Files are read when the tab opens, so open it again now that the file exists.
+  await reopenKnowledge();
   const files = knowledge.getByTestId("bot-knowledge-files");
   const notesRow = files.getByRole("button", { name: "notes/", exact: true });
   await expect(notesRow).toBeVisible();

@@ -11,8 +11,15 @@ const api = vi.hoisted(() => ({
   get: vi.fn(),
   remove: vi.fn(),
 }));
+const files = vi.hoisted(() => vi.fn());
+const updateMemory = vi.hoisted(() => vi.fn());
 vi.mock("../lib/rpc", () => ({
-  rpc: { agentSkills: api, bots: { list: async () => [] } },
+  rpc: {
+    agentSkills: api,
+    bots: { list: async () => [] },
+    computer: { files },
+    memory: { update: updateMemory },
+  },
 }));
 vi.mock("../components/ArtifactFileCard", () => ({ formatBytes: () => "" }));
 vi.mock("@lingui/react/macro", () => {
@@ -42,7 +49,28 @@ vi.mock("@rakazo/ui-web", () => {
   };
 });
 
-import { AgentSkills } from "./KnowledgeSection";
+import { AgentFiles, AgentSkills, MemoryDocumentList } from "./KnowledgeSection";
+
+async function mount(node: ReactNode) {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  await act(async () => root.render(node));
+  const button = (text: string) => {
+    const found = [...container.querySelectorAll("button")].find((entry) =>
+      entry.textContent?.includes(text),
+    );
+    if (!found) throw new Error(`Missing button: ${text}`);
+    return found;
+  };
+  const unmount = async () => {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  };
+  return { container, button, unmount };
+}
 
 it("disables skill rows while a completed save is refreshing the catalog", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -171,5 +199,109 @@ it("tells the shell a skill is gone only once the server has deleted it", async 
     await act(async () => root.unmount());
     container.remove();
     vi.unstubAllGlobals();
+  }
+});
+
+it("hands a skill and a new one to onOpenEditor instead of editing in the list", async () => {
+  api.list.mockResolvedValue([
+    {
+      id: "skill-fixture",
+      name: "greeting",
+      description: "Greet politely",
+      availability: "all",
+      visibleBotIds: [],
+      source: "user",
+    },
+  ]);
+  const onOpenEditor = vi.fn();
+  const view = await mount(<AgentSkills botId="bot-fixture" onOpenEditor={onOpenEditor} />);
+  try {
+    await act(async () => view.button("greeting").click());
+    await act(async () => view.button("New skill").click());
+    expect(onOpenEditor.mock.calls).toEqual([["skill-fixture"], [null]]);
+    expect(view.container.querySelector("textarea")).toBeNull();
+  } finally {
+    await view.unmount();
+  }
+});
+
+it("lists the first five root files, Show more for the rest, and every file of a folder", async () => {
+  const root = ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md"].map((path) => ({
+    path,
+    kind: "file",
+    size: 1,
+  }));
+  files.mockImplementation(async ({ path }: { path: string }) =>
+    path === ""
+      ? [{ path: "notes", kind: "dir", size: 0 }, ...root]
+      : root.map((entry) => ({ ...entry, path: `notes/${entry.path}` })),
+  );
+  const view = await mount(<AgentFiles botId="bot-fixture" />);
+  const names = () =>
+    [...view.container.querySelectorAll("button")].map((entry) => entry.textContent);
+  try {
+    expect(names()).toEqual(["/", "notes/", "a.md", "b.md", "c.md", "d.md", "Show more"]);
+    await act(async () => view.button("Show more").click());
+    expect(names()).toEqual([
+      "/",
+      "notes/",
+      "a.md",
+      "b.md",
+      "c.md",
+      "d.md",
+      "e.md",
+      "f.md",
+      "Show less",
+    ]);
+    await act(async () => view.button("Show less").click());
+    expect(names().at(-1)).toBe("Show more");
+    await act(async () => view.button("notes/").click());
+    expect(names()).toEqual(["/", "notes /", "a.md", "b.md", "c.md", "d.md", "e.md", "f.md"]);
+  } finally {
+    await view.unmount();
+  }
+});
+
+it("holds the other memory rows while an inline save runs", async () => {
+  const doc = (id: string, path: string) => ({
+    id,
+    scope: "user" as const,
+    botId: null,
+    path,
+    content: `# ${path}`,
+    revision: 1,
+    updatedAt: "2026-10-10T08:00:00.000Z",
+  });
+  let finishSave!: () => void;
+  updateMemory.mockImplementation(
+    ({ documentId, content }: { documentId: string; content: string }) =>
+      new Promise((resolve) => {
+        finishSave = () => resolve({ ...doc(documentId, "MEMORY.md"), content, revision: 2 });
+      }),
+  );
+  const view = await mount(
+    <MemoryDocumentList
+      load={async () => [doc("doc-1", "MEMORY.md"), doc("doc-2", "people.md")]}
+      exportFilename="memory.md"
+      emptyLabel="Nothing remembered yet"
+      testId="memory"
+    />,
+  );
+  try {
+    await act(async () => view.button("MEMORY.md").click());
+    const editor = view.container.querySelector("textarea")!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    act(() => {
+      setValue?.call(editor, "# MEMORY.md\n\nShort answers.");
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => view.button("Save").click());
+    expect(view.button("people.md").disabled).toBe(true);
+    await act(async () => finishSave());
+    expect(view.button("people.md").disabled).toBe(false);
+    expect(view.button("MEMORY.md").textContent).toBe("MEMORY.mdrev 2");
+    expect(view.container.querySelector("textarea")).toBeNull();
+  } finally {
+    await view.unmount();
   }
 });

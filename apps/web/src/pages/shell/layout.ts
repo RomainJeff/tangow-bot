@@ -15,6 +15,7 @@ export type BotDetail =
   | { kind: "voice" }
   | { kind: "routine"; routineId: string }
   | { kind: "routine-new"; seed?: RoutineSeed }
+  | { kind: "memory"; documentId: string }
   /** `skillId` null writes a new skill. */
   | { kind: "skill"; skillId: string | null };
 
@@ -27,10 +28,14 @@ const WIDE_DETAILS: ReadonlySet<BotDetail["kind"]> = new Set([
   "description",
   "routine",
   "routine-new",
+  "memory",
   "skill",
 ]);
 
-/** The panel widens to edit a long text, a routine or a skill; its width is never stored. */
+/**
+ * The panel widens to edit a long text, a routine, a memory document or a skill; its width is
+ * never stored.
+ */
 export function panelSizeFor(panel: Panel, view: BotPageView): PanelSize {
   return panel === "bot" && view.detail && WIDE_DETAILS.has(view.detail.kind) ? "wide" : "default";
 }
@@ -68,6 +73,8 @@ export function detailOpener(detail: BotDetail): string {
   switch (detail.kind) {
     case "routine":
       return `routine:${detail.routineId}`;
+    case "memory":
+      return `memory:${detail.documentId}`;
     case "skill":
       return `skill:${detail.skillId ?? "new"}`;
     default:
@@ -81,6 +88,20 @@ export type PendingAttachment = {
   file: File;
   previewUrl?: string;
 };
+
+/**
+ * The bot whose page the panel shows: the thread's own, or the archived bot picked from the
+ * sidebar for as long as it exists (restoring it moves it to `bots`; deleting it closes the page).
+ */
+export function pageBotOf(
+  pickedBotId: string | null,
+  bots: readonly Bot[],
+  archivedBots: readonly Bot[],
+  active: Bot | undefined,
+): Bot | undefined {
+  if (pickedBotId === null) return active;
+  return [...archivedBots, ...bots].find((bot) => bot.id === pickedBotId);
+}
 
 /** The panel is showing when a kind is picked and it has something to show. */
 export function panelIsOpen(

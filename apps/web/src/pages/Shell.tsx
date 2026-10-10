@@ -88,7 +88,6 @@ import { revokePendingAttachmentPreviews } from "../lib/pending-attachments";
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { rpc, selectedSpaceId, selectSpace } from "../lib/rpc";
 import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../lib/run-error-storage";
-import { sharedInflight } from "../lib/shared-inflight";
 import {
   activeThreadRuns,
   applyThreadSendReceipt,
@@ -132,6 +131,7 @@ import {
   botPageFor,
   FALLBACK_BOT_COLOR,
   firstThreadRoute,
+  pageBotOf,
   panelIsOpen,
   panelSizeFor,
   threadJumpLocation,
@@ -267,8 +267,16 @@ export function ShellPage() {
   const [botPage, setBotPage] = useState<BotPageView>({ tab: "settings", detail: null });
   const botPageRef = useRef(botPage);
   botPageRef.current = botPage;
+  // An archived bot picked from the sidebar, whose page shows instead of the thread's bot.
+  const [pickedBotId, setPickedBotId] = useState<string | null>(null);
   const showBotPage = useCallback((view: BotPageView) => {
+    setPickedBotId(null);
     setBotPage(view);
+    setPanel("bot");
+  }, []);
+  const showArchivedBotPage = useCallback((botId: string) => {
+    setPickedBotId(botId);
+    setBotPage({ tab: "activity", detail: null });
     setPanel("bot");
   }, []);
   const panelCoversThread = useRef(false);
@@ -495,15 +503,6 @@ export function ShellPage() {
     runs: number;
   } | null>(null);
   const autoBooted = useRef<string | null>(null);
-  const webhookSecretProvisionRef = useRef(new Map<string, Promise<string>>());
-  const ensureWebhookSecret = (botId: string) =>
-    sharedInflight(webhookSecretProvisionRef.current, botId, async () => {
-      const result = await rpc.bots.rotateWebhookSecret({ botId });
-      setBots((current) =>
-        current.map((bot) => (bot.id === botId ? { ...bot, webhookConfigured: true } : bot)),
-      );
-      return result.secret;
-    });
   const routineRefetched = useRef(new Set<string>());
   const bootstrappedThread = useRef<ThreadSnapshot | null>(null);
   const expandedHistoryThread = useRef<string | null>(null);
@@ -532,6 +531,7 @@ export function ShellPage() {
   const inGroup = Boolean(groupId);
   const active = inGroup ? undefined : (bots.find((b) => b.id === botId) ?? bots[0]);
   const activeGroup = groups.find((group) => group.id === groupId);
+  const pageBot = pageBotOf(pickedBotId, bots, archivedBots, active);
   const [computerWasShown, setComputerWasShown] = useState(computerShown);
   if (computerShown !== computerWasShown) {
     setComputerWasShown(computerShown);
@@ -820,21 +820,17 @@ export function ShellPage() {
     ) {
       snapTranscriptToEndAfterFrame();
     }
+    void botCommandsRef.current.refreshRoutines(id).catch(() => undefined);
     void Promise.all([
-      rpc.routines.list({ botId: id }).catch(() => null),
       rpc.skills.list({ botId: id }).catch(() => null),
       refreshComputerScreen(id).catch(() => null),
-    ]).then(([routines, skills]) => {
+    ]).then(([skills]) => {
       if (
         activeBotId.current !== id ||
         epoch !== historyEpoch.current ||
         request !== threadRefreshEpoch.current
       ) {
         return;
-      }
-      if (routines) {
-        setRoutines(routines);
-        setRoutinesBotId(id);
       }
       if (skills) {
         setTaughtSkills(skills);
@@ -1502,15 +1498,7 @@ export function ShellPage() {
     if (threadTarget.botId) {
       commitComputer(snap.computer ?? null);
       // Don't block parent-scroll on routines metadata; a list failure must not abort the jump.
-      void rpc.routines
-        .list({ botId: threadTarget.botId })
-        .then((routines) => {
-          if (epoch !== historyEpoch.current || jumpId !== jumpGeneration.current) return;
-          if (activeBotId.current !== threadTarget.botId) return;
-          setRoutines(routines);
-          setRoutinesBotId(threadTarget.botId);
-        })
-        .catch(() => undefined);
+      void botCommandsRef.current.refreshRoutines(threadTarget.botId).catch(() => undefined);
     } else {
       commitComputer(null);
       setRoutines([]);
@@ -1550,15 +1538,7 @@ export function ShellPage() {
       // A routine the bot just created may be newer than the list: fetch it once before giving up.
       if (!routine && !routineRefetched.current.has(routineId)) {
         routineRefetched.current.add(routineId);
-        const botId = active.id;
-        void rpc.routines
-          .list({ botId })
-          .then((rows) => {
-            if (activeBotId.current !== botId) return;
-            setRoutines(rows);
-            setRoutinesBotId(botId);
-          })
-          .catch(() => undefined);
+        void botCommandsRef.current.refreshRoutines(active.id).catch(() => undefined);
         return;
       }
       showBotPage({
@@ -2557,7 +2537,7 @@ export function ShellPage() {
 
   // The sidebar menu and the bot page's own menu run the same handlers.
   function runBotAction(botId: string, action: BotAction) {
-    const bot = bots.find((item) => item.id === botId);
+    const bot = [...bots, ...archivedBots].find((item) => item.id === botId);
     switch (action) {
       case "duplicate":
         void rpc.bots.duplicate({ botId }).then(async (copy) => {
@@ -2573,8 +2553,18 @@ export function ShellPage() {
         return;
       case "archive":
         // The page of a bot that just left the roster would show the next bot instead.
-        if (panel === "bot" && active?.id === botId) setPanel(null);
+        if (panel === "bot" && pageBot?.id === botId) setPanel(null);
         void rpc.bots.archive({ botId }).then(() => refreshBots(true));
+        return;
+      case "restore":
+        void rpc.bots.restore({ botId }).then(async () => {
+          await refreshBots(true);
+          // Restored while its page is open: the page stays, now beside the bot's own thread.
+          if (panel === "bot" && pickedBotId === botId) {
+            setPickedBotId(null);
+            navigate(`/app/${botId}`);
+          }
+        });
         return;
       case "delete":
         if (bot) setDeleteTarget(bot);
@@ -2584,12 +2574,12 @@ export function ShellPage() {
   const botCommands = useBotCommands({
     setBots,
     setRoutines,
+    setRoutinesBotId,
     activeBotId,
     supersedeBotsRefresh: () => {
       if (botsRefreshInFlight.current > 0) void refreshBots().catch(() => undefined);
     },
     botAction: runBotAction,
-    ensureWebhookSecret,
     refreshThread: (botId) => refreshThreadRef.current(botId),
     navigate,
     panelCoversThread,
@@ -2597,6 +2587,8 @@ export function ShellPage() {
     activityEpoch,
     refreshSkills: refreshAgentSkills,
   });
+  const botCommandsRef = useRef(botCommands);
+  botCommandsRef.current = botCommands;
 
   // Below `lg` the panel is full width over the thread instead of reflowing
   // beside it (see `lg:pe-panel` below), so it also covers the header and
@@ -2604,7 +2596,7 @@ export function ShellPage() {
   const isDesktopWidth = useMediaQuery("(min-width: 1024px)");
   // The wide panel only sits beside the thread from `xl`; narrower, it lies over it.
   const isWideDesktopWidth = useMediaQuery("(min-width: 1280px)");
-  const panelOpen = panelIsOpen(panel, active, activeGroup);
+  const panelOpen = panelIsOpen(panel, panel === "bot" ? pageBot : active, activeGroup);
   const panelSize = panelSizeFor(panel, botPage);
   const panelCoversColumn =
     panelOpen && (!isDesktopWidth || (panelSize === "wide" && !isWideDesktopWidth));
@@ -2728,6 +2720,8 @@ export function ShellPage() {
         setArchivedOpen={setArchivedOpen}
         refreshBots={refreshBots}
         setDeleteTarget={setDeleteTarget}
+        onOpenArchivedBot={showArchivedBotPage}
+        onRestoreBot={(botId) => runBotAction(botId, "restore")}
         setDeleteGroupTarget={setDeleteGroupTarget}
         setCustomizeOpen={setCustomizeOpen}
         menuOpen={menuOpen}
@@ -2786,7 +2780,8 @@ export function ShellPage() {
             active={active}
             activeGroup={activeGroup}
             activeSnapshot={activeSnapshot}
-            panel={panel}
+            // An archived bot's page is not this conversation's bot page: the gear opens the latter.
+            panel={panel === "bot" && pickedBotId ? null : panel}
             setPanel={setPanel}
             onOpenBotPage={showBotPage}
             refreshThread={refreshThread}
@@ -2926,9 +2921,10 @@ export function ShellPage() {
         setPanel={setPanel}
         size={panelSize}
         botPage={botPage}
-        onBotPage={showBotPage}
+        onBotPage={setBotPage}
         commands={botCommands}
         userId={userId ?? ""}
+        pageBot={pageBot}
         active={active}
         activeGroup={activeGroup}
         computer={computer}

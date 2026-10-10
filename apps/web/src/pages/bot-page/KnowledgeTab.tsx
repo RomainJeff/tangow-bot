@@ -1,8 +1,14 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import type { MemoryDocument } from "@rakazo/contracts";
 import { NativeSelect, NativeSelectOption, SaveMeta, SettingRow, Surface } from "@rakazo/ui-web";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { rpc } from "../../lib/rpc";
-import { AgentFiles, AgentSkills, MemoryDocumentList } from "../KnowledgeSection";
+import {
+  AgentFiles,
+  AgentSkills,
+  MemoryDocumentEditor,
+  MemoryDocumentList,
+} from "../KnowledgeSection";
 import { ScratchpadSection } from "../ScratchpadSection";
 import type { BotDetail } from "../shell/layout";
 import { type BotPageContext, SettingsGroup, useBotField, useSaveLabels } from "./page-kit";
@@ -13,11 +19,14 @@ type MemoryScopeChoice = "" | "isolated" | "shared";
 export function KnowledgeTab({
   page,
   memoryProviderConfigured,
+  epoch,
   onOpen,
 }: {
   page: BotPageContext;
   memoryProviderConfigured: boolean;
-  /** The skill editor opens in the wide detail. */
+  /** Bumped when a wide editor closes, so the lists read again in place. */
+  epoch: number;
+  /** Memory documents and the skill editor open in the wide detail. */
   onOpen: (detail: BotDetail) => void;
 }) {
   const { t } = useLingui();
@@ -28,9 +37,11 @@ export function KnowledgeTab({
         <MemoryDocumentList
           key={bot.id}
           load={() => rpc.memory.list({ botId: bot.id, scope: "bot" })}
+          epoch={epoch}
           exportFilename="memory.md"
           emptyLabel={<Trans>Nothing remembered yet</Trans>}
           testId="bot-knowledge-memory"
+          onOpen={(doc) => onOpen({ kind: "memory", documentId: doc.id })}
         />
       </KnowledgeGroup>
       {memoryProviderConfigured ? (
@@ -44,8 +55,9 @@ export function KnowledgeTab({
       <KnowledgeGroup label={t`Skills`} testId="bot-skills">
         <AgentSkills
           botId={bot.id}
-          onOpenEditor={(skillId) => onOpen({ kind: "skill", skillId })}
+          epoch={epoch}
           onChanged={page.commands.skillsChanged}
+          onOpenEditor={(skillId) => onOpen({ kind: "skill", skillId })}
         />
       </KnowledgeGroup>
       <ScratchpadSection botId={bot.id} />
@@ -95,5 +107,53 @@ function MemoryScopeRow({ page }: { page: BotPageContext }) {
         <NativeSelectOption value="shared">{t`Shared`}</NativeSelectOption>
       </NativeSelect>
     </SettingRow>
+  );
+}
+
+/** One memory document of the bot, read fresh, with its own Save and Cancel. */
+export function MemoryDetail({
+  botId,
+  documentId,
+  onDone,
+}: {
+  botId: string;
+  documentId: string;
+  onDone: () => void;
+}) {
+  const { t } = useLingui();
+  const [read, setRead] = useState<
+    { kind: "loading" } | { kind: "failed" } | { kind: "ready"; doc: MemoryDocument | undefined }
+  >({ kind: "loading" });
+  useEffect(() => {
+    let cancelled = false;
+    rpc.memory
+      .list({ botId, scope: "bot" })
+      .then((docs) => {
+        if (!cancelled) setRead({ kind: "ready", doc: docs.find((doc) => doc.id === documentId) });
+      })
+      .catch(() => {
+        if (!cancelled) setRead({ kind: "failed" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [botId, documentId]);
+  // A document that is gone (removed by the bot) leaves the tab showing.
+  const missing = read.kind === "ready" && !read.doc;
+  useEffect(() => {
+    if (missing) onDone();
+  }, [missing, onDone]);
+
+  if (read.kind === "failed") {
+    return <p className="py-10 text-center text-meta text-muted-foreground">{t`Could not load`}</p>;
+  }
+  if (read.kind !== "ready" || !read.doc) return null;
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="px-2.5 text-title text-foreground" dir="auto">
+        {read.doc.path}
+      </h2>
+      <MemoryDocumentEditor doc={read.doc} onSaved={onDone} onCancel={onDone} />
+    </section>
   );
 }

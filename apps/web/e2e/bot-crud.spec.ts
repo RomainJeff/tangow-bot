@@ -2,6 +2,7 @@ import {
   captureScreenshot,
   completeOnboarding,
   createBotFromPicker,
+  createNamedBot,
   openBotPage,
   openNewBot,
   saveField,
@@ -234,4 +235,42 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await expect(botList.getByRole("button", { name: /^Chief/ })).toBeVisible();
   await expect(page.getByPlaceholder("Message Chief")).toBeVisible();
   await captureScreenshot(page, testInfo, "31-deleted-bot-fallback");
+});
+
+test("an archived bot's page opens read-only from the archived list, and Restore brings it back", async ({
+  page,
+}, testInfo) => {
+  const stamp = Date.now();
+  await signup(page, `bot-archive-${stamp}@rakazo.test`, "password12", "Archive Owner");
+  await completeOnboarding(page);
+  const scoutId = await createNamedBot(page, "Scout");
+  const panel = page.getByTestId("side-panel");
+
+  const botPage = await openBotPage(page);
+  await botPage.getByRole("button", { name: "Actions for Scout" }).click();
+  await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-panel", "closed");
+
+  await page
+    .locator("aside")
+    .first()
+    .getByRole("button", { name: /^Archived/ })
+    .click();
+  await page.getByTestId("archived-bot-open").filter({ hasText: "Scout" }).click();
+  await expect(panel).toHaveAttribute("data-panel", "bot");
+  const archived = panel.getByTestId("bot-page");
+  await expect(archived.getByLabel("Name", { exact: true })).toHaveValue("Scout");
+  await expect(archived.getByLabel("Name", { exact: true })).toBeDisabled();
+  await expect(archived.getByTestId("bot-appearance-trigger")).toBeDisabled();
+  await expect(archived.getByRole("tablist")).toHaveCount(0);
+  await expect(archived.getByTestId("activity-created")).toContainText("Scout created");
+  await captureScreenshot(page, testInfo, "bot-page-archived");
+
+  await archived.getByRole("button", { name: "Actions for Scout" }).click();
+  await expect(page.getByRole("menuitem")).toHaveText(["Restore", "Delete"]);
+  await page.getByRole("menuitem", { name: "Restore", exact: true }).click();
+  await page.waitForURL(new RegExp(`/app/${scoutId}$`));
+  await expect(panel).toHaveAttribute("data-panel", "bot");
+  await expect(archived.getByLabel("Name", { exact: true })).toBeEnabled();
+  await expect(archived.getByRole("tablist")).toBeVisible();
 });

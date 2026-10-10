@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { ORPCError } from "@orpc/client";
-import type { Bot, Routine } from "@rakazo/contracts";
+import type { Bot, BotActivityOutput, Routine } from "@rakazo/contracts";
 import { SaveStoreProvider } from "@rakazo/ui-web";
 import { act, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -8,7 +8,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { saveStore } from "../../lib/save-store";
 import type { BotCommands } from "../shell/bot-commands";
 
-vi.mock("../../lib/rpc", () => ({ rpc: {} }));
+const api = vi.hoisted(() => ({ bots: { activity: vi.fn() } }));
+vi.mock("../../lib/rpc", () => ({ rpc: api }));
 vi.mock("@lingui/react/macro", () => {
   const t = (parts: TemplateStringsArray, ...values: unknown[]) => String.raw(parts, ...values);
   return {
@@ -52,8 +53,8 @@ const ROUTINE: Routine = {
 let container: HTMLElement;
 let root: Root;
 
-function page(commands: Partial<BotCommands>): BotPageContext {
-  return { bot: BOT, userId: "user-1", commands: commands as BotCommands };
+function page(commands: Partial<BotCommands>, bot: Bot = BOT): BotPageContext {
+  return { bot, userId: "user-1", commands: commands as BotCommands, readOnly: false };
 }
 
 function deferred<T>() {
@@ -72,6 +73,7 @@ async function render(node: ReactNode) {
 
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  api.bots.activity.mockResolvedValue({ items: [], nextCursor: null });
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -88,7 +90,13 @@ it("saves a routine's switch at once, then turns it back and says why when the s
   const write = deferred<Routine>();
   const updateRoutine = vi.fn(() => write.promise);
   await render(
-    <RoutinesTab page={page({ updateRoutine })} routines={[ROUTINE]} onOpen={vi.fn()} />,
+    <RoutinesTab
+      page={page({ updateRoutine })}
+      routines={[ROUTINE]}
+      failed={false}
+      onOpen={vi.fn()}
+      onRetry={vi.fn()}
+    />,
   );
   const toggle = container.querySelector<HTMLElement>('[aria-label="Active: Morning digest"]')!;
   expect(toggle.getAttribute("aria-checked")).toBe("false");
@@ -114,8 +122,6 @@ it("shows why a routine cannot be created yet instead of creating it", async () 
       page={page({ createRoutine })}
       seed={{ name: "Weekly wrap-up", prompt: "Sum up the week." }}
       messageProviders={[]}
-      webhookSecret={null}
-      onWebhookSecret={vi.fn()}
       confirm={vi.fn()}
       onCreated={vi.fn()}
     />,
@@ -139,7 +145,9 @@ it("words a weekly routine and opens a new one from the round add button", async
     <RoutinesTab
       page={page({})}
       routines={[{ ...ROUTINE, crons: ["0 10 * * 6"] }]}
+      failed={false}
       onOpen={onOpen}
+      onRetry={vi.fn()}
     />,
   );
   expect(container.textContent).toContain("Weekly on Saturday at 10:00 AM · paused");
@@ -163,13 +171,107 @@ it("says when and why an active routine's last run failed, with a red dot", asyn
           lastRunFailureKind: "provider",
         },
       ]}
+      failed={false}
       onOpen={vi.fn()}
+      onRetry={vi.fn()}
     />,
   );
   expect(container.textContent).toContain(
     "Last run failedMorning digestFailed yesterday · Model error",
   );
   expect(container.querySelector(".bg-destructive")).not.toBeNull();
+});
+
+it("shows loading rows until the routines are read, and Retry once the read failed", async () => {
+  const onRetry = vi.fn();
+  const tab = (failed: boolean, routines: Routine[] | null) => (
+    <RoutinesTab
+      page={page({})}
+      routines={routines}
+      failed={failed}
+      onOpen={vi.fn()}
+      onRetry={onRetry}
+    />
+  );
+  await render(tab(false, null));
+  expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+  expect(container.textContent).toBe("");
+
+  await render(tab(true, null));
+  expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(container.textContent).toBe("Could not load · Retry");
+  await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+  expect(onRetry).toHaveBeenCalledTimes(1);
+
+  await render(tab(false, [ROUTINE]));
+  expect(container.textContent).toContain("Morning digest");
+});
+
+it("lists the routine's own runs on its page, and a test run as soon as it starts", async () => {
+  const run = (runId: string, status: "completed" | "failed" | "running", createdAt: string) => ({
+    kind: "routine_run" as const,
+    run: {
+      runId,
+      botId: "bot-1",
+      botName: "Scout",
+      groupId: null,
+      groupName: null,
+      threadId: "thread-1",
+      status,
+      trigger: "routine" as const,
+      notificationsEnabled: false,
+      promptSnippet: "",
+      createdAt,
+      updatedAt: createdAt,
+      routineId: "routine-1",
+      routineName: "Morning digest",
+      sourceMessageId: null,
+      startedAt: createdAt,
+      completedAt: status === "running" ? null : createdAt,
+      failureKind: status === "failed" ? ("missing_model" as const) : null,
+    },
+  });
+  api.bots.activity.mockResolvedValue({
+    items: [
+      run("run-2", "failed", "2026-10-06T09:00:00.000Z"),
+      run("run-1", "completed", "2026-10-06T08:00:00.000Z"),
+    ],
+    nextCursor: null,
+  } satisfies BotActivityOutput);
+  const testRun = vi.fn(async () => {});
+  await render(
+    <RoutineDetail
+      page={page({ activityEpoch: 0, openRun: vi.fn(), testRun })}
+      routine={ROUTINE}
+      messageProviders={[]}
+      confirm={vi.fn()}
+      onDeleted={vi.fn()}
+    />,
+  );
+
+  const lines = () =>
+    [...container.querySelectorAll('[data-testid="activity-run"]')].map((line) =>
+      line.getAttribute("aria-label"),
+    );
+  expect(api.bots.activity.mock.calls).toEqual([[{ botId: "bot-1", routineId: "routine-1" }]]);
+  expect(lines()).toEqual([
+    // On its own page a routine's lines lead with their time, not its name.
+    expect.stringMatching(/^\d{1,2}:\d{2}\s?[AP]M, No model connected, Failed$/),
+    expect.stringMatching(/^\d{1,2}:\d{2}\s?[AP]M, Done$/),
+  ]);
+
+  api.bots.activity.mockResolvedValue({
+    items: [
+      run("run-3", "running", "2026-10-06T10:00:00.000Z"),
+      run("run-2", "failed", "2026-10-06T09:00:00.000Z"),
+      run("run-1", "completed", "2026-10-06T08:00:00.000Z"),
+    ],
+    nextCursor: null,
+  } satisfies BotActivityOutput);
+  await act(async () => button("Test run").click());
+
+  expect(testRun.mock.calls).toEqual([["bot-1", "routine-1"]]);
+  expect(lines()[0]).toMatch(/^\d{1,2}:\d{2}\s?[AP]M, Running$/);
 });
 
 function button(name: string) {
@@ -180,11 +282,9 @@ async function openTrigger(routine: Routine, row: string, confirm = vi.fn()) {
   const updateRoutine = vi.fn(async () => routine);
   await render(
     <RoutineDetail
-      page={page({ updateRoutine })}
+      page={page({ updateRoutine, webhookSecret: async () => "live-key" })}
       routine={routine}
       messageProviders={[]}
-      webhookSecret={null}
-      onWebhookSecret={vi.fn()}
       confirm={confirm}
       onDeleted={vi.fn()}
     />,
@@ -221,81 +321,239 @@ it("refuses to remove a routine's last trigger", async () => {
   expect(updateRoutine).not.toHaveBeenCalled();
 });
 
+/** Like the shell, marks the bot keyed once the server has answered a read of its key. */
 function KeyHolder({
+  bot,
+  commands,
   children,
 }: {
-  children: (secret: string | null, onSecret: (secret: string) => void) => ReactNode;
+  bot: Bot;
+  commands: Partial<BotCommands>;
+  children: (page: BotPageContext) => ReactNode;
 }) {
-  const [secret, setSecret] = useState<string | null>(null);
-  return children(secret, setSecret);
+  const [keyed, setKeyed] = useState(bot.webhookConfigured);
+  const read = commands.webhookSecret;
+  const shell = read
+    ? {
+        ...commands,
+        webhookSecret: async (botId: string) => {
+          const secret = await read(botId);
+          setKeyed(true);
+          return secret;
+        },
+      }
+    : commands;
+  return children(page(shell, { ...bot, webhookConfigured: keyed }));
 }
 
-async function addWebhook() {
+async function pickWebhook(name = "Webhook") {
   await act(async () => button("Add trigger").click());
   const item = [...document.querySelectorAll('[role="menuitem"]')].find(
-    (entry) => entry.textContent === "Webhook",
+    (entry) => entry.textContent === name,
   ) as HTMLElement;
   await act(async () => item.click());
-  await act(async () => button("Done").click());
 }
 
 const dialogText = () => document.querySelector('[role="dialog"]')?.textContent ?? "";
 
-it("shows the bot's key once a routine's first webhook mints it, until Done", async () => {
-  const updateRoutine = vi.fn(async () => ({ ...ROUTINE, webhookEnabled: true }));
-  const revealWebhookSecret = vi.fn(async () => "key-minted-once");
-  await render(
-    <KeyHolder>
-      {(secret, onSecret) => (
-        <RoutineDetail
-          page={page({ updateRoutine, revealWebhookSecret })}
-          routine={ROUTINE}
-          messageProviders={[]}
-          webhookSecret={secret}
-          onWebhookSecret={onSecret}
-          confirm={vi.fn()}
-          onDeleted={vi.fn()}
-        />
-      )}
-    </KeyHolder>,
-  );
+const labelled = (name: string) =>
+  document.querySelector<HTMLButtonElement>(`[role="dialog"] button[aria-label="${name}"]`);
 
-  await addWebhook();
+const WEBHOOK_URL = `${window.location.origin}/api/v1/bots/bot-1/webhook`;
 
-  expect(updateRoutine.mock.calls).toEqual([["bot-1", "routine-1", { webhookEnabled: true }]]);
-  expect(dialogText()).toContain("key-minted-once");
-  expect(dialogText()).toContain("Authorization: Bearer key-minted-once");
+const DOTS = "••••••••••••••••";
 
-  await act(async () => button("Done").click());
-  expect(document.querySelector('[role="dialog"]')).toBeNull();
-});
-
-it("shows the key a new routine's webhook minted before opening the routine", async () => {
-  const created = { ...ROUTINE, id: "routine-2", webhookEnabled: true, crons: [] };
-  const createRoutine = vi.fn(async () => created);
-  const revealWebhookSecret = vi.fn(async () => "key-minted-once");
-  const onCreated = vi.fn();
-  await render(
-    <KeyHolder>
-      {(secret, onSecret) => (
+function newRoutineForm(
+  commands: Partial<BotCommands>,
+  onCreated = vi.fn(),
+  bot: Bot = BOT,
+  seed = { name: "Deploy watch", prompt: "Say what shipped." },
+) {
+  return (
+    <KeyHolder bot={bot} commands={commands}>
+      {(context) => (
         <RoutineCreateForm
-          page={page({ createRoutine, revealWebhookSecret })}
-          seed={{ name: "Deploy watch", prompt: "Say what shipped." }}
+          page={context}
+          seed={seed}
           messageProviders={[]}
-          webhookSecret={secret}
-          onWebhookSecret={onSecret}
           confirm={vi.fn()}
           onCreated={onCreated}
         />
       )}
-    </KeyHolder>,
+    </KeyHolder>
   );
-  await addWebhook();
+}
 
+function savedRoutine(commands: Partial<BotCommands>, bot: Bot = BOT, confirm = vi.fn()) {
+  return (
+    <KeyHolder bot={bot} commands={commands}>
+      {(context) => (
+        <RoutineDetail
+          page={context}
+          routine={ROUTINE}
+          messageProviders={[]}
+          confirm={confirm}
+          onDeleted={vi.fn()}
+        />
+      )}
+    </KeyHolder>
+  );
+}
+
+it("shows a new routine's webhook address and its key behind dots as soon as it is picked", async () => {
+  const created = { ...ROUTINE, id: "routine-2", webhookEnabled: true, crons: [] };
+  const createRoutine = vi.fn(async () => created);
+  const webhookSecret = vi.fn(async () => "live-key");
+  const onCreated = vi.fn();
+  await render(newRoutineForm({ createRoutine, webhookSecret }, onCreated));
+
+  await pickWebhook();
+
+  expect(dialogText()).toContain(WEBHOOK_URL);
+  expect(dialogText()).toContain(`key${DOTS}`);
+  expect(dialogText()).toContain(`Authorization: Bearer ${DOTS}`);
+  expect(dialogText()).not.toContain("live-key");
+  expect(webhookSecret.mock.calls).toEqual([["bot-1"]]);
+
+  await act(async () => button("Done").click());
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
   await act(async () => button("Create").click());
 
-  expect(dialogText()).toContain("Authorization: Bearer key-minted-once");
-  expect(onCreated).not.toHaveBeenCalled();
-  await act(async () => button("Done").click());
+  expect(createRoutine.mock.calls).toMatchObject([["bot-1", { webhookEnabled: true }]]);
   expect(onCreated.mock.calls).toEqual([[created]]);
+  expect(webhookSecret).toHaveBeenCalledTimes(1);
+});
+
+it("shows the key when the eye is pressed and hides it again", async () => {
+  await render(newRoutineForm({ webhookSecret: async () => "live-key" }));
+  await pickWebhook();
+
+  await act(async () => labelled("Show key")!.click());
+
+  expect(dialogText()).toContain("Authorization: Bearer live-key");
+  expect(labelled("Hide key")?.getAttribute("aria-pressed")).toBe("true");
+
+  await act(async () => labelled("Hide key")!.click());
+
+  expect(dialogText()).not.toContain("live-key");
+  expect(dialogText()).toContain(`Authorization: Bearer ${DOTS}`);
+});
+
+it("copies the real key and header while they are hidden", async () => {
+  const writeText = vi.fn(async (_text: string) => {});
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  await render(newRoutineForm({ webhookSecret: async () => "live-key" }));
+  await pickWebhook();
+
+  await act(async () => labelled("Copy key")!.click());
+  await act(async () => labelled("Copy header")!.click());
+  await act(async () => labelled("Copy POST to")!.click());
+
+  expect(writeText.mock.calls).toEqual([
+    ["live-key"],
+    ["Authorization: Bearer live-key"],
+    [WEBHOOK_URL],
+  ]);
+  expect(dialogText()).not.toContain("live-key");
+});
+
+it("adds a new routine's webhook on Done even when the key could not be read", async () => {
+  const webhookSecret = vi.fn(async (): Promise<string> => {
+    throw new Error("The server did not answer.");
+  });
+  await render(newRoutineForm({ webhookSecret }));
+
+  await pickWebhook();
+
+  expect(dialogText()).toContain(WEBHOOK_URL);
+  expect(document.querySelector('[role="dialog"] [role="alert"]')?.textContent).toBe(
+    "The server did not answer.",
+  );
+  await act(async () => button("Done").click());
+
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(
+    [...container.querySelectorAll("button")].some((item) =>
+      item.textContent?.startsWith("When a webhook fires"),
+    ),
+  ).toBe(true);
+});
+
+it("shows a saved routine's webhook key as soon as it is picked, and Done saves the trigger", async () => {
+  const updateRoutine = vi.fn(async () => ({ ...ROUTINE, webhookEnabled: true }));
+  const webhookSecret = vi.fn(async () => "live-key");
+  await render(savedRoutine({ updateRoutine, webhookSecret }));
+
+  await pickWebhook();
+
+  expect(dialogText()).toContain(WEBHOOK_URL);
+  expect(dialogText()).toContain(`Authorization: Bearer ${DOTS}`);
+  expect(updateRoutine).not.toHaveBeenCalled();
+
+  await act(async () => button("Done").click());
+
+  expect(updateRoutine.mock.calls).toEqual([["bot-1", "routine-1", { webhookEnabled: true }]]);
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(webhookSecret).toHaveBeenCalledTimes(1);
+});
+
+it("rotates a saved routine's key only once confirmed, then shows the new key hidden", async () => {
+  const rotateWebhookSecret = vi.fn(async () => "rotated-key");
+  const confirm = vi.fn(async () => false);
+  const keyed = { ...BOT, webhookConfigured: true } as Bot;
+  await render(
+    savedRoutine({ webhookSecret: async () => "live-key", rotateWebhookSecret }, keyed, confirm),
+  );
+  await pickWebhook();
+
+  await act(async () => button("Rotate key").click());
+
+  expect(confirm.mock.calls).toEqual([["Rotate key?", "Rotate"]]);
+  expect(rotateWebhookSecret).not.toHaveBeenCalled();
+
+  confirm.mockResolvedValue(true);
+  await act(async () => button("Rotate key").click());
+  await act(async () => labelled("Show key")!.click());
+
+  expect(rotateWebhookSecret.mock.calls).toEqual([["bot-1"]]);
+  expect(dialogText()).toContain("Authorization: Bearer rotated-key");
+  expect(dialogText()).not.toContain("live-key");
+});
+
+it("reads the key as a Git event opens, and Cancel adds no trigger", async () => {
+  const createRoutine = vi.fn();
+  const webhookSecret = vi.fn(async () => "live-key");
+  await render(newRoutineForm({ createRoutine, webhookSecret }));
+
+  await pickWebhook("Git event");
+
+  expect(webhookSecret.mock.calls).toEqual([["bot-1"]]);
+  expect(dialogText()).toContain(`${window.location.origin}/api/v1/bots/bot-1/github`);
+  expect(dialogText()).toContain(`key${DOTS}`);
+  expect(dialogText()).toContain("X-Hub-Signature-256: sha256=…");
+
+  await act(async () => button("Cancel").click());
+
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(
+    [...container.querySelectorAll("button")].some((item) =>
+      item.textContent?.startsWith("Git event"),
+    ),
+  ).toBe(false);
+  expect(createRoutine).not.toHaveBeenCalled();
+});
+
+it("offers no key rotation on a routine that is not saved yet", async () => {
+  const rotateWebhookSecret = vi.fn(async () => "rotated-key");
+  await render(
+    newRoutineForm({ webhookSecret: async () => "live-key", rotateWebhookSecret }, vi.fn(), {
+      ...BOT,
+      webhookConfigured: true,
+    } as Bot),
+  );
+
+  await pickWebhook();
+
+  expect(dialogText()).toContain(`key${DOTS}`);
+  expect(dialogText()).not.toContain("Rotate key");
 });

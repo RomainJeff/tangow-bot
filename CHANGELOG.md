@@ -6,17 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-10-10
+### 2026-10-11
 
 #### Added
 
-- **A bot's page now has an Activity tab on web and desktop.** It lists the runs of the bot's routines, the routines it was given and its own creation, newest first, with each failed run's reason, a recap that opens in place and "Open in chat" to land on the run's message. The bot's name in the header opens it, and so do the gear and "Bot settings" while the bot has no instructions, with "Write its first instructions" under its creation.
 - **Bots now create and improve their own skills, and a line under their message says so.** On web, desktop and iPhone, "Skill learned", "Skill updated" or "Skill deleted" followed by the skill's name appears under the bot's reply and opens a skill it learned or updated, and a bot changes your skills only in a conversation you started, one of your routines or a sub-bot it created. Keeping a method on its own after a long task, or fixing it after a step failed, is off by default; a server admin turns it on with `SKILL_LEARNING` (see [Learned skills](docs/self-host.md#learned-skills)).
 
 #### Changed
 
 - A bot can no longer rename a skill, on web, desktop and iPhone; only you rename it, from its settings.
-- On web and desktop, a skill in a bot's Knowledge tab now opens in the wider panel of its page, like a routine, instead of inside the list.
+
+### 2026-10-10
+
+#### Added
+
+- **A bot's page now has an Activity tab on web and desktop.** It lists the runs of the bot's routines, the routines it was given and its own creation, newest first, with each failed run's reason, a recap that opens in place and "Open in chat" to land on the run's message. The bot's name in the header opens it, and so do the gear and "Bot settings" while the bot has no instructions, with "Write its first instructions" under its creation.
+- **A bot's Activity tab now carries a red dot while one of its routines is failing, on web and desktop.** A routine that is on and whose last run failed keeps the dot there until a later run of it does not fail, or it is paused or deleted, and a screen reader hears the tab as "Activity, last run failed".
+- **An archived bot's page opens from the sidebar's Archived list on web and desktop.** It shows the bot's name, title and Activity, with each run's recap, and nothing on it can be edited; its menu offers Restore, which brings the bot back with its page still open beside its conversation, and Delete. Archived bots used to offer only Restore and Delete from the list, with no way to see what they did.
+
+#### Changed
+
+- On web and desktop, a routine's page now lists that routine's own runs under Activity, each opening its recap in place, with Test run beside them, instead of leaving you to pick them out of the bot's whole Activity tab.
+- On web and desktop, a bot's memory documents and skills open in the wider panel from its Knowledge tab, memory still saved only by Save, and closing one goes back to its row, instead of being edited inside the narrow list.
+- On web and desktop, a bot's Knowledge tab lists the first five files of its workspace with Show more for the rest, instead of every file pushing its skills far down.
+- Picking "Webhook" or "Git event" for a routine shows its address and key at once, before you save, and the key stays available behind dots with an eye to show it and Copy to take it whole, instead of being shown once, on web and desktop.
 
 #### Fixed
 
@@ -31,6 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On web and desktop, the composer's text field keeps its width while you type and sits centred on its buttons.
 - Number columns in a bot's tables now line up at the end of the cell in right-to-left languages too.
 - On web and desktop, an open bot screen reconnects to the computer when the bot finishes a task instead of staying on a released screen.
+- On web and desktop, a bot's page now picks up changes made elsewhere when you come back to the window or switch tabs, without undoing a change you just saved, and its Routines tab shows loading rows, then "Could not load · Retry" when the routines cannot be read, instead of staying blank.
 
 ### 2026-10-09
 

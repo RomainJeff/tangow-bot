@@ -39,7 +39,7 @@ function before(entry: { createdAt: Date; id: string }, cursor: RunsCursor | und
  * and its own creation, newest first by creation time. Active runs lead the first page and are
  * never paged; everything else is paged by `(createdAt, id)` across every kind of entry. The bot
  * is the caller's own (`repos.getBot`), and every read is narrowed to the caller's space and user
- * as well, so no id can reach past them.
+ * as well, so no id can reach past them. With `routineId`, only that routine's runs.
  */
 export async function listBotActivity(
   prisma: PrismaClient,
@@ -49,12 +49,14 @@ export async function listBotActivity(
 ): Promise<BotActivityOutput> {
   const limit = input.limit ?? RUNS_PAGE_DEFAULT;
   const owner = { spaceId: actor.spaceId, userId: actor.userId, botId: bot.id };
-  const runScope: Prisma.RunWhereInput = {
-    ...owner,
-    // Only routine wakes use the "routine" trigger, so a deleted routine's scheduled runs stay.
-    // A webhook wake whose routine is gone cannot be told from a plain webhook message: it goes.
-    OR: [{ routineId: { not: null } }, { trigger: "routine" }],
-  };
+  const runScope: Prisma.RunWhereInput = input.routineId
+    ? { ...owner, routineId: input.routineId }
+    : {
+        ...owner,
+        // Only routine wakes use the "routine" trigger, so a deleted routine's scheduled runs stay.
+        // A webhook wake whose routine is gone cannot be told from a plain webhook message: it goes.
+        OR: [{ routineId: { not: null } }, { trigger: "routine" }],
+      };
   const keyset = input.cursor ? afterCursor(input.cursor) : {};
   const [active, finished, routines] = await Promise.all([
     input.cursor
@@ -70,12 +72,14 @@ export async function listBotActivity(
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
     }),
-    prisma.routine.findMany({
-      where: { ...owner, ...keyset },
-      select: { id: true, name: true, createdAt: true, threadId: true },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: limit + 1,
-    }),
+    input.routineId
+      ? []
+      : prisma.routine.findMany({
+          where: { ...owner, ...keyset },
+          select: { id: true, name: true, createdAt: true, threadId: true },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: limit + 1,
+        }),
   ]);
 
   const entries: Entry[] = [
@@ -98,7 +102,7 @@ export async function listBotActivity(
       },
     })),
   ];
-  if (before(bot, input.cursor)) {
+  if (!input.routineId && before(bot, input.cursor)) {
     entries.push({
       createdAt: bot.createdAt,
       id: bot.id,
