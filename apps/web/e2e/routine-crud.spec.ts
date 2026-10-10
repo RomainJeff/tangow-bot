@@ -198,7 +198,7 @@ test("removing the last trigger is refused, an inbound one is confirmed first", 
 
   await panel.getByRole("button", { name: /^When a webhook fires/ }).click();
   await editor.getByRole("button", { name: "Remove", exact: true }).click();
-  const confirm = page.getByRole("alertdialog", { name: "Remove When a webhook fires?" });
+  const confirm = page.getByRole("alertdialog", { name: "Remove webhook?" });
   const removed = page.waitForResponse(
     (response) => response.url().includes("/rpc/routines/update") && response.ok(),
   );

@@ -204,8 +204,11 @@ export async function addRoutineTrigger(page: Page, trigger: RoutineTrigger) {
   await expect(editor).toHaveCount(0);
 }
 
-/** Create the routine being written and wait for it to open in its own page. */
-export async function createRoutine(page: Page) {
+/**
+ * Create the routine being written and wait for it to open in its own page. A routine whose
+ * webhook or Git trigger minted the bot's key shows that key first, until Done.
+ */
+export async function createRoutine(page: Page, { mintsKey = false } = {}) {
   const created = page.waitForResponse(
     (response) => response.url().includes("/rpc/routines/create") && response.ok(),
   );
@@ -214,6 +217,12 @@ export async function createRoutine(page: Page) {
     .getByRole("button", { name: "Create", exact: true })
     .click();
   await created;
+  if (mintsKey) {
+    const key = page.getByRole("dialog");
+    await expect(key.getByText("key", { exact: true })).toBeVisible();
+    await expect(key.getByText("Available after the routine is saved")).toHaveCount(0);
+    await key.getByRole("button", { name: "Done", exact: true }).click();
+  }
   await expect(page.getByTestId("side-panel")).toHaveAttribute("data-detail", "routine");
 }
 

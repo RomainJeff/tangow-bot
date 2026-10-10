@@ -82,7 +82,7 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
   await toolApproval.click();
   await expect(toolApproval).not.toBeChecked();
 
-  await createRoutine(page);
+  await createRoutine(page, { mintsKey: true });
   const [routine] = await rpc<Routine[]>(page, "routines/list", { botId });
   expect(routine).toMatchObject({
     name: "Review repository events",
