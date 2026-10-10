@@ -8,13 +8,9 @@ import { skillPageView } from "../../src/pages/shell/skill-link";
 import "../../src/styles.css";
 
 const i18n = setupI18n({ locale: "en", messages: { en: {} } });
+/** A line written while skills had uids still carries one; it opens by its id. */
 const uid = (digit: string) => digit.repeat(32);
-/** The catalog the reader sees now: "Book a room" was renamed since its line was written. */
-const CATALOG = [
-  { id: "user:meeting-rooms", uid: uid("a") },
-  { id: "user:invoices", uid: uid("b") },
-  { id: "user:long", uid: uid("e") },
-];
+const CATALOG = [{ id: "user:rooms" }, { id: "user:invoices" }, { id: "user:long" }];
 
 function message(id: string, blocks: unknown[]): ThreadMessage {
   return {
