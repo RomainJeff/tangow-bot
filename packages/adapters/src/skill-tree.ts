@@ -4,6 +4,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import type { Stats } from "node:fs";
+import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, readFile, rename, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
@@ -106,18 +107,22 @@ export async function readHistoryJson<T>(
 
 const sha256 = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
 
+const comparePaths = (a: SkillTreeFile, b: SkillTreeFile) =>
+  a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+
 export function fingerprint(tree: SkillTreeFile[]): string {
   return sha256(
-    JSON.stringify(tree.map((file) => [file.path, file.executable, sha256(file.bytes)])),
+    JSON.stringify(
+      [...tree].sort(comparePaths).map((file) => [file.path, file.executable, sha256(file.bytes)]),
+    ),
   );
 }
 
 export const treeBytes = (tree: SkillTreeFile[]) =>
   tree.reduce((sum, file) => sum + file.bytes.length, 0);
 
-/** Files and the folders that hold them, counted the way the import counts archive entries. */
-function entryCount(paths: string[]): number {
-  const folders = new Set(
+const folderPaths = (paths: string[]) =>
+  new Set(
     paths.flatMap((file) =>
       file
         .split("/")
@@ -125,14 +130,18 @@ function entryCount(paths: string[]): number {
         .map((_, index, parts) => parts.slice(0, index + 1).join("/")),
     ),
   );
-  return paths.length + folders.size;
-}
+
+/** Files and the folders that hold them, counted the way the import counts archive entries. */
+const entryCount = (paths: string[]) => paths.length + folderPaths(paths).size;
 
 const tooManyEntries = () =>
   new SkillRefusal(
     "invalid",
     `Skill has too many files and folders (> ${SKILL_BUNDLE_MAX_ENTRIES}).`,
   );
+
+const tooLarge = () =>
+  new SkillRefusal("invalid", `Skill too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`);
 
 /**
  * Relative POSIX paths that stay inside the skill, within the entry and byte caps, sorted; the
@@ -159,9 +168,7 @@ export function normalizeTree(files: SkillTreeFile[]): SkillTreeFile[] {
     });
   }
   if (entryCount([...byPath.keys()]) > SKILL_BUNDLE_MAX_ENTRIES) throw tooManyEntries();
-  if (treeBytes([...byPath.values()]) > SKILL_BUNDLE_MAX_BYTES) {
-    throw new SkillRefusal("invalid", `Skill too large (> ${SKILL_BUNDLE_MAX_BYTES} bytes).`);
-  }
+  if (treeBytes([...byPath.values()]) > SKILL_BUNDLE_MAX_BYTES) throw tooLarge();
   for (const relative of byPath.keys()) {
     const parts = relative.split("/");
     for (let depth = 1; depth < parts.length; depth += 1) {
@@ -170,7 +177,7 @@ export function normalizeTree(files: SkillTreeFile[]): SkillTreeFile[] {
       }
     }
   }
-  return [...byPath.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return [...byPath.values()].sort(comparePaths);
 }
 
 export function withSkillMd(files: SkillTreeFile[], content: string): SkillTreeFile[] {
@@ -181,21 +188,22 @@ export function withSkillMd(files: SkillTreeFile[], content: string): SkillTreeF
   ]);
 }
 
-function unkept(relative: string, info: Stats): SkillRefusal {
-  const what = info.isSymbolicLink()
+const problem = (info: Stats) =>
+  info.isSymbolicLink()
     ? "is a link"
     : !info.isFile()
       ? "is not a regular file"
       : info.nlink > 1
         ? "is a hard link"
         : info.size > SKILL_BUNDLE_MAX_BYTES
-          ? "is larger than 10 MB"
+          ? `is larger than ${SKILL_BUNDLE_MAX_BYTES / 1024 / 1024} MB`
           : "has a backslash in its name";
-  return new SkillRefusal(
+
+const unkept = (relative: string, what: string) =>
+  new SkillRefusal(
     "invalid",
     `${relative} ${what}, and a skill keeps only plain files. Remove it and try again.`,
   );
-}
 
 /**
  * Reads a folder without following anything. Anything the store could not keep (a link, a FIFO,
@@ -207,26 +215,47 @@ export async function captureTree(
   dir: string,
   options: { hardLinks?: boolean } = {},
 ): Promise<SkillTreeFile[]> {
-  const keeps = (info: Stats, name: string) =>
-    !name.includes("\\") && isStorableFile(info, options);
   const root = await lstat(dir);
-  if (!root.isDirectory()) throw unkept(".", root);
+  if (!root.isDirectory()) throw unkept(".", problem(root));
   const files: SkillTreeFile[] = [];
   let entries = 0;
+  let bytes = 0;
+  const read = async (absolute: string, relative: string, name: string): Promise<void> => {
+    const check = (info: Stats) => {
+      if (name.includes("\\") || !isStorableFile(info, options)) {
+        throw unkept(relative, problem(info));
+      }
+    };
+    check(await lstat(absolute));
+    // The lstat above spares a FIFO or device the open; the handle's own stat is what counts,
+    // since a link swapped in after the lstat fails the open instead of being followed.
+    const handle = await open(
+      absolute,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    ).catch((error: unknown) => {
+      throw hasCode(error, "ELOOP") ? unkept(relative, "is a link") : error;
+    });
+    try {
+      const info = await handle.stat();
+      check(info);
+      bytes += info.size;
+      if (bytes > SKILL_BUNDLE_MAX_BYTES) throw tooLarge();
+      files.push({
+        path: relative,
+        bytes: await handle.readFile(),
+        executable: (info.mode & 0o111) !== 0,
+      });
+    } finally {
+      await handle.close();
+    }
+  };
   const walk = async (absolute: string, relative: string): Promise<void> => {
     for (const name of (await readdir(absolute)).sort()) {
       const child = path.join(absolute, name);
       const childPath = relative ? `${relative}/${name}` : name;
       if (++entries > SKILL_BUNDLE_MAX_ENTRIES) throw tooManyEntries();
-      const info = await lstat(child);
-      if (info.isDirectory()) await walk(child, childPath);
-      else if (keeps(info, name)) {
-        files.push({
-          path: childPath,
-          bytes: await readFile(child),
-          executable: (info.mode & 0o111) !== 0,
-        });
-      } else throw unkept(childPath, info);
+      if ((await lstat(child)).isDirectory()) await walk(child, childPath);
+      else await read(child, childPath, name);
     }
   };
   await walk(dir, "");
@@ -236,7 +265,8 @@ export async function captureTree(
 /**
  * Brings `dir` to exactly `tree` with no moment where SKILL.md is missing: what the tree drops
  * goes first, then each file is staged in `staging`, outside the mounted root, and renamed into
- * place, SKILL.md last. It never deletes a file it could not have kept: it refuses instead.
+ * place, SKILL.md last. It never deletes a file it could not have kept: it refuses before
+ * deleting anything.
  */
 export async function materialize(
   tree: SkillTreeFile[],
@@ -244,30 +274,28 @@ export async function materialize(
   staging: string,
 ): Promise<void> {
   const existing = await lstat(dir).catch(() => null);
-  if (existing && !existing.isDirectory()) throw unkept(".", existing);
+  if (existing && !existing.isDirectory()) throw unkept(".", problem(existing));
   await mkdir(dir, { recursive: true });
   const files = new Set(tree.map((file) => file.path));
-  const folders = new Set(
-    tree.flatMap((file) =>
-      file.path
-        .split("/")
-        .slice(0, -1)
-        .map((_, index, parts) => parts.slice(0, index + 1).join("/")),
-    ),
-  );
-  const prune = async (absolute: string, relative: string): Promise<void> => {
+  const folders = folderPaths([...files]);
+  const staleFiles: string[] = [];
+  const staleFolders: string[] = [];
+  const survey = async (absolute: string, relative: string): Promise<void> => {
     for (const name of await readdir(absolute)) {
       const child = path.join(absolute, name);
       const childPath = relative ? `${relative}/${name}` : name;
       const info = await lstat(child);
       if (info.isDirectory()) {
-        await prune(child, childPath);
-        if (!folders.has(childPath)) await rmdir(child);
-      } else if (!isStorableFile(info)) throw unkept(childPath, info);
-      else if (!files.has(childPath)) await rm(child, { force: true });
+        await survey(child, childPath);
+        if (!folders.has(childPath)) staleFolders.push(child);
+      } else if (!isStorableFile(info)) throw unkept(childPath, problem(info));
+      else if (!files.has(childPath)) staleFiles.push(child);
     }
   };
-  await prune(dir, "");
+  await survey(dir, "");
+  for (const file of staleFiles) await rm(file, { force: true });
+  // Surveyed depth first, so each folder comes after the folders inside it.
+  for (const folder of staleFolders) await rmdir(folder);
   const stage = path.join(staging, randomUUID());
   await mkdir(stage, { recursive: true });
   try {
