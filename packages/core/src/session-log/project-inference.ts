@@ -1,6 +1,7 @@
 import type {
   AgentHistoryTurn,
   AgentHistoryTurnPart,
+  EntryId,
   InferenceEntry,
   MessageBlock,
   SessionEntry,
@@ -18,6 +19,8 @@ export interface InferenceProjectionOptions {
   selfBotId: string;
   /** Bot id to display name, for group members and handoffs. */
   botNames?: ReadonlyMap<string, string>;
+  /** Finds a replied-to entry the chain no longer holds, such as one older than the compaction. */
+  resolveReplyTarget?: (entryId: EntryId) => SessionEntry | undefined;
 }
 
 /** Per-call and per-turn caps on replayed tool output: history reminds the model what it
@@ -54,13 +57,15 @@ export function projectInferenceTurns(
       .filter((entry) => entry.type !== "tool.call" || answered.has(toolCallKey(entry))),
   );
   const targets = replyTargets(chain, segments);
-  return segments.flatMap((segment) => renderTurn(segment, options, targets) ?? []);
+  const targetOf = (entryId: EntryId) =>
+    targets.get(entryId) ?? resolvedTarget(options.resolveReplyTarget?.(entryId));
+  return segments.flatMap((segment) => renderTurn(segment, options, targetOf) ?? []);
 }
 
 function renderTurn(
   segment: ReturnType<typeof foldRuns>[number],
   options: InferenceProjectionOptions,
-  targets: ReadonlyMap<string, ReplyTarget>,
+  targetOf: (entryId: EntryId) => ReplyTarget | undefined,
 ): AgentHistoryTurn | undefined {
   const { botNames } = options;
   const nameOf = (botId: string) => botNames?.get(botId) ?? botId;
@@ -76,7 +81,7 @@ function renderTurn(
       return {
         role: "user",
         content: [
-          replyContext(segment, targets, botNames),
+          replyContext(segment, targetOf, botNames),
           blocksToAgentHistoryText(segment.payload.blocks, botNames),
         ]
           .filter(Boolean)
@@ -182,14 +187,19 @@ function replyTargets(
   return targets;
 }
 
+function resolvedTarget(entry: SessionEntry | undefined): ReplyTarget | undefined {
+  return entry && replyTargets([entry], foldRuns([entry].filter(isInferenceEntry))).get(entry.id);
+}
+
 function replyContext(
   entry: SessionEntryOf<"user.message">,
-  targets: ReadonlyMap<string, ReplyTarget>,
+  targetOf: (entryId: EntryId) => ReplyTarget | undefined,
   botNames: ReadonlyMap<string, string> | undefined,
 ): string | undefined {
   const { blocks, replyTo } = entry.payload;
-  const target = replyTo && targets.get(replyTo.entryId);
-  if (!replyTo || !target) return undefined;
+  if (!replyTo) return undefined;
+  const target = targetOf(replyTo.entryId);
+  if (!target) return undefined;
   const emoji = messageReaction({ role: "user", blocks, replyToMessageId: replyTo.entryId });
   // A selected-text excerpt narrows the reply to just that span; reactions stay
   // on the whole-message path because a reaction always targets the message.
