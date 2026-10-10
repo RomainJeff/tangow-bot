@@ -32,13 +32,19 @@ export function useVersionDate(): (iso: string) => string {
  */
 export function SkillVersions({
   skillId,
+  dirty,
   onOpen,
   onRestored,
   onTrashed,
 }: {
   skillId: string;
+  /** The editor holds unsaved edits, which reading the skill back after an Undo would drop. */
+  dirty: boolean;
   onOpen: (versionId: string) => void;
-  /** Undo gave the skill back under this id, which a rename undone changes. */
+  /**
+   * The skill may have changed: read it again under this id, which a rename undone changes. A
+   * refused Undo passes the same id, since the refusal means a newer version landed.
+   */
   onRestored: (skillId: string) => void;
   /** Undo removed the skill: it now sits in Recently deleted. */
   onTrashed: () => void;
@@ -70,7 +76,7 @@ export function SkillVersions({
 
   async function undo() {
     const current = versions?.find((version) => version.current);
-    if (!current || busy) return;
+    if (!current || busy || dirty) return;
     setBusy(true);
     setError(null);
     try {
@@ -87,6 +93,7 @@ export function SkillVersions({
       if (result.skillId === skillId) await load();
     } catch (failure) {
       setError(refusalMessage(failure) ?? t`Could not undo`);
+      onRestored(skillId);
       await load();
     } finally {
       setBusy(false);
@@ -105,7 +112,7 @@ export function SkillVersions({
           variant="tertiary"
           size="capsule"
           className="-me-3"
-          disabled={busy || !canUndo(rows)}
+          disabled={busy || dirty || !canUndo(rows)}
           onClick={() => void undo()}
         >
           <Undo2 aria-hidden="true" />

@@ -21,7 +21,8 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatBytes } from "../components/ArtifactFileCard";
 import { downloadArtifactBytes } from "../lib/artifact-open";
 import { rpc } from "../lib/rpc";
-import { RecentlyDeleted, type RestoredSkill } from "./RecentlyDeleted";
+import type { RestoredSkill } from "./RecentlyDeleted";
+import { RecentlyDeleted } from "./RecentlyDeleted";
 import { SkillVersions, SkillVersionView } from "./SkillVersions";
 
 /** A skill brought back from Recently deleted stays lit twice as long as an arrival, then fades. */
@@ -698,6 +699,7 @@ export function AgentSkillEditor({
       {skillId && skill && !skill.readOnly ? (
         <SkillVersions
           skillId={skillId}
+          dirty={draft !== skill.content}
           onOpen={setReading}
           onRestored={(restoredId) => {
             if (restoredId === skillId) setReads((count) => count + 1);
