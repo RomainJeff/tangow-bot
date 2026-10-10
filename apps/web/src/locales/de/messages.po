@@ -680,10 +680,6 @@ msgstr ""
 msgid "Automatic shape"
 msgstr "Automatische Form"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:391
-msgid "Available after the routine is saved"
-msgstr "Verfügbar, sobald die Routine gespeichert ist"
-
 #. placeholder {0}: bot.name
 #: src/pages/bot-page/SettingsTab.tsx:103
 msgid "Available when {0} is idle"
@@ -3904,6 +3900,10 @@ msgstr "Passwort anzeigen"
 #: src/pages/AccountSettingsOverlay.tsx:130
 msgid "Show the tools a bot used, with their input and output."
 msgstr "Zeigt die von einem Bot verwendeten Tools mit Eingabe und Ausgabe."
+
+#: src/pages/bot-page/RoutineTriggers.tsx:388
+msgid "Shown once."
+msgstr ""
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:230

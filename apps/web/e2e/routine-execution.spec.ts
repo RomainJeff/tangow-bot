@@ -73,6 +73,7 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
   const editor = page.getByRole("dialog");
   await expect(editor.getByText(new RegExp(`/api/v1/bots/${botId}/github$`))).toBeVisible();
   await expect(editor.getByText("X-Hub-Signature-256: sha256=…", { exact: true })).toBeVisible();
+  await expect(editor.getByText("Shown once.", { exact: true })).toBeVisible();
   await editor.getByRole("button", { name: "Done", exact: true }).click();
   await expect(
     page.getByTestId("side-panel").getByText("Git event", { exact: true }),
@@ -82,7 +83,7 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
   await toolApproval.click();
   await expect(toolApproval).not.toBeChecked();
 
-  await createRoutine(page, { mintsKey: true });
+  await createRoutine(page);
   const [routine] = await rpc<Routine[]>(page, "routines/list", { botId });
   expect(routine).toMatchObject({
     name: "Review repository events",

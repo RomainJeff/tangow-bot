@@ -680,10 +680,6 @@ msgstr ""
 msgid "Automatic shape"
 msgstr "自动形状"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:391
-msgid "Available after the routine is saved"
-msgstr "保存例行任务后可用"
-
 #. placeholder {0}: bot.name
 #: src/pages/bot-page/SettingsTab.tsx:103
 msgid "Available when {0} is idle"
@@ -3904,6 +3900,10 @@ msgstr "显示密码"
 #: src/pages/AccountSettingsOverlay.tsx:130
 msgid "Show the tools a bot used, with their input and output."
 msgstr "显示机器人使用的工具及其输入和输出。"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:388
+msgid "Shown once."
+msgstr ""
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:230

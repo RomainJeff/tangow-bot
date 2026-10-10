@@ -680,10 +680,6 @@ msgstr ""
 msgid "Automatic shape"
 msgstr "स्वचालित आकार"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:391
-msgid "Available after the routine is saved"
-msgstr "रूटीन सहेजने के बाद उपलब्ध"
-
 #. placeholder {0}: bot.name
 #: src/pages/bot-page/SettingsTab.tsx:103
 msgid "Available when {0} is idle"
@@ -3904,6 +3900,10 @@ msgstr "पासवर्ड दिखाएँ"
 #: src/pages/AccountSettingsOverlay.tsx:130
 msgid "Show the tools a bot used, with their input and output."
 msgstr "बॉट ने जो टूल उपयोग किए, उन्हें उनके इनपुट और आउटपुट के साथ दिखाएँ।"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:388
+msgid "Shown once."
+msgstr ""
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:230

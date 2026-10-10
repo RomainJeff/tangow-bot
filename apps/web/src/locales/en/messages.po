@@ -680,10 +680,6 @@ msgstr "Automated senders will appear after they post here."
 msgid "Automatic shape"
 msgstr "Automatic shape"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:391
-msgid "Available after the routine is saved"
-msgstr "Available after the routine is saved"
-
 #. placeholder {0}: bot.name
 #: src/pages/bot-page/SettingsTab.tsx:103
 msgid "Available when {0} is idle"
@@ -3904,6 +3900,10 @@ msgstr "Show password"
 #: src/pages/AccountSettingsOverlay.tsx:130
 msgid "Show the tools a bot used, with their input and output."
 msgstr "Show the tools a bot used, with their input and output."
+
+#: src/pages/bot-page/RoutineTriggers.tsx:388
+msgid "Shown once."
+msgstr "Shown once."
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:230

@@ -155,7 +155,7 @@ export function RoutineDetail({
         messageProviders={messageProviders}
         confirm={confirm}
         onSave={saveTriggers}
-        onRotate={() => void reveal().catch(() => undefined)}
+        onReveal={reveal}
       />
 
       <SettingsGroup>

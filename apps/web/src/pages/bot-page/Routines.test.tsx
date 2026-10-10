@@ -52,8 +52,8 @@ const ROUTINE: Routine = {
 let container: HTMLElement;
 let root: Root;
 
-function page(commands: Partial<BotCommands>): BotPageContext {
-  return { bot: BOT, userId: "user-1", commands: commands as BotCommands };
+function page(commands: Partial<BotCommands>, bot: Bot = BOT): BotPageContext {
+  return { bot, userId: "user-1", commands: commands as BotCommands };
 }
 
 function deferred<T>() {
@@ -180,7 +180,7 @@ async function openTrigger(routine: Routine, row: string, confirm = vi.fn()) {
   const updateRoutine = vi.fn(async () => routine);
   await render(
     <RoutineDetail
-      page={page({ updateRoutine })}
+      page={page({ updateRoutine, revealWebhookSecret: async () => "key-minted-once" })}
       routine={routine}
       messageProviders={[]}
       webhookSecret={null}
@@ -230,25 +230,47 @@ function KeyHolder({
   return children(secret, setSecret);
 }
 
-async function addWebhook() {
+async function pickWebhook() {
   await act(async () => button("Add trigger").click());
   const item = [...document.querySelectorAll('[role="menuitem"]')].find(
     (entry) => entry.textContent === "Webhook",
   ) as HTMLElement;
   await act(async () => item.click());
-  await act(async () => button("Done").click());
 }
 
 const dialogText = () => document.querySelector('[role="dialog"]')?.textContent ?? "";
 
-it("shows the bot's key once a routine's first webhook mints it, until Done", async () => {
-  const updateRoutine = vi.fn(async () => ({ ...ROUTINE, webhookEnabled: true }));
-  const revealWebhookSecret = vi.fn(async () => "key-minted-once");
-  await render(
+const WEBHOOK_URL = `${window.location.origin}/api/v1/bots/bot-1/webhook`;
+
+function newRoutineForm(
+  commands: Partial<BotCommands>,
+  onCreated = vi.fn(),
+  bot: Bot = BOT,
+  seed = { name: "Deploy watch", prompt: "Say what shipped." },
+) {
+  return (
+    <KeyHolder>
+      {(secret, onSecret) => (
+        <RoutineCreateForm
+          page={page(commands, bot)}
+          seed={seed}
+          messageProviders={[]}
+          webhookSecret={secret}
+          onWebhookSecret={onSecret}
+          confirm={vi.fn()}
+          onCreated={onCreated}
+        />
+      )}
+    </KeyHolder>
+  );
+}
+
+function savedRoutine(commands: Partial<BotCommands>, bot: Bot = BOT) {
+  return (
     <KeyHolder>
       {(secret, onSecret) => (
         <RoutineDetail
-          page={page({ updateRoutine, revealWebhookSecret })}
+          page={page(commands, bot)}
           routine={ROUTINE}
           messageProviders={[]}
           webhookSecret={secret}
@@ -257,45 +279,91 @@ it("shows the bot's key once a routine's first webhook mints it, until Done", as
           onDeleted={vi.fn()}
         />
       )}
-    </KeyHolder>,
+    </KeyHolder>
   );
+}
 
-  await addWebhook();
-
-  expect(updateRoutine.mock.calls).toEqual([["bot-1", "routine-1", { webhookEnabled: true }]]);
-  expect(dialogText()).toContain("key-minted-once");
-  expect(dialogText()).toContain("Authorization: Bearer key-minted-once");
-
-  await act(async () => button("Done").click());
-  expect(document.querySelector('[role="dialog"]')).toBeNull();
-});
-
-it("shows the key a new routine's webhook minted before opening the routine", async () => {
+it("shows a new routine's webhook address and a freshly minted key as soon as it is picked", async () => {
   const created = { ...ROUTINE, id: "routine-2", webhookEnabled: true, crons: [] };
   const createRoutine = vi.fn(async () => created);
   const revealWebhookSecret = vi.fn(async () => "key-minted-once");
   const onCreated = vi.fn();
-  await render(
-    <KeyHolder>
-      {(secret, onSecret) => (
-        <RoutineCreateForm
-          page={page({ createRoutine, revealWebhookSecret })}
-          seed={{ name: "Deploy watch", prompt: "Say what shipped." }}
-          messageProviders={[]}
-          webhookSecret={secret}
-          onWebhookSecret={onSecret}
-          confirm={vi.fn()}
-          onCreated={onCreated}
-        />
-      )}
-    </KeyHolder>,
-  );
-  await addWebhook();
+  await render(newRoutineForm({ createRoutine, revealWebhookSecret }, onCreated));
 
+  await pickWebhook();
+
+  expect(dialogText()).toContain(WEBHOOK_URL);
+  expect(dialogText()).toContain("key-minted-once");
+  expect(dialogText()).toContain("Authorization: Bearer key-minted-once");
+  expect(dialogText()).toContain("Shown once.");
+  expect(dialogText()).not.toContain("Available after the routine is saved");
+  expect(revealWebhookSecret).toHaveBeenCalledTimes(1);
+
+  await act(async () => button("Done").click());
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
   await act(async () => button("Create").click());
 
-  expect(dialogText()).toContain("Authorization: Bearer key-minted-once");
-  expect(onCreated).not.toHaveBeenCalled();
-  await act(async () => button("Done").click());
+  expect(createRoutine.mock.calls).toMatchObject([["bot-1", { webhookEnabled: true }]]);
   expect(onCreated.mock.calls).toEqual([[created]]);
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(revealWebhookSecret).toHaveBeenCalledTimes(1);
+});
+
+it("adds a new routine's webhook on Done even when the key could not be minted", async () => {
+  const revealWebhookSecret = vi.fn(async () => {
+    throw new Error("The server did not answer.");
+  });
+  await render(newRoutineForm({ revealWebhookSecret }));
+
+  await pickWebhook();
+
+  expect(dialogText()).toContain(WEBHOOK_URL);
+  expect(document.querySelector('[role="dialog"] [role="alert"]')?.textContent).toBe(
+    "The server did not answer.",
+  );
+  await act(async () => button("Done").click());
+
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(
+    [...container.querySelectorAll("button")].some((item) =>
+      item.textContent?.startsWith("When a webhook fires"),
+    ),
+  ).toBe(true);
+});
+
+it("shows a saved routine's first webhook key as soon as it is picked, and Done saves it", async () => {
+  const updateRoutine = vi.fn(async () => ({ ...ROUTINE, webhookEnabled: true }));
+  const revealWebhookSecret = vi.fn(async () => "key-minted-once");
+  await render(savedRoutine({ updateRoutine, revealWebhookSecret }));
+
+  await pickWebhook();
+
+  expect(dialogText()).toContain(WEBHOOK_URL);
+  expect(dialogText()).toContain("Authorization: Bearer key-minted-once");
+  expect(updateRoutine).not.toHaveBeenCalled();
+
+  await act(async () => button("Done").click());
+
+  expect(updateRoutine.mock.calls).toEqual([["bot-1", "routine-1", { webhookEnabled: true }]]);
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(revealWebhookSecret).toHaveBeenCalledTimes(1);
+});
+
+it("keeps a bot's existing key hidden until it is rotated", async () => {
+  const revealWebhookSecret = vi.fn(async () => "key-after-rotation");
+  const keyed = { ...BOT, webhookConfigured: true } as Bot;
+  await render(savedRoutine({ revealWebhookSecret }, keyed));
+
+  await pickWebhook();
+
+  expect(dialogText()).toContain("Saved. Rotate to reveal.");
+  expect(dialogText()).toContain("Authorization: Bearer …");
+  expect(dialogText()).not.toContain("Shown once.");
+  expect(revealWebhookSecret).not.toHaveBeenCalled();
+
+  await act(async () => button("Rotate key").click());
+
+  expect(dialogText()).toContain("Authorization: Bearer key-after-rotation");
+  expect(dialogText()).toContain("Shown once.");
+  expect(revealWebhookSecret).toHaveBeenCalledTimes(1);
 });

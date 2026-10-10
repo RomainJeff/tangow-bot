@@ -6,7 +6,7 @@ import { useId, useState } from "react";
 import { localTimezone } from "../../lib/local-timezone";
 import type { RoutineSeed } from "../shell/layout";
 import { type BotPageContext, type Confirm, SettingsGroup } from "./page-kit";
-import { KeyDialog, WhenToRun, webhookInfo } from "./RoutineTriggers";
+import { WhenToRun, webhookInfo } from "./RoutineTriggers";
 import { useRoutineCopy } from "./routine-copy";
 
 /**
@@ -38,11 +38,12 @@ export function RoutineCreateForm({
   const [draft, setDraft] = useState<RoutineDraft>(() => ({ ...emptyRoutineDraft(), ...seed }));
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [minted, setMinted] = useState<Routine | null>(null);
   const webhook = webhookInfo(bot.id, webhookSecret, bot.webhookConfigured);
   const inbound = draft.webhookEnabled || draft.githubEnabled || Boolean(draft.messageProvider);
   const patch = (partial: Partial<RoutineDraft>) =>
     setDraft((current) => ({ ...current, ...partial }));
+
+  const reveal = async () => onWebhookSecret(await commands.revealWebhookSecret(bot.id));
 
   const create = async () => {
     const checked = validateRoutineDraft(draft, null, () => new Date(), {
@@ -57,10 +58,8 @@ export function RoutineCreateForm({
     setError(null);
     try {
       const mints = (draft.webhookEnabled || draft.githubEnabled) && !webhook.configured;
-      if (mints) onWebhookSecret(await commands.revealWebhookSecret(bot.id));
-      const created = await commands.createRoutine(bot.id, checked.payload);
-      if (mints) setMinted(created);
-      else onCreated(created);
+      if (mints) await reveal();
+      onCreated(await commands.createRoutine(bot.id, checked.payload));
     } catch (failure) {
       setError(
         failure instanceof Error && failure.message ? failure.message : t`Could not save routine`,
@@ -118,7 +117,7 @@ export function RoutineCreateForm({
           setError(null);
           return null;
         }}
-        onRotate={() => undefined}
+        onReveal={reveal}
       />
       <SettingsGroup>
         <SettingRow label={t`Active`}>
@@ -157,13 +156,6 @@ export function RoutineCreateForm({
           {t`Create`}
         </Button>
       </div>
-      {minted ? (
-        <KeyDialog
-          kind={draft.webhookEnabled ? "webhook" : "github"}
-          webhook={webhook}
-          onDone={() => onCreated(minted)}
-        />
-      ) : null}
     </div>
   );
 }
