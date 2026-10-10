@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import type { Routine } from "@rakazo/contracts";
 import {
   activeBotId,
@@ -93,6 +94,35 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
     requireToolApproval: false,
   });
   await captureScreenshot(page, testInfo, "routine-github-event");
+});
+
+test("picking Webhook on a page that missed a key minted elsewhere keeps that key", async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await signup(page, `routine-stale-key-${stamp}@rakazo.test`, "password12", "Stale Key");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  await openRoutineCreate(page);
+  const { secret } = await rpc<{ secret: string }>(page, "bots/rotateWebhookSecret", { botId });
+
+  await page.getByRole("button", { name: "Add trigger" }).click();
+  await page.getByRole("menuitem", { name: "Webhook", exact: true }).click();
+  const editor = page.getByRole("dialog");
+  await expect(editor.getByText("Saved. Rotate to reveal.", { exact: true })).toBeVisible();
+  await expect(editor.getByText("Authorization: Bearer …", { exact: true })).toBeVisible();
+  await expect(editor.getByRole("button", { name: "Rotate key" })).toHaveCount(0);
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+
+  const body = JSON.stringify({ zen: "Design for failure." });
+  const delivery = await page.request.post(`/api/v1/bots/${botId}/github`, {
+    headers: {
+      "content-type": "application/json",
+      "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`,
+    },
+    data: body,
+  });
+  expect(delivery.status()).toBe(200);
 });
 
 test("Korean webhook routine keeps technical field labels in English", async ({

@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -313,6 +314,76 @@ describeIntegration("reusable credential lifecycle", () => {
       }
     },
   );
+
+  describe("webhook key", () => {
+    type Minted = { secret: string | null; webhookConfigured: true };
+
+    async function keyedBot(label: string) {
+      const cookie = await signup(`webhook-${label}-${stamp}@rakazo.test`, `Webhook ${label}`);
+      const me = await rpc<{ userId: string }>(cookie, "me");
+      const bot = await rpc<{ id: string }>(cookie, "bots/create", {
+        name: `Webhook ${label}`,
+        title: "",
+        description: "",
+        instructions: "",
+        notifyOnFinish: false,
+      });
+      const mint = (input: { ifAbsent?: boolean } = {}) =>
+        rpc<Minted>(cookie, "bots/rotateWebhookSecret", { botId: bot.id, ...input });
+      const accepts = async (secret: string) => {
+        const body = JSON.stringify({ zen: "Keep it logically awesome." });
+        const response = await handles.app.request(`/api/v1/bots/${bot.id}/github`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-hub-signature-256": `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`,
+          },
+          body,
+        });
+        return response.status;
+      };
+      const stored = () =>
+        handles.prisma.secret.count({ where: { userId: me.userId, kind: "webhook" } });
+      return { mint, accepts, stored };
+    }
+
+    it("mints a key only when the bot has none, and leaves a live key working", async () => {
+      const bot = await keyedBot("if-absent");
+      const first = await bot.mint({ ifAbsent: true });
+      expect(first.secret).toEqual(expect.any(String));
+      expect(await bot.accepts(first.secret!)).toBe(200);
+
+      expect(await bot.mint({ ifAbsent: true })).toEqual({
+        secret: null,
+        path: expect.any(String),
+        webhookConfigured: true,
+      });
+      expect(await bot.accepts(first.secret!)).toBe(200);
+      expect(await bot.stored()).toBe(1);
+    });
+
+    it("lets one of two concurrent first mints win, and both agree the bot has a key", async () => {
+      const bot = await keyedBot("race");
+      const answers = await Promise.all([
+        bot.mint({ ifAbsent: true }),
+        bot.mint({ ifAbsent: true }),
+      ]);
+      const secrets = answers.flatMap((answer) => (answer.secret ? [answer.secret] : []));
+      expect(secrets).toHaveLength(1);
+      expect(answers.map((answer) => answer.webhookConfigured)).toEqual([true, true]);
+      expect(await bot.accepts(secrets[0]!)).toBe(200);
+      expect(await bot.stored()).toBe(1);
+    });
+
+    it("replaces the key on an explicit rotation", async () => {
+      const bot = await keyedBot("rotate");
+      const first = await bot.mint();
+      const second = await bot.mint();
+      expect(await bot.accepts(first.secret!)).toBe(401);
+      expect(await bot.accepts(second.secret!)).toBe(200);
+      expect(await bot.stored()).toBe(1);
+    });
+  });
 
   async function seedRun(
     label: string,

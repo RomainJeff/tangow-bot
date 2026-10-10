@@ -221,19 +221,40 @@ it("refuses to remove a routine's last trigger", async () => {
   expect(updateRoutine).not.toHaveBeenCalled();
 });
 
+/** Holds the page's key and, like the shell, marks the bot keyed once the server answers. */
 function KeyHolder({
+  bot,
+  commands,
   children,
 }: {
-  children: (secret: string | null, onSecret: (secret: string) => void) => ReactNode;
+  bot: Bot;
+  commands: Partial<BotCommands>;
+  children: (
+    page: BotPageContext,
+    secret: string | null,
+    onSecret: (secret: string) => void,
+  ) => ReactNode;
 }) {
   const [secret, setSecret] = useState<string | null>(null);
-  return children(secret, setSecret);
+  const [keyed, setKeyed] = useState(bot.webhookConfigured);
+  const reveal = commands.revealWebhookSecret;
+  const shell = reveal
+    ? {
+        ...commands,
+        revealWebhookSecret: async (...args: Parameters<typeof reveal>) => {
+          const minted = await reveal(...args);
+          setKeyed(true);
+          return minted;
+        },
+      }
+    : commands;
+  return children(page(shell, { ...bot, webhookConfigured: keyed }), secret, setSecret);
 }
 
-async function pickWebhook() {
+async function pickWebhook(name = "Webhook") {
   await act(async () => button("Add trigger").click());
   const item = [...document.querySelectorAll('[role="menuitem"]')].find(
-    (entry) => entry.textContent === "Webhook",
+    (entry) => entry.textContent === name,
   ) as HTMLElement;
   await act(async () => item.click());
 }
@@ -249,10 +270,10 @@ function newRoutineForm(
   seed = { name: "Deploy watch", prompt: "Say what shipped." },
 ) {
   return (
-    <KeyHolder>
-      {(secret, onSecret) => (
+    <KeyHolder bot={bot} commands={commands}>
+      {(context, secret, onSecret) => (
         <RoutineCreateForm
-          page={page(commands, bot)}
+          page={context}
           seed={seed}
           messageProviders={[]}
           webhookSecret={secret}
@@ -267,10 +288,10 @@ function newRoutineForm(
 
 function savedRoutine(commands: Partial<BotCommands>, bot: Bot = BOT) {
   return (
-    <KeyHolder>
-      {(secret, onSecret) => (
+    <KeyHolder bot={bot} commands={commands}>
+      {(context, secret, onSecret) => (
         <RoutineDetail
-          page={page(commands, bot)}
+          page={context}
           routine={ROUTINE}
           messageProviders={[]}
           webhookSecret={secret}
@@ -365,5 +386,52 @@ it("keeps a bot's existing key hidden until it is rotated", async () => {
 
   expect(dialogText()).toContain("Authorization: Bearer key-after-rotation");
   expect(dialogText()).toContain("Shown once.");
-  expect(revealWebhookSecret).toHaveBeenCalledTimes(1);
+  expect(revealWebhookSecret.mock.calls).toEqual([["bot-1"]]);
+});
+
+it("keeps the bot's live key when the server already holds one this page did not know about", async () => {
+  const revealWebhookSecret = vi.fn(async () => null);
+  await render(savedRoutine({ revealWebhookSecret }));
+
+  await pickWebhook();
+
+  expect(revealWebhookSecret.mock.calls).toEqual([["bot-1", { ifAbsent: true }]]);
+  expect(dialogText()).toContain("Saved. Rotate to reveal.");
+  expect(dialogText()).toContain("Authorization: Bearer …");
+  expect(dialogText()).not.toContain("Shown once.");
+});
+
+it("mints a key only when absent as a Git event opens, and Cancel adds no trigger", async () => {
+  const createRoutine = vi.fn();
+  const revealWebhookSecret = vi.fn(async () => "key-minted-once");
+  await render(newRoutineForm({ createRoutine, revealWebhookSecret }));
+
+  await pickWebhook("Git event");
+
+  expect(revealWebhookSecret.mock.calls).toEqual([["bot-1", { ifAbsent: true }]]);
+  expect(dialogText()).toContain(`${window.location.origin}/api/v1/bots/bot-1/github`);
+  expect(dialogText()).toContain("key-minted-once");
+
+  await act(async () => button("Cancel").click());
+
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(
+    [...container.querySelectorAll("button")].some((item) =>
+      item.textContent?.startsWith("Git event"),
+    ),
+  ).toBe(false);
+  expect(createRoutine).not.toHaveBeenCalled();
+});
+
+it("offers no key rotation on a routine that is not saved yet", async () => {
+  const revealWebhookSecret = vi.fn(async () => "key-after-rotation");
+  await render(
+    newRoutineForm({ revealWebhookSecret }, vi.fn(), { ...BOT, webhookConfigured: true }),
+  );
+
+  await pickWebhook();
+
+  expect(dialogText()).toContain("Saved. Rotate to reveal.");
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("Rotate key");
+  expect(revealWebhookSecret).not.toHaveBeenCalled();
 });
