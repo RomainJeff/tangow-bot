@@ -957,6 +957,12 @@ describe("what a bot may write anywhere in the folder", () => {
       await refusal(ada("r3").create(one("C", "payload.bin", new Uint8Array([0, 1, 255])))),
     ).toBe("invalid");
     expect(await refusal(ada("r4").create(one("D", "notes.md", text("plain"))))).toBe("written");
+    expect(
+      await refusal(ada("r5").create(one("E", "scripts/invoice‮fdp.sh", text("echo ok")))),
+    ).toBe("invalid");
+    expect(await refusal(ada("r6").create(one("F", "references/a​b.md", text("ok"))))).toBe(
+      "invalid",
+    );
   });
 
   it("takes Windows line endings but not a lone carriage return", async () => {
