@@ -9,6 +9,7 @@ import {
   mergeBuiltinSkills,
   parseSkillMd,
   searchSkills,
+  skillsReferencedInPrompt,
   skillWriteRefusal,
   slashSkillOptions,
   validateBotSkill,
@@ -310,6 +311,18 @@ describe("skill prompt helpers", () => {
     expect(expandSkillReferencesInPrompt(mentioned, skills, dirFor)).toBe(mentioned);
 
     expect(expandSkillReferencesInPrompt("/Daily standup", skills)).not.toContain("Files:");
+  });
+
+  it("names the skills a prompt brings in whole, forced first", () => {
+    const skills = [{ name: "Daily standup" }, { name: "Weekly report" }];
+    const names = (prompt: string) =>
+      skillsReferencedInPrompt(prompt, skills).map(({ skill, via }) => `${via} ${skill.name}`);
+    expect(names("/daily standup\nthen @Weekly report")).toEqual(["forced Daily standup"]);
+    expect(names("Run @Weekly report and @Daily standup")).toEqual([
+      "mention Daily standup",
+      "mention Weekly report",
+    ]);
+    expect(names("/Unknown skill")).toEqual([]);
   });
 
   it("builds catalog instructions for auto-use", () => {

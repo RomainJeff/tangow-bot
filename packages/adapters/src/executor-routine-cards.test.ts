@@ -1,8 +1,13 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentRunRequest, ConnectorCall } from "@rakazo/adapter-kit";
-import { BOT_MESSAGE_MAX_HOPS, BOT_OFFER_PROPOSALS, withProposalKey } from "@rakazo/core";
+import {
+  BOT_MESSAGE_MAX_HOPS,
+  BOT_OFFER_PROPOSALS,
+  buildSkillMd,
+  withProposalKey,
+} from "@rakazo/core";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { Prisma } from "@rakazo/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,8 +16,9 @@ import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import type { SkillOwnerLock } from "./skill-lock.js";
 import { createInMemorySkillLock } from "./skill-lock.js";
-import { listUserSkills, userSkillsRoot } from "./skill-store.js";
+import { listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -147,11 +153,22 @@ function fixture(
     /** The model fails with this message once the calls ran. */
     fails?: string;
     skillLearning?: "off" | "shadow" | "on";
+    skillLock?: SkillOwnerLock;
+    /** The tool calls the skill nudge's turn makes, batch by batch. */
+    nudge?: ToolCall[][];
+    /** The owner's earlier exchanges, newest first. */
+    earlierRuns?: Row[];
+    /** What the skill nudge's model call reports it spent. */
+    nudgeUsage?: { inputTokens: number; outputTokens: number };
+    /** Events the run persisted in an earlier attempt. */
+    events?: Row[];
+    taskPrompt?: string;
     /** Messages sent into the run as it starts: whether each came from someone but the user. */
     steering?: boolean[];
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
+  const appended: Row[] = [...(options.events ?? [])];
   const results: unknown[] = [];
   const run: Row = {
     id: "run-1",
@@ -219,6 +236,19 @@ function fixture(
   const botSkill = table([]);
   const messageUpdate = vi.fn(async () => undefined);
   const messageCreate = vi.fn(async ({ data }: { data: Row }) => ({ id: "message-new", ...data }));
+  const usageRecords: Row[] = [];
+  /** The exchange as the skill nudge reads it: the run's bot messages and its claimed steering. */
+  const inExchange = (message: Row, where: { OR: Row[] }) =>
+    message.threadId === "thread-1" &&
+    !message.hiddenFromThread &&
+    where.OR.some((option) =>
+      option.steeringMessages
+        ? message.role === "user" &&
+          ((message.steering ?? []) as Row[]).some(
+            (steering) => steering.runId === "run-1" && steering.claimedAt,
+          )
+        : message.role === option.role && message.runId === option.runId,
+    );
   const send = vi.fn(async () => undefined);
   const prisma: Row = {
     $transaction: vi.fn(async (ops: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
@@ -234,6 +264,7 @@ function fixture(
         return select.bot ? { bot: { notifyOnFinish: true }, thread: { groupId: null } } : null;
       }),
       findUniqueOrThrow: vi.fn(async () => run),
+      findMany: vi.fn(async () => options.earlierRuns ?? []),
       updateMany: vi.fn(async ({ data }: { data: Row }) => {
         Object.assign(run, data);
         return { count: 1 };
@@ -270,6 +301,11 @@ function fixture(
     event: {
       create: vi.fn(async ({ data }: { data: Row }) => ({ ...data, threadId: "thread-1" })),
       findFirst: vi.fn(async () => null),
+      findMany: vi.fn(async ({ where }: { where: { runId: string; type: { in: string[] } } }) =>
+        appended.filter(
+          (event) => event.runId === where.runId && where.type.in.includes(event.type as string),
+        ),
+      ),
     },
     chatGroup: {
       findUnique: vi.fn(async () => ({ name: "Trip", description: "", members: [] })),
@@ -277,7 +313,13 @@ function fixture(
     message: {
       update: messageUpdate,
       create: messageCreate,
-      findMany: vi.fn(async () => messages),
+      findMany: vi.fn(async ({ where }: { where?: { OR?: Row[] } } = {}) =>
+        where?.OR
+          ? messages
+              .filter((message) => inExchange(message, where as { OR: Row[] }))
+              .sort((left, right) => Number(left.seq) - Number(right.seq))
+          : messages,
+      ),
       findFirst: vi.fn(
         async ({ where }: { where: { id: string } }) =>
           messages.find((message) => message.id === where.id) ?? null,
@@ -300,7 +342,10 @@ function fixture(
       ),
     },
     task: {
-      findUniqueOrThrow: vi.fn(async () => ({ id: "task-1", prompt: "Remind me to stretch" })),
+      findUniqueOrThrow: vi.fn(async () => ({
+        id: "task-1",
+        prompt: options.taskPrompt ?? "Remind me to stretch",
+      })),
     },
     connection: { findMany: vi.fn(async () => []) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -322,6 +367,12 @@ function fixture(
       findUnique: vi.fn(async () => ({ enabled: false })),
     },
     externalEffect,
+    usageRecord: {
+      create: vi.fn(async ({ data }: { data: Row }) => {
+        usageRecords.push(data);
+        return data;
+      }),
+    },
   };
   const enqueue = vi.fn(async (_job: { name: string; availableAt: Date }) => undefined);
   const cancel = vi.fn(async (_key: string) => undefined);
@@ -329,6 +380,15 @@ function fixture(
     run.status = "waiting_input";
     return true;
   });
+  const claimSteering = vi.fn(async () =>
+    (options.steering ?? []).map((untrusted, index) => ({
+      id: `steer-${index}`,
+      messageId: `steer-message-${index}`,
+      text: "Save how to order coffee",
+      blocks: [{ kind: "text", text: "Save how to order coffee" }],
+      untrusted,
+    })),
+  );
   const finalizeRun = vi.fn(async (input: { outcome: string }) => {
     run.status = input.outcome;
     return { continuationRunId: null };
@@ -337,20 +397,48 @@ function fixture(
     yield { type: "result" as const, data: { item: call.args.id } };
   });
   let batches: ToolCall[][] = [];
+  const nudgeBatches: ToolCall[][] = options.nudge ?? [];
+  const nudgeResults: unknown[] = [];
+  /** What the run looked like when the skill nudge's turn started. */
+  const duringNudge: { runStatus?: unknown; claimedSteering?: number } = {};
   // Mirrors Pi's parallel batch: every call of a turn is announced before any of them runs.
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
+    const nudge = request.runId.endsWith(":skill-nudge");
+    if (nudge) {
+      duringNudge.runStatus = run.status;
+      duringNudge.claimedSteering = claimSteering.mock.calls.length;
+    }
     await request.claimSteering?.([]);
-    for (const batch of batches) {
+    for (const batch of nudge ? nudgeBatches : batches) {
       const settled = await Promise.all(
-        batch.map((call, index) =>
-          request.executeTool!(call.name, call.args, `${call.name}-${results.length + index}`),
-        ),
+        batch.map(async (call, index) => {
+          const executionId = `${call.name}-${results.length + index}`;
+          const result = await request.executeTool!(call.name, call.args, executionId);
+          // Pi's completion: a tool that returns { error } arrives wrapped, never as `error`.
+          await request.onToolCompleted?.({
+            name: call.name,
+            executionId,
+            durationMs: 0,
+            result: { content: [{ type: "text", text: "" }], details: result },
+            paused: isApprovalPausedResult(result),
+          });
+          return result;
+        }),
       );
-      results.push(...settled);
+      (nudge ? nudgeResults : results).push(...settled);
       if (settled.some(isApprovalPausedResult)) return;
     }
-    if (options.fails) throw new Error(options.fails);
-    yield { type: "done" as const, text: "Done" };
+    if (options.fails && !nudge) throw new Error(options.fails);
+    if (nudge && options.nudgeUsage) {
+      yield {
+        type: "usage" as const,
+        provider: "scripted",
+        model: "scripted",
+        ...options.nudgeUsage,
+      };
+    }
+    if (nudge) yield { type: "text" as const, text: "I kept the booking method." };
+    yield { type: "done" as const, text: nudge ? "I kept the booking method." : "Done" };
   });
   const executor = createRunExecutor({
     prisma,
@@ -365,24 +453,18 @@ function fixture(
     memoryProviders: { resolve: async () => null },
     notifications: { send },
     events: {
-      append: vi.fn(async () => undefined),
+      append: vi.fn(async (input: Row) => {
+        appended.push({ ...input, seq: appended.length + 1 });
+      }),
       notify: vi.fn(async () => undefined),
       pauseRunForInput,
       finalizeRun,
-      claimSteering: vi.fn(async () =>
-        (options.steering ?? []).map((untrusted, index) => ({
-          id: `steer-${index}`,
-          messageId: `steer-message-${index}`,
-          text: "Save how to order coffee",
-          blocks: [{ kind: "text", text: "Save how to order coffee" }],
-          untrusted,
-        })),
-      ),
+      claimSteering,
     },
     jobs: { enqueue, cancel },
     secrets: [],
     dataDir,
-    skillLock: createInMemorySkillLock(),
+    skillLock: options.skillLock ?? createInMemorySkillLock(),
     skillLearning: options.skillLearning,
   } as unknown as Parameters<typeof createRunExecutor>[0]);
 
@@ -395,6 +477,7 @@ function fixture(
   return {
     run,
     effects,
+    externalEffect,
     messages,
     results,
     routineCreate,
@@ -417,6 +500,14 @@ function fixture(
     send,
     instructions: () =>
       (runtimeRun.mock.calls[0]?.[0] as AgentRunRequest | undefined)?.instructions,
+    /** Every turn the runtime was asked for: the exchange, then the skill nudge's, if any. */
+    requests: () => runtimeRun.mock.calls.map(([request]) => request as AgentRunRequest),
+    nudgeResults,
+    duringNudge,
+    usageRecords,
+    /** The payloads of the events of one type the run persisted, in order. */
+    eventsOf: (type: string) =>
+      appended.filter((event) => event.type === type).map((event) => event.payload),
     async play(next: ToolCall[][], workerId = "worker-1", ends: "ok" | "failed" = "ok") {
       batches = next;
       run.status = "queued";
@@ -1669,5 +1760,250 @@ describe("a skill the bot saves on its own", () => {
     expect(f.routineCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({ untrustedPrompt: true }),
     });
+  });
+});
+
+describe("the skill nudge at the end of an exchange", () => {
+  const searches = Array.from({ length: 15 }, () => ({
+    name: "skill_search",
+    args: { query: "table" },
+  }));
+  const keep = {
+    name: "skill_create",
+    args: { name: "Book a table", description: "Book a restaurant table", body: "1. Call." },
+  };
+  const writeCoffee = async () => {
+    const folder = path.join(
+      userSkillsRoot(dataDir, { spaceId: "space-1", userId: "user-1" }),
+      skillDirName("Coffee"),
+    );
+    await mkdir(folder, { recursive: true });
+    await writeFile(
+      path.join(folder, "SKILL.md"),
+      buildSkillMd({ name: "Coffee", description: "Order coffee", body: "1. Pay." }),
+    );
+  };
+  const line = (name: string) => ({
+    kind: "skill_source",
+    skillId: `user:${name.toLowerCase()}`,
+    name,
+    change: "learned",
+  });
+
+  it("never runs, nor records anything, while learning is off", async () => {
+    const f = fixture({ nudge: [[keep]] });
+    await f.play([searches, [{ name: "skill_read", args: { name: "Skill-authoring" } }]]);
+    expect(f.requests()).toHaveLength(1);
+    expect(f.eventsOf("agent.skill.nudge")).toEqual([]);
+    expect(f.eventsOf("agent.skill.used")).toEqual([]);
+    expect(await f.skills()).toEqual([]);
+  });
+
+  it("in shadow mode records that it would have run, without a model call", async () => {
+    const f = fixture({ skillLearning: "shadow", nudge: [[keep]] });
+    await f.play([searches]);
+    expect(f.requests()).toHaveLength(1);
+    expect(f.eventsOf("agent.skill.nudge")).toEqual([
+      { phase: "decided", mode: "shadow", signal: "tools", toolCount: 15 },
+    ]);
+    expect(await f.skills()).toEqual([]);
+  });
+
+  it("runs one private turn with skill tools only, after the run let go, and its skill gets the line", async () => {
+    const f = fixture({
+      skillLearning: "on",
+      nudge: [[keep], [{ name: "message_user", args: { text: "Saved it!" } }]],
+    });
+    await f.play([searches]);
+
+    const [, nudge] = f.requests();
+    expect(f.requests()).toHaveLength(2);
+    expect(nudge).toMatchObject({ runId: "run-1:skill-nudge", allowSilentEmpty: true });
+    expect(nudge!.claimSteering).toBeUndefined();
+    expect(nudge!.prompt).toContain("This task took many steps.");
+    expect(nudge!.tools.map((tool) => tool.name)).toEqual([
+      "skill_read",
+      "skill_search",
+      "skill_create",
+      "skill_update",
+    ]);
+    expect(f.duringNudge).toEqual({ runStatus: "completed", claimedSteering: 1 });
+    expect(f.nudgeResults).toEqual([
+      expect.objectContaining({ ok: true, name: "Book a table" }),
+      { error: "Only skill_read, skill_search, skill_create and skill_update work here." },
+    ]);
+    expect(f.written()).toEqual([[line("Book a table")]]);
+    expect(JSON.stringify(f.written())).not.toContain("I kept the booking method.");
+    expect(f.eventsOf("agent.skill.nudge")).toEqual([
+      { phase: "decided", mode: "on", signal: "tools", toolCount: 15 },
+      { phase: "ended" },
+    ]);
+    expect(
+      f.eventsOf("agent.tool.completed").filter((payload) => (payload as Row).nudge === true),
+    ).toEqual([
+      expect.objectContaining({ name: "skill_create", outcome: "succeeded" }),
+      expect.objectContaining({ name: "message_user", outcome: "error" }),
+    ]);
+  });
+
+  it("does not count the nudge's own skill reads as the exchange following a skill", async () => {
+    await writeCoffee();
+    const f = fixture({
+      skillLearning: "on",
+      nudge: [[{ name: "skill_read", args: { name: "Coffee" } }]],
+    });
+    await f.play([searches]);
+    expect(f.requests()).toHaveLength(2);
+    expect(f.nudgeResults).toHaveLength(1);
+    expect(f.eventsOf("agent.skill.used")).toEqual([]);
+  });
+
+  it("names the skill the bot followed when a later step failed", async () => {
+    await writeCoffee();
+    const f = fixture({ skillLearning: "on" });
+    await f.play([
+      [{ name: "skill_read", args: { name: "Coffee" } }],
+      [{ name: "skill_read", args: { name: "Espresso" } }],
+    ]);
+    expect(f.eventsOf("agent.skill.used")).toEqual([{ name: "Coffee", via: "skill_read" }]);
+    expect(f.requests()[1]!.prompt).toContain(
+      'You followed the skill "Coffee" and a later step failed.',
+    );
+  });
+
+  it("counts a skill as followed when forced with /Name or when its folder is read, and skips a failed run", async () => {
+    await writeCoffee();
+    const f = fixture({ skillLearning: "on", taskPrompt: "/Coffee\nA flat white" });
+    // The fixture has no computer, so the shell call itself fails the run.
+    await f.play(
+      [[{ name: "shell", args: { command: "python /skills/user/coffee/scripts/pay.py" } }]],
+      "worker-1",
+      "failed",
+    );
+    expect(f.eventsOf("agent.skill.used")).toEqual([
+      { name: "Coffee", via: "forced" },
+      { name: "Coffee", via: "file" },
+    ]);
+    expect(f.requests()).toHaveLength(1);
+    expect(f.eventsOf("agent.skill.nudge")).toEqual([]);
+  });
+
+  it("does not run again for a run whose earlier attempt was already nudged", async () => {
+    const f = fixture({
+      skillLearning: "on",
+      nudge: [[keep]],
+      events: [{ runId: "run-1", type: "agent.skill.nudge", payload: { phase: "decided" } }],
+    });
+    await f.play([searches]);
+    expect(f.requests()).toHaveLength(1);
+    expect(await f.skills()).toEqual([]);
+  });
+
+  it("skips the turn, and still ends the run, when past skill writes cannot be read", async () => {
+    await writeCoffee();
+    const f = fixture({ skillLearning: "on", earlierRuns: [{ id: "run-0" }], nudge: [[keep]] });
+    const read = f.externalEffect.findMany.getMockImplementation()!;
+    f.externalEffect.findMany.mockImplementation(async (args) => {
+      const kinds = (args?.where?.kind as { in?: string[] } | undefined)?.in;
+      if (kinds?.includes("skill_create")) throw new Error("effects unavailable");
+      return read(args);
+    });
+    await f.play([
+      [{ name: "skill_read", args: { name: "Coffee" } }],
+      [{ name: "skill_read", args: { name: "Espresso" } }],
+    ]);
+    expect(f.eventsOf("agent.skill.used")).toEqual([{ name: "Coffee", via: "skill_read" }]);
+    expect(f.requests()).toHaveLength(1);
+    expect(f.eventsOf("agent.skill.nudge")).toEqual([]);
+    expect(await f.skills()).toHaveLength(1);
+  });
+
+  it("in shadow mode records why it passed over a turn the user started", async () => {
+    const f = fixture({ skillLearning: "shadow" });
+    await f.play([searches.slice(0, 3)]);
+    expect(f.eventsOf("agent.skill.nudge")).toEqual([
+      { phase: "skipped", mode: "shadow", reason: "no_signal" },
+    ]);
+  });
+
+  it("shows the turn what the user said while the exchange ran, and nothing said after", async () => {
+    const text = (value: string) => [{ kind: "text", text: value }];
+    const f = fixture({
+      skillLearning: "on",
+      messages: [
+        {
+          id: "steer",
+          threadId: "thread-1",
+          seq: 3,
+          role: "user",
+          blocks: text("No, always the pro account."),
+          steering: [{ runId: "run-1", claimedAt: new Date() }],
+        },
+        {
+          id: "reply",
+          threadId: "thread-1",
+          seq: 4,
+          role: "bot",
+          runId: "run-1",
+          botId: "bot-1",
+          blocks: text("Booked with the pro account."),
+        },
+        { id: "next", threadId: "thread-1", seq: 5, role: "user", blocks: text("Thanks!") },
+      ],
+    });
+    await f.play([searches]);
+    expect(f.requests()[1]!.history.slice(-2)).toEqual([
+      { id: "steer", role: "user", content: "No, always the pro account." },
+      { id: "reply", role: "assistant", content: "Booked with the pro account." },
+    ]);
+  });
+
+  it("counts the turn's model spend, and records its skill writes, under the exchange's run", async () => {
+    const f = fixture({
+      skillLearning: "on",
+      nudge: [[keep]],
+      nudgeUsage: { inputTokens: 1200, outputTokens: 40 },
+    });
+    await f.play([searches]);
+    expect(f.usageRecords).toEqual([
+      {
+        spaceId: "space-1",
+        botId: "bot-1",
+        userId: "user-1",
+        runId: "run-1",
+        provider: "scripted",
+        model: "scripted",
+        inputTokens: 1200,
+        outputTokens: 40,
+      },
+    ]);
+    expect(f.effects).toEqual([
+      expect.objectContaining({
+        runId: "run-1",
+        kind: "skill_create",
+        idempotencyKey: expect.stringMatching(/^run-1:skill-nudge:/),
+        status: "completed",
+      }),
+    ]);
+  });
+
+  it("does not run once a webhook steered into the exchange", async () => {
+    const f = fixture({ skillLearning: "on", steering: [true], nudge: [[keep]] });
+    await f.play([[keep], searches]);
+    expect(f.results[0]).toEqual({
+      error:
+        "Skills can't be saved in this run: only a conversation the user started, one of their routines or a sub-bot they created can save one.",
+    });
+    expect(f.requests()).toHaveLength(1);
+    expect(f.nudgeResults).toEqual([]);
+    expect(f.written()).toEqual([]);
+    expect(await f.skills()).toEqual([]);
+  });
+
+  it("does not run for a routine, even a long one", async () => {
+    const f = fixture({ skillLearning: "on", trigger: "routine", nudge: [[keep]] });
+    await f.play([searches]);
+    expect(f.requests()).toHaveLength(1);
+    expect(f.eventsOf("agent.skill.nudge")).toEqual([]);
   });
 });

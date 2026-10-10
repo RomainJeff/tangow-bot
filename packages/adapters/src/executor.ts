@@ -5,6 +5,7 @@ import type {
   AgentModelOAuthCredential,
   AgentRunRequest,
   AgentRuntime,
+  AgentRuntimeEvent,
   AgentToolCompletion,
   ArtifactStore,
   BrowserProvider,
@@ -108,6 +109,7 @@ import {
   SHAPES,
   sandboxCommandTimeoutMs,
   settleRoutineAsk,
+  skillsReferencedInPrompt,
   skillWriteRefusal,
   spawnBotToolArgs,
   type ToolCallDetail,
@@ -355,15 +357,20 @@ import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { writeSkillLines } from "./skill-lines.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
+import type { SkillNudgeDecision } from "./skill-nudge.js";
+import { decideSkillNudge, runSkillNudgeTurn } from "./skill-nudge.js";
+import type { SkillTreeFile } from "./skill-store.js";
 import {
   listAgentSkillRecords,
   readSkillDraft,
+  SKILL_TOOL_NAMES,
   sandboxSkillDir,
   skillCreateFromTool,
   skillDeleteFromTool,
   skillReadFromTool,
   skillSearchFromTool,
   skillUpdateFromTool,
+  userSkillsOpenedIn,
 } from "./skill-tools.js";
 import {
   continueRunClaimFence,
@@ -386,6 +393,7 @@ import {
   botMessageOutcomeFromMidTurn,
   buildSteeringMessageText,
   clampUserProgressMessage,
+  endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
   isProgressMessageTruncated,
@@ -415,6 +423,7 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "list_secrets",
 ]);
 const MAX_MODEL_FILE_BYTES = 250_000;
+const SKILL_NUDGE_TIMEOUT_MS = 2 * 60 * 1000;
 
 function positiveIntegerArg(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
@@ -707,14 +716,17 @@ export function toolCompletionAuditPayload(
   const durationMs = Number.isFinite(completion.durationMs)
     ? Math.max(0, Math.round(completion.durationMs))
     : 0;
+  // Pi hands a tool that returned { error }, rather than threw, over as a wrapped result.
+  const returned = (completion.result as { details?: unknown } | undefined)?.details;
+  const error = completion.error ?? (isFailedToolResult(returned) ? returned.error : undefined);
   const payload: Record<string, unknown> = {
     name: redactSecrets(completion.name, secrets),
     executionId: redactSecrets(completion.executionId, secrets),
     durationMs,
-    outcome: completion.paused ? "paused" : completion.error === undefined ? "succeeded" : "error",
+    outcome: completion.paused ? "paused" : error === undefined ? "succeeded" : "error",
   };
-  if (completion.error !== undefined) {
-    payload.error = sanitizeConnectorError(completion.error, secrets);
+  if (error !== undefined) {
+    payload.error = sanitizeConnectorError(error, secrets);
   }
   if (!isAuditableToolResult(completion.result)) return payload;
 
@@ -743,11 +755,46 @@ export function toolCompletionAuditPayload(
   return payload;
 }
 
+/** A model call's spend, counted on the usage screen under the run's bot. */
+async function recordRunUsage(
+  deps: Pick<ExecutorDeps, "prisma">,
+  target: { spaceId: string; userId: string; botId: string; runId: string },
+  event: Extract<AgentRuntimeEvent, { type: "usage" }>,
+  turn?: "skill_nudge",
+): Promise<void> {
+  getLogger().info("agent.run.usage", {
+    runId: target.runId,
+    botId: target.botId,
+    ...(turn ? { turn } : {}),
+    provider: event.provider,
+    model: event.model,
+    inputTokens: event.inputTokens,
+    outputTokens: event.outputTokens,
+    // Left out entirely when the provider reports no cache counters.
+    ...(event.cacheReadTokens === undefined ? {} : { cacheReadTokens: event.cacheReadTokens }),
+    ...(event.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: event.cacheWriteTokens }),
+  });
+  await deps.prisma.usageRecord.create({
+    data: {
+      spaceId: target.spaceId,
+      botId: target.botId,
+      userId: target.userId,
+      runId: target.runId,
+      provider: event.provider,
+      model: event.model,
+      inputTokens: event.inputTokens,
+      outputTokens: event.outputTokens,
+    },
+  });
+}
+
 export async function appendToolCompletionAudit(
   deps: { events: Pick<ThreadEvents, "append"> },
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   completion: AgentToolCompletion,
   secrets: string[] = [],
+  /** `nudge`: the call came from the skill nudge, so it never counts toward one. */
+  marks: { nudge?: true } = {},
 ): Promise<void> {
   try {
     await deps.events.append({
@@ -756,7 +803,7 @@ export async function appendToolCompletionAudit(
       botId: target.botId,
       runId: target.runId,
       type: "agent.tool.completed",
-      payload: toolCompletionAuditPayload(completion, secrets),
+      payload: { ...toolCompletionAuditPayload(completion, secrets), ...marks },
     });
   } catch (error) {
     // Audit persistence must not change the tool result or strand the run.
@@ -1369,6 +1416,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
       const runSecrets = [...deps.secrets];
       // A skill write landed in this attempt: its line goes under the run's message at the end.
       let savedSkill = false;
+      // The skill nudge's private turn, run once the run has let go of its lease and computer.
+      let skillNudgeTurn: (() => Promise<void>) | undefined;
       try {
         // A follow_up's source message tells whether the user or another bot started it.
         const sourceMessage =
@@ -2030,6 +2079,68 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return secretPausedToolResult();
         };
 
+        const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+        /** What the skill-learning nudge reads back: the skills this run followed, in order. */
+        const recordSkillUse = async (skillName: string, via: string) => {
+          if (learning === "off") return;
+          await deps.events
+            .append({
+              spaceId: run.spaceId,
+              threadId: thread.id,
+              botId: bot.id,
+              runId,
+              type: "agent.skill.used",
+              payload: { name: skillName, via },
+            })
+            .catch((error) => getLogger().warn("skill use record failed", { error }));
+        };
+        const runSkillTool = async (
+          name: string,
+          args: Record<string, unknown>,
+          files?: SkillTreeFile[],
+          fromNudge = false,
+        ): Promise<Record<string, unknown>> => {
+          const text = (key: string) => (args[key] ? String(args[key]) : undefined);
+          if (name === "skill_read") {
+            const read = await skillReadFromTool(skillDeps, skillOwner, {
+              name: text("name"),
+              skillId: text("skillId"),
+            });
+            if (!("error" in read) && !fromNudge) {
+              await recordSkillUse(String(read.name), "skill_read");
+            }
+            return read;
+          }
+          if (name === "skill_search") {
+            return skillSearchFromTool(skillDeps, skillOwner, { query: text("query") });
+          }
+          if (name === "skill_create") {
+            return skillCreateFromTool(skillDeps, skillOwner, runSecrets, {
+              files,
+              name: text("name"),
+              description: text("description"),
+              body: text("body"),
+              content: text("content"),
+            });
+          }
+          if (name === "skill_update") {
+            const given = (key: string) =>
+              args[key] !== undefined ? String(args[key]) : undefined;
+            return skillUpdateFromTool(skillDeps, skillOwner, runSecrets, {
+              files,
+              name: text("name"),
+              skillId: text("skillId"),
+              description: given("description"),
+              body: given("body"),
+              content: text("content"),
+            });
+          }
+          return skillDeleteFromTool(skillDeps, skillOwner, {
+            name: text("name"),
+            skillId: text("skillId"),
+          });
+        };
+
         /**
          * Keyed on the effect, so a retried call cannot post it twice. Logged, never thrown: the
          * routine exists and the model has its result.
@@ -2082,6 +2193,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             if (!("error" in normalized)) args = spawnBotToolArgs(normalized);
           }
           if (name === "schedule_create") args = scheduleCreateArgs(args);
+          if (name === "read_file" || name === "shell") {
+            const reach = String(args.path ?? args.command ?? "");
+            for (const skill of userSkillsOpenedIn(reach, agentSkills)) {
+              await recordSkillUse(skill.name, "file");
+            }
+          }
           if (PAGE_BROWSER_TOOL_NAMES.has(name) && !pageBrowserAllowed) {
             return { error: "Page browser is unavailable on this computer." };
           }
@@ -3257,72 +3374,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
             return finish(cancelled);
           }
-          if (name === "skill_read") {
-            return skillReadFromTool(
-              skillDeps,
-              {
-                spaceId: run.spaceId,
-                userId: run.userId,
-                botId: run.botId,
-              },
-              {
-                name: args.name ? String(args.name) : undefined,
-                skillId: args.skillId ? String(args.skillId) : undefined,
-              },
-            );
-          }
-          if (name === "skill_search") {
-            return skillSearchFromTool(
-              skillDeps,
-              { spaceId: run.spaceId, userId: run.userId, botId: run.botId },
-              { query: args.query ? String(args.query) : undefined },
-            );
-          }
-          const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
-          const saved = (result: Record<string, unknown>) => {
+          if (SKILL_TOOL_NAMES.has(name)) {
+            const draftPath = typeof args.path === "string" ? args.path.trim() : "";
+            const files =
+              draftPath && (name === "skill_create" || name === "skill_update")
+                ? await readSkillDraft(
+                    deps.sandbox,
+                    computer,
+                    resolveBotWorkspacePath(computerMode, bot.id, draftPath),
+                    context,
+                  )
+                : undefined;
+            if (files && "error" in files) return finish(files);
+            const result = await runSkillTool(name, args, files);
+            if (name === "skill_read" || name === "skill_search") return result;
             if ("ok" in result) savedSkill = true;
             return finish(result);
-          };
-          if (name === "skill_create" || name === "skill_update") {
-            const draftPath = typeof args.path === "string" ? args.path.trim() : "";
-            const files = draftPath
-              ? await readSkillDraft(
-                  deps.sandbox,
-                  computer,
-                  resolveBotWorkspacePath(computerMode, bot.id, draftPath),
-                  context,
-                )
-              : undefined;
-            if (files && "error" in files) return finish(files);
-            if (name === "skill_create") {
-              return saved(
-                await skillCreateFromTool(skillDeps, skillOwner, runSecrets, {
-                  files,
-                  name: args.name ? String(args.name) : undefined,
-                  description: args.description ? String(args.description) : undefined,
-                  body: args.body ? String(args.body) : undefined,
-                  content: args.content ? String(args.content) : undefined,
-                }),
-              );
-            }
-            return saved(
-              await skillUpdateFromTool(skillDeps, skillOwner, runSecrets, {
-                files,
-                name: args.name ? String(args.name) : undefined,
-                skillId: args.skillId ? String(args.skillId) : undefined,
-                description: args.description !== undefined ? String(args.description) : undefined,
-                body: args.body !== undefined ? String(args.body) : undefined,
-                content: args.content ? String(args.content) : undefined,
-              }),
-            );
-          }
-          if (name === "skill_delete") {
-            return saved(
-              await skillDeleteFromTool(skillDeps, skillOwner, {
-                name: args.name ? String(args.name) : undefined,
-                skillId: args.skillId ? String(args.skillId) : undefined,
-              }),
-            );
           }
           if (name === "add_mcp_server") {
             const parsed = parseMcpServerToolArgs(args);
@@ -4083,6 +4150,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
           agentSkills,
           sandboxSkillDir,
         );
+        for (const { skill, via } of skillsReferencedInPrompt(task.prompt, agentSkills)) {
+          await recordSkillUse(skill.name, via);
+        }
         const invokedSkill = savedSkills.find((skill) =>
           promptInvokesSkill(taskPrompt, skill.name || skill.goal),
         );
@@ -4250,6 +4320,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
             historyMessagesAvailable,
             historyWindowMode,
           });
+          const runtimeModel: AgentRunRequest["model"] = {
+            provider: runModelProvider,
+            id: runModelId,
+            apiKey: resolved.oauth ? undefined : resolved.apiKey,
+            baseUrl: resolved.baseUrl,
+            reasoning: resolved.reasoning,
+            maxTokens: resolved.maxTokens,
+            contextWindow: resolved.contextWindow,
+            acceptsImages: resolved.acceptsImages,
+            maxImagesPerPrompt: resolved.maxImagesPerPrompt,
+            thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? null,
+            oauth: resolved.oauth
+              ? { credential: resolved.oauth, persist: resolved.persistOAuth }
+              : undefined,
+          };
           const runtimeEvents = deps.runtime.run(
             {
               botId: bot.id,
@@ -4262,21 +4347,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               currentTurnImages,
               tools,
               secrets: runSecrets,
-              model: {
-                provider: runModelProvider,
-                id: runModelId,
-                apiKey: resolved.oauth ? undefined : resolved.apiKey,
-                baseUrl: resolved.baseUrl,
-                reasoning: resolved.reasoning,
-                maxTokens: resolved.maxTokens,
-                contextWindow: resolved.contextWindow,
-                acceptsImages: resolved.acceptsImages,
-                maxImagesPerPrompt: resolved.maxImagesPerPrompt,
-                thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? null,
-                oauth: resolved.oauth
-                  ? { credential: resolved.oauth, persist: resolved.persistOAuth }
-                  : undefined,
-              },
+              model: runtimeModel,
               resumeFromCheckpoint: takeoverResume?.checkpoint,
               script,
               allowSilentEmpty: allowSilentPeerMessage || messagingChannelRun,
@@ -4696,33 +4767,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 );
               }
             } else if (event.type === "usage") {
-              getLogger().info("agent.run.usage", {
-                runId,
-                botId: bot.id,
-                provider: event.provider,
-                model: event.model,
-                inputTokens: event.inputTokens,
-                outputTokens: event.outputTokens,
-                // Left out entirely when the provider reports no cache counters.
-                ...(event.cacheReadTokens === undefined
-                  ? {}
-                  : { cacheReadTokens: event.cacheReadTokens }),
-                ...(event.cacheWriteTokens === undefined
-                  ? {}
-                  : { cacheWriteTokens: event.cacheWriteTokens }),
-              });
-              await deps.prisma.usageRecord.create({
-                data: {
-                  spaceId: run.spaceId,
-                  botId: bot.id,
-                  userId: run.userId,
-                  runId,
-                  provider: event.provider,
-                  model: event.model,
-                  inputTokens: event.inputTokens,
-                  outputTokens: event.outputTokens,
-                },
-              });
+              await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "done") {
               if (!assembled && event.text) {
                 if (publishedMidTurnUserMessage) {
@@ -4825,6 +4870,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
             run.trigger === "bot_message"
               ? botMessageOutcomeFromMidTurn(text, midTurnUserTexts)
               : null;
+          // Decided and marked while the run still holds its lease: a resumed run reads the mark.
+          const skillNudge: SkillNudgeDecision | undefined =
+            learning === "off"
+              ? undefined
+              : await decideSkillNudge(deps, learning, {
+                  run: { ...run, threadId: thread.id },
+                  sourceRole,
+                  steeredByOthers,
+                  replied: !handedOff && (text.trim() !== "" || publishedMidTurnUserMessage),
+                  budgetExhausted: endsWithToolCallBudgetNotice(text),
+                }).catch((error) => {
+                  getLogger().error("skill nudge decision", error);
+                  return undefined;
+                });
           const completed = await deps.events.finalizeRun({
             spaceId: run.spaceId,
             threadId: thread.id,
@@ -4920,6 +4979,100 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
           } catch (error) {
             getLogger().error("history.compact enqueue failed", error);
+          }
+          if (skillNudge?.nudge && skillNudge.mode === "on") {
+            const { signal } = skillNudge;
+            skillNudgeTurn = async () => {
+              // The bot's messages and the user's, claimed as steering while the exchange ran.
+              const exchange = await deps.prisma.message.findMany({
+                where: {
+                  threadId: thread.id,
+                  hiddenFromThread: false,
+                  OR: [
+                    { runId, role: "bot" },
+                    {
+                      role: "user",
+                      steeringMessages: { some: { runId, claimedAt: { not: null } } },
+                    },
+                  ],
+                },
+                orderBy: { seq: "asc" },
+                select: {
+                  id: true,
+                  threadId: true,
+                  role: true,
+                  botId: true,
+                  blocks: true,
+                  replyToMessageId: true,
+                  replyQuote: true,
+                },
+              });
+              const target = { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId };
+              await runSkillNudgeTurn(deps, {
+                run: { id: runId, spaceId: run.spaceId, threadId: thread.id, botId: bot.id },
+                signal,
+                request: {
+                  botId: bot.id,
+                  threadId: thread.id,
+                  instructions,
+                  // The prompt stands in for the source message, as it did in the exchange.
+                  history: [
+                    ...runtimeHistory.filter(
+                      (message) => !run.sourceMessageId || message.id !== run.sourceMessageId,
+                    ),
+                    { role: "user", content: prompt },
+                    ...exchange.map((message) => ({
+                      id: message.id,
+                      ...messageToAgentHistoryTurn(message, bot.id, group?.memberNames),
+                    })),
+                  ],
+                  model: runtimeModel,
+                  secrets: runSecrets,
+                },
+                context: {
+                  operationId: `${runId}:skill-nudge`,
+                  traceId: runId,
+                  spaceId: run.spaceId,
+                  userId: run.userId,
+                  botId: bot.id,
+                  runId,
+                  signal: AbortSignal.any([
+                    AbortSignal.timeout(SKILL_NUDGE_TIMEOUT_MS),
+                    ...(deps.shutdownSignal ? [deps.shutdownSignal] : []),
+                  ]),
+                },
+                callTool: async (name, args, toolCallId) => {
+                  const skillRefusal = skillWriteRefusal(
+                    { trigger: run.trigger, sourceRole, trustedRoutine, steeredByOthers },
+                    name,
+                  );
+                  if (skillRefusal) return { error: skillRefusal };
+                  const safeArgs = redactBotToolArgs(name, args, runSecrets);
+                  if (name !== "skill_create" && name !== "skill_update") {
+                    return runSkillTool(name, safeArgs, undefined, true);
+                  }
+                  // The effect row is what the line sweep looks for if the worker dies mid-turn.
+                  const effect = await deps.prisma.externalEffect.create({
+                    data: {
+                      spaceId: run.spaceId,
+                      runId,
+                      kind: name,
+                      idempotencyKey: toolCallId,
+                      status: "intended",
+                      request: safeArgs as never,
+                    },
+                  });
+                  const result = await runSkillTool(name, safeArgs, undefined, true);
+                  await completeEffect(deps, effect.id, "intended", result);
+                  return result;
+                },
+                audit: (completion) =>
+                  appendToolCompletionAudit(deps, target, completion, runSecrets, { nudge: true }),
+                recordUsage: (usage) =>
+                  recordRunUsage(deps, { ...target, userId: run.userId }, usage, "skill_nudge"),
+              });
+              await writeRunSkillLines(runId);
+            };
           }
         } catch (error) {
           if (!terminalCheckpointComplete) {
@@ -5048,6 +5201,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           })
           .catch(() => undefined);
       }
+      await skillNudgeTurn?.().catch((error) => getLogger().error("skill nudge", error));
     },
   };
 }

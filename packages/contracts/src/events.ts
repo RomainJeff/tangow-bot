@@ -38,6 +38,14 @@ export const ProductEventType = z.enum([
   "effect.recorded",
   "agent.tool.called",
   "agent.tool.completed",
+  /** A run followed a skill: read it, was forced or cited to it, or opened its files; payload { name, via }. */
+  "agent.skill.used",
+  /**
+   * The end-of-exchange skill nudge: { phase: "decided", mode, signal, toolCount, skill? } before
+   * it runs (or, in shadow mode, instead of it), then { phase: "ended" } once its turn is over;
+   * { phase: "skipped", mode, reason } for a turn the user started that it passed over.
+   */
+  "agent.skill.nudge",
   "effect.reconciled",
   /** A person changed a proposed effect on its approval card; payload { effectId, proposed, approved }. */
   "effect.edited",

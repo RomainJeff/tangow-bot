@@ -116,6 +116,29 @@ describe("tool completion audit", () => {
     });
     expect(completion).not.toHaveProperty("result");
   });
+
+  it("records a tool that returned an error through Pi as an error", () => {
+    const payload = toolCompletionAuditPayload(
+      {
+        name: "gmail_send",
+        executionId: "call-1",
+        durationMs: 4,
+        result: {
+          content: [{ type: "text", text: "Failed" }],
+          details: { error: "Bearer secret-token refused" },
+        },
+      },
+      ["secret-token"],
+    );
+
+    expect(payload).toEqual({
+      name: "gmail_send",
+      executionId: "call-1",
+      durationMs: 4,
+      outcome: "error",
+      error: "Bearer [redacted] refused",
+    });
+  });
 });
 
 describe("run workspace checkpoint", () => {

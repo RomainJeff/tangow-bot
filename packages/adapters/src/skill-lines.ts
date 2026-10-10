@@ -48,20 +48,25 @@ const savedName = (result: Prisma.JsonValue): string | undefined =>
     : undefined;
 
 /**
- * One line per skill the run wrote, in the order it first wrote them, from the effects of its skill
- * calls that succeeded. A bot cannot rename a skill, so the name it wrote stays the skill's id.
+ * Per run, one line per skill it wrote, in the order it first wrote them, from the effects of its
+ * skill calls that succeeded. A bot cannot rename a skill, so the name it wrote stays the skill's id.
  */
-async function linesOf(prisma: PrismaClient, runId: string): Promise<SkillSourceBlock[]> {
+export async function skillLinesByRun(
+  prisma: Pick<PrismaClient, "externalEffect">,
+  runIds: string[],
+): Promise<Map<string, SkillSourceBlock[]>> {
   const effects = await prisma.externalEffect.findMany({
-    where: { runId, kind: { in: SKILL_WRITE_TOOLS }, status: "completed" },
+    where: { runId: { in: runIds }, kind: { in: SKILL_WRITE_TOOLS }, status: "completed" },
     orderBy: { createdAt: "asc" },
-    select: { kind: true, result: true },
+    select: { runId: true, kind: true, result: true },
   });
-  const lines = new Map<string, SkillSourceBlock>();
-  for (const { kind, result } of effects) {
+  const byRun = new Map<string, Map<string, SkillSourceBlock>>();
+  for (const { runId, kind, result } of effects) {
     const fold = FOLD.get(kind);
     const name = savedName(result);
     if (!fold || !name) continue;
+    const lines = byRun.get(runId) ?? new Map<string, SkillSourceBlock>();
+    byRun.set(runId, lines);
     const skillId = userSkillKey(name);
     lines.set(skillId, {
       kind: "skill_source",
@@ -70,7 +75,7 @@ async function linesOf(prisma: PrismaClient, runId: string): Promise<SkillSource
       change: fold(lines.get(skillId)?.change),
     });
   }
-  return [...lines.values()];
+  return new Map([...byRun].map(([runId, lines]) => [runId, [...lines.values()]]));
 }
 
 /** The updated skills another bot reads, by the owner's access settings now. */
@@ -125,7 +130,7 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
     },
   });
   if (!run || !FINISHED.includes(run.status) || run.skillLinesAt) return;
-  const all = await linesOf(deps.prisma, run.id);
+  const all = (await skillLinesByRun(deps.prisma, [run.id])).get(run.id) ?? [];
   const startedByUser = runStartedByUser({
     trigger: run.trigger,
     sourceRole: run.sourceMessage?.role,

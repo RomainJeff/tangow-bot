@@ -63,6 +63,7 @@ import {
 } from "./pi-session.js";
 import { textContentArg } from "./tool-text.js";
 import type { TraceExporter } from "./trace-export.js";
+import { toolCallBudgetNotice } from "./user-progress.js";
 
 /**
  * Normalize the ask_user v2 `questions` argument into validated AskQuestion[] with stable ids.
@@ -1908,7 +1909,7 @@ interface ToolHost {
 }
 
 function toolCallBudgetExceededMessage(limit: number) {
-  return `I stopped after reaching the limit of ${limit} tool calls in this turn. Send another message to continue.`;
+  return toolCallBudgetNotice(limit);
 }
 
 function toolCallBudgetFor(runId: string): ToolCallBudget {

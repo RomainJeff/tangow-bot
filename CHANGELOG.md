@@ -11,6 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **A bot's page now has an Activity tab on web and desktop.** It lists the runs of the bot's routines, the routines it was given and its own creation, newest first, with each failed run's reason, a recap that opens in place and "Open in chat" to land on the run's message. The bot's name in the header opens it, and so do the gear and "Bot settings" while the bot has no instructions, with "Write its first instructions" under its creation.
+- **Bots now create and improve their own skills, and a line under their message says so.** On web, desktop and iPhone, "Skill learned", "Skill updated" or "Skill deleted" followed by the skill's name appears under the bot's reply and opens a skill it learned or updated, and a bot changes your skills only in a conversation you started, one of your routines or a sub-bot it created. Keeping a method on its own after a long task, or fixing it after a step failed, is off by default; a server admin turns it on with `SKILL_LEARNING` (see [Learned skills](docs/self-host.md#learned-skills)).
+
+#### Changed
+
+- A bot can no longer rename a skill, on web, desktop and iPhone; only you rename it, from its settings.
+- On web and desktop, a skill in a bot's Knowledge tab now opens in the wider panel of its page, like a routine, instead of inside the list.
 
 #### Fixed
 

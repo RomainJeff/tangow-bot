@@ -98,6 +98,15 @@ export function sandboxSkillDir(skill: { id: string; name: string }): string {
   return `${SANDBOX_SKILL_MOUNTS.user}/${skillDirName(skill.name)}`;
 }
 
+export function userSkillsOpenedIn<T extends { id: string; name: string; source: string }>(
+  text: string,
+  skills: readonly T[],
+): T[] {
+  return skills.filter(
+    (skill) => skill.source === "user" && text.includes(`${sandboxSkillDir(skill)}/`),
+  );
+}
+
 function readOnlyError(skill: {
   id: string;
   source: string;
