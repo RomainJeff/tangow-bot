@@ -2,28 +2,32 @@ import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
 import type { ThreadMessage } from "@rakazo/contracts";
-import type { RoutineGroupRun, RoutineRowRole } from "@rakazo/core";
+import type { RoutineGroupRun, RoutineRowRole, SkillSourceBlock } from "@rakazo/core";
 import {
   isLinkOnlyMessage,
   isNarrationMessage,
   previewSiteLabel,
   sanitizePreviewTitle,
+  skillSourcesOf,
   textWithoutPreviewedLinkLine,
 } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
+  cn,
   Interstitial,
   LinkPreviewCard,
   MessageBubble,
+  MessageMeta,
   MessageRow,
   StackedAvatars,
   Surface,
   UserBubble,
 } from "@rakazo/ui-web";
-import { ArrowRight, Check, Clock } from "lucide-react";
+import { ArrowRight, BookOpen, Check, Clock } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
+import "../../components/ai/beautiful-ui.css";
 import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
 import type { SpawnBotCardEdits } from "../../components/AskCard";
@@ -129,6 +133,8 @@ export const MessageView = memo(function MessageView({
   onBotChanged,
   onAddRoutine,
   routineRole,
+  onOpenSkill,
+  arrivesLive = false,
 }: {
   artifactTarget: ArtifactTarget;
   /** How the transcript frames this message — derived once, from the same
@@ -167,8 +173,15 @@ export const MessageView = memo(function MessageView({
    * group, or nothing — drawn by another line). Undefined for every message
    * that isn't a routine run. */
   routineRole?: RoutineRowRole;
+  /** Opens a skill from the line a bot's message carries; absent in a group, which has no bot page. */
+  onOpenSkill?: (skill: SkillSourceBlock) => void;
+  /** This message is new activity, not history: its skill line arrives with a beat. */
+  arrivesLive?: boolean;
 }) {
   const { t } = useLingui();
+  const skills = skillSourcesOf(message.blocks);
+  const skillsAtMount = useRef(skills.length);
+  const skillLinesLive = arrivesLive || skills.length > skillsAtMount.current;
   const isNarration = isNarrationMessage(message);
   const isLive = message.id.startsWith("progress:");
   const showSteps = useDisplayAgentSteps();
@@ -301,6 +314,33 @@ export const MessageView = memo(function MessageView({
       </>,
     );
   }
+  const skillLines = skills.map((skill) => {
+    const { name } = skill;
+    return {
+      label:
+        skill.change === "learned"
+          ? t`Skill learned · ${name}`
+          : skill.change === "updated"
+            ? t`Skill updated · ${name}`
+            : t`Skill deleted · ${name}`,
+      icon: (
+        <BookOpen
+          aria-hidden
+          className={cn("size-3.5 shrink-0", skillLinesLive && "bui-skill-icon")}
+        />
+      ),
+      className: skillLinesLive ? "bui-skill-line" : undefined,
+      ...(onOpenSkill ? { onClick: () => onOpenSkill(skill) } : {}),
+    };
+  });
+  // The lines hang under the last bubble the message draws; with no bubble they stand alone.
+  const skillLineBubble =
+    message.role === "bot" && !linkOnly
+      ? message.blocks.findLastIndex(
+          (block) => block.kind === "text" && bubbleText(block.text) !== undefined,
+        )
+      : -1;
+  const firstSkillBlock = message.blocks.findIndex((block) => block.kind === "skill_source");
   const rendered = message.blocks
     .map((block, i) => {
       if (isHiddenActivityBlock(block, showSteps)) return null;
@@ -429,6 +469,11 @@ export const MessageView = memo(function MessageView({
           </Surface>
         );
       }
+      if (block.kind === "skill_source") {
+        return skillLineBubble < 0 && i === firstSkillBlock ? (
+          <MessageMeta key={i} lines={skillLines} className="px-3.5" />
+        ) : null;
+      }
       if (block.kind === "routine_run") {
         const handoffFor = (run: RoutineGroupRun): RoutineHandoff | undefined => {
           const sent = run.sentTo;
@@ -531,7 +576,13 @@ export const MessageView = memo(function MessageView({
           );
         }
         return (
-          <MessageBubble key={i} data-testid="message-bot-bubble" inGroup={inGroup} dir="auto">
+          <MessageBubble
+            key={i}
+            data-testid="message-bot-bubble"
+            inGroup={inGroup}
+            dir="auto"
+            meta={i === skillLineBubble && skillLines.length > 0 ? skillLines : undefined}
+          >
             <ChatMarkdown>{shown}</ChatMarkdown>
           </MessageBubble>
         );

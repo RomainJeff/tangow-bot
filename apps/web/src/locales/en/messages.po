@@ -3888,6 +3888,18 @@ msgstr "Sign up"
 msgid "Skill {0}"
 msgstr "Skill {0}"
 
+#: src/pages/shell/message-view.tsx:340
+msgid "Skill deleted · {name}"
+msgstr "Skill deleted · {name}"
+
+#: src/pages/shell/message-view.tsx:337
+msgid "Skill learned · {name}"
+msgstr "Skill learned · {name}"
+
+#: src/pages/shell/message-view.tsx:339
+msgid "Skill updated · {name}"
+msgstr "Skill updated · {name}"
+
 #: src/pages/bot-page/KnowledgeTab.tsx:40
 #: src/pages/CustomizeOverlay.tsx:19
 #: src/pages/SkillsOverlay.tsx:106

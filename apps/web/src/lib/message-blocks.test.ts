@@ -35,7 +35,7 @@ describe("hasRenderableBlock", () => {
     expect(hasRenderableBlock([], true)).toBe(false);
   });
 
-  it("does not draw a message that only carries a skill line, here or on an older build", () => {
+  it("draws a message that only carries a skill line, and not one an older build cannot read", () => {
     const line = [
       {
         kind: "skill_source",
@@ -45,7 +45,7 @@ describe("hasRenderableBlock", () => {
         change: "learned",
       },
     ];
-    expect(hasRenderableBlock(MessageBlocks.parse(line), false)).toBe(false);
+    expect(hasRenderableBlock(MessageBlocks.parse(line), false)).toBe(true);
     // An older build does not know the kind and drops it while parsing.
     expect(
       hasRenderableBlock(MessageBlocks.parse([{ ...line[0], kind: "unknown_kind" }]), false),
