@@ -101,7 +101,6 @@ describe("bots.activity", () => {
           id: "bot-of-someone-else",
           spaceId: "space-1",
           userId: "user-1",
-          archivedAt: null,
         },
         include: { thread: true, computer: true },
       },

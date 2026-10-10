@@ -253,6 +253,53 @@ describeRunsList("runs.list activity tracker", () => {
     });
   });
 
+  it("reads an archived bot's activity for its owner only, and refuses its edits until restored", async () => {
+    const ownerCookie = await signup(app, `archived-page-owner-${stamp}@rakazo.test`, "Owner");
+    const bot = await createBot(app, ownerCookie, "Shelved");
+    const routine = await prisma.routine.create({
+      data: await routineData(prisma, bot.id, "Inbox sweep"),
+    });
+    const done = await seedRun(prisma, bot.id, "completed", "sweep", undefined, routine.id);
+    await seedBotMessage(prisma, done, "Two emails need a reply");
+    await rpc(app, ownerCookie, "bots/archive", { botId: bot.id });
+
+    const activity = await rpc<BotActivityOutput>(app, ownerCookie, "bots/activity", {
+      botId: bot.id,
+    });
+    expect(
+      activity.items.map((item) =>
+        item.kind === "routine_run" ? [item.run.status, item.run.routineName] : item.kind,
+      ),
+    ).toEqual([["completed", "Inbox sweep"], "routine_created", "bot_created"]);
+    expect(await rpc<RunRecap>(app, ownerCookie, "runs/recap", { runId: done.id })).toEqual({
+      text: "Two emails need a reply",
+      messageId: expect.any(String),
+    });
+
+    const intruderCookie = await signup(
+      app,
+      `archived-page-intruder-${stamp}@rakazo.test`,
+      "Intruder",
+    );
+    const foreign = await raw(app, intruderCookie, "bots/activity", { botId: bot.id });
+    expect(foreign.status).toBeGreaterThanOrEqual(400);
+    expect(await foreign.text()).not.toContain("Inbox sweep");
+
+    for (const [proc, body] of [
+      ["bots/update", { botId: bot.id, name: "Renamed" }],
+      ["routines/update", { routineId: routine.id, active: false }],
+    ] as const) {
+      const refused = await raw(app, ownerCookie, proc, body);
+      expect(refused.status).toBeGreaterThanOrEqual(400);
+    }
+    await rpc(app, ownerCookie, "bots/restore", { botId: bot.id });
+    const renamed = await rpc<{ name: string }>(app, ownerCookie, "bots/update", {
+      botId: bot.id,
+      name: "Renamed",
+    });
+    expect(renamed.name).toBe("Renamed");
+  });
+
   it("lists a bot's routine runs, routine creations and its own creation, never other runs", async () => {
     const cookie = await signup(app, `activity-feed-${stamp}@rakazo.test`, "Feed User");
     const bot = await createBot(app, cookie, "Feed Bot");
