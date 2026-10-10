@@ -81,6 +81,7 @@ import {
   nextCronDateAcross,
   nextFence,
   normalizeSpawnBotArgs,
+  notificationBody,
   PENDING_CARD_EFFECT_KINDS,
   PROPOSAL_EFFECT_KINDS,
   PROPOSAL_KEY_FIELD,
@@ -4837,7 +4838,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               {
                 kind: "completion",
                 title: `${bot.name} finished`,
-                body: text.slice(0, 180),
+                body: text,
                 botId: bot.id,
                 threadId: thread.id,
               },
@@ -4926,7 +4927,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               {
                 kind: "failure",
                 title: `${bot.name} failed`,
-                body: message.slice(0, 180),
+                body: message,
                 botId: bot.id,
                 threadId: thread.id,
               },
@@ -5077,6 +5078,9 @@ async function notifyRun(
   opts?: { forceEnabled?: boolean },
 ) {
   if (!deps.notifications) return;
+  const body = notificationBody(message.body);
+  // A completion with nothing left to say pages nobody; an ask, a takeover or a failure still pages.
+  if (!body && message.kind === "completion") return;
   const enabled = await runNotificationsEnabled(deps.prisma, run, opts).catch((error) => {
     getLogger().error("notification preference lookup", error);
     return false;
@@ -5105,7 +5109,7 @@ async function notifyRun(
   ]);
   await deps.notifications
     .send(
-      { ...message, groupId: thread?.groupId ?? undefined, badge, avatar },
+      { ...message, body, groupId: thread?.groupId ?? undefined, badge, avatar },
       {
         operationId: "notify",
         traceId: run.botId,

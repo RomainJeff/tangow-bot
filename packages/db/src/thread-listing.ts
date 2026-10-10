@@ -1,4 +1,4 @@
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import { ACTIVE_RUN_STATUSES, plainText } from "@rakazo/core";
 
 export const activeRunStatuses = [...ACTIVE_RUN_STATUSES];
 
@@ -22,7 +22,9 @@ export function previewFromBlocks(blocks: unknown): string {
       "text" in block &&
       typeof (block as { text?: unknown }).text === "string"
     ) {
-      return (block as { text: string }).text;
+      // A block made only of syntax (`---`, `[](url)`) says nothing: look further.
+      const text = plainText((block as { text: string }).text);
+      if (text) return text;
     }
   }
   return "";

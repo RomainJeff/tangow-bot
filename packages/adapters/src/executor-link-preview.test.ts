@@ -415,6 +415,44 @@ describe("link previews of a run (CA 13, CA 14, CA 70, CA 72)", () => {
     );
   });
 
+  it("pushes a finished reply's words without its markdown", async () => {
+    const f = fixture({
+      trigger: "user",
+      async *runtimeRun() {
+        yield { type: "text", text: "**Done**: see [the report](https://example.test/a)" };
+        yield { type: "done" };
+      },
+    });
+
+    await f.run();
+
+    expect(f.pushes.mock.calls.map(([message]) => message.body)).toEqual(["Done: see the report"]);
+  });
+
+  it("pushes nothing for a finished reply with no words, but still pushes its failure", async () => {
+    const image = "![](https://example.test/a.png)";
+    const finished = fixture({
+      trigger: "user",
+      async *runtimeRun() {
+        yield { type: "text", text: image };
+        yield { type: "done" };
+      },
+    });
+    const failed = fixture({
+      trigger: "user",
+      async *runtimeRun() {
+        yield { type: "text", text: image };
+        throw new Error("model exploded");
+      },
+    });
+
+    await finished.run();
+    await failed.run();
+
+    expect(finished.pushes.mock.calls.map(([message]) => message.body)).toEqual([]);
+    expect(failed.pushes.mock.calls.map(([message]) => message.body)).toEqual(["model exploded"]);
+  });
+
   it.each([
     ["a bot-to-bot run", { trigger: "bot_message" }],
     ["a routine card run", { trigger: "routine", routineId: "routine-1", parentBotId: "bot-0" }],
