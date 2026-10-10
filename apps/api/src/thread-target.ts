@@ -1187,6 +1187,7 @@ export async function stopThreadRuns(
   deps: {
     prisma: PrismaClient;
     sandbox: SandboxProvider;
+    events: ThreadEvents;
   },
   actor: Actor,
   target: ThreadTarget,

@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openBotPage, openBotTab, signup } from "./helpers";
+import { expect, test } from "./test";
 
 /** Documents the two-pane shell: sidebar, thread header, empty thread, light and dark. */
 test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) => {
@@ -15,13 +15,14 @@ test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) =
 
   const header = page.getByTestId("bot-settings-trigger");
   await expect(header).toBeVisible();
-  const headerRow = page.locator("main > div").first();
+  const conversation = page.getByTestId("conversation-column");
+  const headerRow = conversation.locator("> div").first();
   await expect(headerRow).toHaveCSS("height", "56px");
   await expect(headerRow).toHaveCSS("border-bottom-width", "0px");
 
   // The thread is one centred column, with equal air on both sides.
   const main = page.locator("main");
-  const column = main.locator("> div").nth(1);
+  const column = conversation.locator("> div").nth(1);
   await expect(column).toHaveCSS("max-width", "800px");
   const [mainBox, columnBox] = await Promise.all([main.boundingBox(), column.boundingBox()]);
   expect(mainBox).not.toBeNull();

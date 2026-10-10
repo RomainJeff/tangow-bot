@@ -344,7 +344,7 @@ export async function createApp(
       await Promise.all(
         bots.map((bot) =>
           destroyBot(
-            { prisma, sandbox, home, jobs, artifacts, dataDir: env.dataDir },
+            { prisma, sandbox, home, jobs, events, artifacts, dataDir: env.dataDir },
             bot,
             {
               operationId: `account-delete:${userId}`,

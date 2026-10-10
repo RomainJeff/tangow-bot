@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, test } from "./test";
 
 for (const platform of ["darwin", "win32"]) {
   test(`host computer choice explains file access on ${platform}`, async ({ page }, testInfo) => {

@@ -1,6 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type {
-  AgentSkillCatalogEntry,
   Bot,
   BotSection,
   ComputerMode,
@@ -114,6 +113,7 @@ import type { ContextMenuPosition } from "./BotContextMenu";
 import { memberName } from "./GroupPanel";
 import { HostComputerPrompt } from "./HostComputerPrompt";
 import type { SettingsSection } from "./SettingsOverlay";
+import { useAgentSkillCatalog } from "./shell/agent-skill-catalog";
 import type { BotAction } from "./shell/bot-commands";
 import { downloadBotExport, useBotCommands } from "./shell/bot-commands";
 import { CommandPalette, isCommandPaletteHotkey } from "./shell/command-palette";
@@ -127,8 +127,15 @@ import {
   PickerInfoDialog,
   RenameBotSectionDialog,
 } from "./shell/dialogs";
-import type { BotPageView, BotTab, Panel, PendingAttachment } from "./shell/layout";
-import { FALLBACK_BOT_COLOR, firstThreadRoute, panelIsOpen, panelSizeFor } from "./shell/layout";
+import type { BotPageView, Panel, PendingAttachment } from "./shell/layout";
+import {
+  botPageFor,
+  FALLBACK_BOT_COLOR,
+  firstThreadRoute,
+  panelIsOpen,
+  panelSizeFor,
+  threadJumpLocation,
+} from "./shell/layout";
 import type { ScreenLinkHandlers } from "./shell/screen-frame";
 import { ComputerOverlay, SidePanel } from "./shell/side-panel";
 import { BotsSidebar } from "./shell/sidebar";
@@ -264,10 +271,8 @@ export function ShellPage() {
     setBotPage(view);
     setPanel("bot");
   }, []);
-  const openBotPage = useCallback(
-    (tab: BotTab) => showBotPage({ tab, detail: null }),
-    [showBotPage],
-  );
+  const panelCoversThread = useRef(false);
+  const [activityEpoch, setActivityEpoch] = useState(0);
   const [peerConversation, setPeerConversation] = useState<{
     peerBotId: string;
     peerBotName: string;
@@ -276,7 +281,6 @@ export function ShellPage() {
   const [routinesBotId, setRoutinesBotId] = useState<string | null>(null);
   const [taughtSkills, setTaughtSkills] = useState<TaughtSkill[]>([]);
   const [taughtSkillsBotId, setTaughtSkillsBotId] = useState<string | null>(null);
-  const [agentSkills, setAgentSkills] = useState<AgentSkillCatalogEntry[]>([]);
   const [mentionRoutines, setMentionRoutines] = useState<Array<Routine & { botName?: string }>>([]);
   const [mentionConnectors, setMentionConnectors] = useState<
     Array<{
@@ -1007,27 +1011,7 @@ export function ShellPage() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void rpc.agentSkills
-      .list({ botId: activeBotId.current })
-      .then((skills) => {
-        if (!cancelled) setAgentSkills(skills);
-      })
-      .catch(() => {
-        if (!cancelled) setAgentSkills([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const refreshAgentSkills = useCallback(() => {
-    void rpc.agentSkills
-      .list({ botId: activeBotId.current })
-      .then(setAgentSkills)
-      .catch(() => undefined);
-  }, []);
+  const [agentSkills, refreshAgentSkills] = useAgentSkillCatalog(activeBotId);
 
   useEffect(() => {
     void rpc.voice
@@ -1180,6 +1164,7 @@ export function ShellPage() {
           pinnedAroundRef.current = null;
           historyEpoch.current += 1;
         }
+        if (isRunTerminalEvent(event)) setActivityEpoch((epoch) => epoch + 1);
         if (event.type === "bot.archived") {
           void refreshBots(true).catch(() => undefined);
         } else if (
@@ -1477,13 +1462,7 @@ export function ShellPage() {
   async function jumpToSearchHit(hit: SearchHit) {
     setQuery("");
     setSearchHits([]);
-    const params = new URLSearchParams();
-    if (hit.messageId) params.set("m", hit.messageId);
-    if (hit.routineId) params.set("routine", hit.routineId);
-    navigate({
-      pathname: hit.groupId ? `/app/g/${hit.groupId}` : `/app/${hit.botId}`,
-      search: params.toString() ? `?${params.toString()}` : undefined,
-    });
+    navigate(threadJumpLocation(hit));
   }
 
   async function jumpToMessage(target: { botId?: string; groupId?: string; messageId: string }) {
@@ -2612,6 +2591,11 @@ export function ShellPage() {
     botAction: runBotAction,
     ensureWebhookSecret,
     refreshThread: (botId) => refreshThreadRef.current(botId),
+    navigate,
+    panelCoversThread,
+    closePanel: () => setPanel(null),
+    activityEpoch,
+    refreshSkills: refreshAgentSkills,
   });
 
   // Below `lg` the panel is full width over the thread instead of reflowing
@@ -2624,6 +2608,7 @@ export function ShellPage() {
   const panelSize = panelSizeFor(panel, botPage);
   const panelCoversColumn =
     panelOpen && (!isDesktopWidth || (panelSize === "wide" && !isWideDesktopWidth));
+  panelCoversThread.current = panelCoversColumn;
 
   const shell = (
     <div
@@ -2803,7 +2788,7 @@ export function ShellPage() {
             activeSnapshot={activeSnapshot}
             panel={panel}
             setPanel={setPanel}
-            onOpenBotPage={openBotPage}
+            onOpenBotPage={showBotPage}
             refreshThread={refreshThread}
             disabled={Boolean(recordingSkill)}
             onVoice={
@@ -2915,7 +2900,7 @@ export function ShellPage() {
                 onSlashAction={(action) => {
                   if (action === "chat-settings") {
                     if (inGroup) setPanel("group-settings");
-                    else openBotPage("settings");
+                    else showBotPage(botPageFor("slash", active));
                     return;
                   }
                   if (action === "settings-general") {
@@ -3034,7 +3019,7 @@ export function ShellPage() {
               setBotMenu(null);
               if (contextBot) {
                 navigate(`/app/${contextBot.id}`);
-                openBotPage("settings");
+                showBotPage(botPageFor("menu", contextBot));
                 return;
               }
               navigate(`/app/g/${contextGroup!.id}`);

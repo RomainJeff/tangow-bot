@@ -1,5 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, type Page, test } from "./test";
 
 /** Activity rows sit above `[data-sidebar-group]` bots; match their aria-label. */
 function activityRow(page: Page, botName: string) {

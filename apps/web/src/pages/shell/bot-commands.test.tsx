@@ -31,6 +31,9 @@ function routine(id: string, name: string, botId = "a"): Routine {
 let view: { bots: Bot[]; routines: Routine[]; commands: BotCommands };
 const supersedeBotsRefresh = vi.fn();
 const activeBotId = { current: "a" as string | undefined };
+const navigate = vi.fn();
+const closePanel = vi.fn();
+const panelCoversThread = { current: false };
 
 function Harness() {
   const [bots, setBots] = useState([bot("a", "Ada"), bot("b", "Bea")]);
@@ -43,6 +46,11 @@ function Harness() {
     botAction: vi.fn(),
     ensureWebhookSecret: vi.fn(),
     refreshThread: vi.fn(async () => undefined),
+    navigate,
+    panelCoversThread,
+    closePanel,
+    activityEpoch: 0,
+    refreshSkills: vi.fn(),
   });
   view = { bots, routines, commands };
   return null;
@@ -63,6 +71,18 @@ afterEach(() => {
   act(() => root.unmount());
   vi.unstubAllGlobals();
   vi.resetAllMocks();
+});
+
+it("opens a run on the message that started it, closing the panel only if it hides the thread", () => {
+  panelCoversThread.current = false;
+  view.commands.openRun({ botId: "a", groupId: null, sourceMessageId: "m-7" });
+  expect(navigate).toHaveBeenCalledWith({ pathname: "/app/a", search: "?m=m-7" });
+  expect(closePanel).not.toHaveBeenCalled();
+
+  panelCoversThread.current = true;
+  view.commands.openRun({ botId: "a", groupId: null, sourceMessageId: "m-8" });
+  expect(navigate).toHaveBeenLastCalledWith({ pathname: "/app/a", search: "?m=m-8" });
+  expect(closePanel).toHaveBeenCalledTimes(1);
 });
 
 const names = () => view.bots.map((item) => item.name);

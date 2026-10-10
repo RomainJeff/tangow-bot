@@ -10,6 +10,7 @@ import {
   parseSkillMd,
   searchSkills,
   skillWriteRefusal,
+  slashSkillOptions,
   validateBotSkill,
 } from "./agent-skill.js";
 import { parseSkillLearningMode } from "./skill-learning.js";
@@ -507,5 +508,39 @@ describe("skillWriteRefusal", () => {
       false,
       true,
     ]);
+  });
+});
+
+describe("slashSkillOptions", () => {
+  const builtins = Array.from({ length: 10 }, (_, i) => ({
+    name: `builtin-${i}`,
+    description: "Managed skill.",
+    source: "builtin" as const,
+  }));
+  const own = { name: "Daily standup", description: "Prepare a standup.", source: "user" as const };
+
+  it("keeps the user's own skills in the capped list ahead of builtins", () => {
+    expect(slashSkillOptions([...builtins, own], "").map((s) => s.name)).toEqual([
+      "Daily standup",
+      "builtin-0",
+      "builtin-1",
+      "builtin-2",
+      "builtin-3",
+      "builtin-4",
+      "builtin-5",
+      "builtin-6",
+    ]);
+  });
+
+  it("filters on name or description, case-insensitively", () => {
+    const byDescription = {
+      name: "Morning sync",
+      description: "Run the team STANDUP.",
+      source: "user" as const,
+    };
+    const byName = { name: "standup-notes", description: "Notes.", source: "user" as const };
+    expect(
+      slashSkillOptions([...builtins, byDescription, byName], " Standup ").map((s) => s.name),
+    ).toEqual(["Morning sync", "standup-notes"]);
   });
 });

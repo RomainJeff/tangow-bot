@@ -9,6 +9,8 @@ import type { BotCommands } from "../shell/bot-commands";
 import type { BotPageView } from "../shell/layout";
 
 const api = vi.hoisted(() => ({
+  bots: { activity: vi.fn() },
+  runs: { recap: vi.fn() },
   models: { credentials: vi.fn(), list: vi.fn() },
   me: vi.fn(),
   voice: { voices: vi.fn() },
@@ -28,6 +30,8 @@ vi.mock("@lingui/react/macro", () => {
 });
 vi.mock("@lingui/core/macro", () => ({
   t: (parts: TemplateStringsArray, ...values: unknown[]) => String.raw(parts, ...values),
+  plural: (count: number, forms: { one: string; other: string }) =>
+    (count === 1 ? forms.one : forms.other).replace("#", String(count)),
 }));
 
 import { BotPage } from "./BotPage";
@@ -66,6 +70,7 @@ beforeEach(() => {
     addEventListener: () => {},
     removeEventListener: () => {},
   }));
+  api.bots.activity.mockResolvedValue({ items: [], nextCursor: null });
   api.models.credentials.mockResolvedValue([]);
   api.models.list.mockResolvedValue([]);
   api.me.mockResolvedValue(null);
@@ -84,11 +89,16 @@ afterEach(() => {
   store.reset();
 });
 
+let onView: ReturnType<typeof vi.fn<(view: BotPageView) => void>>;
+
 async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[] | null } = {}) {
+  onView = vi.fn<(view: BotPageView) => void>();
   const commands = {
     updateBot: updateBot as BotCommands["updateBot"],
     setComputer: vi.fn(),
     botAction: vi.fn(),
+    activityEpoch: 0,
+    openRun: vi.fn(),
   } as Partial<BotCommands> as BotCommands;
   await act(async () => {
     root.render(
@@ -99,7 +109,7 @@ async function render(view: BotPageView, { bot = BOT, routines = [] as Routine[]
           routines={routines}
           memoryProviderConfigured={false}
           view={view}
-          onView={vi.fn()}
+          onView={onView}
           onClose={vi.fn()}
           commands={commands}
           messagingProviders={[]}
@@ -152,11 +162,38 @@ it("saves the notifications switch as soon as it changes", async () => {
   expect(updateBot.mock.calls).toEqual([["bot-1", { notifyOnFinish: false }]]);
 });
 
-it("opens a new bot on its tabs, like any bot", async () => {
-  await render({ tab: "settings", detail: null }, { bot: { ...BOT, instructions: "" } });
+it("offers to write instructions under the bot's creation while it has none", async () => {
+  api.bots.activity.mockResolvedValue({
+    items: [
+      {
+        kind: "bot_created",
+        botId: "bot-1",
+        botName: "Scout",
+        createdAt: "2026-10-01T08:00:00.000Z",
+      },
+    ],
+    nextCursor: null,
+  });
+  const created = () => {
+    const line = container.querySelector('[data-testid="activity-created"]');
+    return [line?.querySelector("[dir]")?.textContent, line?.querySelector("button")?.textContent];
+  };
+  await render({ tab: "activity", detail: null }, { bot: { ...BOT, instructions: "" } });
 
-  const tabs = [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
-  expect(tabs).toEqual(["Routines", "Knowledge", "Settings"]);
+  expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+    "Activity",
+    "Routines",
+    "Knowledge",
+    "Settings",
+  ]);
+  expect(created()).toEqual(["Scout created", "Write its first instructions"]);
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[data-testid="activity-created"] button')!.click(),
+  );
+  expect(onView.mock.calls).toEqual([[{ tab: "activity", detail: { kind: "instructions" } }]]);
+
+  await render({ tab: "activity", detail: null });
+  expect(created()).toEqual(["Scout created", undefined]);
 });
 
 it("is busy until the bot's routines are read", async () => {

@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("renders tappable choice buttons and submits the offered action id", async ({
   page,
@@ -44,7 +44,7 @@ test("renders tappable choice buttons and submits the offered action id", async 
 
   // Options render as wrapping quick-reply capsules inside the shared options container;
   // these short labels share one row at this width.
-  const optionsContainer = page.getByTestId("ask-options");
+  const optionsContainer = page.getByTestId("ask-options").filter({ has: berlin });
   await expect(optionsContainer).toBeVisible();
   const berlinBox = await berlin.boundingBox();
   const seoulBox = await seoul.boundingBox();
@@ -60,11 +60,14 @@ test("renders tappable choice buttons and submits the offered action id", async 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(berlin).toBeVisible();
   await expect(lisbon).toBeVisible();
-  const narrowBerlin = await berlin.boundingBox();
+  // On a phone the capsules wrap rather than overflow the card.
+  const narrowOptions = await optionsContainer.boundingBox();
   const narrowLisbon = await lisbon.boundingBox();
-  expect(narrowBerlin).toBeTruthy();
+  expect(narrowOptions).toBeTruthy();
   expect(narrowLisbon).toBeTruthy();
-  expect(narrowLisbon!.y).toBeGreaterThan(narrowBerlin!.y);
+  expect(narrowLisbon!.x + narrowLisbon!.width).toBeLessThanOrEqual(
+    narrowOptions!.x + narrowOptions!.width + 1,
+  );
   await expect(lisbon).toBeEnabled();
   await captureScreenshot(page, testInfo, "choice-card-narrow");
 

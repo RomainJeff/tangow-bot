@@ -108,6 +108,7 @@ export function useRoutineCopy() {
 
   return {
     messageLabel,
+    failureReason,
     cadenceLine,
     listSummary,
     triggerLabel,

@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("onboarding uses compact model selects without misleading latest labels", async ({
   page,
@@ -38,15 +38,17 @@ test("onboarding uses compact model selects without misleading latest labels", a
 
   const models = page.getByRole("combobox", { name: "Model", exact: true });
   await models.click();
+  const aliasOption = page.getByRole("option", { name: /\(auto-updates\)$/ }).first();
+  await expect(aliasOption).toBeVisible();
   const labels = await page.getByRole("option").allTextContents();
   // "latest" is an upstream alias marker, so it lands on families like Claude Opus 4.5 while
   // newer models carry no marker. Rendered as-is it tells the user the opposite of the truth.
   expect(labels.filter((label) => /\blatest\b/i.test(label))).toEqual([]);
 
   // Select a non-default model and keep its user-facing alias visible in the compact trigger.
-  const alias = labels.find((label) => label.includes("(auto-updates)"));
-  expect(alias).toBeTruthy();
-  await page.getByRole("option", { name: alias! }).click();
+  const alias = await aliasOption.textContent();
+  expect(labels).toContain(alias);
+  await aliasOption.click();
   await expect(models).toContainText(alias!);
 
   await page.route("**/rpc/models/probeOpenAiCompatible", async (route) => {

@@ -45,6 +45,7 @@ export function KnowledgeTab({
         <AgentSkills
           botId={bot.id}
           onOpenEditor={(skillId) => onOpen({ kind: "skill", skillId })}
+          onChanged={page.commands.skillsChanged}
         />
       </KnowledgeGroup>
       <ScratchpadSection botId={bot.id} />

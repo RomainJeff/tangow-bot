@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Routine, RunActivityRow } from "@rakazo/contracts";
+import type { BotActivityOutput, Routine, RunActivityRow, RunRecap } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
@@ -194,6 +194,165 @@ describeRunsList("runs.list activity tracker", () => {
     expect([renamed.lastRunStatus, renamed.lastRunFailureKind]).toEqual(["failed", "provider"]);
   });
 
+  it("never returns another user's activity or recap for a foreign bot or run", async () => {
+    const ownerCookie = await signup(app, `runs-scope-owner-${stamp}@rakazo.test`, "Owner");
+    const ownerBot = await createBot(app, ownerCookie, "ScopeBot");
+    const routine = await prisma.routine.create({
+      data: await routineData(prisma, ownerBot.id, "Owner digest"),
+    });
+    await seedRun(prisma, ownerBot.id, "running", "owner active", null, routine.id);
+    const done = await seedRun(
+      prisma,
+      ownerBot.id,
+      "completed",
+      "owner done",
+      undefined,
+      routine.id,
+    );
+    await seedBotMessage(prisma, done, "Owner's private report");
+
+    const intruderCookie = await signup(
+      app,
+      `runs-scope-intruder-${stamp}@rakazo.test`,
+      "Intruder",
+    );
+    const ownBot = await createBot(app, intruderCookie, "IntruderBot");
+    await seedRun(prisma, ownBot.id, "completed", "intruder done");
+
+    for (const input of [
+      { botId: ownerBot.id },
+      {
+        botId: ownerBot.id,
+        cursor: { createdAt: new Date(Date.now() + 60_000).toISOString(), id: "zzzzzzzz" },
+      },
+    ]) {
+      const response = await raw(app, intruderCookie, "bots/activity", input);
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(await response.text()).not.toContain("Owner digest");
+    }
+    const recap = await raw(app, intruderCookie, "runs/recap", { runId: done.id });
+    expect(recap.status).toBeGreaterThanOrEqual(400);
+    expect(await recap.text()).not.toContain("private report");
+
+    const mine = await rpc<BotActivityOutput>(app, ownerCookie, "bots/activity", {
+      botId: ownerBot.id,
+    });
+    expect(
+      mine.items.map((item) =>
+        item.kind === "routine_run" ? [item.run.status, item.run.routineName] : item.kind,
+      ),
+    ).toEqual([
+      ["running", "Owner digest"],
+      ["completed", "Owner digest"],
+      "routine_created",
+      "bot_created",
+    ]);
+    expect(await rpc<RunRecap>(app, ownerCookie, "runs/recap", { runId: done.id })).toEqual({
+      text: "Owner's private report",
+      messageId: expect.any(String),
+    });
+  });
+
+  it("lists a bot's routine runs, routine creations and its own creation, never other runs", async () => {
+    const cookie = await signup(app, `activity-feed-${stamp}@rakazo.test`, "Feed User");
+    const bot = await createBot(app, cookie, "Feed Bot");
+    const botRow = await prisma.bot.update({
+      where: { id: bot.id },
+      data: { createdAt: new Date(Date.now() - 600_000) },
+    });
+    const thread = await prisma.thread.findUniqueOrThrow({ where: { botId: bot.id } });
+    const mine = await prisma.routine.create({
+      data: {
+        ...(await routineData(prisma, bot.id, "Mine")),
+        createdAt: new Date(Date.now() - 500_000),
+      },
+    });
+    const proposed = await prisma.routine.create({
+      data: {
+        ...(await routineData(prisma, bot.id, "Proposed")),
+        threadId: thread.id,
+        createdAt: new Date(Date.now() - 400_000),
+      },
+    });
+    const at = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1_000);
+    const chat = await seedRun(prisma, bot.id, "completed", "person asked");
+    const scheduled = await seedRun(prisma, bot.id, "completed", "digest", undefined, mine.id);
+    const hook = await seedRun(prisma, bot.id, "completed", "hook", undefined, proposed.id);
+    await prisma.run.update({ where: { id: hook.id }, data: { trigger: "webhook" } });
+    const orphan = await seedRun(prisma, bot.id, "completed", "deleted routine");
+    await prisma.run.update({ where: { id: orphan.id }, data: { trigger: "routine" } });
+    // A deleted routine's webhook wake reads like a plain webhook message: it is left out.
+    const orphanHook = await seedRun(prisma, bot.id, "completed", "deleted webhook routine");
+    await prisma.run.update({ where: { id: orphanHook.id }, data: { trigger: "webhook" } });
+    for (const [run, secondsAgo] of [
+      [chat, 50],
+      [scheduled, 300],
+      [hook, 200],
+      [orphan, 100],
+    ] as const) {
+      await prisma.run.update({ where: { id: run.id }, data: { createdAt: at(secondsAgo) } });
+    }
+
+    const first = await rpc<BotActivityOutput>(app, cookie, "bots/activity", {
+      botId: bot.id,
+      limit: 3,
+    });
+    const label = (item: BotActivityOutput["items"][number]) =>
+      item.kind === "routine_run"
+        ? `run:${item.run.runId}`
+        : item.kind === "routine_created"
+          ? `created:${item.routineName}:${item.byBotName ?? "you"}`
+          : `bot:${item.botName}`;
+    expect(first.items.map(label)).toEqual([
+      `run:${orphan.id}`,
+      `run:${hook.id}`,
+      `run:${scheduled.id}`,
+    ]);
+    // A finished run is still written to (mirrored to team chat); that must not move it off its page.
+    await prisma.run.update({ where: { id: hook.id }, data: { teamChatMirroredAt: new Date() } });
+    const second = await rpc<BotActivityOutput>(app, cookie, "bots/activity", {
+      botId: bot.id,
+      limit: 3,
+      cursor: first.nextCursor,
+    });
+    expect(second.items.map(label)).toEqual([
+      "created:Proposed:Feed Bot",
+      "created:Mine:you",
+      "bot:Feed Bot",
+    ]);
+    expect(second.nextCursor).toBeNull();
+    expect(second.items.at(-1)).toMatchObject({ createdAt: botRow.createdAt.toISOString() });
+  });
+
+  it("leaves a plain webhook message out of a bot's activity", async () => {
+    const cookie = await signup(app, `activity-hook-${stamp}@rakazo.test`, "Hook User");
+    const bot = await createBot(app, cookie, "Hooked");
+    const { secret, path: hookPath } = await rpc<{ secret: string; path: string }>(
+      app,
+      cookie,
+      "bots/rotateWebhookSecret",
+      { botId: bot.id },
+    );
+    const delivered = await app.request(
+      hookPath.startsWith("/") ? hookPath : `/api/v1/bots/${bot.id}/webhook`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${secret}` },
+        body: JSON.stringify({ text: "deploy finished" }),
+      },
+    );
+    expect(delivered.status).toBeLessThan(400);
+    const runs = await prisma.run.findMany({ where: { botId: bot.id } });
+    expect(runs.map((run) => [run.trigger, run.routineId])).toEqual([["webhook", null]]);
+    await prisma.run.updateMany({
+      where: { botId: bot.id },
+      data: { status: "completed", completedAt: new Date() },
+    });
+
+    const activity = await rpc<BotActivityOutput>(app, cookie, "bots/activity", { botId: bot.id });
+    expect(activity.items.map((item) => item.kind)).toEqual(["bot_created"]);
+  });
+
   it("returns group runs with groupId for navigation", async () => {
     const cookie = await signup(app, `runs-group-${stamp}@rakazo.test`, "Group User");
     const botA = await rpc<{ id: string }>(app, cookie, "bots/create", {
@@ -282,6 +441,41 @@ async function seedRun(
         status === "completed" || status === "failed" ? (completedAt ?? new Date()) : null,
     },
   });
+}
+
+async function seedBotMessage(
+  prisma: PrismaClient,
+  run: { id: string; threadId: string },
+  text: string,
+) {
+  const last = await prisma.message.findFirst({
+    where: { threadId: run.threadId },
+    orderBy: { seq: "desc" },
+  });
+  return prisma.message.create({
+    data: {
+      threadId: run.threadId,
+      seq: (last?.seq ?? 0) + 1,
+      role: "bot",
+      blocks: [{ kind: "text", text }],
+      runId: run.id,
+    },
+  });
+}
+
+async function createBot(app: App, cookie: string, name: string) {
+  return rpc<{ id: string }>(app, cookie, "bots/create", {
+    name,
+    title: name,
+    description: "",
+    instructions: "",
+    notifyOnFinish: true,
+  });
+}
+
+async function routineData(prisma: PrismaClient, botId: string, name: string) {
+  const bot = await prisma.bot.findUniqueOrThrow({ where: { id: botId } });
+  return { spaceId: bot.spaceId, userId: bot.userId, botId, name, prompt: "digest", crons: [] };
 }
 
 async function signup(app: App, email: string, name: string) {

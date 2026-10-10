@@ -1,4 +1,3 @@
-import { expect, test } from "@playwright/test";
 import {
   captureScreenshot,
   completeOnboarding,
@@ -8,6 +7,7 @@ import {
   saveField,
   signup,
 } from "./helpers";
+import { expect, test } from "./test";
 
 test("bot creation, editing, and deletion persist", async ({ page }, testInfo) => {
   const stamp = Date.now();
@@ -67,8 +67,19 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await page.locator("main").getByRole("button", { name: "New Bot", exact: true }).click();
   const sidePanel = page.getByTestId("side-panel");
   const botPage = await openBotPage(page);
-  // A new bot opens on its tabs, like any bot.
-  await expect(botPage.getByRole("tab")).toHaveText(["Routines", "Knowledge", "Settings"]);
+  // A bot with no instructions opens on Activity, its creation offering to write them.
+  await expect(botPage.getByRole("tab")).toHaveText([
+    "Activity",
+    "Routines",
+    "Knowledge",
+    "Settings",
+  ]);
+  await expect(botPage.getByRole("tab", { name: "Activity" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const created = botPage.getByTestId("activity-created");
+  await expect(created.getByText("New Bot created")).toBeVisible();
   await expect(botPage.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
   const nameInput = botPage.getByLabel("Name", { exact: true });
   const titleInput = botPage.getByLabel("Title", { exact: true });
@@ -101,12 +112,8 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await expect(picker).toBeHidden();
   await captureScreenshot(page, testInfo, "27a-new-bot");
 
-  // Instructions open the wide editor and save on the way back to Settings.
-  await botPage.getByRole("tab", { name: "Settings" }).click();
-  await botPage
-    .getByTestId("bot-settings")
-    .getByRole("button", { name: /^Instructions/ })
-    .click();
+  // Writing instructions opens the wide editor; once saved, the link to write them goes.
+  await created.getByRole("button", { name: "Write its first instructions" }).click();
   await expect(sidePanel).toHaveAttribute("data-detail", "instructions");
   await expect(sidePanel).toHaveAttribute("data-size", "wide");
   const instructionsInput = botPage.getByTestId("bot-instructions");
@@ -114,13 +121,11 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   const instructionsSaved = page.waitForResponse(
     (response) => response.url().includes("/rpc/bots/update") && response.ok(),
   );
-  await botPage.getByRole("button", { name: "Settings", exact: true }).click();
+  await botPage.getByRole("button", { name: "Activity", exact: true }).click();
   await instructionsSaved;
   await expect(sidePanel).toHaveAttribute("data-size", "default");
-  await expect(botPage.getByRole("tab", { name: "Settings" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  await expect(created.getByRole("button")).toHaveCount(0);
+  await botPage.getByRole("tab", { name: "Settings" }).click();
   const settings = botPage.getByTestId("bot-settings");
   await expect(settings.getByRole("button", { name: /^Instructions/ })).toContainText(
     "Always cite two independent sources",

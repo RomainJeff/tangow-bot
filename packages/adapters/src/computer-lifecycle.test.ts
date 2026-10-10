@@ -1295,9 +1295,10 @@ describe("releaseBotScreen", () => {
   };
   const botsWithGeneration = (generation: number) => {
     const generations = new Map([["bot-1", generation]]);
+    const appended: unknown[] = [];
     const prisma = {
       bot: {
-        updateMany: async ({
+        update: async ({
           where,
           data,
         }: {
@@ -1305,35 +1306,55 @@ describe("releaseBotScreen", () => {
           data: { screenGeneration: { increment: number } };
         }) => {
           const current = generations.get(where.id);
-          if (current === undefined) return { count: 0 };
+          if (current === undefined) throw new Error("bot not found");
           generations.set(where.id, current + data.screenGeneration.increment);
-          return { count: 1 };
+          return {
+            spaceId: "space-1",
+            thread: { id: "thread-1" },
+            computer: { state: "running" },
+          };
         },
       },
     } as unknown as PrismaClient;
-    return { generations, prisma };
+    const events = {
+      append: async (input: unknown) => {
+        appended.push(input);
+        return input;
+      },
+    } as unknown as ThreadEvents;
+    return { generations, appended, prisma, events };
   };
 
-  it("moves the bot's screen generation on once its slot is released", async () => {
-    const { generations, prisma } = botsWithGeneration(4);
+  it("moves the bot's screen generation on and tells open screens once its slot is released", async () => {
+    const { generations, appended, prisma, events } = botsWithGeneration(4);
     const sandbox = { releaseScreen: async () => undefined };
 
-    await releaseBotScreen({ prisma, sandbox }, ref, context);
+    await releaseBotScreen({ prisma, sandbox, events }, ref, context);
 
     expect(generations.get("bot-1")).toBe(5);
+    expect(appended).toEqual([
+      {
+        spaceId: "space-1",
+        threadId: "thread-1",
+        botId: "bot-1",
+        type: "computer.status",
+        payload: { status: "running" },
+      },
+    ]);
   });
 
-  it("keeps the generation when the release fails and the slot survives", async () => {
-    const { generations, prisma } = botsWithGeneration(4);
+  it("keeps the generation and stays quiet when the release fails and the slot survives", async () => {
+    const { generations, appended, prisma, events } = botsWithGeneration(4);
     const sandbox = {
       releaseScreen: async () => {
         throw new Error("computer desktop failed to stop");
       },
     };
 
-    await releaseBotScreen({ prisma, sandbox }, ref, context);
+    await releaseBotScreen({ prisma, sandbox, events }, ref, context);
 
     expect(generations.get("bot-1")).toBe(4);
+    expect(appended).toEqual([]);
   });
 });
 

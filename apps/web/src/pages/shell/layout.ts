@@ -2,7 +2,7 @@ import type { Bot, Group, SpaceBot, SpaceGroup } from "@rakazo/contracts";
 
 export type Panel = "computer" | "bot" | "create" | "create-group" | "group-settings" | null;
 
-export type BotTab = "routines" | "knowledge" | "settings";
+export type BotTab = "activity" | "routines" | "knowledge" | "settings";
 
 /** What a new routine starts from, when something other than the empty form opens it. */
 export type RoutineSeed = { name: string; prompt: string };
@@ -33,6 +33,34 @@ const WIDE_DETAILS: ReadonlySet<BotDetail["kind"]> = new Set([
 /** The panel widens to edit a long text, a routine or a skill; its width is never stored. */
 export function panelSizeFor(panel: Panel, view: BotPageView): PanelSize {
   return panel === "bot" && view.detail && WIDE_DETAILS.has(view.detail.kind) ? "wide" : "default";
+}
+
+export type BotPageEntry = "header" | "gear" | "menu" | "slash";
+
+/**
+ * Where each way into the bot page lands. The settings entries land on Activity while the bot has
+ * no instructions, where the link to write them is.
+ */
+export function botPageFor(entry: BotPageEntry, bot?: Pick<Bot, "instructions">): BotPageView {
+  if (entry === "header") return { tab: "activity", detail: null };
+  return { tab: bot && !bot.instructions ? "activity" : "settings", detail: null };
+}
+
+/** The thread route that lands on one message: sidebar search hits and run rows share it. */
+export function threadJumpLocation(target: {
+  botId?: string | null;
+  groupId?: string | null;
+  messageId?: string | null;
+  routineId?: string | null;
+}): { pathname: string; search: string | undefined } {
+  const params = new URLSearchParams();
+  if (target.messageId) params.set("m", target.messageId);
+  if (target.routineId) params.set("routine", target.routineId);
+  const search = params.toString();
+  return {
+    pathname: target.groupId ? `/app/g/${target.groupId}` : `/app/${target.botId}`,
+    search: search ? `?${search}` : undefined,
+  };
 }
 
 /** The row that opened a detail carries this in `data-opens`, so focus can go back to it. */

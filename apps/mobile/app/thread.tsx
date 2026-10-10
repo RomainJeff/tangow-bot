@@ -44,6 +44,7 @@ import {
   serializeComposerPrompt,
   showsTimeMarker,
   skillSourcesOf,
+  slashSkillOptions as slashSkills,
   threadTimeMarkerLabel,
   truncateSlashDescription,
   userVisibleMessages,
@@ -604,17 +605,7 @@ function Thread() {
   }, [composerMentionTargets, mentionQuery]);
   const slashQueryNormalized = slashQuery?.trim().toLowerCase() ?? null;
   const slashSkillOptions =
-    slashQuery !== null && mentionQuery === null
-      ? agentSkills
-          .filter((skill) => {
-            if (!slashQueryNormalized) return true;
-            return (
-              skill.name.toLowerCase().includes(slashQueryNormalized) ||
-              skill.description.toLowerCase().includes(slashQueryNormalized)
-            );
-          })
-          .slice(0, 8)
-      : [];
+    slashQuery !== null && mentionQuery === null ? slashSkills(agentSkills, slashQuery) : [];
   const slashActionOptions =
     slashQuery !== null && mentionQuery === null
       ? SLASH_ACTIONS.filter((action) => {

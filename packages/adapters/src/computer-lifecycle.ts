@@ -576,10 +576,15 @@ export async function releaseComputerExecutionLease(
 
 /**
  * Releasing a bot's desktop slot drops its view token, and the next slot gets a new one, so the
- * bot's screen generation moves on and URLs sealed for the old slot stop being reused.
+ * bot's screen generation moves on and URLs sealed for the old slot stop being reused. Open
+ * screens only re-read on a status event, so the release announces one.
  */
 export async function releaseBotScreen(
-  deps: { prisma: PrismaClient; sandbox: Pick<SandboxProvider, "releaseScreen"> },
+  deps: {
+    prisma: PrismaClient;
+    sandbox: Pick<SandboxProvider, "releaseScreen">;
+    events: Pick<ThreadEvents, "append">;
+  },
   computer: ComputerRef,
   context: AdapterContext,
 ): Promise<void> {
@@ -590,9 +595,28 @@ export async function releaseBotScreen(
     // A failed release keeps the slot and its token.
     return;
   }
-  if (!context.botId) return;
-  await deps.prisma.bot
-    .updateMany({ where: { id: context.botId }, data: { screenGeneration: { increment: 1 } } })
+  const botId = context.botId;
+  if (!botId) return;
+  const bot = await deps.prisma.bot
+    .update({
+      where: { id: botId },
+      data: { screenGeneration: { increment: 1 } },
+      select: {
+        spaceId: true,
+        thread: { select: { id: true } },
+        computer: { select: { state: true } },
+      },
+    })
+    .catch(() => null);
+  if (!bot?.thread || !bot.computer) return;
+  await deps.events
+    .append({
+      spaceId: bot.spaceId,
+      threadId: bot.thread.id,
+      botId,
+      type: "computer.status",
+      payload: { status: bot.computer.state },
+    })
     .catch(() => undefined);
 }
 
