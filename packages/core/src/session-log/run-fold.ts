@@ -28,11 +28,11 @@ type RunMessage = {
 };
 
 /**
- * Fold a run's `assistant.*` and `tool.*` entries into one `RunMessage` per contiguous stretch, at
- * the position of the stretch's first entry. Any other entry, or an entry of another run, closes
- * the open stretch, and the run's next such entry opens a new one; a `subagent` entry of the same
- * run passes through without closing it. A tool call takes its output from the `tool.result` or
- * `subagent` entry with the same run and `callId`, or an empty output while none exists yet.
+ * Fold a run's `assistant.*` and `tool.*` entries into one `RunMessage` per stretch, at the
+ * position of the stretch's first entry. Each run has its own open stretch, so runs that
+ * interleave keep one message each. Any other entry closes every open stretch, and a `subagent`
+ * entry passes through without closing them. A tool call takes its output from the `tool.result`
+ * or `subagent` entry with the same run and `callId`, or an empty output while none exists yet.
  */
 export function foldRuns(
   entries: readonly SessionEntry[],
@@ -43,10 +43,11 @@ export function foldRuns(
     if (entry.type === "subagent") outputs.set(toolCallKey(entry), entry.payload.result);
   }
   const segments: (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] = [];
-  let open: RunMessage | undefined;
+  const open = new Map<string, RunMessage>();
   const stretchOf = (entry: FoldedEntry) => {
-    if (open) return open;
-    open = {
+    const stretch = open.get(entry.runId);
+    if (stretch) return stretch;
+    const message: RunMessage = {
       type: "run.message",
       id: entry.id,
       ts: entry.ts,
@@ -54,11 +55,12 @@ export function foldRuns(
       botId: entry.botId,
       blocks: [],
     };
-    segments.push(open);
-    return open;
+    open.set(entry.runId, message);
+    segments.push(message);
+    return message;
   };
   for (const entry of entries) {
-    if (entry.runId !== open?.runId || !STRETCH_TYPES.has(entry.type)) open = undefined;
+    if (!STRETCH_TYPES.has(entry.type)) open.clear();
     switch (entry.type) {
       case "assistant.text":
         stretchOf(entry).blocks.push(...entry.payload.blocks);

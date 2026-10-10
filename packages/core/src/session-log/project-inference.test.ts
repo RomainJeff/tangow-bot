@@ -66,6 +66,22 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
+  it("keeps one turn per run when two runs interleave with nothing between them", async () => {
+    const chain = await fixtureChain("interleaved");
+    const botNames = new Map([
+      ["bot_ada", "Ada"],
+      ["bot_bob", "Bob"],
+    ]);
+    expect(projectInferenceTurns(chain, { selfBotId: "bot_ada", botNames })).toEqual([
+      { role: "assistant", content: "Checking the calendar." },
+      {
+        role: "user",
+        content:
+          '<bot_message from="Bob">\nTwo flights found.\nThe 9:00 one is cheaper.\n</bot_message>',
+      },
+    ]);
+  });
+
   it("pairs a call id that every run reuses with its own run's result", () => {
     const chain = linkEntries("reuse", [
       ...readFile("run_1", "a.md", "alpha"),

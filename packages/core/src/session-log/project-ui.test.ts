@@ -178,6 +178,49 @@ describe("projectThreadItems", () => {
     ]);
   });
 
+  it("keeps one message per run when two runs interleave with nothing between them", async () => {
+    expect(projectThreadItems(await fixtureChain("interleaved"))).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "itl-00",
+        ts: at(0),
+        botId: "bot_ada",
+        runId: "run_itl_a",
+        blocks: text("Checking the calendar."),
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "itl-01",
+        ts: at(1),
+        botId: "bot_bob",
+        runId: "run_itl_b",
+        blocks: [
+          {
+            kind: "steps",
+            steps: [
+              {
+                label: "Search flights",
+                count: 1,
+                calls: [
+                  {
+                    name: "search_flights",
+                    input: '{"to":"Lyon"}',
+                    output: "",
+                    id: "call_flights",
+                  },
+                ],
+              },
+            ],
+          },
+          { kind: "text", text: "Two flights found." },
+          { kind: "text", text: "The 9:00 one is cheaper." },
+        ],
+      },
+    ]);
+  });
+
   it("marks the rewind with a divider and keeps only what the chain still holds", async () => {
     expect(projectThreadItems(await fixtureChain("rewound"))).toEqual([
       {
