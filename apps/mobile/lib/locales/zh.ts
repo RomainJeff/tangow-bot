@@ -188,7 +188,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Could not load integrations": "无法加载集成",
   "Could not load model settings": "无法加载模型设置",
   "Could not load your profile photo": "无法加载你的头像",
-  "Could not load routine": "无法加载例行任务",
   "Could not load the desktop. This device cannot reach the screen URL.":
     "无法加载桌面。此设备无法访问屏幕地址。",
   "Could not load this chat": "无法加载此对话",
@@ -421,7 +420,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   Routine: "例行任务",
   "Routine created": "例行任务已创建",
   "Routine updated": "例行任务已更新",
-  "Routine link is incomplete": "例行任务链接不完整",
   Running: "运行中",
   Save: "保存",
   "Saved.": "已保存。",
@@ -574,14 +572,12 @@ export const ZH_MESSAGES: Record<string, string> = {
   "All integrations": "全部集成",
   "Installed integrations": "已安装的集成",
   "No integrations installed yet.": "尚未安装任何集成。",
-  "Open conversation": "打开对话",
   "Open in full window": "在全窗口中打开",
   "OpenAPI JSON": "OpenAPI JSON",
   "Opened its thread.": "已打开其对话。",
   "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed.":
     "粘贴你服务器的 OpenAI 兼容地址。如有需要，Rakazo 会自动补上 /v1。",
   Paused: "已暂停",
-  Prompt: "提示词",
   "Recording a live demonstration needs desktop or web with the full computer view. You can still ask this bot to run saved skills from chat.":
     "录制现场演示需要桌面端或网页端的完整电脑视图。你仍可在聊天中让这个 Bot 运行已保存的技能。",
   "Remote MCP server": "远程 MCP 服务器",
@@ -702,10 +698,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Notifications on": "通知已开启",
   "Show details": "显示详情",
   "Hide details": "隐藏详情",
-  "Notify me on every run": "每次运行都通知我",
   "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
     "开启后每次运行都会通知并展开卡片；关闭则仅在此对话中保留静默记录。",
-  "Could not update routine": "无法更新例行任务",
 
   Dictate: "语音输入",
   "Cancel dictation": "取消语音输入",

@@ -192,7 +192,6 @@ export const RU_MESSAGES: Record<string, string> = {
   "Could not load group": "Не удалось загрузить группу",
   "Could not load integrations": "Не удалось загрузить интеграции",
   "Could not load model settings": "Не удалось загрузить настройки модели.",
-  "Could not load routine": "Не удалось загрузить программу",
   "Could not load the desktop. This device cannot reach the screen URL.":
     "Не удалось загрузить рабочий стол. Это устройство не может получить доступ к URL-адресу экрана.",
   "Could not load this file.": "Не удалось загрузить этот файл.",
@@ -417,7 +416,6 @@ export const RU_MESSAGES: Record<string, string> = {
   Routine: "Задача",
   "Routine created": "Задача создана",
   "Routine updated": "Задача обновлена",
-  "Routine link is incomplete": "Ссылка на задачу неполная",
   Running: "Выполняется",
   Save: "Сохранить",
   "Saved.": "Сохранено.",
@@ -557,14 +555,12 @@ export const RU_MESSAGES: Record<string, string> = {
   "No authentication": "Нет аутентификации",
   "No connection record found for {name}.": "Для {name} не найдено записей о подключении.",
   "Not in the plugin catalog": "Нет в каталоге плагинов",
-  "Open conversation": "Открыть диалог",
   "Open in full window": "Открыть в полном окне",
   "OpenAPI JSON": "OpenAPI JSON",
   "Opened its thread.": "Диалог открыт.",
   "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed.":
     "Вставьте OpenAI-совместимый адрес со своего сервера. При необходимости Rakazo добавляет /v1.",
   Paused: "Приостановлено",
-  Prompt: "Промпт",
   "Recording a live demonstration needs desktop or web with the full computer view. You can still ask this bot to run saved skills from chat.":
     "Для записи живой демонстрации требуется приложение для компьютера или веб-приложение с полным представлением компьютера. Вы по-прежнему можете попросить этого бота запустить сохранённые навыки из чата.",
   "Remote MCP server": "Удалённый MCP-сервер",
@@ -718,10 +714,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "Notifications on": "Уведомления включены",
   "Show details": "Показать детали",
   "Hide details": "Скрыть детали",
-  "Notify me on every run": "Уведомлять меня при каждом запуске",
   "On sends a notification and expands the card in this thread. Off keeps a silent trace here.":
     "Включено — уведомление и развёрнутая карточка при каждом запуске. Выключено — только тихий след в этом чате.",
-  "Could not update routine": "Не удалось обновить программу",
 
   Dictate: "Диктовать",
   "Cancel dictation": "Отменить надиктовку",

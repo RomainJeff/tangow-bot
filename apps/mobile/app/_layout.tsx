@@ -217,7 +217,6 @@ export default function Layout() {
                 <Stack.Screen name="bot-file" options={{ title: t("Files") }} />
                 <Stack.Screen name="thread" options={{ title: t("Thread") }} />
                 <Stack.Screen name="peer-messages" options={{ title: t("Bot chat") }} />
-                <Stack.Screen name="routine" options={{ title: t("Routine") }} />
                 <Stack.Screen name="computer" options={{ title: t("Computer") }} />
               </Stack>
               <ComputerUpdateProgress />
