@@ -6,8 +6,8 @@ import { createAnswerOrder } from "@rakazo/core";
  * pushes (an editor, the model picker) read one copy. Every call that reaches
  * the server goes through `write` or `read`, which decide what a late answer
  * may still change: a write's answer lands by the shared answer order, field
- * by field for the fields it `sent`; a read lands only if no write overlapped
- * it, since the server may have read the row before that write.
+ * by field for the fields it `sent`; a read lands only if no write answered
+ * while it was in flight, since the server may have read the row before that write.
  */
 export interface BotRecords {
   bot(botId: string): Bot | undefined;
@@ -19,40 +19,14 @@ export interface BotRecords {
   reset(): void;
 }
 
-type Writes = { pending: number; moves: number };
-
 export function createBotRecords(): BotRecords {
   const bots = new Map<string, Bot>();
   const listeners = new Set<() => void>();
-  const writes = new Map<string, Writes>();
   const order = createAnswerOrder();
   let generation = 0;
 
   const notify = () => {
     for (const listener of listeners) listener();
-  };
-
-  async function writing<T>(key: string, run: () => Promise<T>): Promise<T> {
-    const entry = writes.get(key) ?? { pending: 0, moves: 0 };
-    writes.set(key, entry);
-    entry.pending += 1;
-    entry.moves += 1;
-    try {
-      return await run();
-    } finally {
-      entry.pending -= 1;
-      entry.moves += 1;
-    }
-  }
-
-  /** `-1` while a write is in flight: a read started then can never land. */
-  const mark = (key: string) => {
-    const entry = writes.get(key);
-    return entry && entry.pending > 0 ? -1 : (entry?.moves ?? 0);
-  };
-  const quietSince = (key: string, before: number) => {
-    const entry = writes.get(key);
-    return before !== -1 && (entry?.pending ?? 0) === 0 && (entry?.moves ?? 0) === before;
   };
 
   return {
@@ -66,7 +40,7 @@ export function createBotRecords(): BotRecords {
     async write(botId, run, sent = []) {
       const request = order.next();
       const started = generation;
-      const bot = await writing(botId, run);
+      const bot = await run();
       const merge = started === generation ? order.write(botId, request, sent, bot) : null;
       if (merge) {
         bots.set(botId, merge(bots.get(botId)));
@@ -77,10 +51,8 @@ export function createBotRecords(): BotRecords {
     async read(botId, run) {
       const request = order.next();
       const started = generation;
-      const before = mark(botId);
       const bot = await run();
-      if (started !== generation) return;
-      if (quietSince(botId, before) && order.read(botId, request)) {
+      if (started === generation && order.read(botId, request)) {
         bots.set(botId, bot);
         notify();
       }
@@ -88,7 +60,6 @@ export function createBotRecords(): BotRecords {
     reset() {
       generation += 1;
       bots.clear();
-      writes.clear();
       order.reset();
       notify();
     },
