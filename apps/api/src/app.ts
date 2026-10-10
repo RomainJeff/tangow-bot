@@ -27,7 +27,6 @@ import {
   createLinkPreviewPurge,
   createMessagingContextLoader,
   createMessagingTeamChatSender,
-  createPostgresSkillLock,
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
@@ -57,15 +56,14 @@ import {
   PostgresRealtimeFanout,
   pipedreamConfigFromEnv,
   piSessionsRoot,
-  purgeUserSkills,
   pushTokenPath,
   reconcileComputerUpdates,
   removePiUserSessions,
+  removeUserSkillDirs,
   ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
-  scheduleSkillLibraryRepair,
   toTeamChatInbound,
 } from "@rakazo/adapters";
 import { blockedAuthPaths, createAuth } from "@rakazo/auth";
@@ -360,24 +358,12 @@ export async function createApp(
       );
       await removePiUserSessions(env.dataDir, userId);
       await rm(pushTokenPath(env.dataDir, userId), { force: true }).catch(() => undefined);
-      await purgeUserSkills(env.dataDir, userId);
+      await removeUserSkillDirs(env.dataDir, userId);
     },
   });
   const shutdown = new AbortController();
-  // Its own small pool: a held skill lock must never take a connection the change itself needs.
-  const skillLockPool = createPool(env.databaseUrl, {
-    poolMax: 2,
-    applicationName: "rakazo-api-skill-lock",
-  });
-  const skillLock = createPostgresSkillLock(skillLockPool);
-  const stopSkillSweep = scheduleSkillLibraryRepair({
-    prisma,
-    dataDir: env.dataDir,
-    lock: skillLock,
-  });
   const executor = createRunExecutor({
     prisma,
-    skillLock,
     runtime,
     sandbox,
     memory,
@@ -854,7 +840,6 @@ export async function createApp(
       // Abort in-flight continueRun boot waits before draining jobs so stop() cannot sit
       // on waitForComputerReady for the full boot-wait window during shared Postgres journeys.
       shutdown.abort();
-      stopSkillSweep();
       oauthLogins.abortAll();
       messagingStopped = true;
       clearMessagingRetryDelay?.();
@@ -879,7 +864,6 @@ export async function createApp(
       await prisma.$disconnect().catch(() => undefined);
       await created.pool?.end().catch(() => undefined);
       await ownedJobPool?.end().catch(() => undefined);
-      await skillLockPool.end().catch(() => undefined);
       await traceExport.exporter?.flush(2_000);
       await logger.flush({ timeoutMs: 2_000 });
     },

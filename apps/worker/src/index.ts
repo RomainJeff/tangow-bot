@@ -17,7 +17,6 @@ import {
   createLinkPreviewPurge,
   createMessagingContextLoader,
   createPostgresReconciliationLeadership,
-  createPostgresSkillLock,
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
@@ -51,12 +50,10 @@ import {
   ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
-  scheduleSkillLibraryRepair,
 } from "@rakazo/adapters";
 import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
 import {
   createDb,
-  createPool,
   createThreadEvents,
   isTooManyDatabaseConnections,
   parsePositiveInteger,
@@ -193,17 +190,9 @@ async function main() {
         only: ISOLATED_JOB_NAMES,
         noHandleSignals: true,
       });
-  // Its own small pool: a held skill lock must never take a connection the change itself needs.
-  const skillLockPool = createPool(databaseUrl, {
-    poolMax: 2,
-    applicationName: "rakazo-worker-skill-lock",
-  });
-  const skillLock = createPostgresSkillLock(skillLockPool);
-  const stopSkillSweep = scheduleSkillLibraryRepair({ prisma, dataDir, lock: skillLock });
   const skillLearning = parseSkillLearningMode(process.env.SKILL_LEARNING);
   const executor = createRunExecutor({
     prisma,
-    skillLock,
     runtime,
     sandbox,
     memory,
@@ -298,7 +287,6 @@ async function main() {
     if (stopping) return;
     stopping = true;
     try {
-      stopSkillSweep();
       await reconciler.stop();
       await jobHost.stop();
       await previewHost?.stop();
@@ -308,7 +296,6 @@ async function main() {
       await mcp.close();
       await prisma.$disconnect().catch(() => undefined);
       await pool.end().catch(() => undefined);
-      await skillLockPool.end().catch(() => undefined);
     } finally {
       await traceExport.exporter?.flush(2_000);
       await logger.flush({ timeoutMs: 2_000 });
