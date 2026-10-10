@@ -11,6 +11,15 @@ describe("previewFromBlocks", () => {
     ).toBe("Done 3 files in the folder");
   });
 
+  it("skips a block made only of syntax", () => {
+    expect(
+      previewFromBlocks([
+        { kind: "text", text: "---" },
+        { kind: "text", text: "Next **step**" },
+      ]),
+    ).toBe("Next step");
+  });
+
   it("is empty without a text block", () => {
     expect(previewFromBlocks(undefined)).toBe("");
     expect(previewFromBlocks([{ kind: "image", url: "https://example.test/a.png" }])).toBe("");

@@ -22,7 +22,9 @@ export function previewFromBlocks(blocks: unknown): string {
       "text" in block &&
       typeof (block as { text?: unknown }).text === "string"
     ) {
-      return plainText((block as { text: string }).text);
+      // A block made only of syntax (`---`, `[](url)`) says nothing: look further.
+      const text = plainText((block as { text: string }).text);
+      if (text) return text;
     }
   }
   return "";
