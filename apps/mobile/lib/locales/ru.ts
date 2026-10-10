@@ -75,6 +75,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "API key": "API-ключ",
   Account: "Аккаунт",
   Activity: "Активность",
+  "Activity, last run failed": "Активность, последний запуск не удался",
   "No activity yet": "Пока нет активности",
   "Show earlier": "Показать более ранние",
   "Open in chat": "Открыть в чате",

@@ -1,9 +1,11 @@
+import type { Routine } from "@rakazo/contracts";
+import { routineFailing } from "@rakazo/core";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { ActivityTab } from "../components/bot-page/activity-tab";
 import { BotHero, BotTabs } from "../components/bot-page/hero";
-import { LoadFailed } from "../components/bot-page/kit";
+import { LoadFailed, useFocusedRead } from "../components/bot-page/kit";
 import { KnowledgeTab } from "../components/bot-page/knowledge-tab";
 import { SettingsTab } from "../components/bot-page/settings-tab";
 import { NativeSymbol } from "../components/native-symbol";
@@ -59,6 +61,8 @@ export default function BotPageScreen() {
     );
   }, [botId, epoch]);
   useFocusEffect(refresh);
+  const routines = useFocusedRead(() => rpc<Routine[]>("routines/list", { botId }), [botId, epoch]);
+  const routineFailed = routines.read.kind === "ready" && routines.read.value.some(routineFailing);
 
   const leave = () => {
     router.dismissAll();
@@ -128,7 +132,7 @@ export default function BotPageScreen() {
               }
             />
             <View style={styles.body}>
-              <BotTabs value={view} onChange={setView} />
+              <BotTabs value={view} onChange={setView} routineFailed={routineFailed} />
               {view === "activity" ? (
                 <ActivityTab
                   botId={page.bot.id}

@@ -66,6 +66,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "API key": "API 密钥",
   Account: "账户",
   Activity: "动态",
+  "Activity, last run failed": "动态，上次运行失败",
   "No activity yet": "暂无动态",
   "Show earlier": "显示更早的",
   "Open in chat": "在聊天中打开",
