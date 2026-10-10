@@ -8,6 +8,7 @@
  *   the same field already answered.
  * - Its other fields land only when it is the newest answer so far, and never
  *   over a field another write sent: this answer may predate that write.
+ * - A read lands whole when it is the newest answer, and ends every claim.
  */
 export interface AnswerOrder {
   /** Numbers a call about to start, newer than every earlier one. */
@@ -23,6 +24,9 @@ export interface AnswerOrder {
     sent: readonly string[],
     answer: R,
   ): ((current: R | undefined) => R) | null;
+  /** Whether a read's answer may replace the record. */
+  read(key: string, request: number): boolean;
+  reset(): void;
 }
 
 type Claims = { newest: number; fields: Map<string, number> };
@@ -55,6 +59,16 @@ export function createAnswerOrder(): AnswerOrder {
         }
         return base as R;
       };
+    },
+    read(key, request) {
+      const claims = claimsOf(key);
+      if (request <= claims.newest) return false;
+      claims.newest = request;
+      claims.fields.clear();
+      return true;
+    },
+    reset() {
+      records.clear();
     },
   };
 }

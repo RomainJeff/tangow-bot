@@ -47,6 +47,24 @@ describe("answer order", () => {
     expect(bot.name).toBe("Second");
   });
 
+  it("lets a later read replace every field, then lands writes whole again", () => {
+    const order = createAnswerOrder();
+    const bot = land(order.write("b", order.next(), ["name"], { ...shown, name: "Mine" }), shown);
+    expect(order.read("b", order.next())).toBe(true);
+    const after = land(
+      order.write("b", order.next(), ["title"], { ...bot, name: "Renamed by the bot", title: "T" }),
+      bot,
+    );
+    expect(after.name).toBe("Renamed by the bot");
+  });
+
+  it("refuses a read answered after a newer write landed", () => {
+    const order = createAnswerOrder();
+    const read = order.next();
+    land(order.write("b", order.next(), ["name"], { ...shown, name: "New" }), shown);
+    expect(order.read("b", read)).toBe(false);
+  });
+
   it("keeps records apart", () => {
     const order = createAnswerOrder();
     const forB = order.next();
