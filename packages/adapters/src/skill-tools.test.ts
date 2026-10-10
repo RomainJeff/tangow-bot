@@ -24,6 +24,7 @@ import { BUILTIN_SKILLS_ROOT, loadBuiltinSkills } from "./builtin-skills.js";
 import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { marketplacesRoot } from "./marketplace-store.js";
+import { createInMemorySkillLock } from "./skill-lock.js";
 import { listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
 import {
   listAgentSkillRecords,
@@ -42,6 +43,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   return {
     ...actual,
     readdir: vi.fn(actual.readdir),
+    rename: vi.fn(actual.rename),
     rm: vi.fn(actual.rm),
     writeFile: vi.fn(actual.writeFile),
   };
@@ -49,10 +51,12 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 
 const fs = await vi.importActual<typeof FsPromises>("node:fs/promises");
 const readdirMock = vi.mocked(readdir);
+const renameMock = vi.mocked(rename);
 const rmMock = vi.mocked(rm);
 const writeFileMock = vi.mocked(writeFile);
 afterEach(() => {
   readdirMock.mockImplementation(fs.readdir as never);
+  renameMock.mockImplementation(fs.rename);
   rmMock.mockImplementation(fs.rm);
   writeFileMock.mockImplementation(fs.writeFile);
 });
@@ -141,7 +145,7 @@ describe("skill tools", () => {
   beforeEach(async () => {
     prisma = makePrisma();
     dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-tools-"));
-    deps = { prisma: prisma as never, dataDir };
+    deps = { prisma: prisma as never, dataDir, lock: createInMemorySkillLock() };
   });
 
   afterEach(async () => {
@@ -847,7 +851,7 @@ describe("skill drafts", () => {
     beforeEach(async () => {
       prisma = makePrisma();
       dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-drafts-"));
-      deps = { prisma: prisma as never, dataDir };
+      deps = { prisma: prisma as never, dataDir, lock: createInMemorySkillLock() };
     });
     afterEach(async () => {
       await rm(dataDir, { recursive: true, force: true });
@@ -1124,47 +1128,130 @@ describe("skill drafts", () => {
       expect(await create()).toMatchObject({ ok: true });
     });
 
-    it.each([
-      ["fails", Object.assign(new Error("full"), { code: "ENOSPC" }), "Could not create skill."],
-      ["loses the name", undefined, 'A skill named "Deploy" already exists.'],
-    ])(
-      "leaves another bot's skill and its access as they were when a create that claimed its folder %s",
-      async (_, failure, answer) => {
-        const user = { spaceId: "w1", userId: "u1" };
-        const dir = path.join(userSkillsRoot(dataDir, user), "deploy");
-        await skillCreateFromTool(deps, { ...user, botId: "botB" }, [], { files: draft });
-        const rows = async () => [
-          await prisma.skillSetting.findMany(),
-          await prisma.botSkill.findMany(),
-        ];
-        const before = await rows();
-        // Bot B's same-name replace holds its folder aside, then moves it into bot A's claim.
-        const aside = path.join(dataDir, "aside");
-        await rename(dir, aside);
-        writeFileMock.mockImplementation(async (...args: Parameters<typeof fs.writeFile>) => {
-          if (args[0] === path.join(dir, "SKILL.md")) {
-            await rename(aside, dir);
-            if (failure) throw failure;
-          }
-          return fs.writeFile(...args);
-        });
+    it("keeps a skill that landed scoped to its bot when the cleanup after it fails", async () => {
+      rmMock.mockImplementation(async (...args: Parameters<typeof fs.rm>) => {
+        if (path.basename(String(args[0])).startsWith(".import-")) {
+          throw Object.assign(new Error(`EBUSY: resource busy, rm '${args[0]}'`), {
+            code: "EBUSY",
+          });
+        }
+        return fs.rm(...args);
+      });
 
-        expect(
-          await skillCreateFromTool(deps, creator, [], {
-            name: "Deploy",
-            description: "Mine",
-            body: "x",
+      expect(await skillCreateFromTool(deps, creator, [], { files: draft })).toEqual({
+        error: "Could not create skill.",
+      });
+      expect(ownNames(await listAgentSkillRecords(deps, creator))).toEqual(["Deploy"]);
+      expect(ownNames(await listAgentSkillRecords(deps, { ...creator, botId: "botB" }))).toEqual(
+        [],
+      );
+    });
+
+    it("runs a bot's create after a same-name replace of another bot's skill, never in its gap", async () => {
+      const botB = { spaceId: "w1", userId: "u1", botId: "botB" };
+      const dir = path.join(userSkillsRoot(dataDir, botB), "deploy");
+      await skillCreateFromTool(deps, botB, [], { files: draft });
+      const rows = async () => [
+        await prisma.skillSetting.findMany(),
+        await prisma.botSkill.findMany(),
+      ];
+      const before = await rows();
+      let release = () => {};
+      const inGap = new Promise<void>((entered) => {
+        renameMock.mockImplementation(async (from, to) => {
+          if (to === dir && path.basename(String(from)) === "bundle") {
+            entered();
+            await new Promise<void>((resolve) => {
+              release = resolve;
+            });
+          }
+          return fs.rename(from, to);
+        });
+      });
+      const nextMd = buildSkillMd({ name: "Deploy", description: "Ship it", body: "2. Check." });
+
+      const replaced = skillUpdateFromTool(deps, botB, [], {
+        name: "Deploy",
+        files: [{ path: "SKILL.md", bytes: text(nextMd), executable: false }],
+      });
+      await inGap;
+      const created = skillCreateFromTool(deps, creator, [], {
+        name: "Deploy",
+        description: "Mine",
+        body: "x",
+      });
+      await Promise.race([created, new Promise((resolve) => setTimeout(resolve, 100))]);
+      release();
+
+      expect(await replaced).toMatchObject({ ok: true });
+      expect(await created).toEqual({ error: 'A skill named "Deploy" already exists.' });
+      expect(await rows()).toEqual(before);
+      expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toBe(nextMd);
+      expect(ownNames(await listAgentSkillRecords(deps, creator))).toEqual([]);
+    });
+
+    it("waits for the owner's earlier skill write before writing", async () => {
+      await skillCreateFromTool(deps, creator, [], { files: draft });
+      let release = () => {};
+      const held = deps.lock.run(
+        creator,
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
           }),
-        ).toEqual({ error: answer });
-        expect(await rows()).toEqual(before);
-        expect(ownNames(await listAgentSkillRecords(deps, creator))).toEqual([]);
-        expect(ownNames(await listAgentSkillRecords(deps, { ...user, botId: "botC" }))).toEqual([]);
-        expect(ownNames(await listAgentSkillRecords(deps, { ...user, botId: "botB" }))).toEqual([
-          "Deploy",
-        ]);
-        expect(await readFile(path.join(dir, "SKILL.md"), "utf8")).toBe(skillMd);
-      },
-    );
+      );
+      const writes = Promise.all([
+        skillCreateFromTool(deps, creator, [], { name: "Notes", description: "d", body: "x" }),
+        skillDeleteFromTool(deps, creator, { name: "Deploy" }),
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(ownNames(await listAgentSkillRecords(deps, creator))).toEqual(["Deploy"]);
+
+      release();
+      await held;
+      expect(await writes).toMatchObject([{ ok: true }, { ok: true }]);
+      expect(ownNames(await listAgentSkillRecords(deps, creator))).toEqual(["Notes"]);
+    });
+
+    it.each([
+      [
+        "its skills cannot be listed",
+        (base: SkillToolDeps, root: string) => {
+          readdirMock.mockImplementation((async (...args: Parameters<typeof fs.readdir>) => {
+            if (args[0] === root) {
+              throw Object.assign(new Error(`EACCES: permission denied, scandir '${root}'`), {
+                code: "EACCES",
+              });
+            }
+            return fs.readdir(...args);
+          }) as never);
+          return base;
+        },
+      ],
+      [
+        "its lock cannot be taken",
+        (base: SkillToolDeps, root: string) => ({
+          ...base,
+          lock: { run: () => Promise.reject(new Error(`No lock for ${root}`)) },
+        }),
+      ],
+    ])("answers each write without the host path when %s", async (_, broken) => {
+      const used = broken(deps, userSkillsRoot(dataDir, creator));
+
+      expect([
+        await skillCreateFromTool(used, creator, [], {
+          name: "Deploy",
+          description: "d",
+          body: "x",
+        }),
+        await skillUpdateFromTool(used, creator, [], { name: "Deploy", body: "x" }),
+        await skillDeleteFromTool(used, creator, { name: "Deploy" }),
+      ]).toEqual([
+        { error: "Could not create skill." },
+        { error: "Could not update skill." },
+        { error: "Could not delete skill." },
+      ]);
+    });
 
     it("answers a filesystem failure without the host path", async () => {
       await skillCreateFromTool(deps, { spaceId: "w1", userId: "u1" }, [], { files: draft });

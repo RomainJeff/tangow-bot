@@ -27,6 +27,7 @@ import {
   createLinkPreviewPurge,
   createMessagingContextLoader,
   createMessagingTeamChatSender,
+  createPostgresSkillLock,
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
@@ -362,8 +363,15 @@ export async function createApp(
     },
   });
   const shutdown = new AbortController();
+  // Its own small pool: a held skill lock must never take a connection the change itself needs.
+  const skillLockPool = createPool(env.databaseUrl, {
+    poolMax: 2,
+    applicationName: "rakazo-api-skill-lock",
+  });
+  const skillLock = createPostgresSkillLock(skillLockPool);
   const executor = createRunExecutor({
     prisma,
+    skillLock,
     runtime,
     sandbox,
     memory,
@@ -434,6 +442,7 @@ export async function createApp(
 
   const router = createRouter({
     prisma,
+    skillLock,
     events,
     auth,
     jobs,
@@ -864,6 +873,7 @@ export async function createApp(
       await prisma.$disconnect().catch(() => undefined);
       await created.pool?.end().catch(() => undefined);
       await ownedJobPool?.end().catch(() => undefined);
+      await skillLockPool.end().catch(() => undefined);
       await traceExport.exporter?.flush(2_000);
       await logger.flush({ timeoutMs: 2_000 });
     },

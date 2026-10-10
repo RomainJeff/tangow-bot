@@ -354,6 +354,7 @@ import {
 import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { writeSkillLines } from "./skill-lines.js";
+import type { SkillOwnerLock } from "./skill-lock.js";
 import {
   listAgentSkillRecords,
   readSkillDraft,
@@ -665,6 +666,8 @@ export interface ExecutorDeps {
   decisionProviders?: DecisionProviderResolver;
   /** Aborted when createApp stop() begins so in-flight continueRun boot waits exit promptly. */
   shutdownSignal?: AbortSignal;
+  /** Serializes skill writes with the API's; production passes createPostgresSkillLock. */
+  skillLock: SkillOwnerLock;
   /** SKILL_LEARNING: whether bots keep their methods as skills on their own. Off when omitted. */
   skillLearning?: SkillLearningMode;
 }
@@ -1001,7 +1004,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
   const learning = deps.skillLearning ?? "off";
-  const skillDeps = { prisma: deps.prisma, dataDir: deps.dataDir ?? "./data", learning };
+  const skillDeps = {
+    prisma: deps.prisma,
+    dataDir: deps.dataDir ?? "./data",
+    learning,
+    lock: deps.skillLock,
+  };
   // Never fatal: the run already ended, and the sweep adds a line that failed here.
   const writeRunSkillLines = (runId: string) =>
     writeSkillLines(
