@@ -1012,7 +1012,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
     writeSkillLines(
       {
         prisma: deps.prisma,
-        library: skillLibrary,
         events: deps.events,
         lineOnlyMessages: learning !== "off",
       },

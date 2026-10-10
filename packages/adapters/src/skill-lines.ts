@@ -1,12 +1,12 @@
 /**
- * The "Skill learned · <name>" line: written by the server from the skill history, never from the
- * bot's text. A run gets its lines once, recorded on the run, whatever the number of calls or
- * attempts, so a resume, a replay or the sweep changes nothing, and neither does a conversation
- * the user emptied since.
+ * The "Skill learned · <name>" line: written by the server from the run's recorded skill writes,
+ * never from the bot's text. A run gets its lines once, recorded on the run, whatever the number
+ * of calls or attempts, so a resume, a replay or the sweep changes nothing, and neither does a
+ * conversation the user emptied since.
  */
 import type { MessageBlock } from "@rakazo/contracts";
 import type { SkillSourceBlock } from "@rakazo/core";
-import { runStartedByUser } from "@rakazo/core";
+import { asSkillAvailability, runStartedByUser, userSkillKey } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
   appendEventInTransaction,
@@ -14,13 +14,18 @@ import {
   messageUpdatedPayload,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import type { SkillLibrary, SkillRunChange } from "./skill-library.js";
 
 /** The clientNonce of a message that carries a run's lines alone. */
 const LINE_ONLY_NONCE_PREFIX = "skill-source:";
 const FINISHED = ["completed", "failed", "cancelled"];
-/** The tool calls whose effects mark a run that may have changed a skill. */
-const SKILL_WRITE_TOOLS = ["skill_create", "skill_update", "skill_delete"];
+type SkillChange = SkillSourceBlock["change"];
+/** Each skill write, folded onto what the run already did to that skill. */
+const FOLD = new Map<string, (before?: SkillChange) => SkillChange>([
+  ["skill_create", () => "learned"],
+  ["skill_update", (before) => (before === "learned" ? "learned" : "updated")],
+  ["skill_delete", () => "deleted"],
+]);
+const SKILL_WRITE_TOOLS = [...FOLD.keys()];
 /** A run's writes have all landed by then, even those of a run cancelled mid-call. */
 const SWEEP_GRACE_MS = 5 * 60 * 1000;
 const SWEEP_LOOKBACK_MS = 24 * 60 * 60 * 1000;
@@ -28,7 +33,6 @@ const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 export type SkillLineDeps = {
   prisma: PrismaClient;
-  library: SkillLibrary;
   events: Pick<ThreadEvents, "notify">;
   /**
    * Whether a run that left no message gets one carrying its lines alone. Clients that predate
@@ -37,26 +41,75 @@ export type SkillLineDeps = {
   lineOnlyMessages?: boolean;
 };
 
-const lineOf = (change: SkillRunChange): SkillSourceBlock => ({
-  kind: "skill_source",
-  skillUid: change.uid,
-  skillId: change.key,
-  name: change.name,
-  change: change.change,
-});
+/** Only a call that saved returns the skill's name; a refused one returns an error alone. */
+const savedName = (result: Prisma.JsonValue): string | undefined =>
+  result && typeof result === "object" && !Array.isArray(result) && typeof result.name === "string"
+    ? result.name
+    : undefined;
+
+/**
+ * One line per skill the run wrote, in the order it first wrote them, from the effects of its skill
+ * calls that succeeded. A bot cannot rename a skill, so the name it wrote stays the skill's id.
+ */
+async function linesOf(prisma: PrismaClient, runId: string): Promise<SkillSourceBlock[]> {
+  const effects = await prisma.externalEffect.findMany({
+    where: { runId, kind: { in: SKILL_WRITE_TOOLS }, status: "completed" },
+    orderBy: { createdAt: "asc" },
+    select: { kind: true, result: true },
+  });
+  const lines = new Map<string, SkillSourceBlock>();
+  for (const { kind, result } of effects) {
+    const fold = FOLD.get(kind);
+    const name = savedName(result);
+    if (!fold || !name) continue;
+    const skillId = userSkillKey(name);
+    lines.set(skillId, {
+      kind: "skill_source",
+      skillId,
+      name,
+      change: fold(lines.get(skillId)?.change),
+    });
+  }
+  return [...lines.values()];
+}
+
+/** The updated skills another bot reads, by the owner's access settings now. */
+async function reachingOtherBots(
+  tx: Prisma.TransactionClient,
+  run: { spaceId: string; userId: string; botId: string },
+  lines: SkillSourceBlock[],
+): Promise<SkillSourceBlock[]> {
+  const updated = lines.filter((line) => line.change === "updated");
+  if (updated.length === 0) return [];
+  const scope = {
+    spaceId: run.spaceId,
+    userId: run.userId,
+    skillKey: { in: updated.map((line) => line.skillId) },
+  };
+  const settings = await tx.skillSetting.findMany({
+    where: scope,
+    select: { skillKey: true, availability: true },
+  });
+  const picked = await tx.botSkill.findMany({
+    where: { ...scope, enabled: true, botId: { not: run.botId } },
+    select: { skillKey: true },
+  });
+  const availability = new Map(settings.map((row) => [row.skillKey, row.availability]));
+  const pickedKeys = new Set(picked.map((row) => row.skillKey));
+  return updated.filter((line) => {
+    const access = asSkillAvailability(availability.get(line.skillId));
+    return access === "all" || (access === "selected" && pickedKeys.has(line.skillId));
+  });
+}
 
 /**
  * Puts the line of each skill a finished run changed under the run's last message, the reply or an
  * earlier bubble alike. With `lineOnlyMessages`, a run with no message gets a message of its own,
  * which marks nothing unread: in its conversation when the user started the run, else in the
- * bot's own conversation and only for a change other bots read. Without it the change stays in
- * the skill's history alone. A cancelled run writes its lines too.
+ * bot's own conversation and only for a skill other bots read. Without it the change shows
+ * nowhere. A cancelled run writes its lines too.
  */
-export async function writeSkillLines(
-  deps: SkillLineDeps,
-  runId: string,
-  changes?: SkillRunChange[],
-): Promise<void> {
+export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promise<void> {
   const run = await deps.prisma.run.findUnique({
     where: { id: runId },
     select: {
@@ -72,7 +125,7 @@ export async function writeSkillLines(
     },
   });
   if (!run || !FINISHED.includes(run.status) || run.skillLinesAt) return;
-  const all = changes ?? (await deps.library.changesByRun(run, [run.id])).get(run.id) ?? [];
+  const all = await linesOf(deps.prisma, run.id);
   const startedByUser = runStartedByUser({
     trigger: run.trigger,
     sourceRole: run.sourceMessage?.role,
@@ -115,7 +168,7 @@ export async function writeSkillLines(
       if (!Array.isArray(target.blocks)) return null;
       const blocks = [
         ...(target.blocks as Prisma.InputJsonValue[]),
-        ...all.map((change) => lineOf(change) as Prisma.InputJsonValue),
+        ...(all as Prisma.InputJsonValue[]),
       ];
       await tx.message.update({ where: { id: target.id }, data: { blocks } });
       // No run id: the run may be cancelled, and a run id makes clients drop its live progress.
@@ -128,9 +181,9 @@ export async function writeSkillLines(
       });
       return { threadId: target.threadId, seq: event.seq };
     }
-    const shown = startedByUser ? all : all.filter((change) => change.reachesOtherBots);
-    if (shown.length === 0 || !lineOnlyThreadId) return null;
-    const blocks: MessageBlock[] = shown.map(lineOf);
+    if (!lineOnlyThreadId) return null;
+    const blocks: MessageBlock[] = startedByUser ? all : await reachingOtherBots(tx, run, all);
+    if (blocks.length === 0) return null;
     const message = await createThreadMessageInTransaction(tx, {
       threadId: lineOnlyThreadId,
       role: "bot",
@@ -158,7 +211,7 @@ export async function writeSkillLines(
 /**
  * Adds the lines of a run that ended over five minutes ago without them: a worker killed between
  * the write and the end of its run, a resumed run whose last attempt saved nothing. Only runs that
- * called a skill write and have no lines yet are read, each owner's history once for all of them.
+ * called a skill write and have no lines yet are read.
  */
 export async function sweepSkillLines(deps: SkillLineDeps, now = new Date()): Promise<void> {
   const runs = await deps.prisma.run.findMany({
@@ -171,22 +224,10 @@ export async function sweepSkillLines(deps: SkillLineDeps, now = new Date()): Pr
       skillLinesAt: null,
       effects: { some: { kind: { in: SKILL_WRITE_TOOLS } } },
     },
-    select: { id: true, spaceId: true, userId: true },
+    select: { id: true },
   });
-  const byOwner = new Map<string, { owner: { spaceId: string; userId: string }; ids: string[] }>();
-  for (const { id, spaceId, userId } of runs) {
-    const key = `${spaceId}/${userId}`;
-    const entry = byOwner.get(key) ?? { owner: { spaceId, userId }, ids: [] };
-    entry.ids.push(id);
-    byOwner.set(key, entry);
-  }
-  for (const { owner, ids } of byOwner.values()) {
-    try {
-      const byRun = await deps.library.changesByRun(owner, ids);
-      for (const id of ids) await writeSkillLines(deps, id, byRun.get(id) ?? []);
-    } catch (error) {
-      getLogger().error("skill line sweep", error);
-    }
+  for (const { id } of runs) {
+    await writeSkillLines(deps, id).catch((error) => getLogger().error("skill line sweep", error));
   }
 }
 
