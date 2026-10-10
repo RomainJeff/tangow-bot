@@ -190,6 +190,7 @@ import { messageArrivalStaggerMs, useMessageArrivals } from "../lib/message-arri
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
+  skillLineRoute,
   skillLineSegment,
   stepsBlocks,
   visibleMessageBlocks,
@@ -4027,7 +4028,10 @@ function useSkillLines(message: MobileMessage, isNew: boolean): BotBubbleMeta[] 
             ? t("Skill updated · {name}", { name: line.name })
             : t("Skill deleted · {name}", { name: line.name }),
       icon: { ios: "book", android: "book-outline" },
-      onPress: () => router.push("/skills"),
+      onPress: () =>
+        void skillLineRoute(line, () =>
+          rpc<AgentSkillCatalogEntry[]>("agentSkills/list").catch(() => []),
+        ).then((route) => router.push(route)),
       live: skillsLive,
     }),
   );

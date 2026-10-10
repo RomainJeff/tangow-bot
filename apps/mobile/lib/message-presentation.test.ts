@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
+  skillLineRoute,
   skillLineSegment,
   stepsBlocks,
   visibleMessageBlocks,
@@ -126,6 +127,23 @@ describe("skill lines", () => {
       "text",
       "skill_source",
     ]);
+  });
+
+  it("opens the skill by its uid, Recently deleted for a deleted one, or Skills when it is gone", async () => {
+    const catalog = async () => [
+      { id: "user:tea", uid: "f".repeat(32) },
+      { id: "user:coffee-renamed", uid },
+    ];
+    await expect(skillLineRoute(line("learned"), catalog)).resolves.toEqual({
+      pathname: "/bot-skill",
+      params: { skillId: "user:coffee-renamed" },
+    });
+    await expect(skillLineRoute(line("updated"), async () => [])).resolves.toEqual({
+      pathname: "/skills",
+    });
+    await expect(skillLineRoute(line("deleted"), catalog)).resolves.toEqual({
+      pathname: "/bot-skills-trash",
+    });
   });
 
   it("hangs the lines under the last segment that draws text, else stands them alone", () => {
