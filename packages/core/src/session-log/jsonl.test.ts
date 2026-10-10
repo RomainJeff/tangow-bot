@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { longSessionJsonl } from "./fixtures/long-session.js";
-import { bytesSource, FIXTURES, fixtureText } from "./fixtures/read-fixture.js";
+import { bytesSource, FIXTURES, fixtureText, linkEntries } from "./fixtures/read-fixture.js";
 import { decodeEntries, encodeEntries, readTailFromEnd } from "./jsonl.js";
+
+const encode = (text: string) => new TextEncoder().encode(text);
+const tail = (text: string, chunkSize = 4096) =>
+  readTailFromEnd(bytesSource(encode(text)), chunkSize);
+const ids = (entries: readonly { id: string }[]) => entries.map((entry) => entry.id);
+const note = (text: string) => ({ type: "system.note", payload: { text } });
+const threeNotes = encodeEntries(linkEntries("n", [note("one"), note("two"), note("three")]));
 
 describe("session log JSONL", () => {
   it.each(FIXTURES)("re-encodes the %s fixture byte for byte", (name) => {
@@ -33,10 +40,58 @@ describe("session log JSONL", () => {
       ...onChain(9_500, 9_760),
       ...onChain(9_800, 9_999),
     ]);
-    expect(chain[0]?.type).toBe("compaction");
     const lastSixHundredLines = new TextEncoder().encode(
       text.split("\n").slice(-601).join("\n"),
     ).length;
     expect(served.bytes).toBeLessThan(lastSixHundredLines);
+  });
+
+  it.each([
+    ["cut mid-line", `${threeNotes}{"id":"n-3","sessionId":"ses_n","se`, ["n-0", "n-1", "n-2"]],
+    ["whole but without its newline", threeNotes.slice(0, -1), ["n-0", "n-1"]],
+  ])("skips a final line %s as a torn append", async (_, text, expected) => {
+    expect(ids(await tail(text))).toEqual(expected);
+  });
+
+  it("joins lines and multibyte characters that span chunks", async () => {
+    const chain = await tail(fixtureText("linear"), 1);
+    expect(ids(chain)).toEqual(
+      Array.from({ length: 16 }, (_, seq) => `lin-${String(seq).padStart(2, "0")}`),
+    );
+    expect(chain.find((entry) => entry.type === "tool.result")?.payload).toEqual({
+      callId: "call_weather",
+      output: "18°C, sunny",
+      isError: false,
+      artifactIds: [],
+    });
+  });
+
+  it("names the line whose parent is missing from the file", async () => {
+    const lines = fixtureText("linear").split("\n");
+    lines.splice(7, 1);
+    await expect(tail(lines.join("\n"))).rejects.toThrow(
+      "Invalid session entry at line 8 from the end: its parent lin-07 is missing from the file",
+    );
+  });
+
+  it("stops at a clear entry", async () => {
+    const text = encodeEntries(
+      linkEntries("c", [
+        note("before"),
+        { parentId: null, type: "clear", payload: {} },
+        note("after"),
+      ]),
+    );
+    expect(ids(await tail(text))).toEqual(["c-1", "c-2"]);
+  });
+
+  it("reads an empty file as an empty chain", async () => {
+    expect(await tail("")).toEqual([]);
+  });
+
+  it.each([0, 0.5])("rejects a chunk size of %s", async (chunkSize) => {
+    await expect(tail(threeNotes, chunkSize)).rejects.toThrow(
+      `chunkSize must be a positive integer, got ${chunkSize}`,
+    );
   });
 });

@@ -35,51 +35,76 @@ export function decodeEntries(text: string): SessionEntry[] {
  * backwards, skipping lines a rewind left off the chain, and stop at the first `compaction` entry
  * or at an entry with no parent. Reads `chunkSize` bytes at a time, so a long session costs about
  * the bytes since its last compaction. Returns the chain oldest first.
+ *
+ * A file that does not end with a newline ends in a torn append, a crash mid-write, so its last
+ * partial line is skipped. Any other line read that is not JSON, a chain entry that fails
+ * validation, and a parent missing from the file throw `SessionEntryDecodeError` with the line.
  */
 export async function readTailFromEnd(
   open: () => Promise<TailSource>,
   chunkSize: number,
 ): Promise<SessionEntry[]> {
-  if (!(chunkSize > 0)) throw new RangeError(`chunkSize must be positive, got ${chunkSize}`);
+  if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
+    throw new RangeError(`chunkSize must be a positive integer, got ${chunkSize}`);
+  }
   const source = await open();
   try {
     const decoder = new TextDecoder();
     const chain: SessionEntry[] = [];
     let wanted: string | null | undefined;
+    let wantedBy = "";
     let linesFromEnd = 0;
+    let afterLastNewline = true;
     const visit = (bytes: Uint8Array): boolean => {
+      const torn = afterLastNewline;
+      afterLastNewline = false;
       if (bytes.length === 0) return false;
       linesFromEnd += 1;
+      if (torn) return false;
       const location = `line ${linesFromEnd} from the end`;
       const json = parseJson(decoder.decode(bytes), location);
       if (wanted !== undefined && idOf(json) !== wanted) return false;
       const entry = validateEntry(json, location);
       chain.push(entry);
       wanted = entry.parentId;
+      wantedBy = location;
       return entry.type === "compaction" || wanted === null;
     };
-    let carry = new Uint8Array(0);
+    let pieces: Uint8Array[] = [];
     let end = source.size;
     while (end > 0) {
       const start = Math.max(0, end - chunkSize);
       const chunk = await source.read(start, end - start);
-      const buffer = new Uint8Array(chunk.length + carry.length);
-      buffer.set(chunk);
-      buffer.set(carry, chunk.length);
       end = start;
-      let lineEnd = buffer.length;
-      for (let index = buffer.length - 1; index >= 0; index -= 1) {
-        if (buffer[index] !== NEWLINE) continue;
-        if (visit(buffer.subarray(index + 1, lineEnd))) return chain.reverse();
+      let lineEnd = chunk.length;
+      for (let index = chunk.length - 1; index >= 0; index -= 1) {
+        if (chunk[index] !== NEWLINE) continue;
+        if (visit(concat([chunk.subarray(index + 1, lineEnd), ...pieces.reverse()]))) {
+          return chain.reverse();
+        }
+        pieces = [];
         lineEnd = index;
       }
-      carry = buffer.slice(0, lineEnd);
+      pieces.push(chunk.subarray(0, lineEnd));
     }
-    if (visit(carry) || wanted === undefined) return chain.reverse();
-    throw new SessionEntryDecodeError(`Session entry ${wanted} is missing from the file`);
+    if (visit(concat(pieces.reverse())) || wanted === undefined) return chain.reverse();
+    throw new SessionEntryDecodeError(
+      `Invalid session entry at ${wantedBy}: its parent ${wanted} is missing from the file`,
+    );
   } finally {
     await source.close();
   }
+}
+
+function concat(parts: readonly Uint8Array[]): Uint8Array {
+  if (parts.length === 1) return parts[0]!;
+  const joined = new Uint8Array(parts.reduce((length, part) => length + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    joined.set(part, offset);
+    offset += part.length;
+  }
+  return joined;
 }
 
 function parseJson(line: string, location: string): unknown {
