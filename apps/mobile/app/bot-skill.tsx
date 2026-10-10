@@ -18,14 +18,14 @@ import { nativeTextStyle } from "../lib/typography";
  * The id changes when the name does, so the one a save returns is the one kept.
  */
 export default function BotSkillScreen() {
-  const { skillId: linked = "" } = useLocalSearchParams<{ botId: string; skillId: string }>();
+  const { skillId: linked = "" } = useLocalSearchParams<{ skillId: string }>();
   const [skillId, setSkillId] = useState(linked);
   const styles = useThemedStyles(createSkillStyles);
   const tokens = useMobileTokens();
   const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const router = useRouter();
-  const { read, settle, retry } = useFocusedRead(
+  const { read, write, retry } = useFocusedRead(
     () => rpc<AgentSkill>("agentSkills/get", { skillId }),
     [skillId],
   );
@@ -33,7 +33,7 @@ export default function BotSkillScreen() {
   // server no longer holds once the skill is read again.
   const [draft, setDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const skill = read.kind === "ready" ? read.value : null;
   const content = skill?.content ?? null;
@@ -45,6 +45,7 @@ export default function BotSkillScreen() {
   const stopEditing = () => {
     Keyboard.dismiss();
     setDraft(null);
+    setFailed(null);
   };
   const cancel = () => {
     if (!dirty) {
@@ -59,14 +60,15 @@ export default function BotSkillScreen() {
   const save = async () => {
     if (busy || !dirty || draftError || !draft?.trim()) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
+    const settle = write();
     try {
       const saved = await rpc<AgentSkill>("agentSkills/update", { skillId, content: draft });
       setSkillId(saved.id);
       settle(() => ({ kind: "ready", value: saved }));
       stopEditing();
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailed(serverMessage(error) || t("Could not save skill"));
     } finally {
       setBusy(false);
     }
@@ -148,7 +150,7 @@ export default function BotSkillScreen() {
           keyboardDismissMode="on-drag"
           automaticallyAdjustKeyboardInsets
         >
-          {failed ? <Text style={styles.error}>{t("Could not save skill")}</Text> : null}
+          {failed ? <Text style={styles.error}>{failed}</Text> : null}
           <TextInput
             accessibilityLabel={skill.name}
             value={draft ?? content ?? ""}

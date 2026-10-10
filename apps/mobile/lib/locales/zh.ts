@@ -740,7 +740,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Shape {number}": "形状 {number}",
   "Voice and replies": "语音与回复",
   "What it does, in one line": "一句话说明它做什么",
-  "Could not read this file": "无法读取此文件",
+  "Add skill": "添加技能",
   Files: "文件",
   Knowledge: "知识",
   Memory: "记忆",

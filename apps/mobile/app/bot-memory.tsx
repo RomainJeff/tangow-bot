@@ -7,6 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { LoadFailed } from "../components/bot-page/kit";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
+import { useBotPageContext } from "../lib/bot-page";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
@@ -15,7 +16,8 @@ type Read = { kind: "loading" } | { kind: "failed" } | { kind: "ready"; doc: Mem
 
 /**
  * One memory document with explicit Save and Cancel: a save on leaving after an
- * accidental clear would wipe the bot's memory with no history.
+ * accidental clear would wipe the bot's memory with no history. An archived bot's
+ * document only reads, with Close alone.
  */
 export default function BotMemoryScreen() {
   const { botId = "", documentId = "" } = useLocalSearchParams<{
@@ -26,6 +28,7 @@ export default function BotMemoryScreen() {
   const tokens = useMobileTokens();
   const { t } = useI18n();
   const router = useRouter();
+  const readOnly = useBotPageContext(botId)?.readOnly === true;
   const insets = useSafeAreaInsets();
   // The keyboard covers the bottom inset the safe area already pads.
   const keyboardInset = useKeyboardState((state) =>
@@ -102,23 +105,33 @@ export default function BotMemoryScreen() {
           // Unsaved edits or a save in flight close only through Cancel or Save.
           gestureEnabled: !busy && !dirty,
           unstable_headerLeftItems: () => [
-            {
-              type: "button",
-              label: t("Cancel"),
-              variant: "plain",
-              disabled: busy,
-              onPress: cancel,
-            },
+            readOnly
+              ? {
+                  type: "button",
+                  label: t("Close"),
+                  variant: "plain",
+                  onPress: () => router.back(),
+                }
+              : {
+                  type: "button",
+                  label: t("Cancel"),
+                  variant: "plain",
+                  disabled: busy,
+                  onPress: cancel,
+                },
           ],
-          unstable_headerRightItems: () => [
-            {
-              type: "button",
-              label: busy ? t("Saving…") : t("Save"),
-              variant: "done",
-              disabled: busy || !dirty,
-              onPress: () => void save(),
-            },
-          ],
+          unstable_headerRightItems: () =>
+            readOnly
+              ? []
+              : [
+                  {
+                    type: "button",
+                    label: busy ? t("Saving…") : t("Save"),
+                    variant: "done",
+                    disabled: busy || !dirty,
+                    onPress: () => void save(),
+                  },
+                ],
         }}
       />
       {read.kind === "failed" ? (
@@ -135,7 +148,7 @@ export default function BotMemoryScreen() {
             accessibilityLabel={doc.path}
             value={draft}
             onChangeText={setDraft}
-            editable={!busy}
+            editable={!readOnly && !busy}
             multiline
             textAlignVertical="top"
             placeholderTextColor={tokens.mutedForeground}

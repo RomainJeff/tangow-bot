@@ -66,10 +66,23 @@ export function Separated({ children }: { children: ReactNode }) {
   ));
 }
 
-export function GroupAction({ label, onPress }: { label: string; onPress: () => void }) {
+export function GroupAction({
+  label,
+  onPress,
+  accessibilityLabel,
+}: {
+  label: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
   const styles = useThemedStyles(createKitStyles);
   return (
-    <Pressable accessibilityRole="button" hitSlop={10} onPress={onPress}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={10}
+      onPress={onPress}
+    >
       <Text style={styles.groupAction}>{label}</Text>
     </Pressable>
   );
@@ -347,12 +360,18 @@ export function useFocusedRead<T>(load: () => Promise<T>, deps: unknown[]) {
     setRead({ kind: "loading" });
     reload();
   };
-  /** A write's answer: a read still in flight began before it, so it no longer lands. */
-  const settle = (next: (current: Read<T>) => Read<T>) => {
-    latest.current += 1;
-    setRead(next);
+  /**
+   * Call as a write begins; pass its answer to the returned settle. Reads that began before the
+   * write no longer land, while one begun since (the screen came back into view) still does.
+   */
+  const write = () => {
+    const begun = latest.current;
+    return (next: (current: Read<T>) => Read<T>) => {
+      if (latest.current === begun) latest.current += 1;
+      setRead(next);
+    };
   };
-  return { read, settle, retry };
+  return { read, write, retry };
 }
 
 function createKitStyles() {

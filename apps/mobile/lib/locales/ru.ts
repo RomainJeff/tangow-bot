@@ -756,7 +756,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Shape {number}": "Форма {number}",
   "Voice and replies": "Голос и ответы",
   "What it does, in one line": "Чем он занят, одной строкой",
-  "Could not read this file": "Не удалось прочитать файл",
+  "Add skill": "Добавить навык",
   Files: "Файлы",
   Knowledge: "Знания",
   Memory: "Память",

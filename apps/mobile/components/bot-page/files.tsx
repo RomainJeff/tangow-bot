@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { rpc } from "../../lib/api";
-import { dateLocaleForUi, t, useI18n } from "../../lib/i18n";
+import { dateLocaleForUi, useI18n } from "../../lib/i18n";
 import { LoadFailed, LoadingRows, QuietLine, Row, Separated, useFocusedRead } from "./kit";
 
 type WorkspaceEntry = { path: string; kind: "file" | "dir"; size: number };
@@ -19,7 +19,7 @@ function sortEntries(entries: WorkspaceEntry[]): WorkspaceEntry[] {
   });
 }
 
-function formatSize(bytes: number): string {
+function formatSize(bytes: number, t: ReturnType<typeof useI18n>["t"]): string {
   const kilobytes = bytes / 1024;
   const megabytes = kilobytes >= 1024;
   const value = megabytes ? kilobytes / 1024 : kilobytes;
@@ -64,7 +64,7 @@ export function FileList({
         <Row
           key={entry.path}
           label={entry.kind === "dir" ? `${entryName(entry.path)}/` : entryName(entry.path)}
-          value={entry.kind === "file" ? formatSize(entry.size) : null}
+          value={entry.kind === "file" ? formatSize(entry.size, t) : null}
           chevron
           onPress={() =>
             router.push({

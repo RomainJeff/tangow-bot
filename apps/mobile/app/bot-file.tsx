@@ -1,15 +1,16 @@
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
-import { LoadingRows, QuietLine } from "../components/bot-page/kit";
+import { LoadFailed, LoadingRows, QuietLine } from "../components/bot-page/kit";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
-import { useI18n } from "../lib/i18n";
 import { useThemedStyles } from "../lib/native";
+import { serverMessage } from "../lib/server-error";
 import { nativeTextStyle } from "../lib/typography";
 
 type Read =
   | { kind: "loading" }
+  /** `reason` is the server's own words, empty when the call never got an answer. */
   | { kind: "failed"; reason: string }
   | { kind: "ready"; content: string };
 
@@ -17,8 +18,8 @@ type Read =
 export default function BotFileScreen() {
   const { botId = "", path = "" } = useLocalSearchParams<{ botId: string; path: string }>();
   const styles = useThemedStyles(createFileStyles);
-  const { t } = useI18n();
   const [read, setRead] = useState<Read>({ kind: "loading" });
+  const [attempt, setAttempt] = useState(0);
   const name = path.split("/").filter(Boolean).at(-1) ?? path;
 
   useEffect(() => {
@@ -29,17 +30,12 @@ export default function BotFileScreen() {
       })
       .catch((error: unknown) => {
         // A binary file fails the server's UTF-8 decode; an oversized one says so.
-        if (!cancelled) {
-          setRead({
-            kind: "failed",
-            reason: error instanceof Error ? error.message : t("Could not read this file"),
-          });
-        }
+        if (!cancelled) setRead({ kind: "failed", reason: serverMessage(error) });
       });
     return () => {
       cancelled = true;
     };
-  }, [botId, path, t]);
+  }, [botId, path, attempt]);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -47,7 +43,16 @@ export default function BotFileScreen() {
       {read.kind === "loading" ? (
         <LoadingRows />
       ) : read.kind === "failed" ? (
-        <QuietLine>{read.reason}</QuietLine>
+        read.reason ? (
+          <QuietLine>{read.reason}</QuietLine>
+        ) : (
+          <LoadFailed
+            onRetry={() => {
+              setRead({ kind: "loading" });
+              setAttempt((value) => value + 1);
+            }}
+          />
+        )
       ) : (
         <Text selectable style={styles.text}>
           {read.content}

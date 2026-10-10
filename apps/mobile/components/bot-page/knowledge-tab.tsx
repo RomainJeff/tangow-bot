@@ -2,7 +2,6 @@ import type { AgentSkillCatalogEntry, MemoryDocument } from "@rakazo/contracts";
 import { filterSkillList } from "@rakazo/core";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { View } from "react-native";
 import { rpc } from "../../lib/api";
 import { type BotPageContext, useBotField } from "../../lib/bot-page";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
@@ -24,13 +23,13 @@ import {
 export function KnowledgeTab({ page, epoch }: { page: BotPageContext; epoch: number }) {
   const { t } = useI18n();
   return (
-    <View style={{ gap: 28 }}>
+    <>
       <MemoryGroup page={page} epoch={epoch} />
       <Group label={t("Files")}>
         <FileList botId={page.bot.id} path="" shown={5} epoch={epoch} />
       </Group>
       <SkillsGroup page={page} />
-    </View>
+    </>
   );
 }
 
@@ -76,19 +75,22 @@ function SkillsGroup({ page }: { page: BotPageContext }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const botId = page.bot.id;
-  const { read, settle, retry } = useFocusedRead(
+  const { read, write, retry } = useFocusedRead(
     () => rpc<AgentSkillCatalogEntry[]>("agentSkills/list"),
     [],
   );
-  const replace = (updated: AgentSkillCatalogEntry) =>
-    settle((current) =>
-      current.kind === "ready"
-        ? {
-            kind: "ready",
-            value: current.value.map((skill) => (skill.id === updated.id ? updated : skill)),
-          }
-        : current,
-    );
+  const beginReplace = () => {
+    const settle = write();
+    return (updated: AgentSkillCatalogEntry) =>
+      settle((current) =>
+        current.kind === "ready"
+          ? {
+              kind: "ready",
+              value: current.value.map((skill) => (skill.id === updated.id ? updated : skill)),
+            }
+          : current,
+      );
+  };
 
   const listed = read.kind === "ready" ? filterSkillList(read.value, { botId }) : [];
   // No search on iPhone: the skills a bot can switch lead, the always-on builtins follow.
@@ -102,7 +104,11 @@ function SkillsGroup({ page }: { page: BotPageContext }) {
       label={t("Skills")}
       trailing={
         page.readOnly ? null : (
-          <GroupAction label={t("Add")} onPress={() => router.push("/skills")} />
+          <GroupAction
+            label={t("Add")}
+            accessibilityLabel={t("Add skill")}
+            onPress={() => router.push("/skills")}
+          />
         )
       }
     >
@@ -115,7 +121,7 @@ function SkillsGroup({ page }: { page: BotPageContext }) {
       ) : (
         <Separated>
           {(collapsible && !expanded ? skills.slice(0, SKILLS_SHOWN) : skills).map((entry) => (
-            <SkillRow key={entry.id} page={page} entry={entry} onSaved={replace} />
+            <SkillRow key={entry.id} page={page} entry={entry} beginReplace={beginReplace} />
           ))}
           {collapsible ? (
             <Row
@@ -133,11 +139,11 @@ function SkillsGroup({ page }: { page: BotPageContext }) {
 function SkillRow({
   page,
   entry,
-  onSaved,
+  beginReplace,
 }: {
   page: BotPageContext;
   entry: AgentSkillCatalogEntry;
-  onSaved: (entry: AgentSkillCatalogEntry) => void;
+  beginReplace: () => (entry: AgentSkillCatalogEntry) => void;
 }) {
   const botId = page.bot.id;
   const access = useBotField(
@@ -145,7 +151,8 @@ function SkillRow({
     `skill:${entry.id}`,
     entry.visibleBotIds.includes(botId),
     async (enabled) => {
-      onSaved(
+      const replace = beginReplace();
+      replace(
         await rpc<AgentSkillCatalogEntry>("agentSkills/setAccess", {
           skillId: entry.id,
           bots: [{ botId, enabled }],
@@ -163,7 +170,7 @@ function SkillRow({
       onPress={
         page.readOnly
           ? undefined
-          : () => router.push({ pathname: "/bot-skill", params: { botId, skillId: entry.id } })
+          : () => router.push({ pathname: "/bot-skill", params: { skillId: entry.id } })
       }
       meta={<SaveMeta state={access.state} onRetry={access.retry} />}
       control={
