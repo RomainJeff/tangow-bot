@@ -1178,6 +1178,7 @@ describeJourneys("required product journeys", () => {
       threadId: group.threadId,
       name: "Group ping",
       prompt: "say group-reminder-ok",
+      untrustedPrompt: false,
       schedule: { delaySeconds: 30 },
     });
     expect(groupCreated).toMatchObject({ ok: true });

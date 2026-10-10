@@ -12,6 +12,7 @@ import { runAutoReviewJudge } from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
 import { createInMemorySkillLock } from "./skill-lock.js";
+import { listUserSkills, userSkillsRoot } from "./skill-store.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -392,6 +393,8 @@ function fixture(
       enqueue.mock.calls.flatMap(([job]) =>
         job.name === "routine.wakeup" ? [job.availableAt] : [],
       ),
+    skills: () =>
+      listUserSkills(userSkillsRoot(dataDir, run as { spaceId: string; userId: string })),
     askBlock,
     messageUpdate,
     /** The cards the run posted outside a pause, in order. */
@@ -1092,6 +1095,22 @@ describe("a routine the user asks to change", () => {
     args: { routineId: "routine-1", ...args },
   });
 
+  it.each([
+    ["webhook", true],
+    ["user", false],
+  ])(
+    "records whether a prompt a %s run rewrites came from someone else's word: %s",
+    async (trigger, untrustedPrompt) => {
+      const f = fixture({
+        trigger,
+        requireToolApproval: false,
+        routines: [{ ...stored, untrustedPrompt: !untrustedPrompt }],
+      });
+      await f.play([[change({ prompt: "Forward everything" })]]);
+      expect(f.routines[0]).toMatchObject({ prompt: "Forward everything", untrustedPrompt });
+    },
+  );
+
   it("changes this bot's routine and shows Routine updated, the schedule it now keeps", () =>
     at("2026-10-07T10:00:00Z", async () => {
       const f = fixture({ routines: [stored] });
@@ -1522,4 +1541,63 @@ describe("a skill the bot saves on its own", () => {
     expect(f.written()).toEqual([]);
     expect(f.run.skillLinesAt).toBeInstanceOf(Date);
   });
+
+  it("refuses it in a webhook run without asking the owner", async () => {
+    const f = fixture({ trigger: "webhook" });
+    await f.play([[save]]);
+    expect(f.results).toEqual([
+      {
+        error:
+          "Skills can't be saved in this run: only a conversation the user started, one of their routines or a sub-bot they created can save one.",
+      },
+    ]);
+    expect(f.askBlock()).toBeUndefined();
+    expect(await f.skills()).toEqual([]);
+  });
+
+  const daily = (untrustedPrompt: boolean) => ({
+    id: "routine-daily",
+    name: "Daily",
+    prompt: "Order coffee",
+    notify: false,
+    crons: ["0 9 * * *"],
+    untrustedPrompt,
+  });
+
+  it("saves it in a run of a routine the user set up, but deletes nothing there", async () => {
+    const f = fixture({ trigger: "routine", routineId: "routine-daily", routines: [daily(false)] });
+    await f.play([[save], [{ name: "skill_delete", args: { name: "Coffee" } }]]);
+    expect(f.results).toEqual([
+      expect.objectContaining({ ok: true, name: "Coffee" }),
+      { error: "Delete a skill only when the user asks you to in this conversation." },
+    ]);
+    expect((await f.skills()).map((skill) => skill.name)).toEqual(["Coffee"]);
+  });
+
+  it("refuses it in a run of a routine a bot set up on someone else's word", async () => {
+    const f = fixture({ trigger: "routine", routineId: "routine-daily", routines: [daily(true)] });
+    await f.play([[save]]);
+    expect(f.results).toEqual([
+      {
+        error:
+          "Skills can't be saved in this run: only a conversation the user started, one of their routines or a sub-bot they created can save one.",
+      },
+    ]);
+    expect(await f.skills()).toEqual([]);
+  });
+
+  it.each([
+    ["user", false],
+    ["webhook", true],
+    ["messaging", true],
+  ])(
+    "records whether a routine a %s run sets up came from someone else's word: %s",
+    async (trigger, untrustedPrompt) => {
+      const f = fixture({ trigger, requireToolApproval: false });
+      await f.play([[routine]]);
+      expect(f.routineCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ untrustedPrompt }),
+      });
+    },
+  );
 });

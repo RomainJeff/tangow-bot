@@ -873,25 +873,34 @@ describe("skill drafts", () => {
       expect((await skillReadFromTool(deps, creator, { name: "Deploy" })).content).toBe(nextMd);
     });
 
-    it("moves access rows when the folder's SKILL.md renames the skill", async () => {
+    it("keeps the name when a bot renames the skill, by folder, newName or content", async () => {
       await skillCreateFromTool(deps, creator, writerFor(deps, creator), { files: draft });
+      const refused = { error: `Keep the skill's name "Deploy"; the user can rename it.` };
       expect(
         await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
           name: "Deploy",
           files: [{ path: "SKILL.md", bytes: text(shipMd), executable: false }],
         }),
-      ).toEqual({ ok: true, id: "user:ship", name: "Ship", description: "Ship faster" });
-      expect(await prisma.skillSetting.findMany({ where: { skillKey: "user:deploy" } })).toEqual(
-        [],
-      );
-      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:deploy" } })).toEqual([]);
+      ).toEqual(refused);
       expect(
-        await prisma.skillSetting.findMany({ where: { skillKey: "user:ship" } }),
-      ).toMatchObject([{ availability: "selected" }]);
-      expect(await prisma.botSkill.findMany({ where: { skillKey: "user:ship" } })).toMatchObject([
-        { botId: "botA", enabled: true },
-      ]);
-      expect(await readdir(userSkillsRoot(dataDir, creator))).toEqual(["ship"]);
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
+          name: "Deploy",
+          newName: "Ship",
+        }),
+      ).toEqual(refused);
+      expect(
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
+          name: "Deploy",
+          content: shipMd,
+        }),
+      ).toEqual(refused);
+      expect(
+        await skillUpdateFromTool(deps, creator, writerFor(deps, creator), {
+          name: "Deploy",
+          description: "Ship it twice",
+        }),
+      ).toMatchObject({ ok: true, id: "user:deploy", name: "Deploy" });
+      expect(await readdir(userSkillsRoot(dataDir, creator))).toEqual(["deploy"]);
     });
 
     it("rejects files combined with body and folders for read-only skills", async () => {
