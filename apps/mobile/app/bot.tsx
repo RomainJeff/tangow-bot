@@ -4,6 +4,7 @@ import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, View } from "react-
 import { BotHero, BotTabs } from "../components/bot-page/hero";
 import { LoadFailed } from "../components/bot-page/kit";
 import { KnowledgeTab } from "../components/bot-page/knowledge-tab";
+import { RoutinesTab } from "../components/bot-page/routines-tab";
 import { SettingsTab } from "../components/bot-page/settings-tab";
 import { NativeSymbol } from "../components/native-symbol";
 import { rpc } from "../lib/api";
@@ -15,7 +16,7 @@ import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import { useMobileTokens, useResolvedAppearance } from "../lib/native";
 
-/** The bot's page, pushed from its thread: who it is at the top, then Knowledge and Settings. Every field saves itself. */
+/** The bot's page, pushed from its thread: who it is at the top, then Routines, Knowledge and Settings. Every field saves itself. */
 export default function BotPageScreen() {
   const { botId = "" } = useLocalSearchParams<{ botId: string }>();
   const { t } = useI18n();
@@ -124,7 +125,18 @@ export default function BotPageScreen() {
             />
             <View style={styles.body}>
               <BotTabs value={view} onChange={setView} />
-              {view === "knowledge" ? (
+              {view === "routines" ? (
+                <RoutinesTab
+                  page={page}
+                  epoch={epoch}
+                  onOpen={(routine) =>
+                    router.push({
+                      pathname: "/routine",
+                      params: { botId, botName: page.bot.name, routineId: routine.id },
+                    })
+                  }
+                />
+              ) : view === "knowledge" ? (
                 <KnowledgeTab page={page} epoch={epoch} onAddFocus={revealEnd} />
               ) : (
                 <SettingsTab page={page} />

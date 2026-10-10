@@ -123,7 +123,11 @@ function HeroText({
 export function BotTabs({ value, onChange }: { value: BotTab; onChange: (tab: BotTab) => void }) {
   const styles = useThemedStyles(createHeroStyles);
   const { t } = useI18n();
-  const labels: Record<BotTab, string> = { knowledge: t("Knowledge"), settings: t("Settings") };
+  const labels: Record<BotTab, string> = {
+    routines: t("Routines"),
+    knowledge: t("Knowledge"),
+    settings: t("Settings"),
+  };
   return (
     <View style={styles.tabs} accessibilityRole="tablist">
       {BOT_TABS.map((tab) => {
