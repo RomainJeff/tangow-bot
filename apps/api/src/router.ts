@@ -1311,8 +1311,14 @@ export function createRouter(deps: RouterDeps) {
           userId: context.actor.userId,
           signal: context.signal ?? new AbortController().signal,
         });
-        await deps.prisma.$transaction(async (tx) => {
+        const minted = await deps.prisma.$transaction(async (tx) => {
           const previousSecretId = bot.webhookSecretId;
+          // Conditional on the row, so of two concurrent first mints only one claims the bot.
+          const claimed = await tx.bot.updateMany({
+            where: { id: bot.id, ...(input.ifAbsent ? { webhookSecretId: null } : {}) },
+            data: { webhookSecretId: stored.id },
+          });
+          if (claimed.count === 0) return false;
           await tx.secret.create({
             data: {
               id: stored.id,
@@ -1321,10 +1327,6 @@ export function createRouter(deps: RouterDeps) {
               kind: "webhook",
               ciphertext: stored.ciphertext,
             },
-          });
-          await tx.bot.update({
-            where: { id: bot.id },
-            data: { webhookSecretId: stored.id },
           });
           if (previousSecretId) {
             await tx.secret.deleteMany({
@@ -1336,9 +1338,10 @@ export function createRouter(deps: RouterDeps) {
               },
             });
           }
+          return true;
         });
         return {
-          secret: plaintext,
+          secret: minted ? plaintext : null,
           path: `/api/v1/bots/${bot.id}/webhook`,
           webhookConfigured: true as const,
         };

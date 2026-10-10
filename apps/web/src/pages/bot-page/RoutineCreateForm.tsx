@@ -43,7 +43,10 @@ export function RoutineCreateForm({
   const patch = (partial: Partial<RoutineDraft>) =>
     setDraft((current) => ({ ...current, ...partial }));
 
-  const reveal = async () => onWebhookSecret(await commands.revealWebhookSecret(bot.id));
+  const reveal = async () => {
+    const secret = await commands.revealWebhookSecret(bot.id, { ifAbsent: true });
+    if (secret) onWebhookSecret(secret);
+  };
 
   const create = async () => {
     const checked = validateRoutineDraft(draft, null, () => new Date(), {

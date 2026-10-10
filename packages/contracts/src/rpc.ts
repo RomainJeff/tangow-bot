@@ -267,9 +267,10 @@ export const appContract = {
     remove: oc
       .input(z.object({ botId: Id, deleteMemories: z.boolean().default(false) }))
       .output(z.object({ ok: z.literal(true) })),
-    rotateWebhookSecret: oc.input(botId).output(
+    /** With `ifAbsent`, mints only when the bot has no key and leaves an existing one untouched (`secret: null`). */
+    rotateWebhookSecret: oc.input(botId.extend({ ifAbsent: z.boolean().optional() })).output(
       z.object({
-        secret: z.string(),
+        secret: z.string().nullable(),
         path: z.string(),
         webhookConfigured: z.literal(true),
       }),

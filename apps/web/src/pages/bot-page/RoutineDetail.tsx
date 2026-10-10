@@ -71,7 +71,11 @@ export function RoutineDetail({
     routine.webhookEnabled || routine.githubEnabled || Boolean(routine.messageProvider);
   const webhook = webhookInfo(bot.id, webhookSecret, bot.webhookConfigured);
 
-  const reveal = async () => onWebhookSecret(await commands.revealWebhookSecret(bot.id));
+  const show = async (minting: Promise<string | null>) => {
+    const secret = await minting;
+    if (secret) onWebhookSecret(secret);
+  };
+  const reveal = () => show(commands.revealWebhookSecret(bot.id, { ifAbsent: true }));
 
   const saveTriggers = async (next: typeof draft, armOneShot: boolean): Promise<string | null> => {
     const checked = triggerSave(routine, next, () => new Date(), armOneShot);
@@ -156,6 +160,7 @@ export function RoutineDetail({
         confirm={confirm}
         onSave={saveTriggers}
         onReveal={reveal}
+        onRotate={() => show(commands.revealWebhookSecret(bot.id))}
       />
 
       <SettingsGroup>

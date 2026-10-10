@@ -24,8 +24,11 @@ export interface BotCommands {
   updateRoutine(botId: string, routineId: string, patch: RoutinePatch): Promise<Routine>;
   removeRoutine(botId: string, routineId: string): Promise<void>;
   testRun(botId: string, routineId: string): Promise<void>;
-  /** Mints a new webhook key for the bot and returns it; it is shown once. */
-  revealWebhookSecret(botId: string): Promise<string>;
+  /**
+   * Mints a new webhook key for the bot and returns it; it is shown once. With `ifAbsent`, the
+   * server mints only when the bot has no key and answers null when it already has one.
+   */
+  revealWebhookSecret(botId: string, options?: { ifAbsent: true }): Promise<string | null>;
   /** The lifecycle actions the sidebar menu already runs, with the same confirmations. */
   botAction(botId: string, action: BotAction): void;
   /** Changes whenever a run of the open bot ends. */
@@ -46,7 +49,7 @@ export interface BotCommandDeps {
    */
   supersedeBotsRefresh: () => void;
   botAction: BotCommands["botAction"];
-  ensureWebhookSecret: (botId: string) => Promise<string>;
+  ensureWebhookSecret: (botId: string, ifAbsent: boolean) => Promise<string | null>;
   refreshThread: (botId: string) => Promise<unknown>;
   navigate: (to: { pathname: string; search: string | undefined }) => void;
   /** True while the panel lies over the thread (narrow windows, or the wide panel below `xl`). */
@@ -126,7 +129,8 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
         await rpc.routines.testRun({ routineId });
         await depsRef.current.refreshThread(botId).catch(() => undefined);
       },
-      revealWebhookSecret: (botId) => depsRef.current.ensureWebhookSecret(botId),
+      revealWebhookSecret: (botId, options) =>
+        depsRef.current.ensureWebhookSecret(botId, options?.ifAbsent ?? false),
       botAction: (botId, action) => depsRef.current.botAction(botId, action),
       openRun(row) {
         if (depsRef.current.panelCoversThread.current) depsRef.current.closePanel();

@@ -72,6 +72,7 @@ export function WhenToRun({
   confirm,
   onSave,
   onReveal,
+  onRotate,
 }: {
   draft: RoutineDraft;
   existing: Routine | null;
@@ -81,7 +82,10 @@ export function WhenToRun({
   disabled?: boolean;
   confirm: Confirm;
   onSave: (next: RoutineDraft, armOneShot: boolean) => Promise<string | null>;
+  /** Mints the bot's key if it has none. */
   onReveal: () => Promise<void>;
+  /** Replaces the bot's key; a routine that is not saved yet offers no rotation. */
+  onRotate?: () => Promise<void>;
 }) {
   const { t } = useLingui();
   const copy = useRoutineCopy();
@@ -181,6 +185,7 @@ export function WhenToRun({
           confirm={confirm}
           onSave={onSave}
           onReveal={onReveal}
+          onRotate={onRotate}
           onClose={() => setEdit(null)}
         />
       ) : null}
@@ -196,6 +201,7 @@ function TriggerDialog({
   confirm,
   onSave,
   onReveal,
+  onRotate,
   onClose,
 }: {
   initial: TriggerEdit;
@@ -205,6 +211,7 @@ function TriggerDialog({
   confirm: Confirm;
   onSave: (next: RoutineDraft, armOneShot: boolean) => Promise<string | null>;
   onReveal: () => Promise<void>;
+  onRotate?: () => Promise<void>;
   onClose: () => void;
 }) {
   const { t } = useLingui();
@@ -228,19 +235,19 @@ function TriggerDialog({
           : t`When a webhook fires`;
 
   // The key is minted here, as the editor opens, so it shows before the routine is saved.
-  const reveal = async () => {
+  const reveal = async (request: () => Promise<void>) => {
     setRevealing(true);
     setError(null);
     try {
-      await onReveal();
+      await request();
     } catch (failure) {
-      setError(failure instanceof Error && failure.message ? failure.message : t`Could not save`);
+      setError(failure instanceof Error && failure.message ? failure.message : t`Couldn't create`);
     } finally {
       setRevealing(false);
     }
   };
   useEffect(() => {
-    if (inbound !== null && !webhook.configured) void reveal();
+    if (inbound !== null && !webhook.configured) void reveal(onReveal);
   }, []);
 
   const save = async (value: RoutineDraft, arm: boolean) => {
@@ -310,7 +317,7 @@ function TriggerDialog({
             kind={inbound}
             webhook={webhook}
             revealing={revealing}
-            onRotate={() => void reveal()}
+            onRotate={onRotate ? () => void reveal(onRotate) : undefined}
           />
         ) : null}
         {error ? (
@@ -360,7 +367,7 @@ function InboundDetails({
   kind: InboundKind;
   webhook: WebhookInfo;
   revealing: boolean;
-  onRotate: () => void;
+  onRotate?: () => void;
 }) {
   const { t } = useLingui();
   const { secret, configured } = webhook;
@@ -394,7 +401,7 @@ function InboundDetails({
           <dd className={cell}>{header}</dd>
         </div>
       ) : null}
-      {configured && !secret ? (
+      {configured && !secret && onRotate ? (
         <Button
           variant="tertiary"
           size="capsule"

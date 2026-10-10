@@ -489,10 +489,10 @@ export function ShellPage() {
     runs: number;
   } | null>(null);
   const autoBooted = useRef<string | null>(null);
-  const webhookSecretProvisionRef = useRef(new Map<string, Promise<string>>());
-  const ensureWebhookSecret = (botId: string) =>
-    sharedInflight(webhookSecretProvisionRef.current, botId, async () => {
-      const result = await rpc.bots.rotateWebhookSecret({ botId });
+  const webhookSecretProvisionRef = useRef(new Map<string, Promise<string | null>>());
+  const ensureWebhookSecret = (botId: string, ifAbsent: boolean) =>
+    sharedInflight(webhookSecretProvisionRef.current, `${botId}:${ifAbsent}`, async () => {
+      const result = await rpc.bots.rotateWebhookSecret({ botId, ifAbsent });
       setBots((current) =>
         current.map((bot) => (bot.id === botId ? { ...bot, webhookConfigured: true } : bot)),
       );
