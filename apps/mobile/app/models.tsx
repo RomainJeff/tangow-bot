@@ -36,6 +36,7 @@ import {
   waitForModelOAuth,
 } from "../lib/model-auth";
 import { native, useResolvedAppearance, useThemedStyles } from "../lib/native";
+import { thinkingLevelLabel } from "../lib/thinking-level";
 
 const THINKING_LEVEL_OPTIONS: ThinkingLevel[] = [
   "minimal",
@@ -45,16 +46,6 @@ const THINKING_LEVEL_OPTIONS: ThinkingLevel[] = [
   "xhigh",
   "max",
 ];
-
-function thinkingLevelLabel(level: ThinkingLevel, t: (message: string) => string): string {
-  if (level === "xhigh") return t("Extra high");
-  if (level === "low") return t("Low");
-  if (level === "medium") return t("Medium");
-  if (level === "high") return t("High");
-  if (level === "minimal") return t("Minimal");
-  if (level === "max") return t("Max");
-  return level;
-}
 
 type ModelSelection = {
   provider?: string;
@@ -664,7 +655,7 @@ export default function Models() {
                             onPress: () => setThinkingLevel(null),
                           },
                           ...THINKING_LEVEL_OPTIONS.map((level) => ({
-                            text: thinkingLevelLabel(level, t),
+                            text: thinkingLevelLabel(level),
                             onPress: () => setThinkingLevel(level),
                           })),
                         ],
@@ -674,7 +665,7 @@ export default function Models() {
                   >
                     <Text style={styles.modelLabel}>{t("Reasoning effort")}</Text>
                     <Text style={styles.helpLabel}>
-                      {thinkingLevel ? thinkingLevelLabel(thinkingLevel, t) : t("Default")}
+                      {thinkingLevel ? thinkingLevelLabel(thinkingLevel) : t("Default")}
                     </Text>
                   </Pressable>
                 ) : null}
