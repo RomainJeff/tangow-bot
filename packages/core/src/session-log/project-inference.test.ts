@@ -37,6 +37,15 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
+  it("puts a steering message between the two stretches of the run it steered", async () => {
+    expect(projectInferenceTurns(await fixtureChain("steered"), ada)).toEqual([
+      { role: "user", content: "Write a haiku about Lyon." },
+      { role: "assistant", content: "Two rivers at dusk." },
+      { role: "user", content: "Make it about rain." },
+      { role: "assistant", content: "Rain on Fourvière." },
+    ]);
+  });
+
   it("leaves out a tool call whose result the rewind cut, and keeps the user turn before it", async () => {
     expect(projectInferenceTurns(await fixtureChain("rewound"), ada)).toEqual([
       { role: "user", content: "Summarize the report." },
@@ -152,7 +161,7 @@ describe("projectInferenceTurns", () => {
       {
         role: "assistant",
         content:
-          '(already ran Message bot, input: {"bot_id":"bot_bob","message":"What was Q3 revenue?"}, result: Sent to Bob.)\nI asked Bob.',
+          '(already ran Message bot, input: {"bot_id":"bot_bob","message":"What was Q3 revenue?"}, result: Sent to Bob.)',
         parts: [
           {
             type: "toolCalls",
@@ -165,10 +174,10 @@ describe("projectInferenceTurns", () => {
               },
             ],
           },
-          { type: "text", text: "I asked Bob." },
         ],
       },
       { role: "assistant", content: "[to Bob] What was Q3 revenue?" },
+      { role: "assistant", content: "I asked Bob." },
       { role: "user", content: '<bot_message from="Bob">\nQ3 revenue was 1.2M.\n</bot_message>' },
       { role: "assistant", content: "Bob says Q3 revenue was 1.2M." },
     ]);

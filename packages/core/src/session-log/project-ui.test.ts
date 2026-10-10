@@ -68,7 +68,6 @@ describe("projectThreadItems", () => {
               },
             ],
           },
-          { kind: "text", text: "Sent: it is 18°C and sunny in Lyon." },
         ],
       },
       {
@@ -79,6 +78,15 @@ describe("projectThreadItems", () => {
         effectKind: "send_email",
         proposal: { to: "ops@example.com", subject: "Lyon weather" },
         decision: "approved",
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "lin-10",
+        ts: at(10),
+        botId: "bot_ada",
+        runId: "run_lin_1",
+        blocks: text("Sent: it is 18°C and sunny in Lyon."),
       },
       {
         kind: "message",
@@ -116,6 +124,59 @@ describe("projectThreadItems", () => {
         botId: "bot_ada",
         runId: "run_lin_2",
         blocks: text("Tomorrow looks"),
+      },
+    ]);
+  });
+
+  it("splits a run's message around a steering message written while it ran", async () => {
+    expect(projectThreadItems(await fixtureChain("steered"))).toEqual([
+      {
+        kind: "message",
+        role: "user",
+        id: "st-00",
+        ts: at(0),
+        blocks: text("Write a haiku about Lyon."),
+        source: "app",
+      },
+      {
+        kind: "run",
+        id: "st-01",
+        ts: at(1),
+        runId: "run_st_1",
+        botId: "bot_ada",
+        trigger: { kind: "message", entryId: "st-00" },
+        model,
+        effort: null,
+        finished: {
+          outcome: { status: "completed", usage: { inputTokens: 300, outputTokens: 12 } },
+          durationMs: 4000,
+        },
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "st-02",
+        ts: at(2),
+        botId: "bot_ada",
+        runId: "run_st_1",
+        blocks: text("Two rivers at dusk."),
+      },
+      {
+        kind: "message",
+        role: "user",
+        id: "st-03",
+        ts: at(3),
+        blocks: text("Make it about rain."),
+        source: "steering",
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "st-04",
+        ts: at(4),
+        botId: "bot_ada",
+        runId: "run_st_1",
+        blocks: text("Rain on Fourvière."),
       },
     ]);
   });
@@ -488,7 +549,6 @@ describe("projectThreadItems", () => {
               },
             ],
           },
-          { kind: "text", text: "I asked Bob." },
         ],
       },
       {
@@ -502,6 +562,15 @@ describe("projectThreadItems", () => {
         intent: "request",
         exchangeId: "bx-03",
         answeredBy: "bx-07",
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "bx-05",
+        ts: at(5),
+        botId: "bot_ada",
+        runId: "run_bx_1",
+        blocks: text("I asked Bob."),
       },
       {
         kind: "botMessage",

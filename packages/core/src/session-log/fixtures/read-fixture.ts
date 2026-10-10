@@ -10,6 +10,7 @@ export const FIXTURES = [
   "subagent",
   "group",
   "bot-exchange",
+  "steered",
 ] as const;
 export type FixtureName = (typeof FIXTURES)[number];
 

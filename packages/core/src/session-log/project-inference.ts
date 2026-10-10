@@ -167,7 +167,8 @@ function replyTargets(
 ): Map<string, ReplyTarget> {
   const runs = new Map<string, MessageBlock[]>();
   for (const segment of segments) {
-    if (segment.type === "run.message") runs.set(segment.runId, segment.blocks);
+    if (segment.type !== "run.message") continue;
+    runs.set(segment.runId, [...(runs.get(segment.runId) ?? []), ...segment.blocks]);
   }
   const targets = new Map<string, ReplyTarget>();
   for (const entry of chain) {
