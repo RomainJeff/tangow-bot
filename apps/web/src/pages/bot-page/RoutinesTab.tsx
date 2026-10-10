@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Routine } from "@rakazo/contracts";
 import { saveKey } from "@rakazo/core";
-import { Button, type FieldSave, SaveMeta, Switch, useFieldSave } from "@rakazo/ui-web";
+import { Button, type FieldSave, SaveMeta, SettingRow, Switch, useFieldSave } from "@rakazo/ui-web";
 import { Plus } from "lucide-react";
 import type { BotDetail } from "../shell/layout";
 import { type BotPageContext, SettingsGroup, useSaveLabels } from "./page-kit";
@@ -39,16 +39,17 @@ export function RoutinesTab({
   if (routines.length === 0) {
     return (
       <SettingsGroup>
-        <button
-          type="button"
+        <SettingRow
           data-testid="routine-create-button"
           data-opens="routine-new"
           onClick={create}
-          className="flex min-h-12.5 w-full items-center gap-3 px-3.5 text-start text-row-name text-foreground outline-none duration-(--duration-hover) ease-quiet hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <Plus className="size-4 text-muted-foreground" aria-hidden />
-          {t`New routine`}
-        </button>
+          label={
+            <span className="flex items-center gap-3">
+              <Plus className="size-4 text-muted-foreground" aria-hidden />
+              {t`New routine`}
+            </span>
+          }
+        />
       </SettingsGroup>
     );
   }
@@ -101,24 +102,22 @@ function RoutineRow({
   const stateLabel = { paused: t`Paused`, failed: t`Last run failed`, ok: t`Active` }[state];
   const dot = { paused: "bg-input", failed: "bg-destructive", ok: "bg-success" }[state];
   return (
-    <div className="flex min-h-14.5 items-center gap-3 pe-3.5">
-      <button
-        type="button"
+    <div className="flex items-center gap-3 pe-3.5">
+      <SettingRow
         data-opens={`routine:${routine.id}`}
         onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 self-stretch ps-3.5 text-start outline-none duration-(--duration-hover) ease-quiet hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        <span aria-hidden className={`size-2 shrink-0 rounded-full ${dot}`} />
-        <span className="sr-only">{stateLabel}</span>
-        <span className="flex min-w-0 flex-col gap-0.5 py-2">
-          <span className="truncate text-row-name text-foreground" dir="auto">
-            {routine.name}
+        className="min-w-0 flex-1 self-stretch pe-0"
+        label={
+          <span className="flex items-center gap-2">
+            <span aria-hidden className={`size-2 shrink-0 rounded-full ${dot}`} />
+            <span className="sr-only">{stateLabel}</span>
+            <span className="truncate" dir="auto">
+              {routine.name}
+            </span>
           </span>
-          <span className="truncate text-row-status text-muted-foreground">
-            {copy.cadenceLine(shown)}
-          </span>
-        </span>
-      </button>
+        }
+        subline={<span className="block truncate ps-4">{copy.cadenceLine(shown)}</span>}
+      />
       <SaveMeta state={active.state} labels={labels} onRetry={active.retry} />
       <Switch
         aria-label={t`Active: ${routine.name}`}
