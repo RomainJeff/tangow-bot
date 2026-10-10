@@ -1,72 +1,29 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import type { SkillContent } from "@rakazo/adapters";
-import {
-  createInMemorySkillLock,
-  createSkillLibrary,
-  createSkillLineSweep,
-  writeSkillLines,
-} from "@rakazo/adapters";
-import { buildSkillMd } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import { createSkillLineSweep, writeSkillLines } from "@rakazo/adapters";
 import { appendLinkPreviewBlock, clearThread, rewindThread } from "@rakazo/db";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
 
-const owner = { spaceId: "space-1", userId: "user-1" };
-const dirs: string[] = [];
-afterEach(async () => {
-  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-});
-
-/** The access tables the skill library reads: no rows, so a user's skill is every bot's. */
-function accessTables() {
-  const table = () => ({
-    findMany: async () => [],
-    deleteMany: async () => ({ count: 0 }),
-    upsert: async () => ({}),
-  });
-  return {
-    skillSetting: table(),
-    botSkill: table(),
-    bot: { findMany: async () => [] },
-    $transaction: (ops: Promise<unknown>[]) => Promise.all(ops),
-  } as unknown as PrismaClient;
-}
-
-const skill = (name: string, description = `About ${name}`, body = "Steps"): SkillContent => ({
-  kind: "skill-md",
-  name,
-  content: buildSkillMd({ name, description, body }),
-});
+type SkillWrite = "skill_create" | "skill_update" | "skill_delete";
 
 async function setup(
   run: { trigger?: string; status?: string; threadId?: string } = {},
   options: { lineOnlyMessages?: boolean } = {},
 ) {
-  const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-lines-"));
-  dirs.push(dataDir);
-  let tick = 0;
-  const library = createSkillLibrary({
-    prisma: accessTables(),
-    dataDir,
-    lock: createInMemorySkillLock(),
-    now: () => new Date(Date.UTC(2026, 9, 10, 9, 0, tick++)),
-  });
   const db = createFakeThreadDb();
   db.seedThread({ id: "thread-1" });
   db.seedThread({ id: "group-thread", botId: null, groupId: "group-1" });
   db.seedRun({ id: "run-1", threadId: run.threadId ?? "thread-1", ...run });
-  const deps = {
-    prisma: db.prisma,
-    library,
-    events: { notify: async () => undefined },
-    ...options,
+  const deps = { prisma: db.prisma, events: { notify: async () => undefined }, ...options };
+  /** A skill call of the run, as the executor records it once the call returned. */
+  const wrote = (
+    kind: SkillWrite,
+    name: string,
+    { runId = "run-1", result = { ok: true, name } as unknown } = {},
+  ) => {
+    const id = `effect-${db.tables.externalEffects.size + 1}`;
+    const row = { id, runId, kind, status: "completed", result, createdAt: new Date() };
+    db.tables.externalEffects.set(id, row);
   };
-  let calls = 0;
-  const writer = (runId = "run-1", toolCallId = `${runId}-call-${++calls}`) =>
-    library.forBot(owner, { botId: "bot-1", botName: "Ada", runId, toolCallId, secrets: [] });
   const linesIn = (threadId: string) =>
     [...db.tables.messages.values()]
       .filter((message) => message.threadId === threadId)
@@ -76,7 +33,7 @@ async function setup(
           .filter((block) => block.kind === "skill_source")
           .map((block) => `${block.change} ${block.name}`),
       }));
-  return { db, deps, library, writer, linesIn };
+  return { db, deps, wrote, linesIn };
 }
 
 const reply = (id: string, text: string, clientNonce: string | null = null) => ({
@@ -91,16 +48,11 @@ const reply = (id: string, text: string, clientNonce: string | null = null) => (
 
 describe("the skill line of a finished run", () => {
   it("goes under the run's last message, once per skill, in the order the run touched them", async () => {
-    const { db, deps, library, writer, linesIn } = await setup();
-    await library.forOwner(owner).create(skill("Tea"));
-    await library.forOwner(owner).create(skill("Soup"));
-    await writer().create(skill("Coffee"));
-    await writer().update("user:coffee", skill("Coffee", "About Coffee", "Better"));
-    await writer().update("user:soup", skill("Soup", "About Soup", "Hotter"));
-    await writer().delete("user:tea");
-    await library
-      .forOwner(owner)
-      .update("user:coffee", skill("Espresso", "About Coffee", "Better"));
+    const { db, deps, wrote, linesIn } = await setup();
+    wrote("skill_create", "Coffee");
+    wrote("skill_update", "Coffee");
+    wrote("skill_update", "Soup");
+    wrote("skill_delete", "Tea");
     db.seedMessage(reply("bubble", "On it.", "user-message:1"));
     db.seedMessage(reply("final", "Done."));
 
@@ -108,7 +60,7 @@ describe("the skill line of a finished run", () => {
 
     expect(linesIn("thread-1")).toEqual([
       { clientNonce: "user-message:1", lines: [] },
-      { clientNonce: null, lines: ["learned Espresso", "updated Soup", "deleted Tea"] },
+      { clientNonce: null, lines: ["learned Coffee", "updated Soup", "deleted Tea"] },
     ]);
     expect(db.tables.threads.get("thread-1")?.unread).toBe(false);
     expect(
@@ -117,8 +69,8 @@ describe("the skill line of a finished run", () => {
   });
 
   it("goes under the message_user bubble when the run's final text was empty", async () => {
-    const { db, deps, writer, linesIn } = await setup();
-    await writer().create(skill("Coffee"));
+    const { db, deps, wrote, linesIn } = await setup();
+    wrote("skill_create", "Coffee");
     db.seedMessage(reply("bubble", "Saved your order.", "user-message:1"));
 
     await writeSkillLines(deps, "run-1");
@@ -131,8 +83,8 @@ describe("the skill line of a finished run", () => {
   it.each(["completed", "failed", "cancelled"])(
     "stands alone when a %s run left no message, and marks nothing unread, once line-only messages are on",
     async (status) => {
-      const { db, deps, writer, linesIn } = await setup({ status }, { lineOnlyMessages: true });
-      await writer().create(skill("Coffee"));
+      const { db, deps, wrote, linesIn } = await setup({ status }, { lineOnlyMessages: true });
+      wrote("skill_create", "Coffee");
 
       await writeSkillLines(deps, "run-1");
 
@@ -147,8 +99,8 @@ describe("the skill line of a finished run", () => {
   );
 
   it("shows nothing for a run that left no message while line-only messages are off, and never comes back to it", async () => {
-    const { db, deps, writer, linesIn } = await setup();
-    await writer().create(skill("Coffee"));
+    const { db, deps, wrote, linesIn } = await setup();
+    wrote("skill_create", "Coffee");
 
     await writeSkillLines(deps, "run-1");
     db.seedMessage(reply("late", "Here."));
@@ -159,14 +111,13 @@ describe("the skill line of a finished run", () => {
   });
 
   it("is written once, however many times the run is resumed, replayed or swept", async () => {
-    const { db, deps, writer, linesIn } = await setup();
+    const { db, deps, wrote, linesIn } = await setup();
     const now = new Date(Date.UTC(2026, 9, 10, 12));
     db.tables.runs.get("run-1")!.updatedAt = new Date(now.getTime() - 10 * 60_000);
     db.seedMessage(reply("final", "Done."));
-    await writer("run-1", "call-1").create(skill("Coffee"));
+    wrote("skill_create", "Coffee");
     await writeSkillLines(deps, "run-1");
-    await writer("run-1", "call-1").create(skill("Coffee"));
-    await writer("run-1", "call-2").update("user:coffee", skill("Coffee", "About Coffee", "More"));
+    wrote("skill_update", "Coffee");
     await writeSkillLines(deps, "run-1");
     await createSkillLineSweep(deps, { now: () => now })();
 
@@ -175,14 +126,14 @@ describe("the skill line of a finished run", () => {
   });
 
   it("is added by the sweep for a run that ended over five minutes ago without one", async () => {
-    const { db, deps, writer, linesIn } = await setup();
+    const { db, deps, wrote, linesIn } = await setup();
     const now = new Date(Date.UTC(2026, 9, 10, 12));
     db.tables.runs.get("run-1")!.updatedAt = new Date(now.getTime() - 10 * 60_000);
     db.seedRun({ id: "run-2", threadId: "thread-1", updatedAt: new Date(now.getTime() - 60_000) });
     db.seedMessage(reply("first", "Done."));
     db.seedMessage({ ...reply("second", "Done too."), runId: "run-2" });
-    await writer("run-1").create(skill("Coffee"));
-    await writer("run-2").create(skill("Tea"));
+    wrote("skill_create", "Coffee");
+    wrote("skill_create", "Tea", { runId: "run-2" });
     const sweep = createSkillLineSweep(deps, { now: () => now });
 
     await sweep();
@@ -213,7 +164,7 @@ describe("the skill line of a finished run", () => {
         createdAt: asked,
       });
       if (replied) ctx.db.seedMessage(reply("final", "Done."));
-      await ctx.writer().create(skill("Coffee"));
+      ctx.wrote("skill_create", "Coffee");
       return ctx;
     };
 
@@ -258,8 +209,8 @@ describe("the skill line of a finished run", () => {
   });
 
   it("keeps a link preview written at the same time", async () => {
-    const { db, deps, writer } = await setup();
-    await writer().create(skill("Coffee"));
+    const { db, deps, wrote } = await setup();
+    wrote("skill_create", "Coffee");
     db.seedMessage(reply("final", "See https://example.test/a"));
     db.onMessageRead(() => new Promise((resolve) => setTimeout(resolve, 10)));
     const card = {
@@ -284,24 +235,60 @@ describe("the skill line of a finished run", () => {
     );
   });
 
+  it("folds each skill's successful writes into one line, and skips a refused call", async () => {
+    const { db, deps, wrote, linesIn } = await setup();
+    wrote("skill_create", "Coffee");
+    wrote("skill_update", "Coffee");
+    wrote("skill_update", "Soup");
+    wrote("skill_update", "Soup");
+    wrote("skill_update", "Tea");
+    wrote("skill_delete", "Tea");
+    wrote("skill_create", "Jam");
+    wrote("skill_delete", "Jam");
+    wrote("skill_create", "Rice", { result: { error: 'A skill named "Rice" already exists.' } });
+    db.seedMessage(reply("final", "Done."));
+
+    await writeSkillLines(deps, "run-1");
+
+    expect(linesIn("thread-1")).toEqual([
+      {
+        clientNonce: null,
+        lines: ["learned Coffee", "updated Soup", "deleted Tea", "deleted Jam"],
+      },
+    ]);
+  });
+
   it.each([
-    [true, [{ clientNonce: "skill-source:run-1", lines: ["updated Shared"] }]],
+    [true, [{ clientNonce: "skill-source:run-1", lines: ["updated Shared", "updated Picked"] }]],
     [false, []],
   ])(
-    "from a silent routine run stands alone in the bot's conversation, only for a skill other bots read, when line-only messages are %s",
+    "from a silent routine run stands alone in the bot's conversation, only for a skill another bot reads now, when line-only messages are %s",
     async (lineOnlyMessages, expected) => {
-      const { db, deps, library, writer, linesIn } = await setup(
+      const { db, deps, wrote, linesIn } = await setup(
         { trigger: "routine", threadId: "group-thread" },
         { lineOnlyMessages },
       );
-      db.seedRun({ id: "run-2", threadId: "group-thread", trigger: "routine" });
-      await library.forOwner(owner).create(skill("Shared", "Book a table"));
-      await writer("run-1").update("user:shared", skill("Shared", "Book and pay"));
-      await writer("run-2").update("user:shared", skill("Shared", "Book and pay", "Call first"));
-      await writer("run-2").create(skill("Mine"));
+      const owner = { spaceId: "space-1", userId: "user-1" };
+      const setting = (skillKey: string, availability: string) =>
+        db.tables.skillSettings.set(skillKey, { id: skillKey, ...owner, skillKey, availability });
+      const pick = (skillKey: string, botId: string) =>
+        db.tables.botSkills.set(`${botId}/${skillKey}`, {
+          id: `${botId}/${skillKey}`,
+          ...owner,
+          botId,
+          skillKey,
+          enabled: true,
+        });
+      setting("user:picked", "selected");
+      pick("user:picked", "bot-2");
+      setting("user:mine", "selected");
+      pick("user:mine", "bot-1");
+      setting("user:off", "disabled");
+      pick("user:off", "bot-2");
+      for (const name of ["Shared", "Picked", "Mine", "Off"]) wrote("skill_update", name);
+      wrote("skill_create", "New");
 
       await writeSkillLines(deps, "run-1");
-      await writeSkillLines(deps, "run-2");
 
       expect(linesIn("group-thread")).toEqual([]);
       expect(linesIn("thread-1")).toEqual(expected);

@@ -31,7 +31,6 @@ import {
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
-  createSkillLibrary,
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
@@ -440,7 +439,6 @@ export async function createApp(
         purgeLinkPreviews: createLinkPreviewPurge({ prisma, artifacts }),
         sweepSkillLines: createSkillLineSweep({
           prisma,
-          library: createSkillLibrary({ prisma, dataDir: env.dataDir, lock: skillLock }),
           events,
           lineOnlyMessages: env.skillLearning !== "off",
         }),
