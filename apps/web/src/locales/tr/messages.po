@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/pages/shell/sidebar.tsx:534
+#: src/pages/shell/sidebar.tsx:539
 msgid " (unread)"
 msgstr " (okunmadı)"
 
@@ -32,18 +32,18 @@ msgid "{0, plural, one {# routine} other {# routines}}"
 msgstr "{0, plural, one {# rutin} other {# rutin}}"
 
 #. placeholder {0}: runs.length
-#: src/pages/bot-page/BotActivity.tsx:539
+#: src/pages/bot-page/BotActivity.tsx:525
 #: src/pages/shell/routine-run-line.tsx:335
 msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1899
+#: src/pages/Shell.tsx:1879
 msgid "{0} (max {ATTACHMENT_MAX_COUNT} attachments)"
 msgstr "{0} (en fazla {ATTACHMENT_MAX_COUNT} ek)"
 
 #. placeholder {0}: file.name
-#: src/pages/Shell.tsx:1903
+#: src/pages/Shell.tsx:1883
 msgid "{0} (over 10 MiB)"
 msgstr "{0} (10 MiB üzeri)"
 
@@ -110,7 +110,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr ""
 
 #. placeholder {0}: active.name
-#: src/pages/shell/side-panel.tsx:230
+#: src/pages/shell/side-panel.tsx:233
 msgid "{0}'s screen"
 msgstr "{0} adlı botun ekranı"
 
@@ -118,7 +118,7 @@ msgstr "{0} adlı botun ekranı"
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/side-panel.tsx:303
+#: src/pages/shell/side-panel.tsx:306
 msgid "{botName}’s computer"
 msgstr "{botName} adlı botun bilgisayarı"
 
@@ -146,7 +146,7 @@ msgstr "{hours} sa önce"
 msgid "{minutes}m ago"
 msgstr "{minutes} dk önce"
 
-#: src/pages/bot-page/BotActivity.tsx:271
+#: src/pages/bot-page/BotActivity.tsx:282
 msgid "{name} created"
 msgstr "{name} oluşturuldu"
 
@@ -253,22 +253,22 @@ msgstr "İşlem onayları"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:272
+#: src/pages/bot-page/BotPage.tsx:343
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/Shell.tsx:3206
-#: src/pages/shell/sidebar.tsx:405
+#: src/pages/Shell.tsx:3202
+#: src/pages/shell/sidebar.tsx:410
 msgid "Actions for {0}"
 msgstr "{0} için işlemler"
 
-#: src/pages/Shell.tsx:3080
+#: src/pages/Shell.tsx:3076
 msgid "Actions for space"
 msgstr ""
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:124
-#: src/pages/bot-page/RoutineCreateForm.tsx:126
-#: src/pages/bot-page/RoutineDetail.tsx:125
-#: src/pages/bot-page/RoutinesTab.tsx:102
-#: src/pages/KnowledgeSection.tsx:397
+#: src/pages/bot-page/RoutineCreateForm.tsx:116
+#: src/pages/bot-page/RoutineCreateForm.tsx:118
+#: src/pages/bot-page/RoutineDetail.tsx:127
+#: src/pages/bot-page/RoutinesTab.tsx:107
+#: src/pages/KnowledgeSection.tsx:446
 msgid "Active"
 msgstr "Etkin"
 
@@ -277,15 +277,20 @@ msgid "Active model"
 msgstr "Etkin model"
 
 #. placeholder {0}: routine.name
-#: src/pages/bot-page/RoutinesTab.tsx:123
+#: src/pages/bot-page/RoutinesTab.tsx:128
 msgid "Active: {0}"
 msgstr "Etkin: {0}"
 
-#: src/pages/bot-page/BotPage.tsx:89
-#: src/pages/shell/sidebar.tsx:212
-#: src/pages/shell/sidebar.tsx:214
+#: src/pages/bot-page/BotPage.tsx:98
+#: src/pages/bot-page/RoutineDetail.tsx:191
+#: src/pages/shell/sidebar.tsx:217
+#: src/pages/shell/sidebar.tsx:219
 msgid "Activity"
 msgstr "Etkinlik"
+
+#: src/pages/bot-page/BotPage.tsx:268
+msgid "Activity, last run failed"
+msgstr "Etkinlik, son çalışma başarısız oldu"
 
 #: src/pages/PluginsOverlay.tsx:481
 #: src/pages/PluginsOverlay.tsx:996
@@ -379,7 +384,7 @@ msgstr "Rutine ekle"
 msgid "Add Treg"
 msgstr "Treg ekle"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:109
+#: src/pages/bot-page/RoutineTriggers.tsx:95
 msgid "Add trigger"
 msgstr "Tetikleyici ekle"
 
@@ -405,7 +410,7 @@ msgstr "Ekleniyor…"
 msgid "Advanced"
 msgstr "Gelişmiş"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:97
+#: src/pages/bot-page/RoutineTriggers.tsx:83
 msgid "Advanced..."
 msgstr "Gelişmiş…"
 
@@ -413,7 +418,7 @@ msgstr "Gelişmiş…"
 msgid "Agent connections"
 msgstr "Ajan bağlantıları"
 
-#: src/pages/KnowledgeSection.tsx:400
+#: src/pages/KnowledgeSection.tsx:449
 msgid "Agents"
 msgstr "Ajanlar"
 
@@ -422,7 +427,7 @@ msgstr "Ajanlar"
 msgid "Agents:"
 msgstr "Agent'lar:"
 
-#: src/pages/KnowledgeSection.tsx:396
+#: src/pages/KnowledgeSection.tsx:445
 msgid "All"
 msgstr "Tümü"
 
@@ -531,8 +536,8 @@ msgstr "API anahtarı üstbilgisi"
 
 #: src/pages/AccountSettingsOverlay.tsx:112
 #: src/pages/AccountSettingsOverlay.tsx:542
-#: src/pages/bot-page/BotHero.tsx:117
-#: src/pages/bot-page/BotHero.tsx:134
+#: src/pages/bot-page/BotHero.tsx:123
+#: src/pages/bot-page/BotHero.tsx:143
 msgid "Appearance"
 msgstr "Görünüm"
 
@@ -564,7 +569,7 @@ msgstr "Sohbette onayla ya da iptal etmek için hayır de."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Agent'ının bu sunucunun araçlarını kullanabilmesi için sunucuyu onayla."
 
-#: src/pages/bot-page/BotPage.tsx:293
+#: src/pages/bot-page/BotPage.tsx:372
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
 msgstr "Arşivle"
@@ -573,7 +578,7 @@ msgstr "Arşivle"
 msgid "archived"
 msgstr "arşivlendi"
 
-#: src/pages/shell/sidebar.tsx:574
+#: src/pages/shell/sidebar.tsx:579
 msgid "Archived"
 msgstr "Arşivlendi"
 
@@ -604,10 +609,10 @@ msgstr "{0} bağlayıcısından önce sor"
 msgid "Ask before email actions"
 msgstr "E-posta işlemlerinden önce sor"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:132
-#: src/pages/bot-page/RoutineCreateForm.tsx:134
-#: src/pages/bot-page/RoutineDetail.tsx:164
-#: src/pages/bot-page/RoutineDetail.tsx:168
+#: src/pages/bot-page/RoutineCreateForm.tsx:124
+#: src/pages/bot-page/RoutineCreateForm.tsx:126
+#: src/pages/bot-page/RoutineDetail.tsx:165
+#: src/pages/bot-page/RoutineDetail.tsx:169
 msgid "Ask before every action"
 msgstr "Her işlemden önce sor"
 
@@ -664,7 +669,7 @@ msgstr "Yetkilendir"
 msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "Agent'ların araçlarını kullanabilmesi için bu sunucuyu yetkilendir. Bir açılır pencere açılır."
 
-#: src/pages/bot-page/BotHero.tsx:151
+#: src/pages/bot-page/BotHero.tsx:160
 msgid "Auto"
 msgstr "Otomatik"
 
@@ -676,13 +681,9 @@ msgstr ""
 msgid "Automated senders will appear after they post here."
 msgstr ""
 
-#: src/pages/bot-page/BotHero.tsx:142
+#: src/pages/bot-page/BotHero.tsx:151
 msgid "Automatic shape"
 msgstr "Otomatik şekil"
-
-#: src/pages/bot-page/RoutineTriggers.tsx:391
-msgid "Available after the routine is saved"
-msgstr "Rutin kaydedildikten sonra kullanılabilir"
 
 #. placeholder {0}: bot.name
 #: src/pages/bot-page/SettingsTab.tsx:103
@@ -714,12 +715,12 @@ msgstr "Temel URL"
 msgid "Bearer token"
 msgstr "Bearer token"
 
-#: src/pages/shell/side-panel.tsx:295
+#: src/pages/shell/side-panel.tsx:298
 msgid "Booting live desktop…"
 msgstr "Canlı masaüstü başlatılıyor…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:353
+#: src/pages/shell/side-panel.tsx:356
 msgid "Booting up {0}’s computer"
 msgstr "{0} adlı botun bilgisayarı başlatılıyor"
 
@@ -730,7 +731,7 @@ msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/Shell.tsx:1668
+#: src/pages/Shell.tsx:1648
 #: src/pages/shell/message-view.tsx:227
 msgid "Bot"
 msgstr "Bot"
@@ -740,15 +741,15 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:480
+#: src/pages/shell/side-panel.tsx:483
 msgid "Bot screen"
 msgstr "Bot ekranı"
 
-#: src/pages/shell/side-panel.tsx:195
+#: src/pages/shell/side-panel.tsx:198
 msgid "Bot screen preview"
 msgstr "Bot ekranı önizlemesi"
 
-#: src/pages/Shell.tsx:3017
+#: src/pages/Shell.tsx:3013
 #: src/pages/shell/composer.tsx:1172
 #: src/pages/shell/thread-header.tsx:154
 #: src/pages/shell/thread-header.tsx:155
@@ -789,10 +790,10 @@ msgstr "Sunucuya ulaşılamıyor."
 #: src/components/ComputerUpdateProgress.tsx:233
 #: src/components/teach/TeachComputerOverlay.tsx:274
 #: src/lib/approval-labels.ts:14
-#: src/pages/bot-page/page-kit.tsx:102
-#: src/pages/bot-page/RoutineTriggers.tsx:329
-#: src/pages/KnowledgeSection.tsx:175
-#: src/pages/KnowledgeSection.tsx:640
+#: src/pages/bot-page/page-kit.tsx:149
+#: src/pages/bot-page/RoutineTriggers.tsx:296
+#: src/pages/KnowledgeSection.tsx:226
+#: src/pages/KnowledgeSection.tsx:684
 #: src/pages/PluginsOverlay.tsx:1168
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
@@ -825,7 +826,7 @@ msgstr "Yanıtı iptal et"
 
 #: src/components/AskCard.tsx:48
 #: src/pages/ActivityList.tsx:162
-#: src/pages/bot-page/BotActivity.tsx:295
+#: src/pages/bot-page/BotActivity.tsx:306
 #: src/pages/shell/routine-run-line.tsx:161
 msgid "Cancelled"
 msgstr "İptal edildi"
@@ -868,7 +869,7 @@ msgstr "Kontrol başarısız oldu"
 msgid "Check for updates"
 msgstr "Güncellemeleri denetle"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:50
+#: src/pages/bot-page/RoutineCreateForm.tsx:45
 msgid "Check in."
 msgstr "Durum bildir."
 
@@ -902,7 +903,7 @@ msgstr "Yeni bir parola seçin"
 msgid "Choose which connected model Rakazo uses."
 msgstr "Rakazo'nun hangi bağlı modeli kullanacağını seç."
 
-#: src/pages/bot-page/page-kit.tsx:104
+#: src/pages/bot-page/page-kit.tsx:151
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clear"
 msgstr "Temizle"
@@ -912,7 +913,7 @@ msgstr "Temizle"
 msgid "Clear {0}’s conversation?"
 msgstr "{0} sohbeti temizlensin mi?"
 
-#: src/pages/bot-page/BotPage.tsx:289
+#: src/pages/bot-page/BotPage.tsx:368
 #: src/pages/BotContextMenu.tsx:142
 msgid "Clear conversation"
 msgstr "Sohbeti temizle"
@@ -938,8 +939,8 @@ msgid "Client secret"
 msgstr ""
 
 #: src/components/TaskCard.tsx:162
-#: src/pages/KnowledgeSection.tsx:640
-#: src/pages/KnowledgeSection.tsx:788
+#: src/pages/KnowledgeSection.tsx:684
+#: src/pages/KnowledgeSection.tsx:840
 #: src/pages/MessagingSettingsOverlay.tsx:361
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
@@ -951,7 +952,7 @@ msgstr "Kapat"
 msgid "Close chart"
 msgstr "Grafiği kapat"
 
-#: src/pages/shell/side-panel.tsx:458
+#: src/pages/shell/side-panel.tsx:461
 msgid "Close computer"
 msgstr "Bilgisayarı kapat"
 
@@ -981,12 +982,12 @@ msgstr "Mesajlaşma ayarlarını kapat"
 msgid "Close model settings"
 msgstr "Model ayarlarını kapat"
 
-#: src/pages/Shell.tsx:2671
+#: src/pages/Shell.tsx:2663
 msgid "Close navigation"
 msgstr "Gezinmeyi kapat"
 
-#: src/pages/bot-page/BotPage.tsx:154
-#: src/pages/shell/side-panel.tsx:170
+#: src/pages/bot-page/BotPage.tsx:183
+#: src/pages/shell/side-panel.tsx:173
 msgid "Close panel"
 msgstr "Paneli kapat"
 
@@ -1020,12 +1021,12 @@ msgid "Code"
 msgstr "Kod"
 
 #. placeholder {0}: group.title
-#: src/pages/shell/sidebar.tsx:379
+#: src/pages/shell/sidebar.tsx:384
 msgid "Collapse {0}"
 msgstr "{0} ögesini daralt"
 
 #. placeholder {0}: index + 1
-#: src/pages/bot-page/BotHero.tsx:171
+#: src/pages/bot-page/BotHero.tsx:180
 msgid "Color {0}"
 msgstr "Renk {0}"
 
@@ -1050,19 +1051,19 @@ msgstr ""
 msgid "Computer"
 msgstr "Bilgisayar"
 
-#: src/pages/shell/side-panel.tsx:298
+#: src/pages/shell/side-panel.tsx:301
 msgid "Computer failed to boot"
 msgstr "Bilgisayar başlatılamadı"
 
-#: src/pages/shell/side-panel.tsx:499
+#: src/pages/shell/side-panel.tsx:502
 msgid "Computer is asleep"
 msgstr "Bilgisayar uykuda"
 
-#: src/pages/shell/side-panel.tsx:297
+#: src/pages/shell/side-panel.tsx:300
 msgid "Computer is asleep. Open it to wake."
 msgstr "Bilgisayar uykuda. Uyandırmak için açın."
 
-#: src/pages/shell/side-panel.tsx:299
+#: src/pages/shell/side-panel.tsx:302
 msgid "Computer is stopped"
 msgstr "Bilgisayar durduruldu"
 
@@ -1086,7 +1087,7 @@ msgstr "Dağıtım tarafından yapılandırıldı"
 msgid "Configured servers"
 msgstr "Yapılandırılmış sunucular"
 
-#: src/pages/KnowledgeSection.tsx:651
+#: src/pages/KnowledgeSection.tsx:679
 #: src/pages/McpServersOverlay.tsx:506
 msgid "Confirm delete"
 msgstr "Silmeyi onayla"
@@ -1208,6 +1209,10 @@ msgstr "E-posta ile devam et"
 msgid "Copy"
 msgstr "Kopyala"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:449
+msgid "Copy {label}"
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "Eklenemedi"
@@ -1286,13 +1291,13 @@ msgstr "Bu sağlayıcı bağlanamadı"
 msgid "Could not connect this voice provider"
 msgstr "Bu ses sağlayıcısı bağlanamadı"
 
-#: src/pages/Shell.tsx:865
-#: src/pages/Shell.tsx:2517
+#: src/pages/Shell.tsx:861
+#: src/pages/Shell.tsx:2497
 msgid "Could not connect to the computer screen"
 msgstr "Bilgisayar ekranına bağlanılamadı"
 
 #: src/pages/Auth.tsx:101
-#: src/pages/Shell.tsx:2491
+#: src/pages/Shell.tsx:2471
 msgid "Could not continue"
 msgstr "Devam edilemedi"
 
@@ -1332,7 +1337,7 @@ msgstr "MCP sunucusu silinemedi"
 msgid "Could not delete routine"
 msgstr "Rutin silinemedi"
 
-#: src/pages/KnowledgeSection.tsx:591
+#: src/pages/KnowledgeSection.tsx:640
 msgid "Could not delete skill"
 msgstr "Beceri silinemedi"
 
@@ -1369,7 +1374,7 @@ msgstr "{0} indirilemedi. Tekrar dene."
 msgid "Could not download {name}. Try again."
 msgstr "{name} indirilemedi. Tekrar dene."
 
-#: src/pages/KnowledgeSection.tsx:316
+#: src/pages/KnowledgeSection.tsx:365
 msgid "Could not import skill"
 msgstr "Yetenek içe aktarılamadı"
 
@@ -1381,17 +1386,18 @@ msgstr "Bağlayıcı kurulamadı"
 msgid "Could not install skills"
 msgstr "Beceriler kurulamadı"
 
-#: src/pages/bot-page/BotActivity.tsx:453
-#: src/pages/KnowledgeSection.tsx:80
-#: src/pages/KnowledgeSection.tsx:121
-#: src/pages/KnowledgeSection.tsx:251
-#: src/pages/KnowledgeSection.tsx:272
-#: src/pages/KnowledgeSection.tsx:312
-#: src/pages/KnowledgeSection.tsx:701
+#: src/pages/bot-page/KnowledgeTab.tsx:148
+#: src/pages/bot-page/page-kit.tsx:81
+#: src/pages/KnowledgeSection.tsx:89
+#: src/pages/KnowledgeSection.tsx:118
+#: src/pages/KnowledgeSection.tsx:300
+#: src/pages/KnowledgeSection.tsx:321
+#: src/pages/KnowledgeSection.tsx:361
+#: src/pages/KnowledgeSection.tsx:753
 msgid "Could not load"
 msgstr "Yüklenemedi"
 
-#: src/pages/bot-page/BotActivity.tsx:231
+#: src/pages/bot-page/BotActivity.tsx:241
 msgid "Could not load · Retry"
 msgstr "Yüklenemedi · Tekrar dene"
 
@@ -1425,7 +1431,7 @@ msgstr "Model ayarları yüklenemedi"
 msgid "Could not load plugins"
 msgstr "Eklentiler yüklenemedi"
 
-#: src/pages/KnowledgeSection.tsx:552
+#: src/pages/KnowledgeSection.tsx:601
 msgid "Could not load skill"
 msgstr "Beceri yüklenemedi"
 
@@ -1470,7 +1476,7 @@ msgstr "Sunucuya ulaşılamadı"
 msgid "Could not reach this model server"
 msgstr "Bu model sunucusuna ulaşılamadı"
 
-#: src/pages/KnowledgeSection.tsx:721
+#: src/pages/KnowledgeSection.tsx:773
 msgid "Could not read this file"
 msgstr "Bu dosya okunamadı"
 
@@ -1515,14 +1521,14 @@ msgstr "Parola sıfırlanamadı"
 msgid "Could not revoke connection"
 msgstr "Bağlantı iptal edilemedi"
 
-#: src/pages/bot-page/RoutineDetail.tsx:97
+#: src/pages/bot-page/RoutineDetail.tsx:99
 msgid "Could not run routine"
 msgstr "Rutin çalıştırılamadı"
 
-#: src/pages/bot-page/page-kit.tsx:48
-#: src/pages/bot-page/RoutineDetail.tsx:86
+#: src/pages/bot-page/page-kit.tsx:52
+#: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
-#: src/pages/KnowledgeSection.tsx:102
+#: src/pages/KnowledgeSection.tsx:206
 msgid "Could not save"
 msgstr "Kaydedilemedi"
 
@@ -1538,7 +1544,7 @@ msgstr "Grup kaydedilemedi"
 msgid "Could not save model"
 msgstr "Model kaydedilemedi"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:66
+#: src/pages/bot-page/RoutineCreateForm.tsx:59
 msgid "Could not save routine"
 msgstr "Rutin kaydedilemedi"
 
@@ -1546,7 +1552,7 @@ msgstr "Rutin kaydedilemedi"
 msgid "Could not save rule"
 msgstr "Kural kaydedilemedi"
 
-#: src/pages/KnowledgeSection.tsx:574
+#: src/pages/KnowledgeSection.tsx:623
 msgid "Could not save skill"
 msgstr "Beceri kaydedilemedi"
 
@@ -1591,7 +1597,7 @@ msgstr ""
 msgid "Could not submit this answer"
 msgstr "Bu yanıt gönderilemedi"
 
-#: src/pages/Shell.tsx:2344
+#: src/pages/Shell.tsx:2324
 msgid "Could not take control"
 msgstr "Kontrol alınamadı"
 
@@ -1599,7 +1605,7 @@ msgstr "Kontrol alınamadı"
 msgid "Could not update"
 msgstr "Güncellenemedi"
 
-#: src/pages/KnowledgeSection.tsx:294
+#: src/pages/KnowledgeSection.tsx:343
 #: src/pages/McpServersOverlay.tsx:210
 msgid "Could not update agent access"
 msgstr "Agent erişimi güncellenemedi"
@@ -1612,7 +1618,7 @@ msgstr "Bilgisayar güncellenemedi"
 msgid "Could not update plugin"
 msgstr "Eklenti güncellenemedi"
 
-#: src/pages/Shell.tsx:1885
+#: src/pages/Shell.tsx:1865
 msgid "Could not update reaction"
 msgstr "Tepki güncellenemedi"
 
@@ -1625,6 +1631,7 @@ msgid "Could not update your photo"
 msgstr ""
 
 #: src/components/AskCard.tsx:60
+#: src/pages/bot-page/RoutineTriggers.tsx:333
 msgid "Couldn't create"
 msgstr "Oluşturulamadı"
 
@@ -1640,10 +1647,10 @@ msgstr "Avatarlar güncellenemedi"
 msgid "Couldn't update messaging settings"
 msgstr "Mesajlaşma ayarları güncellenemedi"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:157
+#: src/pages/bot-page/RoutineCreateForm.tsx:149
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:202
-#: src/pages/shell/sidebar.tsx:229
+#: src/pages/shell/sidebar.tsx:234
 msgid "Create"
 msgstr "Oluştur"
 
@@ -1668,7 +1675,7 @@ msgstr "Bot oluşturulsun mu?"
 msgid "Create group"
 msgstr "Grup oluştur"
 
-#: src/pages/Shell.tsx:2817
+#: src/pages/Shell.tsx:2812
 #: src/pages/shell/bot-picker.tsx:74
 msgid "Create new Bot"
 msgstr "Yeni bot oluştur"
@@ -1740,7 +1747,7 @@ msgid "Customer support"
 msgstr "Müşteri desteği"
 
 #: src/pages/CustomizeOverlay.tsx:24
-#: src/pages/shell/sidebar.tsx:670
+#: src/pages/shell/sidebar.tsx:679
 msgid "Customize"
 msgstr "Özelleştir"
 
@@ -1779,21 +1786,21 @@ msgstr ""
 msgid "Default scope"
 msgstr "Varsayılan kapsam"
 
-#: src/pages/bot-page/BotPage.tsx:297
+#: src/pages/bot-page/BotPage.tsx:378
 #: src/pages/BotContextMenu.tsx:150
-#: src/pages/KnowledgeSection.tsx:651
+#: src/pages/KnowledgeSection.tsx:679
 #: src/pages/McpServersOverlay.tsx:508
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
-#: src/pages/shell/sidebar.tsx:611
-#: src/pages/shell/sidebar.tsx:647
+#: src/pages/shell/sidebar.tsx:620
+#: src/pages/shell/sidebar.tsx:656
 msgid "Delete"
 msgstr "Sil"
 
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.name
-#: src/pages/shell/sidebar.tsx:608
-#: src/pages/shell/sidebar.tsx:644
+#: src/pages/shell/sidebar.tsx:617
+#: src/pages/shell/sidebar.tsx:653
 msgid "Delete {0}"
 msgstr "{0} sil"
 
@@ -1812,11 +1819,11 @@ msgstr "Grubu sil"
 msgid "Delete memories too"
 msgstr "Hafızayı da sil"
 
-#: src/pages/bot-page/RoutineDetail.tsx:203
+#: src/pages/bot-page/RoutineDetail.tsx:226
 msgid "Delete routine"
 msgstr "Rutini sil"
 
-#: src/pages/Shell.tsx:3094
+#: src/pages/Shell.tsx:3090
 msgid "Delete space"
 msgstr ""
 
@@ -1874,8 +1881,8 @@ msgstr ""
 msgid "Direct MCP"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:337
-#: src/pages/KnowledgeSection.tsx:398
+#: src/pages/KnowledgeSection.tsx:386
+#: src/pages/KnowledgeSection.tsx:447
 msgid "Disabled"
 msgstr "Devre dışı"
 
@@ -1933,13 +1940,12 @@ msgid "Don’t have an account?"
 msgstr "Hesabın yok mu?"
 
 #: src/pages/ActivityList.tsx:158
-#: src/pages/bot-page/BotActivity.tsx:293
-#: src/pages/bot-page/RoutineTriggers.tsx:337
-#: src/pages/bot-page/RoutineTriggers.tsx:370
+#: src/pages/bot-page/BotActivity.tsx:304
+#: src/pages/bot-page/RoutineTriggers.tsx:304
 msgid "Done"
 msgstr "Bitti"
 
-#: src/pages/KnowledgeSection.tsx:781
+#: src/pages/KnowledgeSection.tsx:833
 msgid "Download"
 msgstr "İndir"
 
@@ -1954,7 +1960,7 @@ msgstr "{0} indir"
 msgid "Download {name}"
 msgstr "{name} indir"
 
-#: src/pages/KnowledgeSection.tsx:189
+#: src/pages/KnowledgeSection.tsx:170
 msgid "Download as markdown"
 msgstr "Markdown olarak indir"
 
@@ -1970,7 +1976,7 @@ msgstr ""
 msgid "Draft skill"
 msgstr "Taslak beceri"
 
-#: src/pages/bot-page/BotPage.tsx:280
+#: src/pages/bot-page/BotPage.tsx:359
 #: src/pages/BotContextMenu.tsx:137
 msgid "Duplicate"
 msgstr "Çoğalt"
@@ -1992,7 +1998,7 @@ msgstr "Düzenle ve yeniden gönder"
 msgid "Edit first"
 msgstr "Önce düzenle"
 
-#: src/pages/Shell.tsx:3017
+#: src/pages/Shell.tsx:3013
 msgid "Edit Profile"
 msgstr "Profili Düzenle"
 
@@ -2043,13 +2049,13 @@ msgstr "Her"
 msgid "every {intervalAmountSelect} {intervalUnitSelect}"
 msgstr "her {intervalAmountSelect} {intervalUnitSelect}"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:92
+#: src/pages/bot-page/RoutineTriggers.tsx:78
 #: src/pages/RoutineSchedule.tsx:37
 #: src/pages/RoutineSchedule.tsx:166
 msgid "Every day"
 msgstr "Her gün"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:91
+#: src/pages/bot-page/RoutineTriggers.tsx:77
 #: src/pages/RoutineSchedule.tsx:35
 #: src/pages/RoutineSchedule.tsx:152
 msgid "Every hour"
@@ -2059,12 +2065,12 @@ msgstr "Her saat"
 msgid "Every Monday"
 msgstr "Her pazartesi"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:95
+#: src/pages/bot-page/RoutineTriggers.tsx:81
 #: src/pages/RoutineSchedule.tsx:43
 msgid "Every month"
 msgstr "Her ay"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:94
+#: src/pages/bot-page/RoutineTriggers.tsx:80
 #: src/pages/RoutineSchedule.tsx:41
 msgid "Every week"
 msgstr "Her hafta"
@@ -2078,11 +2084,11 @@ msgid "Expand"
 msgstr "Genişlet"
 
 #. placeholder {0}: group.title
-#: src/pages/shell/sidebar.tsx:378
+#: src/pages/shell/sidebar.tsx:383
 msgid "Expand {0}"
 msgstr "{0} ögesini genişlet"
 
-#: src/pages/bot-page/BotPage.tsx:284
+#: src/pages/bot-page/BotPage.tsx:363
 msgid "Export"
 msgstr "Dışa aktar"
 
@@ -2102,7 +2108,7 @@ msgid "Extra high"
 msgstr "Çok yüksek"
 
 #: src/pages/ActivityList.tsx:160
-#: src/pages/bot-page/BotActivity.tsx:294
+#: src/pages/bot-page/BotActivity.tsx:305
 #: src/pages/bot-page/routine-copy.ts:63
 #: src/pages/shell/routine-run-line.tsx:160
 msgid "Failed"
@@ -2112,14 +2118,14 @@ msgstr "Başarısız"
 msgid "Failed {when}"
 msgstr "{when} başarısız oldu"
 
-#: src/pages/Shell.tsx:2084
-#: src/pages/Shell.tsx:2086
-#: src/pages/Shell.tsx:2088
+#: src/pages/Shell.tsx:2064
+#: src/pages/Shell.tsx:2066
+#: src/pages/Shell.tsx:2068
 msgid "Failed to send message"
 msgstr "Mesaj gönderilemedi"
 
-#: src/pages/Shell.tsx:2144
-#: src/pages/Shell.tsx:2163
+#: src/pages/Shell.tsx:2124
+#: src/pages/Shell.tsx:2143
 msgid "Failed to stop"
 msgstr "Durdurulamadı"
 
@@ -2136,11 +2142,11 @@ msgstr "Hata yönetimi"
 msgid "Featured"
 msgstr "Öne çıkanlar"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:41
+#: src/pages/bot-page/KnowledgeTab.tsx:52
 msgid "Files"
 msgstr "Dosyalar"
 
-#: src/pages/KnowledgeSection.tsx:393
+#: src/pages/KnowledgeSection.tsx:442
 msgid "Filter skills"
 msgstr "Yetenekleri filtrele"
 
@@ -2199,9 +2205,8 @@ msgid "Getting ready"
 msgstr ""
 
 #: src/pages/bot-page/routine-copy.ts:38
-#: src/pages/bot-page/RoutineTriggers.tsx:143
-#: src/pages/bot-page/RoutineTriggers.tsx:226
-#: src/pages/bot-page/RoutineTriggers.tsx:366
+#: src/pages/bot-page/RoutineTriggers.tsx:129
+#: src/pages/bot-page/RoutineTriggers.tsx:209
 msgid "Git event"
 msgstr "Git olayı"
 
@@ -2209,7 +2214,7 @@ msgstr "Git olayı"
 msgid "Git ref"
 msgstr "Git ref"
 
-#: src/pages/KnowledgeSection.tsx:338
+#: src/pages/KnowledgeSection.tsx:387
 msgid "Global"
 msgstr "Genel"
 
@@ -2239,7 +2244,8 @@ msgstr "Önce görüşmeyi sonlandırın, sonra ekrandaki kodu girin."
 msgid "Hang up, then enter the code on screen."
 msgstr "Görüşmeyi sonlandırın, sonra ekrandaki kodu girin."
 
-#: src/pages/bot-page/RoutineTriggers.tsx:421
+#: src/pages/bot-page/RoutineTriggers.tsx:382
+#: src/pages/bot-page/RoutineTriggers.tsx:385
 msgid "header"
 msgstr "başlık"
 
@@ -2260,9 +2266,13 @@ msgstr "Örnek dinle"
 msgid "Hi, this is how I'll sound when I read replies out loud."
 msgstr "Merhaba, yanıtları sesli okuduğumda böyle duyulacağım."
 
-#: src/pages/shell/sidebar.tsx:748
+#: src/pages/shell/sidebar.tsx:757
 msgid "Hide bots"
 msgstr "Botları gizle"
+
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Hide key"
+msgstr ""
 
 #: src/pages/Auth.tsx:183
 msgid "Hide password"
@@ -2303,7 +2313,7 @@ msgstr "Bu bot nasıl davranmalı"
 msgid "How to check"
 msgstr "Nasıl kontrol edilir"
 
-#: src/pages/shell/side-panel.tsx:529
+#: src/pages/shell/side-panel.tsx:532
 msgid "I’m done"
 msgstr "Bitirdim"
 
@@ -2315,7 +2325,7 @@ msgstr "Bunu duyduysan ses hazır."
 msgid "Ignore"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:377
+#: src/pages/KnowledgeSection.tsx:426
 msgid "Import"
 msgstr "İçe aktar"
 
@@ -2323,7 +2333,7 @@ msgstr "İçe aktar"
 msgid "Import OpenAPI JSON"
 msgstr "OpenAPI JSON içe aktar"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:93
+#: src/pages/bot-page/KnowledgeTab.tsx:105
 msgid "Inherit default"
 msgstr "Varsayılanı devral"
 
@@ -2364,8 +2374,8 @@ msgstr "Kuruluyor…"
 msgid "Instance API key"
 msgstr "Instance API anahtarı"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:97
-#: src/pages/bot-page/RoutineDetail.tsx:136
+#: src/pages/bot-page/RoutineCreateForm.tsx:90
+#: src/pages/bot-page/RoutineDetail.tsx:138
 msgid "Instruction"
 msgstr "Talimat"
 
@@ -2388,7 +2398,7 @@ msgstr ""
 msgid "Integrations"
 msgstr "Entegrasyonlar"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:96
+#: src/pages/bot-page/RoutineTriggers.tsx:82
 #: src/pages/RoutineSchedule.tsx:45
 msgid "Interval"
 msgstr "Aralık"
@@ -2401,7 +2411,7 @@ msgstr "Aralık miktarı"
 msgid "Interval unit"
 msgstr "Aralık birimi"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:94
+#: src/pages/bot-page/KnowledgeTab.tsx:106
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Isolated"
 msgstr "Yalıtılmış"
@@ -2426,11 +2436,11 @@ msgstr "az önce"
 msgid "Keep memories"
 msgstr "Hafızayı koru"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:417
+#: src/pages/bot-page/RoutineTriggers.tsx:380
 msgid "key"
 msgstr "anahtar"
 
-#: src/pages/bot-page/BotPage.tsx:91
+#: src/pages/bot-page/BotPage.tsx:100
 msgid "Knowledge"
 msgstr "Bilgi"
 
@@ -2440,7 +2450,7 @@ msgstr "Bilgi"
 msgid "Language"
 msgstr "Dil"
 
-#: src/pages/bot-page/RoutinesTab.tsx:102
+#: src/pages/bot-page/RoutinesTab.tsx:107
 msgid "Last run failed"
 msgstr "Son çalışma başarısız oldu"
 
@@ -2529,7 +2539,7 @@ msgstr "Yerel erişim, botların sormadan komut çalıştırmasına izin verir. 
 msgid "Local Server Settings"
 msgstr ""
 
-#: src/pages/shell/sidebar.tsx:737
+#: src/pages/shell/sidebar.tsx:746
 msgid "Log out"
 msgstr "Çıkış yap"
 
@@ -2622,14 +2632,14 @@ msgstr "Üyeler ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Üyeler ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} seç)"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:27
+#: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
 #: src/pages/SettingsOverlay.tsx:100
 msgid "Memory"
 msgstr "Hafıza"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:84
-#: src/pages/bot-page/KnowledgeTab.tsx:88
+#: src/pages/bot-page/KnowledgeTab.tsx:96
+#: src/pages/bot-page/KnowledgeTab.tsx:100
 msgid "Memory scope"
 msgstr "Hafıza kapsamı"
 
@@ -2706,8 +2716,8 @@ msgstr "Minimal"
 msgid "Minimize"
 msgstr "Küçült"
 
-#: src/pages/shell/sidebar.tsx:199
-#: src/pages/shell/sidebar.tsx:200
+#: src/pages/shell/sidebar.tsx:204
+#: src/pages/shell/sidebar.tsx:205
 msgid "Minimize bots"
 msgstr "Botları küçült"
 
@@ -2794,9 +2804,9 @@ msgstr ""
 #: src/components/AskCard.tsx:334
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:131
-#: src/pages/bot-page/BotHero.tsx:47
-#: src/pages/bot-page/RoutineCreateForm.tsx:81
-#: src/pages/bot-page/RoutineDetail.tsx:109
+#: src/pages/bot-page/BotHero.tsx:49
+#: src/pages/bot-page/RoutineCreateForm.tsx:74
+#: src/pages/bot-page/RoutineDetail.tsx:111
 #: src/pages/GroupPanel.tsx:133
 #: src/pages/GroupPanel.tsx:243
 #: src/pages/shell/bot-panel.tsx:109
@@ -2814,7 +2824,7 @@ msgstr "Bota bir ad ver"
 msgid "Name this group"
 msgstr "Gruba bir ad ver"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:87
+#: src/pages/bot-page/RoutineCreateForm.tsx:80
 msgid "Name this routine"
 msgstr "Bu rutine bir ad verin"
 
@@ -2826,7 +2836,7 @@ msgstr "Girdi bekliyor"
 msgid "Needs takeover"
 msgstr "Devralma bekliyor"
 
-#: src/pages/shell/side-panel.tsx:402
+#: src/pages/shell/side-panel.tsx:405
 msgid "Needs you"
 msgstr "Sizi bekliyor"
 
@@ -2851,9 +2861,9 @@ msgstr "Yeni açık iş öğesi"
 msgid "New password"
 msgstr "Yeni parola"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:75
-#: src/pages/bot-page/RoutinesTab.tsx:49
-#: src/pages/bot-page/RoutinesTab.tsx:65
+#: src/pages/bot-page/RoutineCreateForm.tsx:68
+#: src/pages/bot-page/RoutinesTab.tsx:54
+#: src/pages/bot-page/RoutinesTab.tsx:70
 msgid "New routine"
 msgstr "Yeni rutin"
 
@@ -2862,7 +2872,7 @@ msgstr "Yeni rutin"
 msgid "New section"
 msgstr "Yeni bölüm"
 
-#: src/pages/KnowledgeSection.tsx:357
+#: src/pages/KnowledgeSection.tsx:406
 msgid "New skill"
 msgstr "Yeni beceri"
 
@@ -2874,7 +2884,7 @@ msgstr "Yeni alan"
 msgid "Next"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:191
+#: src/pages/bot-page/BotActivity.tsx:199
 msgid "No activity yet"
 msgstr "Henüz etkinlik yok"
 
@@ -2910,7 +2920,7 @@ msgstr "Henüz bağlı sohbet uygulaması yok."
 msgid "No exceptions. Actions run automatically."
 msgstr "İstisna yok. İşlemler otomatik çalışır."
 
-#: src/pages/KnowledgeSection.tsx:795
+#: src/pages/KnowledgeSection.tsx:847
 msgid "No files yet"
 msgstr "Henüz dosya yok"
 
@@ -2971,7 +2981,7 @@ msgstr "Sağlayıcı bulunamadı."
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:410
+#: src/pages/bot-page/BotActivity.tsx:427
 msgid "No report"
 msgstr "Rapor yok"
 
@@ -2988,11 +2998,11 @@ msgstr "Bu pazar yerinde beceri yok."
 msgid "No skills in this plugin."
 msgstr "Bu eklentide yetenek yok."
 
-#: src/pages/KnowledgeSection.tsx:414
+#: src/pages/KnowledgeSection.tsx:463
 msgid "No skills match"
 msgstr "Eşleşen yetenek yok"
 
-#: src/pages/KnowledgeSection.tsx:414
+#: src/pages/KnowledgeSection.tsx:463
 msgid "No skills yet"
 msgstr "Henüz beceri yok"
 
@@ -3030,7 +3040,7 @@ msgstr "Şimdi değil"
 msgid "Nothing is still running"
 msgstr "Hâlâ çalışan bir şey yok"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:32
+#: src/pages/bot-page/KnowledgeTab.tsx:42
 #: src/pages/KnowledgeSection.tsx:41
 msgid "Nothing remembered yet"
 msgstr "Henüz hatırlanan bir şey yok"
@@ -3049,10 +3059,10 @@ msgstr ""
 msgid "Notifies you each run"
 msgstr "Her çalıştığında sana bildirir"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:141
-#: src/pages/bot-page/RoutineCreateForm.tsx:143
-#: src/pages/bot-page/RoutineDetail.tsx:176
-#: src/pages/bot-page/RoutineDetail.tsx:180
+#: src/pages/bot-page/RoutineCreateForm.tsx:133
+#: src/pages/bot-page/RoutineCreateForm.tsx:135
+#: src/pages/bot-page/RoutineDetail.tsx:177
+#: src/pages/bot-page/RoutineDetail.tsx:181
 msgid "Notify me"
 msgstr "Bana bildir"
 
@@ -3086,8 +3096,8 @@ msgid "Off for every agent until you pick some in Installed."
 msgstr "Kurulu bölümünden birkaçını seçene kadar tüm ajanlar için kapalı."
 
 #: src/pages/bot-page/routine-copy.ts:93
-#: src/pages/bot-page/RoutineTriggers.tsx:115
-#: src/pages/bot-page/RoutineTriggers.tsx:222
+#: src/pages/bot-page/RoutineTriggers.tsx:101
+#: src/pages/bot-page/RoutineTriggers.tsx:205
 msgid "On a schedule"
 msgstr "Zamanlamaya göre"
 
@@ -3100,7 +3110,7 @@ msgstr "her ayın 1'inde saat {0}"
 msgid "One-time"
 msgstr "Tek seferlik"
 
-#: src/pages/Shell.tsx:3132
+#: src/pages/Shell.tsx:3128
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3109,21 +3119,21 @@ msgid "Only the first 50 skills are shown to the agent."
 msgstr "Ajana yalnızca ilk 50 yetenek gösterilir."
 
 #: src/pages/ScratchpadSection.tsx:159
-#: src/pages/shell/side-panel.tsx:219
-#: src/pages/shell/side-panel.tsx:224
+#: src/pages/shell/side-panel.tsx:222
+#: src/pages/shell/side-panel.tsx:227
 msgid "Open"
 msgstr "Aç"
 
 #. placeholder {0}: group.title
-#: src/pages/shell/sidebar.tsx:376
+#: src/pages/shell/sidebar.tsx:381
 msgid "Open {0}"
 msgstr "{0} aç"
 
-#: src/pages/bot-page/BotActivity.tsx:413
+#: src/pages/bot-page/BotActivity.tsx:431
 msgid "Open in chat"
 msgstr "Sohbette aç"
 
-#: src/pages/shell/side-panel.tsx:186
+#: src/pages/shell/side-panel.tsx:189
 msgid "Open in full window"
 msgstr "Tam pencerede aç"
 
@@ -3250,7 +3260,7 @@ msgstr "Sunucundaki OpenAI uyumlu adresi yapıştır. Gerekirse Rakazo /v1 ekler
 msgid "Paste your API key"
 msgstr "API anahtarını yapıştır"
 
-#: src/pages/bot-page/RoutinesTab.tsx:102
+#: src/pages/bot-page/RoutinesTab.tsx:107
 msgid "Paused"
 msgstr "Duraklatıldı"
 
@@ -3270,7 +3280,7 @@ msgstr "Çalınıyor…"
 msgid "Plugins"
 msgstr "Eklentiler"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:413
+#: src/pages/bot-page/RoutineTriggers.tsx:377
 msgid "POST to"
 msgstr "Şuraya POST"
 
@@ -3326,7 +3336,7 @@ msgstr "Tepkiler"
 msgid "Read replies aloud"
 msgstr "Yanıtları sesli oku"
 
-#: src/pages/KnowledgeSection.tsx:443
+#: src/pages/KnowledgeSection.tsx:492
 msgid "read-only"
 msgstr "salt okunur"
 
@@ -3415,7 +3425,7 @@ msgstr "Görünümü yenile"
 msgid "Refreshing…"
 msgstr "Yenileniyor…"
 
-#: src/pages/shell/side-panel.tsx:519
+#: src/pages/shell/side-panel.tsx:522
 msgid "Release"
 msgstr "Bırak"
 
@@ -3429,8 +3439,8 @@ msgstr ""
 
 #: src/components/ApprovalRulesSettings.tsx:179
 #: src/pages/AccountSettingsOverlay.tsx:392
-#: src/pages/bot-page/RoutineTriggers.tsx:263
-#: src/pages/bot-page/RoutineTriggers.tsx:324
+#: src/pages/bot-page/RoutineTriggers.tsx:237
+#: src/pages/bot-page/RoutineTriggers.tsx:291
 #: src/pages/PluginsOverlay.tsx:617
 #: src/pages/PluginsOverlay.tsx:1216
 #: src/pages/ScratchpadSection.tsx:165
@@ -3446,7 +3456,7 @@ msgstr "Kaldır"
 msgid "Remove {0}"
 msgstr "{0} kaldır"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:261
+#: src/pages/bot-page/RoutineTriggers.tsx:235
 msgid "Remove Git event?"
 msgstr "Git olayı kaldırılsın mı?"
 
@@ -3460,7 +3470,7 @@ msgstr "{0} pazar yeri ve yetenekleri kaldırılsın mı?"
 msgid "Remove mention {0}"
 msgstr "{0} bahsini kaldır"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:262
+#: src/pages/bot-page/RoutineTriggers.tsx:236
 msgid "Remove message trigger?"
 msgstr "Mesaj tetikleyicisi kaldırılsın mı?"
 
@@ -3478,7 +3488,7 @@ msgstr "Önizlemeyi kaldır"
 msgid "Remove skill {0}"
 msgstr "{0} becerisini kaldır"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:259
+#: src/pages/bot-page/RoutineTriggers.tsx:233
 msgid "Remove webhook?"
 msgstr "Webhook kaldırılsın mı?"
 
@@ -3498,7 +3508,7 @@ msgid "Removing…"
 msgstr "Kaldırılıyor…"
 
 #: src/pages/BotContextMenu.tsx:121
-#: src/pages/Shell.tsx:3221
+#: src/pages/Shell.tsx:3217
 #: src/pages/shell/dialogs.tsx:246
 msgid "Rename section"
 msgstr ""
@@ -3566,8 +3576,9 @@ msgstr "Sıfırlanıyor…"
 msgid "Restart to update"
 msgstr ""
 
-#: src/pages/shell/sidebar.tsx:602
-#: src/pages/shell/sidebar.tsx:638
+#: src/pages/bot-page/BotPage.tsx:353
+#: src/pages/shell/sidebar.tsx:611
+#: src/pages/shell/sidebar.tsx:647
 msgid "Restore"
 msgstr "Geri yükle"
 
@@ -3575,7 +3586,7 @@ msgstr "Geri yükle"
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "Son kaydedilen çalışma alanını geri yükler. Bilgisayardaki kaydedilmemiş çalışmalar kaybolur."
 
-#: src/pages/bot-page/page-kit.tsx:50
+#: src/pages/bot-page/page-kit.tsx:54
 msgid "Restore unsaved text"
 msgstr "Kaydedilmemiş metni geri yükle"
 
@@ -3583,8 +3594,8 @@ msgstr "Kaydedilmemiş metni geri yükle"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:460
-#: src/pages/bot-page/page-kit.tsx:49
+#: src/pages/bot-page/page-kit.tsx:53
+#: src/pages/bot-page/page-kit.tsx:89
 msgid "Retry"
 msgstr "Tekrar dene"
 
@@ -3593,7 +3604,7 @@ msgstr "Tekrar dene"
 msgid "Retry now"
 msgstr "Şimdi tekrar dene"
 
-#: src/pages/Shell.tsx:2524
+#: src/pages/Shell.tsx:2504
 msgid "Retry screen"
 msgstr "Ekranı yeniden dene"
 
@@ -3602,7 +3613,7 @@ msgid "Return to Rakazo"
 msgstr "Rakazo'ya dön"
 
 #. placeholder {0}: doc.revision
-#: src/pages/KnowledgeSection.tsx:146
+#: src/pages/KnowledgeSection.tsx:144
 msgid "rev {0}"
 msgstr "rev {0}"
 
@@ -3618,21 +3629,29 @@ msgstr "Robot"
 msgid "Room guidance"
 msgstr ""
 
-#: src/pages/bot-page/RoutineTriggers.tsx:426
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate"
+msgstr ""
+
+#: src/pages/bot-page/RoutineTriggers.tsx:406
 msgid "Rotate key"
 msgstr "Anahtarı döndür"
 
-#: src/pages/bot-page/BotActivity.tsx:301
-#: src/pages/bot-page/RoutineCreateForm.tsx:49
+#: src/pages/bot-page/RoutineTriggers.tsx:348
+msgid "Rotate key?"
+msgstr ""
+
+#: src/pages/bot-page/BotActivity.tsx:312
+#: src/pages/bot-page/RoutineCreateForm.tsx:44
 msgid "Routine"
 msgstr "Rutin"
 
 #: src/components/AskCard.tsx:77
-#: src/pages/bot-page/BotActivity.tsx:262
+#: src/pages/bot-page/BotActivity.tsx:273
 msgid "Routine created"
 msgstr "Rutin oluşturuldu"
 
-#: src/pages/bot-page/BotActivity.tsx:262
+#: src/pages/bot-page/BotActivity.tsx:273
 msgid "Routine created by {by}"
 msgstr "Rutini {by} oluşturdu"
 
@@ -3640,11 +3659,11 @@ msgstr "Rutini {by} oluşturdu"
 msgid "Routine updated"
 msgstr "Rutin güncellendi"
 
-#: src/pages/bot-page/BotPage.tsx:90
+#: src/pages/bot-page/BotPage.tsx:99
 msgid "Routines"
 msgstr "Rutinler"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:287
+#: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "Çalışma zamanı"
 
@@ -3653,16 +3672,16 @@ msgid "Run time must be in the future."
 msgstr "Çalışma zamanı gelecekte olmalı."
 
 #: src/pages/ActivityList.tsx:152
-#: src/pages/bot-page/BotActivity.tsx:296
+#: src/pages/bot-page/BotActivity.tsx:307
 #: src/pages/shell/routine-run-line.tsx:156
 msgid "Running"
 msgstr "Çalışıyor"
 
-#: src/pages/bot-page/RoutineDetail.tsx:195
+#: src/pages/bot-page/RoutineDetail.tsx:199
 msgid "Running…"
 msgstr "Çalışıyor…"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:300
+#: src/pages/bot-page/RoutineTriggers.tsx:272
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr ""
 
@@ -3670,8 +3689,8 @@ msgstr ""
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
-#: src/pages/KnowledgeSection.tsx:167
-#: src/pages/KnowledgeSection.tsx:632
+#: src/pages/KnowledgeSection.tsx:234
+#: src/pages/KnowledgeSection.tsx:698
 #: src/pages/ModelSettingsOverlay.tsx:791
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
@@ -3679,7 +3698,7 @@ msgstr "Kaydet"
 
 #: src/components/AskCard.tsx:44
 #: src/components/teach/SkillDraftCard.tsx:142
-#: src/pages/bot-page/page-kit.tsx:47
+#: src/pages/bot-page/page-kit.tsx:51
 #: src/pages/ExternalConversationSettings.tsx:257
 msgid "Saved"
 msgstr "Kaydedildi"
@@ -3693,10 +3712,6 @@ msgstr "Kaydedildi ama liste yenilenemedi"
 msgid "Saved."
 msgstr "Kaydedildi."
 
-#: src/pages/bot-page/RoutineTriggers.tsx:398
-msgid "Saved. Rotate to reveal."
-msgstr "Kaydedildi. Görmek için döndürün."
-
 #: src/components/ComputerUpdateProgress.tsx:51
 msgid "Saving your workspace"
 msgstr ""
@@ -3707,7 +3722,7 @@ msgstr ""
 
 #: src/components/AskCard.tsx:394
 #: src/components/teach/SkillDraftCard.tsx:142
-#: src/pages/bot-page/page-kit.tsx:46
+#: src/pages/bot-page/page-kit.tsx:50
 #: src/pages/GroupPanel.tsx:279
 #: src/pages/ModelSettingsOverlay.tsx:789
 #: src/pages/shell/dialogs.tsx:266
@@ -3729,7 +3744,7 @@ msgstr "Ekran"
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
 #: src/pages/shell/command-palette.tsx:102
-#: src/pages/shell/sidebar.tsx:298
+#: src/pages/shell/sidebar.tsx:303
 msgid "Search"
 msgstr "Ara"
 
@@ -3761,8 +3776,8 @@ msgstr "Modellerde ara"
 msgid "Search providers"
 msgstr "Sağlayıcı ara"
 
-#: src/pages/KnowledgeSection.tsx:383
-#: src/pages/KnowledgeSection.tsx:384
+#: src/pages/KnowledgeSection.tsx:432
+#: src/pages/KnowledgeSection.tsx:433
 msgid "Search skills"
 msgstr "Yeteneklerde ara"
 
@@ -3832,12 +3847,12 @@ msgstr "Sunucu adı"
 msgid "Server URL"
 msgstr "Sunucu URL'si"
 
-#: src/pages/bot-page/BotPage.tsx:92
+#: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:361
 #: src/pages/SettingsOverlay.tsx:110
 #: src/pages/SettingsOverlay.tsx:165
-#: src/pages/shell/sidebar.tsx:701
-#: src/pages/shell/sidebar.tsx:708
+#: src/pages/shell/sidebar.tsx:710
+#: src/pages/shell/sidebar.tsx:717
 msgid "Settings"
 msgstr "Ayarlar"
 
@@ -3855,11 +3870,11 @@ msgid "Setup help"
 msgstr "Kurulum yardımı"
 
 #. placeholder {0}: seed + 1
-#: src/pages/bot-page/BotHero.tsx:142
+#: src/pages/bot-page/BotHero.tsx:151
 msgid "Shape {0}"
 msgstr "Şekil {0}"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:95
+#: src/pages/bot-page/KnowledgeTab.tsx:107
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Shared"
 msgstr "Ortak"
@@ -3876,21 +3891,27 @@ msgstr "Paylaşılan belgeler"
 msgid "Show before / after"
 msgstr "Öncesini / sonrasını göster"
 
-#: src/pages/shell/sidebar.tsx:748
+#: src/pages/shell/sidebar.tsx:757
 #: src/pages/shell/thread-header.tsx:66
 #: src/pages/shell/thread-header.tsx:67
 msgid "Show bots"
 msgstr "Botları göster"
 
-#: src/pages/bot-page/BotActivity.tsx:231
+#: src/pages/bot-page/BotActivity.tsx:241
 msgid "Show earlier"
 msgstr "Öncekileri göster"
 
+#: src/pages/bot-page/RoutineTriggers.tsx:367
+msgid "Show key"
+msgstr ""
+
+#: src/pages/KnowledgeSection.tsx:885
 #: src/pages/shell/message-view.tsx:77
 msgid "Show less"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:440
+#: src/pages/bot-page/BotActivity.tsx:459
+#: src/pages/KnowledgeSection.tsx:885
 #: src/pages/PluginsOverlay.tsx:873
 #: src/pages/shell/message-view.tsx:77
 msgid "Show more"
@@ -3938,7 +3959,7 @@ msgstr ""
 msgid "Skill updated · {name}"
 msgstr ""
 
-#: src/pages/bot-page/KnowledgeTab.tsx:44
+#: src/pages/bot-page/KnowledgeTab.tsx:55
 #: src/pages/CustomizeOverlay.tsx:19
 #: src/pages/SkillsOverlay.tsx:106
 #: src/pages/SkillsOverlay.tsx:256
@@ -3947,7 +3968,7 @@ msgstr "Beceriler"
 
 #: src/components/AskCard.tsx:768
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:526
+#: src/pages/shell/side-panel.tsx:529
 msgid "Skip"
 msgstr "Atla"
 
@@ -3960,7 +3981,7 @@ msgid "Skipped"
 msgstr ""
 
 #. placeholder {0}: skipped.join(", ")
-#: src/pages/Shell.tsx:1919
+#: src/pages/Shell.tsx:1899
 msgid "Skipped {0}"
 msgstr "{0} atlandı"
 
@@ -3995,7 +4016,7 @@ msgstr "Yalnızca seslendir"
 msgid "Speak this reply"
 msgstr "Bu yanıtı seslendir"
 
-#: src/pages/KnowledgeSection.tsx:339
+#: src/pages/KnowledgeSection.tsx:388
 msgid "Specific agents"
 msgstr "Belirli ajanlar"
 
@@ -4019,8 +4040,8 @@ msgstr "Adımlar"
 
 #: src/pages/shell/composer.tsx:986
 #: src/pages/shell/composer.tsx:1027
-#: src/pages/shell/side-panel.tsx:418
-#: src/pages/shell/side-panel.tsx:423
+#: src/pages/shell/side-panel.tsx:421
+#: src/pages/shell/side-panel.tsx:426
 msgid "Stop"
 msgstr "Durdur"
 
@@ -4084,7 +4105,7 @@ msgstr "Sistem"
 msgid "Teach a task"
 msgstr "Görev öğret"
 
-#: src/pages/Shell.tsx:2858
+#: src/pages/Shell.tsx:2853
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Öğretme sürüyor. Yeni mesaj göndermeden önce öğretmeyi durdur."
 
@@ -4093,7 +4114,7 @@ msgstr "Öğretme sürüyor. Yeni mesaj göndermeden önce öğretmeyi durdur."
 msgid "Team"
 msgstr "Takım"
 
-#: src/pages/shell/side-panel.tsx:303
+#: src/pages/shell/side-panel.tsx:306
 msgid "Team Computer"
 msgstr "Takım Bilgisayarı"
 
@@ -4109,7 +4130,7 @@ msgstr "Teams mesajı"
 msgid "Test"
 msgstr "Dene"
 
-#: src/pages/bot-page/RoutineDetail.tsx:195
+#: src/pages/bot-page/RoutineDetail.tsx:199
 msgid "Test run"
 msgstr "Deneme çalışması"
 
@@ -4133,7 +4154,7 @@ msgstr "Seçilen hafıza sağlayıcısı bu sürümde kullanılamıyor."
 msgid "Thinking"
 msgstr "Düşünüyor"
 
-#: src/pages/shell/side-panel.tsx:283
+#: src/pages/shell/side-panel.tsx:286
 msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
 msgstr "Bu bot bir Linux masaüstünde değil, bu bilgisayarda çalışır. Kabuk ve dosyalar senin kullanıcı klasörünü kullanır."
 
@@ -4194,7 +4215,7 @@ msgstr ""
 msgid "Time of day"
 msgstr "Günün saati"
 
-#: src/pages/bot-page/BotHero.tsx:58
+#: src/pages/bot-page/BotHero.tsx:61
 #: src/pages/shell/bot-panel.tsx:120
 msgid "Title"
 msgstr "Başlık"
@@ -4203,7 +4224,7 @@ msgstr "Başlık"
 msgid "To:"
 msgstr "Kime:"
 
-#: src/pages/bot-page/BotActivity.tsx:206
+#: src/pages/bot-page/BotActivity.tsx:216
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/routine-run-line.tsx:401
 #: src/pages/shell/transcript.tsx:221
@@ -4261,7 +4282,7 @@ msgid "Unpin"
 msgstr "Sabitlemeyi kaldır"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/Shell.tsx:2003
+#: src/pages/Shell.tsx:1983
 msgid "Unsupported file type: {0}"
 msgstr "Desteklenmeyen dosya türü: {0}"
 
@@ -4329,8 +4350,8 @@ msgstr "Güncelleniyor…"
 
 #: src/pages/AccountSettingsOverlay.tsx:226
 #: src/pages/SettingsOverlay.tsx:103
-#: src/pages/shell/sidebar.tsx:713
-#: src/pages/shell/sidebar.tsx:724
+#: src/pages/shell/sidebar.tsx:722
+#: src/pages/shell/sidebar.tsx:733
 msgid "Usage"
 msgstr "Kullanım"
 
@@ -4375,7 +4396,7 @@ msgstr "Ses"
 msgid "Voice and replies"
 msgstr "Ses ve yanıtlar"
 
-#: src/pages/bot-page/BotActivity.tsx:297
+#: src/pages/bot-page/BotActivity.tsx:308
 msgid "Waiting"
 msgstr "Bekliyor"
 
@@ -4394,11 +4415,11 @@ msgstr "API'nin geri gelmesi bekleniyor…"
 msgid "Waiting…"
 msgstr "Bekleniyor…"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:150
+#: src/pages/bot-page/RoutineTriggers.tsx:136
 msgid "Webhook"
 msgstr "Webhook"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:93
+#: src/pages/bot-page/RoutineTriggers.tsx:79
 #: src/pages/RoutineSchedule.tsx:39
 #: src/pages/RoutineSchedule.tsx:158
 msgid "Weekdays"
@@ -4412,7 +4433,7 @@ msgstr "Her hafta {weekday} {time}"
 msgid "What about its memories?"
 msgstr "Hafızası ne olsun?"
 
-#: src/pages/bot-page/BotHero.tsx:64
+#: src/pages/bot-page/BotHero.tsx:68
 msgid "What it does, in one line"
 msgstr "Ne yaptığı, tek satırda"
 
@@ -4420,8 +4441,8 @@ msgstr "Ne yaptığı, tek satırda"
 msgid "What result will you demonstrate?"
 msgstr "Hangi sonucu göstereceksin?"
 
-#: src/pages/bot-page/RoutineCreateForm.tsx:103
-#: src/pages/bot-page/RoutineDetail.tsx:143
+#: src/pages/bot-page/RoutineCreateForm.tsx:96
+#: src/pages/bot-page/RoutineDetail.tsx:145
 msgid "What should this routine do each time it runs?"
 msgstr "Bu rutin her çalıştığında ne yapmalı?"
 
@@ -4440,12 +4461,11 @@ msgid "What to return"
 msgstr "Ne döndürülecek"
 
 #: src/pages/bot-page/routine-copy.ts:37
-#: src/pages/bot-page/RoutineTriggers.tsx:227
-#: src/pages/bot-page/RoutineTriggers.tsx:366
+#: src/pages/bot-page/RoutineTriggers.tsx:210
 msgid "When a webhook fires"
 msgstr "Bir webhook tetiklendiğinde"
 
-#: src/pages/bot-page/RoutineTriggers.tsx:103
+#: src/pages/bot-page/RoutineTriggers.tsx:89
 msgid "When to run"
 msgstr "Ne zaman çalışacak"
 
@@ -4463,11 +4483,11 @@ msgstr "Botlar nerede çalışsın?"
 msgid "Working…"
 msgstr "Çalışıyor…"
 
-#: src/pages/KnowledgeSection.tsx:743
+#: src/pages/KnowledgeSection.tsx:795
 msgid "Workspace root"
 msgstr "Çalışma alanı kökü"
 
-#: src/pages/bot-page/BotActivity.tsx:279
+#: src/pages/bot-page/BotActivity.tsx:290
 msgid "Write its first instructions"
 msgstr "İlk yönergelerini yaz"
 
@@ -4475,15 +4495,15 @@ msgstr "İlk yönergelerini yaz"
 msgid "Yearly on {date} at {time}"
 msgstr "Her yıl {date} {time}"
 
-#: src/pages/bot-page/BotActivity.tsx:207
+#: src/pages/bot-page/BotActivity.tsx:217
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402
 #: src/pages/shell/transcript.tsx:222
 msgid "Yesterday"
 msgstr "Dün"
 
-#: src/pages/Shell.tsx:1667
-#: src/pages/Shell.tsx:2548
+#: src/pages/Shell.tsx:1647
+#: src/pages/Shell.tsx:2528
 msgid "You"
 msgstr "Sen"
 
@@ -4495,7 +4515,7 @@ msgstr "Otomatik yönlendirilmezsen bu sekmeyi kapatabilirsin."
 msgid "You can close this window."
 msgstr "Bu pencereyi kapatabilirsin."
 
-#: src/pages/shell/side-panel.tsx:406
+#: src/pages/shell/side-panel.tsx:409
 msgid "You have control"
 msgstr "Kontrol sende"
 

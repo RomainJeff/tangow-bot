@@ -95,6 +95,8 @@ export function BotsSidebar({
   setArchivedOpen,
   refreshBots,
   setDeleteTarget,
+  onOpenArchivedBot,
+  onRestoreBot,
   setDeleteGroupTarget,
   setCustomizeOpen,
   menuOpen,
@@ -160,6 +162,9 @@ export function BotsSidebar({
   setArchivedOpen: Dispatch<SetStateAction<boolean>>;
   refreshBots: (includeArchived?: boolean, replaceBotOrder?: boolean) => Promise<void>;
   setDeleteTarget: Dispatch<SetStateAction<Bot | null>>;
+  /** Opens an archived bot's page, read-only. */
+  onOpenArchivedBot: (botId: string) => void;
+  onRestoreBot: (botId: string) => void;
   setDeleteGroupTarget: Dispatch<SetStateAction<Group | null>>;
   setCustomizeOpen: Dispatch<SetStateAction<boolean>>;
   menuOpen: boolean;
@@ -579,26 +584,30 @@ export function BotsSidebar({
                 <>
                   {archivedBots.map((bot) => (
                     <div key={bot.id} className="flex items-center gap-2 rounded-row px-2.5 py-2">
-                      <BotAvatar
-                        color={bot.color}
-                        identity={bot.id}
-                        shapeSeed={bot.shapeSeed}
-                        size={28}
-                        status={bot.status}
-                      />
-                      <span
-                        className="min-w-0 flex-1 truncate text-capsule text-foreground/75"
-                        dir="auto"
+                      <button
+                        type="button"
+                        data-testid="archived-bot-open"
+                        onClick={() => {
+                          setMobileSidebarOpen(false);
+                          onOpenArchivedBot(bot.id);
+                        }}
+                        className="flex min-w-0 flex-1 items-center gap-2 rounded-chip text-start outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                       >
-                        {bot.name}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() =>
-                          void rpc.bots.restore({ botId: bot.id }).then(() => refreshBots(true))
-                        }
-                      >
+                        <BotAvatar
+                          color={bot.color}
+                          identity={bot.id}
+                          shapeSeed={bot.shapeSeed}
+                          size={28}
+                          status={bot.status}
+                        />
+                        <span
+                          className="min-w-0 flex-1 truncate text-capsule text-foreground/75 hover:text-foreground"
+                          dir="auto"
+                        >
+                          {bot.name}
+                        </span>
+                      </button>
+                      <Button variant="ghost" size="xs" onClick={() => onRestoreBot(bot.id)}>
                         <Trans>Restore</Trans>
                       </Button>
                       <Button

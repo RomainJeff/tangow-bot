@@ -67,6 +67,8 @@ export type BotActivityItem = z.infer<typeof BotActivityItemSchema>;
 /** Active routine runs come first on the first page only and are never paged. */
 export const BotActivityInputSchema = z.object({
   botId: Id,
+  /** Only this routine's runs, for its own page. */
+  routineId: Id.optional(),
   cursor: RunsCursorSchema.optional(),
   limit: z.number().int().min(1).max(RUNS_PAGE_MAX).optional(),
 });

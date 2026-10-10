@@ -46,6 +46,7 @@ export function SidePanel({
   onBotPage,
   commands,
   userId,
+  pageBot,
   active,
   activeGroup,
   computer,
@@ -74,10 +75,12 @@ export function SidePanel({
   setPanel: Dispatch<SetStateAction<Panel>>;
   size: PanelSize;
   botPage: BotPageView;
-  /** Shows the bot page on this view, opening the panel when it is closed. */
+  /** Moves the open bot page to this view. */
   onBotPage: (view: BotPageView) => void;
   commands: BotCommands;
   userId: string;
+  /** The bot the bot page shows: the thread's, or an archived one opened from the sidebar. */
+  pageBot: Bot | undefined;
   active: Bot | undefined;
   activeGroup: Group | undefined;
   computer: ComputerStatus | null;
@@ -110,7 +113,7 @@ export function SidePanel({
   }) => Promise<void>;
 }) {
   const { t } = useLingui();
-  const open = panelIsOpen(panel, active, activeGroup);
+  const open = panelIsOpen(panel, panel === "bot" ? pageBot : active, activeGroup);
   const closeEditor = useCallback(
     () => onBotPage({ tab: botPage.tab, detail: null }),
     [onBotPage, botPage.tab],
@@ -135,12 +138,12 @@ export function SidePanel({
       }`}
     >
       {open ? (
-        panel === "bot" && active ? (
+        panel === "bot" && pageBot ? (
           <BotPage
-            key={active.id}
-            bot={active}
+            key={pageBot.id}
+            bot={pageBot}
             userId={userId}
-            routines={activeRoutines}
+            routines={pageBot.id === active?.id ? activeRoutines : null}
             memoryProviderConfigured={memoryProviderConfig != null}
             view={botPage}
             onView={onBotPage}

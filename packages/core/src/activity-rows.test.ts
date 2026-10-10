@@ -73,6 +73,15 @@ describe("foldActivity", () => {
     ]);
   });
 
+  it("lists every run on its own when folding is off, as on a routine's page", () => {
+    const entries = [run("a"), run("b"), run("c")];
+    expect(foldActivity(entries, { fold: false })).toEqual([
+      { kind: "run", row: row("a") },
+      { kind: "run", row: row("b") },
+      { kind: "run", row: row("c") },
+    ]);
+  });
+
   it("keeps a single success as a plain run", () => {
     expect(foldActivity([run("a")])).toEqual([{ kind: "run", row: row("a") }]);
   });

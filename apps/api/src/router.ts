@@ -228,6 +228,7 @@ import {
   toVoiceStatus,
   voiceContext,
 } from "./voice.js";
+import { loadWebhookSecret, WEBHOOK_SECRET_KIND } from "./webhook-inbound.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
 const THREAD_MESSAGE_PAGE_SIZE = 100;
@@ -1014,7 +1015,8 @@ export function createRouter(deps: RouterDeps) {
         return found;
       }),
       activity: authed.bots.activity.handler(async ({ context, input }) => {
-        const bot = await repos.getBot(context.actor, input.botId);
+        // An archived bot's page still shows what it did.
+        const bot = await repos.getBot(context.actor, input.botId, { includeArchived: true });
         return listBotActivity(deps.prisma, context.actor, bot, input);
       }),
       create: authed.bots.create.handler(async ({ context, input }) => {
@@ -1307,44 +1309,29 @@ export function createRouter(deps: RouterDeps) {
         );
         return { ok: true as const };
       }),
+      webhookSecret: authed.bots.webhookSecret.handler(async ({ context, input }) => {
+        let bot = await repos.getBot(context.actor, input.botId);
+        if (!bot.webhookSecretId) {
+          const minted = await storeWebhookSecret(deps, context, bot, { ifAbsent: true });
+          if (minted) return { secret: minted };
+          // Another request stored the bot's first key between the read and the claim.
+          bot = await repos.getBot(context.actor, input.botId);
+        }
+        const secret = await loadWebhookSecret(deps, bot);
+        if (secret === null) {
+          throw new ORPCError("INTERNAL_SERVER_ERROR", {
+            message: "This bot's webhook key cannot be read. Rotate it to get a new one.",
+          });
+        }
+        return { secret };
+      }),
       rotateWebhookSecret: authed.bots.rotateWebhookSecret.handler(async ({ context, input }) => {
         const bot = await repos.getBot(context.actor, input.botId);
-        const plaintext = randomBytes(32).toString("base64url");
-        const stored = await deps.secrets.put(plaintext, {
-          operationId: "bots.rotateWebhookSecret",
-          traceId: "bots.rotateWebhookSecret",
-          spaceId: context.actor.spaceId,
-          userId: context.actor.userId,
-          signal: context.signal ?? new AbortController().signal,
-        });
-        await deps.prisma.$transaction(async (tx) => {
-          const previousSecretId = bot.webhookSecretId;
-          await tx.secret.create({
-            data: {
-              id: stored.id,
-              userId: context.actor.userId,
-              spaceId: context.actor.spaceId,
-              kind: "webhook",
-              ciphertext: stored.ciphertext,
-            },
-          });
-          await tx.bot.update({
-            where: { id: bot.id },
-            data: { webhookSecretId: stored.id },
-          });
-          if (previousSecretId) {
-            await tx.secret.deleteMany({
-              where: {
-                id: previousSecretId,
-                spaceId: context.actor.spaceId,
-                userId: context.actor.userId,
-                kind: "webhook",
-              },
-            });
-          }
+        const secret = await storeWebhookSecret(deps, context, bot, {
+          ifAbsent: input.ifAbsent ?? false,
         });
         return {
-          secret: plaintext,
+          secret,
           path: `/api/v1/bots/${bot.id}/webhook`,
           webhookConfigured: true as const,
         };
@@ -4789,6 +4776,55 @@ export function createRouter(deps: RouterDeps) {
       ),
     },
   });
+}
+
+/**
+ * Stores a new webhook key for the bot and returns it. With `ifAbsent`, the claim holds only while
+ * the bot has no key, so of two concurrent first keys one wins and the other answers null.
+ */
+async function storeWebhookSecret(
+  deps: Pick<RouterDeps, "prisma" | "secrets">,
+  context: { actor: Actor; signal?: AbortSignal },
+  bot: { id: string; webhookSecretId: string | null },
+  { ifAbsent }: { ifAbsent: boolean },
+): Promise<string | null> {
+  const { actor } = context;
+  const plaintext = randomBytes(32).toString("base64url");
+  const stored = await deps.secrets.put(plaintext, {
+    operationId: "bots.webhookSecret",
+    traceId: "bots.webhookSecret",
+    spaceId: actor.spaceId,
+    userId: actor.userId,
+    signal: context.signal ?? new AbortController().signal,
+  });
+  const claimed = await deps.prisma.$transaction(async (tx) => {
+    const { count } = await tx.bot.updateMany({
+      where: { id: bot.id, ...(ifAbsent ? { webhookSecretId: null } : {}) },
+      data: { webhookSecretId: stored.id },
+    });
+    if (count === 0) return false;
+    await tx.secret.create({
+      data: {
+        id: stored.id,
+        userId: actor.userId,
+        spaceId: actor.spaceId,
+        kind: WEBHOOK_SECRET_KIND,
+        ciphertext: stored.ciphertext,
+      },
+    });
+    if (bot.webhookSecretId) {
+      await tx.secret.deleteMany({
+        where: {
+          id: bot.webhookSecretId,
+          spaceId: actor.spaceId,
+          userId: actor.userId,
+          kind: WEBHOOK_SECRET_KIND,
+        },
+      });
+    }
+    return true;
+  });
+  return claimed ? plaintext : null;
 }
 
 function updaterConfig(deps: RouterDeps): UpdaterProxyConfig {

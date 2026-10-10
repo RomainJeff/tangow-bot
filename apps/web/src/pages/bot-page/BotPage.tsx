@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Bot, Routine } from "@rakazo/contracts";
+import { routineFailing } from "@rakazo/core";
 import {
   Button,
   DropdownMenu,
@@ -14,6 +15,7 @@ import {
 } from "@rakazo/ui-web";
 import {
   Archive,
+  ArchiveRestore,
   ChevronLeft,
   Copy,
   Download,
@@ -22,13 +24,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
 import { BotActivity } from "./BotActivity";
 import { BotHero } from "./BotHero";
 import type { BotPageContext } from "./page-kit";
-import { useBotField, useConfirm } from "./page-kit";
+import { PendingRead, useBotField, useConfirm } from "./page-kit";
 import { RoutineCreateForm } from "./RoutineCreateForm";
 import { RoutineDetail } from "./RoutineDetail";
 import { RoutinesTab } from "./RoutinesTab";
@@ -38,9 +40,15 @@ import { SettingsTab } from "./SettingsTab";
 const KnowledgeTab = lazy(() =>
   import("./KnowledgeTab").then((module) => ({ default: module.KnowledgeTab })),
 );
+const MemoryDetail = lazy(() =>
+  import("./KnowledgeTab").then((module) => ({ default: module.MemoryDetail })),
+);
 const AgentSkillEditor = lazy(() =>
   import("../KnowledgeSection").then((module) => ({ default: module.AgentSkillEditor })),
 );
+
+/** Details whose first stop is the back button rather than a field of their own. */
+const FOCUS_BACK: ReadonlySet<BotDetail["kind"]> = new Set(["model", "voice", "memory", "skill"]);
 
 export interface BotPageProps {
   bot: Bot;
@@ -59,7 +67,8 @@ export interface BotPageProps {
 /**
  * The bot's page in the side panel: who it is at the top, then Activity,
  * Routines, Knowledge and Settings. Every setting saves itself through
- * `commands`; the page holds no copy of the bot.
+ * `commands`; the page holds no copy of the bot. An archived bot's page only
+ * reads: who it is and its activity, until it is restored.
  */
 export function BotPage({
   bot,
@@ -75,24 +84,31 @@ export function BotPage({
   const { t } = useLingui();
   const { confirm, dialog } = useConfirm();
   const root = useRef<HTMLDivElement>(null);
-  const page: BotPageContext = { bot, userId, commands };
+  const archived = bot.archivedAt !== null;
+  const page: BotPageContext = { bot, userId, commands, readOnly: archived };
   // Instructions being saved already count, so the link to write them goes as the editor closes.
   const instructions = useBotField(page, "instructions", bot.instructions, (value) => ({
     instructions: value,
   }));
-  const detail = view.detail;
+  const detail = archived ? null : view.detail;
   const routine =
     detail?.kind === "routine" ? routines?.find((item) => item.id === detail.routineId) : undefined;
-  // A key minted for this bot's inbound triggers is shown once, wherever it was minted.
-  const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
+  const routineFailed = routines?.some(routineFailing) ?? false;
   const tabLabels: Record<BotTab, string> = {
     activity: t`Activity`,
     routines: t`Routines`,
     knowledge: t`Knowledge`,
     settings: t`Settings`,
   };
+  // Knowledge stays mounted behind its memory and skill editors, so closing one
+  // keeps the tab as it was and reads its lists again in place.
+  const knowledgeBehind = detail?.kind === "memory" || detail?.kind === "skill";
+  const [knowledgeEpoch, setKnowledgeEpoch] = useState(0);
   const open = (next: BotDetail) => onView({ tab: view.tab, detail: next });
-  const back = () => onView({ tab: view.tab, detail: null });
+  const back = () => {
+    setKnowledgeEpoch((epoch) => epoch + 1);
+    onView({ tab: view.tab, detail: null });
+  };
   const toRoutines = () => onView({ tab: "routines", detail: null });
 
   // A routine that is gone (deleted here or elsewhere) leaves its tab showing.
@@ -101,37 +117,46 @@ export function BotPage({
     if (missingRoutine) onView({ tab: "routines", detail: null });
   }, [missingRoutine, onView]);
 
+  // The bot or its routines may have changed elsewhere: on another device, or by the bot during
+  // a run (a run ending renews `commands`). Read them again on open, on each tab, on focus.
+  const [readFailed, setReadFailed] = useState(false);
+  const refresh = useCallback(
+    () =>
+      void commands.refresh(bot.id).then(
+        () => setReadFailed(false),
+        () => setReadFailed(true),
+      ),
+    [commands, bot.id],
+  );
+  // Only a Retry shows loading again; a focus read keeps what is shown until it answers.
+  const retry = () => {
+    setReadFailed(false);
+    refresh();
+  };
+  useEffect(() => {
+    if (archived) return;
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [refresh, archived, view.tab]);
+
   // Focus follows the editor: into it when it opens (a text editor focuses its
-  // own field), back to the row that opened it when it closes. A row from a list
-  // that reloads with its tab (skills) is focused once it renders, unless focus
-  // has moved on by then.
+  // own field), back to the row that opened it when it closes.
   const backButton = useRef<HTMLButtonElement>(null);
   const lastDetail = useRef(detail);
   useEffect(() => {
     const closed = lastDetail.current;
     lastDetail.current = detail;
-    if (detail?.kind === "model" || detail?.kind === "voice") backButton.current?.focus();
-    const page = root.current;
-    if (detail || !closed || !page) return;
-    const selector = `[data-opens="${detailOpener(closed)}"]`;
-    const focusOpener = () => {
-      const opener = page.querySelector<HTMLElement>(selector);
-      opener?.focus();
-      return opener !== null;
-    };
-    if (focusOpener()) return;
-    const observer = new MutationObserver(() => {
-      if (document.activeElement !== document.body || focusOpener()) observer.disconnect();
-    });
-    observer.observe(page, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    if (detail && FOCUS_BACK.has(detail.kind)) backButton.current?.focus();
+    if (detail || !closed) return;
+    root.current?.querySelector<HTMLElement>(`[data-opens="${detailOpener(closed)}"]`)?.focus();
   }, [detail]);
 
   return (
     <div
       ref={root}
       data-testid="bot-page"
-      aria-busy={routines === null || undefined}
+      aria-busy={(!archived && routines === null && !readFailed) || undefined}
       className="flex min-h-0 flex-1 flex-col"
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
@@ -150,7 +175,11 @@ export function BotPage({
           <span />
         )}
         <div className="flex items-center gap-0.5">
-          <MoreMenu bot={bot} onAction={(action) => commands.botAction(bot.id, action)} />
+          <MoreMenu
+            bot={bot}
+            archived={archived}
+            onAction={(action) => commands.botAction(bot.id, action)}
+          />
           <Button variant="ghost" size="icon-sm" aria-label={t`Close panel`} onClick={onClose}>
             <X size={16} strokeWidth={1.8} />
           </Button>
@@ -174,24 +203,30 @@ export function BotPage({
               page={page}
               routine={routine}
               messageProviders={messagingProviders}
-              webhookSecret={webhookSecret}
-              onWebhookSecret={setWebhookSecret}
               confirm={confirm}
               onDeleted={toRoutines}
             />
-          ) : null}
+          ) : (
+            <div className="px-4 pt-5">
+              <PendingRead failed={readFailed} onRetry={retry} />
+            </div>
+          )}
         </div>
-      ) : detail?.kind === "skill" ? (
+      ) : detail?.kind === "memory" || detail?.kind === "skill" ? (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto px-4 pt-1 pb-4">
           <Suspense fallback={null}>
-            <AgentSkillEditor
-              key={detail.skillId}
-              skillId={detail.skillId}
-              onDone={(changed) => {
-                if (changed) commands.skillsChanged();
-                back();
-              }}
-            />
+            {detail.kind === "memory" ? (
+              <MemoryDetail botId={bot.id} documentId={detail.documentId} onDone={back} />
+            ) : (
+              <AgentSkillEditor
+                key={detail.skillId}
+                skillId={detail.skillId}
+                onDone={(changed) => {
+                  if (changed) commands.skillsChanged();
+                  back();
+                }}
+              />
+            )}
           </Suspense>
         </div>
       ) : detail?.kind === "routine-new" ? (
@@ -201,61 +236,89 @@ export function BotPage({
             page={page}
             seed={detail.seed}
             messageProviders={messagingProviders}
-            webhookSecret={webhookSecret}
-            onWebhookSecret={setWebhookSecret}
             confirm={confirm}
             onCreated={(created) =>
               onView({ tab: "routines", detail: { kind: "routine", routineId: created.id } })
             }
           />
         </div>
-      ) : (
-        <div className="rk-scroll min-h-0 flex-1 overflow-y-auto pb-4">
+      ) : null}
+      {detail && !knowledgeBehind ? null : (
+        <div hidden={knowledgeBehind} className="rk-scroll min-h-0 flex-1 overflow-y-auto pb-4">
           <BotHero page={page} />
-          <Tabs
-            value={view.tab}
-            onValueChange={(tab) => onView({ tab: tab as BotTab, detail: null })}
-            className="gap-0"
-          >
-            <div className="px-4 pt-5 pb-4">
-              <TabsList variant="segmented" className="w-full">
-                {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
-                  <TabsTrigger key={tab} value={tab} data-testid={`bot-tab-${tab}`}>
-                    {tabLabels[tab]}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+          {archived ? (
+            <div className="px-4 pt-5">
+              <BotActivity botId={bot.id} commands={{ activityEpoch: commands.activityEpoch }} />
             </div>
-            <TabsContent value="activity" className="px-4">
-              <BotActivity
-                botId={bot.id}
-                commands={commands}
-                onWriteInstructions={
-                  instructions.value
-                    ? undefined
-                    : () => onView({ tab: "activity", detail: { kind: "instructions" } })
-                }
-                onOpenRoutine={(routineId) =>
-                  onView({ tab: "routines", detail: { kind: "routine", routineId } })
-                }
-              />
-            </TabsContent>
-            <TabsContent value="routines" className="px-4">
-              <RoutinesTab page={page} routines={routines} onOpen={open} />
-            </TabsContent>
-            <TabsContent value="knowledge" className="px-4">
-              <Suspense fallback={null}>
-                <KnowledgeTab
-                  page={page}
-                  memoryProviderConfigured={memoryProviderConfigured}
-                  onOpen={open}
+          ) : (
+            <Tabs
+              value={view.tab}
+              onValueChange={(tab) => onView({ tab: tab as BotTab, detail: null })}
+              className="gap-0"
+            >
+              <div className="px-4 pt-5 pb-4">
+                <TabsList variant="segmented" className="w-full">
+                  {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
+                    <TabsTrigger
+                      key={tab}
+                      value={tab}
+                      data-testid={`bot-tab-${tab}`}
+                      aria-label={
+                        tab === "activity" && routineFailed
+                          ? t`Activity, last run failed`
+                          : undefined
+                      }
+                      className="gap-1.5"
+                    >
+                      {tabLabels[tab]}
+                      {tab === "activity" && routineFailed ? (
+                        <span
+                          aria-hidden
+                          className="size-1.5 shrink-0 rounded-full bg-destructive"
+                        />
+                      ) : null}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+              <TabsContent value="activity" className="px-4">
+                <BotActivity
+                  botId={bot.id}
+                  commands={commands}
+                  onWriteInstructions={
+                    instructions.value
+                      ? undefined
+                      : () => onView({ tab: "activity", detail: { kind: "instructions" } })
+                  }
+                  onOpenRoutine={(routineId) =>
+                    onView({ tab: "routines", detail: { kind: "routine", routineId } })
+                  }
                 />
-              </Suspense>
-            </TabsContent>
-            <TabsContent value="settings" className="px-4">
-              <SettingsTab page={page} onOpen={open} />
-            </TabsContent>
-          </Tabs>
+              </TabsContent>
+              <TabsContent value="routines" className="px-4">
+                <RoutinesTab
+                  page={page}
+                  routines={routines}
+                  failed={readFailed}
+                  onOpen={open}
+                  onRetry={retry}
+                />
+              </TabsContent>
+              <TabsContent value="knowledge" className="px-4">
+                <Suspense fallback={null}>
+                  <KnowledgeTab
+                    page={page}
+                    memoryProviderConfigured={memoryProviderConfigured}
+                    epoch={knowledgeEpoch}
+                    onOpen={open}
+                  />
+                </Suspense>
+              </TabsContent>
+              <TabsContent value="settings" className="px-4">
+                <SettingsTab page={page} onOpen={open} />
+              </TabsContent>
+            </Tabs>
+          )}
         </div>
       )}
       {dialog}
@@ -263,7 +326,15 @@ export function BotPage({
   );
 }
 
-function MoreMenu({ bot, onAction }: { bot: Bot; onAction: (action: BotAction) => void }) {
+function MoreMenu({
+  bot,
+  archived,
+  onAction,
+}: {
+  bot: Bot;
+  archived: boolean;
+  onAction: (action: BotAction) => void;
+}) {
   const { t } = useLingui();
   return (
     <DropdownMenu>
@@ -275,23 +346,33 @@ function MoreMenu({ bot, onAction }: { bot: Bot; onAction: (action: BotAction) =
         }
       />
       <DropdownMenuContent align="end" className="min-w-52">
-        <DropdownMenuItem onClick={() => onAction("duplicate")}>
-          <Copy />
-          {t`Duplicate`}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction("export")}>
-          <Download />
-          {t`Export`}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => onAction("clear")}>
-          <Eraser />
-          {t`Clear conversation`}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onAction("archive")}>
-          <Archive />
-          {t`Archive`}
-        </DropdownMenuItem>
+        {archived ? (
+          // What the archived list offers: the server refuses everything else on an archived bot.
+          <DropdownMenuItem onClick={() => onAction("restore")}>
+            <ArchiveRestore />
+            {t`Restore`}
+          </DropdownMenuItem>
+        ) : (
+          <>
+            <DropdownMenuItem onClick={() => onAction("duplicate")}>
+              <Copy />
+              {t`Duplicate`}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAction("export")}>
+              <Download />
+              {t`Export`}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onAction("clear")}>
+              <Eraser />
+              {t`Clear conversation`}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAction("archive")}>
+              <Archive />
+              {t`Archive`}
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuItem variant="destructive" onClick={() => onAction("delete")}>
           <Trash2 />
           {t`Delete`}
