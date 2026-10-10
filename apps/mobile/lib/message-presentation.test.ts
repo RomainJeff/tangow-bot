@@ -4,6 +4,7 @@ import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
   skillLineRoute,
+  skillLineSegment,
   stepsBlocks,
   visibleMessageBlocks,
 } from "./message-presentation";
@@ -143,5 +144,12 @@ describe("skill lines", () => {
     await expect(skillLineRoute(line("deleted"), catalog)).resolves.toEqual({
       pathname: "/bot-skills-trash",
     });
+  });
+
+  it("hangs the lines under the last segment that draws text, else stands them alone", () => {
+    expect(skillLineSegment(["Done."])).toBe(0);
+    expect(skillLineSegment(["Reading.", "Done.", ""])).toBe(1);
+    expect(skillLineSegment([""])).toBe(-1);
+    expect(skillLineSegment([])).toBe(-1);
   });
 });

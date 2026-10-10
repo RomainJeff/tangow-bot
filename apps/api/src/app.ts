@@ -451,7 +451,6 @@ export async function createApp(
   const router = createRouter({
     prisma,
     skillLock,
-    skillLineOnlyMessages: env.skillLearning !== "off",
     events,
     auth,
     jobs,

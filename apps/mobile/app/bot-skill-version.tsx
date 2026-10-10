@@ -2,14 +2,13 @@ import type { SkillVersionDetail } from "@rakazo/contracts";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Alert, ScrollView, StyleSheet, Text } from "react-native";
 import { Group, LoadFailed, Row, useFocusedRead } from "../components/bot-page/kit";
-import { MoreButton, useDateLabel } from "../components/bot-page/skill-parts";
+import { MoreButton, useDateLabel, useVersionSubline } from "../components/bot-page/skill-parts";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import { useResolvedAppearance, useThemedStyles } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
-import { versionSubline } from "../lib/skill-versions";
 import { nativeTextStyle } from "../lib/typography";
 
 /** One past version, read only: its SKILL.md and the files it held. */
@@ -23,6 +22,7 @@ export default function BotSkillVersionScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const dateLabel = useDateLabel();
+  const versionSubline = useVersionSubline();
   const { read, retry } = useFocusedRead(
     () => rpc<SkillVersionDetail>("agentSkills/version", { skillId, versionId }),
     [skillId, versionId],
@@ -65,15 +65,7 @@ export default function BotSkillVersionScreen() {
         <LoadFailed onRetry={retry} />
       ) : version ? (
         <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-          <Text style={styles.meta}>
-            {versionSubline(version, {
-              learned: t("learned"),
-              updated: t("updated"),
-              you: t("You"),
-              undone: t("Undone"),
-              unknown: t("Updated"),
-            })}
-          </Text>
+          <Text style={styles.meta}>{versionSubline(version)}</Text>
           <Text selectable style={styles.body}>
             {version.content}
           </Text>

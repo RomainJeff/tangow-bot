@@ -332,3 +332,42 @@ describe("a crash at any step of erasing history", () => {
     );
   });
 });
+
+describe("changing access after a rename crashed", () => {
+  async function renameCrashThenOpen(failAt: number) {
+    const data = await mkdtemp(path.join(tmpdir(), "rakazo-skill-crash-"));
+    dirs.push(data);
+    const prisma = fakeSkillPrisma();
+    const { library } = testLibrary(data, { prisma });
+    const admin = library.forOwner(owner);
+    await library
+      .forBot(owner, ada)
+      .create({ kind: "skill-md", name: "Deploy", content: md("Deploy") });
+    crash.reset(failAt);
+    await admin
+      .update("user:deploy", { kind: "skill-md", name: "Ship", content: md("Ship") })
+      .catch(() => undefined);
+    const steps = crash.steps;
+    crash.reset();
+    const opened = await admin.setAccess("user:deploy", { availability: "all", bots: [] }).then(
+      () => "applied",
+      (error: Error & { reason?: string }) => error.reason ?? error.message,
+    );
+    await library.repair(owner);
+    const [live] = await listUserSkills(userSkillsRoot(data, owner));
+    const availability = prisma.skillSetting.rows
+      .filter((row) => row.skillKey === live?.id)
+      .map((row) => row.availability);
+    return { steps, seen: [opened, live?.id, availability] };
+  }
+
+  it("lands on the skill or is refused, never lost", { timeout: 180_000 }, async () => {
+    const { steps } = await renameCrashThenOpen(Number.POSITIVE_INFINITY);
+    for (let failAt = 1; failAt <= steps; failAt += 1) {
+      expect([
+        ["applied", "user:deploy", ["all"]],
+        ["not_found", "user:ship", ["selected"]],
+      ]).toContainEqual((await renameCrashThenOpen(failAt)).seen);
+    }
+  });
+});

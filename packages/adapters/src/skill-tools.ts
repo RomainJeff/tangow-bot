@@ -333,8 +333,11 @@ export async function skillCreateFromTool(
   const rejected = rejectOversizedContent(content) ?? botSkillError(owner, content);
   if (rejected) return { error: rejected };
 
-  const existing = await findOwnedSkill(deps, owner, { name });
-  if (existing) return { error: `A skill named "${existing.name}" already exists.` };
+  // A replayed call finds its own skill under that name; the writer returns it unchanged.
+  if (!(await writer.replayed())) {
+    const existing = await findOwnedSkill(deps, owner, { name });
+    if (existing) return { error: `A skill named "${existing.name}" already exists.` };
+  }
 
   // A bot-created skill starts scoped to its creator (design Q2); the user widens it in the UI.
   const saved: SkillContent = input.files
@@ -369,6 +372,12 @@ export async function skillUpdateFromTool(
     files?: SkillTreeFile[];
   },
 ): Promise<Record<string, unknown>> {
+  // A replayed rename no longer finds its skill under the name it was given.
+  const replayed = await writer.replayed();
+  if (replayed) {
+    const skill = await findOwnedSkill(deps, owner, { skillId: replayed.key });
+    return { ok: true, id: replayed.key, name: replayed.name, description: skill?.description };
+  }
   const existing = await findOwnedSkill(deps, owner, {
     skillId: input.skillId,
     name: input.name,

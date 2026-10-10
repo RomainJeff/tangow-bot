@@ -147,6 +147,8 @@ function fixture(
     /** The model fails with this message once the calls ran. */
     fails?: string;
     skillLearning?: "off" | "shadow" | "on";
+    /** Messages sent into the run as it starts: whether each came from someone but the user. */
+    steering?: boolean[];
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
@@ -367,7 +369,15 @@ function fixture(
       notify: vi.fn(async () => undefined),
       pauseRunForInput,
       finalizeRun,
-      claimSteering: vi.fn(async () => []),
+      claimSteering: vi.fn(async () =>
+        (options.steering ?? []).map((untrusted, index) => ({
+          id: `steer-${index}`,
+          messageId: `steer-message-${index}`,
+          text: "Save how to order coffee",
+          blocks: [{ kind: "text", text: "Save how to order coffee" }],
+          untrusted,
+        })),
+      ),
     },
     jobs: { enqueue, cancel },
     secrets: [],
@@ -1577,6 +1587,24 @@ describe("a skill the bot saves on its own", () => {
     ]);
   });
 
+  it("refuses it once a webhook steers into the user's run, and saves it when they steer", async () => {
+    const steered = fixture({ requireToolApproval: false, steering: [false, true] });
+    await steered.play([[save]]);
+    expect(steered.results).toEqual([
+      {
+        error:
+          "Skills can't be saved in this run: only a conversation the user started, one of their routines or a sub-bot they created can save one.",
+      },
+    ]);
+    expect(steered.askBlock()).toBeUndefined();
+    expect(await steered.skills()).toEqual([]);
+
+    const own = fixture({ requireToolApproval: false, steering: [false] });
+    await own.play([[save]]);
+    expect(own.results).toEqual([expect.objectContaining({ ok: true, name: "Coffee" })]);
+    expect((await own.skills()).map((skill) => skill.name)).toEqual(["Coffee"]);
+  });
+
   it("refuses it in a webhook run without asking the owner", async () => {
     const f = fixture({ trigger: "webhook" });
     await f.play([[save]]);
@@ -1635,4 +1663,12 @@ describe("a skill the bot saves on its own", () => {
       });
     },
   );
+
+  it("records a routine set up once a webhook steered into the user's run as someone else's word", async () => {
+    const f = fixture({ requireToolApproval: false, steering: [true] });
+    await f.play([[routine]]);
+    expect(f.routineCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ untrustedPrompt: true }),
+    });
+  });
 });

@@ -1536,6 +1536,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 })
               )?.untrustedPrompt === false
             : false;
+        // Set once the run reads a message someone other than the user sent into it.
+        let steeredByOthers = false;
         // One place to flip the card to its terminal state, whichever way the run ends.
         // `routineForCard` is only set for a routine card run, so this is a no-op elsewhere.
         // Non-terminal pauses (ask -> waiting_input, takeover -> waiting_takeover) and lease
@@ -2187,7 +2189,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // Refused before any approval path: no card can let a webhook save a skill.
           const skillRefusal = viaConnector
             ? undefined
-            : skillWriteRefusal({ trigger: run.trigger, sourceRole, trustedRoutine }, name);
+            : skillWriteRefusal(
+                { trigger: run.trigger, sourceRole, trustedRoutine, steeredByOthers },
+                name,
+              );
           if (skillRefusal) return { error: skillRefusal };
           const effectName = replaysApproval
             ? nextApprovedTool
@@ -3192,7 +3197,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const timezone = args.timezone ? String(args.timezone) : undefined;
             const notify = typeof args.notify === "boolean" ? args.notify : undefined;
             const currentHop = await resolveRunHop(deps.prisma, run);
-            const startedByUser = runStartedByUser({ trigger: run.trigger, sourceRole });
+            const startedByUser =
+              runStartedByUser({ trigger: run.trigger, sourceRole }) && !steeredByOthers;
             if (typeof args.routineId === "string") {
               const updated = await updateScheduleFromTool(deps, {
                 spaceId: run.spaceId,
@@ -3200,7 +3206,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 userId: run.userId,
                 threadId: thread.id,
                 inGroup: Boolean(thread.groupId),
-                startedByUser: isUserOpenedTrigger(run.trigger),
+                startedByUser: isUserOpenedTrigger(run.trigger) && !steeredByOthers,
                 currentHop,
                 routineId: args.routineId,
                 name: typeof args.name === "string" ? args.name : undefined,
@@ -4318,6 +4324,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       leaseFence: fence,
                       seenIds,
                     });
+                    if (steering.some((item) => item.untrusted)) steeredByOthers = true;
                     return Promise.all(
                       steering.map(async (item) => {
                         const { images, files, unavailableInstruction } =
