@@ -415,23 +415,13 @@ it.
 
 ### Versions of a skill
 
-Under a skill's editor, once the skill has a history worth showing (a version a
-bot wrote, or more than one version), `text-label` "Versions" with a `tertiary`
-"Undo" (`Undo2`) at the end, then one `SettingRow` per version on a `background`
-`Surface`: the date (`threadTimeMarkerLabel`, so "Today 2:02 PM" as in the
-thread), then "<bot or You> · learned" or "· updated" (an author the history
-does not name reads "Updated") with a chevron. The current version carries a 6 px
-ink dot after its date and `aria-current`; an undone one is `muted` and ends "· Undone". Nothing
-shows while the history loads. A version opens read only: Back, the date and
-author, the SKILL.md in `pre` on `muted`, its files as plain lines with no label,
-and a two-step "Delete" that the current version does not offer. A refusal reads
-as the server's sentence only for a conflict or a bad request, else as what
-failed ("Could not undo", "Could not delete"). On iPhone a skill line opens the
-skill's own screen: its SKILL.md, edited like a memory document, then a `Group`
-"Versions" with a `GroupAction` "Undo" on its label line and a `Row` per version
-(the native check on the current one, dimmed when undone); the field holds a
-draft only while it is edited, so it never shows a text the server no longer
-has.
+On iPhone a skill line opens the skill's own screen: its SKILL.md, edited like a
+memory document, then a `Group` "Versions" with a `GroupAction` "Undo" on its
+label line and a `Row` per version (the native check on the current one, dimmed
+when undone); the field holds a draft only while it is edited, so it never shows
+a text the server no longer has. A refusal reads as the server's sentence only
+for a conflict or a bad request, else as what failed ("Could not undo", "Could
+not delete").
 
 ### Recently deleted
 

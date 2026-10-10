@@ -20,7 +20,6 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { formatBytes } from "../components/ArtifactFileCard";
 import { downloadArtifactBytes } from "../lib/artifact-open";
 import { rpc } from "../lib/rpc";
-import { SkillVersions, SkillVersionView } from "./SkillVersions";
 
 const fieldClass =
   "mt-2 w-full rounded-[11px] border border-border bg-transparent px-3.5 py-3 font-mono text-[13px] leading-relaxed text-foreground";
@@ -508,13 +507,7 @@ export function AgentSkills({
             );
           })
         : null}
-      {editing ? (
-        <AgentSkillEditor
-          skillId={editing.skillId}
-          onDone={closeEditor}
-          onSkillChange={(skillId) => setEditing({ skillId })}
-        />
-      ) : null}
+      {editing ? <AgentSkillEditor skillId={editing.skillId} onDone={closeEditor} /> : null}
     </div>
   );
 }
@@ -526,12 +519,9 @@ export function AgentSkills({
 export function AgentSkillEditor({
   skillId,
   onDone,
-  onSkillChange,
 }: {
   skillId: string | null;
   onDone: (changed: boolean) => void;
-  /** An Undo gave the skill back under another id, as when it undoes a rename. */
-  onSkillChange?: (skillId: string) => void;
 }) {
   const { t } = useLingui();
   const creating = skillId === null;
@@ -540,8 +530,6 @@ export function AgentSkillEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [reading, setReading] = useState<string | null>(null);
-  const [reads, setReads] = useState(0);
   const loaded = creating || skill !== null;
 
   useEffect(() => {
@@ -560,7 +548,7 @@ export function AgentSkillEditor({
     return () => {
       cancelled = true;
     };
-  }, [skillId, reads, t]);
+  }, [skillId, t]);
 
   const draftError = (() => {
     if (!loaded || skill?.readOnly || !draft.trim()) return null;
@@ -597,12 +585,6 @@ export function AgentSkillEditor({
       setError(t`Could not delete skill`);
       setBusy(false);
     }
-  }
-
-  if (skillId && reading) {
-    return (
-      <SkillVersionView skillId={skillId} versionId={reading} onBack={() => setReading(null)} />
-    );
   }
 
   return (
@@ -664,18 +646,6 @@ export function AgentSkillEditor({
           </button>
         ) : null}
       </div>
-      {skillId && skill && !skill.readOnly ? (
-        <SkillVersions
-          skillId={skillId}
-          dirty={draft !== skill.content}
-          onOpen={setReading}
-          onRestored={(restoredId) => {
-            if (restoredId === skillId) setReads((count) => count + 1);
-            else onSkillChange?.(restoredId);
-          }}
-          onTrashed={() => onDone(true)}
-        />
-      ) : null}
     </div>
   );
 }
