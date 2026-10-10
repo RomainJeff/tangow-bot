@@ -212,6 +212,7 @@ Remove the blocks that do not apply to the type (see Variants). Replace every `<
 ---
 ### 🖼 Maquettes
 <suggested_markdown de l'upload PNG>
+<suggested_markdown de l'upload HTML>
 ### 💬 Réponses de <prénom de l'assigné>
 <callout icon="💬" color="gray_bg">
 	<mention-user url="user://<id Notion de l'assigné>"/> réponds ici ; cette zone n'est jamais réécrite.
