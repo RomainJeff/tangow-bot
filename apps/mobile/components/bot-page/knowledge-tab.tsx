@@ -1,6 +1,7 @@
 import type { AgentSkillCatalogEntry, MemoryDocument } from "@rakazo/contracts";
 import { filterSkillList } from "@rakazo/core";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { View } from "react-native";
 import { rpc } from "../../lib/api";
 import { type BotPageContext, useBotField } from "../../lib/bot-page";
@@ -15,6 +16,7 @@ import {
   QuietLine,
   Row,
   SaveMeta,
+  Separated,
   useFocusedRead,
 } from "./kit";
 
@@ -67,9 +69,12 @@ function MemoryGroup({ page, epoch }: { page: BotPageContext; epoch: number }) {
   );
 }
 
+const SKILLS_SHOWN = 5;
+
 function SkillsGroup({ page }: { page: BotPageContext }) {
   const { t } = useI18n();
   const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
   const botId = page.bot.id;
   const { read, settle, retry } = useFocusedRead(
     () => rpc<AgentSkillCatalogEntry[]>("agentSkills/list"),
@@ -85,7 +90,13 @@ function SkillsGroup({ page }: { page: BotPageContext }) {
         : current,
     );
 
-  const skills = read.kind === "ready" ? filterSkillList(read.value, { botId }) : [];
+  const listed = read.kind === "ready" ? filterSkillList(read.value, { botId }) : [];
+  // No search on iPhone: the skills a bot can switch lead, the always-on builtins follow.
+  const skills = [
+    ...listed.filter((entry) => entry.source !== "builtin"),
+    ...listed.filter((entry) => entry.source === "builtin"),
+  ];
+  const collapsible = skills.length > SKILLS_SHOWN;
   return (
     <Group
       label={t("Skills")}
@@ -102,9 +113,17 @@ function SkillsGroup({ page }: { page: BotPageContext }) {
       ) : skills.length === 0 ? (
         <QuietLine>{t("No skills yet")}</QuietLine>
       ) : (
-        skills.map((entry) => (
-          <SkillRow key={entry.id} page={page} entry={entry} onSaved={replace} />
-        ))
+        <Separated>
+          {(collapsible && !expanded ? skills.slice(0, SKILLS_SHOWN) : skills).map((entry) => (
+            <SkillRow key={entry.id} page={page} entry={entry} onSaved={replace} />
+          ))}
+          {collapsible ? (
+            <Row
+              label={expanded ? t("Show less") : t("Show more")}
+              onPress={() => setExpanded((value) => !value)}
+            />
+          ) : null}
+        </Separated>
       )}
     </Group>
   );
@@ -139,7 +158,8 @@ function SkillRow({
     <Row
       label={entry.name}
       subline={entry.description}
-      chevron={!page.readOnly}
+      // A row with a switch carries no chevron, as in iOS Settings; tapping it still opens the skill.
+      chevron={!page.readOnly && entry.source === "builtin"}
       onPress={
         page.readOnly
           ? undefined
