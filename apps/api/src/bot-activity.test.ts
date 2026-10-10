@@ -195,6 +195,31 @@ describe("bots.activity", () => {
     });
     expect(body.json).toEqual({ items: [], nextCursor: null });
   });
+
+  it("lists only one routine's runs for its page, without creations, inside the caller's own bot", async () => {
+    const { prisma, activity } = setup({
+      active: [runRow("live", at(9), { status: "running", completedAt: null })],
+      finished: [runRow("done", at(8))],
+      routines: [{ id: "routine-1", name: "Morning digest", createdAt: at(3), threadId: null }],
+    });
+    const { body } = await activity({ botId: "bot-1", routineId: "routine-1" });
+    expect(body.json.items.map(describeItem)).toEqual(["live:running", "done:completed"]);
+    expect(body.json.nextCursor).toBeNull();
+    const routineRuns = {
+      spaceId: "space-1",
+      userId: "user-1",
+      botId: "bot-1",
+      routineId: "routine-1",
+    };
+    expect(prisma.run.findMany.mock.calls.map(([args]) => args.where)).toEqual([
+      {
+        ...routineRuns,
+        status: { in: ["queued", "leased", "running", "waiting_input", "waiting_takeover"] },
+      },
+      { AND: [routineRuns, { status: { in: ["completed", "failed", "cancelled"] } }, {}] },
+    ]);
+    expect(prisma.routine.findMany).not.toHaveBeenCalled();
+  });
 });
 
 describe("runs.recap", () => {

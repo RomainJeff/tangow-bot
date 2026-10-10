@@ -324,6 +324,57 @@ describeRunsList("runs.list activity tracker", () => {
     expect(second.items.at(-1)).toMatchObject({ createdAt: botRow.createdAt.toISOString() });
   });
 
+  it("lists one routine's runs only for its own bot and owner", async () => {
+    const ownerCookie = await signup(app, `routine-runs-owner-${stamp}@rakazo.test`, "Owner");
+    const bot = await createBot(app, ownerCookie, "Digest Bot");
+    const otherBot = await createBot(app, ownerCookie, "Other Bot");
+    const digest = await prisma.routine.create({
+      data: await routineData(prisma, bot.id, "Digest"),
+    });
+    const sweep = await prisma.routine.create({ data: await routineData(prisma, bot.id, "Sweep") });
+    const elsewhere = await prisma.routine.create({
+      data: await routineData(prisma, otherBot.id, "Elsewhere"),
+    });
+    const live = await seedRun(prisma, bot.id, "running", "digest live", null, digest.id);
+    const done = await seedRun(prisma, bot.id, "completed", "digest done", undefined, digest.id);
+    await seedRun(prisma, bot.id, "completed", "sweep done", undefined, sweep.id);
+    await seedRun(prisma, bot.id, "completed", "person asked");
+    await seedRun(prisma, otherBot.id, "completed", "elsewhere done", undefined, elsewhere.id);
+
+    const runIds = (output: BotActivityOutput) =>
+      output.items.map((item) => (item.kind === "routine_run" ? item.run.runId : item.kind));
+    const own = await rpc<BotActivityOutput>(app, ownerCookie, "bots/activity", {
+      botId: bot.id,
+      routineId: digest.id,
+    });
+    expect(runIds(own)).toEqual([live.id, done.id]);
+    expect(own.nextCursor).toBeNull();
+
+    const crossBot = await rpc<BotActivityOutput>(app, ownerCookie, "bots/activity", {
+      botId: bot.id,
+      routineId: elsewhere.id,
+    });
+    expect(crossBot).toEqual({ items: [], nextCursor: null });
+
+    const intruderCookie = await signup(
+      app,
+      `routine-runs-intruder-${stamp}@rakazo.test`,
+      "Intruder",
+    );
+    const intruderBot = await createBot(app, intruderCookie, "Intruder Bot");
+    const foreign = await raw(app, intruderCookie, "bots/activity", {
+      botId: bot.id,
+      routineId: digest.id,
+    });
+    expect(foreign.status).toBeGreaterThanOrEqual(400);
+    expect(await foreign.text()).not.toContain(done.id);
+    const throughOwnBot = await rpc<BotActivityOutput>(app, intruderCookie, "bots/activity", {
+      botId: intruderBot.id,
+      routineId: digest.id,
+    });
+    expect(throughOwnBot).toEqual({ items: [], nextCursor: null });
+  });
+
   it("leaves a plain webhook message out of a bot's activity", async () => {
     const cookie = await signup(app, `activity-hook-${stamp}@rakazo.test`, "Hook User");
     const bot = await createBot(app, cookie, "Hooked");
