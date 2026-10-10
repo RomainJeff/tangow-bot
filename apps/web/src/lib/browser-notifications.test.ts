@@ -94,9 +94,7 @@ describe("browser notifications", () => {
       event({ payload: { role: "bot", blocks: [{ kind: "text", text }] } }),
       "Chief",
     );
-    expect(body.startsWith("Done: see the report one two word")).toBe(true);
-    expect(body.endsWith("word…")).toBe(true);
-    expect(Array.from(body).length).toBeLessThanOrEqual(180);
+    expect(body).toBe(`Done: see the report one two ${"word ".repeat(30).trim()}…`);
   });
 
   it("puts the bot message in the native notification", () => {
