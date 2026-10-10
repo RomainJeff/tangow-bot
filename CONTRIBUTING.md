@@ -76,7 +76,7 @@ capability config, fixtures, logs, or snapshots; use the encrypted secret store 
 ## Pull requests
 
 - Keep PRs small and easy to review.
-- Target the `main` branch.
+- Target `main`, or the feature branch when the PR is a slice of a multi-PR feature (see `AGENTS.md`).
 - Describe why the change is needed, what changed, and **how you tested** (e.g. `pnpm test`, manual steps).
 - Link related issues when applicable.
 
