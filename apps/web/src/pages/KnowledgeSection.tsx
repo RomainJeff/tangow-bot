@@ -210,9 +210,12 @@ Steps the agent should follow.
 export function AgentSkills({
   botId,
   onOpenEditor,
+  onChanged,
 }: {
   botId?: string;
   onOpenEditor?: (skillId: string | null) => void;
+  /** Called once the server has confirmed a skill write. */
+  onChanged?: () => void;
 } = {}) {
   const { t } = useLingui();
   /** `null` until the catalog is first read. */
@@ -270,6 +273,7 @@ export function AgentSkills({
     } finally {
       setBusy(false);
     }
+    onChanged?.();
   }
 
   async function setAccess(
@@ -282,6 +286,7 @@ export function AgentSkills({
     setError(null);
     try {
       const updated = await rpc.agentSkills.setAccess({ skillId: entry.id, ...patch });
+      onChanged?.();
       setSkills(
         (list) => list?.map((skill) => (skill.id === updated.id ? updated : skill)) ?? null,
       );
@@ -306,6 +311,7 @@ export function AgentSkills({
       } catch {
         setError(t`Could not load`);
       }
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : t`Could not import skill`);
     } finally {

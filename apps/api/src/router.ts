@@ -155,6 +155,7 @@ import {
   getOwnedArtifact,
   getSpaceArtifact,
 } from "./artifacts.js";
+import { listBotActivity, readRunRecap } from "./bot-activity.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
   executionBlocksUserTakeover,
@@ -1012,6 +1013,10 @@ export function createRouter(deps: RouterDeps) {
         if (!found) throw new IsolationError();
         return found;
       }),
+      activity: authed.bots.activity.handler(async ({ context, input }) => {
+        const bot = await repos.getBot(context.actor, input.botId);
+        return listBotActivity(deps.prisma, context.actor, bot, input);
+      }),
       create: authed.bots.create.handler(async ({ context, input }) => {
         try {
           return await repos.createBot(context.actor, input);
@@ -1260,6 +1265,7 @@ export function createRouter(deps: RouterDeps) {
             sandbox: deps.sandbox,
             home: deps.home,
             jobs: deps.jobs,
+            events: deps.events,
             artifacts: deps.artifacts,
             dataDir: deps.dataDir,
           },
@@ -1282,6 +1288,7 @@ export function createRouter(deps: RouterDeps) {
             sandbox: deps.sandbox,
             home: deps.home,
             jobs: deps.jobs,
+            events: deps.events,
             artifacts: deps.artifacts,
             dataDir: deps.dataDir,
           },
@@ -4709,6 +4716,9 @@ export function createRouter(deps: RouterDeps) {
       list: authed.runs.list.handler(async ({ context, input }) => ({
         runs: await listSpaceRuns(deps.prisma, context.actor, input.filter),
       })),
+      recap: authed.runs.recap.handler(({ context, input }) =>
+        readRunRecap(deps.prisma, context.actor, input.runId),
+      ),
     },
     voice: {
       catalog: authed.voice.catalog.handler(async () => listVoiceCatalog()),

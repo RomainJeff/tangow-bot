@@ -1,4 +1,3 @@
-import { expect, type Page, test } from "@playwright/test";
 import {
   captureScreenshot,
   completeOnboarding,
@@ -6,6 +5,7 @@ import {
   openNewGroup,
   signup,
 } from "./helpers";
+import { expect, type Page, test } from "./test";
 
 async function createBot(page: Page, name: string) {
   return createNamedBot(page, name);

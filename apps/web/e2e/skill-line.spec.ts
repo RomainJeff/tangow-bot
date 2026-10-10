@@ -1,6 +1,6 @@
 // Needs the Vite dev server: the fixture is served from source and is not a build entry.
-import { expect, test } from "@playwright/test";
 import { captureScreenshot } from "./helpers";
+import { expect, test } from "./test";
 
 test("a skill line sits under the bot's message, opens the skill, and cannot be faked", async ({
   page,

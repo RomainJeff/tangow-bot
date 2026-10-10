@@ -25,8 +25,10 @@ import {
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
+import { BotActivity } from "./BotActivity";
 import { BotHero } from "./BotHero";
-import { type BotPageContext, useConfirm } from "./page-kit";
+import type { BotPageContext } from "./page-kit";
+import { useBotField, useConfirm } from "./page-kit";
 import { RoutineCreateForm } from "./RoutineCreateForm";
 import { RoutineDetail } from "./RoutineDetail";
 import { RoutinesTab } from "./RoutinesTab";
@@ -55,9 +57,9 @@ export interface BotPageProps {
 }
 
 /**
- * The bot's page in the side panel: who it is at the top, then Routines,
- * Knowledge and Settings. Every setting saves itself through `commands`; the
- * page holds no copy of the bot.
+ * The bot's page in the side panel: who it is at the top, then Activity,
+ * Routines, Knowledge and Settings. Every setting saves itself through
+ * `commands`; the page holds no copy of the bot.
  */
 export function BotPage({
   bot,
@@ -74,12 +76,17 @@ export function BotPage({
   const { confirm, dialog } = useConfirm();
   const root = useRef<HTMLDivElement>(null);
   const page: BotPageContext = { bot, userId, commands };
+  // Instructions being saved already count, so the link to write them goes as the editor closes.
+  const instructions = useBotField(page, "instructions", bot.instructions, (value) => ({
+    instructions: value,
+  }));
   const detail = view.detail;
   const routine =
     detail?.kind === "routine" ? routines?.find((item) => item.id === detail.routineId) : undefined;
   // A key minted for this bot's inbound triggers is shown once, wherever it was minted.
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
   const tabLabels: Record<BotTab, string> = {
+    activity: t`Activity`,
     routines: t`Routines`,
     knowledge: t`Knowledge`,
     settings: t`Settings`,
@@ -177,7 +184,14 @@ export function BotPage({
       ) : detail?.kind === "skill" ? (
         <div className="rk-scroll min-h-0 flex-1 overflow-y-auto px-4 pt-1 pb-4">
           <Suspense fallback={null}>
-            <AgentSkillEditor key={detail.skillId} skillId={detail.skillId} onDone={back} />
+            <AgentSkillEditor
+              key={detail.skillId}
+              skillId={detail.skillId}
+              onDone={(changed) => {
+                if (changed) commands.skillsChanged();
+                back();
+              }}
+            />
           </Suspense>
         </div>
       ) : detail?.kind === "routine-new" ? (
@@ -206,12 +220,26 @@ export function BotPage({
             <div className="px-4 pt-5 pb-4">
               <TabsList variant="segmented" className="w-full">
                 {(Object.keys(tabLabels) as BotTab[]).map((tab) => (
-                  <TabsTrigger key={tab} value={tab}>
+                  <TabsTrigger key={tab} value={tab} data-testid={`bot-tab-${tab}`}>
                     {tabLabels[tab]}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </div>
+            <TabsContent value="activity" className="px-4">
+              <BotActivity
+                botId={bot.id}
+                commands={commands}
+                onWriteInstructions={
+                  instructions.value
+                    ? undefined
+                    : () => onView({ tab: "activity", detail: { kind: "instructions" } })
+                }
+                onOpenRoutine={(routineId) =>
+                  onView({ tab: "routines", detail: { kind: "routine", routineId } })
+                }
+              />
+            </TabsContent>
             <TabsContent value="routines" className="px-4">
               <RoutinesTab page={page} routines={routines} onOpen={open} />
             </TabsContent>

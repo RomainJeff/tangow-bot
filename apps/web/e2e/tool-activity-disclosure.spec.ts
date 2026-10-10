@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot } from "./helpers";
+import { expect, test } from "./test";
 
 const viewports = [
   { name: "desktop-1440x900", width: 1440, height: 900 },

@@ -1,6 +1,6 @@
-import { expect, type Page, test } from "@playwright/test";
 import type { Routine } from "@rakazo/contracts";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, type Page, test } from "./test";
 
 type ThreadBlock = { kind: string; botId?: string; state?: string };
 

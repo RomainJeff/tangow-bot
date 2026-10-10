@@ -1,5 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, type Page, test } from "./test";
 
 async function openComposer(page: Page) {
   const stamp = Date.now();

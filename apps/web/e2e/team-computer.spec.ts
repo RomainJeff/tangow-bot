@@ -1,4 +1,3 @@
-import { expect, type Page, test } from "@playwright/test";
 import {
   activeBotId,
   captureScreenshot,
@@ -9,6 +8,7 @@ import {
   rpc,
   signup,
 } from "./helpers";
+import { expect, type Page, test } from "./test";
 
 test("Team Computer gives bots a home folder plus shared space while Private stays isolated", async ({
   page,

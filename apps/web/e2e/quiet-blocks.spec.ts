@@ -1,4 +1,3 @@
-import { expect, type Page, test } from "@playwright/test";
 import {
   activeBotId,
   captureScreenshot,
@@ -7,6 +6,7 @@ import {
   rpc,
   signup,
 } from "./helpers";
+import { expect, type Page, test } from "./test";
 
 async function switchTheme(page: Page, theme: "light" | "dark") {
   const settings = await openUserSettings(page);
