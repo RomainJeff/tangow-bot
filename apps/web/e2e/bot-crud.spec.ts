@@ -67,9 +67,8 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await page.locator("main").getByRole("button", { name: "New Bot", exact: true }).click();
   const sidePanel = page.getByTestId("side-panel");
   const botPage = await openBotPage(page);
-  // A bot that has never run opens on its first-bot state: who it is, and two ways in.
-  await expect(botPage.getByText("Not awake yet")).toBeVisible();
-  await expect(botPage.getByRole("tablist")).toHaveCount(0);
+  // A new bot opens on its tabs, like any bot.
+  await expect(botPage.getByRole("tab")).toHaveText(["Routines", "Knowledge", "Settings"]);
   await expect(botPage.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
   const nameInput = botPage.getByLabel("Name", { exact: true });
   const titleInput = botPage.getByLabel("Title", { exact: true });
@@ -100,10 +99,14 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   );
   await botPage.getByTestId("bot-appearance-trigger").click();
   await expect(picker).toBeHidden();
-  await captureScreenshot(page, testInfo, "27a-first-bot");
+  await captureScreenshot(page, testInfo, "27a-new-bot");
 
-  // Writing instructions opens the wide editor; once saved, the full page appears.
-  await botPage.getByRole("button", { name: "Write", exact: true }).click();
+  // Instructions open the wide editor and save on the way back to Settings.
+  await botPage.getByRole("tab", { name: "Settings" }).click();
+  await botPage
+    .getByTestId("bot-settings")
+    .getByRole("button", { name: /^Instructions/ })
+    .click();
   await expect(sidePanel).toHaveAttribute("data-detail", "instructions");
   await expect(sidePanel).toHaveAttribute("data-size", "wide");
   const instructionsInput = botPage.getByTestId("bot-instructions");

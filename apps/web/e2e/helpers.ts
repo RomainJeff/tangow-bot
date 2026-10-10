@@ -126,7 +126,7 @@ export async function createBotFromPicker(
 
 export type BotTab = "Routines" | "Knowledge" | "Settings";
 
-/** Open the open bot's page, once it knows whether the bot is new. */
+/** Open the open bot's page, once its routines are read. */
 export async function openBotPage(page: Page) {
   const panel = page.getByTestId("side-panel");
   if ((await panel.getAttribute("data-panel")) !== "bot") {
@@ -149,30 +149,13 @@ export async function saveField(page: Page, field: Locator, value: string) {
   await saved;
 }
 
-/**
- * Open one tab of the bot page. A bot with no instructions, routines or conversation shows no
- * tabs: a test on such a bot calls `writeFirstInstructions` first.
- */
+/** Open one tab of the bot page. */
 export async function openBotTab(page: Page, tab: BotTab) {
   const botPage = await openBotPage(page);
   const trigger = botPage.getByRole("tab", { name: tab, exact: true });
   await trigger.click();
   await expect(trigger).toHaveAttribute("aria-selected", "true");
   return botPage;
-}
-
-/** Leave the first-bot state the way a person does: write instructions from its "Write" row. */
-export async function writeFirstInstructions(page: Page, instructions: string) {
-  const botPage = await openBotPage(page);
-  await expect(botPage.getByText("Not awake yet")).toBeVisible();
-  await botPage.getByRole("button", { name: "Write", exact: true }).click();
-  const saved = page.waitForResponse(
-    (response) => response.url().includes("/rpc/bots/update") && response.ok(),
-  );
-  await botPage.getByTestId("bot-instructions").fill(instructions);
-  await botPage.getByRole("button", { name: "Settings", exact: true }).click();
-  await saved;
-  await expect(botPage.getByRole("tablist")).toBeVisible();
 }
 
 /** The Settings tab of the open bot's page. */
@@ -187,8 +170,8 @@ export async function openRoutines(page: Page) {
 }
 
 /**
- * The routine editor for a new routine: the first-bot "Add", or the Routines tab's create button.
- * Both carry the same test id, so this works in any interface language.
+ * The routine editor for a new routine, from the Routines tab's create button. The button and the
+ * tab are found by test id and position, so this works in any interface language.
  */
 export async function openRoutineCreate(page: Page) {
   const botPage = await openBotPage(page);

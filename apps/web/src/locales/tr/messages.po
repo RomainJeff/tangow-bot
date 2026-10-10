@@ -185,9 +185,6 @@ msgstr "{workingBotName} çalışıyor"
 msgid "@{0}"
 msgstr "@{0}"
 
-msgid "A first routine"
-msgstr "İlk rutin"
-
 #: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "Bir eklenti pazar yeri (.claude-plugin/marketplace.json) veya beceri deposu (SKILL.md dosyaları). Biçim otomatik olarak algılanır."
@@ -2940,9 +2937,6 @@ msgstr "Tetikleyici yok"
 msgid "None yet"
 msgstr "Henüz yok"
 
-msgid "Not awake yet"
-msgstr "Henüz uyanmadı"
-
 #: src/pages/ModelSettingsOverlay.tsx:638
 msgid "Not connected"
 msgstr "Bağlı değil"
@@ -4373,9 +4367,6 @@ msgstr "Çalışıyor…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "Çalışma alanı kökü"
-
-msgid "Write"
-msgstr "Yaz"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

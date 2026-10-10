@@ -1,12 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {
-  captureScreenshot,
-  completeOnboarding,
-  openBotPage,
-  openBotTab,
-  signup,
-  writeFirstInstructions,
-} from "./helpers";
+import { captureScreenshot, completeOnboarding, openBotPage, openBotTab, signup } from "./helpers";
 
 /** Documents the two-pane shell: sidebar, thread header, empty thread, light and dark. */
 test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) => {
@@ -114,10 +107,6 @@ test("header icons toggle the screen and the bot page; the page widens for long 
   const computer = page.getByTestId("open-computer-panel");
   const settings = page.getByTestId("open-settings-panel");
   const column = page.getByTestId("conversation-column");
-  // Chief has never run: its page shows tabs once it has instructions.
-  await writeFirstInstructions(page, "Answer briefly.");
-  await page.getByRole("button", { name: "Close panel" }).click();
-  await expect(panel).toHaveAttribute("data-panel", "closed");
 
   // No verbose label: both controls are icon-only, named for screen readers.
   await expect(computer).toBeVisible();

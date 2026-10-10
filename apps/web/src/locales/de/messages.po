@@ -185,9 +185,6 @@ msgstr "{workingBotName} arbeitet"
 msgid "@{0}"
 msgstr "@{0}"
 
-msgid "A first routine"
-msgstr "Eine erste Routine"
-
 #: src/pages/SkillsOverlay.tsx:235
 msgid "A plugin marketplace (.claude-plugin/marketplace.json) or a repository of skills (SKILL.md files). The format is detected automatically."
 msgstr "Ein Plugin-Marktplatz (.claude-plugin/marketplace.json) oder ein Repository mit Skills (SKILL.md-Dateien). Das Format wird automatisch erkannt."
@@ -2940,9 +2937,6 @@ msgstr "Kein Trigger"
 msgid "None yet"
 msgstr "Noch keine"
 
-msgid "Not awake yet"
-msgstr "Noch nicht wach"
-
 #: src/pages/ModelSettingsOverlay.tsx:638
 msgid "Not connected"
 msgstr "Nicht verbunden"
@@ -4373,9 +4367,6 @@ msgstr "Wird verarbeitet…"
 #: src/pages/KnowledgeSection.tsx:775
 msgid "Workspace root"
 msgstr "Arbeitsbereich-Stammverzeichnis"
-
-msgid "Write"
-msgstr "Schreiben"
 
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/routine-run-line.tsx:402

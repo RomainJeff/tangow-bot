@@ -55,7 +55,6 @@ export function SidePanel({
   onBotPage,
   commands,
   userId,
-  neverRan,
   active,
   activeGroup,
   computer,
@@ -108,8 +107,6 @@ export function SidePanel({
   onBotPage: (view: BotPageView) => void;
   commands: BotCommands;
   userId: string;
-  /** Whether the open bot has never run, `null` until its conversation is read. */
-  neverRan: boolean | null;
   active: Bot | undefined;
   activeGroup: Group | undefined;
   computer: ComputerStatus | null;
@@ -206,7 +203,6 @@ export function SidePanel({
                 ? snapshot.run.routineId
                 : null
             }
-            neverRan={neverRan}
             memoryProviderConfigured={memoryProviderConfig != null}
             view={botPage}
             onView={onBotPage}

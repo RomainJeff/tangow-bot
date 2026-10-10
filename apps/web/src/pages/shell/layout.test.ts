@@ -1,6 +1,5 @@
-import type { ThreadMessage } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { neverRan, panelSizeFor } from "./layout";
+import { panelSizeFor } from "./layout";
 
 describe("panelSizeFor", () => {
   it("widens the bot panel for instructions and the description only", () => {
@@ -15,24 +14,5 @@ describe("panelSizeFor", () => {
     expect(panelSizeFor("computer", wideView)).toBe("default");
     expect(panelSizeFor("routine", wideView)).toBe("default");
     expect(panelSizeFor(null, wideView)).toBe("default");
-  });
-});
-
-describe("neverRan", () => {
-  const message = (runId?: string) => ({ id: "m", runId }) as ThreadMessage;
-
-  it("counts a conversation with no run, or only a message seeded without one, as never run", () => {
-    expect(neverRan({ messages: [], olderCursor: null, run: null })).toBe(true);
-    expect(neverRan({ messages: [message()], olderCursor: null, run: null })).toBe(true);
-  });
-
-  it("counts a message a run wrote, a run under way or unread history as having run", () => {
-    expect(
-      neverRan({ messages: [message(), message("run-1")], olderCursor: null, run: null }),
-    ).toBe(false);
-    expect(neverRan({ messages: [], olderCursor: null, run: { id: "run-1" } as never })).toBe(
-      false,
-    );
-    expect(neverRan({ messages: [message()], olderCursor: 3, run: null })).toBe(false);
   });
 });

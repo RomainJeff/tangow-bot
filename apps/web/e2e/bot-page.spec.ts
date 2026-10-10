@@ -13,7 +13,6 @@ const STATES = [
   { name: "model", query: "tab=settings&detail=model" },
   { name: "voice", query: "tab=settings&detail=voice" },
   { name: "busy", query: "tab=settings&busy=1" },
-  { name: "first", query: "first=1" },
 ] as const;
 
 for (const theme of ["light", "dark"] as const) {
@@ -103,21 +102,6 @@ test("a refused computer change turns back and says why", async ({ page }) => {
     settings.getByText("Wait for this bot to finish before changing its computer."),
   ).toBeVisible();
   await expect(own).toHaveAttribute("aria-pressed", "true");
-});
-
-test("a bot with nothing set up shows its first steps instead of tabs", async ({ page }) => {
-  await page.goto(`${FIXTURE}?first=1`);
-  const botPage = page.getByTestId("bot-page");
-  await expect(botPage.getByText("Not awake yet")).toBeVisible();
-  await expect(botPage.getByRole("tablist")).toHaveCount(0);
-  await expect(botPage.getByLabel("Title", { exact: true })).toHaveAttribute(
-    "placeholder",
-    "What it does, in one line",
-  );
-  await botPage.getByRole("button", { name: "Write", exact: true }).click();
-  await page.getByTestId("bot-instructions").fill("Close the books every first Monday.");
-  await botPage.getByRole("button", { name: "Settings", exact: true }).click();
-  await expect(botPage.getByRole("tablist")).toBeVisible();
 });
 
 test("Knowledge shows memory, files and skills", async ({ page }) => {
