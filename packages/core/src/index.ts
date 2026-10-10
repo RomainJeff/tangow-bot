@@ -51,6 +51,7 @@ export * from "./screen-link.js";
 export * from "./search.js";
 export * from "./secrets-guard.js";
 export * from "./self-update.js";
+export * from "./session-log/jsonl.js";
 export * from "./session-log/project-inference.js";
 export * from "./session-log/project-ui.js";
 export * from "./signup-policy.js";
