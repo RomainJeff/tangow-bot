@@ -1057,6 +1057,27 @@ describe("skill drafts", () => {
       expect(await readFile(path.join(dir, "tool.bin"))).toEqual(Buffer.from(binary));
     });
 
+    it("checks a file a bot names outside its skill even when those bytes are on disk", async () => {
+      const user = { spaceId: "w1", userId: "u1" };
+      const binary = new Uint8Array([0, 1, 255]);
+      await skillCreateFromTool(deps, user, [], { files: withFile("tool.bin", binary) });
+      await skillCreateFromTool(deps, user, [], { name: "Notes", description: "d", body: "x" });
+      const notesMd = buildSkillMd({ name: "Notes", description: "d", body: "y" });
+
+      expect(
+        await skillUpdateFromTool(deps, creator, [], {
+          name: "Notes",
+          files: [
+            { path: "SKILL.md", bytes: text(notesMd), executable: false },
+            { path: "../deploy/tool.bin", bytes: binary, executable: false },
+          ],
+        }),
+      ).toEqual({
+        error:
+          "../deploy/tool.bin: a skill may only hold text files (md, txt, json, yaml, yml, toml, csv, js, ts, py, sh, html, css).",
+      });
+    });
+
     it("refuses a bot write that would take the user's skills past 200 MB", async () => {
       const user = { spaceId: "w1", userId: "u1" };
       await skillCreateFromTool(deps, user, [], { name: "Big", description: "d", body: "x" });
