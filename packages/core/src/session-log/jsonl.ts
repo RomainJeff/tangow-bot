@@ -25,9 +25,16 @@ export function encodeEntries(entries: readonly SessionEntry[]): string {
   return entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
 }
 
+/**
+ * Decode a whole session JSONL file. A final line without its newline is kept when it is a valid
+ * entry and skipped as a torn append, a crash mid-write, when it is not. Any other line that is
+ * not JSON or fails validation throws `SessionEntryDecodeError` with its line number.
+ */
 export function decodeEntries(text: string): SessionEntry[] {
-  return text.split("\n").flatMap((line, index) => {
+  const lines = text.split("\n");
+  return lines.flatMap((line, index) => {
     if (!line) return [];
+    if (index === lines.length - 1) return finalEntry(line) ?? [];
     const location = `line ${index + 1}`;
     return [validateEntry(parseJson(line, location), location)];
   });
@@ -39,9 +46,9 @@ export function decodeEntries(text: string): SessionEntry[] {
  * or at an entry with no parent. Reads `chunkSize` bytes at a time, so a long session costs about
  * the bytes since its last compaction. Returns the chain oldest first.
  *
- * A file that does not end with a newline ends in a torn append, a crash mid-write, so its last
- * partial line is skipped. Any other line read that is not JSON, a chain entry that fails
- * validation, and a parent missing from the file throw `SessionEntryDecodeError` with the line.
+ * A final line without its newline follows the `decodeEntries` rule. Any other line read that is
+ * not JSON, a chain entry that fails validation, and a parent missing from the file throw
+ * `SessionEntryDecodeError` with the line.
  */
 export async function readTailFromEnd(
   open: () => Promise<TailSource>,
@@ -59,15 +66,21 @@ export async function readTailFromEnd(
     let linesFromEnd = 0;
     let afterLastNewline = true;
     const visit = (bytes: Uint8Array): boolean => {
-      const torn = afterLastNewline;
+      const final = afterLastNewline;
       afterLastNewline = false;
       if (bytes.length === 0) return false;
       linesFromEnd += 1;
-      if (torn) return false;
       const location = `line ${linesFromEnd} from the end`;
-      const json = parseJson(decoder.decode(bytes), location);
-      if (wanted !== undefined && idOf(json) !== wanted) return false;
-      const entry = validateEntry(json, location);
+      const line = decoder.decode(bytes);
+      let entry: SessionEntry | undefined;
+      if (final) {
+        entry = finalEntry(line);
+        if (!entry) return false;
+      } else {
+        const json = parseJson(line, location);
+        if (wanted !== undefined && idOf(json) !== wanted) return false;
+        entry = validateEntry(json, location);
+      }
       chain.push(entry);
       wanted = entry.parentId;
       wantedBy = location;
@@ -126,6 +139,14 @@ function validateEntry(json: unknown, location: string): SessionEntry {
     .map((issue) => `${issue.path.map(String).join(".") || "(entry)"}: ${issue.message}`)
     .join("; ");
   throw new SessionEntryDecodeError(`Invalid session entry at ${location}: ${issues}`);
+}
+
+function finalEntry(line: string): SessionEntry | undefined {
+  try {
+    return SessionEntrySchema.safeParse(JSON.parse(line)).data;
+  } catch {
+    return undefined;
+  }
 }
 
 function idOf(json: unknown): unknown {

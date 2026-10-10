@@ -47,10 +47,12 @@ describe("session log JSONL", () => {
   });
 
   it.each([
-    ["cut mid-line", `${threeNotes}{"id":"n-3","sessionId":"ses_n","se`, ["n-0", "n-1", "n-2"]],
-    ["whole but without its newline", threeNotes.slice(0, -1), ["n-0", "n-1"]],
-  ])("skips a final line %s as a torn append", async (_, text, expected) => {
-    expect(ids(await tail(text))).toEqual(expected);
+    ["keeps a final line whole but without its newline", threeNotes.slice(0, -1)],
+    ["skips a final line cut mid-line", `${threeNotes}{"id":"n-3","sessionId":"ses_n","se`],
+    ["skips a final line that is JSON but no entry", `${threeNotes}{"id":"n-3"}`],
+  ])("%s in both readers", async (_, text) => {
+    expect(ids(await tail(text))).toEqual(["n-0", "n-1", "n-2"]);
+    expect(ids(decodeEntries(text))).toEqual(["n-0", "n-1", "n-2"]);
   });
 
   it("joins lines and multibyte characters that span chunks", async () => {
