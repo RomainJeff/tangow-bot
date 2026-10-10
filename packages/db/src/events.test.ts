@@ -2530,7 +2530,7 @@ describe("clearThread", () => {
       task: { updateMany: vi.fn() },
       computerExecutionLease: { updateMany: vi.fn() },
       computer: { updateMany: vi.fn() },
-      message: { deleteMany: vi.fn() },
+      message: { findMany: vi.fn().mockResolvedValue([]), deleteMany: vi.fn() },
       event: {
         deleteMany: vi.fn(),
         create: vi.fn().mockResolvedValue({
@@ -2594,7 +2594,7 @@ describe("clearThread", () => {
       task: { updateMany: vi.fn() },
       computerExecutionLease: { updateMany: vi.fn() },
       computer: { updateMany: vi.fn() },
-      message: { deleteMany: vi.fn() },
+      message: { findMany: vi.fn().mockResolvedValue([]), deleteMany: vi.fn() },
       event: {
         deleteMany: vi.fn(),
         create: vi.fn().mockResolvedValue({
@@ -2666,7 +2666,12 @@ describe("rewindThread", () => {
       message: {
         findFirst: vi
           .fn()
-          .mockResolvedValue(overrides.message === undefined ? { seq: 4 } : overrides.message),
+          .mockResolvedValue(
+            overrides.message === undefined
+              ? { seq: 4, createdAt: new Date(0) }
+              : overrides.message,
+          ),
+        findMany: vi.fn().mockResolvedValue([]),
         deleteMany: vi.fn(),
       },
       run: {

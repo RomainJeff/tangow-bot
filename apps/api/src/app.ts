@@ -31,6 +31,8 @@ import {
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
+  createSkillLibrary,
+  createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
   destroyBot,
@@ -435,6 +437,11 @@ export async function createApp(
         jobs,
         reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
         purgeLinkPreviews: createLinkPreviewPurge({ prisma, artifacts }),
+        sweepSkillLines: createSkillLineSweep({
+          prisma,
+          library: createSkillLibrary({ prisma, dataDir: env.dataDir, lock: skillLock }),
+          events,
+        }),
       })
     : undefined;
   reconciler?.start();

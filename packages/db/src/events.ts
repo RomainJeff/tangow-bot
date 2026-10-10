@@ -323,6 +323,8 @@ interface TruncateThreadInput extends ClearThreadInput {
   fromSeq: number;
   /** Events with seq >= fromEventSeq are deleted. */
   fromEventSeq: number;
+  /** Runs started at or after this instant belong to the part of the conversation that goes. */
+  fromCreatedAt: Date;
 }
 
 interface TruncateThreadResult {
@@ -376,6 +378,22 @@ async function truncateThreadInTransaction(
       executionLeaseExpiresAt: null,
     },
   });
+  const cutMessages = await tx.message.findMany({
+    where: { threadId: input.threadId, seq: { gte: input.fromSeq }, runId: { not: null } },
+    select: { runId: true },
+  });
+  // Their skill lines belonged under the messages that go: none is written after this.
+  await tx.run.updateMany({
+    where: {
+      threadId: input.threadId,
+      skillLinesAt: null,
+      OR: [
+        { id: { in: [...runIds, ...cutMessages.flatMap((m) => (m.runId ? [m.runId] : []))] } },
+        { createdAt: { gte: input.fromCreatedAt } },
+      ],
+    },
+    data: { skillLinesAt: now },
+  });
   await tx.message.deleteMany({
     where: { threadId: input.threadId, seq: { gte: input.fromSeq } },
   });
@@ -403,6 +421,7 @@ export async function clearThread(
       ...input,
       fromSeq: 0,
       fromEventSeq: 0,
+      fromCreatedAt: new Date(0),
     });
     await tx.thread.update({
       where: { id: input.threadId },
@@ -448,7 +467,7 @@ export async function rewindThread(
   const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const target = await tx.message.findFirst({
       where: { id: input.messageId, threadId: input.threadId, role: "user" },
-      select: { seq: true },
+      select: { seq: true, createdAt: true },
     });
     if (!target) return null;
     const created = await tx.event.findFirst({
@@ -466,6 +485,7 @@ export async function rewindThread(
       // No creation event (only possible if history was already pruned): keep every event
       // rather than guess a cut point and drop the wrong range.
       fromEventSeq: created?.seq ?? Number.MAX_SAFE_INTEGER,
+      fromCreatedAt: target.createdAt,
     });
     // Compaction covered the rewound messages, so its summary now describes deleted history.
     const compactionReset =

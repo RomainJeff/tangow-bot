@@ -1,7 +1,17 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { RPCHandler } from "@orpc/server/fetch";
-import { COMPUTER_SCREEN_UNAVAILABLE, ComputerScreenUnavailableError } from "@rakazo/adapters";
+import type { SkillOwnerLock } from "@rakazo/adapters";
+import {
+  COMPUTER_SCREEN_UNAVAILABLE,
+  ComputerScreenUnavailableError,
+  createInMemorySkillLock,
+  createSkillLibrary,
+} from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
 import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
+import { buildSkillMd } from "@rakazo/core";
 import { openScreenCapability } from "@rakazo/core/node/screen-capability";
 import type { PrismaClient } from "@rakazo/db";
 import { InvalidAnswerError } from "@rakazo/db";
@@ -922,8 +932,17 @@ describe("thread rewind", () => {
 });
 
 describe("thread stop", () => {
-  it("settles a routine card the user approved but the stopped run never created", async () => {
-    const run = { id: "run-1", spaceId: "workspace-1", threadId: "thread-1", botId: "bot-1" };
+  async function stopFixture(options: { dataDir?: string; skillLock?: SkillOwnerLock } = {}) {
+    const run = {
+      id: "run-1",
+      spaceId: "workspace-1",
+      userId: "user-1",
+      threadId: "thread-1",
+      botId: "bot-1",
+      trigger: "user",
+      sourceMessage: null,
+      skillLinesAt: null as Date | null,
+    };
     // A run the user started: no routine woke it.
     const matchesRun = (where: { status: unknown; routineId?: unknown }) =>
       where.routineId === undefined && (where.status !== "cancelled" || runStatus === "cancelled");
@@ -932,6 +951,13 @@ describe("thread stop", () => {
     const card = {
       id: "message-2",
       blocks: [{ kind: "ask", approvalEffectId: "effect-1", status: "answered", answer: "allow" }],
+    };
+    const reply = {
+      id: "message-3",
+      threadId: "thread-1",
+      role: "bot",
+      botId: "bot-1",
+      blocks: [{ kind: "text", text: "On it." }] as Array<Record<string, unknown>>,
     };
     const prisma = {
       $queryRaw: vi.fn().mockResolvedValue([]),
@@ -950,7 +976,12 @@ describe("thread stop", () => {
           runStatus = "cancelled";
           return [{ id: run.id }];
         }),
-        findUnique: vi.fn(async () => ({ status: runStatus, startedAt: null })),
+        updateMany: vi.fn(async ({ data }: { data: { skillLinesAt: Date } }) => {
+          if (run.skillLinesAt) return { count: 0 };
+          run.skillLinesAt = data.skillLinesAt;
+          return { count: 1 };
+        }),
+        findUnique: vi.fn(async () => ({ ...run, status: runStatus, startedAt: null })),
       },
       steeringMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
       computerExecutionLease: {
@@ -972,11 +1003,15 @@ describe("thread stop", () => {
         ),
       },
       message: {
-        findMany: vi.fn(async () => [card]),
+        // The run's messages in order: its card, then its last bubble.
+        findMany: vi.fn(async () => [card, reply]),
         findUnique: vi.fn().mockResolvedValue(null),
-        update: vi.fn(async ({ data }: { data: { blocks: typeof card.blocks } }) => {
-          card.blocks = data.blocks;
-        }),
+        update: vi.fn(
+          async ({ where, data }: { where: { id: string }; data: { blocks: never[] } }) => {
+            const target = where.id === reply.id ? reply : card;
+            target.blocks = data.blocks;
+          },
+        ),
       },
       thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }) },
       event: {
@@ -998,7 +1033,8 @@ describe("thread stop", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: options.dataDir ?? "/tmp/rakazo-router-test",
+      skillLock: options.skillLock,
     } as unknown as RouterDeps;
     const actor = {
       spaceId: "workspace-1",
@@ -1006,17 +1042,24 @@ describe("thread stop", () => {
       email: "user@rakazo.test",
       isDeploymentOwner: true,
     } satisfies Actor;
+    const stop = async () =>
+      (
+        await new RPCHandler(createRouter(deps)).handle(
+          new Request("http://127.0.0.1/rpc/threads/stop", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ json: { botId: "bot-1" } }),
+          }),
+          { prefix: "/rpc", context: { actor } },
+        )
+      ).response;
+    return { card, reply, effects, notify, stop };
+  }
 
-    const { response } = await new RPCHandler(createRouter(deps)).handle(
-      new Request("http://127.0.0.1/rpc/threads/stop", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ json: { botId: "bot-1" } }),
-      }),
-      { prefix: "/rpc", context: { actor } },
-    );
+  it("settles a routine card the user approved but the stopped run never created", async () => {
+    const { card, effects, notify, stop } = await stopFixture();
 
-    expect(response.status).toBe(200);
+    expect((await stop()).status).toBe(200);
     expect(card.blocks[0]).toEqual({
       kind: "ask",
       approvalEffectId: "effect-1",
@@ -1030,6 +1073,52 @@ describe("thread stop", () => {
       result: { error: "The run ended before this routine was created." },
     });
     expect(notify).toHaveBeenCalledWith("thread-1", 7);
+  });
+
+  it("writes the line of a skill the stopped run saved under its last message", async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-router-stop-"));
+    const skillLock = createInMemorySkillLock();
+    const owner = { spaceId: "workspace-1", userId: "user-1" };
+    try {
+      const none = {
+        findMany: async () => [],
+        deleteMany: async () => ({ count: 0 }),
+        upsert: async () => ({}),
+      };
+      const access = {
+        skillSetting: none,
+        botSkill: none,
+        $transaction: (ops: Promise<unknown>[]) => Promise.all(ops),
+      } as unknown as PrismaClient;
+      await createSkillLibrary({ prisma: access, dataDir, lock: skillLock })
+        .forBot(owner, {
+          botId: "bot-1",
+          botName: "Ada",
+          runId: "run-1",
+          toolCallId: "call-1",
+          secrets: [],
+        })
+        .create({
+          kind: "skill-md",
+          name: "Coffee",
+          content: buildSkillMd({ name: "Coffee", description: "Order coffee", body: "Pay." }),
+        });
+      const { reply, stop } = await stopFixture({ dataDir, skillLock });
+
+      expect((await stop()).status).toBe(200);
+      expect(reply.blocks).toEqual([
+        { kind: "text", text: "On it." },
+        {
+          kind: "skill_source",
+          skillUid: expect.stringMatching(/^[0-9a-f]{32}$/),
+          skillId: "user:coffee",
+          name: "Coffee",
+          change: "learned",
+        },
+      ]);
+    } finally {
+      await rm(dataDir, { recursive: true, force: true });
+    }
   });
 });
 

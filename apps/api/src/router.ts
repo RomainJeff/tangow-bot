@@ -40,6 +40,7 @@ import {
   clearInactiveUserComputerControl,
   computerSupportsUpdate,
   computerUpdateView,
+  createSkillLibrary,
   createVoiceProvider,
   deletePushToken,
   deploymentAutoReviewDefault,
@@ -84,6 +85,7 @@ import {
   touchRunningComputer,
   updateRoutine,
   verifyMcpInstall,
+  writeSkillLines,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
 import type { Actor, ComputerStatus, McpServer, Me, SpaceNavigation } from "@rakazo/contracts";
@@ -556,6 +558,15 @@ export function createRouter(deps: RouterDeps) {
     dataDir: deps.dataDir,
   });
   const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir, deps.skillLock);
+  const skillLines = {
+    prisma: deps.prisma,
+    library: createSkillLibrary({
+      prisma: deps.prisma,
+      dataDir: deps.dataDir,
+      lock: deps.skillLock,
+    }),
+    events: deps.events,
+  };
   const marketplaces = createMarketplacesService({ prisma: deps.prisma, dataDir: deps.dataDir });
 
   const authed = os.use(async ({ context, next }) => {
@@ -1546,6 +1557,11 @@ export function createRouter(deps: RouterDeps) {
           deps,
           stopping.map((run) => run.id),
         ).catch((error) => getLogger().error("cancelled run cards", error));
+        for (const run of stopping) {
+          await writeSkillLines(skillLines, run.id).catch((error) =>
+            getLogger().error("cancelled run skill lines", error),
+          );
+        }
         return { ok: true as const };
       }),
       clear: authed.threads.clear.handler(async ({ context, input }) => {

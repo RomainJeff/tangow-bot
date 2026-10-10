@@ -61,7 +61,13 @@ export interface FakeThreadDb {
     chatGroupMembers: Map<string, Row>;
     externalMessages: Map<string, Row>;
   };
-  seedThread(input: { id: string; spaceId?: string; userId?: string; botId?: string }): void;
+  seedThread(input: {
+    id: string;
+    spaceId?: string;
+    userId?: string;
+    botId?: string | null;
+    groupId?: string | null;
+  }): void;
   seedMessage(input: {
     id: string;
     threadId: string;
@@ -72,8 +78,17 @@ export interface FakeThreadDb {
     botId?: string | null;
     replyToMessageId?: string | null;
     replyQuote?: string | null;
+    hiddenFromThread?: boolean;
   }): void;
-  seedRun(input: { id: string; threadId: string; status?: string; trigger?: string }): void;
+  seedRun(input: {
+    id: string;
+    threadId: string;
+    status?: string;
+    trigger?: string;
+    botId?: string;
+    updatedAt?: Date;
+    createdAt?: Date;
+  }): void;
   /** Called after every message read, to let another transaction run in between. */
   onMessageRead(hook: (() => Promise<void>) | undefined): void;
   blocksOf(messageId: string): unknown[] | undefined;
@@ -164,8 +179,10 @@ export function createFakeThreadDb(): FakeThreadDb {
       },
       $executeRaw: async () => 0,
       thread: {
-        async findUnique(args: { where: { id: string } }) {
-          return tables.threads.get(args.where.id) ?? null;
+        async findUnique(args: { where: { id?: string; botId?: string } }) {
+          const { id, botId } = args.where;
+          if (id) return tables.threads.get(id) ?? null;
+          return [...tables.threads.values()].find((row) => row.botId === botId) ?? null;
         },
         async findFirst(args: { where: Record<string, unknown> }) {
           return [...tables.threads.values()].find((row) => matches(row, args.where)) ?? null;
@@ -174,8 +191,11 @@ export function createFakeThreadDb(): FakeThreadDb {
           await lockThread(args.where.id);
           const row = tables.threads.get(args.where.id);
           if (!row) throw new Error("thread missing");
-          const inc = (args.data.nextEventSeq as { increment?: number } | undefined)?.increment;
-          if (inc !== undefined) row.nextEventSeq = (row.nextEventSeq as number) + inc;
+          for (const field of ["nextEventSeq", "nextMessageSeq"]) {
+            const inc = (args.data[field] as { increment?: number } | undefined)?.increment;
+            if (inc !== undefined) row[field] = (row[field] as number) + inc;
+          }
+          if (args.data.unread !== undefined) row.unread = args.data.unread;
           return row;
         },
       },
@@ -204,6 +224,19 @@ export function createFakeThreadDb(): FakeThreadDb {
           Object.assign(row, args.data);
           return row;
         },
+        async create(args: { data: Record<string, unknown> }) {
+          const row = {
+            id: nextId("message"),
+            runId: null,
+            clientNonce: null,
+            hiddenFromThread: false,
+            replyToMessageId: null,
+            replyQuote: null,
+            ...args.data,
+          } as Row;
+          tables.messages.set(row.id, row);
+          return row;
+        },
         async deleteMany(args: { where: Record<string, unknown> }) {
           for (const [id, row] of tables.messages) {
             if (matches(row, args.where)) {
@@ -224,6 +257,16 @@ export function createFakeThreadDb(): FakeThreadDb {
         async findFirst(args: { where: Record<string, unknown> }) {
           return [...tables.runs.values()].find((run) => matches(run, args.where)) ?? null;
         },
+        async findMany(args: { where: Record<string, unknown>; distinct?: string[] }) {
+          const rows = [...tables.runs.values()].filter((run) => matches(run, args.where));
+          const seen = new Set<string>();
+          return rows.filter((run) => {
+            const key = JSON.stringify((args.distinct ?? ["id"]).map((field) => run[field]));
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        },
         async updateMany(args: { where: Record<string, unknown>; data: Record<string, unknown> }) {
           const rows = [...tables.runs.values()].filter((run) => matches(run, args.where));
           for (const run of rows) Object.assign(run, args.data);
@@ -235,11 +278,25 @@ export function createFakeThreadDb(): FakeThreadDb {
           return { count: 1 };
         },
       },
+      // What clearing or rewinding a thread also touches, with nothing to keep here.
+      attempt: { updateMany: async () => ({ count: 0 }) },
+      computer: { updateMany: async () => ({ count: 0 }) },
+      computerExecutionLease: { updateMany: async () => ({ count: 0 }) },
+      bot: { update: async () => ({}) },
+      chatGroup: { update: async () => ({}) },
       event: {
         async create(args: { data: Record<string, unknown> }) {
-          const row = { id: nextId("event"), ...args.data } as Row;
+          const row = { id: nextId("event"), createdAt: new Date(), ...args.data } as Row;
           tables.events.set(row.id, row);
           return row;
+        },
+        async findFirst(args: { where: Record<string, unknown> }) {
+          return [...tables.events.values()].find((e) => matches(e, args.where)) ?? null;
+        },
+        async deleteMany(args: { where: Record<string, unknown> }) {
+          for (const [id, row] of tables.events) {
+            if (matches(row, args.where)) tables.events.delete(id);
+          }
         },
         async findMany(args: { where: Record<string, unknown> }) {
           return [...tables.events.values()]
@@ -344,14 +401,16 @@ export function createFakeThreadDb(): FakeThreadDb {
     prisma,
     artifacts,
     tables,
-    seedThread({ id, spaceId = "space-1", userId = "user-1", botId }) {
+    seedThread({ id, spaceId = "space-1", userId = "user-1", botId, groupId = null }) {
       tables.threads.set(id, {
         id,
         spaceId,
         userId,
-        botId: botId ?? "bot-1",
-        groupId: null,
+        botId: botId === undefined ? "bot-1" : botId,
+        groupId,
         nextEventSeq: 0,
+        nextMessageSeq: 0,
+        unread: false,
       });
     },
     seedMessage({
@@ -364,6 +423,7 @@ export function createFakeThreadDb(): FakeThreadDb {
       botId = null,
       replyToMessageId = null,
       replyQuote = null,
+      hiddenFromThread = false,
     }) {
       tables.messages.set(id, {
         id,
@@ -376,18 +436,30 @@ export function createFakeThreadDb(): FakeThreadDb {
         botId,
         replyToMessageId,
         replyQuote,
+        hiddenFromThread,
       });
     },
-    seedRun({ id, threadId, status = "completed", trigger = "user" }) {
+    seedRun({
+      id,
+      threadId,
+      status = "completed",
+      trigger = "user",
+      botId = "bot-1",
+      updatedAt = new Date(),
+      createdAt = updatedAt,
+    }) {
       tables.runs.set(id, {
         id,
         threadId,
         status,
         trigger,
         spaceId: "space-1",
-        botId: "bot-1",
+        botId,
         userId: "user-1",
         checkpoint: null,
+        skillLinesAt: null,
+        updatedAt,
+        createdAt,
       });
     },
     onMessageRead(hook) {
