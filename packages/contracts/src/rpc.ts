@@ -267,7 +267,12 @@ export const appContract = {
     remove: oc
       .input(z.object({ botId: Id, deleteMemories: z.boolean().default(false) }))
       .output(z.object({ ok: z.literal(true) })),
-    /** With `ifAbsent`, mints only when the bot has no key and leaves an existing one untouched (`secret: null`). */
+    /** The bot's webhook key for its owner, created on the first read; a read never replaces a key. */
+    webhookSecret: oc.input(botId).output(z.object({ secret: z.string() })),
+    /**
+     * Replaces the bot's webhook key. `ifAbsent` serves app builds that predate `webhookSecret`:
+     * it stores a key only when the bot has none and answers `secret: null` otherwise.
+     */
     rotateWebhookSecret: oc.input(botId.extend({ ifAbsent: z.boolean().optional() })).output(
       z.object({
         secret: z.string().nullable(),

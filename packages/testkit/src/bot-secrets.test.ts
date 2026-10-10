@@ -316,8 +316,6 @@ describeIntegration("reusable credential lifecycle", () => {
   );
 
   describe("webhook key", () => {
-    type Minted = { secret: string | null; webhookConfigured: true };
-
     async function keyedBot(label: string) {
       const cookie = await signup(`webhook-${label}-${stamp}@rakazo.test`, `Webhook ${label}`);
       const me = await rpc<{ userId: string }>(cookie, "me");
@@ -328,8 +326,13 @@ describeIntegration("reusable credential lifecycle", () => {
         instructions: "",
         notifyOnFinish: false,
       });
-      const mint = (input: { ifAbsent?: boolean } = {}) =>
-        rpc<Minted>(cookie, "bots/rotateWebhookSecret", { botId: bot.id, ...input });
+      const read = (as = cookie) =>
+        rpc<{ secret: string }>(as, "bots/webhookSecret", { botId: bot.id });
+      const rotate = (input: { ifAbsent?: boolean } = {}) =>
+        rpc<{ secret: string | null }>(cookie, "bots/rotateWebhookSecret", {
+          botId: bot.id,
+          ...input,
+        });
       const accepts = async (secret: string) => {
         const body = JSON.stringify({ zen: "Keep it logically awesome." });
         const response = await handles.app.request(`/api/v1/bots/${bot.id}/github`, {
@@ -344,43 +347,60 @@ describeIntegration("reusable credential lifecycle", () => {
       };
       const stored = () =>
         handles.prisma.secret.count({ where: { userId: me.userId, kind: "webhook" } });
-      return { mint, accepts, stored };
+      const configured = async () =>
+        (await rpc<{ webhookConfigured: boolean }>(cookie, "bots/get", { botId: bot.id }))
+          .webhookConfigured;
+      return { read, rotate, accepts, stored, configured };
     }
 
-    it("mints a key only when the bot has none, and leaves a live key working", async () => {
-      const bot = await keyedBot("if-absent");
-      const first = await bot.mint({ ifAbsent: true });
-      expect(first.secret).toEqual(expect.any(String));
-      expect(await bot.accepts(first.secret!)).toBe(200);
+    it("gives the owner the bot's live key on every read, creating it on the first", async () => {
+      const bot = await keyedBot("read");
+      expect(await bot.configured()).toBe(false);
 
-      expect(await bot.mint({ ifAbsent: true })).toEqual({
-        secret: null,
-        path: expect.any(String),
-        webhookConfigured: true,
-      });
-      expect(await bot.accepts(first.secret!)).toBe(200);
+      const first = await bot.read();
+      expect(first.secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(await bot.read()).toEqual(first);
+      expect(await bot.accepts(first.secret)).toBe(200);
+      expect(await bot.configured()).toBe(true);
       expect(await bot.stored()).toBe(1);
     });
 
-    it("lets one of two concurrent first mints win, and both agree the bot has a key", async () => {
+    it("creates exactly one key when two first reads race", async () => {
       const bot = await keyedBot("race");
-      const answers = await Promise.all([
-        bot.mint({ ifAbsent: true }),
-        bot.mint({ ifAbsent: true }),
-      ]);
-      const secrets = answers.flatMap((answer) => (answer.secret ? [answer.secret] : []));
-      expect(secrets).toHaveLength(1);
-      expect(answers.map((answer) => answer.webhookConfigured)).toEqual([true, true]);
-      expect(await bot.accepts(secrets[0]!)).toBe(200);
+      const [one, two] = await Promise.all([bot.read(), bot.read()]);
+      expect(one.secret).toBe(two.secret);
+      expect(await bot.accepts(one.secret)).toBe(200);
       expect(await bot.stored()).toBe(1);
     });
 
-    it("replaces the key on an explicit rotation", async () => {
+    it("refuses the key to anyone but the bot's owner", async () => {
+      const bot = await keyedBot("owner");
+      const { secret } = await bot.read();
+      const stranger = await signup(`webhook-stranger-${stamp}@rakazo.test`, "Webhook stranger");
+
+      await expect(bot.read(stranger)).rejects.toThrow("bots/webhookSecret failed (500)");
+      expect(await bot.read()).toEqual({ secret });
+      expect(await bot.stored()).toBe(1);
+    });
+
+    it("reads the new key after a rotation, and the old one stops working", async () => {
       const bot = await keyedBot("rotate");
-      const first = await bot.mint();
-      const second = await bot.mint();
-      expect(await bot.accepts(first.secret!)).toBe(401);
-      expect(await bot.accepts(second.secret!)).toBe(200);
+      const before = await bot.read();
+      const rotated = await bot.rotate();
+
+      expect(rotated.secret).not.toBe(before.secret);
+      expect(await bot.read()).toEqual({ secret: rotated.secret });
+      expect(await bot.accepts(before.secret)).toBe(401);
+      expect(await bot.accepts(rotated.secret!)).toBe(200);
+      expect(await bot.stored()).toBe(1);
+    });
+
+    it("still leaves a live key alone for app builds that rotate with ifAbsent", async () => {
+      const bot = await keyedBot("if-absent");
+      const { secret } = await bot.read();
+
+      expect(await bot.rotate({ ifAbsent: true })).toMatchObject({ secret: null });
+      expect(await bot.accepts(secret)).toBe(200);
       expect(await bot.stored()).toBe(1);
     });
   });
