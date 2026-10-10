@@ -210,6 +210,7 @@ export default function Layout() {
                   }}
                 />
                 <Stack.Screen name="bot-memory" options={{ presentation: "modal" }} />
+                <Stack.Screen name="bot-skill" />
                 <Stack.Screen name="bot-files" options={{ title: t("Files") }} />
                 <Stack.Screen name="bot-file" options={{ title: t("Files") }} />
                 <Stack.Screen name="thread" options={{ title: t("Thread") }} />
