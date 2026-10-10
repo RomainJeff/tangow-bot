@@ -32,6 +32,8 @@ export interface BotCommands {
   readonly activityEpoch: number;
   /** Opens the run's thread on the message that started it, closing the panel if it hides that thread. */
   openRun(row: Pick<RunActivityRow, "botId" | "groupId" | "sourceMessageId">): void;
+  /** Re-reads the composer's skill catalog after a skill write the server has confirmed. */
+  skillsChanged(): void;
 }
 
 export interface BotCommandDeps {
@@ -51,6 +53,7 @@ export interface BotCommandDeps {
   panelCoversThread: RefObject<boolean>;
   closePanel: () => void;
   activityEpoch: number;
+  refreshSkills: () => void;
 }
 
 export function useBotCommands(deps: BotCommandDeps): BotCommands {
@@ -135,6 +138,7 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
           }),
         );
       },
+      skillsChanged: () => depsRef.current.refreshSkills(),
     };
   }, [order, activityEpoch]);
 }

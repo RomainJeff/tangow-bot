@@ -1,6 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type {
-  AgentSkillCatalogEntry,
   Bot,
   BotSection,
   ComputerMode,
@@ -109,6 +108,7 @@ import type { ContextMenuPosition } from "./BotContextMenu";
 import { memberName } from "./GroupPanel";
 import { HostComputerPrompt } from "./HostComputerPrompt";
 import type { SettingsSection } from "./SettingsOverlay";
+import { useAgentSkillCatalog } from "./shell/agent-skill-catalog";
 import type { BotAction } from "./shell/bot-commands";
 import { downloadBotExport, useBotCommands } from "./shell/bot-commands";
 import { CommandPalette, isCommandPaletteHotkey } from "./shell/command-palette";
@@ -275,7 +275,6 @@ export function ShellPage() {
   const [routinesBotId, setRoutinesBotId] = useState<string | null>(null);
   const [taughtSkills, setTaughtSkills] = useState<TaughtSkill[]>([]);
   const [taughtSkillsBotId, setTaughtSkillsBotId] = useState<string | null>(null);
-  const [agentSkills, setAgentSkills] = useState<AgentSkillCatalogEntry[]>([]);
   const [mentionRoutines, setMentionRoutines] = useState<Array<Routine & { botName?: string }>>([]);
   const [mentionConnectors, setMentionConnectors] = useState<
     Array<{
@@ -1006,27 +1005,7 @@ export function ShellPage() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void rpc.agentSkills
-      .list({ botId: activeBotId.current })
-      .then((skills) => {
-        if (!cancelled) setAgentSkills(skills);
-      })
-      .catch(() => {
-        if (!cancelled) setAgentSkills([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const refreshAgentSkills = useCallback(() => {
-    void rpc.agentSkills
-      .list({ botId: activeBotId.current })
-      .then(setAgentSkills)
-      .catch(() => undefined);
-  }, []);
+  const [agentSkills, refreshAgentSkills] = useAgentSkillCatalog(activeBotId);
 
   useEffect(() => {
     void rpc.voice
@@ -2604,6 +2583,7 @@ export function ShellPage() {
     panelCoversThread,
     closePanel: () => setPanel(null),
     activityEpoch,
+    refreshSkills: refreshAgentSkills,
   });
 
   // Below `lg` the panel is full width over the thread instead of reflowing

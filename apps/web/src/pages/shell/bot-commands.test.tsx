@@ -50,6 +50,7 @@ function Harness() {
     panelCoversThread,
     closePanel,
     activityEpoch: 0,
+    refreshSkills: vi.fn(),
   });
   view = { bots, routines, commands };
   return null;

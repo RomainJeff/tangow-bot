@@ -463,6 +463,7 @@ function Fixture() {
       botAction: (_botId, action) => console.info(`bot action: ${action}`),
       activityEpoch: 0,
       openRun: (row) => console.info(`open run from ${row.sourceMessageId ?? "the end"}`),
+      skillsChanged: () => undefined,
     };
   }, []);
 

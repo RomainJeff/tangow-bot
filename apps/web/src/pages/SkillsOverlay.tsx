@@ -138,7 +138,7 @@ export function SkillsOverlay({
                     <Trans>Only the first 50 skills are shown to the agent.</Trans>
                   </p>
                 ) : null}
-                <AgentSkills />
+                <AgentSkills onChanged={onSkillsChanged} />
               </>
             ) : null}
 

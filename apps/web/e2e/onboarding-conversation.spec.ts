@@ -1,5 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
+import { expect, type Page, test } from "./test";
 
 function slackCard(page: Page) {
   return page.getByRole("group", { name: "Slack connection" });

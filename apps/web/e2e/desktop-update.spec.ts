@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
+import { expect, test } from "./test";
 
 test("desktop update can be checked, deferred, and installed from settings", async ({
   page,

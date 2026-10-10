@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
-import { expect, test } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import { expect, test } from "./test";
 
 /** Nothing hovered: the captures below are meant to show the resting state. */
 async function restPointer(page: Page) {
