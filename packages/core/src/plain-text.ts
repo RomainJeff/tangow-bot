@@ -27,13 +27,17 @@ export function plainText(markdown: string): string {
       .slice(0, PLAIN_TEXT_INPUT_CHARS)
       .replace(/\uE000/g, "")
       .replace(/\r\n/g, "\n")
-      .replace(/^[ \t]{0,3}```[^\n`]*\n?([\s\S]*?)(?:```|(?![\s\S]))/gm, (_m, code: string) =>
+      .replace(
+        /^[ \t]*```[^\n`]*(?:\n|$)([\s\S]*?)(?:^[ \t]*```|(?![\s\S]))/gm,
+        (_m, code: string) => setAside(code),
+      )
+      .replace(
+        /^[ \t]*~~~[^\n]*(?:\n|$)([\s\S]*?)(?:^[ \t]*~~~|(?![\s\S]))/gm,
+        (_m, code: string) => setAside(code),
+      )
+      .replace(/(?<!`)(`+)(?!`)([^\n]*?[^`\n])\1(?!`)/g, (_m, _ticks: string, code: string) =>
         setAside(code),
       )
-      .replace(/^[ \t]{0,3}~~~[^\n]*\n?([\s\S]*?)(?:~~~|(?![\s\S]))/gm, (_m, code: string) =>
-        setAside(code),
-      )
-      .replace(/(?<!`)(`+)([^`\n]+)\1(?!`)/g, (_m, _ticks: string, code: string) => setAside(code))
       .replace(/<((?:https?:\/\/|mailto:)[^>\s]+|[^<>\s@]+@[^<>\s@]+\.[^<>\s@]+)>/g, "$1")
       .replace(/\bhttps?:\/\/[^\s<>()]*[^\s<>()*_]/g, (url) => setAside(url))
       .replace(IMAGE, "$1")
@@ -47,7 +51,8 @@ export function plainText(markdown: string): string {
       .replace(/^\[[ xX]\][ \t]+/gm, "")
       // Emphasis only where its markers are not inside a word or a file name, so `2**3`,
       // `setup__main__` and `__init__.py` keep theirs.
-      .replace(/(^|[^A-Za-z0-9\\])(\*\*|__)(?=\S)((?:(?!\2).)*?\S)\2(?![A-Za-z0-9]|\.\w)/g, "$1$3")
+      .replace(/(^|[^A-Za-z0-9\\])\*\*(?=\S)((?:(?!\*\*).)*?\S)\*\*(?![A-Za-z0-9]|\.\w)/g, "$1$2")
+      .replace(/(^|[^\w\\])__(?=\S)((?:(?!__).)*?\S)__(?!\w|\.\w)/g, "$1$2")
       .replace(/(^|\s)(?:\*\*|__)(?=\s|$)/g, "$1")
       .replace(/(^|[^\w*\\])(\*|_)([^\s*_\\]|[^\s*_][^*_\n]*?[^\s*_\\])\2(?![\w*]|\.\w)/g, "$1$3")
       .replace(/~~(.*?)~~/g, "$1")

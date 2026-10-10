@@ -88,6 +88,28 @@ describe("plainText", () => {
     expect(plainText("a ~~~not fence")).toBe("a ~~~not fence");
   });
 
+  it("keeps the words of inline code that starts a line", () => {
+    expect(plainText("```npm i``` is the command")).toBe("npm i is the command");
+    expect(plainText("Install:\n```npm i``` then run")).toBe("Install: npm i then run");
+  });
+
+  it("closes a fence only at the start of a line", () => {
+    expect(plainText("```js\nconst a = '```';\n```\nok")).toBe("const a = '```'; ok");
+  });
+
+  it("reads a fence indented inside a list item", () => {
+    expect(plainText("1. item\n    ```sh\n    ls -la\n    ```\nok")).toBe("item ls -la ok");
+    expect(plainText("- item\n    ~~~\n    ls\n    ~~~\nok")).toBe("item ls ok");
+  });
+
+  it("keeps backticks inside double-backtick code", () => {
+    expect(plainText("use `` `a` `` here")).toBe("use `a` here");
+  });
+
+  it("keeps triple underscores inside a word", () => {
+    expect(plainText("foo___bar___baz")).toBe("foo___bar___baz");
+  });
+
   it("drops emphasis around a bare address", () => {
     expect(plainText("**https://example.test/docs** is the link")).toBe(
       "https://example.test/docs is the link",
