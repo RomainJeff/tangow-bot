@@ -107,14 +107,23 @@ const SKILL_DELETE_ERROR = "Delete a skill only when the user asks you to in thi
  * every later run, so only the user's own conversation, their routines and a sub-bot's first
  * task save one; a delete needs the user. A routine counts as the user's only while its prompt
  * is (`trustedRoutine`): one a bot set up from a webhook would otherwise save on its word a
- * minute later. A resumed run keeps the trigger it started with.
+ * minute later. A run that read a message someone else sent into it (`steeredByOthers`) is no
+ * longer the user's alone. A resumed run keeps the trigger it started with.
  */
 export function skillWriteRefusal(
-  run: { trigger: string; sourceRole?: string | null; trustedRoutine?: boolean },
+  run: {
+    trigger: string;
+    sourceRole?: string | null;
+    trustedRoutine?: boolean;
+    steeredByOthers?: boolean;
+  },
   tool: string,
 ): string | undefined {
+  if (tool !== "skill_create" && tool !== "skill_update" && tool !== "skill_delete") {
+    return undefined;
+  }
+  if (run.steeredByOthers) return tool === "skill_delete" ? SKILL_DELETE_ERROR : SKILL_WRITE_ERROR;
   if (tool === "skill_delete") return runStartedByUser(run) ? undefined : SKILL_DELETE_ERROR;
-  if (tool !== "skill_create" && tool !== "skill_update") return undefined;
   return runStartedByUser(run) ||
     (run.trigger === "routine" && run.trustedRoutine === true) ||
     run.trigger === "spawn"
