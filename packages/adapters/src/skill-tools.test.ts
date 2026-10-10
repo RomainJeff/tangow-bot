@@ -155,7 +155,7 @@ describe("skill tools", () => {
         secrets: [],
       }),
     );
-    expect(writes.sort()).toEqual(["create", "delete", "update"]);
+    expect(writes.sort()).toEqual(["create", "delete", "replayed", "update"]);
     expect(offered).toEqual([
       "skill_create",
       "skill_delete",
@@ -255,6 +255,37 @@ describe("skill tools", () => {
     const catalog = formatSkillsCatalogInstruction(records);
     expect(catalog).toContain("- Daily standup: Prepare standup notes");
     expect(catalog).toContain("skill_read");
+  });
+
+  it("answers a tool call run again after a crash with its first result", async () => {
+    const bot = { ...owner, botId: "bot-1" };
+    const library = createSkillLibrary({ ...deps, lock });
+    const sameCall = (toolCallId: string) =>
+      library.forBot(bot, {
+        botId: "bot-1",
+        botName: "Bot",
+        runId: "run-1",
+        toolCallId,
+        secrets: [],
+      });
+    const create = { name: "Deploy", description: "Ship it", body: "steps" };
+    const created = await skillCreateFromTool(deps, bot, sameCall("call-1"), create);
+    expect(await skillCreateFromTool(deps, bot, sameCall("call-1"), create)).toEqual(created);
+
+    const rename = { skillId: "user:deploy", newName: "Ship" };
+    const renamed = await skillUpdateFromTool(deps, bot, sameCall("call-2"), rename);
+    expect(renamed).toEqual({ ok: true, id: "user:ship", name: "Ship", description: "Ship it" });
+    expect(await skillUpdateFromTool(deps, bot, sameCall("call-2"), rename)).toEqual(renamed);
+    expect(await skillCreateFromTool(deps, bot, sameCall("call-3"), create)).toMatchObject({
+      ok: true,
+      id: "user:deploy",
+    });
+    expect(
+      await skillUpdateFromTool(deps, bot, sameCall("call-4"), {
+        skillId: "user:ship",
+        newName: "Deploy",
+      }),
+    ).toEqual({ error: 'A skill named "Deploy" already exists.' });
   });
 
   it("reports a conflict when two creators race on the same name", async () => {
