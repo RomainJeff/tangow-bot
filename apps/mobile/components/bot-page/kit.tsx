@@ -1,6 +1,15 @@
 import type { FieldSaveState } from "@rakazo/core";
 import { radii, tokensForAppearance } from "@rakazo/ui-tokens";
-import { Children, Fragment, type ReactNode, useEffect } from "react";
+import { useFocusEffect } from "expo-router";
+import {
+  Children,
+  Fragment,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   AccessibilityInfo,
   Platform,
@@ -18,14 +27,26 @@ import { nativeTextStyle } from "../../lib/typography";
 import { NativeSymbol } from "../native-symbol";
 
 /** A labelled group of rows on one surface, hairlines inset from the leading edge. */
-export function Group({ label, children }: { label?: string; children: ReactNode }) {
+export function Group({
+  label,
+  trailing,
+  children,
+}: {
+  label?: string;
+  /** A short action on the label's line, such as "Add". */
+  trailing?: ReactNode;
+  children: ReactNode;
+}) {
   const styles = useThemedStyles(createKitStyles);
   return (
     <View style={styles.group}>
-      {label ? (
-        <Text style={styles.groupLabel} accessibilityRole="header" numberOfLines={1}>
-          {label}
-        </Text>
+      {label || trailing ? (
+        <View style={styles.groupHead}>
+          <Text style={styles.groupLabel} accessibilityRole="header" numberOfLines={1}>
+            {label}
+          </Text>
+          {trailing}
+        </View>
       ) : null}
       <View style={styles.card}>
         <Separated>{children}</Separated>
@@ -34,8 +55,8 @@ export function Group({ label, children }: { label?: string; children: ReactNode
   );
 }
 
-/** Rows with a hairline between each. */
-function Separated({ children }: { children: ReactNode }) {
+/** Rows with a hairline between each, for a list built inside a `Group`. */
+export function Separated({ children }: { children: ReactNode }) {
   const styles = useThemedStyles(createKitStyles);
   return Children.toArray(children).map((row, index) => (
     <Fragment key={index}>
@@ -43,6 +64,28 @@ function Separated({ children }: { children: ReactNode }) {
       {row}
     </Fragment>
   ));
+}
+
+export function GroupAction({
+  label,
+  onPress,
+  accessibilityLabel,
+}: {
+  label: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
+  const styles = useThemedStyles(createKitStyles);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={10}
+      onPress={onPress}
+    >
+      <Text style={styles.groupAction}>{label}</Text>
+    </Pressable>
+  );
 }
 
 /**
@@ -279,17 +322,77 @@ export function LoadFailed({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+export function QuietLine({ children }: { children: string }) {
+  const styles = useThemedStyles(createKitStyles);
+  return (
+    <View style={styles.quiet}>
+      <Text style={styles.quietText}>{children}</Text>
+    </View>
+  );
+}
+
+type Read<T> = { kind: "loading" } | { kind: "failed" } | { kind: "ready"; value: T };
+
+/**
+ * Reads `load` whenever the screen comes back into view and whenever `deps` change; only the
+ * latest read or write lands, and a failed refresh keeps what was shown.
+ */
+export function useFocusedRead<T>(load: () => Promise<T>, deps: unknown[]) {
+  const [read, setRead] = useState<Read<T>>({ kind: "loading" });
+  const latest = useRef(0);
+  const reload = useCallback(() => {
+    const request = ++latest.current;
+    load().then(
+      (value) => {
+        if (request === latest.current) setRead({ kind: "ready", value });
+      },
+      () => {
+        if (request === latest.current)
+          setRead((current) => (current.kind === "ready" ? current : { kind: "failed" }));
+      },
+    );
+    return () => {
+      if (request === latest.current) latest.current += 1;
+    };
+  }, deps);
+  useFocusEffect(reload);
+  const retry = () => {
+    setRead({ kind: "loading" });
+    reload();
+  };
+  /**
+   * Call as a write begins; pass its answer to the returned settle. Reads that began before the
+   * write no longer land, while one begun since (the screen came back into view) still does.
+   */
+  const write = () => {
+    const begun = latest.current;
+    return (next: (current: Read<T>) => Read<T>) => {
+      if (latest.current === begun) latest.current += 1;
+      setRead(next);
+    };
+  };
+  return { read, write, retry };
+}
+
 function createKitStyles() {
   const tokens = mobileTokens();
   return StyleSheet.create({
     group: { gap: 8 },
-    groupLabel: {
+    groupHead: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      gap: 12,
       paddingHorizontal: 16,
+    },
+    groupLabel: {
+      flexShrink: 1,
       color: tokens.mutedForeground,
       ...nativeTextStyle("label", { size: 13 }),
       letterSpacing: 0.4,
       textTransform: "uppercase",
     },
+    groupAction: { color: tokens.mutedForeground, ...nativeTextStyle("meta", { size: 14 }) },
     card: {
       backgroundColor: tokens.surface,
       borderRadius: radii.card,
