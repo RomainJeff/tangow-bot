@@ -20,9 +20,6 @@ describe("projectThreadItems", () => {
       {
         kind: "note",
         id: "lin-01",
-        sessionId: "ses_linear",
-        seq: 1,
-        parentId: "lin-00",
         ts: at(1),
         type: "session.title",
         payload: { title: "Lyon weather email" },

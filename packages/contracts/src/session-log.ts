@@ -276,6 +276,8 @@ export type AgentHistoryTurnPart =
     };
 
 const itemBase = { id: EntryId, ts: IsoDate };
+const noteFields = { id: true, ts: true, type: true, payload: true } as const;
+const noteKind = { kind: z.literal("note") };
 
 /** What a thread renders, one item per kind. A run folds into one message and one run item. */
 export const ThreadItemSchema = z.discriminatedUnion("kind", [
@@ -303,7 +305,9 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
     trigger: SessionRunTrigger,
     model: RunModel,
     effort: ThinkingLevelSchema.nullable(),
-    finished: z.object({ outcome: RunOutcome, durationMs: z.number().int() }).nullable(),
+    finished: z
+      .object({ outcome: RunOutcome, durationMs: z.number().int().nonnegative() })
+      .nullable(),
   }),
   z.object({ kind: z.literal("subagent"), ...itemBase, runId: Id, ...SubagentPayload.shape }),
   z.object({
@@ -351,12 +355,12 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
     decision: z.enum(["approved", "denied"]).nullable(),
   }),
   z.discriminatedUnion("type", [
-    ComputerControlEntry.extend({ kind: z.literal("note") }),
-    MemoryRevisedEntry.extend({ kind: z.literal("note") }),
-    SkillSavedEntry.extend({ kind: z.literal("note") }),
-    AttachmentAddedEntry.extend({ kind: z.literal("note") }),
-    SessionTitleEntry.extend({ kind: z.literal("note") }),
-    SystemNoteEntry.extend({ kind: z.literal("note") }),
+    ComputerControlEntry.pick(noteFields).extend(noteKind),
+    MemoryRevisedEntry.pick(noteFields).extend(noteKind),
+    SkillSavedEntry.pick(noteFields).extend(noteKind),
+    AttachmentAddedEntry.pick(noteFields).extend(noteKind),
+    SessionTitleEntry.pick(noteFields).extend(noteKind),
+    SystemNoteEntry.pick(noteFields).extend(noteKind),
   ]),
 ]);
 export type ThreadItem = z.infer<typeof ThreadItemSchema>;

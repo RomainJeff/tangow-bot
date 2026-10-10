@@ -1,4 +1,4 @@
-import type { SessionEntry, ThreadItem, UiEntry } from "@rakazo/contracts";
+import type { SessionEntry, SessionEntryOf, ThreadItem, UiEntry } from "@rakazo/contracts";
 import { isUiEntry } from "@rakazo/contracts";
 import { foldRuns } from "./run-fold.js";
 
@@ -7,11 +7,20 @@ type EffectItem = Extract<ThreadItem, { kind: "effect" }>;
 
 /**
  * What a thread shows, from a page of a session's chain oldest first. A run becomes one `run`
- * item where it started and one `message` item where it first spoke. A run or an effect whose
- * opening entry is outside the page is left out, as is a tool result without its call.
+ * item where it started and one `message` item per unbroken stretch of its words. A run whose
+ * start is outside the page gets no `run` item, though its words on the page still show; an
+ * effect whose request is outside the page is left out, as is a tool result without its call.
  */
 export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem[] {
   const visible = entries.filter(isUiEntry);
+  const received = new Map<string, SessionEntryOf<"bot.message.received">[]>();
+  for (const entry of visible) {
+    if (entry.type !== "bot.message.received") continue;
+    received.set(entry.payload.exchangeId, [
+      ...(received.get(entry.payload.exchangeId) ?? []),
+      entry,
+    ]);
+  }
   const runs = new Map<string, RunItem>();
   const effects = new Map<string, EffectItem>();
   const items: ThreadItem[] = [];
@@ -50,7 +59,7 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
         if (run) {
           run.finished = {
             outcome: segment.payload,
-            durationMs: Date.parse(segment.ts) - Date.parse(run.ts),
+            durationMs: Math.max(0, Date.parse(segment.ts) - Date.parse(run.ts)),
           };
         }
         break;
@@ -71,12 +80,7 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
       }
       case "bot.message.sent": {
         const { to, text, intent, exchangeId } = segment.payload;
-        const answer = visible.find(
-          (entry) =>
-            entry.type === "bot.message.received" &&
-            entry.payload.exchangeId === exchangeId &&
-            entry.seq > segment.seq,
-        );
+        const answer = received.get(exchangeId)?.find((entry) => entry.seq > segment.seq);
         items.push({
           kind: "botMessage",
           direction: "sent",
@@ -141,9 +145,11 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
       case "skill.saved":
       case "attachment.added":
       case "session.title":
-      case "system.note":
-        items.push({ kind: "note", ...segment });
+      case "system.note": {
+        const { sessionId, seq, parentId, botId, runId, ...note } = segment;
+        items.push({ kind: "note", ...note });
         break;
+      }
       default:
         segment satisfies Exclude<SessionEntry, UiEntry>;
     }
