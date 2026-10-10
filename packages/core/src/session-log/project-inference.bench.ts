@@ -13,16 +13,16 @@ const runsThatSpoke = new Set(
 const expectedTurns =
   chain.filter((entry) => entry.type === "user.message" || entry.type === "compaction").length +
   runsThatSpoke.size;
-const turns = projectInferenceTurns(chain, options).length;
-if (chain[0]?.type !== "compaction" || chain.length !== 500 || turns !== expectedTurns) {
+let turns = projectInferenceTurns(chain, options);
+if (chain[0]?.type !== "compaction" || chain.length !== 500 || turns.length !== expectedTurns) {
   throw new Error(
-    `expected 500 entries from a compaction and ${expectedTurns} turns, got ${turns}`,
+    `expected 500 entries from a compaction and ${expectedTurns} turns, got ${turns.length}`,
   );
 }
 
 const samples = Array.from({ length: 200 }, () => {
   const start = performance.now();
-  projectInferenceTurns(chain, options);
+  turns = projectInferenceTurns(chain, options);
   return performance.now() - start;
 }).sort((a, b) => a - b);
 const median = samples[samples.length / 2] ?? Number.POSITIVE_INFINITY;
@@ -31,5 +31,5 @@ if (median > BUDGET_MS) {
 }
 
 bench("projectInferenceTurns over 500 entries", () => {
-  projectInferenceTurns(chain, options);
+  turns = projectInferenceTurns(chain, options);
 });
