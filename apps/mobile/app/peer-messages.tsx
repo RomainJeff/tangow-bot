@@ -1,7 +1,8 @@
 import { ChatMarkdown } from "@rakazo/chat-ui/native";
-import type { MessageBlock, ThreadMessage, ThreadMessagePage } from "@rakazo/contracts";
+import type { EntryId, MessageBlock, SessionEntry, ThreadMessagePage } from "@rakazo/contracts";
 import {
   computeMessageGroups,
+  mergeEntries,
   peerConversations,
   showsTimeMarker,
   stripPeerAddressPrefix,
@@ -63,7 +64,7 @@ export default function PeerMessages() {
     peerColor?: string;
     peerShapeSeed?: string;
   }>();
-  const [messages, setMessages] = useState<readonly ThreadMessage[]>([]);
+  const [entries, setEntries] = useState<readonly SessionEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,8 +76,8 @@ export default function PeerMessages() {
     }
     let cancelled = false;
     void (async () => {
-      let before: number | undefined;
-      let collected: ThreadMessage[] = [];
+      let before: EntryId | undefined;
+      let collected: SessionEntry[] = [];
       do {
         const page = await rpc<ThreadMessagePage>("threads/messages", {
           botId,
@@ -84,11 +85,11 @@ export default function PeerMessages() {
           includePeerRuns: true,
         });
         if (cancelled) return;
-        collected = [...page.messages, ...collected];
+        collected = mergeEntries(collected, page.entries);
         before = page.olderCursor ?? undefined;
       } while (before !== undefined);
       if (cancelled) return;
-      setMessages(collected);
+      setEntries(collected);
       setLoading(false);
     })().catch((loadError) => {
       if (cancelled) return;
@@ -101,8 +102,8 @@ export default function PeerMessages() {
   }, [botId, peerBotId]);
 
   const conversation = useMemo(
-    () => peerConversations(messages).find((entry) => entry.peerBotId === peerBotId) ?? null,
-    [messages, peerBotId],
+    () => peerConversations(entries).find((entry) => entry.peerBotId === peerBotId) ?? null,
+    [entries, peerBotId],
   );
   const peer = conversation?.peerBotName ?? peerBotName ?? t("Bot");
   const own = botName ?? t("Bot");

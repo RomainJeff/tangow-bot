@@ -461,17 +461,18 @@ private fun latestReply(session: ApiSession, run: RunRecord): String? {
     if (run.groupId != null) put("groupId", run.groupId) else put("botId", run.botId)
   }
   val root = rpc(session, "threads/get", target)
-  val messages = root.optJSONArray("messages") ?: return ""
-  for (messageIndex in messages.length() - 1 downTo 0) {
-    val message = messages.optJSONObject(messageIndex) ?: continue
-    if (message.optString("role") != "bot") continue
-    if (message.optString("runId") != run.runId) continue
-    if (run.groupId != null && message.optString("botId") != run.botId) continue
-    val blocks = message.optJSONArray("blocks") ?: return ""
+  val entries = root.optJSONArray("entries") ?: return ""
+  for (entryIndex in entries.length() - 1 downTo 0) {
+    val entry = entries.optJSONObject(entryIndex) ?: continue
+    if (entry.optString("runId") != run.runId) continue
+    if (run.groupId != null && entry.optString("botId") != run.botId) continue
+    val type = entry.optString("type")
+    if (type == "handoff") return null
+    if (type != "assistant.text" && type != "bot.text") continue
+    val blocks = entry.optJSONObject("payload")?.optJSONArray("blocks") ?: return ""
     val text = mutableListOf<String>()
     for (blockIndex in 0 until blocks.length()) {
       val block = blocks.optJSONObject(blockIndex) ?: continue
-      if (block.optString("kind") == "handoff") return null
       block.optString("text").takeIf(String::isNotBlank)?.let(text::add)
     }
     return text.joinToString("\n")
