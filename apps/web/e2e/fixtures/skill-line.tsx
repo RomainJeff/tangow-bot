@@ -1,4 +1,4 @@
-import { setupI18n } from "@lingui/core";
+import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
 import type { MessageBlock } from "@rakazo/contracts";
 import { useState } from "react";
@@ -8,7 +8,7 @@ import { MessageView } from "../../src/pages/shell/message-view";
 import { skillPageView } from "../../src/pages/shell/skill-link";
 import "../../src/styles.css";
 
-const i18n = setupI18n({ locale: "en", messages: { en: {} } });
+i18n.loadAndActivate({ locale: "en", messages: {} });
 /** A line written while skills had uids still carries one; it opens by its id. */
 const uid = (digit: string) => digit.repeat(32);
 const CATALOG = [{ id: "user:rooms" }, { id: "user:invoices" }, { id: "user:long" }];
