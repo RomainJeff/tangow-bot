@@ -150,6 +150,95 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       expect(await harness.log.readRun(runId)).toEqual(answers);
     });
 
+    it("reads a child run whole: its trace, what it raised and the answers to its asks, by time", async () => {
+      const { sessionId, runId, session } = await created();
+      const childId = SessionId.parse(`routine-${runId}`);
+      await harness.transaction((tx) =>
+        harness.log.createSession(tx, {
+          kind: "routine",
+          id: childId,
+          spaceId: session.spaceId,
+          parentSessionId: sessionId,
+        }),
+      );
+      const at = (second: number) => new Date(Date.UTC(2026, 9, 11, 9, 0, second)).toISOString();
+      const ofRun = { botId: BOT, runId };
+      const askId = EntryId.parse(crypto.randomUUID());
+      const [started, call, result, ask, answer, , card, done] = await appendAll([
+        {
+          ...ofRun,
+          sessionId: childId,
+          ts: at(0),
+          type: "run.started",
+          payload: { trigger: { kind: "direct" }, model: { provider: "p", id: "m" }, effort: null },
+        },
+        {
+          ...ofRun,
+          sessionId: childId,
+          ts: at(1),
+          type: "tool.call",
+          payload: { callId: "call_0", name: "search", input: "{}" },
+        },
+        {
+          ...ofRun,
+          sessionId: childId,
+          ts: at(2),
+          type: "tool.result",
+          payload: { callId: "call_0", output: "3 hits", isError: false, artifactIds: [] },
+        },
+        {
+          ...ofRun,
+          id: askId,
+          sessionId,
+          ts: at(3),
+          type: "assistant.ask",
+          payload: { block: { kind: "ask", text: "Which outlet?" }, originSessionId: childId },
+        },
+        {
+          sessionId,
+          ts: at(4),
+          type: "user.message",
+          payload: {
+            blocks: [{ kind: "text", text: "Le Monde" }],
+            replyTo: { entryId: askId },
+            source: "app",
+          },
+        },
+        { ...said(sessionId, "unrelated"), ts: at(5) },
+        {
+          ...ofRun,
+          sessionId,
+          ts: at(6),
+          type: "assistant.text",
+          payload: {
+            blocks: [
+              {
+                kind: "mcp_approval",
+                name: "Press",
+                serverId: "mcp_press",
+                transport: "streamable_http",
+                endpoint: null,
+                needsOAuth: false,
+              },
+            ],
+            originSessionId: childId,
+          },
+        },
+        { ...replied(childId, runId, "Done."), ts: at(7) },
+      ]);
+
+      expect(await harness.log.readRun(runId)).toEqual([
+        started,
+        call,
+        result,
+        ask,
+        answer,
+        card,
+        done,
+      ]);
+      expect(await harness.log.readTail(childId)).toEqual([started, call, result, done]);
+    });
+
     it("reads one entry of its session whether the chain still holds it or not", async () => {
       const { sessionId, runId } = await created();
       const [question, answer] = await appendAll([
