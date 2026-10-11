@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,
   messagePresentationSegments,
+  skillLineRoute,
+  skillLineSegment,
   stepsBlocks,
   visibleMessageBlocks,
 } from "./message-presentation";
@@ -103,5 +105,45 @@ describe("mobile message presentation", () => {
         { kind: "text", text: "Done." },
       ]),
     ).toEqual([{ kind: "content", blocks: [{ kind: "text", text: "Done." }] }]);
+  });
+});
+
+describe("skill lines", () => {
+  const uid = "0123456789abcdef0123456789abcdef";
+  const line = (change: "learned" | "updated" | "deleted") =>
+    ({
+      kind: "skill_source",
+      skillUid: uid,
+      skillId: "user:coffee",
+      name: "Coffee",
+      change,
+    }) as const;
+
+  it("draws a message made only of skill lines, and keeps the lines beside its text", () => {
+    expect(hasVisibleMessagePresentation([line("learned")])).toBe(true);
+    const blocks = [{ kind: "text", text: "Done." }, line("updated")] as MessageBlock[];
+    expect(visibleMessageBlocks(blocks)).toEqual(blocks);
+    expect(messagePresentationSegments(blocks)[0]?.blocks.map((block) => block.kind)).toEqual([
+      "text",
+      "skill_source",
+    ]);
+  });
+
+  it("opens the skill by its id, also from a line stored with a uid, or Skills when it is gone", async () => {
+    const { skillUid: _, ...withoutUid } = line("updated");
+    const catalog = async () => [{ id: "builtin:routines" }, { id: "user:coffee" }];
+    const opened = { pathname: "/bot-skill", params: { skillId: "user:coffee" } };
+    await expect(skillLineRoute(withoutUid, catalog)).resolves.toEqual(opened);
+    await expect(skillLineRoute(line("learned"), catalog)).resolves.toEqual(opened);
+    await expect(skillLineRoute(line("updated"), async () => [])).resolves.toEqual({
+      pathname: "/skills",
+    });
+  });
+
+  it("hangs the lines under the last segment that draws text, else stands them alone", () => {
+    expect(skillLineSegment(["Done."])).toBe(0);
+    expect(skillLineSegment(["Reading.", "Done.", ""])).toBe(1);
+    expect(skillLineSegment([""])).toBe(-1);
+    expect(skillLineSegment([])).toBe(-1);
   });
 });

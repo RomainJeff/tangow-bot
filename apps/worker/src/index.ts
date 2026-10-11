@@ -17,9 +17,11 @@ import {
   createLinkPreviewPurge,
   createMessagingContextLoader,
   createPostgresReconciliationLeadership,
+  createPostgresSkillLock,
   createRunExecutor,
   createRunSandbox,
   createRunSecretWriter,
+  createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
   databaseCapacityBackoffMs,
@@ -50,9 +52,10 @@ import {
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
 } from "@rakazo/adapters";
-import { resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
+import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
 import {
   createDb,
+  createPool,
   createThreadEvents,
   isTooManyDatabaseConnections,
   parsePositiveInteger,
@@ -189,8 +192,16 @@ async function main() {
         only: ISOLATED_JOB_NAMES,
         noHandleSignals: true,
       });
+  // Its own small pool: a held skill lock must never take a connection the change itself needs.
+  const skillLockPool = createPool(databaseUrl, {
+    poolMax: 2,
+    applicationName: "rakazo-worker-skill-lock",
+  });
+  const skillLock = createPostgresSkillLock(skillLockPool);
+  const skillLearning = parseSkillLearningMode(process.env.SKILL_LEARNING);
   const executor = createRunExecutor({
     prisma,
+    skillLock,
     runtime,
     sandbox,
     memory,
@@ -220,6 +231,7 @@ async function main() {
     events,
     messaging: messaging ? createMessagingContextLoader(prisma) : undefined,
     web: createWebProvider(),
+    skillLearning,
   });
 
   const jobHandlers = createBackgroundJobHandlers({
@@ -271,6 +283,11 @@ async function main() {
     leadership: createPostgresReconciliationLeadership(pool),
     reconcileComputerUpdates: () => reconcileComputerUpdates({ prisma, jobs }),
     purgeLinkPreviews: createLinkPreviewPurge({ prisma, artifacts }),
+    sweepSkillLines: createSkillLineSweep({
+      prisma,
+      events,
+      lineOnlyMessages: skillLearning !== "off",
+    }),
   });
   reconciler.start();
 
@@ -288,6 +305,7 @@ async function main() {
       await mcp.close();
       await prisma.$disconnect().catch(() => undefined);
       await pool.end().catch(() => undefined);
+      await skillLockPool.end().catch(() => undefined);
     } finally {
       await traceExport.exporter?.flush(2_000);
       await logger.flush({ timeoutMs: 2_000 });

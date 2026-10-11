@@ -11,6 +11,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **The iPhone app now has the bot page that web and desktop have, opened from the bot in a thread's header.** Activity lists the bot's runs with their recaps, Open in chat and a dot while a routine is failing; Routines lists them with switches and lets you create and edit them, each with its own runs and Test run, showing a webhook's address and masked key with an eye and Copy before you save; Knowledge holds memory, its scope when a memory provider is set up, open work, the computer's files and skills; and every field in Settings saves itself. It replaces the single long settings form, so routines, knowledge and activity are now reachable from the phone.
+- **Bots now create and improve their own skills, and a line under their message says so.** On web, desktop and iPhone, "Skill learned", "Skill updated" or "Skill deleted" followed by the skill's name appears under the bot's reply and opens a skill it learned or updated, and a bot changes your skills only in a conversation you started, one of your routines or a sub-bot it created. Keeping a method on its own after a long task, or fixing it after a step failed, is off by default; a server admin turns it on with `SKILL_LEARNING` (see [Learned skills](docs/self-host.md#learned-skills)).
+
+#### Changed
+
+- A bot can no longer rename a skill, on web, desktop and iPhone; only you rename it, from its settings.
+
+#### Fixed
+
+- A bot asked to create another bot now shows the approval card even when it leaves the new bot's computer mode unset, instead of failing with a validation error and never offering the card.
 
 ### 2026-10-10
 

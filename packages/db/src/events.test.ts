@@ -2171,7 +2171,11 @@ describe("sendUserMessage", () => {
     expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 8 }));
   });
 
-  it("persists steering instead of starting a parallel run when the bot is busy", async () => {
+  it.each([
+    ["follow_up", false],
+    ["webhook", true],
+    ["messaging", true],
+  ] as const)("steers a busy run with a %s message, untrusted: %s", async (trigger, untrusted) => {
     const tx = {
       thread: {
         update: vi
@@ -2209,7 +2213,7 @@ describe("sendUserMessage", () => {
         userId: "user-1",
         blocks: [{ kind: "text", text: "hello" }],
         prompt: "hello",
-        trigger: "follow_up",
+        trigger,
       }),
     ).resolves.toEqual({ messageId: "message-1", seq: 4, taskId: null, runId: "run-0" });
 
@@ -2224,7 +2228,7 @@ describe("sendUserMessage", () => {
       data: { runId: "run-0" },
     });
     expect(tx.steeringMessage.create).toHaveBeenCalledWith({
-      data: { messageId: "message-1", botId: "bot-1", userId: "user-1", runId: "run-0" },
+      data: { messageId: "message-1", botId: "bot-1", userId: "user-1", runId: "run-0", untrusted },
     });
   });
 });
@@ -2396,6 +2400,7 @@ describe("claimSteering", () => {
           {
             id: "steer-2",
             messageId: "message-2",
+            untrusted: true,
             message: { seq: 6, blocks: [{ kind: "text", text: "Second" }] },
           },
         ]),
@@ -2435,6 +2440,7 @@ describe("claimSteering", () => {
         messageId: "message-2",
         text: "Second",
         blocks: [{ kind: "text", text: "Second" }],
+        untrusted: true,
       },
     ]);
     expect(tx.run.findFirst).toHaveBeenCalledWith(
@@ -2530,7 +2536,7 @@ describe("clearThread", () => {
       task: { updateMany: vi.fn() },
       computerExecutionLease: { updateMany: vi.fn() },
       computer: { updateMany: vi.fn() },
-      message: { deleteMany: vi.fn() },
+      message: { findMany: vi.fn().mockResolvedValue([]), deleteMany: vi.fn() },
       event: {
         deleteMany: vi.fn(),
         create: vi.fn().mockResolvedValue({
@@ -2594,7 +2600,7 @@ describe("clearThread", () => {
       task: { updateMany: vi.fn() },
       computerExecutionLease: { updateMany: vi.fn() },
       computer: { updateMany: vi.fn() },
-      message: { deleteMany: vi.fn() },
+      message: { findMany: vi.fn().mockResolvedValue([]), deleteMany: vi.fn() },
       event: {
         deleteMany: vi.fn(),
         create: vi.fn().mockResolvedValue({
@@ -2666,7 +2672,12 @@ describe("rewindThread", () => {
       message: {
         findFirst: vi
           .fn()
-          .mockResolvedValue(overrides.message === undefined ? { seq: 4 } : overrides.message),
+          .mockResolvedValue(
+            overrides.message === undefined
+              ? { seq: 4, createdAt: new Date(0) }
+              : overrides.message,
+          ),
+        findMany: vi.fn().mockResolvedValue([]),
         deleteMany: vi.fn(),
       },
       run: {

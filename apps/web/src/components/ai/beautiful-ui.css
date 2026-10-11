@@ -25,3 +25,20 @@
     transform: translateY(0);
   }
 }
+
+/* A skill line that arrives live: the line rises as any arrival does, half an arrival after its
+   bubble, and its icon pops. Both run the arrival duration, the same beat as on iPhone. */
+.bui-skill-line {
+  animation: rk-arrive var(--duration-arrive) var(--motion-ease) calc(var(--duration-arrive) / 2)
+    backwards;
+}
+.bui-skill-icon {
+  animation: bui-pop-in var(--duration-arrive) var(--motion-ease) calc(var(--duration-arrive) / 2)
+    backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bui-skill-line,
+  .bui-skill-icon {
+    animation: none;
+  }
+}

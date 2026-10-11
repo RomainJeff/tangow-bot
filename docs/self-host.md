@@ -268,6 +268,56 @@ be saved by the deployment owner.
 
 Optional messaging platforms (iMessage, Slack, WhatsApp, Telegram, Feishu/Lark) mount when their env credentials are set — see `.env.example`. Point a Feishu/Lark bot event subscription at `/api/v1/messaging/webhook/lark` (webhook/HTTP inbound only; do not enable long connection). Groups stay iMessage-only.
 
+### Learned skills
+
+`SKILL_LEARNING` decides whether bots keep and improve their methods as skills on their own. The
+API and worker read it at start.
+
+- `off` (default): nothing changes. A bot saves a skill when it judges a task worth repeating, and
+  mentions `/Name` after creating or updating one.
+- `shadow`: a bot keeps or improves the skill it followed and no longer mentions it, since the
+  line under its message shows the change. At the end of each conversation turn the user started,
+  the worker also decides whether that turn earns the private follow-up described under `on`, and
+  records the decision without running it.
+- `on`: the same, and a turn that ends with a reply after 15 or more tool calls, or after a step
+  failed while the bot followed a skill, gets one private follow-up in which the bot may only read,
+  search, create and update skills. It posts nothing; a skill it saves gets its line under the
+  reply.
+
+`shadow` and `on` both stop the bot's announcement, so a client that does not show the skill line
+shows nothing when a skill changes. Leave the setting `off` until every client in use shows the
+line: the web app always does; the desktop app and the iPhone app do from the release that added
+the line, so rebuild the desktop app and update the iPhone app first. Then run `shadow` for a week,
+then `on`. To switch, set `SKILL_LEARNING=shadow` (or `on`) in `.env` and recreate the `api` and
+`worker` services with the `docker compose ... up -d` command you deploy with.
+
+In `shadow` and `on`, each decision is logged by the worker as `agent.skill_nudge`, with `decision`
+`nudge` or `skip` and the `reason` of a skip:
+
+```bash
+docker compose --env-file .env -f infra/compose/docker-compose.prod.yml logs worker \
+  | grep agent.skill_nudge
+```
+
+It is also stored as an `agent.skill.nudge` event of the turn's run: `phase` `decided` for a turn
+that earns the follow-up, `skipped` with its `reason` otherwise (turns the user did not start are
+not stored). Count them over the last week in `psql`:
+
+```sql
+SELECT coalesce(payload->>'reason', 'nudge') AS outcome, count(*)
+FROM events
+WHERE type = 'agent.skill.nudge'
+  AND payload->>'phase' IN ('decided', 'skipped')
+  AND "createdAt" > now() - interval '7 days'
+GROUP BY 1
+ORDER BY 2 DESC;
+```
+
+Aim for `nudge` on 10 to 15 % of the turns counted, leaving out `no_reply` and `budget_exhausted`.
+Well above that, the follow-up costs a model call on most long turns; well below, it rarely runs.
+
+Live evaluations of this behaviour are described in [agent verification](agent-verification.md).
+
 ## Choosing a computer provider
 
 The Electron desktop app is a client of the same API. Docker and E2B still apply. On first launch, Electron asks the deployment owner whether bots should keep using Docker or run on this Mac as you. `SANDBOX_PROVIDER=desktop` is a separate, explicit provider that always runs commands on the service host.

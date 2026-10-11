@@ -4,13 +4,14 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput } from "react-native";
 import { LoadFailed, useFocusedRead } from "../components/bot-page/kit";
-import { NativeSymbol } from "../components/native-symbol";
+import { MoreButton } from "../components/bot-page/skill-parts";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
 import { presentMessageActionSheet } from "../lib/message-action-sheet";
-import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../lib/native";
+import { native, useMobileTokens, useResolvedAppearance, useThemedStyles } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
+import { skillDirty, skillText } from "../lib/skill-draft";
 import { nativeTextStyle } from "../lib/typography";
 
 /**
@@ -29,8 +30,6 @@ export default function BotSkillScreen() {
     () => rpc<AgentSkill>("agentSkills/get", { skillId }),
     [skillId],
   );
-  // A draft exists only while someone edits, so the field never shows or saves a text the
-  // server no longer holds once the skill is read again.
   const [draft, setDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -38,9 +37,10 @@ export default function BotSkillScreen() {
   const skill = read.kind === "ready" ? read.value : null;
   const content = skill?.content ?? null;
   const editing = draft !== null;
-  const dirty = draft !== null && content !== null && draft !== content;
+  const dirty = skillDirty(content, draft);
   const parsed = dirty && draft?.trim() ? parseSkillMd(draft) : null;
   const draftError = parsed && "error" in parsed ? parsed.error : null;
+  const saveDisabled = busy || !dirty || Boolean(draftError) || !draft?.trim();
 
   const stopEditing = () => {
     Keyboard.dismiss();
@@ -58,7 +58,7 @@ export default function BotSkillScreen() {
     ]);
   };
   const save = async () => {
-    if (busy || !dirty || draftError || !draft?.trim()) return;
+    if (saveDisabled) return;
     setBusy(true);
     setFailed(null);
     const settle = write();
@@ -103,6 +103,20 @@ export default function BotSkillScreen() {
           // editing value and the screen would stay without a way back.
           headerBackVisible: !editing,
           gestureEnabled: !editing,
+          // Android: the bar buttons below are iOS only, so a plain Cancel and Save stand in.
+          headerLeft: editing
+            ? () => (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  hitSlop={8}
+                  onPress={cancel}
+                  style={styles.headerCancel}
+                >
+                  <Text style={styles.headerCancelLabel}>{t("Cancel")}</Text>
+                </Pressable>
+              )
+            : undefined,
           unstable_headerLeftItems: editing
             ? () => [
                 {
@@ -120,24 +134,24 @@ export default function BotSkillScreen() {
                   type: "button",
                   label: busy ? t("Saving…") : t("Save"),
                   variant: "done",
-                  disabled: busy || !dirty || Boolean(draftError) || !draft?.trim(),
+                  disabled: saveDisabled,
                   onPress: () => void save(),
                 },
               ]
             : undefined,
           headerRight: editing
-            ? undefined
-            : () =>
-                writable ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t("More")}
-                    hitSlop={10}
-                    onPress={remove}
-                  >
-                    <NativeSymbol ios="ellipsis" android="ellipsis-horizontal" size={20} />
-                  </Pressable>
-                ) : null,
+            ? () => (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={saveDisabled}
+                  hitSlop={8}
+                  onPress={() => void save()}
+                  style={saveDisabled ? styles.headerDisabled : undefined}
+                >
+                  <Text style={styles.headerSaveLabel}>{busy ? t("Saving…") : t("Save")}</Text>
+                </Pressable>
+              )
+            : () => (writable ? <MoreButton label={t("More")} onPress={remove} /> : null),
         }}
       />
       {read.kind === "failed" ? (
@@ -153,7 +167,7 @@ export default function BotSkillScreen() {
           {failed ? <Text style={styles.error}>{failed}</Text> : null}
           <TextInput
             accessibilityLabel={skill.name}
-            value={draft ?? content ?? ""}
+            value={skillText(content, draft)}
             onChangeText={setDraft}
             onFocus={() => setDraft((current) => current ?? content ?? "")}
             editable={writable && !busy}
@@ -179,6 +193,13 @@ function createSkillStyles() {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: tokens.background },
     content: { paddingHorizontal: 16, paddingBottom: 48, gap: 12 },
+    headerCancel: { paddingEnd: 20, paddingVertical: 8, justifyContent: "center" },
+    headerCancelLabel: { color: native.label, ...nativeTextStyle("body", { size: 17 }) },
+    headerSaveLabel: {
+      color: tokens.primary,
+      ...nativeTextStyle("body", { size: 16, weight: 600 }),
+    },
+    headerDisabled: { opacity: 0.4 },
     error: { color: tokens.destructive, ...nativeTextStyle("meta", { size: 14 }) },
     field: {
       paddingHorizontal: 4,

@@ -9,7 +9,7 @@ import type { BotCommands } from "../shell/bot-commands";
 import type { BotPageView } from "../shell/layout";
 
 const api = vi.hoisted(() => ({
-  bots: { activity: vi.fn() },
+  bots: { activity: vi.fn(), list: vi.fn() },
   runs: { recap: vi.fn() },
   memory: { list: vi.fn(), update: vi.fn() },
   agentSkills: { list: vi.fn(), get: vi.fn(), update: vi.fn(), remove: vi.fn() },

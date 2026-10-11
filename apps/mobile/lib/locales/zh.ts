@@ -849,4 +849,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Test run": "测试运行",
   "Running…": "正在运行…",
   "Could not run routine": "无法运行例行任务",
+  "Skill learned · {name}": "技能已学会 · {name}",
+  "Skill updated · {name}": "技能已更新 · {name}",
+  "Skill deleted · {name}": "技能已删除 · {name}",
 };

@@ -867,4 +867,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Test run": "Тестовый запуск",
   "Running…": "Выполняется…",
   "Could not run routine": "Не удалось запустить задачу",
+  "Skill learned · {name}": "Навык освоен · {name}",
+  "Skill updated · {name}": "Навык обновлён · {name}",
+  "Skill deleted · {name}": "Навык удалён · {name}",
 };
