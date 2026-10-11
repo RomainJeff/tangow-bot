@@ -43,6 +43,20 @@ export class SessionAppendError extends Error {
   }
 }
 
+/** A read found the chain broken: an entry's parent is not in the session. */
+export class SessionReadError extends Error {
+  readonly reason = "missing_parent";
+
+  constructor(
+    readonly sessionId: SessionId,
+    readonly parentId: EntryId,
+    options?: ErrorOptions,
+  ) {
+    super(`Session ${sessionId} has an entry whose parent ${parentId} is missing`, options);
+    this.name = "SessionReadError";
+  }
+}
+
 /** The redelivery key of the entry types that carry one. */
 export function sessionEntryNonce(entry: SessionEntryDraft | SessionEntry): string | undefined {
   return entry.type === "user.message" || entry.type === "bot.message.received"

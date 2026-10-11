@@ -11,11 +11,16 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import type { NewSession, SessionEntryDraft, SessionHead, SessionLog } from "@rakazo/adapter-kit";
-import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
+import {
+  nextSessionEntry,
+  SessionAppendError,
+  SessionReadError,
+  sessionEntryNonce,
+} from "@rakazo/adapter-kit";
 import type { EntryId, SessionEntry } from "@rakazo/contracts";
 import { SessionId } from "@rakazo/contracts";
 import type { TailSource } from "@rakazo/core";
-import { decodeEntries, readTailFromEnd } from "@rakazo/core";
+import { decodeEntries, readTailFromEnd, SessionEntryMissingParentError } from "@rakazo/core";
 
 const TAIL_CHUNK_BYTES = 64 * 1024;
 const FILE_SAFE_ID = /^[A-Za-z0-9_-]+$/;
@@ -75,6 +80,9 @@ export class FileSessionLog implements SessionLog<undefined> {
       return await readTailFromEnd(() => openTail(file), TAIL_CHUNK_BYTES);
     } catch (error) {
       if (isMissing(error)) return [];
+      if (error instanceof SessionEntryMissingParentError) {
+        throw new SessionReadError(sessionId, error.parentId, { cause: error });
+      }
       throw error;
     }
   }
@@ -92,9 +100,12 @@ export class FileSessionLog implements SessionLog<undefined> {
       entry?.parentId ? byId.get(entry.parentId) : undefined;
     const page: SessionEntry[] = [];
     let cursor = before === undefined ? entries.at(-1) : parentOf(byId.get(before));
-    while (cursor && page.length < limit) {
+    while (cursor) {
       page.push(cursor);
-      cursor = parentOf(cursor);
+      if (page.length === limit || cursor.parentId === null) break;
+      const parent = byId.get(cursor.parentId);
+      if (!parent) throw new SessionReadError(sessionId, cursor.parentId);
+      cursor = parent;
     }
     return page.reverse();
   }

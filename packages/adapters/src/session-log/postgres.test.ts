@@ -67,6 +67,9 @@ runSessionLogConformance(async () => {
         runId: seeded.run.id,
       };
     },
+    async dropEntry(entry) {
+      await database.prisma.sessionEntry.delete({ where: { id: entry.id } });
+    },
     close: database.close,
   };
 });

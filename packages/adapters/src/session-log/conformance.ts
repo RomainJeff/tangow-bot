@@ -13,6 +13,8 @@ export interface SessionLogHarness<Tx> {
   transaction<T>(work: (tx: Tx) => Promise<T>): Promise<T>;
   /** A fresh thread session, not yet created through the log, and a run on its thread. */
   threadSession(): Promise<{ session: Extract<NewSession, { kind: "thread" }>; runId: string }>;
+  /** Remove an entry behind the log's back, as a bad manual edit would. */
+  dropEntry(entry: SessionEntry): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -228,6 +230,25 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
       expect(again).toEqual(first);
       expect([next.seq, next.parentId]).toEqual([1, first.id]);
       expect(await harness.log.readTail(sessionId)).toEqual([first, next]);
+    });
+
+    it("refuses to read a chain whose parent is missing", async () => {
+      const { sessionId } = await created();
+      const [, middle] = await appendAll([
+        said(sessionId, "a"),
+        said(sessionId, "b"),
+        said(sessionId, "c"),
+      ]);
+      await harness.dropEntry(middle!);
+
+      const refusal = {
+        name: "SessionReadError",
+        reason: "missing_parent",
+        sessionId,
+        parentId: middle!.id,
+      };
+      await expect(harness.log.readTail(sessionId)).rejects.toMatchObject(refusal);
+      await expect(harness.log.readPage(sessionId, { limit: 10 })).rejects.toMatchObject(refusal);
     });
 
     it("gives concurrent transactions on one session distinct seqs on one chain", async () => {

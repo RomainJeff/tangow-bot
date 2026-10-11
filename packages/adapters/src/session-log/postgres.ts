@@ -1,5 +1,7 @@
 import type { NewSession, SessionEntryDraft, SessionLog } from "@rakazo/adapter-kit";
-import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
+import { SessionReadError } from "@rakazo/adapter-kit";
+import type { SessionEntry, SessionId } from "@rakazo/contracts";
+import { EntryId } from "@rakazo/contracts";
 import type { PrismaClient, SessionEntryRow } from "@rakazo/db";
 import {
   appendSessionEntryInTransaction,
@@ -51,14 +53,15 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
 
   /**
    * Walk parent links from the entry `start` selects while `proceed` holds for the entry reached.
-   * Each step is a primary key lookup, and a parent always has a lower seq, so the walk ends.
+   * Each step is a primary key lookup, and a parent always has a lower seq, so the walk ends. A
+   * parent the walk looks for and does not find throws `SessionReadError`.
    */
   private async walk(
     sessionId: SessionId,
     start: Prisma.Sql,
     proceed: Prisma.Sql,
   ): Promise<SessionEntry[]> {
-    const rows = await this.prisma.$queryRaw<SessionEntryRow[]>`
+    const rows = await this.prisma.$queryRaw<Array<SessionEntryRow & { wantsParent: boolean }>>`
       WITH RECURSIVE chain AS (
         (SELECT e.*, 1 AS depth FROM session_entries e WHERE e."sessionId" = ${sessionId} ${start})
         UNION ALL
@@ -66,8 +69,13 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
         JOIN chain ON e.id = chain."parentId" AND e."sessionId" = chain."sessionId" AND e.seq < chain.seq
         WHERE ${proceed}
       )
-      SELECT id, "sessionId", seq, "parentId", type, payload, "botId", "runId", "createdAt"
+      SELECT id, "sessionId", seq, "parentId", type, payload, "botId", "runId", "createdAt",
+        ${proceed} AS "wantsParent"
       FROM chain ORDER BY seq`;
+    const [oldest] = rows;
+    if (oldest?.wantsParent && oldest.parentId !== null) {
+      throw new SessionReadError(sessionId, EntryId.parse(oldest.parentId));
+    }
     return rows.map(sessionEntryFromRow);
   }
 }

@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, rm, stat, truncate } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import { SessionId } from "@rakazo/contracts";
-import { decodeEntries } from "@rakazo/core";
+import { decodeEntries, encodeEntries } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import { runSessionLogConformance } from "./conformance.js";
 import { FileSessionLog } from "./file.js";
@@ -28,6 +28,11 @@ runSessionLogConformance(async () => {
         },
         runId: `run-${id}`,
       };
+    },
+    async dropEntry(entry) {
+      const file = path.join(root, "sessions", `${entry.sessionId}.jsonl`);
+      const kept = decodeEntries(await readFile(file, "utf8")).filter(({ id }) => id !== entry.id);
+      await writeFile(file, encodeEntries(kept));
     },
     close: () => rm(root, { recursive: true, force: true }),
   };
