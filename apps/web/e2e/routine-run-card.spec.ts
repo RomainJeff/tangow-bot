@@ -69,7 +69,7 @@ test("renders a routine run card in a sub-bot's own thread", async ({ page }, te
   await card.getByRole("button", { name: "Report, Status check · Opens in full" }).click();
   const session = page.getByTestId("session-view");
   await expect(session.getByRole("heading", { name: "Status check" })).toBeVisible();
-  await expect(session.getByTestId("run-card")).toHaveText("Status check · scripted · Completed");
+  await expect(session.locator("strong")).toBeVisible();
   await expect(session.getByRole("textbox")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "routine-session-view");
 });

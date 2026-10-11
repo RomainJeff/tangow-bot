@@ -21,6 +21,7 @@ const api = vi.hoisted(() => ({ sessionEntries: vi.fn() }));
 vi.mock("../../lib/rpc", () => ({ rpc: { sessions: { entries: api.sessionEntries } } }));
 
 import streamedReply from "../../../../../packages/core/src/session-log/fixtures/streamed-reply.jsonl?raw";
+import { drawsNothing } from "./thread-row";
 import { Transcript } from "./transcript";
 
 const fixture = streamedReply
@@ -74,18 +75,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function renderThread(lastEntry: number, activeRunIds: ReadonlySet<string> = new Set()) {
+async function renderThread(lastEntry: number) {
   await act(async () => {
     root.render(
       <Transcript
         scrollRef={createRef<HTMLDivElement>()}
         artifactTarget={{ botId: "bot_ada" }}
         inGroup={false}
-        view={projectThreadView(fixture.slice(0, lastEntry + 1))}
+        view={projectThreadView(fixture.slice(0, lastEntry + 1), {
+          rendersNothing: (item) => drawsNothing(item, false),
+        })}
         olderCursor={null}
         loadingOlder={false}
         running={false}
-        activeRunIds={activeRunIds}
         workingBots={[]}
         onLoadOlder={() => undefined}
         onOpenBot={() => undefined}
@@ -112,10 +114,14 @@ const text = (selector: string) =>
   [...document.querySelectorAll(selector)].map((element) => element.textContent);
 
 describe("the transcript", () => {
-  it("draws a run card per run, the helper's card and a rewind divider from the rows", async () => {
+  it("draws a reply as its bubble with nothing for the run, the helper's card and a rewind divider", async () => {
     await renderThread(17);
 
-    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Completed"]);
+    expect(
+      [...document.querySelectorAll("[data-message-id]")].map((row) =>
+        row.getAttribute("data-message-id"),
+      ),
+    ).toEqual(["str-00", "str-02", "str-05", "str-08", "str-09", "str-17"]);
     expect(text('[data-testid="task-card"] span[dir="auto"]')).toEqual(["scout"]);
     expect(text('[data-testid="thread-divider"]')).toEqual(["Message edited"]);
     expect(text('[data-testid="message-user-bubble"]')).toEqual([
@@ -124,15 +130,18 @@ describe("the transcript", () => {
     ]);
   });
 
-  it("says an open run is running only while the thread lists it, and needs input on a card", async () => {
-    await renderThread(6, new Set(["run_str_1"]));
-    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Running"]);
-
+  it("says a run needs input above the card it waits on, and nothing while it runs", async () => {
     await renderThread(6);
-    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1"]);
+    expect(text('[data-testid="run-waiting"]')).toEqual([]);
 
-    await renderThread(7, new Set(["run_str_1"]));
-    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Needs input"]);
+    await renderThread(7);
+    expect(text('[data-testid="run-waiting"]')).toEqual(["Needs input"]);
+    expect(
+      document
+        .querySelector('[data-testid="run-waiting"]')
+        ?.closest("[data-message-id]")
+        ?.getAttribute("data-message-id"),
+    ).toBe("str-02");
   });
 
   it("opens a finished helper's own session, read-only", async () => {
