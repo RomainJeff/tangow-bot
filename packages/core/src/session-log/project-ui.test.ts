@@ -956,6 +956,15 @@ describe("projectThreadItems", () => {
         ],
       },
       {
+        kind: "message",
+        role: "user",
+        id: "clr-06",
+        ts: at(6),
+        blocks: text("Tuesday."),
+        replyTo: { entryId: "clr-04" },
+        source: "app",
+      },
+      {
         kind: "note",
         id: "clr-07",
         ts: at(7),
@@ -1010,6 +1019,15 @@ describe("projectThreadItems", () => {
             ],
           },
         ],
+      },
+      {
+        kind: "message",
+        role: "user",
+        id: "clr-12",
+        ts: at(12),
+        blocks: text("Plan my week."),
+        replyTo: { entryId: "clr-11" },
+        source: "app",
       },
     ]);
   });

@@ -161,10 +161,10 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
           if (block?.kind === "ask" && !isSettled(block)) {
             setCard(card, { ...block, status: "answered" });
           }
-          if (payload.clientNonce === undefined && payload.source === "app") {
-            shownBy.set(segment.id, card.item.id);
-            break;
-          }
+        }
+        if (payload.source === "card") {
+          if (card) shownBy.set(segment.id, card.item.id);
+          break;
         }
         push(
           {

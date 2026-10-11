@@ -316,7 +316,7 @@ describe("projectThreadView cards", () => {
       { type: "card.answered", payload: { target: "ans-1", answer: "Tuesday" } },
       {
         type: "user.message",
-        payload: { blocks: text("Tuesday"), replyTo: { entryId: "ans-1" }, source: "app" },
+        payload: { blocks: text("Tuesday"), replyTo: { entryId: "ans-1" }, source: "card" },
       },
     ]);
     expect(projectThreadView(chain.slice(0, 2)).waiting).toEqual({
@@ -338,6 +338,7 @@ describe("projectThreadView cards", () => {
     ]);
     expect(view.waiting).toBeNull();
     expect(["ans-2", "ans-3"].map((id) => view.rowOf.get(id))).toEqual(["ans-1", "ans-1"]);
+    expect(projectThreadView(chain.slice(3)).rows).toEqual([]);
   });
 
   it("shows a multi-question card's answers given in the card", () => {
@@ -365,7 +366,7 @@ describe("projectThreadView cards", () => {
         payload: {
           blocks: text("1. Which city should I start with? — Paris"),
           replyTo: { entryId: "multi-1" },
-          source: "app",
+          source: "card",
         },
       },
     ]);
