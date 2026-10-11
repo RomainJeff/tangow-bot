@@ -111,8 +111,13 @@ function markdownStyles(palette: ColorTokens, inBubble: boolean) {
     },
     bullet_list_content: listContent,
     ordered_list_content: listContent,
+    // A list closes like a paragraph, so the body's -9 cancels its gap too when
+    // it ends the bubble instead of eating into the bubble's bottom padding.
+    ...(inBubble ? { bullet_list: listGap, ordered_list: listGap } : {}),
   });
 }
+
+const listGap = { marginBottom: 9 };
 
 // `flex: 0` cancels the library's default `flex: 1`, which Yoga reads as a zero
 // basis even next to `flexBasis: "auto"`. A list that is the widest thing in a
