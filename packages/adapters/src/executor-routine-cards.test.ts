@@ -2,6 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentRunRequest, ConnectorCall } from "@rakazo/adapter-kit";
+import type { SessionEntry } from "@rakazo/contracts";
+import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
 import {
   BOT_MESSAGE_MAX_HOPS,
   BOT_OFFER_PROPOSALS,
@@ -166,6 +168,10 @@ function fixture(
     taskPrompt?: string;
     /** Messages sent into the run as it starts: whether each came from someone but the user. */
     steering?: boolean[];
+    /** What the session log holds, any session. */
+    entries?: SessionEntry[];
+    /** The person's messages the run claimed as steering. */
+    claimedSteering?: string[];
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
@@ -240,18 +246,13 @@ function fixture(
   const messageUpdate = vi.fn(async () => undefined);
   const messageCreate = vi.fn(async ({ data }: { data: Row }) => ({ id: "message-new", ...data }));
   const usageRecords: Row[] = [];
-  /** The exchange as the skill nudge reads it: the run's bot messages and its claimed steering. */
-  const inExchange = (message: Row, where: { OR: Row[] }) =>
-    message.threadId === "thread-1" &&
-    !message.hiddenFromThread &&
-    where.OR.some((option) =>
-      option.steeringMessages
-        ? message.role === "user" &&
-          ((message.steering ?? []) as Row[]).some(
-            (steering) => steering.runId === "run-1" && steering.claimedAt,
-          )
-        : message.role === option.role && message.runId === option.runId,
-    );
+  const entries = options.entries ?? [];
+  log.sessionLog.readRun.mockImplementation(async (runId) =>
+    entries.filter((entry) => entry.runId === runId),
+  );
+  log.sessionLog.readEntry.mockImplementation(async (_sessionId, entryId) =>
+    entries.find((entry) => entry.id === entryId),
+  );
   const send = vi.fn(async () => undefined);
   const prisma: Row = {
     sessionEntry: log.sessionEntry,
@@ -314,13 +315,7 @@ function fixture(
     message: {
       update: messageUpdate,
       create: messageCreate,
-      findMany: vi.fn(async ({ where }: { where?: { OR?: Row[] } } = {}) =>
-        where?.OR
-          ? messages
-              .filter((message) => inExchange(message, where as { OR: Row[] }))
-              .sort((left, right) => Number(left.seq) - Number(right.seq))
-          : messages,
-      ),
+      findMany: vi.fn(async () => messages),
       findFirst: vi.fn(
         async ({ where }: { where: { id: string } }) =>
           messages.find((message) => message.id === where.id) ?? null,
@@ -373,6 +368,11 @@ function fixture(
         usageRecords.push(data);
         return data;
       }),
+    },
+    steeringMessage: {
+      findMany: vi.fn(async () =>
+        (options.claimedSteering ?? []).map((messageId) => ({ messageId })),
+      ),
     },
   };
   const enqueue = vi.fn(async (_job: { name: string; availableAt: Date }) => undefined);
@@ -1929,29 +1929,34 @@ describe("the skill nudge at the end of an exchange", () => {
   });
 
   it("shows the turn what the user said while the exchange ran, and nothing said after", async () => {
-    const text = (value: string) => [{ kind: "text", text: value }];
+    const text = (value: string) => [{ kind: "text" as const, text: value }];
+    const said = (id: string, seq: number, value: string): SessionEntry => ({
+      id: EntryId.parse(id),
+      sessionId: SessionId.parse("session-main"),
+      seq: EntrySeq.parse(seq),
+      parentId: null,
+      ts: `2026-10-11T09:00:0${seq}.000Z`,
+      type: "user.message",
+      payload: { blocks: text(value), source: "app" },
+    });
     const f = fixture({
       skillLearning: "on",
-      messages: [
+      entries: [
+        said("steer", 3, "No, always the pro account."),
         {
-          id: "steer",
-          threadId: "thread-1",
-          seq: 3,
-          role: "user",
-          blocks: text("No, always the pro account."),
-          steering: [{ runId: "run-1", claimedAt: new Date() }],
-        },
-        {
-          id: "reply",
-          threadId: "thread-1",
-          seq: 4,
-          role: "bot",
-          runId: "run-1",
+          id: EntryId.parse("reply"),
+          sessionId: SessionId.parse("session-main"),
+          seq: EntrySeq.parse(4),
+          parentId: EntryId.parse("steer"),
+          ts: "2026-10-11T09:00:04.000Z",
           botId: "bot-1",
-          blocks: text("Booked with the pro account."),
+          runId: "run-1",
+          type: "assistant.text",
+          payload: { blocks: text("Booked with the pro account.") },
         },
-        { id: "next", threadId: "thread-1", seq: 5, role: "user", blocks: text("Thanks!") },
+        said("next", 5, "Thanks!"),
       ],
+      claimedSteering: ["steer"],
     });
     await f.play([searches]);
     expect(f.requests()[1]!.history.slice(-2)).toEqual([

@@ -7,7 +7,7 @@ import type { SessionEntry, SessionId } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { sessionCookieHeader } from "./index.js";
-import type { ModelEmulatorStep } from "./model-emulator.js";
+import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
@@ -632,6 +632,59 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  it("hands the skill nudge the exchange it just had, every call with the output it returned", async () => {
+    const calls = Array.from({ length: 15 }, (_, index) => `journey-search-${index}`);
+    let exchange: ModelEmulatorRequest | undefined;
+    await journey(
+      [
+        ...calls.map(
+          (id): ModelEmulatorStep => ({
+            expect() {},
+            response: { type: "tool", id, name: "skill_search", arguments: { query: "table" } },
+          }),
+        ),
+        {
+          expect(request) {
+            exchange = request;
+          },
+          response: { type: "text", text: "Booked the table." },
+        },
+        {
+          expect(request) {
+            const said = turnsOf(exchange!.messages);
+            const nudge = turnsOf(request.messages);
+            expect(nudge.calls).toEqual(said.calls);
+            expect(nudge.outputs).toEqual(said.outputs);
+            expect(nudge.outputs.map(([id]) => id)).toEqual(calls);
+            expect(nudge.texts.slice(0, -1)).toEqual([
+              ...said.texts,
+              ["assistant", "Booked the table."],
+            ]);
+            expect(nudge.texts.at(-1)?.[1]).toContain("This task took many steps.");
+          },
+          response: { type: "text", text: "Nothing to keep." },
+        },
+      ],
+      async ({ send, prisma }) => {
+        const sent = await send("Book a table for two.");
+        await sent.settled("completed");
+        await expect
+          .poll(
+            async () =>
+              (
+                await prisma.event.findMany({
+                  where: { runId: sent.runId, type: "agent.skill.nudge" },
+                  orderBy: { seq: "asc" },
+                })
+              ).map((event) => (event.payload as { phase?: string }).phase),
+            { timeout: 15_000, interval: 100 },
+          )
+          .toEqual(["decided", "ended"]);
+      },
+      { skillLearning: "on" },
+    );
+  }, 30_000);
+
   it("gives a call the scripted runtime replays under its id a result of its own", async () => {
     await journey(
       [],
@@ -648,7 +701,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           ["tool.result", callId, expect.stringContaining("Scout")],
         ]);
       },
-      "scripted",
+      { agentRuntime: "scripted" },
     );
   }, 30_000);
 
@@ -840,6 +893,34 @@ async function approveEdited(
   return entries;
 }
 
+function turnsOf(messages: ModelEmulatorRequest["messages"]) {
+  const textOf = (content: unknown) =>
+    typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content.map((part: { text?: string }) => part.text ?? "").join("")
+        : "";
+  const conversation = messages.filter((message) => message.role !== "system");
+  return {
+    texts: conversation.flatMap((message) =>
+      message.role !== "tool" && textOf(message.content)
+        ? [[message.role, textOf(message.content)]]
+        : [],
+    ),
+    calls: conversation.flatMap((message) =>
+      (message.tool_calls ?? []).map((call) => [
+        call.id,
+        call.function.name,
+        call.function.arguments,
+      ]),
+    ),
+    // A live result and a replayed one are the same JSON, printed differently.
+    outputs: conversation.flatMap((message) =>
+      message.role === "tool" ? [[message.tool_call_id, JSON.parse(textOf(message.content))]] : [],
+    ),
+  };
+}
+
 function payloadOf(entry: SessionEntry | undefined) {
   return (entry?.payload ?? {}) as Record<string, unknown>;
 }
@@ -864,7 +945,7 @@ type JourneyFixture = {
 async function journey(
   steps: ModelEmulatorStep[],
   drive: (fixture: JourneyFixture) => Promise<void>,
-  agentRuntime: "pi" | "scripted" = "pi",
+  app: Pick<NonNullable<Parameters<typeof createApp>[0]>, "agentRuntime" | "skillLearning"> = {},
 ) {
   const model = await startModelEmulator({ apiKey: fixtureKey, steps });
   const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-offline-product-"));
@@ -878,11 +959,12 @@ async function journey(
       webOrigin: fixtureOrigin,
       dataDir,
       sandboxProvider: "fake",
-      agentRuntime,
+      agentRuntime: "pi",
       wakeupDriver: "memory",
       signupsEnabled: "true",
       composio: new ComposioEmulator(),
       encryptionKey: "offline-model-fixture-encryption-key",
+      ...app,
     });
     stop = handles.stop;
     const email = `offline-pi-${randomUUID()}@rakazo.test`;

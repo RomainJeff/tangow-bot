@@ -5184,30 +5184,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (skillNudge?.nudge && skillNudge.mode === "on") {
             const { signal } = skillNudge;
             skillNudgeTurn = async () => {
-              // The bot's messages and the user's, claimed as steering while the exchange ran.
-              const exchange = await deps.prisma.message.findMany({
-                where: {
-                  threadId: thread.id,
-                  hiddenFromThread: false,
-                  OR: [
-                    { runId, role: "bot" },
-                    {
-                      role: "user",
-                      steeringMessages: { some: { runId, claimedAt: { not: null } } },
-                    },
-                  ],
-                },
-                orderBy: { seq: "asc" },
-                select: {
-                  id: true,
-                  threadId: true,
-                  role: true,
-                  botId: true,
-                  blocks: true,
-                  replyToMessageId: true,
-                  replyQuote: true,
-                },
-              });
+              const exchange = await readExchange(deps, runId, sessionId);
               const target = { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId };
               await runSkillNudgeTurn(deps, {
                 run: { id: runId, spaceId: run.spaceId, threadId: thread.id, botId: bot.id },
@@ -5222,10 +5199,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       (message) => !run.sourceMessageId || message.id !== run.sourceMessageId,
                     ),
                     { role: "user", content: prompt },
-                    ...exchange.map((message) => ({
-                      id: message.id,
-                      ...messageToAgentHistoryTurn(message, bot.id, group?.memberNames),
-                    })),
+                    ...projectInferenceTurns(exchange, {
+                      selfBotId: bot.id,
+                      botNames: group?.memberNames,
+                    }),
                   ],
                   model: runtimeModel,
                   secrets: runSecrets,
@@ -5629,6 +5606,35 @@ async function readRunHistory(
     before = page[0]!.id;
   }
   return kept.slice(-UNCOMPACTED_HISTORY_LIMIT);
+}
+
+/**
+ * The person's messages a run claimed as steering carry no run id, so the claim names them, and
+ * one that answers the run's question is in `readRun` too. `run.started` adds nothing: the run's
+ * prompt already says why it ran.
+ */
+async function readExchange(
+  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
+  runId: string,
+  sessionId: SessionId,
+): Promise<SessionEntry[]> {
+  const [written, claimed] = await Promise.all([
+    deps.sessionLog.readRun(runId),
+    deps.prisma.steeringMessage.findMany({
+      where: { runId, claimedAt: { not: null } },
+      select: { messageId: true },
+    }),
+  ]);
+  const steering = await Promise.all(
+    claimed.map(({ messageId }) => deps.sessionLog.readEntry(sessionId, EntryId.parse(messageId))),
+  );
+  const exchange = new Map<string, SessionEntry>();
+  for (const entry of [...written, ...steering]) {
+    if (entry && entry.type !== "run.started") exchange.set(entry.id, entry);
+  }
+  return [...exchange.values()].sort(
+    (left, right) => left.ts.localeCompare(right.ts) || left.seq - right.seq,
+  );
 }
 
 async function readEntriesOffChain(
