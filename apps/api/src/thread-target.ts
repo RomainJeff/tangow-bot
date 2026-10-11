@@ -53,12 +53,7 @@ import {
 } from "./artifacts.js";
 import { resolveBusyBotName, toComputerStatus } from "./computer-status.js";
 import { withSerializableRetry } from "./serializable-retry.js";
-import {
-  olderCursor,
-  THREAD_PAGE_SIZE,
-  threadSessionId,
-  withoutHiddenPeerRuns,
-} from "./thread-message-pages.js";
+import { loadEntryPage, threadSessionId } from "./thread-message-pages.js";
 
 export type ThreadTarget =
   | {
@@ -472,22 +467,11 @@ export async function threadHead(prisma: PrismaClient, target: ThreadTarget) {
 }
 
 /**
- * The newest page of the thread's chain, read after the cursor so an entry appended in between is
- * either in the page or after the cursor; clients merge entries by id.
+ * The thread as `threads.get` serves it. The tail page is read after the cursor, so an entry
+ * appended in between is either in the page or after the cursor; clients merge entries by id.
  */
-async function tailPage(
-  deps: { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readPage"> },
-  sessionId: SessionId,
-) {
-  const page = await deps.sessionLog.readPage(sessionId, { limit: THREAD_PAGE_SIZE });
-  return {
-    entries: await withoutHiddenPeerRuns(deps.prisma, page),
-    olderCursor: olderCursor(page),
-  };
-}
-
 export async function threadSnapshot(
-  deps: { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readPage"> },
+  deps: { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readPage" | "readAround"> },
   target: ThreadTarget,
 ): Promise<ThreadSnapshot> {
   // Lock the thread row so the event cursor, the runs and the progress to replay are read from one
@@ -568,7 +552,11 @@ export async function threadSnapshot(
         return { sessionId, last, run: currentRun, progress };
       }),
     ]);
-    const page = await tailPage(deps, core.sessionId);
+    const page = await loadEntryPage(
+      deps,
+      { threadId: target.threadId, sessionId: core.sessionId },
+      {},
+    );
     return {
       botId: target.botId,
       threadId: target.threadId,
@@ -629,7 +617,11 @@ export async function threadSnapshot(
       progress,
     };
   });
-  const page = await tailPage(deps, core.sessionId);
+  const page = await loadEntryPage(
+    deps,
+    { threadId: target.threadId, sessionId: core.sessionId },
+    {},
+  );
   const primaryActiveRun = pickPrimaryActiveRun(core.activeRuns);
   return {
     groupId: target.groupId,

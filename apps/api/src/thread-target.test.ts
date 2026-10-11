@@ -1090,7 +1090,10 @@ function groupPrisma(
 }
 
 function tailOf(entries: SessionEntry[]) {
-  return { readPage: vi.fn(async (_sessionId: string, _page: { limit: number }) => entries) };
+  return {
+    readPage: vi.fn(async (_sessionId: string, _page: { limit: number }) => entries),
+    readAround: vi.fn(async () => []),
+  };
 }
 
 function groupTarget() {

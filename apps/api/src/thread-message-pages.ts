@@ -13,7 +13,7 @@ import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@rakazo/db";
 type ThreadDb = PrismaClient | Prisma.TransactionClient;
 type PageLog = Pick<SessionLog<unknown>, "readPage" | "readAround">;
 
-export const THREAD_PAGE_SIZE = 100;
+const THREAD_PAGE_SIZE = 100;
 
 export async function threadSessionId(prisma: ThreadDb, threadId: string): Promise<SessionId> {
   const { sessionId } = await prisma.thread.findUniqueOrThrow({
@@ -24,13 +24,13 @@ export async function threadSessionId(prisma: ThreadDb, threadId: string): Promi
 }
 
 /** The entry an older page starts before: the page's oldest, unless the chain starts there. */
-export function olderCursor(page: readonly SessionEntry[]): EntryId | null {
+function olderCursor(page: readonly SessionEntry[]): EntryId | null {
   const oldest = page[0];
   return oldest?.parentId ? oldest.id : null;
 }
 
 /** The page without a hidden peer run's work; its receipts, cards and words to the person stay. */
-export async function withoutHiddenPeerRuns(
+async function withoutHiddenPeerRuns(
   prisma: ThreadDb,
   entries: readonly SessionEntry[],
 ): Promise<SessionEntry[]> {
@@ -44,10 +44,9 @@ export async function withoutHiddenPeerRuns(
  */
 export async function loadEntryPage(
   deps: { prisma: ThreadDb; sessionLog: PageLog },
-  threadId: string,
+  { threadId, sessionId }: { threadId: string; sessionId: SessionId },
   query: { before?: EntryId; around?: { entryId: EntryId }; includePeerRuns?: boolean },
 ): Promise<ThreadMessagePage> {
-  const sessionId = await threadSessionId(deps.prisma, threadId);
   const around = query.around
     ? await deps.sessionLog.readAround(sessionId, query.around.entryId, THREAD_PAGE_SIZE)
     : [];

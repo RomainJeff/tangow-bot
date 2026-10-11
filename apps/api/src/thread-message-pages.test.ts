@@ -11,6 +11,7 @@ import {
 } from "./thread-message-pages.js";
 
 const SESSION = SessionId.parse("session-main");
+const thread = { threadId: "thread-1", sessionId: SESSION };
 
 function entry(seq: number, type: string, payload: object, envelope: object = {}): SessionEntry {
   return SessionEntrySchema.parse({
@@ -36,7 +37,6 @@ const peerAsk = (seq: number) =>
 /** A thread whose main session is `session-main`, where `run-peer` is a sub-bot's hidden run. */
 function threadDb() {
   return {
-    thread: { findUniqueOrThrow: vi.fn(async () => ({ sessionId: SESSION })) },
     run: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
         where.id.in.includes("run-peer")
@@ -64,8 +64,8 @@ describe("thread entry pages", () => {
     const chain = Array.from({ length: 150 }, (_, seq) => said(seq, `m${seq}`));
     const deps = { prisma: threadDb(), sessionLog: pagedLog(chain) };
 
-    const tail = await loadEntryPage(deps, "thread-1", {});
-    const older = await loadEntryPage(deps, "thread-1", { before: tail.olderCursor! });
+    const tail = await loadEntryPage(deps, thread, {});
+    const older = await loadEntryPage(deps, thread, { before: tail.olderCursor! });
 
     expect([tail.entries.length, tail.entries[0]?.id, tail.olderCursor]).toEqual([
       100,
@@ -83,8 +83,8 @@ describe("thread entry pages", () => {
     const chain = [said(0, "Ask Scout"), peerStep(1), peerAsk(2), said(3, "Thanks")];
     const deps = { prisma: threadDb(), sessionLog: pagedLog(chain) };
 
-    const page = await loadEntryPage(deps, "thread-1", {});
-    const overlay = await loadEntryPage(deps, "thread-1", { includePeerRuns: true });
+    const page = await loadEntryPage(deps, thread, {});
+    const overlay = await loadEntryPage(deps, thread, { includePeerRuns: true });
 
     expect(ids(page.entries)).toEqual(["entry-0", "entry-2", "entry-3"]);
     expect(ids(overlay.entries)).toEqual(["entry-0", "entry-1", "entry-2", "entry-3"]);
@@ -96,8 +96,8 @@ describe("thread entry pages", () => {
     const rewound = { prisma: threadDb(), sessionLog: pagedLog(chain, []) };
     const around = { entryId: EntryId.parse("entry-1") };
 
-    const jump = await loadEntryPage(held, "thread-1", { around });
-    const fallback = await loadEntryPage(rewound, "thread-1", {
+    const jump = await loadEntryPage(held, thread, { around });
+    const fallback = await loadEntryPage(rewound, thread, {
       around,
       before: EntryId.parse("entry-2"),
     });

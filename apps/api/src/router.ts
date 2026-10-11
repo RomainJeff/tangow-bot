@@ -209,7 +209,12 @@ import {
   UpdaterProxyError,
 } from "./server-update.js";
 import { assertTeachingSendAllowed, createTaughtSkillsService } from "./taught-skills.js";
-import { forwardedThreadEvent, loadAllMessages, loadEntryPage } from "./thread-message-pages.js";
+import {
+  forwardedThreadEvent,
+  loadAllMessages,
+  loadEntryPage,
+  threadSessionId,
+} from "./thread-message-pages.js";
 import {
   enqueueLinkPreview,
   reactToThreadMessage,
@@ -1478,7 +1483,8 @@ export function createRouter(deps: RouterDeps) {
       }),
       messages: authed.threads.messages.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        return loadEntryPage(deps, target.threadId, input);
+        const sessionId = await threadSessionId(deps.prisma, target.threadId);
+        return loadEntryPage(deps, { threadId: target.threadId, sessionId }, input);
       }),
       subscribe: authed.threads.subscribe.handler(async function* ({ context, input }) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
