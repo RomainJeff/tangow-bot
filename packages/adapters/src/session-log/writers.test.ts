@@ -591,10 +591,10 @@ describe("session log writers", () => {
     ]);
   });
 
-  it("raises a routine's MCP approval card to the thread's session and keeps its chart", async () => {
+  it("raises a routine's MCP approval card to the thread's session whole and keeps its chart", async () => {
     const { prisma } = database;
     const franklin = await seedBot(prisma, "Franklin");
-    const { run, routineSessionId } = await routineRun(prisma, franklin, "Veille presse");
+    const { run, routineSessionId, write } = await routineRun(prisma, franklin, "Veille presse");
     const approval = {
       kind: "mcp_approval",
       name: "Press",
@@ -612,6 +612,8 @@ describe("session log writers", () => {
         [approval, chart],
       ),
     );
+    const asked = [{ kind: "text", text: "Connect the press server?" }, approval];
+    await write({ type: "assistant.text", payload: { blocks: asked } });
 
     const blocksOf = async (sessionId: SessionId) =>
       (await log.readTail(sessionId)).map(({ type, payload }) => ({
@@ -625,6 +627,7 @@ describe("session log writers", () => {
     expect(await blocksOf(franklin.sessionId)).toEqual([
       { type: "routine.started", blocks: undefined },
       { type: "assistant.text", blocks: [approval] },
+      { type: "assistant.text", blocks: asked },
     ]);
   });
 
