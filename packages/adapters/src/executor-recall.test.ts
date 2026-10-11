@@ -78,9 +78,6 @@ function fixture(options: { taskPrompt?: string } = {}) {
       findUniqueOrThrow: vi.fn(async () => ({
         id: run.threadId,
         groupId: null,
-        historyCompactionSummary: null,
-        historyCompactedUpToSeq: null,
-        historyCompactionGeneration: 0,
       })),
     },
     message: { findMany: vi.fn(async () => []) },

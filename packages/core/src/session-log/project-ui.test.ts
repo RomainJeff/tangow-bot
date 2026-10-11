@@ -333,13 +333,14 @@ describe("projectThreadItems", () => {
   });
 
   it("folds a routine run's two tool calls into one steps block after the compaction divider", async () => {
-    expect(projectThreadItems(await fixtureChain("compacted"))).toEqual([
-      { kind: "divider", id: "cmp-04", ts: at(4), reason: "compaction" },
+    const page = (await fixtureChain("compacted")).filter((entry) => entry.seq >= 10);
+    expect(projectThreadItems(page)).toEqual([
+      { kind: "divider", id: "cmp-10", ts: at(10), reason: "compaction" },
       {
         kind: "run",
-        id: "cmp-05",
-        ts: at(5),
-        runId: "run_cmp_2",
+        id: "cmp-11",
+        ts: at(11),
+        runId: "run_cmp_3",
         botId: "bot_ada",
         trigger: {
           kind: "routine",
@@ -357,10 +358,10 @@ describe("projectThreadItems", () => {
       {
         kind: "message",
         role: "bot",
-        id: "cmp-06",
-        ts: at(6),
+        id: "cmp-12",
+        ts: at(12),
         botId: "bot_ada",
-        runId: "run_cmp_2",
+        runId: "run_cmp_3",
         blocks: [
           {
             kind: "steps",
@@ -901,15 +902,15 @@ describe("projectThreadItems", () => {
   });
 
   it("shows the words of a run whose start and first call are before the page", async () => {
-    const page = (await fixtureChain("compacted")).filter((entry) => entry.seq >= 7);
+    const page = (await fixtureChain("compacted")).filter((entry) => entry.seq >= 13);
     expect(projectThreadItems(page)).toEqual([
       {
         kind: "message",
         role: "bot",
-        id: "cmp-08",
-        ts: at(8),
+        id: "cmp-14",
+        ts: at(14),
         botId: "bot_ada",
-        runId: "run_cmp_2",
+        runId: "run_cmp_3",
         blocks: [
           {
             kind: "steps",

@@ -50,10 +50,20 @@ export function decodeEntries(text: string): SessionEntry[] {
 }
 
 /**
- * Read a session's chain from the end of its JSONL file: from the last line, follow `parentId`
- * backwards, skipping lines a rewind left off the chain, and stop at the first `compaction` entry
- * or at an entry with no parent. Reads `chunkSize` bytes at a time, so a long session costs about
- * the bytes since its last compaction. Returns the chain oldest first.
+ * A tail in seq order with the compaction it starts from moved to the front, so its summary comes
+ * before the entries it kept, which are older than it.
+ */
+export function compactionFirst(tail: SessionEntry[]): SessionEntry[] {
+  const at = tail.findLastIndex((entry) => entry.type === "compaction");
+  return at <= 0 ? tail : [tail[at]!, ...tail.slice(0, at), ...tail.slice(at + 1)];
+}
+
+/**
+ * Read a session's tail from the end of its JSONL file: from the last line, follow `parentId`
+ * backwards, skipping lines a rewind left off the chain, and stop at an entry with no parent or,
+ * once a `compaction` entry was met, at the last entry its summary covers, or after `maxEntries`.
+ * Reads `chunkSize` bytes at a time, so a long session costs about the bytes since that entry.
+ * Returns the tail in the `compactionFirst` order.
  *
  * A final line without its newline follows the `decodeEntries` rule. Any other line read that is
  * not JSON and a chain entry that fails validation throw `SessionEntryDecodeError` with the line,
@@ -62,6 +72,7 @@ export function decodeEntries(text: string): SessionEntry[] {
 export async function readTailFromEnd(
   open: () => Promise<TailSource>,
   chunkSize: number,
+  maxEntries = Number.POSITIVE_INFINITY,
 ): Promise<SessionEntry[]> {
   if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
     throw new RangeError(`chunkSize must be a positive integer, got ${chunkSize}`);
@@ -70,6 +81,7 @@ export async function readTailFromEnd(
   try {
     const decoder = new TextDecoder();
     const chain: SessionEntry[] = [];
+    let coveredUpToSeq = -1;
     let wanted: EntryId | null | undefined;
     let wantedBy = "";
     let linesFromEnd = 0;
@@ -90,10 +102,14 @@ export async function readTailFromEnd(
         if (wanted !== undefined && idOf(json) !== wanted) return false;
         entry = validateEntry(json, location);
       }
+      if (entry.seq <= coveredUpToSeq) return true;
       chain.push(entry);
+      if (coveredUpToSeq < 0 && entry.type === "compaction") {
+        coveredUpToSeq = entry.payload.coveredUpToSeq;
+      }
       wanted = entry.parentId;
       wantedBy = location;
-      return entry.type === "compaction" || wanted === null;
+      return wanted === null || chain.length === maxEntries;
     };
     let pieces: Uint8Array[] = [];
     let end = source.size;
@@ -105,14 +121,14 @@ export async function readTailFromEnd(
       for (let index = chunk.length - 1; index >= 0; index -= 1) {
         if (chunk[index] !== NEWLINE) continue;
         if (visit(concat([chunk.subarray(index + 1, lineEnd), ...pieces.toReversed()]))) {
-          return chain.reverse();
+          return compactionFirst(chain.reverse());
         }
         pieces = [];
         lineEnd = index;
       }
       pieces.push(chunk.subarray(0, lineEnd));
     }
-    if (visit(concat(pieces.toReversed())) || !wanted) return chain.reverse();
+    if (visit(concat(pieces.toReversed())) || !wanted) return compactionFirst(chain.reverse());
     throw new SessionEntryMissingParentError(wanted, wantedBy);
   } finally {
     await source.close();

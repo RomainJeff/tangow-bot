@@ -108,6 +108,22 @@ describe("historyCompactJob", () => {
     });
   });
 
+  it("carries the run's history budget to the job, and still takes a job queued without one", async () => {
+    const target = handlers();
+
+    await dispatchBackgroundJob(
+      target,
+      "history.compact",
+      historyCompactJob("thread-1", 20_000).payload,
+    );
+    await dispatchBackgroundJob(target, "history.compact", { threadId: "thread-2" });
+
+    expect(vi.mocked(target["history.compact"]).mock.calls).toEqual([
+      [{ threadId: "thread-1", historyBudget: 20_000 }],
+      [{ threadId: "thread-2" }],
+    ]);
+  });
+
   it("keys different threads differently", () => {
     expect(historyCompactJobKey("thread-1")).not.toBe(historyCompactJobKey("thread-2"));
   });

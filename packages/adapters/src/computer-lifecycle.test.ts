@@ -1554,7 +1554,7 @@ describe("computer execution leases", () => {
       thread: {
         update: vi
           .fn()
-          .mockResolvedValueOnce({ nextMessageSeq: 0, historyCompactionGeneration: 0 })
+          .mockResolvedValueOnce({ sessionId: "session-1" })
           .mockResolvedValue({ nextEventSeq: 1 }),
       },
       run: {

@@ -1,4 +1,9 @@
-import type { AskQuestion, ConnectionCatalogItem, SandboxKind } from "@rakazo/contracts";
+import type {
+  AgentHistoryTurn,
+  AskQuestion,
+  ConnectionCatalogItem,
+  SandboxKind,
+} from "@rakazo/contracts";
 
 export interface AdapterContext {
   operationId: string;
@@ -376,29 +381,6 @@ export interface AgentRunModel {
   };
 }
 
-/** One past tool call of the bot's own turn, replayed to the model as a real tool turn. */
-export interface AgentHistoryToolCall {
-  id: string;
-  name: string;
-  args: Record<string, unknown>;
-  /** Redacted, capped output; empty when none was recorded. */
-  output: string;
-}
-
-export type AgentHistoryPart =
-  | { type: "text"; text: string }
-  | { type: "toolCalls"; calls: AgentHistoryToolCall[] };
-
-export interface AgentHistoryMessage {
-  id?: string;
-  role: "user" | "assistant" | "system";
-  /** Text rendering of the turn; always set, also when `parts` is. */
-  content: string;
-  /** The bot's own assistant turns that ran tools, in order. Runtimes that can
-      replay tool turns use this instead of `content`. */
-  parts?: AgentHistoryPart[];
-}
-
 export interface AgentRunRequest {
   botId: string;
   threadId: string;
@@ -406,7 +388,7 @@ export interface AgentRunRequest {
   sourceMessageId?: string | null;
   prompt: string;
   instructions: string;
-  history: AgentHistoryMessage[];
+  history: AgentHistoryTurn[];
   currentTurnImages?: AgentInputImage[];
   tools: ConnectorTool[];
   /**
@@ -593,7 +575,8 @@ export interface BackgroundJobPayloads {
   "computer.update": { updateId: string };
   "computer.control-expire": { computerId: string; leaseId: string };
   "skill.teaching-expire": { skillId: string };
-  "history.compact": { threadId: string };
+  /** `historyBudget` is the tokens the enqueuing run's history could fill, unset when unknown. */
+  "history.compact": { threadId: string; historyBudget?: number };
   "messaging.deliver": { runId?: string };
   /** Identifiers only: the link, its eligibility and the run status are re-read from the database. */
   "link.preview": { messageId: string } | { runId: string };

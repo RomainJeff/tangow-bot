@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
-import { createThreadEvents, createThreadMessage, loadRunHistoryMessages } from "@rakazo/db";
+import { createThreadEvents, createThreadMessage } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 
@@ -706,15 +706,6 @@ describeIntegration("run executor lifecycle", () => {
     const fence = { ...scope, runId: seeded.run.id, leaseOwner: "channel-worker", leaseFence: 1 };
     const claimed = await events.claimSteering({ ...fence, seenIds: [] });
     expect(claimed.map((item) => item.messageId)).toEqual([publicSend.messageId]);
-    const history = await loadRunHistoryMessages(
-      handles.prisma,
-      seeded.run,
-      100,
-      channel.channelId,
-    );
-    expect(history.map((message) => message.id).sort()).toEqual(
-      [source.id, publicSend.messageId].sort(),
-    );
     const attempt = await handles.prisma.attempt.create({
       data: { runId: seeded.run.id, fence: 1, status: "running" },
     });
@@ -743,19 +734,6 @@ describeIntegration("run executor lifecycle", () => {
         where: { messageId_botId: { messageId: privateDm.messageId, botId: seeded.bot.id } },
       }),
     ).toMatchObject({ runId: continuation.id, claimedAt: null });
-    // A later group run gets channel inputs, without either run's private context or bot answers.
-    expect(
-      (
-        await loadRunHistoryMessages(
-          handles.prisma,
-          { ...seeded.run, id: "next-group-run" },
-          100,
-          channel.channelId,
-        )
-      )
-        .map((message) => message.id)
-        .sort(),
-    ).toEqual([source.id, publicSend.messageId].sort());
   });
 
   it("recovers a computer a crashed worker left booting", async () => {

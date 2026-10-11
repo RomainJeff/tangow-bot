@@ -19,7 +19,10 @@ const payloadSchemas = {
     leaseId: z.string().min(1),
   }),
   "skill.teaching-expire": z.object({ skillId: z.string().min(1) }),
-  "history.compact": z.object({ threadId: z.string().min(1) }),
+  "history.compact": z.object({
+    threadId: z.string().min(1),
+    historyBudget: z.number().positive().optional(),
+  }),
   "messaging.deliver": z.object({ runId: z.string().min(1).optional() }),
   "link.preview": z.union([
     z.object({ messageId: z.string().min(1) }).strict(),
@@ -127,10 +130,10 @@ export function messagingDeliverJob(runId?: string, availableAt?: Date): Backgro
   };
 }
 
-export function historyCompactJob(threadId: string): BackgroundJob {
+export function historyCompactJob(threadId: string, historyBudget?: number): BackgroundJob {
   return {
     name: "history.compact",
-    payload: { threadId },
+    payload: historyBudget === undefined ? { threadId } : { threadId, historyBudget },
     replaceKey: historyCompactJobKey(threadId),
   };
 }

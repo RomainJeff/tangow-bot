@@ -1,15 +1,16 @@
 import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 
-type Draft<E> = E extends { type: "rewind" }
+type Draft<E> = E extends { type: "rewind" | "compaction" }
   ? Omit<E, "id" | "seq" | "ts"> & { id?: EntryId; ts?: string }
   : Omit<E, "id" | "seq" | "parentId" | "ts"> & { id?: EntryId; ts?: string };
 
 /**
  * An entry as a writer hands it to `SessionLog.append`. The log assigns `seq` and makes the
- * session's head the parent, except that a rewind names its target as `parentId` and a clear has
- * no parent. `id` defaults to a new uuid and `ts` to now. A thread's feed shows the entry under its
- * `botId`, else under `feedBotId`, which the entry does not keep.
+ * session's head the parent, except that a rewind names its target as `parentId`, a compaction
+ * names the head it summarized up to as `parentId`, and a clear has no parent. `id` defaults to a
+ * new uuid and `ts` to now. A thread's feed shows the entry under its `botId`, else under
+ * `feedBotId`, which the entry does not keep.
  */
 export type SessionEntryDraft = Draft<SessionEntry> & { feedBotId?: string };
 
@@ -57,6 +58,13 @@ export class SessionReadError extends Error {
   }
 }
 
+/** Guards the entry counts a read takes, `readPage`'s `limit` and `readTail`'s `maxEntries`. */
+export function assertEntryCount(name: string, count: number): void {
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new RangeError(`${name} must be a positive integer, got ${count}`);
+  }
+}
+
 /** The redelivery key of the entry types that carry one. */
 export function sessionEntryNonce(entry: SessionEntryDraft | SessionEntry): string | undefined {
   return entry.type === "user.message" || entry.type === "bot.message.received"
@@ -74,10 +82,10 @@ export function nextSessionEntry(
   seq: number,
   head: SessionHead | null,
 ): SessionEntry {
-  if (draft.type === "compaction" && draft.payload.coveredUpToSeq !== head?.seq) {
+  if (draft.type === "compaction" && draft.parentId !== head?.id) {
     throw new SessionAppendError(
       "stale_compaction",
-      `Compaction covers up to seq ${draft.payload.coveredUpToSeq} but the head of session ${draft.sessionId} is at seq ${head?.seq ?? "none"}`,
+      `Compaction was built on entry ${draft.parentId} but the head of session ${draft.sessionId} is ${head?.id ?? "none"}`,
     );
   }
   return SessionEntrySchema.parse({
@@ -85,7 +93,11 @@ export function nextSessionEntry(
     id: draft.id ?? crypto.randomUUID(),
     seq,
     parentId:
-      draft.type === "rewind" ? draft.parentId : draft.type === "clear" ? null : (head?.id ?? null),
+      draft.type === "rewind" || draft.type === "compaction"
+        ? draft.parentId
+        : draft.type === "clear"
+          ? null
+          : (head?.id ?? null),
     ts: new Date(draft.ts ?? Date.now()).toISOString(),
   });
 }

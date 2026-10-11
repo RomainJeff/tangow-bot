@@ -32,22 +32,18 @@ const REPLY_TARGET_MAX_CHARS = 20_000;
 type ReplyTarget = { role: "user" | "bot"; blocks: MessageBlock[] };
 
 /**
- * The history a bot reads, from a session's chain oldest first. The chain starts at its last
- * `compaction` entry, whose summary becomes the first turn. A tool call whose result is missing
- * from the chain, cut by a rewind or still running, is left out so no call replays unanswered.
- * A cancelled run replays only its answered tool calls, so the bot knows what its tools already
- * did; its half-finished words are no history to build on.
+ * The history a bot reads, from a session's tail as `SessionLog.readTail` returns it. A leading
+ * `compaction` entry becomes the first turn, its summary, and the entries it kept follow as
+ * ordinary turns; an older compaction among them adds nothing the leading summary lacks. A tool
+ * call whose result is missing from the tail, cut by a rewind or still running, is left out so no
+ * call replays unanswered. A cancelled run replays only its answered tool calls, so the bot knows
+ * what its tools already did; its half-finished words are no history to build on.
  */
 export function projectInferenceTurns(
   entries: readonly SessionEntry[],
   options: InferenceProjectionOptions,
 ): AgentHistoryTurn[] {
-  const chain = entries.slice(
-    Math.max(
-      0,
-      entries.findLastIndex((entry) => entry.type === "compaction"),
-    ),
-  );
+  const chain = entries.filter((entry, index) => entry.type !== "compaction" || index === 0);
   const answered = toolOutputs(chain);
   const segments = foldRuns(
     chain
@@ -63,19 +59,24 @@ export function projectInferenceTurns(
   const targetOf = (entryId: EntryId) =>
     targets.get(entryId) ?? resolvedTarget(options.resolveReplyTarget?.(entryId));
   return segments.flatMap((segment) => {
+    let turn: Turn | undefined;
     if (segment.type !== "run.message" || !cancelled.has(segment.runId)) {
-      return renderTurn(segment, options, targetOf) ?? [];
+      turn = renderTurn(segment, options, targetOf);
+    } else {
+      const blocks = segment.blocks.filter((block) => block.kind === "steps");
+      if (blocks.length > 0) turn = renderTurn({ ...segment, blocks }, options, targetOf);
     }
-    const blocks = segment.blocks.filter((block) => block.kind === "steps");
-    return blocks.length > 0 ? (renderTurn({ ...segment, blocks }, options, targetOf) ?? []) : [];
+    return turn ? { id: segment.id, ...turn } : [];
   });
 }
+
+type Turn = Omit<AgentHistoryTurn, "id">;
 
 function renderTurn(
   segment: ReturnType<typeof foldRuns>[number],
   options: InferenceProjectionOptions,
   targetOf: (entryId: EntryId) => ReplyTarget | undefined,
-): AgentHistoryTurn | undefined {
+): Turn | undefined {
   const { botNames } = options;
   const nameOf = (botId: string) => botNames?.get(botId) ?? botId;
   switch (segment.type) {
@@ -148,7 +149,7 @@ function speakerTurn(
   content: string,
   options: InferenceProjectionOptions,
   parts?: AgentHistoryTurnPart[],
-): AgentHistoryTurn {
+): Turn {
   if (authorBotId !== options.selfBotId) {
     const name = options.botNames?.get(authorBotId) ?? "";
     return { role: "user", content: renderBotMessageBlock(name, content) };

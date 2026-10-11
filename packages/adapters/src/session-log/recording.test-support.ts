@@ -1,4 +1,5 @@
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
+import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
 import { vi } from "vitest";
 
 export function hopEntryOf(blocks: unknown) {
@@ -22,9 +23,18 @@ export function recordingSessionLog() {
         drafts.push(draft);
         return draft;
       }),
-      readTail: vi.fn(async () => []),
-      readPage: vi.fn(async () => []),
+      readTail: vi.fn(
+        async (
+          _sessionId: SessionId,
+          _options?: { maxEntries?: number },
+        ): Promise<SessionEntry[]> => [],
+      ),
+      readPage: vi.fn(async (_sessionId: SessionId, _page: unknown): Promise<SessionEntry[]> => []),
       readRun: vi.fn(async () => []),
+      readEntry: vi.fn(
+        async (_sessionId: SessionId, _entryId: EntryId): Promise<SessionEntry | undefined> =>
+          undefined,
+      ),
     },
     sessionEntry: {
       findMany: vi.fn(async () => []),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { longSessionJsonl } from "./fixtures/long-session.js";
+import { LONG_SESSION_KEPT, longSessionJsonl } from "./fixtures/long-session.js";
 import { bytesSource, FIXTURES, fixtureText, linkEntries } from "./fixtures/read-fixture.js";
 import { decodeEntries, encodeEntries, readTailFromEnd } from "./jsonl.js";
 
@@ -24,7 +24,7 @@ describe("session log JSONL", () => {
     );
   });
 
-  it("reads a 10 000 line session backwards only as far as its last compaction", async () => {
+  it("reads a 10 000 line session backwards only as far as the seq its last compaction covers", async () => {
     const text = longSessionJsonl({
       count: 10_000,
       compactionEvery: 500,
@@ -37,7 +37,9 @@ describe("session log JSONL", () => {
     const onChain = (from: number, to: number) =>
       Array.from({ length: to - from + 1 }, (_, index) => from + index);
     expect(chain.map((entry) => entry.seq)).toEqual([
-      ...onChain(9_500, 9_760),
+      9_500,
+      ...onChain(9_500 - LONG_SESSION_KEPT, 9_499),
+      ...onChain(9_501, 9_760),
       ...onChain(9_800, 9_999),
     ]);
     const lastSixHundredLines = new TextEncoder().encode(

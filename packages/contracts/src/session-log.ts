@@ -183,8 +183,8 @@ const EntryShapes = z.discriminatedUnion("type", [
     z.object({
       summary: z.string(),
       /**
-       * The seq of the compaction's parent, the last entry it summarizes, so nothing on the chain
-       * sits between them.
+       * The seq of the last entry the summary covers. The chain entries after it are the window
+       * the compaction keeps word for word, so a reader of the tail walks back to it.
        */
       coveredUpToSeq: EntrySeq,
     }),
@@ -193,7 +193,11 @@ const EntryShapes = z.discriminatedUnion("type", [
     ...envelope,
     parentId: EntryId,
     type: z.literal("rewind"),
-    payload: z.object({ reason: z.string().optional() }),
+    payload: z.object({
+      reason: z.string().optional(),
+      /** It cut a turn a compaction on the chain had summarized, so it starts a history generation. */
+      cutsSummary: z.literal(true).optional(),
+    }),
   }),
   z.object({
     ...envelope,
@@ -284,6 +288,8 @@ export function isUiEntry(entry: SessionEntry): entry is UiEntry {
 
 /** A turn of the history the runtime replays, in the shape `AgentRunRequest.history` takes. */
 export type AgentHistoryTurn = {
+  /** The entry the turn renders, so the runtime can drop the turn it already holds as its prompt. */
+  id?: string;
   role: "user" | "assistant";
   content: string;
   /** The bot's own turns that ran tools, as ordered text and tool-call parts. */

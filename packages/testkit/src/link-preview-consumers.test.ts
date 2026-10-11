@@ -1,4 +1,4 @@
-import type { AgentRuntime, JobPublisher, MemoryStore } from "@rakazo/adapter-kit";
+import type { AgentRuntime, MemoryStore, SessionLog } from "@rakazo/adapter-kit";
 import {
   botRunOutcomeText,
   completionNotificationBody,
@@ -6,20 +6,21 @@ import {
   loadCurrentTurnImages,
   mirrorMessagingOutbound,
 } from "@rakazo/adapters";
-import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock, SessionEntry, ThreadMessage } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@rakazo/contracts";
 import {
   blocksToAgentHistoryText,
   isUserDirectedMessage,
   peerConversations,
   peerMessagesFrom,
+  projectInferenceTurns,
   speechFromBlocks,
   userVisibleMessages,
 } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { Prisma, PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { querySpaceSearch } from "../../../apps/api/src/search.ts";
 import { compactHistory } from "../../adapters/src/history-compaction.ts";
-import { messageToAgentHistoryText } from "../../adapters/src/reply-context.ts";
 import { materializeCurrentTurnFiles } from "../../adapters/src/thread-artifacts.ts";
 import { previewFromBlocks } from "../../db/src/thread-listing.ts";
 
@@ -44,6 +45,20 @@ const blocks = (): MessageBlock[] => [
   { kind: "link_preview", url: LINK, removed: true },
 ];
 
+const chain = (bodies: readonly object[]): SessionEntry[] =>
+  bodies.map((body, seq) =>
+    SessionEntrySchema.parse({
+      id: `e-${seq}`,
+      sessionId: "session-1",
+      seq,
+      parentId: seq === 0 ? null : `e-${seq - 1}`,
+      ts: new Date(Date.UTC(2026, 9, 11, 9, 0, seq)).toISOString(),
+      ...body,
+    }),
+  );
+
+/** A history budget so small that compaction summarizes everything before the newest exchange. */
+const KEEP_ONLY_THE_NEWEST_EXCHANGE = 1;
 const never = (value: unknown, where: string) =>
   expect(JSON.stringify(value) ?? "", where).not.toContain("wire the money");
 
@@ -52,63 +67,48 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
     // The model's own history.
     expect(blocksToAgentHistoryText(blocks())).toBe(`read ${LINK}`);
     // A quoted reply: the target message, with a card, as the next turn sees it.
-    const quoted = messageToAgentHistoryText({
-      id: "m2",
-      threadId: "t1",
-      role: "user",
-      blocks: [{ kind: "text", text: "yes" }],
-      replyToMessageId: "m1",
-      replyTo: { id: "m1", threadId: "t1", role: "user", blocks: blocks() },
-    });
-    expect(quoted).toContain(`read ${LINK}`);
-    never(quoted, "messageToAgentHistoryText");
+    const conversation = chain([
+      { type: "user.message", payload: { blocks: blocks(), source: "app" } },
+      {
+        type: "user.message",
+        payload: {
+          blocks: [{ kind: "text", text: "yes" }],
+          replyTo: { entryId: "e-0" },
+          source: "app",
+        },
+      },
+    ]);
+    const quoted = projectInferenceTurns(conversation, { selfBotId: "bot-1" }).at(-1);
+    expect(quoted?.content).toContain(`read ${LINK}`);
+    never(quoted, "projectInferenceTurns");
 
     // Compaction: the transcript sent to the summarising model.
     const run = vi.fn<AgentRuntime["run"]>(async function* () {
       yield { type: "done", text: "A summary." };
     });
-    const history = Array.from({ length: 50 }, (_, seq) => ({
-      seq,
-      role: seq % 2 === 0 ? "user" : "bot",
-      blocks: seq === 0 ? blocks() : [{ kind: "text", text: `message ${seq}` }],
-      botId: null,
-    }));
     const thread = {
       id: "t1",
       botId: "bot-1",
-      groupId: null,
       spaceId: "s1",
       userId: "u1",
-      nextEventSeq: 0,
-      nextMessageSeq: 50,
-      historyCompactedUpToSeq: null as number | null,
-      historyCompactionSummary: null as string | null,
-      historyCompactionGeneration: 0,
+      sessionId: "session-1",
     };
     await compactHistory(
       {
         prisma: {
-          thread: {
-            findUniqueOrThrow: vi.fn(async () => thread),
-            updateMany: vi.fn(async () => ({ count: 1 })),
-          },
-          event: { findFirst: vi.fn(async () => null) },
-          message: {
-            findMany: vi.fn(async (args: { where: { seq: { gt?: number; lte?: number } } }) =>
-              args.where.seq.lte !== undefined
-                ? history.filter((message) => message.seq <= args.where.seq.lte!)
-                : history.filter((message) => message.seq > args.where.seq.gt!),
-            ),
-          },
+          $transaction: async (work: (tx: unknown) => unknown) => work(undefined),
+          thread: { findUniqueOrThrow: vi.fn(async () => thread) },
           deploymentSettings: { findUnique: vi.fn(async () => null) },
-          chatGroupMember: { findMany: vi.fn(async () => []) },
           usageRecord: { create: vi.fn() },
         } as unknown as PrismaClient,
+        sessionLog: {
+          readTail: vi.fn(async () => conversation),
+          append: vi.fn(async (_tx: unknown, draft: unknown) => draft),
+        } as unknown as SessionLog<Prisma.TransactionClient>,
         runtime: {
           describe: () => ({ capabilities: { streaming: true, compaction: true } }),
           run,
         } as unknown as AgentRuntime,
-        jobs: { enqueue: vi.fn() } as unknown as JobPublisher,
         memory: {
           read: vi.fn(async () => ({ documents: [] })),
           commit: vi.fn(),
@@ -117,6 +117,7 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
         deploymentModelKey: "key",
       },
       "t1",
+      KEEP_ONLY_THE_NEWEST_EXCHANGE,
     );
     const prompts = run.mock.calls.map(([request]) => request.prompt);
     expect(prompts.join("\n")).toContain(`read ${LINK}`);

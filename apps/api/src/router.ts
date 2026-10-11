@@ -367,15 +367,15 @@ function computerContext(actor: Actor, botId: string, operationId: string): Adap
 }
 
 /**
- * Durable memories remain in their Space-private containers. Truncating history only removes
- * conversation-derived summaries from the previous generation; including the new generation also
- * covers a compaction job that began just after the truncation committed.
+ * Durable memories remain in their Space-private containers. Truncating history only removes the
+ * conversation-derived summaries filed under the generation it ended; a compaction still saving
+ * under that generation purges it again once it sees a clear or a rewind moved the generation on.
  */
 async function purgeCompactedHistoryMemory(
   deps: RouterDeps,
   actor: Actor,
   target: ThreadTarget,
-  historyCompactionGeneration: number,
+  generation: number,
   reason: string,
 ): Promise<void> {
   if (target.kind !== "bot") return;
@@ -390,7 +390,7 @@ async function purgeCompactedHistoryMemory(
     const purged = await configuredMemory.provider.purgeHistory(
       {
         botId: target.botId,
-        generations: [Math.max(0, historyCompactionGeneration - 1), historyCompactionGeneration],
+        generations: [generation],
       },
       computerContext(actor, target.botId, `${reason}:${target.threadId}`),
     );
@@ -1551,7 +1551,7 @@ export function createRouter(deps: RouterDeps) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         const contextBotId = target.kind === "bot" ? target.botId : target.memberBotIds[0];
         if (!contextBotId) throw new IsolationError();
-        const { cancelledRunIds, historyCompactionGeneration } = await deps.events.clearThread({
+        const { cancelledRunIds, historyGeneration } = await deps.events.clearThread({
           spaceId: context.actor.spaceId,
           threadId: target.threadId,
           botId: contextBotId,
@@ -1565,7 +1565,7 @@ export function createRouter(deps: RouterDeps) {
           deps,
           context.actor,
           target,
-          historyCompactionGeneration,
+          historyGeneration,
           "thread-clear",
         );
         // The cleared messages took their preview cards with them: drop the card images.
@@ -1599,13 +1599,12 @@ export function createRouter(deps: RouterDeps) {
           ),
         );
         await sweepOrphanPreviewArtifacts(deps, { spaceId: context.actor.spaceId });
-        // Compaction survived the rewind, so its summary still matches the remaining history.
-        if (rewound.compactionReset) {
+        if (rewound.historyGeneration !== undefined) {
           await purgeCompactedHistoryMemory(
             deps,
             context.actor,
             target,
-            rewound.historyCompactionGeneration,
+            rewound.historyGeneration,
             "thread-rewind",
           );
         }

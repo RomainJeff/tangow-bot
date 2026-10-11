@@ -46,6 +46,26 @@ export function sessionEntryFromRow(row: SessionEntryRow): SessionEntry {
   throw new SessionEntryDecodeError(`Invalid session entry ${row.id}: ${issues}`);
 }
 
+/**
+ * The epoch semantic memory files a session's compacted summaries under: the seq of its newest
+ * clear or rewind that cut a summarized turn, 0 before any. Either leaves the summaries filed
+ * before it unrecalled, and a summary saved while it landed fails the re-check.
+ */
+export async function historyGeneration(
+  prisma: Pick<Prisma.TransactionClient, "sessionEntry">,
+  sessionId: string,
+): Promise<number> {
+  const cut = await prisma.sessionEntry.findFirst({
+    where: {
+      sessionId,
+      OR: [{ type: "clear" }, { type: "rewind", payload: { path: ["cutsSummary"], equals: true } }],
+    },
+    orderBy: { seq: "desc" },
+    select: { seq: true },
+  });
+  return cut?.seq ?? 0;
+}
+
 export async function createSessionInTransaction(
   tx: Prisma.TransactionClient,
   session: NewSession,
@@ -294,23 +314,61 @@ export async function appendRunBlocksInTransaction(
 /**
  * Rewind the log to just before the user message the thread was cut at: its entry carries the
  * message's id. A message with no entry predates the log, so everything the log holds came after
- * it, and a clear cuts that as a rewind past the first entry would.
+ * it, and a clear cuts that as a rewind past the first entry would. A compaction the rewind cuts
+ * off whose summary ends before the message still describes turns that remain, so it is written
+ * again on top of the rewind and the next read starts from it; one whose summary reaches the
+ * message describes turns that are gone, and the rewind says so.
  */
 export async function appendRewindInTransaction(
   tx: Prisma.TransactionClient,
   input: { sessionId: SessionId; messageId: string; feedBotId: string },
 ): Promise<void> {
-  const target = await tx.sessionEntry.findFirst({
-    where: { id: input.messageId, sessionId: input.sessionId },
-    select: { parentId: true },
-  });
   const { sessionId, feedBotId } = input;
-  await appendSessionEntryInTransaction(
-    tx,
-    target?.parentId
-      ? { type: "rewind", sessionId, parentId: target.parentId as EntryId, payload: {}, feedBotId }
-      : { type: "clear", sessionId, payload: {}, feedBotId },
-  );
+  const target = await tx.sessionEntry.findFirst({
+    where: { id: input.messageId, sessionId },
+    select: { seq: true, parentId: true },
+  });
+  if (!target?.parentId) {
+    await appendSessionEntryInTransaction(tx, { type: "clear", sessionId, payload: {}, feedBotId });
+    return;
+  }
+  const cutOff = await newestCompactionAfter(tx, sessionId, target.seq);
+  const cutsSummary = cutOff !== undefined && cutOff.payload.coveredUpToSeq >= target.seq;
+  const rewind = await appendSessionEntryInTransaction(tx, {
+    type: "rewind",
+    sessionId,
+    parentId: target.parentId as EntryId,
+    payload: cutsSummary ? { cutsSummary } : {},
+    feedBotId,
+  });
+  if (cutOff && !cutsSummary) {
+    await appendSessionEntryInTransaction(tx, {
+      type: "compaction",
+      sessionId,
+      parentId: rewind.id,
+      payload: cutOff.payload,
+      feedBotId,
+    });
+  }
+}
+
+/** The first compaction on the chain walking back from the head, among the entries after `seq`. */
+async function newestCompactionAfter(
+  tx: Prisma.TransactionClient,
+  sessionId: SessionId,
+  seq: number,
+): Promise<SessionEntryOf<"compaction"> | undefined> {
+  const [row] = await tx.$queryRaw<SessionEntryRow[]>`
+    WITH RECURSIVE chain AS (
+      SELECT e.* FROM session_entries e JOIN sessions s ON e.id = s."headEntryId"
+      WHERE s.id = ${sessionId} AND e.seq > ${seq}
+      UNION ALL
+      SELECT e.* FROM session_entries e JOIN chain ON e.id = chain."parentId"
+      WHERE chain.type <> 'compaction' AND e."sessionId" = ${sessionId} AND e.seq > ${seq}
+    )
+    SELECT * FROM chain WHERE type = 'compaction'`;
+  const entry = row && sessionEntryFromRow(row);
+  return entry?.type === "compaction" ? entry : undefined;
 }
 
 /**

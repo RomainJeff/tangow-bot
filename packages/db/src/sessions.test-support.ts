@@ -8,6 +8,7 @@ export function stubbedDbSessions() {
     appendRewindInTransaction: vi.fn(async () => undefined),
     appendComputerControlInTransaction: vi.fn(async () => undefined),
     createSessionInTransaction: vi.fn(async (_tx: unknown, session: { id: string }) => session.id),
+    historyGeneration: vi.fn(async () => 0),
     sessionEntryFromRow: vi.fn((row: unknown) => row),
   };
 }

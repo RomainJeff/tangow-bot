@@ -362,9 +362,10 @@ export async function createApp(
     },
   });
   const shutdown = new AbortController();
+  const sessionLog = new PostgresSessionLog(prisma);
   const executor = createRunExecutor({
     prisma,
-    sessionLog: new PostgresSessionLog(prisma),
+    sessionLog,
     runtime,
     sandbox,
     memory,
@@ -401,6 +402,7 @@ export async function createApp(
   const jobHandlers = createBackgroundJobHandlers({
     executor,
     prisma,
+    sessionLog,
     sandbox,
     home,
     jobs,

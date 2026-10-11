@@ -12,6 +12,7 @@ import {
 import path from "node:path";
 import type { NewSession, SessionEntryDraft, SessionHead, SessionLog } from "@rakazo/adapter-kit";
 import {
+  assertEntryCount,
   nextSessionEntry,
   SessionAppendError,
   SessionReadError,
@@ -75,10 +76,14 @@ export class FileSessionLog implements SessionLog<undefined> {
     });
   }
 
-  async readTail(sessionId: SessionId): Promise<SessionEntry[]> {
+  async readTail(
+    sessionId: SessionId,
+    { maxEntries }: { maxEntries?: number } = {},
+  ): Promise<SessionEntry[]> {
+    if (maxEntries !== undefined) assertEntryCount("maxEntries", maxEntries);
     const file = this.fileOf(sessionId);
     try {
-      return await readTailFromEnd(() => openTail(file), TAIL_CHUNK_BYTES);
+      return await readTailFromEnd(() => openTail(file), TAIL_CHUNK_BYTES, maxEntries);
     } catch (error) {
       if (isMissing(error)) return [];
       if (error instanceof SessionEntryMissingParentError) {
@@ -92,9 +97,7 @@ export class FileSessionLog implements SessionLog<undefined> {
     sessionId: SessionId,
     { before, limit }: { before?: EntryId; limit: number },
   ): Promise<SessionEntry[]> {
-    if (!Number.isInteger(limit) || limit <= 0) {
-      throw new RangeError(`limit must be a positive integer, got ${limit}`);
-    }
+    assertEntryCount("limit", limit);
     const entries = await this.readAll(sessionId);
     const byId = new Map<string, SessionEntry>(entries.map((entry) => [entry.id, entry]));
     const parentOf = (entry: SessionEntry | undefined) =>
@@ -124,6 +127,10 @@ export class FileSessionLog implements SessionLog<undefined> {
       if (run.length > 0) return run;
     }
     return [];
+  }
+
+  async readEntry(sessionId: SessionId, entryId: EntryId): Promise<SessionEntry | undefined> {
+    return (await this.readAll(sessionId)).find((entry) => entry.id === entryId);
   }
 
   private async readAll(sessionId: SessionId): Promise<SessionEntry[]> {

@@ -832,15 +832,15 @@ describe("computer screen url", () => {
 });
 
 describe("thread rewind", () => {
-  function rewindDeps(role: string | null) {
+  function rewindDeps(role: string | null, endedGeneration: { historyGeneration?: number } = {}) {
     const rewindThread = vi.fn().mockResolvedValue({
       event: { seq: 20 },
       cancelledRunIds: ["run-1"],
-      historyCompactionGeneration: 3,
       fromSeq: 4,
-      compactionReset: false,
+      ...endedGeneration,
     });
     const cancel = vi.fn().mockResolvedValue(undefined);
+    const purgeHistory = vi.fn().mockResolvedValue({ ok: true, value: undefined });
     const prisma = {
       bot: {
         findFirst: vi.fn().mockResolvedValue({
@@ -855,6 +855,7 @@ describe("thread rewind", () => {
       prisma,
       events: { rewindThread },
       jobs: { cancel },
+      memoryProviders: { resolve: vi.fn(async () => ({ provider: { purgeHistory } })) },
       env: {
         defaultProvider: "fake",
         defaultModel: "fake-model",
@@ -870,7 +871,13 @@ describe("thread rewind", () => {
       email: "user@rakazo.test",
       isDeploymentOwner: true,
     } satisfies Actor;
-    return { rewindThread, cancel, actor, handler: new RPCHandler(createRouter(deps)) };
+    return {
+      rewindThread,
+      cancel,
+      purgeHistory,
+      actor,
+      handler: new RPCHandler(createRouter(deps)),
+    };
   }
 
   function rewindRequest(messageId: string) {
@@ -899,6 +906,19 @@ describe("thread rewind", () => {
       messageId: "message-4",
     });
     expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("purges the compacted summaries of a history generation only when the rewind ended it", async () => {
+    const purged = async (endedGeneration: { historyGeneration?: number }) => {
+      const { purgeHistory, actor, handler } = rewindDeps("user", endedGeneration);
+      await handler.handle(rewindRequest("message-4"), { prefix: "/rpc", context: { actor } });
+      return purgeHistory.mock.calls.map(([request]) => request);
+    };
+
+    expect([await purged({ historyGeneration: 3 }), await purged({})]).toEqual([
+      [{ botId: "bot-1", generations: [3] }],
+      [],
+    ]);
   });
 
   it("refuses to rewind to a bot message", async () => {
