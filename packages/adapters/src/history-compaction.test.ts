@@ -8,7 +8,7 @@ import type {
   SemanticMemorySaveRequest,
   SessionEntryDraft,
 } from "@rakazo/adapter-kit";
-import type { SessionEntry, SessionId } from "@rakazo/contracts";
+import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
 import { EntrySeq } from "@rakazo/contracts";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -255,7 +255,11 @@ const USER = "user_compaction";
 const SUMMARY_HEADING = "\n\n## Latest messages, word for word\n\n";
 
 type Seeded = { botId: string; threadId: string; sessionId: SessionId; runId: string };
-type Body = Pick<SessionEntryDraft, "type" | "payload"> & { botId?: string; runId?: string };
+type Body = Pick<SessionEntryDraft, "type" | "payload"> & {
+  botId?: string;
+  runId?: string;
+  parentId?: EntryId;
+};
 
 describe("compactHistory", () => {
   let database: PgliteDatabase;
@@ -522,6 +526,7 @@ describe("compactHistory", () => {
     await append(seeded, [
       {
         type: "compaction",
+        parentId: before.at(-1)!.id,
         payload: {
           summary: `Summary so far.${SUMMARY_HEADING}user: old 2\n\nbot: old 3`,
           coveredUpToSeq: EntrySeq.parse(before.at(-1)!.seq),
@@ -623,6 +628,7 @@ describe("compactHistory", () => {
     await append(seeded, [
       {
         type: "compaction",
+        parentId: only!.id,
         payload: { summary: "Said hello.", coveredUpToSeq: EntrySeq.parse(only!.seq) },
       },
       { type: "system.note", payload: { text: "Ada joined" } },

@@ -183,8 +183,8 @@ const EntryShapes = z.discriminatedUnion("type", [
     z.object({
       summary: z.string(),
       /**
-       * The seq of the compaction's parent, the last entry it summarizes, so nothing on the chain
-       * sits between them.
+       * The seq of the last entry the summary covers. The chain entries after it are the window
+       * the compaction keeps word for word, so a reader of the tail walks back to it.
        */
       coveredUpToSeq: EntrySeq,
     }),

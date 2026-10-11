@@ -1,5 +1,5 @@
 import type { SessionEntry, SessionId } from "@rakazo/contracts";
-import { EntrySeq } from "@rakazo/contracts";
+import { EntryId, EntrySeq } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import {
   appendSessionEntryInTransaction,
@@ -294,6 +294,7 @@ describe("session log writers", () => {
       appendSessionEntryInTransaction(tx, {
         type: "compaction",
         sessionId,
+        parentId: EntryId.parse(cut.messageId),
         feedBotId: bot.id,
         payload: { summary: "Kept and edited.", coveredUpToSeq: EntrySeq.parse(1) },
       }),

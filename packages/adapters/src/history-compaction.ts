@@ -679,6 +679,7 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
         deps.sessionLog.append(tx, {
           type: "compaction",
           sessionId,
+          parentId: head.id,
           feedBotId: botThread.botId,
           payload: {
             summary: [summary, latest].filter(Boolean).join(RECENT_TURNS_HEADING),

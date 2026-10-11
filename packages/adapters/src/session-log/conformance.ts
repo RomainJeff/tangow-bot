@@ -38,10 +38,11 @@ function replied(sessionId: SessionId, runId: string, text: string): SessionEntr
   };
 }
 
-function compacted(sessionId: SessionId, coveredUpToSeq: number): SessionEntryDraft {
+function compacted(head: SessionEntry, coveredUpToSeq: number): SessionEntryDraft {
   return {
-    sessionId,
+    sessionId: head.sessionId,
     type: "compaction",
+    parentId: head.id,
     payload: { summary: `up to ${coveredUpToSeq}`, coveredUpToSeq: EntrySeq.parse(coveredUpToSeq) },
   };
 }
@@ -50,7 +51,7 @@ function textOf(entry: SessionEntry): string {
   if (entry.type === "user.message" || entry.type === "assistant.text") {
     return entry.payload.blocks.map((block) => (block.kind === "text" ? block.text : "")).join("");
   }
-  return entry.type;
+  return entry.type === "compaction" ? entry.payload.summary : entry.type;
 }
 
 function expectLinearChain(entries: readonly SessionEntry[]): void {
@@ -155,8 +156,13 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
         said(sessionId, "question"),
         replied(sessionId, runId, "answer"),
       ]);
-      await append({ sessionId, type: "rewind", parentId: question!.id, payload: {} });
-      await append(compacted(sessionId, 2));
+      const rewind = await append({
+        sessionId,
+        type: "rewind",
+        parentId: question!.id,
+        payload: {},
+      });
+      await append(compacted(rewind, 2));
       const elsewhere = await append(said((await created()).sessionId, "elsewhere"));
 
       expect(await harness.log.readEntry(sessionId, answer!.id)).toEqual(answer);
@@ -176,21 +182,33 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
 
     it("reads the tail from the last compaction", async () => {
       const { sessionId } = await created();
-      await append(said(sessionId, "a"));
-      await append(compacted(sessionId, 0));
-      await append(said(sessionId, "b"));
-      await append(compacted(sessionId, 2));
+      const a = await append(said(sessionId, "a"));
+      await append(compacted(a, 0));
+      const b = await append(said(sessionId, "b"));
+      await append(compacted(b, 2));
       await append(said(sessionId, "c"));
 
-      expect((await harness.log.readTail(sessionId)).map(textOf)).toEqual(["compaction", "c"]);
+      expect((await harness.log.readTail(sessionId)).map(textOf)).toEqual(["up to 2", "c"]);
     });
 
-    it("refuses a compaction behind the head and a rewind outside the session", async () => {
+    it("appends a compaction that keeps the entries after the seq it covers", async () => {
+      const { sessionId } = await created();
+      const [, b] = await appendAll([said(sessionId, "a"), said(sessionId, "b")]);
+      const compaction = await append(compacted(b!, 0));
+
+      expect([compaction.seq, compaction.parentId, compaction.payload]).toEqual([
+        2,
+        b!.id,
+        { summary: "up to 0", coveredUpToSeq: 0 },
+      ]);
+    });
+
+    it("refuses a compaction whose parent is not the head, and a rewind outside the session", async () => {
       const { sessionId } = await created();
       const elsewhere = await append(said((await created()).sessionId, "elsewhere"));
       const entries = await appendAll([said(sessionId, "a"), said(sessionId, "b")]);
       const refused = [
-        { draft: compacted(sessionId, 0), reason: "stale_compaction" },
+        { draft: compacted(entries[0]!, 1), reason: "stale_compaction" },
         {
           draft: { sessionId, type: "rewind", parentId: elsewhere.id, payload: {} },
           reason: "missing_parent",
@@ -205,19 +223,14 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
 
     it("pages back along the chain past a compaction", async () => {
       const { sessionId } = await created();
-      const [e0, , e2, , e4] = await appendAll([
-        said(sessionId, "e0"),
-        said(sessionId, "e1"),
-        said(sessionId, "e2"),
-        compacted(sessionId, 2),
-        said(sessionId, "e4"),
-        said(sessionId, "e5"),
-      ]);
+      const [e0, , e2] = await appendAll(["e0", "e1", "e2"].map((text) => said(sessionId, text)));
+      await append(compacted(e2!, 2));
+      const [e4] = await appendAll([said(sessionId, "e4"), said(sessionId, "e5")]);
       const page = async (before: SessionEntry | undefined, limit: number) =>
         (await harness.log.readPage(sessionId, { before: before?.id, limit })).map(textOf);
 
       expect(await page(undefined, 2)).toEqual(["e4", "e5"]);
-      expect(await page(e4, 2)).toEqual(["e2", "compaction"]);
+      expect(await page(e4, 2)).toEqual(["e2", "up to 2"]);
       expect(await page(e2, 5)).toEqual(["e0", "e1"]);
       expect(await page(e0, 2)).toEqual([]);
     });
