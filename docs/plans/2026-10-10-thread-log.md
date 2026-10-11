@@ -1,6 +1,6 @@
 # Session log plan
 
-A conversation becomes an append-only log of typed entries, one JSON object per entry, stored as rows in Postgres and serialized as JSONL at the edges. The log is keyed by session. A thread owns one main session, a subagent runs in its own child session and leaves one entry in its parent. Messages, the inference context, the compaction summary, run cards and the activity feed are projections of the same entries. Entries form a tree through `parentId`, so rewind and clear append instead of deleting. Readers start at the newest entry of a session and walk parents back to the last `compaction` entry, never the whole session. The program ships on `feature/session-log` as six slices, SL1 to SL6, in that order.
+A conversation becomes an append-only log of typed entries, one JSON object per entry, stored as rows in Postgres and serialized as JSONL at the edges. The log is keyed by session. A thread owns one main session, a subagent runs in its own child session and leaves one entry in its parent. Messages, the inference context, the compaction summary, run cards and the activity feed are projections of the same entries. Entries form a tree through `parentId`, so rewind and clear append instead of deleting. Readers start at the newest entry of a session and walk parents back to the last `compaction` entry, never the whole session. The program ships on `feature/session-log` as seven slices, SL1 to SL4, SL4b, SL5 and SL6, in that order.
 
 ## How to read this
 
@@ -13,7 +13,8 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 ## Decisions already taken
 
 - The log lives in Postgres as a `session_entries` table keyed by `sessionId`. JSONL is the serialization at the edges (file backend, export, import, fixtures), not the production store. The repo's multi-writer shape (API, worker, steering, peer bots, channel mirrors) rules out one file per session. See Appendix B.
-- A `sessions` table owns identity and the seq counter. `kind` is `thread` or `subagent`. A thread row points at its main session. A subagent session points at `parentSessionId` and `parentEntryId`, the `tool.call` that launched it, and has no thread of its own.
+- A `sessions` table owns identity and the seq counter. `kind` is `thread`, `subagent` or `routine`. A thread row points at its main session. A subagent session points at `parentSessionId` and `parentEntryId`, the `tool.call` that launched it, and has no thread of its own. A routine session points at `parentSessionId` only and has no thread of its own.
+- A routine run is detached like a subagent. Its own `run.*`, `assistant.*` and `tool.*` entries live in a routine session, so a person's next question never carries the routine's tool calls. The thread's main session gets one `routine.run` entry at the end, with the routine's final words, status, usage and the child `sessionId`, rendered as a card that opens that session. What a routine says to the person mid-run (an ask, an approval) is written to the main session, because it is conversation with the person.
 - One entry per block during a run. The full type list and who reads each type is the audience registry in SL1, summarized in Appendix E.
 - An entry is admitted to the log only when it is a durable fact of the conversation, something the user expects to see again a week later. Progress ticks, status transitions, takeover negotiation steps, and facts about the bot or the group stay in the `events` table or their own tables.
 - Entries form a tree. Each entry carries `parentId`. The head of a session is its entry with the highest `seq`, so readers need no pointer. The writer keeps `headEntryId` on the session row, updated in the same statement that bumps `nextEntrySeq`, only to spare a round trip per append. A `rewind` entry's parent is the target entry. A `clear` entry has no parent.
@@ -45,16 +46,17 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ### Spawn owners
 
-- [ ] Create `feature/session-log` from `main` and open its draft PR to `main` with a `## Sub-PRs` section listing SL1 to SL6 as task items.
+- [ ] Create `feature/session-log` from `main` and open its draft PR to `main` with a `## Sub-PRs` section listing SL1 to SL6 and SL4b as task items.
 - [ ] Spawn one owner per PR with the full lifecycle the execution playbook names.
 - [ ] Follow this dependency graph. Start dependent work only after its parent merges into the feature branch.
   - [ ] SL1 is first. It branches from `feature/session-log`.
   - [ ] SL2 after SL1.
   - [ ] SL3 after SL2.
   - [ ] SL4 after SL3.
-  - [ ] SL5 after SL4.
+  - [ ] SL4b after SL4.
+  - [ ] SL5 after SL4b.
   - [ ] SL6 after SL5.
-- [ ] Hold the file boundaries. SL1 touches only `packages/contracts/` and `packages/core/`. SL2 touches only `packages/db/`, `packages/adapter-kit/` and `packages/adapters/src/session-log/`. SL3 and SL4 touch `packages/adapters/`, `apps/api/src/`, `apps/worker/src/`. SL5 touches `apps/api/src/`, `apps/web/src/`, `apps/mobile/`. SL6 touches `packages/db/`, `scripts/`, `CHANGELOG.md`, and deletes.
+- [ ] Hold the file boundaries. SL1 touches only `packages/contracts/` and `packages/core/`. SL2 touches only `packages/db/`, `packages/adapter-kit/` and `packages/adapters/src/session-log/`. SL3, SL4 and SL4b touch `packages/adapters/`, `apps/api/src/`, `apps/worker/src/`. SL5 touches `apps/api/src/`, `apps/web/src/`, `apps/mobile/`. SL6 touches `packages/db/`, `scripts/`, `CHANGELOG.md`, and deletes.
 - [ ] Hold the review gate. SL5 changes an interaction. It waits for the operator's review in chat with screenshots and a video before merge.
 
 ### PR mechanics, for every PR
@@ -343,9 +345,71 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] Rebased onto the current feature branch after the verdict, patch-id unchanged.
 - [ ] The root merges SL4 into `feature/session-log`.
 
-## Serve the UI from the log (SL5)
+## Detach routine runs into their own session (SL4b)
 
 **Depends on.** SL4.
+
+**Files.**
+
+- [ ] Edit `packages/contracts/src/session-log.ts`.
+- [ ] Edit `packages/core/src/session-log/project-inference.ts`, `project-ui.ts`, `run-fold.ts` and their tests and fixtures.
+- [ ] Edit `packages/db/prisma/schema.prisma` and add a migration that widens the `sessions` kind check to `routine`.
+- [ ] Edit `packages/db/src/sessions.ts`.
+- [ ] Edit `packages/adapters/src/executor.ts` and `packages/adapters/src/history-compaction.ts`.
+- [ ] Edit `packages/adapters/src/session-log/writers.test.ts` and `packages/testkit/src/pi-offline.postgres.test.ts`.
+
+**Build.**
+
+- [ ] `routine.run` entry type in the contract, `{ sessionId, routineId, name, model, status, result, usage }`, `botId` required, `runId` the routine run's id. Its `ENTRY_AUDIENCE` row says inference yes and ui yes. `projectInferenceTurns` renders it as an assistant turn holding `result`. `projectThreadItems` renders a `routine` item carrying `sessionId`, so the card opens the routine session. It is not a stretch type.
+- [ ] `sessions.kind` accepts `routine`, with `parentSessionId` required, `parentEntryId` null and `threadId` null. `createSessionInTransaction` accepts the new kind.
+- [ ] The executor, when a run's trigger is `routine` or `webhook`, creates a routine session and sets `Run.sessionId` to it before `openRunLog`, so `run.started`, every block, every tool entry and `run.finished` land there. Routine sessions emit no feed event. The main session's progress keeps flowing through the existing ephemeral events, which carry the thread id.
+- [ ] Entries that are conversation with the person stay in the main session even during a routine run, namely `assistant.ask`, `assistant.choice`, `effect.requested`, `effect.edited`, `effect.resolved`, `computer.control`, `skill.saved`, `memory.revised`. One function decides the target session per entry type; no call site picks a session by hand.
+- [ ] In `finalizeRun` for a routine run, after `run.finished` in the routine session, the executor appends one `routine.run` to the main session with the run's final text as `result`, the outcome, usage and the routine session id. A cancelled or failed routine run still gets its `routine.run` with that status.
+- [ ] The routine card run that exists today (`isRoutineCardRun`, the routine digest message) keeps writing its visible message through the main session as before; the `routine.run` entry is the log's record of the run, and SL5 decides which of the two the UI shows.
+- [ ] `compactHistory` never runs on a routine session; `shouldEnqueueCompaction` is not evaluated for routine runs. A routine session is bounded by the run.
+
+**You see.**
+
+- [ ] After a routine fires, `select type from session_entries where session_id = <main> order by seq desc limit 1` shows `routine.run`, and the routine session holds the run's own entries.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] `project-inference.test.ts` and `project-ui.test.ts` gain a `routine.run` case each with a literal expectation. Run `pnpm --filter @rakazo/core test`.
+- [ ] `writers.test.ts` gains a routine run that calls a tool and asks for an approval, asserting the routine session holds `run.started, tool.call, tool.result, assistant.text, run.finished` and the main session holds `effect.requested, effect.resolved, routine.run` in that order. Run `pnpm --filter @rakazo/adapters test`.
+- [ ] The pi-offline journey gains a routine run followed by a person's message, asserting the person's run history holds the `routine.run` turn and none of the routine's tool calls. Run `pnpm test:integration`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `sonnet` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Fire a routine that uses a tool, then send a message, at trunk (`feature/session-log` before this slice) and at head. Save `routine-trunk.txt` and `routine-head.txt`. Pass when trunk's next history carries the routine's tool calls and head's carries only the `routine.run` turn.
+- [ ] Lane 2. Fire a routine and read both sessions. Save `routine-sessions.txt`. Pass when the routine session holds the run's entries and the main session holds one `routine.run` with the child session id.
+- [ ] Lane 3. Fire a webhook routine. Save `webhook-sessions.txt`. Pass when the same split holds with trigger `webhook`.
+- [ ] Lane 4. A routine run that asks for an approval. Save `routine-approval.txt`. Pass when the `effect.*` entries are in the main session with the routine run's id.
+- [ ] Lane 5. Cancel a routine run mid-way. Save `routine-cancel.txt`. Pass when the routine session ends with `run.finished { cancelled }` and the main session holds a `routine.run` with status cancelled.
+- [ ] Lane 6. A routine that fails. Save `routine-failed.txt`. Pass when `routine.run` carries the failed status and the error text.
+- [ ] Lane 7. Two routines firing at the same minute on one bot. Save `routine-concurrent.txt`. Pass when two routine sessions exist and the main session holds two `routine.run` entries in finish order.
+- [ ] Lane 8. Compaction after several routine runs. Save `routine-compaction.txt`. Pass when the summary covers the `routine.run` turns and no routine session was compacted.
+- [ ] Lane 9. Run `pnpm lint` and `pnpm check` at head. Save `lint-check.txt`. Pass when both exit zero apart from the pre-existing formatting failure outside this slice.
+- [ ] Lane 10. Run `pnpm test:e2e:affected` at head. Save `e2e-affected.txt`. Pass when the run exits zero apart from the known pre-existing red.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. History load time for a person's run after ten routine runs of five tool calls each, at trunk and at head, logged in `agent.run.context`.
+- [ ] Probe. Seed with a script, send ten messages at trunk then ten at head, interleaved twice.
+- [ ] Baseline. Record the trunk median first.
+- [ ] Rule. Fail when the head median exceeds the trunk median. Head reads ten turns where trunk read sixty.
+
+**Review gate.** None. SL4b is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Bugbot triage done.
+- [ ] Rebased onto the current feature branch after the verdict, patch-id unchanged.
+- [ ] The root merges SL4b into `feature/session-log`.
+
+## Serve the UI from the log (SL5)
+
+**Depends on.** SL4b.
 
 **Files.**
 
@@ -544,6 +608,7 @@ Decision. A. The head is the entry with the highest seq in its session, so the r
 | `assistant.ask`, `assistant.choice` | Executor, on pause for input | yes | yes |
 | `tool.call`, `tool.result` | Executor | yes | yes |
 | `subagent` | Parent run, once per helper | yes, as the tool result | yes, card to the child session |
+| `routine.run` | Executor, once per routine run, in the thread's main session | yes, the routine's final words on the assistant side | yes, card to the routine session |
 | `handoff` | `handoffToGroupBot`, in the group session | yes, assistant for the sender, `<bot_message>` for the receiver | yes, line naming both bots |
 | `bot.message.sent` | `messageBot`, in the sender's session | yes, assistant side | yes, card linking to the peer's thread |
 | `bot.message.received` | `messageBot`, in the receiver's session | yes, the waking `<bot_message>` user turn | yes, card linking back |
