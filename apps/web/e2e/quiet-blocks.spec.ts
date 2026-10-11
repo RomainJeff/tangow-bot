@@ -61,14 +61,13 @@ test("framed blocks capture a pending approval and an answered question as norma
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Deny", exact: true })).toBeVisible();
 
-  // The approval is a normal bot row — the framed card is just the row's body,
-  // no longer a standalone element. Mono (single-bot) thread: no per-row name
-  // or avatar, the header already says who this is.
+  // The approval sits on the bot's side like its messages — the framed card is
+  // the row's body, not a standalone element. Mono (single-bot) thread: no
+  // per-row name or avatar, the header already says who this is.
   const approvalMessage = page.locator("[data-message-id]").filter({ has: allowOnce });
   await expect(approvalMessage.locator('[data-slot="message-row"]')).toBeVisible();
   await expect(approvalMessage.locator('[data-slot="message-row-author"]')).toHaveCount(0);
   await expect(approvalMessage.locator('[data-slot="message-row-avatar"]')).toHaveCount(0);
-  await expect(approvalMessage.getByTestId("message-bubble-frame")).toBeVisible();
   await expect(approvalMessage.locator(".ms-10.max-w-block")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "quiet-blocks-approval-light");
 
