@@ -165,7 +165,11 @@ test("message hover shows a floating action pill; reply links to parent", async 
   await expect(userActions.getByRole("button", { name: "Reply" })).toHaveCount(0);
   await expect(userActions.getByRole("button", { name: "React" })).toHaveCount(0);
 
-  await userActions.getByRole("button", { name: "Copy" }).click();
+  // The run card lands right under the bubble, where these icons float: hover the row again first.
+  await expect(async () => {
+    await parentRow.hover();
+    await userActions.getByRole("button", { name: "Copy" }).click({ timeout: 2_000 });
+  }).toPass();
   await expect
     .poll(async () => page.evaluate(() => navigator.clipboard.readText()))
     .toBe(parentText);
