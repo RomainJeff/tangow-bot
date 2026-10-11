@@ -797,7 +797,7 @@ function Thread() {
       headerTitle: () => (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={!inGroup && botId ? t("Bot settings") : displayName || t("Thread")}
+          accessibilityLabel={displayName || t("Thread")}
           disabled={inGroup || !botId}
           onPress={() => {
             if (!botId || inGroup) return;
