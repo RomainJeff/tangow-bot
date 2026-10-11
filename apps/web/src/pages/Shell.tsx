@@ -12,6 +12,7 @@ import type {
   MessageReaction,
   ProductEvent,
   Routine,
+  Run,
   SearchHit,
   Space,
   SpaceMemoryConfig,
@@ -22,6 +23,7 @@ import type {
 import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_MAX_COUNT,
+  EntryId,
   normalizeCreateBotProfile,
 } from "@rakazo/contracts";
 import type {
@@ -1441,7 +1443,7 @@ export function ShellPage() {
       rpc.threads.get(threadTarget),
       rpc.threads.messages({
         ...threadTarget,
-        around: { entryId: target.messageId as ThreadSnapshot["entries"][number]["id"] },
+        around: { entryId: EntryId.parse(target.messageId) },
       }),
     ]);
     // The epoch check drops a jump that raced a conversation clear (or a bot switch): applying
@@ -1566,13 +1568,13 @@ export function ShellPage() {
       autoSpoken.current = lastBot?.id ?? null;
       return;
     }
-    if (snapshot.run && ["running", "queued", "leased"].includes(snapshot.run.status)) return;
+    if (isWorking(snapshot.run, view)) return;
     if (!lastBot || lastBot.id === autoSpoken.current) return;
     const text = speechFromBlocks(lastBot.blocks);
     if (!text) return;
     autoSpoken.current = lastBot.id;
     void speaker.speak(text, { botId: active.id, messageId: lastBot.id });
-  }, [view.rows, snapshot?.run?.status, snapshot?.botId, active?.autoSpeak, active?.id, callOpen]);
+  }, [view, snapshot?.run, snapshot?.botId, active?.autoSpeak, active?.id, callOpen]);
   const rowIndexOf = useMemo(
     () => new Map(view.rows.map((row, index) => [row.item.id as string, index])),
     [view.rows],
@@ -1580,10 +1582,7 @@ export function ShellPage() {
   const activeReplyTarget = replyTarget && rowIndexOf.has(replyTarget.id) ? replyTarget : null;
   const activeRewindTarget = rewindTarget && rowIndexOf.has(rewindTarget.id) ? rewindTarget : null;
   const currentRuns = activeThreadRuns(activeSnapshot);
-  // A run the entries say waits on a card is not working, whatever its last run event said.
-  const workingRuns = currentRuns.filter(
-    (run) => ["running", "queued", "leased"].includes(run.status) && run.id !== view.waiting?.runId,
-  );
+  const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
   const composerRunning = currentRuns.some((run) => isActive(run.status));
   const runError = threadRunError(activeSnapshot, dismissedRunErrorIds);
@@ -1622,7 +1621,7 @@ export function ShellPage() {
           : undefined;
     return {
       messages: messageItems,
-      running: currentRuns.some((run) => ["running", "queued", "leased"].includes(run.status)),
+      running: isWorking(activeSnapshot?.run, view),
       ask:
         waiting && block
           ? {
@@ -1634,7 +1633,7 @@ export function ShellPage() {
             }
           : null,
     };
-  }, [view, messageItems, currentRuns]);
+  }, [view, messageItems, activeSnapshot?.run]);
   const transcriptArtifactTarget = useMemo<ArtifactTarget>(
     () => (inGroup ? { groupId: groupId ?? "" } : { botId: active?.id ?? "" }),
     [active?.id, groupId, inGroup],
@@ -3407,6 +3406,16 @@ export function ShellPage() {
 
   return (
     <AvatarStyleProvider value={bootstrapMe?.avatarStyle ?? "organic"}>{shell}</AvatarStyleProvider>
+  );
+}
+
+/**
+ * A run still at work: queued or going, unless the entries show it waiting on a card, which the
+ * run events no longer say.
+ */
+function isWorking(run: Pick<Run, "id" | "status"> | null | undefined, view: ThreadView): boolean {
+  return Boolean(
+    run && ["running", "queued", "leased"].includes(run.status) && run.id !== view.waiting?.runId,
   );
 }
 
