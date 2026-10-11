@@ -34,6 +34,12 @@ type RunMessage = {
   originSessionId?: SessionId;
 };
 
+/**
+ * Fold a run's `assistant.*` and `tool.*` entries into one `RunMessage` per stretch, at the
+ * position of the stretch's first entry. Each run has its own open stretch, so runs that
+ * interleave keep one message each. Any other entry closes every open stretch, a `bot.text` too
+ * since it is a message of its own; a `subagent` entry and the card-state entries pass through.
+ */
 export function foldRuns(
   entries: readonly SessionEntry[],
   outputs: ReadonlyMap<EntryId, string> = toolOutputs(entries),
