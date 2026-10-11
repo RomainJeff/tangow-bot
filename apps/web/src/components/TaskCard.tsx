@@ -1,16 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import {
-  Button,
-  ClippedPreview,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Shimmer,
-  Surface,
-} from "@rakazo/ui-web";
-import { CircleDashed, CircleX, FileText, StopCircle, X } from "lucide-react";
-import { useState } from "react";
+import { ClippedPreview, Shimmer, Surface } from "@rakazo/ui-web";
+import { CircleDashed, CircleX, FileText, StopCircle } from "lucide-react";
 
 export type TaskCardState = "running" | "done" | "failed" | "cancelled";
 
@@ -98,10 +89,10 @@ export function TaskCardSurface({
 }
 
 /**
- * A delegated task's result (a subagent): the whole card is one target and
- * opens the task and its full result in a dialog. A finished task shows no
- * status word; running, failed and cancelled show their symbol and word
- * under the title (spec 9, A8).
+ * A delegated task (a subagent): once it has a session of its own, the whole
+ * card is one target and opens it. A finished task shows no status word;
+ * running, failed and cancelled show their symbol and word under the title
+ * (spec 9, A8).
  */
 export function TaskCard({
   title,
@@ -110,6 +101,7 @@ export function TaskCard({
   body,
   streaming = false,
   testId,
+  onOpen,
 }: {
   title: string;
   state: TaskCardState;
@@ -117,67 +109,34 @@ export function TaskCard({
   body?: string;
   streaming?: boolean;
   testId?: string;
+  onOpen?: () => void;
 }) {
   const { t } = useLingui();
-  const [open, setOpen] = useState(false);
-  const opens = Boolean(body || meta);
   const card = (
     <TaskCardSurface title={title} state={state} meta={meta} body={body} streaming={streaming} />
   );
 
-  if (!opens) {
+  if (!onOpen) {
     return <div data-testid={testId ?? "task-card"}>{card}</div>;
   }
 
   return (
-    <>
-      {/* The button lies over the card instead of wrapping it: the result's
-          markdown can hold links, which cannot nest in a button. The card is
-          inert, so its links take no focus or click; the label says it all. */}
-      <div data-testid={testId ?? "task-card"} className="group relative">
-        <div inert className="duration-(--duration-hover) ease-quiet group-hover:opacity-90">
-          {card}
-        </div>
-        <button
-          type="button"
-          aria-label={[title, state === "done" ? null : taskStatusLabel(state, t), meta]
-            .filter(Boolean)
-            .join(", ")}
-          aria-haspopup="dialog"
-          onClick={() => setOpen(true)}
-          className="absolute inset-0 rounded-[inherit]"
-        />
+    // The button lies over the card instead of wrapping it: the result's
+    // markdown can hold links, which cannot nest in a button. The card is
+    // inert, so its links take no focus or click; the label says it all.
+    <div data-testid={testId ?? "task-card"} className="group relative">
+      <div inert className="duration-(--duration-hover) ease-quiet group-hover:opacity-90">
+        {card}
       </div>
-      {open ? (
-        <Dialog open onOpenChange={setOpen}>
-          <DialogContent
-            showCloseButton={false}
-            className="max-h-[85vh] w-[min(640px,94vw)] overflow-y-auto sm:max-w-none"
-          >
-            <div className="flex items-center justify-between">
-              <DialogTitle>{title}</DialogTitle>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t`Close`}
-                onClick={() => setOpen(false)}
-              >
-                <X />
-              </Button>
-            </div>
-            {meta ? (
-              <p className="text-meta text-muted-foreground" dir="auto">
-                {meta}
-              </p>
-            ) : null}
-            {body ? (
-              <div dir="auto">
-                <ChatMarkdown streaming={streaming}>{body}</ChatMarkdown>
-              </div>
-            ) : null}
-          </DialogContent>
-        </Dialog>
-      ) : null}
-    </>
+      <button
+        type="button"
+        aria-label={[title, state === "done" ? null : taskStatusLabel(state, t), meta]
+          .filter(Boolean)
+          .join(", ")}
+        aria-haspopup="dialog"
+        onClick={onOpen}
+        className="absolute inset-0 rounded-[inherit]"
+      />
+    </div>
   );
 }

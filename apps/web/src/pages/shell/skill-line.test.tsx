@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { MessageBlock, ThreadMessage } from "@rakazo/contracts";
+import type { MessageBlock } from "@rakazo/contracts";
 import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -16,18 +16,18 @@ vi.mock("@lingui/react/macro", () => ({
 }));
 vi.mock("../../lib/rpc", () => ({ rpc: {} }));
 
+import type { MessageItem } from "../../lib/thread-items";
 import { MessageView } from "./message-view";
 
 type SkillBlock = Extract<MessageBlock, { kind: "skill_source" }>;
 
-function botMessage(blocks: MessageBlock[]): ThreadMessage {
+function botMessage(blocks: MessageBlock[]): MessageItem {
   return {
-    id: "m1",
-    threadId: "t1",
-    seq: 1,
+    kind: "message",
+    id: "m1" as MessageItem["id"],
+    ts: "2026-10-10T08:30:00.000Z",
     role: "bot",
     botId: "bot1",
-    createdAt: "2026-10-10T08:30:00.000Z",
     blocks,
   };
 }
@@ -59,7 +59,7 @@ afterEach(() => {
 });
 
 async function render(
-  message: ThreadMessage,
+  message: MessageItem,
   props: {
     onOpenSkill?: (skill: SkillBlock) => void;
     arrivesLive?: boolean;
@@ -70,12 +70,10 @@ async function render(
       <MessageView
         artifactTarget={{ botId: "bot1" }}
         chrome="row"
-        canAnswer={false}
         message={message}
         inGroup={false}
         showAuthor={false}
         showAvatar={false}
-        onAnswer={async () => undefined}
         onOpenBot={() => undefined}
         onOpenPeerMessages={() => undefined}
         peerBot={() => undefined}

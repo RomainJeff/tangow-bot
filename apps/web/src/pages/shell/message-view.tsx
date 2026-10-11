@@ -1,8 +1,8 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
-import type { ThreadMessage } from "@rakazo/contracts";
-import type { RoutineGroupRun, RoutineRowRole, SkillSourceBlock } from "@rakazo/core";
+import type { MessageBlock } from "@rakazo/contracts";
+import type { SkillSourceBlock } from "@rakazo/core";
 import {
   isLinkOnlyMessage,
   isNarrationMessage,
@@ -11,7 +11,7 @@ import {
   skillSourcesOf,
   textWithoutPreviewedLinkLine,
 } from "@rakazo/core";
-import type { StackedAvatarItem } from "@rakazo/ui-web";
+import type { MessageRowMeta, StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
   cn,
@@ -33,12 +33,13 @@ import { ArtifactFileCard } from "../../components/ArtifactFileCard";
 import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
-import { TaskCard } from "../../components/TaskCard";
 import { SkillDraftCard } from "../../components/teach/SkillDraftCard";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageProviderLabel } from "../../lib/messaging";
+import type { MessageItem } from "../../lib/thread-items";
+import { botIdOf } from "../../lib/thread-items";
 import { FALLBACK_BOT_COLOR } from "./layout";
 import { messageLinkPreview } from "./message-actions";
 
@@ -88,10 +89,8 @@ import {
   LinkPreviewImage,
   McpApprovalCard,
 } from "./message-cards";
-import type { RoutineHandoff } from "./routine-run-line";
-import { RoutineGroupLine, RoutineRunLine } from "./routine-run-line";
 
-export function previewMessageText(message: ThreadMessage): string {
+export function previewMessageText(message: { blocks: readonly MessageBlock[] }): string {
   const text = message.blocks
     .map((block) =>
       block.kind === "text" ||
@@ -111,10 +110,29 @@ export function previewMessageText(message: ThreadMessage): string {
   return t`Message`;
 }
 
+/** The line a skill a bot learned, updated or deleted draws, opening the skill unless it is gone. */
+export function skillLine(
+  skill: SkillSourceBlock,
+  live: boolean,
+  onOpenSkill?: (skill: SkillSourceBlock) => void,
+): MessageRowMeta {
+  const { name } = skill;
+  return {
+    label:
+      skill.change === "learned"
+        ? t`Skill learned · ${name}`
+        : skill.change === "updated"
+          ? t`Skill updated · ${name}`
+          : t`Skill deleted · ${name}`,
+    icon: <BookOpen aria-hidden className={cn("size-3.5 shrink-0", live && "bui-skill-icon")} />,
+    className: live ? "bui-skill-line" : undefined,
+    ...(onOpenSkill && skill.change !== "deleted" ? { onClick: () => onOpenSkill(skill) } : {}),
+  };
+}
+
 export const MessageView = memo(function MessageView({
   artifactTarget,
   chrome,
-  canAnswer,
   viewerUserId,
   message,
   inGroup,
@@ -132,7 +150,6 @@ export const MessageView = memo(function MessageView({
   onRefresh,
   onBotChanged,
   onAddRoutine,
-  routineRole,
   onOpenSkill,
   arrivesLive = false,
 }: {
@@ -140,9 +157,8 @@ export const MessageView = memo(function MessageView({
   /** How the transcript frames this message — derived once, from the same
    * visible blocks it renders, so this view never re-derives it. */
   chrome: "row" | "aside";
-  canAnswer: boolean;
   viewerUserId?: string;
-  message: ThreadMessage;
+  message: MessageItem;
   /** True in a multi-bot (group) thread: a bot row reserves an avatar column
    * and its bubble caps at 88% of the content column. False in a single-bot
    * (mono) thread: no avatar column, no name, and the bubble caps at 82% of
@@ -155,7 +171,8 @@ export const MessageView = memo(function MessageView({
   /** Show the avatar for this message: the last message of a group
    * (`isLastOfGroup`). Always false in a mono thread. */
   showAvatar: boolean;
-  onAnswer: (message: ThreadMessage, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  /** Set while the thread waits on this message's card: answering settles it. */
+  onAnswer?: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   onOpenBot: (botId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   speakerName?: string;
@@ -163,16 +180,12 @@ export const MessageView = memo(function MessageView({
   peerBot: (
     botId: string,
   ) => { color: string; name?: string; shapeSeed?: number | null; status?: string } | undefined;
-  replyPreview?: ThreadMessage;
+  replyPreview?: MessageItem;
   replyToMessageId?: string;
   onJumpToMessage?: (messageId: string) => void;
   onRefresh: () => Promise<void>;
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
-  /** How this message's routine run renders once runs are folded (a line, a
-   * group, or nothing — drawn by another line). Undefined for every message
-   * that isn't a routine run. */
-  routineRole?: RoutineRowRole;
   /** Opens a skill from the line a bot's message carries; absent in a group, which has no bot page. */
   onOpenSkill?: (skill: SkillSourceBlock) => void;
   /** This message is new activity, not history: its skill line arrives with a beat. */
@@ -183,7 +196,8 @@ export const MessageView = memo(function MessageView({
   const skillsAtMount = useRef(skills.length);
   const skillLinesLive = arrivesLive || skills.length > skillsAtMount.current;
   const isNarration = isNarrationMessage(message);
-  const isLive = message.id.startsWith("progress:");
+  const botId = botIdOf(message);
+  const isLive = message.role === "bot" && message.live === true;
   const showSteps = useDisplayAgentSteps();
   const visibleBlocks = message.blocks.filter((block) => !isHiddenActivityBlock(block, showSteps));
   // Nothing this version can draw (a `connect` or legacy `reasoning` block):
@@ -202,7 +216,7 @@ export const MessageView = memo(function MessageView({
       {replyPreview ? previewMessageText(replyPreview) : t`Earlier message`}
     </button>
   ) : null;
-  const author = peerBot(message.botId ?? "");
+  const author = peerBot(botId ?? "");
   const avatarOf = (botId: string): StackedAvatarItem => {
     const bot = peerBot(botId);
     return {
@@ -219,7 +233,7 @@ export const MessageView = memo(function MessageView({
       avatar={
         <BotAvatar
           color={author?.color ?? FALLBACK_BOT_COLOR}
-          identity={message.botId}
+          identity={botId}
           shapeSeed={author?.shapeSeed}
           size={26}
         />
@@ -283,25 +297,7 @@ export const MessageView = memo(function MessageView({
       </div>
     );
   };
-  const skillLines = skills.map((skill) => {
-    const { name } = skill;
-    return {
-      label:
-        skill.change === "learned"
-          ? t`Skill learned · ${name}`
-          : skill.change === "updated"
-            ? t`Skill updated · ${name}`
-            : t`Skill deleted · ${name}`,
-      icon: (
-        <BookOpen
-          aria-hidden
-          className={cn("size-3.5 shrink-0", skillLinesLive && "bui-skill-icon")}
-        />
-      ),
-      className: skillLinesLive ? "bui-skill-line" : undefined,
-      ...(onOpenSkill && skill.change !== "deleted" ? { onClick: () => onOpenSkill(skill) } : {}),
-    };
-  });
+  const skillLines = skills.map((skill) => skillLine(skill, skillLinesLive, onOpenSkill));
   if (!drawsSomething) return null;
   if (isNarration) {
     const prose = visibleBlocks.flatMap((block) => {
@@ -377,7 +373,7 @@ export const MessageView = memo(function MessageView({
         const peer = sent ? block.toBotName : block.fromBotName;
         const peerBotId = sent ? block.toBotId : block.fromBotId;
         const label = sent ? t`Messaged ${peer}` : t`Message from ${peer}`;
-        const self = message.botId;
+        const self = botId;
         const pair = sent ? [self, peerBotId] : [peerBotId, self];
         return (
           <CollaborationMarker
@@ -418,20 +414,6 @@ export const MessageView = memo(function MessageView({
           <MessageBubble key={i} data-testid="message-bot-bubble" inGroup={inGroup} dir="auto">
             <ChatMarkdown streaming>{block.text}</ChatMarkdown>
           </MessageBubble>
-        );
-      }
-      if (block.kind === "subagent") {
-        const running = block.status === "running";
-        const failed = block.status === "failed";
-        return (
-          <TaskCard
-            key={i}
-            title={block.name || t`subagent`}
-            state={running ? "running" : failed ? "failed" : "done"}
-            meta={block.task}
-            body={block.result || block.progress}
-            streaming={running}
-          />
         );
       }
       if (block.kind === "child_bot") {
@@ -478,38 +460,17 @@ export const MessageView = memo(function MessageView({
           <MessageMeta key={i} lines={skillLines} className="px-3.5" />
         ) : null;
       }
-      if (block.kind === "routine_run") {
-        const handoffFor = (run: RoutineGroupRun): RoutineHandoff | undefined => {
-          const sent = run.sentTo;
-          if (!sent) return undefined;
-          return {
-            receipt: <BotAvatar {...avatarOf(sent.toBotId)} size={14} />,
-            bots: [avatarOf(message.botId ?? ""), avatarOf(sent.toBotId)],
-            label: t`Messaged ${sent.toBotName}`,
-            onClick: () =>
-              onOpenPeerMessages({ peerBotId: sent.toBotId, peerBotName: sent.toBotName }),
-          };
-        };
-        if (routineRole?.kind === "group") {
-          return <RoutineGroupLine key={i} runs={routineRole.runs} handoffFor={handoffFor} />;
-        }
-        const run: RoutineGroupRun =
-          routineRole?.kind === "run"
-            ? routineRole.run
-            : { messageId: message.id, createdAt: message.createdAt, run: block, latest: true };
-        return <RoutineRunLine key={i} item={run} handoff={handoffFor(run)} />;
-      }
       if (block.kind === "choice") {
-        const botId = "botId" in artifactTarget ? artifactTarget.botId : message.botId;
-        if (!botId) return null;
-        return <ChoiceCard key={i} botId={botId} block={block} onBotChanged={onBotChanged} />;
+        const cardBotId = "botId" in artifactTarget ? artifactTarget.botId : botId;
+        if (!cardBotId) return null;
+        return <ChoiceCard key={i} botId={cardBotId} block={block} onBotChanged={onBotChanged} />;
       }
       if (block.kind === "app_connect") {
-        const botId = "botId" in artifactTarget ? artifactTarget.botId : message.botId;
-        if (!botId) return null;
+        const cardBotId = "botId" in artifactTarget ? artifactTarget.botId : botId;
+        if (!cardBotId) return null;
         return (
           <div key={i} className="flex justify-start py-1">
-            <AppConnectCard botId={botId} block={block} />
+            <AppConnectCard botId={cardBotId} block={block} />
           </div>
         );
       }
@@ -524,7 +485,7 @@ export const MessageView = memo(function MessageView({
         return (
           <div key={i} className="flex justify-start">
             <McpApprovalCard
-              botId={"botId" in artifactTarget ? artifactTarget.botId : message.botId}
+              botId={"botId" in artifactTarget ? artifactTarget.botId : botId}
               name={block.name}
               serverId={block.serverId}
               transport={block.transport}
@@ -612,11 +573,11 @@ export const MessageView = memo(function MessageView({
           <AskCard
             key={i}
             block={block}
-            canAnswer={canAnswer}
+            canAnswer={Boolean(onAnswer)}
             viewerUserId={viewerUserId}
-            onAnswer={(text, edits) => onAnswer(message, text, edits)}
+            onAnswer={onAnswer ?? noAnswer}
             messageId={message.id}
-            botId={message.botId}
+            botId={botId}
           />
         );
       }
@@ -672,3 +633,5 @@ export const MessageView = memo(function MessageView({
   // right-aligned bubble alone, never wrapped in an author header.
   return chrome === "row" && message.role === "bot" ? botRow(body) : body;
 });
+
+async function noAnswer(): Promise<void> {}

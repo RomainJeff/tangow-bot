@@ -1,17 +1,8 @@
 import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
-import type { MessageReaction, ThreadMessage } from "@rakazo/contracts";
-import type { SkillSourceBlock } from "@rakazo/core";
-import {
-  computeMessageGroups,
-  foldRoutineRuns,
-  isAsideOnlyMessage,
-  isToolActivityBlock,
-  latestActivityLabel,
-  projectMessageReactions,
-  showsTimeMarker,
-  threadTimeMarkerLabel,
-} from "@rakazo/core";
+import type { MessageReaction } from "@rakazo/contracts";
+import type { SkillSourceBlock, ThreadView } from "@rakazo/core";
+import { isToolActivityBlock, latestActivityLabel } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { cn } from "@rakazo/ui-web";
 import { ArrowDown } from "lucide-react";
@@ -34,18 +25,20 @@ import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
 import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
-import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageTimeLabel } from "../../lib/message-time";
+import type { CardAnswerTarget, MessageItem, SessionViewTarget } from "../../lib/thread-items";
+import { isLiveItem } from "../../lib/thread-items";
 import {
-  initialMaxSeq,
-  isNewArrivalSeq,
+  arrivedAfterMount,
   transcriptIsNearEnd,
   transcriptMovedDown,
 } from "../../lib/transcript-scroll";
 import { placeHoverPill } from "./hover-pill-placement";
 import { MessageActionsSheet } from "./message-actions-sheet";
 import { MessageHoverActions, UserMessageActions } from "./message-hover-actions";
-import { MessageView } from "./message-view";
+import { SessionView } from "./session-view";
+import type { RowContext } from "./thread-row";
+import { RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
 
 /** B1: hold this long on a touch bubble to open its action sheet. */
 const LONG_PRESS_MS = 450;
@@ -62,10 +55,9 @@ export const Transcript = memo(function Transcript({
   scrollRef,
   artifactTarget,
   inGroup,
-  messages,
+  view,
   olderCursor,
   loadingOlder,
-  answerableAskMessageId,
   viewerUserId,
   running,
   workingBots,
@@ -75,7 +67,7 @@ export const Transcript = memo(function Transcript({
   onAnswer,
   onReply,
   onEdit,
-  rewindFromSeq,
+  rewindFromItemId,
   onReact,
   onJumpToMessage,
   onOpenPeerMessages,
@@ -95,10 +87,9 @@ export const Transcript = memo(function Transcript({
    * shared name/avatar. False in a single-bot (mono) thread: no message ever
    * shows a name or avatar — the bot's identity lives in the header. */
   inGroup: boolean;
-  messages: ThreadMessage[];
-  olderCursor: number | null;
+  view: ThreadView;
+  olderCursor: string | null;
   loadingOlder: boolean;
-  answerableAskMessageId: string | null;
   viewerUserId?: string;
   running: boolean;
   workingBots: GroupAvatarMember[];
@@ -106,25 +97,24 @@ export const Transcript = memo(function Transcript({
   workingStartedAt?: number;
   onLoadOlder: () => void | Promise<void>;
   onOpenBot: (botId: string) => void;
-  onAnswer: (message: ThreadMessage, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
-  onReply: (message: ThreadMessage) => void;
-  onEdit: (message: ThreadMessage) => void;
-  rewindFromSeq: number | null;
-  onReact: (message: ThreadMessage, reaction: MessageReaction) => Promise<void>;
+  onAnswer: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  onReply: (message: MessageItem) => void;
+  onEdit: (message: MessageItem) => void;
+  /** The message being edited: it and every row after it go once the edit is sent. */
+  rewindFromItemId: string | null;
+  onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
   onJumpToMessage: (messageId: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   memberName?: (botId: string | undefined) => string | undefined;
-  peerBot: (
-    botId: string,
-  ) => { color: string; name?: string; shapeSeed?: number | null; status?: string } | undefined;
+  peerBot: RowContext["peerBot"];
   onRefresh: () => Promise<void>;
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
-  /** Opens a skill in its bot's page, from the line under the message that touched it. */
+  /** Opens a skill in its bot's page, from the line that names it. */
   onOpenSkill?: (skill: SkillSourceBlock) => void;
   voiceReady: boolean;
   speakingMessageId: string | null;
-  onSpeak: (message: ThreadMessage) => void;
+  onSpeak: (message: MessageItem) => void;
 }) {
   const { t } = useLingui();
   const showSteps = useDisplayAgentSteps();
@@ -134,104 +124,69 @@ export const Transcript = memo(function Transcript({
   const lastScrollTop = useRef<number | null>(null);
   const autoScrollTimer = useRef<number | undefined>(undefined);
   const jumpButtonRef = useRef<HTMLButtonElement>(null);
-  const messageById = useMemo(
-    () => new Map(messages.map((message) => [message.id, message])),
-    [messages],
+  const [sessionTarget, setSessionTarget] = useState<SessionViewTarget | null>(null);
+  const { rows, waiting, rowOf } = view;
+  const messages = useMemo(
+    () => rows.flatMap((row) => (row.item.kind === "message" ? [row.item] : [])),
+    [rows],
   );
-  // A row arrives with a beat only when it is genuinely new activity, not
-  // when a thread's history first loads and not when "Load earlier messages"
-  // prepends older rows: both would otherwise read as ids this instance has
-  // never seen. The line is the highest `seq` present at mount — anything
-  // beyond it is new; anything at or below it is history, however it got here.
-  const maxSeqAtMount = useRef<number | null>(null);
-  if (maxSeqAtMount.current === null) {
-    maxSeqAtMount.current = initialMaxSeq(messages);
+  // A row arrives with a beat only when it is genuinely new activity, not when a thread's history
+  // first loads and not when "Load earlier messages" prepends older rows.
+  const idsAtMount = useRef<ReadonlySet<string> | null>(null);
+  if (idsAtMount.current === null) {
+    idsAtMount.current = new Set(rows.map((row) => row.item.id));
   }
-  const isNewArrival = useCallback(
-    (message: ThreadMessage) => isNewArrivalSeq(message.seq, maxSeqAtMount.current ?? 0),
-    [],
-  );
-  // Markers read the rendered rows: a hidden activity row must not swallow a
-  // marker or invent a gap.
-  const reactionView = useMemo(
+  const arrived = useMemo(
     () =>
-      projectMessageReactions(
-        messages.filter((message) =>
-          message.blocks.some((block) => !isHiddenActivityBlock(block, showSteps)),
-        ),
+      arrivedAfterMount(
+        idsAtMount.current ?? new Set(),
+        rows.map((row) => row.item.id),
       ),
-    [messages, showSteps],
+    [rows],
   );
-  // Rule R (packages/core/src/message-grouping.ts, docs/design-system.md §
-  // Grouping): an aside no longer stays transparent to grouping — it breaks
-  // the group and the next message reopens it. Only a message this version
-  // draws nothing for (a legacy `connect`/`reasoning` block) stays
-  // transparent, so it can never break a group either side of it.
-  const messageGroups = useMemo(
-    () =>
-      computeMessageGroups(reactionView.visibleMessages, {
-        isTransparent: (m) => !hasRenderableBlock(m.blocks, showSteps),
-      }),
-    [reactionView.visibleMessages, showSteps],
-  );
-  // Routine runs as log lines: a run keeps the message it then sent, and a
-  // bot's consecutive quiet runs with nothing between them share one line. A
-  // folded run or an absorbed handoff renders nothing (its role is "hidden").
-  const routineRoles = useMemo(
-    () => foldRoutineRuns(reactionView.visibleMessages),
-    [reactionView.visibleMessages],
-  );
-  const isRoutineRow = useCallback(
-    (message: ThreadMessage | undefined) => {
-      if (!message) return false;
-      const role = routineRoles.get(message.id);
-      return role?.kind === "run" || role?.kind === "group";
-    },
-    [routineRoles],
-  );
-  // Time markers down the rendered (non-hidden) rows: between two routine
-  // lines a marker only says the day, when it changes (routine lines carry
-  // their own time already) — everywhere else, the usual day-and-time label.
-  // `previousVisibleRow` is the row rendered just before each one (skipping
-  // anything hidden), used both for that and for the zero gap between two
-  // consecutive routine lines.
-  const { timeMarkers, previousVisibleRow } = useMemo(() => {
-    const markers = new Map<string, string>();
-    const before = new Map<string, ThreadMessage>();
-    let previousRow: ThreadMessage | undefined;
-    let previous: { createdAt?: string; routine: boolean } | undefined;
-    for (const message of reactionView.visibleMessages) {
-      const role = routineRoles.get(message.id);
-      if (role?.kind === "hidden") continue;
-      const routine = role?.kind === "run" || role?.kind === "group";
-      // A group line stands for a fold of earlier runs: its marker is about
-      // when that stretch started (the fold's first run), not this message's
-      // own timestamp (its last, folded run).
-      const at = role?.kind === "group" ? role.runs[0]?.createdAt : message.createdAt;
-      if (at) {
-        const shows =
-          routine && previous?.routine
-            ? new Date(previous.createdAt ?? at).toDateString() !== new Date(at).toDateString()
-            : showsTimeMarker(previous?.createdAt, at);
-        if (shows) {
-          markers.set(
-            message.id,
-            threadTimeMarkerLabel(at, {
-              locale: i18n.locale || "en",
-              today: t`Today`,
-              yesterday: t`Yesterday`,
-              withTime: !routine,
-            }),
-          );
-        }
-      }
-      // The next row is measured from the group's last run, like on mobile.
-      previous = { createdAt: message.createdAt ?? previous?.createdAt, routine };
-      if (previousRow) before.set(message.id, previousRow);
-      previousRow = message;
-    }
-    return { timeMarkers: markers, previousVisibleRow: before };
-  }, [reactionView.visibleMessages, routineRoles, t]);
+  const rewindFromIndex =
+    rewindFromItemId === null ? -1 : rows.findIndex((row) => row.item.id === rewindFromItemId);
+  const context = useMemo<RowContext>(() => {
+    const messageById = new Map(messages.map((message) => [message.id as string, message]));
+    return {
+      artifactTarget,
+      inGroup,
+      viewerUserId,
+      waiting,
+      onAnswer,
+      memberName,
+      peerBot,
+      onOpenBot,
+      onOpenPeerMessages,
+      onOpenSession: setSessionTarget,
+      onJumpToMessage,
+      onRefresh,
+      onBotChanged,
+      onAddRoutine,
+      onOpenSkill,
+      messageOfEntry: (entryId) => {
+        const itemId = rowOf.get(entryId);
+        return itemId ? messageById.get(itemId) : undefined;
+      },
+    };
+  }, [
+    artifactTarget,
+    inGroup,
+    viewerUserId,
+    waiting,
+    onAnswer,
+    memberName,
+    peerBot,
+    onOpenBot,
+    onOpenPeerMessages,
+    onJumpToMessage,
+    onRefresh,
+    onBotChanged,
+    onAddRoutine,
+    onOpenSkill,
+    messages,
+    rowOf,
+  ]);
   const workingBotName = workingBots.length === 1 ? workingBots[0]?.name : undefined;
   const workingFallback = `${
     workingBotName != null && workingBotName !== ""
@@ -241,6 +196,7 @@ export const Transcript = memo(function Transcript({
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const workingLabel =
     (workingBots.length === 1 ? latestActivityLabel(messages) : undefined) ?? workingFallback;
+
   const snapToEnd = useCallback(() => {
     const element = scrollRef.current;
     if (!element) return;
@@ -273,7 +229,7 @@ export const Transcript = memo(function Transcript({
 
   useLayoutEffect(() => {
     if (following.current) snapToEnd();
-  }, [messages, running, snapToEnd]);
+  }, [rows, running, snapToEnd]);
 
   useLayoutEffect(() => {
     const button = jumpButtonRef.current;
@@ -310,7 +266,7 @@ export const Transcript = memo(function Transcript({
   // the pill itself never appears on touch (no hover to reveal it with;
   // mouse and keyboard keep the existing hover/focus pill, untouched below).
   const [pressingMessageId, setPressingMessageId] = useState<string | null>(null);
-  const [sheetMessage, setSheetMessage] = useState<ThreadMessage | null>(null);
+  const [sheetMessage, setSheetMessage] = useState<MessageItem | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const pressStart = useRef<{ id: string; pointerId: number; x: number; y: number } | null>(null);
   const squashTimer = useRef<number | undefined>(undefined);
@@ -333,7 +289,7 @@ export const Transcript = memo(function Transcript({
   }, [clearPressTimers]);
 
   const onBubblePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>, message: ThreadMessage) => {
+    (event: ReactPointerEvent<HTMLDivElement>, message: MessageItem) => {
       // A second finger never starts, resets or cancels the first one's press.
       if (pressStart.current && pressStart.current.pointerId !== event.pointerId) {
         cancelPress();
@@ -344,7 +300,7 @@ export const Transcript = memo(function Transcript({
       suppressClickForId.current = null;
       if (event.pointerType !== "touch") return;
       // A message still being written has no actions yet (as on hover).
-      if (message.id.startsWith("progress:")) return;
+      if (isLiveItem(message)) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest(LONG_PRESS_EXCLUDED_SELECTOR)) return;
       if (!target?.closest(LONG_PRESS_BUBBLE_SELECTOR)) return;
@@ -476,92 +432,58 @@ export const Transcript = memo(function Transcript({
             {loadingOlder ? t`Loading…` : t`Load earlier messages`}
           </button>
         ) : null}
-        {reactionView.visibleMessages.map((message, index) => {
-          // Drawn by another line: a folded routine run, or the handoff a run
-          // sent, absorbed into that run's own line. Renders nothing.
-          const routineRole = routineRoles.get(message.id);
-          if (routineRole?.kind === "hidden") return null;
-          const chromeBlocks = message.blocks.filter(
-            (block) => !isHiddenActivityBlock(block, showSteps),
-          );
-          // An aside is a note between messages: it gets no row chrome — no hover
-          // actions, no clock, no reactions, no width cap. A bot's question or
-          // approval is a normal row now — its FramedBlock card is just the row's
-          // body. Aside is decided by the blocks alone (a peer receipt is stored
-          // with role "user" but is still an aside).
-          const chrome: "row" | "aside" = isAsideOnlyMessage(chromeBlocks) ? "aside" : "row";
-          const rewound = rewindFromSeq !== null && (message.seq ?? 0) >= rewindFromSeq;
-          const messageReactions = reactionView.reactions.get(message.id);
-          const timeMarker = timeMarkers.get(message.id) ?? "";
-          const group = messageGroups[index]!;
-          const prevMessage = reactionView.visibleMessages[index - 1];
-          const prevChrome: "row" | "aside" | undefined = prevMessage
-            ? isAsideOnlyMessage(
-                prevMessage.blocks.filter((b) => !isHiddenActivityBlock(b, showSteps)),
-              )
-              ? "aside"
-              : "row"
-            : undefined;
+        {rows.map((row, index) => {
+          const { item } = row;
+          const chrome = rowChrome(item, showSteps);
+          const message = item.kind === "message" ? item : null;
+          // Only a message row carries actions: the hover pill, the press sheet, reactions.
+          const acts = message !== null && chrome === "row";
+          const rewound = rewindFromIndex >= 0 && index >= rewindFromIndex;
+          const previous = rows[index - 1];
+          const prevChrome = previous ? rowChrome(previous.item, showSteps) : undefined;
+          const arrives = arrived.has(item.id);
           // 14px between groups (the container's own `gap-3.5`) narrows to 3px
           // within a group, to 0 between two consecutive asides, and to 0
           // between two consecutive routine lines (they stack like a log) —
           // unless a day marker sits between them, which keeps its own air.
-          const routineChain =
-            !timeMarker &&
-            isRoutineRow(message) &&
-            isRoutineRow(previousVisibleRow.get(message.id));
+          const routineChain = !row.marker && row.routine && previous?.routine;
           const spacingClass = routineChain
             ? " -mt-3.5"
-            : !group.isFirstOfGroup
+            : !row.firstOfGroup
               ? " -mt-2.75"
               : chrome === "aside" && prevChrome === "aside"
                 ? " -mt-3.5"
                 : "";
           return (
-            <Fragment key={message.id}>
-              {timeMarker ? (
-                <time
-                  dateTime={message.createdAt}
-                  className="self-center text-label tabular-nums text-muted-foreground"
-                >
-                  {timeMarker}
-                </time>
-              ) : null}
+            <Fragment key={item.id}>
+              {row.marker ? <RowMarker marker={row.marker} /> : null}
               <div
-                data-message-id={message.id}
+                data-message-id={item.id}
                 data-rewound={rewound ? "true" : undefined}
-                data-long-pressing={
-                  chrome === "row" && pressingMessageId === message.id ? "true" : undefined
-                }
-                onPointerEnter={
-                  chrome === "row" ? (event) => placeHoverPill(event.currentTarget) : undefined
-                }
+                data-long-pressing={acts && pressingMessageId === item.id ? "true" : undefined}
+                onPointerEnter={acts ? (event) => placeHoverPill(event.currentTarget) : undefined}
                 onPointerDown={
-                  chrome === "row" ? (event) => onBubblePointerDown(event, message) : undefined
+                  acts && message ? (event) => onBubblePointerDown(event, message) : undefined
                 }
-                onPointerMove={chrome === "row" ? onBubblePointerMove : undefined}
-                onPointerUp={chrome === "row" ? onBubblePointerEnd : undefined}
-                onPointerCancel={chrome === "row" ? onBubblePointerEnd : undefined}
-                onClickCapture={
-                  chrome === "row" ? (event) => onRowClickCapture(event, message.id) : undefined
-                }
+                onPointerMove={acts ? onBubblePointerMove : undefined}
+                onPointerUp={acts ? onBubblePointerEnd : undefined}
+                onPointerCancel={acts ? onBubblePointerEnd : undefined}
+                onClickCapture={acts ? (event) => onRowClickCapture(event, item.id) : undefined}
                 className={`${
-                  chrome === "row" ? "group group/message relative hover:z-20" : "relative py-0.5"
-                }${rewound ? " opacity-40" : ""}${
-                  isNewArrival(message) ? " animate-arrive" : ""
-                }${spacingClass}`}
+                  acts ? "group group/message relative hover:z-20" : "relative py-0.5"
+                }${rewound ? " opacity-40" : ""}${arrives ? " animate-arrive" : ""}${spacingClass}`}
               >
                 <div
                   className={
-                    chrome === "row"
+                    acts
                       ? `relative flex ${message.role === "user" ? "justify-end" : "justify-start"}`
                       : undefined
                   }
                 >
                   <div
-                    data-testid={chrome === "row" ? "message-bubble-frame" : undefined}
+                    data-testid={acts ? "message-bubble-frame" : undefined}
                     className={
-                      chrome === "row"
+                      acts
                         ? // The pill floats in this frame: beside the bubble when there is
                           // room (`placeHoverPill`), else at its top-end corner, so both
                           // rows run the full column width. A user row right-aligns its
@@ -574,16 +496,15 @@ export const Transcript = memo(function Transcript({
                         : undefined
                     }
                   >
-                    {/* The pill is for a bot's message: your own gets Edit and Copy
-                        under it (below), and a routine line opens on a tap. */}
-                    {chrome === "row" && message.role !== "user" && !isRoutineRow(message) ? (
+                    {/* The pill is for a bot's message: your own gets Edit and Copy under it. */}
+                    {acts && message.role !== "user" ? (
                       <MessageHoverActions
                         message={message}
                         // No row carries a permanent clock: the time rides in the pill, next
                         // to the bubble or card. Cards have no clock of their own.
                         time={
-                          <time dateTime={message.createdAt} data-testid="message-hover-time">
-                            {messageTimeLabel(message.createdAt, i18n.locale)}
+                          <time dateTime={message.ts} data-testid="message-hover-time">
+                            {messageTimeLabel(message.ts, i18n.locale)}
                           </time>
                         }
                         onReply={onReply}
@@ -593,42 +514,17 @@ export const Transcript = memo(function Transcript({
                         onSpeak={() => onSpeak(message)}
                       />
                     ) : null}
-                    <MessageView
-                      artifactTarget={artifactTarget}
+                    <ThreadRowBody
+                      row={row}
+                      context={context}
                       chrome={chrome}
-                      message={message}
-                      inGroup={inGroup}
-                      showAuthor={inGroup && group.isFirstOfGroup}
-                      showAvatar={inGroup && group.isLastOfGroup}
-                      canAnswer={message.id === answerableAskMessageId}
-                      viewerUserId={viewerUserId}
-                      onOpenBot={onOpenBot}
-                      onOpenPeerMessages={onOpenPeerMessages}
-                      onAnswer={onAnswer}
-                      speakerName={
-                        chrome !== "row" || message.role !== "bot"
-                          ? undefined
-                          : memberName?.(message.botId)
-                      }
-                      memberName={memberName}
-                      peerBot={peerBot}
-                      replyPreview={
-                        message.replyToMessageId
-                          ? messageById.get(message.replyToMessageId)
-                          : undefined
-                      }
-                      replyToMessageId={message.replyToMessageId}
-                      onJumpToMessage={onJumpToMessage}
-                      onRefresh={onRefresh}
-                      onBotChanged={onBotChanged}
-                      onAddRoutine={onAddRoutine}
-                      routineRole={routineRole}
-                      onOpenSkill={onOpenSkill}
-                      arrivesLive={isNewArrival(message)}
+                      showAuthor={row.firstOfGroup}
+                      showAvatar={row.lastOfGroup}
+                      arrivesLive={arrives}
                     />
                   </div>
                 </div>
-                {chrome === "row" && messageReactions ? (
+                {acts && row.reactions.length > 0 ? (
                   <div
                     data-testid="message-reactions"
                     className={cn(
@@ -636,7 +532,7 @@ export const Transcript = memo(function Transcript({
                       message.role === "user" && "justify-end",
                     )}
                   >
-                    {[...messageReactions].map(([emoji, count]) => (
+                    {row.reactions.map(([emoji, count]) => (
                       <span
                         key={emoji}
                         className="rounded-full border border-border bg-muted px-2 py-0.5 text-time"
@@ -647,7 +543,7 @@ export const Transcript = memo(function Transcript({
                     ))}
                   </div>
                 ) : null}
-                {chrome === "row" && message.role === "user" ? (
+                {acts && message.role === "user" ? (
                   <UserMessageActions message={message} onEdit={onEdit} />
                 ) : null}
               </div>
@@ -657,7 +553,7 @@ export const Transcript = memo(function Transcript({
         {running &&
         !messages.some(
           (message) =>
-            message.id.startsWith("progress:") &&
+            isLiveItem(message) &&
             message.blocks.some(
               (block) =>
                 block.kind === "progress" && !isToolActivityBlock(block) && Boolean(block.text),
@@ -690,6 +586,14 @@ export const Transcript = memo(function Transcript({
         speaking={sheetMessage !== null && speakingMessageId === sheetMessage.id}
         onSpeak={onSpeak}
       />
+      {sessionTarget ? (
+        <SessionView
+          key={sessionTarget.kind === "session" ? sessionTarget.sessionId : sessionTarget.runId}
+          target={sessionTarget}
+          context={context}
+          onClose={() => setSessionTarget(null)}
+        />
+      ) : null}
     </div>
   );
 });

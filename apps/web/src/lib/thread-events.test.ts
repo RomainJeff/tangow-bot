@@ -1,9 +1,4 @@
-import type {
-  ComputerStatus,
-  ProductEvent,
-  SessionEntry,
-  ThreadSnapshot,
-} from "@rakazo/contracts";
+import type { ComputerStatus, ProductEvent, SessionEntry, ThreadSnapshot } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import type { ThreadState } from "./thread-events.js";
@@ -235,7 +230,11 @@ describe("thread event reduction", () => {
 
   it("ignores a refresh whose cursor is behind the event-sourced snapshot", () => {
     const run = threadRun("run-1");
-    const newer: ThreadState = { ...state(), cursor: 12, run: { ...run, status: "waiting_takeover" } };
+    const newer: ThreadState = {
+      ...state(),
+      cursor: 12,
+      run: { ...run, status: "waiting_takeover" },
+    };
     const older: ThreadSnapshot = {
       ...wire(),
       cursor: 9,
@@ -390,12 +389,19 @@ describe("thread event reduction", () => {
   it("clears only the terminal run's streamed text", () => {
     const runA = threadRun("run-a", "bot-a");
     const runB = threadRun("run-b", "bot-b");
-    const streaming = [progress(5, "run-a", "A"), progress(6, "run-b", "B")].reduce<ThreadState | null>(
-      reduceThreadState,
-      { ...state(), run: runA, activeRuns: [runA, runB] },
-    );
+    const streaming = [
+      progress(5, "run-a", "A"),
+      progress(6, "run-b", "B"),
+    ].reduce<ThreadState | null>(reduceThreadState, {
+      ...state(),
+      run: runA,
+      activeRuns: [runA, runB],
+    });
 
-    const next = reduceThreadState(streaming, event({ type: "run.failed", seq: 10, runId: "run-a" }));
+    const next = reduceThreadState(
+      streaming,
+      event({ type: "run.failed", seq: 10, runId: "run-a" }),
+    );
 
     expect([...(next?.layer.keys() ?? [])]).toEqual(["run-b"]);
     expect(next?.run).toEqual(runB);

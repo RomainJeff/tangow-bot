@@ -17,25 +17,14 @@ export function transcriptMovedDown(previousScrollTop: number | null, scrollTop:
 }
 
 /**
- * B9 (web-parity PR B): the highest `seq` among a thread's messages at the
- * moment a `Transcript` mounts — the line below which a message is history,
- * however it got there (the thread's first load, a page already fully
- * fetched before mount, or a "Load earlier messages" prepend afterwards),
- * never a genuinely new arrival that should play the arrival beat.
- * Reopening an already-loaded thread mounts a fresh `Transcript` with its
- * full history already in `messages` (Shell keys it by `threadId` and
- * commits a snapshot atomically — never a partial page first), so this line
- * sits at or above every one of them: none can cross it.
+ * B9: the rows that arrived after a `Transcript` mounted, which play the arrival beat. A row is
+ * new when its id was absent at mount and it sits after the last row that was there: the first
+ * load, a reopened thread and a "Load earlier messages" page all land at or before that row.
  */
-export function initialMaxSeq(messages: readonly { seq?: number | null }[]): number {
-  return messages.reduce((max, message) => Math.max(max, message.seq ?? 0), 0);
-}
-
-/** A message is a new arrival only once its `seq` passes the line captured
- * at mount (`initialMaxSeq`). */
-export function isNewArrivalSeq(
-  messageSeq: number | null | undefined,
-  maxSeqAtMount: number,
-): boolean {
-  return (messageSeq ?? 0) > maxSeqAtMount;
+export function arrivedAfterMount(
+  idsAtMount: ReadonlySet<string>,
+  ids: readonly string[],
+): Set<string> {
+  const lastKnown = ids.findLastIndex((id) => idsAtMount.has(id));
+  return new Set(ids.slice(lastKnown + 1).filter((id) => !idsAtMount.has(id)));
 }
