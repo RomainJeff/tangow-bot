@@ -250,9 +250,6 @@ function fixture(
       findUniqueOrThrow: vi.fn(async () => ({
         id: "thread-1",
         groupId: options.groupId ?? null,
-        historyCompactionSummary: null,
-        historyCompactedUpToSeq: null,
-        historyCompactionGeneration: 1,
       })),
       findFirst: vi.fn(async () => ({ groupId: options.groupId ?? null })),
       count: vi.fn(async () => 0),

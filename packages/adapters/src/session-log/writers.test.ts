@@ -1,4 +1,5 @@
 import type { SessionEntry, SessionId } from "@rakazo/contracts";
+import { EntrySeq } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import {
   appendSessionEntryInTransaction,
@@ -270,6 +271,45 @@ describe("session log writers", () => {
     expect(
       (await log.readTail(sessionId)).map(({ type, parentId }) => ({ type, parentId })),
     ).toEqual([{ type: "clear", parentId: null }]);
+  });
+
+  it("says when a rewind cuts a compaction, and names the history generation a clear ends", async () => {
+    const { prisma } = database;
+    const { bot, threadId, sessionId } = await seedBot(prisma, "Ada");
+    const events = createThreadEvents(prisma);
+    const send = (text: string) =>
+      events.sendUserMessage({
+        spaceId: SPACE,
+        threadId,
+        botId: bot.id,
+        userId: USER,
+        blocks: [{ kind: "text", text }],
+        prompt: text,
+        trigger: "user",
+        createRun: false,
+      });
+    await send("Keep this");
+    const cut = await send("Edit this");
+    await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        type: "compaction",
+        sessionId,
+        feedBotId: bot.id,
+        payload: { summary: "Kept and edited.", coveredUpToSeq: EntrySeq.parse(1) },
+      }),
+    );
+    const after = await send("After the summary");
+    const target = { spaceId: SPACE, threadId, botId: bot.id };
+
+    const keptSummary = await rewindThread(prisma, { ...target, messageId: after.messageId });
+    const cutSummary = await rewindThread(prisma, { ...target, messageId: cut.messageId });
+    const firstClear = await clearThread(prisma, target);
+    const secondClear = await clearThread(prisma, target);
+
+    expect(keptSummary).toMatchObject({ compactionReset: false, historyGeneration: 0 });
+    expect(cutSummary).toMatchObject({ compactionReset: true, historyGeneration: 0 });
+    expect(firstClear.historyGeneration).toBe(0);
+    expect(secondClear.historyGeneration).toBe(6);
   });
 
   it("closes the log of a run it cancels with who cancelled it", async () => {

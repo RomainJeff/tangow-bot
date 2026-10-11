@@ -2516,7 +2516,7 @@ describe("clearThread", () => {
       thread: {
         update: vi
           .fn()
-          .mockResolvedValueOnce({ nextMessageSeq: 42, historyCompactionGeneration: 0 })
+          .mockResolvedValueOnce({ sessionId: "session-1" })
           .mockResolvedValue({ nextEventSeq: 1 }),
       },
       run: {
@@ -2559,15 +2559,6 @@ describe("clearThread", () => {
         executionLeaseExpiresAt: null,
       },
     });
-    // Every deleted message counts as compacted, so compaction cannot summarize cleared history.
-    expect(tx.thread.update).toHaveBeenCalledWith({
-      where: { id: "thread-1" },
-      data: {
-        historyCompactedUpToSeq: 41,
-        historyCompactionSummary: null,
-        historyCompactionGeneration: { increment: 1 },
-      },
-    });
     expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 0 }));
   });
 
@@ -2578,7 +2569,7 @@ describe("clearThread", () => {
       thread: {
         update: vi
           .fn()
-          .mockResolvedValueOnce({ nextMessageSeq: 3, historyCompactionGeneration: 0 })
+          .mockResolvedValueOnce({ sessionId: "session-group" })
           .mockResolvedValue({ nextEventSeq: 1 }),
       },
       run: {
@@ -2646,22 +2637,16 @@ describe("clearThread", () => {
 });
 
 describe("rewindThread", () => {
-  function rewindTx(overrides: {
-    message?: { seq: number } | null;
-    historyCompactedUpToSeq?: number | null;
-  }) {
+  function rewindTx(overrides: { message?: { seq: number } | null }) {
     return {
       $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         update: vi
           .fn()
-          .mockResolvedValueOnce({
-            nextMessageSeq: 9,
-            historyCompactedUpToSeq: overrides.historyCompactedUpToSeq ?? null,
-            historyCompactionGeneration: 2,
-          })
+          .mockResolvedValueOnce({ sessionId: "session-1" })
           .mockResolvedValue({ nextEventSeq: 21 }),
       },
+      sessionEntry: { findFirst: vi.fn().mockResolvedValue(null) },
       message: {
         findFirst: vi
           .fn()
@@ -2736,36 +2721,6 @@ describe("rewindThread", () => {
       }),
     );
     expect(publish).toHaveBeenCalledWith("thread:thread-1", JSON.stringify({ cursor: 20 }));
-  });
-
-  it("keeps compaction when the target is newer than the compaction cursor", async () => {
-    const tx = rewindTx({ historyCompactedUpToSeq: 2 });
-
-    await expect(rewindThread(rewindPrisma(tx), input)).resolves.toMatchObject({
-      compactionReset: false,
-    });
-    expect(tx.thread.update).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ historyCompactionGeneration: { increment: 1 } }),
-      }),
-    );
-  });
-
-  it("resets compaction when the target sits under the compaction cursor", async () => {
-    const tx = rewindTx({ historyCompactedUpToSeq: 4 });
-
-    await expect(rewindThread(rewindPrisma(tx), input)).resolves.toMatchObject({
-      compactionReset: true,
-      historyCompactionGeneration: 2,
-    });
-    expect(tx.thread.update).toHaveBeenCalledWith({
-      where: { id: "thread-1" },
-      data: {
-        historyCompactedUpToSeq: null,
-        historyCompactionSummary: null,
-        historyCompactionGeneration: { increment: 1 },
-      },
-    });
   });
 
   it("returns null and changes nothing when the target is not a user message", async () => {

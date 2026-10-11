@@ -836,7 +836,7 @@ describe("thread rewind", () => {
     const rewindThread = vi.fn().mockResolvedValue({
       event: { seq: 20 },
       cancelledRunIds: ["run-1"],
-      historyCompactionGeneration: 3,
+      historyGeneration: 3,
       fromSeq: 4,
       compactionReset: false,
     });

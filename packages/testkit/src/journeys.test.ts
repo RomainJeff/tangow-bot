@@ -475,15 +475,6 @@ describeJourneys("required product journeys", () => {
         trigger: "user",
       },
     });
-    await prisma.thread.update({
-      where: { id: thread.id },
-      data: {
-        historyCompactedUpToSeq: 0,
-        historyCompactionSummary: "summary that must be invalidated",
-        historyCompactionGeneration: 3,
-      },
-    });
-
     await rpc(app, cookie, "threads/clear", { botId: bot.id });
 
     const snap = await rpc<Snap>(app, cookie, "threads/get", { botId: bot.id });
@@ -499,12 +490,6 @@ describeJourneys("required product journeys", () => {
       },
       { type: "thread.cleared" },
     ]);
-    // The deleted messages all count as compacted, so compaction cannot summarize them and
-    // recall cannot treat the fresh conversation as having uncompacted history.
-    const clearedThread = await prisma.thread.findUniqueOrThrow({ where: { id: thread.id } });
-    expect(clearedThread.historyCompactedUpToSeq).toBe(clearedThread.nextMessageSeq - 1);
-    expect(clearedThread.historyCompactionSummary).toBeNull();
-    expect(clearedThread.historyCompactionGeneration).toBe(4);
     expect(await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({
       status: "cancelled",
     });

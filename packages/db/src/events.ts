@@ -39,6 +39,7 @@ import {
   appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
+  historyGeneration,
 } from "./sessions.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -88,7 +89,8 @@ export interface ClearThreadInput {
 export interface ClearThreadResult {
   event: ProductEvent;
   cancelledRunIds: string[];
-  historyCompactionGeneration: number;
+  /** The history generation the clear ended, whose compacted summaries the caller purges. */
+  historyGeneration: number;
 }
 
 export interface RewindThreadInput extends ClearThreadInput {
@@ -99,7 +101,7 @@ export interface RewindThreadInput extends ClearThreadInput {
 export interface RewindThreadResult {
   event: ProductEvent;
   cancelledRunIds: string[];
-  historyCompactionGeneration: number;
+  historyGeneration: number;
   fromSeq: number;
   /** Compaction covered the rewound range and was rolled back; derived memory is now stale. */
   compactionReset: boolean;
@@ -341,9 +343,6 @@ interface TruncateThreadInput extends ClearThreadInput {
 }
 
 interface TruncateThreadResult {
-  nextMessageSeq: number;
-  historyCompactedUpToSeq: number | null;
-  historyCompactionGeneration: number;
   sessionId: string;
   cancelledRunIds: string[];
 }
@@ -364,12 +363,7 @@ async function truncateThreadInTransaction(
       ...(input.groupId ? { groupId: input.groupId } : { botId: input.botId }),
     },
     data: { unread: false },
-    select: {
-      nextMessageSeq: true,
-      historyCompactedUpToSeq: true,
-      historyCompactionGeneration: true,
-      sessionId: true,
-    },
+    select: { sessionId: true },
   });
   const activeRuns = await tx.run.findMany({
     where: {
@@ -421,19 +415,7 @@ export async function clearThread(
       fromSeq: 0,
       fromEventSeq: 0,
     });
-    await tx.thread.update({
-      where: { id: input.threadId },
-      data: {
-        // nextMessageSeq is not reset, so mark every deleted message as already compacted.
-        // Leaving the cursor behind would let compaction re-summarize deleted history (or, reset
-        // to null, immediately re-fire on the fresh conversation).
-        ...(truncated.nextMessageSeq > 0
-          ? { historyCompactedUpToSeq: truncated.nextMessageSeq - 1 }
-          : {}),
-        historyCompactionSummary: null,
-        historyCompactionGeneration: { increment: 1 },
-      },
-    });
+    const generation = await historyGeneration(tx, truncated.sessionId);
     await appendSessionEntryInTransaction(tx, {
       type: "clear",
       sessionId: truncated.sessionId as SessionId,
@@ -445,18 +427,10 @@ export async function clearThread(
       type: "thread.cleared",
       payload: {},
     });
-    return {
-      event,
-      cancelledRunIds: truncated.cancelledRunIds,
-      historyCompactionGeneration: truncated.historyCompactionGeneration,
-    };
+    return { event, cancelledRunIds: truncated.cancelledRunIds, historyGeneration: generation };
   });
   await notifyRealtime(realtime, committed.event.threadId, committed.event.seq);
-  return {
-    event: mapProductEvent(committed.event),
-    cancelledRunIds: committed.cancelledRunIds,
-    historyCompactionGeneration: committed.historyCompactionGeneration,
-  };
+  return { ...committed, event: mapProductEvent(committed.event) };
 }
 
 /**
@@ -490,19 +464,16 @@ export async function rewindThread(
       // rather than guess a cut point and drop the wrong range.
       fromEventSeq: created?.seq ?? Number.MAX_SAFE_INTEGER,
     });
-    // Compaction covered the rewound messages, so its summary now describes deleted history.
-    const compactionReset =
-      truncated.historyCompactedUpToSeq !== null && target.seq <= truncated.historyCompactedUpToSeq;
-    if (compactionReset) {
-      await tx.thread.update({
-        where: { id: input.threadId },
-        data: {
-          historyCompactedUpToSeq: null,
-          historyCompactionSummary: null,
-          historyCompactionGeneration: { increment: 1 },
-        },
-      });
-    }
+    const cut = await tx.sessionEntry.findFirst({
+      where: { id: input.messageId, sessionId: truncated.sessionId },
+      select: { seq: true },
+    });
+    const compactionReset = Boolean(
+      await tx.sessionEntry.findFirst({
+        where: { sessionId: truncated.sessionId, type: "compaction", seq: { gt: cut?.seq ?? -1 } },
+        select: { id: true },
+      }),
+    );
     await appendRewindInTransaction(tx, {
       sessionId: truncated.sessionId as SessionId,
       messageId: input.messageId,
@@ -516,7 +487,7 @@ export async function rewindThread(
     return {
       event,
       cancelledRunIds: truncated.cancelledRunIds,
-      historyCompactionGeneration: truncated.historyCompactionGeneration,
+      historyGeneration: await historyGeneration(tx, truncated.sessionId),
       fromSeq: target.seq,
       compactionReset,
     };
