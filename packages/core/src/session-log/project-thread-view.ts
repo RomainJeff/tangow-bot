@@ -107,16 +107,14 @@ function onChain(entries: readonly SessionEntry[]): SessionEntry[] {
   let kept: SessionEntry[] = [];
   for (const entry of byId(entries)) {
     if (entry.type === "rewind") {
-      // A parent the server held back (a hidden peer run's entry) still has the cut turn as a child.
-      const parent = kept.find((candidate) => candidate.id === entry.parentId);
-      const cut = parent
-        ? undefined
-        : kept.find((candidate) => candidate.parentId === entry.parentId);
-      kept = parent
-        ? kept.filter((candidate) => candidate.seq <= parent.seq)
-        : cut
-          ? kept.filter((candidate) => candidate.seq < cut.seq)
-          : [];
+      // A parent the server held back (a hidden peer run's entry) is found through its held child,
+      // the first entry of the cut turn. With no held child, the page is already the chain.
+      const parentAt = kept.findIndex((candidate) => candidate.id === entry.parentId);
+      const cutAt =
+        parentAt === -1
+          ? kept.findIndex((candidate) => candidate.parentId === entry.parentId)
+          : parentAt + 1;
+      if (cutAt !== -1) kept = kept.slice(0, cutAt);
     } else if (entry.type === "clear") {
       kept = [];
     }

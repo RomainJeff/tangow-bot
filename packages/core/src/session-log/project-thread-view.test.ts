@@ -268,20 +268,36 @@ describe("projectThreadView on a streamed reply", () => {
 });
 
 describe("projectThreadView rewind", () => {
-  it("cuts at the turn after a parent the server held back, keeping what came before", () => {
-    const [one, , two, rewind, edited] = linkEntries("hid", [
+  const peer = { botId: "bot_bob", runId: "run_peer" };
+  const peerFinished = {
+    ...peer,
+    type: "run.finished",
+    payload: { status: "completed", usage: { inputTokens: 1, outputTokens: 1 } },
+  };
+
+  it("cuts the held turn after a parent the server held back, keeping what came before", () => {
+    const [one, , two, , reply, rewind, edited] = linkEntries("hid", [
       { type: "user.message", payload: { blocks: text("One"), source: "app" } },
-      {
-        ...ada,
-        type: "run.finished",
-        payload: { status: "completed", usage: { inputTokens: 1, outputTokens: 1 } },
-      },
+      peerFinished,
       { type: "user.message", payload: { blocks: text("Two"), source: "app" } },
+      { ...peer, type: "assistant.text", payload: { blocks: text("Peer aside") } },
+      { ...ada, type: "assistant.text", payload: { blocks: text("About two") } },
       { type: "rewind", parentId: "hid-1", payload: {} },
       { type: "user.message", payload: { blocks: text("Two edited"), source: "app" } },
     ]);
-    const rows = projectThreadView([one!, two!, rewind!, edited!]).rows;
-    expect(rows.map((row) => row.item.id)).toEqual(["hid-0", "hid-3", "hid-4"]);
+    const rows = projectThreadView([one!, two!, reply!, rewind!, edited!]).rows;
+    expect(rows.map((row) => row.item.id)).toEqual(["hid-0", "hid-5", "hid-6"]);
+  });
+
+  it("keeps the turn before a rewind on a page read along the chain, its parent held back", () => {
+    const [one, , rewind, edited] = linkEntries("chn", [
+      { type: "user.message", payload: { blocks: text("One"), source: "app" } },
+      peerFinished,
+      { type: "rewind", payload: {} },
+      { type: "user.message", payload: { blocks: text("Two edited"), source: "app" } },
+    ]);
+    const rows = projectThreadView([one!, rewind!, edited!]).rows;
+    expect(rows.map((row) => row.item.id)).toEqual(["chn-0", "chn-2", "chn-3"]);
   });
 });
 
