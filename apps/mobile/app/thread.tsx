@@ -26,6 +26,7 @@ import {
   abortableDelay,
   appendedEntries,
   attachmentsForThread,
+  botWordsOf,
   buildComposerMentionOptions,
   type ComposerMention,
   canEditSpawnBotCard,
@@ -335,10 +336,6 @@ function isAsideItem(item: ThreadItem, showSteps: boolean): boolean {
     default:
       return false;
   }
-}
-
-function isBotWords(entry: SessionEntry): boolean {
-  return entry.type === "assistant.text" || entry.type === "bot.text";
 }
 
 function isWorkingStatus(status: string | undefined): boolean {
@@ -1199,7 +1196,7 @@ function Thread() {
               if (event.type === "bot.updated") {
                 void refreshMentionBots();
               }
-              if (appended.some(isBotWords)) {
+              if (botWordsOf(event).length > 0) {
                 readVisibleTarget.current = null;
                 markReadIfVisible();
               }

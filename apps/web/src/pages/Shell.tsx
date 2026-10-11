@@ -36,6 +36,8 @@ import type {
 import {
   appendedEntries,
   attachmentsForThread,
+  blocksOfBotWords,
+  botWordsOf,
   buildComposerMentionOptions,
   drawsNothing,
   groupBotsForSidebar,
@@ -113,7 +115,7 @@ import {
   userHoldsComputerControl,
 } from "../lib/thread-events";
 import type { CardAnswerTarget, MessageItem } from "../lib/thread-items";
-import { botIdOf, botWordsOf } from "../lib/thread-items";
+import { botIdOf } from "../lib/thread-items";
 import { transcriptCanSnapAfterFrame, transcriptIsNearEnd } from "../lib/transcript-scroll";
 import { speaker } from "../lib/tts";
 import { useMediaQuery } from "../lib/use-media-query";
@@ -1153,10 +1155,8 @@ export function ShellPage() {
         const words = botWordsOf(event);
         if (words.length > 0) {
           if (
-            words.some(
-              (entry) =>
-                (entry.type === "assistant.text" || entry.type === "bot.text") &&
-                entry.payload.blocks.some((block) => block.kind === "child_bot"),
+            words.some((entry) =>
+              blocksOfBotWords(entry).some((block) => block.kind === "child_bot"),
             )
           ) {
             void refreshBots().catch(() => undefined);

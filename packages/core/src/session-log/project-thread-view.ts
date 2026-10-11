@@ -3,6 +3,7 @@ import type {
   MessageBlock,
   ProductEvent,
   SessionEntry,
+  SessionEntryOf,
   SessionEntryType,
   ThreadItem,
 } from "@rakazo/contracts";
@@ -227,6 +228,41 @@ export function appendedEntries(event: ProductEvent): readonly SessionEntry[] {
     appendedOf.set(event, entries);
   }
   return entries;
+}
+
+const BOT_WORDS_TYPES = [
+  "assistant.text",
+  "bot.text",
+  "assistant.ask",
+  "assistant.choice",
+  "effect.requested",
+] as const;
+type BotWords = SessionEntryOf<(typeof BOT_WORDS_TYPES)[number]>;
+const BOT_WORDS: ReadonlySet<string> = new Set(BOT_WORDS_TYPES);
+
+/** What a bot said to the person in this event: a reply, a question, or a card to act on. */
+export function botWordsOf(event: ProductEvent): BotWords[] {
+  return appendedEntries(event).filter((entry): entry is BotWords => BOT_WORDS.has(entry.type));
+}
+
+export function blocksOfBotWords(entry: BotWords): readonly MessageBlock[] {
+  return entry.type === "assistant.text" || entry.type === "bot.text" ? entry.payload.blocks : [];
+}
+
+export function textOfBotWords(entry: BotWords): string {
+  switch (entry.type) {
+    case "assistant.ask":
+      return entry.payload.block.text;
+    case "assistant.choice":
+      return entry.payload.block.question;
+    case "effect.requested":
+      return entry.payload.card?.text ?? "";
+    default:
+      return blocksOfBotWords(entry)
+        .map((block) => (block.kind === "text" ? block.text : ""))
+        .filter(Boolean)
+        .join("\n");
+  }
 }
 
 export function reduceProgressLayer(layer: ProgressLayer, event: ProductEvent): ProgressLayer {

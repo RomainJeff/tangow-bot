@@ -1,7 +1,6 @@
 import type { ProductEvent } from "@rakazo/contracts";
-import { notificationBody } from "@rakazo/core";
+import { botWordsOf, notificationBody, textOfBotWords } from "@rakazo/core";
 import { i18n } from "./i18n";
-import { botWordsOf, textOfBotWords } from "./thread-items";
 
 export type BrowserNotificationPermission = "default" | "denied" | "granted";
 
