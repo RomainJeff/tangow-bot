@@ -2071,7 +2071,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                         outcome.status === "completed"
                           ? { status: "completed" }
                           : { status: "failed", error: result },
-                        outcome.usage,
+                        { usage: outcome.usage },
                       );
                     }
                     await deps.sessionLog.append(tx, {

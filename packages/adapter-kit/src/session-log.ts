@@ -23,6 +23,13 @@ export type NewSession =
       parentSessionId: SessionId;
       /** The `tool.call` entry in the parent session that launched the subagent. */
       parentEntryId: EntryId;
+    }
+  | {
+      kind: "routine";
+      id: SessionId;
+      spaceId: string;
+      /** The thread's main session, which the routine run reports to. */
+      parentSessionId: SessionId;
     };
 
 /** The session's entry with the highest seq, as stored; `nextSessionEntry` validates what it becomes. */
