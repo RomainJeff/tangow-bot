@@ -478,6 +478,7 @@ export async function threadSnapshot(
             where: {
               botId: target.botId,
               threadId: target.threadId,
+              parentRunId: null,
               // A busy peer run drives the working indicator; a failed one stays hidden, since
               // that failure belongs to the bot that ordered the work and would otherwise bury a
               // user-visible failure in the composer error strip.
@@ -504,6 +505,7 @@ export async function threadSnapshot(
                 where: {
                   botId: target.botId,
                   threadId: target.threadId,
+                  parentRunId: null,
                   // Peer bot_message failures must not bury a user-visible failure.
                   trigger: { not: "bot_message" },
                   status: { in: ["failed", "completed", "cancelled"] },
@@ -562,6 +564,7 @@ export async function threadSnapshot(
       tx.run.findMany({
         where: {
           threadId: target.threadId,
+          parentRunId: null,
           status: { in: [...ACTIVE_RUN_STATUSES] },
         },
         orderBy: { createdAt: "desc" },
@@ -571,6 +574,7 @@ export async function threadSnapshot(
       tx.run.findMany({
         where: {
           threadId: target.threadId,
+          parentRunId: null,
           trigger: { not: "bot_message" },
           status: { in: ["failed", "completed", "cancelled"] },
         },
@@ -788,6 +792,7 @@ export async function sendThreadMessage(
           where: {
             threadId: target.threadId,
             botId: target.botId,
+            parentRunId: null,
             status: { in: [...ACTIVE_RUN_STATUSES] },
           },
           select: { id: true, taskId: true, status: true },
@@ -991,6 +996,7 @@ export async function sendThreadMessage(
         where: {
           threadId: target.threadId,
           botId: { in: targetBotIds },
+          parentRunId: null,
           status: { in: [...ACTIVE_RUN_STATUSES] },
         },
         select: { id: true, taskId: true, botId: true, status: true },

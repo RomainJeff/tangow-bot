@@ -27,6 +27,7 @@ import type {
   AgentToolCompletion,
   AgentToolExecutionResult,
   ConnectorTool,
+  SubagentLog,
   ToolCallTrace,
 } from "@rakazo/adapter-kit";
 import type { AskQuestion } from "@rakazo/contracts";
@@ -1290,6 +1291,12 @@ function toAgentTool(tool: ConnectorTool, host: ToolHost, exposedName: string): 
   };
 }
 
+type SubagentOutcome = { status: "completed" | "failed"; result: string; toolResult: string };
+
+function subagentFailed(message: string): SubagentOutcome {
+  return { status: "failed", result: message, toolResult: `Subagent failed: ${message}` };
+}
+
 async function executeSubagent(host: ToolHost, executionId: string, args: Record<string, unknown>) {
   if (host.depth > 0) return "Subagents cannot nest further.";
   await host.subagentGate.acquire();
@@ -1299,16 +1306,65 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
       .trim()
       .slice(0, 80) || "helper";
   const task = String(args.task ?? "").trim();
-  const extra = args.instructions ? String(args.instructions).trim() : "";
-  host.queue.push({
-    type: "subagent",
-    agentId,
-    name,
-    task,
-    status: "running",
-    progress: "starting…",
-  });
+  try {
+    host.queue.push({
+      type: "subagent",
+      agentId,
+      name,
+      task,
+      status: "running",
+      progress: "starting…",
+    });
+    const requestedProvider = String(args.model_provider ?? "").trim();
+    const requestedModelId = String(args.model_id ?? "").trim();
+    const usage = { inputTokens: 0, outputTokens: 0 };
+    let log: SubagentLog | undefined;
+    let outcome: SubagentOutcome;
+    try {
+      log = await host.request.startSubagent?.({
+        callId: executionId,
+        name,
+        task,
+        args,
+        model:
+          requestedProvider && requestedModelId
+            ? { provider: requestedProvider, id: requestedModelId }
+            : { provider: host.request.model.provider, id: host.request.model.id },
+      });
+      outcome = await runSubagent(host, { agentId, name, task, args, log, usage });
+    } catch (error) {
+      outcome = subagentFailed(
+        sanitizeError(error instanceof Error ? error.message : String(error)),
+      );
+    }
+    host.queue.push({
+      type: "subagent",
+      agentId,
+      name,
+      task,
+      status: outcome.status,
+      result: outcome.result,
+    });
+    await log?.finish({ status: outcome.status, result: outcome.toolResult, usage });
+    return outcome.toolResult;
+  } finally {
+    host.subagentGate.release();
+  }
+}
 
+async function runSubagent(
+  host: ToolHost,
+  call: {
+    agentId: string;
+    name: string;
+    task: string;
+    args: Record<string, unknown>;
+    log: SubagentLog | undefined;
+    usage: { inputTokens: number; outputTokens: number };
+  },
+): Promise<SubagentOutcome> {
+  const { agentId, name, task, args, log, usage } = call;
+  const extra = args.instructions ? String(args.instructions).trim() : "";
   const requestedProvider = String(args.model_provider ?? "").trim();
   const requestedModelId = String(args.model_id ?? "").trim();
   let requestModel = host.request.model;
@@ -1323,18 +1379,12 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
       requestModel = await host.request.resolveModel(requestedProvider, requestedModelId);
     }
   } catch (error) {
-    const message = sanitizeError(error instanceof Error ? error.message : String(error));
-    host.queue.push({ type: "subagent", agentId, name, task, status: "failed", result: message });
-    host.subagentGate.release();
-    return `Subagent failed: ${message}`;
+    return subagentFailed(sanitizeError(error instanceof Error ? error.message : String(error)));
   }
 
   const selectedModel = resolveRuntimeModel(requestModel);
   if (!selectedModel.model) {
-    const message = `Unknown model ${selectedModel.provider}/${selectedModel.modelId}`;
-    host.queue.push({ type: "subagent", agentId, name, task, status: "failed", result: message });
-    host.subagentGate.release();
-    return `Subagent failed: ${message}`;
+    return subagentFailed(`Unknown model ${selectedModel.provider}/${selectedModel.modelId}`);
   }
   const subagentModel = modelForCompletion(selectedModel.model, requestModel.maxTokens);
 
@@ -1349,6 +1399,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     depth: 1,
     // Nested tool calls have no span of their own in the run trace.
     toolTrace: undefined,
+    request: log ? { ...host.request, executeTool: log.executeTool } : host.request,
   };
   const nested = new Agent({
     sessionId: conversationSessionId(host.request.threadId, host.request.botId, agentId),
@@ -1414,10 +1465,14 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     if (event.type === "message_end" && event.message.role === "assistant") {
       const text = assistantText(event.message);
       if (text && !streamed) streamed = text;
+      if (text) log?.text(text).catch(() => undefined);
       if ("usage" in event.message && event.message.usage) {
+        const billed = billedPromptTokens(event.message.usage);
+        usage.inputTokens += billed.inputTokens;
+        usage.outputTokens += billed.outputTokens;
         host.queue.push({
           type: "usage",
-          ...billedPromptTokens(event.message.usage),
+          ...billed,
           ...providerCacheTokens(event.message.usage),
           provider: subagentModel.provider,
           model: subagentModel.id,
@@ -1427,17 +1482,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
   });
 
   try {
-    if (host.signal.aborted) {
-      host.queue.push({
-        type: "subagent",
-        agentId,
-        name,
-        task,
-        status: "failed",
-        result: "stopped",
-      });
-      return "stopped";
-    }
+    if (host.signal.aborted) return { status: "failed", result: "stopped", toolResult: "stopped" };
     const onAbort = () => nested.abort();
     host.signal.addEventListener("abort", onAbort);
     try {
@@ -1457,9 +1502,7 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
     const budgetExceeded = host.toolCallBudget.exceeded;
     const error = nested.state.errorMessage;
     if (error && !budgetExceeded) {
-      const message = sanitizeProviderError(subagentModel.provider, error);
-      host.queue.push({ type: "subagent", agentId, name, task, status: "failed", result: message });
-      return `Subagent failed: ${message}`;
+      return subagentFailed(sanitizeProviderError(subagentModel.provider, error));
     }
     const budgetMessage = budgetExceeded
       ? toolCallBudgetExceededMessage(host.toolCallBudget.limit)
@@ -1469,22 +1512,11 @@ async function executeSubagent(host: ToolHost, executionId: string, args: Record
         ? `${streamed.trim()}\n\n${budgetMessage}`
         : budgetMessage || streamed || assistantText(nested.state.messages.at(-1)) || "done.";
     const clipped = clipToolResultText(result, 12_000);
-    host.queue.push({
-      type: "subagent",
-      agentId,
-      name,
-      task,
-      status: "completed",
-      result: clipped,
-    });
-    return clipped;
+    return { status: "completed", result: clipped, toolResult: clipped };
   } catch (error) {
-    const message = sanitizeError(error instanceof Error ? error.message : String(error));
-    host.queue.push({ type: "subagent", agentId, name, task, status: "failed", result: message });
-    return `Subagent failed: ${message}`;
+    return subagentFailed(sanitizeError(error instanceof Error ? error.message : String(error)));
   } finally {
     host.nestedAgents.delete(nested);
-    host.subagentGate.release();
   }
 }
 

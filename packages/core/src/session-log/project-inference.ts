@@ -186,6 +186,7 @@ function triggerContext(trigger: SessionRunTrigger): string | undefined {
     case "handoff":
     case "bot_message":
     case "direct":
+    case "subagent":
       return undefined;
   }
 }

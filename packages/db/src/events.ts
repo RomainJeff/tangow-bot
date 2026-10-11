@@ -264,6 +264,7 @@ export interface SendUserMessageResult {
  * one whose reply never reaches the conversation.
  */
 export const conversationRunFilter = {
+  parentRunId: null,
   NOT: {
     routineId: { not: null },
     OR: [{ trigger: "webhook" }, { trigger: "routine", bot: { parentBotId: { not: null } } }],
@@ -1808,6 +1809,11 @@ async function finalizeRunOnce(
         });
       }
     }
+    const strandedHelpers = await tx.run.findMany({
+      where: { parentRunId: input.runId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      select: { id: true, taskId: true },
+    });
+    await cancelRunsInTransaction(tx, strandedHelpers, now);
     await appendRunFinishedInTransaction(
       tx,
       input.runId,

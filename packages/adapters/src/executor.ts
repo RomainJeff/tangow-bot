@@ -20,6 +20,8 @@ import type {
   SemanticMemoryProvider,
   SessionEntryDraft,
   SessionLog,
+  SubagentCall,
+  SubagentLog,
   ToolCallTrace,
   WebProvider,
 } from "@rakazo/adapter-kit";
@@ -134,6 +136,7 @@ import {
   activeBotNames,
   appendEventInTransaction,
   appendRunBlocksInTransaction,
+  appendRunFinishedInTransaction,
   createSpaceForMember,
   createThreadMessageInTransaction,
   effectiveMemoryScope,
@@ -146,6 +149,7 @@ import {
   Prisma,
   type PrismaClient,
   parseComputerMode,
+  RunHistoryWriteError,
   SpaceLimitError,
   type ThreadEvents,
 } from "@rakazo/db";
@@ -1969,6 +1973,122 @@ export function createRunExecutor(deps: ExecutorDeps) {
         };
         const writeRunEntry = (entry: ToolLogEntry) => logEntry({ ...runLog, ...entry });
         const effort = thinkingLevel ?? resolved.thinkingLevel ?? null;
+        const startSubagent = async (call: SubagentCall): Promise<SubagentLog> => {
+          await afterToolAnnounced(call.callId);
+          const callEntryId = EntryId.parse(randomUUID());
+          const helper = await deps.prisma.$transaction(async (tx) => {
+            await deps.sessionLog.append(tx, {
+              ...runLog,
+              id: callEntryId,
+              ...toolCall(call.callId, "run_subagent", call.args),
+            });
+            const sessionId = await deps.sessionLog.createSession(tx, {
+              kind: "subagent",
+              id: SessionId.parse(randomUUID()),
+              spaceId: run.spaceId,
+              parentSessionId: runLog.sessionId,
+              parentEntryId: callEntryId,
+            });
+            const task = await tx.task.create({
+              data: {
+                spaceId: run.spaceId,
+                botId: bot.id,
+                threadId: thread.id,
+                userId: run.userId,
+                prompt: call.task,
+                status: "running",
+              },
+              select: { id: true },
+            });
+            const helperRun = await tx.run.create({
+              data: {
+                spaceId: run.spaceId,
+                botId: bot.id,
+                threadId: thread.id,
+                taskId: task.id,
+                userId: run.userId,
+                status: "running",
+                trigger: "subagent",
+                sessionId,
+                parentRunId: runId,
+                modelProvider: call.model.provider,
+                modelId: call.model.id,
+                startedAt: new Date(),
+              },
+              select: { id: true },
+            });
+            await deps.sessionLog.append(tx, {
+              type: "run.started",
+              sessionId,
+              botId: bot.id,
+              runId: helperRun.id,
+              payload: {
+                trigger: { kind: "subagent", entryId: callEntryId },
+                model: call.model,
+                effort,
+              },
+            });
+            return { log: { sessionId, runId: helperRun.id, botId: bot.id }, taskId: task.id };
+          });
+          const inOrder = serialWrites();
+          const writeHelperEntry = (entry: ToolLogEntry) =>
+            inOrder(() => logEntry({ ...helper.log, ...entry }));
+          return {
+            executeTool: (name, args, executionId, _route, trace) =>
+              runLoggedTool(writeHelperEntry, name, args, executionId, trace),
+            text: (text) =>
+              inOrder(() =>
+                logEntry({
+                  ...helper.log,
+                  type: "assistant.text",
+                  payload: { blocks: [{ kind: "text", text: redactSecrets(text, runSecrets) }] },
+                }),
+              ).then(() => undefined),
+            finish: (outcome) =>
+              inOrder(async () => {
+                const result = redactSecrets(outcome.result, runSecrets);
+                try {
+                  await deps.prisma.$transaction(async (tx) => {
+                    const closed = await tx.run.updateMany({
+                      where: { id: helper.log.runId, status: "running" },
+                      data: { status: outcome.status, completedAt: new Date() },
+                    });
+                    if (closed.count === 1) {
+                      await tx.task.update({
+                        where: { id: helper.taskId },
+                        data: { status: outcome.status },
+                        select: { id: true },
+                      });
+                      await appendRunFinishedInTransaction(
+                        tx,
+                        helper.log.runId,
+                        outcome.status === "completed"
+                          ? { status: "completed" }
+                          : { status: "failed", error: result },
+                        outcome.usage,
+                      );
+                    }
+                    await deps.sessionLog.append(tx, {
+                      ...runLog,
+                      type: "subagent",
+                      payload: {
+                        callId: call.callId,
+                        sessionId: helper.log.sessionId,
+                        name: call.name,
+                        model: call.model,
+                        task: redactSecrets(call.task, runSecrets),
+                        status: outcome.status,
+                        result,
+                        usage: outcome.usage,
+                      },
+                    });
+                  });
+                } catch (error) {
+                  if (!(error instanceof RunHistoryWriteError)) throw error;
+                }
+              }),
+          };
+        };
         let pendingProgress = "";
         let lastProgressAt = 0;
         let hasStreamedText = false;
@@ -4314,6 +4434,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                     await afterToolAnnounced(executionId);
                     return runLoggedTool(writeRunEntry, name, args, executionId, trace);
                   },
+              startSubagent: scripted ? undefined : startSubagent,
               resolveModel: scripted
                 ? undefined
                 : (provider, modelId) =>
@@ -5531,6 +5652,21 @@ function deferred() {
     resolve = settle;
   });
   return { promise, resolve };
+}
+
+function serialWrites() {
+  let tail: Promise<unknown> = Promise.resolve();
+  let failure: { error: unknown } | undefined;
+  return <T>(write: () => Promise<T>): Promise<T> => {
+    const next = tail.then(() => {
+      if (failure) throw failure.error;
+      return write();
+    });
+    tail = next.catch((error: unknown) => {
+      failure ??= { error };
+    });
+    return next;
+  };
 }
 
 async function openRunLog(
