@@ -12,18 +12,53 @@ import {
 import { i18n } from "./i18n.js";
 
 function appended(type: "assistant.text" | "user.message", text: string) {
-  const entry = SessionEntrySchema.parse({
-    id: "entry-1",
-    sessionId: "session-1",
-    seq: 3,
-    parentId: "parent",
-    ts: "2026-10-11T08:00:00.000Z",
-    ...(type === "assistant.text"
-      ? { botId: "bot-1", runId: "run-1", type, payload: { blocks: [{ kind: "text", text }] } }
-      : { type, payload: { blocks: [{ kind: "text", text }], source: "app" } }),
-  });
-  return { entries: [entry] };
+  return entryPayload(
+    type === "assistant.text"
+      ? { type, payload: { blocks: [{ kind: "text", text }] } }
+      : { type, payload: { blocks: [{ kind: "text", text }], source: "app" } },
+  );
 }
+
+function entryPayload(entry: { type: string; payload: unknown }) {
+  const bot = entry.type === "user.message" ? {} : { botId: "bot-1", runId: "run-1" };
+  return {
+    entries: [
+      SessionEntrySchema.parse({
+        id: "entry-1",
+        sessionId: "session-1",
+        seq: 3,
+        parentId: "parent",
+        ts: "2026-10-11T08:00:00.000Z",
+        ...bot,
+        ...entry,
+      }),
+    ],
+  };
+}
+
+const ask = entryPayload({
+  type: "assistant.ask",
+  payload: { block: { kind: "ask", text: "Which region first?" } },
+});
+const choice = entryPayload({
+  type: "assistant.choice",
+  payload: {
+    block: {
+      kind: "choice",
+      question: "Pick a city",
+      options: [{ id: "berlin", letter: "A", label: "Berlin" }],
+    },
+  },
+});
+const approval = entryPayload({
+  type: "effect.requested",
+  payload: {
+    effectId: "effect-1",
+    effectKind: "connector",
+    proposal: {},
+    card: { kind: "ask", text: "Write this note to the CRM?" },
+  },
+});
 
 function event(overrides: Partial<ProductEvent> = {}): ProductEvent {
   return {
@@ -91,6 +126,21 @@ describe("browser notifications", () => {
     expect(shouldNotifyBrowser(event(), context({ notifiedEventIds: new Set(["event-1"]) }))).toBe(
       false,
     );
+  });
+
+  it("notifies when the bot asks, offers a choice or needs an approval, with its question", () => {
+    expect(
+      [ask, choice, approval].map((payload) => shouldNotifyBrowser(event({ payload }), context())),
+    ).toEqual([true, true, true]);
+    expect(
+      [ask, choice, approval].map((payload) =>
+        browserNotificationMessage(event({ payload }), "Chief"),
+      ),
+    ).toEqual([
+      { title: "Chief", body: "Which region first?" },
+      { title: "Chief", body: "Pick a city" },
+      { title: "Chief", body: "Write this note to the CRM?" },
+    ]);
   });
 
   it("shows the bot message's words without its markdown, cut for a notification", () => {

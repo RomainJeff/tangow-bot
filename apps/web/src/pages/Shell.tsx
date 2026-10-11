@@ -1152,7 +1152,11 @@ export function ShellPage() {
         const words = botWordsOf(event);
         if (words.length > 0) {
           if (
-            words.some((entry) => entry.payload.blocks.some((block) => block.kind === "child_bot"))
+            words.some(
+              (entry) =>
+                (entry.type === "assistant.text" || entry.type === "bot.text") &&
+                entry.payload.blocks.some((block) => block.kind === "child_bot"),
+            )
           ) {
             void refreshBots().catch(() => undefined);
           }

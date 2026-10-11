@@ -1,7 +1,7 @@
 import type { ProductEvent } from "@rakazo/contracts";
 import { notificationBody } from "@rakazo/core";
 import { i18n } from "./i18n";
-import { botWordsOf } from "./thread-items";
+import { botWordsOf, textOfBotWords } from "./thread-items";
 
 export type BrowserNotificationPermission = "default" | "denied" | "granted";
 
@@ -71,11 +71,7 @@ export function browserNotificationMessage(
   const name = botName.trim() || i18n._({ id: "Bot", message: "Bot" });
   const words = botWordsOf(event);
   if (words.length > 0) {
-    const body = words
-      .flatMap((entry) => entry.payload.blocks)
-      .map((block) => (block.kind === "text" ? block.text : ""))
-      .filter(Boolean)
-      .join("\n");
+    const body = words.map(textOfBotWords).filter(Boolean).join("\n");
     return {
       title: name,
       body: notificationBody(body) || i18n._({ id: "Message", message: "Message" }),
