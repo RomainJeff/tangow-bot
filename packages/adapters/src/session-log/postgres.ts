@@ -94,10 +94,10 @@ export class PostgresSessionLog implements SessionLog<Prisma.TransactionClient> 
         AND answer.payload -> 'replyTo' ->> 'entryId' = ask.id
       WHERE ask.type IN ('assistant.ask', 'assistant.choice')
       UNION ALL
-      SELECT state.* FROM run card
-      JOIN session_entries state ON state."sessionId" = card."sessionId"
-        AND state.type IN (${Prisma.join(CARD_STATE_TYPES)}) AND state.seq > card.seq
-        AND state.payload ->> 'target' = card.id
+      SELECT state.* FROM (SELECT "sessionId", min(seq) AS seq FROM run GROUP BY "sessionId") start
+      JOIN session_entries state ON state."sessionId" = start."sessionId" AND state.seq > start.seq
+      WHERE state.type IN (${Prisma.join(CARD_STATE_TYPES)})
+        AND state.payload ->> 'target' IN (SELECT id FROM run)
       ORDER BY "createdAt", seq`;
     return rows.map(sessionEntryFromRow);
   }
