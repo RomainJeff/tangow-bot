@@ -1,5 +1,12 @@
 import { RPCHandler } from "@orpc/server/fetch";
-import type { Actor, BotActivityInput, BotActivityOutput, RunRecap } from "@rakazo/contracts";
+import type {
+  Actor,
+  BotActivityInput,
+  BotActivityOutput,
+  RunRecap,
+  SessionEntry,
+} from "@rakazo/contracts";
+import { SessionEntrySchema } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import type { RouterDeps } from "./router.js";
@@ -45,7 +52,7 @@ function setup({
   finished = [] as unknown[],
   routines = [] as unknown[],
   run = null as unknown,
-  messages = [] as unknown[],
+  entries = [] as SessionEntry[],
 } = {}) {
   const prisma = {
     bot: {
@@ -60,10 +67,13 @@ function setup({
       findFirst: vi.fn(async (_args: unknown) => run),
     },
     routine: { findMany: vi.fn(async (_args: unknown) => routines) },
-    message: { findMany: vi.fn(async (_args: unknown) => messages) },
   };
+  const sessionLog = { readRun: vi.fn(async (_runId: string) => entries) };
   const handler = new RPCHandler(
-    createRouter({ prisma: prisma as unknown as PrismaClient } as unknown as RouterDeps),
+    createRouter({
+      prisma: prisma as unknown as PrismaClient,
+      sessionLog,
+    } as unknown as RouterDeps),
   );
   const call = async <T>(path: string, input: unknown) => {
     const { response } = await handler.handle(
@@ -78,8 +88,10 @@ function setup({
   };
   return {
     prisma,
+    sessionLog,
     activity: (input: BotActivityInput) => call<BotActivityOutput>("bots/activity", input),
     recap: (runId: string) => call<RunRecap>("runs/recap", { runId }),
+    entries: (runId: string) => call<{ entries: SessionEntry[] }>("runs/entries", { runId }),
   };
 }
 
@@ -221,43 +233,67 @@ describe("bots.activity", () => {
   });
 });
 
+const runEntry = (seq: number, type: string, payload: object): SessionEntry =>
+  SessionEntrySchema.parse({
+    id: `entry-${seq}`,
+    sessionId: "session-routine",
+    seq,
+    parentId: seq === 0 ? null : `entry-${seq - 1}`,
+    ts: at(9 + seq).toISOString(),
+    botId: "bot-1",
+    runId: "run-1",
+    type,
+    payload,
+  });
+
+const ranDigest = [
+  runEntry(0, "run.started", {
+    trigger: { kind: "direct" },
+    model: { provider: "scripted", id: "scripted" },
+    effort: null,
+  }),
+  runEntry(1, "assistant.text", { blocks: [{ kind: "text", text: "**2 invoices** are late" }] }),
+  runEntry(2, "tool.call", { callId: "call-1", name: "send_email", input: "{}" }),
+  runEntry(3, "tool.result", { callId: "call-1", output: "sent", isError: false, artifactIds: [] }),
+  runEntry(4, "assistant.text", { blocks: [{ kind: "text", text: "Sent the reminders." }] }),
+];
+
 describe("runs.recap", () => {
-  it("refuses a run outside the caller's space and user", async () => {
-    const { prisma, recap } = setup({ run: null });
+  it("refuses a run outside the caller's space and user, and reads none of its entries", async () => {
+    const { prisma, sessionLog, recap } = setup({ run: null, entries: ranDigest });
     const { status } = await recap("run-of-someone-else");
     expect(status).toBe(500);
     expect(prisma.run.findFirst.mock.calls[0]?.[0]).toMatchObject({
       where: { id: "run-of-someone-else", spaceId: "space-1", userId: "user-1" },
     });
-    expect(prisma.message.findMany).not.toHaveBeenCalled();
+    expect(sessionLog.readRun).not.toHaveBeenCalled();
   });
 
-  it("returns what the run said in its thread and the message to open", async () => {
-    const { prisma, recap } = setup({
-      run: { id: "run-1", threadId: "thread-1" },
-      messages: [
-        { id: "m1", blocks: [{ kind: "text", text: "**2 invoices** are late" }] },
-        { id: "m2", blocks: [{ kind: "text", text: "Sent the reminders." }] },
-      ],
-    });
+  it("returns what the run said from its entries and the entry to open", async () => {
+    const { recap } = setup({ run: { id: "run-1" }, entries: ranDigest });
     const { body } = await recap("run-1");
     expect(body.json).toEqual({
       text: "**2 invoices** are late\n\nSent the reminders.",
-      messageId: "m1",
-    });
-    expect(prisma.message.findMany.mock.calls[0]?.[0]).toMatchObject({
-      where: { threadId: "thread-1", runId: "run-1", role: "bot" },
+      messageId: "entry-1",
     });
   });
+});
 
-  it("keeps a message's text when it also holds a block this build does not know", async () => {
-    const { recap } = setup({
-      run: { id: "run-1", threadId: "thread-1" },
-      messages: [
-        { id: "m1", blocks: [{ kind: "text", text: "Sent the reminders." }, { kind: "hologram" }] },
-      ],
-    });
-    const { body } = await recap("run-1");
-    expect(body.json).toEqual({ text: "Sent the reminders.", messageId: "m1" });
+describe("runs.entries", () => {
+  it("returns the caller's own run's entries and refuses anyone else's", async () => {
+    const own = setup({ run: { id: "run-1" }, entries: ranDigest });
+    const foreign = setup({ run: null, entries: ranDigest });
+
+    const { body } = await own.entries("run-1");
+    const { status } = await foreign.entries("run-1");
+
+    expect(body.json.entries.map((entry) => entry.id)).toEqual([
+      "entry-0",
+      "entry-1",
+      "entry-2",
+      "entry-3",
+      "entry-4",
+    ]);
+    expect(status).toBe(500);
   });
 });

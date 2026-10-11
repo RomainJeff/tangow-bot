@@ -8,6 +8,7 @@ import type {
   JobPublisher,
   MemoryStore,
   SandboxProvider,
+  SessionLog,
 } from "@rakazo/adapter-kit";
 import {
   computerControlExpireJobKey,
@@ -163,7 +164,7 @@ import {
   getOwnedArtifact,
   getSpaceArtifact,
 } from "./artifacts.js";
-import { listBotActivity, readRunRecap } from "./bot-activity.js";
+import { listBotActivity, readRunEntries, readRunRecap } from "./bot-activity.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
   executionBlocksUserTakeover,
@@ -208,15 +209,11 @@ import {
   UpdaterProxyError,
 } from "./server-update.js";
 import { assertTeachingSendAllowed, createTaughtSkillsService } from "./taught-skills.js";
-import {
-  isPeerRun,
-  loadAllMessages,
-  loadMessagePage,
-  shouldForwardPeerThreadEvent,
-} from "./thread-message-pages.js";
+import { forwardedThreadEvent, loadAllMessages, loadEntryPage } from "./thread-message-pages.js";
 import {
   enqueueLinkPreview,
   reactToThreadMessage,
+  readSessionEntries,
   resolveThreadTarget,
   sendThreadMessage,
   setThreadUnreadState,
@@ -239,7 +236,6 @@ import {
 import { loadWebhookSecret, WEBHOOK_SECRET_KIND } from "./webhook-inbound.js";
 
 const MAX_COMPUTER_TEXT_FILE_BYTES = 2 * 1024 * 1024;
-const THREAD_MESSAGE_PAGE_SIZE = 100;
 const EXPORT_MESSAGE_PAGE_SIZE = 500;
 
 async function reconcilePendingConnections(
@@ -493,6 +489,7 @@ function mcpAssignmentDto(row: {
 export interface RouterDeps {
   prisma: PrismaClient;
   events: ThreadEvents;
+  sessionLog: SessionLog<Prisma.TransactionClient>;
   auth: Auth;
   jobs: JobPublisher;
   sandbox: SandboxProvider;
@@ -1357,20 +1354,9 @@ export function createRouter(deps: RouterDeps) {
       listArchived: authed.groups.listArchived.handler(async ({ context }) =>
         groupRepos.listGroups(context.actor, { archived: true }),
       ),
-      get: authed.groups.get.handler(async ({ context, input }) => {
-        const group = await groupRepos.getGroup(context.actor, input.groupId);
-        return {
-          ...groupRepos.mapGroup(group),
-          messages: (
-            await loadMessagePage(
-              deps.prisma,
-              group.thread!.id,
-              undefined,
-              THREAD_MESSAGE_PAGE_SIZE,
-            )
-          ).messages,
-        };
-      }),
+      get: authed.groups.get.handler(async ({ context, input }) =>
+        groupRepos.mapGroup(await groupRepos.getGroup(context.actor, input.groupId)),
+      ),
       duplicate: authed.groups.duplicate.handler(async ({ context, input }) => {
         const source = await groupRepos.getGroup(context.actor, input.groupId);
         try {
@@ -1492,28 +1478,18 @@ export function createRouter(deps: RouterDeps) {
       }),
       messages: authed.threads.messages.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        return loadMessagePage(
-          deps.prisma,
-          target.threadId,
-          input.before,
-          THREAD_MESSAGE_PAGE_SIZE,
-          input.around,
-          input.includePeerRuns,
-          input.includePeerReceipts,
-        );
+        return loadEntryPage(deps, target.threadId, input);
       }),
       subscribe: authed.threads.subscribe.handler(async function* ({ context, input }) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        const peerRunCache = new Map<string, Promise<boolean>>();
+        const peerRuns = new Map<string, Promise<boolean>>();
         for await (const event of deps.events.follow(
           target.threadId,
           input.cursor,
           context.signal,
         )) {
-          if (await isPeerRun(deps.prisma, event.runId, peerRunCache)) {
-            if (!shouldForwardPeerThreadEvent(event)) continue;
-          }
-          yield event;
+          const forwarded = await forwardedThreadEvent(deps.prisma, event, peerRuns);
+          if (forwarded) yield forwarded;
         }
       }),
       send: authed.threads.send.handler(async ({ context, input }) => {
@@ -4721,7 +4697,15 @@ export function createRouter(deps: RouterDeps) {
         runs: await listSpaceRuns(deps.prisma, context.actor, input.filter),
       })),
       recap: authed.runs.recap.handler(({ context, input }) =>
-        readRunRecap(deps.prisma, context.actor, input.runId),
+        readRunRecap(deps, context.actor, input.runId),
+      ),
+      entries: authed.runs.entries.handler(async ({ context, input }) => ({
+        entries: await readRunEntries(deps, context.actor, input.runId),
+      })),
+    },
+    sessions: {
+      entries: authed.sessions.entries.handler(({ context, input }) =>
+        readSessionEntries(deps, context.actor, input.sessionId),
       ),
     },
     voice: {

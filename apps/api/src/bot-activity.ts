@@ -1,3 +1,4 @@
+import type { SessionLog } from "@rakazo/adapter-kit";
 import type {
   Actor,
   BotActivityInput,
@@ -5,9 +6,10 @@ import type {
   BotActivityOutput,
   RunRecap,
   RunsCursor,
+  SessionEntry,
 } from "@rakazo/contracts";
 import { RUNS_PAGE_DEFAULT } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, runRecap } from "@rakazo/core";
+import { ACTIVE_RUN_STATUSES, projectThreadItems, runRecap } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { IsolationError } from "@rakazo/db";
 import { mapRun, RUN_INCLUDE, TERMINAL_STATUSES } from "./runs.js";
@@ -129,21 +131,32 @@ export async function listBotActivity(
   };
 }
 
-/** What a run left in its thread, read only from the caller's own runs. */
+type RunLogDeps = { prisma: PrismaClient; sessionLog: Pick<SessionLog<unknown>, "readRun"> };
+
+/** A run's entries from every session it wrote to, read only from the caller's own runs. */
+export async function readRunEntries(
+  deps: RunLogDeps,
+  actor: Actor,
+  runId: string,
+): Promise<SessionEntry[]> {
+  const run = await deps.prisma.run.findFirst({
+    where: { id: runId, spaceId: actor.spaceId, userId: actor.userId },
+    select: { id: true },
+  });
+  if (!run) throw new IsolationError();
+  return deps.sessionLog.readRun(run.id);
+}
+
+/** What a run said, from its entries; `messageId` names the entry its first words start at. */
 export async function readRunRecap(
-  prisma: PrismaClient,
+  deps: RunLogDeps,
   actor: Actor,
   runId: string,
 ): Promise<RunRecap> {
-  const run = await prisma.run.findFirst({
-    where: { id: runId, spaceId: actor.spaceId, userId: actor.userId },
-    select: { id: true, threadId: true },
-  });
-  if (!run) throw new IsolationError();
-  const messages = await prisma.message.findMany({
-    where: { threadId: run.threadId, runId: run.id, role: "bot" },
-    orderBy: { seq: "asc" },
-    select: { id: true, blocks: true },
-  });
-  return runRecap(messages);
+  const items = projectThreadItems(await readRunEntries(deps, actor, runId));
+  return runRecap(
+    items.flatMap((item) =>
+      item.kind === "message" && item.role === "bot" ? [{ id: item.id, blocks: item.blocks }] : [],
+    ),
+  );
 }
