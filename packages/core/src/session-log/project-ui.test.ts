@@ -1113,6 +1113,53 @@ describe("projectThreadItems", () => {
     });
   });
 
+  it("drops the running helper once its run is cancelled before the helper answered", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const trigger = { kind: "webhook", routineId: "rtn_1" };
+    const input = JSON.stringify({ name: "scout", task: "List competitors" });
+    const usage = { inputTokens: 300, outputTokens: 5 };
+    const chain = linkEntries("stop", [
+      { ...run, type: "run.started", payload: { trigger, model, effort: null } },
+      {
+        ...run,
+        type: "tool.call",
+        payload: { callId: "call_scout", name: "run_subagent", input },
+      },
+      { ...run, type: "run.finished", payload: { status: "cancelled", usage } },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "run",
+        id: "stop-0",
+        ts: at(0),
+        ...run,
+        trigger,
+        model,
+        effort: null,
+        finished: { outcome: { status: "cancelled", usage }, durationMs: 2000 },
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "stop-1",
+        ts: at(1),
+        ...run,
+        blocks: [
+          {
+            kind: "steps",
+            steps: [
+              {
+                label: "Run subagent",
+                count: 1,
+                calls: [{ name: "run_subagent", input, output: "", id: "call_scout" }],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
   it("gives a run finished at a timestamp before its start a duration of zero", () => {
     const run = { botId: "bot_ada", runId: "run_1" };
     const trigger = { kind: "webhook", routineId: "rtn_1" };

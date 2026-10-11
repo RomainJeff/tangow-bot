@@ -57,14 +57,15 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
 /**
  * What a thread shows, from a page of a session's chain oldest first. A run becomes one `run`
  * item where it started and one `message` item per unbroken stretch of its words, followed by a
- * running `subagent` item for each helper it launched that has not answered yet; a routine run,
- * whose words live in its own session, becomes one `routine` item its finish fills in. A run whose
- * start is outside the page gets no `run` item, though its words on the page still show; an
- * effect whose request is outside the page is left out, as is a tool result without its call. An
- * item whose entry rose from a child session names it as `origin`, with the routine's or the
- * helper's name when the page holds its start. Entries about an earlier card or message settle
- * that card or add to that message, and a reply that is a card's own answer record shows as the
- * answered card alone. A compaction's divider sits before the first item it did not summarize.
+ * running `subagent` item for each helper it launched that has not answered while the run is still
+ * open; a routine run, whose words live in its own session, becomes one `routine` item its finish
+ * fills in. A run whose start is outside the page gets no `run` item, though its words on the page
+ * still show; an effect whose request is outside the page is left out, as is a tool result without
+ * its call. An item whose entry rose from a child session names it as `origin`, with the
+ * routine's or the helper's name when the page holds its start. Entries about an earlier card or
+ * message settle that card or add to that message, and a reply that is a card's own answer record
+ * shows as the answered card alone. A compaction's divider sits before the first item it did not
+ * summarize.
  */
 export function projectThread(entries: readonly SessionEntry[]): ProjectedThread {
   const visible = entries.filter(isUiEntry);
@@ -81,6 +82,9 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
     sessionId ? { origin: { sessionId, ...children.get(sessionId) } } : {};
   const outputs = toolOutputs(visible);
   const seqOf = new Map<string, number>(visible.map((entry) => [entry.id, entry.seq]));
+  const finishedRuns = new Set(
+    visible.flatMap((entry) => (entry.type === "run.finished" ? [entry.runId] : [])),
+  );
   const runs = new Map<string, RunItem>();
   const effects = new Map<string, EffectItem>();
   const routines = new Map<string, RoutineItem>();
@@ -132,7 +136,7 @@ export function projectThread(entries: readonly SessionEntry[]): ProjectedThread
             runCards.push({ id: entry.id, runId: entry.runId, seq: entry.seq });
           }
           if (entry.type === "tool.call" && entry.payload.name === "run_subagent") {
-            if (outputs.has(entry.id)) continue;
+            if (outputs.has(entry.id) || finishedRuns.has(entry.runId)) continue;
             const helper: SubagentItem = {
               kind: "subagent",
               status: "running",
