@@ -19,18 +19,6 @@ export const DELEGATION_TOOL_NAMES = new Set([
   "message_bot",
 ]);
 
-// `message_user` is a conversation channel, never a progress channel. Bots with
-// `chattyReplies` on additionally trade one long final answer for a run of short
-// bubbles.
-export const CHATTY_MESSAGE_USER_DESCRIPTION =
-  "Send one short chat message to the user immediately, without ending your turn. Each call posts one bubble. Use several short message_user calls instead of one long final answer, and to ask questions. Never narrate your work: no progress updates, no tool logs, no play-by-play. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation, not in other words, not from a new angle. When you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled. Let the number of bubbles follow the content: usually one or two, more only when there are that many separate points. A long deliverable the user asked for goes in your final reply, not in bubbles. Bubbles render Markdown (bold, italics, lists, links, inline code), so format when it helps readability.";
-
-export function withChattyReplies(tools: ConnectorTool[]): ConnectorTool[] {
-  return tools.map((tool) =>
-    tool.name === "message_user" ? { ...tool, description: CHATTY_MESSAGE_USER_DESCRIPTION } : tool,
-  );
-}
-
 export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "computer_observe",
@@ -289,8 +277,13 @@ export const builtinAgentTools: ConnectorTool[] = [
   },
   {
     name: "message_user",
-    description:
-      "Talk to the user in this chat immediately, without ending your turn. Each call posts one bubble. Only two uses: saying something to the user as part of your reply, split into short natural messages like a human conversation, or asking a question you need answered. Never narrate your work: no announcing what you are about to do, no tool logs, no play-by-play, no status beats. Never repeat or rephrase a point you already made, or re-ask a question you already asked, earlier in this conversation, not in other words, not from a new angle; when you have nothing genuinely new to say, end the turn with an empty response instead of restating what is already settled. HARD LIMIT: each bubble is cut off silently at 500 characters, so keep it short and never put a report or any long-form content in one. Bubbles render Markdown (bold, italics, lists, links, inline code), so format when it helps readability.",
+    description: `Deliver a visible message to the user (supports markdown). Ordinary assistant text and
+other tools’ output are not shown to them.
+
+Report useful progress during work and deliver the outcome before
+finishing. Avoid messages that merely narrate internal operations.
+
+HARD LIMIT: each message is cut off silently at 500 characters, so keep it short`,
     inputSchema: {
       type: "object",
       properties: {
