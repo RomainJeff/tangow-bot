@@ -429,7 +429,7 @@ describe("the history a run reads from its session log", () => {
     ]);
   });
 
-  it("enqueues a compaction only for a bot's own thread with a real summarizer model", async () => {
+  it("enqueues a compaction only for a person's run in a bot's own thread with a real summarizer model", async () => {
     const tail = chain(0, [said("x".repeat(100_000))]);
     const model = { provider: "openai", id: "model-without-a-catalog-window" };
     const own = fixture({ tail, compaction: true, model });
@@ -440,8 +440,14 @@ describe("the history a run reads from its session log", () => {
       groupMembers: [{ id: BOT, name: "Assistant" }],
     });
     const scriptedModel = fixture({ tail, compaction: true });
+    const routine = fixture({
+      tail,
+      compaction: true,
+      model,
+      run: { trigger: "routine", routineId: "routine-1", createdAt: new Date() },
+    });
 
-    await Promise.all([own.history(), group.history(), scriptedModel.history()]);
+    await Promise.all([own.history(), group.history(), scriptedModel.history(), routine.history()]);
 
     const compactions = (f: ReturnType<typeof fixture>) =>
       f.jobs.enqueue.mock.calls
@@ -450,6 +456,7 @@ describe("the history a run reads from its session log", () => {
     expect(compactions(own)).toMatchObject([{ payload: { threadId: "thread-1" } }]);
     expect(compactions(group)).toEqual([]);
     expect(compactions(scriptedModel)).toEqual([]);
+    expect(compactions(routine)).toEqual([]);
   });
 
   it("keeps the newest 200 turns when the model's context window is unknown", async () => {

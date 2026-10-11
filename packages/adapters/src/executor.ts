@@ -5069,9 +5069,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           // Last, and never fatal: the run is already finalized, so a failure here must not reach
           // the catch block below, where a second finalizeRun would match no rows and silently
           // skip the completion notification.
-          // A routine run read no history and its session ends with it: nothing to compact.
           if (
-            run.routineId == null &&
             compacts(thread) &&
             runModelProvider !== "scripted" &&
             !messagingChannelRun &&
