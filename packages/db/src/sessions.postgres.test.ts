@@ -4,6 +4,7 @@ import { SessionId } from "@rakazo/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { logCancelledRunsInTransaction } from "./cancel-runs.js";
 import { createDb, type PrismaClient } from "./client.js";
+import { clearThread } from "./events.js";
 import { appendRunFinishedInTransaction, appendSessionEntryInTransaction } from "./sessions.js";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -43,6 +44,38 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     });
     const thread = await prisma.thread.create({ data: { spaceId: id, userId: id, botId: bot.id } });
     return SessionId.parse(thread.sessionId);
+  }
+
+  async function startedRun() {
+    const sessionId = await freshSession();
+    const { id: threadId, botId } = await prisma.thread.findUniqueOrThrow({
+      where: { sessionId },
+      select: { id: true, botId: true },
+    });
+    const task = await prisma.task.create({
+      data: { spaceId: id, botId: botId!, threadId, userId: id, prompt: "", status: "running" },
+    });
+    const run = await prisma.run.create({
+      data: {
+        spaceId: id,
+        botId: botId!,
+        threadId,
+        taskId: task.id,
+        userId: id,
+        status: "running",
+        trigger: "user",
+      },
+    });
+    await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        sessionId,
+        botId: botId!,
+        runId: run.id,
+        type: "run.started",
+        payload: { trigger: { kind: "direct" }, model: { provider: "p", id: "m" }, effort: null },
+      }),
+    );
+    return { sessionId, threadId, botId: botId!, runId: run.id, taskId: task.id };
   }
 
   function said(sessionId: SessionId, text: string): SessionEntryDraft {
@@ -125,34 +158,7 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
   });
 
   it("closes a run's log once when a cancel waits on a finalize that commits first", async () => {
-    const sessionId = await freshSession();
-    const { id: threadId, botId } = await prisma.thread.findUniqueOrThrow({
-      where: { sessionId },
-      select: { id: true, botId: true },
-    });
-    const task = await prisma.task.create({
-      data: { spaceId: id, botId: botId!, threadId, userId: id, prompt: "", status: "running" },
-    });
-    const run = await prisma.run.create({
-      data: {
-        spaceId: id,
-        botId: botId!,
-        threadId,
-        taskId: task.id,
-        userId: id,
-        status: "running",
-        trigger: "user",
-      },
-    });
-    await prisma.$transaction((tx) =>
-      appendSessionEntryInTransaction(tx, {
-        sessionId,
-        botId: botId!,
-        runId: run.id,
-        type: "run.started",
-        payload: { trigger: { kind: "direct" }, model: { provider: "p", id: "m" }, effort: null },
-      }),
-    );
+    const { threadId, runId } = await startedRun();
     let finalized!: () => void;
     let release!: () => void;
     const finalizing = new Promise<void>((resolve) => {
@@ -163,14 +169,14 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     });
     const finalize = prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
-      await tx.run.update({ where: { id: run.id }, data: { status: "completed" } });
-      await appendRunFinishedInTransaction(tx, run.id, { status: "completed" });
+      await tx.run.update({ where: { id: runId }, data: { status: "completed" } });
+      await appendRunFinishedInTransaction(tx, runId, { status: "completed" });
       finalized();
       await released;
     }, TRANSACTION);
     await Promise.race([finalizing, finalize]);
     const cancel = prisma.$transaction(
-      (tx) => logCancelledRunsInTransaction(tx, [run.id], id),
+      (tx) => logCancelledRunsInTransaction(tx, [runId], id),
       TRANSACTION,
     );
     await waitForLockWaiter();
@@ -178,7 +184,7 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
     await Promise.all([finalize, cancel]);
 
     const logged = await prisma.sessionEntry.findMany({
-      where: { runId: run.id },
+      where: { runId },
       orderBy: { seq: "asc" },
       select: { type: true, payload: true },
     });
@@ -188,6 +194,26 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
       ["run.started", undefined],
       ["run.finished", "completed"],
     ]);
+  });
+
+  it("keeps a cleared thread's cancelled run.finished and its clear in the feed", async () => {
+    const { threadId, botId } = await startedRun();
+
+    await clearThread(prisma, { spaceId: id, threadId, botId, userId: id });
+
+    const feed = await prisma.event.findMany({
+      where: { threadId },
+      orderBy: { seq: "asc" },
+      select: { type: true, payload: true },
+    });
+    expect(
+      feed.map(({ type, payload }) => [
+        type,
+        ...((payload as { entries?: SessionEntry[] }).entries ?? []).map((entry) =>
+          entry.type === "run.finished" ? `${entry.type} ${entry.payload.status}` : entry.type,
+        ),
+      ]),
+    ).toEqual([["session.entry.appended", "run.finished cancelled", "clear"], ["thread.cleared"]]);
   });
 
   it("gives two concurrent appends on one session distinct seqs on one chain", async () => {

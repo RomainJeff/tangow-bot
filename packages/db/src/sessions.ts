@@ -59,17 +59,37 @@ export async function createSessionInTransaction(
   return SessionId.parse(main.id);
 }
 
-/** The threads a transaction locked for its appends, and the feed event that carries them. */
-type TransactionLog = { threadOf: Map<string, string | null>; eventOf: Map<string, string> };
+/** The `session.entry.appended` event that carries a transaction's entries to one thread. */
+type ThreadFeed = {
+  eventId: string;
+  spaceId: string;
+  threadId: string;
+  botId: string;
+  runId: string | null;
+  entries: SessionEntry[];
+};
+/** The threads a transaction locked for its appends, and the feed event of each. */
+type TransactionLog = { threadOf: Map<string, string | null>; feedOf: Map<string, ThreadFeed> };
 const transactionLogs = new WeakMap<Prisma.TransactionClient, TransactionLog>();
 
 function transactionLog(tx: Prisma.TransactionClient): TransactionLog {
   let log = transactionLogs.get(tx);
   if (!log) {
-    log = { threadOf: new Map(), eventOf: new Map() };
+    log = { threadOf: new Map(), feedOf: new Map() };
     transactionLogs.set(tx, log);
   }
   return log;
+}
+
+function insertFeedEvent(feed: ThreadFeed, at: Prisma.Sql, gate: Prisma.Sql) {
+  return Prisma.sql`t AS (
+      UPDATE threads SET "nextEventSeq" = "nextEventSeq" + 1 ${gate} WHERE threads.id = ${feed.threadId}
+      RETURNING threads."nextEventSeq" - 1 AS seq),
+    inserted AS (
+      INSERT INTO events (id, "spaceId", "threadId", "botId", seq, type, payload, "runId", "createdAt")
+      SELECT ${feed.eventId}, ${feed.spaceId}, ${feed.threadId}, ${feed.botId}, t.seq,
+        'session.entry.appended', ${JSON.stringify({ entries: feed.entries })}::jsonb, ${feed.runId}, ${at}
+      FROM t)`;
 }
 
 /**
@@ -138,27 +158,31 @@ export async function appendSessionEntryInTransaction(
   );
   const runId = entry.runId ?? null;
   const at = Prisma.sql`${entry.ts}::timestamptz AT TIME ZONE 'UTC'`;
-  const eventId = threadId ? log.eventOf.get(threadId) : undefined;
-  const newEventId = threadId && !eventId ? randomUUID() : undefined;
-  const feed = eventId
+  const feed = threadId ? log.feedOf.get(threadId) : undefined;
+  const newFeed: ThreadFeed | undefined =
+    threadId && feedBotId && !feed
+      ? {
+          eventId: randomUUID(),
+          spaceId: session.spaceId,
+          threadId,
+          botId: feedBotId,
+          runId,
+          entries: [entry],
+        }
+      : undefined;
+  const feedSql = feed
     ? Prisma.sql`, appended AS (
         UPDATE events SET payload = jsonb_set(payload, '{entries}', (payload -> 'entries') || ${JSON.stringify(entry)}::jsonb)
-        FROM e WHERE events.id = ${eventId})`
-    : newEventId
-      ? Prisma.sql`, t AS (
-          UPDATE threads SET "nextEventSeq" = "nextEventSeq" + 1 FROM e WHERE threads.id = ${threadId}
-          RETURNING threads."nextEventSeq" - 1 AS seq),
-        appended AS (
-          INSERT INTO events (id, "spaceId", "threadId", "botId", seq, type, payload, "runId", "createdAt")
-          SELECT ${newEventId}, ${session.spaceId}, ${threadId}, ${feedBotId}, t.seq,
-            'session.entry.appended', ${JSON.stringify({ entries: [entry] })}::jsonb, ${runId}, ${at}
-          FROM t)`
+        FROM e WHERE events.id = ${feed.eventId}
+        RETURNING events.id)`
+    : newFeed
+      ? Prisma.sql`, ${insertFeedEvent(newFeed, at, Prisma.sql`FROM e`)}`
       : Prisma.empty;
   // A run writes nothing once cancelled, and nothing of its own once it finished in this session.
   // The checks read a snapshot taken after the session lock, so they see a cancel or a finish that
   // committed while this append waited.
   const runScoped = /^(run|assistant|tool)\./.test(entry.type);
-  const written = await tx.$queryRaw<unknown[]>`
+  const written = await tx.$queryRaw<Array<{ fed: boolean }>>`
     WITH e AS (
       INSERT INTO session_entries (id, "sessionId", seq, "parentId", type, payload, "botId", "runId", "createdAt")
       SELECT ${entry.id}, ${entry.sessionId}, ${seq}, ${entry.parentId}, ${entry.type},
@@ -172,8 +196,8 @@ export async function appendSessionEntryInTransaction(
     s AS (
       UPDATE sessions SET "nextEntrySeq" = ${seq + 1}, "headEntryId" = ${entry.id}
       FROM e WHERE sessions.id = ${entry.sessionId})
-    ${feed}
-    SELECT 1 FROM e`;
+    ${feedSql}
+    SELECT ${feed ? Prisma.sql`EXISTS (SELECT 1 FROM appended)` : Prisma.sql`true`} AS fed FROM e`;
   if (written.length === 0) {
     const [run] = await tx.$queryRaw<Array<{ status: string }>>`
       SELECT status FROM runs WHERE id = ${runId}`;
@@ -183,7 +207,14 @@ export async function appendSessionEntryInTransaction(
       `Run ${runId} already finished in session ${entry.sessionId}`,
     );
   }
-  if (threadId && newEventId) log.eventOf.set(threadId, newEventId);
+  if (newFeed) log.feedOf.set(newFeed.threadId, newFeed);
+  if (!feed) return entry;
+  feed.entries.push(entry);
+  if (!written[0]?.fed) {
+    // A truncate in this transaction deleted the event, so a new one carries its entries.
+    feed.eventId = randomUUID();
+    await tx.$queryRaw`WITH ${insertFeedEvent(feed, at, Prisma.empty)} SELECT 1`;
+  }
   return entry;
 }
 
