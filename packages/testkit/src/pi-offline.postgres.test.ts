@@ -170,6 +170,82 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  it("closes a helper behind its parent's thread lock, holding nothing a stop needs first", async () => {
+    let helperAsked!: () => void;
+    let answerHelper!: () => void;
+    const asked = new Promise<void>((resolve) => {
+      helperAsked = resolve;
+    });
+    const answered = new Promise<void>((resolve) => {
+      answerHelper = resolve;
+    });
+    await journey(
+      [
+        { expect() {}, response: DELEGATE },
+        {
+          async expect() {
+            helperAsked();
+            await answered;
+          },
+          response: { type: "text", text: "checked" },
+        },
+        { expect() {}, response: { type: "text", text: "Checked." } },
+      ],
+      async ({ prisma, send }) => {
+        const sent = await send("Have a helper check it.");
+        await asked;
+        const helper = await prisma.run.findFirstOrThrow({ where: { parentRunId: sent.runId } });
+        const { threadId } = await prisma.run.findUniqueOrThrow({ where: { id: sent.runId } });
+        let release!: () => void;
+        const released = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        let locked!: () => void;
+        const holding = new Promise<void>((resolve) => {
+          locked = resolve;
+        });
+        const stopLike = prisma.$transaction(
+          async (tx) => {
+            await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
+            locked();
+            await released;
+          },
+          { timeout: 20_000 },
+        );
+        await holding;
+        answerHelper();
+        await expect
+          .poll(
+            async () => {
+              const [row] = await prisma.$queryRaw<Array<{ waiting: number }>>`
+                SELECT count(*)::int AS waiting FROM pg_stat_activity
+                WHERE datname = current_database() AND wait_event_type = 'Lock'
+                  AND query ILIKE '%FROM threads%FOR UPDATE%'`;
+              return row!.waiting;
+            },
+            { timeout: 10_000, interval: 20 },
+          )
+          .toBe(1);
+        const probe =
+          await prisma.$queryRaw`SELECT id FROM runs WHERE id = ${helper.id} FOR NO KEY UPDATE NOWAIT`.then(
+            () => "free",
+            (error: unknown) => String(error),
+          );
+        release();
+        await stopLike;
+        await sent.settled("completed");
+
+        expect(probe).toBe("free");
+        expect(
+          await prisma.run.findUniqueOrThrow({
+            where: { id: helper.id },
+            select: { status: true },
+          }),
+        ).toEqual({ status: "completed" });
+      },
+    );
+  }, 30_000);
+
   it("gives every call one result when the run pauses for an answer, then an approval", async () => {
     const secret = {
       label: "API key",
@@ -326,6 +402,12 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
 });
 
 const EDITED_INSTRUCTIONS = "You are Scout. Focus on venues.";
+const DELEGATE = {
+  type: "tool",
+  id: "journey-delegate",
+  name: "run_subagent",
+  arguments: { name: "checker", task: "Say checked." },
+} as const;
 
 async function approveEdited(
   { app, cookie, bot, prisma, send, log }: JourneyFixture,

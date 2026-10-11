@@ -2057,6 +2057,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 const result = redactSecrets(outcome.result, runSecrets);
                 try {
                   await deps.prisma.$transaction(async (tx) => {
+                    // The parent's thread, then the helper's run and session, the order stop takes.
+                    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
                     const closed = await tx.run.updateMany({
                       where: { id: helper.log.runId, status: "running" },
                       data: { status: outcome.status, completedAt: new Date() },
