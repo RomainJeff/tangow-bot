@@ -129,7 +129,7 @@ async function cancelActiveRuns(
       actor.userId,
     );
     await tx.run.updateMany({
-      where: { id: { in: runs.map((run) => run.id) } },
+      where: { id: { in: runs.map((run) => run.id) }, status: { in: [...ACTIVE_RUN_STATUSES] } },
       data: { status: "cancelled", completedAt: new Date() },
     });
     return runs;

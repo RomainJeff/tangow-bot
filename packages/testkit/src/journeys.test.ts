@@ -10,9 +10,12 @@ import {
   ManagedSandboxEmulator,
   toComputerRef,
 } from "@rakazo/adapters";
+import type { SessionId } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, ONCE_ROUTINE_CRON } from "@rakazo/core";
 import {
   appendEvent,
+  appendRunFinishedInTransaction,
+  appendSessionEntryInTransaction,
   createThreadEvents,
   createThreadMessage,
   RunHistoryWriteError,
@@ -2385,6 +2388,93 @@ describeJourneys("required product journeys", () => {
       if (previousTtl === undefined) delete process.env.TEACH_RECORDING_TTL_MS;
       else process.env.TEACH_RECORDING_TTL_MS = previousTtl;
     }
+  });
+
+  it("18b: teaching leaves a run that finished while it started completed, with one run.finished", async () => {
+    const cookie = await signup(app, `teach-race-j-${stamp}@rakazo.test`, "Teach Race Ada");
+    const bot = await rpc<Bot>(app, cookie, "bots/create", {
+      name: "Racer",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: true,
+    });
+    await rpc(app, cookie, "computer/boot", { botId: bot.id });
+    const thread = await prisma.thread.findFirstOrThrow({ where: { botId: bot.id } });
+    const task = await prisma.task.create({
+      data: {
+        spaceId: thread.spaceId,
+        botId: bot.id,
+        threadId: thread.id,
+        userId: thread.userId,
+        prompt: "Finish now",
+        status: "running",
+      },
+    });
+    const run = await prisma.run.create({
+      data: {
+        spaceId: thread.spaceId,
+        botId: bot.id,
+        threadId: thread.id,
+        taskId: task.id,
+        userId: thread.userId,
+        status: "running",
+        trigger: "user",
+      },
+    });
+    await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        sessionId: thread.sessionId as SessionId,
+        botId: bot.id,
+        runId: run.id,
+        type: "run.started",
+        payload: { trigger: { kind: "direct" }, model: { provider: "p", id: "m" }, effort: null },
+      }),
+    );
+    let finalizing!: () => void;
+    let release!: () => void;
+    const holding = new Promise<void>((resolve) => {
+      finalizing = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const finalize = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
+        await tx.run.update({ where: { id: run.id }, data: { status: "completed" } });
+        await appendRunFinishedInTransaction(tx, run.id, { status: "completed" });
+        finalizing();
+        await released;
+      },
+      { timeout: 20_000 },
+    );
+    await holding;
+    const started = rpc(app, cookie, "skills/start", { botId: bot.id, goal: "Race demo" });
+    await waitForDatabase(async () => {
+      const [row] = await prisma.$queryRaw<Array<{ waiting: number }>>`
+        SELECT count(*)::int AS waiting FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+      return row!.waiting > 0;
+    });
+    release();
+    await finalize;
+    await started;
+
+    expect(
+      await prisma.run.findUniqueOrThrow({ where: { id: run.id }, select: { status: true } }),
+    ).toEqual({ status: "completed" });
+    const logged = await prisma.sessionEntry.findMany({
+      where: { runId: run.id },
+      orderBy: { seq: "asc" },
+      select: { type: true, payload: true },
+    });
+    expect(
+      logged.map(({ type, payload }) => [type, (payload as { status?: string }).status]),
+    ).toEqual([
+      ["run.started", undefined],
+      ["run.finished", "completed"],
+    ]);
   });
 
   it("19: destination writes pause for approval before side effects", async () => {
