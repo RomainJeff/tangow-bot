@@ -19,6 +19,7 @@ const FOLDED_TYPES = [
   "tool.result",
 ] as const;
 type FoldedEntry = SessionEntryOf<(typeof FOLDED_TYPES)[number]>;
+export type ToolAnswer = SessionEntryOf<"tool.result" | "subagent">;
 const STRETCH_TYPES = new Set<SessionEntryType>([...FOLDED_TYPES, ...CARD_STATE_TYPES, "subagent"]);
 
 type RunMessage = {
@@ -39,13 +40,20 @@ type RunMessage = {
  * position of the stretch's first entry. Each run has its own open stretch, so runs that
  * interleave keep one message each. Any other entry closes every open stretch, a `bot.text` too
  * since it is a message of its own; a `subagent` entry and the card-state entries pass through.
+ * With `splitAtHelpers`, a `run_subagent` call also closes its run's stretch, so a helper's card
+ * can sit between what the run said before the call and after it.
  */
 export function foldRuns(
   entries: readonly SessionEntry[],
-  outputs: ReadonlyMap<EntryId, string> = toolOutputs(entries),
+  {
+    answers = toolAnswers(entries),
+    splitAtHelpers = false,
+  }: { answers?: ReadonlyMap<EntryId, ToolAnswer>; splitAtHelpers?: boolean } = {},
 ): (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] {
   const segments: (RunMessage | Exclude<SessionEntry, FoldedEntry>)[] = [];
   const open = new Map<string, RunMessage>();
+  const callOf = new Map([...answers].map(([callId, answer]) => [answer.id, callId]));
+  const holderOf = new Map<EntryId, RunMessage>();
   const stretchOf = (entry: FoldedEntry) => {
     const stretch = open.get(entry.runId);
     if (stretch) {
@@ -87,17 +95,23 @@ export function foldRuns(
       case "tool.call": {
         const message = stretchOf(entry);
         const { callId, name, input } = entry.payload;
+        const answer = answers.get(entry.id);
         message.blocks = appendToolCallSegment(message.blocks, name, {
           name,
           input,
-          output: outputs.get(entry.id) ?? "",
+          output: answer ? outputOf(answer) : "",
           id: callId,
         });
+        holderOf.set(entry.id, message);
+        if (splitAtHelpers && name === "run_subagent") open.delete(entry.runId);
         break;
       }
-      case "tool.result":
-        open.get(entry.runId)?.entries.push(entry);
+      case "tool.result": {
+        const call = callOf.get(entry.id);
+        const holder = call === undefined ? undefined : holderOf.get(call);
+        (holder ?? open.get(entry.runId))?.entries.push(entry);
         break;
+      }
       default:
         segments.push(entry);
     }
@@ -106,15 +120,15 @@ export function foldRuns(
 }
 
 /**
- * Each tool call's output by the call's entry id. Providers reuse call ids such as `call_0`, from
+ * Each tool call's answer by the call's entry id. Providers reuse call ids such as `call_0`, from
  * run to run and within a run once it resumes, so a `tool.result` or `subagent` entry answers the
  * latest earlier call of its run and call id that has no answer yet. A call a crash cut stays
  * unanswered under the replay that follows it, and a result whose call a compaction cut answers
  * nothing.
  */
-export function toolOutputs(entries: readonly SessionEntry[]): Map<EntryId, string> {
+export function toolAnswers(entries: readonly SessionEntry[]): Map<EntryId, ToolAnswer> {
   const unanswered = new Map<string, EntryId[]>();
-  const outputs = new Map<EntryId, string>();
+  const answers = new Map<EntryId, ToolAnswer>();
   for (const entry of entries) {
     if (entry.type !== "tool.call" && entry.type !== "tool.result" && entry.type !== "subagent") {
       continue;
@@ -128,9 +142,13 @@ export function toolOutputs(entries: readonly SessionEntry[]): Map<EntryId, stri
     }
     const call = calls.pop();
     if (call === undefined) continue;
-    outputs.set(call, entry.type === "tool.result" ? entry.payload.output : entry.payload.result);
+    answers.set(call, entry);
   }
-  return outputs;
+  return answers;
+}
+
+function outputOf(answer: ToolAnswer): string {
+  return answer.type === "tool.result" ? answer.payload.output : answer.payload.result;
 }
 
 function toolCallKey(entry: SessionEntryOf<"tool.call" | "tool.result" | "subagent">) {

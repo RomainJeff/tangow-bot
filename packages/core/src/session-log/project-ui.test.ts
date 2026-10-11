@@ -642,7 +642,7 @@ describe("projectThreadItems", () => {
     ]);
   });
 
-  it("gives a subagent its own item that points at the child session", async () => {
+  it("places a subagent's item at its call, between the run's words before and after", async () => {
     expect(projectThreadItems(await fixtureChain("subagent"))).toEqual([
       {
         kind: "message",
@@ -692,7 +692,6 @@ describe("projectThreadItems", () => {
               },
             ],
           },
-          { kind: "text", text: "Your competitors are Acme, Globex and Initech." },
         ],
       },
       {
@@ -708,6 +707,15 @@ describe("projectThreadItems", () => {
         status: "completed",
         result: "Acme, Globex, Initech",
         usage: { inputTokens: 400, outputTokens: 25 },
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "sub-04",
+        ts: at(4),
+        botId: "bot_ada",
+        runId: "run_sub_1",
+        blocks: text("Your competitors are Acme, Globex and Initech."),
       },
     ]);
   });

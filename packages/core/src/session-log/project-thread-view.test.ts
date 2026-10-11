@@ -103,15 +103,25 @@ const finishedRun = {
   },
   ...alone,
 };
-const answeredWork = {
+const work = {
   item: {
     kind: "message",
     role: "bot",
     id: "str-02",
     ts: at(2),
     ...ada,
+    blocks: [{ kind: "steps", steps: [search, scoutCall("Globex, Initech")], durationMs: 9000 }],
+  },
+  ...alone,
+};
+const answered = {
+  item: {
+    kind: "message",
+    role: "bot",
+    id: "str-06",
+    ts: at(6),
+    ...ada,
     blocks: [
-      { kind: "steps", steps: [search, scoutCall("Globex, Initech")], durationMs: 9000 },
       { kind: "text", text: "Acme, Globex, Initech" },
       { kind: "ask", text: "Compare prices too?", status: "answered" },
     ],
@@ -217,8 +227,9 @@ describe("projectThreadView on a streamed reply", () => {
     expect(view.rows).toEqual([
       firstMessage,
       finishedRun,
-      answeredWork,
+      work,
       scout,
+      answered,
       yes,
       {
         ...summary({
@@ -232,7 +243,7 @@ describe("projectThreadView on a streamed reply", () => {
     ]);
     expect(view.waiting).toBeNull();
     expect(["str-07", "str-10", "str-11"].map((id) => [id, view.rowOf.get(id)])).toEqual([
-      ["str-07", "str-02"],
+      ["str-07", "str-06"],
       ["str-10", "str-01"],
       ["str-11", "str-09"],
     ]);
@@ -243,8 +254,9 @@ describe("projectThreadView on a streamed reply", () => {
     expect(view.rows).toEqual([
       firstMessage,
       finishedRun,
-      answeredWork,
+      work,
       scout,
+      answered,
       yes,
       summary(),
       { item: { kind: "divider", id: "str-17", ts: at(17), reason: "rewind" }, ...alone },
@@ -583,6 +595,54 @@ describe("projectThreadView cards", () => {
 });
 
 describe("projectThreadView rows", () => {
+  it("keeps a call's result with the message that made it when a helper splits the run", () => {
+    const helper = '{"name":"scout","task":"Look"}';
+    const chain = linkEntries("par", [
+      {
+        ...ada,
+        type: "tool.call",
+        payload: { callId: "call_web", name: "web_search", input: "{}" },
+      },
+      {
+        ...ada,
+        type: "tool.call",
+        payload: { callId: "call_scout", name: "run_subagent", input: helper },
+      },
+      {
+        ...ada,
+        type: "tool.result",
+        payload: { callId: "call_web", output: "Found", isError: false, artifactIds: [] },
+      },
+      {
+        ...ada,
+        type: "subagent",
+        payload: {
+          callId: "call_scout",
+          sessionId: "ses_scout",
+          name: "scout",
+          model,
+          task: "Look",
+          status: "completed",
+          result: "Seen",
+          usage: { inputTokens: 1, outputTokens: 1 },
+        },
+      },
+      { ...ada, type: "assistant.text", payload: { blocks: text("Done") } },
+    ]);
+    const view = projectThreadView(chain);
+    expect(view.rows.map((row) => [row.item.kind, row.item.id, row.messageId])).toEqual([
+      ["message", "par-0", undefined],
+      ["subagent", "par-3", undefined],
+      ["message", "par-4", "par-4"],
+    ]);
+    expect(["par-1", "par-2", "par-3", "par-4"].map((id) => view.rowOf.get(id))).toEqual([
+      "par-0",
+      "par-0",
+      "par-3",
+      "par-4",
+    ]);
+  });
+
   it("folds emoji-only replies under their message, keeping one whose message is not held", () => {
     const reply = (target: string, value: string) => ({
       type: "user.message",

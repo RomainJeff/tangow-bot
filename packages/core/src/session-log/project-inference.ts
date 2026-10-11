@@ -14,7 +14,7 @@ import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from ".
 import { messageReaction } from "../message-reactions.js";
 import type { ChildSession } from "./child-sessions.js";
 import { childSessionsOf } from "./child-sessions.js";
-import { foldRuns, toolOutputs } from "./run-fold.js";
+import { foldRuns, toolAnswers } from "./run-fold.js";
 
 export interface InferenceProjectionOptions {
   /** The bot the history is for. Only its own words stay on the assistant side. */
@@ -49,7 +49,7 @@ export function projectInferenceTurns(
   options: InferenceProjectionOptions,
 ): AgentHistoryTurn[] {
   const chain = entries.filter((entry, index) => entry.type !== "compaction" || index === 0);
-  const answered = toolOutputs(chain);
+  const answered = toolAnswers(chain);
   const segments = foldRuns(
     chain
       .filter(isInferenceEntry)
