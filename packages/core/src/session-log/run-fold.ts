@@ -30,8 +30,8 @@ type RunMessage = {
 /**
  * Fold a run's `assistant.*` and `tool.*` entries into one `RunMessage` per stretch, at the
  * position of the stretch's first entry. Each run has its own open stretch, so runs that
- * interleave keep one message each. Any other entry closes every open stretch, and a `subagent`
- * entry passes through without closing them. A tool call takes its output from the `tool.result`
+ * interleave keep one message each. Any other entry closes every open stretch, a `bot.text` too
+ * since it is a message of its own, and a `subagent` entry passes through without closing them. A tool call takes its output from the `tool.result`
  * or `subagent` entry with the same run and `callId`, or an empty output while none exists yet.
  */
 export function foldRuns(

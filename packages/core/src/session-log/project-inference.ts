@@ -90,6 +90,8 @@ function renderTurn(
         options,
         replayParts(segment.blocks, botNames),
       );
+    case "bot.text":
+      return speakerTurn(segment.botId, historyText(segment.payload.blocks, botNames), options);
     case "user.message":
       return {
         role: "user",
@@ -192,8 +194,9 @@ function triggerContext(trigger: SessionRunTrigger): string | undefined {
 }
 
 /**
- * What a user message can reply to: an earlier user message, or a bot's run by any of its entries,
- * so a reply to the run's message or an answer to its question quotes the whole run.
+ * What a user message can reply to: an earlier user message, a bot's words outside a run, or a
+ * bot's run by any of its entries, so a reply to the run's message or an answer to its question
+ * quotes the whole run.
  */
 function replyTargets(
   chain: readonly SessionEntry[],
@@ -206,8 +209,9 @@ function replyTargets(
   }
   const targets = new Map<string, ReplyTarget>();
   for (const entry of chain) {
-    if (entry.type === "user.message") {
-      targets.set(entry.id, { role: "user", blocks: entry.payload.blocks });
+    if (entry.type === "user.message" || entry.type === "bot.text") {
+      const role = entry.type === "user.message" ? "user" : "bot";
+      targets.set(entry.id, { role, blocks: entry.payload.blocks });
       continue;
     }
     const blocks = entry.runId === undefined ? undefined : runs.get(entry.runId);

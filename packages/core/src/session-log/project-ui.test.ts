@@ -747,6 +747,67 @@ describe("projectThreadItems", () => {
           },
         ],
       },
+      {
+        kind: "message",
+        role: "bot",
+        id: "clr-11",
+        ts: at(11),
+        botId: "bot_ada",
+        blocks: [
+          {
+            kind: "choice",
+            question: "What should I work on next?",
+            options: [
+              { id: "inbox", letter: "A", label: "Clear my inbox" },
+              { id: "week", letter: "B", label: "Plan my week" },
+            ],
+          },
+        ],
+      },
+      {
+        kind: "message",
+        role: "user",
+        id: "clr-12",
+        ts: at(12),
+        blocks: text("Plan my week."),
+        replyTo: { entryId: "clr-11" },
+        source: "app",
+      },
+    ]);
+  });
+
+  it("shows a bot's words outside a run as their own message, splitting a run's stretch", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const chain = linkEntries("aside", [
+      { ...run, type: "assistant.text", payload: { blocks: text("Recording your steps.") } },
+      { botId: "bot_ada", type: "bot.text", payload: { blocks: text("Draft skill saved.") } },
+      { ...run, type: "assistant.text", payload: { blocks: text("Back to the export.") } },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "aside-0",
+        ts: at(0),
+        ...run,
+        blocks: text("Recording your steps."),
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "aside-1",
+        ts: at(1),
+        botId: "bot_ada",
+        blocks: text("Draft skill saved."),
+      },
+      {
+        kind: "message",
+        role: "bot",
+        id: "aside-2",
+        ts: at(2),
+        ...run,
+        blocks: text("Back to the export."),
+      },
     ]);
   });
 
