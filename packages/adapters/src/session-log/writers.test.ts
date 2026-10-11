@@ -1,19 +1,23 @@
+import { randomUUID } from "node:crypto";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { SessionEntry, SessionId } from "@rakazo/contracts";
 import { EntryId, EntrySeq } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import {
+  appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
   cancelRunsInTransaction,
   clearThread,
   createThreadEvents,
+  finalizeRun,
   openRoutineSessionInTransaction,
   rewindThread,
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { messageConnectedAgent } from "../agent-connections.js";
 import { messageBot, returnBotMessageOutcome } from "../bot-messages.js";
+import { openRunLog } from "../executor.js";
 import type { PgliteDatabase } from "./pglite.js";
 import { openPgliteDatabase } from "./pglite.js";
 import { PostgresSessionLog } from "./postgres.js";
@@ -31,7 +35,12 @@ async function seedBot(prisma: PrismaClient, name: string) {
   return { bot, threadId: thread.id, sessionId: thread.sessionId as SessionId };
 }
 
-async function seedRun(prisma: PrismaClient, botId: string, threadId: string) {
+async function seedRun(
+  prisma: PrismaClient,
+  botId: string,
+  threadId: string,
+  started: { trigger?: string; routineId?: string; leaseOwner?: string; leaseFence?: number } = {},
+) {
   const task = await prisma.task.create({
     data: { spaceId: SPACE, botId, threadId, userId: USER, prompt: "", status: "running" },
   });
@@ -44,8 +53,53 @@ async function seedRun(prisma: PrismaClient, botId: string, threadId: string) {
       userId: USER,
       status: "running",
       trigger: "user",
+      ...started,
     },
   });
+}
+
+const SCHEDULED_AT = "2026-10-11T07:00:00.000Z";
+const SCRIPTED = { provider: "scripted", id: "scripted" };
+
+/** A run of the routine `name` in the bot's thread, with its own session open and its log started. */
+async function routineRun(
+  prisma: PrismaClient,
+  { bot, threadId }: Awaited<ReturnType<typeof seedBot>>,
+  name: string,
+  started: Parameters<typeof seedRun>[3] = {},
+) {
+  const run = await seedRun(prisma, bot.id, threadId, started);
+  const routineSessionId = await prisma.$transaction((tx) =>
+    openRoutineSessionInTransaction(tx, run, {
+      routineId: "rtn_digest",
+      name,
+      trigger: "routine",
+      scheduledAt: SCHEDULED_AT,
+      model: SCRIPTED,
+    }),
+  );
+  const write = async (body: object) => {
+    const { sessionId: addressed } = await prisma.run.findUniqueOrThrow({
+      where: { id: run.id },
+    });
+    await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        ...body,
+        sessionId: addressed as SessionId,
+        botId: bot.id,
+        runId: run.id,
+      } as SessionEntryDraft),
+    );
+  };
+  await write({
+    type: "run.started",
+    payload: {
+      trigger: { kind: "routine", routineId: "rtn_digest", name, scheduledAt: SCHEDULED_AT },
+      model: SCRIPTED,
+      effort: null,
+    },
+  });
+  return { run, routineSessionId, write };
 }
 
 const shape = ({ id, type, parentId, payload }: SessionEntry) => ({ id, type, parentId, payload });
@@ -67,6 +121,7 @@ describe("session log writers", () => {
     });
   });
   afterAll(() => database.close());
+  const types = async (id: SessionId) => (await log.readTail(id)).map((entry) => entry.type);
 
   it("links a request and its result between two bots as one exchange, delivered once", async () => {
     const { prisma } = database;
@@ -344,46 +399,11 @@ describe("session log writers", () => {
 
   it("keeps a routine run's steps in its own session and its approval and ends in the thread's", async () => {
     const { prisma } = database;
-    const { bot, threadId, sessionId } = await seedBot(prisma, "Hopper");
+    const hopper = await seedBot(prisma, "Hopper");
+    const { sessionId } = hopper;
     const usage = { inputTokens: 0, outputTokens: 0 };
-    const at = "2026-10-11T07:00:00.000Z";
-    const routineRun = async (name: string) => {
-      const run = await seedRun(prisma, bot.id, threadId);
-      const routineSessionId = await prisma.$transaction((tx) =>
-        openRoutineSessionInTransaction(tx, run, {
-          routineId: "rtn_digest",
-          name,
-          trigger: "routine",
-          scheduledAt: at,
-          model: { provider: "scripted", id: "scripted" },
-        }),
-      );
-      const write = async (body: object) => {
-        const { sessionId: addressed } = await prisma.run.findUniqueOrThrow({
-          where: { id: run.id },
-        });
-        await prisma.$transaction((tx) =>
-          appendSessionEntryInTransaction(tx, {
-            ...body,
-            sessionId: addressed as SessionId,
-            botId: bot.id,
-            runId: run.id,
-          } as SessionEntryDraft),
-        );
-      };
-      await write({
-        type: "run.started",
-        payload: {
-          trigger: { kind: "routine", routineId: "rtn_digest", name, scheduledAt: at },
-          model: { provider: "scripted", id: "scripted" },
-          effort: null,
-        },
-      });
-      return { run, routineSessionId, write };
-    };
-    const types = async (id: SessionId) => (await log.readTail(id)).map((entry) => entry.type);
 
-    const digest = await routineRun("Digest");
+    const digest = await routineRun(prisma, hopper, "Digest");
     await digest.write({
       type: "tool.call",
       payload: { callId: "call_0", name: "spawn_bot", input: "{}" },
@@ -413,7 +433,7 @@ describe("session log writers", () => {
         { result: "Scout is up." },
       ),
     );
-    const stopped = await routineRun("Tidy");
+    const stopped = await routineRun(prisma, hopper, "Tidy");
     await prisma.$transaction((tx) =>
       cancelRunsInTransaction(
         tx,
@@ -442,8 +462,8 @@ describe("session log writers", () => {
           routineId: "rtn_digest",
           name: "Digest",
           trigger: "routine",
-          scheduledAt: at,
-          model: { provider: "scripted", id: "scripted" },
+          scheduledAt: SCHEDULED_AT,
+          model: SCRIPTED,
         },
       },
       {
@@ -471,6 +491,180 @@ describe("session log writers", () => {
         runId: stopped.run.id,
         payload: { status: "cancelled", by: USER, usage, result: "" },
       },
+    ]);
+  });
+
+  it("forwards a routine run's question, its choice and the person's answer to the thread's session", async () => {
+    const { prisma } = database;
+    const grace = await seedBot(prisma, "Grace");
+    const { run, routineSessionId } = await routineRun(prisma, grace, "Inbox");
+    const askId = EntryId.parse(randomUUID());
+
+    await prisma.$transaction((tx) =>
+      appendRunBlocksInTransaction(tx, { id: askId, runId: run.id, botId: grace.bot.id }, [
+        { kind: "ask", text: "Which inbox?" },
+        {
+          kind: "choice",
+          question: "Archive the rest?",
+          options: [{ id: "yes", letter: "A", label: "Yes" }],
+        },
+      ]),
+    );
+    await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        type: "user.message",
+        sessionId: routineSessionId,
+        feedBotId: grace.bot.id,
+        payload: {
+          blocks: [{ kind: "text", text: "Work" }],
+          replyTo: { entryId: askId },
+          source: "app",
+        },
+      }),
+    );
+
+    expect(await types(routineSessionId)).toEqual(["run.started"]);
+    expect(await types(grace.sessionId)).toEqual([
+      "routine.started",
+      "assistant.ask",
+      "assistant.choice",
+      "user.message",
+    ]);
+  });
+
+  it("opens a webhook routine run's own session once, and a resumed run reopens that one", async () => {
+    const { prisma } = database;
+    const { bot, threadId, sessionId } = await seedBot(prisma, "Turing");
+    const routine = await prisma.routine.create({
+      data: {
+        spaceId: SPACE,
+        botId: bot.id,
+        userId: USER,
+        threadId,
+        name: "Deploy hook",
+        prompt: "Ship it.",
+        crons: [],
+        webhookEnabled: true,
+      },
+    });
+    const queued = await seedRun(prisma, bot.id, threadId, {
+      trigger: "webhook",
+      routineId: routine.id,
+    });
+    const open = async () => {
+      const run = await prisma.run.findUniqueOrThrow({ where: { id: queued.id } });
+      const runLog = { sessionId: run.sessionId as SessionId, runId: run.id, botId: bot.id };
+      return openRunLog({ prisma, sessionLog: log }, run, runLog, SCRIPTED, null);
+    };
+
+    const opened = await open();
+    await prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        type: "tool.call",
+        sessionId: opened.sessionId,
+        botId: bot.id,
+        runId: queued.id,
+        payload: { callId: "call_0", name: "deploy", input: "{}" },
+      }),
+    );
+    const resumed = await open();
+
+    expect(resumed).toEqual({
+      sessionId: opened.sessionId,
+      awaitingResult: new Map([["call_0", "{}"]]),
+    });
+    expect((await log.readTail(sessionId)).map(({ type, payload }) => ({ type, payload }))).toEqual(
+      [
+        {
+          type: "routine.started",
+          payload: {
+            sessionId: opened.sessionId,
+            routineId: routine.id,
+            name: "Deploy hook",
+            trigger: "webhook",
+            scheduledAt: queued.createdAt.toISOString(),
+            model: SCRIPTED,
+          },
+        },
+      ],
+    );
+    expect(
+      (await log.readTail(opened.sessionId)).map(({ type, payload }) => ({ type, payload })),
+    ).toEqual([
+      {
+        type: "run.started",
+        payload: {
+          trigger: { kind: "webhook", routineId: routine.id },
+          model: SCRIPTED,
+          effort: null,
+        },
+      },
+      { type: "tool.call", payload: { callId: "call_0", name: "deploy", input: "{}" } },
+    ]);
+  });
+
+  it("reports a routine run that fails through finalizeRun as failed in the thread's session", async () => {
+    const { prisma } = database;
+    const lovelace = await seedBot(prisma, "Lovelace");
+    const lease = { leaseOwner: "worker-1", leaseFence: 1 };
+    const { run, routineSessionId } = await routineRun(prisma, lovelace, "Digest", lease);
+    const attempt = await prisma.attempt.create({
+      data: { runId: run.id, fence: lease.leaseFence, status: "running" },
+    });
+
+    await finalizeRun(prisma, {
+      spaceId: SPACE,
+      threadId: lovelace.threadId,
+      botId: lovelace.bot.id,
+      runId: run.id,
+      taskId: run.taskId,
+      attemptId: attempt.id,
+      ...lease,
+      outcome: "failed",
+      error: "model unavailable",
+    });
+
+    expect(await types(routineSessionId)).toEqual(["run.started", "run.finished"]);
+    expect(
+      (await log.readTail(lovelace.sessionId)).map(({ type, payload }) => ({ type, payload })),
+    ).toEqual([
+      expect.objectContaining({ type: "routine.started" }),
+      {
+        type: "routine.finished",
+        payload: {
+          status: "failed",
+          error: "model unavailable",
+          usage: { inputTokens: 0, outputTokens: 0 },
+          result: "",
+        },
+      },
+    ]);
+  });
+
+  it("names the thread's session, not the routine's, as where a routine run's bot message came from", async () => {
+    const { prisma } = database;
+    const asker = await seedBot(prisma, "Babbage");
+    const helper = await seedBot(prisma, "Clarke");
+    const { run, routineSessionId } = await routineRun(prisma, asker, "Digest");
+    const deps = {
+      prisma,
+      events: { notify: vi.fn(async () => undefined) },
+      jobs: { enqueue: vi.fn(async () => undefined) },
+    } as unknown as Parameters<typeof messageBot>[0];
+
+    await messageBot(deps, run, asker.bot, {
+      bot_id: helper.bot.id,
+      message: "Chart Q3",
+      deliveryKey: "routine-call-1",
+    });
+
+    const [sent] = await log.readTail(asker.sessionId).then((entries) => entries.slice(-1));
+    const [received] = await log.readTail(helper.sessionId);
+    expect(await types(routineSessionId)).toEqual(["run.started"]);
+    expect([sent?.type, received?.type, received?.payload]).toEqual([
+      "bot.message.sent",
+      "bot.message.received",
+      expect.objectContaining({ fromSessionId: asker.sessionId, fromEntryId: sent?.id }),
     ]);
   });
 
