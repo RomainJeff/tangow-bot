@@ -484,6 +484,9 @@ model Thread {
   createdAt                   DateTime   @default(now())
   nextEventSeq                Int        @default(0)
   nextMessageSeq              Int        @default(0)
+  historyCompactedUpToSeq     Int?
+  historyCompactionSummary    String?    @db.Text
+  historyCompactionGeneration Int        @default(0)
   unread                      Boolean    @default(false)
   // The main session. The database fills it: a uuid default, and the threads_create_main_session
   // trigger inserts the matching sessions row, so every thread has its log from its first insert.

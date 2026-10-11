@@ -254,6 +254,8 @@ describe("sessions migration", () => {
         VALUES ('r1', 's1', 'b1', 't1', 'k1', 'u1', 'completed', 'user', now());
         INSERT INTO messages (id, "threadId", seq, role, blocks)
         VALUES ('m1', 't1', 0, 'user', '[{"kind":"text","text":"hi"}]');
+        UPDATE threads SET "historyCompactedUpToSeq" = 0, "historyCompactionSummary" = 'Said hi.'
+        WHERE id = 't1';
       `);
       await applyMigration(pglite, MIGRATION);
       await pglite.exec(`DELETE FROM sessions WHERE "threadId" = 't2'`);
@@ -288,6 +290,15 @@ describe("sessions migration", () => {
     expect(
       await prisma.message.findMany({ select: { id: true, seq: true, blocks: true } }),
     ).toEqual([{ id: "m1", seq: 0, blocks: [{ kind: "text", text: "hi" }] }]);
+  });
+
+  it("keeps a thread's compaction summary from before the log for the backfill to read", async () => {
+    expect(
+      await database.prisma.thread.findUniqueOrThrow({
+        where: { id: "t1" },
+        select: { historyCompactedUpToSeq: true, historyCompactionSummary: true },
+      }),
+    ).toEqual({ historyCompactedUpToSeq: 0, historyCompactionSummary: "Said hi." });
   });
 
   it("points a session that already has entries at its newest one, so the next append chains on", async () => {
