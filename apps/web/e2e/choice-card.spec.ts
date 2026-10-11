@@ -1,6 +1,6 @@
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
-import { answerOf, threadEntries } from "./thread-log";
+import { threadEntries } from "./thread-log";
 
 test("renders tappable choice buttons and submits the offered action id", async ({
   page,
@@ -87,12 +87,21 @@ test("renders tappable choice buttons and submits the offered action id", async 
       async () => {
         const entries = await threadEntries(page, { botId });
         const ask = entries.find((entry) => entry.type === "assistant.ask");
-        const answer = ask ? answerOf(entries, ask.id) : undefined;
-        return answer?.type === "user.message" ? answer.payload.blocks : null;
+        if (!ask) return null;
+        const reply = entries.find(
+          (entry) => entry.type === "user.message" && entry.payload.replyTo?.entryId === ask.id,
+        );
+        const answered = entries.find(
+          (entry) => entry.type === "card.answered" && entry.payload.target === ask.id,
+        );
+        return {
+          reply: reply?.type === "user.message" ? reply.payload.blocks : null,
+          answer: answered?.type === "card.answered" ? answered.payload.answer : null,
+        };
       },
       { timeout: 30_000 },
     )
-    .toEqual([{ kind: "text", text: "Seoul" }]);
+    .toEqual({ reply: [{ kind: "text", text: "Seoul" }], answer: "choice-2" });
 
   await captureScreenshot(page, testInfo, "choice-card-answered");
 });

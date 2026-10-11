@@ -90,9 +90,12 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await assertChipCentered();
   await captureScreenshot(page, testInfo, "peer-chip-mobile");
 
-  await chip.focus();
-  await expect(chip).toBeFocused();
-  await chip.press("Enter");
+  const openChip = chip.getByRole("button", {
+    name: /Messaged Researcher|Message from Researcher/,
+  });
+  await openChip.focus();
+  await expect(openChip).toBeFocused();
+  await openChip.press("Enter");
   const view = page.getByTestId("peer-conversation-view");
   await expect(view).toBeVisible();
   await expect(view.getByRole("heading", { name: /Chief · Researcher/ })).toBeVisible();
