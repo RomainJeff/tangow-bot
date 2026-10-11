@@ -1,7 +1,7 @@
 import { ThreadItemSchema } from "@rakazo/contracts";
-import type { RoutineLineRun } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import { routineLine } from "./routine-line";
+import type { RoutineLineRun } from "./routine-groups.js";
+import { routineLine } from "./routine-groups.js";
 
 function run(fields: object, latest = true): RoutineLineRun {
   const item = ThreadItemSchema.parse({

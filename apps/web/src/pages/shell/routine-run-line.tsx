@@ -2,8 +2,8 @@ import { i18n } from "@lingui/core";
 import { plural } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
-import type { RoutineLineRun } from "@rakazo/core";
-import { threadTimeMarkerLabel } from "@rakazo/core";
+import type { RoutineLineRun, RoutineLineState } from "@rakazo/core";
+import { routineLine, threadTimeMarkerLabel } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import { ClippedPreview, Dialog, DialogContent, DialogTitle, Shimmer } from "@rakazo/ui-web";
 import {
@@ -18,8 +18,6 @@ import {
 import type { ComponentType, ReactNode } from "react";
 import { useState } from "react";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
-
-type RoutineState = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 /** The bot a run then messaged, drawn by the run: a receipt at rest, the
  * centred `CollaborationMarker` when the line is open. */
@@ -37,7 +35,7 @@ const GROUP_DIALOG_MAX = 8;
 
 /** The run's state as one icon: the shape tells it apart without colour, the
  * colour only confirms. Completed and failed are filled; the rest are not. */
-const ROUTINE_STATE_ICON: Record<RoutineState, ComponentType<{ className?: string }>> = {
+const ROUTINE_STATE_ICON: Record<RoutineLineState, ComponentType<{ className?: string }>> = {
   queued: Clock,
   running: CircleDashed,
   completed: CircleCheck,
@@ -45,18 +43,14 @@ const ROUTINE_STATE_ICON: Record<RoutineState, ComponentType<{ className?: strin
   cancelled: StopCircle,
 };
 
-function routineState(run: RoutineLineRun, queued = false): RoutineState {
-  return run.item.finished?.status ?? (queued ? "queued" : "running");
-}
-
 /** The symbol carries the colour; the word is muted unless the run failed. */
-function stateColorClass(state: RoutineState): string {
+function stateColorClass(state: RoutineLineState): string {
   if (state === "completed") return "text-success";
   if (state === "failed") return "text-destructive";
   return "text-muted-foreground";
 }
 
-function stateWordClass(state: RoutineState): string {
+function stateWordClass(state: RoutineLineState): string {
   return state === "failed" ? "text-destructive" : "text-muted-foreground";
 }
 
@@ -107,27 +101,19 @@ export function RoutineRunLine({
 }) {
   const { t } = useLingui();
   const { item } = run;
-  const state = routineState(run, queued);
-  const digest = item.finished?.result.trim() || undefined;
-  const failed = state === "failed";
-  const subscribed = item.notify === true;
+  const { state, report: digest, subscribed, opensOnItsOwn } = routineLine(run, queued);
   const expands = Boolean(digest || handoff);
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  // Only a routine's latest run opens on its own: older ones stay folded so past reports are no wall.
-  const expanded =
-    expands && (manualExpanded ?? Boolean(digest && run.latest && (subscribed || failed)));
+  const expanded = expands && (manualExpanded ?? opensOnItsOwn);
   const locale = i18n.locale || "en";
   const time = routineTime(item.ts, locale, withDay);
-  const statusLabel =
-    state === "queued"
-      ? t`Queued`
-      : state === "running"
-        ? t`Running`
-        : state === "completed"
-          ? t`Completed`
-          : failed
-            ? t`Failed`
-            : t`Cancelled`;
+  const statusLabel = {
+    queued: t`Queued`,
+    running: t`Running`,
+    completed: t`Completed`,
+    failed: t`Failed`,
+    cancelled: t`Cancelled`,
+  }[state];
   const Icon = ROUTINE_STATE_ICON[state];
   const colorClass = stateColorClass(state);
   const wordClass = stateWordClass(state);
@@ -266,7 +252,7 @@ export function RoutineGroupLine({
   const last = runs.at(-1)!;
   const spansDays = !sameLocalDay(first.item.ts, last.item.ts);
   const range = routineRange(first.item.ts, last.item.ts, locale);
-  const cancelledCount = runs.filter((run) => routineState(run) === "cancelled").length;
+  const cancelledCount = runs.filter((run) => routineLine(run, false).state === "cancelled").length;
   const statusLabel = cancelledCount
     ? plural(cancelledCount, { one: "# cancelled", other: "# cancelled" })
     : t`Completed`;

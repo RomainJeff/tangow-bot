@@ -5,6 +5,22 @@ type SentItem = Extract<ThreadItem, { kind: "botMessage"; direction: "sent" }>;
 
 export type RoutineLineRun = { item: RoutineItem; sentTo?: SentItem; latest: boolean };
 
+export type RoutineLineState = "queued" | "running" | "completed" | "failed" | "cancelled";
+
+/** A routine run's line: the latest run of a subscribed or failed routine opens on its report. */
+export function routineLine(run: RoutineLineRun, queued: boolean) {
+  const { finished, notify } = run.item;
+  const state: RoutineLineState = finished?.status ?? (queued ? "queued" : "running");
+  const report = finished?.result.trim() || undefined;
+  const subscribed = notify === true;
+  return {
+    state,
+    report,
+    subscribed,
+    opensOnItsOwn: Boolean(report && run.latest && (subscribed || state === "failed")),
+  };
+}
+
 export type RoutineLineRole =
   | { kind: "run"; run: RoutineLineRun }
   | { kind: "group"; runs: RoutineLineRun[] };

@@ -41,6 +41,7 @@ import {
   type RoutineLineRun,
   resolveComposerSendPlan,
   routineCardSettlement,
+  routineLine,
   SLASH_ACTIONS,
   type SlashActionId,
   selectedAskActionLabel,
@@ -216,7 +217,6 @@ import {
 } from "../lib/pick-attachments";
 import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
-import { routineLine } from "../lib/routine-line";
 import { isViewedRunLine, originSession } from "../lib/session-sheet";
 import { closeSheet, openSheet } from "../lib/sheet";
 import type { SpawnBotEdits } from "../lib/spawn-bot-edit";
@@ -4606,16 +4606,13 @@ function RoutineRunLine({
   const stacked = PixelRatio.getFontScale() > 1.35;
   const symbolColor =
     state === "completed" ? tokens.success : failed ? tokens.destructive : tokens.mutedForeground;
-  const statusLabel =
-    state === "queued"
-      ? t("Queued")
-      : state === "running"
-        ? t("Running")
-        : state === "completed"
-          ? t("Completed")
-          : failed
-            ? t("Failed")
-            : t("Cancelled");
+  const statusLabel = {
+    queued: t("Queued"),
+    running: t("Running"),
+    completed: t("Completed"),
+    failed: t("Failed"),
+    cancelled: t("Cancelled"),
+  }[state];
   const statusStyle = {
     color: failed ? tokens.destructive : tokens.mutedForeground,
     ...nativeTextStyle("label", { weight: 500 }),
