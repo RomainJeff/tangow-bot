@@ -8,9 +8,10 @@ type Draft<E> = E extends { type: "rewind" }
 /**
  * An entry as a writer hands it to `SessionLog.append`. The log assigns `seq` and makes the
  * session's head the parent, except that a rewind names its target as `parentId` and a clear has
- * no parent. `id` defaults to a new uuid and `ts` to now.
+ * no parent. `id` defaults to a new uuid and `ts` to now. A thread's feed shows the entry under its
+ * `botId`, else under `feedBotId`, which the entry does not keep.
  */
-export type SessionEntryDraft = Draft<SessionEntry>;
+export type SessionEntryDraft = Draft<SessionEntry> & { feedBotId?: string };
 
 export type NewSession =
   | { kind: "thread"; id: SessionId; spaceId: string; threadId: string }
@@ -26,7 +27,11 @@ export type NewSession =
 /** The session's entry with the highest seq, as stored; `nextSessionEntry` validates what it becomes. */
 export type SessionHead = { id: string; seq: number };
 
-export type SessionAppendRefusal = "unknown_session" | "missing_parent" | "stale_compaction";
+export type SessionAppendRefusal =
+  | "unknown_session"
+  | "missing_parent"
+  | "stale_compaction"
+  | "no_feed_bot";
 
 export class SessionAppendError extends Error {
   constructor(

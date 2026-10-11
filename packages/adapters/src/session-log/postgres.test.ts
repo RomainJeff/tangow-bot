@@ -88,8 +88,18 @@ describe("PostgresSessionLog", () => {
     const entry = await prisma.$transaction((tx) =>
       log.append(tx, {
         sessionId,
+        feedBotId: botId,
         type: "user.message",
         payload: { blocks: [{ kind: "text", text: "hello" }], source: "app" },
+      }),
+    );
+    const authored = await prisma.$transaction((tx) =>
+      log.append(tx, {
+        sessionId,
+        botId: "bot_author",
+        feedBotId: botId,
+        type: "system.note",
+        payload: { text: "noted" },
       }),
     );
     const childId = SessionId.parse("ses_child_feed");
@@ -108,10 +118,27 @@ describe("PostgresSessionLog", () => {
       });
     });
 
-    const events = await prisma.event.findMany({ where: { threadId } });
+    const events = await prisma.event.findMany({ where: { threadId }, orderBy: { seq: "asc" } });
     expect(events.map(({ type, botId, payload }) => ({ type, botId, payload }))).toEqual([
       { type: "session.entry.appended", botId, payload: { entry } },
+      { type: "session.entry.appended", botId: "bot_author", payload: { entry: authored } },
     ]);
+  });
+
+  it("refuses a thread session entry that names no bot for the feed", async () => {
+    const { prisma } = database;
+    const { sessionId } = await seedThread(prisma);
+
+    await expect(
+      prisma.$transaction((tx) =>
+        log.append(tx, {
+          sessionId,
+          type: "user.message",
+          payload: { blocks: [{ kind: "text", text: "whose?" }], source: "app" },
+        }),
+      ),
+    ).rejects.toMatchObject({ reason: "no_feed_bot" });
+    expect(await log.readTail(sessionId)).toEqual([]);
   });
 
   it("refuses an entry from a cancelled run", async () => {

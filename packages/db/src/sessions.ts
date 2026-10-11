@@ -95,6 +95,23 @@ export async function appendSessionEntryInTransaction(
     }
   }
   const entry = nextSessionEntry(sanitizeJsonValue(draft), session.seq, head);
+  if (thread) {
+    const botId = entry.botId ?? draft.feedBotId;
+    if (botId === undefined) {
+      throw new SessionAppendError(
+        "no_feed_bot",
+        `Entry for session ${draft.sessionId} names no bot to show it under on thread ${thread.id}`,
+      );
+    }
+    await appendEventInTransaction(tx, {
+      spaceId: session.spaceId,
+      threadId: thread.id,
+      botId,
+      type: "session.entry.appended",
+      payload: { entry },
+      runId: entry.runId,
+    });
+  }
   await tx.sessionEntry.create({
     data: {
       id: entry.id,
@@ -109,33 +126,5 @@ export async function appendSessionEntryInTransaction(
     },
     select: { id: true },
   });
-  if (thread) {
-    await appendEventInTransaction(tx, {
-      spaceId: session.spaceId,
-      threadId: thread.id,
-      botId: entry.botId ?? (await threadBotId(tx, thread.id)),
-      type: "session.entry.appended",
-      payload: { entry },
-      runId: entry.runId,
-    });
-  }
   return entry;
-}
-
-/**
- * The bot a thread's feed attributes a bot-less entry to: the thread's bot, the bot of its external
- * conversation, or a group's first member.
- */
-async function threadBotId(tx: Prisma.TransactionClient, threadId: string): Promise<string> {
-  const [owner] = await tx.$queryRaw<Array<{ botId: string | null }>>`
-    SELECT COALESCE(
-      t."botId",
-      c."botId",
-      (SELECT m."botId" FROM chat_group_members m
-       WHERE m."groupId" = t."groupId" ORDER BY m."createdAt", m.id LIMIT 1)
-    ) AS "botId"
-    FROM threads t LEFT JOIN external_conversations c ON c.id = t."externalConversationId"
-    WHERE t.id = ${threadId}`;
-  if (!owner?.botId) throw new Error(`Thread ${threadId} has no bot to attribute its entries to`);
-  return owner.botId;
 }

@@ -76,7 +76,7 @@ export function runSessionLogConformance<Tx>(makeLog: () => Promise<SessionLogHa
     }
 
     function append(draft: SessionEntryDraft): Promise<SessionEntry> {
-      return harness.transaction((tx) => harness.log.append(tx, draft));
+      return harness.transaction((tx) => harness.log.append(tx, { ...draft, feedBotId: BOT }));
     }
 
     async function appendAll(drafts: readonly SessionEntryDraft[]): Promise<SessionEntry[]> {
