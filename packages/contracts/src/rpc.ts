@@ -100,6 +100,7 @@ import {
   RunsListOutputSchema,
 } from "./runs.js";
 import { SearchQueryOutputSchema } from "./search.js";
+import { EntryId, SessionEntrySchema, SessionId } from "./session-log.js";
 
 const botId = z.object({ botId: Id });
 const groupId = z.object({ groupId: Id });
@@ -127,6 +128,8 @@ const structuredMentionTarget = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("routine"), id: Id }),
   z.object({ kind: z.literal("connector"), id: Id }),
 ]);
+
+const sessionEntriesOutput = z.object({ entries: z.array(SessionEntrySchema) });
 
 const threadSendInput = threadTarget
   .safeExtend({
@@ -312,15 +315,10 @@ export const appContract = {
     messages: oc
       .input(
         threadTarget.safeExtend({
-          before: z.number().int().nonnegative().optional(),
+          before: EntryId.optional(),
           includePeerRuns: z.boolean().optional(),
-          includePeerReceipts: z.boolean().optional(),
-          around: z
-            .object({
-              messageId: Id.optional(),
-              seq: z.number().int().nonnegative().optional(),
-            })
-            .optional(),
+          /** The chain around this entry, for a jump to it. */
+          around: z.object({ entryId: EntryId }).optional(),
         }),
       )
       .output(ThreadMessagePageSchema),
@@ -884,6 +882,12 @@ export const appContract = {
   runs: {
     list: oc.input(z.object({ filter: z.enum(["active", "recent"]) })).output(RunsListOutputSchema),
     recap: oc.input(z.object({ runId: Id })).output(RunRecapSchema),
+    /** A run's entries from every session it wrote to, joined with the person's answers. */
+    entries: oc.input(z.object({ runId: Id })).output(sessionEntriesOutput),
+  },
+  sessions: {
+    /** A child session's chain, for its read-only thread view. */
+    entries: oc.input(z.object({ sessionId: SessionId })).output(sessionEntriesOutput),
   },
   voice: {
     catalog: oc.output(z.array(VoiceCatalogEntrySchema)),

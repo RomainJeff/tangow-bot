@@ -198,6 +198,23 @@ export const ChoiceBlock = z.object({
   answerId: z.string().optional(),
 });
 
+export const SkillDraftBlock = z.object({
+  kind: z.literal("skill_draft"),
+  skillId: Id,
+  name: z.string(),
+  goal: z.string(),
+  playbook: z.object({
+    whenToUse: z.string(),
+    inputs: z.array(z.string()),
+    steps: z.array(z.string()),
+    howToCheck: z.string(),
+    whatToReturn: z.string(),
+    approvalBoundaries: z.string(),
+    failureHandling: z.string(),
+  }),
+  status: z.enum(["draft", "saved"]),
+});
+
 export const MessageBlock = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string() }),
   z.object({
@@ -279,22 +296,7 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     title: z.string().optional(),
     status: z.enum(["created", "archived", "deleted"]),
   }),
-  z.object({
-    kind: z.literal("skill_draft"),
-    skillId: Id,
-    name: z.string(),
-    goal: z.string(),
-    playbook: z.object({
-      whenToUse: z.string(),
-      inputs: z.array(z.string()),
-      steps: z.array(z.string()),
-      howToCheck: z.string(),
-      whatToReturn: z.string(),
-      approvalBoundaries: z.string(),
-      failureHandling: z.string(),
-    }),
-    status: z.enum(["draft", "saved"]),
-  }),
+  SkillDraftBlock,
   ChartBlock,
   z.object({
     /** Approval card for an agent-created MCP server. The user completes the

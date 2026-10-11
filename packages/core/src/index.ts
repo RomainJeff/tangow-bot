@@ -55,6 +55,7 @@ export * from "./secrets-guard.js";
 export * from "./self-update.js";
 export * from "./session-log/jsonl.js";
 export * from "./session-log/project-inference.js";
+export * from "./session-log/project-thread-view.js";
 export * from "./session-log/project-ui.js";
 export * from "./signup-policy.js";
 export * from "./skill-access.js";
