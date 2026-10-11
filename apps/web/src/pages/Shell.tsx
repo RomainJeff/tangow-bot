@@ -524,6 +524,13 @@ export function ShellPage() {
   const initiallyScrolledThread = useRef<string | null>(null);
   const messageScroll = useRef<HTMLDivElement>(null);
   const pinnedAroundRef = useRef<{ botId?: string; groupId?: string } | null>(null);
+  function leaveJumpWindow({ snapToEnd = false } = {}) {
+    const inWindow = expandedHistoryThread.current !== null || pinnedAroundRef.current !== null;
+    expandedHistoryThread.current = null;
+    pinnedAroundRef.current = null;
+    const element = messageScroll.current;
+    if (snapToEnd && inWindow && element) element.scrollTop = element.scrollHeight;
+  }
   const manuallyUnread = useRef(new Set<string>());
   const readVisibleGroups = useRef(new Set<string>());
   const notifiedBrowserEvents = useRef(new Set<string>());
@@ -1137,8 +1144,7 @@ export function ShellPage() {
         const appended = appendedEntries(event);
         const cut = appended.some((entry) => entry.type === "clear" || entry.type === "rewind");
         if (appended.some((entry) => entry.type === "clear")) {
-          expandedHistoryThread.current = null;
-          pinnedAroundRef.current = null;
+          leaveJumpWindow();
           historyEpoch.current += 1;
         }
         if (isRunTerminalEvent(event)) setActivityEpoch((epoch) => epoch + 1);
@@ -1207,10 +1213,7 @@ export function ShellPage() {
     window.addEventListener("focus", markVisibleGroupRead);
     document.addEventListener("visibilitychange", markVisibleGroupRead);
     const pendingJump = searchParamsRef.current.get("m");
-    if (!pendingJump) {
-      pinnedAroundRef.current = null;
-      expandedHistoryThread.current = null;
-    }
+    if (!pendingJump) leaveJumpWindow();
     historyEpoch.current += 1;
     const abort = new AbortController();
     void runThreadSubscription({
@@ -2092,12 +2095,7 @@ export function ShellPage() {
         // The message is in the log and on the feed: the next one can go while the thread refreshes.
         setSending(false);
         // A send leaves a search jump's window for the latest page, where the message and its reply land.
-        if (expandedHistoryThread.current !== null || pinnedAroundRef.current !== null) {
-          expandedHistoryThread.current = null;
-          pinnedAroundRef.current = null;
-          const element = messageScroll.current;
-          if (element) element.scrollTop = element.scrollHeight;
-        }
+        leaveJumpWindow({ snapToEnd: true });
         if (groupTarget) await refreshGroupThreadRef.current(groupTarget);
         else if (botTarget) await refreshThreadRef.current(botTarget);
       } catch (error) {
@@ -3313,8 +3311,7 @@ export function ShellPage() {
                 (clearTarget.kind === "bot" && active?.id === clearTarget.chat.id) ||
                 (clearTarget.kind === "group" && activeGroup?.id === clearTarget.chat.id)
               ) {
-                expandedHistoryThread.current = null;
-                pinnedAroundRef.current = null;
+                leaveJumpWindow();
                 historyEpoch.current += 1;
                 updateSnapshot((current) => (current ? { ...current, run: null } : current));
               }
