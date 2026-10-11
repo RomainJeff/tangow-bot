@@ -156,7 +156,7 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
     if (claimed.count === 0 || all.length === 0) return null;
     const target = (
       await tx.message.findMany({
-        where: { threadId: run.threadId, runId: run.id, role: "bot", hiddenFromThread: false },
+        where: { threadId: run.threadId, runId: run.id, role: "bot" },
         orderBy: { seq: "asc" },
         select: {
           id: true,

@@ -81,7 +81,6 @@ export interface FakeThreadDb {
     botId?: string | null;
     replyToMessageId?: string | null;
     replyQuote?: string | null;
-    hiddenFromThread?: boolean;
     createdAt?: Date;
   }): void;
   seedRun(input: {
@@ -236,7 +235,6 @@ export function createFakeThreadDb(): FakeThreadDb {
             id: nextId("message"),
             runId: null,
             clientNonce: null,
-            hiddenFromThread: false,
             replyToMessageId: null,
             replyQuote: null,
             ...args.data,
@@ -450,7 +448,6 @@ export function createFakeThreadDb(): FakeThreadDb {
       botId = null,
       replyToMessageId = null,
       replyQuote = null,
-      hiddenFromThread = false,
       createdAt,
     }) {
       tables.messages.set(id, {
@@ -464,7 +461,6 @@ export function createFakeThreadDb(): FakeThreadDb {
         botId,
         replyToMessageId,
         replyQuote,
-        hiddenFromThread,
         createdAt,
       });
     },
