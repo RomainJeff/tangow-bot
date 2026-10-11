@@ -27,6 +27,8 @@ export type ThreadRow = {
   routine?: RoutineLineRole;
   /** A time marker before the row; `withTime` false between two routine lines, the day only. */
   marker?: { at: string; withTime: boolean };
+  /** The id a reply or a reaction to the row names: the published message the row starts with. */
+  messageId?: EntryId;
 };
 
 /** The card the thread waits on: an ask, a choice or an approval with no answer, in a run still open. */
