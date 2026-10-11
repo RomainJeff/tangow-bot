@@ -441,7 +441,13 @@ export async function readSessionEntries(
   actor: Actor,
   sessionId: SessionId,
 ): Promise<SessionEntries> {
-  const threadId = await threadOfSession(deps.prisma, sessionId, actor.spaceId);
+  const [threadId, run] = await Promise.all([
+    threadOfSession(deps.prisma, sessionId, actor.spaceId),
+    deps.prisma.run.findFirst({
+      where: { sessionId, session: { kind: { not: "thread" } } },
+      select: { id: true },
+    }),
+  ]);
   const thread = threadId
     ? await deps.prisma.thread.findUnique({
         where: { id: threadId },
@@ -452,10 +458,6 @@ export async function readSessionEntries(
   await resolveThreadTarget(deps.prisma, actor, {
     botId: thread.botId ?? undefined,
     groupId: thread.groupId ?? undefined,
-  });
-  const run = await deps.prisma.run.findFirst({
-    where: { sessionId, session: { kind: { not: "thread" } } },
-    select: { id: true },
   });
   if (!run) throw new IsolationError();
   return readCappedRun(deps.sessionLog, run.id);
