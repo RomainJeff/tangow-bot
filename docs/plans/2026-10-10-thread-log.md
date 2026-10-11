@@ -639,5 +639,5 @@ Taken by the operator on 2026-10-11 from the inventory of `main` against the fea
 - The skill nudge's private exchange is rebuilt from the run's entries through `readRun` and the inference projection. `reply-context.ts` stays deleted; nothing reintroduces `messageToAgentHistoryTurn`.
 - `executor-compaction-asides.test.ts` stays deleted; its new main-side case moves to a projection test, a `skill.learnt` entry yields no turn.
 - `agent.skill.used` and `agent.skill.nudge` stay in the `events` feed, out of the log.
-- SL6 adds to its backfill the `skill_source` conversion and ports the remaining readers of `messages` before the drop: `writeSkillLines`, the nudge exchange, `cutMessages` in the truncate path, `previewFromBlocks` in `thread-listing.ts`. `steering_messages.untrusted` rides the repoint the plan already lists.
+- SL6 adds to its backfill the `skill_source` conversion and ports the remaining readers of `messages` before the drop, namely `writeSkillLines`, the nudge exchange, `cutMessages` in the truncate path, `previewFromBlocks` in `thread-listing.ts`. `steering_messages.untrusted` rides the repoint the plan already lists.
 - `TeachComputerOverlay.tsx` has no fix on main; a separate small PR on `main` formats it.
