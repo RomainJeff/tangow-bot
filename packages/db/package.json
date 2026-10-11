@@ -8,6 +8,10 @@
       "types": "./src/index.ts",
       "development": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./sessions.test-support": {
+      "types": "./src/sessions.test-support.ts",
+      "default": "./src/sessions.test-support.ts"
     }
   },
   "scripts": {

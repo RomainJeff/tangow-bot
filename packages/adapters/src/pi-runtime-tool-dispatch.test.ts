@@ -11,7 +11,8 @@ const fakeAgentState = vi.hoisted(() => ({
     | "parent-limit"
     | "parent-parallel"
     | "ask-pause"
-    | "nested-ask-pause",
+    | "nested-ask-pause"
+    | "subagent-log",
   emitFinalAfterFollowUp: true,
   abortCount: 0,
   tools: [] as Array<{
@@ -165,6 +166,28 @@ vi.mock("@earendil-works/pi-agent-core", () => ({
             this.aborted ? Promise.resolve() : shell.execute(`shell-${index}`, item.args),
           ),
         );
+        return;
+      }
+
+      if (fakeAgentState.mode === "subagent-log") {
+        const delegation = this.tools.find((tool) => tool.name === "run_subagent");
+        if (delegation) {
+          const args = fakeAgentState.invoke.args;
+          this.emit({ type: "tool_execution_start", toolName: delegation.name, args });
+          fakeAgentState.toolResult = await delegation.execute("delegate-1", args);
+          return;
+        }
+        const shell = this.tools.find((tool) => tool.name === "shell");
+        if (!shell) throw new Error("shell was not exposed to the subagent");
+        await shell.execute("count-1", { command: "echo 1" });
+        this.emit({
+          type: "message_end",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "1 2" }],
+            usage: { input: 10, output: 3 },
+          },
+        });
         return;
       }
 
@@ -1046,6 +1069,92 @@ describe("Pi connector tool dispatch", () => {
           "I stopped after reaching the limit of 80 tool calls in this turn. Send another message to continue.",
       }),
     );
+  });
+
+  describe("a subagent's own log", () => {
+    async function delegate(args: Record<string, unknown>) {
+      fakeAgentState.mode = "subagent-log";
+      fakeAgentState.invoke = { name: "run_subagent", args };
+      const writes: string[] = [];
+      const parentTool = vi.fn(async () => ({ ok: true }));
+      const finish = vi.fn(async () => undefined);
+      const startSubagent = vi.fn(async () => ({
+        executeTool: vi.fn(async (name: string) => {
+          writes.push(`tool ${name}`);
+          return { ok: true };
+        }),
+        text: vi.fn(async (text: string) => {
+          writes.push(`text ${text}`);
+        }),
+        finish,
+      }));
+      for await (const _event of new PiAgentRuntime().run(
+        {
+          botId: "b",
+          threadId: "t",
+          runId: `delegating-${String(args.task)}`,
+          prompt: "delegate",
+          instructions: "Use run_subagent.",
+          history: [],
+          tools: [
+            {
+              name: "run_subagent",
+              description: "Delegate work",
+              inputSchema: { type: "object", properties: {} },
+            },
+            shellTool,
+          ],
+          model: { provider: "test", id: "dispatch-test-model" },
+          executeTool: parentTool,
+          startSubagent,
+        },
+        {
+          operationId: "3",
+          traceId: "3",
+          spaceId: "w",
+          userId: "u",
+          signal: new AbortController().signal,
+        },
+      )) {
+      }
+      return { writes, parentTool, finish, startSubagent };
+    }
+
+    it("runs the helper's tools and words through its log and closes it with the result", async () => {
+      const args = { name: "counter", task: "Count to two." };
+      const { writes, parentTool, finish, startSubagent } = await delegate(args);
+
+      expect(startSubagent).toHaveBeenCalledWith({
+        callId: "delegate-1",
+        name: "counter",
+        task: "Count to two.",
+        args,
+        model: { provider: "test", id: "dispatch-test-model" },
+      });
+      expect(parentTool).not.toHaveBeenCalled();
+      expect(writes).toEqual(["tool shell", "text 1 2"]);
+      expect(finish).toHaveBeenCalledWith({
+        status: "completed",
+        result: "1 2",
+        usage: { inputTokens: 10, outputTokens: 3 },
+      });
+      expect(fakeAgentState.toolResult).toMatchObject({ content: [{ type: "text", text: "1 2" }] });
+    });
+
+    it("closes the log of a helper that fails with the exact text its parent reads", async () => {
+      const { finish } = await delegate({ name: "picky", task: "Pick", model_provider: "x" });
+
+      expect(finish).toHaveBeenCalledWith({
+        status: "failed",
+        result: "Subagent failed: model_provider and model_id must both be set",
+        usage: { inputTokens: 0, outputTokens: 0 },
+      });
+      expect(fakeAgentState.toolResult).toMatchObject({
+        content: [
+          { type: "text", text: "Subagent failed: model_provider and model_id must both be set" },
+        ],
+      });
+    });
   });
 
   it("treats unset, empty, and non-positive MAX_TOOL_CALLS_PER_TURN as unlimited", () => {

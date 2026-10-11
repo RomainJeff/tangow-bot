@@ -10,6 +10,10 @@ import {
   type MessagingDeliveryDeps,
 } from "./messaging-delivery.js";
 
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
+
 const context: AdapterContext = {
   operationId: "op-1",
   traceId: "trace-1",

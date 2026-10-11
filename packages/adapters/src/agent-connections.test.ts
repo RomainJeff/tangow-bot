@@ -6,6 +6,10 @@ import {
   respondAgentConnection,
 } from "./agent-connections.js";
 
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
+
 const requesterIdentity = {
   id: "mi-1",
   provider: "sendblue",
@@ -160,10 +164,10 @@ function createDeps(
         return { count: before - outboundRows.length };
       }),
     },
-    message: {
+    sessionEntry: {
       findUnique: vi.fn(async () =>
         overrides.sourceHop != null
-          ? { blocks: [{ kind: "bot_message_received", hop: overrides.sourceHop }] }
+          ? { type: "bot.message.received", payload: { hop: overrides.sourceHop } }
           : null,
       ),
     },

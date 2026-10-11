@@ -11,6 +11,11 @@ import type * as ChildBotsModule from "./child-bots.js";
 import { spawnBot } from "./child-bots.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { recordingSessionLog } from "./session-log/recording.test-support.js";
+
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -187,7 +192,11 @@ function fixture({
     description: "Test assistant",
     ...data,
   }));
+  const log = recordingSessionLog();
   const prisma = {
+    sessionEntry: log.sessionEntry,
+    $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
+    steeringMessage: { findFirst: vi.fn(async () => null) },
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
@@ -268,6 +277,7 @@ function fixture({
     yield { type: "done" as const, text: "Done" };
   });
   const executor = createRunExecutor({
+    sessionLog: log.sessionLog,
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     connector: {

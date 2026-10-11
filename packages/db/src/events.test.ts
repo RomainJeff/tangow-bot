@@ -24,6 +24,10 @@ import {
 } from "./events.js";
 import { RunHistoryWriteError } from "./messages.js";
 
+vi.mock("./sessions.js", async () =>
+  (await import("./sessions.test-support.js")).stubbedDbSessions(),
+);
+
 class TestFanout implements RealtimeFanout {
   subscriber: ((payload: string) => void) | undefined;
   unsubscribed = false;
@@ -93,6 +97,7 @@ describe("finalizeRun", () => {
         findUnique: vi.fn(async () => ({ status: "running" })),
         findUniqueOrThrow: vi.fn(async () => ({ sourceMessage: null })),
         findFirst: vi.fn(async () => null),
+        findMany: vi.fn(async () => []),
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
       attempt: { updateMany: vi.fn(async () => ({ count: 1 })) },

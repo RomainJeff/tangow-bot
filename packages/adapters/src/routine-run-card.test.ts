@@ -3,6 +3,7 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor, settleCancelledRunCards } from "./executor.js";
+import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -58,6 +59,7 @@ function fixture({
     routineId,
     requireToolApproval: true,
     leaseFence: 0,
+    createdAt: new Date("2026-10-11T08:00:00.000Z"),
   };
 
   const finalizeRun = vi.fn(async ({ outcome }: { outcome: "completed" | "failed" }) => {
@@ -65,7 +67,10 @@ function fixture({
     return { continuationRunId: null };
   });
 
+  const log = recordingSessionLog();
+
   const prisma = {
+    sessionEntry: log.sessionEntry,
     // The thread lock a card update takes before it reads the message.
     $queryRaw: vi.fn(async () => []),
     run: {
@@ -186,6 +191,7 @@ function fixture({
 
   const notify = vi.fn(async () => undefined);
   const executor = createRunExecutor({
+    sessionLog: log.sessionLog,
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },

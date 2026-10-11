@@ -15,6 +15,7 @@ import type * as ComputerWorkspaceModule from "./computer-workspace.js";
 import { createRunExecutor } from "./executor.js";
 import { FakeBrowserProvider } from "./fake-browser.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
+import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
 vi.mock("./computer-workspace.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerWorkspaceModule>()),
@@ -89,7 +90,10 @@ async function runWithDecisionProvider(
     trigger: "user",
     leaseFence: 0,
   };
+  const log = recordingSessionLog();
   const prisma = {
+    sessionEntry: log.sessionEntry,
+    $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
@@ -171,6 +175,7 @@ async function runWithDecisionProvider(
   });
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
   const executor = createRunExecutor({
+    sessionLog: log.sessionLog,
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     connector: { discoverTools: async () => [], resolveCall: async () => undefined },

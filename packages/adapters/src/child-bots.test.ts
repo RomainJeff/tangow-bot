@@ -16,6 +16,10 @@ import {
   spawnBot,
 } from "./child-bots.js";
 
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
+
 const context = {
   operationId: "test",
   traceId: "test",
@@ -109,7 +113,7 @@ describe("spawned bot creation", () => {
       .mockReturnValue({ createBot } as unknown as ReturnType<typeof createRepos>);
     const messageSpy = vi
       .spyOn(db, "createThreadMessageInTransaction")
-      .mockResolvedValue({} as never);
+      .mockResolvedValue({ id: "message-prompt" } as never);
     const runCreate = vi.fn().mockResolvedValue({ id: "child-run" });
     const tx = {
       task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
@@ -137,9 +141,14 @@ describe("spawned bot creation", () => {
 
     const data = runCreate.mock.calls[0]?.[0].data;
     expect(data).toMatchObject({ trigger: "spawn" });
-    expect(data).not.toHaveProperty("sourceMessageId");
+    expect(data).toMatchObject({ sourceMessageId: "message-prompt" });
     expect(data).not.toHaveProperty("routineId");
-    const hopDb = { message: { findUnique: vi.fn() }, routine: { findUnique: vi.fn() } };
+    const hopDb = {
+      sessionEntry: {
+        findUnique: vi.fn().mockResolvedValue({ type: "user.message", payload: {} }),
+      },
+      routine: { findUnique: vi.fn() },
+    };
     expect(await resolveRunHop(hopDb as never, { ...data, routineId: null })).toBe(0);
     createReposSpy.mockRestore();
     messageSpy.mockRestore();

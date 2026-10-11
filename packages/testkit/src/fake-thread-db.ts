@@ -235,6 +235,11 @@ export function createFakeThreadDb(): FakeThreadDb {
           return { count: 1 };
         },
       },
+      sessionEntry: {
+        async findUnique() {
+          return null;
+        },
+      },
       event: {
         async create(args: { data: Record<string, unknown> }) {
           const row = { id: nextId("event"), ...args.data } as Row;

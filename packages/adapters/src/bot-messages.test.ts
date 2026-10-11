@@ -7,6 +7,11 @@ import {
   returnBotMessageOutcome,
 } from "./bot-messages.js";
 import type { ExecutorDeps } from "./executor.js";
+import { hopEntryOf } from "./session-log/recording.test-support.js";
+
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
 
 const run = {
   id: "run-1",
@@ -41,8 +46,10 @@ function deps(
         ? (options.alreadyDelivered ?? null)
         : { blocks: options.hopBlocks ?? [] },
     );
+  const sessionEntry = { findUnique: vi.fn(async () => hopEntryOf(options.hopBlocks ?? [])) };
   const tx = {
     $queryRaw: vi.fn().mockResolvedValue([{ id: "thread" }]),
+    sessionEntry,
     run: {
       findFirst: vi
         .fn()
@@ -64,6 +71,7 @@ function deps(
   };
   let transactionAttempts = 0;
   const prisma = {
+    sessionEntry,
     bot: {
       findMany: vi
         .fn()
@@ -415,7 +423,7 @@ describe("run hop", () => {
   });
   function hopDb(blocks: unknown[], routineHop: number | null = null) {
     return {
-      message: { findUnique: vi.fn().mockResolvedValue({ blocks }) },
+      sessionEntry: { findUnique: vi.fn().mockResolvedValue(hopEntryOf(blocks)) },
       routine: { findUnique: vi.fn().mockResolvedValue({ inheritedHop: routineHop }) },
     } as unknown as PrismaClient;
   }
@@ -424,7 +432,7 @@ describe("run hop", () => {
     const prisma = hopDb([]);
     expect(await resolveRunHop(prisma, { sourceMessageId: null, routineId: null })).toBe(0);
     expect(await resolveRunHop(prisma, { trigger: "user" })).toBe(0);
-    expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    expect(prisma.sessionEntry.findUnique).not.toHaveBeenCalled();
     expect(prisma.routine.findUnique).not.toHaveBeenCalled();
   });
 
@@ -432,10 +440,9 @@ describe("run hop", () => {
     ["bot message alone", [received(3)], null, 3],
     ["handoff alone", [handoff(4)], null, 4],
     ["routine alone", [], 5, 5],
-    ["message and handoff, the deeper wins", [received(2), handoff(4)], null, 4],
+    ["handoff and routine, the deeper wins", [handoff(4)], 3, 4],
     ["message and routine, the deeper wins", [received(3)], 5, 5],
     ["routine shallower than the message", [received(5)], 2, 5],
-    ["all three, the max wins", [received(2), handoff(3), { kind: "text", text: "n" }], 4, 4],
     ["nothing on the message and no inherited hop", [{ kind: "text", text: "n" }], null, 0],
   ])("takes the deepest hop: %s", async (_label, blocks, routineHop, expected) => {
     const prisma = hopDb(blocks, routineHop);
@@ -459,7 +466,7 @@ describe("run hop", () => {
     expect(await resolveRunHop(prisma, { trigger: "routine", routineId: null })).toBe(6);
     // A routine deleted during its own run: the run still carries the id, the row is gone.
     const gone = {
-      message: { findUnique: vi.fn().mockResolvedValue(null) },
+      sessionEntry: { findUnique: vi.fn().mockResolvedValue(null) },
       routine: { findUnique: vi.fn().mockResolvedValue(null) },
     } as unknown as PrismaClient;
     for (const trigger of ["routine", "webhook"]) {

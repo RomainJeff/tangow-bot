@@ -11,6 +11,7 @@ import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -139,9 +140,11 @@ function fixture(
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
+  const log = recordingSessionLog();
   const results: unknown[] = [];
   const run: Row = {
     id: "run-1",
+    sessionId: "session-1",
     botId: "bot-1",
     threadId: "thread-1",
     taskId: "task-1",
@@ -208,6 +211,7 @@ function fixture(
   const messageCreate = vi.fn(async ({ data }: { data: Row }) => ({ id: "message-new", ...data }));
   const send = vi.fn(async () => undefined);
   const prisma: Row = {
+    sessionEntry: log.sessionEntry,
     $transaction: vi.fn(async (ops: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
       typeof ops === "function" ? ops(prisma) : Promise.all(ops),
     ),
@@ -337,6 +341,7 @@ function fixture(
   });
   const executor = createRunExecutor({
     prisma,
+    sessionLog: log.sessionLog,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     connector: {
       discoverTools: async () => [],

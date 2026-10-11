@@ -487,7 +487,10 @@ describeJourneys("required product journeys", () => {
     expect(snap.messages).toEqual([]);
     expect(snap.run).toBeNull();
     expect(await prisma.message.count({ where: { threadId: thread.id } })).toBe(0);
-    expect(await prisma.event.findMany({ where: { threadId: thread.id } })).toMatchObject([
+    expect(
+      await prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
+    ).toMatchObject([
+      { type: "session.entry.appended", payload: { entry: { type: "clear", parentId: null } } },
       { type: "thread.cleared" },
     ]);
     // The deleted messages all count as compacted, so compaction cannot summarize them and
@@ -539,7 +542,10 @@ describeJourneys("required product journeys", () => {
       }),
     ).rejects.toThrow(RunHistoryWriteError);
     expect(await prisma.message.count({ where: { threadId: thread.id } })).toBe(0);
-    expect(await prisma.event.findMany({ where: { threadId: thread.id } })).toMatchObject([
+    expect(
+      await prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
+    ).toMatchObject([
+      { type: "session.entry.appended", payload: { entry: { type: "clear", parentId: null } } },
       { type: "thread.cleared" },
     ]);
 
@@ -1305,7 +1311,7 @@ describeJourneys("required product journeys", () => {
       prisma.event.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
       prisma.message.findMany({ where: { threadId: thread.id }, orderBy: { seq: "asc" } }),
     ]);
-    expect(events.map((row) => row.seq)).toEqual(Array.from({ length: 40 }, (_, i) => i));
+    expect(events.map((row) => row.seq)).toEqual(Array.from({ length: 80 }, (_, i) => i));
     expect(messages.map((row) => row.seq)).toEqual(Array.from({ length: 40 }, (_, i) => i));
   });
 

@@ -1,6 +1,11 @@
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
 import { handoffToGroupBot } from "./group-handoff.js";
+import { hopEntryOf } from "./session-log/recording.test-support.js";
+
+vi.mock("../../db/src/sessions.js", async () =>
+  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+);
 
 const run = {
   id: "run-a",
@@ -19,6 +24,7 @@ function harness(
   const messageCreate = vi.fn(async () => ({ id: "message-1" }));
   const tx = {
     $queryRaw: vi.fn(async () => [{ id: "group-1" }]),
+    sessionEntry: { findUnique: vi.fn(async () => hopEntryOf(sourceBlocks)) },
     chatGroup: {
       findFirst: vi.fn(async () => ({
         id: "group-1",
