@@ -704,6 +704,28 @@ describe("compactHistory", () => {
     expect(h.calls("learn")).toHaveLength(1);
   });
 
+  it("lands on top of a head that is itself a compaction, as a retried job finds it", async () => {
+    const seeded = await seedThread();
+    const entries = await append(seeded, exchanges(seeded, 3));
+    const [head] = await append(seeded, [
+      {
+        type: "compaction",
+        parentId: entries.at(-1)!.id,
+        payload: { summary: "Summary 0.", coveredUpToSeq: EntrySeq.parse(1) },
+      },
+    ]);
+    const h = harness(seeded, { summaries: (_request, call) => `Summary ${call}.` });
+
+    await h.compact();
+
+    const compaction = await compactionOf(seeded);
+    expect(compaction?.entry).toMatchObject({
+      parentId: head!.id,
+      payload: { summary: "Summary 1.", coveredUpToSeq: 3 },
+    });
+    expect(compaction?.after).toEqual([...entries.slice(4), head]);
+  });
+
   it("drops the work when a clear lands while the summarizer runs", async () => {
     const seeded = await seedThread();
     await append(seeded, exchanges(seeded, 2));

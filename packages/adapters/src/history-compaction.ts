@@ -690,7 +690,7 @@ export async function compactHistory(
   }
   let compaction: SessionEntry | undefined;
   for (let attempt = 0; !compaction; attempt += 1) {
-    const head = tail.at(-1)!;
+    const head = tail.reduce((newest, entry) => (entry.seq > newest.seq ? entry : newest));
     try {
       compaction = await deps.prisma.$transaction((tx) =>
         deps.sessionLog.append(tx, {
