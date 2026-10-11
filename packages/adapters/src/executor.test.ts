@@ -11,7 +11,6 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import { CHATTY_MESSAGE_USER_DESCRIPTION } from "./builtin-tools.js";
 import {
   appendToolCompletionAudit,
   buildSystemInstructions,
@@ -243,57 +242,15 @@ describe("run tool selection", () => {
     );
   });
 
-  it("swaps the message_user description only when chattyReplies is on", () => {
-    const describeMessageUser = (chattyReplies: boolean) =>
-      selectBuiltinToolsForRun({
-        graphicalToolsAllowed: true,
-        groupId: null,
-        trigger: "user",
-        semanticMemoryEnabled: false,
-        messagingChannelRun: false,
-        chattyReplies,
-      }).find((tool) => tool.name === "message_user")?.description;
-
-    expect(describeMessageUser(true)).toBe(CHATTY_MESSAGE_USER_DESCRIPTION);
-    expect(describeMessageUser(false)).not.toBe(CHATTY_MESSAGE_USER_DESCRIPTION);
-    expect(describeMessageUser(false)).toBeTruthy();
-  });
-
-  it("tells every bot to end the turn empty once message_user said everything", () => {
-    // Without this rule a bot splits its answer into bubbles and then repeats the whole
-    // answer as its final reply, so the user reads it twice.
-    for (const chattyReplies of [false, true]) {
-      const description = selectBuiltinToolsForRun({
-        graphicalToolsAllowed: true,
-        groupId: null,
-        trigger: "user",
-        semanticMemoryEnabled: false,
-        messagingChannelRun: false,
-        chattyReplies,
-      }).find((tool) => tool.name === "message_user")?.description;
-      expect(description).toContain("end the turn with an empty response");
-      expect(description).toContain("Never repeat or rephrase a point you already made");
-    }
-  });
-
-  it("keeps long deliverables in the final reply for chatty bots, and schedules in the user's language", () => {
-    const tools = (chattyReplies: boolean) =>
-      selectBuiltinToolsForRun({
-        graphicalToolsAllowed: true,
-        groupId: null,
-        trigger: "user",
-        semanticMemoryEnabled: false,
-        messagingChannelRun: false,
-        chattyReplies,
-      });
-    expect(CHATTY_MESSAGE_USER_DESCRIPTION).toContain(
-      "A long deliverable the user asked for goes in your final reply, not in bubbles.",
-    );
-    for (const chattyReplies of [false, true]) {
-      const messageUser = tools(chattyReplies).find((tool) => tool.name === "message_user");
-      expect(JSON.stringify(messageUser)).not.toContain("\u2014");
-    }
-    const schedule = tools(false).find((tool) => tool.name === "schedule_create");
+  it("keeps schedules in the user's language", () => {
+    const tools = selectBuiltinToolsForRun({
+      graphicalToolsAllowed: true,
+      groupId: null,
+      trigger: "user",
+      semanticMemoryEnabled: false,
+      messagingChannelRun: false,
+    });
+    const schedule = tools.find((tool) => tool.name === "schedule_create");
     expect(JSON.stringify(schedule?.inputSchema)).toContain(
       "Write it in the language the user uses.",
     );
@@ -1842,7 +1799,7 @@ describe("buildSystemInstructions", () => {
     expect(untrustedRule).toBeLessThan(at(parts.memoryContext));
     expect(untrustedRule).toBeLessThan(at(parts.botDirectory));
 
-    const stableTail = at("Never narrate your work to the user.");
+    const stableTail = at(CHAT_VOICE_INSTRUCTIONS);
     expect(stableTail).toBeLessThan(at(parts.memoryContext));
     expect(at(parts.memoryContext)).toBeLessThan(at(parts.scratchpadContext));
     expect(at(parts.scratchpadContext)).toBeLessThan(at(parts.botDirectory));
@@ -1918,7 +1875,7 @@ describe("buildSystemInstructions", () => {
       expect(withOffer.endsWith(BOT_OFFER_DEDICATED_BOT)).toBe(true);
       const withMemory = buildSystemInstructions({ ...parts, userTurn: true });
       expect(withMemory.indexOf(BOT_OFFER_DEDICATED_BOT)).toBeGreaterThan(
-        withMemory.indexOf("Never narrate your work to the user."),
+        withMemory.indexOf(CHAT_VOICE_INSTRUCTIONS),
       );
       expect(withMemory.indexOf(BOT_OFFER_DEDICATED_BOT)).toBeLessThan(
         withMemory.indexOf(parts.memoryContext),
@@ -1965,14 +1922,13 @@ describe("buildSystemInstructions", () => {
     expect(buildSystemInstructions({ ...parts, rememberExposed: false })).not.toContain("remember");
   });
 
-  it("puts the chat voice right after the narration rule, inside the cacheable prefix", () => {
+  it("puts communication guidance inside the cacheable prefix", () => {
     const instructions = buildSystemInstructions(parts);
     const voice = instructions.indexOf(CHAT_VOICE_INSTRUCTIONS);
     expect(instructions.startsWith(parts.botInstructions)).toBe(true);
-    expect(voice).toBeGreaterThan(instructions.indexOf("Never narrate your work to the user."));
+    expect(voice).toBeGreaterThan(instructions.indexOf(parts.agentSkillsLine));
     expect(voice).toBeLessThan(instructions.indexOf(parts.memoryContext));
 
-    // The voice points back at the messaging note ("a note above"), so that note must stay first.
     const messaging = buildSystemInstructions({
       ...parts,
       messagingContext: "Chat surface: messaging app.",
@@ -1980,23 +1936,6 @@ describe("buildSystemInstructions", () => {
     expect(messaging.indexOf("Chat surface: messaging app.")).toBeLessThan(
       messaging.indexOf(CHAT_VOICE_INSTRUCTIONS),
     );
-  });
-
-  it("lets bot instructions, user preferences and explicit asks override the chat voice", () => {
-    expect(CHAT_VOICE_INSTRUCTIONS).toMatch(/^How you write in chat\. These are defaults\./);
-    expect(CHAT_VOICE_INSTRUCTIONS).toContain("Your bot instructions at the top of this prompt");
-    expect(CHAT_VOICE_INSTRUCTIONS).toContain("in memory");
-    expect(CHAT_VOICE_INSTRUCTIONS).toContain("an explicit ask about length, format or language");
-  });
-
-  it("keeps em dashes out of the voice and narration guidance it asks the model to avoid", () => {
-    const instructions = buildSystemInstructions(parts);
-    const narration = instructions
-      .split("\n\n")
-      .find((paragraph) => paragraph.startsWith("Never narrate your work"));
-    expect(CHAT_VOICE_INSTRUCTIONS).not.toContain("\u2014");
-    expect(narration).toBeDefined();
-    expect(narration).not.toContain("\u2014");
   });
 });
 
