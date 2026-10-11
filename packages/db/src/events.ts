@@ -889,7 +889,7 @@ export async function answerRunInputInTransaction(
         payload: {
           blocks: [{ kind: "text", text }],
           replyTo: { entryId: input.messageId as EntryId },
-          source: "app",
+          source: "card",
         },
       });
     const message = await tx.message.findFirst({

@@ -1275,7 +1275,7 @@ describe("session log writers", () => {
               payload: {
                 blocks: [{ kind: "text", text: reply }],
                 replyTo: { entryId: target },
-                source: "app",
+                source: "card",
               },
             },
           ]);
