@@ -1,10 +1,11 @@
 /**
  * The "Skill learned · <name>" line: written by the server from the run's recorded skill writes,
- * never from the bot's text. A run gets its lines once, recorded on the run, whatever the number
- * of calls or attempts, so a resume, a replay or the sweep changes nothing, and neither does a
- * conversation the user emptied since.
+ * never from the bot's text, with a `skill.learnt` entry per line in the session log. A run gets
+ * its lines once, recorded on the run, whatever the number of calls or attempts, so a resume, a
+ * replay or the sweep changes nothing, and neither does a conversation the user emptied since.
  */
-import type { MessageBlock } from "@rakazo/contracts";
+import type { SessionLog } from "@rakazo/adapter-kit";
+import type { SessionId } from "@rakazo/contracts";
 import type { SkillSourceBlock } from "@rakazo/core";
 import { asSkillAvailability, runStartedByUser, userSkillKey } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
@@ -34,6 +35,7 @@ const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 export type SkillLineDeps = {
   prisma: PrismaClient;
   events: Pick<ThreadEvents, "notify">;
+  sessionLog: Pick<SessionLog<Prisma.TransactionClient>, "append">;
   /**
    * Whether a run that left no message gets one carrying its lines alone. Clients that predate
    * the line draw such a message as an empty row, so it stays off until they are gone.
@@ -123,6 +125,7 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
       userId: true,
       botId: true,
       threadId: true,
+      sessionId: true,
       trigger: true,
       status: true,
       skillLinesAt: true,
@@ -135,18 +138,31 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
     trigger: run.trigger,
     sourceRole: run.sourceMessage?.role,
   });
-  const lineOnlyThreadId = !deps.lineOnlyMessages
+  const lineOnlyThread = !deps.lineOnlyMessages
     ? undefined
     : startedByUser
-      ? run.threadId
-      : (
-          await deps.prisma.thread.findUnique({
-            where: { botId: run.botId },
-            select: { id: true },
-          })
-        )?.id;
+      ? { id: run.threadId, sessionId: run.sessionId }
+      : await deps.prisma.thread.findUnique({
+          where: { botId: run.botId },
+          select: { id: true, sessionId: true },
+        });
+  const logLines = async (
+    tx: Prisma.TransactionClient,
+    sessionId: string,
+    lines: SkillSourceBlock[],
+  ) => {
+    for (const line of lines) {
+      await deps.sessionLog.append(tx, {
+        type: "skill.learnt",
+        sessionId: sessionId as SessionId,
+        botId: run.botId,
+        runId: run.id,
+        payload: { skillId: line.skillId, name: line.name, change: line.change },
+      });
+    }
+  };
   const written = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    for (const threadId of new Set([run.threadId, lineOnlyThreadId])) {
+    for (const threadId of new Set([run.threadId, lineOnlyThread?.id])) {
       if (threadId) await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
     }
     const claimed = await tx.run.updateMany({
@@ -176,6 +192,7 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
         ...(all as Prisma.InputJsonValue[]),
       ];
       await tx.message.update({ where: { id: target.id }, data: { blocks } });
+      await logLines(tx, run.sessionId, all);
       // No run id: the run may be cancelled, and a run id makes clients drop its live progress.
       const event = await appendEventInTransaction(tx, {
         spaceId: run.spaceId,
@@ -186,11 +203,16 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
       });
       return { threadId: target.threadId, seq: event.seq };
     }
-    if (!lineOnlyThreadId) return null;
-    const blocks: MessageBlock[] = startedByUser ? all : await reachingOtherBots(tx, run, all);
+    if (!lineOnlyThread) return null;
+    const blocks = startedByUser ? all : await reachingOtherBots(tx, run, all);
     if (blocks.length === 0) return null;
+    await logLines(
+      tx,
+      lineOnlyThread.id === run.threadId ? run.sessionId : lineOnlyThread.sessionId,
+      blocks,
+    );
     const message = await createThreadMessageInTransaction(tx, {
-      threadId: lineOnlyThreadId,
+      threadId: lineOnlyThread.id,
       role: "bot",
       blocks,
       botId: run.botId,
@@ -199,12 +221,12 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
     });
     const event = await appendEventInTransaction(tx, {
       spaceId: run.spaceId,
-      threadId: lineOnlyThreadId,
+      threadId: lineOnlyThread.id,
       botId: run.botId,
       type: "thread.message.created",
       payload: { messageId: message.id, role: "bot", blocks },
     });
-    return { threadId: lineOnlyThreadId, seq: event.seq };
+    return { threadId: lineOnlyThread.id, seq: event.seq };
   });
   if (written) {
     await deps.events.notify(written.threadId, written.seq).catch((error) => {

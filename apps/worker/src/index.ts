@@ -290,6 +290,7 @@ async function main() {
     sweepSkillLines: createSkillLineSweep({
       prisma,
       events,
+      sessionLog,
       lineOnlyMessages: skillLearning !== "off",
     }),
   });

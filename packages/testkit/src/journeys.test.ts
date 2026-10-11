@@ -2473,14 +2473,6 @@ describeJourneys("required product journeys", () => {
       name: "Export weekly CRM list",
       playbook: stopped.playbook,
     });
-    await withEntryFault(prisma, "skill.saved", async () => {
-      await expect(
-        rpc(app, cookie, "skills/save", { skillId: skill.id, name: "Export weekly CRM list" }),
-      ).rejects.toThrow();
-    });
-    expect(
-      (await rpc<{ status: string }>(app, cookie, "skills/get", { skillId: skill.id })).status,
-    ).toBe("draft");
     const saved = await rpc<{ status: string; name: string }>(app, cookie, "skills/save", {
       skillId: skill.id,
       name: "Export weekly CRM list",
@@ -2490,7 +2482,7 @@ describeJourneys("required product journeys", () => {
     const teachingLog = await prisma.sessionEntry.findMany({
       where: {
         session: { thread: { botId: bot.id } },
-        type: { in: ["run.finished", "bot.text", "skill.saved"] },
+        type: { in: ["run.finished", "bot.text"] },
       },
       orderBy: { seq: "asc" },
       select: { type: true, runId: true, payload: true },
@@ -2501,14 +2493,12 @@ describeJourneys("required product journeys", () => {
           status?: string;
           by?: string;
           blocks?: Array<{ kind: string }>;
-          name?: string;
         };
-        return [type, runId, fields.status ?? fields.blocks?.[0]?.kind ?? fields.name, fields.by];
+        return [type, runId, fields.status ?? fields.blocks?.[0]?.kind, fields.by];
       }),
     ).toEqual([
       ["run.finished", busy.runId, "cancelled", teacher.userId],
       ["bot.text", null, "skill_draft", undefined],
-      ["skill.saved", null, "Export weekly CRM list", undefined],
     ]);
     const listed = await rpc<Array<{ id: string; name: string }>>(app, cookie, "skills/list", {
       botId: bot.id,

@@ -239,15 +239,17 @@ export async function appendSessionEntryInTransaction(
       ? Prisma.sql`, ${insertFeedEvent(newFeed, at, Prisma.sql`FROM e`)}`
       : Prisma.empty;
   // A run writes nothing once cancelled, and nothing of its own once it finished in this session.
-  // The checks read a snapshot taken after the session lock, so they see a cancel or a finish that
-  // committed while this append waited.
+  // The skills it learnt are written for it once it ended, however it ended. The checks read a
+  // snapshot taken after the session lock, so they see a cancel or a finish that committed while
+  // this append waited.
   const runScoped = /^(run|assistant|tool)\./.test(entry.type);
+  const afterTheRun = entry.type === "skill.learnt";
   const written = await tx.$queryRaw<Array<{ fed: boolean }>>`
     WITH e AS (
       INSERT INTO session_entries (id, "sessionId", seq, "parentId", type, payload, "botId", "runId", "createdAt")
       SELECT ${entry.id}, ${entry.sessionId}, ${seq}, ${entry.parentId}, ${entry.type},
         ${JSON.stringify(entry.payload)}::jsonb, ${entry.botId ?? null}, ${runId}, ${at}
-      WHERE (${runId}::text IS NULL
+      WHERE (${runId}::text IS NULL OR ${afterTheRun}
           OR EXISTS (SELECT 1 FROM runs WHERE id = ${runId} AND status <> 'cancelled'))
         AND NOT (${runScoped} AND EXISTS (
           SELECT 1 FROM session_entries

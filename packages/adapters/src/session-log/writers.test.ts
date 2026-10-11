@@ -11,6 +11,7 @@ import {
   clearThread,
   createSessionInTransaction,
   createThreadEvents,
+  createThreadMessage,
   finalizeRun,
   openRoutineSessionInTransaction,
   rewindThread,
@@ -19,6 +20,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { messageConnectedAgent } from "../agent-connections.js";
 import { messageBot, returnBotMessageOutcome } from "../bot-messages.js";
 import { openRunLog } from "../executor.js";
+import { createSkillLineSweep, writeSkillLines } from "../skill-lines.js";
 import type { PgliteDatabase } from "./pglite.js";
 import { openPgliteDatabase } from "./pglite.js";
 import { PostgresSessionLog } from "./postgres.js";
@@ -853,5 +855,200 @@ describe("session log writers", () => {
         payload: { status: "cancelled", by: USER, usage: { inputTokens: 0, outputTokens: 0 } },
       },
     ]);
+  });
+
+  describe("a run's learnt skills", () => {
+    const text = (value: string): MessageBlock[] => [{ kind: "text", text: value }];
+    const lineDeps = () => ({
+      prisma: database.prisma,
+      events: { notify: vi.fn(async () => undefined) },
+      sessionLog: log,
+      lineOnlyMessages: true,
+    });
+    const learnt = async (sessionId: SessionId) =>
+      (await log.readTail(sessionId)).flatMap((entry) =>
+        entry.type === "skill.learnt" ? [{ runId: entry.runId, ...entry.payload }] : [],
+      );
+    const wrote = (runId: string, kind: string, name: string) =>
+      database.prisma.externalEffect.create({
+        data: {
+          spaceId: SPACE,
+          runId,
+          kind,
+          idempotencyKey: randomUUID(),
+          status: "completed",
+          request: {},
+          result: { ok: true, name },
+        },
+      });
+    const replied = (run: { id: string; botId: string; threadId: string }, value: string) =>
+      createThreadMessage(database.prisma, {
+        threadId: run.threadId,
+        role: "bot",
+        botId: run.botId,
+        runId: run.id,
+        blocks: text(value),
+      });
+    const ended = (runId: string, status = "completed") =>
+      database.prisma.run.update({ where: { id: runId }, data: { status } });
+
+    it("logs each skill once, with its line under the reply, however often the lines are written", async () => {
+      const { prisma } = database;
+      const { bot, threadId, sessionId } = await seedBot(prisma, "Ines");
+      const run = await seedRun(prisma, bot.id, threadId);
+      const reply = await replied(run, "Done.");
+      await wrote(run.id, "skill_create", "Coffee");
+      await wrote(run.id, "skill_create", "Tea");
+      await wrote(run.id, "skill_update", "Coffee");
+      await ended(run.id);
+
+      await writeSkillLines(lineDeps(), run.id);
+      await writeSkillLines(lineDeps(), run.id);
+
+      expect(await learnt(sessionId)).toEqual([
+        { runId: run.id, skillId: "user:coffee", name: "Coffee", change: "learned" },
+        { runId: run.id, skillId: "user:tea", name: "Tea", change: "learned" },
+      ]);
+      expect((await prisma.message.findUniqueOrThrow({ where: { id: reply.id } })).blocks).toEqual([
+        ...text("Done."),
+        { kind: "skill_source", skillId: "user:coffee", name: "Coffee", change: "learned" },
+        { kind: "skill_source", skillId: "user:tea", name: "Tea", change: "learned" },
+      ]);
+    });
+
+    it("lands a routine run's skill in the thread's session, naming the routine's", async () => {
+      const { prisma } = database;
+      const seeded = await seedBot(prisma, "Olga");
+      const { run, routineSessionId } = await routineRun(prisma, seeded, "Digest", {
+        trigger: "routine",
+      });
+      await replied(run, "Digest sent.");
+      await wrote(run.id, "skill_create", "Digest");
+      await ended(run.id);
+
+      await writeSkillLines(lineDeps(), run.id);
+
+      expect(await learnt(seeded.sessionId)).toEqual([
+        {
+          runId: run.id,
+          originSessionId: routineSessionId,
+          skillId: "user:digest",
+          name: "Digest",
+          change: "learned",
+        },
+      ]);
+      expect(await learnt(routineSessionId)).toEqual([]);
+    });
+
+    it("lands the skill of a run nobody started in the bot's own thread when the line goes there", async () => {
+      const { prisma } = database;
+      const seeded = await seedBot(prisma, "Pia");
+      const group = await prisma.chatGroup.create({
+        data: { spaceId: SPACE, userId: USER, name: "Team" },
+      });
+      const groupThread = await prisma.thread.create({
+        data: { spaceId: SPACE, userId: USER, groupId: group.id },
+      });
+      const run = await seedRun(prisma, seeded.bot.id, groupThread.id, { trigger: "routine" });
+      await prisma.skillSetting.create({
+        data: { spaceId: SPACE, userId: USER, skillKey: "user:shared", availability: "all" },
+      });
+      await wrote(run.id, "skill_update", "Shared");
+      await ended(run.id);
+
+      await writeSkillLines(lineDeps(), run.id);
+
+      expect(await learnt(seeded.sessionId)).toEqual([
+        { runId: run.id, skillId: "user:shared", name: "Shared", change: "updated" },
+      ]);
+      expect(await learnt(groupThread.sessionId as SessionId)).toEqual([]);
+    });
+
+    it("logs the skills of a run cancelled after it saved them", async () => {
+      const { prisma } = database;
+      const { bot, threadId, sessionId } = await seedBot(prisma, "Rita");
+      const run = await seedRun(prisma, bot.id, threadId);
+      await wrote(run.id, "skill_create", "Soup");
+      await ended(run.id, "cancelled");
+
+      await writeSkillLines(lineDeps(), run.id);
+
+      expect(await learnt(sessionId)).toEqual([
+        { runId: run.id, skillId: "user:soup", name: "Soup", change: "learned" },
+      ]);
+    });
+
+    describe("in a conversation the person emptied since", () => {
+      const later = () => new Date(Date.now() + 10 * 60_000);
+      const emptied = async (
+        name: string,
+        status: string,
+        {
+          replies = true,
+          startedFirst = false,
+        }: { replies?: boolean; startedFirst?: boolean } = {},
+      ) => {
+        const { prisma } = database;
+        const seeded = await seedBot(prisma, name);
+        const earlyRun = startedFirst
+          ? await seedRun(prisma, seeded.bot.id, seeded.threadId)
+          : undefined;
+        const ask = await createThreadEvents(prisma).sendUserMessage({
+          spaceId: SPACE,
+          threadId: seeded.threadId,
+          botId: seeded.bot.id,
+          userId: USER,
+          blocks: text("Order my coffee."),
+          prompt: "Order my coffee.",
+          trigger: "user",
+          createRun: false,
+        });
+        const run = earlyRun ?? (await seedRun(prisma, seeded.bot.id, seeded.threadId));
+        if (replies) await replied(run, "Done.");
+        await wrote(run.id, "skill_create", "Coffee");
+        await ended(run.id, status);
+        const thread = { spaceId: SPACE, threadId: seeded.threadId, botId: seeded.bot.id };
+        const nothingCameBack = async () => {
+          await createSkillLineSweep(lineDeps(), { now: later })();
+          const blocks = (
+            await prisma.message.findMany({ where: { threadId: seeded.threadId } })
+          ).flatMap((message) => message.blocks as Array<{ kind: string }>);
+          expect(blocks.filter((block) => block.kind === "skill_source")).toEqual([]);
+          expect(await learnt(seeded.sessionId)).toEqual([]);
+        };
+        return { run, thread, ask, nothingCameBack };
+      };
+
+      it("gets no line back after a clear", async () => {
+        const { thread, nothingCameBack } = await emptied("Sami", "completed");
+        await clearThread(database.prisma, thread);
+        await nothingCameBack();
+      });
+
+      it("gets no line back after a rewind to the message that started the run", async () => {
+        const { thread, ask, nothingCameBack } = await emptied("Tom", "completed", {
+          replies: false,
+        });
+        await rewindThread(database.prisma, { ...thread, messageId: ask.messageId });
+        await nothingCameBack();
+      });
+
+      it("gets no line back after a rewind to a message sent while the run was going, once its reply is gone", async () => {
+        const { thread, ask, nothingCameBack } = await emptied("Uma", "completed", {
+          startedFirst: true,
+        });
+        await rewindThread(database.prisma, { ...thread, messageId: ask.messageId });
+        await nothingCameBack();
+      });
+
+      it("gets no line for a run the clear stopped before it ended", async () => {
+        const { run, thread, nothingCameBack } = await emptied("Vic", "running");
+        await clearThread(database.prisma, thread);
+        expect(
+          (await database.prisma.run.findUniqueOrThrow({ where: { id: run.id } })).status,
+        ).toBe("cancelled");
+        await nothingCameBack();
+      });
+    });
   });
 });

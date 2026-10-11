@@ -216,7 +216,7 @@ export function projectThreadItems(entries: readonly SessionEntry[]): ThreadItem
         break;
       case "computer.control":
       case "memory.revised":
-      case "skill.saved":
+      case "skill.learnt":
       case "attachment.added":
       case "session.title":
       case "system.note": {

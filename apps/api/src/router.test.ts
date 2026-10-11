@@ -1128,7 +1128,7 @@ describe("thread stop", () => {
     save("Tea");
     expect(reply.blocks).toEqual([{ kind: "text", text: "On it." }]);
 
-    await createSkillLineSweep({ prisma, events: { notify } })();
+    await createSkillLineSweep({ prisma, events: { notify }, sessionLog: { append: vi.fn() } })();
     expect(reply.blocks).toEqual([{ kind: "text", text: "On it." }, line("Coffee"), line("Tea")]);
   });
 });

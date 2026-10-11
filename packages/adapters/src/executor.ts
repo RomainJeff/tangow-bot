@@ -1078,6 +1078,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       {
         prisma: deps.prisma,
         events: deps.events,
+        sessionLog: deps.sessionLog,
         lineOnlyMessages: learning !== "off",
       },
       runId,

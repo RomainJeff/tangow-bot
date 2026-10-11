@@ -1,6 +1,6 @@
 import * as z from "zod";
 import { ThinkingLevelSchema } from "./domain.js";
-import { AskBlock, BotMessageIntent, ChoiceBlock, MessageBlock } from "./events.js";
+import { AskBlock, BotMessageIntent, ChoiceBlock, MessageBlock, SkillChange } from "./events.js";
 import { Id, IsoDate } from "./ids.js";
 
 export const EntryId = Id.brand<"EntryId">();
@@ -112,7 +112,10 @@ const MemoryRevisedEntry = entry(
   "memory.revised",
   z.object({ ...risen, facts: z.array(z.string()) }),
 );
-const SkillSavedEntry = entry("skill.saved", z.object({ ...risen, skillId: Id, name: z.string() }));
+const SkillLearntEntry = entry(
+  "skill.learnt",
+  z.object({ ...risen, skillId: Id, name: z.string(), change: SkillChange }),
+);
 const AttachmentAddedEntry = entry("attachment.added", z.object({ artifactId: Id }));
 const SessionTitleEntry = entry("session.title", z.object({ title: z.string() }));
 const SystemNoteEntry = entry("system.note", z.object({ text: z.string() }));
@@ -210,7 +213,7 @@ const EntryShapes = z.discriminatedUnion("type", [
   ),
   ComputerControlEntry,
   MemoryRevisedEntry,
-  SkillSavedEntry,
+  SkillLearntEntry,
   AttachmentAddedEntry,
   SessionTitleEntry,
   SystemNoteEntry,
@@ -303,7 +306,7 @@ export const ENTRY_AUDIENCE = {
   "effect.resolved": { inference: "no", ui: true },
   "computer.control": { inference: "context", ui: true },
   "memory.revised": { inference: "no", ui: true },
-  "skill.saved": { inference: "no", ui: true },
+  "skill.learnt": { inference: "no", ui: true },
   "attachment.added": { inference: "no", ui: true },
   "session.title": { inference: "no", ui: true },
   "system.note": { inference: "no", ui: true },
@@ -493,7 +496,7 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
   z.discriminatedUnion("type", [
     ComputerControlEntry.pick(noteFields).extend(noteKind),
     MemoryRevisedEntry.pick(noteFields).extend(noteKind),
-    SkillSavedEntry.pick(noteFields).extend(noteKind),
+    SkillLearntEntry.pick(noteFields).extend(noteKind),
     AttachmentAddedEntry.pick(noteFields).extend(noteKind),
     SessionTitleEntry.pick(noteFields).extend(noteKind),
     SystemNoteEntry.pick(noteFields).extend(noteKind),

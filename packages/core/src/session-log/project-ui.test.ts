@@ -519,8 +519,13 @@ describe("projectThreadItems", () => {
       },
       {
         botId: "bot_ada",
-        type: "skill.saved",
-        payload: { originSessionId: "ses_gone", skillId: "skill_1", name: "Digest" },
+        type: "skill.learnt",
+        payload: {
+          originSessionId: "ses_gone",
+          skillId: "user:digest",
+          name: "Digest",
+          change: "learned",
+        },
       },
     ]);
     const fromVeille = { sessionId: "ses_veille", kind: "routine", name: "Veille presse" };
@@ -603,8 +608,13 @@ describe("projectThreadItems", () => {
         kind: "note",
         id: "org-7",
         ts: at(7),
-        type: "skill.saved",
-        payload: { originSessionId: "ses_gone", skillId: "skill_1", name: "Digest" },
+        type: "skill.learnt",
+        payload: {
+          originSessionId: "ses_gone",
+          skillId: "user:digest",
+          name: "Digest",
+          change: "learned",
+        },
         origin: { sessionId: "ses_gone" },
       },
     ]);

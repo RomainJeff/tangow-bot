@@ -31,7 +31,7 @@ import {
   type TeachComputerInput,
   teachingControlLeaseExpiresAt,
 } from "@rakazo/adapters";
-import type { Actor, MessageBlock, SessionId, TaughtSkill } from "@rakazo/contracts";
+import type { Actor, MessageBlock, TaughtSkill } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   buildPlaybookFromRecording,
@@ -42,7 +42,6 @@ import {
 } from "@rakazo/core";
 import {
   appendEventInTransaction,
-  appendSessionEntryInTransaction,
   type createRepos,
   expireComputerExecutionLeases,
   IsolationError,
@@ -504,27 +503,16 @@ export function createTaughtSkillsService(deps: TaughtSkillsDeps) {
       if (skill.status !== "draft" && skill.status !== "saved") {
         throw new ORPCError("BAD_REQUEST", { message: "Finish recording before saving" });
       }
-      const { row, bot } = await deps.prisma.$transaction(async (tx) => {
-        const row = await tx.taughtSkill.update({
-          where: { id: skill.id },
-          data: {
-            status: "saved",
-            name: name ?? (skill.name || skill.goal.slice(0, 80)),
-          },
-        });
-        const bot = await tx.bot.findUnique({
-          where: { id: row.botId },
-          include: { thread: true },
-        });
-        if (bot?.thread) {
-          await appendSessionEntryInTransaction(tx, {
-            type: "skill.saved",
-            sessionId: bot.thread.sessionId as SessionId,
-            botId: bot.id,
-            payload: { skillId: row.id, name: row.name },
-          });
-        }
-        return { row, bot };
+      const row = await deps.prisma.taughtSkill.update({
+        where: { id: skill.id },
+        data: {
+          status: "saved",
+          name: name ?? (skill.name || skill.goal.slice(0, 80)),
+        },
+      });
+      const bot = await deps.prisma.bot.findUnique({
+        where: { id: row.botId },
+        include: { thread: true },
       });
       await updateSkillDraftMessage(deps, actor, row, {
         name: row.name,

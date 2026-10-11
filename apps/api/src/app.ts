@@ -438,6 +438,7 @@ export async function createApp(
         sweepSkillLines: createSkillLineSweep({
           prisma,
           events,
+          sessionLog,
           lineOnlyMessages: env.skillLearning !== "off",
         }),
       })

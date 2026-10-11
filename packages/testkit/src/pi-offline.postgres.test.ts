@@ -595,7 +595,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
-  it("logs a skill the bot saves with a tool as skill.saved in its run", async () => {
+  it("logs a skill the bot creates as skill.learnt once its run ended", async () => {
     await journey(
       [
         {
@@ -617,17 +617,26 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
         const sent = await send("Save a skill for the weekly digest.");
         await sent.settled("completed");
 
-        const entries = await log.readRun(sent.runId);
-        expect(
-          entries.map((entry) => [entry.type, payloadOf(entry).callId ?? payloadOf(entry).name]),
-        ).toEqual([
-          ["run.started", undefined],
-          ["tool.call", "journey-skill"],
-          ["skill.saved", "weekly-digest"],
-          ["tool.result", "journey-skill"],
-          ["assistant.text", undefined],
-          ["run.finished", undefined],
-        ]);
+        await expect
+          .poll(async () =>
+            (await log.readRun(sent.runId)).map((entry) => [
+              entry.type,
+              payloadOf(entry).callId ?? payloadOf(entry).change,
+            ]),
+          )
+          .toEqual([
+            ["run.started", undefined],
+            ["tool.call", "journey-skill"],
+            ["tool.result", "journey-skill"],
+            ["assistant.text", undefined],
+            ["run.finished", undefined],
+            ["skill.learnt", "learned"],
+          ]);
+        const learnt = (await log.readRun(sent.runId)).at(-1);
+        expect(learnt).toMatchObject({
+          sessionId: sent.sessionId,
+          payload: { skillId: "user:weekly-digest", name: "weekly-digest", change: "learned" },
+        });
       },
     );
   }, 30_000);

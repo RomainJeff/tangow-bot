@@ -61,6 +61,8 @@ export const ProductEventType = z.enum([
 ]);
 export type ProductEventType = z.infer<typeof ProductEventType>;
 
+export const SkillChange = z.enum(["learned", "updated", "deleted"]);
+
 export const MessageRole = z.enum(["user", "bot", "system"]);
 export const BotMessageIntent = z.enum(["request", "result", "question", "status", "fyi"]);
 export type BotMessageIntent = z.infer<typeof BotMessageIntent>;
@@ -385,7 +387,7 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     skillUid: SkillUidSchema.optional(),
     skillId: z.string(),
     name: z.string(),
-    change: z.enum(["learned", "updated", "deleted"]),
+    change: SkillChange,
   }),
   LinkPreviewBlock,
 ]);

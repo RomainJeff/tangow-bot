@@ -123,6 +123,28 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
+  it("gives the model no turn for a skill the bot learnt", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const chain = linkEntries("learnt", [
+      { type: "user.message", payload: { blocks: text("Order my coffee."), source: "app" } },
+      { ...run, type: "assistant.text", payload: { blocks: text("Ordered.") } },
+      {
+        ...run,
+        type: "run.finished",
+        payload: { status: "completed", usage: { inputTokens: 900, outputTokens: 12 } },
+      },
+      {
+        ...run,
+        type: "skill.learnt",
+        payload: { skillId: "user:coffee", name: "Coffee", change: "learned" },
+      },
+    ]);
+    expect(turnsOf(chain, ada)).toEqual([
+      { role: "user", content: "Order my coffee." },
+      { role: "assistant", content: "Ordered." },
+    ]);
+  });
+
   it("says which routine or helper a risen question, choice or card came from when the chain names it", () => {
     const chain = linkEntries("org", [
       {

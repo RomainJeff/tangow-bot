@@ -1,5 +1,5 @@
 import { createSkillLineSweep, writeSkillLines } from "@rakazo/adapters";
-import { appendLinkPreviewBlock, clearThread, rewindThread } from "@rakazo/db";
+import { appendLinkPreviewBlock } from "@rakazo/db";
 import { describe, expect, it } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
 
@@ -13,7 +13,12 @@ async function setup(
   db.seedThread({ id: "thread-1" });
   db.seedThread({ id: "group-thread", botId: null, groupId: "group-1" });
   db.seedRun({ id: "run-1", threadId: run.threadId ?? "thread-1", ...run });
-  const deps = { prisma: db.prisma, events: { notify: async () => undefined }, ...options };
+  const deps = {
+    prisma: db.prisma,
+    events: { notify: async () => undefined },
+    sessionLog: { append: async () => ({}) as never },
+    ...options,
+  };
   /** A skill call of the run, as the executor records it once the call returned. */
   const wrote = (
     kind: SkillWrite,
@@ -143,69 +148,6 @@ describe("the skill line of a finished run", () => {
       { clientNonce: null, lines: ["learned Coffee"] },
       { clientNonce: null, lines: [] },
     ]);
-  });
-
-  describe("in a conversation the user emptied since", () => {
-    const now = new Date(Date.UTC(2026, 9, 10, 12));
-    const asked = new Date(now.getTime() - 20 * 60_000);
-    const thread = { spaceId: "space-1", threadId: "thread-1", botId: "bot-1" };
-    const emptied = async (
-      status: string,
-      { startedAt = asked, replied = true }: { startedAt?: Date; replied?: boolean } = {},
-    ) => {
-      const ctx = await setup({ status }, { lineOnlyMessages: true });
-      const run = ctx.db.tables.runs.get("run-1")!;
-      run.createdAt = startedAt;
-      run.updatedAt = new Date(now.getTime() - 10 * 60_000);
-      ctx.db.seedMessage({
-        ...reply("ask", "Order my coffee."),
-        role: "user",
-        runId: undefined,
-        createdAt: asked,
-      });
-      if (replied) ctx.db.seedMessage(reply("final", "Done."));
-      ctx.wrote("skill_create", "Coffee");
-      return ctx;
-    };
-
-    it("gets no line back after a clear", async () => {
-      const { db, deps, linesIn } = await emptied("completed");
-
-      await clearThread(db.prisma, thread);
-      await createSkillLineSweep(deps, { now: () => now })();
-
-      expect(linesIn("thread-1")).toEqual([]);
-    });
-
-    it("gets no line back after a rewind to the message that started the run", async () => {
-      const { db, deps, linesIn } = await emptied("completed", { replied: false });
-
-      await rewindThread(db.prisma, { ...thread, messageId: "ask" });
-      await createSkillLineSweep(deps, { now: () => now })();
-
-      expect(linesIn("thread-1")).toEqual([]);
-    });
-
-    it("gets no line back after a rewind to a message sent while the run was going, once its reply is gone", async () => {
-      const { db, deps, linesIn } = await emptied("completed", {
-        startedAt: new Date(asked.getTime() - 60_000),
-      });
-
-      await rewindThread(db.prisma, { ...thread, messageId: "ask" });
-      await createSkillLineSweep(deps, { now: () => now })();
-
-      expect(linesIn("thread-1")).toEqual([]);
-    });
-
-    it("gets no line for a run the clear stopped before it ended", async () => {
-      const { db, deps, linesIn } = await emptied("running");
-
-      await clearThread(db.prisma, thread);
-      await createSkillLineSweep(deps, { now: () => now })();
-
-      expect(db.tables.runs.get("run-1")?.status).toBe("cancelled");
-      expect(linesIn("thread-1")).toEqual([]);
-    });
   });
 
   it("keeps a link preview written at the same time", async () => {

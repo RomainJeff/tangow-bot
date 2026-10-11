@@ -320,7 +320,11 @@ describe("the skill nudge's private turn", () => {
       },
     );
     await writeSkillLines(
-      { prisma: db.prisma, events: { notify: async () => undefined } },
+      {
+        prisma: db.prisma,
+        events: { notify: async () => undefined },
+        sessionLog: { append: async () => ({}) as never },
+      },
       "run-1",
     );
 
