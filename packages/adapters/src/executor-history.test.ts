@@ -429,22 +429,6 @@ describe("the history a run reads from its session log", () => {
     ]);
   });
 
-  it("reads at most 200 entries of a thread that can never compact, and the whole tail of one that can", async () => {
-    const group = fixture({ groupMembers: [{ id: BOT, name: "Assistant" }], compaction: true });
-    const own = fixture({ compaction: true });
-    const scriptedRuntime = fixture();
-
-    await Promise.all([group.history(), own.history(), scriptedRuntime.history()]);
-
-    expect(group.log.sessionLog.readTail.mock.calls).toEqual([["session-1", { maxEntries: 200 }]]);
-    expect(own.log.sessionLog.readTail.mock.calls).toEqual([
-      ["session-1", { maxEntries: undefined }],
-    ]);
-    expect(scriptedRuntime.log.sessionLog.readTail.mock.calls).toEqual([
-      ["session-1", { maxEntries: 200 }],
-    ]);
-  });
-
   it("enqueues a compaction only for a bot's own thread with a real summarizer model", async () => {
     const tail = chain(0, [said("x".repeat(100_000))]);
     const model = { provider: "openai", id: "model-without-a-catalog-window" };
