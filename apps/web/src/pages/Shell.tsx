@@ -2091,6 +2091,13 @@ export function ShellPage() {
         if (botTarget && activeBotId.current === botTarget) setAttachmentNotice(null);
         // The message is in the log and on the feed: the next one can go while the thread refreshes.
         setSending(false);
+        // A send leaves a search jump's window for the latest page, where the message and its reply land.
+        if (expandedHistoryThread.current !== null || pinnedAroundRef.current !== null) {
+          expandedHistoryThread.current = null;
+          pinnedAroundRef.current = null;
+          const element = messageScroll.current;
+          if (element) element.scrollTop = element.scrollHeight;
+        }
         if (groupTarget) await refreshGroupThreadRef.current(groupTarget);
         else if (botTarget) await refreshThreadRef.current(botTarget);
       } catch (error) {
