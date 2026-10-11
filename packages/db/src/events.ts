@@ -101,6 +101,7 @@ export interface RewindThreadInput extends ClearThreadInput {
 export interface RewindThreadResult {
   event: ProductEvent;
   cancelledRunIds: string[];
+  /** The history generation the rewind ended, whose compacted summaries a reset purges. */
   historyGeneration: number;
   fromSeq: number;
   /** Compaction covered the rewound range and was rolled back; derived memory is now stale. */
@@ -474,6 +475,7 @@ export async function rewindThread(
         select: { id: true },
       }),
     );
+    const generation = await historyGeneration(tx, truncated.sessionId);
     await appendRewindInTransaction(tx, {
       sessionId: truncated.sessionId as SessionId,
       messageId: input.messageId,
@@ -487,7 +489,7 @@ export async function rewindThread(
     return {
       event,
       cancelledRunIds: truncated.cancelledRunIds,
-      historyGeneration: await historyGeneration(tx, truncated.sessionId),
+      historyGeneration: generation,
       fromSeq: target.seq,
       compactionReset,
     };

@@ -48,18 +48,19 @@ export function sessionEntryFromRow(row: SessionEntryRow): SessionEntry {
 
 /**
  * The epoch semantic memory files a session's compacted summaries under: the seq of its newest
- * clear, 0 before any, so a clear leaves the summaries of what it cleared unrecalled.
+ * clear or rewind, 0 before any. Either can cut what a summary describes, so it leaves the
+ * summaries filed before it unrecalled, and a summary saved while it landed fails the re-check.
  */
 export async function historyGeneration(
   prisma: Pick<Prisma.TransactionClient, "sessionEntry">,
   sessionId: string,
 ): Promise<number> {
-  const clear = await prisma.sessionEntry.findFirst({
-    where: { sessionId, type: "clear" },
+  const cut = await prisma.sessionEntry.findFirst({
+    where: { sessionId, type: { in: ["clear", "rewind"] } },
     orderBy: { seq: "desc" },
     select: { seq: true },
   });
-  return clear?.seq ?? 0;
+  return cut?.seq ?? 0;
 }
 
 export async function createSessionInTransaction(

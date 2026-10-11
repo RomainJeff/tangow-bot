@@ -273,7 +273,7 @@ describe("session log writers", () => {
     ).toEqual([{ type: "clear", parentId: null }]);
   });
 
-  it("says when a rewind cuts a compaction, and names the history generation a clear ends", async () => {
+  it("says when a rewind cuts a compaction, and names the history generation each rewind and clear ends", async () => {
     const { prisma } = database;
     const { bot, threadId, sessionId } = await seedBot(prisma, "Ada");
     const events = createThreadEvents(prisma);
@@ -308,8 +308,8 @@ describe("session log writers", () => {
     const secondClear = await clearThread(prisma, target);
 
     expect(keptSummary).toMatchObject({ compactionReset: false, historyGeneration: 0 });
-    expect(cutSummary).toMatchObject({ compactionReset: true, historyGeneration: 0 });
-    expect(firstClear.historyGeneration).toBe(0);
+    expect(cutSummary).toMatchObject({ compactionReset: true, historyGeneration: 4 });
+    expect(firstClear.historyGeneration).toBe(5);
     expect(secondClear.historyGeneration).toBe(6);
   });
 
