@@ -5,7 +5,6 @@ import {
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
-  stepsBlocks,
   visibleMessageBlocks,
 } from "./message-presentation";
 
@@ -52,7 +51,6 @@ describe("mobile message presentation", () => {
 
     expect(hasVisibleMessagePresentation(steps)).toBe(false);
     expect(hasVisibleMessagePresentation(steps, true)).toBe(true);
-    expect(stepsBlocks(steps)).toEqual(steps);
     expect(
       hasVisibleMessagePresentation(
         [{ kind: "progress", text: "Using browser", activity: true }],
@@ -106,6 +104,24 @@ describe("mobile message presentation", () => {
       ]),
     ).toEqual([{ kind: "content", blocks: [{ kind: "text", text: "Done." }] }]);
   });
+
+  it("keeps shown steps where the bot produced them, between its words", () => {
+    const tool: Extract<MessageBlock, { kind: "steps" }> = {
+      kind: "steps",
+      steps: [{ label: "Read file", count: 1 }],
+    };
+
+    expect(
+      messagePresentationSegments(
+        [{ kind: "text", text: "Checking." }, tool, { kind: "text", text: "Done." }],
+        true,
+      ),
+    ).toEqual([
+      { kind: "content", blocks: [{ kind: "text", text: "Checking." }] },
+      { kind: "steps", block: tool },
+      { kind: "content", blocks: [{ kind: "text", text: "Done." }] },
+    ]);
+  });
 });
 
 describe("skill lines", () => {
@@ -123,10 +139,7 @@ describe("skill lines", () => {
     expect(hasVisibleMessagePresentation([line("learned")])).toBe(true);
     const blocks = [{ kind: "text", text: "Done." }, line("updated")] as MessageBlock[];
     expect(visibleMessageBlocks(blocks)).toEqual(blocks);
-    expect(messagePresentationSegments(blocks)[0]?.blocks.map((block) => block.kind)).toEqual([
-      "text",
-      "skill_source",
-    ]);
+    expect(messagePresentationSegments(blocks)).toEqual([{ kind: "content", blocks }]);
   });
 
   it("opens the skill by its id, also from a line stored with a uid, or Skills when it is gone", async () => {

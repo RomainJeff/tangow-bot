@@ -205,7 +205,6 @@ import {
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
-  stepsBlocks,
   visibleMessageBlocks,
 } from "../lib/message-presentation";
 import { native, useMobileTokens, useResolvedAppearance } from "../lib/native";
@@ -3753,28 +3752,30 @@ const MessageBubble = memo(function MessageBubble({
       </Surface>
     );
   }
-  const segments = messagePresentationSegments(shownBlocks);
-  const steps = showSteps ? stepsBlocks(message.blocks) : [];
+  const segments = messagePresentationSegments(shownBlocks, showSteps);
   const live = isLiveMessage(message);
   const firstContent = segments.findIndex((segment) => segment.kind === "content");
   const lastContent = skillLineSegment(
-    segments.map((segment) => blockText({ ...message, blocks: segment.blocks })),
+    segments.map((segment) =>
+      segment.kind === "content" ? blockText({ ...message, blocks: segment.blocks }) : "",
+    ),
   );
   return (
     <View style={{ gap: 8, width: "100%" }}>
-      {steps.map((block, index) => (
-        <AgentSteps key={`${message.id}-steps-${index}`} block={block} live={live} />
-      ))}
-      {segments.map((segment, index) => (
-        <MessageText
-          key={`${message.id}-content-${index}`}
-          message={{ ...message, blocks: segment.blocks }}
-          replyPreview={index === firstContent ? replyPreview : undefined}
-          actionProps={actionProps}
-          mono={mono}
-          meta={index === lastContent ? metaLines : undefined}
-        />
-      ))}
+      {segments.map((segment, index) =>
+        segment.kind === "steps" ? (
+          <AgentSteps key={`${message.id}-steps-${index}`} block={segment.block} live={live} />
+        ) : (
+          <MessageText
+            key={`${message.id}-content-${index}`}
+            message={{ ...message, blocks: segment.blocks }}
+            replyPreview={index === firstContent ? replyPreview : undefined}
+            actionProps={actionProps}
+            mono={mono}
+            meta={index === lastContent ? metaLines : undefined}
+          />
+        ),
+      )}
       {appConnectBlocks.map((block, index) => (
         <AppConnectCard
           key={`${block.provider}-${index}`}
