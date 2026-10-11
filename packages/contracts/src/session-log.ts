@@ -1,5 +1,6 @@
 import * as z from "zod";
 import {
+  AskAnswers,
   AskBlock,
   BotMessageIntent,
   ChoiceBlock,
@@ -250,14 +251,17 @@ const EntryShapes = z.discriminatedUnion("type", [
     }),
   ),
   /**
-   * A card settled with no reply entry: a choice chosen, a card dismissed, an ask the composer
-   * resumed, a secret answered, a connector connected (`answerId` the connector).
+   * A card settled: a choice chosen (`answerId`), a card dismissed, an ask the composer resumed (no
+   * answer), an ask answered inside the card (`answer`, `""` for a secret, or a multi-question
+   * card's `answers`), a connector connected (`answerId` the connector).
    */
   entry(
     "card.answered",
     z.object({
       ...target,
       answerId: z.string().optional(),
+      answer: z.string().optional(),
+      answers: AskAnswers.optional(),
       dismissed: z.literal(true).optional(),
     }),
   ),
