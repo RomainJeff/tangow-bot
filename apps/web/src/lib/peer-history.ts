@@ -20,14 +20,14 @@ export async function loadPeerHistory({
 }): Promise<SessionEntry[]> {
   const deadline = AbortSignal.timeout(totalTimeoutMs);
   let before: EntryId | undefined;
-  let collected: SessionEntry[] = [];
+  const pages: (readonly SessionEntry[])[] = [];
   do {
     const page = await loadPage(
       before,
       AbortSignal.any([signal, deadline, AbortSignal.timeout(pageTimeoutMs)]),
     );
-    collected = mergeEntries(collected, page.entries);
+    pages.push(page.entries);
     before = page.olderCursor ?? undefined;
   } while (before !== undefined);
-  return collected;
+  return mergeEntries([], pages.flat());
 }

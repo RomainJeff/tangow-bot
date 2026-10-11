@@ -77,7 +77,7 @@ export default function PeerMessages() {
     let cancelled = false;
     void (async () => {
       let before: EntryId | undefined;
-      let collected: SessionEntry[] = [];
+      const pages: SessionEntry[][] = [];
       do {
         const page = await rpc<ThreadMessagePage>("threads/messages", {
           botId,
@@ -85,11 +85,11 @@ export default function PeerMessages() {
           includePeerRuns: true,
         });
         if (cancelled) return;
-        collected = mergeEntries(collected, page.entries);
+        pages.push(page.entries);
         before = page.olderCursor ?? undefined;
       } while (before !== undefined);
       if (cancelled) return;
-      setEntries(collected);
+      setEntries(mergeEntries([], pages.flat()));
       setLoading(false);
     })().catch((loadError) => {
       if (cancelled) return;
