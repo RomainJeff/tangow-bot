@@ -473,7 +473,7 @@ function stampDuration(messages: readonly MessageItem[], durationMs: number) {
     const index = message.blocks.findLastIndex((block) => block.kind === "steps");
     const block = message.blocks[index];
     if (block?.kind !== "steps") continue;
-    message.blocks[index] = { ...block, durationMs };
+    if (block.durationMs === undefined) message.blocks[index] = { ...block, durationMs };
     return;
   }
 }

@@ -1219,6 +1219,27 @@ describe("projectThreadItems", () => {
     ]);
   });
 
+  it("keeps the duration a steps block already carries", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const trigger = { kind: "webhook", routineId: "rtn_1" };
+    const usage = { inputTokens: 300, outputTokens: 5 };
+    const steps = { kind: "steps", steps: [{ label: "Searched the drive", count: 1 }] };
+    const chain = linkEntries("kept", [
+      { ...run, type: "run.started", payload: { trigger, model, effort: null } },
+      {
+        ...run,
+        type: "assistant.text",
+        payload: { blocks: [{ ...steps, durationMs: 124_000 }, ...text("Done.")] },
+      },
+      { ...run, type: "run.finished", payload: { status: "completed", usage } },
+    ]);
+    const message = projectThreadItems(chain).find((item) => item.kind === "message");
+    expect(message?.kind === "message" && message.blocks[0]).toEqual({
+      ...steps,
+      durationMs: 124_000,
+    });
+  });
+
   it("gives a run finished at a timestamp before its start a duration of zero", () => {
     const run = { botId: "bot_ada", runId: "run_1" };
     const trigger = { kind: "webhook", routineId: "rtn_1" };
