@@ -28,7 +28,7 @@ import type {
   MessageItem,
   SessionViewTarget,
 } from "../../lib/thread-items";
-import { FALLBACK_BOT_COLOR } from "./layout";
+import { FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
 import { MessageView, skillLine } from "./message-view";
 import type { RoutineHandoff } from "./routine-run-line";
 import { RoutineGroupLine, RoutineRunLine } from "./routine-run-line";
@@ -46,7 +46,7 @@ export type RowContext = {
   onAnswer?: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: PeerBot;
-  onOpenBot: (botId: string) => void;
+  onOpenBot: (botId: string, messageId?: string) => void;
   onOpenPeerMessages: (peer: { peerBotId: string; peerBotName: string }) => void;
   onOpenSession: (target: SessionViewTarget) => void;
   onJumpToMessage?: (messageId: string) => void;
@@ -390,19 +390,54 @@ function BotMessageMarker({ item, context }: { item: ItemOf<"botMessage">; conte
       : "botId" in context.artifactTarget
         ? context.artifactTarget.botId
         : undefined;
+  const intent = {
+    request: t`Request`,
+    result: t`Result`,
+    question: t`Question`,
+    status: t`Status`,
+    fyi: t`FYI`,
+  }[item.intent];
   const label = sent ? t`Messaged ${peer}` : t`Message from ${peer}`;
+  const messageId = item.direction === "received" ? item.origin.entryId : undefined;
+  const jump = peerBotId ? threadJumpLocation({ botId: peerBotId, messageId }) : null;
+  const peerLink =
+    jump && peerBotId ? (
+      <a
+        href={`${jump.pathname}${jump.search ?? ""}`}
+        className="relative underline-offset-2 hover:underline"
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+          event.preventDefault();
+          context.onOpenBot(peerBotId, messageId);
+        }}
+      >
+        {peer}
+      </a>
+    ) : (
+      peer
+    );
   const pair = sent ? [self, peerBotId] : [peerBotId, self];
   return (
     <CollaborationMarker
-      ariaLabel={label}
+      ariaLabel={`${label} · ${intent}`}
       bots={pair.filter((botId): botId is string => Boolean(botId)).map(avatarOf)}
-      label={label}
+      label={
+        <>
+          <ExchangeLabel sent={sent} peer={peerLink} />
+          {` · ${intent}`}
+        </>
+      }
       muted={item.direction === "sent" && item.answeredBy === null}
       onClick={
         peerBotId ? () => context.onOpenPeerMessages({ peerBotId, peerBotName: peer }) : undefined
       }
     />
   );
+}
+
+/** The same messages as the card's name, with the peer as a node so it can be a link. */
+function ExchangeLabel({ sent, peer }: { sent: boolean; peer: ReactNode }) {
+  return sent ? <Trans>Messaged {peer}</Trans> : <Trans>Message from {peer}</Trans>;
 }
 
 function DividerLine({ reason }: { reason: ItemOf<"divider">["reason"] }) {

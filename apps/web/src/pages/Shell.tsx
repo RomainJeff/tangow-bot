@@ -1833,7 +1833,10 @@ export function ShellPage() {
     initiallyScrolledThread.current = snapshot.threadId;
   }, [active, groupId, inGroup, snapshot?.botId, snapshot?.groupId, snapshot?.threadId]);
 
-  const openBot = useCallback((id: string) => navigate(`/app/${id}`), [navigate]);
+  const openBot = useCallback(
+    (id: string, messageId?: string) => navigate(threadJumpLocation({ botId: id, messageId })),
+    [navigate],
+  );
   const loadOlder = useCallback(() => loadOlderMessagesRef.current(), []);
   const jumpToReplyMessage = useCallback((messageId: string) => {
     const rowId = viewRef.current.rowOf.get(messageId) ?? messageId;

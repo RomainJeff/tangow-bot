@@ -96,7 +96,7 @@ export const Transcript = memo(function Transcript({
   /** Epoch ms the earliest working run started; undefined ticks from mount. */
   workingStartedAt?: number;
   onLoadOlder: () => void | Promise<void>;
-  onOpenBot: (botId: string) => void;
+  onOpenBot: (botId: string, messageId?: string) => void;
   onAnswer: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
   onReply: (message: MessageItem) => void;
   onEdit: (message: MessageItem) => void;

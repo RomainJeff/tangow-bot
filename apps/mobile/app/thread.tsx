@@ -180,6 +180,7 @@ import {
   confirmClearConversation,
   confirmDeleteBot,
 } from "../lib/bot-lifecycle";
+import { botMessageCard } from "../lib/bot-message-card";
 import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
@@ -4047,9 +4048,8 @@ const ItemRow = memo(function ItemRow({
         const sent = item.direction === "sent";
         const ownBotId = sent ? item.botId : botId;
         const peerBotId = item.peer.kind === "bot" ? item.peer.botId : undefined;
-        const label = sent
-          ? t("Messaged {peer}", { peer: item.peer.name })
-          : t("Message from {peer}", { peer: item.peer.name });
+        const card = botMessageCard(item);
+        const peerThread = readOnly ? null : card.peerThread;
         const pair = sent ? [ownBotId, peerBotId] : [peerBotId, ownBotId];
         // 7f: a brand-new marker's two bloubs glance at each other once — the
         // first item (rendered on the left by `StackedAvatars`) looks right,
@@ -4062,16 +4062,25 @@ const ItemRow = memo(function ItemRow({
         // view-only exchange opens on its own screen.
         return (
           <Interstitial
-            accessibilityLabel={label}
+            accessibilityLabel={card.label}
             avatars={<StackedAvatars items={pairItems} size={sizes.interstitial} still />}
             hitSlop={{ top: 5, bottom: 5, left: 8, right: 8 }}
+            style={card.muted ? { opacity: 0.6 } : undefined}
             onPress={
               openPeerMessages && peerBotId
                 ? () => openPeerMessages(ownBotId, peerBotId, item.peer.name)
                 : undefined
             }
           >
-            {label}
+            {card.before}
+            {peerThread ? (
+              <Text accessibilityRole="link" onPress={() => router.push(peerThread)}>
+                {card.peer}
+              </Text>
+            ) : (
+              card.peer
+            )}
+            {card.after}
           </Interstitial>
         );
       }
