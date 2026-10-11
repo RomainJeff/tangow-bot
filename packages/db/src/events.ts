@@ -1,4 +1,5 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
+import type { EntryId, SessionId } from "@rakazo/contracts";
 import {
   ASK_DISMISSED_ANSWER,
   type AskQuestion,
@@ -33,8 +34,10 @@ import {
   RunHistoryWriteError,
 } from "./messages.js";
 import {
+  appendComputerControlInTransaction,
   appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
+  appendSessionEntryInTransaction,
 } from "./sessions.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 
@@ -170,6 +173,8 @@ export interface PauseRunForInput {
    * (not in message blocks) so clients still see redacted labels.
    */
   offeredActions?: Array<{ id: string; label: string }>;
+  /** The effect an approval card asks about; its proposal is already redacted. */
+  effect?: { id: string; kind: string; proposal: Record<string, unknown> };
 }
 
 const CHOICE_ASK_CHECKPOINT_KIND = "choice_ask_v1";
@@ -861,9 +866,25 @@ export async function answerRunInputInTransaction(
         threadId: input.threadId,
         status: "waiting_input",
       },
-      select: { botId: true, userId: true, checkpoint: true },
+      select: { botId: true, userId: true, checkpoint: true, sessionId: true },
     });
     if (!run) return null;
+    const runLog = {
+      sessionId: run.sessionId as SessionId,
+      botId: run.botId,
+      runId: input.runId,
+    };
+    const answerEntry = (text: string) =>
+      appendSessionEntryInTransaction(tx, {
+        type: "user.message",
+        sessionId: runLog.sessionId,
+        feedBotId: run.botId,
+        payload: {
+          blocks: [{ kind: "text", text }],
+          replyTo: { entryId: input.messageId as EntryId },
+          source: "app",
+        },
+      });
     const message = await tx.message.findFirst({
       where: {
         id: input.messageId,
@@ -979,6 +1000,7 @@ export async function answerRunInputInTransaction(
           : block,
       );
       await tx.message.update({ where: { id: message.id }, data: { blocks: answeredBlocks } });
+      await answerEntry(lines.join("\n"));
       const updated = await appendEventInTransaction(tx, {
         spaceId: input.spaceId,
         threadId: input.threadId,
@@ -1151,6 +1173,26 @@ export async function answerRunInputInTransaction(
       index === pending.index ? answeredAsk : block,
     );
     await tx.message.update({ where: { id: message.id }, data: { blocks } });
+    if (approvalEffect) {
+      const effectId = approvalEffect.id;
+      if (spawnBotEdit) {
+        await appendSessionEntryInTransaction(tx, {
+          ...runLog,
+          type: "effect.edited",
+          payload: { effectId, proposal: spawnBotEdit.approved },
+        });
+      }
+      await appendSessionEntryInTransaction(tx, {
+        ...runLog,
+        type: "effect.resolved",
+        payload: {
+          effectId,
+          decision: input.answer === "allow" || input.answer === "always" ? "approved" : "denied",
+        },
+      });
+    } else if (!secretAsk) {
+      await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
+    }
     if (spawnBotEdit) {
       // Before the message.updated event, so one notify covers both. The audit keeps what the model
       // proposed next to what the person approved.
@@ -1358,7 +1400,7 @@ export async function dismissProposalWithTextInTransaction(
   await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
   const run = await tx.run.findFirst({
     where: { id: input.runId, spaceId: input.spaceId, threadId: input.threadId },
-    select: { botId: true, userId: true, status: true },
+    select: { botId: true, userId: true, status: true, sessionId: true },
   });
   if (!run || run.userId !== input.userId) return { outcome: "keep" };
   const waiting = run.status === "waiting_input";
@@ -1403,6 +1445,13 @@ export async function dismissProposalWithTextInTransaction(
   });
   // Under the thread lock both rows move together; anything else rolls the effect back too.
   if (queued.count !== 1) throw new Error("The run changed while its card was put away");
+  await appendSessionEntryInTransaction(tx, {
+    type: "effect.resolved",
+    sessionId: run.sessionId as SessionId,
+    botId: run.botId,
+    runId: input.runId,
+    payload: { effectId: effect.id, decision: "denied" },
+  });
 
   const blocks = (message.blocks as Prisma.InputJsonValue[]).map((block, index) =>
     index === pending.index
@@ -1469,6 +1518,30 @@ export async function pauseRunForInput(
       botId: input.botId,
       runId: input.runId,
     });
+    if (input.effect) {
+      const { sessionId } = await tx.run.findUniqueOrThrow({
+        where: { id: input.runId },
+        select: { sessionId: true },
+      });
+      await appendSessionEntryInTransaction(tx, {
+        id: message.id as EntryId,
+        type: "effect.requested",
+        sessionId: sessionId as SessionId,
+        botId: input.botId,
+        runId: input.runId,
+        payload: {
+          effectId: input.effect.id,
+          effectKind: input.effect.kind,
+          proposal: input.effect.proposal,
+        },
+      });
+    } else {
+      await appendRunBlocksInTransaction(
+        tx,
+        { id: message.id, runId: input.runId, botId: input.botId },
+        input.blocks,
+      );
+    }
     await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
       threadId: input.threadId,
@@ -1655,9 +1728,14 @@ export async function finalizeComputerControlRelease(
 
     const bot = await tx.bot.findFirst({
       where: { id: input.botId, spaceId: input.spaceId },
-      select: { thread: { select: { id: true } } },
+      select: { thread: { select: { id: true, sessionId: true } } },
     });
     if (!bot?.thread) return { threadId: null, seq: null, runId };
+    await appendComputerControlInTransaction(tx, {
+      sessionId: bot.thread.sessionId as SessionId,
+      botId: input.botId,
+      holder: "bot",
+    });
     const event = await appendEventInTransaction(tx, {
       spaceId: input.spaceId,
       threadId: bot.thread.id,

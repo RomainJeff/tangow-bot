@@ -219,6 +219,30 @@ export async function appendRunBlocksInTransaction(
   }
 }
 
+/**
+ * Record who holds the bot's computer when it changes hands from the holder the log last saw, the
+ * bot when it saw none. A release follows only a takeover the log saw granted, so control a
+ * teaching session borrowed leaves no trace.
+ */
+export async function appendComputerControlInTransaction(
+  tx: Prisma.TransactionClient,
+  input: { sessionId: SessionId; botId: string; holder: "user" | "bot" },
+): Promise<void> {
+  const last = await tx.sessionEntry.findFirst({
+    where: { sessionId: input.sessionId, type: "computer.control" },
+    orderBy: { seq: "desc" },
+    select: { payload: true },
+  });
+  const lastHolder = (last?.payload as { holder?: string } | undefined)?.holder ?? "bot";
+  if (lastHolder === input.holder) return;
+  await appendSessionEntryInTransaction(tx, {
+    type: "computer.control",
+    sessionId: input.sessionId,
+    botId: input.botId,
+    payload: { holder: input.holder },
+  });
+}
+
 type RunEnding =
   | { status: "completed" }
   | { status: "failed"; error: string }

@@ -261,7 +261,7 @@ import {
 } from "./computer-support.js";
 import { observationToolResult, parseComputerActions } from "./computer-tools.js";
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
-import { sanitizeConnectorError } from "./connector-safety.js";
+import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
@@ -2702,6 +2702,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   runUserId: run.userId,
                 }),
               ],
+              effect: {
+                id: applied!.effect.id,
+                kind: applied!.effect.kind,
+                proposal: effectProposal(
+                  redactConnectorPayload(applied!.effect.request, runSecrets),
+                ),
+              },
             });
             // pauseRunForInput returning false after a successful renew means the run row no
             // longer matches this worker. Exiting via pauseForApproval() would leave the run
@@ -3417,28 +3424,33 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : undefined;
             if (files && "error" in files) return finish(files);
             const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
-            if (name === "skill_create") {
-              return finish(
-                await skillCreateFromTool(skillDeps, skillOwner, {
-                  files,
-                  name: args.name ? String(args.name) : undefined,
-                  description: args.description ? String(args.description) : undefined,
-                  body: args.body ? String(args.body) : undefined,
-                  content: args.content ? String(args.content) : undefined,
-                }),
-              );
+            const saved =
+              name === "skill_create"
+                ? await skillCreateFromTool(skillDeps, skillOwner, {
+                    files,
+                    name: args.name ? String(args.name) : undefined,
+                    description: args.description ? String(args.description) : undefined,
+                    body: args.body ? String(args.body) : undefined,
+                    content: args.content ? String(args.content) : undefined,
+                  })
+                : await skillUpdateFromTool(skillDeps, skillOwner, {
+                    files,
+                    name: args.name ? String(args.name) : undefined,
+                    skillId: args.skillId ? String(args.skillId) : undefined,
+                    newName: args.newName ? String(args.newName) : undefined,
+                    description:
+                      args.description !== undefined ? String(args.description) : undefined,
+                    body: args.body !== undefined ? String(args.body) : undefined,
+                    content: args.content ? String(args.content) : undefined,
+                  });
+            if ("ok" in saved) {
+              await logEntry({
+                ...runLog,
+                type: "skill.saved",
+                payload: { skillId: String(saved.id), name: String(saved.name) },
+              });
             }
-            return finish(
-              await skillUpdateFromTool(skillDeps, skillOwner, {
-                files,
-                name: args.name ? String(args.name) : undefined,
-                skillId: args.skillId ? String(args.skillId) : undefined,
-                newName: args.newName ? String(args.newName) : undefined,
-                description: args.description !== undefined ? String(args.description) : undefined,
-                body: args.body !== undefined ? String(args.body) : undefined,
-                content: args.content ? String(args.content) : undefined,
-              }),
-            );
+            return finish(saved);
           }
           if (name === "skill_delete") {
             return finish(
@@ -5640,6 +5652,12 @@ type RunLog = { sessionId: SessionId; runId: string; botId: string };
 type ToolLogEntry =
   | { type: "tool.call"; payload: SessionEntryOf<"tool.call">["payload"] }
   | { type: "tool.result"; payload: SessionEntryOf<"tool.result">["payload"] };
+
+function effectProposal(request: unknown): Record<string, unknown> {
+  return request && typeof request === "object" && !Array.isArray(request)
+    ? (request as Record<string, unknown>)
+    : { request };
+}
 
 function toolArtifactIds(result: unknown): string[] {
   const artifactId = (result as { artifactId?: unknown } | null)?.artifactId;

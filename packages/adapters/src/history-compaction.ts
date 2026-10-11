@@ -9,9 +9,10 @@ import type {
   MemoryStore,
 } from "@rakazo/adapter-kit";
 import { historyCompactJob } from "@rakazo/adapter-kit";
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock, SessionId } from "@rakazo/contracts";
 import { blocksToAgentHistoryText, escapeDirectoryField } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
+import { appendSessionEntryInTransaction } from "@rakazo/db";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
@@ -370,7 +371,13 @@ List the durable facts this conversation establishes that are NOT already in tha
 
 Output one Markdown bullet per fact ("- the fact"), each a single self-contained line, at most ${MAX_LEARNED_FACTS}. Output exactly NONE when the conversation establishes nothing new.`;
 
-type CompactionThread = { id: string; botId: string; spaceId: string; userId: string };
+type CompactionThread = {
+  id: string;
+  botId: string;
+  spaceId: string;
+  userId: string;
+  sessionId: string;
+};
 
 /**
  * Compaction reads the whole backlog, so it is often the most expensive call in a thread.
@@ -477,7 +484,7 @@ async function learnDurableFacts(
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => /^[-*]\s+\S/.test(line))
-    .map((line) => redactSensitiveText(`- ${line.slice(1).trim()}`))
+    .map((line) => redactSensitiveText(line.slice(1).trim()))
     .slice(0, MAX_LEARNED_FACTS);
   if (facts.length > 0) {
     // ponytail: no semantic dedup, the run is told what is already remembered and a duplicate
@@ -487,11 +494,19 @@ async function learnDurableFacts(
         scope: "bot",
         botId: thread.botId,
         path: "MEMORY.md",
-        content: `## Learned ${new Date().toISOString().slice(0, 10)}\n${facts.join("\n")}`,
+        content: `## Learned ${new Date().toISOString().slice(0, 10)}\n${facts.map((fact) => `- ${fact}`).join("\n")}`,
         mode: "append",
         sourceThreadId: thread.id,
       },
       options.context,
+    );
+    await deps.prisma.$transaction((tx) =>
+      appendSessionEntryInTransaction(tx, {
+        type: "memory.revised",
+        sessionId: thread.sessionId as SessionId,
+        botId: thread.botId,
+        payload: { facts },
+      }),
     );
   }
   getLogger().info("history.compact.learned", {
@@ -525,6 +540,7 @@ export async function compactHistory(deps: CompactHistoryDeps, threadId: string)
     botId: thread.botId,
     spaceId: thread.spaceId,
     userId: thread.userId,
+    sessionId: thread.sessionId,
   };
   const previousCursor = thread.historyCompactedUpToSeq;
   const previousGeneration = thread.historyCompactionGeneration;

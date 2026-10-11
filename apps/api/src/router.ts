@@ -85,7 +85,14 @@ import {
   verifyMcpInstall,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
-import type { Actor, ComputerStatus, McpServer, Me, SpaceNavigation } from "@rakazo/contracts";
+import type {
+  Actor,
+  ComputerStatus,
+  McpServer,
+  Me,
+  SessionId,
+  SpaceNavigation,
+} from "@rakazo/contracts";
 import {
   appContract,
   IntegrationProviderIdSchema,
@@ -104,6 +111,7 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
+  appendComputerControlInTransaction,
   appendEventInTransaction,
   BotSectionNameConflictError,
   CannotDeleteDefaultSpaceError,
@@ -2102,6 +2110,10 @@ export function createRouter(deps: RouterDeps) {
           throw error;
         }
         if (bot.thread) {
+          const sessionId = bot.thread.sessionId as SessionId;
+          await deps.prisma.$transaction((tx) =>
+            appendComputerControlInTransaction(tx, { sessionId, botId: bot.id, holder: "user" }),
+          );
           await deps.events.append({
             spaceId: context.actor.spaceId,
             threadId: bot.thread.id,

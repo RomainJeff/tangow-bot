@@ -31,7 +31,7 @@ import {
   type TeachComputerInput,
   teachingControlLeaseExpiresAt,
 } from "@rakazo/adapters";
-import type { Actor, MessageBlock, TaughtSkill } from "@rakazo/contracts";
+import type { Actor, MessageBlock, SessionId, TaughtSkill } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   buildPlaybookFromRecording,
@@ -42,6 +42,7 @@ import {
 } from "@rakazo/core";
 import {
   appendEventInTransaction,
+  appendSessionEntryInTransaction,
   type createRepos,
   expireComputerExecutionLeases,
   IsolationError,
@@ -520,6 +521,15 @@ export function createTaughtSkillsService(deps: TaughtSkillsDeps) {
         status: "saved",
       });
       if (bot?.thread) {
+        const sessionId = bot.thread.sessionId as SessionId;
+        await deps.prisma.$transaction((tx) =>
+          appendSessionEntryInTransaction(tx, {
+            type: "skill.saved",
+            sessionId,
+            botId: bot.id,
+            payload: { skillId: row.id, name: row.name },
+          }),
+        );
         await deps.events.append({
           spaceId: actor.spaceId,
           threadId: bot.thread.id,
