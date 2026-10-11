@@ -1,8 +1,14 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { ThreadItem } from "@rakazo/contracts";
-import type { RoutineLineRun, SkillSourceBlock, ThreadRow, WaitingCard } from "@rakazo/core";
-import { isAsideOnlyMessage, threadTimeMarkerLabel } from "@rakazo/core";
+import type {
+  RoutineLineRun,
+  SessionOrigin,
+  SkillSourceBlock,
+  ThreadRow,
+  WaitingCard,
+} from "@rakazo/core";
+import { isAsideOnlyMessage, sessionOriginOf, threadTimeMarkerLabel } from "@rakazo/core";
 import type { StackedAvatarItem } from "@rakazo/ui-web";
 import {
   BotAvatar,
@@ -101,8 +107,7 @@ export function ThreadRowBody({
 }) {
   const { item } = row;
   const body = itemBody(item, row, context, { chrome, showAuthor, showAvatar, arrivesLive });
-  const origin =
-    "origin" in item && item.origin && !("entryId" in item.origin) ? item.origin : null;
+  const origin = sessionOriginOf(item);
   if (!origin) return body;
   return (
     <>
@@ -441,11 +446,7 @@ function OriginLabel({
   origin,
   onOpenSession,
 }: {
-  origin: {
-    sessionId: ItemOf<"routine">["sessionId"];
-    kind?: "routine" | "subagent";
-    name?: string;
-  };
+  origin: SessionOrigin;
   onOpenSession: (target: SessionViewTarget) => void;
 }) {
   const { t } = useLingui();
