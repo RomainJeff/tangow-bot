@@ -983,6 +983,9 @@ export async function sendThreadMessage(
       const blocks = buildUserMessageBlocks(input.text, attachmentBlocks, {
         linkPreview: input.linkPreview,
       });
+      // Each targeted bot gets a run in turn, so the first run is always the first target's.
+      const eventBotId = targetBotIds[0];
+      if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       const message = await createThreadMessageInTransaction(tx, {
         threadId: target.threadId,
         role: "user",
@@ -990,7 +993,7 @@ export async function sendThreadMessage(
         replyToMessageId: input.replyToMessageId,
         replyQuote,
         clientNonce: input.clientNonce,
-        feedBotId: memberBotIds[0],
+        feedBotId: eventBotId,
       });
       const activeRuns = await tx.run.findMany({
         where: {
@@ -1079,8 +1082,6 @@ export async function sendThreadMessage(
         createdRuns.push(run);
       }
       const firstRun = runs[0];
-      const eventBotId = firstRun?.botId ?? targetBotIds[0];
-      if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       if (firstRun) {
         await tx.message.update({ where: { id: message.id }, data: { runId: firstRun.id } });
         if (createdRuns.length) {

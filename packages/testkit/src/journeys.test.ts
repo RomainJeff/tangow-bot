@@ -1881,6 +1881,11 @@ describeJourneys("required product journeys", () => {
       "groups/create",
       { name: "Research squad", botIds: [botA.id, botB.id, botC.id, botD.id] },
     );
+    // Members created together tie on createdAt; make BotA the group's first member for sure.
+    await prisma.chatGroupMember.updateMany({
+      where: { groupId: group.id, botId: botA.id },
+      data: { createdAt: new Date(Date.now() - 60_000) },
+    });
     const listed = await rpc<Array<{ id: string }>>(app, ada, "groups/list");
     expect(listed.some((row) => row.id === group.id)).toBe(true);
     expect((await rpc<Bot[]>(app, ada, "bots/list")).map((b) => b.id)).toEqual(
@@ -1932,6 +1937,28 @@ describeJourneys("required product journeys", () => {
       const run = await prisma.run.findUnique({ where: { id: groupAsk.runId } });
       return run?.status === "waiting_input";
     });
+    const askedMessage = await prisma.message.findFirstOrThrow({
+      where: { threadId: group.threadId, role: "user" },
+      orderBy: { seq: "desc" },
+    });
+    const feed = await prisma.event.findMany({
+      where: {
+        threadId: group.threadId,
+        type: { in: ["thread.message.created", "session.entry.appended"] },
+      },
+      orderBy: { seq: "asc" },
+    });
+    const carries = (payload: unknown) =>
+      (payload as { messageId?: string }).messageId === askedMessage.id ||
+      ((payload as { entries?: Array<{ id: string }> }).entries ?? []).some(
+        (entry) => entry.id === askedMessage.id,
+      );
+    expect(
+      feed.filter((event) => carries(event.payload)).map((event) => [event.type, event.botId]),
+    ).toEqual([
+      ["session.entry.appended", botD.id],
+      ["thread.message.created", botD.id],
+    ]);
     const groupsWithActiveMember = await rpc<
       Array<{ id: string; members: Array<{ botId: string; status?: string }> }>
     >(app, ada, "groups/list");
