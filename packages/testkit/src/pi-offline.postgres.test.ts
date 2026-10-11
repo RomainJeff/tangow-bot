@@ -652,6 +652,79 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
     );
   }, 30_000);
 
+  it("keeps a routine's steps out of the next person's history, which reads its start and its words", async () => {
+    await journey(
+      [
+        { expect() {}, response: { type: "text", text: "Hello." } },
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "journey-routine-write",
+            name: "write_file",
+            arguments: { path: "notes/brief.txt", content: "brief" },
+          },
+        },
+        { expect() {}, response: { type: "text", text: "Saved the brief." } },
+        {
+          expect(request) {
+            const history = JSON.stringify(request.messages);
+            expect(history).toContain('[context] The routine \\"Morning brief\\" started');
+            expect(history).toContain("Saved the brief.");
+            expect(history).not.toContain("journey-routine-write");
+            expect(request.messages.some((message) => message.role === "tool")).toBe(false);
+          },
+          response: { type: "text", text: "It is in notes/brief.txt." },
+        },
+      ],
+      async ({ app, cookie, bot, prisma, send, log }) => {
+        await (await send("Hi.")).settled("completed");
+        const routine = await rpc<{ id: string }>(app, cookie, "routines/create", {
+          botId: bot.id,
+          name: "Morning brief",
+          prompt: "Save the brief.",
+          webhookEnabled: true,
+        });
+        const { runId } = await rpc<{ runId: string }>(app, cookie, "routines/testRun", {
+          routineId: routine.id,
+        });
+        await expect
+          .poll(async () => (await prisma.run.findUnique({ where: { id: runId } }))?.status, {
+            timeout: 15_000,
+            interval: 100,
+          })
+          .toBe("completed");
+        const asked = await send("Where is the brief?");
+        await asked.settled("completed");
+
+        const { sessionId: routineSessionId } = await prisma.run.findUniqueOrThrow({
+          where: { id: runId },
+        });
+        const types = async (sessionId: string) =>
+          (await log.readTail(sessionId as SessionId)).map((entry) => entry.type);
+        expect(await types(routineSessionId)).toEqual([
+          "run.started",
+          "tool.call",
+          "tool.result",
+          "assistant.text",
+          "run.finished",
+        ]);
+        expect(await types(asked.sessionId)).toEqual([
+          "user.message",
+          "run.started",
+          "assistant.text",
+          "run.finished",
+          "routine.started",
+          "routine.finished",
+          "user.message",
+          "run.started",
+          "assistant.text",
+          "run.finished",
+        ]);
+      },
+    );
+  }, 30_000);
+
   it("logs a stopped run as cancelled by its stopper, then the reply sent to it", async () => {
     let opened!: () => void;
     const holding = new Promise<void>((resolve) => {

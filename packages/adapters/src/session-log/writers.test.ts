@@ -1,10 +1,14 @@
+import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { SessionEntry, SessionId } from "@rakazo/contracts";
 import { EntryId, EntrySeq } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import {
+  appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
+  cancelRunsInTransaction,
   clearThread,
   createThreadEvents,
+  openRoutineSessionInTransaction,
   rewindThread,
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -336,6 +340,138 @@ describe("session log writers", () => {
       firstClear.historyGeneration,
       secondClear.historyGeneration,
     ]).toEqual([undefined, 0, 10, 11]);
+  });
+
+  it("keeps a routine run's steps in its own session and its approval and ends in the thread's", async () => {
+    const { prisma } = database;
+    const { bot, threadId, sessionId } = await seedBot(prisma, "Hopper");
+    const usage = { inputTokens: 0, outputTokens: 0 };
+    const at = "2026-10-11T07:00:00.000Z";
+    const routineRun = async (name: string) => {
+      const run = await seedRun(prisma, bot.id, threadId);
+      const routineSessionId = await prisma.$transaction((tx) =>
+        openRoutineSessionInTransaction(tx, run, {
+          routineId: "rtn_digest",
+          name,
+          trigger: "routine",
+          scheduledAt: at,
+          model: { provider: "scripted", id: "scripted" },
+        }),
+      );
+      const write = async (body: object) => {
+        const { sessionId: addressed } = await prisma.run.findUniqueOrThrow({
+          where: { id: run.id },
+        });
+        await prisma.$transaction((tx) =>
+          appendSessionEntryInTransaction(tx, {
+            ...body,
+            sessionId: addressed as SessionId,
+            botId: bot.id,
+            runId: run.id,
+          } as SessionEntryDraft),
+        );
+      };
+      await write({
+        type: "run.started",
+        payload: {
+          trigger: { kind: "routine", routineId: "rtn_digest", name, scheduledAt: at },
+          model: { provider: "scripted", id: "scripted" },
+          effort: null,
+        },
+      });
+      return { run, routineSessionId, write };
+    };
+    const types = async (id: SessionId) => (await log.readTail(id)).map((entry) => entry.type);
+
+    const digest = await routineRun("Digest");
+    await digest.write({
+      type: "tool.call",
+      payload: { callId: "call_0", name: "spawn_bot", input: "{}" },
+    });
+    await digest.write({
+      type: "effect.requested",
+      payload: { effectId: "effect_1", effectKind: "spawn_bot", proposal: { name: "Scout" } },
+    });
+    await digest.write({
+      type: "effect.resolved",
+      payload: { effectId: "effect_1", decision: "approved" },
+    });
+    await digest.write({
+      type: "tool.result",
+      payload: { callId: "call_0", output: "created", isError: false, artifactIds: [] },
+    });
+    await digest.write({
+      type: "assistant.text",
+      payload: { blocks: [{ kind: "text", text: "Scout is up." }] },
+    });
+    await prisma.run.update({ where: { id: digest.run.id }, data: { status: "completed" } });
+    await prisma.$transaction((tx) =>
+      appendRunFinishedInTransaction(
+        tx,
+        digest.run.id,
+        { status: "completed" },
+        { result: "Scout is up." },
+      ),
+    );
+    const stopped = await routineRun("Tidy");
+    await prisma.$transaction((tx) =>
+      cancelRunsInTransaction(
+        tx,
+        [{ id: stopped.run.id, taskId: stopped.run.taskId }],
+        new Date(),
+        USER,
+      ),
+    );
+
+    expect(await types(digest.routineSessionId)).toEqual([
+      "run.started",
+      "tool.call",
+      "tool.result",
+      "assistant.text",
+      "run.finished",
+    ]);
+    expect(await types(stopped.routineSessionId)).toEqual(["run.started", "run.finished"]);
+    expect(
+      (await log.readTail(sessionId)).map(({ type, runId, payload }) => ({ type, runId, payload })),
+    ).toEqual([
+      {
+        type: "routine.started",
+        runId: digest.run.id,
+        payload: {
+          sessionId: digest.routineSessionId,
+          routineId: "rtn_digest",
+          name: "Digest",
+          trigger: "routine",
+          scheduledAt: at,
+          model: { provider: "scripted", id: "scripted" },
+        },
+      },
+      {
+        type: "effect.requested",
+        runId: digest.run.id,
+        payload: { effectId: "effect_1", effectKind: "spawn_bot", proposal: { name: "Scout" } },
+      },
+      {
+        type: "effect.resolved",
+        runId: digest.run.id,
+        payload: { effectId: "effect_1", decision: "approved" },
+      },
+      {
+        type: "routine.finished",
+        runId: digest.run.id,
+        payload: { status: "completed", usage, result: "Scout is up." },
+      },
+      {
+        type: "routine.started",
+        runId: stopped.run.id,
+        payload: expect.objectContaining({ sessionId: stopped.routineSessionId, name: "Tidy" }),
+      },
+      {
+        type: "routine.finished",
+        runId: stopped.run.id,
+        payload: { status: "cancelled", by: USER, usage, result: "" },
+      },
+    ]);
   });
 
   it("closes the log of a run it cancels with who cancelled it", async () => {
