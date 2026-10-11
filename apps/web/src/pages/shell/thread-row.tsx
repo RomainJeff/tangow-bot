@@ -151,7 +151,7 @@ function itemBody(
     case "run":
       return (
         <BotSide inGroup={context.inGroup}>
-          <RunCard item={item} />
+          <RunCard item={item} waiting={context.waiting?.runId === item.runId} />
         </BotSide>
       );
     case "subagent":
@@ -249,13 +249,15 @@ function BotSide({ inGroup, children }: { inGroup: boolean; children: ReactNode 
   );
 }
 
-function RunCard({ item }: { item: ItemOf<"run"> }) {
+function RunCard({ item, waiting }: { item: ItemOf<"run">; waiting: boolean }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const status = item.finished?.outcome.status ?? "running";
   const statusLabel =
     status === "running"
-      ? t`Running`
+      ? waiting
+        ? t`Needs input`
+        : t`Running`
       : status === "completed"
         ? t`Completed`
         : status === "failed"

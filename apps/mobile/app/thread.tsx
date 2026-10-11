@@ -2095,6 +2095,7 @@ function Thread() {
                 members={snap?.members}
                 isNew={isNew}
                 canAnswer={item.id === answerableAskMessageId}
+                needsInput={item.kind === "run" && item.runId === waiting?.runId}
                 viewerUserId={viewerUserId}
                 onAnswer={answerCard}
               />
@@ -3926,6 +3927,7 @@ const ItemRow = memo(function ItemRow({
   members,
   isNew,
   canAnswer,
+  needsInput = false,
   viewerUserId,
   onAnswer,
   readOnly = false,
@@ -3939,6 +3941,8 @@ const ItemRow = memo(function ItemRow({
   members?: MobileSnapshot["members"];
   isNew: boolean;
   canAnswer: boolean;
+  /** A run row whose run waits on a card. */
+  needsInput?: boolean;
   viewerUserId?: string;
   onAnswer?: (card: CardTarget, answer: string, edits?: SpawnBotEdits) => Promise<void>;
   readOnly?: boolean;
@@ -3978,7 +3982,7 @@ const ItemRow = memo(function ItemRow({
       case "message":
         return null;
       case "run":
-        return <RunRow item={item} />;
+        return <RunRow item={item} needsInput={needsInput} />;
       case "subagent": {
         const title = item.name || t("subagent");
         if (item.status === "running") {
@@ -4117,13 +4121,14 @@ const ItemRow = memo(function ItemRow({
 });
 
 /** A run as one quiet line: its model and how it went, opening to its duration and tokens. */
-function RunRow({ item }: { item: RunItem }) {
+function RunRow({ item, needsInput }: { item: RunItem; needsInput: boolean }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const outcome = item.finished?.outcome;
   const state = !outcome ? "running" : outcome.status;
-  const word = stateWord(state === "completed" ? "done" : state);
+  const waiting = state === "running" && needsInput;
+  const word = waiting ? t("Needs input") : stateWord(state === "completed" ? "done" : state);
   const symbol = ROUTINE_STATE_SYMBOL[state];
   const statusStyle = {
     color: state === "failed" ? tokens.destructive : tokens.mutedForeground,
@@ -4168,7 +4173,7 @@ function RunRow({ item }: { item: RunItem }) {
         >
           {item.model.id}
         </Text>
-        {state === "running" ? (
+        {state === "running" && !waiting ? (
           <ShimmerText style={statusStyle}>{word}</ShimmerText>
         ) : (
           <Text style={statusStyle}>{word}</Text>

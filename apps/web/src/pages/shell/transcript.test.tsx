@@ -123,6 +123,14 @@ describe("the transcript", () => {
     ]);
   });
 
+  it("says a run needs input while it waits on a card", async () => {
+    await renderThread(6);
+    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Running"]);
+
+    await renderThread(7);
+    expect(text('[data-testid="run-card"]')).toEqual(["emulator-1 · Needs input"]);
+  });
+
   it("opens a finished helper's own session, read-only", async () => {
     await renderThread(9);
 
